@@ -86,3 +86,8 @@
 [[deferred]]
   text = "Resume a detached run that died partway, reusing the mutants already measured instead of starting the leg over."
   why = "Needs gremlins to checkpoint, which it does not do today — the stretch half of cache-budget-prune's note about pinning its working directory is the prerequisite, and it may need a patched build."
+
+[[deferred]]
+  id = "9c1f7be59afdc8ac"
+  text = "A detached run does not lock the host workdir. Any other remote operation while one is in flight — `dross test`, a second phase dispatching, an attached `dross verify` — rsyncs over the same workdir the running sequence is still reading, so packages it has not reached yet get mutated against a different tree than the ones it already did. The run reports one score over two trees and nothing says so."
+  why = "Discovered 2026-08-31 while deciding whether to work on another phase during a live detached run: the answer is that it is currently unsafe and nothing stops it. Candidate fixes, not exclusive: refuse a remote operation while a detached run is recorded for that host; give each detached run its own workdir copy; or record the dispatch commit in the run and refuse a collect whose workdir has moved."
