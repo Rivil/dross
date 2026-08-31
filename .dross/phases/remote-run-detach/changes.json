@@ -19,6 +19,22 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/remote/remote_test.go",
+        "internal/mutation/gremlins_test.go"
+      ],
+      "commit": "e380807",
+      "completed_at": "2026-08-31T08:50:13.094739Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "TestExecScriptRefusesBeforeItReachesTheTransport",
+          "loc": "internal/remote/remote_test.go:860",
+          "what": "asserts the live transport's own guards, which every other test stubs away"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/remote/remote.go",
@@ -116,6 +132,36 @@
           "symbol": "TestReadmeDocumentsDetachedRuns",
           "loc": "internal/cmd/options_docs_test.go:333",
           "what": "pins the detach surface as documented in both README and the verify prompt, including the five result states so an agent never reads a still-running run as a red suite"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/verify_results_test.go"
+      ],
+      "commit": "2e509d7",
+      "completed_at": "2026-08-31T08:55:33.936863Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "TestCollectWritesTheSameArtefactsAnAttachedRunWould",
+          "loc": "internal/cmd/verify_results_test.go:290",
+          "what": "asserts a detached collect rebuilds scope, filters out-of-scope survivors and stamps the recorded host, which is the claim c-2 makes and nothing checked"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/verify_detach_test.go"
+      ],
+      "commit": "9a787f9",
+      "completed_at": "2026-08-31T08:55:44.343893Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "TestVerifyDetachDispatchesThroughTheCommand",
+          "loc": "internal/cmd/verify_detach_test.go:330",
+          "what": "drives the detach flags through Verify's own RunE so the wiring between flag and guards has a regression test, not just the helpers"
         }
       ]
     }
