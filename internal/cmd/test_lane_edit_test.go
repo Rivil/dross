@@ -8,6 +8,7 @@ package cmd
 // dropping a grant would satisfy a test that only checked Prepare.
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -708,5 +709,38 @@ func TestLaneEditDoesNotWarnWhenTheCommandStopsBeingWholeTree(t *testing.T) {
 	}
 	if strings.Contains(out, "⚠") {
 		t.Errorf("the warning fired on the edit that removed the whole-tree token:\n%s", out)
+	}
+}
+
+// TestLaneSelectorRefusalIsGone pins the deletion.
+//
+// laneSelectorRefusal covered one field group and was reachable while selector
+// and empty_exit were the only fields the CLI could write. t-5/t-6 replaced that
+// with laneRefusal, which validates a synthetic one-lane project through
+// laneProblems — and laneProblems already calls laneSelectorProblems, so the old
+// function's check became a strict subset of the live gate with no callers.
+//
+// It was found by mutation testing, not by review: gremlins reported a survivor
+// at its `len(problems) == 0` branch, NOT COVERED, because nothing reached it.
+// A dead guard is worse than no guard — it reads as protection while protecting
+// nothing, and the next person to touch this file has to re-derive that it is
+// unreachable.
+//
+// Asserted over the package source rather than by calling it, because the point
+// is that it does not exist to call.
+func TestLaneSelectorRefusalIsGone(t *testing.T) {
+	src, err := os.ReadFile("test_lane.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(src), "func laneSelectorRefusal(") {
+		t.Error("laneSelectorRefusal is back. laneRefusal already runs laneProblems " +
+			"over the whole proposed lane, and laneProblems calls laneSelectorProblems — " +
+			"so this would be a second, unreachable copy of a live check")
+	}
+	// The live gate must still be there, or this test would pass on a file that
+	// deleted the wrong thing.
+	if !strings.Contains(string(src), "func laneRefusal(") {
+		t.Error("laneRefusal is missing — the gate that replaced it")
 	}
 }

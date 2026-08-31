@@ -56,27 +56,11 @@ func loadProjectForLanes() (root string, p *project.Project, err error) {
 	return root, p, nil
 }
 
-// laneSelectorRefusal returns the CLI's refusal for a proposed lane's selector
-// fields, or nil when they are usable.
-//
-// It reads the SAME laneSelectorProblems `dross validate` reports through, and
-// that is the point rather than a convenience: the two surfaces cannot drift,
-// so the CLI can never write a lane validate would then turn round and reject.
-// The problems are quoted verbatim, project.toml prefix included, because they
-// are exactly what the user would read on the next validate run.
-func laneSelectorRefusal(name string, lane project.TestLane) error {
-	problems := laneSelectorProblems(laneLabel(0, name), lane)
-	if len(problems) == 0 {
-		return nil
-	}
-	return fmt.Errorf("lane %q would not validate:\n  %s", name, strings.Join(problems, "\n  "))
-}
-
 // laneToolchainRefusal returns the CLI's refusal for a proposed lane's
 // toolchain override, or nil when every entry is usable.
 //
 // Quoted through the SAME laneToolchainProblems `dross validate` reports, for
-// the reason laneSelectorRefusal is: the CLI must never be able to write a lane
+// the reason laneRefusal is: the CLI must never be able to write a lane
 // validate would then reject, and a second copy of the rules here would drift
 // until it could.
 func laneToolchainRefusal(name string, lane project.TestLane) error {
@@ -132,11 +116,11 @@ func parseEmptyExit(name string, v []string) ([]int, error) {
 //
 // It reads the same laneProblems `dross validate` reports through, which is the
 // documented invariant rather than a convenience: the CLI can never write a
-// lane validate would then turn round and reject. laneSelectorRefusal and
-// laneToolchainRefusal cover one field group each and were enough while those
-// were the only fields the CLI could write; once match, command and the globs
-// are editable, the faults they can introduce — an empty match list, a blank
-// command, a glob that does not compile — are reported only here.
+// lane validate would then turn round and reject. laneToolchainRefusal covers
+// one field group and was enough while those were the only fields the CLI could
+// write; once match, command and the globs are editable, the faults they can
+// introduce — an empty match list, a blank command, a glob that does not
+// compile — are reported only here.
 //
 // It validates a SYNTHETIC one-lane project holding ONLY the proposed lane.
 // Feeding it the whole modified project would refuse an edit because some OTHER
