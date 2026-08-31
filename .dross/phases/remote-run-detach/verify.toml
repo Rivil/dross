@@ -1,96 +1,54 @@
 [verify]
   phase = "remote-run-detach"
-  generated_at = 2026-08-31T08:36:57.596629Z
-  verdict = "fail"
-  finalized = true
-  finalized_at = 2026-08-31T08:39:25.867589Z
+  generated_at = 2026-08-31T14:11:13.267869Z
+  verdict = "pending"
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.8985148514851485
-  mutants_killed = 726
-  mutants_survived = 82
-  mutants_not_covered = 82
+  mutation_score = 0.9554455445544554
+  mutants_killed = 772
+  mutants_survived = 36
+  mutants_not_covered = 36
   mutants_in_scope = 808
-  unclassified_in_scope = 62
+  unclassified_in_scope = 16
   criteria_total = 6
-  criteria_covered = 4
-  criteria_uncovered = 2
+  criteria_covered = 0
+  criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 726
-    survived = 82
+    killed = 772
+    survived = 36
     timeout = 0
     in_scope = 808
-    score = 0.8985148514851485
+    score = 0.9554455445544554
     file_count = 15
 
 [[criterion]]
   id = "c-1"
-  status = "weak"
-  tests = ["internal/cmd/verify_detach_test.go:62 TestDispatchReturnsWithoutWaiting", "internal/cmd/verify_detach_test.go:83 TestDispatchPushesBeforeItStarts", "internal/remote/remote_test.go:735 TestDetachScriptDetachesFromTheSession", "internal/remote/remote_test.go TestDetachScriptBackgroundsOnlyTheJob"]
-  notes = "The MECHANISM is covered and was proven live: the run survived the ssh connection ending and the laptop sleeping ~10h, finishing exit 0, and dispatch returns in 1s. Downgraded to weak because 12 in-hunk survivors sit in Verify's own --detach branch: every test drives dispatchDetached directly, so the flag wiring — detachRequiresAHost, parseDetachAt, gremlinsAdapter and the len(steps)==0 guard at their call sites — has no test at the command level. A refactor of that branch would not be caught."
+  status = "unknown"
 
 [[criterion]]
   id = "c-2"
-  status = "weak"
-  tests = ["internal/mutation/gremlins_test.go TestCollectMatchesRunForTheSameReports", "internal/cmd/verify_finish_test.go:70 TestFinishVerifyWritesBothArtefacts", "internal/cmd/verify_results_test.go:77 TestResultsOnAnUnreachableHostIsNotAVerdict", "internal/cmd/verify_results_test.go TestFetchClearsEachLocalReportBeforePullingIt"]
-  notes = "Both HALVES are tested — Collect agrees with Run for identical reports, and finishVerify writes both artefacts — but the criterion's actual claim, that a detached collect reconstructs them IDENTICALLY to an attached run, has no test asserting it. 36 in-hunk survivors sit in collectDetached, all in the success path: scope rebuild, DetachSteps, fetch, Collect, FilterReport, Tests assembly, measuredOn. Only the refusal branches are exercised. This gap was flagged when t-5 was written and is now measured rather than suspected."
+  status = "unknown"
 
 [[criterion]]
   id = "c-3"
-  status = "covered"
-  tests = ["internal/cmd/local_detached_test.go:38 TestDetachedRunRoundTripsEveryField", "internal/cmd/local_detached_test.go:122 TestSecondRunForOnePhaseIsRefused", "internal/cmd/local_detached_test.go TestDetachedRunReadsRefuseATrackedStore", "internal/cmd/verify_status_test.go:35 TestStatusNamesEveryDispatchedRun", "internal/cmd/verify_status_test.go TestStatusLabelsARecordedStateAsRecorded"]
-  notes = "The record layer is covered field-for-field, including the tracked-store refusal at every entry point, and status is asserted to label an unconfirmed state as recorded rather than observed. Proven live beyond the tests: the record survived the laptop sleeping, two watcher processes being killed, and three branch switches, and a later session read it correctly. The 4 in-hunk survivors are in verifyStatus/printDetachedStatus RunE glue, not in the record itself — FLAGged, not a downgrade."
+  status = "unknown"
 
 [[criterion]]
   id = "c-4"
-  status = "covered"
-  tests = ["internal/remote/remote_test.go TestScheduledRunSleepsAgainstTheHostClock", "internal/cmd/verify_detach_test.go TestScheduledDispatchRecordsItsStartTime", "internal/cmd/verify_results_test.go TestResultsOnAScheduledRunSaysScheduled", "internal/cmd/verify_status_test.go TestCancelClearsTheRecord", "internal/cmd/verify_status_test.go TestCancelReachesTheHostThatHoldsTheRun"]
-  notes = "Every clause has a test: the schedule crosses as an epoch second the HOST compares (so no duration is baked in at dispatch), the record carries it, results reports scheduled distinctly from running, and cancel both clears the record and tears down on the dispatching host. NOTE rather than downgrade: --at has never been exercised against a real host, so the host-side sleep is proven by script assertion only."
+  status = "unknown"
 
 [[criterion]]
   id = "c-5"
-  status = "covered"
-  tests = ["internal/cmd/verify_detach_test.go:104 TestDispatchRecordsTheHostItDispatchedTo", "internal/cmd/verify_results_test.go:174 TestResultsReadsTheRecordedHostNotTodaysGrant", "internal/cmd/verify_finish_test.go:88 TestFinishVerifyStampsTheHostThatMeasured"]
-  notes = "The fetch-side test is the load-bearing one: it records a run on anachryon while the grant on disk names helicon, and asserts the fetch asks anachryon. Confirmed live — this run's tests.json carries measured_on = helicon read from the record, not re-resolved."
+  status = "unknown"
 
 [[criterion]]
   id = "c-6"
-  status = "covered"
-  tests = ["internal/remote/remote_test.go TestParseStatusSeparatesAbsentFromZero", "internal/remote/remote_test.go TestParseStatusDistinguishesAMissingRunDirectory", "internal/cmd/verify_results_test.go:77 TestResultsOnAnUnreachableHostIsNotAVerdict", "internal/cmd/verify_results_test.go:152 TestResultsOnAVanishedRunSaysSo"]
-  notes = "The distinction the criterion rests on is asserted at both layers: exit 0 and no-exit-recorded parse differently (HasExit separate from ExitCode, so no in-band sentinel), a removed run directory parses differently from an empty one, and each non-finished state exits its own code writing NEITHER artefact. The 4 in-hunk survivors are ExecScript's error branches, which no test reaches because every test stubs the transport — FLAGged."
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/remote/remote.go:844 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/remote/remote.go:847 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:109 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:113 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:117 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:121 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:124 (CONDITIONALS_NEGATION)"
+  status = "unknown"
 
 [[finding]]
   severity = "BLOCKING"
@@ -103,62 +61,6 @@
 [[finding]]
   severity = "BLOCKING"
   text = "gremlins mutant survived: internal/cmd/verify.go:367 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:483 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:487 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:491 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:508 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:512 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:516 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:520 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:526 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:529 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:529 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:529 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:529 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:552 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:555 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "BLOCKING"
@@ -178,35 +80,7 @@
 
 [[finding]]
   severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:583 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
   text = "gremlins mutant survived: internal/cmd/verify.go:621 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/mutation/gremlins.go:537 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:109 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:113 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:117 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:121 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:124 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "BLOCKING"
@@ -219,62 +93,6 @@
 [[finding]]
   severity = "BLOCKING"
   text = "gremlins mutant survived: internal/cmd/verify.go:367 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:483 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:487 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:491 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:508 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:512 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:516 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:520 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:526 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:529 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:529 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:529 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:529 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:552 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:555 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "BLOCKING"
@@ -294,60 +112,4 @@
 
 [[finding]]
   severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:583 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
   text = "gremlins mutant survived: internal/cmd/verify.go:621 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/mutation/gremlins.go:537 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/remote/remote.go:844 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/remote/remote.go:847 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "36 in-hunk survivors in collectDetached (internal/cmd/verify.go) — the entire success path of `dross verify results` is unexercised. Only the refusal branches (unreachable / running / scheduled / gone / no-record) have tests; the scope rebuild, DetachSteps, fetch, Collect, FilterReport, Tests assembly and measuredOn stamping have none. This is the gap flagged when t-5 was written ('the full artifacts-identical end-to-end is expensive') and it is now measured rather than suspected. It is also the criterion c-2 actually claims, so the claim is currently untested."
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "12 in-hunk survivors in Verify's --detach branch (internal/cmd/verify.go) — every dispatch test drives dispatchDetached directly, so nothing exercises the flag wiring: the detachRequiresAHost, parseDetachAt, gremlinsAdapter and DetachSteps call sites, and the len(steps)==0 guard. The branch demonstrably works (two live dispatches) but has no regression test."
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "4 in-hunk survivors in gremlinsAdapter and 4 in verifyStatus/printDetachedStatus RunE glue (internal/cmd/verify.go) — the helpers are tested directly; their command-level call sites are not."
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "4 in-hunk survivors in remote.ExecScript's error branches (internal/remote/remote.go:844,847) — no test reaches them because every test stubs the transport seam. The empty-script refusal and the SSHArgs failure path are unasserted."
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "2 in-hunk survivors in Collect's unreadable-report branch (internal/mutation/gremlins.go:537) — the missing-report and equivalence cases are covered, a malformed report is not."
-
-[[finding]]
-  severity = "NOTE"
-  text = "Two defects shipped in this phase were found only by running it against a real host, and both were in code whose unit tests passed: the `&` bound to the whole && chain so ssh never returned (c7f9454), and the report fetch nesting its directory so Collect silently merged nine-day-old local reports into a plausible 0.96 (e15e33b). Weigh the 0.90 accordingly — a mutation score on this phase is evidence about the tests, not proof the feature works. The proof was running it."
-
-[[finding]]
-  severity = "NOTE"
-  text = "c-1 and c-3 have live evidence beyond their tests: this run survived the ssh connection ending, the laptop sleeping ~10 hours, two watcher processes being killed and three branch switches, then reported finished (exit 0) and collected correctly from a later session. Dispatch returns in ~1s."
-
-[[finding]]
-  severity = "NOTE"
-  text = "--at has never been exercised against a real host. Its host-side sleep is asserted at the script level only, so the scheduling half of c-4 is proven by construction rather than by observation."
-
-[[finding]]
-  severity = "NOTE"
-  text = "collectDetached requires the phase's own branch to be checked out — it failed with 'read spec: no such file' when run from phase/lane-host-affinity. That is a real limit on the 'collect from any later session' promise: any session works, but only on the right branch. Not a defect of this run; worth its own item."
-
-[[finding]]
-  severity = "NOTE"
-  text = "The 20 accepted survivors are the known gremlins attribution ceiling in internal/remote/remote.go (Classify's switch cases), already carrying reasons in survivors.toml. Efficacy over the 726 reachable mutants is 1.00."
