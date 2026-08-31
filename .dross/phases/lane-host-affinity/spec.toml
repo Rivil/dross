@@ -54,3 +54,8 @@
 [[deferred]]
   text = "Re-routing a lane mid-run when its chosen host dies partway."
   why = "Requires a run to be resumable, which nothing here is. remote-run-detach parked the same prerequisite for resuming a dead detached run."
+
+[[deferred]]
+  id = "a55b8867426e79e1"
+  text = "Do not warn when the dropped label is an identity tag dross is about to create. FilterKnownLabels/WarnDroppedLabels (internal/forge/forge.go:317,343) cannot distinguish \"your filter named a label that does not exist\" from \"this dross/deferred:<id> or dross/task:<x> identity is new, so of course nothing carries it yet\" — and the second fires on every single first-file, reading as a fault on the routine path. Pass the identity tag separately from user-supplied filter labels, or suppress the warning for a dropped label the caller is about to ensureTag."
+  why = "Diagnosed 2026-08-31 after the warning appeared on every deferred add and phase/task sync all night. The dedupe itself is sound and was proven against the live board: 153 dross/deferred: identities and 200 dross/task: identities, zero duplicated. So this is message noise, not a correctness bug — but it is noise on the happy path, which is how a warning gets trained out of being read."
