@@ -567,6 +567,154 @@ func TestCollectAcceptsARunWhereEveryPackageExitedClean(t *testing.T) {
 	}
 }
 
+// --- the real detachFetchReports ---
+//
+// Every collect test above swaps detachFetchReports wholesale, which is why the
+// exit-file fetch shipped with no coverage at all and mutation found two live
+// mutants inside it. Unlike the detachSync/detachStatus/detachCancel seams,
+// this body bottoms out in runDetachArgv — a package-level var — so the REAL
+// function runs here with only the spawn replaced. No ssh, no rsync: the
+// locked tests_spawn_no_ssh decision is untouched.
+
+// fetchSpy runs the real detachFetchReports against a recording spawn, and
+// returns every argv it would have executed. fail names paths whose fetch
+// should report an error, standing in for rsync's "source not there".
+func fetchSpy(t *testing.T, steps []mutation.PackageStep, localRoot string, fail map[string]bool) ([][]string, error) {
+	t.Helper()
+	orig := runDetachArgv
+	t.Cleanup(func() { runDetachArgv = orig })
+	var got [][]string
+	runDetachArgv = func(argv []string) error {
+		got = append(got, argv)
+		for _, a := range argv {
+			if fail[a] {
+				return errors.New("rsync: no such file")
+			}
+		}
+		return nil
+	}
+	tg := remote.Target{Host: "helicon", Workdir: "/srv/x"}
+	return got, detachFetchReports(tg, localRoot, steps)
+}
+
+// argvFor returns the recorded argv whose destination is want, or nil.
+func argvFor(got [][]string, want string) []string {
+	for _, a := range got {
+		if len(a) > 0 && a[len(a)-1] == want {
+			return a
+		}
+	}
+	return nil
+}
+
+// TestFetchReportsFetchesEachExitCodeBesideItsReport: without the code, a
+// package that wrote no report is indistinguishable from one that failed before
+// writing anything, and ReportlessExit has nothing to refuse on. Fetching the
+// report alone would silently restore the false-green t-13 removed.
+func TestFetchReportsFetchesEachExitCodeBesideItsReport(t *testing.T) {
+	root := t.TempDir()
+	steps := []mutation.PackageStep{
+		{Package: "./internal/cmd", ReportRel: "reports/gremlins/internal_cmd.json",
+			ExitRel: "reports/gremlins/internal_cmd.exit"},
+		{Package: "./internal/remote", ReportRel: "reports/gremlins/internal_remote.json",
+			ExitRel: "reports/gremlins/internal_remote.exit"},
+	}
+
+	got, err := fetchSpy(t, steps, root, nil)
+	if err != nil {
+		t.Fatalf("detachFetchReports: %v", err)
+	}
+	for _, s := range steps {
+		if argvFor(got, filepath.Join(root, s.ReportRel)) == nil {
+			t.Errorf("no fetch issued for %s's report", s.Package)
+		}
+		exitArgv := argvFor(got, filepath.Join(root, s.ExitRel))
+		if exitArgv == nil {
+			t.Fatalf("no fetch issued for %s's exit code — a failed package would read as an empty one", s.Package)
+		}
+		// The remote operand must name this step's exit path under the
+		// target's workdir, or the fetch brings back some other file.
+		if !strings.Contains(strings.Join(exitArgv, " "), "/srv/x/"+s.ExitRel) {
+			t.Errorf("%s's exit fetch does not read the run's own path: %v", s.Package, exitArgv)
+		}
+	}
+}
+
+// TestFetchReportsClearsAStaleExitCode is the same guarantee the report gets,
+// and it matters more: the exit code is what decides whether an ABSENT report
+// is benign. A code left by a previous collect would answer for a package that
+// recorded nothing this time.
+func TestFetchReportsClearsAStaleExitCode(t *testing.T) {
+	root := t.TempDir()
+	steps := []mutation.PackageStep{
+		{Package: "./internal/cmd", ReportRel: "reports/gremlins/internal_cmd.json",
+			ExitRel: "reports/gremlins/internal_cmd.exit"},
+	}
+	stale := filepath.Join(root, steps[0].ExitRel)
+	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stale, []byte("0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// The fetch is stubbed and writes nothing, so anything still at the path
+	// afterwards is the stale file surviving.
+	if _, err := fetchSpy(t, steps, root, nil); err != nil {
+		t.Fatalf("detachFetchReports: %v", err)
+	}
+	if _, err := os.Stat(stale); err == nil {
+		t.Error("a stale exit code survived the collect — it would answer for a package that recorded none")
+	} else if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+}
+
+// TestFetchReportsSkipsAStepWithNoExitPath: a step from before exit files
+// existed carries no ExitRel, and there is nothing to fetch for it. Deriving a
+// path anyway would fetch some other package's code.
+func TestFetchReportsSkipsAStepWithNoExitPath(t *testing.T) {
+	root := t.TempDir()
+	steps := []mutation.PackageStep{
+		{Package: "./internal/cmd", ReportRel: "reports/gremlins/internal_cmd.json"},
+	}
+
+	got, err := fetchSpy(t, steps, root, nil)
+	if err != nil {
+		t.Fatalf("detachFetchReports: %v", err)
+	}
+	if len(got) != 1 {
+		t.Errorf("want exactly the report fetch, got %d fetches: %v", len(got), got)
+	}
+	if argvFor(got, filepath.Join(root, steps[0].ReportRel)) == nil {
+		t.Errorf("the report was not fetched: %v", got)
+	}
+}
+
+// TestFetchReportsToleratesAFailedExitFetch: a step killed before it recorded a
+// code leaves nothing to fetch, exactly as a package that gathered no covered
+// mutants leaves no report. Neither absence is a collect failure — Collect
+// reads an unrecorded code as a skip, and the run-level guard is the backstop.
+func TestFetchReportsToleratesAFailedExitFetch(t *testing.T) {
+	root := t.TempDir()
+	steps := []mutation.PackageStep{
+		{Package: "./internal/cmd", ReportRel: "reports/gremlins/internal_cmd.json",
+			ExitRel: "reports/gremlins/internal_cmd.exit"},
+		{Package: "./internal/remote", ReportRel: "reports/gremlins/internal_remote.json",
+			ExitRel: "reports/gremlins/internal_remote.exit"},
+	}
+	// The first package's exit fetch fails; the second must still be attempted.
+	fail := map[string]bool{filepath.Join(root, steps[0].ExitRel): true}
+
+	got, err := fetchSpy(t, steps, root, fail)
+	if err != nil {
+		t.Fatalf("a missing exit code failed the whole collect: %v", err)
+	}
+	if argvFor(got, filepath.Join(root, steps[1].ExitRel)) == nil {
+		t.Error("the second package's exit fetch never happened — one absent code truncated the collect")
+	}
+}
+
 // TestASuccessfulCollectClearsTheRecord: leaving it would report a phase as
 // having a run in flight forever, and block every future --detach on it.
 func TestASuccessfulCollectClearsTheRecord(t *testing.T) {
