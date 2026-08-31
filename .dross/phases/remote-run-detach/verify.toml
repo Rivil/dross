@@ -1,7 +1,9 @@
 [verify]
   phase = "remote-run-detach"
   generated_at = 2026-08-31T14:11:13.267869Z
-  verdict = "pending"
+  verdict = "partial"
+  finalized = true
+  finalized_at = 2026-08-31T14:27:06.381408Z
 
 [summary]
   mutation_status = "measured"
@@ -11,10 +13,10 @@
   mutants_survived = 36
   mutants_not_covered = 36
   mutants_in_scope = 808
-  unclassified_in_scope = 16
+  unclassified_in_scope = 0
   criteria_total = 6
-  criteria_covered = 0
-  criteria_uncovered = 0
+  criteria_covered = 5
+  criteria_uncovered = 1
 
   [[summary.leg]]
     language = "go"
@@ -28,88 +30,52 @@
 
 [[criterion]]
   id = "c-1"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/verify_detach_test.go:62:TestDispatchReturnsWithoutWaiting", "internal/cmd/verify_detach_test.go:86:TestDispatchPushesBeforeItStarts", "internal/cmd/verify_detach_test.go:435:TestVerifyDetachDispatchesThroughTheCommand", "internal/remote/remote_test.go:737:TestDetachScriptDetachesFromTheSession", "internal/remote/remote_test.go:963:TestDetachScriptBackgroundsOnlyTheJob"]
+  notes = "The two halves of the claim are proven on separate surfaces. \"Returns within seconds\" is asserted at the dispatch site: TestDispatchReturnsWithoutWaiting requires exactly one remote start carrying every package, so a dispatch that held the session per package would fail it, and TestDispatchPushesBeforeItStarts pins sync-then-spawn — a run started against an unsynced tree would measure the host's leftovers under this phase's name. \"Owned by the host\" is asserted at the script surface, which is where it is decidable without a real ssh: TestDetachScriptBackgroundsOnlyTheJob rejects a script whose `&` binds to the whole `&&` list — the live-helicon bug recorded in t-2's landmark, where ssh held the channel for the full leg — and requires the pid to be captured after the job. TestDetachScriptDetachesFromTheSession pins the setsid/nohup detachment itself."
 
 [[criterion]]
   id = "c-2"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/verify_results_test.go:388:TestCollectWritesTheSameArtefactsAnAttachedRunWould", "internal/cmd/verify_finish_test.go:224:TestFinishVerifyIsTheOnlyArtefactWriter", "internal/cmd/verify_finish_test.go:159:TestFinishVerifyClassifiesSurvivorLifecycle", "internal/cmd/verify_finish_test.go:193:TestFinishVerifySeedsEveryCriterion", "internal/mutation/gremlins_test.go:859:TestCollectMatchesRunForTheSameReports"]
+  notes = "The strongest-evidenced criterion in the phase. TestCollectWritesTheSameArtefactsAnAttachedRunWould drives collectDetached end to end and restates each parity property independently rather than reading it back off the code: measured_on is the recorded host, the scope is rebuilt from changes.json and names the phase's own file, the go leg carries the fetched report's kills, an untouched sibling's survivor is filtered out of scope and lands in out_of_scope, and verify.toml is a pending skeleton carrying the spec's criteria. TestFinishVerifyIsTheOnlyArtefactWriter is the structural half — one writer means the two paths cannot diverge — and TestCollectMatchesRunForTheSameReports pins the adapter-level equality directly."
 
 [[criterion]]
   id = "c-3"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/local_detached_test.go:38:TestDetachedRunRoundTripsEveryField", "internal/cmd/local_detached_test.go:263:TestDetachedRunIsAbsentFromLocalKeys", "internal/cmd/local_detached_test.go:281:TestDetachedRunReadsRefuseATrackedStore", "internal/cmd/verify_status_test.go:34:TestStatusNamesEveryDispatchedRun", "internal/cmd/verify_detach_test.go:138:TestSecondDispatchIsRefusedByName", "internal/cmd/verify_results_test.go:460:TestASuccessfulCollectClearsTheRecord"]
+  notes = "Survival across /clear and reboot is a property of the store, and the store is local.toml on disk — TestDetachedRunRoundTripsEveryField reads every field back through a fresh load, which is the same operation a new session performs. The two guards the run_state_location decision bought are asserted rather than assumed: the record is absent from localKeys, so no generic key-writer can aim a later fetch at an unseen host, and a tracked store is refused. The \"never stranded, never re-dispatched\" pair is closed from both ends: status names the run, a second dispatch is refused by name, and a successful collect clears the record."
 
 [[criterion]]
   id = "c-4"
-  status = "unknown"
+  status = "weak"
+  tests = ["internal/remote/remote_test.go:777:TestScheduledRunSleepsAgainstTheHostClock", "internal/cmd/verify_detach_test.go:188:TestScheduledDispatchRecordsItsStartTime", "internal/cmd/verify_detach_test.go:295:TestParseDetachAtResolvesToTheNextOccurrence", "internal/cmd/verify_results_test.go:128:TestResultsOnAScheduledRunSaysScheduled", "internal/cmd/verify_status_test.go:129:TestCancelClearsTheRecord", "internal/cmd/verify_status_test.go:157:TestCancelReachesTheHostThatHoldsTheRun", "internal/cmd/verify_status_test.go:208:TestCancelAgainstAnUnreachableHostStillClearsButSaysSo"]
+  notes = "Weak on the cancellation half only; the scheduling half is fully covered. TestScheduledRunSleepsAgainstTheHostClock pins every part of the schedule_mechanism decision — the target as an epoch second, `date +%s` so it is the HOST clock that is consulted, the sleep, and the run entering the scheduled state rather than reporting itself running for the hours it waits — and TestResultsOnAScheduledRunSaysScheduled is the read side.\n\nThe gap is \"can be cancelled\". stubCancel replaces detachCancel wholesale, so every cancel test asserts what was passed to the seam (host, runDir, pidFile) and what the caller does with its result, and NOTHING asserts the text of the teardown command itself. The code's own comment names the failure that text prevents: the kill targets the process GROUP (`kill -- -PID`) because setsid made the job a group leader, and signalling the pid alone would leave gremlins and its `go test` children holding the host's cores for an hour after the user was told the run was cancelled. That is precisely the breakage this criterion claims to prevent, and no test would fail if the `-- -` were dropped. See the FLAG finding below."
 
 [[criterion]]
   id = "c-5"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/verify_detach_test.go:104:TestDispatchRecordsTheHostItDispatchedTo", "internal/cmd/verify_results_test.go:177:TestResultsReadsTheRecordedHostNotTodaysGrant", "internal/cmd/verify_status_test.go:157:TestCancelReachesTheHostThatHoldsTheRun"]
+  notes = "Both ends of the pin are asserted, and the fetch end is asserted against an adversarial grant rather than an absent one: TestResultsReadsTheRecordedHostNotTodaysGrant is named for exactly the failure mode the criterion forbids — a grant edited between dispatch and fetch must not redirect the read. TestCollectWritesTheSameArtefactsAnAttachedRunWould independently corroborates it by requiring measured_on to be the recorded host (\"anachryon\") and not the grant on disk. Cancel reads the same recorded host, so a teardown cannot be aimed at a machine that holds nothing."
 
 [[criterion]]
   id = "c-6"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/verify_results_test.go:80:TestResultsOnAnUnreachableHostIsNotAVerdict", "internal/cmd/verify_results_test.go:100:TestResultsOnAStillRunningRunWritesNothing", "internal/cmd/verify_results_test.go:155:TestResultsOnAVanishedRunSaysSo", "internal/cmd/verify_results_test.go:485:TestCollectRefusesARunThatProducedNothing", "internal/cmd/verify_detach_test.go:167:TestAFailedStartRecordsNothing", "internal/remote/remote_test.go:802:TestDetachScriptRecordsTheExitCode"]
+  notes = "The criterion's two clauses are asserted separately and both bite. \"Never a mutation score, never a verdict\" is enforced by assertNoArtefacts, which every non-finished case calls — an unreachable host, a still-running run, a vanished run — so a regression that wrote a partial verify.toml fails the test rather than merely changing a message. \"Reported distinctly\" is enforced by exit code per state (13 unreachable, 11 running, 14 gone, 12 produced-nothing), which is the results_never_blocks decision made checkable, plus a message assertion that the unreachable case says \"not failed\" — the distinction between unknown and failed that the criterion turns on. The dispatch-time mirror is TestAFailedStartRecordsNothing, and TestDetachScriptRecordsTheExitCode is the host-side signal that makes \"finished\" separable from \"died\"."
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:167 (CONDITIONALS_NEGATION)"
+  severity = "FLAG"
+  text = "c-4: the teardown command detachCancel builds is never asserted. stubCancel replaces the whole seam, so the tests prove the right host, runDir and pidFile reach it but nothing checks that the command kills the process GROUP. Dropping the `-- -` from `kill -- -$(cat pid)` — the exact regression the code comments against, which would leave gremlins holding the host's cores for an hour after a reported cancellation — passes the suite today. Closing it wants the line extracted as a pure `cancelLine(runDir, pidFile) string` helper and asserted directly, which needs no ssh and so does not disturb the locked tests_spawn_no_ssh decision. Recorded as debt against c-4; not routed, because the fix belongs to whoever next touches the cancel path."
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:363 (CONDITIONALS_NEGATION)"
+  severity = "NOTE"
+  text = "All 6 distinct in-diff survivors were drained by acceptance after the run, so unclassified_in_scope is 0 by the store rather than by a re-measurement: ec603fea4bc70ee2 (verify.go:167), b58cb617602cac6e (:363), 4b0446237dd04163 (:367) under the new detach-seam-body category; 068655dba0057f17 (:569) and 0896f0c77e9a1e27 (:570) with individual reasons; 1356a6e766535468 (:621) with its own attribution-ceiling proof. tests.json is left as the raw record of the run as measured and still shows them as in-diff; the next verify run will recompute both from .dross/survivors.toml. Re-running here would have cost a ~100-minute helicon leg to change bookkeeping, and would have replaced the measurement rather than confirmed it."
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:367 (CONDITIONALS_NEGATION)"
+  severity = "NOTE"
+  text = "Every one of the 36 survivors is NOT-COVERED-attributed (mutants_not_covered == mutants_survived == 36), so none is a mutant that ran and escaped an assertion. A live `go test -coverprofile ./internal/cmd` on 2026-08-31 confirms the split directly: the blocks covering verify.go:167, :363, :367 and :568-573 report count 0 — swapped-seam bodies that no test executes — while the block covering :621 reports count 1, a line that provably runs and that gremlins still marks NOT COVERED. That is the switch-case attribution ceiling observed on this phase's own code rather than inferred from the fixture."
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:570 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:569 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:569 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:569 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:621 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:167 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:363 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:367 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:570 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:569 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:569 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:569 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:621 (CONDITIONALS_NEGATION)"
+  severity = "NOTE"
+  text = "Mutation measured on helicon via detached run r-20260831-122722 and collected 2026-08-31 — the phase's own machinery measuring the phase. Score 0.955 over 808 in-scope mutants (772 killed, 36 survived); with all 36 survivors uncoverable by construction, efficacy over the reachable set is 772/772. 15 files in scope; out-of-scope survivors in untouched siblings were filtered and are already accepted in .dross/survivors.toml."
