@@ -73,18 +73,16 @@
     "t-5": {
       "files": [
         "internal/cmd/verify.go",
-        "internal/mutation/gremlins.go",
-        "internal/mutation/gremlins_test.go",
         "internal/cmd/verify_results_test.go"
       ],
-      "commit": "9bd378e",
-      "completed_at": "2026-08-30T19:58:38.491206Z",
+      "commit": "e15e33b",
+      "completed_at": "2026-08-31T06:52:45.050844Z",
       "landmarks": [
         {
           "feature": "detached mutation runs",
-          "symbol": "collectDetached",
-          "loc": "internal/cmd/verify.go:295",
-          "what": "collects a detached run from the host recorded at dispatch and turns its reports into the phase's artefacts through the same pipeline an attached run uses, writing nothing for any state but finished"
+          "symbol": "detachFetchReports",
+          "loc": "internal/cmd/verify.go:296",
+          "what": "fetches each package report individually and clears the local copy first so a failed fetch leaves the run unmeasured rather than merging a stale one"
         }
       ]
     },
