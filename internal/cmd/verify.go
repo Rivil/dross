@@ -566,10 +566,22 @@ func collectDetached(phaseID string) error {
 // and the `go test` processes it spawned running, holding the host's cores for
 // an hour after the user was told the run was cancelled.
 var detachCancel = func(t remote.Target, runDir, pidFile string) error {
-	line := "kill -- -$(cat " + shellQuoteArg(pidFile) + " 2>/dev/null) 2>/dev/null; " +
-		"rm -rf " + shellQuoteArg(runDir)
-	_, err := remote.Exec(t, []string{"bash", "-c", line})
+	// Through remoteExecFn, not remote.Exec directly: the package's one remote
+	// seam, so a test can assert the argv that would reach the host without
+	// stubbing detachCancel itself and losing sight of the line it builds.
+	_, err := remoteExecFn(t, []string{"bash", "-c", cancelLine(runDir, pidFile)})
 	return err
+}
+
+// cancelLine is the teardown command text, split out from detachCancel so it is
+// assertable without a host. detachCancel is a swapped seam in tests, so
+// everything inside it is invisible to the suite — including the `-- -` that
+// makes the kill target the process GROUP. Extracting the string is what lets a
+// test fail when that regresses, rather than the host quietly keeping its cores
+// busy for an hour after a reported cancellation.
+func cancelLine(runDir, pidFile string) string {
+	return "kill -- -$(cat " + shellQuoteArg(pidFile) + " 2>/dev/null) 2>/dev/null; " +
+		"rm -rf " + shellQuoteArg(runDir)
 }
 
 // verifyStatus registers `dross verify status`.

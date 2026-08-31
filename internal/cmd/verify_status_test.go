@@ -231,3 +231,103 @@ func TestCancelAgainstAnUnreachableHostStillClearsButSaysSo(t *testing.T) {
 		t.Error("the record was kept, which blocks a re-dispatch over a host that is merely down")
 	}
 }
+
+// --- cancelLine: the teardown text stubCancel makes invisible ---
+//
+// Every other cancel test swaps detachCancel wholesale, so they prove the right
+// host, runDir and pidFile reach the seam and nothing about what the seam then
+// asks the host to do. These assert the command text itself, which needs no ssh
+// and so leaves the tests_spawn_no_ssh decision intact.
+
+// TestCancelLineKillsTheProcessGroup is the regression the code comments
+// against: setsid made the detached job a group leader, so a kill that
+// signalled the bare pid would leave gremlins and its `go test` children
+// running — the host's cores held for an hour after the user was told the run
+// was cancelled. The `-- -` is what makes the signal reach the group.
+func TestCancelLineKillsTheProcessGroup(t *testing.T) {
+	line := cancelLine(".dross-runs/r-1", ".dross-runs/r-1/pid")
+
+	if !strings.Contains(line, "kill -- -$(cat ") {
+		t.Errorf("cancel line does not kill the process group:\n%s", line)
+	}
+	// The negation is the load-bearing half: `kill -- -$(...)` contains
+	// `kill -$(...)` as a substring, so a positive check alone would still
+	// pass with the group marker dropped. Assert the pid-only form is absent.
+	if strings.Contains(strings.ReplaceAll(line, "kill -- -$(cat ", ""), "kill -$(cat ") {
+		t.Errorf("cancel line signals a bare pid somewhere:\n%s", line)
+	}
+	if strings.Contains(line, "kill $(cat ") {
+		t.Errorf("cancel line signals the pid, not its group:\n%s", line)
+	}
+}
+
+// TestCancelLineRemovesTheRunDirectory pins the other half of a teardown: the
+// record is dropped locally by cancelDetached, so a run dir left on the host
+// would be a directory `verify results` could still find and read a stale
+// report out of.
+func TestCancelLineRemovesTheRunDirectory(t *testing.T) {
+	line := cancelLine(".dross-runs/r-1", ".dross-runs/r-1/pid")
+
+	if !strings.Contains(line, "rm -rf ") {
+		t.Errorf("cancel line does not remove the run dir:\n%s", line)
+	}
+	kill := strings.Index(line, "kill")
+	rm := strings.Index(line, "rm -rf")
+	if kill < 0 || rm < 0 || rm < kill {
+		t.Errorf("cancel line removes the run dir before killing the job:\n%s", line)
+	}
+	// The kill must not abort the line: its failure is expected when the job
+	// already exited, and the rm still has to run.
+	if !strings.Contains(line, "; rm -rf ") {
+		t.Errorf("cancel line chains the rm behind the kill's success:\n%s", line)
+	}
+}
+
+// TestCancelLineQuotesItsPaths proves both paths go through shellQuoteArg. The
+// run dir is dross-generated today, but the workdir it hangs off is user
+// config, and an unquoted path in an `rm -rf` is the worst place in the
+// codebase for a word split.
+func TestCancelLineQuotesItsPaths(t *testing.T) {
+	line := cancelLine("/srv/a b/.dross-runs/r-1", "/srv/a b/.dross-runs/r-1/pid")
+
+	for _, want := range []string{
+		"'/srv/a b/.dross-runs/r-1/pid'",
+		"'/srv/a b/.dross-runs/r-1'",
+	} {
+		if !strings.Contains(line, want) {
+			t.Errorf("cancel line does not quote %s:\n%s", want, line)
+		}
+	}
+
+	quoted := cancelLine("/srv/x'y", "/srv/x'y/pid")
+	if strings.Contains(quoted, `'/srv/x'y`) {
+		t.Errorf("a quote in the run dir escapes its quoting:\n%s", quoted)
+	}
+}
+
+// TestCancelSendsTheCancelLineToTheHost joins the two halves: the extracted
+// text is what detachCancel actually hands the transport, so asserting the
+// string is asserting the command the host runs. Without this, cancelLine
+// could drift into being dead code the tests are happy with.
+func TestCancelSendsTheCancelLineToTheHost(t *testing.T) {
+	var got []string
+	orig := remoteExecFn
+	t.Cleanup(func() { remoteExecFn = orig })
+	remoteExecFn = func(_ remote.Target, argv []string) (string, error) {
+		got = argv
+		return "", nil
+	}
+
+	if err := detachCancel(remote.Target{Host: "helicon"}, ".dross-runs/r-1", ".dross-runs/r-1/pid"); err != nil {
+		t.Fatalf("detachCancel: %v", err)
+	}
+	want := []string{"bash", "-c", cancelLine(".dross-runs/r-1", ".dross-runs/r-1/pid")}
+	if len(got) != len(want) {
+		t.Fatalf("argv = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("argv[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
