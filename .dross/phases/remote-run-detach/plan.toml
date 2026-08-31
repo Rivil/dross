@@ -1,4 +1,4 @@
-task_seq = 10
+task_seq = 11
 
 [phase]
   id = "remote-run-detach"
@@ -105,4 +105,14 @@ task_seq = 10
   description = "The transport's own refusals and Collect's malformed-report branch, neither of which any test reaches today."
   covers = ["c-2", "c-6"]
   test_contract = ["if ExecScript stops refusing an empty script, a blank script reaches the transport", "if ExecScript stops validating the target, an unsafe host builds an argv", "if Collect stops classifying a malformed report, an unparseable file is merged or fatal instead of recorded UnmeasuredUnreadable"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 1
+  title = "Assert the cancel teardown line"
+  files = ["internal/cmd/verify.go", "internal/cmd/verify_status_test.go"]
+  description = "detachCancel's command text is invisible to the suite because stubCancel replaces the whole seam. Extract the line as a pure cancelLine(runDir, pidFile) string and assert it directly, so dropping the process-group '-- -' fails a test instead of leaving gremlins holding the host's cores after a reported cancellation."
+  covers = ["c-4"]
+  test_contract = ["if cancelLine stops targeting the process group, TestCancelLineKillsTheProcessGroup fails", "if cancelLine stops removing the run directory, TestCancelLineRemovesTheRunDirectory fails", "if cancelLine stops quoting its paths, TestCancelLineQuotesItsPaths fails"]
   status = "done"

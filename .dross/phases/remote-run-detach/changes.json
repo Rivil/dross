@@ -35,6 +35,22 @@
         }
       ]
     },
+    "t-11": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_status_test.go"
+      ],
+      "commit": "41cc4e7",
+      "completed_at": "2026-08-31T14:37:10.153458Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "cancelLine",
+          "loc": "internal/cmd/verify.go:582",
+          "what": "teardown command text extracted as a pure helper so the process-group kill is assertable without a host"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/remote/remote.go",

@@ -1295,21 +1295,12 @@
   accepted_in = "remote-run-detach"
 
 [[accepted]]
-  key = "068655dba0057f17"
-  file = "internal/cmd/verify.go"
-  op = "ARITHMETIC_BASE"
-  text = "line := \"kill -- -$(cat \" + shellQuoteArg(pidFile) + \" 2>/dev/null) 2>/dev/null; \" +"
-  line = 569
-  reason = "ARITHMETIC_BASE on Go string concatenation inside detachCancel's body. Two reasons, both independently sufficient. (1) The mutant cannot compile: ARITHMETIC_BASE rewrites + to -, and \"kill -- -$(cat \" - shellQuoteArg(pidFile) is not a valid Go expression, so no assertion any test could write would distinguish it from the original. (2) The line never runs under test: detachCancel is a swapped seam (stubCancel in verify_status_test.go replaces the whole var) and a live go test -coverprofile on 2026-08-31 reports count 0 for the block spanning 568-573; reaching it means spawning real ssh, which the locked tests_spawn_no_ssh decision forbids. THIS ACCEPTANCE SILENCES THE MUTANT, NOT THE GAP IT SITS BESIDE: nothing anywhere asserts the text of the teardown command, so the process-GROUP kill (kill -- -PID) that the code's own comment says prevents gremlins holding the host's cores for an hour after a reported cancellation is unproven. That is recorded as a FLAG on c-4 in this phase's verify.toml; closing it wants cancelLine(runDir, pidFile) extracted as a pure helper and asserted directly."
-  accepted_in = "remote-run-detach"
-
-[[accepted]]
   key = "0896f0c77e9a1e27"
   file = "internal/cmd/verify.go"
   op = "ARITHMETIC_BASE"
   text = "\"rm -rf \" + shellQuoteArg(runDir)"
-  line = 570
-  reason = "ARITHMETIC_BASE on Go string concatenation inside detachCancel's body — the continuation line of the same expression as internal/cmd/verify.go:569, and accepted for the same two independently sufficient reasons: the mutant rewrites + to - on a string expression and cannot compile, and the line never runs under test (detachCancel is replaced wholesale by stubCancel; go test -coverprofile reports count 0 for the block spanning 568-573 as of 2026-08-31). As with :569, this silences the mutant and not the gap: the teardown command's text is unasserted, so the process-group kill is unproven, FLAGged against c-4 in this phase's verify.toml."
+  line = 584
+  reason = "ARITHMETIC_BASE on Go string concatenation inside cancelLine — the continuation line of the same expression as internal/cmd/verify.go:583, and unkillable for the same reason: the operator rewrites + to - on a string expression, which does not compile. The behaviour this line carries IS asserted: TestCancelLineRemovesTheRunDirectory in internal/cmd/verify_status_test.go fails if the rm is dropped, moved before the kill, or chained behind the kill's success, and TestCancelLineQuotesItsPaths fails if the run dir stops going through shellQuoteArg. The earlier acceptance of this key recorded the teardown text as unasserted; that FLAG on c-4 is now closed by those tests."
   accepted_in = "remote-run-detach"
 
 [[accepted]]
@@ -1319,4 +1310,13 @@
   text = "case serr != nil:"
   line = 621
   reason = "The gremlins switch-case attribution ceiling, proven live on this exact line rather than by analogy. The line is 'case serr != nil:' in verifyStatus's status switch, and a go test -coverprofile ./internal/cmd run on 2026-08-31 reports count 1 for the block spanning 621-625 — the arm executes — while the gremlins report for the same tree marks it NOT COVERED and therefore never builds a mutant for it. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. The arm is directly asserted by TestStatusLabelsARecordedStateAsRecorded in internal/cmd/verify_status_test.go, which stubs detachStatus to return a transport error and requires the printed line to carry both 'recorded' and 'did not answer' — the whole point being that an unverified state is never printed as though it were observed. Adding tests cannot kill this mutant, because a test already runs the line. See the gremlins-attribution-ceiling category and TestAttributionCeilingIsReal for the general proof."
+  accepted_in = "remote-run-detach"
+
+[[accepted]]
+  key = "74e811ee04b389a7"
+  file = "internal/cmd/verify.go"
+  op = "ARITHMETIC_BASE"
+  text = "return \"kill -- -$(cat \" + shellQuoteArg(pidFile) + \" 2>/dev/null) 2>/dev/null; \" +"
+  line = 583
+  reason = "ARITHMETIC_BASE on Go string concatenation inside cancelLine. The mutant cannot compile: the operator rewrites + to -, and \"kill -- -$(cat \" - shellQuoteArg(pidFile) is not a valid Go expression, so no assertion any test could write would distinguish it from the original. Unlike its predecessor at the old detachCancel:569, this line IS executed under test and the gap beside it is closed: TestCancelLineKillsTheProcessGroup in internal/cmd/verify_status_test.go asserts the process-GROUP form directly and fails if the `-- -` is dropped, and TestCancelSendsTheCancelLineToTheHost pins that this text is what reaches the transport. What remains unkillable is the uncompilable arithmetic mutant alone, not the behaviour."
   accepted_in = "remote-run-detach"
