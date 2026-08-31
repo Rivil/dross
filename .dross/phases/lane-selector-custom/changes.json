@@ -121,6 +121,22 @@
           "what": "README and options.md gain the selector template surface, the widened lane edit field set and the whole-tree warning; the remove-then-re-add guard is re-pointed to the lane name and the flag-name guard widened to lane edit"
         }
       ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/test_lane.go",
+        "internal/cmd/test_lane_edit_test.go"
+      ],
+      "commit": "db5d739",
+      "completed_at": "2026-08-31T07:25:39.051552Z",
+      "landmarks": [
+        {
+          "feature": "test lane declaration surface",
+          "symbol": "laneRefusal",
+          "loc": "internal/cmd/test_lane.go:130",
+          "what": "the sole CLI gate for a proposed lane, after the orphaned per-field-group laneSelectorRefusal it had already subsumed was deleted"
+        }
+      ]
     }
   }
 }

@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 8
 
 [phase]
   id = "lane-selector-custom"
@@ -76,4 +76,14 @@ task_seq = 0
   covers = ["c-1", "c-3", "c-4"]
   depends_on = ["t-5", "t-6"]
   test_contract = ["if README loses --selector-template, --selector-join or the whole-tree warning wording, TestReadmeDocumentsTestLanes fails", "if either doc still routes a match, command, selector or empty_exit change through remove-then-re-add, the re-pointed assertion fails", "if the re-pointed guard is deleted rather than re-pointed — a doc telling the reader to hand-edit a [[runtime.test_lane]] block passing clean — the hand-edit refusal fails", "if either doc advertises a `lane edit` flag the cobra command does not register, the widened flag-name guard fails"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 1
+  title = "Delete the orphaned laneSelectorRefusal"
+  files = ["internal/cmd/test_lane.go", "internal/cmd/test_lane_edit_test.go"]
+  description = "t-5/t-6 replaced the per-field-group gate with laneRefusal, which runs laneProblems over a synthetic one-lane project. laneProblems already calls laneSelectorProblems, so laneSelectorRefusal's check is a strict subset of the live gate and nothing calls it."
+  covers = ["c-3"]
+  test_contract = ["if the dead function returns, the test asserting internal/cmd defines no laneSelectorRefusal fails", "if deleting it removed a live guard, TestLaneEditRefusesAMalformedLaneBeforeTheWrite's unknown-selector and template cases go red"]
   status = "done"
