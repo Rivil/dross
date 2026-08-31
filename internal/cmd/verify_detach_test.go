@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 )
 
@@ -359,5 +360,137 @@ func TestGremlinsAdapterNamesTheGapRatherThanDispatchingHalfARun(t *testing.T) {
 	}
 	if got != g {
 		t.Error("gremlinsAdapter returned a different adapter than the one configured")
+	}
+}
+
+// detachCmdRepo is the fixture the command-level tests need: a real repo with
+// a phase, a recorded change set, and a stubbed adapter list whose tuning the
+// caller chooses. Returns the repo dir.
+func detachCmdRepo(t *testing.T, phaseID string, tuning mutationTuning) string {
+	t.Helper()
+	dir := scopedVerifyRepo(t, phaseID)
+	phaseSpec(t, phaseID)
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go")
+	if err := runCmd(t, Changes(), "record", phaseID, "t-1", "--files", "a.go"); err != nil {
+		t.Fatal(err)
+	}
+	mustSetBase(t, phaseID, "base")
+
+	prev := configuredAdaptersFn
+	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) ([]mutation.Adapter, mutationTuning, error) {
+		return []mutation.Adapter{&mutation.Gremlins{ProjectRoot: dir}}, tuning, nil
+	}
+	t.Cleanup(func() { configuredAdaptersFn = prev })
+	return dir
+}
+
+// TestVerifyDetachRefusesWithNoHostThroughTheCommand drives Verify's own RunE
+// rather than dispatchDetached, which is what every other dispatch test does.
+//
+// The wiring between the flag and the guards had no test at all — 12 in-hunk
+// survivors sat in that branch — so a refactor that dropped the
+// detachRequiresAHost call would have gone unnoticed while the helper's own
+// test kept passing.
+func TestVerifyDetachRefusesWithNoHostThroughTheCommand(t *testing.T) {
+	detachCmdRepo(t, "detachcmd", mutationTuning{}) // no Target: nothing granted
+	rec := &detachRecorder{}
+	rec.install(t)
+
+	err := runCmd(t, Verify(), "detachcmd", "--detach")
+	if err == nil {
+		t.Fatal("--detach was accepted with no granted host")
+	}
+	if !strings.Contains(err.Error(), "dross remote grant") {
+		t.Errorf("the refusal does not name the fix: %v", err)
+	}
+	if len(rec.scripts) != 0 || len(rec.syncs) != 0 {
+		t.Errorf("a refused --detach still touched the host: %d syncs, %d spawns",
+			len(rec.syncs), len(rec.scripts))
+	}
+}
+
+// TestVerifyDetachRejectsABadAtThroughTheCommand pins the --at call site. A
+// misparse that fell through to an immediate dispatch would spend the host's
+// night on a run the user asked to defer, and say nothing.
+func TestVerifyDetachRejectsABadAtThroughTheCommand(t *testing.T) {
+	detachCmdRepo(t, "detachcmd", mutationTuning{Target: detachTarget()})
+	rec := &detachRecorder{}
+	rec.install(t)
+
+	err := runCmd(t, Verify(), "detachcmd", "--detach", "--at", "tonight")
+	if err == nil {
+		t.Fatal("--at tonight was accepted")
+	}
+	if !strings.Contains(err.Error(), "--at") {
+		t.Errorf("the refusal does not name the flag: %v", err)
+	}
+	if len(rec.scripts) != 0 {
+		t.Error("a bad --at still started a run")
+	}
+}
+
+// TestVerifyDetachDispatchesThroughTheCommand is the positive half: the flag
+// reaches dispatchDetached with a schedule parsed and an adapter resolved.
+func TestVerifyDetachDispatchesThroughTheCommand(t *testing.T) {
+	dir := detachCmdRepo(t, "detachcmd", mutationTuning{Target: detachTarget()})
+	rec := &detachRecorder{}
+	rec.install(t)
+
+	if err := runCmd(t, Verify(), "detachcmd", "--detach", "--at", "02:00"); err != nil {
+		t.Fatalf("dross verify --detach: %v", err)
+	}
+	if len(rec.scripts) != 1 {
+		t.Fatalf("want exactly one dispatch, got %d", len(rec.scripts))
+	}
+	got, err := findDetachedRun(filepath.Join(dir, RootDirName), dir, "detachcmd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil {
+		t.Fatal("the command dispatched but recorded nothing")
+	}
+	if !got.Scheduled() {
+		t.Error("--at reached the command but no schedule was recorded")
+	}
+	if got.State != "scheduled" {
+		t.Errorf("state = %q, want scheduled", got.State)
+	}
+}
+
+// TestVerifyStatusAndCancelThroughTheCommand covers verifyStatus's own RunE,
+// including the --cancel branch that chooses between listing and tearing down.
+func TestVerifyStatusAndCancelThroughTheCommand(t *testing.T) {
+	dir := detachCmdRepo(t, "detachcmd", mutationTuning{Target: detachTarget()})
+	root := filepath.Join(dir, RootDirName)
+	if err := recordDetachedRun(root, dir, detachedRun{
+		Phase: "detachcmd", RunID: "r-1", Host: "helicon", Workdir: "/srv/x",
+		RunDir: ".dross-runs/r-1", DispatchedAt: time.Now().UTC(), State: "running",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "running"}, nil)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Verify(), "status"); err != nil {
+		t.Fatalf("verify status: %v", err)
+	}
+	if !strings.Contains(out, "detachcmd") || !strings.Contains(out, "helicon") {
+		t.Errorf("status did not list the run:\n%s", out)
+	}
+
+	calls := stubCancel(t, nil)
+	if err := runCmdCapturing(t, &out, Verify(), "status", "--cancel", "detachcmd"); err != nil {
+		t.Fatalf("verify status --cancel: %v", err)
+	}
+	if len(*calls) != 1 {
+		t.Fatalf("--cancel did not reach the host: %d calls", len(*calls))
+	}
+	got, err := findDetachedRun(root, dir, "detachcmd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Error("--cancel through the command left the record behind")
 	}
 }
