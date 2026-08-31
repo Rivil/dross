@@ -1001,3 +1001,34 @@ func TestDetachScriptBackgroundsOnlyTheJob(t *testing.T) {
 		t.Errorf("the last statement does not record the detached job's pid:\n  %s", last)
 	}
 }
+
+// TestExecScriptRefusesBeforeItReachesTheTransport covers the two refusals no
+// other test reaches, because every caller's test stubs this seam out.
+//
+// It is the live transport for both detached scripts, so its guards are the
+// last thing standing between a malformed target and an ssh invocation. A
+// blank script would open a connection to run nothing; an unsafe target would
+// build an argv the package exists to refuse.
+func TestExecScriptRefusesBeforeItReachesTheTransport(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		target Target
+		script string
+	}{
+		{"empty script", target(), ""},
+		{"whitespace-only script", target(), "  \n\t "},
+		{"unsafe host", Target{Host: "evil; rm -rf /", Workdir: "/srv/x"}, "echo hi"},
+		{"unsafe workdir", Target{Host: host, Workdir: "/srv/$(whoami)"}, "echo hi"},
+		{"no workdir", Target{Host: host}, "echo hi"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := ExecScript(tc.target, tc.script)
+			if err == nil {
+				t.Fatalf("ExecScript accepted %s", tc.name)
+			}
+			if out != "" {
+				t.Errorf("a refused ExecScript returned output %q — it must produce none", out)
+			}
+		})
+	}
+}

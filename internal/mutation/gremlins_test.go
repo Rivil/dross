@@ -968,3 +968,48 @@ func TestDetachStepsDerivesTheSamePackagesRunDoes(t *testing.T) {
 		}
 	}
 }
+
+// TestCollectClassifiesAnUnreadableReport covers the branch between "no report"
+// and "a good report" — a file that exists and does not parse.
+//
+// The three outcomes call for opposite handling and are deliberately distinct
+// as DATA rather than as prose: missing means nothing is known, unreadable
+// means nothing is known but something is wrong, and a parsed report with no
+// coverage means the package WAS measured. A collect that merged a malformed
+// file, or that treated it as fatal, would lose that distinction — and the
+// detached path reads reports written hours earlier on another machine, which
+// is exactly where a truncated file shows up.
+func TestCollectClassifiesAnUnreadableReport(t *testing.T) {
+	root := t.TempDir()
+	g := &Gremlins{ProjectRoot: root}
+	steps, err := g.DetachSteps([]string{"pkga/x.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "reports", "gremlins"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Truncated mid-object, which is what a half-written or half-fetched
+	// report actually looks like.
+	if err := os.WriteFile(filepath.Join(root, steps[0].ReportRel), []byte(`{"mutants_killed": 4, "files": [`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rep, err := g.Collect(steps)
+	if err != nil {
+		t.Fatalf("an unreadable report should be recorded, not fatal: %v", err)
+	}
+	if rep.Killed+rep.Survived+rep.Timeout != 0 {
+		t.Errorf("an unreadable report contributed counts: %+v", rep)
+	}
+	if len(g.Unmeasured) != 1 {
+		t.Fatalf("want 1 unmeasured entry, got %d: %+v", len(g.Unmeasured), g.Unmeasured)
+	}
+	if g.Unmeasured[0].Kind != UnmeasuredUnreadable {
+		t.Errorf("kind = %q, want %q — a malformed report is not the same as an absent one, "+
+			"and a drain treats the two differently", g.Unmeasured[0].Kind, UnmeasuredUnreadable)
+	}
+	if !strings.Contains(g.Unmeasured[0].Message, "unreadable") {
+		t.Errorf("the message does not say why: %q", g.Unmeasured[0].Message)
+	}
+}
