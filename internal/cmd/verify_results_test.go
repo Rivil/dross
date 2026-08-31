@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/verify"
 )
@@ -213,5 +214,91 @@ func TestResultsWithNoRecordedRunSaysHowToStartOne(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "--detach") {
 		t.Errorf("the error does not say how to start one: %v", err)
+	}
+}
+
+// TestFetchClearsEachLocalReportBeforePullingIt is the regression for the bug a
+// live collection from helicon produced, and it is the more dangerous half of
+// that bug by far.
+//
+// The fetch originally pulled the report DIRECTORY. FetchArgs passes its source
+// through Target.In, which cleans the path and so strips the trailing slash
+// rsync needs to mean "the contents of" — the reports landed in
+// reports/gremlins/gremlins/ and the real ones were never written. Collect then
+// read the LOCAL paths, found reports left there nine days earlier, and merged
+// them into a perfectly plausible verify.toml: score 0.96 over 274 mutants,
+// attributed to a file this phase had since grown by 238 lines. Every line
+// number in it pointed at the pre-phase version.
+//
+// A fetch that silently does nothing must therefore leave NO report behind, so
+// the run reads as unmeasured rather than as someone else's answer. That is
+// what this pins: each local report is removed before its fetch is attempted.
+func TestFetchClearsEachLocalReportBeforePullingIt(t *testing.T) {
+	root := chdirDross(t)
+	repoDir := filepath.Dir(root)
+	reportDir := filepath.Join(repoDir, "reports", "gremlins")
+	if err := os.MkdirAll(reportDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(reportDir, "internal_remote.json")
+	if err := os.WriteFile(stale, []byte(`{"mutants_killed":999}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	steps := []mutation.PackageStep{{
+		Package:   "./internal/remote",
+		ReportRel: filepath.Join("reports", "gremlins", "internal_remote.json"),
+	}}
+
+	// A fetch that fails outright — the case that produced the wrong answer.
+	orig := runDetachArgv
+	t.Cleanup(func() { runDetachArgv = orig })
+	runDetachArgv = func(argv []string) error { return errors.New("rsync: no such file") }
+
+	if err := detachFetchReports(remote.Target{Host: "helicon", Workdir: "/srv/x"}, repoDir, steps); err != nil {
+		t.Fatalf("a package with no report should not fail the fetch: %v", err)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Error("a failed fetch left the previous run's report in place — Collect would " +
+			"merge it and report someone else's numbers as this phase's")
+	}
+}
+
+// TestFetchPullsPerFileNotTheDirectory pins the shape rather than the symptom.
+// A directory fetch nests, because FetchArgs cleans the trailing slash away;
+// per-file is also what the attached path does, so the two agree by
+// construction rather than by coincidence.
+func TestFetchPullsPerFileNotTheDirectory(t *testing.T) {
+	root := chdirDross(t)
+	repoDir := filepath.Dir(root)
+
+	steps := []mutation.PackageStep{
+		{Package: "./internal/cmd", ReportRel: filepath.Join("reports", "gremlins", "internal_cmd.json")},
+		{Package: "./internal/remote", ReportRel: filepath.Join("reports", "gremlins", "internal_remote.json")},
+	}
+
+	var argvs [][]string
+	orig := runDetachArgv
+	t.Cleanup(func() { runDetachArgv = orig })
+	runDetachArgv = func(argv []string) error {
+		argvs = append(argvs, argv)
+		return nil
+	}
+
+	if err := detachFetchReports(remote.Target{Host: "helicon", Workdir: "/srv/x"}, repoDir, steps); err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(argvs) != len(steps) {
+		t.Fatalf("want one fetch per package (%d), got %d", len(steps), len(argvs))
+	}
+	for i, argv := range argvs {
+		src := argv[len(argv)-2]
+		if strings.HasSuffix(src, "/gremlins") || strings.HasSuffix(src, "/gremlins/") {
+			t.Errorf("fetch %d pulls the directory (%q) — rsync nests it into "+
+				"reports/gremlins/gremlins and the real reports never land", i, src)
+		}
+		if !strings.HasSuffix(src, ".json") {
+			t.Errorf("fetch %d source %q is not a report file", i, src)
+		}
 	}
 }

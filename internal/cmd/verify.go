@@ -370,13 +370,47 @@ var detachStatus = func(t remote.Target, runDir string) (remote.RunStatus, error
 	return remote.ParseStatus(out)
 }
 
-// detachFetchReports pulls the run's report directory back. Swapped in tests.
-var detachFetchReports = func(t remote.Target, localRoot string) error {
-	argv, err := remote.FetchArgs(t, "reports/gremlins/", filepath.Join(localRoot, "reports", "gremlins"))
-	if err != nil {
-		return err
+// detachFetchReports pulls the run's reports back, one file per package.
+// Swapped in tests.
+//
+// PER FILE, not as a directory, and each local copy is REMOVED first. Both
+// halves are load-bearing, and a live collection from helicon proved it:
+//
+//   - Fetching the directory nests it. FetchArgs passes the source through
+//     Target.In, which cleans the path and so strips the trailing slash rsync
+//     needs to mean "the contents of"; the reports landed in
+//     reports/gremlins/gremlins/. SyncArgs carries a comment about that exact
+//     slash — FetchArgs had only ever been used per-file, where it does not
+//     arise. Fetching per file is also what the attached path does, so the two
+//     now agree.
+//
+//   - Removing the local copy first turns a failed fetch into a MISSING report
+//     rather than a stale one. Collect reads local paths, so without this a
+//     fetch that silently did nothing is read as a complete run of whatever was
+//     last left on this machine. That is precisely what happened: a report from
+//     nine days earlier was parsed as this run's, producing a plausible 0.96
+//     over a file this phase had since grown by 238 lines. A missing report is
+//     recorded as unmeasured and is visible; a stale one is a wrong answer that
+//     looks exactly like a right one.
+var detachFetchReports = func(t remote.Target, localRoot string, steps []mutation.PackageStep) error {
+	for _, s := range steps {
+		local := filepath.Join(localRoot, s.ReportRel)
+		if err := os.Remove(local); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("clear stale report %s: %w", s.ReportRel, err)
+		}
+		argv, err := remote.FetchArgs(t, s.ReportRel, local)
+		if err != nil {
+			return err
+		}
+		// A package that produced no report is not a fetch failure — the
+		// attached path reads that as "gremlins gathered no covered mutants"
+		// and so must this one. Only the absence is tolerated; the local file
+		// is already gone, so nothing stale can survive it.
+		if err := runDetachArgv(argv); err != nil {
+			Printf("collect: no report fetched for %s (%v)\n", s.Package, err)
+		}
 	}
-	return runDetachArgv(argv)
+	return nil
 }
 
 // verifyResults registers `dross verify results <phase>`.
@@ -483,7 +517,7 @@ func collectDetached(phaseID string) error {
 		return err
 	}
 
-	if err := detachFetchReports(target, repoDir); err != nil {
+	if err := detachFetchReports(target, repoDir, steps); err != nil {
 		return &ExitCodeError{Code: exitResultsUnreachable, Err: fmt.Errorf(
 			"could not fetch run %s's reports from %s: %w", rec.RunID, rec.Host, err)}
 	}
