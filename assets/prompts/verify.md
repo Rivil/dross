@@ -33,6 +33,38 @@ This shells out to mutation tools (currently Stryker for TS/JS/Svelte; other lan
 - `.dross/phases/<id>/tests.json` — raw machine output, killed/survived counts per language, plus the `scope` block (what the run scoped to) and the `out_of_scope` list (survivors in files this phase never touched)
 - `.dross/phases/<id>/verify.toml` — skeleton verdict with `verdict = "pending"`, per-criterion `status = "unknown"`, and `[summary].mutation_status` of `measured | unmeasurable | skipped | out-of-scope` (use this — not the raw score — to decide whether the mutation leg gates at all in §3), plus `[summary].unclassified_in_scope`, the mutation leg's fail lever
 
+### Long legs: dispatch detached rather than holding the session
+
+When the mutation leg is long — a big Go repo, a remote host, anything you would
+not want to sit through — do not hold the session waiting for it. Dispatch it and
+come back:
+
+```
+dross verify <phase> --detach            # returns immediately; the run outlives the connection
+dross verify <phase> --detach --at 02:00 # same, but the host starts it off-hours
+```
+
+The run is owned by the host from that moment: the link can drop, the laptop can
+close, the session can be `/clear`ed. Collect it later — in this session or a
+completely new one:
+
+```
+dross verify status                       # what is in flight, and where
+dross verify results <phase>              # collect it; writes tests.json + verify.toml
+```
+
+`verify results` writes the same two artefacts an attached run does, through the
+same pipeline, so everything below — the criterion mapping, the survivor
+cross-check, the verdict — is unchanged. A detached verdict is not a second-class
+one.
+
+**A non-finished result is not a verdict about the code.** `verify results` exits
+`10` scheduled, `11` running, `12` the run produced nothing measurable, `13` the
+host was unreachable, `14` the run is gone. Only `12`, `13` and `14` need action,
+and none of them is a red suite — a run that **did not report** says nothing
+about the tests. On `10` or `11` the run is alive and fine: wait and collect
+again. Never fill in verify.toml from a run you did not collect.
+
 **Read the score with its denominator.** `dross verify` now prints it that way — `score: 0.90 over 191 in-scope mutant(s)`, plus a second line naming how many of those are uncoverable by construction and what the efficacy is over the rest. Carry both into your report: 0.90 over 10 mutants and 0.90 over 400 are the same number and not the same evidence, and a survivor the tooling cannot reach is a different fact from one the tests missed.
 
 **The score covers only this phase's changed files.** Mutation tools attribute at a coarser granularity than a phase does — gremlins mutates a whole Go package — so every report is filtered against the phase's change set before it reaches these files. A survivor in an untouched sibling is real, but it is not this phase's, and it is neither scored nor flagged here. `[summary].mutants_in_scope` is the denominator that filtering left: read it next to the score, because 0.50 over 2 mutants and 0.50 over 200 are the same number and not the same evidence.

@@ -752,11 +752,35 @@ func (l *Launcher) remoteExitFatal(bin string, code int) error {
 // report stays a benign skip (gremlins found no covered mutants), and any exit
 // WITH a report stays tolerated. Local runs are untouched.
 func (l *Launcher) reportlessExitFatal(bin string, code int) error {
-	if !l.remoteRun() || code == 0 {
+	if !l.remoteRun() {
+		return nil
+	}
+	return ReportlessExit(bin, l.Target.Host, code)
+}
+
+// ReportlessExit is the rule itself, split out from reportlessExitFatal so the
+// attached loop and a detached collect apply ONE rule rather than two copies of
+// it.
+//
+// Two copies is not a hypothetical concern here — it is the bug's own history.
+// The attached loop grew this guard after a false clean 0.95; the detached path
+// shipped later without an equivalent and reproduced the same false-green,
+// because nothing structural tied them together. A shared constructor is what
+// makes a change to the rule reach both callers.
+//
+// The host is a parameter rather than read from a launcher because a detached
+// collect must name the host that actually MEASURED the run — the one recorded
+// at dispatch — and not whatever the grant resolves to now. That is c-5, and
+// reaching for an ambient host here would quietly undo it.
+//
+// code 0 is not fatal: gremlins exiting 0 without a report means it found no
+// covered mutants, which is a real and benign answer.
+func ReportlessExit(bin, host string, code int) error {
+	if code == 0 {
 		return nil
 	}
 	return fmt.Errorf("remote %s on %s exited %d and wrote no report — it failed before measuring anything, so this package is unmeasured rather than clean; run it there to see why: %w",
-		bin, l.Target.Host, code, remote.ErrRemoteCommand)
+		bin, host, code, remote.ErrRemoteCommand)
 }
 
 // fetchFatal reports whether a failed report fetch ends the run.

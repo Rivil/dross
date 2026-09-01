@@ -215,6 +215,16 @@ func TestScopingHasNoOptOut(t *testing.T) {
 		// the adapters with attribution turned off, which is what an opt-out
 		// would mean.
 		"skip-mutation": true,
+		// Moves WHERE the run happens, not what it scopes to. The detached
+		// dispatch derives its packages from the same scoped file set the
+		// attached path does (DetachSteps takes `files`, which is already the
+		// scoped union), and the collected report goes through the same
+		// filtering — so a detached run cannot be a wider run.
+		"detach": true,
+		// Moves WHEN the detached run starts. Touches neither the file set nor
+		// the attribution; a scheduled run scopes exactly as the immediate one
+		// it would otherwise have been.
+		"at": true,
 	}
 
 	var got []string

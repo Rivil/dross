@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
@@ -244,6 +245,162 @@ type localStore struct {
 	// own environment carries GITHUB_TOKEN and YOUTRACK_TOKEN and "send
 	// everything" would put them on the mutation host.
 	MutationRemoteEnv string `toml:"mutation_remote_env,omitempty"`
+
+	// DetachedRuns records the mutation runs this machine dispatched to a host
+	// and has not yet collected — one per phase, at most.
+	//
+	// It lives here rather than in the phase directory because it is machine-
+	// AND host-local in the same way the grant above is: a run id naming a
+	// directory on helicon means nothing in a clone, on another laptop, or to
+	// anyone reading the phase's artefacts later. Committing it would also put
+	// a host name into cumulative history, which is the self-authorization
+	// local.toml exists to keep out.
+	//
+	// ABSENT from localKeys, on the RemotePool precedent one step further: the
+	// record names a host AND a directory a later `verify results` will read a
+	// report out of, so a generic key-writer could point a fetch at a machine
+	// and a path the user never saw. Only the detach verb writes it, and it
+	// prints the host it is dispatching to before it does.
+	//
+	// An ARRAY keyed by phase rather than a map, so the file reads in dispatch
+	// order and a hand-inspected local.toml shows what is outstanding without
+	// the reader having to know the key set.
+	DetachedRuns []detachedRun `toml:"detached_run,omitempty"`
+}
+
+// detachedRun is one dispatched-but-uncollected mutation run.
+//
+// RunDir is STORED rather than re-derived from Workdir and RunID at fetch
+// time. The derivation is ours and could change; a run dispatched by an older
+// dross would then be looked for in a directory nothing ever wrote to, and the
+// failure would present as "the run vanished" rather than as a version skew.
+// Storing the path the dispatch actually used makes the record self-contained.
+//
+// ScheduledFor is the zero time for an immediate run. A scheduled one carries
+// the instant the host will start it, which is what lets `verify status` say
+// "scheduled" rather than "running" without asking the host.
+type detachedRun struct {
+	Phase        string    `toml:"phase"`
+	RunID        string    `toml:"run_id"`
+	Host         string    `toml:"host"`
+	Workdir      string    `toml:"workdir"`
+	RunDir       string    `toml:"run_dir"`
+	DispatchedAt time.Time `toml:"dispatched_at"`
+	ScheduledFor time.Time `toml:"scheduled_for,omitempty"`
+	State        string    `toml:"state"`
+}
+
+// Scheduled reports whether this run is waiting for its start time rather than
+// already running.
+func (d detachedRun) Scheduled() bool { return !d.ScheduledFor.IsZero() }
+
+// readDetachedRuns returns every dispatched-but-uncollected run.
+//
+// It goes through refuseTrackedLocal for the reason readRemoteGrant does: the
+// record names a host and a path a fetch will read from, so a committed store
+// carrying one is a repo pointing this machine's next `verify results` at a
+// directory of its choosing. Refused unread, like every other trust-bearing
+// read of this file.
+//
+// An unparseable store is an error rather than an empty list, on the same
+// reasoning: "I could not read your config" must not resolve to "you have no
+// runs outstanding", because that silently re-dispatches a leg already running
+// on the host and leaves two writers for one phase's tests.json.
+func readDetachedRuns(root, repoDir string) ([]detachedRun, error) {
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return nil, err
+	}
+	l, err := loadLocal(localPath(root))
+	if err != nil {
+		return nil, err
+	}
+	return l.DetachedRuns, nil
+}
+
+// findDetachedRun returns the run recorded for a phase, or (nil, nil) when
+// there is none.
+func findDetachedRun(root, repoDir, phaseID string) (*detachedRun, error) {
+	runs, err := readDetachedRuns(root, repoDir)
+	if err != nil {
+		return nil, err
+	}
+	for i := range runs {
+		if runs[i].Phase == phaseID {
+			return &runs[i], nil
+		}
+	}
+	return nil, nil
+}
+
+// recordDetachedRun stores a dispatched run, refusing a second one for a phase
+// that already has one in flight.
+//
+// The refusal is the one_run_per_phase decision made mechanical. Two runs
+// against one phase both write that phase's tests.json when collected, and the
+// loser wins silently — whichever fetch happens second overwrites the first
+// with numbers measured from a different dispatch. Refusing by name, with the
+// running host in the message, makes cancel-then-redispatch the explicit
+// gesture rather than something the user discovers afterwards.
+//
+// The refusal states the FACT — which run, on which host, dispatched when — and
+// narrates no remediation command. The verbs that collect and cancel a run live
+// on the verify command, and naming them here binds this layer to the CLI's
+// spelling: TestNarratedCommandsResolveAgainstTheTree fails a message naming a
+// subcommand that does not exist, and it caught exactly that on the first draft
+// of this function. The caller adds the remediation line, where the verbs are.
+func recordDetachedRun(root, repoDir string, rec detachedRun) error {
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return err
+	}
+	path := localPath(root)
+	l, err := loadLocal(path)
+	if err != nil {
+		return err
+	}
+	for _, existing := range l.DetachedRuns {
+		if existing.Phase == rec.Phase {
+			return fmt.Errorf(
+				"phase %q already has a detached run in flight: %s on %s (dispatched %s)",
+				rec.Phase, existing.RunID, existing.Host,
+				existing.DispatchedAt.Format(time.RFC3339))
+		}
+	}
+	l.DetachedRuns = append(l.DetachedRuns, rec)
+	return l.save(path)
+}
+
+// clearDetachedRun removes a phase's record, reporting whether there was one.
+//
+// The boolean is what lets a cancel of an unknown phase be an error rather
+// than a silent success: a caller that cannot tell "removed" from "there was
+// nothing" reports both as done, and a user who mistyped a phase id is told
+// the run is cancelled while it keeps running on the host.
+func clearDetachedRun(root, repoDir, phaseID string) (bool, error) {
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return false, err
+	}
+	path := localPath(root)
+	l, err := loadLocal(path)
+	if err != nil {
+		return false, err
+	}
+	kept := make([]detachedRun, 0, len(l.DetachedRuns))
+	found := false
+	for _, r := range l.DetachedRuns {
+		if r.Phase == phaseID {
+			found = true
+			continue
+		}
+		kept = append(kept, r)
+	}
+	if !found {
+		return false, nil
+	}
+	l.DetachedRuns = kept
+	if err := l.save(path); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // localKeys maps each key to its accessors, keeping `local get` and

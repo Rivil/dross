@@ -1,0 +1,159 @@
+task_seq = 15
+
+[phase]
+  id = "remote-run-detach"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Record a detached run in local.toml"
+  files = ["internal/cmd/local.go", "internal/cmd/local_detached_test.go"]
+  description = "Add a detached-run record to localStore, keyed by phase: run id, host,\nworkdir, dispatched-at, scheduled-for, state. Read/write/clear helpers.\nExcluded from localKeys exactly as the remote grants are.\n"
+  covers = ["c-3", "c-5"]
+  test_contract = ["if a field is dropped from the round trip, a record written and re-read from a fresh localStore fails the field-for-field comparison", "if the one-run-per-phase guard breaks, writing a second record for a phase that already has one stops returning an error naming the in-flight run", "if the record leaks into the generic key-writer, a test asserting detached_run is absent from localKeys fails — an agent could otherwise name a host through dross local set", "if the record is written when local.toml is tracked, the refuseTrackedLocal guard test fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Build the host-side detach script"
+  files = ["internal/remote/remote.go", "internal/remote/remote_test.go"]
+  description = "Add DetachScript(t, runDir, argv, notBefore): a setsid+nohup script that\nwrites a pidfile, a status file and the tool's exit code into runDir, and\nsleeps host-side until notBefore when one is given. Plus the status-read\nand run-dir helpers, built on the existing Script/ScriptAll/FetchArgs.\n"
+  covers = ["c-1", "c-4", "c-6"]
+  test_contract = ["if runDir or argv interpolation stops being quoted, a run directory spelled with a space or a semicolon stops arriving as one token — the same assertion shape shellQuote already carries", "if the sleep is emitted unconditionally, a notBefore already in the past produces a script containing a sleep", "if the exit code stops being recorded, a completed run becomes indistinguishable from a died one — the test asserting an absent exit-code file differs from a recorded 0 fails", "if setsid/nohup is dropped, the generated script no longer detaches the tool from the ssh session and the argv-shape assertion fails"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Extract the post-run verify pipeline"
+  files = ["internal/cmd/verify.go", "internal/cmd/verify_finish_test.go"]
+  description = "Lift everything after RunScoped — MeasuredOn stamping, gone-file skips,\nsurvivor lifecycle, tests.json + verify.toml writes, summary printing — into\none finishVerify seam both the attached and the detached path call.\nPure refactor: no behaviour change on the attached path.\n"
+  covers = ["c-2"]
+  test_contract = ["if the extraction changes attached-path behaviour, tests.json and verify.toml for a fixed Tests input stop being byte-identical to what the pre-extraction path wrote", "if a pipeline step is left behind in RunE, a finishVerify call with a fixed Tests produces a verify.toml missing that step's output — the staleness notes and the survivor lifecycle are each asserted present"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Dispatch a detached run behind --detach"
+  files = ["internal/cmd/verify.go", "internal/mutation/gremlins.go", "internal/remote/remote.go", "internal/cmd/verify_detach_test.go", "internal/cmd/verify_scoping_test.go"]
+  description = "Add --detach and --at: resolve the host, push the tree, build the per-package\nhost-side command sequence, spawn it detached with DetachScript, record it,\nprint phase and host, return. Needs an exported accessor for the gremlins\nper-package argv, which is why gremlins.go joined this task's files."
+  covers = ["c-1", "c-4", "c-5"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["if --detach starts waiting on the run, the test asserting exactly one ssh spawn and a return without the tool's completion fails", "if the dispatched host stops being the recorded one, the record's host no longer equals the target selectRemoteTarget returned", "if the in-flight guard breaks, a second --detach on a phase with a live run stops being refused by name", "if the no-grant path regresses, --detach without a remote grant stops being refused before any spawn — asserted with the spawn recorder at zero"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Fetch a detached run with verify results"
+  files = ["internal/cmd/verify.go", "internal/mutation/gremlins.go", "internal/mutation/gremlins_test.go", "internal/cmd/verify_results_test.go"]
+  description = "`dross verify results <phase>`: read the record, fetch status and report from\nthe RECORDED host, parse into Tests, hand to finishVerify. One distinct exit\ncode per state — scheduled, running, finished, failed, unreachable.\n"
+  covers = ["c-2", "c-5", "c-6"]
+  depends_on = ["t-1", "t-2", "t-3"]
+  test_contract = ["if the detached path diverges from the attached one, tests.json and verify.toml built from the same report stop matching the attached path's output field-for-field", "if the fetch re-resolves the pool, a record naming host A stops being read from A once the pool prefers B — asserted with a two-host pool and a recorded non-preferred host", "if an unreachable host is treated as a result, the run exits with the finished code and writes verify.toml instead of exiting unreachable and writing neither file", "if a still-running run is treated as finished, results stops exiting with the running code and writes artefacts early"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "List and cancel in-flight runs"
+  files = ["internal/cmd/verify.go", "internal/cmd/verify_status_test.go"]
+  description = "`dross verify status` names each recorded run (phase, host, dispatched-at,\nstate) and says so plainly when there are none. `--cancel <phase>` kills a\nscheduled or running run host-side and clears its record.\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["if status stops reading the record, a dispatched run no longer appears with its phase, host and state", "if cancel leaves the record behind, a cancelled phase still reports in-flight and a re-dispatch is still refused", "if cancel stops reaching the host, the run directory survives the cancel — asserted on the spawned argv", "if cancelling an unknown phase becomes a silent success, the test asserting an error fails"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Document the detached run surface"
+  files = ["README.md", "assets/prompts/verify.md", "internal/cmd/options_docs_test.go"]
+  description = "Document --detach, --at, verify results and verify status in the README, and\nteach the /dross-verify prompt to dispatch detached and fetch later rather\nthan holding a session for the length of the leg.\n"
+  covers = ["c-1", "c-2", "c-3", "c-4"]
+  depends_on = ["t-4", "t-5", "t-6"]
+  test_contract = ["if a verb or flag ships undocumented, the options/README doc test fails naming the missing one — the same check that already covers the lane surface", "if the prompt keeps telling the reader to wait out an attached run, the assertion that verify.md names the detached path fails"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 1
+  title = "Cover collectDetached's success path"
+  files = ["internal/cmd/verify_results_test.go"]
+  description = "Build the fixture the refusal tests never needed — project.toml, spec, changes.json, a finished run record, reports on disk — and assert a detached collect produces the same artefacts an attached run would for the same report."
+  covers = ["c-2"]
+  test_contract = ["if the detached collect diverges from the attached path, tests.json and verify.toml built from one report differ between finishVerify-direct and collectDetached", "if the scope rebuild breaks, a collect writes a tests.json whose scope does not match the one phaseScope derives from changes.json", "if the record is not cleared on success, a second collect of the same phase succeeds instead of reporting no run"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 1
+  title = "Cover the command-level detach wiring"
+  files = ["internal/cmd/verify_detach_test.go"]
+  description = "Drive Verify() and verifyStatus() through their RunE rather than calling the helpers directly, so the flag wiring and guards have a regression test."
+  covers = ["c-1", "c-3"]
+  test_contract = ["if --detach stops refusing without a reachable host, running Verify with --detach and no grant spawns instead of erroring", "if --at stops reaching parseDetachAt, an invalid --at value is accepted by the command", "if the len(steps)==0 guard goes, a phase with no Go packages dispatches an empty run"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 1
+  title = "Cover ExecScript and the unreadable report"
+  files = ["internal/remote/remote_test.go", "internal/mutation/gremlins_test.go"]
+  description = "The transport's own refusals and Collect's malformed-report branch, neither of which any test reaches today."
+  covers = ["c-2", "c-6"]
+  test_contract = ["if ExecScript stops refusing an empty script, a blank script reaches the transport", "if ExecScript stops validating the target, an unsafe host builds an argv", "if Collect stops classifying a malformed report, an unparseable file is merged or fatal instead of recorded UnmeasuredUnreadable"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 1
+  title = "Assert the cancel teardown line"
+  files = ["internal/cmd/verify.go", "internal/cmd/verify_status_test.go"]
+  description = "detachCancel's command text is invisible to the suite because stubCancel replaces the whole seam. Extract the line as a pure cancelLine(runDir, pidFile) string and assert it directly, so dropping the process-group '-- -' fails a test instead of leaving gremlins holding the host's cores after a reported cancellation."
+  covers = ["c-4"]
+  test_contract = ["if cancelLine stops targeting the process group, TestCancelLineKillsTheProcessGroup fails", "if cancelLine stops removing the run directory, TestCancelLineRemovesTheRunDirectory fails", "if cancelLine stops quoting its paths, TestCancelLineQuotesItsPaths fails"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 4
+  title = "Derive mutation packages only from Go directories"
+  files = ["internal/mutation/gremlins.go", "internal/mutation/gremlins_test.go"]
+  description = "packagesFromFiles maps every changed file's directory to a gremlins package, including directories that hold no Go. Two consequences, both live on this phase: README.md maps to '.', and gremlins appends /... to every package argument, so '.' becomes './...' and mutates the whole module (this phase's run produced a 196-file, 5444-mutant root.json and out-of-scope survivors from internal/statusline, internal/phase, internal/architecture and internal/forge); and assets/prompts/verify.md maps to './assets/prompts', where gremlins exits 1 and writes no report. Filter the derivation to directories containing at least one .go file. Shared by the attached and detached paths, so both get the fix."
+  covers = ["c-2"]
+  test_contract = ["if the derivation stops filtering Go-less directories, a test over a file set containing a root-level non-Go file and a Go-less subdirectory fails by deriving '.' and './assets/prompts'", "if the filter over-reaches and drops a directory that does contain Go, a test asserting a mixed file set still derives its Go package fails"]
+  status = "done"
+
+[[task]]
+  id = "t-13"
+  wave = 5
+  title = "Fail a detached collect on a package that failed before measuring"
+  files = ["internal/cmd/verify.go", "internal/mutation/gremlins.go", "internal/mutation/launcher.go", "internal/cmd/verify_results_test.go", "internal/cmd/verify_detach_test.go", "internal/mutation/gremlins_test.go"]
+  description = "The attached loop calls reportlessExitFatal per package (internal/mutation/gremlins.go:273): no report PLUS a non-zero tool exit fails the run, written after that exact shape reported a false clean 0.95 with a package silently unmeasured (internal/mutation/launcher.go:745). The detached path calls no equivalent — detachFetchReports warns and continues, and the only fatal check (internal/cmd/verify.go:530) needs every package to have measured nothing. It is structural: detachSequence joins packages with ';' and DetachScript records one exit code for the sequence, the last package's, so a package failing anywhere but last is invisible by construction. Have detachSequence write a per-package exit file beside each report, fetch it with the report, and apply the attached path's rule at collect."
+  covers = ["c-2"]
+  depends_on = ["t-12"]
+  test_contract = ["if the detached collect stops failing on a package that wrote no report and exited non-zero, a test driving a two-package collect where the first package failed and the second measured cleanly fails by writing artefacts instead of refusing", "if detachSequence stops writing a per-package exit file, a test asserting each step's rendered shell records its own exit code fails", "if the guard over-reaches, a test asserting a package that exited 0 with no report is still a benign skip fails"]
+  status = "done"
+
+[[task]]
+  id = "t-14"
+  wave = 6
+  title = "Cover the real detachFetchReports body"
+  files = ["internal/cmd/verify_results_test.go"]
+  description = "Both in-diff survivors from run r-20260831-202210 (internal/cmd/verify.go:438 and :442, CONDITIONALS_NEGATION, in-hunk) sit inside detachFetchReports, which every collect test replaces wholesale — so the exit-file fetch added by t-13 has no test at all. Unlike the detachSync/detachStatus/detachCancel seams, this one bottoms out in runDetachArgv, a package-level var, so the REAL body can run with only the spawn stubbed: no ssh, no rsync, and the locked tests_spawn_no_ssh decision is untouched. Assert that each step's exit file is fetched alongside its report, that a stale local exit file is cleared first, that a step carrying no ExitRel fetches only its report, and that a failed exit fetch is tolerated the way a failed report fetch is."
+  covers = ["c-2"]
+  test_contract = ["if detachFetchReports stops fetching the per-package exit file, a test asserting the real body issues a fetch for each step's ExitRel fails", "if it stops clearing a stale local exit file before fetching, a test seeding one and asserting it is gone fails", "if a step carrying no ExitRel stops being skipped, a test asserting only the report is fetched for it fails"]
+  status = "done"
+
+[[task]]
+  id = "t-15"
+  wave = 7
+  title = "Tolerate only a missing report, not a dead connection"
+  files = ["internal/cmd/verify.go", "internal/cmd/verify_results_test.go"]
+  description = "c-6 requires that a transport failure at fetch time reads as 'the run did not report'. detachFetchReports does not: it warns and continues on ANY error from runDetachArgv, so a connection that dies mid-collect is read as 'these packages produced no report' and a score is written over whichever packages happened to arrive first. Its own comment already states the correct rule — 'only the absence is tolerated' — and the attached path implements it via fetchFatal, which survives only remote.ErrPartial. remote.Classify is exported and reachable from package cmd, so the detached path can make the same distinction: rsync 23/24 (source missing/vanished) tolerated, 255 and 10/12/30/35 (the connection) fatal."
+  covers = ["c-6"]
+  test_contract = ["if a dead-connection fetch error stops being fatal, a test whose report fetch fails with rsync 255 fails by collecting a score instead of refusing", "if a missing report stops being tolerated, a test whose fetch fails with rsync 23 fails by refusing a collect that should succeed", "if the exit-code fetch stops distinguishing them, a test whose exit fetch fails with a transport error fails by continuing"]
+  status = "done"

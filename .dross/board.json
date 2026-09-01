@@ -32,6 +32,7 @@
     "red-proof-repoint": "DRO-125",
     "reentry-signal-truth": "DRO-181",
     "remote-mutation-runner": "DRO-24",
+    "remote-run-detach": "DRO-277",
     "remote-test-runner": "DRO-26",
     "remote-toolchain-bootstrap": "DRO-129",
     "remote-toolchain-install": "DRO-246",
@@ -121,6 +122,7 @@
     "someday:id:974f6ffb1634e97a": "DRO-120",
     "someday:id:9a70b04cd1817f37": "DRO-72",
     "someday:id:9ae1aad86e4bf770": "DRO-56",
+    "someday:id:9c1f7be59afdc8ac": "DRO-281",
     "someday:id:9fa4386fc04774d6": "DRO-112",
     "someday:id:a0c922d44af899fc": "DRO-78",
     "someday:id:a1eca47a8213daa2": "DRO-207",
@@ -158,6 +160,7 @@
     "someday:id:ee252a290b75a800": "DRO-80",
     "someday:id:ee52693267d9cef5": "DRO-108",
     "someday:id:f0d699cce6b70445": "DRO-71",
+    "someday:id:f74fa3c9230a9c3b": "DRO-291",
     "someday:id:f93277521f881095": "DRO-89",
     "someday:id:fa50fb2ca56d687a": "DRO-276",
     "someday:id:fd3b654f5740fd11": "DRO-75",
@@ -542,6 +545,36 @@
       "issue": "DRO-187",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "remote-run-detach/t-1": {
+      "issue": "DRO-278",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-run-detach/t-11": {
+      "issue": "DRO-288",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-run-detach/t-12": {
+      "issue": "DRO-289",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-run-detach/t-13": {
+      "issue": "DRO-290",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-run-detach/t-2": {
+      "issue": "DRO-279",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-run-detach/t-3": {
+      "issue": "DRO-280",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "remote-toolchain-bootstrap/t-1": {
       "issue": "DRO-130"
