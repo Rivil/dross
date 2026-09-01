@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -420,10 +421,13 @@ var detachFetchReports = func(t remote.Target, localRoot string, steps []mutatio
 		}
 		// A package that produced no report is not a fetch failure — the
 		// attached path reads that as "gremlins gathered no covered mutants"
-		// and so must this one. Only the absence is tolerated; the local file
+		// and so must this one. Only the ABSENCE is tolerated; the local file
 		// is already gone, so nothing stale can survive it.
-		if err := runDetachArgv(argv); err != nil {
-			Printf("collect: no report fetched for %s (%v)\n", s.Package, err)
+		if ferr := classifyFetch(t.Host, runDetachArgv(argv)); ferr != nil {
+			if !errors.Is(ferr, remote.ErrPartial) {
+				return fmt.Errorf("fetching %s's report from %s: %w", s.Package, t.Host, ferr)
+			}
+			Printf("collect: no report fetched for %s (%v)\n", s.Package, ferr)
 		}
 
 		// The exit code travels with the report, and its absence is tolerated
@@ -442,9 +446,43 @@ var detachFetchReports = func(t remote.Target, localRoot string, steps []mutatio
 		if err != nil {
 			return err
 		}
-		_ = runDetachArgv(exitArgv)
+		if ferr := classifyFetch(t.Host, runDetachArgv(exitArgv)); ferr != nil {
+			if !errors.Is(ferr, remote.ErrPartial) {
+				return fmt.Errorf("fetching %s's exit code from %s: %w", s.Package, t.Host, ferr)
+			}
+			// Absent: the step never recorded one. Collect reads that as a
+			// skip, which is the pre-exit-file reading and stays correct.
+		}
 	}
 	return nil
+}
+
+// classifyFetch turns runDetachArgv's raw error into a transport judgement, so
+// a collect can tell "the file is not there" from "the connection died".
+//
+// That distinction is c-6: a transport failure at fetch time must read as "the
+// run did not report", never as a package with nothing to measure. Without it
+// a connection dropping mid-collect scores whichever packages arrived first and
+// says nothing about the rest — the same false-green as a package that failed
+// before measuring, arriving through a different door.
+//
+// An error that is already classified passes through, so a test can hand this
+// an rsync verdict without constructing an *exec.ExitError. An error that is
+// neither classified nor an exit status means rsync did not run at all, which
+// is not an absent report either.
+func classifyFetch(host string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, remote.ErrPartial) || errors.Is(err, remote.ErrTransport) ||
+		errors.Is(err, remote.ErrRemoteCommand) {
+		return err
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return remote.Classify("rsync", host, ee.ExitCode())
+	}
+	return err
 }
 
 // verifyResults registers `dross verify results <phase>`.

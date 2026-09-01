@@ -253,9 +253,11 @@ func TestFetchClearsEachLocalReportBeforePullingIt(t *testing.T) {
 	}}
 
 	// A fetch that fails outright — the case that produced the wrong answer.
+	// rsync 23 is how "the source is not there" arrives, which is what a
+	// package gremlins gathered no covered mutants for leaves behind.
 	orig := runDetachArgv
 	t.Cleanup(func() { runDetachArgv = orig })
-	runDetachArgv = func(argv []string) error { return errors.New("rsync: no such file") }
+	runDetachArgv = func(argv []string) error { return remote.Classify("rsync", "helicon", 23) }
 
 	if err := detachFetchReports(remote.Target{Host: "helicon", Workdir: "/srv/x"}, repoDir, steps); err != nil {
 		t.Fatalf("a package with no report should not fail the fetch: %v", err)
@@ -263,6 +265,21 @@ func TestFetchClearsEachLocalReportBeforePullingIt(t *testing.T) {
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
 		t.Error("a failed fetch left the previous run's report in place — Collect would " +
 			"merge it and report someone else's numbers as this phase's")
+	}
+
+	// The clear must happen for ANY failed fetch, not just the tolerated one.
+	// A dead connection now refuses the collect, but if it ever stopped
+	// refusing, the stale report must still not be there to be merged — the
+	// two guards protect the same thing from different directions.
+	if err := os.WriteFile(stale, []byte(`{"mutants_killed":999}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runDetachArgv = func(argv []string) error { return remote.Classify("rsync", "helicon", 255) }
+	if err := detachFetchReports(remote.Target{Host: "helicon", Workdir: "/srv/x"}, repoDir, steps); err == nil {
+		t.Error("a dead connection was collected as a package with no report")
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Error("a fetch that died on the connection left the previous run's report in place")
 	}
 }
 
@@ -577,9 +594,12 @@ func TestCollectAcceptsARunWhereEveryPackageExitedClean(t *testing.T) {
 // locked tests_spawn_no_ssh decision is untouched.
 
 // fetchSpy runs the real detachFetchReports against a recording spawn, and
-// returns every argv it would have executed. fail names paths whose fetch
-// should report an error, standing in for rsync's "source not there".
-func fetchSpy(t *testing.T, steps []mutation.PackageStep, localRoot string, fail map[string]bool) ([][]string, error) {
+// returns every argv it would have executed. fail maps a destination path to
+// the rsync exit code its fetch should report — 23 for a source that is not
+// there, 255 or 12 for a connection that died. The codes are what the function
+// under test must distinguish, so the fixture speaks in them rather than in a
+// generic error.
+func fetchSpy(t *testing.T, steps []mutation.PackageStep, localRoot string, fail map[string]int) ([][]string, error) {
 	t.Helper()
 	orig := runDetachArgv
 	t.Cleanup(func() { runDetachArgv = orig })
@@ -587,8 +607,8 @@ func fetchSpy(t *testing.T, steps []mutation.PackageStep, localRoot string, fail
 	runDetachArgv = func(argv []string) error {
 		got = append(got, argv)
 		for _, a := range argv {
-			if fail[a] {
-				return errors.New("rsync: no such file")
+			if code, ok := fail[a]; ok {
+				return remote.Classify("rsync", "helicon", code)
 			}
 		}
 		return nil
@@ -703,8 +723,9 @@ func TestFetchReportsToleratesAFailedExitFetch(t *testing.T) {
 		{Package: "./internal/remote", ReportRel: "reports/gremlins/internal_remote.json",
 			ExitRel: "reports/gremlins/internal_remote.exit"},
 	}
-	// The first package's exit fetch fails; the second must still be attempted.
-	fail := map[string]bool{filepath.Join(root, steps[0].ExitRel): true}
+	// 23 is rsync's "source not there": the step recorded no code. The second
+	// package must still be attempted.
+	fail := map[string]int{filepath.Join(root, steps[0].ExitRel): 23}
 
 	got, err := fetchSpy(t, steps, root, fail)
 	if err != nil {
@@ -712,6 +733,120 @@ func TestFetchReportsToleratesAFailedExitFetch(t *testing.T) {
 	}
 	if argvFor(got, filepath.Join(root, steps[1].ExitRel)) == nil {
 		t.Error("the second package's exit fetch never happened — one absent code truncated the collect")
+	}
+}
+
+// --- absence versus a dead connection (c-6 at fetch time) ---
+//
+// "The file is not there" and "the connection died" arrive at this layer as the
+// same thing: a non-zero rsync. They mean opposite things. The first is a
+// package with nothing to measure; the second is a collect that learned nothing
+// about the package and must not score around it. detachFetchReports tolerated
+// both until this test existed, so a connection dropping mid-collect produced a
+// score over whichever packages happened to arrive first.
+
+// TestFetchReportsRefusesADeadConnection: rsync 255 is the transport, not the
+// payload. Continuing past it writes a score over a subset of the run.
+func TestFetchReportsRefusesADeadConnection(t *testing.T) {
+	root := t.TempDir()
+	steps := []mutation.PackageStep{
+		{Package: "./internal/cmd", ReportRel: "reports/gremlins/internal_cmd.json",
+			ExitRel: "reports/gremlins/internal_cmd.exit"},
+		{Package: "./internal/remote", ReportRel: "reports/gremlins/internal_remote.json",
+			ExitRel: "reports/gremlins/internal_remote.exit"},
+	}
+	fail := map[string]int{filepath.Join(root, steps[0].ReportRel): 255}
+
+	got, err := fetchSpy(t, steps, root, fail)
+	if err == nil {
+		t.Fatal("a dead connection was read as a package with no report")
+	}
+	if !errors.Is(err, remote.ErrTransport) {
+		t.Errorf("the failure is not reported as a transport failure: %v", err)
+	}
+	if !strings.Contains(err.Error(), steps[0].Package) {
+		t.Errorf("the failure does not name the package it happened on: %v", err)
+	}
+	// It must stop, not carry on collecting the rest — continuing is what
+	// produces the partial score.
+	if argvFor(got, filepath.Join(root, steps[1].ReportRel)) != nil {
+		t.Error("the collect kept fetching after the connection died")
+	}
+}
+
+// TestFetchReportsRefusesAConnectionThatDiesOnTheExitCode: the exit code is
+// what decides whether an absent report is benign, so failing to learn it is
+// strictly worse than failing to learn a report. It must refuse too, not fall
+// through to the skip that an absent code earns.
+func TestFetchReportsRefusesAConnectionThatDiesOnTheExitCode(t *testing.T) {
+	root := t.TempDir()
+	steps := []mutation.PackageStep{
+		{Package: "./internal/cmd", ReportRel: "reports/gremlins/internal_cmd.json",
+			ExitRel: "reports/gremlins/internal_cmd.exit"},
+	}
+	// 12 is rsync's protocol stream error — the connection, not the payload.
+	fail := map[string]int{filepath.Join(root, steps[0].ExitRel): 12}
+
+	if _, err := fetchSpy(t, steps, root, fail); err == nil {
+		t.Fatal("a connection that died fetching the exit code was ignored")
+	} else if !errors.Is(err, remote.ErrTransport) {
+		t.Errorf("not reported as a transport failure: %v", err)
+	}
+}
+
+// TestFetchReportsStillToleratesAnAbsentReport is the over-reach guard: the
+// point is to distinguish, not to become strict. rsync 23 is a source that is
+// not there, which is exactly what a package gremlins gathered no covered
+// mutants for leaves behind, and the collect must carry on.
+func TestFetchReportsStillToleratesAnAbsentReport(t *testing.T) {
+	root := t.TempDir()
+	steps := []mutation.PackageStep{
+		{Package: "./internal/cmd", ReportRel: "reports/gremlins/internal_cmd.json",
+			ExitRel: "reports/gremlins/internal_cmd.exit"},
+		{Package: "./internal/remote", ReportRel: "reports/gremlins/internal_remote.json",
+			ExitRel: "reports/gremlins/internal_remote.exit"},
+	}
+	fail := map[string]int{
+		filepath.Join(root, steps[0].ReportRel): 23,
+		filepath.Join(root, steps[0].ExitRel):   23,
+	}
+
+	got, err := fetchSpy(t, steps, root, fail)
+	if err != nil {
+		t.Fatalf("an absent report was treated as a fetch failure: %v", err)
+	}
+	if argvFor(got, filepath.Join(root, steps[1].ReportRel)) == nil {
+		t.Error("the collect stopped at a package that simply had no report")
+	}
+}
+
+// TestClassifyFetchReadsRsyncsVerdict pins the mapping directly, including the
+// case that reaches it as a raw process failure rather than a classified one.
+func TestClassifyFetchReadsRsyncsVerdict(t *testing.T) {
+	if err := classifyFetch("helicon", nil); err != nil {
+		t.Errorf("a successful fetch produced an error: %v", err)
+	}
+	for _, tc := range []struct {
+		code int
+		want error
+	}{
+		{23, remote.ErrPartial}, // source not there
+		{24, remote.ErrPartial}, // source vanished mid-transfer
+		{255, remote.ErrTransport},
+		{12, remote.ErrTransport}, // protocol stream error
+		{30, remote.ErrTransport}, // I/O timeout
+	} {
+		got := classifyFetch("helicon", remote.Classify("rsync", "helicon", tc.code))
+		if !errors.Is(got, tc.want) {
+			t.Errorf("rsync %d classified as %v, want %v", tc.code, got, tc.want)
+		}
+	}
+	// An error that is not an exit status at all means rsync never ran, which
+	// is not an absent report either.
+	if err := classifyFetch("helicon", errors.New("exec: rsync not found")); err == nil {
+		t.Error("a failure to spawn rsync was read as a successful fetch")
+	} else if errors.Is(err, remote.ErrPartial) {
+		t.Errorf("a failure to spawn rsync was read as an absent report: %v", err)
 	}
 }
 
