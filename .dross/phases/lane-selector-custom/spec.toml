@@ -1,0 +1,77 @@
+[phase]
+  id = "lane-selector-custom"
+  title = "lane-selector-custom"
+  milestone = "v1.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "A [[runtime.test_lane]] entry may declare a free-form selector template naming where its matched paths land on the command line, so a task touching one file produces a scoped run for a runner the closed enum cannot shape (cargo module paths, `ctest -R` regexes); `dross validate` rejects a malformed template and names the offending lane."
+
+[[criteria]]
+  id = "c-2"
+  text = "A lane's selector template is part of its consent line: adding or changing one leaves the grant STALE rather than letting an untrusted line run under a grant issued before it, and a path substituted into a template reaches the runner as one argument — it can never become a second command or an option dross did not choose to pass."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross test lane edit` changes the rest of a lane's fields in place — match, command, selector and empty_exit — so a lane's scoping is corrected without remove-then-re-add; an edit that moves the consent line reports the grant as stale, and a refused edit leaves project.toml byte-for-byte unchanged."
+
+[[criteria]]
+  id = "c-4"
+  text = "Declaring a selector or template on a command that already ends in a whole-tree token (`./...`, `.`) is reported as a WARNING naming the lane and the token — at declaration time and on every `dross validate` — because appending a scoped selector to it runs the union, so the scoped run would silently be the whole suite. The lane is still written."
+
+[[decisions]]
+  key = "template_placeholders"
+  choice = "Two placeholders. `{path}` repeats the whole template once per derived path (`--package {path}` → `--package a --package b`); `{paths}` substitutes them into a single instance. A template containing neither is refused — it would scope nothing."
+  why = "The two runner shapes are both real and neither covers the other: cargo wants a per-path flag repeated, ctest wants one joined regex. A single placeholder would leave half the enum's gap open, which is the gap this phase exists to close."
+  locked = true
+
+[[decisions]]
+  key = "selector_join"
+  choice = "`{paths}` expands to separate argv tokens by default; an optional `selector_join` field on the lane joins them into one token instead (`selector_join = \"|\"` for `ctest -R`). validate refuses it on a lane whose template has no `{paths}`."
+  why = "Separate tokens are what a trailing path list wants and a regex alternation is unreachable without a separator. A declared field keeps it declared-not-inferred; an inline `{paths:|}` syntax would make the template a small language with its own parse errors to name."
+  locked = true
+
+[[decisions]]
+  key = "template_schema"
+  choice = "`selector_template` is its own key beside `selector`. `selector` keeps its meaning — it decides whether the substituted values are files, dirs or Go packages — and the template decides where they go on the line. A template declared with no `selector` is refused."
+  why = "The enum already solves path SHAPE and the template solves path PLACEMENT; they are orthogonal, so a cargo lane can substitute directories without the template having to reshape paths itself. Mutually exclusive fields would put that reshaping back inside the template, which it cannot express."
+  locked = true
+
+[[decisions]]
+  key = "template_fence"
+  choice = "The template's content is fenced by consent alone, exactly as `command` and `prepare` are — it is folded into the lane's consent line (c-2) and the user reads and grants the exact line before it runs. No metacharacter refusals."
+  why = "The precedent already exists for arbitrary user command text on this path, and a metacharacter denylist would fence a line the user has already read while making legitimate regex templates and `selector_join = \"|\"` awkward to state. Two mechanisms doing consent's job is worse than one that works."
+  locked = true
+
+[[decisions]]
+  key = "warning_surface"
+  choice = "The c-4 whole-tree warning prints at declaration time (`dross test lane add` / `lane edit`) AND on every `dross validate` run. Not in the run-time lane header."
+  why = "Declaration time alone misses a lane hand-edited into project.toml or written before the check existed, and the message scrolls away the one moment it appears. Repeating it on every gate run is how a warning gets trained out."
+  locked = true
+
+[[deferred]]
+  id = "899390dd30b47c4e"
+  text = "`dross test lane preview <name> --files a.go b.go` — render a lane's derived command line for a given file set without spawning anything."
+  why = "c-1's validate rejection and the lane header's printed line already close the feedback loop, slower. A dry-run verb is its own surface with its own output contract."
+  target = "lane-selector-preview"
+
+[[deferred]]
+  id = "010e057c10c922c6"
+  text = "Auto-deriving a runner's 'collected nothing' exit codes from its command line."
+  why = "Inference, against the milestone's declared-not-inferred non-goal — unchanged since lane-selector-translation parked it. Someday, not this milestone."
+
+[[deferred]]
+  id = "121f867fd1bffb0c"
+  text = "Source-to-test path mapping (editing src/foo.ts running test/foo.test.ts) where the runner has no --related / --findRelatedTests of its own."
+  why = "A per-framework mapping engine — the milestone's third non-goal. Unchanged since lane-selector-translation parked it. Someday, not this milestone."
+
+[[deferred]]
+  id = "62841da45ed858fe"
+  text = "`dross test lane list` prints a lane's selector_template and selector_join beside its selector."
+  why = "No criterion covers it and the add/edit output already echoes the template at declaration time; it belongs with the surface that renders a lane's scoping."
+  target = "lane-selector-preview"
+
+[[deferred]]
+  id = "fa50fb2ca56d687a"
+  text = "`dross verify --detach` starts the mutation leg ON the granted remote under a run id that outlives both the ssh connection and the session: the run is spawned detached host-side (not by a local nohup, which still needs the link held for ~1h40m and dies with it), `dross verify results <id>` reconstructs tests.json and the verify.toml skeleton from any later session or machine, and `--at <time>` / a queue the host drains lets a ~2h leg land off-hours. Suggested slug: remote-run-detach."
+  why = "The run outliving the session is the blocking half: a 1h40m leg currently pins a session that can do nothing else and cannot be /cleared, the harness reaps background tasks at ~1h48m, and a dropped link loses the whole run. Scheduling rides in the same phase (user decision 2026-08-30) because helicon is shared - cache-budget-prune notes an LLM on the same box - and an off-hours slot is a flag on the queue detach already has to build. Off-theme for v1.6 lane truth, so parked for v1.7 scoping rather than inserted."

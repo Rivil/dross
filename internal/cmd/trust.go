@@ -280,6 +280,17 @@ func addFingerprint(set, line string) string {
 // probabilistic.
 const laneFrame = "dross:lane-prepare:v1\x00"
 
+// laneTemplateFrame is the THIRD namespace, for a lane that declares selector
+// scoping of its own.
+//
+// It is disjoint from laneFrame and from the unframed namespace by
+// construction, not by being hard to hit: no unframed line may carry a NUL, and
+// the two framed prefixes differ in their own text, so no byte string can be
+// read as belonging to two of the three. That is what keeps a templated lane
+// from running under a grant issued for a prepared one carrying the same two
+// command lines.
+const laneTemplateFrame = "dross:lane-template:v1\x00"
+
 // laneConsentLine returns the exact byte string ONE lane's consent grant is
 // taken over — the value Fingerprint hashes and the store records.
 //
@@ -295,8 +306,14 @@ const laneFrame = "dross:lane-prepare:v1\x00"
 //     issued for neither.
 //   - The framed form is NUL-delimited and no unframed line may carry a NUL,
 //     so feeding those bytes back as a bare command misses rather than forging
-//     the pair's own fingerprint. The two namespaces are disjoint by
-//     construction, not by being hard to hit.
+//     the pair's own fingerprint. The namespaces are disjoint by construction,
+//     not by being hard to hit.
+//   - A lane declaring selector scoping of its own takes a THIRD form under
+//     laneTemplateFrame, binding selector_template and selector_join alongside
+//     the two command lines. Adding or changing either therefore stales the
+//     grant rather than letting an unread line run under one issued before it —
+//     the template is arbitrary user text on the spawned line, fenced by
+//     consent exactly as command and prepare are.
 //
 // A lane with no command returns the empty string whatever its prepare says:
 // consent binds to something runnable, and LaneConsented's ConsentNotApplicable
@@ -315,8 +332,22 @@ func laneConsentLine(lane project.TestLane) string {
 	// unrunnable, and binding consent to it would be binding to something that
 	// can never run. Empty here means exactly that, and LaneConsented turns it
 	// into the same ConsentNotApplicable a commandless lane gets.
-	if strings.ContainsRune(lane.Command, 0) || strings.ContainsRune(lane.Prepare, 0) {
+	if strings.ContainsRune(lane.Command, 0) || strings.ContainsRune(lane.Prepare, 0) ||
+		strings.ContainsRune(lane.SelectorTemplate, 0) || strings.ContainsRune(lane.SelectorJoin, 0) {
 		return ""
+	}
+	// Gated on either scoping field being declared, not on the template alone:
+	// a join carries user text into the run just as a template does, so a lane
+	// hand-edited to carry one must not ride a grant taken before it. Neither
+	// field existed before this phase, so no grant already written anywhere is
+	// disturbed by framing that shape.
+	if lane.SelectorTemplate != "" || lane.SelectorJoin != "" {
+		return fmt.Sprintf("%s%d\x00%s\x00%d\x00%s\x00%d\x00%s\x00%d\x00%s",
+			laneTemplateFrame,
+			len(lane.Prepare), lane.Prepare,
+			len(lane.Command), lane.Command,
+			len(lane.SelectorTemplate), lane.SelectorTemplate,
+			len(lane.SelectorJoin), lane.SelectorJoin)
 	}
 	if lane.Prepare == "" {
 		return lane.Command

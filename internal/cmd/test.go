@@ -258,16 +258,9 @@ func shArgvFor(field, line string) ([]string, error) {
 func testCommandLine(base string, selector []string) string {
 	line := strings.TrimSpace(base)
 	for _, s := range selector {
-		line += " " + shellQuoteArg(s)
+		line += " " + testlane.ShellQuote(s)
 	}
 	return line
-}
-
-// shellQuoteArg single-quotes an argument for `sh -c`, the same allowlist-free
-// approach internal/remote uses: wrap in single quotes and escape any embedded
-// single quote, which is total rather than a metacharacter blocklist.
-func shellQuoteArg(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // Test registers `dross test`.
@@ -447,6 +440,17 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		// is that nothing ran before it.
 		if _, err := testlane.Derive(m.lane.Selector, nil); err != nil {
 			return fmt.Errorf("%s: %w", laneField(m.lane.Name), err)
+		}
+		// The template is checked in the same sweep and for the same reason:
+		// its shape is a property of project.toml, not of this file set, so
+		// Expand against no paths is a pure fence. A malformed template found
+		// inside the run loop would refuse with earlier lanes already spawned
+		// — and worse, a placeholder-less one honoured there would spawn the
+		// lane's WHOLE command under a scoped lane's name.
+		if m.lane.SelectorTemplate != "" {
+			if _, err := testlane.Expand(m.lane.SelectorTemplate, m.lane.SelectorJoin, nil); err != nil {
+				return fmt.Errorf("%s: %w", laneField(m.lane.Name), err)
+			}
 		}
 	}
 
@@ -677,6 +681,11 @@ type matchedLane struct {
 // The derived arguments come back alongside the line because the miss report
 // names them: "collected no tests" is only actionable if the reader can see
 // what it was looking in.
+//
+// A lane that also declares a selector_template places those arguments through
+// the template instead of appending them, which is how a runner the closed enum
+// cannot shape — cargo's repeated `--package`, ctest's joined `-R` regex — gets
+// a scoped line at all.
 func laneRunLine(repoDir string, lane project.TestLane, paths []string) (string, []string, bool) {
 	if lane.Selector == "" {
 		return lane.Command, nil, true
@@ -702,7 +711,24 @@ func laneRunLine(repoDir string, lane project.TestLane, paths []string) (string,
 	if err != nil || len(args) == 0 {
 		return "", nil, false
 	}
-	return testCommandLine(lane.Command, args), args, true
+	if lane.SelectorTemplate == "" {
+		return testCommandLine(lane.Command, args), args, true
+	}
+	// The template decides WHERE the derived arguments land; Derive above has
+	// already decided what shape they take. The fragments carry their own
+	// quoting — done mid-expansion, since template text and substituted path
+	// are one string by the time they get here — so they are joined onto the
+	// consented command verbatim rather than re-quoted.
+	//
+	// An error here means the up-front fence was skipped: the lane does not
+	// spawn, for the reason a bad style does not. Appending nothing and
+	// running anyway would be the silent whole-suite run this feature exists
+	// to replace.
+	frags, err := testlane.Expand(lane.SelectorTemplate, lane.SelectorJoin, args)
+	if err != nil || len(frags) == 0 {
+		return "", nil, false
+	}
+	return strings.TrimSpace(lane.Command) + " " + strings.Join(frags, " "), args, true
 }
 
 // laneField is the project.toml key a lane's refusals name.

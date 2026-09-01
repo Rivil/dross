@@ -554,3 +554,271 @@ install = "npm install -g markdownlint-cli"`)
 		}
 	}
 }
+
+// TestValidateRejectsSelectorTemplateWithNoSelector: the template says WHERE
+// the paths go and the selector says what SHAPE they take, so a template on a
+// lane that names no selector has nothing to place. Refused by name, because
+// the lane would otherwise sit in project.toml looking configured while
+// scoping nothing.
+func TestValidateRejectsSelectorTemplateWithNoSelector(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "rust"
+match = ["crates/**"]
+command = "cargo test"
+selector_template = "--package {path}"`)
+
+	out, err := validateOutput(t)
+	if err == nil {
+		t.Fatalf("validate accepted a selector_template with no selector:\n%s", out)
+	}
+	if !strings.Contains(out, `"rust"`) {
+		t.Errorf("problem must name the offending lane, got:\n%s", out)
+	}
+	if !strings.Contains(out, "selector_template") {
+		t.Errorf("problem must name the field, got:\n%s", out)
+	}
+}
+
+// TestValidateRejectsSelectorTemplateWithNoPlaceholder: a template carrying
+// neither {path} nor {paths} substitutes nothing, so the lane would run its
+// whole command unscoped while the user believes they scoped it — the exact
+// silent-whole-suite failure this phase's warning tier exists to make loud.
+func TestValidateRejectsSelectorTemplateWithNoPlaceholder(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "rust"
+match = ["crates/**"]
+command = "cargo test"
+selector = "dir"
+selector_template = "--package"`)
+
+	out, err := validateOutput(t)
+	if err == nil {
+		t.Fatalf("validate accepted a placeholder-less selector_template:\n%s", out)
+	}
+	if !strings.Contains(out, `"rust"`) {
+		t.Errorf("problem must name the offending lane, got:\n%s", out)
+	}
+	if !strings.Contains(out, "{path}") || !strings.Contains(out, "{paths}") {
+		t.Errorf("problem must name both placeholders it looked for, got:\n%s", out)
+	}
+}
+
+// TestValidateRejectsSelectorJoinWithNoPathsPlaceholder: a join collapses a
+// {paths} expansion into one argument. With no {paths} to collapse — whether
+// the template repeats {path} instead, or there is no template at all — it can
+// never apply, so declaring one is a belief about the config that is not true.
+func TestValidateRejectsSelectorJoinWithNoPathsPlaceholder(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		extra string
+	}{
+		{"repeating template", "selector_template = \"--package {path}\"\nselector_join = \"|\""},
+		{"no template at all", "selector_join = \"|\""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := laneFixture(t)
+			appendLanes(t, dir, `[[runtime.test_lane]]
+name = "rust"
+match = ["crates/**"]
+command = "cargo test"
+selector = "dir"
+`+tc.extra)
+
+			out, err := validateOutput(t)
+			if err == nil {
+				t.Fatalf("validate accepted selector_join with no {paths}:\n%s", out)
+			}
+			if !strings.Contains(out, `"rust"`) {
+				t.Errorf("problem must name the offending lane, got:\n%s", out)
+			}
+			if !strings.Contains(out, "selector_join") {
+				t.Errorf("problem must name the field, got:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestValidateAcceptsAFullyPopulatedTemplateLane is the accept side, and it is
+// the assertion a too-broad refusal predicate fails alone: every rejection test
+// above passes for a rule that refuses templates outright. Both placeholder
+// shapes are exercised, one per lane, since {path} and {paths} take different
+// branches of the same check.
+//
+// The `a{2,3}` in the ctest lane is deliberate: an unrecognised {...} run is
+// ordinary template text — a regex quantifier — and must not be mistaken for a
+// placeholder dross does not know.
+func TestValidateAcceptsAFullyPopulatedTemplateLane(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "rust"
+match = ["crates/**"]
+command = "cargo test"
+selector = "dir"
+selector_template = "--package {path}"
+
+[[runtime.test_lane]]
+name = "ctest"
+match = ["tests/**"]
+command = "ctest"
+selector = "path"
+selector_template = "-R a{2,3}{paths}"
+selector_join = "|"`)
+
+	out, err := validateOutput(t)
+	if err != nil {
+		t.Errorf("validate rejected well-formed selector templates:\n%s", out)
+	}
+}
+
+// TestValidateAcceptsALaneDeclaringNeitherTemplateField is the opt-in half: a
+// lane that names neither new field must contribute ZERO problems, or the rule
+// would invent a fault for every lane written before this phase and turn an
+// opt-in field into a nag on every repo that already declares lanes.
+//
+// Asserted at the rule's own layer as well as through validate's exit status,
+// which an aggregate "no error" check would still pass if the problem were
+// reported and something else swallowed it.
+func TestValidateAcceptsALaneDeclaringNeitherTemplateField(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"
+selector = "go-package"
+empty_exit = [5]`)
+
+	out, err := validateOutput(t)
+	if err != nil {
+		t.Errorf("validate rejected a lane declaring no template fields:\n%s", out)
+	}
+
+	p, err := project.Load(filepath.Join(dir, ".dross", "project.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, problem := range laneProblems(p) {
+		if strings.Contains(problem, "selector_template") || strings.Contains(problem, "selector_join") {
+			t.Errorf("a lane declaring neither template field was reported: %s", problem)
+		}
+	}
+}
+
+// --- the whole-tree warning (c-4) ---
+
+// TestValidateWarnsOnAScopedWholeTreeCommand: `go test ./...` plus a selector
+// appends the derived package to a token that already means everything, and
+// `go test ./... ./internal/...` runs the UNION. The lane spends the full suite
+// on every scoped run while its transcript shows a derived selector — a
+// whole-suite run wearing a scoped lane's name.
+func TestValidateWarnsOnAScopedWholeTreeCommand(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		command string
+		scoping string
+		token   string
+	}{
+		{"selector on ./...", "go test ./...", `selector = "go-package"`, "./..."},
+		{"selector on .", "go test .", `selector = "go-package"`, "."},
+		{"template on ./...", "go test ./...", "selector = \"dir\"\nselector_template = \"--package {path}\"", "./..."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := laneFixture(t)
+			appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "`+tc.command+`"
+`+tc.scoping)
+
+			out, err := validateOutput(t)
+			if err != nil {
+				t.Fatalf("the warning failed validate:\n%s", out)
+			}
+			if !strings.Contains(out, `"go"`) {
+				t.Errorf("the warning must name the lane, got:\n%s", out)
+			}
+			if !strings.Contains(out, tc.token) {
+				t.Errorf("the warning must name the token %q, got:\n%s", tc.token, out)
+			}
+		})
+	}
+}
+
+// TestTheWholeTreeWarningDoesNotFailValidate is the exit contract stated on its
+// own. A warning that failed the gate would be a refusal wearing a softer word,
+// and the locked decision is that the lane is still written and still valid.
+func TestTheWholeTreeWarningDoesNotFailValidate(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test ./..."
+selector = "go-package"`)
+
+	out, err := validateOutput(t)
+	if err != nil {
+		t.Errorf("a warning changed validate's exit status: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "⚠") {
+		t.Errorf("no warning was printed at all — the exit assertion would be vacuous:\n%s", out)
+	}
+}
+
+// TestNoWarningForAScopedCommand is the false-positive half. A lane whose
+// command does NOT end in a whole-tree token is the normal scoped lane, and
+// warning on it would train the warning out of being read.
+func TestNoWarningForAScopedCommand(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test -count=1"
+selector = "go-package"
+
+[[runtime.test_lane]]
+name = "unscoped"
+match = ["docs/**"]
+command = "go test ./..."
+
+[[runtime.test_lane]]
+name = "dotted"
+match = ["cmd/**"]
+command = "go test ./cmd/..."
+selector = "dir"`)
+
+	out, err := validateOutput(t)
+	if err != nil {
+		t.Fatalf("validate rejected well-formed lanes:\n%s", out)
+	}
+	if strings.Contains(out, "⚠") {
+		t.Errorf("a warning fired on a lane that scopes cleanly, or on one that does not scope at all:\n%s", out)
+	}
+}
+
+// TestAWarningAlongsideAProblemStillFails: the two lists are separate, and the
+// warning tier must not swallow a real fault that happens to sit beside it.
+func TestAWarningAlongsideAProblemStillFails(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test ./..."
+selector = "go-package"
+
+[[runtime.test_lane]]
+name = "broken"
+match = ["docs/**"]
+command = ""`)
+
+	out, err := validateOutput(t)
+	if err == nil {
+		t.Fatalf("a real problem stopped failing validate once a warning was present:\n%s", out)
+	}
+	if !strings.Contains(out, "⚠") {
+		t.Errorf("the warning was dropped when a problem was present:\n%s", out)
+	}
+	if !strings.Contains(out, "✗") {
+		t.Errorf("the problem was not reported:\n%s", out)
+	}
+}

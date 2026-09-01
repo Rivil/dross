@@ -35,6 +35,11 @@ func Validate() *cobra.Command {
 				return err
 			}
 			var problems []string
+			// Warnings are a SEPARATE list from problems, not a formatting
+			// choice applied to one: a warning describes a lane that is
+			// well-formed and probably not what the user meant, and folding it
+			// into problems would fail the gate over a judgement call.
+			var warnings []string
 
 			// project.toml
 			p, err := project.Load(filepath.Join(root, project.File))
@@ -55,6 +60,7 @@ func Validate() *cobra.Command {
 				}
 				problems = append(problems, enumProblems(p)...)
 				problems = append(problems, laneProblems(p)...)
+				warnings = append(warnings, laneWarnings(p)...)
 			}
 
 			// state.json
@@ -134,6 +140,14 @@ func Validate() *cobra.Command {
 				}
 			}
 
+			// Warnings print on EVERY run and never touch the exit status.
+			// Repetition is the point (the locked warning_surface decision):
+			// a message that appeared once at declaration time scrolls away
+			// the moment it appears, and a lane hand-edited into project.toml
+			// never saw that moment at all.
+			for _, w := range warnings {
+				Printf("⚠ %s\n", w)
+			}
 			if len(problems) == 0 {
 				Print("✓ all dross artefacts valid")
 				return nil
@@ -260,11 +274,23 @@ func laneProblems(p *project.Project) []string {
 	return problems
 }
 
+// The two placeholders a selector_template may carry. They are named here
+// rather than spelled inline so validate's refusals and the expander that
+// honours them can never drift into recognising different tokens.
+//
+// templatePathToken is not a prefix hazard: "{path}" ends in its own brace, so
+// a strings.Contains for it never fires on "{paths}".
+const (
+	templatePathToken  = "{path}"
+	templatePathsToken = "{paths}"
+)
+
 // laneSelectorProblems reports the faults in one lane's opt-in selector fields.
 //
 // It is split out of laneProblems so the selector rules read as one paragraph:
 // a style dross cannot translate, an exit code that would mean the wrong thing,
-// and a code declared on a lane that can never produce it.
+// a code declared on a lane that can never produce it, a template with nothing
+// to place or nowhere to place it, and a join with nothing to join.
 func laneSelectorProblems(label string, lane project.TestLane) []string {
 	var problems []string
 	// The empty case is guarded here rather than left to Has: SelectorStyles
@@ -288,6 +314,29 @@ func laneSelectorProblems(label string, lane project.TestLane) []string {
 		case code < 0 || code > 255:
 			problems = append(problems, fmt.Sprintf("project.toml: %s empty_exit lists %d — a process exit code is 0-255, so no runner can ever return it", label, code))
 		}
+	}
+	// The template rules read as one paragraph with the selector ones because
+	// they are the same rule from two sides: a template places what a selector
+	// shapes, so neither is usable without the other, and a placeholder-less
+	// template scopes nothing while claiming to.
+	//
+	// Only the two known placeholders are looked for. An unrecognised `{...}`
+	// run is NOT a fault — a regex quantifier like `a{2,3}` is legitimate
+	// template text, and refusing it would fence a line the user has already
+	// read and granted.
+	if lane.SelectorTemplate != "" {
+		if strings.TrimSpace(lane.Selector) == "" {
+			problems = append(problems, fmt.Sprintf("project.toml: %s declares selector_template with no selector — the template says where the paths go, the selector says what shape they take, so a template alone has nothing to place", label))
+		}
+		if !strings.Contains(lane.SelectorTemplate, templatePathToken) && !strings.Contains(lane.SelectorTemplate, templatePathsToken) {
+			problems = append(problems, fmt.Sprintf("project.toml: %s selector_template = %q contains neither %s nor %s — a template with no placeholder substitutes nothing, so the lane would run unscoped", label, lane.SelectorTemplate, templatePathToken, templatePathsToken))
+		}
+	}
+	if lane.SelectorJoin != "" && !strings.Contains(lane.SelectorTemplate, templatePathsToken) {
+		// Reported against the lane rather than silently ignored: a join with
+		// no {paths} to collapse can never apply, so a user who declared one
+		// is believing they configured something they did not.
+		problems = append(problems, fmt.Sprintf("project.toml: %s declares selector_join with no %s in its selector_template — a join collapses a %s expansion into one argument, so there is nothing here for it to join", label, templatePathsToken, templatePathsToken))
 	}
 	if len(lane.EmptyExit) > 0 && strings.TrimSpace(lane.Selector) == "" {
 		// Not a reading of the locked empty_detection decision but an addition
@@ -376,4 +425,61 @@ func loadIfExists(path string, load func() (any, error)) (any, error) {
 		return nil, nil
 	}
 	return load()
+}
+
+// wholeTreeTokens are the command-line spellings that mean "the entire tree".
+//
+// Both are Go's, which is not a limitation being papered over: they are the
+// tokens dross's own selector translation can produce, and a runner that spells
+// its whole-tree token differently is one whose lane is scoped by a template
+// rather than by the enum. A guessed list of every runner's spelling would warn
+// on lines it had no business reading.
+var wholeTreeTokens = []string{"./...", "."}
+
+// laneWarnings reports the lanes that are well-formed and probably not what the
+// user meant.
+//
+// Distinct from laneProblems and deliberately so: a warning never fails the
+// gate. It describes a lane that validates, runs, and produces a result the
+// user will read as scoped when it is not.
+func laneWarnings(p *project.Project) []string {
+	var warnings []string
+	for i, lane := range p.Runtime.TestLane {
+		if w := laneWholeTreeWarning(laneLabel(i, lane.Name), lane); w != "" {
+			warnings = append(warnings, w)
+		}
+	}
+	return warnings
+}
+
+// laneWholeTreeWarning reports a lane that scopes onto a command already ending
+// in a whole-tree token, or "" when there is nothing to say.
+//
+// The two do not compose the way they look like they do: `go test ./...
+// ./internal/cmd/...` runs the UNION, which is the whole tree. So the lane
+// spends the full suite on every scoped run while its transcript shows a
+// derived selector — a whole-suite run wearing a scoped lane's name, which is
+// the exact failure the selector feature exists to remove.
+//
+// It is a warning rather than a refusal because the lane is well-formed and the
+// combination is occasionally deliberate; the user is told, and the lane is
+// still written.
+//
+// One helper, called by validate and by both declaration verbs, so neither
+// surface can drift into warning about something the other does not.
+func laneWholeTreeWarning(label string, lane project.TestLane) string {
+	if strings.TrimSpace(lane.Selector) == "" && lane.SelectorTemplate == "" {
+		return ""
+	}
+	fields := strings.Fields(lane.Command)
+	if len(fields) == 0 {
+		return ""
+	}
+	last := fields[len(fields)-1]
+	for _, token := range wholeTreeTokens {
+		if last == token {
+			return fmt.Sprintf("project.toml: %s scopes onto a command ending in %s — appending a selector to a whole-tree token runs the union, so the scoped run would silently be the whole suite", label, token)
+		}
+	}
+	return ""
 }

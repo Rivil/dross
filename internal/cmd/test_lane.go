@@ -56,27 +56,11 @@ func loadProjectForLanes() (root string, p *project.Project, err error) {
 	return root, p, nil
 }
 
-// laneSelectorRefusal returns the CLI's refusal for a proposed lane's selector
-// fields, or nil when they are usable.
-//
-// It reads the SAME laneSelectorProblems `dross validate` reports through, and
-// that is the point rather than a convenience: the two surfaces cannot drift,
-// so the CLI can never write a lane validate would then turn round and reject.
-// The problems are quoted verbatim, project.toml prefix included, because they
-// are exactly what the user would read on the next validate run.
-func laneSelectorRefusal(name string, lane project.TestLane) error {
-	problems := laneSelectorProblems(laneLabel(0, name), lane)
-	if len(problems) == 0 {
-		return nil
-	}
-	return fmt.Errorf("lane %q would not validate:\n  %s", name, strings.Join(problems, "\n  "))
-}
-
 // laneToolchainRefusal returns the CLI's refusal for a proposed lane's
 // toolchain override, or nil when every entry is usable.
 //
 // Quoted through the SAME laneToolchainProblems `dross validate` reports, for
-// the reason laneSelectorRefusal is: the CLI must never be able to write a lane
+// the reason laneRefusal is: the CLI must never be able to write a lane
 // validate would then reject, and a second copy of the rules here would drift
 // until it could.
 func laneToolchainRefusal(name string, lane project.TestLane) error {
@@ -87,15 +71,70 @@ func laneToolchainRefusal(name string, lane project.TestLane) error {
 	return fmt.Errorf("lane %q would not validate:\n  %s", name, strings.Join(problems, "\n  "))
 }
 
-// clearsToolchain reports whether a --toolchain argv means "go back to
-// derived".
+// clearsList reports whether a repeatable string flag's argv means "clear this
+// field".
 //
 // `--toolchain ""` is the clear gesture, spelled exactly as `--prepare ""` is,
 // and only a lone blank counts. A blank BESIDE a real entry is a typo rather
 // than a request — clearing on it would silently discard the entry the user did
-// mean, so it falls through to laneToolchainProblems and is refused by name.
-func clearsToolchain(v []string) bool {
+// mean, so it falls through to the refusal gate and is named there.
+//
+// Shared by every repeatable field the edit verb can write — toolchain, match
+// and empty_exit — so one gesture means one thing across the surface rather
+// than each flag inventing its own spelling of "unset".
+func clearsList(v []string) bool {
 	return len(v) == 0 || (len(v) == 1 && strings.TrimSpace(v[0]) == "")
+}
+
+// parseEmptyExit turns an --empty-exit argv into the codes the lane declares.
+//
+// Taken as strings rather than through cobra's IntSliceVar so the field has a
+// CLEAR gesture at all: an int slice cannot express `--empty-exit ""`, and
+// without it there would be no way to drop a code short of removing the lane —
+// which is the remove-then-re-add this verb exists to end.
+//
+// A non-numeric entry is refused BY NAME. Dropping it silently would write a
+// lane missing the very code the user was declaring, and reporting only a count
+// would leave them re-reading their own argv to find which one.
+func parseEmptyExit(name string, v []string) ([]int, error) {
+	if clearsList(v) {
+		return nil, nil
+	}
+	out := make([]int, 0, len(v))
+	for _, raw := range v {
+		n, err := strconv.Atoi(strings.TrimSpace(raw))
+		if err != nil {
+			return nil, fmt.Errorf("lane %q: --empty-exit %q is not a number — the field lists a runner's exit codes, so every entry must be one", name, raw)
+		}
+		out = append(out, n)
+	}
+	return out, nil
+}
+
+// laneRefusal returns the CLI's refusal for a WHOLE proposed lane, or nil when
+// every field is usable.
+//
+// It reads the same laneProblems `dross validate` reports through, which is the
+// documented invariant rather than a convenience: the CLI can never write a
+// lane validate would then turn round and reject. laneToolchainRefusal covers
+// one field group and was enough while those were the only fields the CLI could
+// write; once match, command and the globs are editable, the faults they can
+// introduce — an empty match list, a blank command, a glob that does not
+// compile — are reported only here.
+//
+// It validates a SYNTHETIC one-lane project holding ONLY the proposed lane.
+// Feeding it the whole modified project would refuse an edit because some OTHER
+// hand-edited lane is broken — and this verb is the tool for fixing exactly
+// that lane. Duplicate-name detection therefore stays where it is, on the add
+// path, since a one-lane project can never collide with itself.
+func laneRefusal(name string, lane project.TestLane) error {
+	synthetic := &project.Project{}
+	synthetic.Runtime.TestLane = []project.TestLane{lane}
+	problems := laneProblems(synthetic)
+	if len(problems) == 0 {
+		return nil
+	}
+	return fmt.Errorf("lane %q would not validate:\n  %s", name, strings.Join(problems, "\n  "))
 }
 
 // laneToolchainLine renders one lane's EFFECTIVE toolchain for the listing,
@@ -120,6 +159,8 @@ func testLaneAdd() *cobra.Command {
 	var command string
 	var prepare string
 	var selector string
+	var selectorTemplate string
+	var selectorJoin string
 	var toolchain []string
 	var install string
 	var emptyExit []int
@@ -162,6 +203,13 @@ func testLaneAdd() *cobra.Command {
 				// that can disagree with itself never reaches disk.
 				Prepare:  strings.TrimSpace(prepare),
 				Selector: configenum.Normalize(selector),
+				// Verbatim, never trimmed: the template is fenced by consent
+				// alone (the locked template_fence decision), so its own text
+				// reaches the line exactly as typed — a trailing space inside
+				// a regex is the user's to mean, and normalizing it away here
+				// would silently spawn a line other than the one granted.
+				SelectorTemplate: selectorTemplate,
+				SelectorJoin:     selectorJoin,
 				// Verbatim, not trimmed and not filtered. A blank entry here is a
 				// mistake with no other reading — there is nothing to clear on a
 				// lane being declared — and dropping it silently would write an
@@ -175,7 +223,11 @@ func testLaneAdd() *cobra.Command {
 				Install:   strings.TrimSpace(install),
 				EmptyExit: emptyExit,
 			}
-			if err := laneSelectorRefusal(name, proposed); err != nil {
+			// The WHOLE lane, through the same problems validate reports, so
+			// this verb cannot write a lane the next `dross validate` rejects
+			// — a glob that does not compile among them, which the two
+			// field-group refusals below never covered.
+			if err := laneRefusal(name, proposed); err != nil {
 				return err
 			}
 			if err := laneToolchainRefusal(name, proposed); err != nil {
@@ -205,6 +257,11 @@ func testLaneAdd() *cobra.Command {
 				Printf("  prepare: %s\n", proposed.Prepare)
 			}
 			Printf("  %s\n", proposed.Command)
+			// Echoed at declaration time because nothing else prints it yet:
+			// `lane list` does not render the template, so this summary is the
+			// one place a declared template is visible without reading
+			// project.toml back.
+			printLaneTemplate(proposed)
 			// The probe set, always — derived or not. It is what decides which
 			// machine the lane runs on, and the moment to see it is the moment
 			// the lane is declared.
@@ -224,6 +281,7 @@ func testLaneAdd() *cobra.Command {
 			if proposed.Install != "" {
 				Printf("\nIts install line is granted separately — installing is not running:\n\n    dross trust --lane-install %s\n", name)
 			}
+			printLaneWholeTreeWarning(name, proposed)
 			return nil
 		},
 	}
@@ -231,6 +289,8 @@ func testLaneAdd() *cobra.Command {
 	c.Flags().StringVar(&command, "command", "", "the command line this lane runs")
 	c.Flags().StringVar(&prepare, "prepare", "", "optional bootstrap line run before this lane's command, on the same host; covered by the same consent grant")
 	c.Flags().StringVar(&selector, "selector", "", "shape the matched paths take when appended to the command ("+configenum.SelectorStyles.List()+"); omitted runs the command untouched")
+	c.Flags().StringVar(&selectorTemplate, "selector-template", "", "where the matched paths land on the command line, for a runner the selector styles cannot shape; {path} repeats the template per path, {paths} substitutes them into one instance. Requires --selector")
+	c.Flags().StringVar(&selectorJoin, "selector-join", "", "join a {paths} expansion into ONE argument with this separator (\"|\" for `ctest -R`); omitted expands to separate arguments")
 	c.Flags().StringArrayVar(&toolchain, "toolchain", nil, "binary this lane needs on the host that runs it (repeatable); omitted derives it from the first token of --command and --prepare")
 	c.Flags().StringVar(&install, "install", "", "optional line that installs this lane's toolchain; replaces dross's built-in recipe and carries its own consent grant, separate from the lane's")
 	c.Flags().IntSliceVar(&emptyExit, "empty-exit", nil, "exit code this lane's runner uses for \"collected no tests\" (repeatable); requires --selector")
@@ -288,44 +348,59 @@ func testLaneList() *cobra.Command {
 	}
 }
 
-// testLaneEdit is `dross test lane edit <name>`: the fields a lane can change
+// testLaneEdit is `dross test lane edit <name>`: every field a lane can change
 // in place.
 //
-// It supersedes lane-selector-translation's lane_edit_surface decision for
-// prepare and toolchain. That lock's reasoning was that remove-then-re-add is
-// an adequate workaround, and these two are where it stops being one: removing
-// a lane drops its consent grant, so the workaround silently discards trust the
-// user granted and re-adds the lane as if it had never been read. Match,
-// command, selector and empty_exit keep the remove-then-re-add path.
+// It supersedes lane-selector-translation's lane_edit_surface decision
+// outright. That lock's reasoning was that remove-then-re-add is an adequate
+// workaround for the rest of a lane's fields, and it is not one: removing a
+// lane DROPS its consent grant, so the workaround discards trust the user
+// granted and re-adds the lane as if it had never been read — collapsing STALE
+// into ABSENT, which is the distinction the consent ladder exists to preserve
+// and the one that tells a rewrite apart from a first run.
 //
-// Toolchain is the sharper case of the two: it is not part of the consent line
-// at all — it names binaries, not a command — so remove-then-re-add would drop
-// a grant in order to change a field the grant does not cover.
+// So match, command, selector, empty_exit, selector_template and selector_join
+// join prepare, toolchain and install here. Nothing about a lane is
+// remove-then-re-add any more except its NAME, which keys the grant store and
+// therefore cannot move without the grant moving with it.
 //
-// The grant is KEPT, deliberately, even though the fingerprint no longer
-// matches. Revoking would report a lane the user has trusted before as one they
-// never have — collapsing STALE into ABSENT, which is the distinction the
-// consent ladder exists to preserve and the one that tells a rewrite apart from
-// a first run.
+// Toolchain and install remain the two fields OUTSIDE the command grant —
+// toolchain names binaries rather than a command, and install carries its own
+// grant — so changing either leaves the lane's test runs granted.
+//
+// The grant is KEPT whenever it goes stale, deliberately, even though the
+// fingerprint no longer matches: revoking would report a lane the user has
+// trusted before as one they never have.
 func testLaneEdit() *cobra.Command {
+	var match []string
+	var command string
 	var prepare string
+	var selector string
+	var selectorTemplate string
+	var selectorJoin string
 	var toolchain []string
 	var install string
+	var emptyExit []string
 	c := &cobra.Command{
 		Use:   "edit <name>",
-		Short: "Set or clear a declared lane's prepare line, toolchain or install line, keeping its grant",
-		Long: "Changes a lane's --prepare, --toolchain or --install in place, leaving its\n" +
-			"match globs, command and position in project.toml exactly as they were.\n\n" +
-			"--prepare changes the consent line, so the lane's grant is kept but goes\n" +
-			"STALE: `dross trust --lane <name>` will say the line CHANGED rather than\n" +
-			"that it was never trusted. --toolchain is not part of the consent line —\n" +
-			"it names binaries, not a command — so changing it leaves the grant alone.\n" +
+		Short: "Change a declared lane's fields in place, keeping its grant",
+		Long: "Changes a lane's --match, --command, --prepare, --selector,\n" +
+			"--selector-template, --selector-join, --empty-exit, --toolchain or\n" +
+			"--install in place, leaving its name and its position in project.toml\n" +
+			"exactly as they were. Only the lane's NAME is still remove-then-re-add:\n" +
+			"it keys the consent store, so it cannot move without the grant moving.\n\n" +
+			"--match, --command, --prepare, --selector-template and --selector-join\n" +
+			"change the consent line, so the lane's grant is kept but goes STALE:\n" +
+			"`dross trust --lane <name>` will say the line CHANGED rather than that it\n" +
+			"was never trusted. --toolchain is not part of the consent line — it names\n" +
+			"binaries, not a command — so changing it leaves the grant alone.\n" +
 			"--install is not part of it either: it carries its OWN grant, so adding\n" +
 			"one to a lane that already runs green never refuses its test runs.\n\n" +
-			"--toolchain is repeatable and REPLACES the derived list wholesale; pass\n" +
-			"--toolchain \"\" to go back to deriving it, and --install \"\" to drop the\n" +
-			"install line. Changing a lane's match, command, selector or empty_exit is\n" +
-			"still remove-then-re-add.",
+			"--match, --toolchain and --empty-exit are repeatable and REPLACE the\n" +
+			"declared list wholesale; pass \"\" to any of them to clear it, and\n" +
+			"--prepare \"\", --selector \"\" or --install \"\" to drop those.\n\n" +
+			"An edit that would leave the lane malformed is refused before anything is\n" +
+			"written, through the same rules `dross validate` reports.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Read from Changed, not from the value. An omitted --prepare and
@@ -333,16 +408,22 @@ func testLaneEdit() *cobra.Command {
 			// alone" and "clear it" — and a check on emptiness alone would
 			// collapse them into one clearing behaviour, so `lane edit go`
 			// with no flag at all would silently drop an existing prepare.
+			setsMatch := cmd.Flags().Changed("match")
+			setsCommand := cmd.Flags().Changed("command")
 			setsPrepare := cmd.Flags().Changed("prepare")
+			setsSelector := cmd.Flags().Changed("selector")
+			setsTemplate := cmd.Flags().Changed("selector-template")
+			setsJoin := cmd.Flags().Changed("selector-join")
+			setsEmptyExit := cmd.Flags().Changed("empty-exit")
 			setsToolchain := cmd.Flags().Changed("toolchain")
 			setsInstall := cmd.Flags().Changed("install")
-			if !setsPrepare && !setsToolchain && !setsInstall {
-				return fmt.Errorf("nothing to change: `dross test lane edit %s` needs --prepare, --toolchain or --install.\n\n"+
-					"Pass a command to set a prepare, or --prepare \"\" to clear it; pass one or\n"+
-					"more --toolchain binaries to override the derived list, or --toolchain \"\"\n"+
-					"to go back to deriving it; pass an --install line to override dross's\n"+
-					"built-in install recipe, or --install \"\" to drop it. Every other lane\n"+
-					"field is changed by removing the lane and re-adding it", args[0])
+			if !setsMatch && !setsCommand && !setsPrepare && !setsSelector &&
+				!setsTemplate && !setsJoin && !setsEmptyExit && !setsToolchain && !setsInstall {
+				return fmt.Errorf("nothing to change: `dross test lane edit %s` needs one of --match, --command,\n"+
+					"--prepare, --selector, --selector-template, --selector-join, --empty-exit,\n"+
+					"--toolchain or --install.\n\n"+
+					"Pass \"\" to any of them to clear the field. Only the lane's NAME is changed\n"+
+					"by removing the lane and re-adding it — it keys the consent grant", args[0])
 			}
 			name := args[0]
 			root, p, err := loadProjectForLanes()
@@ -375,11 +456,46 @@ func testLaneEdit() *cobra.Command {
 			// user never mentioned — the same omitted-means-clear collapse the
 			// Changed guard above exists to prevent, one flag deeper.
 			proposed := p.Runtime.TestLane[idx]
+			if setsMatch {
+				if clearsList(match) {
+					// Cleared to nil rather than written as a lone blank glob.
+					// The two are different lanes — one matches nothing and is
+					// refused below by name, the other matches the empty
+					// string and validates clean while never selecting — and
+					// the refusal is the honest reading of `--match ""`.
+					proposed.Match = nil
+				} else {
+					proposed.Match = match
+				}
+			}
+			if setsCommand {
+				proposed.Command = strings.TrimSpace(command)
+			}
 			if setsPrepare {
 				proposed.Prepare = strings.TrimSpace(prepare)
 			}
+			if setsSelector {
+				proposed.Selector = configenum.Normalize(selector)
+			}
+			if setsTemplate {
+				// Verbatim on the `lane add` precedent: the template is fenced
+				// by consent alone, so its own text reaches the line exactly as
+				// typed. Two verbs that normalized differently would put a lane
+				// on disk whose spawned line depended on which one wrote it.
+				proposed.SelectorTemplate = selectorTemplate
+			}
+			if setsJoin {
+				proposed.SelectorJoin = selectorJoin
+			}
+			if setsEmptyExit {
+				codes, err := parseEmptyExit(name, emptyExit)
+				if err != nil {
+					return err
+				}
+				proposed.EmptyExit = codes
+			}
 			if setsToolchain {
-				if clearsToolchain(toolchain) {
+				if clearsList(toolchain) {
 					// nil rather than an empty slice, so omitempty leaves the key
 					// out and the lane returns to the derived shape it had before
 					// the override was ever written.
@@ -395,9 +511,14 @@ func testLaneEdit() *cobra.Command {
 				proposed.Install = strings.TrimSpace(install)
 			}
 			// Checked BEFORE the mutation lands, so a refused edit leaves
-			// project.toml byte-for-byte unchanged — and checked through the same
-			// problems validate reports, so the CLI cannot write a lane validate
-			// would then reject.
+			// project.toml byte-for-byte unchanged — and checked through the
+			// WHOLE lane's problems, not one field group's, because the newly
+			// editable fields can introduce faults only laneProblems reports:
+			// an empty match list, a blank command, a glob that does not
+			// compile.
+			if err := laneRefusal(name, proposed); err != nil {
+				return err
+			}
 			if err := laneToolchainRefusal(name, proposed); err != nil {
 				return err
 			}
@@ -406,11 +527,42 @@ func testLaneEdit() *cobra.Command {
 			if err := p.Save(filepath.Join(root, project.File)); err != nil {
 				return err
 			}
+			if setsMatch {
+				Printf("lane %q match: %s\n", name, strings.Join(lane.Match, " "))
+			}
+			if setsCommand {
+				Printf("lane %q command: %s\n", name, lane.Command)
+			}
 			if setsPrepare {
 				if lane.Prepare == "" {
 					Printf("lane %q now declares no prepare.\n", name)
 				} else {
 					Printf("lane %q prepare: %s\n", name, lane.Prepare)
+				}
+			}
+			if setsSelector {
+				if lane.Selector == "" {
+					Printf("lane %q now declares no selector.\n", name)
+				} else {
+					Printf("lane %q selector: %s\n", name, lane.Selector)
+				}
+			}
+			if setsTemplate || setsJoin {
+				// Echoed for the reason `lane add` echoes it: `lane list` does
+				// not render a template, so this is the one place a declared
+				// one is visible without reading project.toml back.
+				if lane.SelectorTemplate == "" && lane.SelectorJoin == "" {
+					Printf("lane %q now declares no selector template.\n", name)
+				} else {
+					Printf("lane %q:\n", name)
+					printLaneTemplate(lane)
+				}
+			}
+			if setsEmptyExit {
+				if len(lane.EmptyExit) == 0 {
+					Printf("lane %q now declares no empty-exit codes.\n", name)
+				} else {
+					Printf("lane %q empty-exit: %s\n", name, joinInts(lane.EmptyExit))
 				}
 			}
 			if setsToolchain {
@@ -434,10 +586,17 @@ func testLaneEdit() *cobra.Command {
 			if laneConsentLine(lane) != before {
 				Printf("\nIts grant is now stale — the lane will refuse until you re-read it:\n\n    dross trust --lane %s\n", name)
 			}
+			printLaneWholeTreeWarning(name, lane)
 			return nil
 		},
 	}
+	c.Flags().StringArrayVar(&match, "match", nil, "glob this lane matches (repeatable); replaces the declared list, pass \"\" to clear it")
+	c.Flags().StringVar(&command, "command", "", "the command line this lane runs")
 	c.Flags().StringVar(&prepare, "prepare", "", "the lane's bootstrap line; pass \"\" to clear it")
+	c.Flags().StringVar(&selector, "selector", "", "shape the matched paths take ("+configenum.SelectorStyles.List()+"); pass \"\" to clear it")
+	c.Flags().StringVar(&selectorTemplate, "selector-template", "", "where the matched paths land on the command line; {path} repeats the template per path, {paths} substitutes them into one instance. Pass \"\" to clear it")
+	c.Flags().StringVar(&selectorJoin, "selector-join", "", "join a {paths} expansion into ONE argument with this separator; pass \"\" to clear it")
+	c.Flags().StringArrayVar(&emptyExit, "empty-exit", nil, "exit code this lane's runner uses for \"collected no tests\" (repeatable); replaces the declared list, pass \"\" to clear it")
 	c.Flags().StringArrayVar(&toolchain, "toolchain", nil, "binary this lane needs on the host that runs it (repeatable); replaces the derived list, pass \"\" to go back to deriving it")
 	c.Flags().StringVar(&install, "install", "", "the line that installs this lane's toolchain; replaces dross's built-in recipe, pass \"\" to drop it")
 	return c
@@ -506,4 +665,32 @@ func joinInts(v []int) string {
 		out[i] = strconv.Itoa(n)
 	}
 	return strings.Join(out, " ")
+}
+
+// printLaneWholeTreeWarning prints the c-4 whole-tree warning at declaration
+// time, and nothing when there is none.
+//
+// It reads the SAME laneWholeTreeWarning validate reports through, so the two
+// surfaces cannot drift into warning about different things. The lane is
+// already written by the time this runs: it is a warning, not a refusal, and
+// declaring it is a legitimate thing to do.
+func printLaneWholeTreeWarning(name string, lane project.TestLane) {
+	if w := laneWholeTreeWarning(laneLabel(0, name), lane); w != "" {
+		Printf("\n⚠ %s\n", w)
+	}
+}
+
+// printLaneTemplate echoes a lane's declared selector scoping, and prints
+// nothing for a lane that declares none.
+//
+// Shared by `lane add` and `lane edit` so neither can echo a field the other
+// hides. It is the only surface that renders a template today — `lane list`
+// does not — which is what the deferred lane-selector-preview work rests on.
+func printLaneTemplate(lane project.TestLane) {
+	if lane.SelectorTemplate != "" {
+		Printf("  selector-template: %s\n", lane.SelectorTemplate)
+	}
+	if lane.SelectorJoin != "" {
+		Printf("  selector-join: %s\n", lane.SelectorJoin)
+	}
 }

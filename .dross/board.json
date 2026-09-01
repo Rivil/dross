@@ -17,6 +17,7 @@
     "guard-remedy-ordering": "DRO-27",
     "lane-prepare-step": "DRO-223",
     "lane-remote-locality": "DRO-235",
+    "lane-selector-custom": "DRO-268",
     "lane-selector-translation": "DRO-210",
     "legacy-phase-backfill": "DRO-142",
     "milestone-lifecycle-close": "DRO-13",
@@ -50,7 +51,8 @@
   },
   "backlog": {
     "slug:lane-host-affinity": "DRO-242",
-    "slug:lane-selector-custom": "DRO-218",
+    "slug:lane-selector-preview": "DRO-284",
+    "someday:id:010e057c10c922c6": "DRO-286",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
     "someday:id:0323e4284012842f": "DRO-208",
@@ -59,6 +61,7 @@
     "someday:id:0ad901405561a187": "DRO-116",
     "someday:id:0d1268f8311bb7e4": "DRO-221",
     "someday:id:0eb3dd31220aa3bc": "DRO-101",
+    "someday:id:121f867fd1bffb0c": "DRO-287",
     "someday:id:130a1cf4bc7049f2": "DRO-92",
     "someday:id:1708546d27dd3939": "DRO-81",
     "someday:id:1920efcbac52f0c0": "DRO-245",
@@ -89,6 +92,7 @@
     "someday:id:5610b45525282bf4": "DRO-219",
     "someday:id:5802ad3fe8f08d87": "DRO-34",
     "someday:id:5c2c048407b679b5": "DRO-159",
+    "someday:id:62841da45ed858fe": "DRO-267",
     "someday:id:64cd228356c9fce5": "DRO-76",
     "someday:id:6606a4ae3d228907": "DRO-52",
     "someday:id:66f4a1fc8ec83883": "DRO-70",
@@ -108,6 +112,7 @@
     "someday:id:87008f463c24d5b1": "DRO-262",
     "someday:id:87d98c3c945fa02c": "DRO-257",
     "someday:id:8911d7673663ac5f": "DRO-243",
+    "someday:id:899390dd30b47c4e": "DRO-285",
     "someday:id:89b51ed2552d67bc": "DRO-42",
     "someday:id:8aa15f3752fc7827": "DRO-97",
     "someday:id:93ce98de1002acab": "DRO-50",
@@ -157,6 +162,7 @@
     "someday:id:f0d699cce6b70445": "DRO-71",
     "someday:id:f74fa3c9230a9c3b": "DRO-291",
     "someday:id:f93277521f881095": "DRO-89",
+    "someday:id:fa50fb2ca56d687a": "DRO-276",
     "someday:id:fd3b654f5740fd11": "DRO-75",
     "someday:id:fee0d326fde9b275": "DRO-64",
     "someday:id:ff40c2cbbd18e7dc": "DRO-94"
@@ -343,6 +349,46 @@
     },
     "lane-remote-locality/t-6": {
       "issue": "DRO-241",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-1": {
+      "issue": "DRO-269",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-2": {
+      "issue": "DRO-270",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-3": {
+      "issue": "DRO-271",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-4": {
+      "issue": "DRO-272",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-5": {
+      "issue": "DRO-273",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-6": {
+      "issue": "DRO-274",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-7": {
+      "issue": "DRO-275",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-8": {
+      "issue": "DRO-283",
       "plan_status": "done",
       "board_state": "task-complete"
     },

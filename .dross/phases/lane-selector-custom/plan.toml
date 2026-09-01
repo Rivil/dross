@@ -1,0 +1,89 @@
+task_seq = 8
+
+[phase]
+  id = "lane-selector-custom"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Declare selector_template + selector_join"
+  files = ["internal/project/project.go", "internal/cmd/validate.go", "internal/cmd/validate_lane_test.go"]
+  description = "Add SelectorTemplate and SelectorJoin to project.TestLane, both omitempty, and\nextend laneSelectorProblems with the template refusals: a template with no\nselector, a template containing neither placeholder, and a selector_join on a\ntemplate with no {paths}. Unknown {...} tokens are NOT refused — a regex\nquantifier like a{2,3} is legitimate template text.\n"
+  covers = ["c-1"]
+  test_contract = ["if a lane declaring selector_template with no selector stops being refused, validate's lane test fails", "if a template containing neither {path} nor {paths} stops being refused, validate's lane test fails", "if selector_join stops being refused on a template with no {paths}, validate's lane test fails", "if any refusal stops naming the offending lane label, the message assertion fails", "if a lane declaring neither new field changes its validate outcome, the pre-phase lane fixtures fail", "if a fully-populated valid lane — selector = \"dir\", a well-formed template, selector_join on a {paths} template — stops validating clean, the accept-side test fails; a refusal predicate too broad passes every item above and fails only this one"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Expand a template into argv"
+  files = ["internal/testlane/template.go", "internal/testlane/template_test.go", "internal/cmd/test.go", "internal/cmd/run.go"]
+  description = "Pure Expand(template, join string, paths []string) ([]string, error) returning\nshell-ready fragments: {path} repeats the whole template once per derived path,\n{paths} substitutes them into a single instance — separate tokens by default,\none joined token when join is set. Substituted paths go through the option-safe\nand shell-quoting treatment; the template's own text is emitted verbatim.\n\nQuoting must happen mid-expansion — nothing downstream can tell template text\nfrom a substituted path — so shellQuoteArg MOVES from internal/cmd/test.go into\ninternal/testlane and test.go calls it there. One quoting implementation serves\nboth the plain append path and the template path.\n\nrun.go:200 is its second caller and routes through the moved function too. No\ncmd-local copy or wrapper survives the move — a second implementation is the\ncheapest way to satisfy the compiler and it defeats the whole point.\n"
+  covers = ["c-1", "c-2"]
+  test_contract = ["if `--package {path}` over two paths stops yielding `--package a --package b`, the repeat test fails", "if `-R {paths}` with join `|` yields two tokens instead of one `-R 'a|b'`, the join test fails", "if a path spelled `a; rm -rf /` stops expanding to a single quoted token, the injection test fails", "if a path spelled `-x.go` stops expanding as `./-x.go`, the option-safety test fails", "if the template's own text is quoted or rewritten rather than emitted verbatim, the fence test fails", "if a template containing neither placeholder returns fragments instead of an error, the refusal test fails — t-4's up-front fence is that error", "if the moved quoter changes what the plain append path spawns, the existing selector line tests fail", "if a second quoting implementation survives in internal/cmd, the single-quoter assertion fails — `dross run` and `dross test` must quote through the same function"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Fold the template into the consent line"
+  files = ["internal/cmd/trust.go", "internal/cmd/test_lane_consent_test.go"]
+  description = "laneConsentLine binds selector_template and selector_join alongside command and\nprepare, under a length-framed form used ONLY when a template is declared, so a\nlane without one keeps its exact current fingerprint.\n\nThis is a THIRD namespace beside the bare command and the prepare frame, which\ntrust.go documents as disjoint by construction rather than hard to hit. The new\nform gets its own frame constant and the NUL refusal extends to both new fields:\na NUL in selector_template or selector_join yields the empty line, exactly as\none in Command or Prepare does, because that is what keeps a frame unforgeable.\n"
+  covers = ["c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["if adding a selector_template to a granted lane reports GRANTED instead of STALE, the staleness test fails", "if changing selector_join alone leaves the fingerprint unmoved, the join-staleness test fails", "if a lane with no template — with or without a prepare — changes fingerprint from its pre-phase value, the grant-preservation test fails", "if any prepare-lane can be spelled to produce the same framed string as some template-lane, the disjointness test fails — that collision is c-2's failure mode, a line running under a grant issued for a different one", "if a NUL in selector_template or selector_join yields a framed line rather than the empty one, the NUL-refusal test fails", "if a lane carrying command + prepare + template stops fingerprinting distinctly from the same lane missing any one of the three, the three-field framing test fails"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Run the template at the lane run site"
+  files = ["internal/cmd/test.go", "internal/cmd/test_files_test.go"]
+  description = "laneRunLine expands a declared template through testlane.Expand instead of\nappending derived args; the up-front fence checks the template against no paths\nso a malformed one refuses before any lane spawns; the header prints the exact\nexpanded line.\n"
+  covers = ["c-1", "c-2"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["if a templated lane spawns the unexpanded command, or the header prints a different string than the one spawned, the run-site test fails", "if a malformed template is discovered inside the run loop rather than by the up-front fence, the fence test fails — an earlier lane would already have spawned", "if a matched path carrying a shell metacharacter reaches the spawned line unquoted, the run-site injection test fails", "if a lane declaring no template stops spawning its command byte-for-byte, the untouched-lane test fails"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Add and edit every lane field"
+  files = ["internal/cmd/test_lane.go", "internal/cmd/test_lane_edit_test.go"]
+  description = "`lane add` gains --selector-template and --selector-join. `lane edit` gains\n--match, --command, --selector, --empty-exit and the two new fields, each\nwritten only when its own flag was Changed.\n\nThe refusal gate widens with the field set: it goes through a whole-lane helper\nreading laneProblems, not laneSelectorProblems alone, because the faults the\nnewly-editable fields can introduce — an empty match list, a blank command, a\nglob that does not compile — are reported there. The documented invariant is\nthat the CLI can never write a lane validate would then reject.\n\nThe helper validates a SYNTHETIC one-lane project holding only the proposed\nlane, labelled the way laneSelectorRefusal already labels one. Feeding it the\nwhole modified project would refuse an edit because some OTHER hand-edited lane\nis broken — and `lane edit` is the tool c-3 exists to provide for fixing exactly\nthat lane. Duplicate-name detection stays where it is, on the add path.\n\n--empty-exit on the edit verb is registered as a string slice parsed to ints, so\n`--empty-exit \"\"` clears on the same --toolchain precedent --match uses; a\nnon-numeric entry is refused by name. Both verbs echo the template and join in\ntheir summary output, which is what makes a declared template visible before\n`lane list` learns to print it.\n\nThe stale claim lives in this file too: testLaneEdit's Short, Long, its\n\"nothing to change\" error and its doc comment all say match, command, selector\nand empty_exit are remove-then-re-add.\n"
+  covers = ["c-1", "c-3"]
+  depends_on = ["t-1"]
+  test_contract = ["if `lane edit X --command` stops rewriting in place or stops reporting the grant stale, the edit test fails", "if `lane edit X --selector dir` reorders the lane in project.toml or drops its grant, the in-place test fails", "if an edit refused by the lane refusal helper leaves project.toml rewritten rather than byte-for-byte unchanged, the refusal test fails", "if `lane edit X --command \"\"` or a non-compiling `--match` glob is written rather than refused before the save, the widened-gate test fails — the CLI would have written a lane `dross validate` rejects", "if `lane add --selector-template` with no --selector is written rather than refused before the save, the add-refusal test fails", "if an omitted flag clears the field it names, the Changed-guard test fails", "if `--match \"\"` or `--empty-exit \"\"` stops clearing its field, the clear-gesture test fails; if a non-numeric --empty-exit entry is accepted, its refusal test fails", "if `lane add` / `lane edit` stop echoing a declared selector_template and selector_join, the declaration-echo test fails — the `lane list` deferral rests on that echo", "if `lane edit --help` still claims match, command, selector or empty_exit are remove-then-re-add, the help-text assertion fails", "if an edit is refused because a DIFFERENT lane in project.toml is malformed, the unrelated-lane test fails — the gate reads the proposed lane alone"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  title = "Warn on a template over a whole-tree command"
+  files = ["internal/cmd/validate.go", "internal/cmd/test_lane.go", "internal/cmd/validate_lane_test.go", "internal/cmd/test_lane_test.go", "internal/cmd/test_lane_edit_test.go"]
+  description = "Detect a command whose last token is a whole-tree token (`./...`, `.`) on a lane\nthat also scopes. Report it as a WARNING naming the lane and the token, at\ndeclaration time and on every validate run. validate gains a warning tier:\nwarnings print but never change the exit status.\n\nThe validate-side assertions go in validate_lane_test.go; the declaration-time\nones go beside the existing lane assertions — test_lane_test.go for `lane add`,\ntest_lane_edit_test.go for `lane edit`. Both surfaces call one shared warning\nhelper, so neither can drift into warning about something the other does not.\nt-6 runs a wave after t-5, so sharing that file is sequential, not concurrent.\n"
+  covers = ["c-4"]
+  depends_on = ["t-1", "t-5"]
+  test_contract = ["if a lane with `go test ./...` plus a selector stops warning, or the warning stops naming the lane and the token, the warning test fails", "if that warning changes validate's exit status from 0, the exit-contract test fails", "if `lane add` / `lane edit` stop printing the warning, or refuse the lane instead of writing it, the declaration-time test fails", "if a scoped command produces a warning, the false-positive test fails", "if a real problem alongside a warning stops failing validate, the problems-still-fail test fails"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 4
+  title = "Document the template surface"
+  files = ["README.md", "assets/prompts/options.md", "internal/cmd/options_docs_test.go"]
+  description = "README and options.md gain --selector-template, --selector-join, the widened\n`lane edit` field set and the whole-tree warning. Both currently assert that\nmatch, command, selector and empty_exit are remove-then-re-add — the claim c-3\nfalsifies.\n\nThat claim is not only prose: TestOptionsDocumentsTheSelectorSurfaceCorrectly\nrequires options.md to CONTAIN \"remove-then-re-add\" and to name those four\nfields as the ones it applies to. The guard is re-pointed, not deleted — it must\nstill refuse a doc that routes a lane edit around the CLI's refusals, but the\nsentence it looks for becomes the in-place-editable field set. The flag-name\nguard below it parses only `dross test lane add` examples, so it is widened to\n`lane edit` too, or a documented edit flag that does not exist goes unchecked.\n\nRule r-01: options.md is an asset, so `make install` before relying on it.\n"
+  covers = ["c-1", "c-3", "c-4"]
+  depends_on = ["t-5", "t-6"]
+  test_contract = ["if README loses --selector-template, --selector-join or the whole-tree warning wording, TestReadmeDocumentsTestLanes fails", "if either doc still routes a match, command, selector or empty_exit change through remove-then-re-add, the re-pointed assertion fails", "if the re-pointed guard is deleted rather than re-pointed — a doc telling the reader to hand-edit a [[runtime.test_lane]] block passing clean — the hand-edit refusal fails", "if either doc advertises a `lane edit` flag the cobra command does not register, the widened flag-name guard fails"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 1
+  title = "Delete the orphaned laneSelectorRefusal"
+  files = ["internal/cmd/test_lane.go", "internal/cmd/test_lane_edit_test.go"]
+  description = "t-5/t-6 replaced the per-field-group gate with laneRefusal, which runs laneProblems over a synthetic one-lane project. laneProblems already calls laneSelectorProblems, so laneSelectorRefusal's check is a strict subset of the live gate and nothing calls it."
+  covers = ["c-3"]
+  test_contract = ["if the dead function returns, the test asserting internal/cmd defines no laneSelectorRefusal fails", "if deleting it removed a live guard, TestLaneEditRefusesAMalformedLaneBeforeTheWrite's unknown-selector and template cases go red"]
+  status = "done"
