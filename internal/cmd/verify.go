@@ -20,6 +20,7 @@ import (
 	"github.com/Rivil/dross/internal/stack"
 	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/telemetry"
+	"github.com/Rivil/dross/internal/testlane"
 	"github.com/Rivil/dross/internal/verify"
 )
 
@@ -229,20 +230,20 @@ func detachSequence(steps []mutation.PackageStep) string {
 	var parts []string
 	for _, s := range steps {
 		var b strings.Builder
-		b.WriteString("rm -f " + shellQuoteArg(s.ReportRel) + "; ")
+		b.WriteString("rm -f " + testlane.ShellQuote(s.ReportRel) + "; ")
 		if s.ExitRel != "" {
 			// Cleared with the report and for the same reason: a code left by
 			// a previous dispatch would be read as this run's.
-			b.WriteString("rm -f " + shellQuoteArg(s.ExitRel) + "; ")
+			b.WriteString("rm -f " + testlane.ShellQuote(s.ExitRel) + "; ")
 		}
 		for i, a := range s.Argv {
 			if i > 0 {
 				b.WriteByte(' ')
 			}
-			b.WriteString(shellQuoteArg(a))
+			b.WriteString(testlane.ShellQuote(a))
 		}
 		if s.ExitRel != "" {
-			b.WriteString("; printf '%s\\n' \"$?\" > " + shellQuoteArg(s.ExitRel))
+			b.WriteString("; printf '%s\\n' \"$?\" > " + testlane.ShellQuote(s.ExitRel))
 		}
 		parts = append(parts, b.String())
 	}
@@ -655,8 +656,8 @@ var detachCancel = func(t remote.Target, runDir, pidFile string) error {
 // test fail when that regresses, rather than the host quietly keeping its cores
 // busy for an hour after a reported cancellation.
 func cancelLine(runDir, pidFile string) string {
-	return "kill -- -$(cat " + shellQuoteArg(pidFile) + " 2>/dev/null) 2>/dev/null; " +
-		"rm -rf " + shellQuoteArg(runDir)
+	return "kill -- -$(cat " + testlane.ShellQuote(pidFile) + " 2>/dev/null) 2>/dev/null; " +
+		"rm -rf " + testlane.ShellQuote(runDir)
 }
 
 // verifyStatus registers `dross verify status`.
