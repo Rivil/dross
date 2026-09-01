@@ -91,3 +91,8 @@
   id = "9c1f7be59afdc8ac"
   text = "A detached run does not lock the host workdir. Any other remote operation while one is in flight — `dross test`, a second phase dispatching, an attached `dross verify` — rsyncs over the same workdir the running sequence is still reading, so packages it has not reached yet get mutated against a different tree than the ones it already did. The run reports one score over two trees and nothing says so."
   why = "Discovered 2026-08-31 while deciding whether to work on another phase during a live detached run: the answer is that it is currently unsafe and nothing stops it. Candidate fixes, not exclusive: refuse a remote operation while a detached run is recorded for that host; give each detached run its own workdir copy; or record the dispatch commit in the run and refuse a collect whose workdir has moved."
+
+[[deferred]]
+  id = "f74fa3c9230a9c3b"
+  text = "Gremlins appends `/...` to every package argument, so a repo whose module root holds .go files still derives `.` as a whole-module run. t-12's filter removed the problem for dross (no root .go) but not the mechanism: any repo with a root package mutates everything whenever a root file changes, and the per-package reports are merged alongside it so the denominator double-counts."
+  why = "Discovered 2026-09-01 while fixing the dross case in t-12. Out of that task's declared scope, and not reproducible in this repo, so it cannot be tested here without a fixture module that has a root package. Needs a decision about what a gremlins package argument should mean — probably deriving the package list from `go list` rather than from directories, which is a different design than the one packagesFromFiles pins."

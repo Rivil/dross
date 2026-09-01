@@ -1,51 +1,85 @@
 [verify]
   phase = "remote-run-detach"
-  generated_at = 2026-09-01T00:03:46.923064Z
-  verdict = "pending"
+  generated_at = 2026-09-01T01:54:58.426919Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-09-01T01:56:49.428371Z
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9705882352941176
-  mutants_killed = 495
+  mutation_score = 0.970703125
+  mutants_killed = 497
   mutants_survived = 15
   mutants_not_covered = 15
-  mutants_in_scope = 510
+  mutants_in_scope = 512
   unclassified_in_scope = 0
   criteria_total = 6
-  criteria_covered = 0
+  criteria_covered = 6
   criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 495
+    killed = 497
     survived = 15
     timeout = 0
-    in_scope = 510
-    score = 0.9705882352941176
+    in_scope = 512
+    score = 0.970703125
     file_count = 16
 
 [[criterion]]
   id = "c-1"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/verify_detach_test.go:62:TestDispatchReturnsWithoutWaiting", "internal/cmd/verify_detach_test.go:86:TestDispatchPushesBeforeItStarts", "internal/cmd/verify_detach_test.go:435:TestVerifyDetachDispatchesThroughTheCommand", "internal/remote/remote_test.go:737:TestDetachScriptDetachesFromTheSession", "internal/remote/remote_test.go:963:TestDetachScriptBackgroundsOnlyTheJob"]
+  notes = "The two halves of the claim are proven on separate surfaces. \"Returns within seconds\" is asserted at the dispatch site: TestDispatchReturnsWithoutWaiting requires exactly one remote start carrying every package, so a dispatch that held the session per package would fail it, and TestDispatchPushesBeforeItStarts pins sync-then-spawn — a run started against an unsynced tree would measure the host's leftovers under this phase's name. \"Owned by the host\" is asserted at the script surface, which is where it is decidable without a real ssh: TestDetachScriptBackgroundsOnlyTheJob rejects a script whose `&` binds to the whole `&&` list, and TestDetachScriptDetachesFromTheSession pins the setsid/nohup detachment.\n\nObserved live across four detached runs this session, and the observation is stronger than the assertion: the local poller watching r-20260831-143901 was reaped by the harness twice (at ~50 and ~82 minutes into a ~97-minute leg) and the run finished on helicon regardless, exit 0. r-20260831-202210's poller died at 29 minutes with the same outcome. The laptop losing its watcher is the closest thing to \"closing the lid\" available to a test, and the run did not notice."
 
 [[criterion]]
   id = "c-2"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/verify_results_test.go:388:TestCollectWritesTheSameArtefactsAnAttachedRunWould", "internal/mutation/gremlins_test.go:859:TestCollectMatchesRunForTheSameReports", "internal/cmd/verify_finish_test.go:224:TestFinishVerifyIsTheOnlyArtefactWriter", "internal/mutation/gremlins_test.go:1042:TestCollectRefusesAPackageThatFailedBeforeMeasuring", "internal/cmd/verify_results_test.go:496:TestCollectRefusesWhenOnePackageFailedBeforeMeasuring", "internal/mutation/gremlins_test.go:1096:TestCollectStillSkipsAZeroExitWithNoReport", "internal/mutation/gremlins_test.go:1119:TestCollectTreatsAnUnrecordedExitAsASkip", "internal/mutation/gremlins_test.go:1148:TestCollectToleratesAFailedExitWhenTheReportLanded", "internal/cmd/verify_detach_test.go:290:TestDetachSequenceRecordsEachPackagesOwnExitCode", "internal/cmd/verify_results_test.go:600:TestFetchReportsFetchesEachExitCodeBesideItsReport"]
+  notes = "Upgraded from weak; the divergence the previous verify recorded is closed, and closed at the mechanism rather than at the symptom.\n\nArtefact parity was already strong and is unchanged: given the same per-package reports on disk, collectDetached and Run share ParseGremlinsJSON, RePrefixGremlinsFiles, DropInapplicable, hasCoverage and mergeInto outright; TestCollectMatchesRunForTheSameReports pins their agreement; TestCollectWritesTheSameArtefactsAnAttachedRunWould restates scope, measured_on, leg counts, out-of-scope filtering and the pending skeleton independently.\n\nWhat was missing was parity of the guard deciding whether a report set is trustworthy at all. The attached loop refuses a package that wrote no report AND exited non-zero (reportlessExitFatal); the detached path refused nothing, and structurally could not — detachSequence joins packages with `;` and DetachScript records one exit code for the sequence, the LAST package's, so a package failing anywhere but last was invisible by construction. t-13 gives each step its own exit file, cleared with its report and written immediately after its own argv, and t-12 removed the Go-less directories that would otherwise have made the new guard fire every run.\n\nThe rule now has ONE implementation: ReportlessExit, called by both paths. That is the fix for the bug's actual cause — the attached loop grew the guard, the detached path shipped later without it, and nothing tied them together. TestCollectRefusesWhenOnePackageFailedBeforeMeasuring is the end-to-end case the old run-level guard could not see: the run exits 0 because the last package succeeded, one earlier package failed before measuring, and the collect must refuse rather than score the remainder. Three over-reach guards bound it — a clean exit with no report, a non-zero exit WITH a report (gremlins exits non-zero whenever a mutant survives), and an unrecorded or unparseable code, which stays a skip rather than inventing a 0."
 
 [[criterion]]
   id = "c-3"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/local_detached_test.go:38:TestDetachedRunRoundTripsEveryField", "internal/cmd/local_detached_test.go:263:TestDetachedRunIsAbsentFromLocalKeys", "internal/cmd/local_detached_test.go:281:TestDetachedRunReadsRefuseATrackedStore", "internal/cmd/verify_status_test.go:34:TestStatusNamesEveryDispatchedRun", "internal/cmd/verify_detach_test.go:138:TestSecondDispatchIsRefusedByName", "internal/cmd/verify_results_test.go:460:TestASuccessfulCollectClearsTheRecord"]
+  notes = "Survival across /clear and reboot is a property of the store, and the store is local.toml on disk — TestDetachedRunRoundTripsEveryField reads every field back through a fresh load, the same operation a new session performs. The two guards the run_state_location decision bought are asserted rather than assumed: the record is absent from localKeys, so no generic key-writer can aim a later fetch at an unseen host, and a tracked store is refused. \"Never stranded, never re-dispatched\" is closed from both ends — status names the run, a second dispatch is refused by name, and a successful collect clears the record.\n\nCorroborated live: four dispatch/collect cycles this session, each named by phase, run id, host and dispatched-at across sessions of polling, and each cleared on collect so the next --detach was accepted. One dispatch was killed before it reached the host (an unrelated binary fault) and left NO record behind — the ordering dispatchDetached documents, verified by `dross verify status` reporting nothing to collect rather than a phantom run."
 
 [[criterion]]
   id = "c-4"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/remote/remote_test.go:777:TestScheduledRunSleepsAgainstTheHostClock", "internal/cmd/verify_detach_test.go:188:TestScheduledDispatchRecordsItsStartTime", "internal/cmd/verify_detach_test.go:295:TestParseDetachAtResolvesToTheNextOccurrence", "internal/cmd/verify_results_test.go:128:TestResultsOnAScheduledRunSaysScheduled", "internal/cmd/verify_status_test.go:129:TestCancelClearsTheRecord", "internal/cmd/verify_status_test.go:157:TestCancelReachesTheHostThatHoldsTheRun", "internal/cmd/verify_status_test.go:208:TestCancelAgainstAnUnreachableHostStillClearsButSaysSo", "internal/cmd/verify_status_test.go:247:TestCancelLineKillsTheProcessGroup", "internal/cmd/verify_status_test.go:268:TestCancelLineRemovesTheRunDirectory", "internal/cmd/verify_status_test.go:290:TestCancelLineQuotesItsPaths", "internal/cmd/verify_status_test.go:312:TestCancelSendsTheCancelLineToTheHost"]
+  notes = "Scheduling was already fully covered: TestScheduledRunSleepsAgainstTheHostClock pins every part of the schedule_mechanism decision — the target as an epoch second, `date +%s` so it is the HOST clock consulted, the sleep, and the run entering the scheduled state rather than reporting itself running for the hours it waits — with TestResultsOnAScheduledRunSaysScheduled as the read side.\n\nCancellation is now asserted at the command text, not only at the seam. detachCancel's line is extracted as a pure cancelLine(runDir, pidFile), so the `-- -` that makes the kill target the process GROUP is checkable without a host. TestCancelLineKillsTheProcessGroup carries the load-bearing negation as well as the positive: `kill -- -$(cat` contains `kill -$(cat` as a substring, so it strips the group form before asserting the bare-pid form is absent — a positive-only check would have passed with the marker dropped, which is how the original gap survived review. TestCancelLineRemovesTheRunDirectory pins `; rm -rf` rather than `&&` (the kill's failure is expected when the job already exited, and the rm must still run) and the kill-before-rm order. TestCancelSendsTheCancelLineToTheHost joins the extracted string to the argv reaching the transport, so cancelLine cannot decay into dead code the suite is content with."
 
 [[criterion]]
   id = "c-5"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/verify_detach_test.go:104:TestDispatchRecordsTheHostItDispatchedTo", "internal/cmd/verify_results_test.go:177:TestResultsReadsTheRecordedHostNotTodaysGrant", "internal/cmd/verify_status_test.go:157:TestCancelReachesTheHostThatHoldsTheRun", "internal/cmd/verify_results_test.go:496:TestCollectRefusesWhenOnePackageFailedBeforeMeasuring"]
+  notes = "Both ends of the pin are asserted, and the fetch end against an adversarial grant rather than an absent one: TestResultsReadsTheRecordedHostNotTodaysGrant is named for exactly the failure mode the criterion forbids — a grant edited between dispatch and fetch must not redirect the read. collectDetached builds its target from rec.Host/rec.Workdir with no call to the pool resolver anywhere in the function, so there is no second path to drift from.\n\nt-13 extended the pin to a surface that did not exist before: Collect takes the measuring host as a PARAMETER rather than reading g.Remote, so a refusal names the machine that actually measured the run. Reaching for an ambient host there would have quietly undone this criterion in new code, and TestCollectRefusesWhenOnePackageFailedBeforeMeasuring asserts the recorded host appears in the refusal. Cancel reads the same recorded host, so a teardown cannot be aimed at a machine that holds nothing. Every tests.json this session carries measured_on = \"helicon\", the host named in the record."
 
 [[criterion]]
   id = "c-6"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/verify_results_test.go:80:TestResultsOnAnUnreachableHostIsNotAVerdict", "internal/cmd/verify_results_test.go:100:TestResultsOnAStillRunningRunWritesNothing", "internal/cmd/verify_results_test.go:155:TestResultsOnAVanishedRunSaysSo", "internal/cmd/verify_results_test.go:485:TestCollectRefusesARunThatProducedNothing", "internal/cmd/verify_detach_test.go:167:TestAFailedStartRecordsNothing", "internal/remote/remote_test.go:802:TestDetachScriptRecordsTheExitCode", "internal/cmd/verify_results_test.go:678:TestFetchReportsRefusesADeadConnection", "internal/cmd/verify_results_test.go:706:TestFetchReportsRefusesAConnectionThatDiesOnTheExitCode", "internal/cmd/verify_results_test.go:723:TestFetchReportsStillToleratesAnAbsentReport", "internal/cmd/verify_results_test.go:748:TestClassifyFetchReadsRsyncsVerdict"]
+  notes = "The run-state half was already covered and is unchanged: \"never a mutation score, never a verdict\" is enforced by assertNoArtefacts, which every non-finished case calls, so a regression that wrote a partial verify.toml fails the test rather than merely changing a message; \"reported distinctly\" is enforced by exit code per state (13 unreachable, 11 running, 14 gone, 12 produced-nothing), which is the results_never_blocks decision made checkable, plus a message assertion that the unreachable case says \"not failed\".\n\nThe criterion's last clause — \"transport failure at fetch time reads as 'the run did not report'\" — was NOT met, and this was found by reading the criterion against the code rather than from the mutation report. detachFetchReports warned and continued on ANY error from runDetachArgv, so a connection dropping mid-collect was read as \"these packages produced no report\" and a score was written over whichever packages arrived first. Its own comment stated the correct rule; the code did not implement it.\n\nt-15 closes it through remote.Classify, the same classifier the attached path's fetchFatal uses: rsync 23/24 is a source that is not there and is tolerated, 255 and 10/12/30/35 are the connection and refuse the collect. The exit-code fetch gets the same treatment, and it matters more — the code is what decides whether an absent report is benign, so failing to learn it must refuse rather than fall through to the skip an absent code earns. TestClassifyFetchReadsRsyncsVerdict pins the mapping directly including the not-an-exit-status case (rsync never ran, which is not an absent report either), and TestFetchReportsStillToleratesAnAbsentReport is the over-reach guard: the point is to distinguish, not to become strict."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation measured on helicon via detached run r-20260901-001432, dispatched 00:14Z and collected 01:55Z — the phase's own machinery measuring the phase, for the fourth time this session, each run collected through the path under test. Score 0.97 over 512 in-scope mutants (497 killed, 15 survived); with all 15 uncoverable by construction, efficacy over the 497 reachable is 1.00. 16 files in scope, 107 out-of-scope survivors filtered. The arc across runs is the audit trail: 0.955 over an inflated 808 (36 survived) before the amend; 0.965/808 after the cancel-line work; 0.97 over a corrected 510 with 17 survived once t-12 fixed the package derivation; 0.97/510 with 15 survived after t-14 killed the two in-diff survivors; 0.97 over 512 with the same 15 after t-15 added two mutable lines and both were killed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "All 15 in-scope survivors carry Lifecycle=accepted with recorded reasons, so unclassified_in_scope is 0 and nothing was left for a later run to inherit. All 15 are NOT-COVERED-attributed (mutants_not_covered == mutants_survived): none is a mutant that ran and escaped an assertion. Two families, both previously proven rather than assumed — the `var detach* = func(...)` process-construction seam bodies at internal/cmd/verify.go:168, 380, 384 and internal/remote/remote.go:797, which every test replaces wholesale and which could only execute by spawning real ssh; and the gremlins switch-case attribution ceiling at internal/cmd/verify.go:708 and internal/remote/remote.go:763/765/769, where a coverprofile run shows the arm executing while gremlins marks it NOT COVERED. internal/mutation/launcher.go:230 is an ARITHMETIC_BASE on a string concatenation inside an error message — the mutant does not compile and is not viable. Note that detachFetchReports no longer appears in this list: its body was the source of the two in-diff survivors this session and t-14 covered it by stubbing runDetachArgv rather than the whole function, so acceptance was not needed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The in-scope denominator was previously inflated, and this phase's earlier numbers should be read with that in mind. packagesFromFiles derived a gremlins package from every changed file's DIRECTORY, and gremlins appends `/...` to every package argument — so a changed README.md derived `.`, which mutated the whole module. Its report was then merged alongside the per-package reports covering the same files, double-counting them. This phase's 808 in-scope mutants were really 512; the same run's out-of-scope survivors included internal/statusline, internal/phase, internal/architecture and internal/forge, packages nowhere near this phase. The SCORE was roughly preserved (numerator and denominator inflated together), which is why 0.955 and 0.965 looked plausible, but the counts were not real. The signature is visible in the survivor lists: max repeat-per-key fell from 10 to 5 as the duplication cleared, while distinct survivors rose. Any past verify.toml for a phase whose change set touched a root-level file carries the same inflation."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Deferred and filed rather than fixed here (deferred[4], board DRO-291): t-12 removed the whole-module run for dross by filtering the derivation to directories holding .go files, but not the mechanism behind it. Gremlins appends `/...` to any package argument, so a repo whose module root holds .go files still derives `.` as a whole-module run and still double-counts against its per-package reports. It is not reproducible in this repo — there is no root package — so it cannot be tested here without a fixture module, and fixing it properly means deriving the package list from `go list` rather than from directories, which is a different design than packagesFromFiles pins."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Operational, not a property of this phase, but it cost a dispatch: on macOS `make install` overwrites ~/.local/bin/dross in place, and the replacement is then SIGKILLed on every invocation — exit 137, no output, `dross --version` included. `codesign -v` passes on the file, so signature checks do not diagnose it. The first --detach of this session was killed by it and dispatched nothing; `dross verify status` correctly reported no run, which is the dispatch ordering working. `rm -f ~/.local/bin/dross && make install` fixes it. Worth knowing because project rule r-01 makes `make install` a routine step before relying on any prompt or Go change, and exit 137 reads as a silent mystery rather than a build problem."
