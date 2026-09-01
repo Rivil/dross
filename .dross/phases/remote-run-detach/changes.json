@@ -1,7 +1,9 @@
 {
   "phase": "remote-run-detach",
+  "pr": 115,
   "base": "milestone/v1.6",
   "base_commit": "94954f1d011cf8e3f0df577d3099c76bc1eedb50",
+  "status": "shipped",
   "tasks": {
     "t-1": {
       "files": [
