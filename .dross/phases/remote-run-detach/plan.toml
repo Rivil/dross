@@ -1,4 +1,4 @@
-task_seq = 14
+task_seq = 15
 
 [phase]
   id = "remote-run-detach"
@@ -146,4 +146,14 @@ task_seq = 14
   description = "Both in-diff survivors from run r-20260831-202210 (internal/cmd/verify.go:438 and :442, CONDITIONALS_NEGATION, in-hunk) sit inside detachFetchReports, which every collect test replaces wholesale — so the exit-file fetch added by t-13 has no test at all. Unlike the detachSync/detachStatus/detachCancel seams, this one bottoms out in runDetachArgv, a package-level var, so the REAL body can run with only the spawn stubbed: no ssh, no rsync, and the locked tests_spawn_no_ssh decision is untouched. Assert that each step's exit file is fetched alongside its report, that a stale local exit file is cleared first, that a step carrying no ExitRel fetches only its report, and that a failed exit fetch is tolerated the way a failed report fetch is."
   covers = ["c-2"]
   test_contract = ["if detachFetchReports stops fetching the per-package exit file, a test asserting the real body issues a fetch for each step's ExitRel fails", "if it stops clearing a stale local exit file before fetching, a test seeding one and asserting it is gone fails", "if a step carrying no ExitRel stops being skipped, a test asserting only the report is fetched for it fails"]
+  status = "done"
+
+[[task]]
+  id = "t-15"
+  wave = 7
+  title = "Tolerate only a missing report, not a dead connection"
+  files = ["internal/cmd/verify.go", "internal/cmd/verify_results_test.go"]
+  description = "c-6 requires that a transport failure at fetch time reads as 'the run did not report'. detachFetchReports does not: it warns and continues on ANY error from runDetachArgv, so a connection that dies mid-collect is read as 'these packages produced no report' and a score is written over whichever packages happened to arrive first. Its own comment already states the correct rule — 'only the absence is tolerated' — and the attached path implements it via fetchFatal, which survives only remote.ErrPartial. remote.Classify is exported and reachable from package cmd, so the detached path can make the same distinction: rsync 23/24 (source missing/vanished) tolerated, 255 and 10/12/30/35 (the connection) fatal."
+  covers = ["c-6"]
+  test_contract = ["if a dead-connection fetch error stops being fatal, a test whose report fetch fails with rsync 255 fails by collecting a score instead of refusing", "if a missing report stops being tolerated, a test whose fetch fails with rsync 23 fails by refusing a collect that should succeed", "if the exit-code fetch stops distinguishing them, a test whose exit fetch fails with a transport error fails by continuing"]
   status = "done"

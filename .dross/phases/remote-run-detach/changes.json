@@ -102,6 +102,22 @@
         }
       ]
     },
+    "t-15": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_results_test.go"
+      ],
+      "commit": "6ad6efa",
+      "completed_at": "2026-09-01T00:14:21.566987Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "classifyFetch",
+          "loc": "internal/cmd/verify.go:466",
+          "what": "reads rsync's exit code so a collect tells an absent report from a dead connection, refusing the second instead of scoring around it"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/remote/remote.go",

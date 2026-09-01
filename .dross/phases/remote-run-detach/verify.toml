@@ -1,17 +1,17 @@
 [verify]
   phase = "remote-run-detach"
-  generated_at = 2026-08-31T22:07:23.535289Z
+  generated_at = 2026-09-01T00:03:46.923064Z
   verdict = "pending"
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9666666666666667
-  mutants_killed = 493
-  mutants_survived = 17
-  mutants_not_covered = 17
+  mutation_score = 0.9705882352941176
+  mutants_killed = 495
+  mutants_survived = 15
+  mutants_not_covered = 15
   mutants_in_scope = 510
-  unclassified_in_scope = 2
+  unclassified_in_scope = 0
   criteria_total = 6
   criteria_covered = 0
   criteria_uncovered = 0
@@ -19,11 +19,11 @@
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 493
-    survived = 17
+    killed = 495
+    survived = 15
     timeout = 0
     in_scope = 510
-    score = 0.9666666666666667
+    score = 0.9705882352941176
     file_count = 16
 
 [[criterion]]
@@ -49,11 +49,3 @@
 [[criterion]]
   id = "c-6"
   status = "unknown"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:438 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/verify.go:442 (CONDITIONALS_NEGATION)"
