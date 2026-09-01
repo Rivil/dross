@@ -91,6 +91,8 @@
     "someday:id:48b5edeb0556cd3a": "DRO-105",
     "someday:id:5610b45525282bf4": "DRO-219",
     "someday:id:5802ad3fe8f08d87": "DRO-34",
+    "someday:id:58ecc7ff9f2a5c15": "DRO-302",
+    "someday:id:59d5dcbbcbec81c2": "DRO-301",
     "someday:id:5c2c048407b679b5": "DRO-159",
     "someday:id:62841da45ed858fe": "DRO-267",
     "someday:id:64cd228356c9fce5": "DRO-76",
@@ -106,6 +108,7 @@
     "someday:id:794b7474a9e2ac97": "DRO-222",
     "someday:id:7b308a04a43d8cb9": "DRO-22",
     "someday:id:7ea6759938b910a4": "DRO-84",
+    "someday:id:82da70858aaff13e": "DRO-303",
     "someday:id:84db6f7af8f57cef": "DRO-49",
     "someday:id:8517ca7569b82540": "DRO-74",
     "someday:id:85981310e87bb7cf": "DRO-68",
@@ -549,32 +552,77 @@
     "remote-run-detach/t-1": {
       "issue": "DRO-278",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-10": {
+      "issue": "DRO-298",
+      "plan_status": "done",
+      "board_state": "task-complete"
     },
     "remote-run-detach/t-11": {
       "issue": "DRO-288",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-run-detach/t-12": {
       "issue": "DRO-289",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-run-detach/t-13": {
       "issue": "DRO-290",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-14": {
+      "issue": "DRO-299",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-15": {
+      "issue": "DRO-300",
+      "plan_status": "done",
+      "board_state": "task-complete"
     },
     "remote-run-detach/t-2": {
       "issue": "DRO-279",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-run-detach/t-3": {
       "issue": "DRO-280",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-4": {
+      "issue": "DRO-292",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-5": {
+      "issue": "DRO-293",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-6": {
+      "issue": "DRO-294",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-7": {
+      "issue": "DRO-295",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-8": {
+      "issue": "DRO-296",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-9": {
+      "issue": "DRO-297",
+      "plan_status": "done",
+      "board_state": "task-complete"
     },
     "remote-toolchain-bootstrap/t-1": {
       "issue": "DRO-130"

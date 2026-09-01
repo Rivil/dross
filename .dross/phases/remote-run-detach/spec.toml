@@ -76,14 +76,17 @@
   locked = true
 
 [[deferred]]
+  id = "59d5dcbbcbec81c2"
   text = "Notify on completion — push, email or a desktop notification when a detached run lands, instead of the user checking `dross verify status`."
   why = "A separate surface with its own transport and its own credentials. The status verb closes the loop first; notification is a convenience on top of a loop that already works."
 
 [[deferred]]
+  id = "58ecc7ff9f2a5c15"
   text = "Fan a phase's mutation run out across every granted host and compare the reports, rather than dispatching to one."
   why = "Two hosts' numbers are not interchangeable evidence — different core counts and toolchain versions — so comparing them needs a story about what a disagreement means. That is its own phase, and remote-host-pool is closer to its home."
 
 [[deferred]]
+  id = "82da70858aaff13e"
   text = "Resume a detached run that died partway, reusing the mutants already measured instead of starting the leg over."
   why = "Needs gremlins to checkpoint, which it does not do today — the stretch half of cache-budget-prune's note about pinning its working directory is the prerequisite, and it may need a patched build."
 
