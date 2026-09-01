@@ -1,0 +1,58 @@
+[phase]
+  id = "lane-selector-preview"
+  title = "lane-selector-preview"
+  milestone = "v1.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross test lane preview --files a.go b.go` prints, for each lane the file set hits, the exact command line that run would spawn — derived through the same code path the real gate uses, so preview and gate cannot diverge — and spawns nothing: no lane command, no prepare, no remote sync."
+
+[[criteria]]
+  id = "c-2"
+  text = "Preview names the non-running outcomes rather than silently emitting no line: a path matching no lane, an out-of-tree path, a path not on disk (dropped before deriving, named with its reason), and a lane that matched but whose selector scoped to nothing."
+
+[[criteria]]
+  id = "c-3"
+  text = "Preview names each rendered lane's consent state, so a line that would be refused at run time is visible as refused before it is run; preview itself never refuses on an ungranted lane."
+
+[[criteria]]
+  id = "c-4"
+  text = "`dross test lane list` prints a lane's selector_template and selector_join beside its selector, so every field that shapes the lane's derived line is readable from the listing."
+
+[[criteria]]
+  id = "c-5"
+  text = "`--json` emits preview's findings — lanes hit, derived line, dropped paths, unmatched paths, out-of-tree paths, consent state and locality — in a stable machine-readable shape carrying the same facts as the human output."
+
+[[criteria]]
+  id = "c-6"
+  text = "Preview names where each lane would run: the granted host, or `local` with the absent toolchain named when the lane would fall back; a host that cannot be reached is reported as unresolved rather than turning preview into a failure."
+
+[[decisions]]
+  key = "preview_invocation"
+  choice = "`dross test lane preview` takes no lane positional. It resolves lanes from the file set exactly as `dross test --files` does and previews every hit lane; `--lane <name>` narrows to one."
+  why = "Preview's question is \"what would the gate do with these files\", not \"what would this lane do with files it does not match\". Mirroring the gate's own resolution is also what makes c-1's same-code-path guarantee testable."
+  locked = true
+
+[[decisions]]
+  key = "missing_paths_in_preview"
+  choice = "Paths not on disk are filtered before deriving, exactly as laneRunLine does under the locked missing_paths rule — but preview names each dropped path and the reason, rather than silently shortening the line."
+  why = "Diverging from the run's filter would break c-1's guarantee for precisely the case a user is most likely to preview. Naming the drop keeps fidelity without the line going quietly short."
+  locked = true
+
+[[decisions]]
+  key = "bare_preview_default"
+  choice = "A bare `dross test lane preview` with no `--files` defaults the file set to the working tree's uncommitted changes (staged, unstaged and untracked), and says how many files it took."
+  why = "\"What will the gate run for the work I have right now\" is the question the verb is opened to ask; making the most common invocation an error would cost the surface its ergonomics. It infers the input, never the lanes — the milestone's declared-not-inferred non-goal is about lanes."
+  locked = true
+
+[[decisions]]
+  key = "preview_exit_status"
+  choice = "Preview always exits 0 except on a real fault (unreadable project.toml, unknown `--lane` name). \"No lane matches\" and \"every lane scoped to nothing\" are printed findings, not a non-zero verdict."
+  why = "Preview describes; it does not judge. A verdict in the exit status would make a verb that spawns nothing wireable as a CI gate, duplicating `dross test`'s own refusal in a surface that never ran a test."
+  locked = true
+
+[[decisions]]
+  key = "locality_probe"
+  choice = "Preview probes the granted host's toolchain by default to report c-6's locality; `--no-probe` — and an unreachable host — degrade to naming the configured target with locality marked unprobed/unresolved, still exit 0."
+  why = "There is no toolchain cache: the probe is a live `command -v` over ssh, so an honest locality answer costs a round-trip. Probing by default keeps the reported target true; the opt-out preserves the instant offline read for someone who only wants the derived line."
+  locked = true
