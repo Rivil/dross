@@ -1,38 +1,38 @@
 [verify]
   phase = "lane-selector-preview"
-  generated_at = 2026-09-02T11:01:53.083097Z
-  verdict = "fail"
+  generated_at = 2026-09-02T15:48:03.153379Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-09-02T12:22:34.650184Z
+  finalized_at = 2026-09-02T15:49:18.01329Z
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9835390946502057
-  mutants_killed = 239
-  mutants_survived = 4
-  mutants_not_covered = 4
-  mutants_in_scope = 243
-  unclassified_in_scope = 3
+  mutation_score = 0.995850622406639
+  mutants_killed = 240
+  mutants_survived = 1
+  mutants_not_covered = 1
+  mutants_in_scope = 241
+  unclassified_in_scope = 0
   criteria_total = 6
-  criteria_covered = 5
-  criteria_uncovered = 1
+  criteria_covered = 6
+  criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 239
-    survived = 4
+    killed = 240
+    survived = 1
     timeout = 0
-    in_scope = 243
-    score = 0.9835390946502057
+    in_scope = 241
+    score = 0.995850622406639
     file_count = 17
 
 [[criterion]]
   id = "c-1"
   status = "covered"
   tests = ["internal/cmd/lane_plan_test.go:39:TestPlanLineIsTheSpawnedLine", "internal/cmd/lane_preview_test.go:71:TestPreviewLineIsTheLineTheGateWouldSpawn", "internal/cmd/lane_preview_test.go:42:TestPreviewSpawnsNothing", "internal/cmd/lane_preview_test.go:250:TestPreviewTakesTrailingPathsAsFiles"]
-  notes = "The same-code-path guarantee is asserted as string IDENTITY between lanePlan's derived Line and the line the gate actually spawned (captured by installSpawnRecorder), not each against a literal — the only assertion shape that cannot pass while preview and gate disagree. Spawn-freedom is asserted against the spawn/ssh/rsync recorders rather than against absent output, so a preview that ran the prepare silently would still fail."
+  notes = "The same-code-path guarantee is asserted as string IDENTITY between the line the gate actually spawned (captured by installSpawnRecorder) and the line preview printed, not each against a literal — the only assertion shape that cannot pass while preview and gate disagree. Spawn-freedom is asserted against the spawn/ssh/rsync recorders rather than against absent output, so a preview that ran the prepare silently would still fail."
 
 [[criterion]]
   id = "c-2"
@@ -44,50 +44,34 @@
   id = "c-3"
   status = "covered"
   tests = ["internal/cmd/lane_preview_consent_test.go:25:TestPreviewRendersAnUngrantedLaneWithoutRefusing", "internal/cmd/lane_preview_consent_test.go:56:TestStaleAndGrantedAreDistinguished"]
-  notes = "Asserted as a PAIR against the gate over the same argv: preview prints 'consent: <absent>' beside the derived line and exits 0 while `dross test --files` exits exitLaneRefused. The consent ladder (stale vs absent vs granted) is asserted through ConsentState.String() so a second vocabulary cannot be hand-written in the test."
+  notes = "Asserted as a PAIR against the gate over the same argv: preview prints 'consent: <absent>' beside the derived line and exits 0 while `dross test --files` exits exitLaneRefused, so preview's exit 0 is a difference rather than an unfalsifiable fact. The consent ladder (stale vs absent vs granted) is asserted through ConsentState.String(), so a second vocabulary cannot be hand-written in the test."
 
 [[criterion]]
   id = "c-4"
   status = "covered"
   tests = ["internal/cmd/test_lane_list_fields_test.go:42:TestLaneListPrintsTemplateFields", "internal/cmd/test_lane_list_fields_test.go:68:TestListOmitsTemplateFieldsForALaneWithout", "internal/cmd/test_lane_list_fields_test.go:107:TestListAndAddRenderTemplatesIdentically"]
-  notes = "Both template shapes covered (repeat {path} and joined {paths}), plus the absence case that keeps the fields opt-in. The identity test compares lane list's transcript against lane add's rather than each against a literal, which is what fails on a list-local second renderer."
+  notes = "Both template shapes covered (repeat {path} and joined {paths}) plus selector-join, and the absence case that keeps the fields opt-in guards its own fixture by first asserting the selector line is present. The identity test compares lane list's transcript against lane add's rather than each against a literal, which is what fails on a list-local second renderer."
 
 [[criterion]]
   id = "c-5"
   status = "covered"
   tests = ["internal/cmd/lane_preview_json_test.go:62:TestPreviewJSONIsBareAndCarriesTheFindings", "internal/cmd/lane_preview_json_test.go:156:TestJSONCarriesConsentAndLocality", "internal/cmd/lane_preview_json_test.go:126:TestPreviewJSONReportsAnEmptyMatchWithoutFailing", "internal/cmd/lane_preview_json_test.go:103:TestPreviewJSONUsesItsOwnFlagUsage"]
-  notes = "Every field the criterion names is asserted: lanes, line, dropped, unmatched, out_of_tree, consent, locality, host_state. Bareness is checked via assertBareJSONDocument (no '# <path>' header). The payload's strings are compared against the TRANSCRIPT, not against literals, so a second vocabulary in the JSON fails. The empty-match case pins `lanes` to an array rather than null and exit 0."
+  notes = "Every field the criterion names is asserted: lanes, line, dropped, unmatched, out_of_tree, consent, locality, host_state. Bareness is checked via assertBareJSONDocument (no '# <path>' header). The payload's strings are compared against the TRANSCRIPT, not against literals, so a second vocabulary in the JSON fails. The empty-match case pins `lanes` to an array rather than null, keeps exit 0, and rejects a bare `{}` via a field count."
 
 [[criterion]]
   id = "c-6"
-  status = "weak"
-  tests = ["internal/cmd/lane_preview_locality_test.go:71:TestUnreachableHostIsUnresolvedNotAFailure", "internal/cmd/lane_preview_locality_test.go:125:TestMissingRemoteToolFallsBackNamingTheBinary", "internal/cmd/lane_preview_locality_test.go:224:TestUnresolvedHostNeverRefusesALane", "internal/cmd/lane_preview_locality_test.go:261:TestUnprobedHostNeverClaimsLocal", "internal/cmd/lane_preview_locality_test.go:190:TestPreviewLandsOnTheGrantTheRunWouldUse", "internal/cmd/lane_preview_consent_test.go:102:TestUnreachableHostStillExitsZero"]
-  notes = "The granted-host, local-fallback-naming-the-binary and unprobed halves are covered well. The 'host that cannot be reached is reported as unresolved rather than turning preview into a failure' half is only HALF covered: preview has two unresolved paths and the tests reach one. preflightRemote converts remote.ErrTransport into Fallback=true with a nil error, so every fakeProbe in the suite lands on the `chosen == nil` branch at lane_preview_locality.go:127. The `perr != nil` branch at :119 — a host that answered and whose answer was a failure (non-transport probe error) — is executed by no test, which is why three in-hunk mutants survive there NOT_COVERED. That is the branch where propagating the error is the natural instinct, i.e. exactly the regression c-6 forbids."
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/lane_preview_locality.go:119 (INVERT_NEGATIVES) — flips the `perr != nil` guard on preview's 'host answered with a failure' path; no test reaches the branch, so nothing notices preview turning a probe failure into a returned error"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/lane_preview_locality.go:119 (ARITHMETIC_BASE) — mutates `targets[len(targets)-1]`; nothing asserts which host preview names when a probe fails non-transport"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/lane_preview_locality.go:119 (ARITHMETIC_BASE) — second index mutation on the same unreached expression"
-
-[[finding]]
-  severity = "FLAG"
-  text = "criterion c-6 downgraded covered -> weak: the unresolved-host promise is proved for the transport-failure path only; the non-transport probe-failure path (lane_preview_locality.go:113-119) has no covering test"
+  status = "covered"
+  tests = ["internal/cmd/lane_preview_locality_test.go:190:TestPreviewLandsOnTheGrantTheRunWouldUse", "internal/cmd/lane_preview_locality_test.go:125:TestMissingRemoteToolFallsBackNamingTheBinary", "internal/cmd/lane_preview_locality_test.go:71:TestUnreachableHostIsUnresolvedNotAFailure", "internal/cmd/lane_preview_locality_test.go:292:TestProbeFailureIsUnresolvedNotAFailure", "internal/cmd/lane_preview_locality_test.go:338:TestProbeFailureNamesTheHostThatFailed", "internal/cmd/lane_preview_locality_test.go:224:TestUnresolvedHostNeverRefusesALane", "internal/cmd/lane_preview_locality_test.go:261:TestUnprobedHostNeverClaimsLocal", "internal/cmd/lane_preview_consent_test.go:102:TestUnreachableHostStillExitsZero"]
+  notes = "Upgraded weak -> covered by t-9. The previous run downgraded this because preview has TWO unresolved paths and the tests reached one: preflightRemote absorbs remote.ErrTransport into Fallback=true with a nil error, so every fakeProbe landed on the `chosen == nil` branch and the `perr != nil` branch at lane_preview_locality.go:119 — a host that answered and whose answer was a failure — was executed by no test, leaving three in-hunk mutants surviving NOT_COVERED. t-9's two tests reach it and all three are now killed. Covering it also surfaced a real defect the mutants were pointing at: the pool walk bails at the failing index, so targets[len(targets)-1] named a machine that was never contacted above a reason quoting a different machine's error; pickRemoteTarget now returns the failing target beside the error and TestProbeFailureNamesTheHostThatFailed pins it with the failure on the FIRST of two grants, the only arrangement where the right answer and the last index differ. The transcript half is covered too: TestUnreachableHostStillExitsZero asserts 'runs on:' per lane block, not just the previewHost struct."
 
 [[finding]]
   severity = "NOTE"
-  text = "survivor accepted this run: internal/cmd/lane_preview.go:249 (CONDITIONALS_NEGATION) — gremlins attributes no coverage block to a `case X != \"\":` switch condition. Proven exercised: go coverage reports block 249.24,253.64 count=1 under TestMalformedLaneIsAFindingNotAFault, which asserts the exact string that branch prints. Tooling attribution ceiling, not a test gap."
+  text = "mutation measured on helicon: score 1.00 over 241 in-scope mutants (killed=240, survived=1, that one NOT_COVERED); efficacy over the 240 reachable = 1.00. 111 out-of-scope survivors filtered — see `out_of_scope` in tests.json."
 
 [[finding]]
   severity = "NOTE"
-  text = "retired 2 stale acceptances whose subject mutants are no longer produced (internal/cmd/verify.go: 0896f0c77e9a1e27, 74e811ee04b389a7)"
+  text = "the sole in-scope survivor is already accepted: internal/cmd/lane_preview.go:249 (CONDITIONALS_NEGATION) — gremlins attributes no coverage block to a `case X != \"\":` switch condition. Proven exercised: go coverage reports block 249.24,253.64 count=1 under TestMalformedLaneIsAFindingNotAFault, which asserts the exact string that branch prints. Tooling attribution ceiling, not a test gap. Nothing was left unclassified this run."
 
 [[finding]]
   severity = "NOTE"
-  text = "mutation measured on helicon: score 0.98 over 243 in-scope mutants (killed=239, survived=4, all 4 NOT_COVERED); efficacy over the 239 reachable = 1.00. 111 out-of-scope survivors filtered — see `out_of_scope` in tests.json."
+  text = "the previous run's three BLOCKING survivors at internal/cmd/lane_preview_locality.go:119 (INVERT_NEGATIVES, ARITHMETIC_BASE x2) are killed by t-9 (348f81e), not accepted or routed. in-scope mutants moved 243 -> 241 with survived 4 -> 1 and not_covered 4 -> 1."
