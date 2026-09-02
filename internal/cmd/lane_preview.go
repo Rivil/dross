@@ -81,6 +81,7 @@ func testLanePreview() *cobra.Command {
 	var files []string
 	var lane string
 	var noProbe bool
+	var asJSON bool
 	c := &cobra.Command{
 		Use:   "preview [paths...]",
 		Short: "Show the command line each lane would spawn for a file set, without running anything",
@@ -92,12 +93,13 @@ func testLanePreview() *cobra.Command {
 			"describes, it does not judge.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(_ *cobra.Command, args []string) error {
-			return runLanePreview(files, args, lane, !noProbe)
+			return runLanePreview(files, args, lane, !noProbe, asJSON)
 		},
 	}
 	c.Flags().StringArrayVar(&files, "files", nil, "repo-relative path to resolve against the declared lanes (repeatable)")
 	c.Flags().StringVar(&lane, "lane", "", "narrow the preview to one declared lane")
 	c.Flags().BoolVar(&noProbe, "no-probe", false, "do not contact the granted host; report its locality as unresolved")
+	addPreviewJSONFlag(c, &asJSON)
 	return c
 }
 
@@ -105,7 +107,7 @@ func testLanePreview() *cobra.Command {
 //
 // probe is threaded through rather than read from a flag here so the locality
 // task can turn it off without this function growing a second entry point.
-func runLanePreview(files, args []string, lane string, probe bool) error {
+func runLanePreview(files, args []string, lane string, probe, asJSON bool) error {
 	root, proj, err := loadProjectForLanes()
 	if err != nil {
 		return err
@@ -173,6 +175,9 @@ func runLanePreview(files, args []string, lane string, probe bool) error {
 		report.Lanes[i].Fallback = loc.Lanes[i].Note
 	}
 
+	if asJSON {
+		return emitPreviewJSON(report)
+	}
 	printPreview(report, bare)
 	return nil
 }
