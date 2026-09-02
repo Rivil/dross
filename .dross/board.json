@@ -18,6 +18,7 @@
     "lane-prepare-step": "DRO-223",
     "lane-remote-locality": "DRO-235",
     "lane-selector-custom": "DRO-268",
+    "lane-selector-preview": "DRO-304",
     "lane-selector-translation": "DRO-210",
     "legacy-phase-backfill": "DRO-142",
     "milestone-lifecycle-close": "DRO-13",
