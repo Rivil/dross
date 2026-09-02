@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Rivil/dross/internal/project"
 )
 
 // previewReport is everything one preview learned. It is the single source for
@@ -36,6 +38,13 @@ type previewReport struct {
 	// OutOfTree are paths naming something outside the repo. A finding here,
 	// exit 2 at the gate.
 	OutOfTree []string `json:"out_of_tree"`
+	// Host is the granted host this preview's locality is about, empty when
+	// no host is granted at all.
+	Host string `json:"host,omitempty"`
+	// HostState is what the host told us — probed, unprobed, unresolved — or
+	// `none`. It is a report-level fact rather than a per-lane one: every lane
+	// in one preview was answered by the same probe, or by the same silence.
+	HostState string `json:"host_state"`
 }
 
 // previewLaneReport is one lane's answer.
@@ -56,6 +65,9 @@ type previewLaneReport struct {
 	Consent string `json:"consent,omitempty"`
 	// Locality is where the lane would run, or that it is unresolved.
 	Locality string `json:"locality,omitempty"`
+	// Fallback is the run's own fallback line — lane, binary, host and remedy
+	// — set only when a probe PROVED the host lacks a tool.
+	Fallback string `json:"fallback,omitempty"`
 }
 
 // testLanePreview is the subcommand.
@@ -68,6 +80,7 @@ type previewLaneReport struct {
 func testLanePreview() *cobra.Command {
 	var files []string
 	var lane string
+	var noProbe bool
 	c := &cobra.Command{
 		Use:   "preview [paths...]",
 		Short: "Show the command line each lane would spawn for a file set, without running anything",
@@ -79,11 +92,12 @@ func testLanePreview() *cobra.Command {
 			"describes, it does not judge.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(_ *cobra.Command, args []string) error {
-			return runLanePreview(files, args, lane, true)
+			return runLanePreview(files, args, lane, !noProbe)
 		},
 	}
 	c.Flags().StringArrayVar(&files, "files", nil, "repo-relative path to resolve against the declared lanes (repeatable)")
 	c.Flags().StringVar(&lane, "lane", "", "narrow the preview to one declared lane")
+	c.Flags().BoolVar(&noProbe, "no-probe", false, "do not contact the granted host; report its locality as unresolved")
 	return c
 }
 
@@ -129,10 +143,12 @@ func runLanePreview(files, args []string, lane string, probe bool) error {
 		Unmatched:  plan.Unmatched,
 		OutOfTree:  plan.OutOfTree,
 	}
+	var shown []matchedLane
 	for _, pl := range plan.Lanes {
 		if lane != "" && pl.lane.Name != lane {
 			continue
 		}
+		shown = append(shown, pl.matchedLane)
 		report.Lanes = append(report.Lanes, previewLaneReport{
 			Name:            pl.lane.Name,
 			Line:            pl.Line,
@@ -140,11 +156,38 @@ func runLanePreview(files, args []string, lane string, probe bool) error {
 			Dropped:         pl.Dropped,
 			ScopedToNothing: pl.ScopedToNothing,
 			FenceErr:        renderedErr(pl.FenceErr),
+			// Reported, never acted on. The gate refuses an ungranted lane
+			// here; preview annotates it, which is what makes a line that
+			// WOULD be refused visible before anyone runs it (c-3).
+			Consent: previewConsent(root, repoDir, pl.lane).String(),
 		})
+	}
+
+	loc, err := previewHost(root, repoDir, shown, probe)
+	if err != nil {
+		return err
+	}
+	report.Host, report.HostState = loc.Host, string(loc.State)
+	for i := range report.Lanes {
+		report.Lanes[i].Locality = loc.Lanes[i].Text
+		report.Lanes[i].Fallback = loc.Lanes[i].Note
 	}
 
 	printPreview(report, bare)
 	return nil
+}
+
+// previewConsent is the lane's grant state, and ONLY that.
+//
+// The error LaneConsented returns beside it is deliberately discarded. It is
+// the run's refusal — the thing that stops an ungranted lane from spawning —
+// and preview spawns nothing, so carrying it would turn an annotation into a
+// gate. laneConsentRefusal's text is never rendered here for the same reason:
+// it tells the user to go and run `dross trust`, which is advice about a run
+// that is not happening.
+func previewConsent(root, repoDir string, lane project.TestLane) ConsentState {
+	state, _ := LaneConsented(root, repoDir, lane.Name, laneConsentLine(lane))
+	return state
 }
 
 // renderedErr renders an error into the report's string field, empty for nil.
@@ -168,6 +211,12 @@ func printPreview(r previewReport, bare bool) {
 		Printf("preview: %s from the working tree\n", countedFiles(r.FilesTaken))
 	} else {
 		Printf("preview: %s\n", countedFiles(r.FilesTaken))
+	}
+	// One host line for the whole report, because one probe (or one silence)
+	// answered for every lane in it. Repeating the state per lane would read
+	// as several independent answers.
+	if r.Host != "" {
+		Printf("host: %s (%s)\n", r.Host, r.HostState)
 	}
 
 	// Every non-running outcome is NAMED with its reason (c-2). Emitting no
@@ -207,6 +256,15 @@ func printPreviewLane(l previewLaneReport) {
 		// gate does. The deleted path is the case a user is most likely to be
 		// previewing, and a line that quietly got shorter explains nothing.
 		Printf("  dropped %s — not on disk, so it was filtered before deriving\n", p)
+	}
+	if l.Consent != "" {
+		Printf("  consent: %s\n", l.Consent)
+	}
+	if l.Locality != "" {
+		Printf("  runs on: %s\n", l.Locality)
+	}
+	if l.Fallback != "" {
+		Printf("  %s\n", l.Fallback)
 	}
 }
 
