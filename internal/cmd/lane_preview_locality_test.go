@@ -279,3 +279,90 @@ func TestUnprobedHostNeverClaimsLocal(t *testing.T) {
 		}
 	}
 }
+
+// TestProbeFailureIsUnresolvedNotAFailure is the OTHER half of c-6's escape
+// clause, and the one nothing reached until now.
+//
+// preflightRemote converts remote.ErrTransport into Fallback=true with a NIL
+// error, so every transport-shaped fake lands on the `chosen == nil` branch. A
+// host that ANSWERED and whose answer was a failure — bad workdir, a refused
+// key, a probe command that exited non-zero — is the other way a grant fails to
+// resolve, and it is the branch where propagating the error is the natural
+// instinct. Propagating it is exactly what locked preview_exit_status forbids.
+func TestProbeFailureIsUnresolvedNotAFailure(t *testing.T) {
+	grantedLaneFixture(t, goAndWebLanes)
+	installLaneLookPath(t)
+	// Deliberately NOT wrapping remote.ErrTransport: that error is absorbed
+	// into a fallback upstream and would never reach the branch under test.
+	fakeProbe(t, func(tg remote.Target, _ []string) (remote.Readiness, error) {
+		return remote.Readiness{}, fmt.Errorf("probe %s: exit status 127", tg.Host)
+	})
+	root, repoDir, lanes := previewLanes(t)
+
+	got, err := previewHost(root, repoDir, lanes, true)
+	if err != nil {
+		t.Fatalf("a probe failure turned preview into a failure: %v", err)
+	}
+	if got.State != hostUnresolved {
+		t.Errorf("state = %q, want unresolved", got.State)
+	}
+	if !strings.Contains(got.Why, "did not answer") {
+		t.Errorf("why = %q, does not say the host did not answer", got.Why)
+	}
+	if !strings.Contains(got.Why, "exit status 127") {
+		t.Errorf("why = %q, drops the underlying probe error", got.Why)
+	}
+	// The lanes survive the unresolved host: preview's derived lines are what
+	// the user asked for, and a probe failure is not a reason to lose them.
+	if len(got.Lanes) != 2 {
+		t.Fatalf("want 2 lane answers, got %d", len(got.Lanes))
+	}
+	for i, l := range got.Lanes {
+		if l.Resolved {
+			t.Errorf("lane %d claims a resolved site over a host that failed", i)
+		}
+		if l.Err != nil {
+			t.Errorf("lane %d carries %v — a probe failure convicts no lane", i, l.Err)
+		}
+	}
+}
+
+// TestProbeFailureNamesTheHostThatFailed pins WHICH machine the banner blames.
+//
+// pickRemoteTarget bails at the failing index rather than walking on, so the
+// failing grant is not generally the last configured one. Naming
+// targets[len(targets)-1] here printed a host that was never contacted, above a
+// reason quoting a different host's error — the two halves of one line
+// disagreeing. Asserted with the failure on the FIRST of two grants, which is
+// the only arrangement where the right answer and the last index differ.
+func TestProbeFailureNamesTheHostThatFailed(t *testing.T) {
+	grantedLaneFixture(t, goAndWebLanes)
+	installLaneLookPath(t)
+	root, repoDir, lanes := previewLanes(t)
+	appendPoolHost(t, root, "second")
+	var asked []string
+	fakeProbe(t, func(tg remote.Target, _ []string) (remote.Readiness, error) {
+		asked = append(asked, tg.Host)
+		if tg.Host == "helicon" {
+			return remote.Readiness{}, fmt.Errorf("probe helicon: permission denied")
+		}
+		return remote.Readiness{Cores: 4}, nil
+	})
+
+	got, err := previewHost(root, repoDir, lanes, true)
+	if err != nil {
+		t.Fatalf("a probe failure turned preview into a failure: %v", err)
+	}
+	if got.Host != "helicon" {
+		t.Errorf("host = %q, want helicon — the grant that actually failed", got.Host)
+	}
+	if !strings.Contains(got.Why, "permission denied") {
+		t.Errorf("why = %q, drops helicon's error", got.Why)
+	}
+	// The walk must STOP at the failure. Reaching `second` would be the
+	// laundering pickRemoteTarget's own comment rules out, and would make the
+	// banner's host a matter of which machine answered last.
+	if len(asked) != 1 || asked[0] != "helicon" {
+		t.Errorf("probed %v, want [helicon] only — the walk ran past a real failure", asked)
+	}
+}

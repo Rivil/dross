@@ -116,7 +116,13 @@ func previewHost(root, repoDir string, lanes []matchedLane, probe bool) (preview
 		// unresolved, named, with the reason carried — turning it into a
 		// non-zero exit would make a verb that spawns nothing wireable as a
 		// CI gate.
-		return previewUnresolved(hostUnresolved, targets[len(targets)-1].Host, "did not answer: "+perr.Error(), lanes), nil
+		//
+		// The host named is the one pickRemoteTarget BAILED on, which it hands
+		// back beside the error. It is not necessarily the last configured
+		// grant: the walk stops at the failure rather than running on, so
+		// naming targets[len(targets)-1] here would print a machine that was
+		// never contacted, above a reason quoting a different machine's error.
+		return previewUnresolved(hostUnresolved, chosen.Host, "did not answer: "+perr.Error(), lanes), nil
 	}
 	if chosen == nil {
 		// pf.Why is deliberately NOT reused. It is the RUN's fallback wording

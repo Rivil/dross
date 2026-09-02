@@ -38,7 +38,13 @@ func pickRemoteTarget(targets []*remote.Target, tools []string) (*remote.Target,
 			// The host answered and the answer was a failure. Re-trying
 			// elsewhere in the hope of a different one is how a real failure
 			// gets laundered into a pass.
-			return nil, preflight{}, notices, err
+			//
+			// The FAILING target comes back beside the error, because the walk
+			// bails at i rather than at the end: a caller that wants to name
+			// the machine cannot recover it from the slice. Both run-side
+			// callers return on a non-nil error without reading this, so it is
+			// only ever read by someone who asked which host failed.
+			return t, preflight{}, notices, err
 		}
 		if !pf.Fallback {
 			if i > 0 {
