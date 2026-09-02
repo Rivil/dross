@@ -1,4 +1,4 @@
-task_seq = 8
+task_seq = 9
 
 [phase]
   id = "lane-selector-preview"
@@ -85,4 +85,14 @@ task_seq = 8
   covers = ["c-5"]
   depends_on = ["t-5", "t-6"]
   test_contract = ["if --json wraps or headers its payload, TestPreviewJSONIsBareAndCarriesTheFindings fails: assertBareJSONDocument holds (first non-space byte '{', no `# <path>` header, parses) and lanes[0].line, dropped, unmatched and out_of_tree equal the human rendering's facts; --json registers its own usage string, not jsonFlagUsage, which promises \"instead of toml\"", "if an empty match degrades the payload, TestPreviewJSONReportsAnEmptyMatchWithoutFailing fails: --json on an unmatched-only set emits an object with an empty lanes array and the unmatched paths present, exit 0 — a bare `{}` or a non-zero exit fails", "if the JSON payload invents its own vocabulary, TestJSONCarriesConsentAndLocality fails: lanes[].consent and lanes[].locality hold the SAME strings the human rendering printed — a payload emitting \"consent\": \"ok\" fails the comparison"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 5
+  title = "Cover preview's non-transport probe-failure path"
+  files = ["internal/cmd/remote_pool.go", "internal/cmd/lane_preview_locality.go", "internal/cmd/lane_preview_locality_test.go"]
+  description = "Closes the c-6 half no test reaches. preflightRemote converts remote.ErrTransport into\nFallback=true with a NIL error, so every existing fakeProbe lands on previewHost's\n`chosen == nil` branch. The other unresolved path — pickRemoteTarget returning a non-nil\nerror, i.e. the host answered and the answer was a failure — is executed by nothing,\nleaving three in-hunk mutants surviving NOT_COVERED at lane_preview_locality.go:119.\nAdds the missing test only; no production change."
+  covers = ["c-6"]
+  test_contract = ["if a non-transport probe failure is returned rather than classified, TestProbeFailureIsUnresolvedNotAFailure fails: with the probe seam returning a plain (non-ErrTransport) error, previewHost returns a NIL error, State==\"unresolved\", and the reason carries \"did not answer\" plus the underlying error text — propagating it would make a verb that spawns nothing report a transport fault", "if preview names the wrong host when a probe fails non-transport, TestProbeFailureNamesTheLastConfiguredHost fails: with two configured grants, the reported Host is the LAST target, which is what targets[len(targets)-1] selects — an off-by-one or a first-target read fails the assertion"]
   status = "done"

@@ -134,6 +134,23 @@
           "what": "preview's findings as a bare JSON document in the same vocabulary the transcript prints"
         }
       ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/remote_pool.go",
+        "internal/cmd/lane_preview_locality.go",
+        "internal/cmd/lane_preview_locality_test.go"
+      ],
+      "commit": "348f81e",
+      "completed_at": "2026-09-02T12:54:36.647892Z",
+      "landmarks": [
+        {
+          "feature": "test lane preview",
+          "symbol": "pickRemoteTarget",
+          "loc": "internal/cmd/remote_pool.go:47",
+          "what": "the failing grant comes back beside the error so preview names the host that actually failed rather than the last one configured"
+        }
+      ]
     }
   }
 }
