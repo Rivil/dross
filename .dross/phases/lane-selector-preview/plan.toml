@@ -67,12 +67,12 @@ task_seq = 8
 
 [[task]]
   id = "t-7"
-  wave = 3
+  wave = 5
   title = "Document preview and the listing template fields"
   files = ["README.md", "internal/cmd/lane_preview_docs_test.go"]
   description = "Extends the single `dross test lane {add,list,edit,remove,install}` row (README.md:220) to\ninclude preview: its invocation, the bare working-tree default, --lane, --no-probe, --json,\nthe always-0 exit policy, and the sentence that `lane list` now prints selector-template and\nselector-join. One task owns that row so two parallel edits cannot collide on it.\n"
   covers = ["c-4"]
-  depends_on = ["t-2", "t-5", "t-6"]
+  depends_on = ["t-2", "t-5", "t-6", "t-8"]
   test_contract = ["if the row does not document the verb, TestReadmeDocumentsThePreviewVerb fails: the row containing \"dross test lane\", located per-row via readmeRowContaining, names `preview`, `--no-probe` and `--json` — per-row so a mention three commands away cannot satisfy it", "if the listing's new fields go undocumented, TestReadmeDocumentsTheListingTemplateFields fails: that row names `selector-template` and `selector-join` as fields `lane list` prints", "if the exit policy is left implicit, TestPreviewExitPolicyIsDocumented fails: the row states preview exits 0 for \"no lane matches\" — the sentence that stops it being wired as a CI gate"]
   status = "pending"
 
