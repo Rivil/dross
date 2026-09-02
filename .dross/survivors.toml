@@ -1295,15 +1295,6 @@
   accepted_in = "remote-run-detach"
 
 [[accepted]]
-  key = "0896f0c77e9a1e27"
-  file = "internal/cmd/verify.go"
-  op = "ARITHMETIC_BASE"
-  text = "\"rm -rf \" + shellQuoteArg(runDir)"
-  line = 584
-  reason = "ARITHMETIC_BASE on Go string concatenation inside cancelLine — the continuation line of the same expression as internal/cmd/verify.go:583, and unkillable for the same reason: the operator rewrites + to - on a string expression, which does not compile. The behaviour this line carries IS asserted: TestCancelLineRemovesTheRunDirectory in internal/cmd/verify_status_test.go fails if the rm is dropped, moved before the kill, or chained behind the kill's success, and TestCancelLineQuotesItsPaths fails if the run dir stops going through shellQuoteArg. The earlier acceptance of this key recorded the teardown text as unasserted; that FLAG on c-4 is now closed by those tests."
-  accepted_in = "remote-run-detach"
-
-[[accepted]]
   key = "1356a6e766535468"
   file = "internal/cmd/verify.go"
   op = "CONDITIONALS_NEGATION"
@@ -1313,10 +1304,10 @@
   accepted_in = "remote-run-detach"
 
 [[accepted]]
-  key = "74e811ee04b389a7"
-  file = "internal/cmd/verify.go"
-  op = "ARITHMETIC_BASE"
-  text = "return \"kill -- -$(cat \" + shellQuoteArg(pidFile) + \" 2>/dev/null) 2>/dev/null; \" +"
-  line = 583
-  reason = "ARITHMETIC_BASE on Go string concatenation inside cancelLine. The mutant cannot compile: the operator rewrites + to -, and \"kill -- -$(cat \" - shellQuoteArg(pidFile) is not a valid Go expression, so no assertion any test could write would distinguish it from the original. Unlike its predecessor at the old detachCancel:569, this line IS executed under test and the gap beside it is closed: TestCancelLineKillsTheProcessGroup in internal/cmd/verify_status_test.go asserts the process-GROUP form directly and fails if the `-- -` is dropped, and TestCancelSendsTheCancelLineToTheHost pins that this text is what reaches the transport. What remains unkillable is the uncompilable arithmetic mutant alone, not the behaviour."
-  accepted_in = "remote-run-detach"
+  key = "fa6e99b07880ba83"
+  file = "internal/cmd/lane_preview.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case l.FenceErr != \"\":"
+  line = 249
+  reason = "switch-case condition: gremlins attributes no coverage block to a 'case X != \"\":' expression. Proven exercised — go coverage shows block 249.24,253.64 count=1 under TestMalformedLaneIsAFindingNotAFault, which asserts the exact 'lane bad — would not run:' string this branch prints. Tooling attribution ceiling, not a test gap."
+  accepted_in = "lane-selector-preview"
