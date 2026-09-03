@@ -21,22 +21,16 @@
     },
     "t-2": {
       "files": [
-        "internal/cmd/local.go",
-        "internal/cmd/doctor.go",
-        "internal/cmd/remote_grant.go",
-        "internal/cmd/remote_bootstrap_cmd.go",
-        "internal/cmd/test_lane_install.go",
-        "internal/cmd/local_resolution_test.go",
-        "internal/cmd/remote_bootstrap.go"
+        "internal/cmd/local_resolution_test.go"
       ],
-      "commit": "5142626",
-      "completed_at": "2026-09-03T07:18:55.950415Z",
+      "commit": "e52f843",
+      "completed_at": "2026-09-03T10:07:34.031255Z",
       "landmarks": [
         {
-          "feature": "remote host pool",
-          "symbol": "resolveRemoteHost",
-          "loc": "internal/cmd/local.go:613",
-          "what": "single pool-walking resolution every non-run surface uses, replacing the scalar readRemoteGrant that let doctor/status/bootstrap/lane-install name a host the run would not use"
+          "feature": "remote host resolution",
+          "symbol": "TestACommandFailureNamesTheMachineThatFailed",
+          "loc": "internal/cmd/local_resolution_test.go:198",
+          "what": "pins that a failed pool resolution names the machine that failed rather than an anonymous granted host"
         }
       ]
     },
