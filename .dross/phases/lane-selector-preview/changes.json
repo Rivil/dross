@@ -1,7 +1,9 @@
 {
   "phase": "lane-selector-preview",
+  "pr": 116,
   "base": "milestone/v1.6",
   "base_commit": "4006b62735c61c4e14c41ef2107d97c8ae67046b",
+  "status": "shipped",
   "tasks": {
     "t-1": {
       "files": [
