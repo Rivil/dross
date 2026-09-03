@@ -3,7 +3,7 @@ phases = ["test-lane-config", "lane-selector-translation", "lane-prepare-step", 
 [milestone]
   version = "v1.6"
   title = "1.6 lane truth — the test gate runs what the task actually touched"
-  status = "active"
+  status = "complete"
   started = "2026-08-25"
   base = "main"
 
