@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/testlane"
@@ -372,17 +373,59 @@ func runnableLanes(matched []matchedLane) []project.TestLane {
 	return out
 }
 
-// plannedRemotely reports whether any lane is still going to the granted host.
+// plannedHosts names every machine at least one lane is going to, in the order
+// the lanes declared them, without repeats.
 //
-// One is enough. The sync exists so a remote lane measures the tree on disk
-// rather than the previous run's, so skipping it for a run that still has one
-// remote lane would produce the worst outcome available: a green from code that
-// is not the code in hand.
-func plannedRemotely(plan []laneVerdict) bool {
+// It is what decides the syncs. One lane is enough to earn a host its copy of
+// the tree — the sync exists so a remote lane measures the code in hand rather
+// than the previous run's, and skipping it would produce the worst outcome
+// available: a green from code that is not the code in hand. Equally, a host no
+// lane is going to gets nothing: paying for a transfer nothing reads is the
+// cost the pre-sync decision exists to avoid.
+func plannedHosts(plan []laneVerdict) []string {
+	seen := map[string]bool{}
+	out := []string{}
 	for _, v := range plan {
-		if v.Site == siteRemote {
-			return true
+		if v.Site != siteRemote || seen[v.Host] {
+			continue
 		}
+		seen[v.Host] = true
+		out = append(out, v.Host)
 	}
-	return false
+	return out
+}
+
+// splitRunLine says, in one line, that this run's lanes landed on more than one
+// machine — and which lane went where.
+//
+// Empty for a run that did not split, which is nearly all of them: a line
+// printed unconditionally would be noise on the common path, and noise on the
+// common path is how a line stops being read. But a split run MUST say so
+// (c-4): different hosts have different core counts and toolchain versions, so
+// two runs of the same phase measured across different candidates are not
+// interchangeable evidence, and a transcript that read identically to a
+// single-host run would hide that at exactly the moment it matters.
+//
+// "More than one machine" counts this one. A run with a lane on a host and a
+// lane here is split too, and the per-lane fallback line explains only the
+// lane that came home — not that the run's numbers now come from two places.
+func splitRunLine(lanes []plannedLane, plan []laneVerdict) string {
+	seen := map[string]bool{}
+	var where []string
+	for i, v := range plan {
+		site := "this machine"
+		if v.Site == siteRemote {
+			site = v.Host
+		} else if v.Site == siteRefused {
+			// A lane that never spawned produced no numbers, so it is not one
+			// of the places this run was measured.
+			continue
+		}
+		seen[site] = true
+		where = append(where, fmt.Sprintf("%s on %s", lanes[i].lane.Name, site))
+	}
+	if len(seen) < 2 {
+		return ""
+	}
+	return fmt.Sprintf("this run is split across %d machines — %s", len(seen), strings.Join(where, ", "))
 }

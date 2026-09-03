@@ -178,10 +178,27 @@ func pickRemoteTarget(targets []*remote.Target, tools []string) (*remote.Target,
 // selectRemoteTarget is pickRemoteTarget with the announcements printed. It is
 // what the RUN calls: a run's transcript is the only record of which machine
 // produced its numbers, so the skips reach stdout in the order they happened.
-func selectRemoteTarget(targets []*remote.Target, tools []string) (*remote.Target, preflight, error) {
-	chosen, pf, notices, err := pickRemoteTarget(targets, tools)
-	for _, n := range notices {
+//
+// The whole POOL comes back beside the chosen target, not just that host's
+// readiness: a run routes each lane across the candidates, so "which host did
+// the run pick" is only the first line of the answer. Callers that want one
+// host read the target and ignore the rest.
+func selectRemoteTarget(targets []*remote.Target, tools []string) (*remote.Target, remotePool, error) {
+	pool, err := probeRemotePool(targets, tools)
+	for _, n := range pool.Notices {
 		Printf("remote: %s\n", n)
 	}
-	return chosen, pf, err
+	if err != nil {
+		return pool.Failed, pool, err
+	}
+	if len(pool.Candidates) == 0 {
+		return nil, pool, nil
+	}
+	chosen := pool.Candidates[0]
+	if chosen.Target != targets[0] {
+		// The swap must be visible, or two runs' numbers are silently
+		// incomparable.
+		Printf("remote: using %s\n", chosen.Target.Host)
+	}
+	return chosen.Target, pool, nil
 }

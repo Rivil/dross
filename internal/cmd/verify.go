@@ -994,7 +994,7 @@ func resolveMutationTuning(p *project.Project, root string) (mutationTuning, err
 	}
 	// Walks the authorized hosts in order and takes the first that answers.
 	// With one candidate this is exactly the previous behaviour.
-	target, pf, perr := selectRemoteTarget(targets, nil)
+	target, pool, perr := selectRemoteTarget(targets, nil)
 	if perr != nil {
 		return mutationTuning{}, fmt.Errorf(
 			"remote mutation host %s is not usable: %w\n"+
@@ -1010,10 +1010,10 @@ func resolveMutationTuning(p *project.Project, root string) (mutationTuning, err
 		// The LAST candidate's reason: with one host it is that host's, and
 		// with several it is why the final attempt failed, after each earlier
 		// skip was already printed.
-		mt.FellBackFrom, mt.FallbackWhy = targets[len(targets)-1].Host, pf.Why
+		mt.FellBackFrom, mt.FallbackWhy = targets[len(targets)-1].Host, pool.Why
 		return mt, nil
 	}
-	target.Cores = pf.Ready.Cores
+	target.Cores = pool.Candidates[0].Ready.Cores
 	mt.Target = target
 	return mt, nil
 }

@@ -67,14 +67,14 @@ func targets(hosts ...string) []*remote.Target {
 func TestSelectSkipsUnreachableAndUsesTheNext(t *testing.T) {
 	probed := probeScript(t, map[string]bool{"a": true}, nil, 8)
 	out := captureStdout(t, func() {
-		got, pf, err := selectRemoteTarget(targets("a", "b"), nil)
+		got, pool, err := selectRemoteTarget(targets("a", "b"), nil)
 		if err != nil {
 			t.Fatalf("select: %v", err)
 		}
 		if got == nil || got.Host != "b" {
 			t.Fatalf("chose %v, want b", got)
 		}
-		if pf.Fallback {
+		if pool.Fallback {
 			t.Error("a usable host must not read as a fallback")
 		}
 	})
@@ -128,15 +128,15 @@ func TestSelectDoesNotSkipARemoteCommandFailure(t *testing.T) {
 func TestSelectAllUnreachableFallsBackLocally(t *testing.T) {
 	probeScript(t, map[string]bool{"a": true, "b": true}, nil, 4)
 	captureStdout(t, func() {
-		got, pf, err := selectRemoteTarget(targets("a", "b"), nil)
+		got, pool, err := selectRemoteTarget(targets("a", "b"), nil)
 		if err != nil {
 			t.Fatalf("an unreachable pool must fall back, not error: %v", err)
 		}
 		if got != nil {
 			t.Errorf("chose %v with nothing reachable", got)
 		}
-		if !pf.Fallback || pf.Why == "" {
-			t.Errorf("the fallback must carry a reason: %+v", pf)
+		if !pool.Fallback || pool.Why == "" {
+			t.Errorf("the fallback must carry a reason: %+v", pool)
 		}
 	})
 }
@@ -146,12 +146,12 @@ func TestSelectAllUnreachableFallsBackLocally(t *testing.T) {
 func TestSelectSingleHostIsUnchanged(t *testing.T) {
 	probeScript(t, nil, nil, 12)
 	out := captureStdout(t, func() {
-		got, pf, err := selectRemoteTarget(targets("solo"), nil)
+		got, pool, err := selectRemoteTarget(targets("solo"), nil)
 		if err != nil || got == nil || got.Host != "solo" {
 			t.Fatalf("got %v/%v", got, err)
 		}
-		if pf.Ready.Cores != 12 {
-			t.Errorf("cores = %d, want the probe's answer carried through", pf.Ready.Cores)
+		if pool.Candidates[0].Ready.Cores != 12 {
+			t.Errorf("cores = %d, want the probe's answer carried through", pool.Candidates[0].Ready.Cores)
 		}
 	})
 	if strings.TrimSpace(out) != "" {
@@ -160,9 +160,9 @@ func TestSelectSingleHostIsUnchanged(t *testing.T) {
 }
 
 func TestSelectNoCandidatesIsNotRemote(t *testing.T) {
-	got, pf, err := selectRemoteTarget(nil, nil)
-	if err != nil || got != nil || pf.Fallback {
-		t.Errorf("no grant must mean no remote and no fallback narration: %v/%v/%+v", got, err, pf)
+	got, pool, err := selectRemoteTarget(nil, nil)
+	if err != nil || got != nil || pool.Fallback {
+		t.Errorf("no grant must mean no remote and no fallback narration: %v/%v/%+v", got, err, pool)
 	}
 }
 
