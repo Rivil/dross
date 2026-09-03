@@ -24,3 +24,19 @@
   id = "46c15a85de624472"
   text = "The architecture symbol codex does not index struct fields, so every dotted Type.Field link in ARCHITECTURE.md reports 'no such symbol' even when correct. dross architecture check reports 27 unresolved; spot-checks show forge.Config.Hosts (forge.go:82), Remote.AuthUser (project.go:162), Deferred.Target/Dismissed/Survivor (phase.go:324/329/336), TaskEdit.Files (plan_edit.go:129), VerifySummary.UnclassifiedInScope (verify.go:383) and watchDigest.Stranded (watch.go:31) all exist. watchDigest.Stranded is the proof: doc line and actual line both 31, still unresolved. matchSymbols (internal/architecture/links.go:264) already falls back to the last dotted component, so indexing fields is likely the whole fix. Two further classes are not defects but are counted as drift: prose landmarks that were never symbols (\"doctor's clobber section\"), and genuine duplicates like changes.Complete (package func + method) reported ambiguous."
   why = "The false-negative flood makes ARCHITECTURE.md read as 63-links-stale when only 36 were; it also invites a future pass to delete correct doc entries to satisfy the checker. Found 2026-08-28 while fixing the 36 real ones (c1d2526)."
+
+[[deferred]]
+  id = "49e1846c35c70607"
+  text = "`dross validate` does not enforce the dependency-wave invariant that `plan_edit.go:286` refuses on: a task may sit in the same wave as a task it depends on, validate clean, and still be unmovable by `dross task move`. The validator and the edit-time refusal disagree about what a well-formed plan is; the refusal is the stricter and correct one, so validate should carry the same check."
+  why = "Bit twice in one session while planning lane-selector-preview (2026-09-02): a plan.toml that passed `dross validate` was then refused by `dross task move` for t-7 sharing a wave with its dependency. A validator that green-lights an uneditable plan sends the failure to the wrong place — edit time instead of validate time."
+
+[[deferred]]
+  id = "75415f41886564d8"
+  text = "Per-branch roadmap divergence: each phase branch carries its own `.dross/milestones/<v>.toml`, so a phase scaffolded on one branch is absent from the milestone's phases array as seen from another. A squash-merge of an older branch can therefore drop an in-flight phase from its own roadmap. The milestone file is shared bookkeeping being edited on divergent branches with no reconciliation at merge."
+  why = "Recurred on remote-run-detach and was patched by hand in e884881 — the second time this shape has cost a manual repair. Not lane work: it is milestone bookkeeping, so it wants its own home rather than being folded into v1.6's last phase."
+
+[[deferred]]
+  id = "ee3c2f06092c862f"
+  text = "The per-package mutation runner enumerates a lane `./assets/prompts` that is not a Go package: `go list ./assets/...` returns only `github.com/Rivil/dross/assets`, and `assets/prompts` holds markdown with no .go files. Gremlins exits 23 there and collect reports `no report fetched for ./assets/prompts (exit 23)` — a lane that yields nothing without failing the run. Suspect the enumerator walks directories rather than `go list` output; either way collect should distinguish 'lane produced no report' from 'lane is not a package' and never pass silently."
+  why = "A lane that silently yields nothing is the e15e33b failure shape: mutation coverage can quietly shrink with no red signal. Observed on the last collect before 2026-09-02."
+  target = "mutation-score-truth"
