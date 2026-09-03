@@ -44,14 +44,17 @@
   locked = true
 
 [[deferred]]
+  id = "5424d79f2f8d3bc5"
   text = "Pinning a specific lane to a specific host by name, overriding toolchain-derived affinity."
   why = "A second source of truth beside the toolchain declaration, and nothing has asked for it yet. Reachable later without rework — affinity is derived, so a pin would simply take precedence."
 
 [[deferred]]
+  id = "fc82932cc45aefb6"
   text = "Running one lane on several candidates at once to shorten wall-clock."
   why = "Parallel remote execution is a different capability from choosing a host, with its own failure modes (partial results, interleaved output) and its own argument about whether the numbers combine."
 
 [[deferred]]
+  id = "4872b79b07f21c0a"
   text = "Re-routing a lane mid-run when its chosen host dies partway."
   why = "Requires a run to be resumable, which nothing here is. remote-run-detach parked the same prerequisite for resuming a dead detached run."
 

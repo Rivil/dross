@@ -52,7 +52,6 @@
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
-    "slug:lane-host-affinity": "DRO-242",
     "someday:id:010e057c10c922c6": "DRO-286",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
@@ -89,8 +88,10 @@
     "someday:id:4518ecf010f195bb": "DRO-90",
     "someday:id:46744487f204b5cd": "DRO-54",
     "someday:id:46c15a85de624472": "DRO-233",
+    "someday:id:4872b79b07f21c0a": "DRO-329",
     "someday:id:48b5edeb0556cd3a": "DRO-105",
     "someday:id:49e1846c35c70607": "DRO-314",
+    "someday:id:5424d79f2f8d3bc5": "DRO-327",
     "someday:id:5610b45525282bf4": "DRO-219",
     "someday:id:5802ad3fe8f08d87": "DRO-34",
     "someday:id:58ecc7ff9f2a5c15": "DRO-302",
@@ -173,6 +174,7 @@
     "someday:id:f74fa3c9230a9c3b": "DRO-291",
     "someday:id:f93277521f881095": "DRO-89",
     "someday:id:fa50fb2ca56d687a": "DRO-276",
+    "someday:id:fc82932cc45aefb6": "DRO-328",
     "someday:id:fd3b654f5740fd11": "DRO-75",
     "someday:id:fee0d326fde9b275": "DRO-64",
     "someday:id:ff40c2cbbd18e7dc": "DRO-94"
@@ -300,37 +302,37 @@
     "lane-host-affinity/t-1": {
       "issue": "DRO-318",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-host-affinity/t-2": {
       "issue": "DRO-319",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-host-affinity/t-3": {
       "issue": "DRO-320",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-host-affinity/t-4": {
       "issue": "DRO-321",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-host-affinity/t-5": {
       "issue": "DRO-322",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-host-affinity/t-6": {
       "issue": "DRO-323",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-host-affinity/t-7": {
       "issue": "DRO-324",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-prepare-step/t-1": {
       "issue": "DRO-225",
