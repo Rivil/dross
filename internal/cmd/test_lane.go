@@ -39,7 +39,7 @@ func testLane() *cobra.Command {
 			"<name>` — so a lane that changes refuses only itself. A lane's optional\n" +
 			"install line is granted apart from it, with `dross trust --lane-install`.",
 	}
-	c.AddCommand(testLaneAdd(), testLaneList(), testLaneEdit(), testLaneRemove(), testLaneInstall())
+	c.AddCommand(testLaneAdd(), testLaneList(), testLanePreview(), testLaneEdit(), testLaneRemove(), testLaneInstall())
 	return c
 }
 
@@ -257,10 +257,9 @@ func testLaneAdd() *cobra.Command {
 				Printf("  prepare: %s\n", proposed.Prepare)
 			}
 			Printf("  %s\n", proposed.Command)
-			// Echoed at declaration time because nothing else prints it yet:
-			// `lane list` does not render the template, so this summary is the
-			// one place a declared template is visible without reading
-			// project.toml back.
+			// Echoed at declaration time, in the same shape `lane list` will
+			// print it back: the summary and the listing are the same lines
+			// because they are the same renderer.
 			printLaneTemplate(proposed)
 			// The probe set, always — derived or not. It is what decides which
 			// machine the lane runs on, and the moment to see it is the moment
@@ -339,6 +338,17 @@ func testLaneList() *cobra.Command {
 				if lane.Selector != "" {
 					Printf("  selector: %s\n", lane.Selector)
 				}
+				// Straight after the selector, because the three fields are one
+				// answer: the style decides what the derived arguments ARE, the
+				// template decides where they land and the join decides how they
+				// are separated. A listing that showed only the style would let a
+				// reader reconstruct the wrong line from it.
+				//
+				// The same renderer `lane add` and `lane edit` use, called rather
+				// than copied — two renderers would be two answers to "what does
+				// this lane's template look like", and the one a user reads back
+				// would be the one nothing else validates.
+				printLaneTemplate(lane)
 				if len(lane.EmptyExit) > 0 {
 					Printf("  empty-exit: %s\n", joinInts(lane.EmptyExit))
 				}
@@ -683,9 +693,10 @@ func printLaneWholeTreeWarning(name string, lane project.TestLane) {
 // printLaneTemplate echoes a lane's declared selector scoping, and prints
 // nothing for a lane that declares none.
 //
-// Shared by `lane add` and `lane edit` so neither can echo a field the other
-// hides. It is the only surface that renders a template today — `lane list`
-// does not — which is what the deferred lane-selector-preview work rests on.
+// Shared by `lane add`, `lane edit` and `lane list`, so none of them can echo a
+// field another hides. One renderer is the point: a listing that reconstructed
+// the template itself would be a second answer to "what does this lane look
+// like", and the two would diverge on the first field either gained.
 func printLaneTemplate(lane project.TestLane) {
 	if lane.SelectorTemplate != "" {
 		Printf("  selector-template: %s\n", lane.SelectorTemplate)

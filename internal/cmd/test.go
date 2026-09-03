@@ -356,32 +356,32 @@ func refuseFilesWithSelector(files, args []string) error {
 		strings.Join(files, " --files "), strings.Join(args, " "))
 }
 
-// runTestLanes resolves a file set against the declared lanes.
+// runTestLanes resolves a file set against the declared lanes and runs the ones
+// it hits.
 //
-// It deliberately spawns NOTHING yet — resolution and the per-lane consent gate
-// land in separate commits, and this is the earlier one. Splitting them there
-// is what keeps this commit from ever executing a command line out of
-// project.toml that no fingerprint covers.
+// The resolution is not this function's any more — it is lanePlan's, next door
+// in lane_plan.go, and by the first line here the lane match, the fence, the
+// existence filter and the derived line are all data. What stayed behind is
+// precisely the half preview must NOT inherit: the refusal policy. Every
+// finding on the plan becomes an exit status here and a printed line there,
+// from the same facts, which is the only arrangement in which the two cannot
+// disagree about what would run.
 func runTestLanes(root, repoDir string, proj *project.Project, files []string, local bool) error {
-	globs := make([][]string, len(proj.Runtime.TestLane))
-	for i, lane := range proj.Runtime.TestLane {
-		globs[i] = lane.Match
-	}
-	sel := testlane.Select(globs, files)
+	plan := lanePlan(repoDir, proj, files)
 
 	// Checked FIRST, and it poisons the whole set. Resolving the in-tree half
 	// of a half-broken argv would report on a subset the caller never asked
 	// for — and they would read the result as covering everything they listed.
-	if len(sel.OutOfTree) > 0 {
+	if len(plan.OutOfTree) > 0 {
 		return &ExitCodeError{Code: exitBadFileSet, Err: fmt.Errorf(
 			"refusing to run: these paths are OUTSIDE THIS REPOSITORY — %s\n\n"+
 				"--files takes repo-relative paths. A lane's globs are written against the\n"+
 				"repo, so a path from elsewhere can never match one; this is an argv problem,\n"+
 				"not a lane-configuration problem. Nothing was resolved and no lane ran.",
-			strings.Join(sel.OutOfTree, " "))}
+			strings.Join(plan.OutOfTree, " "))}
 	}
 
-	if len(sel.Lanes) == 0 {
+	if len(plan.Lanes) == 0 {
 		// The whole reason c-8 exists. Exiting 0 here would report a green
 		// run to a caller deciding whether to commit, having measured nothing
 		// at all — which is worse than any red.
@@ -390,67 +390,25 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 				"Declared lanes: %s\n\n"+
 				"Either widen a lane's match globs (`dross test lane list`), or run the whole\n"+
 				"suite with a bare `dross test`.",
-			strings.Join(sel.Unmatched, " "), strings.Join(laneNames(proj), ", "))}
+			strings.Join(plan.Unmatched, " "), strings.Join(laneNames(proj), ", "))}
 	}
 
 	// A PARTIAL miss is reported and the matched lanes still run (locked
 	// unmatched_files): a task that edited Go code and a README must not drag
 	// in the full suite, but the README must not vanish from the transcript
 	// either, or the run silently covers less than the caller listed.
-	if len(sel.Unmatched) > 0 {
-		Printf("no lane matches: %s\n", strings.Join(sel.Unmatched, " "))
+	if len(plan.Unmatched) > 0 {
+		Printf("no lane matches: %s\n", strings.Join(plan.Unmatched, " "))
 	}
 
-	// The lane's INDEX travels with it all the way to the spawn, because
-	// sel.Matched is keyed by it: a lane carried around as a bare TestLane
-	// loses the only handle on the paths that selected it, and the selector
-	// would have to be re-derived from the whole file set — which is exactly
-	// the c-4 leak of one lane's paths into another lane's command line.
-	matched := make([]matchedLane, 0, len(sel.Lanes))
-	for _, i := range sel.Lanes {
-		matched = append(matched, matchedLane{index: i, lane: proj.Runtime.TestLane[i]})
-	}
-
-	// Fenced up front, every matched lane, before any of them runs. Checking
-	// inside the loop would discover a malformed lane line halfway through a
-	// multi-lane run, with earlier lanes already executed — and the fence
-	// exists precisely to stop a line from reaching a shell.
-	//
-	// shArgvFor rather than shArgv: the label is what the refusal tells the
-	// user to go and edit, and blaming runtime.test_command for a lane's
-	// command would send them to a line that is perfectly fine.
-	for _, m := range matched {
-		if _, err := shArgvFor(laneField(m.lane.Name), m.lane.Command); err != nil {
-			return err
-		}
-		// The prepare goes through the SAME fence, in the SAME up-front sweep.
-		// A bootstrap line is a line reaching a shell exactly as a command is,
-		// and checking it inside the run loop would refuse a malformed prepare
-		// on the second lane with the first lane's suite already run — the one
-		// thing an up-front fence exists to make impossible.
-		if m.lane.Prepare != "" {
-			if _, err := shArgvFor(laneField(m.lane.Name), m.lane.Prepare); err != nil {
-				return err
-			}
-		}
-		// The style is checked here, in the same up-front sweep and against
-		// no paths, because it is a property of project.toml rather than of
-		// this file set. Discovering it inside the run loop would refuse a
-		// lane with earlier lanes already spawned, and the point of a fence
-		// is that nothing ran before it.
-		if _, err := testlane.Derive(m.lane.Selector, nil); err != nil {
-			return fmt.Errorf("%s: %w", laneField(m.lane.Name), err)
-		}
-		// The template is checked in the same sweep and for the same reason:
-		// its shape is a property of project.toml, not of this file set, so
-		// Expand against no paths is a pure fence. A malformed template found
-		// inside the run loop would refuse with earlier lanes already spawned
-		// — and worse, a placeholder-less one honoured there would spawn the
-		// lane's WHOLE command under a scoped lane's name.
-		if m.lane.SelectorTemplate != "" {
-			if _, err := testlane.Expand(m.lane.SelectorTemplate, m.lane.SelectorJoin, nil); err != nil {
-				return fmt.Errorf("%s: %w", laneField(m.lane.Name), err)
-			}
+	// The fence ran inside lanePlan, over every matched lane, before any line
+	// was derived. Its verdicts are read here in declaration order and the
+	// first one refuses the whole run — which is exactly the property an
+	// in-loop fence could not have, since it would discover a malformed lane
+	// with earlier lanes already spawned.
+	for _, pl := range plan.Lanes {
+		if pl.FenceErr != nil {
+			return pl.FenceErr
 		}
 	}
 
@@ -458,8 +416,8 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	// the transcript names every refusal up front rather than interleaving them
 	// with test output, where a refusal scrolls past under a passing suite.
 	var worst error
-	runnable := make([]matchedLane, 0, len(matched))
-	for _, m := range matched {
+	runnable := make([]plannedLane, 0, len(plan.Lanes))
+	for _, pl := range plan.Lanes {
 		// Resolved against lane.Command, never against the derived line
 		// (locked selector_consent). The grant covers the line the user was
 		// shown and approved; the selector is machine-derived repo-relative
@@ -467,23 +425,31 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		// `dross test <selector>` against runtime.test_command. Fingerprinting
 		// the derived line instead would go stale on every new file set and
 		// refuse practically every scoped run.
-		state, cerr := LaneConsented(root, repoDir, m.lane.Name, laneConsentLine(m.lane))
+		state, cerr := LaneConsented(root, repoDir, pl.lane.Name, laneConsentLine(pl.lane))
 		if cerr != nil {
 			// Printed AND folded into the outcome. Returning it alone would
 			// lose it whenever another lane goes red and outranks it, and a
 			// consent problem the user never sees is one they never fix.
-			refusal := laneConsentRefusal(m.lane, state, cerr)
+			refusal := laneConsentRefusal(pl.lane, state, cerr)
 			Printf("%v\n\n", refusal)
 			worst = worseOutcome(worst, &ExitCodeError{Code: exitLaneRefused, Err: refusal})
 			continue
 		}
-		runnable = append(runnable, m)
+		runnable = append(runnable, pl)
 	}
 	if len(runnable) == 0 {
 		// Nothing spawns, and the status is the refusal. A run where every
 		// lane was refused measured exactly as much as one that matched
 		// nothing, and must not read as green.
 		return worst
+	}
+
+	// The locality half is keyed on matchedLane, which a plannedLane embeds:
+	// the toolchain question is about the lane, not about the line it derived,
+	// so it reads the same value it always did.
+	matched := make([]matchedLane, 0, len(runnable))
+	for _, pl := range runnable {
+		matched = append(matched, pl.matchedLane)
 	}
 
 	// The host is chosen ONCE for the whole run, and the tree is pushed once.
@@ -494,7 +460,7 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	// The tools go with it: the union of every runnable lane's toolchain,
 	// deduped, asked as part of THIS probe. Two lanes needing `go` cost one
 	// `command -v`, and no lane opens a connection of its own.
-	target, ready, err := resolveTestTarget(root, repoDir, local, laneToolUnion(runnableLanes(runnable)))
+	target, ready, err := resolveTestTarget(root, repoDir, local, laneToolUnion(runnableLanes(matched)))
 	if err != nil {
 		return err
 	}
@@ -507,14 +473,14 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	if target != nil {
 		host = target.Host
 	}
-	plan := laneLocality(runnable, host, ready.Missing, laneLookPath)
+	verdicts := laneLocality(matched, host, ready.Missing, laneLookPath)
 
 	// The tree is pushed only if something is actually going to run there. A
 	// run where every matched lane fell back has no use for the remote copy,
 	// and paying for the transfer anyway is the cost c-4 exists to avoid — but
 	// ONE remote-going lane is enough, because that lane measures the tree it
 	// finds and a stale one is the previous run's code.
-	if target != nil && plannedRemotely(plan) {
+	if target != nil && plannedRemotely(verdicts) {
 		if err := syncTreeTo(*target, repoDir); err != nil {
 			return err
 		}
@@ -525,12 +491,12 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	// exitRank puts exitNothingMeasured above nil, so folding a single miss
 	// through worseOutcome would fail a run whose other lanes all passed.
 	misses := 0
-	for i, m := range runnable {
+	for i, pl := range runnable {
 		// The locality verdict is applied BEFORE anything else this lane does.
 		// A refused lane never reaches a selector question, and a fallback line
 		// printed after the prepare or the header would be a transcript that
 		// cannot be read as a sequence (c-2).
-		if plan[i].Site == siteRefused {
+		if verdicts[i].Site == siteRefused {
 			// Printed AND folded, exactly as a consent refusal is: returning it
 			// alone would lose it the moment another lane goes red, and a
 			// missing binary the user never sees is one they never install.
@@ -538,29 +504,28 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 			// NOT counted as a miss — a miss folds into exitNothingMeasured,
 			// which ranks last, so a lane that could not run anywhere would sink
 			// below the red it must outrank.
-			Printf("%v\n\n", plan[i].Err)
-			worst = worseOutcome(worst, plan[i].Err)
+			Printf("%v\n\n", verdicts[i].Err)
+			worst = worseOutcome(worst, verdicts[i].Err)
 			continue
 		}
-		if plan[i].Announce != "" {
-			Printf("%s\n", plan[i].Announce)
+		if verdicts[i].Announce != "" {
+			Printf("%s\n", verdicts[i].Announce)
 		}
 		// nil is "here". Per lane, not per run: in one invocation a lane whose
 		// tools the host has goes over ssh while its neighbour runs locally,
 		// and both report their own suite result (c-3).
 		laneTarget := target
-		if plan[i].Site == siteLocal {
+		if verdicts[i].Site == siteLocal {
 			laneTarget = nil
 		}
-		line, selector, ok := laneRunLine(repoDir, m.lane, sel.Matched[m.index])
-		if !ok {
+		if pl.ScopedToNothing {
 			// The lane declares a selector and every path that selected it
 			// has since been deleted, so there is nothing to scope the run
 			// to (locked missing_paths). It does not spawn: `go test
 			// ./gone/...` is a hard runner error, which would read as a
 			// failing gate for code the task deliberately removed.
 			Printf("selector miss: lane %q — every path matching it is gone, so its %s selector scoped to nothing\n",
-				m.lane.Name, m.lane.Selector)
+				pl.lane.Name, pl.lane.Selector)
 			misses++
 			continue
 		}
@@ -581,8 +546,8 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		// prepare_scope): idempotence is the declared contract, so a repeat is
 		// the no-op the user promised, while a dedup cache would make a lane's
 		// spawn set depend on which neighbours happened to match.
-		if m.lane.Prepare != "" {
-			Printf("lane %s prepare: %s\n", m.lane.Name, m.lane.Prepare)
+		if pl.lane.Prepare != "" {
+			Printf("lane %s prepare: %s\n", pl.lane.Name, pl.lane.Prepare)
 			// Spawned through the same seams as the command, so it lands on
 			// the same host and the same transport as the command it precedes
 			// (locked prepare_locality). A lane that bootstrapped only on the
@@ -592,7 +557,7 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 			// No selector is appended: the derived paths scope the suite, and
 			// a bootstrap handed this file set's paths would be a different
 			// command on every run.
-			if err := runLanePrepare(laneTarget, repoDir, m.lane); err != nil {
+			if err := runLanePrepare(laneTarget, repoDir, pl.lane); err != nil {
 				// The lane's own command does NOT run. A bootstrap that failed
 				// measured nothing about the code, and running the suite
 				// anyway would report the consequence as a verdict.
@@ -606,11 +571,11 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 				continue
 			}
 		}
-		Printf("lane %s: %s\n", m.lane.Name, line)
-		err := runOneLane(laneTarget, repoDir, m.lane, line)
-		if code, miss := selectorMissCode(err, m.lane.EmptyExit); miss {
+		Printf("lane %s: %s\n", pl.lane.Name, pl.Line)
+		err := runOneLane(laneTarget, repoDir, pl.lane, pl.Line)
+		if code, miss := selectorMissCode(err, pl.lane.EmptyExit); miss {
 			Printf("selector miss: lane %q collected no tests for %s (exit %d)\n",
-				m.lane.Name, strings.Join(selector, " "), code)
+				pl.lane.Name, strings.Join(pl.Selector, " "), code)
 			misses++
 			continue
 		}
@@ -667,68 +632,6 @@ func selectorMissCode(err error, codes []int) (int, bool) {
 type matchedLane struct {
 	index int
 	lane  project.TestLane
-}
-
-// laneRunLine builds the one command line a lane will spawn, and reports
-// whether there is anything to spawn at all.
-//
-// ok is false only for a lane that declares a selector whose paths have all
-// been deleted. A lane with no selector is always ok: its line is its command,
-// byte-for-byte, and the existence filter never touches it — every lane written
-// before this feature must behave exactly as it did, including when a caller
-// names a path that is not there.
-//
-// The derived arguments come back alongside the line because the miss report
-// names them: "collected no tests" is only actionable if the reader can see
-// what it was looking in.
-//
-// A lane that also declares a selector_template places those arguments through
-// the template instead of appending them, which is how a runner the closed enum
-// cannot shape — cargo's repeated `--package`, ctest's joined `-R` regex — gets
-// a scoped line at all.
-func laneRunLine(repoDir string, lane project.TestLane, paths []string) (string, []string, bool) {
-	if lane.Selector == "" {
-		return lane.Command, nil, true
-	}
-	// Filtered before translation (locked missing_paths): a task that deleted
-	// a file would otherwise derive a package that no longer exists, and
-	// `go test ./gone/...` is a hard runner error — a failing gate for work
-	// the task did on purpose.
-	live := make([]string, 0, len(paths))
-	for _, p := range paths {
-		if _, err := os.Stat(filepath.Join(repoDir, p)); err == nil {
-			live = append(live, p)
-		}
-	}
-	if len(live) == 0 {
-		return "", nil, false
-	}
-	// The error was already raised by the up-front fence, against this exact
-	// style. Reaching it here would mean the fence was skipped, and spawning
-	// the unscoped command would be the silent whole-suite run the selector
-	// exists to replace — so the lane does not run.
-	args, err := testlane.Derive(lane.Selector, live)
-	if err != nil || len(args) == 0 {
-		return "", nil, false
-	}
-	if lane.SelectorTemplate == "" {
-		return testCommandLine(lane.Command, args), args, true
-	}
-	// The template decides WHERE the derived arguments land; Derive above has
-	// already decided what shape they take. The fragments carry their own
-	// quoting — done mid-expansion, since template text and substituted path
-	// are one string by the time they get here — so they are joined onto the
-	// consented command verbatim rather than re-quoted.
-	//
-	// An error here means the up-front fence was skipped: the lane does not
-	// spawn, for the reason a bad style does not. Appending nothing and
-	// running anyway would be the silent whole-suite run this feature exists
-	// to replace.
-	frags, err := testlane.Expand(lane.SelectorTemplate, lane.SelectorJoin, args)
-	if err != nil || len(frags) == 0 {
-		return "", nil, false
-	}
-	return strings.TrimSpace(lane.Command) + " " + strings.Join(frags, " "), args, true
 }
 
 // laneField is the project.toml key a lane's refusals name.

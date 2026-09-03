@@ -1,0 +1,98 @@
+task_seq = 9
+
+[phase]
+  id = "lane-selector-preview"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Extract spawn-free lane resolution"
+  files = ["internal/cmd/lane_plan.go", "internal/cmd/test.go", "internal/cmd/lane_plan_test.go"]
+  description = "lanePlan(repoDir, proj, files) lifts runTestLanes' whole resolution — testlane.Select,\nthe up-front shArgvFor/Derive/Expand fence, the os.Stat existence filter, the laneRunLine\nderivation — into a struct holding DATA and no spawn seam. laneRunLine is widened so the\nexistence filter reports what it removed. runTestLanes is rewritten to consume the plan\nand keeps its refusal policy exactly where it is today.\n"
+  covers = ["c-1", "c-2"]
+  test_contract = ["if the line is re-derived anywhere but lanePlan, TestPlanLineIsTheSpawnedLine fails: for a selector=\"go-package\" lane over three paths, the recorded spawnLocal argv from `dross test --files` is byte-identical to plan.Lanes[0].Line", "if the existence filter stops recording what it removed, TestLaneRunLineNamesDroppedPaths fails: a lane matched by two paths, one not on disk, must yield Dropped==[that path] and a Line scoped to the survivor only", "if a lane whose every selector path is deleted stops being distinguishable, TestEverySelectorPathGoneScopesToNothing fails: ScopedToNothing is true and Line is \"\"", "if exitBadFileSet moves into the shared function, TestResolveReportsOutOfTreeAsData fails: `--files /abs/x.go` must land in OutOfTree with a NIL error, or preview can never honour locked preview_exit_status", "if the fence stops running before derivation, TestMalformedLaneIsFencedBeforeAnySpawn fails: a lane whose selector_template carries no placeholder puts FenceErr on that lane and records zero spawnLocal calls", "if the extraction changes gate behaviour, the existing TestSelectorScopesTheSpawnedLine, TestTemplatedLaneSpawnsTheExpandedLine, TestDeletedPathsAreDroppedFromTheSelector, TestALaneWhoseEveryPathIsGoneDoesNotSpawnAndIsNotGreen, TestASelectorlessLaneIsStillByteIdentical and TestPartialMissNamesTheRest fail; `dross test --files` still exits 2 out-of-tree and 5 on an unmatched-only set", "if Unmatched is left out of the returned plan, TestPlanCarriesUnmatchedPaths fails: lanePlan over a set holding one path matching a lane and one in-tree path matching none returns Unmatched==[the unmatched path] on the plan struct, so preview reads it from there rather than re-deriving what the gate prints inline at test.go:401"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Print selector template fields in lane list"
+  files = ["internal/cmd/test_lane.go", "internal/cmd/test_lane_list_fields_test.go"]
+  description = "testLaneList calls the existing printLaneTemplate — today only reached by `lane add` and\n`lane edit` — directly after its `selector:` line, so every field shaping a lane's derived\nline is readable from the listing. No second renderer.\n"
+  covers = ["c-4"]
+  test_contract = ["if either Printf is dropped, TestLaneListPrintsTemplateFields fails: a lane declaring --selector-template \"--package {path}\" --selector-join \"|\" must print `selector-template: --package {path}` and `selector-join: |`", "if the fields stop being opt-in, TestListOmitsTemplateFieldsForALaneWithout fails: a lane with a bare --selector prints NEITHER key — no `selector-template: -` placeholder", "if a list-local renderer is written instead of reusing printLaneTemplate, TestListAndAddRenderTemplatesIdentically fails: the two lines `lane list` prints must be the exact lines `lane add` echoes for the same lane"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Derive bare preview file set from working tree"
+  files = ["internal/cmd/worktree_files.go", "internal/cmd/worktree_files_test.go"]
+  description = "worktreeChangedFiles(repoDir) is the file set a bare `preview` uses (locked\nbare_preview_default): `git status --porcelain --untracked-files=all` parsed through the\nexisting porcelainPaths/unquotePath, returning repo-relative paths, deduped, in git's\norder. Deletions are kept so preview can name them as dropped; a rename contributes only\nits destination. gitStatusRaw is left alone — autoCommitDrossDirt wants the collapsed form.\n"
+  covers = ["c-1"]
+  test_contract = ["if -uall is dropped, TestWorkingTreeFilesExpandsUntrackedDirectories fails: a new directory holding two untracked .go files must return both FILE paths, not git's collapsed `dir/` — the collapsed form previews nothing for files that do match", "if deletions are filtered at collection, TestDeletedFileIsStillInTheSet fails: a staged deletion must appear in the set, or c-2 cannot name it at derivation", "if quoting is not undone, TestQuotedPathIsUnquoted fails: a path with a space comes back unquoted, matching what `--files` would have been handed", "if the rename filter is missing, TestRenameContributesOnlyTheDestination fails: an `R  old.go -> new.go` line yields [\"new.go\"] — porcelainPaths returns both sides, so the source must be dropped or every rename reports a phantom dropped path", "if a clean tree is treated as an error, TestCleanTreeReturnsAnEmptySetNotAnError fails: a clean repo returns (nil, nil) so the caller prints \"0 files\" and exits 0"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Resolve preview host: probed, unprobed, unresolved"
+  files = ["internal/cmd/lane_preview_locality.go", "internal/cmd/lane_preview_locality_test.go", "internal/cmd/remote_pool.go"]
+  description = "previewHost resolves where lanes would run without committing to a run: readRemoteGrants, then the\ngrant pool through pickRemoteTarget — the Printf-free core split out of selectRemoteTarget,\nwhich stays as the announcing wrapper the run calls — so preview lands on the same grant the\nrun would. It probes through preflightRemote (the same remoteProbeFn seam doctor and the run use)\nunless probing is off, classifying the answer none/probed/unprobed/unresolved. Per-lane\nverdicts come from the EXISTING laneLocality, called with host=\"\" whenever the host is\nunprobed or unresolved — no new laneSite enum values. In that state its verdict is read for\nlocal tool absence ONLY, and rendered under the unresolved banner: siteRefused prints as\nunresolved naming the tool absent here too, never as a refusal, and siteLocal prints as plain\nunresolved, never as a proven fallback. It never syncs the tree.\n"
+  covers = ["c-6"]
+  test_contract = ["if a transport failure is returned rather than classified, TestUnreachableHostIsUnresolvedNotAFailure fails: with the probe seam returning remote.ErrTransport, State==\"unresolved\", the host is named and the error is NIL — a verdict of `local` would claim a fallback the probe never proved", "if --no-probe still opens a connection, TestNoProbeNeverOpensAConnection fails: a call-counting remoteProbeFn records 0 calls and the host is reported `unprobed`", "if preview re-derives locality instead of calling laneLocality, TestMissingRemoteToolFallsBackNamingTheBinary fails: with the probe reporting pnpm missing, the web lane is siteLocal carrying the exact laneFallbackLine naming pnpm, the host and `dross test lane install web`, while the go lane is siteRemote", "if a refused lane's error is returned rather than carried, TestRefusedLaneCarriesItsErrorRatherThanReturningIt fails: a lane whose tool is on neither machine comes back siteRefused with its exitToolchainMissing error on the verdict", "if previewHost stops walking the pool the way the run does, TestPreviewLandsOnTheGrantTheRunWouldUse fails: with two grants where the first is unreachable and the second answers, preview names the SECOND host — and pickRemoteTarget writes nothing to stdout, so --json stays a bare document", "if an unprobed host lets a locally-missing tool read as a refusal, TestUnresolvedHostNeverRefusesALane fails: with the probe seam in transport failure and pnpm absent from this machine, the web lane renders `unresolved` naming the configured host AND naming pnpm as absent here — the string `refused` appears nowhere and the verdict carries no exitToolchainMissing error", "if an unprobed host lets a locally-present lane claim a fallback, TestUnprobedHostNeverClaimsLocal fails: under --no-probe a lane whose every tool resolves locally renders `unresolved`, not `local`, and no laneFallbackLine is printed — only a probe can prove a fallback"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Add lane preview with findings and --json"
+  files = ["internal/cmd/lane_preview.go", "internal/cmd/test_lane.go", "internal/cmd/lane_preview_test.go"]
+  description = "New `preview` subcommand under the `lane` group: cobra.ArbitraryArgs with trailing positionals joining the --files set, --files (repeatable),\n--lane <name> via findLane. No lane positional (locked preview_invocation). It\ncalls lanePlan and nothing that can execute. Bare invocation takes worktreeChangedFiles\nand says how many files it took. Declares the FULL previewReport struct — lanes[] (name,\nline, selector, dropped, scoped_to_nothing, fence_err, consent, locality), unmatched,\nout_of_tree, files_taken — filling every field except consent/locality, which t-6 fills\nthrough the same struct, and renders it for humans — serializing it is t-8's --json.\nExit 0 on every finding.\n"
+  covers = ["c-1", "c-2"]
+  depends_on = ["t-1", "t-3"]
+  test_contract = ["if any route into runOneLane, runLanePrepare or syncTreeTo survives, TestPreviewSpawnsNothing fails: with spawnLocal and spawnRemote replaced by recorders, a preview over a file set hitting a lane declaring --prepare records zero spawnLocal calls, zero remote spawn events and no rsync in the runLog", "if preview builds its line by any path other than lanePlan, TestPreviewLineIsTheLineTheGateWouldSpawn fails: `dross test --files internal/cmd/test.go` under installSpawnRecorder records line L, and preview over the same set prints a line whose command text equals L exactly", "if preview inherits the gate's refusals, TestPreviewExitsZeroWhereTheGateRefuses fails: over an out-of-tree path preview exits 0 while the gate exits 2; over an unmatched-only set preview exits 0 while the gate exits 5", "if any non-running outcome is silently omitted, TestPreviewNamesEveryNonRunningOutcome fails: ONE invocation carrying an unmatched in-tree path, an out-of-tree path, a matched-but-deleted path and a selector lane whose every path is gone prints four distinct findings, each naming the path AND its reason", "if the fence's refusal is inherited, TestMalformedLaneIsAFindingNotAFault fails: a lane carrying t-1's FenceErr is rendered with its problem named and preview exits 0", "if --lane stops going through findLane, TestUnknownLaneNameIsAFault fails: `--lane nope` exits non-zero listing the declared lane names, while `--lane go` on a set also hitting the docs lane renders the go lane only", "if the bare default stops reading the working tree, TestBarePreviewTakesTheWorkingTree fails: with one untracked internal/new/a.go and no --files, preview says it took 1 file and names the go lane", "if trailing positionals stop joining the file set, TestPreviewTakesTrailingPathsAsFiles fails: c-1's literal `dross test lane preview --files a.go b.go` takes BOTH paths — files_taken is 2 and the lanes rendered are the ones that two-path set hits — while no argument is ever read as a lane name, keeping locked preview_invocation intact"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  title = "Annotate previewed lanes with consent and locality"
+  files = ["internal/cmd/lane_preview.go", "internal/cmd/lane_preview_consent_test.go"]
+  description = "Adds --no-probe and fills previewReport's consent/locality fields. Consent comes from the\nsame LaneConsented(root, repoDir, name, laneConsentLine(lane)) call the gate makes, read\nfor its ConsentState only; the error is discarded so an ungranted lane annotates rather\nthan refuses, and laneConsentRefusal's text is never rendered. Locality is t-4's\npreviewHost verdicts. Both reported, never acted on; t-8 serializes them.\n"
+  covers = ["c-3", "c-6"]
+  depends_on = ["t-4", "t-5"]
+  test_contract = ["if the gate's laneConsentRefusal path is reused, TestPreviewRendersAnUngrantedLaneWithoutRefusing fails: a lane with no grant renders `consent: absent`, its derived line still prints, preview exits 0 and spawns nothing — while `dross test --files` over the same lane refuses", "if a second consent vocabulary is hand-written, TestStaleAndGrantedAreDistinguished fails: a lane whose command changed after `dross trust --lane` renders `stale`, not `absent`, and the granted lane beside it renders `granted`, asserted against ConsentState.String()", "if an unreachable host reaches the exit status, TestUnreachableHostStillExitsZero fails: with the probe seam in transport failure every lane renders unresolved naming the host, and preview exits 0", "if --no-probe still probes, TestNoProbeAsksNothing fails: the probe counter is 0 and lanes report the configured host as unprobed"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 5
+  title = "Document preview and the listing template fields"
+  files = ["README.md", "internal/cmd/lane_preview_docs_test.go"]
+  description = "Extends the single `dross test lane {add,list,edit,remove,install}` row (README.md:220) to\ninclude preview: its invocation, the bare working-tree default, --lane, --no-probe, --json,\nthe always-0 exit policy, and the sentence that `lane list` now prints selector-template and\nselector-join. One task owns that row so two parallel edits cannot collide on it.\n"
+  covers = ["c-4"]
+  depends_on = ["t-2", "t-5", "t-6", "t-8"]
+  test_contract = ["if the row does not document the verb, TestReadmeDocumentsThePreviewVerb fails: the row containing \"dross test lane\", located per-row via readmeRowContaining, names `preview`, `--no-probe` and `--json` — per-row so a mention three commands away cannot satisfy it", "if the listing's new fields go undocumented, TestReadmeDocumentsTheListingTemplateFields fails: that row names `selector-template` and `selector-join` as fields `lane list` prints", "if the exit policy is left implicit, TestPreviewExitPolicyIsDocumented fails: the row states preview exits 0 for \"no lane matches\" — the sentence that stops it being wired as a CI gate"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 4
+  title = "Emit the preview report as bare JSON"
+  files = ["internal/cmd/lane_preview_json.go", "internal/cmd/lane_preview_json_test.go"]
+  description = "Adds --json to the preview subcommand and serializes the previewReport struct t-5 declared\nand t-6 completed. A bare document — no `# <path>` header, no wrapper — carrying every fact the\nhuman rendering shows, consent and locality included, in the same vocabulary. Registers its own\nusage string rather than jsonFlagUsage, whose text promises \"instead of toml\".\n"
+  covers = ["c-5"]
+  depends_on = ["t-5", "t-6"]
+  test_contract = ["if --json wraps or headers its payload, TestPreviewJSONIsBareAndCarriesTheFindings fails: assertBareJSONDocument holds (first non-space byte '{', no `# <path>` header, parses) and lanes[0].line, dropped, unmatched and out_of_tree equal the human rendering's facts; --json registers its own usage string, not jsonFlagUsage, which promises \"instead of toml\"", "if an empty match degrades the payload, TestPreviewJSONReportsAnEmptyMatchWithoutFailing fails: --json on an unmatched-only set emits an object with an empty lanes array and the unmatched paths present, exit 0 — a bare `{}` or a non-zero exit fails", "if the JSON payload invents its own vocabulary, TestJSONCarriesConsentAndLocality fails: lanes[].consent and lanes[].locality hold the SAME strings the human rendering printed — a payload emitting \"consent\": \"ok\" fails the comparison"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 5
+  title = "Cover preview's non-transport probe-failure path"
+  files = ["internal/cmd/remote_pool.go", "internal/cmd/lane_preview_locality.go", "internal/cmd/lane_preview_locality_test.go"]
+  description = "Closes the c-6 half no test reaches. preflightRemote converts remote.ErrTransport into\nFallback=true with a NIL error, so every existing fakeProbe lands on previewHost's\n`chosen == nil` branch. The other unresolved path — pickRemoteTarget returning a non-nil\nerror, i.e. the host answered and the answer was a failure — is executed by nothing,\nleaving three in-hunk mutants surviving NOT_COVERED at lane_preview_locality.go:119.\nAdds the missing test only; no production change."
+  covers = ["c-6"]
+  test_contract = ["if a non-transport probe failure is returned rather than classified, TestProbeFailureIsUnresolvedNotAFailure fails: with the probe seam returning a plain (non-ErrTransport) error, previewHost returns a NIL error, State==\"unresolved\", and the reason carries \"did not answer\" plus the underlying error text — propagating it would make a verb that spawns nothing report a transport fault", "if preview names the wrong host when a probe fails non-transport, TestProbeFailureNamesTheLastConfiguredHost fails: with two configured grants, the reported Host is the LAST target, which is what targets[len(targets)-1] selects — an off-by-one or a first-target read fails the assertion"]
+  status = "done"
