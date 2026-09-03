@@ -619,10 +619,14 @@ func collectDetached(phaseID string) error {
 	kept, dropped := verify.FilterReport(report, scope, "go")
 	t.OutOfScope = append(t.OutOfScope, dropped...)
 	t.Languages = append(t.Languages, verify.LanguageRun{
-		Name:     "go",
-		Tool:     "gremlins",
-		Files:    files,
-		Mutation: kept,
+		Name: "go",
+		Tool: "gremlins",
+		// rec.Host, not the grant: this leg's numbers came off the machine the
+		// dispatch record named, and re-deriving it here would stamp today's
+		// pool onto a report measured hours ago somewhere else.
+		MeasuredOn: verify.MeasuredOnHost(rec.Host),
+		Files:      files,
+		Mutation:   kept,
 	})
 
 	if err := finishVerify(root, phaseID, spec, t, verify.MeasuredOnHost(rec.Host), gone); err != nil {
@@ -1018,47 +1022,23 @@ func resolveMutationTuning(p *project.Project, root string) (mutationTuning, err
 	return mt, nil
 }
 
-// measuredOnFromAdapters reads a run's provenance off the adapters it is about
-// to use, rather than off the grant on disk.
-//
-// The distinction is the whole point of the field. A grant answers "is a host
-// authorized", which is not the same question as "where did these numbers come
-// from": a run can hold a grant it was told to ignore, or one it could not
-// reach. Only the adapters know which machine they were pointed at, so they are
-// what gets asked.
-//
-// A skipped mutation leg has no adapters at all and reports local — nothing ran
-// anywhere, and claiming a host would be worse than saying nothing.
-func measuredOnFromAdapters(adapters []mutation.Adapter) string {
-	for _, a := range adapters {
-		var target *remote.Target
-		switch v := a.(type) {
-		case *mutation.Gremlins:
-			target = v.Remote
-		case *mutation.Stryker:
-			target = v.Remote
-		case *mutation.StrykerNet:
-			target = v.Remote
-		}
-		if target != nil {
-			return verify.MeasuredOnHost(target.Host)
-		}
-	}
-	return verify.MeasuredLocally()
-}
-
 // measuredOnOf resolves a run's provenance from the adapters it used and the
 // tuning that produced them.
 //
+// The adapter walk lives in internal/verify (MeasuredOnAdapters), where the
+// per-leg stamp is also taken. Asking the same question twice, from two type
+// switches, is how a run's summary comes to disagree with its own legs — and
+// the disagreement is silent, since both produce a plausible string.
+//
 // A fallback is the case the adapters alone cannot express: they are local, so
-// measuredOnFromAdapters would call it a plain local run and lose the fact that
-// a remote measurement was expected and did not happen. The tuning is the only
+// the adapter walk would call it a plain local run and lose the fact that a
+// remote measurement was expected and did not happen. The tuning is the only
 // thing that still remembers.
 func measuredOnOf(adapters []mutation.Adapter, mt mutationTuning) string {
 	if mt.FellBackFrom != "" {
 		return verify.MeasuredAfterFallback(mt.FellBackFrom, mt.FallbackWhy)
 	}
-	return measuredOnFromAdapters(adapters)
+	return verify.MeasuredOnAdapters(adapters)
 }
 
 // profileCacheVars reads the toolchain cache variables the detected stack

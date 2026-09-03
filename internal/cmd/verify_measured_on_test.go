@@ -5,6 +5,7 @@ import (
 
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/verify"
 )
 
 // TestMeasuredOnComesFromTheAdapters: the provenance is read off what the run
@@ -46,16 +47,18 @@ func TestMeasuredOnComesFromTheAdapters(t *testing.T) {
 			want:     "helicon",
 		},
 		{
-			// The allowlist can put a local adapter ahead of a remote one; the
-			// answer is still the host, because that is where mutants ran.
+			// A local adapter beside a remote one is a run measured in TWO
+			// places, and the record has to say both. Collapsing it to the
+			// host would attribute the local leg's mutants to a machine that
+			// never saw them.
 			name:     "a local adapter ahead of a remote one",
 			adapters: []mutation.Adapter{&mutation.Stryker{}, &mutation.Gremlins{Remote: target}},
-			want:     "helicon",
+			want:     "local, helicon",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := measuredOnFromAdapters(tc.adapters); got != tc.want {
-				t.Errorf("measuredOnFromAdapters = %q, want %q", got, tc.want)
+			if got := verify.MeasuredOnAdapters(tc.adapters); got != tc.want {
+				t.Errorf("MeasuredOnAdapters = %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -68,11 +71,11 @@ func TestMeasuredOnIgnoresTheGrant(t *testing.T) {
 	doctorRemoteFixture(t, "helicon", "/home/rivil/dross", nil)
 
 	// The grant is readable...
-	if got := measuredOnFromAdapters(nil); got != "local" {
+	if got := verify.MeasuredOnAdapters(nil); got != "local" {
 		t.Errorf("a run with no adapters reported %q despite measuring nothing", got)
 	}
 	// ...and still does not label a local adapter list as remote.
-	if got := measuredOnFromAdapters([]mutation.Adapter{&mutation.Gremlins{}}); got != "local" {
+	if got := verify.MeasuredOnAdapters([]mutation.Adapter{&mutation.Gremlins{}}); got != "local" {
 		t.Errorf("a local adapter reported %q — the grant on disk answered for the run", got)
 	}
 }
