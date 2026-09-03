@@ -517,6 +517,71 @@ func Run(phaseID string, files []string, adapters []mutation.Adapter) (*Tests, e
 // dispatched to mutate is not narrowed here — narrowing the dispatch would
 // change which mutants exist, and this is only about which of them this phase
 // is answerable for.
+// hunkContextLines pads each changed hunk before it becomes a mutation range.
+//
+// WHY A PAD IS NECESSARY AT ALL, measured rather than assumed. A mutant is
+// matched by the line its span STARTS on, and a mutant can enclose the changed
+// line while starting above it. Measured against Stryker 9.6.1 on 2026-09-03
+// with src/lib/utils/portion-cascade.ts, whose three mutants all concern the
+// single statement on line 29:
+//
+//	--mutate portion-cascade.ts        3 mutants
+//	--mutate portion-cascade.ts:29-29  2 mutants   <- the block mutant is LOST
+//	--mutate portion-cascade.ts:20-30  3 mutants
+//
+// The missing one is the function-body block statement, whose span opens on
+// line 28. An unpadded range would have reported that line fully killed while
+// never generating the mutant that covers it — a scoped run that measures less
+// than it claims, which is the exact failure narrowing exists to avoid.
+//
+// WHY 25, and what it still does not buy. Measured on the four files of the
+// phase this was built for (ingredient-density-prod-seed, base 153a855e):
+//
+//	                        whole file   hunk only   +-5   +-25   +-100
+//	recipe.ts                     1360           0     5     19      71
+//	db/schema.ts                  1832           1     -     22       -
+//	admin-ingredients.ts           526           -     -      7       -
+//
+// 25 recovers the enclosing-block mutants at roughly 1-2% of the whole-file
+// count, where 100 costs three times as much for cases a hunk that size would
+// usually have covered anyway. It is a HEURISTIC and it has a real residue: a
+// mutant whose span opens more than 25 lines above the hunk — a long function,
+// a large object literal — is still missed. That is a known limitation of
+// line-scoping, not a bug to be fixed by a larger number, and the honest fix is
+// an AST-aware range that a future change can build on this seam.
+const hunkContextLines = 25
+
+// padAndMerge widens each range by hunkContextLines and merges any that then
+// overlap or touch. Merging is not cosmetic: two overlapping specs for one file
+// make the argv claim a scope it does not have, and a reader diffing --mutate
+// against the report would be comparing against a double-counted set.
+func padAndMerge(in []Range) []mutation.Range {
+	if len(in) == 0 {
+		return nil
+	}
+	padded := make([]mutation.Range, 0, len(in))
+	for _, r := range in {
+		start := r.Start - hunkContextLines
+		if start < 1 {
+			start = 1
+		}
+		padded = append(padded, mutation.Range{Start: start, End: r.End + hunkContextLines})
+	}
+	sort.Slice(padded, func(i, j int) bool { return padded[i].Start < padded[j].Start })
+	out := []mutation.Range{padded[0]}
+	for _, r := range padded[1:] {
+		last := &out[len(out)-1]
+		if r.Start <= last.End+1 {
+			if r.End > last.End {
+				last.End = r.End
+			}
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
 // runAdapter dispatches one adapter's leg, narrowed to the phase's changed
 // LINES when the adapter can express that and the scope actually knows them.
 //
@@ -543,11 +608,7 @@ func runAdapter(a mutation.Adapter, files []string, scope *Scope) (*mutation.Rep
 		if len(hunks) == 0 {
 			continue
 		}
-		rs := make([]mutation.Range, 0, len(hunks))
-		for _, h := range hunks {
-			rs = append(rs, mutation.Range{Start: h.Start, End: h.End})
-		}
-		ranges[f] = rs
+		ranges[f] = padAndMerge(hunks)
 	}
 	if len(ranges) == 0 {
 		return a.Run(files)
