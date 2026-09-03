@@ -38,11 +38,25 @@ type remotePool struct {
 	// host that was not.
 	Fallback bool
 	Why      string
+	// Unreached is every candidate that did not answer, with the reason, in
+	// declared order.
+	//
+	// Notices renders these for a transcript; this keeps them addressable by
+	// HOST, which a caller acting on the whole pool needs — `dross remote
+	// bootstrap` reports per candidate, and "which machines could I not reach"
+	// is not answerable from a list of sentences.
+	Unreached []poolMiss
 	// Failed is the candidate whose probe returned an answer that was a
 	// failure, set only alongside a non-nil error. The walk bails there rather
 	// than at the end, so a caller that wants to name the machine cannot
 	// recover it from the slice.
 	Failed *remote.Target
+}
+
+// poolMiss is one candidate that could not be reached, and why.
+type poolMiss struct {
+	Target *remote.Target
+	Why    string
 }
 
 // probeRemotePool probes the authorized candidates for tools, in the order the
@@ -73,6 +87,27 @@ type remotePool struct {
 // lane would multiply ssh round trips by the lane count on every gate run for
 // information that is the same either way.
 func probeRemotePool(targets []*remote.Target, tools []string) (remotePool, error) {
+	return walkRemotePool(targets, tools, true)
+}
+
+// probeEveryCandidate is the walk without the early stop: every granted host is
+// probed, whether or not an earlier one already covers the tools.
+//
+// It is for callers acting on the POOL rather than choosing from it. `dross
+// remote bootstrap` provisions every candidate, so a walk that stopped once one
+// host held everything would leave the rest exactly as unprovisioned as before
+// — and would report them as though they had been considered.
+//
+// The same function, one flag apart, deliberately: the skip rules, the
+// remote-command abort and the fallback reason are all the same rules, and a
+// second walk would drift on the first one either gained.
+func probeEveryCandidate(targets []*remote.Target, tools []string) (remotePool, error) {
+	return walkRemotePool(targets, tools, false)
+}
+
+// walkRemotePool is the walk both entry points share. stopWhenCovered ends it
+// as soon as some reachable candidate accounts for every probed tool.
+func walkRemotePool(targets []*remote.Target, tools []string, stopWhenCovered bool) (remotePool, error) {
 	var pool remotePool
 	if len(targets) == 0 {
 		return pool, nil
@@ -98,6 +133,7 @@ func probeRemotePool(targets []*remote.Target, tools []string) (remotePool, erro
 			// using B" is the fact that makes two runs' numbers comparable or
 			// not.
 			pool.Notices = append(pool.Notices, pf.Why)
+			pool.Unreached = append(pool.Unreached, poolMiss{Target: t, Why: pf.Why})
 			pool.Fallback = true
 			pool.Why = pf.Why
 			continue
@@ -108,7 +144,7 @@ func probeRemotePool(targets []*remote.Target, tools []string) (remotePool, erro
 				delete(unmet, tool)
 			}
 		}
-		if len(unmet) == 0 {
+		if stopWhenCovered && len(unmet) == 0 {
 			// Every probed tool is on some reachable candidate. Another round
 			// trip cannot change where any lane lands.
 			break
