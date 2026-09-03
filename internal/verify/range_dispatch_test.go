@@ -61,8 +61,12 @@ func TestRunScopedNarrowsToTheChangedLines(t *testing.T) {
 	if !a.rangedCall || a.plainCall {
 		t.Fatalf("wanted the ranged arm; ranged=%v plain=%v", a.rangedCall, a.plainCall)
 	}
-	if got := a.ranRanges["web/src/a.ts"]; len(got) != 1 || got[0].Start != 10 || got[0].End != 12 {
-		t.Errorf("ranges for a.ts = %v, want [{10 12}]", got)
+	// PADDED: the hunk is 10-12, and hunkContextLines widens it to 1-37 (the
+	// start clamps at line 1). The pad is asserted on its own in
+	// TestPadAndMergeWidensEachHunk; what this case pins is that a.ts is
+	// narrowed at all and b.ts is not.
+	if got := a.ranRanges["web/src/a.ts"]; len(got) != 1 || got[0].Start != 1 || got[0].End != 37 {
+		t.Errorf("ranges for a.ts = %v, want [{1 37}]", got)
 	}
 	// b.ts has no hunks, so it carries no range and the adapter mutates it
 	// whole. Its ABSENCE from the map is the fail-open signal — an empty slice
@@ -131,5 +135,71 @@ func TestRunScopedWithANilScopeRunsWholeFiles(t *testing.T) {
 	}
 	if a.rangedCall || !a.plainCall {
 		t.Errorf("a nil scope must mean the plain arm; ranged=%v plain=%v", a.rangedCall, a.plainCall)
+	}
+}
+
+// The pad exists because a mutant can enclose the changed line while starting
+// above it — measured: portion-cascade.ts:29-29 finds 2 of the line's 3
+// mutants, because the function-body block opens on line 28.
+func TestPadAndMergeWidensEachHunk(t *testing.T) {
+	got := padAndMerge([]Range{{Start: 100, End: 104}})
+	want := []mutation.Range{{Start: 75, End: 129}}
+	if len(got) != 1 || got[0] != want[0] {
+		t.Errorf("padAndMerge = %v, want %v", got, want)
+	}
+}
+
+// A hunk near the top of a file must not produce a range starting at or below
+// zero: Stryker's spec is 1-based and runArgs refuses a Start <= 0 by falling
+// back to the whole file, which would silently un-narrow the run.
+func TestPadAndMergeClampsToTheFirstLine(t *testing.T) {
+	got := padAndMerge([]Range{{Start: 3, End: 4}})
+	if len(got) != 1 || got[0].Start != 1 {
+		t.Errorf("padAndMerge = %v, want a range starting at line 1", got)
+	}
+}
+
+// Two hunks whose pads overlap must merge. Two overlapping specs for one file
+// make the argv claim a scope it does not have.
+func TestPadAndMergeMergesOverlappingHunks(t *testing.T) {
+	got := padAndMerge([]Range{{Start: 100, End: 101}, {Start: 120, End: 121}})
+	if len(got) != 1 {
+		t.Fatalf("padAndMerge = %v, want one merged range", got)
+	}
+	if got[0].Start != 75 || got[0].End != 146 {
+		t.Errorf("merged range = %v, want {75 146}", got[0])
+	}
+}
+
+// ...but hunks far apart must stay apart, or narrowing collapses into the
+// whole file one merge at a time.
+func TestPadAndMergeKeepsDistantHunksSeparate(t *testing.T) {
+	got := padAndMerge([]Range{{Start: 10, End: 11}, {Start: 900, End: 901}})
+	if len(got) != 2 {
+		t.Errorf("padAndMerge = %v, want two ranges", got)
+	}
+}
+
+func TestPadAndMergeOnNoHunksIsNil(t *testing.T) {
+	if got := padAndMerge(nil); got != nil {
+		t.Errorf("padAndMerge(nil) = %v, want nil", got)
+	}
+}
+
+// The dispatch must carry the PADDED range, not the raw hunk — otherwise the
+// pad is computed and thrown away.
+func TestRunScopedPassesPaddedRanges(t *testing.T) {
+	a := &rangingAdapter{name: "stryker"}
+	scope := scopeWithHunks(
+		[]string{"web/src/a.ts"},
+		map[string][]Range{"web/src/a.ts": {{Start: 100, End: 104}}},
+	)
+	if _, err := RunScoped("p", []string{"web/src/a.ts"},
+		[]mutation.Adapter{a}, scope); err != nil {
+		t.Fatalf("RunScoped: %v", err)
+	}
+	got := a.ranRanges["web/src/a.ts"]
+	if len(got) != 1 || got[0].Start != 75 || got[0].End != 129 {
+		t.Errorf("dispatched ranges = %v, want [{75 129}]", got)
 	}
 }
