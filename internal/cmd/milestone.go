@@ -255,6 +255,21 @@ func milestoneComplete() *cobra.Command {
 				}
 			}
 
+			// The PR's head is resolved by the provider, so unpushed local
+			// commits are silently absent from it — and --finalize then
+			// deletes the branch that held them. Publish before opening.
+			headPushed, headCommits, err := pushMilestoneHeadIfAhead(repoDir, msBranch)
+			if err != nil {
+				return err
+			}
+			if headPushed {
+				if headCommits > 0 {
+					Printf("pushed %d local commit(s) on %s to origin\n", headCommits, msBranch)
+				} else {
+					Printf("pushed %s to origin\n", msBranch)
+				}
+			}
+
 			hosts, herr := remotePolicy(root, repoDir, p)
 			if herr != nil {
 				return herr
@@ -975,4 +990,70 @@ func appendUnique(list []string, value string) []string {
 		}
 	}
 	return append(list, value)
+}
+
+// pushMilestoneHeadIfAhead publishes local commits on milestone/<version>
+// before the integration PR is opened against them.
+//
+// The PR's head is a branch name the provider resolves on ITS side, so
+// anything committed locally but not pushed is simply absent from the PR —
+// silently. That is how a v1.5 close-out shipped a milestone missing a commit:
+// the branch was opened at the sha origin happened to hold, `--finalize` then
+// deleted the branch local+remote, and the unpushed commit was left orphaned
+// and unreachable by any ref. `dross ship` has always pushed phase/<id> before
+// opening a phase PR (ship.go step 7); this is the same guarantee for the
+// milestone head, which never got it.
+//
+// Three no-ops, one refusal, one push:
+//   - no local refs/heads/<msBranch> — this machine only has origin's copy,
+//     so there is nothing local that could be missing from the PR
+//   - no origin/<msBranch> yet — `milestone create` pushes at scope time, so
+//     this is a re-scoped or hand-made branch; push it, there is no remote
+//     state to conflict with
+//   - nothing ahead — already published
+//   - ahead AND behind — a real divergence. Refuse by name and push nothing;
+//     force-pushing a shared integration branch to open a PR is never the
+//     right call, and the user needs to reconcile before the milestone lands.
+//   - purely ahead — push it, and say how many commits were published
+//
+// A failed push is a hard error, mirroring pushBaseIfAheadDrossOnly's
+// push_failure posture: continuing past it opens the PR against stale content,
+// which is the exact bug this exists to prevent.
+func pushMilestoneHeadIfAhead(repoDir, msBranch string) (pushed bool, commits int, err error) {
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+msBranch)...) != nil {
+		return false, 0, nil
+	}
+	if out, ferr := gitCombined(repoDir, "fetch", "origin"); ferr != nil {
+		return false, 0, fmt.Errorf("git fetch: %w\n%s", ferr, out)
+	}
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/remotes/origin/"+msBranch)...) != nil {
+		if out, perr := gitCombined(repoDir, gitRefArgs("push", []string{"-u"}, "origin", msBranch)...); perr != nil {
+			return false, 0, fmt.Errorf("push %s to origin: %w\n%s", msBranch, perr, out)
+		}
+		return true, 0, nil
+	}
+	ahead, err := gitTrim(repoDir, gitRefArgs("rev-list", nil, "origin/"+msBranch+".."+msBranch)...)
+	if err != nil {
+		return false, 0, fmt.Errorf("git rev-list origin/%s..%s: %w", msBranch, msBranch, err)
+	}
+	if ahead == "" {
+		return false, 0, nil
+	}
+	behind, err := gitTrim(repoDir, gitRefArgs("rev-list", nil, msBranch+"..origin/"+msBranch)...)
+	if err != nil {
+		return false, 0, fmt.Errorf("git rev-list %s..origin/%s: %w", msBranch, msBranch, err)
+	}
+	n := len(strings.Fields(ahead))
+	if behind != "" {
+		return false, 0, fmt.Errorf("local %s is ahead of origin/%s by %d commit(s) AND behind it by %d — "+
+			"the integration PR would be opened against content that is neither. "+
+			"Reconcile %s with origin before closing the milestone; refusing to force-push it for you",
+			msBranch, msBranch, n, len(strings.Fields(behind)), msBranch)
+	}
+	if out, perr := gitCombined(repoDir, gitRefArgs("push", nil, "origin", msBranch)...); perr != nil {
+		return false, 0, fmt.Errorf("push of %d local commit(s) on %s failed: %w\n%s\n"+
+			"Refusing to open the PR — it would carry stale content and the unpushed commits would be lost at --finalize.",
+			n, msBranch, perr, out)
+	}
+	return true, n, nil
 }

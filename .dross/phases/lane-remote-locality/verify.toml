@@ -1,0 +1,119 @@
+[verify]
+  phase = "lane-remote-locality"
+  generated_at = 2026-08-29T08:09:40.645721Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-29T09:39:32.024925Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9333333333333333
+  mutants_killed = 420
+  mutants_survived = 30
+  mutants_not_covered = 30
+  mutants_in_scope = 450
+  unclassified_in_scope = 0
+  criteria_total = 9
+  criteria_covered = 9
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 420
+    survived = 30
+    timeout = 0
+    in_scope = 450
+    score = 0.9333333333333333
+    file_count = 17
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/lane_locality_wiring_test.go:177:TestFallenBackLaneReportsItsOwnResult", "internal/cmd/lane_locality_test.go:190:TestPrepareToolSendsTheWholeLaneLocal"]
+  notes = "The fallen-back lane's own suite result reaches the run's status: the wiring test spawns the lane locally and asserts the transcript carries that lane's result, not a remote 'command not found'."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/lane_locality_test.go:167:TestFallbackLineNamesLaneBinaryAndHost", "internal/cmd/lane_locality_wiring_test.go:136:TestFallbackLinePrecedesThatLanesOutput"]
+  notes = "Lane, missing binary and host appear on one line, and the wiring test asserts that line's index precedes the lane's own output — so a fallen-back lane is never transcript-identical to a remote one."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/lane_locality_test.go:146:TestLaneLocalityIsPerLane", "internal/cmd/lane_locality_wiring_test.go:107:TestLocalityIsDecidedPerLane"]
+  notes = "One invocation, remote has A's toolchain and not B's: the wiring test asserts exactly one ssh spawn and one local spawn, so the split is observed at the spawn layer rather than inferred from output."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_consent_test.go:623:TestLaneRunProbesOnceWithTheUnion", "internal/cmd/test_lane_consent_test.go:655:TestLaneRunDedupesTheProbedUnion", "internal/cmd/test_lane_consent_test.go:688:TestLaneProbePrecedesTheSync", "internal/cmd/lane_locality_wiring_test.go:60:TestEveryLaneFallingBackSkipsTheTransfer", "internal/cmd/lane_locality_wiring_test.go:83:TestOneRemoteLaneStillGetsTheTransfer"]
+  notes = "Single probe, deduped union, and probe-before-sync asserted by index rather than by presence; the transfer half is pinned in both directions — skipped when every lane falls back, still paid when one lane stays remote."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_consent_test.go:714:TestUnreachableHostKeepsItsOwnWording", "internal/cmd/lane_locality_wiring_test.go:324:TestUnreachableHostSpawnsEveryLaneLocally", "internal/cmd/lane_locality_test.go:259:TestUnreachableHostPrintsNoToolchainLine"]
+  notes = "The two fallbacks are held apart from both sides: transport keeps its existing wording and sends every lane local, and the unreachable path is asserted to print no toolchain line at all."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/lane_locality_wiring_test.go:270:TestFallbackIsNeverSticky"]
+  notes = "Non-stickiness is asserted twice in one test — the config bytes are unchanged after the fallback run, AND a second run with the binary present goes remote again with no user action."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_toolchain_test.go:46:TestLaneAddWritesToolchainInFlagOrder", "internal/cmd/test_lane_toolchain_test.go:94:TestLaneListShowsEveryLanesEffectiveToolchain", "internal/cmd/test_lane_toolchain_test.go:149:TestLaneEditToolchainClearsBackToDerived", "internal/cmd/test_lane_toolchain_test.go:170:TestLaneEditWithoutToolchainLeavesItAlone", "internal/cmd/test_lane_toolchain_test.go:247:TestValidateAcceptsWhatLaneAddWrote"]
+  notes = "Eleven tests over the flag surface: repeatable flag order preserved, clear-back-to-derived, the Changed guard that keeps an absent flag from wiping the field, and both list rows (derived and overridden). The round-trip test closes the loop by feeding lane add's own output back through validate."
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/doctor_lane_toolchain_test.go:57:TestDoctorNamesTheLaneMissingItsToolchain", "internal/cmd/doctor_lane_toolchain_test.go:147:TestDoctorProbesOnceForAdaptersAndLanes", "internal/cmd/doctor_lane_toolchain_test.go:180:TestDoctorReusesTheRunsDerivation", "internal/cmd/doctor_lane_toolchain_test.go:210:TestDoctorAndTheRunNameTheSameBinary", "internal/cmd/doctor_lane_toolchain_test.go:242:TestDoctorLaneLessOutputIsUnchanged"]
+  notes = "Eight tests. The no-disagreement half of the criterion is the load-bearing one and is tested directly: one fixture is driven through both doctor and the run, and the two are asserted to name the same binary."
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/lane_locality_test.go:224:TestLocalRunStillConsultsLookPath", "internal/cmd/lane_locality_wiring_test.go:240:TestUngrantedRunStillRefusesAMissingBinary", "internal/cmd/lane_locality_wiring_test.go:204:TestNeitherHostLaneNeverSpawns", "internal/cmd/lane_locality_test.go:133:TestToolchainFailureWithoutARemoteNamesOnlyThisMachine"]
+  notes = "The ungranted path is asserted on all three of its obligations: exit 8 taken, no spawn attempted, and the neighbouring lane unaffected — so a missing tool cannot be laundered into a red suite."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/execute.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/options.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/milestone.go:1030 (CONDITIONALS_NEGATION) — routed to milestone-push-failure-tests"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/milestone.go:1054 (ARITHMETIC_BASE) — routed to milestone-push-failure-tests"
+
+[[finding]]
+  severity = "NOTE"
+  text = "filtered 2 out-of-scope survivor(s) in files this phase did not touch — listed under `out_of_scope` in tests.json, not counted in the score"
+
+[[finding]]
+  severity = "NOTE"
+  text = "All 30 in-scope survivors are gremlins' NOT-COVERED class: go-cover attributes no coverage block to a switch{} case condition, so gremlins never builds or runs the mutant. Efficacy over the 420 mutants it could reach is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The 3 in-diff survivors (validate.go:309 CONDITIONALS_NEGATION, :311 CONDITIONALS_BOUNDARY, :311 CONDITIONALS_NEGATION) were accepted only after each mutation was applied by hand and observed to turn the suite red — not on the category argument alone. 309 negation is killed by TestValidateAcceptsAbsentAndDeclaredToolchains; 311 boundary by six tests including TestLaneAddWritesToolchainInFlagOrder; 311 negation by eight including TestValidateNamesLaneWithUnusableToolchainEntries."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation measured on helicon (remote gremlins host), 450 in-scope mutants over 17 Go files."

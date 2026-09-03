@@ -76,6 +76,134 @@ type Runtime struct {
 	ShellCommand     string             `toml:"shell_command,omitempty" json:"shell_command,omitempty"`
 	LogsCommand      string             `toml:"logs_command,omitempty" json:"logs_command,omitempty"`
 	Services         map[string]Service `toml:"services,omitempty" json:"services,omitempty"`
+
+	// TestLane declares the optional [[runtime.test_lane]] blocks that let
+	// `dross test --files` run only the suites a file set actually touches.
+	//
+	// omitempty is load-bearing beyond tidiness: a repo that declares no lane
+	// must round-trip byte-identically to one written before lanes existed, so
+	// the whole feature stays opt-in and `dross test` keeps meaning
+	// TestCommand for every repo that has not asked for anything else.
+	TestLane []TestLane `toml:"test_lane,omitempty" json:"test_lane,omitempty"`
+}
+
+// TestLane is one named subset of the repo paired with the command that tests
+// it: Match is a list of globs, Command is the line to run when a supplied file
+// set hits any of them.
+//
+// Those three fields are required and validate says so per-field — a lane with
+// no Command cannot be run, a lane with no Match can never be selected, and a
+// lane with no Name cannot be granted consent, since the machine-local grant
+// store is keyed by lane name. Prepare, Selector and EmptyExit are optional and
+// opt-in; see their own comments.
+type TestLane struct {
+	Name    string   `toml:"name" json:"name"`
+	Match   []string `toml:"match" json:"match"`
+	Command string   `toml:"command" json:"command"`
+
+	// Prepare is the optional bootstrap line this lane runs before its
+	// Command — the `make build` or `docker compose up -d` a cold host needs
+	// before the suite means anything. Omitted means the lane spawns exactly
+	// what it spawns today, so the field is opt-in per lane like Selector.
+	//
+	// It runs on the same host and through the same transport as Command, and
+	// it is covered by the SAME consent grant: the lane's fingerprint is taken
+	// over both lines together, so appending a prepare to a granted lane
+	// staleness-refuses it rather than smuggling an untrusted line past a
+	// grant issued for the command alone.
+	Prepare string `toml:"prepare,omitempty" json:"prepare,omitempty"`
+
+	// Selector names the shape the lane's matched paths take when they are
+	// appended to Command — one of configenum.SelectorStyles. Omitted means
+	// append nothing, which is what every lane written before selectors
+	// existed means, so translation is opt-in per lane and a lane that says
+	// nothing keeps spawning Command byte-for-byte.
+	Selector string `toml:"selector,omitempty" json:"selector,omitempty"`
+
+	// SelectorTemplate names WHERE this lane's matched paths land on its
+	// command line, for a runner whose shape the Selector enum cannot express:
+	// cargo wants `--package <p>` repeated per path, `ctest -R` wants one
+	// joined regex. Omitted — the normal case — means the derived paths are
+	// appended to Command exactly as they are today, so the field is opt-in
+	// per lane like Selector itself.
+	//
+	// It is orthogonal to Selector rather than a replacement for it: Selector
+	// still decides whether the substituted values are files, dirs or Go
+	// packages, and the template decides where they go. A template declared
+	// with no Selector is therefore refused — it would have nothing to place.
+	//
+	// Two placeholders are recognised. `{path}` repeats the WHOLE template
+	// once per derived path; `{paths}` substitutes them all into a single
+	// instance. A template containing neither is refused, since it would scope
+	// nothing while claiming to. Any other `{...}` run is ordinary template
+	// text — a regex quantifier like `a{2,3}` is legitimate here.
+	//
+	// Its content is fenced by consent alone, exactly as Command and Prepare
+	// are: it is folded into the lane's consent line, so adding or changing a
+	// template leaves the grant stale rather than running an unread line under
+	// a grant issued before it.
+	SelectorTemplate string `toml:"selector_template,omitempty" json:"selector_template,omitempty"`
+
+	// SelectorJoin collapses a `{paths}` expansion into ONE argv token,
+	// separated by this string — `selector_join = "|"` is what turns `-R
+	// {paths}` into `-R 'a|b'` for ctest. Omitted, `{paths}` expands to
+	// separate tokens, which is what a trailing path list wants.
+	//
+	// A regex alternation is unreachable without a separator, and an inline
+	// `{paths:|}` syntax would make the template a small language with its own
+	// parse errors to name — so it is a declared field. validate refuses it on
+	// a lane whose template has no `{paths}`, where it could never apply.
+	SelectorJoin string `toml:"selector_join,omitempty" json:"selector_join,omitempty"`
+
+	// Toolchain overrides the binaries this lane needs on the host that runs
+	// it. Omitted — the normal case — means the list is DERIVED from the first
+	// token of Command and Prepare (testlane.Toolchain), so locality detection
+	// works on every lane already declared without an edit.
+	//
+	// The field is the escape hatch for the lines derivation gets wrong: an env
+	// prefix like `FOO=1 go test`, a wrapper script, a `mise exec`. It replaces
+	// the derived list wholesale rather than extending it, because appending
+	// would keep probing the very token the user overrode to say was not a
+	// binary.
+	//
+	// Every entry must be a bare binary name — validate refuses blanks,
+	// embedded whitespace, `=` and path separators — since each entry is asked
+	// of a host as `command -v <entry>` and an entry that can never resolve
+	// would pin the lane to a local run with no message pointing at the cause.
+	Toolchain []string `toml:"toolchain,omitempty" json:"toolchain,omitempty"`
+
+	// Install is the optional line that installs this lane's toolchain onto
+	// the machine that is missing it. Omitted — the normal case — means the
+	// lane installs from dross's built-in recipe for the tool, or is refused
+	// by name when there is none: an install command is never guessed at.
+	//
+	// Declared, it REPLACES the built-in recipe for this lane's tool rather
+	// than extending it, for the reason Toolchain replaces its derived list:
+	// appending would keep running the very recipe the user overrode to say
+	// was wrong. It is also the only route to installing something the
+	// built-in table deliberately refuses — a language runtime — because that
+	// choice then belongs to the person who owns the host rather than to
+	// dross.
+	//
+	// It carries its OWN consent grant, separate from the command+prepare
+	// grant the lane's test runs bind to. Folding it into that fingerprint the
+	// way Prepare is folded in would staleness-refuse a lane's ordinary test
+	// runs the moment an install line was added — a line that has never
+	// executed breaking a gate that was passing — and installing is a
+	// different act with a different blast radius than running a suite.
+	Install string `toml:"install,omitempty" json:"install,omitempty"`
+
+	// EmptyExit lists the exit codes this lane's runner uses to say "I
+	// collected no tests" — pytest's 5, for example. dross reports those as a
+	// selector miss rather than a red suite. It is declared, never inferred:
+	// with no codes listed, only a selector that filtered down to nothing can
+	// produce a miss, and a runner's output is never scraped for wording.
+	//
+	// It is meaningless without Selector — an unscoped lane runs its whole
+	// suite and can only collect nothing if the repo has no tests at all — so
+	// validate refuses the combination rather than letting a user believe they
+	// configured a code that can never fire.
+	EmptyExit []int `toml:"empty_exit,omitempty" json:"empty_exit,omitempty"`
 }
 
 type Service struct {

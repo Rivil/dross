@@ -1,0 +1,84 @@
+[phase]
+  id = "test-lane-config"
+  title = "test-lane-config"
+  milestone = "v1.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "project.toml accepts one or more [[runtime.test_lane]] entries, each with a name, match globs and a test command; dross validate rejects a lane missing any of the three and names the offending lane."
+
+[[criteria]]
+  id = "c-2"
+  text = "Given a set of file paths, dross resolves exactly the lanes whose match globs at least one of them; paths matching no lane are named in the output rather than silently dropped."
+
+[[criteria]]
+  id = "c-3"
+  text = "dross test --files <paths> runs only the resolved lanes' commands — a file set confined to one lane produces zero invocations of any other lane's command."
+
+[[criteria]]
+  id = "c-4"
+  text = "Each lane run prints the lane name and the exact command line it ran before that lane's output, so the transcript names the runner that produced the result."
+
+[[criteria]]
+  id = "c-5"
+  text = "A repo declaring no [[runtime.test_lane]] behaves exactly as today — dross test runs runtime.test_command byte-identically, with or without --files — so lanes are opt-in and c-8's refusal never fires on a lane-less repo."
+
+[[criteria]]
+  id = "c-6"
+  text = "Consent covers each lane's command individually: a lane whose command line is untrusted or stale on this machine refuses that lane's run, names the lane, and makes the overall run exit non-zero, while lanes with a valid grant are unaffected."
+
+[[criteria]]
+  id = "c-7"
+  text = "/dross-execute's pre-commit gate passes the current task's plan.toml files to dross test --files, so lane selection is the task's own touched paths rather than the whole repo."
+
+[[criteria]]
+  id = "c-8"
+  text = "A --files set that matches no declared lane exits non-zero naming the unmatched paths, rather than reporting a green run that measured nothing."
+
+[[criteria]]
+  id = "c-9"
+  text = "Test lanes are added, listed and removed through the dross CLI — declaring a lane never requires hand-editing project.toml."
+
+[[decisions]]
+  key = "lane_input"
+  choice = "The caller supplies the file set explicitly via `dross test --files <paths>`; dross never derives it from plan.toml state or the git diff."
+  why = "Keeps dross a dispatcher, works outside a phase, and is testable without a plan; the agent already holds the task's files."
+  locked = true
+
+[[decisions]]
+  key = "unmatched_files"
+  choice = "Partial misses are reported by path and the matched lanes still run; a file set matching zero lanes refuses (c-8)."
+  why = "A docs-only edit must not drag in the full suite, but a run that measured nothing must never read as green."
+  locked = true
+
+[[decisions]]
+  key = "bare_test_run"
+  choice = "`dross test` with no --files runs runtime.test_command, unchanged and byte-identical to the consented line. Lanes scope the gate; test_command remains the whole suite."
+  why = "Keeps c-5 back-compat trivially true and leaves verify.md's full-suite meaning untouched."
+  locked = true
+
+[[decisions]]
+  key = "multi_lane"
+  choice = "Every lane with at least one matching file runs, in declaration order; a file may belong to several lanes; a red result on any lane fails the gate."
+  why = "No hidden precedence from array position, and a cross-cutting task is genuinely tested on both sides."
+  locked = true
+
+[[decisions]]
+  key = "lane_consent"
+  choice = "local.toml stores a per-lane command fingerprint map; one lane going stale refuses only that lane and names it."
+  why = "Follows the trusted_replay_commands precedent; an aggregate hash would let a one-character docs-lane edit block the Go gate."
+  locked = true
+
+[[deferred]]
+  id = "a1eca47a8213daa2"
+  text = "survivor internal/cmd/milestone.go:1030 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "milestone-push-failure-tests"
+  survivor = "84d409d56631ed49"
+
+[[deferred]]
+  id = "0323e4284012842f"
+  text = "survivor internal/cmd/milestone.go:1054 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "milestone-push-failure-tests"
+  survivor = "6efb661ce18f93d2"

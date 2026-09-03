@@ -1,0 +1,254 @@
+{
+  "phase": "remote-run-detach",
+  "pr": 115,
+  "base": "milestone/v1.6",
+  "base_commit": "94954f1d011cf8e3f0df577d3099c76bc1eedb50",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/local.go",
+        "internal/cmd/local_detached_test.go"
+      ],
+      "commit": "9dce0f1",
+      "completed_at": "2026-08-30T19:38:11.213712Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "detachedRun",
+          "loc": "internal/cmd/local.go:282",
+          "what": "a machine-local per-phase record of a dispatched-but-uncollected run — host, run dir and start time — kept out of localKeys so no generic key-writer can aim a later fetch at a host and path the user never saw"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/remote/remote_test.go",
+        "internal/mutation/gremlins_test.go"
+      ],
+      "commit": "e380807",
+      "completed_at": "2026-08-31T08:50:13.094739Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "TestExecScriptRefusesBeforeItReachesTheTransport",
+          "loc": "internal/remote/remote_test.go:860",
+          "what": "asserts the live transport's own guards, which every other test stubs away"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_status_test.go"
+      ],
+      "commit": "41cc4e7",
+      "completed_at": "2026-08-31T14:37:10.153458Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "cancelLine",
+          "loc": "internal/cmd/verify.go:582",
+          "what": "teardown command text extracted as a pure helper so the process-group kill is assertable without a host"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/mutation/gremlins.go",
+        "internal/mutation/gremlins_test.go"
+      ],
+      "commit": "daf7206",
+      "completed_at": "2026-08-31T18:05:30.508378Z",
+      "landmarks": [
+        {
+          "feature": "mutation testing adapters",
+          "symbol": "packagesFromFiles",
+          "loc": "internal/mutation/gremlins.go:597",
+          "what": "derives a gremlins package only for directories carrying a changed .go file, so a root README no longer expands to a whole-module run and a Go-less directory no longer gets a doomed invocation"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/mutation/gremlins.go",
+        "internal/mutation/launcher.go",
+        "internal/cmd/verify_results_test.go",
+        "internal/cmd/verify_detach_test.go",
+        "internal/mutation/gremlins_test.go"
+      ],
+      "commit": "3d93e42",
+      "completed_at": "2026-08-31T20:20:47.57743Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "ReportlessExit",
+          "loc": "internal/mutation/launcher.go:778",
+          "what": "one shared rule refusing a package that wrote no report and exited non-zero, applied by the attached loop and by a detached collect reading the per-package exit code the sequence now records"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/cmd/verify_results_test.go"
+      ],
+      "commit": "04d0693",
+      "completed_at": "2026-08-31T22:13:08.024908Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "fetchSpy",
+          "loc": "internal/cmd/verify_results_test.go:583",
+          "what": "runs the real detachFetchReports with only runDetachArgv stubbed, so the per-package exit-code fetch is asserted without a host"
+        }
+      ]
+    },
+    "t-15": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_results_test.go"
+      ],
+      "commit": "6ad6efa",
+      "completed_at": "2026-09-01T00:14:21.566987Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "classifyFetch",
+          "loc": "internal/cmd/verify.go:466",
+          "what": "reads rsync's exit code so a collect tells an absent report from a dead connection, refusing the second instead of scoring around it"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/remote/remote.go",
+        "internal/remote/remote_test.go"
+      ],
+      "commit": "c7f9454",
+      "completed_at": "2026-08-30T21:31:49.19872Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "remote.DetachScript",
+          "loc": "internal/remote/remote.go:358",
+          "what": "backgrounds only the setsid job so ssh returns immediately — an \u0026\u0026 chain ending in \u0026 backgrounds the whole chain and holds the ssh channel for the full leg, which a live helicon dispatch proved"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_finish_test.go"
+      ],
+      "commit": "509735a",
+      "completed_at": "2026-08-30T19:45:39.153037Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "finishVerify",
+          "loc": "internal/cmd/verify.go:138",
+          "what": "the one seam turning a completed mutation run into tests.json plus the verify.toml skeleton, shared by the attached run and the detached fetch so a detached verdict is not a second-class artefact"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/mutation/gremlins.go",
+        "internal/remote/remote.go",
+        "internal/cmd/verify_detach_test.go",
+        "internal/cmd/verify_scoping_test.go"
+      ],
+      "commit": "ea65ab1",
+      "completed_at": "2026-08-30T19:53:28.211538Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "dispatchDetached",
+          "loc": "internal/cmd/verify.go:239",
+          "what": "pushes the tree then starts the whole per-package gremlins sequence on the granted host as one detached job, recording the run only once the host has accepted it so a failed dispatch strands nothing"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_results_test.go"
+      ],
+      "commit": "e15e33b",
+      "completed_at": "2026-08-31T06:52:45.050844Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "detachFetchReports",
+          "loc": "internal/cmd/verify.go:296",
+          "what": "fetches each package report individually and clears the local copy first so a failed fetch leaves the run unmeasured rather than merging a stale one"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_status_test.go"
+      ],
+      "commit": "584b662",
+      "completed_at": "2026-08-30T20:01:16.875472Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "cancelDetached",
+          "loc": "internal/cmd/verify.go:400",
+          "what": "lists what this machine dispatched without needing the network and tears a run down on the host that holds it, killing the process group setsid created rather than the pid alone"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "README.md",
+        "assets/prompts/verify.md",
+        "internal/cmd/options_docs_test.go"
+      ],
+      "commit": "d3fc777",
+      "completed_at": "2026-08-30T20:03:28.960047Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "TestReadmeDocumentsDetachedRuns",
+          "loc": "internal/cmd/options_docs_test.go:333",
+          "what": "pins the detach surface as documented in both README and the verify prompt, including the five result states so an agent never reads a still-running run as a red suite"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/verify_results_test.go"
+      ],
+      "commit": "2e509d7",
+      "completed_at": "2026-08-31T08:55:33.936863Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "TestCollectWritesTheSameArtefactsAnAttachedRunWould",
+          "loc": "internal/cmd/verify_results_test.go:290",
+          "what": "asserts a detached collect rebuilds scope, filters out-of-scope survivors and stamps the recorded host, which is the claim c-2 makes and nothing checked"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/verify_detach_test.go"
+      ],
+      "commit": "9a787f9",
+      "completed_at": "2026-08-31T08:55:44.343893Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "TestVerifyDetachDispatchesThroughTheCommand",
+          "loc": "internal/cmd/verify_detach_test.go:330",
+          "what": "drives the detach flags through Verify's own RunE so the wiring between flag and guards has a regression test, not just the helpers"
+        }
+      ]
+    }
+  }
+}

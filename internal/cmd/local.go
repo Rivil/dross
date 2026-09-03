@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
@@ -110,6 +111,49 @@ type localStore struct {
 	// <name>` writes it, and it prints the line first.
 	TrustedRunCommands string `toml:"trusted_run_commands,omitempty"`
 
+	// TrustedLaneCommands maps a [[runtime.test_lane]] name to sha256 of that
+	// lane's command line — the per-lane half of the exec-consent gate.
+	//
+	// A MAP keyed by lane name, not a comma-separated fingerprint set like the
+	// replay and run grants beside it. The set shape answers "has this exact
+	// line been trusted?", which is enough when the lines are independent. A
+	// lane's grant has to answer a second question the set cannot: WHICH lane
+	// went stale. With an aggregate or an anonymous set, a one-character edit
+	// to a docs lane's command is indistinguishable from an edit to the Go
+	// lane's, so the gate can only refuse the whole run — and a docs typo that
+	// blocks the Go test gate is a gate people route around. Keyed by name,
+	// one stale lane refuses only itself (the locked lane_consent decision).
+	//
+	// The name is the key, so a RENAMED lane inherits nothing: the lookup
+	// misses and the new name is simply ungranted. That is the correct
+	// direction — a rename is an edit to the lane, and every edit re-prompts.
+	//
+	// ABSENT from localKeys, on the TrustedTestCommand precedent: `dross local
+	// set` must not be able to grant it. Only `dross trust --lane <name>`
+	// writes it, and it prints the command line first.
+	TrustedLaneCommands map[string]string `toml:"trusted_lane_commands,omitempty"`
+
+	// TrustedLaneInstalls maps a [[runtime.test_lane]] name to sha256 of that
+	// lane's declared `install` line — consent to INSTALL that lane's toolchain,
+	// which is a different act from consent to run its suite.
+	//
+	// A second map rather than a second line folded into TrustedLaneCommands'
+	// fingerprint, and that separation is the locked install_consent decision.
+	// Folding it in the way `prepare` is folded in would staleness-refuse a
+	// lane's ordinary TEST runs the moment an install line was added — a line
+	// that has never executed breaking a gate that was passing the day before.
+	// The blast radius differs too: running a suite touches this repo's tree,
+	// while installing changes a machine for everything else that uses it.
+	//
+	// Keyed by lane name on the TrustedLaneCommands precedent, so one lane's
+	// rewritten install line refuses only itself, and a renamed lane inherits
+	// nothing.
+	//
+	// ABSENT from localKeys, for the reason every grant here is: `dross local
+	// set` must not be able to authorize an install. Only `dross trust
+	// --lane-install <name>` writes it, and it prints the line first.
+	TrustedLaneInstalls map[string]string `toml:"trusted_lane_installs,omitempty"`
+
 	// RemoteHost and RemoteWorkdir authorize dross to run this repo's code on
 	// another machine — the mutation adapters and, since remote-test-runner,
 	// the test suite.
@@ -168,7 +212,7 @@ type localStore struct {
 	// untracked file: a clean rename would silently stop resolving on every
 	// machine that already granted a host, and the failure would present as a
 	// local run the user believed was remote — the exact confusion
-	// readRemoteGrant's unparseable-store handling exists to prevent.
+	// readRemoteGrants's unparseable-store handling exists to prevent.
 	//
 	// resolveRemoteGrant reads the new keys first; see effectiveRemote below
 	// for why a half-migrated file resolves to the NEW value.
@@ -201,6 +245,162 @@ type localStore struct {
 	// own environment carries GITHUB_TOKEN and YOUTRACK_TOKEN and "send
 	// everything" would put them on the mutation host.
 	MutationRemoteEnv string `toml:"mutation_remote_env,omitempty"`
+
+	// DetachedRuns records the mutation runs this machine dispatched to a host
+	// and has not yet collected — one per phase, at most.
+	//
+	// It lives here rather than in the phase directory because it is machine-
+	// AND host-local in the same way the grant above is: a run id naming a
+	// directory on helicon means nothing in a clone, on another laptop, or to
+	// anyone reading the phase's artefacts later. Committing it would also put
+	// a host name into cumulative history, which is the self-authorization
+	// local.toml exists to keep out.
+	//
+	// ABSENT from localKeys, on the RemotePool precedent one step further: the
+	// record names a host AND a directory a later `verify results` will read a
+	// report out of, so a generic key-writer could point a fetch at a machine
+	// and a path the user never saw. Only the detach verb writes it, and it
+	// prints the host it is dispatching to before it does.
+	//
+	// An ARRAY keyed by phase rather than a map, so the file reads in dispatch
+	// order and a hand-inspected local.toml shows what is outstanding without
+	// the reader having to know the key set.
+	DetachedRuns []detachedRun `toml:"detached_run,omitempty"`
+}
+
+// detachedRun is one dispatched-but-uncollected mutation run.
+//
+// RunDir is STORED rather than re-derived from Workdir and RunID at fetch
+// time. The derivation is ours and could change; a run dispatched by an older
+// dross would then be looked for in a directory nothing ever wrote to, and the
+// failure would present as "the run vanished" rather than as a version skew.
+// Storing the path the dispatch actually used makes the record self-contained.
+//
+// ScheduledFor is the zero time for an immediate run. A scheduled one carries
+// the instant the host will start it, which is what lets `verify status` say
+// "scheduled" rather than "running" without asking the host.
+type detachedRun struct {
+	Phase        string    `toml:"phase"`
+	RunID        string    `toml:"run_id"`
+	Host         string    `toml:"host"`
+	Workdir      string    `toml:"workdir"`
+	RunDir       string    `toml:"run_dir"`
+	DispatchedAt time.Time `toml:"dispatched_at"`
+	ScheduledFor time.Time `toml:"scheduled_for,omitempty"`
+	State        string    `toml:"state"`
+}
+
+// Scheduled reports whether this run is waiting for its start time rather than
+// already running.
+func (d detachedRun) Scheduled() bool { return !d.ScheduledFor.IsZero() }
+
+// readDetachedRuns returns every dispatched-but-uncollected run.
+//
+// It goes through refuseTrackedLocal for the reason readRemoteGrants does: the
+// record names a host and a path a fetch will read from, so a committed store
+// carrying one is a repo pointing this machine's next `verify results` at a
+// directory of its choosing. Refused unread, like every other trust-bearing
+// read of this file.
+//
+// An unparseable store is an error rather than an empty list, on the same
+// reasoning: "I could not read your config" must not resolve to "you have no
+// runs outstanding", because that silently re-dispatches a leg already running
+// on the host and leaves two writers for one phase's tests.json.
+func readDetachedRuns(root, repoDir string) ([]detachedRun, error) {
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return nil, err
+	}
+	l, err := loadLocal(localPath(root))
+	if err != nil {
+		return nil, err
+	}
+	return l.DetachedRuns, nil
+}
+
+// findDetachedRun returns the run recorded for a phase, or (nil, nil) when
+// there is none.
+func findDetachedRun(root, repoDir, phaseID string) (*detachedRun, error) {
+	runs, err := readDetachedRuns(root, repoDir)
+	if err != nil {
+		return nil, err
+	}
+	for i := range runs {
+		if runs[i].Phase == phaseID {
+			return &runs[i], nil
+		}
+	}
+	return nil, nil
+}
+
+// recordDetachedRun stores a dispatched run, refusing a second one for a phase
+// that already has one in flight.
+//
+// The refusal is the one_run_per_phase decision made mechanical. Two runs
+// against one phase both write that phase's tests.json when collected, and the
+// loser wins silently — whichever fetch happens second overwrites the first
+// with numbers measured from a different dispatch. Refusing by name, with the
+// running host in the message, makes cancel-then-redispatch the explicit
+// gesture rather than something the user discovers afterwards.
+//
+// The refusal states the FACT — which run, on which host, dispatched when — and
+// narrates no remediation command. The verbs that collect and cancel a run live
+// on the verify command, and naming them here binds this layer to the CLI's
+// spelling: TestNarratedCommandsResolveAgainstTheTree fails a message naming a
+// subcommand that does not exist, and it caught exactly that on the first draft
+// of this function. The caller adds the remediation line, where the verbs are.
+func recordDetachedRun(root, repoDir string, rec detachedRun) error {
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return err
+	}
+	path := localPath(root)
+	l, err := loadLocal(path)
+	if err != nil {
+		return err
+	}
+	for _, existing := range l.DetachedRuns {
+		if existing.Phase == rec.Phase {
+			return fmt.Errorf(
+				"phase %q already has a detached run in flight: %s on %s (dispatched %s)",
+				rec.Phase, existing.RunID, existing.Host,
+				existing.DispatchedAt.Format(time.RFC3339))
+		}
+	}
+	l.DetachedRuns = append(l.DetachedRuns, rec)
+	return l.save(path)
+}
+
+// clearDetachedRun removes a phase's record, reporting whether there was one.
+//
+// The boolean is what lets a cancel of an unknown phase be an error rather
+// than a silent success: a caller that cannot tell "removed" from "there was
+// nothing" reports both as done, and a user who mistyped a phase id is told
+// the run is cancelled while it keeps running on the host.
+func clearDetachedRun(root, repoDir, phaseID string) (bool, error) {
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return false, err
+	}
+	path := localPath(root)
+	l, err := loadLocal(path)
+	if err != nil {
+		return false, err
+	}
+	kept := make([]detachedRun, 0, len(l.DetachedRuns))
+	found := false
+	for _, r := range l.DetachedRuns {
+		if r.Phase == phaseID {
+			found = true
+			continue
+		}
+		kept = append(kept, r)
+	}
+	if !found {
+		return false, nil
+	}
+	l.DetachedRuns = kept
+	if err := l.save(path); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // localKeys maps each key to its accessors, keeping `local get` and
@@ -236,7 +436,11 @@ var localKeys = map[string]struct {
 	// remote_host and remote_workdir — and their deprecated mutation_remote_*
 	// aliases — are NOT here. See the struct fields: they are granted by
 	// `dross remote grant`, which shows the user what it is authorizing, and by
-	// nothing else.
+	// nothing else. trusted_lane_commands is out for the same reason: only
+	// `dross trust --lane <name>` writes it, after printing the line, and
+	// trusted_lane_installs is out on that same precedent — a key-writer that
+	// could grant it would authorize changing a machine without ever showing
+	// the user the line it was about to run there.
 }
 
 // effectiveRemote returns the granted host and workdir, preferring the current
@@ -313,8 +517,18 @@ func refuseTrackedLocal(repoDir string) error {
 		rel, rel, rel)
 }
 
-// readRemoteGrant returns the machine-local authorization for a remote mutation
-// run, or (nil, nil) when the repo has none.
+// remoteCandidate is one authorized host in the pool.
+type remoteCandidate struct {
+	Host    string `toml:"host"`
+	Workdir string `toml:"workdir"`
+}
+
+// readRemoteGrants returns every authorized host in preference order: the
+// scalar grant first, then the pool. It is the ONE reader of the machine-local
+// authorization — nothing else parses local.toml for a host.
+//
+// Order is the user's declared preference, so honouring it needs no policy of
+// our own.
 //
 // It goes through refuseTrackedLocal for the same reason the consent gate does,
 // and the reason is sharper here: a tracked local.toml naming a remote host is a
@@ -331,17 +545,6 @@ func refuseTrackedLocal(repoDir string) error {
 // this file treats a decode failure as "no value"; a trust-bearing key cannot,
 // because "I could not read your config" must never resolve to a silent local
 // run the user thought was remote.
-// remoteCandidate is one authorized host in the pool.
-type remoteCandidate struct {
-	Host    string `toml:"host"`
-	Workdir string `toml:"workdir"`
-}
-
-// readRemoteGrants returns every authorized host in preference order: the
-// scalar grant first, then the pool.
-//
-// Order is the user's declared preference, so honouring it needs no policy of
-// our own.
 func readRemoteGrants(root, repoDir string) ([]*remote.Target, error) {
 	if err := refuseTrackedLocal(repoDir); err != nil {
 		return nil, err
@@ -378,27 +581,50 @@ func readRemoteGrants(root, repoDir string) ([]*remote.Target, error) {
 	return out, nil
 }
 
-func readRemoteGrant(root, repoDir string) (*remote.Target, error) {
-	if err := refuseTrackedLocal(repoDir); err != nil {
-		return nil, err
-	}
-	l, err := loadLocal(localPath(root))
+// resolveRemoteHost answers "which machine is the remote" for every surface
+// that is not itself a run — doctor, `dross remote status`, `dross remote
+// bootstrap`, `dross test lane install`.
+//
+// It is the ONLY answer (locked resolution_has_one_implementation). The
+// scalar-only reader those four used to call is gone: four callers each doing
+// their own resolution is how the divergence arose, and the failure is silent —
+// the surfaces simply disagree, so doctor blesses a host the next run does not
+// use. A second correct implementation is one refactor away from being a second
+// wrong one.
+//
+// The scalar grant stays candidate zero inside readRemoteGrants, so a repo with
+// only the old pair resolves exactly as it always did.
+//
+// It PROBES, which the scalar reader did not. That is the point: with a pool
+// declared and the first host down, the machine the next run uses is not the
+// one config names, and a surface that reported the config value would name a
+// machine nothing is going to touch. tools is what the caller needs on the far
+// side, asked as part of this same probe — nil when the caller only wants the
+// host.
+//
+// The whole pool comes back beside the chosen target, because "the host" is no
+// longer the whole answer for a caller that acts per lane: an install decides
+// against the candidate that would actually run the lane, not against the first
+// one that answered.
+//
+// A chosen target of nil means one of two different things, and callers must
+// keep them apart: pool.Fallback reports a grant that exists and could not be
+// reached, while a nil target with no fallback is simply no grant at all.
+func resolveRemoteHost(root, repoDir string, tools []string) (*remote.Target, remotePool, error) {
+	targets, err := readRemoteGrants(root, repoDir)
 	if err != nil {
-		return nil, err
+		return nil, remotePool{}, err
 	}
-	host, workdir := l.effectiveRemote()
-	if host == "" {
-		return nil, nil
-	}
-	env, err := resolveRemoteEnv(l.MutationRemoteEnv)
+	pool, err := probeRemotePool(targets, tools)
 	if err != nil {
-		return nil, err
+		// The failing candidate comes back so the caller can name the machine;
+		// the walk bailed there rather than at the end.
+		return pool.Failed, pool, err
 	}
-	t := &remote.Target{Host: host, Workdir: workdir, Env: env, ScratchBase: l.RemoteScratchBase}
-	if err := t.Validate(); err != nil {
-		return nil, fmt.Errorf("%s/%s: %w", RootDirName, LocalFile, err)
+	if len(pool.Candidates) == 0 {
+		return nil, pool, nil
 	}
-	return t, nil
+	return pool.Candidates[0].Target, pool, nil
 }
 
 // resolveRemoteEnv turns the mutation_remote_env NAME allowlist into the

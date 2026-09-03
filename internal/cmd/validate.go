@@ -35,6 +35,11 @@ func Validate() *cobra.Command {
 				return err
 			}
 			var problems []string
+			// Warnings are a SEPARATE list from problems, not a formatting
+			// choice applied to one: a warning describes a lane that is
+			// well-formed and probably not what the user meant, and folding it
+			// into problems would fail the gate over a judgement call.
+			var warnings []string
 
 			// project.toml
 			p, err := project.Load(filepath.Join(root, project.File))
@@ -54,6 +59,8 @@ func Validate() *cobra.Command {
 					problems = append(problems, fmt.Sprintf("project.toml: runtime.mode is empty (%s)", configenum.RuntimeModes.List()))
 				}
 				problems = append(problems, enumProblems(p)...)
+				problems = append(problems, laneProblems(p)...)
+				warnings = append(warnings, laneWarnings(p)...)
 			}
 
 			// state.json
@@ -133,6 +140,14 @@ func Validate() *cobra.Command {
 				}
 			}
 
+			// Warnings print on EVERY run and never touch the exit status.
+			// Repetition is the point (the locked warning_surface decision):
+			// a message that appeared once at declaration time scrolls away
+			// the moment it appears, and a lane hand-edited into project.toml
+			// never saw that moment at all.
+			for _, w := range warnings {
+				Printf("⚠ %s\n", w)
+			}
 			if len(problems) == 0 {
 				Print("✓ all dross artefacts valid")
 				return nil
@@ -185,6 +200,212 @@ func enumProblems(p *project.Project) []string {
 	return problems
 }
 
+// laneProblems reports every structural fault in the [[runtime.test_lane]]
+// blocks. A lane is three required parts and nothing about the toml decoder
+// enforces any of them: a missing key decodes to a zero value, so an
+// unvalidated lane is a lane that fails later, at the moment a gate wanted to
+// run something.
+//
+// Each fault is reported on its own line, against the lane it belongs to, so a
+// project.toml with several half-written lanes tells the user everything that
+// is wrong in one pass rather than one fault per run.
+//
+// Nothing is reported for a repo declaring no lane: lanes are opt-in (the
+// bare_test_run decision), and a validator that invented a problem for every
+// existing repo would make an opt-in feature mandatory by nagging.
+func laneProblems(p *project.Project) []string {
+	var problems []string
+	seen := map[string]bool{}
+	for i, lane := range p.Runtime.TestLane {
+		label := laneLabel(i, lane.Name)
+		if strings.TrimSpace(lane.Name) == "" {
+			// Reported by ordinal, never as the empty string: the consent
+			// store is keyed by lane name, so a nameless lane can never be
+			// granted, and `runtime.test_lane ""` would not tell the user
+			// which of several blocks to go and fix.
+			problems = append(problems, fmt.Sprintf("project.toml: %s has no name — a lane is granted consent by name, so every lane needs one", label))
+		} else if seen[lane.Name] {
+			// Two lanes under one name collapse to a single entry in the
+			// name-keyed grant store, so one lane's grant would silently
+			// authorize the other lane's command.
+			problems = append(problems, fmt.Sprintf("project.toml: %s is declared more than once — lane names key the machine-local consent store, so they must be unique", label))
+		} else {
+			seen[lane.Name] = true
+		}
+		if len(lane.Match) == 0 {
+			problems = append(problems, fmt.Sprintf("project.toml: %s has an empty match list — a lane matching no path can never be selected", label))
+		}
+		if strings.TrimSpace(lane.Command) == "" {
+			problems = append(problems, fmt.Sprintf("project.toml: %s has no command — a lane with no command line has nothing to run and nothing to consent to", label))
+		}
+		if lane.Prepare != "" && strings.TrimSpace(lane.Prepare) == "" {
+			// Not a reading of any locked decision but an addition: a
+			// whitespace-only prepare is the one shape that disagrees with
+			// itself. It survives project.Load non-empty, so the consent
+			// fingerprint covers it and `dross trust --lane` prints a blank
+			// line, while every reader that asks "does this lane declare a
+			// prepare" trims it and says no. `dross test lane add --prepare`
+			// normalizes it away, so only a hand-edited project.toml can
+			// carry one — which is exactly what validate is for.
+			problems = append(problems, fmt.Sprintf("project.toml: %s has a whitespace-only prepare — it reads as no prepare but fingerprints as one; drop the key or give it a command line", label))
+		}
+		if lane.Install != "" && strings.TrimSpace(lane.Install) == "" {
+			// The prepare rule one field over, for the same shape and the same
+			// reason: a whitespace-only install survives project.Load
+			// non-empty, so its own consent fingerprint covers it and the
+			// trust verb prints a blank line, while every reader asking "does
+			// this lane declare an install" trims it and says no. `dross test
+			// lane add --install` normalizes it away, so only a hand-edited
+			// project.toml can carry one.
+			problems = append(problems, fmt.Sprintf("project.toml: %s has a whitespace-only install — it reads as no install but fingerprints as one; drop the key or give it a command line", label))
+		}
+		problems = append(problems, laneSelectorProblems(label, lane)...)
+		problems = append(problems, laneToolchainProblems(label, lane)...)
+		for _, pattern := range lane.Match {
+			if err := checkGlob(pattern); err != nil {
+				// Named by pattern as well as by lane: a broken glob
+				// otherwise presents as a file set that never matches, which
+				// reads as a file-set problem rather than a lane that cannot
+				// compile.
+				problems = append(problems, fmt.Sprintf("project.toml: %s match pattern %q does not compile: %v", label, pattern, err))
+			}
+		}
+	}
+	return problems
+}
+
+// The two placeholders a selector_template may carry. They are named here
+// rather than spelled inline so validate's refusals and the expander that
+// honours them can never drift into recognising different tokens.
+//
+// templatePathToken is not a prefix hazard: "{path}" ends in its own brace, so
+// a strings.Contains for it never fires on "{paths}".
+const (
+	templatePathToken  = "{path}"
+	templatePathsToken = "{paths}"
+)
+
+// laneSelectorProblems reports the faults in one lane's opt-in selector fields.
+//
+// It is split out of laneProblems so the selector rules read as one paragraph:
+// a style dross cannot translate, an exit code that would mean the wrong thing,
+// a code declared on a lane that can never produce it, a template with nothing
+// to place or nowhere to place it, and a join with nothing to join.
+func laneSelectorProblems(label string, lane project.TestLane) []string {
+	var problems []string
+	// The empty case is guarded here rather than left to Has: SelectorStyles
+	// has no code default, so Has("") is false, and an omitted selector is the
+	// pre-selector behaviour every existing lane already relies on.
+	if strings.TrimSpace(lane.Selector) != "" && !configenum.SelectorStyles.Has(lane.Selector) {
+		problems = append(problems, fmt.Sprintf("project.toml: %s selector = %q is not a selector style — expected %s", label, lane.Selector, configenum.SelectorStyles.List()))
+	}
+	for _, code := range lane.EmptyExit {
+		switch {
+		case code == 0:
+			// A lane claiming 0 means "collected nothing" would report every
+			// green run as a miss, which is the one outcome that must never
+			// be silently swallowed.
+			problems = append(problems, fmt.Sprintf("project.toml: %s empty_exit lists 0 — 0 is the runner's success code, so a lane declaring it would report every passing run as collecting no tests", label))
+		case code == 255:
+			// internal/remote spends 255 on ssh transport failure, so a lane
+			// claiming it would report an unreachable host as "no tests" —
+			// a run that never happened dressed up as a run that found none.
+			problems = append(problems, fmt.Sprintf("project.toml: %s empty_exit lists 255 — 255 is ssh's transport-failure code, so a lane declaring it would report an unreachable host as collecting no tests", label))
+		case code < 0 || code > 255:
+			problems = append(problems, fmt.Sprintf("project.toml: %s empty_exit lists %d — a process exit code is 0-255, so no runner can ever return it", label, code))
+		}
+	}
+	// The template rules read as one paragraph with the selector ones because
+	// they are the same rule from two sides: a template places what a selector
+	// shapes, so neither is usable without the other, and a placeholder-less
+	// template scopes nothing while claiming to.
+	//
+	// Only the two known placeholders are looked for. An unrecognised `{...}`
+	// run is NOT a fault — a regex quantifier like `a{2,3}` is legitimate
+	// template text, and refusing it would fence a line the user has already
+	// read and granted.
+	if lane.SelectorTemplate != "" {
+		if strings.TrimSpace(lane.Selector) == "" {
+			problems = append(problems, fmt.Sprintf("project.toml: %s declares selector_template with no selector — the template says where the paths go, the selector says what shape they take, so a template alone has nothing to place", label))
+		}
+		if !strings.Contains(lane.SelectorTemplate, templatePathToken) && !strings.Contains(lane.SelectorTemplate, templatePathsToken) {
+			problems = append(problems, fmt.Sprintf("project.toml: %s selector_template = %q contains neither %s nor %s — a template with no placeholder substitutes nothing, so the lane would run unscoped", label, lane.SelectorTemplate, templatePathToken, templatePathsToken))
+		}
+	}
+	if lane.SelectorJoin != "" && !strings.Contains(lane.SelectorTemplate, templatePathsToken) {
+		// Reported against the lane rather than silently ignored: a join with
+		// no {paths} to collapse can never apply, so a user who declared one
+		// is believing they configured something they did not.
+		problems = append(problems, fmt.Sprintf("project.toml: %s declares selector_join with no %s in its selector_template — a join collapses a %s expansion into one argument, so there is nothing here for it to join", label, templatePathsToken, templatePathsToken))
+	}
+	if len(lane.EmptyExit) > 0 && strings.TrimSpace(lane.Selector) == "" {
+		// Not a reading of the locked empty_detection decision but an addition
+		// to it: without a selector the lane always runs its whole suite, so
+		// the declared code can never fire and the user is left believing they
+		// configured something they did not.
+		problems = append(problems, fmt.Sprintf("project.toml: %s declares empty_exit with no selector — an unscoped lane runs its whole suite, so the code could never fire", label))
+	}
+	return problems
+}
+
+// laneToolchainProblems reports the faults in one lane's opt-in toolchain
+// override.
+//
+// Every entry is asked of a host as `command -v <entry>`, so the rules here are
+// all one rule: an entry that could never resolve on any host would send its
+// lane local on every future run — or refuse to spawn it at all — with nothing
+// in the transcript pointing at the override as the cause. Refusing the shape
+// up front is the only place that failure is legible.
+//
+// Nothing is reported for a lane that omits the key. The list is derived then
+// (the locked toolchain_source decision), and a validator inventing a problem
+// for every lane written before this phase would make an opt-in field
+// mandatory by nagging.
+func laneToolchainProblems(label string, lane project.TestLane) []string {
+	var problems []string
+	for _, tool := range lane.Toolchain {
+		switch {
+		case strings.TrimSpace(tool) == "":
+			problems = append(problems, fmt.Sprintf("project.toml: %s toolchain lists a blank entry — every entry is probed as `command -v <tool>`, and no host answers to the empty string", label))
+		case len(strings.Fields(tool)) > 1:
+			// A whole command line rather than a binary: the shape a user
+			// reaches for when they copy the lane's command into the override.
+			problems = append(problems, fmt.Sprintf("project.toml: %s toolchain lists %q — an entry is one binary name, not a command line; list the binary alone", label, tool))
+		case strings.Contains(tool, "="):
+			// `FOO=1` is what first-token derivation produces for an
+			// env-prefixed command, and it is exactly what the override exists
+			// to REPLACE — carrying it into the override reproduces the fault.
+			problems = append(problems, fmt.Sprintf("project.toml: %s toolchain lists %q — that is an environment assignment, not a binary; name the binary the line actually runs", label, tool))
+		case strings.ContainsAny(tool, `/\`):
+			// A path resolves against a working directory, and the whole point
+			// of the probe is that it is asked of two different hosts whose
+			// trees do not have to agree. Only a name looked up on PATH means
+			// the same question on both.
+			problems = append(problems, fmt.Sprintf("project.toml: %s toolchain lists %q — an entry is looked up on PATH on whichever host runs the lane, so it must be a bare binary name, not a path", label, tool))
+		}
+	}
+	return problems
+}
+
+// laneLabel names a lane for a problem line: by name when it has one, by
+// ordinal when it does not, so every problem points at a specific block.
+func laneLabel(i int, name string) string {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Sprintf("runtime.test_lane[%d]", i)
+	}
+	return fmt.Sprintf("runtime.test_lane %q", name)
+}
+
+// checkGlob reports whether one lane pattern is syntactically well-formed.
+//
+// filepath.Match validates the WHOLE pattern even once the comparison has
+// failed, so matching against a throwaway name is a syntax check: only
+// ErrBadPattern comes back, a plain non-match returns nil.
+func checkGlob(pattern string) error {
+	_, err := filepath.Match(pattern, "x")
+	return err
+}
+
 // danglingTargets reports every [[deferred]] target in one source that names no
 // valid destination. Shared by the phase-spec walk and the project store so both
 // are judged by exactly the same rule and reported in the same shape.
@@ -204,4 +425,61 @@ func loadIfExists(path string, load func() (any, error)) (any, error) {
 		return nil, nil
 	}
 	return load()
+}
+
+// wholeTreeTokens are the command-line spellings that mean "the entire tree".
+//
+// Both are Go's, which is not a limitation being papered over: they are the
+// tokens dross's own selector translation can produce, and a runner that spells
+// its whole-tree token differently is one whose lane is scoped by a template
+// rather than by the enum. A guessed list of every runner's spelling would warn
+// on lines it had no business reading.
+var wholeTreeTokens = []string{"./...", "."}
+
+// laneWarnings reports the lanes that are well-formed and probably not what the
+// user meant.
+//
+// Distinct from laneProblems and deliberately so: a warning never fails the
+// gate. It describes a lane that validates, runs, and produces a result the
+// user will read as scoped when it is not.
+func laneWarnings(p *project.Project) []string {
+	var warnings []string
+	for i, lane := range p.Runtime.TestLane {
+		if w := laneWholeTreeWarning(laneLabel(i, lane.Name), lane); w != "" {
+			warnings = append(warnings, w)
+		}
+	}
+	return warnings
+}
+
+// laneWholeTreeWarning reports a lane that scopes onto a command already ending
+// in a whole-tree token, or "" when there is nothing to say.
+//
+// The two do not compose the way they look like they do: `go test ./...
+// ./internal/cmd/...` runs the UNION, which is the whole tree. So the lane
+// spends the full suite on every scoped run while its transcript shows a
+// derived selector — a whole-suite run wearing a scoped lane's name, which is
+// the exact failure the selector feature exists to remove.
+//
+// It is a warning rather than a refusal because the lane is well-formed and the
+// combination is occasionally deliberate; the user is told, and the lane is
+// still written.
+//
+// One helper, called by validate and by both declaration verbs, so neither
+// surface can drift into warning about something the other does not.
+func laneWholeTreeWarning(label string, lane project.TestLane) string {
+	if strings.TrimSpace(lane.Selector) == "" && lane.SelectorTemplate == "" {
+		return ""
+	}
+	fields := strings.Fields(lane.Command)
+	if len(fields) == 0 {
+		return ""
+	}
+	last := fields[len(fields)-1]
+	for _, token := range wholeTreeTokens {
+		if last == token {
+			return fmt.Sprintf("project.toml: %s scopes onto a command ending in %s — appending a selector to a whole-tree token runs the union, so the scoped run would silently be the whole suite", label, token)
+		}
+	}
+	return ""
 }

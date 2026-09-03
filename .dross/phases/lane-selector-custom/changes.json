@@ -1,0 +1,144 @@
+{
+  "phase": "lane-selector-custom",
+  "pr": 114,
+  "base": "milestone/v1.6",
+  "base_commit": "94954f1d011cf8e3f0df577d3099c76bc1eedb50",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/project/project.go",
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_lane_test.go"
+      ],
+      "commit": "95e4178",
+      "completed_at": "2026-08-30T17:11:26.277829Z",
+      "landmarks": [
+        {
+          "feature": "test lane scoping",
+          "symbol": "TestLane.SelectorTemplate",
+          "loc": "internal/project/project.go:145",
+          "what": "lanes may declare a free-form selector template and join; validate refuses one with no selector, no placeholder, or a join with no {paths}"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/testlane/template.go",
+        "internal/testlane/template_test.go",
+        "internal/cmd/test.go",
+        "internal/cmd/run.go"
+      ],
+      "commit": "0db0d53",
+      "completed_at": "2026-08-30T17:14:32.208479Z",
+      "landmarks": [
+        {
+          "feature": "test lane scoping",
+          "symbol": "testlane.Expand",
+          "loc": "internal/testlane/template.go:52",
+          "what": "{path} repeats the template per path and {paths} substitutes them into one instance (joined when declared); the sole shell quoter moves here so template text and substituted path are quoted by one implementation"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/trust.go",
+        "internal/cmd/test_lane_consent_test.go"
+      ],
+      "commit": "c9007dd",
+      "completed_at": "2026-08-30T17:17:27.518624Z",
+      "landmarks": [
+        {
+          "feature": "per-lane exec consent",
+          "symbol": "laneTemplateFrame",
+          "loc": "internal/cmd/trust.go:292",
+          "what": "a third length-framed consent namespace binds selector_template and selector_join beside command and prepare, so declaring or changing either stales the grant while an untemplated lane keeps its pre-phase fingerprint"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_files_test.go"
+      ],
+      "commit": "25d8534",
+      "completed_at": "2026-08-30T17:19:53.675223Z",
+      "landmarks": [
+        {
+          "feature": "test lane scoping",
+          "symbol": "laneRunLine",
+          "loc": "internal/cmd/test.go:689",
+          "what": "a lane declaring a selector_template places its derived paths through testlane.Expand instead of appending them; the up-front fence expands against no paths so a malformed template refuses before any lane spawns and the header prints the exact expanded line"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/test_lane.go",
+        "internal/cmd/test_lane_edit_test.go"
+      ],
+      "commit": "4fcc012",
+      "completed_at": "2026-08-30T17:27:51.619553Z",
+      "landmarks": [
+        {
+          "feature": "test lane declaration surface",
+          "symbol": "testLaneEdit",
+          "loc": "internal/cmd/test_lane.go:389",
+          "what": "lane edit now rewrites match, command, selector, empty_exit, selector_template and selector_join in place keeping the grant (only the name is still remove-then-re-add); both verbs gate on the whole lane's laneProblems over a synthetic one-lane project"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/validate.go",
+        "internal/cmd/test_lane.go",
+        "internal/cmd/validate_lane_test.go",
+        "internal/cmd/test_lane_test.go",
+        "internal/cmd/test_lane_edit_test.go"
+      ],
+      "commit": "7ab22e7",
+      "completed_at": "2026-08-30T17:30:54.056838Z",
+      "landmarks": [
+        {
+          "feature": "lane configuration validation",
+          "symbol": "laneWholeTreeWarning",
+          "loc": "internal/cmd/validate.go:470",
+          "what": "validate gains a warning tier that never changes exit status; a lane scoping onto a command ending in ./... or . is warned about by name at declaration time and on every validate run, and still written"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "README.md",
+        "assets/prompts/options.md",
+        "internal/cmd/options_docs_test.go"
+      ],
+      "commit": "961233f",
+      "completed_at": "2026-08-30T17:34:17.210264Z",
+      "landmarks": [
+        {
+          "feature": "documentation",
+          "symbol": "TestOptionsDocumentsTheSelectorSurfaceCorrectly",
+          "loc": "internal/cmd/options_docs_test.go:281",
+          "what": "README and options.md gain the selector template surface, the widened lane edit field set and the whole-tree warning; the remove-then-re-add guard is re-pointed to the lane name and the flag-name guard widened to lane edit"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/test_lane.go",
+        "internal/cmd/test_lane_edit_test.go"
+      ],
+      "commit": "db5d739",
+      "completed_at": "2026-08-31T07:25:39.051552Z",
+      "landmarks": [
+        {
+          "feature": "test lane declaration surface",
+          "symbol": "laneRefusal",
+          "loc": "internal/cmd/test_lane.go:130",
+          "what": "the sole CLI gate for a proposed lane, after the orphaned per-field-group laneSelectorRefusal it had already subsumed was deleted"
+        }
+      ]
+    }
+  }
+}

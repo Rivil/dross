@@ -1,0 +1,117 @@
+[phase]
+  id = "remote-toolchain-install"
+  title = "remote-toolchain-install"
+  milestone = "v1.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "A lane that falls back for a missing toolchain names the remedy in the same breath: the fallback line is followed by the exact `dross test lane install` invocation for that lane, so the offer reaches the user at the moment the fallback is paid for rather than in a doc."
+
+[[criteria]]
+  id = "c-2"
+  text = "`dross remote bootstrap` plans every declared lane's toolchain alongside the mutation adapters — one probe, one plan, one already-installed / would-install / refused vocabulary — so a host's readiness for lanes and for mutation is never two separate answers."
+
+[[criteria]]
+  id = "c-3"
+  text = "An install recipe is never guessed: a lane tool is installable only from a built-in recipe or from the lane's own `install` line, and a tool with neither is named rather than attempted."
+
+[[criteria]]
+  id = "c-4"
+  text = "A lane's `install` line overrides the built-in recipe for the same tool, and a lane with no `install` line still installs from the built-in recipe where one exists — so the feature works on lanes already declared, and the declared line is the escape hatch."
+
+[[criteria]]
+  id = "c-5"
+  text = "Both install surfaces are dry-run by default and a `dross test` run never installs as a side effect of a fallback: the host changes only when an explicit apply is passed to an install command the user invoked."
+
+[[criteria]]
+  id = "c-6"
+  text = "`dross test lane install <name>` installs on the side that has the gap — the granted host when the lane would have run there, this machine when this machine is the one missing the tool — and says which machine it acted on."
+
+[[criteria]]
+  id = "c-7"
+  text = "A lane's `install` line carries its own consent fingerprint, granted separately from the lane's test grant: adding an install line to a lane that already runs green never staleness-refuses its ordinary test runs, and an ungranted install line is refused rather than executed."
+
+[[criteria]]
+  id = "c-8"
+  text = "A tool that cannot be installed is refused by name with what the host's owner must do, and a refusal is never reported as a failed install attempt — the two have different remedies and only one of them is dross's to perform."
+
+[[criteria]]
+  id = "c-9"
+  text = "An install is a fact about the host and not sticky state in dross: after a successful install nothing is written to the grant store or project.toml, and the next run sends that lane remote with no user action."
+
+[[decisions]]
+  key = "install_recipe_source"
+  choice = "A lane tool's install command comes from a built-in recipe table, with an optional `install = \"...\"` line on the lane replacing the table's entry for that lane. A tool present in neither is refused by name, never guessed at."
+  why = "The table makes the feature work on lanes already declared instead of lying dead until every lane is rewritten — the same argument that made toolchain derivation beat a declared-only field. The lane line is the escape hatch for the tool the table gets wrong or does not know, and it mirrors how `toolchain` already overrides its derived list: replace, never extend."
+  locked = true
+
+[[decisions]]
+  key = "install_scope_for_lanes"
+  choice = "The built-in table covers package-class lane tools only — things installed into a runtime that is already there. Language runtimes (go, node, dotnet) stay refusals, exactly as remote-toolchain-bootstrap's install_scope locked. A lane that genuinely needs a runtime installed writes its own `install` line."
+  why = "install_scope is locked and drew the line at the runtime for real reasons: version policy, PATH ownership, usually root, on a machine dross was merely lent. A table that installed node would relitigate that decision silently. Routing the runtime case through a line the lane's author wrote keeps the choice with the person who owns the host."
+  locked = true
+
+[[decisions]]
+  key = "install_consent"
+  choice = "The `install` line is fingerprinted and granted separately from the lane's command+prepare test grant."
+  why = "Folding it into the lane fingerprint the way prepare was folded in would staleness-refuse a lane's ordinary test runs the moment an install line is added — a line that has never executed would break a gate that was passing. The install is also a different act with a different blast radius than running a suite, so it earns its own consent rather than riding one issued for testing."
+  locked = true
+
+[[decisions]]
+  key = "install_surface"
+  choice = "`dross test lane install <name> [--apply]` is the lane-scoped install verb and owns both sides, remote and local. `dross remote bootstrap` keeps its whole-host role and gains lane coverage (c-2)."
+  why = "The local half cannot live under the `remote` noun — `dross remote bootstrap --local` is a contradiction in its own name. The lane is the noun both installs actually share, so the lane-scoped verb is where they belong; bootstrap stays the answer to 'is this host ready', which is a different question."
+  locked = true
+
+[[decisions]]
+  key = "install_local_override"
+  choice = "`dross test lane install` carries a `--local` flag that forces the install onto this machine whichever side the probe found the gap on. c-6's automatic side-selection stays the default; the flag is never needed to get the correct behaviour."
+  why = "`dross test` already spells \"do not go remote\" as `--local`, so the lane-scoped install verb reading differently would be the inconsistency. It is the escape hatch for a granted host that is up but is not the machine the user wants provisioned — provisioning this laptop ahead of a trip, say. It extends install_surface's flag set rather than contradicting it, and it is recorded because a flag that deliberately inverts a criterion's rule needs a stated case to be faithful to."
+  locked = true
+
+[[decisions]]
+  key = "offer_scope"
+  choice = "c-1's offer names the lane-scoped invocation for the one lane that fell back, not an unfiltered whole-host bootstrap."
+  why = "The offer's blast radius should match what the transcript justified: one lane fell back, so the command on offer installs one lane's tool. Pointing at the whole-host bootstrap would provision tools for lanes and adapters this run never touched, on the strength of a single lane's fallback."
+  locked = true
+
+[[decisions]]
+  key = "undeclared_exit"
+  choice = "A declared lane with no built-in recipe and no `install` line is reported — 'no install line; add one or install <tool> on the host by hand' — but does not count toward the refusal exit. Only a declared install that dross could not run is a failure."
+  why = "Counting it as a refusal would make every repo with lanes and no install lines start exiting 1 on a command that passed the day before. The report is the useful part; the non-zero exit would be noise that trains the loop to ignore it."
+  locked = true
+
+[[deferred]]
+  id = "b328f16cd8693b82"
+  text = "Pinning or otherwise managing the versions of lane toolchains dross installs — the install lands whatever its recipe resolves."
+  why = "Explicit milestone non-goal: 'does not manage toolchain versions'."
+
+[[deferred]]
+  id = "1f7da51167187ecb"
+  text = "Provisioning lane toolchains across more than the one granted host."
+  why = "The grant is singular by design; a pool is a scheduler question, and lane-host-affinity already holds the two routed items about it."
+  target = "lane-host-affinity"
+
+[[deferred]]
+  id = "87008f463c24d5b1"
+  text = "A verb to uninstall or clean up what dross installed on a borrowed host."
+  why = "No demand yet, and a removal path on someone else's machine is its own consent question."
+
+[[deferred]]
+  id = "617da14b27a353ca"
+  text = "survivor internal/cmd/lane_install.go:216 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  dismissed = true
+  survivor = "6413ac9e54ed7540"
+
+[[deferred]]
+  id = "31ef6cd6fbd3d161"
+  text = "survivor internal/cmd/lane_install.go:220 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  dismissed = true
+  survivor = "b49d50d9aa57b170"
+
+[[deferred]]
+  id = "87d98c3c945fa02c"
+  text = "dross verify has no reclassify-only path: draining survivors forces a full re-run of the mutation leg (~1h40m on this repo) purely to recompute unclassified_in_scope from a static store against a report that already exists"
+  why = "verify.md instructs a re-run after every drain; at this repo's leg length that is unaffordable, so the honest path becomes hand-editing verify.toml's summary — which is what happened on remote-toolchain-install (2026-08-29). A --reclassify flag reusing the existing tests.json would make the prompt's own instruction followable."

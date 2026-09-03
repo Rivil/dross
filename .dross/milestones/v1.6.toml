@@ -1,0 +1,12 @@
+phases = ["test-lane-config", "lane-selector-translation", "lane-prepare-step", "lane-remote-locality", "remote-toolchain-install", "milestone-push-failure-tests", "lane-selector-custom", "remote-run-detach", "lane-host-affinity", "lane-selector-preview"]
+
+[milestone]
+  version = "v1.6"
+  title = "1.6 lane truth — the test gate runs what the task actually touched"
+  status = "active"
+  started = "2026-08-25"
+  base = "main"
+
+[scope]
+  success_criteria = ["In a repo declaring two [[runtime.test_lane]] entries, a task's pre-commit gate runs only the lane whose match globs the task's files — the gate names the lane and command it ran, and a task confined to one lane produces zero invocations of the other lane's runner", "A lane whose toolchain is absent on the granted remote runs locally rather than failing, and dross reports the fallback every time — naming the missing toolchain and the host — then offers to install it on the remote and performs the install on acceptance", "A task whose changed files are source paths produces a scoped run that matches real tests: dross translates task paths into the lane runner's selector form, and a selector that matches nothing is reported as a selector miss, never as a failing gate", "A lane may declare a prepare command that runs after sync and before the lane's test command, idempotent and a no-op on a warm host — so a cold or freshly-granted remote bootstraps itself instead of failing its first run", "A mutation-scoped config key cannot disable the test gate: dross test resolves only the env a test run needs, and an unset mutation-only name never turns a test run into a refusal"]
+  non_goals = ["Not a provisioning system: the install and bootstrap surfaces put a named toolchain onto a granted host on request — they are not config management and do not manage toolchain versions. Host breadth is deliberately NOT the boundary: lane-host-affinity widened bootstrap to every granted candidate.", "Lanes are declared, not inferred: no auto-detection of lanes from repo layout or lockfiles — the user writes [[runtime.test_lane]] explicitly", "No dross-owned test runner: dross dispatches a lane's command and shapes selectors for it, and never becomes a test framework or per-framework execution engine"]

@@ -1,0 +1,132 @@
+task_seq = 12
+
+[phase]
+  id = "remote-toolchain-install"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Declare the lane install line"
+  files = ["internal/project/project.go", "internal/cmd/validate.go", "internal/cmd/test_lane.go", "internal/cmd/validate_lane_test.go", "internal/cmd/test_lane_edit_test.go"]
+  description = "Add `Install string` to project.TestLane with matching tags (`toml:\"install,omitempty\"\njson:\"install,omitempty\"`). laneProblems gains the whitespace-only-install rule as an\nINLINE arm beside the existing prepare rule (validate.go:236) — the rule is one line, and\nlaneProblems already carries both shapes (prepare inline, toolchain via\nlaneToolchainProblems). `dross test lane add --install` / `edit --install` (set, and\n`--install \"\"` to clear through the per-flag Changed guard), refused through the existing\nlaneToolchainRefusal path; `lane list` prints the line.\n"
+  covers = ["c-4", "c-7"]
+  test_contract = ["if the whitespace-only rule is missing, a test asserting `install = \"   \"` is reported by `dross validate` with the prepare rule's wording fails — a line that reads as absent but fingerprints as present", "if the rule nags pre-existing lanes, a test asserting a lane with NO install key adds ZERO problems fails", "if Install is folded into the lane's test fingerprint, a test asserting `dross test lane edit go --install \"npm i -g pnpm\"` leaves laneConsentLine(lane) BYTE-IDENTICAL and a previously-granted lane still reads ConsentGranted fails — c-7's non-staleness half proved at the cheapest layer", "if omitempty or the clear path breaks, a test asserting `--install \"\"` round-trips to a project.toml with NO `install` key at all fails — asserted on the key's absence, not on an empty string", "if the per-flag Changed guard is collapsed, a test asserting `dross test lane edit go --toolchain go` leaves an existing install line intact fails", "if `--install` alone is treated as no-op, a test asserting it is NOT the \"nothing to change\" refusal fails", "if add or list drop the field, a test asserting `lane add x --install \"go install ./x\"` writes install= and `lane list` prints it fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Install recipe table, resolver and local seam"
+  files = ["internal/cmd/lane_install.go", "internal/cmd/lane_install_test.go", "ARCHITECTURE.md"]
+  description = "New `resolveInstall(tool, declared string) installStep` returning EXACTLY one of\nrecipe-argv / declared-line / refusal / unknown. A step carries EITHER Argv (dross's own\nrecipe) OR Line (the lane's declared string) — never one shape pretending to be the other.\nThis task declares the NEW `localInstallFn` argv seam and the single point where a Line is\nrendered `[\"sh\",\"-c\",line]`; the remote half REUSES the existing `remoteExecFn`\n(remote_bootstrap_cmd.go:20) rather than declaring a second one, so both surfaces' tests\nstub the same var. New table beside, not merged into, bootstrapRecipes: package-class lane\ntools plus explicit runtime refusal rows (go, node, npx, dotnet). Also `laneInstallable`.\nArgv goes through the transport seam per install_transport, locked in\nremote-toolchain-bootstrap's spec and already honoured by remoteExecFn.\n"
+  covers = ["c-3", "c-4", "c-8"]
+  test_contract = ["if the runtime rows are lost, a test asserting resolveInstall(\"go\", \"\") returns a Refusal naming go as a runtime with a NIL Argv fails; deleting the row turns it into Unknown and the test fails (locked install_scope_for_lanes guard)", "if a declared line appends to rather than replaces the table entry, a test asserting resolveInstall(\"pnpm\", \"corepack enable pnpm\") returns the DECLARED line and that the built-in pnpm entry appears NOWHERE in the returned step fails (c-4)", "if the table half is dropped, a test asserting a tool with no declared line but a table row returns the table argv fails — the half that makes the feature work on lanes already declared (c-4)", "if the fourth arm collapses into a refusal, a test asserting a tool in neither returns Unknown with an EMPTY Refusal, carrying the \"no install line; add one or install <tool> on the host by hand\" wording, fails; a table-driven sweep asserting no key ever sets both Unknown and Refusal fails (locked undeclared_exit, at the type level)", "if a declared line is rendered as a single argv element, TestDeclaredLineIsNotArgv0 fails — a line quoted whole would exec a binary literally named `npm install -g pnpm`", "if the Line rendering is duplicated or wrong, a test asserting the one shared renderer turns a declared Line into exactly `[\"sh\",\"-c\",line]` — and that a table step's Argv passes through untouched — fails", "if a second remote seam is declared, a test asserting lane_install.go references the EXISTING remoteExecFn var and declares no remote exec seam of its own fails — two seams means each surface's tests stub a different one", "if a row starts installing runtimes, a STRUCTURAL sweep over every table row asserting each installable row names a runtime and no row's argv starts with apt / brew / curl / dnf fails"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Name the remedy on a toolchain fallback"
+  files = ["internal/cmd/lane_locality.go", "internal/cmd/lane_locality_test.go", "internal/cmd/lane_locality_wiring_test.go"]
+  description = "laneFallbackLine appends the exact lane-scoped invocation `dross test lane install <name>`\n— bare, without --apply — for the ONE lane that fell back. Printed unconditionally on a\nfallback, not gated on installability. The empty-host and no-absent-tools arms stay silent.\nPure string work on an existing function: it needs nothing from any other task, and the\nc-5 \"a fallback installs nothing\" proof lives in t-7 where both seams exist to count.\n"
+  covers = ["c-1"]
+  test_contract = ["if the offer is dropped or detached, a test asserting a lane falling back for a missing `pnpm` prints the fallback line AND `dross test lane install <lane>` in ONE Announce, carrying that lane's own name, fails", "if the offer widens to the whole host, a test asserting the Announce never contains `dross remote bootstrap` fails (locked offer_scope)", "if --apply leaks into the offer, a test asserting the offered verb is BARE fails — the verb's own dry run ends with the --apply hint", "if the silent arms regress, a test asserting a lane that went remote, and a run with host == \"\", each produce an EMPTY Announce fails"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Widen remoteProbeTools with lane attribution"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_lane_toolchain_test.go", "internal/cmd/doctor_remote_test.go"]
+  description = "remoteProbeTools (doctor.go:1435) already unions remoteMutationTools with laneToolUnion but\nreturns attribution for adapter tools only. Widen it to return the lane each lane tool came\nfrom, alongside the existing needBy, and update its caller (doctor.go:1524). Self-contained\non existing code — it is what lets bootstrap tag a lane step without growing the private\nderivation its own drift test forbids.\n"
+  covers = ["c-2"]
+  test_contract = ["if lane tools come back unattributed, a test asserting remoteProbeTools maps each lane tool to the lane that wants it — and that a tool wanted by two lanes maps to the FIRST in lane order — fails", "if adapter attribution is disturbed, a test asserting adapter tools still map to their adapter and never to a lane fails", "if the union or its dedupe changes, a test asserting the returned tool list is BYTE-IDENTICAL to today's for a repo with one adapter and two lanes fails", "if doctor's own surface shifts, a test asserting doctor's Remote section output is byte-identical before and after the widening fails — this task changes a signature, not a report"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Install consent store, fingerprint and grant API"
+  files = ["internal/cmd/local.go", "internal/cmd/trust.go", "internal/cmd/trust_lane_install_test.go"]
+  description = "`TrustedLaneInstalls map[string]string` on localStore, ABSENT from localKeys on the\nTrustedLaneCommands precedent (local.go:258-262). laneInstallConsentLine in its OWN NUL\nframe, and LaneInstallConsented / GrantLaneInstallConsent / RevokeLaneInstallConsent. Store\nand fingerprint layer only — the trust verb, the refusal ladder and the helper's gate are\nt-6.\n"
+  covers = ["c-7"]
+  depends_on = ["t-1"]
+  test_contract = ["if Install is folded into laneConsentLine, a test asserting that adding an install line to a lane that already runs green leaves LaneConsented at ConsentGranted while LaneInstallConsented reports ConsentAbsent fails — one edit, two independent answers, the exact regression install_consent is locked against", "if the stale arm is missing, a test asserting an edited granted install line reports ConsentStale (NOT ConsentAbsent) and leaves the lane's TEST grant untouched fails", "if the two frames are not disjoint, a test feeding framed install bytes back as a bare command line and asserting a DIFFERENT fingerprint fails — a command must not be able to forge an install grant", "if the NUL guard is missing, a test asserting an install line containing a NUL yields an empty consent line and is refused as un-grantable fails, mirroring laneConsentLine", "if the key reaches localKeys, a test asserting `dross local set trusted_lane_installs …` is refused as an unknown key fails", "if per-lane isolation breaks, a test asserting GrantLaneInstallConsent for one lane leaves every other lane's install grant byte-identical fails"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  title = "Gate the install line behind its own trust verb"
+  files = ["internal/cmd/trust.go", "internal/cmd/lane_install.go", "internal/cmd/test_lane.go", "internal/cmd/trust_lane_install_cmd_test.go"]
+  description = "`dross trust --lane-install <name>` (with --check, mirroring the existing flag) printing\nthe line before it writes, and laneInstallRefusal's absent/stale ladder. The shared install\nhelper in lane_install.go refuses an ungranted DECLARED line before it reaches either seam.\nRevokeLaneConsent drops BOTH grants at the single remove site — including for a lane that\nholds only an install grant, which its current\n`if _, ok := l.TrustedLaneCommands[name]; !ok { return nil }` short-circuit (trust.go:389)\nwould skip.\n"
+  covers = ["c-7", "c-8"]
+  depends_on = ["t-2", "t-5"]
+  test_contract = ["if the gate is missing from the shared helper, a test asserting an ungranted declared line is refused with NEITHER exec seam called — and that after `dross trust --lane-install <name>` the same call reaches the seam exactly once — fails", "if the table path is gated too, a test asserting a lane with NO install line whose tool has a built-in recipe reaches the seam with an EMPTY grant store fails", "if the refusal ladder collapses, a test asserting the ungranted and the stale arms produce DIFFERENT messages, each naming the lane and printing the install line, fails", "if the verb writes before showing, a test asserting `dross trust --lane-install` prints the exact line it is about to grant BEFORE the store is written fails, and `--check` asserting it reports state without writing fails", "if the revoke short-circuit is not fixed, a test asserting a lane holding an install grant and NO command grant still has its install grant dropped by `dross test lane remove` fails — the asymmetric case the both-grants test never reaches", "if removal is not atomic across both grants, a test asserting `dross test lane remove go` leaves neither trusted_lane_commands[go] nor trusted_lane_installs[go], and that a lane re-added under the same name starts ungranted on both, fails"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 4
+  title = "Add dross test lane install verb"
+  files = ["internal/cmd/test_lane_install.go", "internal/cmd/test_lane.go", "internal/cmd/test_lane_install_test.go"]
+  description = "`dross test lane install <name> [--apply] [--local]` — the lane-scoped verb owning BOTH\nsides. ONE probe of the lane's toolchain picks the side: gap on the granted host → install\nthere; host fine, or no grant, or --local → install here through t-2's localInstallFn.\nDry-run by default; --apply is the only path reaching a seam, and an ungranted declared\nline is refused BEFORE any I/O. Every line says which machine it acted on. Also carries\nc-5's \"a `dross test` fallback installs nothing\" proof, which needs both seams to count.\nDocs are t-9.\n"
+  covers = ["c-5", "c-6", "c-8"]
+  depends_on = ["t-1", "t-2", "t-6"]
+  test_contract = ["if the side is chosen wrongly, a test asserting a host-side gap calls remoteExecFn once and localInstallFn zero with the header naming the HOST — and that a this-machine gap inverts both counts and the named machine — fails (c-6, on call counts, not prose)", "if the both-machines-missing case is left to branch order, a test asserting a lane whose tool is absent from the host AND this machine installs on the HOST — the side the lane would have run on — and names it, fails; a refusal there would send the user to install by hand what dross can install", "if a transport failure is read as an answer, a test asserting a failed probe installs on NEITHER side and exits non-zero naming the host fails — a local install firing on the strength of an unanswered probe fails it", "if the dry-run default breaks, a test asserting that without --apply BOTH seams are called ZERO times while the output still prints the argv (or line) it would run and ends with the --apply hint fails (c-5)", "if a fallback starts installing, a full `dross test --files` fallback run asserting BOTH install seams' call counters are 0 fails — c-5's \"never as a side effect\" half", "if --local is ignored, a test asserting `--local` on a lane whose gap is on the HOST installs through localInstallFn anyway and names this machine fails (locked install_local_override)", "if the consent gate is bypassed here, a test asserting a lane with its own `install` line and no grant is REFUSED — printing the line and `dross trust --lane-install <name>` with no seam reached — fails", "if a refusal is reported as a failed attempt, a test asserting a runtime refusal exits with the refusal wording and increments a DIFFERENT counter than a failed exec fails (c-8)", "if undeclared_exit is mis-encoded, a test asserting a tool with no recipe and no install line prints the \"add one or install <tool> by hand\" report and exits 0, while a declared install whose exec returns non-zero exits 1, fails", "if the no-op path regresses, a test asserting a lane both machines already satisfy prints \"nothing to install\" and exits 0 fails", "if lane resolution diverges, a test asserting `dross test lane install nope` lists the declared lane names through the shared findLane and does NOT probe fails", "if the verb is renamed or moved, a test resolving t-3's offered invocation through cobra's command tree (rootCmd.Find) to the registered install command fails — the fallback must never advertise a command that errors"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 4
+  title = "Plan lane toolchains inside remote bootstrap"
+  files = ["internal/cmd/remote_bootstrap.go", "internal/cmd/remote_bootstrap_cmd.go", "internal/cmd/remote_bootstrap_lane_test.go", "internal/cmd/remote_bootstrap_cmd_test.go"]
+  description = "planRemoteBootstrap probes through t-4's widened remoteProbeTools rather than re-deriving\nthe union, and plans lane steps through t-2's resolver, tagged `(lane <name>)` beside the\nadapter's `(<adapter>)`. The `len(tools) == 0` early return becomes \"no tools AND no\nlanes\", so a lanes-only repo is planned rather than silently empty. The counters and exit\nladder inline in remoteBootstrap's RunE (remote_bootstrap_cmd.go:84-118) gain the Unknown\nbucket, which prints and does NOT count toward the exit; an ungranted lane install line is\na REFUSAL there too.\n"
+  covers = ["c-2", "c-3", "c-5", "c-8"]
+  depends_on = ["t-2", "t-4", "t-6"]
+  test_contract = ["if the probe is issued twice, a test over a repo with one adapter and two lanes asserting EXACTLY ONE remoteProbeFn call whose tool list is the deduplicated union fails — the recorder asserts both the count and the argument (c-2)", "if the early return is not widened, a test over a repo with declared lanes and ZERO [mutation].adapters asserting bootstrap plans and reports the lane steps fails — an empty bootstrap there is the \"two separate answers\" c-2 exists to end", "if the union is not deduped, a test asserting `go`, wanted by both a Go lane and gremlins' recipe, appears as ONE step fails", "if bootstrap grows a private derivation, a test asserting bootstrap and doctor's Remote section derive their tool list and their lane attribution from the SAME remoteProbeTools fails — the drift shows up as doctor passing on a host the run then falls back from", "if the vocabularies split, a test asserting a present lane tool and a present adapter tool produce the same `✓ … already installed` shape fails (c-2)", "if undeclared_exit is mis-encoded at the report layer, a test asserting a lane step with no recipe and no install line prints \"no install line\", does NOT increment the refusal counter, and exits 0 when it is the only gap — while an unchanged mutation refusal in the same run still exits 1 — fails", "if a lane runtime refusal stops counting, a test asserting it exits 1, counted in `refused` and never in `failed`, fails", "if bootstrap becomes a way around the consent gate, a test asserting that under --apply a lane's declared install reaches remoteExecFn as `sh -c <line>` ONLY when its install grant passes — and that ungranted, the exec recorder stays EMPTY and the step reports a refusal rather than a failed attempt — fails", "if the dry-run default leaks, a test asserting no lane step reaches remoteExecFn without --apply fails (c-5)"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 5
+  title = "Document both install surfaces"
+  files = ["README.md", "assets/prompts/options.md", "internal/cmd/lane_install_docs_test.go"]
+  description = "README rows for `dross test lane install` (with --apply and --local), `dross trust\n--lane-install`, and `dross remote bootstrap`'s widened lane coverage. options.md gains the\nnew consent verb and the new non-settable grant key, on the lane_toolchain_docs_test.go\nprecedent — the existing options sweep walks localKeys, which t-5 deliberately keeps\ntrusted_lane_installs out of, so nothing catches this drift today.\n"
+  covers = ["c-2", "c-6"]
+  depends_on = ["t-7", "t-8"]
+  test_contract = ["if the verb's row drifts, a test asserting the README row for `dross test lane install` names both --apply and --local fails", "if the trust row drifts, a test asserting the `dross trust` row names --lane-install fails", "if bootstrap's widened scope goes undocumented, a test asserting the `dross remote bootstrap` row says it covers declared lanes, not adapters alone, fails (c-2)", "if options.md misses the new consent surface, a test asserting it names `dross trust --lane-install` and `trusted_lane_installs` fails — the sweep that would otherwise catch this walks localKeys, which the key is deliberately absent from", "if options.md tells the user to set the key directly, a test asserting it never spells `local set trusted_lane_installs` fails — the negative arm the toolchain precedent carries", "if a documented flag is not registered, a test resolving every flag named in those rows through cobra's command tree fails — a README naming a flag the binary lacks"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 5
+  title = "Prove an install leaves no residue"
+  files = ["internal/cmd/lane_install_residue_test.go"]
+  description = "The c-9 invariant asserted across BOTH surfaces rather than assumed: an applied install\nwrites nothing anywhere, and the next run routes the lane remotely on the probe's answer\nalone.\n"
+  covers = ["c-9"]
+  depends_on = ["t-7", "t-8"]
+  test_contract = ["if either surface caches an \"installed\" flag, a test asserting `.dross/local.toml` and `project.toml` are BYTE-IDENTICAL before and after an applied `dross test lane install --apply` AND an applied `dross remote bootstrap --apply` fails", "if routing needs a user gesture after an install, a test asserting that with the probe now reporting the tool PRESENT, laneLocality returns siteRemote for that lane with no grant read and no intervening command, fails", "if routing starts depending on consent state, a test asserting an install grant recorded for a DECLARED line is not consulted by the locality decision at all fails"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 5
+  title = "Execute the local install seam in a test"
+  files = ["internal/cmd/lane_install_spawn_test.go"]
+  description = "runInstallLocally is stubbed by every fixture via localInstallFn, so its empty-argv guard and error-wrap have never executed. Drive the real function directly with POSIX utilities, mirroring the runRemoteCommand spawn-seam tests."
+  covers = ["c-6"]
+  depends_on = ["t-7"]
+  test_contract = ["if the empty-argv guard is removed, TestLocalInstallRefusesEmptyArgv fails", "if the error wrap drops argv[0] or swallows output, TestLocalInstallWrapsFailureWithTheBinary fails", "if CombinedOutput stops capturing, TestLocalInstallCapturesOutputOnSuccess fails"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 4
+  title = "Pin the lane-install nothing-to-trust refusal"
+  files = ["internal/cmd/trust_lane_install_cmd_test.go", ".dross/survivors.toml"]
+  description = "trust.go:598's refusal for a lane with no install line is asserted by no test, so the three ARITHMETIC_BASE acceptances on its message cannot cite one and TestRepoAcceptanceReasonsCiteRealTests fails. Pin the branch, then cite it in the reasons."
+  covers = ["c-7"]
+  depends_on = ["t-6"]
+  test_contract = ["if the nothing-to-trust refusal stops naming the lane or the edit remedy, TestTrustLaneInstallWithNoLineRefuses fails", "if a refused install-trust writes a grant anyway, TestTrustLaneInstallWithNoLineRefuses fails"]
+  status = "done"

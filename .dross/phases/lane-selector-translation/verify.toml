@@ -1,0 +1,119 @@
+[verify]
+  phase = "lane-selector-translation"
+  generated_at = 2026-08-27T08:29:41.388485Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-27T10:23:58.458659Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9262295081967213
+  mutants_killed = 226
+  mutants_survived = 18
+  mutants_not_covered = 18
+  mutants_in_scope = 244
+  unclassified_in_scope = 0
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 226
+    survived = 18
+    timeout = 0
+    in_scope = 244
+    score = 0.9262295081967213
+    file_count = 17
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/validate_lane_test.go:TestValidateNamesLaneWithUnknownSelector", "internal/cmd/validate_lane_test.go:TestValidateAcceptsAbsentAndDeclaredSelectors", "internal/cmd/validate_lane_test.go:TestValidateNormalizesSelectorCase", "internal/cmd/validate_lane_test.go:TestValidateRejectsUnusableEmptyExitCodes", "internal/cmd/validate_lane_test.go:TestValidateRejectsEmptyExitWithoutSelector", "internal/project/project_test.go:TestTestLaneSelectorFieldsDecode"]
+  notes = "The refusal is asserted to name the lane AND to be rendered from configenum.SelectorStyles rather than a literal, so a style added to the Set reaches the message without anyone editing the test. All four in-hunk survivors land in this criterion's switch and are accepted, not unkilled — see the findings below."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_selector_test.go:TestSelectorScopesTheSpawnedLine", "internal/cmd/test_lane_selector_test.go:TestTheHeaderIsTheSpawnedLine", "internal/cmd/test_lane_selector_test.go:TestSelectorHeaderStillPrecedesLaneOutput", "internal/cmd/test_lane_selector_test.go:TestTheRemotePathGetsTheDerivedLineToo"]
+  notes = "Asserted on the RECORDED SPAWN, so a lane that derived a selector and then spawned its bare command fails. The header test compares header against the recorded line rather than each against a literal, which is what catches a transcript that lies about what ran."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_selector_test.go:TestASelectorlessLaneIsStillByteIdentical", "internal/cmd/test_lane_selector_test.go:TestTheExistenceFilterOnlyTouchesSelectorLanes"]
+  notes = "The byte-identical test puts a selector-declaring lane in the SAME run, which is the shape a per-run rather than per-lane implementation gets wrong."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_selector_test.go:TestASelectorCarriesOnlyItsOwnLanesPaths", "internal/testlane/match_test.go:TestMatchedRecordsOnlyThePathsThatHitTheLane", "internal/testlane/match_test.go:TestAPathMatchedByTwoLanesAppearsInBoth"]
+  notes = "Asserted on argv, where it matters: an implementation handing every in-tree path to every lane produces the right lane set and spawn count and only shows up as a go lane being told to test ./docs/... . The unmatched in-tree path and the out-of-tree path are both pinned."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_miss_test.go:TestAMissDoesNotFailARunThatMeasuredSomething", "internal/cmd/test_lane_miss_test.go:TestAMissLineNamesTheLaneAndTheSelector", "internal/cmd/test_lane_miss_test.go:TestEveryLaneMissingExitsNothingMeasured", "internal/cmd/test_lane_miss_test.go:TestOneIntegerApartOppositeVerdicts", "internal/cmd/test_lane_miss_test.go:TestAMissNeverOutranksARealFailure"]
+  notes = "Both halves asserted on the EXIT CODE, not the transcript. TestOneIntegerApartOppositeVerdicts is the strongest of the set: same lane, same declaration, exit 5 versus exit 1, so the empty-exit arm cannot swallow a real red."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_selector_test.go:TestAnExistingGrantSurvivesTheAppendedSelector", "internal/cmd/test_lane_selector_test.go:TestAnUngrantedSelectorLaneStillRefuses"]
+  notes = "The grant test fails both ways it could be got wrong: re-fingerprinting the derived line fails on the refusal, dropping the selector to keep the grant valid fails on the difference. The refusal test pins that consent names lane.Command and never the derived line."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_test.go:TestLaneAddPersistsSelectorFields", "internal/cmd/test_lane_test.go:TestLaneAddRefusesBadSelectorFieldsBeforeTheWrite", "internal/cmd/test_lane_test.go:TestLaneAddNormalizesTheSelector", "internal/cmd/test_lane_test.go:TestLaneListOmitsUndeclaredSelectorFields", "internal/cmd/test_lane_test.go:TestSelectorFieldsSurviveAnotherLanesRemoval", "internal/cmd/options_docs_test.go:TestOptionsDocumentsTheSelectorSurfaceCorrectly"]
+  notes = "The refusal test asserts on the FILE as well as the error, so a refusal that ran after the save would fail rather than pass an error-only check."
+
+[[finding]]
+  severity = "NOTE"
+  text = "accepted survivor: internal/cmd/validate.go:256 (CONDITIONALS_NEGATION) — gremlins-attribution-ceiling. `case code == 0` in laneSelectorProblems; TestValidateRejectsUnusableEmptyExitCodes/success drives 0 through dross validate and asserts the \"success code\" needle."
+
+[[finding]]
+  severity = "NOTE"
+  text = "accepted survivor: internal/cmd/validate.go:261 (CONDITIONALS_NEGATION) — gremlins-attribution-ceiling. `case code == 255`; TestValidateRejectsUnusableEmptyExitCodes/ssh-transport drives 255 and asserts the \"transport-failure\" needle."
+
+[[finding]]
+  severity = "NOTE"
+  text = "accepted survivor: internal/cmd/validate.go:266 (CONDITIONALS_NEGATION) — gremlins-attribution-ceiling. `case code < 0 || code > 255`; TestValidateRejectsUnusableEmptyExitCodes/out-of-range drives 300 and asserts the \"0-255\" needle."
+
+[[finding]]
+  severity = "NOTE"
+  text = "accepted survivor: internal/cmd/validate.go:266 (CONDITIONALS_BOUNDARY) — shadowed-range-boundary. An equivalent mutant: widening `<` to `<=` or `>` to `>=` admits only 0 and 255, which the two case arms above already consume, so no input reaches the mutated comparison and no assertion can distinguish it."
+
+[[finding]]
+  severity = "NOTE"
+  text = "all 18 in-scope survivors are also NOT COVERED (mutants_survived == mutants_not_covered == 18): gremlins built no running mutant for any of them. Efficacy over the 226 reachable mutants is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped ARCHITECTURE.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/options.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/milestone.go:1030 (CONDITIONALS_NEGATION) — routed to milestone-push-failure-tests"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/milestone.go:1054 (ARITHMETIC_BASE) — routed to milestone-push-failure-tests"
+
+[[finding]]
+  severity = "NOTE"
+  text = "filtered 2 out-of-scope survivor(s) in files this phase did not touch — listed under `out_of_scope` in tests.json, not counted in the score"
+
+[[finding]]
+  severity = "NOTE"
+  text = "summary.unclassified_in_scope was reconciled from 6 to 0 by hand after the four distinct in-hunk survivors (keys d978f429d092ab26, 57293670addabbd3, c7f84a5caf3f19aa, ee552310d9ef3bd7) were accepted into .dross/survivors.toml. The mutation run itself was not repeated; its counts above are exactly as `dross verify` wrote them at 08:29:41Z."

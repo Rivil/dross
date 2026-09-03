@@ -1,0 +1,158 @@
+{
+  "phase": "lane-selector-preview",
+  "pr": 116,
+  "base": "milestone/v1.6",
+  "base_commit": "4006b62735c61c4e14c41ef2107d97c8ae67046b",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/lane_plan.go",
+        "internal/cmd/test.go",
+        "internal/cmd/lane_plan_test.go"
+      ],
+      "commit": "163be4d",
+      "completed_at": "2026-09-02T08:33:44.63104Z",
+      "landmarks": [
+        {
+          "feature": "test lane resolution",
+          "symbol": "lanePlan",
+          "loc": "internal/cmd/lane_plan.go:81",
+          "what": "spawn-free lane resolution returning every finding as data so the gate and preview share one derivation"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/test_lane.go",
+        "internal/cmd/test_lane_list_fields_test.go"
+      ],
+      "commit": "6a05d5f",
+      "completed_at": "2026-09-02T08:37:36.498841Z",
+      "landmarks": [
+        {
+          "feature": "test lane listing",
+          "symbol": "testLaneList",
+          "loc": "internal/cmd/test_lane.go:300",
+          "what": "lane list prints selector-template and selector-join through the same renderer lane add and lane edit use"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/worktree_files.go",
+        "internal/cmd/worktree_files_test.go"
+      ],
+      "commit": "23558b3",
+      "completed_at": "2026-09-02T08:41:09.340757Z",
+      "landmarks": [
+        {
+          "feature": "test lane preview",
+          "symbol": "worktreeChangedFiles",
+          "loc": "internal/cmd/worktree_files.go:33",
+          "what": "bare preview's file set from the uncommitted working tree with untracked directories expanded to files"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/lane_preview_locality.go",
+        "internal/cmd/lane_preview_locality_test.go",
+        "internal/cmd/remote_pool.go"
+      ],
+      "commit": "5a233c8",
+      "completed_at": "2026-09-02T08:47:19.834272Z",
+      "landmarks": [
+        {
+          "feature": "test lane preview",
+          "symbol": "previewHost",
+          "loc": "internal/cmd/lane_preview_locality.go:93",
+          "what": "three-valued locality for preview — probed, unprobed or unresolved — over the run's own grant walk, never claiming a fallback no probe proved"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/lane_preview.go",
+        "internal/cmd/test_lane.go",
+        "internal/cmd/lane_preview_test.go"
+      ],
+      "commit": "60880f6",
+      "completed_at": "2026-09-02T08:52:43.712819Z",
+      "landmarks": [
+        {
+          "feature": "test lane preview",
+          "symbol": "testLanePreview",
+          "loc": "internal/cmd/lane_preview.go:68",
+          "what": "the preview verb — derived lines from lanePlan plus every non-running outcome named, spawning nothing and exiting 0"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/lane_preview.go",
+        "internal/cmd/lane_preview_consent_test.go"
+      ],
+      "commit": "74ece2b",
+      "completed_at": "2026-09-02T08:56:56.154729Z",
+      "landmarks": [
+        {
+          "feature": "test lane preview",
+          "symbol": "previewConsent",
+          "loc": "internal/cmd/lane_preview.go:188",
+          "what": "preview annotates each lane's grant state and locality without ever acting on either"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "README.md",
+        "internal/cmd/lane_preview_docs_test.go"
+      ],
+      "commit": "7f4c22e",
+      "completed_at": "2026-09-02T09:05:44.324769Z",
+      "landmarks": [
+        {
+          "feature": "test lane preview",
+          "symbol": "README lane row",
+          "loc": "README.md:220",
+          "what": "the lane row documents preview end to end plus the listing's new template fields"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/lane_preview_json.go",
+        "internal/cmd/lane_preview_json_test.go",
+        "internal/cmd/lane_preview.go"
+      ],
+      "commit": "0b2dace",
+      "completed_at": "2026-09-02T09:00:32.976346Z",
+      "landmarks": [
+        {
+          "feature": "test lane preview",
+          "symbol": "emitPreviewJSON",
+          "loc": "internal/cmd/lane_preview_json.go:41",
+          "what": "preview's findings as a bare JSON document in the same vocabulary the transcript prints"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/remote_pool.go",
+        "internal/cmd/lane_preview_locality.go",
+        "internal/cmd/lane_preview_locality_test.go"
+      ],
+      "commit": "348f81e",
+      "completed_at": "2026-09-02T12:54:36.647892Z",
+      "landmarks": [
+        {
+          "feature": "test lane preview",
+          "symbol": "pickRemoteTarget",
+          "loc": "internal/cmd/remote_pool.go:47",
+          "what": "the failing grant comes back beside the error so preview names the host that actually failed rather than the last one configured"
+        }
+      ]
+    }
+  }
+}

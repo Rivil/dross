@@ -1,0 +1,73 @@
+[verify]
+  phase = "milestone-push-failure-tests"
+  generated_at = 2026-08-30T13:27:09.322986Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-30T15:02:57.215807Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 1.0
+  mutants_killed = 52
+  mutants_survived = 0
+  mutants_not_covered = 0
+  mutants_in_scope = 52
+  unclassified_in_scope = 0
+  criteria_total = 6
+  criteria_covered = 6
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 52
+    survived = 0
+    timeout = 0
+    in_scope = 52
+    score = 1.0
+    file_count = 3
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/milestone_push_head_test.go:156:TestMilestonePushHeadNoUpstreamRefusedPushIsHardError"]
+  notes = "Two observations on one fixture (milestonePushHeadUnpushedFixture + rejectPushes on the bare origin): the direct pushMilestoneHeadIfAhead call asserts non-nil err, err contains msBranch, and pushed==false; the `milestone complete` run on the same repo asserts the command fails naming the branch and cap.created==0. Reaches the no-upstream `push -u` arm at milestone.go:1030 because the fixture never pushes the branch. The test's own comment records that the cap.created==0 half is load-bearing only while nothing in the open path pushes before milestone.go:261."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/milestone_push_head_test.go:186:TestMilestonePushHeadRefusedAheadPushNamesCommitCount"]
+  notes = "Asserts the literal phrase `push of 2 local commit(s)` on a branch two commits ahead — by value, not a bare digit, so an off-by-one in milestone.go:1054's %d fails the test rather than passing on a non-nil error. Also pins pushed==false and the branch name."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/milestone_push_head_test.go:258:TestMilestonePushHeadDivergedRefusalStatesBothCounts"]
+  notes = "Asymmetric 2-ahead/1-behind fixture, so a swapped pair of counts is detectable (the pre-existing TestMilestoneCompleteRefusesDivergedHead only checks that the words ahead/behind appear). Asserts `ahead of origin/milestone/v0.9 by 2 commit(s)` and `behind it by 1` in their own positions — the branch name rides in the first phrase — and compares origin's own rev-parse of the branch before and after, pinning that the refusal never force-pushes."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/mutation/stryker_test.go:993:TestStrykerInitialTestFailureAbortNamesTruncation", "internal/mutation/stryker_test.go:1013:TestStrykerTruncationNoteSaysListIsTruncated", "internal/mutation/stryker_test.go:1035:TestStrykerTruncationNoteAbsentOnOtherAborts"]
+  notes = "Three-way: positive fires the note on a hardcoded literal copy of the 9.6.1 header (so a reworded strykerInitialTestFailureText goes red rather than feeding itself); note-content requires `only the first failing test`, `truncated` and `unknown number`; negative proves a reportless abort with another cause carries no note, pinning locked decision note_trigger. All three drive the real Stryker.Run path via noisyStryker exiting 1, so no report lands and the run reaches the no-report branch at stryker.go:142."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/milestone_push_head_test.go:214:TestMilestonePushHeadFetchFailureIsHardError"]
+  notes = "Repoints origin at a nonexistent path so `git fetch origin` (milestone.go:1026) fails before any ahead/behind comparison. Asserts non-nil err naming `fetch`, pushed==false, and that the real bare origin's rev-parse of the branch is unmoved — so a swallowed fetch error that fell through to the rev-list and reported not-ahead would fail here."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/milestone_push_head_test.go:311:TestMilestonePushHeadCleanAheadPushesAndCounts"]
+  notes = "Happy path of the same function: pushed==true, commits==2 asserted by value (invisible from the command-level sibling, which cannot see the return values), and origin's rev-parse of the branch equal to the local tip afterwards."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The mutation leg's 52 in-scope mutants all come from internal/mutation/stryker.go — the only non-test source file this phase changed. gremlins does not mutate _test.go files, so c-1/c-2/c-3/c-5/c-6, which pin behaviour in the untouched internal/cmd/milestone.go, carry no in-scope mutation evidence and rest on the criterion mapping above."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Supporting (out-of-scope, not gated): the internal/cmd package run produced no surviving mutant anywhere in milestone.go, including pushMilestoneHeadIfAhead at milestone.go:1022-1058 — the guard these tests exist to pin. All 108 filtered out-of-scope survivors sit in other files and every one already carries lifecycle=accepted (the gremlins switch-case attribution ceiling); 0 unclassified, nothing to drain."

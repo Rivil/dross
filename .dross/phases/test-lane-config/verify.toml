@@ -1,0 +1,119 @@
+[verify]
+  phase = "test-lane-config"
+  generated_at = 2026-08-26T05:26:34.277828Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-26T06:49:28.911493Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9586614173228346
+  mutants_killed = 487
+  mutants_survived = 21
+  mutants_not_covered = 21
+  mutants_in_scope = 508
+  unclassified_in_scope = 0
+  criteria_total = 9
+  criteria_covered = 9
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 487
+    survived = 21
+    timeout = 0
+    in_scope = 508
+    score = 0.9586614173228346
+    file_count = 19
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/validate_lane_test.go:57:TestValidateNamesLaneMissingCommand", "internal/cmd/validate_lane_test.go:75:TestValidateNamesLaneWithEmptyMatch", "internal/cmd/validate_lane_test.go:94:TestValidateIdentifiesNamelessLaneByIndex", "internal/project/project_test.go:206:TestTestLaneDecodes"]
+  notes = "Each missing-field case asserts both the refusal AND that the message names the offending lane; the nameless case pins ordinal addressing rather than an empty name."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/testlane/match_test.go:90:TestSelectIsOrderedAndDeduped", "internal/testlane/match_test.go:135:TestSelectReportsUnmatchedPaths", "internal/testlane/match_test.go:160:TestOutOfTreePathsAreTheirOwnCategory", "internal/testlane/match_test.go:119:TestDotSlashPrefixIsNotAMiss"]
+  notes = "Resolution and the miss-report are asserted as separate categories, so a selector returning only lanes would fail. All 11 in-scope match.go mutants were killed."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_consent_test.go:39:TestFilesRunsOnlyMatchedLanes"]
+  notes = "Stated as an absence: spawn count == 1 AND the docs lane's command absent from every recorded line, so a loop that ran everything would fail."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_consent_test.go:80:TestLaneHeaderPrecedesLaneOutput", "internal/cmd/test_lane_consent_test.go:64:TestLaneLineIsByteIdentical"]
+  notes = "Ordering is pinned by string index of header vs an output sentinel, not mere presence; the command line is asserted byte-for-byte against the consented string."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/test_files_test.go:67:TestNoLanesIsByteIdentical"]
+  notes = "Sub-tests cover both bare and --files on a lane-less repo, asserting exactly one spawn of the consented line byte-for-byte."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_consent_test.go:113:TestUngrantedLaneRefusesOnlyItself", "internal/cmd/test_lane_consent_test.go:138:TestStaleLaneRefusalIsDistinct", "internal/cmd/trust_lane_test.go:52:TestOneLaneGoesStaleAlone", "internal/cmd/trust_lane_test.go:213:TestTrustLaneOnALaneLessRepoSaysSo", "internal/cmd/trust_lane_test.go:493:TestDoctorCountsEachRefusedLane"]
+  notes = "Per-lane isolation, the distinct exit code, the lane being named, and the granted lane still running are each asserted separately. The two in-hunk survivors that held this criterion at BLOCKING in the previous run (trust.go:388 findLane's lane-less message, doctor.go:1280 the refused-lane issue count) are killed by the two amend tests: the lane-less refusal asserts the message AND the one-lane boundary it is distinguished from, and the doctor test asserts two refused lanes raise exactly one more issue than one, so a ✗ the exit code does not carry fails."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/prompt_test_command_test.go:126:TestExecutePromptPassesTaskFilesToTest", "internal/cmd/prompt_test_command_test.go:143:TestExecutePromptDocumentsUnmatchedExit"]
+  notes = "Reads assets/prompts/execute.md directly rather than the installed ~/.claude symlink, so it asserts what the repo ships (rule r-01). Pins both `dross test --files` and task.files as the argument source."
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/test_files_test.go:95:TestUnmatchedFileSetRefusesWithoutRunning", "internal/cmd/test_files_test.go:291:TestNothingMeasuredIsTaggedForTheExitMapper", "internal/cmd/test_files_test.go:161:TestAbsolutePathRefusalSaysOutOfTree"]
+  notes = "Asserts the exit code, that the unmatched path is named, and that zero commands were spawned; the out-of-tree refusal is pinned as a distinct code so the two refusals cannot collapse."
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_test.go:34:TestLaneAddPersists", "internal/cmd/test_lane_test.go:157:TestLaneRemoveKeepsOtherLanes", "internal/cmd/test_lane_test.go:224:TestLaneRemoveDropsItsGrant", "internal/cmd/options_docs_test.go:181:TestReadmeDocumentsTestLanes"]
+  notes = "add/list/remove round-trip through disk, rejected adds are asserted to leave project.toml byte-identical, and removal is asserted to drop the lane's consent grant."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/execute.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/options.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/milestone.go:1030 (CONDITIONALS_NEGATION) — routed to milestone-push-failure-tests"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/milestone.go:1054 (ARITHMETIC_BASE) — routed to milestone-push-failure-tests"
+
+[[finding]]
+  severity = "NOTE"
+  text = "filtered 73 out-of-scope survivor(s) in files this phase did not touch — 71 already accepted in .dross/survivors.toml, 2 routed to milestone-push-failure-tests. None unclassified; listed under `out_of_scope` in tests.json, not counted in the score."
+
+[[finding]]
+  severity = "NOTE"
+  text = "21 of 508 in-scope mutants are NOT COVERED (uncoverable by construction — gremlins attributes no coverage block to them, the go-cover switch-case attribution ceiling proven by internal/mutation/ceiling_test.go); efficacy over the 487 reachable is 1.00. All 21 carry an existing acceptance in .dross/survivors.toml and all are origin=inherited — none sits in a hunk this phase wrote."
+
+[[finding]]
+  severity = "NOTE"
+  text = "amend closed the previous run's two BLOCKING findings: survived fell 23 → 21 and in-diff survivors 2 → 0. No new survivor appeared in the 19 measured files."
+
+[[finding]]
+  severity = "NOTE"
+  text = "dross gap surfaced in the previous run and still open: `dross survivor route --target` refuses any phase without a scaffolded directory, so forward-looking debt cannot be routed to an unstarted phase. Worked around by scaffolding milestone-push-failure-tests first."

@@ -48,6 +48,32 @@ Mark the board issue in-progress (no-op unless `[remote].board_sync` is on — s
 dross issue phase sync <id> --status in-progress
 ```
 
+**Pull any board-side task moves back into the plan** (same no-op rule — safe to
+always run). The outbound direction is wired throughout this prompt (`dross issue
+task sync`, below); this is the inbound half, and without it a card someone moved
+on the board never reaches `plan.toml`, so `dross task next` picks from a stale
+plan:
+```
+dross issue task pull <phase>
+```
+This **reports without writing** — that is its default. Read the report, then:
+
+- **No moves** → say nothing and carry on.
+- **Moves reported** → surface them in one line each (task id, plan status → board
+  status) and ask whether to apply. On acceptance:
+  ```
+  dross issue task pull <phase> --apply
+  ```
+  Applying rewrites task statuses in `plan.toml`, which changes what `dross task
+  next` returns — so it is the user's call, not an automatic one.
+- **A task changed on both sides** → dross refuses it by name and prints both
+  values. It does not pick a winner and neither do you: surface the conflict and
+  let the user say which side is right.
+- **`--apply` refused for the provider** → boards that are open/closed only
+  (Forgejo, Gitea, GitLab) carry no workflow state to read, and the command says
+  so by name. That is a configuration fact, not an error — note it once and move
+  on to the task loop.
+
 Load the stack loadout once and keep it in working context for the whole phase:
 ```
 dross stack loadout
@@ -139,20 +165,61 @@ Exit 0 means trusted; run the suite. Non-zero means it is untrusted or stale —
 run `dross trust`. Never run `dross trust` on their behalf: the whole point of
 the gate is that a human reads the line the repo supplied.
 
-Run the suite through dross, not by interpolating the raw command:
+Run the suite through dross, not by interpolating the raw command, and pass
+**this task's own `task.files`** — the exact paths from `plan.toml`, one
+`--files` per path:
 ```
-dross test
+dross test --files <task.files[0]> --files <task.files[1]> ...
 ```
-`dross test` runs `runtime.test_command` itself — gated on the same consent,
-streaming output as it arrives, and on the granted remote host when there is one
-(`dross remote status`), so a run leaves the laptop without you doing anything
-differently. Append a package/path selector to narrow a re-run after a fix
-(`dross test ./internal/cmd/...`), and pass `--local` to force the run onto this
-machine.
+`--files` resolves those paths against the repo's `[[runtime.test_lane]]` blocks
+and runs only the lanes they hit, so the gate costs the code this task touched
+rather than the whole suite. The paths come from the plan, never from the git
+diff — a task that touched a file it did not declare is a plan deviation you
+already had to surface at §1d, and quietly widening the gate to cover it would
+hide exactly that.
 
-Read the exit status, not just the output: **1** is a red suite, **3** is a host
-it could not reach and **4** is an incomplete transfer. The last two mean the
-suite did not run — they are never a reason to commit.
+Repeat the flag rather than comma-joining: a comma is legal in a path.
+
+A repo that declares **no** lanes ignores `--files` entirely and runs
+`runtime.test_command` unchanged, so this form is safe everywhere — there is no
+"only when lanes are configured" branch to decide.
+
+`dross test` runs the command itself — gated on consent, streaming output as it
+arrives, and on the granted remote host when there is one (`dross remote
+status`), so a run leaves the laptop without you doing anything differently.
+Pass `--local` to force the run onto this machine. A bare `dross test` (no
+`--files`) still runs the whole suite; append a package/path selector to narrow
+that (`dross test ./internal/cmd/...`), which cannot be combined with `--files`.
+
+Read the exit status, not just the output. Only **0** means the code was
+measured and passed:
+
+- **1** — a red suite. The one status that is a verdict about the code.
+- **2** — a `--files` path names something outside this repository. Fix the
+  argv, not the config.
+- **3** — the granted host could not be reached.
+- **4** — the transfer to it did not complete, so whatever ran, ran against an
+  incomplete tree.
+- **5** — the file set matched no declared lane, so **nothing was measured**.
+  Widen a lane (`dross test lane list`) or run the whole suite bare.
+- **6** — a matched lane's command is untrusted or stale on this machine, so
+  that lane did not run. Show the user the exact lane command and let them run
+  `dross trust --lane <name>` themselves, never on their behalf — a lane grant
+  is code execution the repo chose, exactly like the whole-suite one.
+- **7** — a matched lane's `prepare` command failed, so that lane's tests never
+  ran. The bootstrap is the thing to fix, not the code: read the prepare line
+  the failure names. The run's other lanes still ran, so a 7 can be hiding a
+  green elsewhere — it is not a partial pass.
+- **8** — a matched lane's toolchain is on neither the granted host nor this
+  machine, so the lane never spawned. Read the binary the refusal names and
+  tell the user which machine is missing it; the run's other lanes still ran,
+  so an 8 can be hiding a green elsewhere. A lane the granted host alone lacks
+  is not this — that one falls back and runs here, announced by name, and
+  reports its own suite result.
+
+**2, 3, 4, 5, 6, 7 and 8 all mean the run did not happen** — in whole or in part.
+None of them is a reason to commit, and none of them is a red suite: treating
+one as a test failure sends you hunting a bug in code that was never executed.
 
 Three outcomes:
 

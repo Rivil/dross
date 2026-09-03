@@ -44,6 +44,27 @@ func probeMissing(t *testing.T, missing ...string) *[]string {
 	return &asked
 }
 
+// planBootstrapFor probes target the way the bootstrap COMMAND does — one
+// question over bootstrapProbeSet — and hands the answer to the plan.
+//
+// The probe moved out of planRemoteBootstrap when host resolution started
+// walking the pool, so these tests take it here rather than each building a
+// Readiness by hand. Built from the production derivation, not a copy of it: a
+// helper that assembled its own probe set would keep passing after the real one
+// drifted.
+func planBootstrapFor(t *testing.T, target remote.Target, p *project.Project) ([]bootstrapStep, error) {
+	t.Helper()
+	tools, _, _ := remoteProbeTools(p)
+	if len(tools) == 0 {
+		return planRemoteBootstrap(p, remote.Readiness{})
+	}
+	ready, err := remoteProbeFn(target, bootstrapProbeSet(tools))
+	if err != nil {
+		return nil, fmt.Errorf("cannot plan a bootstrap for %s: %w", target.Host, err)
+	}
+	return planRemoteBootstrap(p, ready)
+}
+
 func stepFor(steps []bootstrapStep, tool string) (bootstrapStep, bool) {
 	for _, s := range steps {
 		if s.Tool == tool {
@@ -60,7 +81,7 @@ func stepFor(steps []bootstrapStep, tool string) (bootstrapStep, bool) {
 func TestPlanRefusesMissingRuntime(t *testing.T) {
 	probeMissing(t, "gremlins", "go")
 
-	steps, err := planRemoteBootstrap(bootstrapTarget, bootstrapProject("gremlins"))
+	steps, err := planBootstrapFor(t, bootstrapTarget, bootstrapProject("gremlins"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +109,7 @@ func TestPlanRefusesMissingRuntime(t *testing.T) {
 func TestPlanInstallsAdapterIntoAnExistingRuntime(t *testing.T) {
 	probeMissing(t, "gremlins") // go is present
 
-	steps, err := planRemoteBootstrap(bootstrapTarget, bootstrapProject("gremlins"))
+	steps, err := planBootstrapFor(t, bootstrapTarget, bootstrapProject("gremlins"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +137,7 @@ func TestPlanInstallsAdapterIntoAnExistingRuntime(t *testing.T) {
 func TestPlanSkipsPresentTools(t *testing.T) {
 	probeMissing(t) // nothing missing
 
-	steps, err := planRemoteBootstrap(bootstrapTarget, bootstrapProject("gremlins", "stryker", "stryker-net"))
+	steps, err := planBootstrapFor(t, bootstrapTarget, bootstrapProject("gremlins", "stryker", "stryker-net"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +173,7 @@ func TestPlanUsesConfiguredAdapters(t *testing.T) {
 			p := bootstrapProject(adapters...)
 			probeMissing(t)
 
-			steps, err := planRemoteBootstrap(bootstrapTarget, p)
+			steps, err := planBootstrapFor(t, bootstrapTarget, p)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -186,7 +207,7 @@ func TestPlanStepsNameTheirTool(t *testing.T) {
 		t.Run(strings.Join(missing, "+"), func(t *testing.T) {
 			probeMissing(t, missing...)
 
-			steps, err := planRemoteBootstrap(bootstrapTarget, bootstrapProject())
+			steps, err := planBootstrapFor(t, bootstrapTarget, bootstrapProject())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -221,7 +242,7 @@ func TestPlanStepsNameTheirTool(t *testing.T) {
 func TestPlanRefusesRuntimeTools(t *testing.T) {
 	probeMissing(t, "npx", "dotnet")
 
-	steps, err := planRemoteBootstrap(bootstrapTarget, bootstrapProject("stryker", "stryker-net"))
+	steps, err := planBootstrapFor(t, bootstrapTarget, bootstrapProject("stryker", "stryker-net"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +268,7 @@ func TestPlanTransportFailureIsNotMissingTools(t *testing.T) {
 		return remote.Readiness{}, fmt.Errorf("ssh: connect: %w", remote.ErrTransport)
 	})
 
-	steps, err := planRemoteBootstrap(bootstrapTarget, bootstrapProject())
+	steps, err := planBootstrapFor(t, bootstrapTarget, bootstrapProject())
 	if err == nil {
 		t.Fatalf("an unreachable host produced a plan: %+v", steps)
 	}
@@ -268,7 +289,7 @@ func TestPlanTransportFailureIsNotMissingTools(t *testing.T) {
 func TestPlanProbesRuntimesInOneRoundTrip(t *testing.T) {
 	asked := probeMissing(t)
 
-	if _, err := planRemoteBootstrap(bootstrapTarget, bootstrapProject("gremlins")); err != nil {
+	if _, err := planBootstrapFor(t, bootstrapTarget, bootstrapProject("gremlins")); err != nil {
 		t.Fatal(err)
 	}
 	joined := strings.Join(*asked, ",")
@@ -288,7 +309,7 @@ func TestPlanUnknownToolFailsClosed(t *testing.T) {
 	t.Cleanup(func() { bootstrapRecipes = orig })
 	probeMissing(t, "gremlins")
 
-	steps, err := planRemoteBootstrap(bootstrapTarget, bootstrapProject("gremlins"))
+	steps, err := planBootstrapFor(t, bootstrapTarget, bootstrapProject("gremlins"))
 	if err != nil {
 		t.Fatal(err)
 	}

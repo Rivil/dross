@@ -26,6 +26,14 @@
   name = "exec-seam-guard"
   reason = "The 'if stdin != \"\"' guard lives inside the process-construction seam (launcherCommand) that every remote test replaces, so executing it would mean spawning the real ssh — the one thing those tests exist to avoid. Its effect is asserted instead of its line: TestRemoteEnvExportsPrecedeTheCommand and TestGremlinsRemoteRunOrderAndArgv both read the script back off the recorded stdin, which is only there because this branch attaches it, and TestRemoteNilCarriesNoScript pins the empty-stdin side."
 
+[[category]]
+  name = "shadowed-range-boundary"
+  reason = "An equivalent mutant, not a coverage gap: this arm is `case code < 0 || code > 255` in laneSelectorProblems, and the two arms above it already match code == 0 and code == 255 exactly. CONDITIONALS_BOUNDARY can only widen `<` to `<=` or `>` to `>=`, and both widenings admit only the two values the earlier cases have already consumed — so no input reaches the mutated comparison and no assertion can distinguish the mutant from the original. Killing it would require deleting the explicit 0 and 255 arms, which exist to give each code its own refusal message (TestValidateRejectsUnusableEmptyExitCodes asserts the distinct needles \"success code\", \"transport-failure\" and \"0-255\" per code). The reachable half of this arm is covered: the out-of-range case drives 300 through dross validate and asserts the 0-255 refusal."
+
+[[category]]
+  name = "detach-seam-body"
+  reason = "The body of a `var detach* = func(...)` process-construction seam in internal/cmd/verify.go — detachSync, detachStatus, detachCancel. Every test in verify_detach_test.go, verify_results_test.go and verify_status_test.go replaces the whole var, so these bodies never execute: a live `go test -coverprofile ./internal/cmd` on 2026-08-31 reports count 0 for every block covering lines 167, 363, 367 and 568-573. Executing them would mean spawning real ssh, because remote.commandFn — the transport seam these bodies bottom out in — is unexported and unreachable from package cmd, and the phase's locked tests_spawn_no_ssh decision forbids a test that needs a host. Their effect is asserted instead of their line: the stubs return the same errors the real bodies would propagate, and TestResultsOnAnUnreachableHostIsNotAVerdict, TestDispatchPushesBeforeItStarts and TestCancelAgainstAnUnreachableHostStillClearsButSaysSo pin what the caller does with them. Move the seam boundary below remote.Exec, or export a transport stub from internal/remote, and these become reachable and owe tests rather than this reason."
+
 [[accepted]]
   key = "742de35850fac7e6"
   file = "internal/cmd/survivor.go"
@@ -1141,3 +1149,165 @@
   line = 110
   category = "gremlins-attribution-ceiling"
   accepted_in = "remote-toolchain-bootstrap"
+
+[[accepted]]
+  key = "d978f429d092ab26"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case code == 0:"
+  line = 256
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "lane-selector-translation"
+
+[[accepted]]
+  key = "57293670addabbd3"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case code == 255:"
+  line = 261
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "lane-selector-translation"
+
+[[accepted]]
+  key = "c7f84a5caf3f19aa"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case code < 0 || code > 255:"
+  line = 266
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "lane-selector-translation"
+
+[[accepted]]
+  key = "ee552310d9ef3bd7"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case code < 0 || code > 255:"
+  line = 266
+  category = "shadowed-range-boundary"
+  accepted_in = "lane-selector-translation"
+
+[[accepted]]
+  key = "95057f14e22b9e4a"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case strings.TrimSpace(tool) == \"\":"
+  line = 309
+  reason = "Attribution ceiling, proven per-mutant rather than by category: this is a switch{} case condition in laneToolchainProblems, so go-cover attributes no block to its columns and gremlins never builds or runs the mutant (it is reported NOT COVERED, not executed-and-survived). Applying the mutation by hand and running go test ./internal/cmd -run Toolchain turns the suite red: TestValidateAcceptsAbsentAndDeclaredToolchains fails, because negating the blank-entry arm makes validate reject the legitimate toolchain = [\"mise\"] lane. The test that would catch this breakage already exists and already catches it."
+  accepted_in = "lane-remote-locality"
+
+[[accepted]]
+  key = "da63dd0716ff940c"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(strings.Fields(tool)) > 1:"
+  line = 311
+  reason = "Attribution ceiling, proven per-mutant rather than by category: this is a switch{} case condition in laneToolchainProblems, so go-cover attributes no block to its columns and gremlins never builds or runs the mutant (reported NOT COVERED, not executed-and-survived). Applying > 1 -> >= 1 by hand and running go test ./internal/cmd -run Toolchain turns the suite red in six tests, including TestValidateAcceptsAbsentAndDeclaredToolchains and TestLaneAddWritesToolchainInFlagOrder: widening the boundary makes every single-binary entry read as a command line, so validate rejects toolchains that lane add itself writes. Already caught by existing tests."
+  accepted_in = "lane-remote-locality"
+
+[[accepted]]
+  key = "aae374b2bffb7a5a"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(strings.Fields(tool)) > 1:"
+  line = 311
+  reason = "Attribution ceiling, proven per-mutant rather than by category: this is a switch{} case condition in laneToolchainProblems, so go-cover attributes no block to its columns and gremlins never builds or runs the mutant (reported NOT COVERED, not executed-and-survived). Applying > 1 -> <= 1 by hand and running go test ./internal/cmd -run Toolchain turns the suite red in eight tests, including TestValidateNamesLaneWithUnusableToolchainEntries (the command-line subtest stops being refused) and TestValidateAcceptsAbsentAndDeclaredToolchains (single-binary entries start being refused). Both directions of the arm are already asserted."
+  accepted_in = "lane-remote-locality"
+
+[[accepted]]
+  key = "3a6b02474271a0b3"
+  file = "internal/cmd/lane_install.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.argv == nil:"
+  line = 155
+  reason = "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+  accepted_in = "remote-toolchain-install"
+
+[[accepted]]
+  key = "01c1a84fcf199fc2"
+  file = "internal/cmd/test_lane_install.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.Refusal != \"\":"
+  line = 247
+  reason = "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+  accepted_in = "remote-toolchain-install"
+
+[[accepted]]
+  key = "cd19e310c5a973a4"
+  file = "internal/cmd/remote_bootstrap.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case lane != \"\":"
+  line = 173
+  reason = "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+  accepted_in = "remote-toolchain-install"
+
+[[accepted]]
+  key = "1427e5d3fcc1800d"
+  file = "internal/cmd/remote_bootstrap.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case resolved.Refusal != \"\":"
+  line = 217
+  reason = "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+  accepted_in = "remote-toolchain-install"
+
+[[accepted]]
+  key = "a8d3d9876b2def80"
+  file = "internal/cmd/remote_bootstrap.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case resolved.Line != \"\":"
+  line = 219
+  reason = "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+  accepted_in = "remote-toolchain-install"
+
+[[accepted]]
+  key = "6e71b90a4ed4fec4"
+  file = "internal/cmd/remote_bootstrap.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case resolved.Runtime != \"\" && missing[resolved.Runtime]:"
+  line = 230
+  reason = "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+  accepted_in = "remote-toolchain-install"
+
+[[accepted]]
+  key = "ec603fea4bc70ee2"
+  file = "internal/cmd/verify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 167
+  category = "detach-seam-body"
+  accepted_in = "remote-run-detach"
+
+[[accepted]]
+  key = "b58cb617602cac6e"
+  file = "internal/cmd/verify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 363
+  category = "detach-seam-body"
+  accepted_in = "remote-run-detach"
+
+[[accepted]]
+  key = "4b0446237dd04163"
+  file = "internal/cmd/verify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 367
+  category = "detach-seam-body"
+  accepted_in = "remote-run-detach"
+
+[[accepted]]
+  key = "1356a6e766535468"
+  file = "internal/cmd/verify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case serr != nil:"
+  line = 621
+  reason = "The gremlins switch-case attribution ceiling, proven live on this exact line rather than by analogy. The line is 'case serr != nil:' in verifyStatus's status switch, and a go test -coverprofile ./internal/cmd run on 2026-08-31 reports count 1 for the block spanning 621-625 — the arm executes — while the gremlins report for the same tree marks it NOT COVERED and therefore never builds a mutant for it. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. The arm is directly asserted by TestStatusLabelsARecordedStateAsRecorded in internal/cmd/verify_status_test.go, which stubs detachStatus to return a transport error and requires the printed line to carry both 'recorded' and 'did not answer' — the whole point being that an unverified state is never printed as though it were observed. Adding tests cannot kill this mutant, because a test already runs the line. See the gremlins-attribution-ceiling category and TestAttributionCeilingIsReal for the general proof."
+  accepted_in = "remote-run-detach"
+
+[[accepted]]
+  key = "fa6e99b07880ba83"
+  file = "internal/cmd/lane_preview.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case l.FenceErr != \"\":"
+  line = 249
+  reason = "switch-case condition: gremlins attributes no coverage block to a 'case X != \"\":' expression. Proven exercised — go coverage shows block 249.24,253.64 count=1 under TestMalformedLaneIsAFindingNotAFault, which asserts the exact 'lane bad — would not run:' string this branch prints. Tooling attribution ceiling, not a test gap."
+  accepted_in = "lane-selector-preview"

@@ -1,0 +1,97 @@
+[verify]
+  phase = "lane-prepare-step"
+  generated_at = 2026-08-28T06:45:46.88244Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-28T08:14:16.919436Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.948076923076923
+  mutants_killed = 493
+  mutants_survived = 27
+  mutants_not_covered = 27
+  mutants_in_scope = 520
+  unclassified_in_scope = 0
+  criteria_total = 6
+  criteria_covered = 6
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 493
+    survived = 27
+    timeout = 0
+    in_scope = 520
+    score = 0.948076923076923
+    file_count = 16
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_test.go:426:TestLaneAddPersistsPrepare", "internal/cmd/test_lane_test.go:454:TestLaneListOmitsAnUndeclaredPrepare", "internal/cmd/test_lane_test.go:474:TestLaneAddWithPrepareStartsUngranted", "internal/cmd/test_lane_test.go:498:TestLaneAddNormalizesAWhitespaceOnlyPrepare", "internal/project/project_test.go:383:TestTestLanePrepareDecodes", "internal/project/project_test.go:426:TestLaneWithoutPrepareRoundTripsUnchanged", "internal/cmd/test_lane_prepare_test.go:360:TestLaneWithNoPrepareSpawnsExactlyOnce"]
+  notes = "Write, read-back and list all asserted; the absence half is asserted against a declaring neighbour so the opt-in claim cannot pass vacuously, and the round-trip is a byte compare. 'Spawns exactly what it spawns today' is pinned on the recorder COUNT on both the local and remote seam, which is the only assertion an unconditional `sh -c ''` fails."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_prepare_test.go:92:TestRemotePrepareRunsAfterTheSyncAndBeforeTheCommand", "internal/cmd/test_lane_prepare_test.go:130:TestPreparesInterleavePerLane", "internal/cmd/test_lane_prepare_test.go:156:TestIdenticalPreparesAreNotDeduplicated", "internal/cmd/test_lane_prepare_test.go:191:TestPrepareLinePrecedesTheLaneHeaderAndItsOutput"]
+  notes = "Sequence is pinned by INDEX on the recorded spawns ([rsync, ssh prepare, ssh command]) rather than by presence, so a prepare hoisted above the sync or dropped after the command fails. Transcript order is asserted by byte offset: prepare line < lane header < the lane first own output."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_prepare_test.go:399:TestFailedPrepareSkipsItsOwnLaneAndSparesTheRest", "internal/cmd/test_lane_prepare_test.go:459:TestPrepareFailureOutranksARedSuite", "internal/cmd/test_lane_prepare_test.go:488:TestEveryPrepareFailedIsNotNothingMeasured", "internal/cmd/test_lane_prepare_test.go:515:TestPrepareFailureIsClassifiedOnBothTransports", "internal/cmd/test_lane_prepare_test.go:562:TestTransportFailureDuringAPrepareKeepsItsOwnCode", "internal/cmd/test_lane_consent_test.go:244:TestExitPrecedenceIsTotal", "internal/cmd/test_lane_consent_test.go:283:TestPrepareOutranksRedAndUnderranksPartial", "internal/cmd/test_files_test.go:140:TestExitCodesArePairwiseDistinct"]
+  notes = "Skip-own-lane and spare-the-rest are asserted against the same recorder, so a `return` and a missing skip each fail a different half. Exit 7 is asserted on BOTH transports, folded through worseOutcome beside a red suite, kept apart from exitNothingMeasured, and the transport family (ssh 255, incomplete rsync) is pinned unchanged."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_consent_test.go:506:TestStalePrepareRefusesOnlyItsOwnLaneAndNamesThePrepare", "internal/cmd/trust_lane_test.go:551:TestLaneConsentFramingSeparatesThePrepareFromTheCommand", "internal/cmd/trust_lane_test.go:567:TestLaneWithNoPrepareFingerprintsItsCommandUnchanged", "internal/cmd/trust_lane_test.go:589:TestFramedBytesCannotForgeALanesGrant", "internal/cmd/trust_lane_test.go:618:TestAppendingAPrepareStalesTheGrant", "internal/cmd/trust_lane_test.go:648:TestTrustLanePrintsBothLinesBeforeWriting", "internal/cmd/trust_lane_test.go:679:TestDoctorShowsAPreparedLanesBootstrap", "internal/cmd/trust_lane_test.go:703:TestDoctorStalePrepareNamesTheSameFix", "internal/cmd/test_lane_prepare_test.go:277:TestSkippedLanesNeverPrepare"]
+  notes = "A two-lane fixture where the go lane PREPARE alone changed asserts all three halves at once: the refusal text carries the changed prepare and the CHANGED wording, the neighbour still reaches the runner, and the run exits 6. Framing is pinned against both a re-split collision and a forged bare command, and the no-prepare lane fingerprints its command byte-for-byte so existing grants do not stale."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_prepare_test.go:229:TestPrepareRunsOnBothTransports"]
+  notes = "Both halves against the SAME granted-remote fixture: the remote run records [prepare, command] on the ssh seam and nothing locally, --local records exactly [prepare, command] locally and nothing on the host, and the two prepare strings are compared for equality — so a line rebuilt per transport fails even while both halves 'ran a prepare'."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_edit_test.go:44:TestLaneEditChangesOnlyThePrepare", "internal/cmd/test_lane_edit_test.go:74:TestLaneEditDistinguishesOmittedFromEmpty", "internal/cmd/test_lane_edit_test.go:114:TestLaneEditKeepsTheGrantAndStalesIt", "internal/cmd/test_lane_edit_test.go:150:TestLaneEditNamesTheFixOnlyWhenItChanged", "internal/cmd/test_lane_edit_test.go:174:TestLaneEditUnknownNameLeavesTheFileAlone", "internal/cmd/test_lane_edit_test.go:197:TestLaneEditNormalizesAWhitespaceOnlyPrepare"]
+  notes = "Whole-struct DeepEqual plus a document-position assert against a neighbour, so a remove-then-append with the right values still fails. The consent half asserts BOTH that trusted_lane_commands keeps the entry and that `trust --lane --check` says 'has CHANGED' and not 'has not been trusted' — the STALE-into-ABSENT collapse this verb exists to prevent."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/execute.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/options.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/milestone.go:1030 (CONDITIONALS_NEGATION) — routed to milestone-push-failure-tests"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/milestone.go:1054 (ARITHMETIC_BASE) — routed to milestone-push-failure-tests"
+
+[[finding]]
+  severity = "NOTE"
+  text = "filtered 2 out-of-scope survivor(s) in files this phase did not touch — listed under `out_of_scope` in tests.json, not counted in the score"
+
+[[finding]]
+  severity = "NOTE"
+  text = "27 in-scope survivors, all accepted and all origin=inherited (validate.go, doctor.go switch-case / const-initializer lines) — the proven gremlins go-cover attribution ceiling, not a test gap. None sits in a hunk this phase changed and none is in the prepare code (test.go, test_lane.go, trust.go, project.go). Efficacy over the 493 reachable mutants = 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The three documentation files this phase touched (README.md, assets/prompts/execute.md, assets/prompts/options.md) have no mutation adapter, but they are gated by real tests: TestReadmeDocumentsTestLanes, TestOptionsDocumentsTheSelectorSurfaceCorrectly and TestExecutePromptDocumentsPrepareExit."

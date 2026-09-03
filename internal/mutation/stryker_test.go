@@ -979,3 +979,66 @@ func TestStrykerLocalRunClearsAStaleReport(t *testing.T) {
 		t.Errorf("yesterday's report survived a local run, stat err = %v", statErr)
 	}
 }
+
+// ── initial-test-run abort: the truncation note (c-4) ────────────────────────
+
+// c-4 positive: an abort whose output carries Stryker's initial-test-run
+// header gets the truncation note.
+//
+// The header is written out as a HARDCODED literal here, not read from
+// strykerInitialTestFailureText — the constant is never fed its own text, so a
+// reworded constant (a dropped trailing colon, say) stops matching real
+// Stryker output and this test goes red, which is the whole point of pinning
+// wording in a constant.
+func TestStrykerInitialTestFailureAbortNamesTruncation(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	const header = "One or more tests failed in the initial test run:"
+	out := "INFO Stryker Starting\n" + header + "\n\tsrc/lib/a.test.ts > adds two numbers"
+	defer noisyStryker(t, s, out, 1, nil)()
+
+	_, _, err := captureStderr(t, func() (*Report, error) { return s.Run([]string{"src/a.ts"}) })
+	if err == nil {
+		t.Fatal("an initial-test-run abort returned nil error")
+	}
+	if !strings.Contains(err.Error(), strykerInitialTestTruncationNote) {
+		t.Errorf("the truncation note is missing from an initial-test-run abort:\n%v", err)
+	}
+}
+
+// c-4 note content: the note has to say BOTH that only the first failing test
+// is named AND that the list is truncated, so the reader knows an unknown
+// number remain rather than assuming the one shown is the whole problem.
+//
+// Driven with the constant, so this test is about what the note SAYS; the test
+// above is about whether it fires on Stryker's real wording.
+func TestStrykerTruncationNoteSaysListIsTruncated(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	defer noisyStryker(t, s, strykerInitialTestFailureText+"\n\tsrc/lib/a.test.ts > adds two numbers", 1, nil)()
+
+	_, _, err := captureStderr(t, func() (*Report, error) { return s.Run([]string{"src/a.ts"}) })
+	if err == nil {
+		t.Fatal("an initial-test-run abort returned nil error")
+	}
+	low := strings.ToLower(err.Error())
+	for _, want := range []string{"only the first failing test", "truncated", "unknown number"} {
+		if !strings.Contains(low, want) {
+			t.Errorf("the note does not say %q — the reader would take the one named test for the whole problem:\n%v", want, err)
+		}
+	}
+}
+
+// c-4 negative: the note is attached ONLY on an initial-test-run abort. A
+// reportless failure with some other cause never printed a truncated list, so
+// claiming one is misleading in its own right (locked decision note_trigger).
+func TestStrykerTruncationNoteAbsentOnOtherAborts(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	defer noisyStryker(t, s, "INFO Stryker Starting\nMissing required environment variable: DATABASE_URL", 1, nil)()
+
+	_, _, err := captureStderr(t, func() (*Report, error) { return s.Run([]string{"src/a.ts"}) })
+	if err == nil {
+		t.Fatal("a reportless failure returned nil error")
+	}
+	if strings.Contains(err.Error(), strykerInitialTestTruncationNote) {
+		t.Errorf("the truncation note was attached to an abort that printed no failure list:\n%v", err)
+	}
+}

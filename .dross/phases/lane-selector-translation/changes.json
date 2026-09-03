@@ -1,0 +1,128 @@
+{
+  "phase": "lane-selector-translation",
+  "pr": 109,
+  "base": "milestone/v1.6",
+  "base_commit": "92577b68bfd257d49a0c54b755dac5364d974a81",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/configenum/configenum.go",
+        "internal/project/project.go",
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_lane_test.go",
+        "internal/project/project_test.go"
+      ],
+      "commit": "4953a09",
+      "completed_at": "2026-08-26T15:03:35.044464Z",
+      "landmarks": [
+        {
+          "feature": "test lane selectors",
+          "symbol": "SelectorStyles",
+          "loc": "internal/configenum/configenum.go:205",
+          "what": "closed enum of lane selector shapes plus TestLane.Selector/EmptyExit schema and validate's per-lane refusals"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/testlane/match.go",
+        "internal/testlane/match_test.go"
+      ],
+      "commit": "09d25f3",
+      "completed_at": "2026-08-26T15:06:15.863209Z",
+      "landmarks": [
+        {
+          "feature": "test lane selectors",
+          "symbol": "Selection.Matched",
+          "loc": "internal/testlane/match.go:61",
+          "what": "per-lane record of the normalized paths that selected each lane, so a selector is derived only from its own lane's files"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/testlane/selector.go",
+        "internal/testlane/selector_test.go",
+        "internal/cmd/enum_divergence_test.go"
+      ],
+      "commit": "f7aeb0a",
+      "completed_at": "2026-08-26T15:09:41.406159Z",
+      "landmarks": [
+        {
+          "feature": "test lane selectors",
+          "symbol": "Derive",
+          "loc": "internal/testlane/selector.go:34",
+          "what": "pure translation of a lane's matched paths into path/dir/go-package selector arguments, order-independent and option-safe"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/test_lane.go",
+        "internal/cmd/test_lane_test.go"
+      ],
+      "commit": "1dcabd0",
+      "completed_at": "2026-08-26T15:13:00.691211Z",
+      "landmarks": [
+        {
+          "feature": "test lane selectors",
+          "symbol": "laneSelectorRefusal",
+          "loc": "internal/cmd/test_lane.go:65",
+          "what": "lane add/list gain --selector and --empty-exit, refused pre-write through validate's own rule set so the CLI cannot write a lane validate rejects"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_lane_selector_test.go"
+      ],
+      "commit": "1cbff44",
+      "completed_at": "2026-08-26T15:18:03.600804Z",
+      "landmarks": [
+        {
+          "feature": "test lane selectors",
+          "symbol": "laneRunLine",
+          "loc": "internal/cmd/test.go:501",
+          "what": "builds one selector-scoped line per lane from its own live matched paths, printed in the header and spawned on both transports while consent stays bound to lane.Command"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/remote/remote.go",
+        "internal/cmd/test_lane_miss_test.go"
+      ],
+      "commit": "4e4f1f2",
+      "completed_at": "2026-08-26T15:22:42.05539Z",
+      "landmarks": [
+        {
+          "feature": "test lane selectors",
+          "symbol": "selectorMissCode",
+          "loc": "internal/cmd/test.go:521",
+          "what": "a lane collecting no tests is reported as a selector miss outside the worst-outcome fold, and an all-miss run exits nothing-measured instead of green"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "README.md",
+        "ARCHITECTURE.md",
+        "assets/prompts/options.md",
+        "internal/cmd/options_docs_test.go"
+      ],
+      "commit": "8aa4c89",
+      "completed_at": "2026-08-26T15:26:22.914479Z",
+      "landmarks": [
+        {
+          "feature": "test lane selectors",
+          "symbol": "TestOptionsDocumentsTheSelectorSurfaceCorrectly",
+          "loc": "internal/cmd/options_docs_test.go:223",
+          "what": "README/ARCHITECTURE/options.md carry the selector styles, empty-exit codes and miss outcome, guarded by needles plus a flag-parity check against the registered cobra flags"
+        }
+      ]
+    }
+  }
+}

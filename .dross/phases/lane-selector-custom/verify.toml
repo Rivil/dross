@@ -1,0 +1,65 @@
+[verify]
+  phase = "lane-selector-custom"
+  generated_at = 2026-08-31T12:25:36.462053Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-31T12:26:28.978223Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9741176470588235
+  mutants_killed = 828
+  mutants_survived = 22
+  mutants_not_covered = 22
+  mutants_in_scope = 850
+  unclassified_in_scope = 0
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 828
+    survived = 22
+    timeout = 0
+    in_scope = 850
+    score = 0.9741176470588235
+    file_count = 16
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/validate_lane_test.go:563 TestValidateRejectsSelectorTemplateWithNoSelector", "internal/cmd/validate_lane_test.go:587 TestValidateRejectsSelectorTemplateWithNoPlaceholder", "internal/cmd/validate_lane_test.go:612 TestValidateRejectsSelectorJoinWithNoPathsPlaceholder", "internal/cmd/validate_lane_test.go:652 TestValidateAcceptsAFullyPopulatedTemplateLane", "internal/cmd/test_files_test.go:377 TestTemplatedLaneSpawnsTheExpandedLine", "internal/cmd/test_files_test.go:451 TestMalformedTemplateRefusesBeforeAnyLaneSpawns"]
+  notes = "Unchanged from the first verify and still holding: each malformed shape fails validate AND the assertion requires the offending lane be named, the accept case is the anti-over-refusal assertion a blanket refusal would fail alone, and the run site asserts the RECORDED spawn line so a lane that expanded a template then spawned its bare command fails."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_consent_test.go:796 TestAddingASelectorTemplateStalesTheGrant", "internal/cmd/test_lane_consent_test.go:815 TestChangingSelectorJoinAloneStalesTheGrant", "internal/cmd/test_lane_consent_test.go:843 TestLaneWithNoTemplateKeepsItsPrePhaseConsentLine", "internal/cmd/test_lane_consent_test.go:872 TestTemplateAndPrepareNamespacesAreDisjoint", "internal/cmd/test_files_test.go:486 TestTemplatedPathCarryingAMetacharacterIsQuoted"]
+  notes = "Both halves asserted. Staleness compares against LITERAL pre-phase strings rather than laneConsentLine's own output, so a self-consistent rewrite still fails; the disjointness test compares >100 grantable lanes with both frame prefixes appearing as field CONTENT. The injection half asserts `cargo test --only 'crates/a; touch pwned'` reaches sh -c as one argument."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_edit_test.go:389 TestLaneEditRewritesEveryInPlaceFieldKeepingPosition", "internal/cmd/test_lane_edit_test.go:451 TestLaneEditRefusesAMalformedLaneBeforeTheWrite", "internal/cmd/test_lane_edit_test.go:731 TestLaneSelectorRefusalIsGone"]
+  notes = "The widened field set is walked case by case, each asserting the lane kept its POSITION and the neighbour is byte-identical — what a remove-then-append implementation fails while getting the value right. The refusal table compares project.toml as BYTES. Now also pins the t-8 deletion: laneSelectorRefusal stays gone and laneRefusal stays present, so the assertion cannot pass on a file that deleted the wrong thing."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/validate_lane_test.go:715 TestValidateWarnsOnAScopedWholeTreeCommand", "internal/cmd/validate_lane_test.go:751 TestTheWholeTreeWarningDoesNotFailValidate", "internal/cmd/validate_lane_test.go:771 TestNoWarningForAScopedCommand", "internal/cmd/test_lane_test.go:537 TestLaneAddWarnsOnAScopedWholeTreeCommandAndStillWrites", "internal/cmd/test_lane_edit_test.go:673 TestLaneEditWarnsOnAScopedWholeTreeCommand"]
+  notes = "All three declared surfaces (validate, lane add, lane edit) for both tokens, each asserting the lane AND the token are named. The exit contract is non-vacuous — it asserts a warning was printed before asserting it did not fail the gate — and the false-positive half is covered at every surface."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Re-verify after t-8 deleted the orphaned laneSelectorRefusal. The previous run's single BLOCKING survivor was that function's `len(problems) == 0` branch, NOT COVERED because nothing called it — laneRefusal had already subsumed it via laneProblems. Deleting it cleared the gate: 0 in-diff survivors this run, against 1 before."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Measured detached on helicon (run r-20260831-084537, ~4h) and collected from a later session — the first phase in this repo verified without holding a session for the leg. Score 0.97 over 850 in-scope mutants; all 22 survivors are the accepted gremlins attribution ceiling, so efficacy over the 828 reachable is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "`dross verify results` requires the phase's own branch to be checked out — it failed with 'read spec: no such file' when first attempted from another phase's branch. A real limit on the collect-from-any-session promise: any session works, but only on the right branch."

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -296,6 +297,16 @@ func readDotted(p *project.Project, path string) (string, bool) {
 		return strings.Join(p.Goals.NonGoals, ","), true
 	case "goals.differentiators":
 		return strings.Join(p.Goals.Differentiators, ","), true
+	// mutation — the three keys /dross-options §13 documents. They were
+	// described in the prompt but never wired here, so the whole section was
+	// unactionable through the CLI and could only be reached by hand-editing
+	// project.toml, which the prompts' own don't-bypass-the-CLI rule forbids.
+	case "mutation.adapters":
+		return strings.Join(p.Mutation.Adapters, ","), true
+	case "mutation.gremlins.timeout_coefficient":
+		return strconv.Itoa(p.Mutation.Gremlins.TimeoutCoefficient), true
+	case "mutation.stryker.workdir":
+		return p.Mutation.Stryker.Workdir, true
 	}
 	return "", false
 }
@@ -358,6 +369,23 @@ func writeDotted(p *project.Project, path, value string) error {
 			return err
 		}
 		*target = b
+		return nil
+	}
+	// The first numeric key on this surface. It refuses rather than coercing,
+	// for the same reason setBool does: a value that silently became 0 would
+	// configure a real behaviour (gremlins' timeout multiplier) to something
+	// the user never asked for, and they would find out from a mutation run.
+	// An empty value clears it, matching how every optional key unsets.
+	setInt := func(target *int) error {
+		if strings.TrimSpace(value) == "" {
+			*target = 0
+			return nil
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil {
+			return fmt.Errorf("invalid %s %q: expected a whole number", path, value)
+		}
+		*target = n
 		return nil
 	}
 	// One state_map entry at a time — never a whole-map replace, so the other
@@ -533,6 +561,13 @@ func writeDotted(p *project.Project, path, value string) error {
 		p.Goals.NonGoals = splitCSV(value)
 	case "goals.differentiators":
 		p.Goals.Differentiators = splitCSV(value)
+	// mutation — see the matching arm in readDotted for why these were absent.
+	case "mutation.adapters":
+		p.Mutation.Adapters = splitCSV(value)
+	case "mutation.gremlins.timeout_coefficient":
+		return setInt(&p.Mutation.Gremlins.TimeoutCoefficient)
+	case "mutation.stryker.workdir":
+		p.Mutation.Stryker.Workdir = value
 	default:
 		return fmt.Errorf("unknown or unsettable field: %s", path)
 	}

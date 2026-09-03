@@ -134,7 +134,12 @@ func TestExecutePromptChecksConsent(t *testing.T) {
 	for _, name := range []string{"execute.md", "quick.md"} {
 		t.Run(name, func(t *testing.T) {
 			prompt := readPrompt(t, name)
-			run := strings.Index(prompt, "dross test\n```")
+			// The opening fence plus the verb, not the whole line: the
+			// invocation carries flags now (execute.md passes the task's
+			// own --files), and pinning the exact argv here would make this
+			// ordering guard fail every time the gate's arguments change —
+			// which is not what it is asserting.
+			run := strings.Index(prompt, "```\ndross test")
 			if run < 0 {
 				t.Fatalf("%s no longer runs the suite via `dross test` — update this test if that is intended", name)
 			}

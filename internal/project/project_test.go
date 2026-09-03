@@ -194,3 +194,292 @@ func TestSaveDefaultsAreOmittedAndOptionalsRemainEmpty(t *testing.T) {
 		t.Error("expected SquashMerge to default false")
 	}
 }
+
+// TestTestLaneDecodes pins the [[runtime.test_lane]] wire format against
+// hand-written toml rather than against a struct this package Saved: the
+// document is what a user edits and what `dross test lane add` has to produce,
+// so a decoder that only agrees with its own encoder proves nothing about it.
+//
+// A dropped toml tag or a missing field decodes to a zero-length slice with no
+// error at all — toml.Decode ignores keys it has no home for — so the
+// length assertion is the one that fails when the schema regresses.
+func TestTestLaneDecodes(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	if err := os.WriteFile(path, []byte(`
+[project]
+name = "x"
+version = "1.0.0.0"
+
+[runtime]
+mode = "native"
+test_command = "go test ./..."
+
+[[runtime.test_lane]]
+name = "go"
+match = ["internal/**/*.go", "main.go"]
+command = "go test -count=1 ./..."
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(p.Runtime.TestLane) != 1 {
+		t.Fatalf("want 1 lane, got %d — the toml tag or the Runtime field is missing", len(p.Runtime.TestLane))
+	}
+	lane := p.Runtime.TestLane[0]
+	if lane.Name != "go" {
+		t.Errorf("name = %q, want go", lane.Name)
+	}
+	if !reflect.DeepEqual(lane.Match, []string{"internal/**/*.go", "main.go"}) {
+		t.Errorf("match = %v, want both globs in order", lane.Match)
+	}
+	if lane.Command != "go test -count=1 ./..." {
+		t.Errorf("command = %q — this is the exact string consent fingerprints", lane.Command)
+	}
+	// Lanes are additive: declaring one must not disturb the scalar the
+	// lane-less path still runs.
+	if p.Runtime.TestCommand != "go test ./..." {
+		t.Errorf("test_command = %q, want it untouched by the lane block", p.Runtime.TestCommand)
+	}
+}
+
+// TestNoTestLaneIsAbsentFromTheDocument holds the opt-in half of the schema:
+// a project with no lane must not grow a test_lane key on Save. Without
+// omitempty the encoder writes an empty array into every project.toml dross
+// touches, which turns "this repo has no lanes" into a line the user has to
+// read and wonder about.
+func TestNoTestLaneIsAbsentFromTheDocument(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	p := &Project{Project: ProjectMeta{Name: "x", Version: "1.0.0.0"}, Runtime: Runtime{Mode: "native"}}
+	if err := p.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	if body := string(mustReadFile(t, path)); strings.Contains(body, "test_lane") {
+		t.Errorf("a lane-less project.toml mentions test_lane:\n%s", body)
+	}
+}
+
+func mustReadFile(t *testing.T, path string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+// TestTestLaneSelectorFieldsDecode: selector and empty_exit reach the struct
+// from a hand-written document, which is what a user edits and what `dross test
+// lane add` has to produce. A dropped toml tag decodes to the zero value with
+// no error at all, so these assertions are the only thing that fails when the
+// schema regresses.
+func TestTestLaneSelectorFieldsDecode(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	if err := os.WriteFile(path, []byte(`
+[project]
+name = "x"
+version = "1.0.0.0"
+
+[runtime]
+mode = "native"
+
+[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test -count=1"
+selector = "go-package"
+empty_exit = [5]
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(p.Runtime.TestLane) != 1 {
+		t.Fatalf("want 1 lane, got %d", len(p.Runtime.TestLane))
+	}
+	lane := p.Runtime.TestLane[0]
+	if lane.Selector != "go-package" {
+		t.Errorf("selector = %q, want go-package — the toml tag or the field is missing", lane.Selector)
+	}
+	if !reflect.DeepEqual(lane.EmptyExit, []int{5}) {
+		t.Errorf("empty_exit = %v, want [5]", lane.EmptyExit)
+	}
+}
+
+// TestLaneWithoutSelectorFieldsRoundTripsUnchanged is the opt-in half of this
+// phase's schema, and the sibling of TestNoTestLaneIsAbsentFromTheDocument: a
+// lane that declares neither field must render exactly the bytes a project.toml
+// written before selectors existed carries. Without omitempty on both fields
+// every existing lane grows a `selector = ""` line on the next Save, which
+// turns an opt-in feature into one every repo has to read about.
+func TestLaneWithoutSelectorFieldsRoundTripsUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	p := &Project{
+		Project: ProjectMeta{Name: "x", Version: "1.0.0.0"},
+		Runtime: Runtime{
+			Mode:     "native",
+			TestLane: []TestLane{{Name: "go", Match: []string{"internal/**"}, Command: "go test"}},
+		},
+	}
+	if err := p.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	body := string(mustReadFile(t, path))
+	if strings.Contains(body, "selector") {
+		t.Errorf("a lane declaring no selector rendered a selector key:\n%s", body)
+	}
+	if strings.Contains(body, "empty_exit") {
+		t.Errorf("a lane declaring no empty exit codes rendered an empty_exit key:\n%s", body)
+	}
+}
+
+// TestDeclaredSelectorFieldsRender: the other direction — a lane that DOES
+// declare them must write them back, or `dross test lane add --selector` would
+// accept a flag that never reaches disk.
+func TestDeclaredSelectorFieldsRender(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	p := &Project{
+		Project: ProjectMeta{Name: "x", Version: "1.0.0.0"},
+		Runtime: Runtime{
+			Mode: "native",
+			TestLane: []TestLane{{
+				Name:      "go",
+				Match:     []string{"internal/**"},
+				Command:   "go test",
+				Selector:  "go-package",
+				EmptyExit: []int{5},
+			}},
+		},
+	}
+	if err := p.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	lane := reloaded.Runtime.TestLane[0]
+	if lane.Selector != "go-package" || !reflect.DeepEqual(lane.EmptyExit, []int{5}) {
+		t.Errorf("round-trip lost the selector fields: selector=%q empty_exit=%v", lane.Selector, lane.EmptyExit)
+	}
+}
+
+// TestTestLanePrepareDecodes: prepare has to reach the struct from a
+// hand-written document, which is both what a user edits and what `dross test
+// lane add --prepare` produces. A dropped toml tag decodes to the zero value
+// with no error at all, so the lane would silently run with no bootstrap on a
+// cold host — a red suite blamed on the code.
+func TestTestLanePrepareDecodes(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	if err := os.WriteFile(path, []byte(`
+[project]
+name = "x"
+version = "1.0.0.0"
+
+[runtime]
+mode = "native"
+
+[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test -count=1"
+prepare = "make build"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(p.Runtime.TestLane) != 1 {
+		t.Fatalf("want 1 lane, got %d", len(p.Runtime.TestLane))
+	}
+	if got := p.Runtime.TestLane[0].Prepare; got != "make build" {
+		t.Errorf("prepare = %q, want \"make build\" — the toml tag or the field is missing", got)
+	}
+}
+
+// TestLaneWithoutPrepareRoundTripsUnchanged is the opt-in half of this phase's
+// schema, and the sibling of TestNoTestLaneIsAbsentFromTheDocument: a lane
+// declaring no prepare must render exactly the bytes a project.toml written
+// before this phase carries. Without omitempty every existing lane grows a
+// `prepare = ""` line on the next Save — which both reads as something the
+// user has to go and set AND, worse, would change what the lane's consent
+// fingerprint is taken over on a document nobody edited.
+//
+// The byte compare is a full Save → Load → Save cycle, so a field that
+// rendered on the first pass and not the second (or the reverse) fails here
+// rather than at the moment a grant went stale for no reason.
+func TestLaneWithoutPrepareRoundTripsUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "project.toml")
+	p := &Project{
+		Project: ProjectMeta{Name: "x", Version: "1.0.0.0"},
+		Runtime: Runtime{
+			Mode:     "native",
+			TestLane: []TestLane{{Name: "go", Match: []string{"internal/**"}, Command: "go test"}},
+		},
+	}
+	if err := p.Save(first); err != nil {
+		t.Fatal(err)
+	}
+	before := string(mustReadFile(t, first))
+	if strings.Contains(before, "prepare") {
+		t.Errorf("a lane declaring no prepare rendered a prepare key:\n%s", before)
+	}
+
+	reloaded, err := Load(first)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	second := filepath.Join(dir, "again.toml")
+	if err := reloaded.Save(second); err != nil {
+		t.Fatal(err)
+	}
+	if after := string(mustReadFile(t, second)); after != before {
+		t.Errorf("a lane-with-no-prepare document did not round-trip byte-identically:\n--- before\n%s\n--- after\n%s", before, after)
+	}
+}
+
+// TestDeclaredPrepareRenders: the other direction — a lane that DOES declare a
+// prepare must write it back, or `dross test lane add --prepare` would accept a
+// flag that never reaches disk.
+func TestDeclaredPrepareRenders(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	p := &Project{
+		Project: ProjectMeta{Name: "x", Version: "1.0.0.0"},
+		Runtime: Runtime{
+			Mode: "native",
+			TestLane: []TestLane{{
+				Name:    "go",
+				Match:   []string{"internal/**"},
+				Command: "go test",
+				Prepare: "make build",
+			}},
+		},
+	}
+	if err := p.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if got := reloaded.Runtime.TestLane[0].Prepare; got != "make build" {
+		t.Errorf("round-trip lost the prepare: %q", got)
+	}
+}

@@ -1,0 +1,191 @@
+{
+  "phase": "test-lane-config",
+  "pr": 107,
+  "base": "milestone/v1.6",
+  "base_commit": "76b14167a8436f420575a8c46852fd0b136bb8db",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/project/project.go",
+        "internal/project/project_test.go",
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_lane_test.go"
+      ],
+      "commit": "dbc3845",
+      "completed_at": "2026-08-25T12:27:32.816447Z",
+      "landmarks": [
+        {
+          "feature": "test lanes",
+          "symbol": "TestLane",
+          "loc": "internal/project/project.go:98",
+          "what": "[[runtime.test_lane]] schema (name/match/command) plus per-field validate rules naming the offending lane"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/trust_lane_test.go"
+      ],
+      "commit": "e545c21",
+      "completed_at": "2026-08-25T20:20:22.471354Z",
+      "landmarks": [
+        {
+          "feature": "test lane consent",
+          "symbol": "TestDoctorCountsEachRefusedLane",
+          "loc": "internal/cmd/trust_lane_test.go:266",
+          "what": "each refused lane is worth exactly one doctor issue, so the transcript and the exit code agree"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/survivor_backlog_repo_test.go"
+      ],
+      "commit": "46e8486",
+      "completed_at": "2026-08-25T17:34:52.312068Z",
+      "landmarks": [
+        {
+          "feature": "survivor backlog audit",
+          "symbol": "auditSurvivorBacklog",
+          "loc": "internal/cmd/survivor_backlog_repo_test.go:82",
+          "what": "forward routing into the active milestone counts as scheduled disposal; past it stays deferral"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/testlane/match.go",
+        "internal/testlane/match_test.go"
+      ],
+      "commit": "57ffe67",
+      "completed_at": "2026-08-25T12:31:26.526985Z",
+      "landmarks": [
+        {
+          "feature": "test lanes",
+          "symbol": "Select",
+          "loc": "internal/testlane/match.go:60",
+          "what": "pure path-to-lane resolver: ordered deduped lane indices plus unmatched and out-of-tree paths as separate categories"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/test_lane.go",
+        "internal/cmd/test_lane_test.go",
+        "internal/cmd/test.go"
+      ],
+      "commit": "32d4b5d",
+      "completed_at": "2026-08-25T12:43:00.889166Z",
+      "landmarks": [
+        {
+          "feature": "test lanes",
+          "symbol": "testLane",
+          "loc": "internal/cmd/test_lane.go:29",
+          "what": "dross test lane add|list|remove writes [[runtime.test_lane]] through the CLI and drops a removed lane's consent grant"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/local.go",
+        "internal/cmd/trust.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/trust_lane_test.go"
+      ],
+      "commit": "9ce037a",
+      "completed_at": "2026-08-25T12:37:09.418776Z",
+      "landmarks": [
+        {
+          "feature": "exec consent",
+          "symbol": "LaneConsented",
+          "loc": "internal/cmd/trust.go:200",
+          "what": "per-lane consent fingerprints in local.toml keyed by lane name, granted by dross trust --lane and surfaced per lane in doctor"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_files_test.go"
+      ],
+      "commit": "f01ece7",
+      "completed_at": "2026-08-25T12:47:10.504771Z",
+      "landmarks": [
+        {
+          "feature": "test lanes",
+          "symbol": "runTestLanes",
+          "loc": "internal/cmd/test.go:265",
+          "what": "dross test --files resolves paths to lanes, refusing an out-of-tree set at exit 2 and a nothing-matched set at exit 5"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/test_lane_consent_test.go",
+        "internal/cmd/test_files_test.go"
+      ],
+      "commit": "4565b7d",
+      "completed_at": "2026-08-25T12:53:58.096835Z",
+      "landmarks": [
+        {
+          "feature": "test lanes",
+          "symbol": "runOneLane",
+          "loc": "internal/cmd/test.go:340",
+          "what": "matched lanes spawn in declaration order behind their own consent grant, headers precede output, worst outcome wins the exit code"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "assets/prompts/execute.md",
+        "internal/cmd/prompt_test_command_test.go",
+        "internal/cmd/consent_surface_test.go"
+      ],
+      "commit": "dae5593",
+      "completed_at": "2026-08-25T13:00:27.065378Z",
+      "landmarks": [
+        {
+          "feature": "execute loop",
+          "symbol": "TestExecutePromptPassesTaskFilesToTest",
+          "loc": "internal/cmd/prompt_test_command_test.go:126",
+          "what": "pre-commit test gate scopes itself to the task's own plan.toml files via dross test --files and documents all six exit codes"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "README.md",
+        "assets/prompts/options.md",
+        "internal/cmd/options_docs_test.go"
+      ],
+      "commit": "d894a29",
+      "completed_at": "2026-08-25T12:57:10.808976Z",
+      "landmarks": [
+        {
+          "feature": "settings discovery",
+          "symbol": "TestReadmeDocumentsTestLanes",
+          "loc": "internal/cmd/options_docs_test.go:182",
+          "what": "lane verbs, dross test --files and the per-lane grant documented in README and options.md behind drift guards"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/trust_lane_test.go"
+      ],
+      "commit": "1304383",
+      "completed_at": "2026-08-25T18:09:28.039331Z",
+      "landmarks": [
+        {
+          "feature": "test lane consent",
+          "symbol": "TestTrustLaneOnALaneLessRepoSaysSo",
+          "loc": "internal/cmd/trust_lane_test.go:202",
+          "what": "a lane-less repo's trust --lane refusal says so and names the verb that declares one"
+        }
+      ]
+    }
+  }
+}

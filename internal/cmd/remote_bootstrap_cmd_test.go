@@ -331,3 +331,29 @@ func TestDocsCoverRemoteBootstrap(t *testing.T) {
 		}
 	}
 }
+
+// TestAdapterStepsAreUnchangedByLaneCoverage: the adapter half of the report is
+// what every existing user reads, and widening bootstrap to cover lanes must be
+// invisible to a repo that declares none. A tag that started reading "lane " for
+// an adapter step, or a step that lost its adapter's name, would be this change
+// altering output it never claimed to touch.
+func TestAdapterStepsAreUnchangedByLaneCoverage(t *testing.T) {
+	bootstrapFixture(t, "gremlins")
+	probeMissing(t, "gremlins")
+	rec := &execRecorder{}
+	rec.install(t)
+
+	out, err := runBootstrap(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "→ gremlins (gremlins) would install: go install "+gremlinsPin) {
+		t.Errorf("the adapter step's line moved:\n%s", out)
+	}
+	if strings.Contains(out, "lane ") {
+		t.Errorf("a repo with no lanes printed a lane tag:\n%s", out)
+	}
+	if strings.Contains(out, "no install line") {
+		t.Errorf("a repo with no lanes reached the unreported arm:\n%s", out)
+	}
+}

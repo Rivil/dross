@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -248,15 +249,7 @@ func ScriptAll(t Target, cmds [][]string) (string, error) {
 		return "", fmt.Errorf("remote: empty command for host %q", t.Host)
 	}
 	var b strings.Builder
-	for _, e := range t.Env {
-		b.WriteString("export ")
-		b.WriteString(e.Name)
-		b.WriteByte('=')
-		b.WriteString(shellQuote(e.Value))
-		b.WriteByte('\n')
-	}
-	b.WriteString("cd ")
-	b.WriteString(shellQuote(t.Workdir))
+	writePreamble(&b, t)
 	for n, argv := range cmds {
 		if len(argv) == 0 {
 			return "", fmt.Errorf("remote: empty command for host %q", t.Host)
@@ -290,6 +283,232 @@ func ScriptAll(t Target, cmds [][]string) (string, error) {
 	}
 	b.WriteByte('\n')
 	return b.String(), nil
+}
+
+// writePreamble emits the exports and the cd that every remote script starts
+// with, leaving the builder positioned at the end of the `cd` line.
+//
+// Extracted so the env-export quoting has ONE implementation. It is the line
+// where a value carrying `$(` or a backtick would become execution rather than
+// data, and a second copy of it is a second place for that to be got wrong —
+// the detached script below needs the same preamble and must not spell it
+// again.
+func writePreamble(b *strings.Builder, t Target) {
+	for _, e := range t.Env {
+		b.WriteString("export ")
+		b.WriteString(e.Name)
+		b.WriteByte('=')
+		b.WriteString(shellQuote(e.Value))
+		b.WriteByte('\n')
+	}
+	b.WriteString("cd ")
+	b.WriteString(shellQuote(t.Workdir))
+}
+
+// RunsDirName is the host-side directory, relative to the target's workdir,
+// under which each detached run gets its own directory.
+//
+// Dot-prefixed and inside the workdir rather than in /tmp: the workdir is the
+// one path the grant already authorized, so a run directory there needs no
+// second authorization and is removed by the same cleanup that owns the tree.
+// A /tmp path would also be swept by tmpfiles on a long-scheduled run — the
+// exact case --at exists to serve.
+const RunsDirName = ".dross-runs"
+
+// RunDir returns the host-side directory for one detached run, relative to the
+// target's workdir.
+//
+// runID is validated as a path SEGMENT, not merely quoted: it is joined into a
+// path that a later cancel removes recursively, so a segment spelling `..` would
+// aim that removal at the workdir's parent. Quoting alone stops the shell from
+// splitting it and does nothing about what the path then denotes.
+func RunDir(runID string) (string, error) {
+	if runID == "" {
+		return "", fmt.Errorf("remote: empty run id: %w", ErrUnsafeTarget)
+	}
+	if runID != path.Base(runID) || runID == "." || runID == ".." {
+		return "", fmt.Errorf("remote: run id %q is not a single path segment: %w", runID, ErrUnsafeTarget)
+	}
+	return path.Join(RunsDirName, runID), nil
+}
+
+// DetachScript builds the script that starts argv on the host and returns
+// without waiting for it.
+//
+// The run outlives the ssh connection, which is the whole point: `setsid`
+// detaches it from the session so the SIGHUP that follows the connection
+// closing never reaches it, `nohup` covers the case where setsid is absent, and
+// stdin is redirected from /dev/null so the tool cannot block reading a
+// terminal that is about to go away. Output goes to a log file in the run
+// directory rather than back over the connection, because there is no
+// connection to carry it by the time the tool is producing any.
+//
+// notBefore is honoured on the HOST's clock, as an absolute instant in epoch
+// seconds rather than a duration computed here. A duration would bake in this
+// machine's clock at dispatch and drift by however long the ssh round trip
+// took; an epoch second is unambiguous and needs no timezone agreement between
+// the two machines. A notBefore already past emits no sleep at all — the
+// comparison is done host-side, so a dispatch racing its own start time cannot
+// produce a negative sleep.
+//
+// The tool's exit code is written to a file AFTER it finishes. That file's
+// existence is the completion signal: a run that died — host rebooted, OOM
+// killer, someone's `pkill` — leaves no exit file, which is what makes
+// "finished with failures" distinguishable from "never finished" at fetch time.
+func DetachScript(t Target, runDir string, argv []string, notBefore time.Time) (string, error) {
+	if err := t.Validate(); err != nil {
+		return "", err
+	}
+	if len(argv) == 0 {
+		return "", fmt.Errorf("remote: empty command for host %q", t.Host)
+	}
+	if runDir == "" {
+		return "", fmt.Errorf("remote: empty run directory: %w", ErrUnsafeTarget)
+	}
+
+	q := func(s string) string { return shellQuote(s) }
+	statePath := q(path.Join(runDir, "state"))
+	exitPath := q(path.Join(runDir, "exit"))
+	pidPath := q(path.Join(runDir, "pid"))
+	logPath := q(path.Join(runDir, "log"))
+
+	// The inner script is what the detached shell runs. Built as text and
+	// single-quoted into `bash -c` as one argument, so nothing in it is
+	// re-parsed by the outer shell.
+	var inner strings.Builder
+	if !notBefore.IsZero() {
+		fmt.Fprintf(&inner, "__t=%d; __n=$(date +%%s); "+
+			"if [ \"$__t\" -gt \"$__n\" ]; then sleep $((__t - __n)); fi; ",
+			notBefore.Unix())
+	}
+	// Written after the sleep, so a scheduled run reads as scheduled until it
+	// actually starts rather than from the moment it was dispatched.
+	inner.WriteString("printf '%s' running > " + statePath + "; ")
+	for i, a := range argv {
+		if i > 0 {
+			inner.WriteByte(' ')
+		}
+		inner.WriteString(q(a))
+	}
+	// `$?` is captured before anything else can overwrite it, and the state
+	// file is only moved to finished once the code is durably recorded — a
+	// reader that saw finished with no exit file would have to guess.
+	inner.WriteString("; __c=$?; printf '%s\\n' \"$__c\" > " + exitPath +
+		"; printf '%s' finished > " + statePath)
+
+	initial := "running"
+	if !notBefore.IsZero() {
+		initial = "scheduled"
+	}
+
+	var b strings.Builder
+	writePreamble(&b, t)
+	// Each setup step is its own statement guarded by `|| exit 1`, NOT an `&&`
+	// chain ending in `&`.
+	//
+	// This is the shape a live dispatch against helicon proved necessary. In
+	// `a && b && setsid ... &` the `&` binds to the WHOLE list, so the entire
+	// chain — including the mutation run — ran in a background subshell whose
+	// stdout was still the ssh channel. ssh therefore did not return until the
+	// run finished, which is precisely the blocking this exists to remove, and
+	// the dispatch looked like a hang. `$!` was the subshell's pid too, so the
+	// recorded pid pointed at the wrong process and `--cancel` would have had
+	// nothing to signal.
+	b.WriteString(" || exit 1\n")
+	b.WriteString("mkdir -p " + q(runDir) + " || exit 1\n")
+	b.WriteString("printf '%s' " + q(initial) + " > " + statePath + " || exit 1\n")
+	b.WriteString("setsid nohup bash -c " + q(inner.String()) +
+		" > " + logPath + " 2>&1 < /dev/null &\n")
+	// `$!` is the detached job's pid, recorded so a cancel has a process group
+	// to signal. It is only that pid on the line immediately after the `&`, and
+	// only because the `&` now applies to that single command.
+	b.WriteString("printf '%s\\n' \"$!\" > " + pidPath + "\n")
+	return b.String(), nil
+}
+
+// StatusScript builds the script that reports a detached run's state without
+// disturbing it.
+//
+// Every value is emitted as a labelled line with an empty value when its file
+// is absent, so a missing file and an empty one read the same and neither is an
+// error. `dir` is emitted separately because the difference between "the run
+// has not written anything yet" and "the run directory is gone" is the
+// difference between waiting and reporting a lost run — c-6's distinction, and
+// one that three empty values on their own cannot express.
+func StatusScript(t Target, runDir string) (string, error) {
+	if err := t.Validate(); err != nil {
+		return "", err
+	}
+	if runDir == "" {
+		return "", fmt.Errorf("remote: empty run directory: %w", ErrUnsafeTarget)
+	}
+	q := func(s string) string { return shellQuote(s) }
+	var b strings.Builder
+	writePreamble(&b, t)
+	b.WriteString("\nprintf 'dir=%s\\n' \"$([ -d " + q(runDir) + " ] && echo yes || echo no)\"")
+	for _, f := range []string{"state", "exit", "pid"} {
+		b.WriteString("\nprintf '" + f + "=%s\\n' \"$(cat " +
+			q(path.Join(runDir, f)) + " 2>/dev/null)\"")
+	}
+	b.WriteByte('\n')
+	return b.String(), nil
+}
+
+// RunStatus is a detached run's host-side state, as StatusScript reported it.
+//
+// HasExit is separate from ExitCode rather than encoded as a sentinel: the tool
+// exiting 0 and the tool never finishing are the two outcomes a fetch must not
+// confuse, and any in-band sentinel (-1, 0, "") is a value some real run could
+// also produce.
+type RunStatus struct {
+	DirExists bool
+	State     string
+	ExitCode  int
+	HasExit   bool
+	PID       int
+}
+
+// ParseStatus reads StatusScript's output.
+//
+// Unknown lines are ignored rather than refused: the remote shell's profile may
+// print a banner before anything dross wrote, and a status read that failed
+// because someone's .bashrc greets them would strand a finished run.
+func ParseStatus(out string) (RunStatus, error) {
+	var s RunStatus
+	seen := false
+	for _, line := range strings.Split(out, "\n") {
+		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok {
+			continue
+		}
+		switch k {
+		case "dir":
+			s.DirExists = v == "yes"
+			seen = true
+		case "state":
+			s.State = v
+		case "exit":
+			if v != "" {
+				n, err := strconv.Atoi(v)
+				if err != nil {
+					return RunStatus{}, fmt.Errorf("remote: unreadable exit code %q: %w", v, err)
+				}
+				s.ExitCode, s.HasExit = n, true
+			}
+		case "pid":
+			if v != "" {
+				n, err := strconv.Atoi(v)
+				if err != nil {
+					return RunStatus{}, fmt.Errorf("remote: unreadable pid %q: %w", v, err)
+				}
+				s.PID = n
+			}
+		}
+	}
+	if !seen {
+		return RunStatus{}, fmt.Errorf("remote: no status lines in output")
+	}
+	return s, nil
 }
 
 // SyncArgs returns the argv that pushes the local working tree to the target,
@@ -518,6 +737,16 @@ func (e *ExitError) Error() string {
 // than re-deriving the mapping from the code at every site.
 func (e *ExitError) Unwrap() error { return e.kind }
 
+// ExitCode exposes the remote program's own status under the same interface
+// *exec.ExitError satisfies locally.
+//
+// The class (Unwrap) answers "did this run at all"; the NUMBER answers "what
+// did the runner say", and a caller that declared what its runner's
+// collected-nothing code is needs the number. Without this method a run on a
+// granted host reaches errors.As with nothing to match, and the same runner
+// exiting the same way would be a miss locally and a red suite remotely.
+func (e *ExitError) ExitCode() int { return e.Code }
+
 // Classify maps an exit code onto the class its caller branches on.
 //
 // 255 is ssh's own "I could not do this" code — reserved by ssh precisely so a
@@ -598,6 +827,25 @@ func Exec(t Target, argv []string) (string, error) {
 	script, err := Script(t, argv)
 	if err != nil {
 		return "", err
+	}
+	return run(t.Host, full, script)
+}
+
+// ExecScript runs a script this package already built — DetachScript's or
+// StatusScript's — on the target, returning its output.
+//
+// Separate from Exec because Exec builds Script from an argv, and the detached
+// scripts are not one argv: they are a sequence with redirections and a
+// backgrounded job, which no argv can express. Both go down the same ssh
+// transport and classify failures the same way, so the difference is only in
+// who composed the text.
+func ExecScript(t Target, script string) (string, error) {
+	full, err := SSHArgs(t)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(script) == "" {
+		return "", fmt.Errorf("remote: empty script for host %q", t.Host)
 	}
 	return run(t.Host, full, script)
 }

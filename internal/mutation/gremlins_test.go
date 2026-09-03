@@ -1,6 +1,7 @@
 package mutation
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"os/exec"
@@ -451,6 +452,56 @@ func TestPackagesFromFiles(t *testing.T) {
 			in:   nil,
 			want: nil,
 		},
+		// --- Go-less directories yield no package ---
+		//
+		// Gremlins appends `/...` to every package argument, so "." is not the
+		// root package — it is the whole module. A changed README.md deriving
+		// "." is what made a phase touching 15 files mutate all 196 of them.
+		{
+			name: "a root file that is not Go derives no root package",
+			in:   []string{"README.md"},
+			want: nil,
+		},
+		{
+			name: "a directory holding no Go is dropped",
+			in:   []string{"assets/prompts/verify.md"},
+			want: nil,
+		},
+		{
+			name: "the phase's own shape: Go-less dirs dropped, Go dirs kept",
+			in: []string{
+				"README.md",
+				"assets/prompts/verify.md",
+				"internal/cmd/verify.go",
+				"internal/remote/remote.go",
+			},
+			want: []string{"./internal/cmd", "./internal/remote"},
+		},
+		// The guard against over-reach: the filter is per FILE, but the
+		// decision is per DIRECTORY. A package must survive a non-Go file
+		// sitting beside its sources, whatever order they arrive in.
+		{
+			name: "a non-Go file beside Go does not drop its package",
+			in:   []string{"internal/cmd/verify.go", "internal/cmd/testdata.json"},
+			want: []string{"./internal/cmd"},
+		},
+		{
+			name: "the non-Go file arriving first does not drop it either",
+			in:   []string{"internal/cmd/testdata.json", "internal/cmd/verify.go"},
+			want: []string{"./internal/cmd"},
+		},
+		{
+			name: "a real root package is still derived from a root .go file",
+			in:   []string{"README.md", "main.go"},
+			want: []string{"."},
+		},
+		// A task that only adds tests still owes its package a run: those
+		// tests are precisely what kill its mutants.
+		{
+			name: "test sources count as Go",
+			in:   []string{"internal/cmd/verify_status_test.go"},
+			want: []string{"./internal/cmd"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -839,5 +890,368 @@ func TestMissingReportIsSkipNotError(t *testing.T) {
 	// not replace it.
 	if got := g.Unmeasured[0].String(); got != g.Unmeasured[0].Message {
 		t.Errorf("String() = %q, want the printed message %q", got, g.Unmeasured[0].Message)
+	}
+}
+
+// TestCollectMatchesRunForTheSameReports is the equivalence that makes c-2 an
+// assertion instead of a claim.
+//
+// Run and Collect are two entry points to the same merge: Run reaches it after
+// spawning the tool and fetching each report, Collect reaches it hours later
+// against reports already on disk. They share every helper — ParseGremlinsJSON,
+// RePrefixGremlinsFiles, DropInapplicable, hasCoverage, mergeInto — but sharing
+// helpers is not the same as agreeing, and nothing else in the suite would fail
+// if one of them grew a step the other lacked.
+//
+// A detached verdict that differed from an attached one would be invisible:
+// both produce a plausible verify.toml, and the difference would only surface
+// as two runs of the same phase disagreeing for no stated reason.
+func TestCollectMatchesRunForTheSameReports(t *testing.T) {
+	root := t.TempDir()
+	restore := fakeGremlins(t, []byte(fixtureGremlins))
+	defer restore()
+
+	files := []string{"pkga/x.go", "pkgb/y.go"}
+
+	// Run spawns (faked) and leaves the per-package reports on disk.
+	viaRun := &Gremlins{ProjectRoot: root}
+	fromRun, err := viaRun.Run(files)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Collect reads exactly those reports, with no spawn at all.
+	viaCollect := &Gremlins{ProjectRoot: root}
+	steps, err := viaCollect.DetachSteps(files)
+	if err != nil {
+		t.Fatalf("DetachSteps: %v", err)
+	}
+	fromCollect, err := viaCollect.Collect(steps, "helicon")
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	for _, f := range []struct {
+		name      string
+		got, want int
+	}{
+		{"Killed", fromCollect.Killed, fromRun.Killed},
+		{"Survived", fromCollect.Survived, fromRun.Survived},
+		{"Timeout", fromCollect.Timeout, fromRun.Timeout},
+		{"NotCovered", fromCollect.NotCovered, fromRun.NotCovered},
+		{"Errors", fromCollect.Errors, fromRun.Errors},
+		{"len(Surviving)", len(fromCollect.Surviving), len(fromRun.Surviving)},
+	} {
+		if f.got != f.want {
+			t.Errorf("%s: Collect=%d Run=%d — the two paths disagree, so a detached "+
+				"verdict is not the attached one", f.name, f.got, f.want)
+		}
+	}
+	if fromCollect.Score != fromRun.Score {
+		t.Errorf("Score: Collect=%v Run=%v", fromCollect.Score, fromRun.Score)
+	}
+
+	// The survivor rows must match by identity, not merely in count: a path
+	// that re-prefixed differently would keep the count and change every path.
+	byKey := func(r *Report) map[string]int {
+		m := map[string]int{}
+		for _, s := range r.Surviving {
+			m[fmt.Sprintf("%s:%d:%s", s.File, s.Line, s.Op)]++
+		}
+		return m
+	}
+	if !reflect.DeepEqual(byKey(fromCollect), byKey(fromRun)) {
+		t.Errorf("surviving rows differ:\n Collect=%v\n Run=%v", byKey(fromCollect), byKey(fromRun))
+	}
+}
+
+// TestCollectSkipsAMissingReportRatherThanFailing mirrors Run's reading: a
+// package gremlins gathered no covered mutants for writes nothing, and that is
+// an exclusion, not an error. Failing here would turn every phase containing
+// one such package into an uncollectable detached run.
+func TestCollectSkipsAMissingReportRatherThanFailing(t *testing.T) {
+	root := t.TempDir()
+	g := &Gremlins{ProjectRoot: root}
+	steps, err := g.DetachSteps([]string{"pkga/x.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := g.Collect(steps, "helicon")
+	if err != nil {
+		t.Fatalf("Collect failed on an absent report: %v", err)
+	}
+	if rep.Killed+rep.Survived != 0 {
+		t.Errorf("an absent report contributed counts: %+v", rep)
+	}
+	if len(g.Unmeasured) != 1 || g.Unmeasured[0].Kind != UnmeasuredMissing {
+		t.Errorf("the absent report was not recorded as unmeasured: %+v", g.Unmeasured)
+	}
+}
+
+// writeStepExit records code as the exit file for step s, the way the detached
+// sequence does on the host.
+func writeStepExit(t *testing.T, root string, s PackageStep, code string) {
+	t.Helper()
+	if s.ExitRel == "" {
+		t.Fatal("step carries no ExitRel — the detached sequence has nowhere to record a code")
+	}
+	p := filepath.Join(root, s.ExitRel)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(code+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// writeStepReport drops payload at step s's report path, creating the report
+// directory the way the host's `mkdir -p` does. Not folded into writeStepExit:
+// a test that writes only one of the pair is asserting something about the
+// other's absence.
+func writeStepReport(t *testing.T, root string, s PackageStep, payload string) {
+	t.Helper()
+	p := filepath.Join(root, s.ReportRel)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(payload), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestCollectRefusesAPackageThatFailedBeforeMeasuring is the false-green this
+// whole seam exists to refuse, at the package level.
+//
+// The attached loop has refused this since reportlessExitFatal landed — written
+// after a real host failed `go test ./internal/cmd`, leaving gremlins unable to
+// gather coverage, exiting 1 and writing nothing, while the run reported a
+// clean 0.95 with the package holding most of the phase's code unmeasured. The
+// detached path reproduced it exactly, because a missing report was read as
+// "no covered mutants" with no code consulted.
+//
+// The second package measures cleanly, which is the point: the failure must
+// bite even when the rest of the run is fine. A guard that only fired when
+// EVERYTHING failed is the run-level one that was already there and already
+// insufficient.
+func TestCollectRefusesAPackageThatFailedBeforeMeasuring(t *testing.T) {
+	root := t.TempDir()
+	g := &Gremlins{ProjectRoot: root}
+	steps, err := g.DetachSteps([]string{"pkga/x.go", "pkgb/y.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) != 2 {
+		t.Fatalf("want two steps, got %d", len(steps))
+	}
+	// First failed before writing anything; second measured fine.
+	writeStepExit(t, root, steps[0], "1")
+	writeStepReport(t, root, steps[1], fixtureGremlins)
+	writeStepExit(t, root, steps[1], "0")
+
+	rep, err := g.Collect(steps, "helicon")
+	if err == nil {
+		t.Fatal("a package that exited 1 without writing a report was collected as merely unmeasured")
+	}
+	if rep != nil {
+		t.Errorf("a refused collect still returned a report: %+v", rep)
+	}
+	// The message has to name what failed and where, or the user cannot act:
+	// the package, the code, and the host that actually measured it.
+	for _, want := range []string{steps[0].Package, "exited 1", "helicon"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error does not mention %q: %v", want, err)
+		}
+	}
+}
+
+// TestCollectStillSkipsAZeroExitWithNoReport is the over-reach guard. Gremlins
+// exiting 0 without a report means it found no covered mutants — a real and
+// benign answer, and the state TestCollectSkipsAMissingReportRatherThanFailing
+// pins. Turning that into a failure would make every phase containing such a
+// package uncollectable.
+func TestCollectStillSkipsAZeroExitWithNoReport(t *testing.T) {
+	root := t.TempDir()
+	g := &Gremlins{ProjectRoot: root}
+	steps, err := g.DetachSteps([]string{"pkga/x.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeStepExit(t, root, steps[0], "0")
+
+	rep, err := g.Collect(steps, "helicon")
+	if err != nil {
+		t.Fatalf("a clean exit with no report should be a skip, not a failure: %v", err)
+	}
+	if rep.Killed+rep.Survived != 0 {
+		t.Errorf("an absent report contributed counts: %+v", rep)
+	}
+	if len(g.Unmeasured) != 1 || g.Unmeasured[0].Kind != UnmeasuredMissing {
+		t.Errorf("the absent report was not recorded as unmeasured: %+v", g.Unmeasured)
+	}
+}
+
+// TestCollectTreatsAnUnrecordedExitAsASkip covers the states where no code can
+// be trusted: the step never reached the line that writes one (killed
+// mid-package, host rebooted), or what it wrote is not a number.
+//
+// None of those is evidence of failure, and inventing a 0 would be evidence of
+// success the run never produced. They stay skips — the reading that held
+// before exit files existed — with the run-level guard as the backstop.
+func TestCollectTreatsAnUnrecordedExitAsASkip(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		code string // "" means write no file at all
+	}{
+		{name: "no exit file at all", code: ""},
+		{name: "an empty exit file", code: ""},
+		{name: "a non-numeric exit file", code: "killed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			g := &Gremlins{ProjectRoot: root}
+			steps, err := g.DetachSteps([]string{"pkga/x.go"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.name != "no exit file at all" {
+				writeStepExit(t, root, steps[0], tc.code)
+			}
+			if _, err := g.Collect(steps, "helicon"); err != nil {
+				t.Errorf("an unrecorded exit should stay a skip: %v", err)
+			}
+			if len(g.Unmeasured) != 1 || g.Unmeasured[0].Kind != UnmeasuredMissing {
+				t.Errorf("not recorded as unmeasured: %+v", g.Unmeasured)
+			}
+		})
+	}
+}
+
+// TestCollectToleratesAFailedExitWhenTheReportLanded: the rule is about a
+// package that failed BEFORE measuring anything. Gremlins exits non-zero
+// whenever mutants survive, which is a successful measurement with bad results
+// — refusing that would make every run with a survivor uncollectable.
+func TestCollectToleratesAFailedExitWhenTheReportLanded(t *testing.T) {
+	root := t.TempDir()
+	g := &Gremlins{ProjectRoot: root}
+	steps, err := g.DetachSteps([]string{"pkga/x.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeStepReport(t, root, steps[0], fixtureGremlins)
+	writeStepExit(t, root, steps[0], "1")
+
+	rep, err := g.Collect(steps, "helicon")
+	if err != nil {
+		t.Fatalf("a non-zero exit WITH a report is a measurement, not a failure: %v", err)
+	}
+	if rep.Killed == 0 {
+		t.Errorf("the report that landed was not merged: %+v", rep)
+	}
+}
+
+// TestDetachStepsRecordsAnExitPathBesideEachReport: the code and the report
+// share a stem and a directory, so they are cleared, fetched and read as a
+// pair. A step with no ExitRel is one the sequence cannot record a code for,
+// and every package that produced no report would then be indistinguishable
+// from one that failed.
+func TestDetachStepsRecordsAnExitPathBesideEachReport(t *testing.T) {
+	g := &Gremlins{ProjectRoot: t.TempDir()}
+	steps, err := g.DetachSteps([]string{"internal/cmd/a.go", "internal/remote/c.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range steps {
+		if s.ExitRel == "" {
+			t.Fatalf("step %s records no exit path", s.Package)
+		}
+		want := filepath.Join("reports", "gremlins", filepath.Base(GremlinsExitPath(g.ProjectRoot, s.Package)))
+		if s.ExitRel != want {
+			t.Errorf("step %s writes its code to %q, want %q", s.Package, s.ExitRel, want)
+		}
+		if filepath.Dir(s.ExitRel) != filepath.Dir(s.ReportRel) {
+			t.Errorf("step %s splits its code (%s) from its report (%s)", s.Package, s.ExitRel, s.ReportRel)
+		}
+		if strings.TrimSuffix(s.ExitRel, ".exit") != strings.TrimSuffix(s.ReportRel, ".json") {
+			t.Errorf("step %s's code and report do not share a stem: %s vs %s", s.Package, s.ExitRel, s.ReportRel)
+		}
+	}
+	if steps[0].ExitRel == steps[1].ExitRel {
+		t.Errorf("two packages record their codes to the same file: %s", steps[0].ExitRel)
+	}
+}
+
+// TestDetachStepsDerivesTheSamePackagesRunDoes: the detached dispatch and the
+// attached run must mutate the same set. A second derivation here would drift
+// the moment packagesFromFiles changed, and the detached run would quietly
+// measure a different set of packages while reporting through the same
+// artefacts.
+func TestDetachStepsDerivesTheSamePackagesRunDoes(t *testing.T) {
+	g := &Gremlins{ProjectRoot: t.TempDir()}
+	files := []string{"internal/cmd/a.go", "internal/cmd/b.go", "internal/remote/c.go"}
+
+	steps, err := g.DetachSteps(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, s := range steps {
+		got = append(got, s.Package)
+	}
+	want := packagesFromFiles(files)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("DetachSteps packages = %v, Run would use %v", got, want)
+	}
+	// And each step's report path must be the one Run writes, or a detached
+	// run's reports land where nothing collects them.
+	for _, s := range steps {
+		wantRel := filepath.Join("reports", "gremlins", filepath.Base(GremlinsReportPath(g.ProjectRoot, s.Package)))
+		if s.ReportRel != wantRel {
+			t.Errorf("step %s writes %q, Run reads %q", s.Package, s.ReportRel, wantRel)
+		}
+	}
+}
+
+// TestCollectClassifiesAnUnreadableReport covers the branch between "no report"
+// and "a good report" — a file that exists and does not parse.
+//
+// The three outcomes call for opposite handling and are deliberately distinct
+// as DATA rather than as prose: missing means nothing is known, unreadable
+// means nothing is known but something is wrong, and a parsed report with no
+// coverage means the package WAS measured. A collect that merged a malformed
+// file, or that treated it as fatal, would lose that distinction — and the
+// detached path reads reports written hours earlier on another machine, which
+// is exactly where a truncated file shows up.
+func TestCollectClassifiesAnUnreadableReport(t *testing.T) {
+	root := t.TempDir()
+	g := &Gremlins{ProjectRoot: root}
+	steps, err := g.DetachSteps([]string{"pkga/x.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "reports", "gremlins"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Truncated mid-object, which is what a half-written or half-fetched
+	// report actually looks like.
+	if err := os.WriteFile(filepath.Join(root, steps[0].ReportRel), []byte(`{"mutants_killed": 4, "files": [`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rep, err := g.Collect(steps, "helicon")
+	if err != nil {
+		t.Fatalf("an unreadable report should be recorded, not fatal: %v", err)
+	}
+	if rep.Killed+rep.Survived+rep.Timeout != 0 {
+		t.Errorf("an unreadable report contributed counts: %+v", rep)
+	}
+	if len(g.Unmeasured) != 1 {
+		t.Fatalf("want 1 unmeasured entry, got %d: %+v", len(g.Unmeasured), g.Unmeasured)
+	}
+	if g.Unmeasured[0].Kind != UnmeasuredUnreadable {
+		t.Errorf("kind = %q, want %q — a malformed report is not the same as an absent one, "+
+			"and a drain treats the two differently", g.Unmeasured[0].Kind, UnmeasuredUnreadable)
+	}
+	if !strings.Contains(g.Unmeasured[0].Message, "unreadable") {
+		t.Errorf("the message does not say why: %q", g.Unmeasured[0].Message)
 	}
 }

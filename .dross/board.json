@@ -2,7 +2,8 @@
   "milestones": {
     "v1.2": "DRO-1",
     "v1.3": "DRO-7",
-    "v1.5": "DRO-134"
+    "v1.5": "DRO-134",
+    "v1.6": "DRO-188"
   },
   "phases": {
     "board-mirror-reaper": "DRO-163",
@@ -14,8 +15,15 @@
     "deferred-add-command": "DRO-14",
     "exec-trust-followups": "DRO-2",
     "guard-remedy-ordering": "DRO-27",
+    "lane-host-affinity": "DRO-317",
+    "lane-prepare-step": "DRO-223",
+    "lane-remote-locality": "DRO-235",
+    "lane-selector-custom": "DRO-268",
+    "lane-selector-preview": "DRO-304",
+    "lane-selector-translation": "DRO-210",
     "legacy-phase-backfill": "DRO-142",
     "milestone-lifecycle-close": "DRO-13",
+    "milestone-push-failure-tests": "DRO-263",
     "mirror-terminal-state": "DRO-149",
     "multilang-verify-signal": "DRO-28",
     "mutation-diff-scope": "DRO-9",
@@ -26,62 +34,92 @@
     "red-proof-repoint": "DRO-125",
     "reentry-signal-truth": "DRO-181",
     "remote-mutation-runner": "DRO-24",
+    "remote-run-detach": "DRO-277",
     "remote-test-runner": "DRO-26",
     "remote-toolchain-bootstrap": "DRO-129",
+    "remote-toolchain-install": "DRO-246",
     "survivor-drain": "DRO-12",
-    "survivor-lifecycle": "DRO-10"
+    "survivor-lifecycle": "DRO-10",
+    "test-lane-config": "DRO-191"
   },
   "quicks": {
     "1.2.8.1": "DRO-6",
     "1.3.5.1": "DRO-20",
+    "1.5.6.2": "DRO-189",
+    "1.5.6.3": "DRO-190",
+    "1.6.3.1": "DRO-232",
+    "1.6.3.2": "DRO-234",
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
+    "someday:id:010e057c10c922c6": "DRO-286",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
+    "someday:id:0323e4284012842f": "DRO-208",
     "someday:id:053bcdb6ddc5f57b": "DRO-162",
     "someday:id:06ca9b2e97abcb78": "DRO-87",
     "someday:id:0ad901405561a187": "DRO-116",
+    "someday:id:0d1268f8311bb7e4": "DRO-221",
     "someday:id:0eb3dd31220aa3bc": "DRO-101",
+    "someday:id:121f867fd1bffb0c": "DRO-287",
     "someday:id:130a1cf4bc7049f2": "DRO-92",
     "someday:id:1708546d27dd3939": "DRO-81",
+    "someday:id:1920efcbac52f0c0": "DRO-245",
     "someday:id:1b82d94dacd3b963": "DRO-111",
     "someday:id:1bcd0f352182ecf9": "DRO-39",
     "someday:id:1ecc05633e1a85ed": "DRO-15",
+    "someday:id:1f7da51167187ecb": "DRO-261",
     "someday:id:20d239bfa5341306": "DRO-62",
     "someday:id:215d2ae2e7799d69": "DRO-102",
     "someday:id:2385fc70268180d1": "DRO-83",
     "someday:id:24da6d2754488290": "DRO-41",
+    "someday:id:26a2f16243a1ffbe": "DRO-220",
     "someday:id:29eda0e6b5c6ffba": "DRO-180",
     "someday:id:2a662adc6c7edb5f": "DRO-73",
     "someday:id:2d576654430ab9a2": "DRO-93",
     "someday:id:2e734f46572de8ca": "DRO-110",
     "someday:id:3701d0add3074097": "DRO-91",
     "someday:id:3a0d7d3147d7b585": "DRO-115",
-    "someday:id:3ab9f3a197c6ec1e": "DRO-161",
     "someday:id:3d97976a9b813c12": "DRO-69",
     "someday:id:3d9baeead7292172": "DRO-109",
     "someday:id:3e10687c24c50dd5": "DRO-66",
+    "someday:id:41d3a87cd97fcb38": "DRO-209",
     "someday:id:44c1e11debcc3ee6": "DRO-98",
     "someday:id:4518ecf010f195bb": "DRO-90",
     "someday:id:46744487f204b5cd": "DRO-54",
+    "someday:id:46c15a85de624472": "DRO-233",
+    "someday:id:4872b79b07f21c0a": "DRO-329",
     "someday:id:48b5edeb0556cd3a": "DRO-105",
+    "someday:id:49e1846c35c70607": "DRO-314",
+    "someday:id:5424d79f2f8d3bc5": "DRO-327",
+    "someday:id:5610b45525282bf4": "DRO-219",
     "someday:id:5802ad3fe8f08d87": "DRO-34",
+    "someday:id:58ecc7ff9f2a5c15": "DRO-302",
+    "someday:id:59d5dcbbcbec81c2": "DRO-301",
     "someday:id:5c2c048407b679b5": "DRO-159",
+    "someday:id:62841da45ed858fe": "DRO-267",
     "someday:id:64cd228356c9fce5": "DRO-76",
     "someday:id:6606a4ae3d228907": "DRO-52",
     "someday:id:66f4a1fc8ec83883": "DRO-70",
+    "someday:id:6953a18634519ce3": "DRO-244",
     "someday:id:6e9a60c539934c23": "DRO-40",
     "someday:id:6f43c4001c862759": "DRO-124",
     "someday:id:7300a61dfb556269": "DRO-118",
+    "someday:id:75415f41886564d8": "DRO-315",
     "someday:id:7587f4c35d42ee82": "DRO-106",
     "someday:id:75fa307a41cebafe": "DRO-59",
     "someday:id:77f61ea051b44f42": "DRO-53",
+    "someday:id:794b7474a9e2ac97": "DRO-222",
     "someday:id:7b308a04a43d8cb9": "DRO-22",
     "someday:id:7ea6759938b910a4": "DRO-84",
+    "someday:id:82da70858aaff13e": "DRO-303",
     "someday:id:84db6f7af8f57cef": "DRO-49",
     "someday:id:8517ca7569b82540": "DRO-74",
     "someday:id:85981310e87bb7cf": "DRO-68",
+    "someday:id:87008f463c24d5b1": "DRO-262",
+    "someday:id:87d98c3c945fa02c": "DRO-257",
+    "someday:id:8911d7673663ac5f": "DRO-243",
+    "someday:id:899390dd30b47c4e": "DRO-285",
     "someday:id:89b51ed2552d67bc": "DRO-42",
     "someday:id:8aa15f3752fc7827": "DRO-97",
     "someday:id:93ce98de1002acab": "DRO-50",
@@ -91,16 +129,22 @@
     "someday:id:974f6ffb1634e97a": "DRO-120",
     "someday:id:9a70b04cd1817f37": "DRO-72",
     "someday:id:9ae1aad86e4bf770": "DRO-56",
+    "someday:id:9c1f7be59afdc8ac": "DRO-281",
     "someday:id:9fa4386fc04774d6": "DRO-112",
     "someday:id:a0c922d44af899fc": "DRO-78",
+    "someday:id:a1eca47a8213daa2": "DRO-207",
     "someday:id:a3485cb4d13bd717": "DRO-99",
     "someday:id:a3bc77dbd1f99621": "DRO-88",
     "someday:id:a466b845ac09e62e": "DRO-103",
+    "someday:id:a55b8867426e79e1": "DRO-282",
     "someday:id:a7375e4e818abe9c": "DRO-61",
+    "someday:id:a745d842f98f7973": "DRO-326",
     "someday:id:ab84f90d28487b7a": "DRO-17",
     "someday:id:ad762bc624279cdf": "DRO-104",
     "someday:id:ae17cb02fa7db2fc": "DRO-82",
     "someday:id:ae6631594447a24e": "DRO-55",
+    "someday:id:b32165178110b56a": "DRO-325",
+    "someday:id:b328f16cd8693b82": "DRO-260",
     "someday:id:b38eb66d043ad477": "DRO-160",
     "someday:id:b4794de89d962714": "DRO-63",
     "someday:id:b85eb8099f7b6714": "DRO-43",
@@ -124,9 +168,13 @@
     "someday:id:ec525c193f4d6717": "DRO-79",
     "someday:id:ed3c65534e6dca2d": "DRO-114",
     "someday:id:ee252a290b75a800": "DRO-80",
+    "someday:id:ee3c2f06092c862f": "DRO-316",
     "someday:id:ee52693267d9cef5": "DRO-108",
     "someday:id:f0d699cce6b70445": "DRO-71",
+    "someday:id:f74fa3c9230a9c3b": "DRO-291",
     "someday:id:f93277521f881095": "DRO-89",
+    "someday:id:fa50fb2ca56d687a": "DRO-276",
+    "someday:id:fc82932cc45aefb6": "DRO-328",
     "someday:id:fd3b654f5740fd11": "DRO-75",
     "someday:id:fee0d326fde9b275": "DRO-64",
     "someday:id:ff40c2cbbd18e7dc": "DRO-94"
@@ -251,6 +299,226 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "lane-host-affinity/t-1": {
+      "issue": "DRO-318",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-host-affinity/t-2": {
+      "issue": "DRO-319",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-host-affinity/t-3": {
+      "issue": "DRO-320",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-host-affinity/t-4": {
+      "issue": "DRO-321",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-host-affinity/t-5": {
+      "issue": "DRO-322",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-host-affinity/t-6": {
+      "issue": "DRO-323",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-host-affinity/t-7": {
+      "issue": "DRO-324",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-prepare-step/t-1": {
+      "issue": "DRO-225",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-prepare-step/t-2": {
+      "issue": "DRO-226",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-prepare-step/t-3": {
+      "issue": "DRO-227",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-prepare-step/t-4": {
+      "issue": "DRO-228",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-prepare-step/t-5": {
+      "issue": "DRO-230",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-prepare-step/t-6": {
+      "issue": "DRO-229",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-prepare-step/t-7": {
+      "issue": "DRO-231",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-remote-locality/t-1": {
+      "issue": "DRO-236",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-remote-locality/t-2": {
+      "issue": "DRO-237",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-remote-locality/t-3": {
+      "issue": "DRO-239",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-remote-locality/t-4": {
+      "issue": "DRO-238",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-remote-locality/t-5": {
+      "issue": "DRO-240",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-remote-locality/t-6": {
+      "issue": "DRO-241",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-1": {
+      "issue": "DRO-269",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-2": {
+      "issue": "DRO-270",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-3": {
+      "issue": "DRO-271",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-4": {
+      "issue": "DRO-272",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-5": {
+      "issue": "DRO-273",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-6": {
+      "issue": "DRO-274",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-7": {
+      "issue": "DRO-275",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-8": {
+      "issue": "DRO-283",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-preview/t-1": {
+      "issue": "DRO-305",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-preview/t-2": {
+      "issue": "DRO-306",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-preview/t-3": {
+      "issue": "DRO-307",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-preview/t-4": {
+      "issue": "DRO-308",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-preview/t-5": {
+      "issue": "DRO-309",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-preview/t-6": {
+      "issue": "DRO-310",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-preview/t-7": {
+      "issue": "DRO-312",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-preview/t-8": {
+      "issue": "DRO-311",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-preview/t-9": {
+      "issue": "DRO-313",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-translation/t-1": {
+      "issue": "DRO-211",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-translation/t-2": {
+      "issue": "DRO-212",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-translation/t-3": {
+      "issue": "DRO-213",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-translation/t-4": {
+      "issue": "DRO-214",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-translation/t-5": {
+      "issue": "DRO-215",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-translation/t-6": {
+      "issue": "DRO-216",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "lane-selector-translation/t-7": {
+      "issue": "DRO-217",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
     "legacy-phase-backfill/t-1": {
       "issue": "DRO-143",
       "plan_status": "done",
@@ -280,6 +548,21 @@
       "issue": "DRO-148",
       "plan_status": "done",
       "board_state": "task-in-review"
+    },
+    "milestone-push-failure-tests/t-1": {
+      "issue": "DRO-264",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "milestone-push-failure-tests/t-2": {
+      "issue": "DRO-266",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "milestone-push-failure-tests/t-3": {
+      "issue": "DRO-265",
+      "plan_status": "done",
+      "board_state": "task-complete"
     },
     "mirror-terminal-state/t-1": {
       "issue": "DRO-150",
@@ -355,11 +638,201 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "remote-run-detach/t-1": {
+      "issue": "DRO-278",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-10": {
+      "issue": "DRO-298",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-11": {
+      "issue": "DRO-288",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-12": {
+      "issue": "DRO-289",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-13": {
+      "issue": "DRO-290",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-14": {
+      "issue": "DRO-299",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-15": {
+      "issue": "DRO-300",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-2": {
+      "issue": "DRO-279",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-3": {
+      "issue": "DRO-280",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-4": {
+      "issue": "DRO-292",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-5": {
+      "issue": "DRO-293",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-6": {
+      "issue": "DRO-294",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-7": {
+      "issue": "DRO-295",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-8": {
+      "issue": "DRO-296",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-run-detach/t-9": {
+      "issue": "DRO-297",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
     "remote-toolchain-bootstrap/t-1": {
       "issue": "DRO-130"
     },
     "remote-toolchain-bootstrap/t-3": {
       "issue": "DRO-131"
+    },
+    "remote-toolchain-install/t-1": {
+      "issue": "DRO-247",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-toolchain-install/t-10": {
+      "issue": "DRO-256",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-toolchain-install/t-11": {
+      "issue": "DRO-258",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-toolchain-install/t-12": {
+      "issue": "DRO-259",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-toolchain-install/t-2": {
+      "issue": "DRO-248",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-toolchain-install/t-3": {
+      "issue": "DRO-249",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-toolchain-install/t-4": {
+      "issue": "DRO-250",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-toolchain-install/t-5": {
+      "issue": "DRO-251",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-toolchain-install/t-6": {
+      "issue": "DRO-252",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-toolchain-install/t-7": {
+      "issue": "DRO-253",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-toolchain-install/t-8": {
+      "issue": "DRO-254",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-toolchain-install/t-9": {
+      "issue": "DRO-255",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-lane-config/t-1": {
+      "issue": "DRO-192",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-lane-config/t-10": {
+      "issue": "DRO-202",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-lane-config/t-11": {
+      "issue": "DRO-201",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-lane-config/t-2": {
+      "issue": "DRO-193",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-lane-config/t-3": {
+      "issue": "DRO-195",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-lane-config/t-4": {
+      "issue": "DRO-194",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-lane-config/t-5": {
+      "issue": "DRO-196",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-lane-config/t-6": {
+      "issue": "DRO-197",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-lane-config/t-7": {
+      "issue": "DRO-199",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-lane-config/t-8": {
+      "issue": "DRO-198",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-lane-config/t-9": {
+      "issue": "DRO-200",
+      "plan_status": "done",
+      "board_state": "task-complete"
     }
   },
   "dismissed": [
@@ -368,7 +841,8 @@
     "DRO-3",
     "DRO-18",
     "DRO-7",
-    "DRO-1"
+    "DRO-1",
+    "DRO-133"
   ],
-  "last_pull": "2026-08-19T12:54:11.333974Z"
+  "last_pull": "2026-08-28T09:39:52.560775Z"
 }

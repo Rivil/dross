@@ -1,0 +1,74 @@
+[phase]
+  id = "lane-host-affinity"
+  title = "lane-host-affinity"
+  milestone = "v1.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "A lane whose toolchain the selected host lacks runs on another granted pool candidate that has it, rather than falling back to this machine — and the run names, per lane, which host it went to and why. Falling back locally remains the answer only when no candidate has that toolchain."
+
+[[criteria]]
+  id = "c-2"
+  text = "Every surface that reports or acts on 'the remote host' resolves it the way a run does — walking the pool — so `dross doctor`, `dross remote status`, `dross remote bootstrap` and `dross test lane install` can never name a different machine than the one the next run would actually use. With a pool declared and the scalar host down, all of them agree."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross remote bootstrap` provisions a toolchain across every granted candidate rather than only the scalar grant, reporting per host what it installed, what was already present, and what it could not reach — so a pool is brought up to the state per-lane routing assumes, in one command."
+
+[[criteria]]
+  id = "c-4"
+  text = "A lane's host choice is recorded in the run's own output and in verify.toml's provenance, so two runs of the same phase measured on different candidates are distinguishable after the fact rather than both reading as 'remote'."
+
+[[decisions]]
+  key = "routing_is_announced_never_silent"
+  choice = "Per-lane routing to a different candidate is always announced by name — lane, host, and the toolchain that decided it. It never happens quietly, and a run whose lanes landed on two different hosts says so on both."
+  why = "selectRemoteTarget's existing rule is that a reachable host missing its toolchain is NOT skipped, because moving silently would hide a fixable configuration hole — and because two runs measured on different machines are not interchangeable evidence. This phase adds movement, so it must carry that rule with it rather than quietly repealing it; the announcement is what keeps the numbers comparable."
+  locked = true
+
+[[decisions]]
+  key = "one_probe_not_per_lane_probes"
+  choice = "The candidates are probed once, for the union of every matched lane's toolchain, before the tree is pushed — extending the existing single-probe shape across the pool rather than probing per lane."
+  why = "Lane locality already decides from one probe taken before the sync, precisely so a run where nothing can go remote never pays for the transfer. Probing per lane would multiply ssh round trips by the lane count on every gate run, and the information is the same: which candidate has which tool."
+  locked = true
+
+[[decisions]]
+  key = "resolution_has_one_implementation"
+  choice = "c-2 is satisfied by deleting the scalar-only path, not by teaching each caller to walk the pool. readRemoteGrant's callers move to the pool-walking resolver; the scalar grant stays as candidate zero inside it."
+  why = "Four callers each doing their own resolution is how the divergence arose in the first place. A second correct implementation is one refactor away from being a second wrong one, and the failure is silent — the surfaces simply disagree, which is exactly the bug being fixed."
+  locked = true
+
+[[decisions]]
+  key = "no_new_config_surface"
+  choice = "No new project.toml or local.toml keys. Affinity is derived from the existing [[remote_pool]] declaration plus the toolchains lanes already declare; there is no per-lane host pin."
+  why = "The milestone's declared-not-inferred non-goal cuts both ways: lanes are declared, but a host pin would be a second place to state something the toolchain already implies, and the two would drift. If a user genuinely needs to pin a lane to a host, that is its own phase with its own argument."
+  locked = true
+
+[[deferred]]
+  id = "5424d79f2f8d3bc5"
+  text = "Pinning a specific lane to a specific host by name, overriding toolchain-derived affinity."
+  why = "A second source of truth beside the toolchain declaration, and nothing has asked for it yet. Reachable later without rework — affinity is derived, so a pin would simply take precedence."
+
+[[deferred]]
+  id = "fc82932cc45aefb6"
+  text = "Running one lane on several candidates at once to shorten wall-clock."
+  why = "Parallel remote execution is a different capability from choosing a host, with its own failure modes (partial results, interleaved output) and its own argument about whether the numbers combine."
+
+[[deferred]]
+  id = "4872b79b07f21c0a"
+  text = "Re-routing a lane mid-run when its chosen host dies partway."
+  why = "Requires a run to be resumable, which nothing here is. remote-run-detach parked the same prerequisite for resuming a dead detached run."
+
+[[deferred]]
+  id = "a55b8867426e79e1"
+  text = "Do not warn when the dropped label is an identity tag dross is about to create. FilterKnownLabels/WarnDroppedLabels (internal/forge/forge.go:317,343) cannot distinguish \"your filter named a label that does not exist\" from \"this dross/deferred:<id> or dross/task:<x> identity is new, so of course nothing carries it yet\" — and the second fires on every single first-file, reading as a fault on the routine path. Pass the identity tag separately from user-supplied filter labels, or suppress the warning for a dropped label the caller is about to ensureTag."
+  why = "Diagnosed 2026-08-31 after the warning appeared on every deferred add and phase/task sync all night. The dedupe itself is sound and was proven against the live board: 153 dross/deferred: identities and 200 dross/task: identities, zero duplicated. So this is message noise, not a correctness bug — but it is noise on the happy path, which is how a warning gets trained out of being read."
+
+[[deferred]]
+  id = "b32165178110b56a"
+  text = "`dross test lane preview` does not route per lane across the pool. previewHost resolves one host via pickRemoteTarget and passes singleLaneCandidate(host, missing) into laneLocality (internal/cmd/lane_preview_locality.go:145), so a lane whose toolchain only the SECOND candidate holds previews as `local` while a run now sends it to that candidate. Fix: probe with probeRemotePool and pass laneCandidatesOf(pool), keeping the unresolved/no-probe wording as it is."
+  why = "Surfaced while executing lane-host-affinity t-3. c-2 names doctor, remote status, remote bootstrap and test lane install as the surfaces that must resolve like a run; preview is not among them and no criterion covers it, so widening it was out of the phase's scope. It is the same divergence class, and preview exists precisely to say where a lane would run."
+
+[[deferred]]
+  id = "a745d842f98f7973"
+  text = "Mutation legs never actually land on different candidates, so verify.toml's multi-host provenance is capable-but-unexercised. mutationAdapters gives every adapter the same mt.Target (internal/cmd/verify.go:1097-1111), and resolveMutationTuning picks one host. Adapters already declare toolchains (gremlins->go, stryker->npx, stryker.net->dotnet) via remoteProbeTools, so routing each leg to the candidate that has its tool is the same rule test lanes now follow. Needs mutationTuning to carry a per-tool target rather than one."
+  why = "Surfaced while executing lane-host-affinity t-5. t-5 made MeasuredAcross, LanguageRun.MeasuredOn and LegSummary.MeasuredOn record a split correctly and they are tested at the unit level, but no production path produces one, so c-4's verify.toml half is structurally satisfied and never exercised. Routing mutation legs was in no task's scope."

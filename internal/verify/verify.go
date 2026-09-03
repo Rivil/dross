@@ -114,11 +114,97 @@ func MeasuredAfterFallback(host, why string) string {
 	return s + ")"
 }
 
+// MeasuredAcross is the provenance of a run whose legs did NOT all land on the
+// same machine, naming each in the order they ran.
+//
+// A single machine keeps its bare name, unchanged — the overwhelmingly common
+// shape, and a run that started rendering "alpha" as "across alpha" would make
+// every existing record read as though something had changed. It is only when
+// there are two that the field has to stop pretending there is one answer:
+// collapsing to the first leg's host would attribute the second leg's numbers
+// to a machine that never saw them, which is worse than saying nothing.
+//
+// Duplicates are folded, so three legs on one host still read as one host.
+func MeasuredAcross(hosts []string) string {
+	seen := map[string]bool{}
+	var out []string
+	for _, h := range hosts {
+		h = MeasuredOnHost(h)
+		if seen[h] {
+			continue
+		}
+		seen[h] = true
+		out = append(out, h)
+	}
+	if len(out) == 0 {
+		return measuredLocal
+	}
+	return strings.Join(out, ", ")
+}
+
+// AdapterHost is the machine an adapter was pointed at, or "" for one that runs
+// here.
+//
+// ONE type switch, here, rather than one at every site that wants to know. The
+// question is asked by the run's provenance stamp and by the summary that
+// carries it into verify.toml, and two switches would drift the moment an
+// adapter is added — silently, because the second one would simply report
+// "local" for it.
+func AdapterHost(a mutation.Adapter) string {
+	switch v := a.(type) {
+	case *mutation.Gremlins:
+		if v.Remote != nil {
+			return v.Remote.Host
+		}
+	case *mutation.Stryker:
+		if v.Remote != nil {
+			return v.Remote.Host
+		}
+	case *mutation.StrykerNet:
+		if v.Remote != nil {
+			return v.Remote.Host
+		}
+	}
+	return ""
+}
+
+// MeasuredOnAdapters reads a run's provenance off the adapters it is about to
+// use, rather than off the grant on disk.
+//
+// The distinction is the whole point of the field. A grant answers "is a host
+// authorized", which is not the same question as "where did these numbers come
+// from": a run can hold a grant it was told to ignore, or one it could not
+// reach. Only the adapters know which machine they were pointed at.
+//
+// EVERY adapter is asked, not just the first. Reading one and stopping is how a
+// run measured across two candidates records only one of them — and the record
+// is then indistinguishable from a run that used a single host.
+//
+// No adapters at all is a skipped mutation leg, which reports local: nothing
+// ran anywhere, and claiming a host would be worse than saying nothing.
+func MeasuredOnAdapters(adapters []mutation.Adapter) string {
+	hosts := make([]string, 0, len(adapters))
+	for _, a := range adapters {
+		hosts = append(hosts, AdapterHost(a))
+	}
+	return MeasuredAcross(hosts)
+}
+
 type LanguageRun struct {
 	Name     string           `json:"name"` // "typescript" | "go" | ...
 	Tool     string           `json:"tool"` // "stryker" | "gremlins" | ...
 	Files    []string         `json:"files"`
 	Mutation *mutation.Report `json:"mutation,omitempty"`
+	// MeasuredOn names the machine THIS leg ran on — the host its adapter was
+	// pointed at, or "local".
+	//
+	// Per leg rather than only per run, because the run-level string cannot
+	// hold two answers: once legs can land on different candidates, a single
+	// field either names one of them (and silently drops the other) or names
+	// both (and stops saying which numbers came from where). Two runs of the
+	// same phase measured across different hosts are only distinguishable
+	// after the fact if each leg says where it was measured.
+	MeasuredOn string `json:"measured_on,omitempty"`
 	// Error records an adapter failure for this language leg. One broken
 	// adapter must not discard the other legs' finished reports — the run
 	// is recorded with Mutation nil and the error text, and Skeleton
@@ -316,6 +402,15 @@ type LegSummary struct {
 	InScope   int     `toml:"in_scope"`
 	Score     float64 `toml:"score"`
 	FileCount int     `toml:"file_count,omitempty"`
+	// MeasuredOn names the machine this leg's numbers came from. Omitted when
+	// empty, so a verify.toml written before per-leg provenance existed round-
+	// trips unchanged.
+	//
+	// The summary's own MeasuredOn names every machine the run used; this says
+	// which of them produced THIS leg. Without it a split run records that two
+	// hosts were involved and leaves the reader to guess which score belongs to
+	// which — and the guess is exactly what makes two runs comparable or not.
+	MeasuredOn string `toml:"measured_on,omitempty"`
 }
 
 type VerifySummary struct {
@@ -460,10 +555,14 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 			// failing early adapter (e.g. stryker misconfigured) must not
 			// throw away a finished gremlins report.
 			t.Languages = append(t.Languages, LanguageRun{
-				Name:  adapterLanguage(name),
-				Tool:  name,
-				Files: byAdapter[name],
-				Error: err.Error(),
+				Name: adapterLanguage(name),
+				Tool: name,
+				// Stamped even on a failure: "which machine did this leg fail
+				// on" is the first question a transport error raises, and a
+				// leg with no provenance sends the reader to the wrong box.
+				MeasuredOn: MeasuredOnHost(AdapterHost(a)),
+				Files:      byAdapter[name],
+				Error:      err.Error(),
 				// Classified while the error VALUE is still live. Everything
 				// downstream sees only Error, a string, and errors.Is cannot be
 				// re-run against prose.
@@ -475,10 +574,14 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 		kept, dropped := FilterReport(report, scope, language)
 		t.OutOfScope = append(t.OutOfScope, dropped...)
 		t.Languages = append(t.Languages, LanguageRun{
-			Name:     language,
-			Tool:     name,
-			Files:    byAdapter[name],
-			Mutation: kept,
+			Name: language,
+			Tool: name,
+			// From the adapter that actually ran, never from the run-level
+			// string: with legs able to land on different candidates, the
+			// run-level answer is a summary of these, not a source for them.
+			MeasuredOn: MeasuredOnHost(AdapterHost(a)),
+			Files:      byAdapter[name],
+			Mutation:   kept,
 		})
 	}
 
@@ -585,10 +688,11 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 			// nothing, and leaving it out would make the run look like it only
 			// ever had the legs that worked.
 			v.Summary.Legs = append(v.Summary.Legs, LegSummary{
-				Language:  lr.Name,
-				Tool:      lr.Tool,
-				Error:     lr.Error,
-				FileCount: len(lr.Files),
+				Language:   lr.Name,
+				Tool:       lr.Tool,
+				Error:      lr.Error,
+				FileCount:  len(lr.Files),
+				MeasuredOn: lr.MeasuredOn,
 			})
 			continue
 		}
@@ -611,14 +715,15 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 		// two are read on the same terms — timeouts in the denominator, and a
 		// leg that measured nothing scores 0 rather than NaN.
 		v.Summary.Legs = append(v.Summary.Legs, LegSummary{
-			Language:  lr.Name,
-			Tool:      lr.Tool,
-			Killed:    lr.Mutation.Killed,
-			Survived:  lr.Mutation.Survived,
-			Timeout:   lr.Mutation.Timeout,
-			InScope:   inScope,
-			Score:     mutation.PooledScore(lr.Mutation.Killed, lr.Mutation.Survived, lr.Mutation.Timeout),
-			FileCount: len(lr.Files),
+			Language:   lr.Name,
+			Tool:       lr.Tool,
+			Killed:     lr.Mutation.Killed,
+			Survived:   lr.Mutation.Survived,
+			Timeout:    lr.Mutation.Timeout,
+			InScope:    inScope,
+			Score:      mutation.PooledScore(lr.Mutation.Killed, lr.Mutation.Survived, lr.Mutation.Timeout),
+			FileCount:  len(lr.Files),
+			MeasuredOn: lr.MeasuredOn,
 		})
 	}
 	// Every mutant the tools produced landed outside this phase's files. The

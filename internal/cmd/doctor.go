@@ -23,6 +23,7 @@ import (
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/state"
+	"github.com/Rivil/dross/internal/testlane"
 )
 
 // Doctor checks project-level health for the current dross repo.
@@ -1221,19 +1222,95 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 		Printf("  ✗ %v\n", cerr)
 		issues++
 	case ConsentNotApplicable:
-		Printf("  ⚠ no runtime.test_command is configured, so the loop commands refuse.\n")
-		Printf("    Fix: `dross project set runtime.test_command \"<cmd>\"`, then `dross trust`.\n")
+		// Lane-aware since lanes gained their own grants: in a lanes-only repo
+		// `dross test --files` runs the lanes under those grants and never
+		// reaches this gate, so the old wording — "the loop commands refuse" —
+		// is false in exactly the repo shape lanes exist to serve, and telling
+		// that user to configure a whole-suite command sends them to fix
+		// something that is not broken.
+		if len(p.Runtime.TestLane) > 0 {
+			Printf("  ⚠ no runtime.test_command is configured; `dross test --files` still runs the lanes below.\n")
+			Printf("    A bare `dross test` has nothing to run — set one only if you want a whole-suite command.\n")
+		} else {
+			Printf("  ⚠ no runtime.test_command is configured, so the loop commands refuse.\n")
+			Printf("    Fix: `dross project set runtime.test_command \"<cmd>\"`, then `dross trust`.\n")
+		}
 	default:
 		Printf("  ⚠ this machine has not trusted the configured test command:\n")
 		Printf("      %s\n", p.Runtime.TestCommand)
 		Printf("    Fix (only after reading that line): `dross trust`\n")
 	}
+	issues += reportLaneConsent(root, repoDir, p)
 	Print("")
 
 	issues += checkRemoteMutation(root, repoDir, p)
 	checkMutationToolchain(p)
 
 	return issues
+}
+
+// reportLaneConsent prints one row per declared [[runtime.test_lane]], on the
+// same state machine and the same severity split as the whole-suite grant above.
+//
+// It exists for the timing, not for the information. A lane grant that first
+// announces itself by refusing mid-gate is discovered at the worst possible
+// moment — after the code is written, while the agent is trying to commit — and
+// the refusal arrives per lane, so a repo with four lanes can surface four
+// separate surprises across four tasks. Doctor answers the same question in one
+// place, before any of it.
+//
+// A repo with no lanes prints nothing at all: the section would otherwise grow
+// a permanent "no lanes configured" line in every repo that never wanted them.
+func reportLaneConsent(root, repoDir string, p *project.Project) int {
+	issues := 0
+	for _, lane := range p.Runtime.TestLane {
+		state, cerr := LaneConsented(root, repoDir, lane.Name, laneConsentLine(lane))
+		switch state {
+		case ConsentGranted:
+			Printf("  ✓ lane %q: trusted\n", lane.Name)
+		case ConsentStale:
+			// An issue, exactly as the whole-suite stale case is: something
+			// WAS trusted under this name and the command has since changed,
+			// which is the signature the binding exists to catch.
+			Printf("  ✗ lane %q: consent is stale — what it runs has CHANGED since it was trusted here:\n", lane.Name)
+			Printf("      %s\n", lane.Command)
+			printLanePrepare(lane)
+			// Named as the fix in every arm that prints lines, prepare
+			// included: the state doctor reports and the state that refuses
+			// mid-run must agree on what closes it, or a stale prepare would
+			// send the reader looking for a second verb that does not exist.
+			Printf("    Fix (only after reading that): `dross trust --lane %s`\n", lane.Name)
+			issues++
+		case ConsentRefused:
+			Printf("  ✗ lane %q: %v\n", lane.Name, cerr)
+			issues++
+		case ConsentNotApplicable:
+			Printf("  ⚠ lane %q declares no command, so it can never be trusted or run.\n", lane.Name)
+			Printf("    Fix: re-add it with a command, or `dross validate` for the full report.\n")
+		default:
+			// Advisory, like the whole-suite ABSENT case: this is the honest
+			// state of every fresh clone, and failing doctor on it would make
+			// a clean checkout look broken.
+			Printf("  ⚠ lane %q: not trusted on this machine:\n", lane.Name)
+			Printf("      %s\n", lane.Command)
+			printLanePrepare(lane)
+			Printf("    Fix (only after reading that): `dross trust --lane %s`\n", lane.Name)
+		}
+	}
+	return issues
+}
+
+// printLanePrepare prints one lane's bootstrap line under its command, and
+// nothing at all for a lane declaring none.
+//
+// Under rather than beside, and only when declared: the same grant covers both
+// lines, so a report that showed one of them would understate what the user is
+// being asked to trust — while a `prepare: -` row on every pre-existing lane
+// would read as something they are expected to go and set.
+func printLanePrepare(lane project.TestLane) {
+	if lane.Prepare != "" {
+		Printf("      prepare: %s\n", lane.Prepare)
+	}
 }
 
 // checkMutationToolchain reports whether the LOCAL toolchain each configured
@@ -1345,6 +1422,107 @@ func remoteMutationTools(p *project.Project) ([]string, map[string]string) {
 	return tools, needBy
 }
 
+// remoteProbeTools is everything doctor asks the host about, in ONE probe: the
+// mutation adapters' tools first, then every declared lane's toolchain.
+//
+// One probe rather than two is c-8's "never disagree" clause taken literally.
+// A second question asked separately is a second answer that can differ from
+// the first — and the failure it produces is the one doctor exists to prevent:
+// doctor passing on a host the run then falls back from.
+//
+// The lane half goes through laneToolUnion, which is the same derivation the
+// run uses. Doctor re-deriving it would be a copy, and a copy drifts.
+//
+// It returns TWO attributions over the one tool list — the adapter that wants a
+// tool, and the lane that does — because the callers need to say why the host
+// needs each one, and "adapter" and "lane" are different sentences with
+// different remedies. They are disjoint by construction: a tool an adapter
+// already claimed is never also attributed to a lane, so a tool wanted by both
+// gremlins and a Go lane is ONE entry in the probe and reports as the adapter's.
+// A tool wanted by two lanes belongs to the FIRST in lane order, matching the
+// list's own order — array position is already the tie-break everywhere lanes
+// are read.
+//
+// This exists so `dross remote bootstrap` can tag a lane's install step without
+// growing a private derivation of its own, which is exactly the drift its own
+// test forbids.
+func remoteProbeTools(p *project.Project) (tools []string, needBy, laneBy map[string]string) {
+	tools, needBy = remoteMutationTools(p)
+	seen := map[string]bool{}
+	for _, tool := range tools {
+		seen[tool] = true
+	}
+	laneBy = map[string]string{}
+	for _, lane := range p.Runtime.TestLane {
+		for _, tool := range testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain) {
+			if seen[tool] {
+				// Claimed by an adapter. Left unattributed to any lane rather
+				// than double-tagged: one tool, one reason it is being asked
+				// for, or a caller printing both would report one gap twice.
+				continue
+			}
+			if _, taken := laneBy[tool]; taken {
+				continue
+			}
+			laneBy[tool] = lane.Name
+		}
+	}
+	for _, tool := range laneToolUnion(p.Runtime.TestLane) {
+		if seen[tool] {
+			continue
+		}
+		seen[tool] = true
+		tools = append(tools, tool)
+	}
+	return tools, needBy, laneBy
+}
+
+// reportLaneToolchains prints one row per declared lane: its effective
+// toolchain, and which of it the host lacks.
+//
+// Nothing here is an ISSUE. A lane whose toolchain the host is missing still
+// runs — it runs here instead, and reports its own suite result — so failing
+// doctor on it would fail a repo that works, which is how a check gets ignored.
+// An adapter's missing tool still increments, because a mutation run has no
+// local fallback to take.
+//
+// A lane declaring no probable token at all is surfaced with the --toolchain
+// fix rather than left to look like a missing binary. The locked first-token
+// rule takes `FOO=1 go test` at its word, and a lane pinned to local by an env
+// prefix with nothing naming the cause is exactly the silent failure the
+// override exists to end.
+func reportLaneToolchains(host string, p *project.Project, missing []string) {
+	gone := map[string]bool{}
+	for _, tool := range missing {
+		gone[tool] = true
+	}
+	for _, lane := range p.Runtime.TestLane {
+		tools := testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain)
+		var gaps []string
+		for _, tool := range tools {
+			if gone[tool] {
+				gaps = append(gaps, tool)
+			}
+		}
+		if len(gaps) == 0 {
+			Printf("  ✓ lane %s toolchain on %s: %s\n", lane.Name, host, strings.Join(tools, " "))
+			continue
+		}
+		Printf("  ⚠ lane %s will run on this machine — %s has no %s (lane needs %s)\n",
+			lane.Name, host, strings.Join(gaps, " "), strings.Join(tools, " "))
+		for _, tool := range gaps {
+			// Decided by laneToolchainProblems, the same rules `dross validate`
+			// applies to a declared override, so the two surfaces cannot
+			// disagree about which tokens are probable at all.
+			if len(laneToolchainProblems("", project.TestLane{Toolchain: []string{tool}})) == 0 {
+				continue
+			}
+			Printf("    %q is not a binary name — it is the first token of the lane's own line, so no host will ever resolve it.\n", tool)
+			Printf("    Fix: `dross test lane edit %s --toolchain <binary>`\n", lane.Name)
+		}
+	}
+}
+
 // checkRemoteMutation reports whether a granted remote is actually usable, and
 // returns the number of issues found.
 //
@@ -1363,31 +1541,71 @@ func checkRemoteMutation(root, repoDir string, p *project.Project) int {
 	// test` both read it. Reporting it twice would invite the reader to think
 	// there are two grants to manage, and to withdraw one of them.
 	Print("Remote:")
-	target, err := readRemoteGrant(root, repoDir)
+	// The lane attribution is unused HERE: doctor reports lanes through
+	// reportLaneToolchains, which walks the lanes themselves and so already
+	// knows which lane each row is about. It is bootstrap that needs the map,
+	// from a step that only has a tool name.
+	//
+	// The tools ride the SAME probe the resolution already pays for. Resolving
+	// and then probing separately would be two questions where the run asks
+	// one, and the second answer is the one that drifts.
+	tools, needBy, _ := remoteProbeTools(p)
+	// Resolved the way a RUN resolves it — walking the pool — so doctor can
+	// never bless a machine the next run would not use (c-2). With a pool
+	// declared and the scalar host down, this names the host that answered.
+	target, pool, err := resolveRemoteHost(root, repoDir, tools)
 	switch {
 	case err != nil:
-		Printf("  ✗ %v\n", err)
+		// A candidate that ANSWERED and failed is named, because the remedy is
+		// about that machine. Anything else is a store-level refusal with no
+		// host to name.
+		if target != nil {
+			Printf("  ✗ remote host %s is not usable: %v\n", target.Host, err)
+			Printf("    Fix: check ssh access, or withdraw the grant with `dross remote revoke`.\n")
+		} else {
+			Printf("  ✗ %v\n", err)
+		}
+		issues++
+	case pool.Fallback:
+		// Granted and unreachable is a fault, not the ungranted advisory below:
+		// the user authorized a machine and runs are silently coming home from
+		// it. Every candidate is covered by this one line — Why names the last
+		// one tried, and the skips are the pool's own notices.
+		Printf("  ✗ remote host is not usable: %s\n", pool.Why)
+		for _, n := range pool.Notices {
+			Printf("    %s\n", n)
+		}
+		Printf("    Fix: check ssh access, or withdraw the grant with `dross remote revoke`.\n")
 		issues++
 	case target == nil:
 		Printf("  ⚠ no remote granted — mutation runs and `dross test` run on this machine.\n")
 		Printf("    Grant one with `dross remote grant <host> <workdir>`.\n")
 	default:
-		tools, needBy := remoteMutationTools(p)
-		ready, perr := remoteProbeFn(*target, tools)
-		if perr != nil {
-			Printf("  ✗ remote host %s is not usable: %v\n", target.Host, perr)
-			Printf("    Fix: check ssh access, or withdraw the grant with `dross remote revoke`.\n")
-			issues++
-			break
+		ready := pool.Candidates[0].Ready
+		// Every candidate that was SKIPPED to get here, named. A doctor that
+		// silently reported the second host would hide the first one being
+		// down, which is the fault the user has to fix.
+		for _, n := range pool.Notices {
+			Printf("  ⚠ %s\n", n)
 		}
 		Printf("  ✓ %s reachable — workdir %s, %d cores (mutation runs and `dross test`)\n", target.Host, target.Workdir, ready.Cores)
 		for _, missing := range ready.Missing {
 			// One line per missing tool, each naming the adapter that wanted
 			// it: "something is missing" sends the user looking, and the
 			// remedy differs per toolchain.
-			Printf("  ✗ %s is not installed on %s — the %s adapter needs it there.\n", missing, target.Host, needBy[missing])
+			//
+			// Gated on needBy, because the probe set now carries lane tools
+			// too. Without the gate a lane's missing binary would fall through
+			// here and print "the  adapter needs it there" with an empty name,
+			// and would count as an issue for a lane that still runs.
+			adapter, wanted := needBy[missing]
+			if !wanted {
+				continue
+			}
+			Printf("  ✗ %s is not installed on %s — the %s adapter needs it there.\n", missing, target.Host, adapter)
 			issues++
 		}
+		reportLaneToolchains(target.Host, p, ready.Missing)
 	}
 	Print("")
 	return issues

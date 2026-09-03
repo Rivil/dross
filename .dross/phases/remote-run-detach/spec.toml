@@ -1,0 +1,101 @@
+[phase]
+  id = "remote-run-detach"
+  title = "remote-run-detach"
+  milestone = "v1.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross verify <phase> --detach` starts the mutation run on the granted host and returns within seconds having recorded it, rather than holding the session for the length of the leg; the remote work is owned by the host, so ending the ssh connection — killing the local process, dropping the link, closing the laptop — leaves the run producing its report."
+
+[[criteria]]
+  id = "c-2"
+  text = "`dross verify results <phase>`, run from a session that never started it, reconstructs tests.json and the verify.toml skeleton identically to what an attached run writes — same scope filtering, same pooled score, same survivor lifecycle — so a detached verdict is not a second-class one and /dross-verify's judgement step reads the same inputs either way."
+
+[[criteria]]
+  id = "c-3"
+  text = "A detached run's identity, host and state live in machine-local state that survives /clear, a new session and a reboot of the laptop, and `dross verify status` names what is in flight (phase, host, dispatched-at, state) — so a run is never stranded by forgetting an id, and a finished run is never re-dispatched because nothing recorded the first one."
+
+[[criteria]]
+  id = "c-4"
+  text = "`--at <time>` defers the start so a long leg lands off-hours without the laptop staying awake to trigger it: the run is dispatched and owned by the host the moment the flag is used, appears in `dross verify status` as scheduled before it begins, and can be cancelled while it is still waiting."
+
+[[criteria]]
+  id = "c-5"
+  text = "A detached run records the host it was dispatched to, and `dross verify results` reads the report from that same host rather than re-resolving the pool — so a grant edited, a pool reordered, or a host that came back up between dispatch and fetch can never make results arrive from a machine that did not measure them."
+
+[[criteria]]
+  id = "c-6"
+  text = "A `dross verify results` that cannot reach the host, or that finds the run's directory gone, is reported distinctly from a run that completed — never as a mutation score and never written into verify.toml as a verdict. Transport failure at fetch time reads as 'the run did not report', exactly as a transport failure at dispatch time reads as 'the run did not happen'."
+
+[[decisions]]
+  key = "run_state_location"
+  choice = "Detached-run state lives in `.dross/local.toml`, keyed by phase, beside the remote grant — not in a new `.dross/runs.toml` and not in the phase directory."
+  why = "local.toml is already gitignored, already guarded by refuseTrackedLocal, and already checked by doctor for being tracked. A second untracked state file would need all three re-implemented, and the one that got skipped is the one that ends up committed — a run id naming a host is meaningless in a clone and is machine-local by the same argument the grant is."
+  locked = true
+
+[[decisions]]
+  key = "detach_mechanism"
+  choice = "`setsid` + `nohup` writing a pidfile, a status file and the tool's exit code into a per-run directory under the host workdir. Not systemd-run, not tmux, not screen."
+  why = "It needs nothing installed on the host and no user-lingering configuration, so it works on any POSIX host the existing ssh path already reaches — helicon is a borrowed box and anachryon is not yet characterized. The recorded exit code is what makes 'finished' distinguishable from 'died' at fetch time, which c-6 turns on."
+  locked = true
+
+[[decisions]]
+  key = "schedule_mechanism"
+  choice = "`--at` dispatches the detached process immediately; the process sleeps host-side until the target time and then starts the tool. Not at(1)/atd, and not a dross-side sleep."
+  why = "at(1) is frequently absent and needs atd running, which is a second host requirement for a flag that exists to remove requirements. A dross-side sleep needs the laptop awake, which is precisely what the flag exists to avoid. Dispatching immediately also means the host owns the run from the moment the flag is used, so a scheduled run is visible and cancellable rather than a local intention."
+  locked = true
+
+[[decisions]]
+  key = "results_never_blocks"
+  choice = "`dross verify results` never blocks, streams or polls. It reports the run's state and exits with a distinct code per state: scheduled, running, finished, failed, unreachable."
+  why = "A fetch that blocked until the run finished would re-create the 90-minute wait this phase exists to remove. Polling cadence is the caller's decision, not the verb's, and a distinct exit code per state is what lets a caller poll without parsing prose."
+  locked = true
+
+[[decisions]]
+  key = "one_run_per_phase"
+  choice = "At most one detached run per phase. A second `--detach` while one is in flight is refused and names the running one; cancel-then-redispatch is the explicit gesture."
+  why = "Two runs writing one phase's tests.json is a race whose loser silently wins, and the phase — not a run id — is the identity `results` is keyed on, so a second run would have nowhere distinct to land. Refusing keeps the keying honest rather than inventing a disambiguator nobody asked for."
+  locked = true
+
+[[decisions]]
+  key = "tests_spawn_no_ssh"
+  choice = "Every criterion is proven by tests that spawn no ssh and need no grant — the existing spawn-recorder / failLocalSpawns seam is extended to cover the detached path. Real-host confirmation is recorded in verify.toml as evidence, never as a gate."
+  why = "The suite must stay green on a machine with no remote grant and no network; this phase is itself being built on one that may lose ssh mid-run. A test that needs a borrowed host goes red for reasons that say nothing about the code, and a red that says nothing is how a loop learns to ignore reds — the same argument remote-toolchain-bootstrap already parked about gh on helicon."
+  locked = true
+
+[[decisions]]
+  key = "doctor_divergence_stays_put"
+  choice = "The doctor/run host-resolution divergence (doctor reads the scalar grant via readRemoteGrant, the run walks the pool via readRemoteGrants + selectRemoteTarget) stays with lane-host-affinity. This phase pins the dispatched host in run state instead of unifying resolution."
+  why = "c-5 removes the danger for a detached run specifically — results read the host that actually measured them, whatever doctor reports — so unifying the two resolvers stops being load-bearing here. It remains a real fault for attached runs and belongs with the phase that owns host affinity, which now sits immediately after this one."
+  locked = true
+
+[[decisions]]
+  key = "pool_and_preflight_already_ship"
+  choice = "Host selection across hosts and the chosen host's toolchain check are NOT in this phase: `[[remote_pool]]` in local.toml (internal/cmd/local.go:204) already declares additional hosts in preference order, and selectRemoteTarget already preflights each candidate via preflightRemote(t, tools) (internal/cmd/remote_pool.go:22). Adding anachryon is `dross remote grant`, not code."
+  why = "Both were raised as requirements for this phase and both already exist and are tested. Re-specifying them would rebuild working code and put a second host-selection path beside the one the attached run uses, which is the divergence the doctor fault above already demonstrates the cost of."
+  locked = true
+
+[[deferred]]
+  id = "59d5dcbbcbec81c2"
+  text = "Notify on completion — push, email or a desktop notification when a detached run lands, instead of the user checking `dross verify status`."
+  why = "A separate surface with its own transport and its own credentials. The status verb closes the loop first; notification is a convenience on top of a loop that already works."
+
+[[deferred]]
+  id = "58ecc7ff9f2a5c15"
+  text = "Fan a phase's mutation run out across every granted host and compare the reports, rather than dispatching to one."
+  why = "Two hosts' numbers are not interchangeable evidence — different core counts and toolchain versions — so comparing them needs a story about what a disagreement means. That is its own phase, and remote-host-pool is closer to its home."
+
+[[deferred]]
+  id = "82da70858aaff13e"
+  text = "Resume a detached run that died partway, reusing the mutants already measured instead of starting the leg over."
+  why = "Needs gremlins to checkpoint, which it does not do today — the stretch half of cache-budget-prune's note about pinning its working directory is the prerequisite, and it may need a patched build."
+
+[[deferred]]
+  id = "9c1f7be59afdc8ac"
+  text = "A detached run does not lock the host workdir. Any other remote operation while one is in flight — `dross test`, a second phase dispatching, an attached `dross verify` — rsyncs over the same workdir the running sequence is still reading, so packages it has not reached yet get mutated against a different tree than the ones it already did. The run reports one score over two trees and nothing says so."
+  why = "Discovered 2026-08-31 while deciding whether to work on another phase during a live detached run: the answer is that it is currently unsafe and nothing stops it. Candidate fixes, not exclusive: refuse a remote operation while a detached run is recorded for that host; give each detached run its own workdir copy; or record the dispatch commit in the run and refuse a collect whose workdir has moved."
+
+[[deferred]]
+  id = "f74fa3c9230a9c3b"
+  text = "Gremlins appends `/...` to every package argument, so a repo whose module root holds .go files still derives `.` as a whole-module run. t-12's filter removed the problem for dross (no root .go) but not the mechanism: any repo with a root package mutates everything whenever a root file changes, and the per-package reports are merged alongside it so the denominator double-counts."
+  why = "Discovered 2026-09-01 while fixing the dross case in t-12. Out of that task's declared scope, and not reproducible in this repo, so it cannot be tested here without a fixture module that has a root package. Needs a decision about what a gremlins package argument should mean — probably deriving the package list from `go list` rather than from directories, which is a different design than the one packagesFromFiles pins."

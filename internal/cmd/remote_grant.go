@@ -187,13 +187,28 @@ func remoteStatus() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// Reads through the same readRemoteGrant a run does, so status can
-			// never report a grant the run would refuse (or vice versa). A
-			// tracked local.toml surfaces here as the refusal, not as the host
-			// it happens to contain — that host is not authorization.
-			t, err := readRemoteGrant(root, filepath.Dir(root))
+			// Resolved through the SAME walk a run performs, so status can
+			// never report a machine the run would not use (c-2). That means
+			// it probes: with a pool declared and the scalar host down, the
+			// host config names is not the host the next run touches, and
+			// printing the config value would name a machine nothing is going
+			// to reach. A tracked local.toml surfaces here as the refusal, not
+			// as the host it happens to contain — that host is not
+			// authorization.
+			t, pool, err := resolveRemoteHost(root, filepath.Dir(root), nil)
 			if err != nil {
 				return err
+			}
+			if pool.Fallback {
+				// Granted and unreachable is NOT "not granted": the
+				// authorization stands and revoking it is a different
+				// decision from waiting for the host to come back. Exits 0 for
+				// the same reason the ungranted line does — it is a report.
+				Printf("remote: granted, but unreachable\n\n    %s\n", pool.Why)
+				for _, n := range pool.Notices {
+					Printf("    %s\n", n)
+				}
+				return nil
 			}
 			if t == nil {
 				// Exits 0: "no remote configured" is the normal state of most
@@ -202,6 +217,12 @@ func remoteStatus() *cobra.Command {
 				return nil
 			}
 			Printf("remote: granted\n\n    host:    %s\n    workdir: %s\n", t.Host, t.Workdir)
+			for _, n := range pool.Notices {
+				// A candidate skipped to get here is named. Status that showed
+				// only the winner would hide the first host being down —
+				// exactly the fault the user opened status to find.
+				Printf("    (%s)\n", n)
+			}
 			return nil
 		},
 	}

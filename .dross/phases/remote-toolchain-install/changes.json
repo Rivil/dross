@@ -1,0 +1,213 @@
+{
+  "phase": "remote-toolchain-install",
+  "pr": 112,
+  "base": "milestone/v1.6",
+  "base_commit": "755618b0f8fbdefdbf68ad5a3dea5d225ca09b6f",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/project/project.go",
+        "internal/cmd/validate.go",
+        "internal/cmd/test_lane.go",
+        "internal/cmd/validate_lane_test.go",
+        "internal/cmd/test_lane_edit_test.go"
+      ],
+      "commit": "8cb65bf",
+      "completed_at": "2026-08-29T15:15:35.838736Z",
+      "landmarks": [
+        {
+          "feature": "test lane declaration",
+          "symbol": "TestLane.Install",
+          "loc": "internal/project/project.go:159",
+          "what": "optional per-lane install line, separately consented and outside the lane's test fingerprint"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/lane_install_residue_test.go"
+      ],
+      "commit": "d102963",
+      "completed_at": "2026-08-29T15:58:52.935428Z",
+      "landmarks": [
+        {
+          "feature": "lane toolchain install",
+          "symbol": "TestAppliedInstallWritesNothingAnywhere",
+          "loc": "internal/cmd/lane_install_residue_test.go:44",
+          "what": "byte-compare proof that neither install surface writes state, and that routing resumes on the probe alone"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/lane_install_spawn_test.go"
+      ],
+      "commit": "9b39c53",
+      "completed_at": "2026-08-30T07:27:36.396451Z",
+      "landmarks": [
+        {
+          "feature": "lane toolchain install",
+          "symbol": "runInstallLocally",
+          "loc": "internal/cmd/lane_install.go:215",
+          "what": "the local install spawn seam's own body is executed in tests — guard, capture and error wrap, not just the stubbed seam"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/trust_lane_install_cmd_test.go",
+        ".dross/survivors.toml"
+      ],
+      "commit": "dbd62ee",
+      "completed_at": "2026-08-30T07:26:44.634825Z",
+      "landmarks": [
+        {
+          "feature": "install consent",
+          "symbol": "TestTrustLaneInstallWithNoLineRefuses",
+          "loc": "internal/cmd/trust_lane_install_cmd_test.go:265",
+          "what": "pins the lane-install nothing-to-trust refusal so the const-concat acceptances cite a real test"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/lane_install.go",
+        "internal/cmd/lane_install_test.go",
+        "ARCHITECTURE.md"
+      ],
+      "commit": "b0768c9",
+      "completed_at": "2026-08-29T15:21:57.693258Z",
+      "landmarks": [
+        {
+          "feature": "lane toolchain install",
+          "symbol": "resolveInstall",
+          "loc": "internal/cmd/lane_install.go:137",
+          "what": "pure four-arm resolver — recipe argv / declared line / refusal / unknown — with the built-in recipe table and the local install seam"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/lane_locality.go",
+        "internal/cmd/lane_locality_test.go",
+        "internal/cmd/lane_locality_wiring_test.go"
+      ],
+      "commit": "5636652",
+      "completed_at": "2026-08-29T15:25:10.383643Z",
+      "landmarks": [
+        {
+          "feature": "lane toolchain install",
+          "symbol": "laneFallbackLine",
+          "loc": "internal/cmd/lane_locality.go:179",
+          "what": "the fallback line carries the bare lane-scoped install invocation for the one lane that fell back"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_lane_toolchain_test.go",
+        "internal/cmd/doctor_remote_test.go"
+      ],
+      "commit": "66723e4",
+      "completed_at": "2026-08-29T15:29:46.580777Z",
+      "landmarks": [
+        {
+          "feature": "lane toolchain install",
+          "symbol": "remoteProbeTools",
+          "loc": "internal/cmd/doctor.go:1449",
+          "what": "one probe returning two disjoint attributions — the adapter that wants a tool and the lane that does"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/local.go",
+        "internal/cmd/trust.go",
+        "internal/cmd/trust_lane_install_test.go"
+      ],
+      "commit": "1fafbd1",
+      "completed_at": "2026-08-29T15:33:37.068931Z",
+      "landmarks": [
+        {
+          "feature": "lane toolchain install",
+          "symbol": "laneInstallConsentLine",
+          "loc": "internal/cmd/trust.go:430",
+          "what": "install consent in its own NUL-framed namespace and its own per-lane grant map, independent of the lane's test grant"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/trust.go",
+        "internal/cmd/lane_install.go",
+        "internal/cmd/test_lane.go",
+        "internal/cmd/trust_lane_install_cmd_test.go"
+      ],
+      "commit": "a4e034a",
+      "completed_at": "2026-08-29T15:38:36.473442Z",
+      "landmarks": [
+        {
+          "feature": "lane toolchain install",
+          "symbol": "trustLaneInstall",
+          "loc": "internal/cmd/trust.go:578",
+          "what": "dross trust --lane-install grants a lane's install line separately; the shared helper refuses an ungranted declared line before either seam"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/test_lane_install.go",
+        "internal/cmd/test_lane.go",
+        "internal/cmd/test_lane_install_test.go"
+      ],
+      "commit": "1fed76d",
+      "completed_at": "2026-08-29T15:44:27.172104Z",
+      "landmarks": [
+        {
+          "feature": "lane toolchain install",
+          "symbol": "testLaneInstall",
+          "loc": "internal/cmd/test_lane_install.go:94",
+          "what": "the lane-scoped install verb owning both sides — one probe picks the machine with the gap, dry-run by default, --local inverts"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/remote_bootstrap.go",
+        "internal/cmd/remote_bootstrap_cmd.go",
+        "internal/cmd/remote_bootstrap_lane_test.go",
+        "internal/cmd/remote_bootstrap_cmd_test.go"
+      ],
+      "commit": "01b908b",
+      "completed_at": "2026-08-29T15:50:26.387211Z",
+      "landmarks": [
+        {
+          "feature": "lane toolchain install",
+          "symbol": "planLaneStep",
+          "loc": "internal/cmd/remote_bootstrap.go:203",
+          "what": "bootstrap plans every declared lane's toolchain from the same probe and resolver as the lane verb, gating a declared install line at plan time"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "README.md",
+        "assets/prompts/options.md",
+        "internal/cmd/lane_install_docs_test.go",
+        "internal/cmd/lane_toolchain_docs_test.go"
+      ],
+      "commit": "611fdb3",
+      "completed_at": "2026-08-29T15:55:59.876668Z",
+      "landmarks": [
+        {
+          "feature": "lane toolchain install",
+          "symbol": "TestOptionsDocumentsTheInstallGrant",
+          "loc": "internal/cmd/lane_install_docs_test.go:70",
+          "what": "README and options.md cover both install surfaces and the separate grant, guarded where the localKeys sweep cannot reach"
+        }
+      ]
+    }
+  }
+}

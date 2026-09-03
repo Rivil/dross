@@ -142,3 +142,47 @@ func TestExecutePromptOffloadGuidance(t *testing.T) {
 		}
 	}
 }
+
+// TestExecutePromptDocumentsPrepareExit is the agent-facing half of c-3.
+//
+// exitPrepareFailed is worth nothing if the reader of the exit status does not
+// know what 7 means. An agent that fell through to "non-zero, and not one of
+// the codes I know" reads a failed bootstrap as a red suite and goes hunting a
+// bug in code that was never executed — the exact failure the code was split
+// out to prevent. Both halves are asserted: the entry itself, and its
+// membership in the line that says which codes mean the run did not happen.
+// (r-01: the prompt edit is only live after `make install`.)
+func TestExecutePromptDocumentsPrepareExit(t *testing.T) {
+	content := executePromptContent(t)
+	if !strings.Contains(content, "- 7 —") {
+		t.Error("execute.md's exit-code list has no entry for 7 — an agent would read a failed prepare as a red suite")
+	}
+	if !strings.Contains(content, "prepare") {
+		t.Error("execute.md's exit-code list never names the prepare command")
+	}
+	// The literal is pinned to the CURRENT list. The drift-proof version of
+	// this — every declared exit code, read out of test.go — is
+	// TestExecuteSummaryNamesEveryNonRedCode; this one stays because it is
+	// what names 7 specifically, and 7's whole point is not reading as a red.
+	if !strings.Contains(content, "2, 3, 4, 5, 6, 7 and 8 all mean the run did not happen") {
+		t.Error("execute.md's did-not-happen line still omits 7, so 7 reads as a verdict about the code")
+	}
+}
+
+// TestExecutePromptPullsBoardTaskMoves guards the inbound half of board task
+// sync. The outbound calls (`dross issue task sync`) have been wired since the
+// task loop existed, but nothing ever called `dross issue task pull`, so a card
+// moved on the board never reached plan.toml and `dross task next` picked from a
+// stale plan. Removing the edge again fails this.
+//
+// The `--apply` needle matters as much as the verb: the bare command only
+// reports, so an edge that never names `--apply` can surface drift but can never
+// close it. (r-01: the prompt edit is only live after `make install`.)
+func TestExecutePromptPullsBoardTaskMoves(t *testing.T) {
+	content := executePromptContent(t)
+	for _, needle := range []string{"dross issue task pull", "--apply"} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("execute.md must wire the inbound board task pull: missing %q", needle)
+		}
+	}
+}
