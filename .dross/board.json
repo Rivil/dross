@@ -52,7 +52,6 @@
   },
   "backlog": {
     "slug:lane-host-affinity": "DRO-242",
-    "slug:lane-selector-preview": "DRO-284",
     "someday:id:010e057c10c922c6": "DRO-286",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
@@ -399,47 +398,47 @@
     "lane-selector-preview/t-1": {
       "issue": "DRO-305",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-preview/t-2": {
       "issue": "DRO-306",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-preview/t-3": {
       "issue": "DRO-307",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-preview/t-4": {
       "issue": "DRO-308",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-preview/t-5": {
       "issue": "DRO-309",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-preview/t-6": {
       "issue": "DRO-310",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-preview/t-7": {
       "issue": "DRO-312",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-preview/t-8": {
       "issue": "DRO-311",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-preview/t-9": {
       "issue": "DRO-313",
-      "plan_status": "in_progress",
-      "board_state": "task-in-progress"
+      "plan_status": "done",
+      "board_state": "task-complete"
     },
     "lane-selector-translation/t-1": {
       "issue": "DRO-211",
