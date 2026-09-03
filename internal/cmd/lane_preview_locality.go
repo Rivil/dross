@@ -142,7 +142,7 @@ func previewHost(root, repoDir string, lanes []matchedLane, probe bool) (preview
 // lane go", diverging on the first rule either gained.
 func previewResolved(state previewHostState, host, why string, lanes []matchedLane, probedHost string, missing []string) previewLocality {
 	out := previewLocality{State: state, Host: host, Why: why}
-	for _, v := range laneLocality(lanes, probedHost, missing, laneLookPath) {
+	for _, v := range laneLocality(lanes, singleLaneCandidate(probedHost, missing), laneLookPath) {
 		line := laneLocalityLine{Site: v.Site, Resolved: true, Note: v.Announce, Err: v.Err}
 		switch v.Site {
 		case siteRemote:

@@ -15,6 +15,7 @@
     "deferred-add-command": "DRO-14",
     "exec-trust-followups": "DRO-2",
     "guard-remedy-ordering": "DRO-27",
+    "lane-host-affinity": "DRO-317",
     "lane-prepare-step": "DRO-223",
     "lane-remote-locality": "DRO-235",
     "lane-selector-custom": "DRO-268",
@@ -134,11 +135,14 @@
     "someday:id:a3485cb4d13bd717": "DRO-99",
     "someday:id:a3bc77dbd1f99621": "DRO-88",
     "someday:id:a466b845ac09e62e": "DRO-103",
+    "someday:id:a55b8867426e79e1": "DRO-282",
     "someday:id:a7375e4e818abe9c": "DRO-61",
+    "someday:id:a745d842f98f7973": "DRO-326",
     "someday:id:ab84f90d28487b7a": "DRO-17",
     "someday:id:ad762bc624279cdf": "DRO-104",
     "someday:id:ae17cb02fa7db2fc": "DRO-82",
     "someday:id:ae6631594447a24e": "DRO-55",
+    "someday:id:b32165178110b56a": "DRO-325",
     "someday:id:b328f16cd8693b82": "DRO-260",
     "someday:id:b38eb66d043ad477": "DRO-160",
     "someday:id:b4794de89d962714": "DRO-63",
@@ -290,6 +294,41 @@
     },
     "completion-record-truth/t-6": {
       "issue": "DRO-138",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-1": {
+      "issue": "DRO-318",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-2": {
+      "issue": "DRO-319",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-3": {
+      "issue": "DRO-320",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-4": {
+      "issue": "DRO-321",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-5": {
+      "issue": "DRO-322",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-6": {
+      "issue": "DRO-323",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-7": {
+      "issue": "DRO-324",
       "plan_status": "done",
       "board_state": "task-in-review"
     },

@@ -146,7 +146,7 @@ func TestMissingRemoteToolFallsBackNamingTheBinary(t *testing.T) {
 	if got.Lanes[1].Site != siteLocal {
 		t.Fatalf("the web lane is not local — the host lacks pnpm")
 	}
-	want := laneFallbackLine(lanes[1].lane, "helicon", []string{"pnpm"})
+	want := laneFallbackLine(lanes[1].lane, []string{"helicon"}, []string{"pnpm"})
 	if got.Lanes[1].Note != want {
 		t.Errorf("note = %q, want the run's own fallback line %q", got.Lanes[1].Note, want)
 	}

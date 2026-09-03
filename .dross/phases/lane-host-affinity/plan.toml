@@ -1,0 +1,79 @@
+task_seq = 0
+
+[phase]
+  id = "lane-host-affinity"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Probe every candidate, not just the chosen one"
+  files = ["internal/cmd/remote_pool.go", "internal/cmd/remote_pool_test.go"]
+  description = "Widen the pool walk to return each reachable candidate's readiness rather than\nstopping at the first that answers. One probe per candidate for the union of\nevery matched lane's toolchain, keeping the existing pre-sync timing.\n"
+  covers = ["c-1"]
+  test_contract = ["if the walk stops at the first reachable candidate, a pool whose second host alone has the toolchain reports no candidate for that tool", "if probing moves after the sync, the test asserting zero transfer on a pool where nothing is reachable fails", "if an unreachable candidate stops the walk instead of being skipped and announced, a pool with a dead first host reports no candidates at all", "if the union is not probed in one call per host, the probe count exceeds one per candidate for a two-lane run"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Collapse host resolution onto one implementation"
+  files = ["internal/cmd/local.go", "internal/cmd/doctor.go", "internal/cmd/remote_grant.go", "internal/cmd/remote_bootstrap_cmd.go", "internal/cmd/test_lane_install.go", "internal/cmd/local_resolution_test.go"]
+  description = "Delete the scalar-only readRemoteGrant path and move its four callers onto the\npool-walking resolver, with the scalar grant kept as candidate zero inside it.\n"
+  covers = ["c-2"]
+  test_contract = ["if any caller keeps its own resolution, a test asserting readRemoteGrant has no definition in internal/cmd fails", "if doctor and a run disagree, the fixture with a pool declared and the scalar host down has them naming different hosts", "if the scalar grant stops being candidate zero, a repo with only the scalar pair resolves to no host", "if remote status reports a host the next run would not use, the two-host fixture's status output and selectRemoteTarget's choice differ"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Route each lane to a candidate that has its toolchain"
+  files = ["internal/cmd/lane_locality.go", "internal/cmd/lane_locality_test.go"]
+  description = "Widen laneLocality from one host to the probed candidate set: a lane goes to\nthe first candidate holding its toolchain, falls back local only when none\ndoes, and stays refused when neither a candidate nor this machine can run it.\n"
+  covers = ["c-1"]
+  depends_on = ["t-1"]
+  test_contract = ["if a lane stops preferring a candidate that has its toolchain, a two-host fixture where only the second has pnpm sends that lane local", "if local fallback stops being last resort, a lane whose tool exists on a candidate still runs here", "if the refused path regresses, a lane whose toolchain is on no candidate and not on this machine spawns instead of taking exitToolchainMissing", "if two lanes cannot land on different hosts, the fixture with a go lane and a pnpm lane on separate candidates puts both on one"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Announce every lane's host and why"
+  files = ["internal/cmd/test.go", "internal/cmd/lane_locality.go", "internal/cmd/test_lane_locality_output_test.go"]
+  description = "Print, per lane, the host it went to and the toolchain that decided it — and\nsay plainly when a run's lanes landed on more than one machine.\n"
+  covers = ["c-1", "c-4"]
+  depends_on = ["t-3"]
+  test_contract = ["if routing goes unannounced, a run whose lane moved to a second candidate prints no host for that lane", "if the reason is dropped, the announcement names the host but not the toolchain that decided it", "if a split run is not flagged, a run with lanes on two hosts reads identically to one with all lanes on a single host"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Record each lane's host in the run provenance"
+  files = ["internal/verify/verify.go", "internal/cmd/verify.go", "internal/verify/provenance_test.go"]
+  description = "Carry the per-lane host into tests.json and verify.toml, so measured_on stops\nbeing a single string when a run spanned candidates.\n"
+  covers = ["c-4"]
+  depends_on = ["t-3"]
+  test_contract = ["if provenance collapses to one host, a run measured across two candidates records only one and the two runs are indistinguishable afterwards", "if a single-host run's provenance changes shape, the existing measured_on assertions for an unsplit run go red"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  title = "Bootstrap a toolchain across the pool"
+  files = ["internal/cmd/remote_bootstrap_cmd.go", "internal/cmd/remote_bootstrap_pool_test.go"]
+  description = "Provision across every granted candidate rather than the scalar grant alone,\nreporting per host what was installed, what was already present, and what\ncould not be reached.\n"
+  covers = ["c-3"]
+  depends_on = ["t-2"]
+  test_contract = ["if bootstrap still targets one host, a two-candidate pool leaves the second without the toolchain", "if the per-host report collapses, an install that succeeded on one host and failed on another reads as a single outcome", "if an unreachable candidate aborts the run, a pool with one dead host installs nothing on the live one"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 4
+  title = "Document per-lane host affinity"
+  files = ["README.md", "internal/cmd/options_docs_test.go"]
+  description = "Document that lanes route per toolchain across the pool, that every move is\nannounced, and that bootstrap spans candidates.\n"
+  covers = ["c-1", "c-2", "c-3", "c-4"]
+  depends_on = ["t-4", "t-5", "t-6"]
+  test_contract = ["if the affinity surface ships undocumented, the README doc test fails naming what is missing", "if the announcement contract is undocumented, a reader has no way to know a split run is expected rather than a bug"]
+  status = "done"

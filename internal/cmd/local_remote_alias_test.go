@@ -30,9 +30,9 @@ func TestExistingMutationGrantStillResolves(t *testing.T) {
 	root := chdirDross(t)
 	writeLocalStore(t, root, "mutation_remote_host = \"helicon\"\nmutation_remote_workdir = \"/home/rivil/dross\"\n")
 
-	target, err := readRemoteGrant(root, filepath.Dir(root))
+	target, err := firstRemoteGrant(root, filepath.Dir(root))
 	if err != nil {
-		t.Fatalf("readRemoteGrant: %v", err)
+		t.Fatalf("firstRemoteGrant: %v", err)
 	}
 	if target == nil {
 		t.Fatal("a pre-existing mutation_remote_* grant resolved to no target — the machine that granted it would now run locally without saying so")
@@ -61,9 +61,9 @@ func TestNewKeyWinsOverAlias(t *testing.T) {
 		"",
 	}, "\n"))
 
-	target, err := readRemoteGrant(root, filepath.Dir(root))
+	target, err := firstRemoteGrant(root, filepath.Dir(root))
 	if err != nil {
-		t.Fatalf("readRemoteGrant: %v", err)
+		t.Fatalf("firstRemoteGrant: %v", err)
 	}
 	if target == nil {
 		t.Fatal("a store carrying both key generations resolved to no target")
@@ -92,7 +92,7 @@ func TestRemoteGrantPairResolvesTogether(t *testing.T) {
 		"",
 	}, "\n"))
 
-	target, err := readRemoteGrant(root, filepath.Dir(root))
+	target, err := firstRemoteGrant(root, filepath.Dir(root))
 	if target != nil && target.Workdir == "/srv/old" {
 		t.Fatalf("a new host was paired with the deprecated workdir %q — the pair must resolve from one generation", target.Workdir)
 	}
@@ -137,7 +137,7 @@ func TestUnreadableStoreIsNotASilentLocalRun(t *testing.T) {
 	root := chdirDross(t)
 	writeLocalStore(t, root, "this is not ][ valid toml\n")
 
-	target, err := readRemoteGrant(root, filepath.Dir(root))
+	target, err := firstRemoteGrant(root, filepath.Dir(root))
 	if err == nil {
 		t.Fatalf("an unparseable local.toml resolved cleanly to target=%v — a broken grant must error, not degrade to a local run", target)
 	}

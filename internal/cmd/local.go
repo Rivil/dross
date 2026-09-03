@@ -212,7 +212,7 @@ type localStore struct {
 	// untracked file: a clean rename would silently stop resolving on every
 	// machine that already granted a host, and the failure would present as a
 	// local run the user believed was remote — the exact confusion
-	// readRemoteGrant's unparseable-store handling exists to prevent.
+	// readRemoteGrants's unparseable-store handling exists to prevent.
 	//
 	// resolveRemoteGrant reads the new keys first; see effectiveRemote below
 	// for why a half-migrated file resolves to the NEW value.
@@ -296,7 +296,7 @@ func (d detachedRun) Scheduled() bool { return !d.ScheduledFor.IsZero() }
 
 // readDetachedRuns returns every dispatched-but-uncollected run.
 //
-// It goes through refuseTrackedLocal for the reason readRemoteGrant does: the
+// It goes through refuseTrackedLocal for the reason readRemoteGrants does: the
 // record names a host and a path a fetch will read from, so a committed store
 // carrying one is a repo pointing this machine's next `verify results` at a
 // directory of its choosing. Refused unread, like every other trust-bearing
@@ -517,8 +517,18 @@ func refuseTrackedLocal(repoDir string) error {
 		rel, rel, rel)
 }
 
-// readRemoteGrant returns the machine-local authorization for a remote mutation
-// run, or (nil, nil) when the repo has none.
+// remoteCandidate is one authorized host in the pool.
+type remoteCandidate struct {
+	Host    string `toml:"host"`
+	Workdir string `toml:"workdir"`
+}
+
+// readRemoteGrants returns every authorized host in preference order: the
+// scalar grant first, then the pool. It is the ONE reader of the machine-local
+// authorization — nothing else parses local.toml for a host.
+//
+// Order is the user's declared preference, so honouring it needs no policy of
+// our own.
 //
 // It goes through refuseTrackedLocal for the same reason the consent gate does,
 // and the reason is sharper here: a tracked local.toml naming a remote host is a
@@ -535,17 +545,6 @@ func refuseTrackedLocal(repoDir string) error {
 // this file treats a decode failure as "no value"; a trust-bearing key cannot,
 // because "I could not read your config" must never resolve to a silent local
 // run the user thought was remote.
-// remoteCandidate is one authorized host in the pool.
-type remoteCandidate struct {
-	Host    string `toml:"host"`
-	Workdir string `toml:"workdir"`
-}
-
-// readRemoteGrants returns every authorized host in preference order: the
-// scalar grant first, then the pool.
-//
-// Order is the user's declared preference, so honouring it needs no policy of
-// our own.
 func readRemoteGrants(root, repoDir string) ([]*remote.Target, error) {
 	if err := refuseTrackedLocal(repoDir); err != nil {
 		return nil, err
@@ -582,27 +581,50 @@ func readRemoteGrants(root, repoDir string) ([]*remote.Target, error) {
 	return out, nil
 }
 
-func readRemoteGrant(root, repoDir string) (*remote.Target, error) {
-	if err := refuseTrackedLocal(repoDir); err != nil {
-		return nil, err
-	}
-	l, err := loadLocal(localPath(root))
+// resolveRemoteHost answers "which machine is the remote" for every surface
+// that is not itself a run — doctor, `dross remote status`, `dross remote
+// bootstrap`, `dross test lane install`.
+//
+// It is the ONLY answer (locked resolution_has_one_implementation). The
+// scalar-only reader those four used to call is gone: four callers each doing
+// their own resolution is how the divergence arose, and the failure is silent —
+// the surfaces simply disagree, so doctor blesses a host the next run does not
+// use. A second correct implementation is one refactor away from being a second
+// wrong one.
+//
+// The scalar grant stays candidate zero inside readRemoteGrants, so a repo with
+// only the old pair resolves exactly as it always did.
+//
+// It PROBES, which the scalar reader did not. That is the point: with a pool
+// declared and the first host down, the machine the next run uses is not the
+// one config names, and a surface that reported the config value would name a
+// machine nothing is going to touch. tools is what the caller needs on the far
+// side, asked as part of this same probe — nil when the caller only wants the
+// host.
+//
+// The whole pool comes back beside the chosen target, because "the host" is no
+// longer the whole answer for a caller that acts per lane: an install decides
+// against the candidate that would actually run the lane, not against the first
+// one that answered.
+//
+// A chosen target of nil means one of two different things, and callers must
+// keep them apart: pool.Fallback reports a grant that exists and could not be
+// reached, while a nil target with no fallback is simply no grant at all.
+func resolveRemoteHost(root, repoDir string, tools []string) (*remote.Target, remotePool, error) {
+	targets, err := readRemoteGrants(root, repoDir)
 	if err != nil {
-		return nil, err
+		return nil, remotePool{}, err
 	}
-	host, workdir := l.effectiveRemote()
-	if host == "" {
-		return nil, nil
-	}
-	env, err := resolveRemoteEnv(l.MutationRemoteEnv)
+	pool, err := probeRemotePool(targets, tools)
 	if err != nil {
-		return nil, err
+		// The failing candidate comes back so the caller can name the machine;
+		// the walk bailed there rather than at the end.
+		return pool.Failed, pool, err
 	}
-	t := &remote.Target{Host: host, Workdir: workdir, Env: env, ScratchBase: l.RemoteScratchBase}
-	if err := t.Validate(); err != nil {
-		return nil, fmt.Errorf("%s/%s: %w", RootDirName, LocalFile, err)
+	if len(pool.Candidates) == 0 {
+		return nil, pool, nil
 	}
-	return t, nil
+	return pool.Candidates[0].Target, pool, nil
 }
 
 // resolveRemoteEnv turns the mutation_remote_env NAME allowlist into the

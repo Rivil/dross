@@ -432,6 +432,69 @@ func TestReadmeDocumentsDetachedRuns(t *testing.T) {
 	}
 }
 
+// TestReadmeDocumentsLaneHostAffinity is the documentation half of per-lane
+// routing, on the TestDocsCoverAllowHosts precedent: a behaviour nobody can
+// find documented is one a reader meets first as a surprise.
+//
+// The announcement contract is the part that most needs writing down. A run
+// whose lanes landed on two machines LOOKS like a fault the first time you see
+// it — and without a line saying it is expected, the reader's next move is to
+// revoke a grant to make the transcript legible again, which is precisely the
+// workaround this whole surface exists to end.
+func TestReadmeDocumentsLaneHostAffinity(t *testing.T) {
+	root := repoRootForDocs(t)
+	b, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatalf("read README.md: %v", err)
+	}
+	readme := string(b)
+
+	for _, want := range []string{
+		// The pool itself. It was reachable from `--add` and from the store
+		// and documented in neither, so a reader had no way to learn that a
+		// second host could be authorized at all.
+		"--add",
+		"[[remote_pool]]",
+		"candidate zero",
+		// c-1: a lane moves rather than coming home.
+		"local is the last resort",
+		"one probe per candidate",
+		// c-4: the split flag, and that it is expected rather than a fault.
+		"split across",
+		"not interchangeable evidence",
+		// c-2: the four surfaces that must agree, named, so a reader can tell
+		// the guarantee from a coincidence.
+		"granted, but unreachable",
+		"can never name a machine the next run would not use",
+		// c-3: bootstrap spans the pool.
+		"provisions **every** granted candidate",
+		"could not be reached",
+		// c-4's persisted half.
+		"measured_on",
+	} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("README.md does not document %q", want)
+		}
+	}
+
+	// The four surfaces c-2 names are named individually: a sentence promising
+	// "every surface agrees" without listing them is a claim the reader cannot
+	// check, and the one that is missing is the one that drifted.
+	agree := strings.Index(readme, "can never name a machine the next run would not use")
+	if agree < 0 {
+		t.Fatal("README.md states no resolution guarantee at all")
+	}
+	// The window ends AT the phrase: the enumeration precedes it, and reaching
+	// past it would let a mention further down the row stand in for a name
+	// missing from the guarantee itself.
+	clause := readme[max(0, agree-700):agree]
+	for _, surface := range []string{"dross doctor", "dross remote status", "dross remote bootstrap", "dross test lane install"} {
+		if !strings.Contains(clause, surface) {
+			t.Errorf("the resolution guarantee does not name %q — the unnamed surface is the one that drifts", surface)
+		}
+	}
+}
+
 // TestVerifyPromptTeachesTheDetachedPath: the prompt is what an agent reads
 // before deciding how to run a two-hour leg. One that only describes the
 // attached form will keep holding a session for the length of the run, which is

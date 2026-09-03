@@ -132,7 +132,7 @@ func TestPreflightWritesNothing(t *testing.T) {
 	if string(after) != string(before) {
 		t.Errorf("a fallback rewrote local.toml:\n before: %q\n after:  %q", before, after)
 	}
-	target, err := readRemoteGrant(root, dir)
+	target, err := firstRemoteGrant(root, dir)
 	if err != nil {
 		t.Fatal(err)
 	}

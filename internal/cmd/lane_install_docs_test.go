@@ -31,7 +31,10 @@ func docsBody(t *testing.T, parts ...string) string {
 // reader scans first, and both flags change what the verb does to a machine.
 func TestReadmeDocumentsTheLaneInstallVerb(t *testing.T) {
 	body := docsBody(t, "README.md")
-	row := readmeRowContaining(t, body, "dross test lane install")
+	// Located by the row's own heading, not by the verb's name: the remote row
+	// now cross-references `dross test lane install` among the surfaces that
+	// must agree about the host, and matching on that would assert against it.
+	row := readmeRowContaining(t, body, "dross test lane {")
 	for _, want := range []string{"--apply", "--local"} {
 		if !strings.Contains(row, want) {
 			t.Errorf("the `dross test lane install` row does not name %s", want)
@@ -116,8 +119,27 @@ func TestDocumentedFlagsResolve(t *testing.T) {
 // readmeRowContaining returns the single README table row carrying want.
 func readmeRowContaining(t *testing.T, body, want string) string {
 	t.Helper()
+	// The row whose FIRST CELL names it wins, before any row that merely
+	// mentions it. The README is one long table and rows cross-reference each
+	// other — the remote row names `dross test lane install` among the surfaces
+	// that must agree about the host — so a plain body match hands back
+	// whichever row happens to come first and silently asserts against the
+	// wrong one.
+	var lines []string
 	for _, line := range strings.Split(body, "\n") {
-		if strings.HasPrefix(line, "|") && strings.Contains(line, want) {
+		if !strings.HasPrefix(line, "|") {
+			continue
+		}
+		lines = append(lines, line)
+		if strings.Contains(firstCell(line), want) {
+			return line
+		}
+	}
+	// A caller may legitimately name something documented in a row's body
+	// rather than its heading (`dross remote bootstrap [--apply]` lives inside
+	// the `dross remote {…}` row), so the body match stays as the fallback.
+	for _, line := range lines {
+		if strings.Contains(line, want) {
 			return line
 		}
 	}

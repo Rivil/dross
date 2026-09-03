@@ -1,0 +1,74 @@
+[verify]
+  phase = "lane-host-affinity"
+  generated_at = 2026-09-03T11:56:18.964421Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-09-03T11:57:55.234977Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9603072983354674
+  mutants_killed = 750
+  mutants_survived = 31
+  mutants_not_covered = 31
+  mutants_in_scope = 781
+  unclassified_in_scope = 0
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 750
+    survived = 31
+    timeout = 0
+    in_scope = 781
+    score = 0.9603072983354674
+    file_count = 29
+    measured_on = "helicon"
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/lane_locality_test.go:TestLanePrefersACandidateThatHasItsToolchain", "internal/cmd/lane_locality_test.go:TestTwoLanesLandOnDifferentHosts", "internal/cmd/lane_locality_test.go:TestLocalIsTheLastResortNotTheSecondOption", "internal/cmd/lane_locality_test.go:TestNoCandidateHasItFallsBackNamingThePool", "internal/cmd/lane_locality_test.go:TestAMovedLaneIsAnnouncedWithItsReason", "internal/cmd/test_lane_locality_output_test.go:TestSplitRunSendsEachLaneToTheHostThatHasItsToolchain", "internal/cmd/test_lane_locality_output_test.go:TestMovedLaneNamesItsHostAndTheToolchainThatDecidedIt"]
+  notes = "Both halves asserted. Routing: the prefers-candidate test asserts the DESTINATION rather than an error, so a walk that stopped at the first candidate cannot pass by producing a plausible local run; last-resort ordering is pinned separately by a three-candidate fixture. Announcement: the moved-lane line must name lane, destination host, origin host and the deciding toolchain, and a lane that did not move must stay silent. Driven end-to-end through the real Test() command, not only through laneLocality. Unchanged from the 2026-09-03 09:55 run; no in-hunk survivor touches this surface."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/local_resolution_test.go:TestScalarGrantResolutionIsGone", "internal/cmd/local_resolution_test.go:TestResolveKeepsTheScalarGrantAsCandidateZero", "internal/cmd/local_resolution_test.go:TestResolveAgreesWithARunWhenTheScalarHostIsDown", "internal/cmd/local_resolution_test.go:TestRemoteStatusReportsTheHostTheRunWouldUse", "internal/cmd/local_resolution_test.go:TestACommandFailureNamesTheMachineThatFailed"]
+  notes = "The named fixture - pool declared, scalar host down - is asserted by comparing resolveRemoteHost against selectRemoteTarget through their real entry points rather than a re-derivation. The structural half AST-scans internal/cmd for a readRemoteGrant definition, which is what catches a second resolver that happens to agree today; behaviour alone cannot see it. All four surfaces confirmed on the one resolver (doctor.go:1556, remote_grant.go:198, test_lane_install.go:179). The prior run's FLAG - the resolveRemoteHost ERROR branch at test_lane_install.go:182 reached by no test - is CLOSED: TestACommandFailureNamesTheMachineThatFailed drives a remote-COMMAND failure (not a transport one, which preflightRemote converts to a fallback) through the install verb and asserts the message names the failing machine rather than the anonymous \"the granted host\". The mutant that survived there is killed in this run."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/remote_bootstrap_pool_test.go:TestBootstrapProvisionsEveryCandidate", "internal/cmd/remote_bootstrap_pool_test.go:TestBootstrapReportsEachHostSeparately", "internal/cmd/remote_bootstrap_pool_test.go:TestBootstrapReportsWhatWasAlreadyPresentPerHost", "internal/cmd/remote_bootstrap_pool_test.go:TestAnUnreachableCandidateDoesNotStopTheRest", "internal/cmd/remote_bootstrap_pool_test.go:TestASingleGrantedHostIsUnchanged"]
+  notes = "All three outcomes c-3 names are asserted per host: installed, already-present, and unreachable. The separation test asserts both directions - beta's refusal appears in beta's section AND does not bleed into alpha's - and that the non-zero exit names the unprovisioned host rather than failing anonymously. The dead-candidate test pins that the walk continues and still exits non-zero, so a partly-provisioned pool cannot read as success to a script."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/test_lane_locality_output_test.go:TestSplitRunIsFlaggedAsSplit", "internal/cmd/test_lane_locality_output_test.go:TestAnUnsplitRunIsNotFlagged", "internal/cmd/test_lane_locality_output_test.go:TestAMixedLocalAndRemoteRunIsSplitToo", "internal/verify/provenance_test.go:TestMeasuredAcrossNamesEveryMachine", "internal/verify/provenance_test.go:TestLegSummaryCarriesItsOwnHost", "internal/verify/provenance_test.go:TestAFailedLegStillRecordsItsHost", "internal/verify/provenance_test.go:TestUnsplitRunKeepsItsLegProvenanceOmitted"]
+  notes = "Both halves. Run output: the split line names each lane's placement, an unsplit run is asserted NOT flagged, and a mixed local/remote run counts as split - and that half is producible today, driven through the real Test() command. Provenance: MeasuredAcross is asserted never to collapse to a single host, each leg carries its own, a failed leg still records where it failed, and a pre-per-leg record round-trips with the field omitted. The criterion as written rests on MeasuredOnHost, which is on the live path (verify.go:627, wired via MeasuredOnAdapters). See the NOTE on the verify-side split, which is capable but not yet producible."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The prior run's BLOCKING survivor - internal/cmd/test_lane_install.go:182 (CONDITIONALS_NEGATION), the resolveRemoteHost error branch t-2 added - is KILLED. Closed by TestACommandFailureNamesTheMachineThatFailed in commit e52f843, which was proven to kill it: red under a hand-applied negation of the condition (the message went anonymous to \"the granted host did not answer\"), green with the file restored. Killed count moved 749 -> 750 and survivors 32 -> 31 across the two runs."
+
+[[finding]]
+  severity = "NOTE"
+  text = "All 31 survivors are the accepted gremlins attribution ceiling (switch-case conditions, const initializers, closure bodies) already recorded in .dross/survivors.toml - every one is origin=inherited, lifecycle=accepted, and zero are in-hunk. All 31 are reported NOT COVERED, so efficacy over the 750 reachable mutants is 1.00; the headline 0.96 over 781 carries the uncoverable ones in its denominator. unclassified_in_scope = 0: the mutation gate is clear."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-4's verify.toml half is capable but not yet producible in production: mutationAdapters hands every adapter the same target (verify.go:1097-1111), so no live verify run yields a multi-host measured_on. Already routed to the deferred store as a745d842f98f7973 during execution. This run confirms it again - measured_on = \"helicon\", a single host. The run-output half of c-4 is unaffected and is live."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Two further in-scope divergences were filed to the deferred store during execution rather than left to be re-listed: b32165178110b56a (dross test lane preview still resolves one host via pickRemoteTarget, so it previews `local` for a lane a run would now send to a second candidate) and a55b8867426e79e1 (dropped-label warning fires on every identity tag dross is about to create)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "90 out-of-scope survivors were filtered - they sit in Go packages this phase edited around but did not touch. See `out_of_scope` in tests.json."

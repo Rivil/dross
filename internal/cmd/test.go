@@ -460,28 +460,44 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	// The tools go with it: the union of every runnable lane's toolchain,
 	// deduped, asked as part of THIS probe. Two lanes needing `go` cost one
 	// `command -v`, and no lane opens a connection of its own.
-	target, ready, err := resolveTestTarget(root, repoDir, local, laneToolUnion(runnableLanes(matched)))
+	_, pool, err := resolveTestTarget(root, repoDir, local, laneToolUnion(runnableLanes(matched)))
 	if err != nil {
 		return err
 	}
 
 	// Where each lane runs, decided from the probe above and from this
-	// machine, before anything spawns. host is empty whenever the run is local
-	// anyway — including after a transport fallback, which is what keeps a lane
-	// from blaming a toolchain on a host that never answered.
-	host := ""
-	if target != nil {
-		host = target.Host
-	}
-	verdicts := laneLocality(matched, host, ready.Missing, laneLookPath)
+	// machine, before anything spawns. The candidate list is empty whenever the
+	// run is local anyway — including after a transport fallback, which is what
+	// keeps a lane from blaming a toolchain on a host that never answered.
+	//
+	// The WHOLE pool, not the chosen host: a lane whose toolchain the chosen
+	// host lacks goes to a candidate that has it rather than coming home for a
+	// tool the pool holds (c-1).
+	verdicts := laneLocality(matched, laneCandidatesOf(pool), laneLookPath)
 
-	// The tree is pushed only if something is actually going to run there. A
-	// run where every matched lane fell back has no use for the remote copy,
-	// and paying for the transfer anyway is the cost c-4 exists to avoid — but
-	// ONE remote-going lane is enough, because that lane measures the tree it
-	// finds and a stale one is the previous run's code.
-	if target != nil && plannedRemotely(verdicts) {
-		if err := syncTreeTo(*target, repoDir); err != nil {
+	// A run whose lanes landed on more than one machine says so, once, before
+	// any of them spawns. Without it the transcript reads exactly like a
+	// single-host run, and two such runs' numbers are not comparable — the
+	// hosts differ in cores and toolchain versions (c-4).
+	if line := splitRunLine(runnable, verdicts); line != "" {
+		Printf("remote: %s\n", line)
+	}
+
+	// One target per host, looked up by the name the verdict carries. The map
+	// is built from the pool rather than from the chosen target, because a
+	// moved lane's host is a candidate the run did NOT choose.
+	byHost := map[string]*remote.Target{}
+	for _, c := range pool.Candidates {
+		byHost[c.Target.Host] = c.Target
+	}
+
+	// The tree is pushed to every host a lane is actually going to, and to no
+	// other. A run where every matched lane fell back has no use for any remote
+	// copy, and paying for the transfer anyway is the cost c-4 exists to avoid —
+	// but ONE remote-going lane is enough for its host, because that lane
+	// measures the tree it finds and a stale one is the previous run's code.
+	for _, host := range plannedHosts(verdicts) {
+		if err := syncTreeTo(*byHost[host], repoDir); err != nil {
 			return err
 		}
 	}
@@ -512,11 +528,12 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 			Printf("%s\n", verdicts[i].Announce)
 		}
 		// nil is "here". Per lane, not per run: in one invocation a lane whose
-		// tools the host has goes over ssh while its neighbour runs locally,
-		// and both report their own suite result (c-3).
-		laneTarget := target
-		if verdicts[i].Site == siteLocal {
-			laneTarget = nil
+		// tools one host has goes over ssh to THAT host while its neighbour
+		// runs on another or locally, and each reports its own suite result
+		// (c-3, c-1).
+		var laneTarget *remote.Target
+		if verdicts[i].Site == siteRemote {
+			laneTarget = byHost[verdicts[i].Host]
 		}
 		if pl.ScopedToNothing {
 			// The lane declares a selector and every path that selected it
@@ -772,19 +789,20 @@ func testTarget(root, repoDir string, local bool) ([]*remote.Target, error) {
 // can go remote never pays for the transfer. A caller with no lanes passes nil
 // and the probe asks exactly what it asked before.
 //
-// The Readiness comes back alongside the target because Missing is the answer
-// the per-lane decision is made from — returning only the target would force
-// the caller to re-probe for it, which is the drift this signature exists to
-// prevent. It is zero-valued whenever the target is nil: a host that was never
-// reached told us nothing about its toolchain, and an empty Missing must never
-// be read as "it has everything".
-func resolveTestTarget(root, repoDir string, local bool, tools []string) (*remote.Target, remote.Readiness, error) {
+// The whole probed POOL comes back alongside the chosen target, because the
+// per-lane decision is made from it — every reachable candidate and what each
+// one lacks. Returning only the target would force the caller to re-probe, and
+// returning only the chosen host's Missing would put every lane on that host or
+// on this machine, which is the routing c-1 removes. It is empty whenever the
+// target is nil: a host that was never reached told us nothing about its
+// toolchain, and an empty Missing must never be read as "it has everything".
+func resolveTestTarget(root, repoDir string, local bool, tools []string) (*remote.Target, remotePool, error) {
 	targets, err := testTarget(root, repoDir, local)
 	if err != nil {
-		return nil, remote.Readiness{}, err
+		return nil, remotePool{}, err
 	}
 	if len(targets) == 0 {
-		return nil, remote.Readiness{}, nil
+		return nil, remotePool{}, nil
 	}
 	// BEFORE the sync, not after. Probing after the tree is pushed discovers
 	// an unreachable host having already paid for the transfer, and — worse —
@@ -793,11 +811,11 @@ func resolveTestTarget(root, repoDir string, local bool, tools []string) (*remot
 	//
 	// With more than one candidate this walks them in order and takes the
 	// first that answers; with one it is exactly the previous behaviour.
-	chosen, pf, perr := selectRemoteTarget(targets, tools)
+	chosen, pool, perr := selectRemoteTarget(targets, tools)
 	if perr != nil {
-		return nil, remote.Readiness{}, perr
+		return nil, remotePool{}, perr
 	}
-	if pf.Fallback {
+	if pool.Fallback {
 		// Announced, never silent. A fallback the output does not mention
 		// leaves a local result indistinguishable from a remote one, which is
 		// the state that made `dross remote revoke` the workaround when
@@ -806,10 +824,10 @@ func resolveTestTarget(root, repoDir string, local bool, tools []string) (*remot
 		// This is the TRANSPORT half of the c-5 split, and it keeps its wording
 		// unchanged: the whole run comes home, once, and no lane prints a
 		// toolchain line for a host that never answered.
-		Printf("remote: %s\n", pf.Why)
-		return nil, remote.Readiness{}, nil
+		Printf("remote: %s\n", pool.Why)
+		return nil, remotePool{}, nil
 	}
-	return chosen, pf.Ready, nil
+	return chosen, pool, nil
 }
 
 // runTest executes one test run, here or on the granted host.

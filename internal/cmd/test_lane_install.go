@@ -172,34 +172,73 @@ func laneInstallTarget(root, repoDir string, lane project.TestLane, local bool) 
 	tools := testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain)
 	probe := append(append([]string{}, tools...), laneInstallRuntimes(tools)...)
 
-	var target *remote.Target
 	if !local {
-		t, err := readRemoteGrant(root, repoDir)
+		// Resolved by walking the pool, from the SAME probe the decision is
+		// made on (c-2). Reading the scalar grant and probing it separately is
+		// how this surface came to name a host the run would not have used.
+		_, pool, err := resolveRemoteHost(root, repoDir, probe)
 		if err != nil {
-			return laneInstallSite{}, err
+			host := "the granted host"
+			if pool.Failed != nil {
+				host = pool.Failed.Host
+			}
+			return laneInstallSite{}, fmt.Errorf("cannot decide what lane %q needs: %s did not answer: %w", lane.Name, host, err)
 		}
-		target = t
-	}
-
-	if target != nil {
-		ready, err := remoteProbeFn(*target, probe)
-		if err != nil {
-			return laneInstallSite{}, fmt.Errorf("cannot decide what lane %q needs: %s did not answer: %w", lane.Name, target.Host, err)
+		if pool.Fallback {
+			// A probe that failed is never read as an answer. Installing here
+			// on the strength of an unanswered probe would provision the wrong
+			// machine on no evidence at all.
+			return laneInstallSite{}, fmt.Errorf("cannot decide what lane %q needs: %s", lane.Name, pool.Why)
 		}
-		gone := map[string]bool{}
-		for _, m := range ready.Missing {
-			gone[m] = true
-		}
-		if gap := absentTools(tools, gone); len(gap) > 0 {
+		if len(pool.Candidates) > 0 {
+			// The gap is decided against the candidate the LANE would run on,
+			// not against whichever host answered first. If some candidate
+			// already holds the whole toolchain, that is where the lane goes
+			// and there is no remote gap to fill — installing into the first
+			// host anyway would provision a machine this lane never touches.
+			if holder := laneToolHolder(pool, tools); holder != nil {
+				// The pool has everything this lane needs. Anything left to
+				// install is here.
+				return localLaneInstallSite(probe, tools), nil
+			}
+			// No candidate holds it: the lane runs on the first one and falls
+			// back from there, so that is the side with the gap.
+			c := pool.Candidates[0]
+			gone := map[string]bool{}
+			for _, m := range c.Ready.Missing {
+				gone[m] = true
+			}
 			return laneInstallSite{
-				Target:  target,
-				Machine: target.Host,
-				Gap:     gap,
+				Target:  c.Target,
+				Machine: c.Target.Host,
+				Gap:     absentTools(tools, gone),
 				Present: presentOf(probe, gone),
 			}, nil
 		}
-		// The host has everything. Anything left to install is here.
 	}
+	return localLaneInstallSite(probe, tools), nil
+}
+
+// laneToolHolder is the first candidate holding every one of tools, or nil.
+//
+// Declared order is the preference, so the first that qualifies wins — the same
+// rule the run applies when it routes the lane.
+func laneToolHolder(pool remotePool, tools []string) *remote.Target {
+	for _, c := range pool.Candidates {
+		gone := map[string]bool{}
+		for _, m := range c.Ready.Missing {
+			gone[m] = true
+		}
+		if len(absentTools(tools, gone)) == 0 {
+			return c.Target
+		}
+	}
+	return nil
+}
+
+// localLaneInstallSite is the gap on THIS machine, resolved through the same
+// lookPath the run spawns with.
+func localLaneInstallSite(probe, tools []string) laneInstallSite {
 
 	gone := map[string]bool{}
 	for _, tool := range probe {
@@ -211,7 +250,7 @@ func laneInstallTarget(root, repoDir string, lane project.TestLane, local bool) 
 		Machine: "this machine",
 		Gap:     absentTools(tools, gone),
 		Present: presentOf(probe, gone),
-	}, nil
+	}
 }
 
 // presentOf inverts a missing set over the probed list.

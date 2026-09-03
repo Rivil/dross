@@ -88,7 +88,7 @@ func TestExitTaxonomyOrderSurvivesTheInsertion(t *testing.T) {
 // worst-wins fold that got the comparison backwards passes one of them.
 func TestWorseOutcomeKeepsTheLaneThatNeverRan(t *testing.T) {
 	red := &ExitCodeError{Code: exitSuiteFailed, Err: errors.New("test lane \"go\" failed")}
-	gone := toolchainFailure(project.TestLane{Name: "web", Command: "pnpm test"}, "pnpm", "helicon")
+	gone := toolchainFailure(project.TestLane{Name: "web", Command: "pnpm test"}, "pnpm", []string{"helicon"})
 
 	for _, tc := range []struct {
 		name string
@@ -111,7 +111,7 @@ func TestWorseOutcomeKeepsTheLaneThatNeverRan(t *testing.T) {
 // machine that already has it, and one worded as a suite failure sends them
 // looking for a bug in code no runner ever loaded.
 func TestToolchainFailureNamesBothHosts(t *testing.T) {
-	err := toolchainFailure(project.TestLane{Name: "web", Command: "pnpm test"}, "pnpm", "helicon")
+	err := toolchainFailure(project.TestLane{Name: "web", Command: "pnpm test"}, "pnpm", []string{"helicon"})
 	msg := err.Error()
 
 	for _, want := range []string{"web", "pnpm", "helicon", "this machine", "neither"} {
@@ -131,7 +131,7 @@ func TestToolchainFailureNamesBothHosts(t *testing.T) {
 // ungranted run there is no second host, and claiming "neither host" would
 // invent one the user never granted.
 func TestToolchainFailureWithoutARemoteNamesOnlyThisMachine(t *testing.T) {
-	msg := toolchainFailure(project.TestLane{Name: "web"}, "pnpm", "").Error()
+	msg := toolchainFailure(project.TestLane{Name: "web"}, "pnpm", nil).Error()
 	if !strings.Contains(msg, "this machine") || !strings.Contains(msg, "pnpm") {
 		t.Errorf("the local refusal does not name the tool and this machine: %s", msg)
 	}
@@ -148,7 +148,7 @@ func TestLaneLocalityIsPerLane(t *testing.T) {
 		project.TestLane{Name: "go", Command: "go test ./..."},
 		project.TestLane{Name: "web", Command: "pnpm test"},
 	)
-	got := laneLocality(lanes, "helicon", []string{"pnpm"}, haveTools("go", "pnpm"))
+	got := laneLocality(lanes, singleLaneCandidate("helicon", []string{"pnpm"}), haveTools("go", "pnpm"))
 
 	if got[0].Site != siteRemote {
 		t.Errorf("the go lane went %v, want remote — the host has go", got[0].Site)
@@ -167,7 +167,7 @@ func TestLaneLocalityIsPerLane(t *testing.T) {
 func TestFallbackLineNamesLaneBinaryAndHost(t *testing.T) {
 	got := laneLocality(
 		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
-		"helicon", []string{"pnpm"}, haveTools("pnpm"))
+		singleLaneCandidate("helicon", []string{"pnpm"}), haveTools("pnpm"))
 
 	line := got[0].Announce
 	if line == "" {
@@ -189,7 +189,7 @@ func TestFallbackLineNamesLaneBinaryAndHost(t *testing.T) {
 // wrong machine.
 func TestPrepareToolSendsTheWholeLaneLocal(t *testing.T) {
 	lane := project.TestLane{Name: "web", Command: "node run.js", Prepare: "pnpm install"}
-	got := laneLocality(lanesFor(lane), "helicon", []string{"pnpm"}, haveTools("node", "pnpm"))
+	got := laneLocality(lanesFor(lane), singleLaneCandidate("helicon", []string{"pnpm"}), haveTools("node", "pnpm"))
 
 	if got[0].Site != siteLocal {
 		t.Errorf("a lane whose PREPARE tool is missing went %v, want local in full", got[0].Site)
@@ -205,7 +205,7 @@ func TestPrepareToolSendsTheWholeLaneLocal(t *testing.T) {
 func TestNeitherHostRefusesRatherThanFallingBack(t *testing.T) {
 	got := laneLocality(
 		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
-		"helicon", []string{"pnpm"}, haveTools())
+		singleLaneCandidate("helicon", []string{"pnpm"}), haveTools())
 
 	if got[0].Site != siteRefused {
 		t.Fatalf("a lane no machine can run went %v, want refused", got[0].Site)
@@ -232,7 +232,7 @@ func TestLocalRunStillConsultsLookPath(t *testing.T) {
 			project.TestLane{Name: "go", Command: "go test ./..."},
 			project.TestLane{Name: "web", Command: "pnpm test"},
 		),
-		"", nil, look)
+		nil, look)
 
 	if len(asked) == 0 {
 		t.Fatal("a run with no remote consulted lookPath for nothing")
@@ -259,7 +259,7 @@ func TestLocalRunStillConsultsLookPath(t *testing.T) {
 func TestUnreachableHostPrintsNoToolchainLine(t *testing.T) {
 	got := laneLocality(
 		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
-		"", nil, haveTools("pnpm"))
+		nil, haveTools("pnpm"))
 
 	if got[0].Site != siteLocal {
 		t.Errorf("the lane went %v, want local", got[0].Site)
@@ -304,7 +304,7 @@ func TestLaneToolUnionHonoursTheOverride(t *testing.T) {
 func TestFallbackLineOffersTheLaneScopedInstall(t *testing.T) {
 	got := laneLocality(
 		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
-		"helicon", []string{"pnpm"}, haveTools("pnpm"))
+		singleLaneCandidate("helicon", []string{"pnpm"}), haveTools("pnpm"))
 
 	line := got[0].Announce
 	if line == "" {
@@ -325,7 +325,7 @@ func TestFallbackLineOffersTheLaneScopedInstall(t *testing.T) {
 func TestFallbackOfferIsLaneScopedNotWholeHost(t *testing.T) {
 	got := laneLocality(
 		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
-		"helicon", []string{"pnpm"}, haveTools("pnpm"))
+		singleLaneCandidate("helicon", []string{"pnpm"}), haveTools("pnpm"))
 
 	if strings.Contains(got[0].Announce, "dross remote bootstrap") {
 		t.Errorf("the offer widened to the whole host: %q", got[0].Announce)
@@ -339,7 +339,7 @@ func TestFallbackOfferIsLaneScopedNotWholeHost(t *testing.T) {
 func TestFallbackOfferIsBare(t *testing.T) {
 	got := laneLocality(
 		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
-		"helicon", []string{"pnpm"}, haveTools("pnpm"))
+		singleLaneCandidate("helicon", []string{"pnpm"}), haveTools("pnpm"))
 
 	if strings.Contains(got[0].Announce, "--apply") {
 		t.Errorf("the offered verb carries --apply: %q", got[0].Announce)
@@ -354,16 +354,244 @@ func TestFallbackOfferKeepsTheSilentArmsSilent(t *testing.T) {
 	lanes := lanesFor(project.TestLane{Name: "web", Command: "pnpm test"})
 
 	t.Run("lane went remote", func(t *testing.T) {
-		got := laneLocality(lanes, "helicon", nil, haveTools("pnpm"))
+		got := laneLocality(lanes, singleLaneCandidate("helicon", nil), haveTools("pnpm"))
 		if got[0].Announce != "" {
 			t.Errorf("a lane that went remote announced: %q", got[0].Announce)
 		}
 	})
 
 	t.Run("no remote granted", func(t *testing.T) {
-		got := laneLocality(lanes, "", nil, haveTools("pnpm"))
+		got := laneLocality(lanes, nil, haveTools("pnpm"))
 		if got[0].Announce != "" {
 			t.Errorf("a run with no granted host announced: %q", got[0].Announce)
 		}
 	})
+}
+
+// twoHosts is the affinity fixture: a first candidate holding `go` and not
+// `pnpm`, a second holding `pnpm` and not `go`. It is the shape the whole
+// phase exists for — one pool, two toolchains, no machine with both.
+func twoHosts() []laneCandidate {
+	return []laneCandidate{
+		{Host: "alpha", Missing: []string{"pnpm"}},
+		{Host: "beta", Missing: []string{"go"}},
+	}
+}
+
+// TestLanePrefersACandidateThatHasItsToolchain is c-1. Before this, a lane
+// whose tool the chosen host lacked came home — even when the pool held a
+// machine that had it. The run was then slower AND measured on the wrong
+// machine, for a tool that was one candidate away.
+func TestLanePrefersACandidateThatHasItsToolchain(t *testing.T) {
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
+		twoHosts(), haveTools("pnpm"))
+
+	// This machine HAS pnpm, so a walk that stopped at the first candidate
+	// produces a perfectly plausible local run — which is why the regression
+	// has to be asserted as the destination, not as an error.
+	if got[0].Site != siteRemote || got[0].Host != "beta" {
+		t.Fatalf("the lane went to %q (%v), want remote on beta — alpha has no pnpm and beta does",
+			got[0].Host, got[0].Site)
+	}
+}
+
+// TestTwoLanesLandOnDifferentHosts is the same rule stated as the outcome that
+// makes it worth having: one invocation, two lanes, two machines. A decision
+// that put both on one host passes every single-lane assertion.
+func TestTwoLanesLandOnDifferentHosts(t *testing.T) {
+	got := laneLocality(
+		lanesFor(
+			project.TestLane{Name: "go", Command: "go test ./..."},
+			project.TestLane{Name: "web", Command: "pnpm test"},
+		),
+		twoHosts(), haveTools("go", "pnpm"))
+
+	if got[0].Site != siteRemote || got[0].Host != "alpha" {
+		t.Errorf("the go lane went to %q (%v), want alpha", got[0].Host, got[0].Site)
+	}
+	if got[1].Site != siteRemote || got[1].Host != "beta" {
+		t.Errorf("the web lane went to %q (%v), want beta", got[1].Host, got[1].Site)
+	}
+	if got[0].Host == got[1].Host {
+		t.Errorf("both lanes landed on %q — the pool's second toolchain went unused", got[0].Host)
+	}
+}
+
+// TestAMovedLaneIsAnnouncedWithItsReason is locked
+// routing_is_announced_never_silent. Two runs measured on different machines
+// are not interchangeable evidence, so a lane that landed elsewhere has to say
+// so — with the binary that decided it, or the reader has a host name and no
+// way to tell whether it was a choice or a fault.
+func TestAMovedLaneIsAnnouncedWithItsReason(t *testing.T) {
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
+		twoHosts(), haveTools("pnpm"))
+
+	line := got[0].Announce
+	if line == "" {
+		t.Fatal("a lane moved to a second candidate silently — the transcript reads as a single-host run")
+	}
+	for _, want := range []string{"web", "beta", "alpha", "pnpm"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("the announcement does not name %q: %q", want, line)
+		}
+	}
+	if strings.Contains(strings.TrimSuffix(line, "\n"), "\n") {
+		t.Errorf("the announcement spans more than one line: %q", line)
+	}
+}
+
+// TestALaneOnTheChosenHostStillAnnouncesNothing: the announcement is for a
+// MOVE. A line printed for every lane would make the transcript unreadable at
+// exactly the point a move matters.
+func TestALaneOnTheChosenHostStillAnnouncesNothing(t *testing.T) {
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "go", Command: "go test ./..."}),
+		twoHosts(), haveTools("go"))
+
+	if got[0].Host != "alpha" {
+		t.Fatalf("the go lane went to %q, want the first candidate", got[0].Host)
+	}
+	if got[0].Announce != "" {
+		t.Errorf("a lane that went where the run went announced: %q", got[0].Announce)
+	}
+}
+
+// TestLocalIsTheLastResortNotTheSecondOption: the pool is walked to the end
+// before this machine is considered. A lane that came home while a granted
+// candidate held its toolchain is the bug c-1 names.
+func TestLocalIsTheLastResortNotTheSecondOption(t *testing.T) {
+	candidates := []laneCandidate{
+		{Host: "alpha", Missing: []string{"pnpm"}},
+		{Host: "beta", Missing: []string{"pnpm"}},
+		{Host: "gamma", Missing: nil},
+	}
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
+		candidates, haveTools("pnpm"))
+
+	if got[0].Site != siteRemote || got[0].Host != "gamma" {
+		t.Errorf("the lane went to %q (%v), want gamma — it is the only candidate with pnpm",
+			got[0].Host, got[0].Site)
+	}
+}
+
+// TestNoCandidateHasItFallsBackNamingThePool: with the tool on no granted host
+// the lane still comes home, and the line must not blame one machine for a gap
+// the whole pool has — the reader would install pnpm on alpha and watch the
+// lane come home again.
+func TestNoCandidateHasItFallsBackNamingThePool(t *testing.T) {
+	candidates := []laneCandidate{
+		{Host: "alpha", Missing: []string{"pnpm"}},
+		{Host: "beta", Missing: []string{"pnpm"}},
+	}
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
+		candidates, haveTools("pnpm"))
+
+	if got[0].Site != siteLocal {
+		t.Fatalf("the lane went %v, want local — no candidate has pnpm", got[0].Site)
+	}
+	line := got[0].Announce
+	for _, want := range []string{"alpha", "beta", "pnpm", "dross test lane install web"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("the fallback does not name %q: %q", want, line)
+		}
+	}
+}
+
+// TestRefusedSurvivesThePoolWalk is locked local_absence with more than one
+// candidate. A tool on no granted host AND not here must still refuse rather
+// than spawn — the refusal is the whole reason a missing binary does not arrive
+// as a failing gate.
+func TestRefusedSurvivesThePoolWalk(t *testing.T) {
+	candidates := []laneCandidate{
+		{Host: "alpha", Missing: []string{"pnpm"}},
+		{Host: "beta", Missing: []string{"pnpm"}},
+	}
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
+		candidates, haveTools())
+
+	if got[0].Site != siteRefused {
+		t.Fatalf("a lane no machine can run went %v, want refused", got[0].Site)
+	}
+	if code := ExitCode(got[0].Err); code != exitToolchainMissing {
+		t.Errorf("the refusal carries exit %d, want %d", code, exitToolchainMissing)
+	}
+	msg := got[0].Err.Error()
+	for _, want := range []string{"alpha", "beta", "this machine", "pnpm"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the refusal does not name %q: %s", want, msg)
+		}
+	}
+}
+
+// TestRefusalNamesOnlyTheHostsThatLackIt: a candidate that HAS the tool must
+// not appear in the refusal. It cannot be the reason the lane did not run, and
+// naming it sends the reader to install a binary that is already there.
+func TestRefusalNamesOnlyTheHostsThatLackIt(t *testing.T) {
+	candidates := []laneCandidate{
+		{Host: "alpha", Missing: []string{"pnpm", "node"}},
+		{Host: "beta", Missing: []string{"pnpm"}},
+	}
+	// The lane needs node then pnpm; alpha lacks both, beta lacks only pnpm,
+	// and this machine has neither. The refusal is raised on the first tool
+	// this machine lacks in lane order — node — which only alpha is missing.
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "web", Command: "node run.js", Prepare: "pnpm install"}),
+		candidates, haveTools())
+
+	if got[0].Site != siteRefused {
+		t.Fatalf("the lane went %v, want refused", got[0].Site)
+	}
+	msg := got[0].Err.Error()
+	if !strings.Contains(msg, "node") || !strings.Contains(msg, "alpha") {
+		t.Errorf("the refusal does not name the tool and the host lacking it: %s", msg)
+	}
+	if strings.Contains(msg, "beta") {
+		t.Errorf("the refusal blames beta, which has node — the reader is sent to the wrong box: %s", msg)
+	}
+}
+
+// TestLaneCandidatesOfSkipsUnreachableCandidates: only hosts that ANSWERED may
+// route a lane. A candidate that was never reached has an empty Missing, and
+// reading that as "it has everything" would send every lane into a machine that
+// is down.
+func TestLaneCandidatesOfSkipsUnreachableCandidates(t *testing.T) {
+	probeScriptTools(t, map[string]bool{"dead": true}, nil, map[string][]string{
+		"live": {"go"},
+	}, 8)
+	pool, err := probeRemotePool(targets("dead", "live"), []string{"go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := laneCandidatesOf(pool)
+	if len(got) != 1 || got[0].Host != "live" {
+		t.Fatalf("candidates = %+v, want live alone — dead never answered", got)
+	}
+	if len(got[0].Missing) != 0 {
+		t.Errorf("live is missing %v, want nothing", got[0].Missing)
+	}
+}
+
+// TestSingleLaneCandidateIsUnchangedFromTheOneHostRun: the overwhelmingly
+// common shape is still one granted host, and it must decide exactly as it did
+// before the pool was walked — including the message wording, which names the
+// host rather than "no granted host".
+func TestSingleLaneCandidateIsUnchangedFromTheOneHostRun(t *testing.T) {
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
+		singleLaneCandidate("helicon", []string{"pnpm"}), haveTools("pnpm"))
+
+	if got[0].Site != siteLocal {
+		t.Fatalf("the lane went %v, want local", got[0].Site)
+	}
+	if !strings.Contains(got[0].Announce, "helicon has no pnpm") {
+		t.Errorf("the single-host wording changed: %q", got[0].Announce)
+	}
+	if singleLaneCandidate("", nil) != nil {
+		t.Error("an empty host produced a candidate — a machine that never answered must route nothing")
+	}
 }

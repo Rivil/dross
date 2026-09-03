@@ -111,8 +111,25 @@ var bootstrapRecipes = map[string]bootstrapRecipe{
 	},
 }
 
-// planRemoteBootstrap decides what bootstrap would do to t, without doing any
-// of it.
+// bootstrapProbeSet is every binary bootstrap asks a host about: the tools
+// themselves plus the runtimes their recipes need.
+//
+// Runtimes are probed alongside the tools in ONE round trip: a second probe
+// would be a second chance for the host to change underneath the answer. Both
+// recipe tables contribute, since a lane's recipe has prerequisites the
+// adapters' table knows nothing about.
+//
+// Extracted so the command's host RESOLUTION and the plan ask the same
+// question. A private derivation on either side drifts, and the drift shows up
+// as bootstrap provisioning for a probe set nothing else agrees with.
+func bootstrapProbeSet(tools []string) []string {
+	probe := append(append([]string{}, tools...), bootstrapRuntimes(tools)...)
+	probe = append(probe, laneInstallRuntimes(tools)...)
+	return dedupeTools(probe)
+}
+
+// planRemoteBootstrap decides what bootstrap would do to a host, without doing
+// any of it.
 //
 // The tool set comes from remoteProbeTools — the same function doctor's Remote
 // section reads — so a repo whose [mutation].adapters allowlist selects one
@@ -122,15 +139,19 @@ var bootstrapRecipes = map[string]bootstrapRecipe{
 // and the shape it takes is doctor passing on a host the run then falls back
 // from.
 //
-// One probe covers adapters and lanes together (c-2). A host's readiness for
-// lanes and for mutation is one question with one answer, and asking it twice is
-// two chances for the host to change underneath them.
+// ready is the host's answer over bootstrapProbeSet, taken by the CALLER. It
+// arrives here rather than being probed here because resolving which host to
+// bootstrap now walks the pool (c-2), and that walk already probed every
+// candidate: probing again would be a second round trip per host, and a second
+// chance for the host to change underneath the answer. One probe covers
+// adapters and lanes together — a host's readiness for lanes and for mutation
+// is one question with one answer.
 //
-// A transport failure is returned as an error, never as a plan. A host that
-// could not be reached told us nothing about its toolchain, and a plan whose
-// every step claimed the tool was absent would propose installing a whole
-// toolchain onto a machine that is merely down.
-func planRemoteBootstrap(t remote.Target, p *project.Project) ([]bootstrapStep, error) {
+// A transport failure never reaches here at all: the walk returns it as an
+// error, so a host that could not be reached produces no plan rather than a
+// plan whose every step claims the tool is absent — which would propose
+// installing a whole toolchain onto a machine that is merely down.
+func planRemoteBootstrap(p *project.Project, ready remote.Readiness) ([]bootstrapStep, error) {
 	tools, needBy, laneBy := remoteProbeTools(p)
 	if len(tools) == 0 {
 		return nil, nil
@@ -147,16 +168,6 @@ func planRemoteBootstrap(t remote.Target, p *project.Project) ([]bootstrapStep, 
 			return nil, err
 		}
 		root, repoDir = r, filepath.Dir(r)
-	}
-	// Runtimes are probed alongside the tools in ONE round trip: a second probe
-	// would be a second chance for the host to change underneath the answer.
-	// Both recipe tables contribute, since a lane's recipe has prerequisites
-	// the adapters' table knows nothing about.
-	probe := append(append([]string{}, tools...), bootstrapRuntimes(tools)...)
-	probe = append(probe, laneInstallRuntimes(tools)...)
-	ready, err := remoteProbeFn(t, dedupeTools(probe))
-	if err != nil {
-		return nil, fmt.Errorf("cannot plan a bootstrap for %s: %w", t.Host, err)
 	}
 	missing := map[string]bool{}
 	for _, m := range ready.Missing {
