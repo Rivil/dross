@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -179,5 +180,43 @@ func TestRemoteStatusSeparatesUnreachableFromUngranted(t *testing.T) {
 	}
 	if !strings.Contains(out, "down") {
 		t.Errorf("the report does not name the host that did not answer:\n%s", out)
+	}
+}
+
+// TestACommandFailureNamesTheMachineThatFailed covers the ERROR branch of the
+// resolution this task collapsed onto one implementation: a host that ANSWERED
+// and failed is an answer, and the caller has to be able to say which machine
+// it was.
+//
+// It is a different failure from the one TestFailedProbeInstallsNowhere pins. A
+// TRANSPORT error is turned into a fallback by preflightRemote, so that run
+// leaves through pool.Why with the host never having failed at all. Only a
+// remote-COMMAND failure aborts the walk with pool.Failed set, which is the
+// branch that turns a target into a name.
+//
+// The probe's own error deliberately carries no host, so "helicon" in the
+// message can only have come from pool.Failed — a resolution that lost the
+// failing target falls back to the anonymous "the granted host" and this goes
+// red rather than passing on a plausible-looking string.
+func TestACommandFailureNamesTheMachineThatFailed(t *testing.T) {
+	grantedLaneFixture(t, pnpmLane)
+	installLaneLookPath(t, "pnpm")
+	fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
+		return remote.Readiness{}, fmt.Errorf("getconf: %w", remote.ErrRemoteCommand)
+	})
+	rn, ln := installSeamRecorder(t)
+
+	err := runCmd(t, Test(), "lane", "install", "web", "--apply")
+	if err == nil {
+		t.Fatal("a host that answered with a failure was treated as an answer")
+	}
+	if *rn != 0 || *ln != 0 {
+		t.Errorf("a failed resolution still installed: remote=%d local=%d", *rn, *ln)
+	}
+	if !strings.Contains(err.Error(), "helicon") {
+		t.Errorf("the failure does not name the machine that failed: %v", err)
+	}
+	if strings.Contains(err.Error(), "the granted host") {
+		t.Errorf("the failing target was lost and the message went anonymous: %v", err)
 	}
 }
