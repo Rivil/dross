@@ -128,6 +128,38 @@ type Adapter interface {
 	Run(files []string) (*Report, error)
 }
 
+// Range is an inclusive line range, both ends counted. It mirrors
+// verify.Range, which is where these values come from — a phase's changed
+// hunks, parsed out of `git diff -U0`.
+type Range struct {
+	Start int
+	End   int
+}
+
+// RangeRunner is the OPTIONAL half of Adapter: an adapter that can restrict
+// mutation to a file's changed LINES rather than the whole file.
+//
+// WHY OPTIONAL. Not every tool can express it. Gremlins mutates Go packages
+// and takes no line scope at all, and forcing the method onto the Adapter
+// interface would mean every adapter growing a body it cannot honour — which
+// is worse than a type assertion, because a stub that ignores its ranges
+// measures the whole file while claiming it did not.
+//
+// WHY IT MATTERS. Without it a phase that edits one line of a 700-mutant file
+// inherits all 700: they are instrumented, run, and reported as that phase's
+// survivors. dross already knows better — it parses the hunks and uses them to
+// TAG each survivor in-hunk or inherited — but it learns it too late, after
+// the cost has been paid and the score diluted.
+//
+// FAIL-OPEN IS PART OF THE CONTRACT. A file with no entry in ranges is mutated
+// WHOLE. A caller that cannot supply ranges passes nil and gets exactly
+// today's behaviour. A scope that silently narrowed is the one outcome
+// phaseScope refuses to produce, and this seam must not reintroduce it.
+type RangeRunner interface {
+	Adapter
+	RunRanges(files []string, ranges map[string][]Range) (*Report, error)
+}
+
 // ErrNotImplemented is returned by stub adapters in v0.
 var ErrNotImplemented = errors.New("mutation adapter not yet implemented")
 

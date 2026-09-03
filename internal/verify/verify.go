@@ -517,6 +517,44 @@ func Run(phaseID string, files []string, adapters []mutation.Adapter) (*Tests, e
 // dispatched to mutate is not narrowed here — narrowing the dispatch would
 // change which mutants exist, and this is only about which of them this phase
 // is answerable for.
+// runAdapter dispatches one adapter's leg, narrowed to the phase's changed
+// LINES when the adapter can express that and the scope actually knows them.
+//
+// The two guards are not the same guard, and both are load-bearing:
+//
+//   - an adapter that does not implement RangeRunner (gremlins, stryker-net)
+//     keeps the plain Run it has always had. Asserting the interface without
+//     checking would stop the Go leg running at all.
+//   - a scope with NO hunks — a degraded diff, a base ref that went missing —
+//     falls back to whole-file scope rather than mutating nothing. phaseScope
+//     already degrades loudly rather than narrowing quietly; narrowing to an
+//     empty set here would undo exactly that.
+//
+// Per-file fail-open lives one level down, in the adapter: a file present in
+// the scope but absent from Hunks is mutated whole.
+func runAdapter(a mutation.Adapter, files []string, scope *Scope) (*mutation.Report, error) {
+	rr, ok := a.(mutation.RangeRunner)
+	if !ok || scope == nil || len(scope.Hunks) == 0 {
+		return a.Run(files)
+	}
+	ranges := make(map[string][]mutation.Range, len(scope.Hunks))
+	for _, f := range files {
+		hunks := scope.Hunks[f]
+		if len(hunks) == 0 {
+			continue
+		}
+		rs := make([]mutation.Range, 0, len(hunks))
+		for _, h := range hunks {
+			rs = append(rs, mutation.Range{Start: h.Start, End: h.End})
+		}
+		ranges[f] = rs
+	}
+	if len(ranges) == 0 {
+		return a.Run(files)
+	}
+	return rr.RunRanges(files, ranges)
+}
+
 func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scope *Scope) (*Tests, error) {
 	t := &Tests{
 		Phase:       phaseID,
@@ -549,7 +587,7 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 
 	for _, name := range names {
 		a := adapterByName[name]
-		report, err := a.Run(byAdapter[name])
+		report, err := runAdapter(a, byAdapter[name], scope)
 		if err != nil {
 			// Record-and-continue: adapters run in sorted-name order, so a
 			// failing early adapter (e.g. stryker misconfigured) must not
