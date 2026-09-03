@@ -473,7 +473,7 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	if target != nil {
 		host = target.Host
 	}
-	verdicts := laneLocality(matched, host, ready.Missing, laneLookPath)
+	verdicts := laneLocality(matched, singleLaneCandidate(host, ready.Missing), laneLookPath)
 
 	// The tree is pushed only if something is actually going to run there. A
 	// run where every matched lane fell back has no use for the remote copy,

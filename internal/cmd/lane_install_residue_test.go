@@ -104,14 +104,14 @@ func TestRoutingResumesOnTheProbeAlone(t *testing.T) {
 	lane := project.TestLane{Name: "web", Command: "pnpm test"}
 
 	// Before: the host lacks pnpm, so the lane falls back and offers the verb.
-	before := laneLocality(lanesFor(lane), "helicon", []string{"pnpm"}, haveTools("pnpm"))
+	before := laneLocality(lanesFor(lane), singleLaneCandidate("helicon", []string{"pnpm"}), haveTools("pnpm"))
 	if before[0].Site != siteLocal {
 		t.Fatalf("the fixture did not fall back: %v", before[0].Site)
 	}
 
 	// After: the SAME call with the probe now reporting the tool present. No
 	// command ran in between, and nothing on disk changed.
-	after := laneLocality(lanesFor(lane), "helicon", nil, haveTools("pnpm"))
+	after := laneLocality(lanesFor(lane), singleLaneCandidate("helicon", nil), haveTools("pnpm"))
 	if after[0].Site != siteRemote {
 		t.Errorf("the lane is still local after the host gained the tool: %v", after[0].Site)
 	}
@@ -143,12 +143,12 @@ func TestLocalityNeverConsultsTheInstallGrant(t *testing.T) {
 		t.Fatalf("the fixture's grant did not land: %v", state)
 	}
 
-	granted := laneLocality(lanesFor(lane), "helicon", []string{"pnpm"}, haveTools("pnpm"))
+	granted := laneLocality(lanesFor(lane), singleLaneCandidate("helicon", []string{"pnpm"}), haveTools("pnpm"))
 
 	if err := RevokeLaneInstallConsent(root, "web"); err != nil {
 		t.Fatal(err)
 	}
-	revoked := laneLocality(lanesFor(lane), "helicon", []string{"pnpm"}, haveTools("pnpm"))
+	revoked := laneLocality(lanesFor(lane), singleLaneCandidate("helicon", []string{"pnpm"}), haveTools("pnpm"))
 
 	if granted[0].Site != revoked[0].Site {
 		t.Errorf("revoking the install grant changed where the lane runs: %v -> %v", granted[0].Site, revoked[0].Site)
