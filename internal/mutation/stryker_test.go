@@ -271,7 +271,7 @@ func TestDispatch(t *testing.T) {
 // Node — the invocation must use @stryker-mutator/core.
 func TestStrykerRunArgsScopedPackage(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo"}
-	args, _, err := s.runArgs([]string{"src/a.ts", "src/b.ts"})
+	args, _, err := s.runArgs([]string{"src/a.ts", "src/b.ts"}, nil)
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestStrykerRunArgsScopedPackage(t *testing.T) {
 func TestStrykerWorkdirMonorepo(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
 
-	args, _, err := s.runArgs([]string{"web/src/a.ts", "web/src/b.svelte"})
+	args, _, err := s.runArgs([]string{"web/src/a.ts", "web/src/b.svelte"}, nil)
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -368,7 +368,7 @@ func TestStrykerPinPatternRejectsLooseSpecs(t *testing.T) {
 // a developer machine — the shape of the 2025–2026 npm compromises.
 func TestStrykerRunArgsPinned(t *testing.T) {
 	s := &Stryker{ProjectRoot: t.TempDir()}
-	args, _, err := s.runArgs([]string{"src/api/tags.ts"})
+	args, _, err := s.runArgs([]string{"src/api/tags.ts"}, nil)
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -555,7 +555,7 @@ func TestStrykerRunUnknownStatusCountsAsError(t *testing.T) {
 func TestStrykerMutateEscapesBracketPaths(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
 
-	args, requested, err := s.runArgs([]string{"web/src/routes/recipes/[id]/+page.server.ts"})
+	args, requested, err := s.runArgs([]string{"web/src/routes/recipes/[id]/+page.server.ts"}, nil)
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -616,7 +616,7 @@ func TestStrykerEscapeIsSinglePass(t *testing.T) {
 // a change to those is a change to every existing measurement.
 func TestStrykerPlainPathsAreUnchanged(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
-	args, requested, err := s.runArgs([]string{"web/src/lib/utils/format.ts", "web/src/lib/server/tier.ts"})
+	args, requested, err := s.runArgs([]string{"web/src/lib/utils/format.ts", "web/src/lib/server/tier.ts"}, nil)
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -641,12 +641,12 @@ func TestStrykerEscapeRunsAfterTheFence(t *testing.T) {
 
 	// A dash entry that only becomes one after the workdir trim is still
 	// refused — escaping happens after both, so it cannot rescue it.
-	if _, _, err := s.runArgs([]string{"web/-rf.ts"}); err == nil {
+	if _, _, err := s.runArgs([]string{"web/-rf.ts"}, nil); err == nil {
 		t.Error("escaping smuggled a leading-dash path past the fence")
 	}
 	// And a bracket path is not refused: escaping never introduces a dash, so
 	// the fence must have nothing to say about it.
-	if _, _, err := s.runArgs([]string{"web/src/routes/[id]/+page.ts"}); err != nil {
+	if _, _, err := s.runArgs([]string{"web/src/routes/[id]/+page.ts"}, nil); err != nil {
 		t.Errorf("a bracket path was refused by the fence: %v", err)
 	}
 }
