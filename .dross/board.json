@@ -15,6 +15,7 @@
     "deferred-add-command": "DRO-14",
     "exec-trust-followups": "DRO-2",
     "guard-remedy-ordering": "DRO-27",
+    "lane-host-affinity": "DRO-317",
     "lane-prepare-step": "DRO-223",
     "lane-remote-locality": "DRO-235",
     "lane-selector-custom": "DRO-268",
@@ -291,6 +292,41 @@
     },
     "completion-record-truth/t-6": {
       "issue": "DRO-138",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-1": {
+      "issue": "DRO-318",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-2": {
+      "issue": "DRO-319",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-3": {
+      "issue": "DRO-320",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-4": {
+      "issue": "DRO-321",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-5": {
+      "issue": "DRO-322",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-6": {
+      "issue": "DRO-323",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-host-affinity/t-7": {
+      "issue": "DRO-324",
       "plan_status": "done",
       "board_state": "task-in-review"
     },

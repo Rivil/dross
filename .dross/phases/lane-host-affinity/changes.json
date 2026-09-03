@@ -2,5 +2,130 @@
   "phase": "lane-host-affinity",
   "base": "milestone/v1.6",
   "base_commit": "94954f1d011cf8e3f0df577d3099c76bc1eedb50",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/remote_pool.go",
+        "internal/cmd/remote_pool_test.go"
+      ],
+      "commit": "960cb88",
+      "completed_at": "2026-09-03T07:02:05.55456Z",
+      "landmarks": [
+        {
+          "feature": "remote host pool",
+          "symbol": "probeRemotePool",
+          "loc": "internal/cmd/remote_pool.go:75",
+          "what": "probes every granted candidate for the lane toolchain union and returns each reachable host's own readiness, stopping early once every probed tool is covered"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/local.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/remote_grant.go",
+        "internal/cmd/remote_bootstrap_cmd.go",
+        "internal/cmd/test_lane_install.go",
+        "internal/cmd/local_resolution_test.go",
+        "internal/cmd/remote_bootstrap.go"
+      ],
+      "commit": "5142626",
+      "completed_at": "2026-09-03T07:18:55.950415Z",
+      "landmarks": [
+        {
+          "feature": "remote host pool",
+          "symbol": "resolveRemoteHost",
+          "loc": "internal/cmd/local.go:613",
+          "what": "single pool-walking resolution every non-run surface uses, replacing the scalar readRemoteGrant that let doctor/status/bootstrap/lane-install name a host the run would not use"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/lane_locality.go",
+        "internal/cmd/lane_locality_test.go",
+        "internal/cmd/test.go",
+        "internal/cmd/lane_preview_locality.go"
+      ],
+      "commit": "2fc9170",
+      "completed_at": "2026-09-03T07:28:21.982497Z",
+      "landmarks": [
+        {
+          "feature": "per-lane host routing",
+          "symbol": "laneLocality",
+          "loc": "internal/cmd/lane_locality.go:150",
+          "what": "walks the probed candidate set so a lane goes to the first host holding its toolchain and only comes home when no candidate does"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/lane_locality.go",
+        "internal/cmd/test_lane_locality_output_test.go",
+        "internal/cmd/remote_pool.go",
+        "internal/cmd/verify.go"
+      ],
+      "commit": "e4805ab",
+      "completed_at": "2026-09-03T07:37:13.231495Z",
+      "landmarks": [
+        {
+          "feature": "per-lane host routing",
+          "symbol": "splitRunLine",
+          "loc": "internal/cmd/lane_locality.go:412",
+          "what": "run prints each lane's host and the toolchain that moved it, and flags in one line when a run's lanes were measured across more than one machine"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/verify/verify.go",
+        "internal/cmd/verify.go",
+        "internal/verify/provenance_test.go"
+      ],
+      "commit": "f49e9f9",
+      "completed_at": "2026-09-03T07:46:33.707173Z",
+      "landmarks": [
+        {
+          "feature": "run provenance",
+          "symbol": "MeasuredAcross",
+          "loc": "internal/verify/verify.go:128",
+          "what": "measured_on names every machine a run used and each leg carries its own host, so two runs measured on different candidates are distinguishable after the fact"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/remote_bootstrap_cmd.go",
+        "internal/cmd/remote_bootstrap_pool_test.go",
+        "internal/cmd/remote_pool.go"
+      ],
+      "commit": "ca026e9",
+      "completed_at": "2026-09-03T07:57:53.544415Z",
+      "landmarks": [
+        {
+          "feature": "remote bootstrap",
+          "symbol": "bootstrapPool",
+          "loc": "internal/cmd/remote_bootstrap_cmd.go:116",
+          "what": "provisions every granted candidate from its own probed readiness and reports per host what installed, what was present and what could not be reached"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "README.md",
+        "internal/cmd/options_docs_test.go"
+      ],
+      "commit": "eb98d55",
+      "completed_at": "2026-09-03T08:04:48.876773Z",
+      "landmarks": [
+        {
+          "feature": "documentation",
+          "symbol": "TestReadmeDocumentsLaneHostAffinity",
+          "loc": "internal/cmd/options_docs_test.go:444",
+          "what": "README documents the granted pool, per-lane toolchain routing, the split-run announcement, the four surfaces that must resolve alike and pool-wide bootstrap, with a test that fails if any goes missing"
+        }
+      ]
+    }
+  }
 }
