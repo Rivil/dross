@@ -50,17 +50,39 @@ func remoteBootstrap() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			target, err := readRemoteGrant(root, filepath.Dir(root))
+			// Resolved by walking the pool, exactly as a run does (c-2): a
+			// bootstrap that provisioned the host config names while runs go
+			// somewhere else would install onto a machine nothing measures on.
+			//
+			// The walk asks bootstrap's OWN probe set, through the same
+			// derivation the plan uses. Resolving on a different question is
+			// how a surface ends up agreeing about the host and disagreeing
+			// about what it holds — and it is what lets the pool walk skip a
+			// candidate for a reason bootstrap would not recognise.
+			tools, _, _ := remoteProbeTools(p)
+			target, pool, err := resolveRemoteHost(root, filepath.Dir(root), bootstrapProbeSet(tools))
 			if err != nil {
 				return err
+			}
+			if pool.Fallback {
+				// Unreachable is not ungranted, and the remedies differ. An
+				// error that said "no remote granted" would send the user to
+				// re-grant a host that is already authorized and merely down.
+				return fmt.Errorf("no granted host answered — nothing to bootstrap.\n%s", pool.Why)
 			}
 			if target == nil {
 				// Named, not merely reported: the user's next move is the grant,
 				// and an error that only says "no remote" sends them looking.
 				return fmt.Errorf("no remote granted — nothing to bootstrap.\nGrant one with `dross remote grant <host> <workdir>`")
 			}
+			for _, n := range pool.Notices {
+				Printf("remote: %s\n", n)
+			}
 
-			steps, err := planRemoteBootstrap(*target, p)
+			// The plan reads the readiness the WALK already took, so the host
+			// is asked once. Re-probing here would be a second round trip and
+			// a second chance for it to change underneath the plan.
+			steps, err := planRemoteBootstrap(p, pool.Candidates[0].Ready)
 			if err != nil {
 				return err
 			}

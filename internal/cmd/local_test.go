@@ -386,7 +386,7 @@ func TestReadRemoteGrantRefusesTrackedLocal(t *testing.T) {
 	}
 	mustGit(t, dir, "add", "-f", ".dross/"+LocalFile)
 
-	got, err := readRemoteGrant(root, dir)
+	got, err := firstRemoteGrant(root, dir)
 	if err == nil {
 		t.Fatal("a tracked local.toml was read rather than refused")
 	}
@@ -405,7 +405,7 @@ func TestReadRemoteGrantRefusesTrackedLocal(t *testing.T) {
 	// Untracked, the same file grants: the refusal is about provenance, not
 	// about the value.
 	mustGit(t, dir, "rm", "--cached", "-q", ".dross/"+LocalFile)
-	got, err = readRemoteGrant(root, dir)
+	got, err = firstRemoteGrant(root, dir)
 	if err != nil {
 		t.Fatalf("an untracked local.toml must be readable: %v", err)
 	}
@@ -430,7 +430,7 @@ func TestReadRemoteGrantWorkdirAloneIsNoGrant(t *testing.T) {
 		[]byte("mutation_remote_workdir = \"/srv/dross\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got, err := readRemoteGrant(root, dir)
+	got, err := firstRemoteGrant(root, dir)
 	if err != nil {
 		t.Fatalf("a workdir with no host must not error: %v", err)
 	}
@@ -442,7 +442,7 @@ func TestReadRemoteGrantWorkdirAloneIsNoGrant(t *testing.T) {
 	if err := os.Remove(filepath.Join(root, LocalFile)); err != nil {
 		t.Fatal(err)
 	}
-	got, err = readRemoteGrant(root, dir)
+	got, err = firstRemoteGrant(root, dir)
 	if err != nil || got != nil {
 		t.Errorf("a missing store = (%+v, %v), want (nil, nil)", got, err)
 	}
@@ -470,7 +470,7 @@ func TestReadRemoteGrantRefusesAnUnusableHost(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(root, LocalFile), []byte(tc.body), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			got, err := readRemoteGrant(root, dir)
+			got, err := firstRemoteGrant(root, dir)
 			if err == nil {
 				t.Fatalf("unusable grant was accepted: %+v", got)
 			}
@@ -626,9 +626,9 @@ func TestRemoteGrantCarriesTheResolvedEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	target, err := readRemoteGrant(root, filepath.Dir(root))
+	target, err := firstRemoteGrant(root, filepath.Dir(root))
 	if err != nil {
-		t.Fatalf("readRemoteGrant: %v", err)
+		t.Fatalf("firstRemoteGrant: %v", err)
 	}
 	if target == nil {
 		t.Fatal("no grant")
@@ -643,7 +643,7 @@ func TestRemoteGrantCarriesTheResolvedEnv(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, LocalFile), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readRemoteGrant(root, filepath.Dir(root)); err == nil {
+	if _, err := firstRemoteGrant(root, filepath.Dir(root)); err == nil {
 		t.Fatal("a grant naming an unset variable resolved anyway")
 	}
 }

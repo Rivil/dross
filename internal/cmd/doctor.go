@@ -1541,26 +1541,52 @@ func checkRemoteMutation(root, repoDir string, p *project.Project) int {
 	// test` both read it. Reporting it twice would invite the reader to think
 	// there are two grants to manage, and to withdraw one of them.
 	Print("Remote:")
-	target, err := readRemoteGrant(root, repoDir)
+	// The lane attribution is unused HERE: doctor reports lanes through
+	// reportLaneToolchains, which walks the lanes themselves and so already
+	// knows which lane each row is about. It is bootstrap that needs the map,
+	// from a step that only has a tool name.
+	//
+	// The tools ride the SAME probe the resolution already pays for. Resolving
+	// and then probing separately would be two questions where the run asks
+	// one, and the second answer is the one that drifts.
+	tools, needBy, _ := remoteProbeTools(p)
+	// Resolved the way a RUN resolves it — walking the pool — so doctor can
+	// never bless a machine the next run would not use (c-2). With a pool
+	// declared and the scalar host down, this names the host that answered.
+	target, pool, err := resolveRemoteHost(root, repoDir, tools)
 	switch {
 	case err != nil:
-		Printf("  ✗ %v\n", err)
+		// A candidate that ANSWERED and failed is named, because the remedy is
+		// about that machine. Anything else is a store-level refusal with no
+		// host to name.
+		if target != nil {
+			Printf("  ✗ remote host %s is not usable: %v\n", target.Host, err)
+			Printf("    Fix: check ssh access, or withdraw the grant with `dross remote revoke`.\n")
+		} else {
+			Printf("  ✗ %v\n", err)
+		}
+		issues++
+	case pool.Fallback:
+		// Granted and unreachable is a fault, not the ungranted advisory below:
+		// the user authorized a machine and runs are silently coming home from
+		// it. Every candidate is covered by this one line — Why names the last
+		// one tried, and the skips are the pool's own notices.
+		Printf("  ✗ remote host is not usable: %s\n", pool.Why)
+		for _, n := range pool.Notices {
+			Printf("    %s\n", n)
+		}
+		Printf("    Fix: check ssh access, or withdraw the grant with `dross remote revoke`.\n")
 		issues++
 	case target == nil:
 		Printf("  ⚠ no remote granted — mutation runs and `dross test` run on this machine.\n")
 		Printf("    Grant one with `dross remote grant <host> <workdir>`.\n")
 	default:
-		// The lane attribution is unused HERE: doctor reports lanes through
-		// reportLaneToolchains, which walks the lanes themselves and so already
-		// knows which lane each row is about. It is bootstrap that needs the
-		// map, from a step that only has a tool name.
-		tools, needBy, _ := remoteProbeTools(p)
-		ready, perr := remoteProbeFn(*target, tools)
-		if perr != nil {
-			Printf("  ✗ remote host %s is not usable: %v\n", target.Host, perr)
-			Printf("    Fix: check ssh access, or withdraw the grant with `dross remote revoke`.\n")
-			issues++
-			break
+		ready := pool.Candidates[0].Ready
+		// Every candidate that was SKIPPED to get here, named. A doctor that
+		// silently reported the second host would hide the first one being
+		// down, which is the fault the user has to fix.
+		for _, n := range pool.Notices {
+			Printf("  ⚠ %s\n", n)
 		}
 		Printf("  ✓ %s reachable — workdir %s, %d cores (mutation runs and `dross test`)\n", target.Host, target.Workdir, ready.Cores)
 		for _, missing := range ready.Missing {

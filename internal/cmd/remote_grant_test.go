@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // TestRemoteGrantPrintsBeforeItWrites is the consent_model decision's ordering
@@ -56,9 +58,9 @@ func TestMutationRemoteAliasStillGrants(t *testing.T) {
 	if err := runCmd(t, Mutation(), "remote", "grant", "helicon", "/srv/dross"); err != nil {
 		t.Fatalf("dross mutation remote grant: %v", err)
 	}
-	target, err := readRemoteGrant(root, filepath.Dir(root))
+	target, err := firstRemoteGrant(root, filepath.Dir(root))
 	if err != nil {
-		t.Fatalf("readRemoteGrant: %v", err)
+		t.Fatalf("firstRemoteGrant: %v", err)
 	}
 	if target == nil || target.Host != "helicon" || target.Workdir != "/srv/dross" {
 		t.Fatalf("the alias did not grant: %+v", target)
@@ -67,9 +69,9 @@ func TestMutationRemoteAliasStillGrants(t *testing.T) {
 	if err := runCmd(t, Mutation(), "remote", "revoke"); err != nil {
 		t.Fatalf("dross mutation remote revoke: %v", err)
 	}
-	target, err = readRemoteGrant(root, filepath.Dir(root))
+	target, err = firstRemoteGrant(root, filepath.Dir(root))
 	if err != nil {
-		t.Fatalf("readRemoteGrant after revoke: %v", err)
+		t.Fatalf("firstRemoteGrant after revoke: %v", err)
 	}
 	if target != nil {
 		t.Errorf("the alias's revoke left %+v", target)
@@ -180,8 +182,8 @@ func TestRevokeClearsHostAndWorkdir(t *testing.T) {
 	}
 }
 
-// TestRemoteStatusReportsBothGenerations: status reads through the same
-// readRemoteGrant a run does, so it can never report a grant the run would
+// TestRemoteStatusReportsBothGenerations: status resolves through the same
+// pool walk a run does, so it can never report a grant the run would
 // refuse — including a legacy one.
 func TestRemoteStatusReportsBothGenerations(t *testing.T) {
 	for _, tc := range []struct{ name, body string }{
@@ -191,6 +193,12 @@ func TestRemoteStatusReportsBothGenerations(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			root := chdirDross(t)
 			writeLocalStore(t, root, tc.body)
+			// Status resolves by PROBING now, so the walk has to be stubbed —
+			// a status that reported the config value without asking is
+			// exactly the divergence c-2 removes.
+			fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
+				return remote.Readiness{Cores: 8}, nil
+			})
 
 			var out string
 			if err := runCmdCapturing(t, &out, Remote(), "status"); err != nil {
