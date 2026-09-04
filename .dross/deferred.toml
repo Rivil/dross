@@ -40,3 +40,13 @@
   text = "The per-package mutation runner enumerates a lane `./assets/prompts` that is not a Go package: `go list ./assets/...` returns only `github.com/Rivil/dross/assets`, and `assets/prompts` holds markdown with no .go files. Gremlins exits 23 there and collect reports `no report fetched for ./assets/prompts (exit 23)` — a lane that yields nothing without failing the run. Suspect the enumerator walks directories rather than `go list` output; either way collect should distinguish 'lane produced no report' from 'lane is not a package' and never pass silently."
   why = "A lane that silently yields nothing is the e15e33b failure shape: mutation coverage can quietly shrink with no red signal. Observed on the last collect before 2026-09-02."
   target = "mutation-score-truth"
+
+[[deferred]]
+  id = "bd1e72da1a5f0812"
+  text = "dross mints a board tag per phase and per task and never collects them — the DRO instance is at 1243 and only climbs"
+  why = "ytMaxPages (100 x 1000) is the next hard ceiling after the 1.7.1.1 pagination fix, and every board read gets slower on the way there; nothing in dross ever deletes a dross/phase: or dross/task: tag"
+
+[[deferred]]
+  id = "4841efdde12bd371"
+  text = "TestNoCommandCountSurvivesAnywhere does not grep ARCHITECTURE.md"
+  why = "it covers every .go file and every shipped prompt, but a stale 'closed set of six loop commands' claim survived in ARCHITECTURE.md and had to be found by hand during the exec-consent-completeness ship; nothing stops it returning there"
