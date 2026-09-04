@@ -55,6 +55,15 @@
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
+    "slug:ast-aware-mutation-ranges": "DRO-349",
+    "slug:cmd-package-decomposition": "DRO-351",
+    "slug:mutation-range-provenance": "DRO-348",
+    "slug:push-gates-on-origin": "DRO-345",
+    "slug:scanner-self-exclusion": "DRO-346",
+    "slug:secret-detection": "DRO-350",
+    "slug:supply-chain-currency": "DRO-347",
+    "slug:tool-output-not-persisted": "DRO-344",
+    "slug:tracked-path-containment": "DRO-343",
     "someday:id:010e057c10c922c6": "DRO-286",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
