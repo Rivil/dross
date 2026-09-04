@@ -66,6 +66,7 @@ func Techdebt() *cobra.Command {
 // git repo (so ls-files fails), it falls back to a tree walk that skips .git
 // and .dross, so the scan still runs — the run id will carry the "nogit" sha.
 func trackedFiles(repoDir string) ([]string, error) {
+	//dross:exec-exempt git ls-files -z lists tracked paths and runs no repo-authored line; the argv is fixed here
 	out, err := exec.Command("git", "-C", repoDir, "ls-files", "-z").Output()
 	if err == nil {
 		var paths []string

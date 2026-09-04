@@ -862,6 +862,7 @@ func resolveCompleteBase(repoDir, root string, p *project.Project, s *state.Stat
 // Best-effort: any git or parse failure yields "" and the caller refuses.
 func phaseRefRecordedBase(repoDir, phaseID string) string {
 	ref := "refs/heads/phase/" + phaseID + ":.dross/phases/" + phaseID + "/" + changes.File
+	//dross:exec-exempt git show reads one blob out of the object store; the ref is fenced by gitRefArgs and nothing in a blob executes
 	out, err := exec.Command("git", append([]string{"-C", repoDir}, gitRefArgs("show", nil, ref)...)...).Output()
 	if err != nil {
 		return ""
@@ -897,6 +898,7 @@ func completeBaseCandidates(repoDir string, p *project.Project, s *state.State) 
 // 0 and the caller's ancestry fallback stands.
 func originRecordedPR(repoDir, base, phaseID string) int {
 	ref := "origin/" + base + ":" + ".dross/phases/" + phaseID + "/changes.json"
+	//dross:exec-exempt git show reads one blob out of the object store; the ref is fenced by gitRefArgs and nothing in a blob executes
 	out, err := exec.Command("git", append([]string{"-C", repoDir}, gitRefArgs("show", nil, ref)...)...).Output()
 	if err != nil {
 		return 0
@@ -1068,6 +1070,7 @@ func dirtyTreeError(action, status string) error {
 func gitNoOut(repoDir string, args ...string) error {
 	gitArgvTap(args)
 	full := append([]string{"-C", repoDir}, args...)
+	//dross:exec-exempt the argv is dross's own git plumbing, fenced by gitRefArgs/gitPathArgs before it gets here; none of it runs a repo-authored line
 	return exec.Command("git", full...).Run()
 }
 

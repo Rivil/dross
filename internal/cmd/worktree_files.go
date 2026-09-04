@@ -30,6 +30,7 @@ import (
 // exits 0, which is the honest answer to "what would the gate run" when there
 // is nothing in hand.
 func worktreeChangedFiles(repoDir string) ([]string, error) {
+	//dross:exec-exempt git status --porcelain reads the working tree and runs no repo-authored line; no hook fires for it
 	out, err := exec.Command("git", "-C", repoDir, "status", "--porcelain", "--untracked-files=all").Output()
 	if err != nil {
 		return nil, fmt.Errorf("git status: %w", err)

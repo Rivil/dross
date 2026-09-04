@@ -975,6 +975,7 @@ func phaseCommitsOnMain(root, repoDir, mainBranch string) ([]leakedPhaseCommit, 
 	}
 
 	// List commits on local main not in origin/main.
+	//dross:exec-exempt git rev-list walks commit ancestry between two fenced refs and runs no repo-authored line
 	out, err := exec.Command("git", append([]string{"-C", repoDir},
 		gitRefArgs("rev-list", nil, "origin/"+mainBranch+".."+mainBranch)...)...).Output()
 	if err != nil {
@@ -1074,6 +1075,7 @@ func parseGitForCompare(raw string) (host, path string) {
 // cannot be exercised any other way: CI's git is new enough, so without a seam
 // the check would only ever be observed passing.
 var gitVersionOutput = func() (string, error) {
+	//dross:exec-exempt git --version prints the binary's own version; the argv is fixed and touches nothing in the repo
 	out, err := exec.Command("git", "--version").Output()
 	return string(out), err
 }

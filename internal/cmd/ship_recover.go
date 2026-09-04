@@ -172,6 +172,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 
 	// Pre-check: SHA must actually contain a .dross/ tree, or the checkout
 	// step would fail with an unhelpful pathspec error.
+	//dross:exec-exempt git rev-parse --verify resolves an object name and prints nothing else; the ref is fenced and no repo-authored line runs
 	if err := exec.Command("git", append([]string{"-C", repoDir},
 		gitRefArgs("rev-parse", []string{"--verify"}, sha+":.dross")...)...).Run(); err != nil {
 		return fmt.Errorf("commit %s has no .dross/ tree — nothing to restore. "+
@@ -262,6 +263,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 func gitTrim(repoDir string, args ...string) (string, error) {
 	gitArgvTap(args)
 	full := append([]string{"-C", repoDir}, args...)
+	//dross:exec-exempt the argv is dross's own git plumbing, fenced by gitRefArgs/gitPathArgs before it gets here; none of it runs a repo-authored line
 	out, err := exec.Command("git", full...).Output()
 	if err != nil {
 		return "", err
@@ -272,6 +274,7 @@ func gitTrim(repoDir string, args ...string) (string, error) {
 func gitCombined(repoDir string, args ...string) (string, error) {
 	gitArgvTap(args)
 	full := append([]string{"-C", repoDir}, args...)
+	//dross:exec-exempt the argv is dross's own git plumbing, fenced by gitRefArgs/gitPathArgs before it gets here; none of it runs a repo-authored line
 	out, err := exec.Command("git", full...).CombinedOutput()
 	return string(out), err
 }

@@ -233,6 +233,7 @@ func resolveSquashCommit(repoDir, branch, mainBranch string) (string, error) {
 // git happens to emit the files in.
 func patchIDOfDiff(repoDir, from, to string) (string, error) {
 	var diff bytes.Buffer
+	//dross:exec-exempt git diff renders two fenced refs as text; the refs come from gitRefArgs and a diff executes nothing
 	d := exec.Command("git", append([]string{"-C", repoDir}, gitRefArgs("diff", nil, from, to)...)...)
 	d.Stdout = &diff
 	if err := d.Run(); err != nil {
@@ -241,6 +242,7 @@ func patchIDOfDiff(repoDir, from, to string) (string, error) {
 	if diff.Len() == 0 {
 		return "", nil
 	}
+	//dross:exec-exempt git patch-id --stable hashes a diff arriving on stdin; the argv is fixed and reads no repo-authored line
 	p := exec.Command("git", "-C", repoDir, "patch-id", "--stable")
 	p.Stdin = &diff
 	out, err := p.Output()

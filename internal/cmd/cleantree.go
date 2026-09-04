@@ -51,6 +51,7 @@ func autoCommitDrossDirt(repoDir, action string) (committed bool, err error) {
 // whitespace — gitTrim would eat the first line's leading status column
 // (" M path") and break positional parsing.
 func gitStatusRaw(repoDir string) (string, error) {
+	//dross:exec-exempt git status --porcelain reads the working tree and runs no repo-authored line; no hook fires for it
 	out, err := exec.Command("git", "-C", repoDir, "status", "--porcelain").Output()
 	if err != nil {
 		return "", err
