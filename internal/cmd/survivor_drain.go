@@ -320,6 +320,15 @@ func survivorDrain() *cobra.Command {
 			"configured adapter over --packages, or over every Go package in the repo.",
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
+			// FIRST, before FindRoot's siblings and before any survivor is
+			// gathered. The drain has two spawn seams — goListDirs shells the
+			// toolchain, and --report's coverage pass runs `go test
+			// -coverprofile` over the repo's own packages — so the gate goes at
+			// the RunE top rather than at each seam, where a third seam added
+			// later would arrive ungated by default.
+			if err := requireExecConsent(); err != nil {
+				return err
+			}
 			root, err := FindRoot()
 			if err != nil {
 				return err

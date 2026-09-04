@@ -708,17 +708,24 @@ func findLane(p *project.Project, name string) (project.TestLane, error) {
 //     gate bricks the very commands a user reaches for to understand why dross
 //     is refusing. A gate that makes diagnosis impossible gets disabled.
 //
-//   - `verify` and `test` are in it because they are the commands that spawn
-//     the suite itself — `dross test` is the execution site the prompts now
-//     call, so gating it is gating the run rather than the step boundary
-//     around it. The other four are in it because they are the loop's step
-//     boundaries: refusing there stops an execute run before it reaches the
-//     step that runs tests. The locked exec_consent_gate decision admits what
-//     this cannot do — nothing stops an agent typing `go test` directly. The
-//     CLI covers the CLI.
+//   - `verify`, `test` and `survivor drain` are in it because they are the
+//     commands that spawn the suite itself — `dross test` is the execution
+//     site the prompts now call, and the drain shells `go list` and `go test
+//     -coverprofile` over the repo's own packages, so gating them is gating
+//     the run rather than the step boundary around it. The drain rides
+//     runtime.test_command's grant per the locked drain_grant decision:
+//     consenting to "dross may run this repo's suite here" is the same
+//     permission the drain needs, and a separate grant family would cost
+//     another trust surface for no additional authority. The remaining
+//     members are in it because they are the loop's step boundaries: refusing
+//     there stops an execute run before it reaches the step that runs tests.
+//     The locked exec_consent_gate decision admits what this cannot do —
+//     nothing stops an agent typing `go test` directly. The CLI covers the
+//     CLI.
 var execGatedCommands = []string{
 	"changes record",
 	"state bump",
+	"survivor drain",
 	"task next",
 	"task status in_progress",
 	"test",
