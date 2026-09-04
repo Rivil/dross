@@ -137,9 +137,16 @@ func execConsentVacuity(sites int) error {
 // mirroring subprocargs_audit_test.go's runAudit down to the _test.go skip.
 func sweepExecConsent(t *testing.T, root string, roots []string) ([]execFinding, int) {
 	t.Helper()
+	g := sweepExecGraph(t, root, roots)
+	return g.findings(), len(g.sites)
+}
+
+// sweepExecGraph is the same walk, handing back the whole graph — what the
+// repo-wide gate needs so it can measure its own coverage as well as read its
+// verdicts.
+func sweepExecGraph(t *testing.T, root string, roots []string) *execGraph {
+	t.Helper()
 	fset := token.NewFileSet()
-	var findings []execFinding
-	sites := 0
 
 	var files []*ast.File
 	for _, r := range roots {
@@ -164,18 +171,148 @@ func sweepExecConsent(t *testing.T, root string, roots []string) ([]execFinding,
 	// ONE graph over the whole set, never a graph per file: reach crosses
 	// packages, and a per-file audit would report every cross-package call as
 	// leading nowhere.
-	findings, sites = auditExecFiles(fset, files)
-	return findings, sites
+	return buildExecGraph(fset, files)
 }
 
-// execConsentRoots returns the tree the repo-wide gate sweeps and the roots
-// inside it.
+// execConsentScanRoots are the trees the repo-wide gate sweeps. BOTH, not just
+// internal/cmd: the first sweep of the subprocess-argv audit nearly stopped
+// there, and the packages that actually spawn — mutation, remote, codex, ship —
+// all live one level out.
+var execConsentScanRoots = []string{"internal", "cmd"}
+
+// The discovery floor. A walk that quietly stopped matching reports zero
+// findings, which is indistinguishable from success, so the gate also has to
+// find ENOUGH — measured today at 41 sites across 24 files, with the floor set
+// roughly a quarter under both so ordinary churn does not trip it and a dropped
+// scan root does.
+const (
+	execConsentMinSites = 30
+	execConsentMinFiles = 20
+)
+
+// execConsentFloor is the coverage check, factored out so it can be exercised
+// directly rather than only observed passing.
+func execConsentFloor(sites, files int) error {
+	if sites < execConsentMinSites {
+		return fmt.Errorf("found only %d spawn sites, want at least %d — the walk has narrowed", sites, execConsentMinSites)
+	}
+	if files < execConsentMinFiles {
+		return fmt.Errorf("found spawn sites in only %d files, want at least %d — a scan root has been dropped", files, execConsentMinFiles)
+	}
+	return nil
+}
+
+// execConsentDistinctFiles counts the files a sweep found spawn sites in.
+func execConsentDistinctFiles(g *execGraph) int {
+	seen := map[string]bool{}
+	for _, s := range g.sites {
+		seen[s.pos.Filename] = true
+	}
+	return len(seen)
+}
+
+// TestEverySpawnSiteGatedOrExempt is the gate, over this repository's own
+// source. trust.go's package comment and doctor's consent section point at it
+// by name, so renaming it is a documented break rather than a quiet one.
 //
-// This task scopes it to the fixture corpus — the PASS rows of snippets.txt,
-// materialised as real source in a temp tree — because the repo's own spawn
-// sites are not gated or marked yet. Widening it to internal/ and cmd/ is t-10,
-// and it is a one-function change by design.
-func execConsentRoots(t *testing.T) (string, []string) {
+// Three things have to hold together, and each covers a way the other two can
+// lie: zero findings (nothing ungated), a non-zero site count (the walk still
+// matches), and a floor under both the site and file counts (the walk still
+// matches ENOUGH).
+func TestEverySpawnSiteGatedOrExempt(t *testing.T) {
+	g := sweepExecGraph(t, repoRootForDocs(t), execConsentScanRoots)
+	if err := execConsentVacuity(len(g.sites)); err != nil {
+		t.Fatal(err)
+	}
+	if err := execConsentFloor(len(g.sites), execConsentDistinctFiles(g)); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range g.findings() {
+		t.Error(f.String())
+	}
+}
+
+// TestExecConsentFloorCatchesANarrowedWalk exercises the floor in both
+// directions. Asserting it only on the live tree would leave the rule itself
+// unproven — a check that always returned nil would pass identically.
+func TestExecConsentFloorCatchesANarrowedWalk(t *testing.T) {
+	if err := execConsentFloor(execConsentMinSites, execConsentMinFiles); err != nil {
+		t.Errorf("the floor rejects its own minimum: %v", err)
+	}
+	if err := execConsentFloor(execConsentMinSites-1, execConsentMinFiles); err == nil {
+		t.Error("a narrowed site count passed the floor")
+	}
+	if err := execConsentFloor(execConsentMinSites, execConsentMinFiles-1); err == nil {
+		t.Error("a narrowed file count passed the floor")
+	}
+}
+
+// TestDroppingAScanRootFailsTheFloor: the roots are the one input nobody would
+// notice shrinking. internal/ holds the packages that actually spawn — mutation,
+// remote, codex, ship — so a sweep of cmd/ alone must fall under the floor
+// rather than reporting a clean, much smaller tree.
+func TestDroppingAScanRootFailsTheFloor(t *testing.T) {
+	g := sweepExecGraph(t, repoRootForDocs(t), []string{"cmd"})
+	if err := execConsentFloor(len(g.sites), execConsentDistinctFiles(g)); err == nil {
+		t.Errorf("sweeping cmd/ alone found %d sites in %d files and passed the floor — dropping `internal` is invisible",
+			len(g.sites), execConsentDistinctFiles(g))
+	}
+}
+
+// assertExecConsentCovers pins one file inside the scan roots by path, mirroring
+// subprocargs_audit_test.go's assertAuditCovers. A package that left scope would
+// otherwise show up as a smaller, cleaner sweep.
+func assertExecConsentCovers(t *testing.T, rel string) {
+	t.Helper()
+	root := repoRootForDocs(t)
+	target := filepath.Join(root, rel)
+	if _, err := os.Stat(target); err != nil {
+		t.Fatalf("expected %s to exist: %v", rel, err)
+	}
+	for _, r := range execConsentScanRoots {
+		if strings.HasPrefix(target, filepath.Join(root, r)+string(filepath.Separator)) {
+			return
+		}
+	}
+	t.Errorf("%s is outside the scan roots %v", rel, execConsentScanRoots)
+}
+
+// TestExecConsentScansTheSpawningPackages: the four packages outside
+// internal/cmd where dross actually shells out. Asserted by path rather than
+// assumed, because the failure mode is silent.
+func TestExecConsentScansTheSpawningPackages(t *testing.T) {
+	for _, rel := range []string{
+		filepath.Join("internal", "mutation", "gremlins.go"),
+		filepath.Join("internal", "remote", "remote.go"),
+		filepath.Join("internal", "codex", "git.go"),
+		filepath.Join("internal", "ship", "open.go"),
+	} {
+		assertExecConsentCovers(t, rel)
+	}
+}
+
+// TestExecConsentSweepIsGreenOverTheFixtureCorpus keeps the synthetic corpus
+// exercised now that the gate above scans the real tree.
+//
+// It is not redundant with the snippet table: that runs each PASS row alone,
+// while this materialises them into one file and puts the whole SWEEP over it —
+// the WalkDir, the _test.go skip, the graph build. A sweep that could only find
+// sites in this repository's own layout would be a gate that stopped working
+// the moment it was pointed anywhere else.
+func TestExecConsentSweepIsGreenOverTheFixtureCorpus(t *testing.T) {
+	root, roots := execConsentFixtureCorpus(t)
+	findings, sites := sweepExecConsent(t, root, roots)
+	if err := execConsentVacuity(sites); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range findings {
+		t.Error(f.String())
+	}
+}
+
+// execConsentFixtureCorpus materialises snippets.txt's PASS rows as real source
+// in a temp tree, and returns it as a root the sweep can walk.
+func execConsentFixtureCorpus(t *testing.T) (string, []string) {
 	t.Helper()
 	rows, _ := parseExecSnippetTable(t)
 	var body []string
@@ -191,20 +328,6 @@ func execConsentRoots(t *testing.T) (string, []string) {
 		t.Fatal(err)
 	}
 	return dir, []string{"."}
-}
-
-// TestEverySpawnSiteGatedOrExempt is the gate. trust.go's package comment and
-// doctor's consent section point at it by name, so renaming it is a documented
-// break rather than a quiet one.
-func TestEverySpawnSiteGatedOrExempt(t *testing.T) {
-	root, roots := execConsentRoots(t)
-	findings, sites := sweepExecConsent(t, root, roots)
-	if err := execConsentVacuity(sites); err != nil {
-		t.Fatal(err)
-	}
-	for _, f := range findings {
-		t.Error(f.String())
-	}
 }
 
 // TestExecConsentFailsVacuously exercises the floor directly. Asserting it
