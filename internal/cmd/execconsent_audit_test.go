@@ -1594,11 +1594,12 @@ func (fx *reachFx) site(t *testing.T, marker string) *execSite {
 // claims that are only meaningful against real code — that doctor does not
 // reach the mutation runner, and that the gate half of the verdict tells
 // doctor's display-only consent read from verify's acted-on one.
-func repoExecGraph(t *testing.T) *execGraph {
+func repoExecGraph(t *testing.T, rewrites ...[3]string) *execGraph {
 	t.Helper()
 	root := repoRootForDocs(t)
 	fset := token.NewFileSet()
 	var files []*ast.File
+	applied := map[string]bool{}
 	for _, r := range []string{"internal", "cmd"} {
 		err := filepath.WalkDir(filepath.Join(root, r), func(path string, d os.DirEntry, err error) error {
 			if err != nil {
@@ -1607,7 +1608,23 @@ func repoExecGraph(t *testing.T) *execGraph {
 			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
-			f, perr := parser.ParseFile(fset, path, nil, parser.ParseComments)
+			body, rerr := os.ReadFile(path)
+			if rerr != nil {
+				return rerr
+			}
+			src := string(body)
+			// A rewrite is {file base, before, after}. It is how a test can ask
+			// "what would the enumerator say if this gate were deleted"
+			// without deleting it — the only way to prove the gate half of the
+			// verdict is load-bearing rather than decorative.
+			for _, rw := range rewrites {
+				if filepath.Base(path) != rw[0] || !strings.Contains(src, rw[1]) {
+					continue
+				}
+				src = strings.Replace(src, rw[1], rw[2], 1)
+				applied[rw[0]+rw[1]] = true
+			}
+			f, perr := parser.ParseFile(fset, path, src, parser.ParseComments)
 			if perr != nil {
 				return perr
 			}
@@ -1616,6 +1633,11 @@ func repoExecGraph(t *testing.T) *execGraph {
 		})
 		if err != nil {
 			t.Fatalf("walk %s: %v", r, err)
+		}
+	}
+	for _, rw := range rewrites {
+		if !applied[rw[0]+rw[1]] {
+			t.Fatalf("rewrite of %s never matched %q — the test is asserting against source that moved", rw[0], rw[1])
 		}
 	}
 	return buildExecGraph(fset, files)
@@ -1906,5 +1928,154 @@ func (Loud) Go() error { return exec.Command("git", "gc").Run() }
 	}
 	if !reported {
 		t.Error("the ambiguity was recorded but never reported as a finding")
+	}
+}
+
+// --- the toolchain spawns, proven gated by reach ---
+//
+// These are the sites that run a repo- or user-supplied line: `dross run`'s
+// slot command, `dross test`'s local and remote suites, verify's detached
+// dispatch and collection, a lane's install line, and the drain's two seams.
+// Every one of them must resolve as GATED through the call graph rather than
+// carrying an exemption marker — a marker on any of them would be an author
+// writing down that the line is safe, which is exactly the judgement the
+// consent gate exists to hand to a human instead.
+//
+// update.go is the single carve-out and the reason is specific: the binary it
+// self-execs is the one the updater just downloaded and minisign-verified, so
+// the signature — not a grant — is what makes the argv trusted.
+
+// execConsentGatedFiles are the files whose every site must be gated by reach.
+//
+// Repo-relative, never by base name: `run.go` exists four times in this tree —
+// internal/cmd's slot runner and the scan entry points in internal/security,
+// internal/quality and internal/techdebt — and matching on the base name pulled
+// three of t-8's marked sites into this task's assertion.
+var execConsentGatedFiles = []string{
+	"internal/cmd/run.go",
+	"internal/cmd/test.go",
+	"internal/cmd/verify.go",
+	"internal/cmd/lane_install.go",
+	"internal/cmd/survivor_drain.go",
+}
+
+// sitesIn returns every site in the given repo-relative files.
+func (g *execGraph) sitesIn(rels ...string) []*execSite {
+	var out []*execSite
+	for _, s := range g.sites {
+		for _, rel := range rels {
+			if execSiteIsIn(s, rel) {
+				out = append(out, s)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// execSiteIsIn reports whether a site sits in the named repo-relative file.
+func execSiteIsIn(s *execSite, rel string) bool {
+	return strings.HasSuffix(s.pos.Filename, string(filepath.Separator)+filepath.FromSlash(rel))
+}
+
+// execFindingIsIn is the same test for a rendered finding, whose Pos carries a
+// trailing ":line:col".
+func execFindingIsIn(f execFinding, rel string) bool {
+	cut := strings.SplitN(f.Pos, ":", 2)[0]
+	return strings.HasSuffix(cut, string(filepath.Separator)+filepath.FromSlash(rel))
+}
+
+// TestToolchainSpawnsResolveAsGated is c-2 for the half that must NOT be
+// marked. A sweep cleared by markers proves nothing, and these are the sites
+// where a marker would be furthest from the truth.
+func TestToolchainSpawnsResolveAsGated(t *testing.T) {
+	g := repoExecGraph(t)
+
+	sites := g.sitesIn(execConsentGatedFiles...)
+	if len(sites) == 0 {
+		t.Fatal("found no spawn sites in the toolchain files — the walk stopped covering them")
+	}
+	for _, s := range sites {
+		where := filepath.Base(s.pos.Filename)
+		if s.class != execReachGated {
+			t.Errorf("%s:%d is %s, want %s — this site runs a repo- or user-supplied line",
+				where, s.pos.Line, s.Verdict(), execReachGated)
+		}
+		if s.marked {
+			t.Errorf("%s:%d carries an exemption marker; a site the gate already covers must not claim one",
+				where, s.pos.Line)
+		}
+	}
+	for _, f := range g.findings() {
+		for _, rel := range execConsentGatedFiles {
+			if execFindingIsIn(f, rel) {
+				t.Errorf("finding in a file that should be wholly gated: %s", f.String())
+			}
+		}
+	}
+}
+
+// TestUpdateSelfExecIsTheOnlyMarkerHere pins the carve-out's boundary. A
+// self-exec carve-out that widened would let any spawn claim "it is our own
+// binary", so the reason must name the thing that makes it true.
+func TestUpdateSelfExecIsTheOnlyMarkerHere(t *testing.T) {
+	g := repoExecGraph(t)
+	sites := g.sitesIn("internal/cmd/update.go")
+	if len(sites) != 1 {
+		t.Fatalf("update.go has %d spawn sites, want 1 — the carve-out is no longer about one call", len(sites))
+	}
+	s := sites[0]
+	if !s.marked {
+		t.Fatal("update.go's self-exec carries no exemption marker")
+	}
+	if !strings.Contains(strings.ToLower(s.marker.Reason), "verif") {
+		t.Errorf("the reason does not name signature verification, which is the only thing that makes it safe: %q", s.marker.Reason)
+	}
+	for _, f := range g.findings() {
+		if execFindingIsIn(f, "internal/cmd/update.go") {
+			t.Errorf("update.go's marked self-exec is still a finding: %s", f.String())
+		}
+	}
+}
+
+// TestReachProofIsLoadBearing: without this, "gated via reach" could be a
+// verdict the graph hands out to everything and the whole attribution would be
+// decorative. Deleting `dross run`'s consent check — in a copy of the source,
+// not on disk — must turn its spawn into a finding that names it.
+func TestReachProofIsLoadBearing(t *testing.T) {
+	// The CALL is removed, not just the branch under it. Leaving
+	// `if err != nil { return err }` standing would still be a function acting
+	// on a consent result — a weaker gate, but a real one — and the assertion
+	// is about what happens when the check is gone.
+	g := repoExecGraph(t, [3]string{
+		"run.go",
+		"consented, err := RunConsented(root, line)",
+		"consented, err := true, error(nil)",
+	})
+	var found bool
+	for _, f := range g.findings() {
+		if execFindingIsIn(f, "internal/cmd/run.go") && strings.Contains(f.Why, "ungated") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("deleting `dross run`'s consent check changed nothing — the reach proof is decorative:\n%v", g.findings())
+	}
+}
+
+// TestRunSlotStillRefusesAtRuntime: the reach proof is a claim about the SHAPE
+// of the code. It is not the refusal. A graph that said "gated" over a call
+// site whose runtime check had been quietly weakened would be a green audit
+// over a broken gate, so the refusal is exercised for real.
+func TestRunSlotStillRefusesAtRuntime(t *testing.T) {
+	gatedFixture(t)
+	mustRunSet(t, "runtime.lint_command", "golangci-lint run")
+
+	err := runCmd(t, Run(), "lint")
+	if err == nil {
+		t.Fatal("`dross run lint` ran an unconsented slot command")
+	}
+	if !strings.Contains(err.Error(), "lint") {
+		t.Errorf("the refusal does not name the slot: %v", err)
 	}
 }

@@ -740,6 +740,7 @@ var execGatedCommands = []string{
 	"task status in_progress",
 	"test",
 	"verify",
+	"verify results",
 }
 
 // requireExecConsent is the refusal a gated command runs FIRST, before any I/O.

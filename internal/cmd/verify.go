@@ -493,6 +493,16 @@ func verifyResults() *cobra.Command {
 		Short: "Collect a detached mutation run and write tests.json + verify.toml",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			// FIRST. `verify results` reads like the harmless half of a
+			// detached run — it collects rather than measures — but
+			// detachFetchReports rsyncs from the recorded host per package,
+			// and the artefacts it then writes are this phase's verdict. The
+			// enumerator found it reaching verify.go's spawn seam with no
+			// grant of its own, which made every mutation spawn MIXED:
+			// covered when `verify` reached it, uncovered when this did.
+			if err := requireExecConsent(); err != nil {
+				return err
+			}
 			return collectDetached(args[0])
 		},
 	}

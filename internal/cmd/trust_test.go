@@ -323,6 +323,7 @@ func TestGatedCommandsRefuse(t *testing.T) {
 			return runCmd(t, Changes(), "record", "01-x", "t-1", "--files", "a.go")
 		}},
 		{"survivor drain", func(t *testing.T) error { return runCmd(t, Survivor(), "drain") }},
+		{"verify results", func(t *testing.T) error { return runCmd(t, Verify(), "results", "01-x") }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -352,6 +353,7 @@ func TestExecGatedSetIsExplicit(t *testing.T) {
 		"task status in_progress",
 		"test",
 		"verify",
+		"verify results",
 	}
 	got := append([]string(nil), execGatedCommands...)
 	sort.Strings(got)
@@ -361,7 +363,7 @@ func TestExecGatedSetIsExplicit(t *testing.T) {
 	// The declaration must match reality: every named command actually refuses.
 	// TestGatedCommandsRefuse drives exactly these, so a name added here
 	// without a matching row (or a call site) shows up there.
-	if len(execGatedCommands) != 7 {
+	if len(execGatedCommands) != 8 {
 		t.Errorf("the gated set changed size — add or remove the matching row in TestGatedCommandsRefuse")
 	}
 }
