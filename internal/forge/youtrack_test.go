@@ -6,7 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -758,6 +761,27 @@ func newYTTagFake(known ...string) *ytTagFake {
 	return f
 }
 
+// ytPageWindow applies $skip / $top to an ordered slice the way YouTrack
+// applies them to a collection: absent $top means the server's own default
+// page, which is the silent truncation a bare list request already suffers.
+func ytPageWindow(all []string, q url.Values) []string {
+	skip, _ := strconv.Atoi(q.Get("$skip"))
+	top, err := strconv.Atoi(q.Get("$top"))
+	if err != nil || top <= 0 {
+		top = ytFakeDefaultPage
+	}
+	if skip >= len(all) {
+		return nil
+	}
+	end := min(skip+top, len(all))
+	return all[skip:end]
+}
+
+// ytFakeDefaultPage stands in for the page YouTrack serves when the client
+// names none. The real value is version-dependent; what matters to the tests
+// is that it is small and that a client which asks for nothing gets it.
+const ytFakeDefaultPage = 42
+
 func (f *ytTagFake) nameFor(id string) string {
 	for n, i := range f.index {
 		if i == id {
@@ -773,9 +797,18 @@ func (f *ytTagFake) handler(t *testing.T) http.HandlerFunc {
 		path := r.URL.Path
 		switch {
 		case path == "/api/issueTags" && r.Method == "GET":
+			// Paged, in a stable order. A fake that answered every read with
+			// the whole index could not tell a paginating client from one
+			// capped at a single page — both would pass — so the paging is
+			// part of what this fake models, not scaffolding around it.
+			names := make([]string, 0, len(f.index))
+			for n := range f.index {
+				names = append(names, n)
+			}
+			sort.Strings(names)
 			var out []string
-			for n, id := range f.index {
-				out = append(out, fmt.Sprintf(`{"id":%q,"name":%q}`, id, n))
+			for _, n := range ytPageWindow(names, r.URL.Query()) {
+				out = append(out, fmt.Sprintf(`{"id":%q,"name":%q}`, f.index[n], n))
 			}
 			_, _ = io.WriteString(w, "["+strings.Join(out, ",")+"]")
 

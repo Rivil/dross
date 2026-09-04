@@ -87,6 +87,52 @@ var (
 // rides in there).
 const ytIssueFields = "idReadable,summary,description,resolved,tags(name),customFields(name,value(name,isResolved))"
 
+// ytPageSize is the page dross asks for on every collection read, and
+// ytMaxPages is the walk's stop.
+//
+// YouTrack truncates silently: a bare list request answers with the server's
+// own default page, and an explicit $top is a cap rather than a promise. Both
+// return a well-formed short array, so a truncated read is indistinguishable
+// from a complete one at the call site — which is the whole problem. A tag
+// index read at a flat $top=1000 against a 1243-tag instance hid 243 names,
+// and `ensureTag` then POSTed a tag that already existed and took an HTTP 400
+// naming it; the same capped read reached `listTagNames`, where an existing
+// label reads as unknown and is dropped from the query *silently*, which is
+// the worse half — a narrowed query returns a confident wrong answer.
+//
+// ytMaxPages exists because a server that ignores $skip would hand back a full
+// page forever. An error naming the cap is the only honest end to that walk: a
+// silent truncation here would re-create the bug the walk exists to fix.
+const (
+	ytPageSize = 1000
+	ytMaxPages = 100
+)
+
+// ytPaged walks a YouTrack collection endpoint, accumulating pages until one
+// comes back short of ytPageSize. `query` is the already-encoded query string
+// without paging parameters; $skip and $top are appended literally, since
+// YouTrack's parameter names carry a `$` that does not survive being escaped
+// alongside ordinary values.
+//
+// It is a free function rather than a method because Go methods cannot carry
+// type parameters, and the two collections it walks decode into different
+// element types.
+func ytPaged[T any](c *YouTrackClient, path, query string) ([]T, error) {
+	var all []T
+	for page := 0; page < ytMaxPages; page++ {
+		reqURL := fmt.Sprintf("%s?%s&$skip=%d&$top=%d", c.endpoint(path), query, page*ytPageSize, ytPageSize)
+		var batch []T
+		if err := c.do("GET", reqURL, nil, &batch); err != nil {
+			return nil, err
+		}
+		all = append(all, batch...)
+		if len(batch) < ytPageSize {
+			return all, nil
+		}
+	}
+	return nil, fmt.Errorf("read %s: still returning full pages after %d × %d records — the server appears to ignore $skip, and a truncated read here would be silently wrong", path, ytMaxPages, ytPageSize)
+}
+
 // NewYouTrack validates config, resolves the permanent token from the
 // environment, and returns a ready client. It errors early on the same shape
 // of problems the forge New checks: missing base URL / auth env, unset token,
@@ -639,8 +685,8 @@ func (c *YouTrackClient) ListIssues(f IssueFilter) ([]Issue, error) {
 	q := url.Values{}
 	q.Set("query", c.buildQuery(f))
 	q.Set("fields", ytIssueFields)
-	var raw []youtrackIssue
-	if err := c.do("GET", c.endpoint("/issues")+"?"+q.Encode(), nil, &raw); err != nil {
+	raw, err := ytPaged[youtrackIssue](c, "/issues", q.Encode())
+	if err != nil {
 		return nil, fmt.Errorf("list issues: %w", err)
 	}
 	out := make([]Issue, 0, len(raw))
@@ -657,11 +703,12 @@ func (c *YouTrackClient) loadTags() (map[string]string, error) {
 	if c.tagIDs != nil {
 		return c.tagIDs, nil // already populated this run
 	}
-	var tags []struct {
+	type ytTag struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	}
-	if err := c.do("GET", c.endpoint("/issueTags")+"?fields=id,name&$top=1000", nil, &tags); err != nil {
+	tags, err := ytPaged[ytTag](c, "/issueTags", "fields=id,name")
+	if err != nil {
 		return nil, fmt.Errorf("list tags: %w", err)
 	}
 	index := make(map[string]string, len(tags))
