@@ -412,6 +412,18 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Task paths are translated into each lane runner's selector form, and a selector matching nothing is reported as a miss rather than a failing gate
 - [x] A lane may declare a `prepare` command between sync and test, so remote build prerequisites are dross's job rather than hidden in each repo's test command
 
+### Milestone v1.7 — symmetric controls: every path to a dangerous operation goes through the gate (active)
+
+- [ ] Every command that spawns the repository's own code goes through the exec-consent gate, proven by a test that enumerates spawn sites rather than a hand-maintained list
+- [ ] A path loaded from a tracked artifact is containment-checked before any file I/O, on the read path as well as the write path, through one shared implementation
+- [ ] No raw subprocess output is persisted to `verify.toml` or rendered into a PR body — a failed leg records its exit status and a pointer, and the live diagnostic stays on stderr
+- [ ] A failed push is retried on the next run because its gate compares local against origin rather than against the local index
+- [ ] Running dross's own scans against dross reports zero self-referential findings — no testdata languages, no identity hashes read as secrets, no scanner flagging its own marker definitions
+- [ ] No reachable stdlib vulnerability ships, and the release build measures the dependency graph it actually ships
+- [ ] Mutation ranges are AST-aware: a range covers the enclosing syntactic construct, so no mutant covering a changed line goes ungenerated
+- [ ] No persisted artifact or published PR body carries recognisable secret material — captured output is not persisted, and what is persisted is scanned
+- [ ] `internal/cmd` holds cobra wiring only; every domain it carries today lives in a package of its own, provable by import direction
+
 ## Telemetry
 
 Dross records local-only usage events at `~/.claude/dross/telemetry.jsonl`. The intent is single-developer self-observation — a dogfood log you can read back later to find where the tool gets in your way.
