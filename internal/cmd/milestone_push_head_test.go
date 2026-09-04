@@ -330,3 +330,38 @@ func TestMilestonePushHeadCleanAheadPushesAndCounts(t *testing.T) {
 		t.Errorf("origin %s = %s; want %s — the local commits did not reach origin", branch, remote, local)
 	}
 }
+
+// TestMilestonePushHeadNoUpstreamPublishesTheBranch is the SUCCESS half of the
+// no-upstream arm, and it exists because its sibling refusal test cannot kill
+// the mutant that arm's condition carries.
+//
+// TestMilestonePushHeadNoUpstreamRefusedPushIsHardError asserts the same arm
+// with pushes refused, and passes whether the condition is negated or not: with
+// no refs/remotes/origin/<branch> to be found, a negated condition simply falls
+// through to `rev-list origin/<branch>..<branch>`, which fails for its own
+// reason and still returns an error. An error either way tells the two apart
+// not at all.
+//
+// Only the success path separates them. Negated, this branch is never pushed
+// and the rev-list errors instead — so pushed=true with a nil error is
+// reachable through the real condition alone.
+//
+// commits=0 is asserted rather than ignored: there is no upstream yet to be
+// ahead OF, so a count here would be counting against nothing.
+func TestMilestonePushHeadNoUpstreamPublishesTheBranch(t *testing.T) {
+	dir, _, branch := milestonePushHeadUnpushedFixture(t)
+
+	pushed, commits, err := pushMilestoneHeadIfAhead(dir, branch)
+	if err != nil {
+		t.Fatalf("publishing a branch origin has never seen must succeed: %v", err)
+	}
+	if !pushed {
+		t.Error("pushed=false for a branch that was published")
+	}
+	if commits != 0 {
+		t.Errorf("commits=%d, want 0 — there is no upstream to be ahead of yet", commits)
+	}
+	if gitNoOut(dir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/remotes/origin/"+branch)...) != nil {
+		t.Errorf("origin has no %s after a push this function reported as done", branch)
+	}
+}

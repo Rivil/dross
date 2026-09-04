@@ -73,12 +73,12 @@
   id = "a1eca47a8213daa2"
   text = "survivor internal/cmd/milestone.go:1030 (CONDITIONALS_NEGATION)"
   why = "surviving mutant routed out of a verify run"
-  target = "milestone-push-failure-tests"
+  dismissed = true
   survivor = "84d409d56631ed49"
 
 [[deferred]]
   id = "0323e4284012842f"
   text = "survivor internal/cmd/milestone.go:1054 (ARITHMETIC_BASE)"
   why = "surviving mutant routed out of a verify run"
-  target = "milestone-push-failure-tests"
+  dismissed = true
   survivor = "6efb661ce18f93d2"

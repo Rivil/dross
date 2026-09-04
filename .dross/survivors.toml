@@ -1311,3 +1311,11 @@
   line = 249
   reason = "switch-case condition: gremlins attributes no coverage block to a 'case X != \"\":' expression. Proven exercised — go coverage shows block 249.24,253.64 count=1 under TestMalformedLaneIsAFindingNotAFault, which asserts the exact 'lane bad — would not run:' string this branch prints. Tooling attribution ceiling, not a test gap."
   accepted_in = "lane-selector-preview"
+
+[[accepted]]
+  key = "6efb661ce18f93d2"
+  file = "internal/cmd/milestone.go"
+  op = "ARITHMETIC_BASE"
+  text = "return false, 0, fmt.Errorf(\"push of %d local commit(s) on %s failed: %w\\n%s\\n\"+"
+  line = 1054
+  reason = "ARITHMETIC_BASE mutates + to - on a string concatenation joining the two halves of the ahead-push failure message; the mutant does not compile and is never viable, so no test a caller could write can kill it. The branch it sits in is covered by TestMilestonePushHeadRefusedAheadPushNamesCommitCount, which asserts the message names the exact commit count that would be lost at --finalize. Same class as the accepted string-concat entry on the remote-restore table; the standing fix is the deferred item that teaches the gremlins adapter to drop these before they reach the survivor list at all."
