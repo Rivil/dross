@@ -87,6 +87,9 @@ type laneLocalityLine struct {
 // It never syncs the tree. Locality is decided from a probe and from this
 // machine's resolver, both of which the run also does before any transfer.
 //
+// The probe is gated: see probeBlockedBy, checked before pickRemoteTarget,
+// because that is where the ssh is.
+//
 // The error return is for a REAL fault only — an unreadable local store, a
 // malformed grant. An unreachable host comes back as hostUnresolved with a nil
 // error, which is what lets preview honour locked preview_exit_status.
@@ -104,6 +107,15 @@ func previewHost(root, repoDir string, lanes []matchedLane, probe bool) (preview
 		// while proving nothing the configured name does not already say.
 		return previewUnresolved(hostUnprobed, targets[0].Host, "not probed", lanes), nil
 	}
+	if blocked := probeBlockedBy(root, repoDir, lanes); blocked != "" {
+		// The consent refusal, taken BEFORE pickRemoteTarget rather than
+		// after: the probe is an ssh to a machine, so a refusal that arrived
+		// afterwards would have already done the thing it was declining to
+		// authorize. It is hostUnresolved rather than hostUnprobed because the
+		// user did not ask for an offline read — they asked a question this
+		// grant does not let preview answer, and the reason says which.
+		return previewUnresolved(hostUnresolved, targets[0].Host, blocked, lanes), nil
+	}
 
 	chosen, pf, _, perr := pickRemoteTarget(targets, laneToolUnion(runnableLanes(lanes)))
 	// The pool's own notices are dropped rather than printed. They belong to a
@@ -114,8 +126,10 @@ func previewHost(root, repoDir string, lanes []matchedLane, probe bool) (preview
 		// A host that RAN something and failed is still not a preview
 		// failure. Preview describes: the fault is reported as the host being
 		// unresolved, named, with the reason carried — turning it into a
-		// non-zero exit would make a verb that spawns nothing wireable as a
-		// CI gate.
+		// non-zero exit would make a verb that measures nothing wireable as a
+		// CI gate. (The probe itself IS a subprocess — that is why the branch
+		// above refuses it for an ungranted lane — but it runs no test, and an
+		// exit status is a verdict about tests.)
 		//
 		// The host named is the one pickRemoteTarget BAILED on, which it hands
 		// back beside the error. It is not necessarily the last configured
@@ -132,6 +146,37 @@ func previewHost(root, repoDir string, lanes []matchedLane, probe bool) (preview
 		return previewUnresolved(hostUnresolved, targets[len(targets)-1].Host, "could not be reached", lanes), nil
 	}
 	return previewResolved(hostProbed, chosen.Host, "", lanes, chosen.Host, pf.Ready.Missing), nil
+}
+
+// probeBlockedBy returns the reason the host must not be contacted, or empty
+// when it may be.
+//
+// The rule mirrors the run's, deliberately. runTestLanes resolves consent for
+// every matched lane and RETURNS before resolveTestTarget when none of them is
+// runnable, so neither a probe nor a transfer is ever paid for on behalf of
+// lanes that were all refused. Preview lands in the same place: one granted
+// lane justifies the connection, zero does not.
+//
+// It reads the grant through previewConsent — the same call the per-lane
+// annotation uses — rather than being handed a verdict, so the annotation the
+// user reads and the authority the probe runs under cannot disagree.
+//
+// A preview that matched no lane at all is NOT blocked: there is no ungranted
+// lane on whose behalf the probe would be running, and naming the configured
+// host for an empty file set is the answer this verb has always given.
+func probeBlockedBy(root, repoDir string, lanes []matchedLane) string {
+	if len(lanes) == 0 {
+		return ""
+	}
+	var ungranted []string
+	for _, ml := range lanes {
+		if previewConsent(root, repoDir, ml.lane) == ConsentGranted {
+			return ""
+		}
+		ungranted = append(ungranted, ml.lane.Name)
+	}
+	return fmt.Sprintf("not probed: no previewed lane is granted on this machine (%s) — read a lane's line with `dross trust --lane %s`",
+		strings.Join(ungranted, ", "), ungranted[0])
 }
 
 // previewResolved builds the answer for a host that told us something — or for
