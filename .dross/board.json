@@ -302,6 +302,56 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "exec-consent-completeness/t-1": {
+      "issue": "DRO-333",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-consent-completeness/t-10": {
+      "issue": "DRO-342",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-consent-completeness/t-2": {
+      "issue": "DRO-334",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-consent-completeness/t-3": {
+      "issue": "DRO-335",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-consent-completeness/t-4": {
+      "issue": "DRO-336",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-consent-completeness/t-5": {
+      "issue": "DRO-337",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-consent-completeness/t-6": {
+      "issue": "DRO-338",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-consent-completeness/t-7": {
+      "issue": "DRO-339",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-consent-completeness/t-8": {
+      "issue": "DRO-340",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-consent-completeness/t-9": {
+      "issue": "DRO-341",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "lane-host-affinity/t-1": {
       "issue": "DRO-318",
       "plan_status": "done",

@@ -2,5 +2,199 @@
   "phase": "exec-consent-completeness",
   "base": "milestone/v1.7",
   "base_commit": "55fa85dfd4d6dd1ba0ca0fdc0b599c38e807e2b2",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/execconsent_audit_test.go",
+        "internal/cmd/testdata/exec_consent/snippets.txt",
+        "internal/cmd/testdata/exec_consent/ungated.go.txt"
+      ],
+      "commit": "349ff16",
+      "completed_at": "2026-09-04T09:43:20.885854Z",
+      "landmarks": [
+        {
+          "feature": "exec consent audit",
+          "symbol": "execExemptMarkers",
+          "loc": "internal/cmd/execconsent_audit_test.go:91",
+          "what": "derives every exec.Command site from the AST and parses the //dross:exec-exempt grammar, requiring prose on the line immediately above"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/execconsent_audit_test.go"
+      ],
+      "commit": "a11a9e7",
+      "completed_at": "2026-09-04T09:43:14.504455Z",
+      "landmarks": [
+        {
+          "feature": "exec consent audit",
+          "symbol": "TestEverySpawnSiteGatedOrExempt",
+          "loc": "internal/cmd/execconsent_audit_test.go:222",
+          "what": "the gate sweeps internal and cmd with zero findings over 41 sites, under a site-and-file floor that fails when the walk narrows or a scan root is dropped"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/survivor_drain.go",
+        "internal/cmd/trust.go",
+        "internal/cmd/trust_test.go",
+        "internal/cmd/survivor_drain_consent_test.go",
+        "internal/cmd/survivor_drain_test.go"
+      ],
+      "commit": "19db1cd",
+      "completed_at": "2026-09-04T09:32:19.821693Z",
+      "landmarks": [
+        {
+          "feature": "exec consent gate",
+          "symbol": "execGatedCommands",
+          "loc": "internal/cmd/trust.go:738",
+          "what": "survivor drain joins the gated set and refuses before go list, the mutation adapter or go test -coverprofile can spawn"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/lane_preview.go",
+        "internal/cmd/lane_preview_locality.go",
+        "internal/cmd/lane_remote_consent_test.go"
+      ],
+      "commit": "6a655b0",
+      "completed_at": "2026-09-04T09:32:19.833772Z",
+      "landmarks": [
+        {
+          "feature": "remote lane consent",
+          "symbol": "probeBlockedBy",
+          "loc": "internal/cmd/lane_preview_locality.go:167",
+          "what": "preview refuses its host probe locally when no previewed lane is granted, and run plus bootstrap dispatch order is pinned by counters over the probe, rsync and install seams"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/execconsent_audit_test.go",
+        "internal/cmd/testdata/exec_consent/reach/root.go.txt",
+        "internal/cmd/testdata/exec_consent/reach/helper.go.txt"
+      ],
+      "commit": "1895623",
+      "completed_at": "2026-09-04T09:17:04.789591Z",
+      "landmarks": [
+        {
+          "feature": "exec consent audit",
+          "symbol": "buildExecGraph",
+          "loc": "internal/cmd/execconsent_audit_test.go:645",
+          "what": "call-reach graph with local type inference attributes every spawn site to the commands that reach it and splits them by whether those commands gate"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/trust.go",
+        "internal/cmd/doctor.go",
+        "assets/prompts/verify.md",
+        "assets/prompts/execute.md",
+        "assets/prompts/quick.md",
+        "internal/cmd/execconsent_docs_test.go"
+      ],
+      "commit": "5234edc",
+      "completed_at": "2026-09-04T09:32:19.84444Z",
+      "landmarks": [
+        {
+          "feature": "exec consent gate",
+          "symbol": "reportExecGatedSurface",
+          "loc": "internal/cmd/doctor.go:1265",
+          "what": "doctor prints the gated roster it reads from execGatedCommands plus the //dross:exec-exempt hatch, and the comment and prompts describe the enumerated surface instead of a fixed list"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/cleantree.go",
+        "internal/cmd/pause.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/ship_recover.go",
+        "internal/cmd/statusline.go",
+        "internal/cmd/techdebt.go",
+        "internal/cmd/worktree_files.go",
+        "internal/cmd/init.go",
+        "internal/cmd/milestone_stale.go",
+        "internal/cmd/doctor.go"
+      ],
+      "commit": "4f73f79",
+      "completed_at": "2026-09-04T09:32:19.85449Z",
+      "landmarks": [
+        {
+          "feature": "exec consent audit",
+          "symbol": "gitStatusRaw",
+          "loc": "internal/cmd/cleantree.go:53",
+          "what": "seventeen git-plumbing spawn sites carry a //dross:exec-exempt line stating why that subcommand cannot reach repo-authored code"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/run.go",
+        "internal/cmd/test.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/lane_install.go",
+        "internal/cmd/update.go",
+        "internal/cmd/survivor_drain.go",
+        "internal/cmd/trust.go",
+        "internal/cmd/trust_test.go",
+        "internal/cmd/execconsent_audit_test.go"
+      ],
+      "commit": "c729730",
+      "completed_at": "2026-09-04T09:31:57.647811Z",
+      "landmarks": [
+        {
+          "feature": "exec consent gate",
+          "symbol": "TestToolchainSpawnsResolveAsGated",
+          "loc": "internal/cmd/execconsent_audit_test.go:1991",
+          "what": "every cmd site that runs a repo-supplied line is proven gated by reach rather than marked, and verify results joins the gated set as the eighth member"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/codex/git.go",
+        "internal/codex/ast_grep.go",
+        "internal/quality/run.go",
+        "internal/security/run.go",
+        "internal/techdebt/run.go",
+        "internal/ship/open.go",
+        "internal/remote/remote.go",
+        "internal/cmd/execconsent_audit_test.go"
+      ],
+      "commit": "04b6bff",
+      "completed_at": "2026-09-04T09:35:41.059449Z",
+      "landmarks": [
+        {
+          "feature": "exec consent audit",
+          "symbol": "buildCommand",
+          "loc": "internal/remote/remote.go:794",
+          "what": "helper-package spawns carry markers and the transport's reason must name the caller-side consent check, enforced by a test that exercises the rejection"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/mutation/gremlins.go",
+        "internal/mutation/stryker.go",
+        "internal/mutation/stryker_net.go",
+        "internal/mutation/launcher.go",
+        "internal/cmd/execconsent_audit_test.go"
+      ],
+      "commit": "cedf5f1",
+      "completed_at": "2026-09-04T09:39:51.195334Z",
+      "landmarks": [
+        {
+          "feature": "exec consent audit",
+          "symbol": "TestMutationSpawnsAreGatedViaVerify",
+          "loc": "internal/cmd/execconsent_audit_test.go:2223",
+          "what": "the mutation adapters' seven spawns resolve gated by reach from verify, a marker on any of them is a finding, and deleting verify's gate flags all seven"
+        }
+      ]
+    }
+  }
 }
