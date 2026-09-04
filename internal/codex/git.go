@@ -17,6 +17,7 @@ func recentLog(dir string) ([]string, error) {
 	// The token is spelled out here rather than imported: internal/codex must
 	// not depend on internal/cmd, and one shared constant is not worth
 	// inverting that dependency.
+	//dross:exec-exempt git log --max-count=5 renders commit metadata as text; the pathspec is fenced behind -- and reading history executes no repo-authored line
 	cmd := exec.Command("git", "-C", dir,
 		"log",
 		"--max-count=5",

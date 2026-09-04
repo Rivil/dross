@@ -2079,3 +2079,118 @@ func TestRunSlotStillRefusesAtRuntime(t *testing.T) {
 		t.Errorf("the refusal does not name the slot: %v", err)
 	}
 }
+
+// --- the helper packages, marked with their reasons ---
+//
+// These are the scan, report and transport spawns: codex's git log and
+// ast-grep, the three scanners' rev-parse, ship's gh client, and internal/
+// remote's single ssh/rsync seam. None of them is reachable only from gating
+// commands, and none of them can be — `dross architecture check` and `dross
+// techdebt` legitimately shell git without ever running the repo's suite. So
+// each carries a marker, and the marker has to earn its place.
+
+// execConsentMarkedFiles are the helper-package files whose sites are exempt by
+// marker rather than gated by reach. Repo-relative for the reason
+// execConsentGatedFiles is: `run.go` is four different files in this tree.
+var execConsentMarkedFiles = []string{
+	"internal/codex/git.go",
+	"internal/codex/ast_grep.go",
+	"internal/quality/run.go",
+	"internal/security/run.go",
+	"internal/techdebt/run.go",
+	"internal/ship/open.go",
+	"internal/remote/remote.go",
+}
+
+// TestHelperPackageSpawnsAreMarked is c-2 for the half that cannot be gated.
+func TestHelperPackageSpawnsAreMarked(t *testing.T) {
+	g := repoExecGraph(t)
+	sites := g.sitesIn(execConsentMarkedFiles...)
+	if len(sites) == 0 {
+		t.Fatal("found no spawn sites in the helper packages — the walk stopped covering them")
+	}
+	for _, f := range g.findings() {
+		for _, rel := range execConsentMarkedFiles {
+			if execFindingIsIn(f, rel) {
+				t.Errorf("helper-package finding: %s", f.String())
+			}
+		}
+	}
+	// Every site here is either gated by reach or marked; nothing is left over.
+	for _, s := range sites {
+		if s.class == execReachGated {
+			continue
+		}
+		if !s.marked {
+			t.Errorf("%s:%d is %s and carries no marker", filepath.Base(s.pos.Filename), s.pos.Line, s.class)
+		}
+	}
+}
+
+// remoteMarkerNamesTheCallerCheck is c-7's second half, read off the marker.
+//
+// internal/remote is the ONE place in the tree whose exemption is conditional
+// on something outside it: the transport is safe because its argv is built by
+// SSHArgs/SyncArgs against the host allowlist AND because any repo-authored
+// line it carries was consent-checked by the caller before dispatch. A marker
+// that stated only the first half would be true about this file and wrong about
+// the system — and it is exactly the half that t-3's counters exist to hold.
+func remoteMarkerNamesTheCallerCheck(reason string) error {
+	low := strings.ToLower(reason)
+	if !strings.Contains(low, "consent") {
+		return errors.New("internal/remote's marker does not name the caller-side consent check, " +
+			"so the two halves of c-7 can drift apart with this file still reading as justified")
+	}
+	return nil
+}
+
+// TestRemoteMarkerNamesTheCallerCheck exercises that rule in both directions.
+// Asserting only the live prose would leave the rule itself unproven — a check
+// that always returned nil would pass just as well.
+func TestRemoteMarkerNamesTheCallerCheck(t *testing.T) {
+	g := repoExecGraph(t)
+	var marked *execSite
+	for _, s := range g.sitesIn("internal/remote/remote.go") {
+		if s.marked {
+			marked = s
+			break
+		}
+	}
+	if marked == nil {
+		t.Fatal("internal/remote/remote.go's transport seam carries no exemption marker")
+	}
+	if err := remoteMarkerNamesTheCallerCheck(marked.marker.Reason); err != nil {
+		t.Errorf("%v\n  reason: %q", err, marked.marker.Reason)
+	}
+	if remoteMarkerNamesTheCallerCheck("argv[0] is always ssh or rsync and every operand is allowlisted") == nil {
+		t.Error("a marker stating only the transport half was accepted")
+	}
+}
+
+// TestFuncLiteralSpawnIsAttributedThroughItsVar: ship/open.go's gh client is a
+// package-level var holding a func literal, which is the shape an AST walk
+// most easily loses — the spawn is not inside any FuncDecl. Deleting its marker
+// must produce a finding, and one attributed through the seam rather than
+// "reachable from no command".
+func TestFuncLiteralSpawnIsAttributedThroughItsVar(t *testing.T) {
+	g := repoExecGraph(t, [3]string{
+		"open.go",
+		"//dross:exec-exempt gh is the forge API client",
+		"// (marker removed by the test)",
+	})
+	var found execFinding
+	for _, f := range g.findings() {
+		if execFindingIsIn(f, "internal/ship/open.go") {
+			found = f
+		}
+	}
+	if found.Why == "" {
+		t.Fatalf("removing ghCommand's marker produced no finding — the func-literal seam is invisible to the walk:\n%v", g.findings())
+	}
+	if strings.Contains(found.Why, "no command at all") {
+		t.Errorf("the site was flagged as unreachable rather than attributed through its var seam: %s", found.Why)
+	}
+	if !strings.Contains(found.Why, "ungated command") {
+		t.Errorf("the finding does not name the command that reaches it: %s", found.Why)
+	}
+}
