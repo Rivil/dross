@@ -1,0 +1,175 @@
+task_seq = 10
+
+[phase]
+  id = "exec-consent-completeness"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Enumerate spawn sites and parse exemption markers"
+  files = ["internal/cmd/execconsent_audit_test.go", "internal/cmd/testdata/exec_consent/snippets.txt", "internal/cmd/testdata/exec_consent/ungated.go.txt"]
+  description = "go/ast walk over auditRoots (internal, cmd) collecting every exec.Command /\nexec.CommandContext construction, plus the //dross:exec-exempt <reason> grammar — comment\non the line immediately above, non-empty prose required. New file, NOT an extension of\nsubprocargs_audit_test.go: the two gates answer different questions and a merged walk makes\none gate's red read as the other's. Same package, so spawnArgvOf, stringLit, exprText and\nauditRoots are called, not copied. Files ending in _test.go are outside the surface per the\namended spawn_surface lock, mirroring subprocargs_audit_test.go:345.\nTestEverySpawnSiteGatedOrExempt lands here scoped to the fixture set and green; t-10 widens\nits scan roots.\n"
+  covers = ["c-1", "c-2", "c-4"]
+  test_contract = [
+    "if the finding text loses its anchors, the ungated fixture spawn must still produce exactly one finding whose text contains the fixture's file, its line, and the literal remedy `gate it or mark it exempt`",
+    "if a binary-name table creeps into the verdict, an ungated `exec.Command(\"cargo\", pkg)` must still be flagged with the same finding shape as a git one — no binary name appears in any table the verdict consults",
+    "if the marker grammar stops requiring prose, a bare `//dross:exec-exempt` with no reason must be a finding naming the marker as reasonless, while the same marker with prose is not",
+    "if proximity replaces position, a marker two lines above the call must NOT exempt it",
+    "if the FLAG/PASS snippet table is silently truncated, rows-parsed == rows-exercised must fail, mirroring subprocargs_audit_test.go:417, so coverage cannot shrink unnoticed",
+    "if the walk matches nothing, a run returning zero spawn sites over the fixture set must fail with `found no spawn sites` rather than passing vacuously",
+    "if the repo-wide test function is not created here, t-5's docs contract has no name to point at: TestEverySpawnSiteGatedOrExempt must exist and be green over fixtures alone",
+    "if the surface swallows fixture code, a spawn inside a _test.go file must NOT be a finding — the walk skips _test.go the way subprocargs_audit_test.go:345 does, and a fixture asserting otherwise fails",
+    "if prose quality is unenforced at the grammar level, a marker whose reason is under 20 characters must be a finding: `//dross:exec-exempt status` is rejected where a marker naming why the subcommand cannot reach repo-authored code is not",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Gate survivor drain behind exec consent"
+  files = ["internal/cmd/survivor_drain.go", "internal/cmd/trust.go", "internal/cmd/trust_test.go", "internal/cmd/survivor_drain_consent_test.go"]
+  description = "Add `survivor drain` to execGatedCommands and call requireExecConsent as the first\nstatement of drain's RunE, before FindRoot's siblings and before gatherDrainSurvivors.\nGate at the RunE top, not at the two seams — drain has two spawn seams that would each\nneed it. Existing drain fixtures gain trustFixture.\n"
+  covers = ["c-3"]
+  test_contract = [
+    "if the refusal lands after the spawn, an unconsented `dross survivor drain` must error naming `dross trust` AND the goListDirs seam (survivor_drain.go:38) must record ZERO calls",
+    "if --report bypasses the gate, the same refusal must hold with --report, where coverageProfileFn (:189) would otherwise spawn `go test -coverprofile` over the repo",
+    "if the gate never opens, after GrantConsent the same run must fail for some other reason or succeed — never with `dross trust`",
+    "if the gated set grows or shrinks silently, TestExecGatedSetIsExplicit's want list must hold 7 entries including `survivor drain` and its size assertion must read 7 (today trust_test.go:362 reads 6)",
+    "if the gate spreads into read-only diagnosis, `dross survivor list` and `dross doctor` must still succeed unconsented",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Refuse a remote lane before anything reaches host"
+  files = ["internal/cmd/test.go", "internal/cmd/remote_bootstrap.go", "internal/cmd/lane_preview.go", "internal/cmd/lane_preview_locality.go", "internal/cmd/lane_remote_consent_test.go"]
+  description = "Proof-first with a conditional fix on dispatch and bootstrap: runTestLanes already resolves\nconsent (test.go:428) before resolveTestTarget (:463) and syncTreeTo (:500), and\nremote_bootstrap.go:231 calls LaneInstallConsented, but nothing pins either order. Preview\nis a real behaviour change: --probe reaches the host through pickRemoteTarget, so an\nungranted lane's probe is refused locally and rendered as an unresolved host with the reason\ncarried — exit status unchanged, honouring locked preview_exit_status. previewConsent's and\nlane_preview_locality's `spawns nothing` comments are corrected; probe does spawn. All\nassertions ride counting stubs over spawnRemote (test.go:742) and remoteProbeFn, never\noutput text.\n"
+  covers = ["c-7"]
+  test_contract = [
+    "if the probe moves above the grant check, a granted host with a STALE lane grant must record zero spawnRemote calls — no rsync argv, no ssh argv — and exit the lane-refused code with a refusal naming the lane and `dross trust --lane <name>`",
+    "if the absent-grant path reaches the wire, the ssh preflight in resolveTestTarget and the rsync in syncTreeTo must both be unreached, proven by counter == 0",
+    "if laneConsentLine stops framing command and prepare together, a lane granted for its command alone then given a `prepare` must be refused locally — the prepare line never appears in the recorded remote argv",
+    "if an unreachable host can mask the refusal, the host probe seam must record no call when every matched lane is ungranted",
+    "if the bootstrap leg is refactored past its check, `dross remote bootstrap --apply` with an ungranted lane install line must record zero remoteExecFn install calls for that lane",
+    "if preview's probe stays ungated, `dross test lane preview --probe` on an ungranted lane must not reach pickRemoteTarget: zero ssh spawns, host rendered unresolved with the ungranted reason, exit code unchanged from today",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  depends_on = ["t-1"]
+  title = "Attribute spawn sites by call reach"
+  files = ["internal/cmd/execconsent_audit_test.go", "internal/cmd/testdata/exec_consent/reach/root.go.txt", "internal/cmd/testdata/exec_consent/reach/helper.go.txt"]
+  description = "Build a function-to-function edge set from the same ASTs — package-level var seams, func\nliterals, methods — plus the cobra tree (Use + AddCommand) so a site is attributed to a full\ncommand path. Verdict by reach class: a site reached ONLY by gated commands passes unmarked\nand a marker on it is itself a finding, so the sweep cannot be cleared by marking\neverything. A site with MIXED reach — gated and ungated — passes only with a marker whose\nprose says why the ungated reach is safe. A site reached by no gated command passes only\nwith a marker. Gating is detected by name rule — a function gates if it calls\nrequireExecConsent or an identifier ending in `Consented` AND acts on the result rather than\ndiscarding it — never by a roster of known helpers, because c-1 kills hand-maintained lists\non both sides of the verdict.\n"
+  covers = ["c-6", "c-2"]
+  test_contract = [
+    "RECALL: if cross-package edges are dropped, a fixture RunE reaching exec.Command through two named hops in a different package must still be attributed to root's `Use:` string and flagged when that command is not gated",
+    "PRECISION: if the graph degenerates into everything-reaches-everything, the reach set for `dross doctor` must NOT contain internal/mutation/gremlins.go's spawn — without this every site needs a marker and the gate half of the verdict is dead code",
+    "if var seams stop being followed, an edge through `var runFn = doSpawn` must be followed, and rewriting the seam as `var runFn = func(){…}` must keep the attribution",
+    "AMBIGUITY: if a helper name resolving to two different packages is silently attributed to the gated one, the run must fail — it must be REPORTED instead, since over-attribution turns an ungated site green",
+    "if an unresolvable edge reads as unreachable, a site reachable from NO command must be a finding (fail-closed)",
+    "if a mixed verdict is resolved in favour of the gate, an UNMARKED site reachable from both a gated and an ungated command must be flagged with the finding naming the ungated command; the same site with a marker passes, which is the only green state ship_recover.go's gitTrim (reached by gated `verify` via verifyscope.go and by ungated `status`) and remote.go (reached by gated `test` and by ungated `doctor` through remoteProbeFn) can reach",
+    "if the name rule is replaced by a roster, a snippet calling a newly-invented `FooConsented` must gate its callee with no edit to the enumerator",
+    "if a discarded consent result counts as gating, doctor.go:1267's display-only LaneConsented call must NOT mark `doctor` as gating, while verify.go:49's acted-on requireExecConsent must",
+    "if the verdict stays permissive, a marker placed on a site reached ONLY by gated commands must itself be a finding reading `a site reached only by gated commands needs no exemption` — otherwise the whole sweep can be cleared by marking every site, and t-9's attribution proves nothing",
+    "if the exclusive rule over-reaches, a MIXED-reach site must not be caught by it: a marker on a site reached by both a gated and an ungated command must pass, or ship_recover.go's gitTrim and remote.go have no green state and t-6, t-8 and t-10 become unsatisfiable",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  depends_on = ["t-1", "t-2"]
+  title = "Describe the enumerated surface, not six names"
+  files = ["internal/cmd/trust.go", "internal/cmd/doctor.go", "assets/prompts/verify.md", "assets/prompts/execute.md", "assets/prompts/quick.md", "internal/cmd/execconsent_docs_test.go"]
+  description = "Rewrite execGatedCommands' comment (trust.go:698 opens `the CLOSED set`, :716 says `The\nother four`), doctor's Exec consent section (doctor.go:1212), and the three prompts that\ndescribe the gated surface — quick.md:83 `the loop commands below refuse`, verify.md:22 `the\none consent-gated execution site`, which stops being true the moment drain joins. A docs\ntest pins the wording by reading the source file the way redproof_doc_test.go already does.\noptions.md carries consent prose but describes grant mechanics, not the gated set — confirm\nrather than edit blind.\n"
+  covers = ["c-5"]
+  test_contract = [
+    "if the closed-set framing survives, the docs test must fail on trust.go's comment containing `CLOSED set`, `the other four`, or a spelled-out command count",
+    "if a future author restates a count, a repo-wide grep for `six commands` / `6 commands` must fail on a hit anywhere in .go or assets/*.md — as word or numeral",
+    "if a prompt still names a fixed list, the docs test must fail when any of verify.md, execute.md or quick.md describes the gate as a closed set of command names",
+    "if drain's membership is undocumented, `dross doctor` under `Exec consent:` must name `survivor drain` among what the grant authorizes",
+    "if the escape hatch is undiscoverable, `dross doctor` under `Exec consent:` must contain the token `//dross:exec-exempt`, so the reader learns it where they learn the state",
+    "if the comment's pointer rots, it must name TestEverySpawnSiteGatedOrExempt by function name and the docs test must fail when that function no longer exists",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  depends_on = ["t-4"]
+  title = "Mark git-plumbing spawn sites exempt"
+  files = ["internal/cmd/cleantree.go", "internal/cmd/pause.go", "internal/cmd/phase.go", "internal/cmd/ship_recover.go", "internal/cmd/statusline.go", "internal/cmd/techdebt.go", "internal/cmd/worktree_files.go", "internal/cmd/init.go", "internal/cmd/milestone_stale.go", "internal/cmd/doctor.go"]
+  description = "One //dross:exec-exempt line per git spawn (status, show, ls-files, rev-parse, patch-id,\n--version), each stating why that subcommand cannot reach repo-authored code. Ten files,\ndeliberately over the split rule: one layer, one reason class, comment-only — splitting\nproduces two tasks that must agree on identical prose with nothing to enforce that.\n"
+  covers = ["c-2"]
+  test_contract = [
+    "if any of these sites is left unmarked, the enumerator scoped to these ten files must report zero findings — a missing marker breaks it",
+    "if the marker-to-site binding is loose, deleting any one marker must reintroduce exactly one finding naming that file and line",
+    "if prose quality is unenforced, every marker in the tree must carry at least 20 characters of reason; a marker whose prose is only the subcommand name must still be a finding",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  depends_on = ["t-2", "t-4"]
+  title = "Prove cmd toolchain spawns reach a gate"
+  files = ["internal/cmd/run.go", "internal/cmd/test.go", "internal/cmd/verify.go", "internal/cmd/lane_install.go", "internal/cmd/update.go", "internal/cmd/survivor_drain.go"]
+  description = "These spawn repo- or user-supplied lines. Each must resolve as GATED through reach —\nrequireExecConsent, RunConsented, ReplayConsented, LaneConsented, LaneInstallConsented — and\nany that does not is gated here rather than marked. survivor_drain.go is included: t-2 gates\nits RunE, and this is where the enumerator confirms both its spawns (:38, :189) resolve as\ngated rather than needing markers.\n"
+  covers = ["c-2", "c-6"]
+  test_contract = [
+    "if a site here is marked instead of gated, the enumerator must report zero findings for these six files with each verdict reading `gated`, never `exempt`",
+    "if reach stops proving the gate, removing `dross run`'s RunConsented check must make the enumerator flag run.go:262 by name",
+    "if the self-exec carve-out widens, update.go's self-exec of the verified new binary must be the only site here allowed a marker, and its reason must name signature verification",
+    "if the reach proof is mistaken for the runtime refusal, `dross run <slot>` unconsented must still refuse with a message naming the slot",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  depends_on = ["t-4"]
+  title = "Mark helper-package spawn sites exempt"
+  files = ["internal/codex/git.go", "internal/codex/ast_grep.go", "internal/quality/run.go", "internal/security/run.go", "internal/techdebt/run.go", "internal/ship/open.go", "internal/remote/remote.go", "internal/cmd/execconsent_audit_test.go"]
+  description = "Markers for the scan/report/transport spawns. remote.go's buildCommand states that its argv\nis ssh/rsync built by SSHArgs/SyncArgs against the host allowlist, and that any\nrepo-authored line it carries is consent-checked by the caller (t-3).\n"
+  covers = ["c-2"]
+  test_contract = [
+    "if any of these sites is left unmarked, the enumerator scoped to these seven files must report zero findings",
+    "if the two halves of c-7 drift apart, remote.go's marker must be REJECTED when its prose does not mention the caller-side consent check",
+    "if the edge set stops covering func-literal spawns, deleting ship/open.go's marker on the ghCommand literal must produce a finding attributed through the var seam",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-9"
+  wave = 3
+  depends_on = ["t-4"]
+  title = "Attribute mutation spawns to verify"
+  files = ["internal/mutation/gremlins.go", "internal/mutation/stryker.go", "internal/mutation/stryker_net.go", "internal/mutation/launcher.go"]
+  description = "These run the repo's own suite. They must resolve as gated by reach from `verify` — not\nmarked exempt — which is the concrete case c-6 names (verify → internal/mutation →\ngremlins). If the easy way through the sweep is marking every site exempt, the phase ships a\ngreen test that proves nothing.\n"
+  covers = ["c-2", "c-6"]
+  test_contract = [
+    "if these are marked instead of attributed, the verdict for all four files must read `gated via verify` and a marker placed on any of them must itself be a finding — these sites are reached ONLY by gated commands (internal/mutation is imported only by verify.go, survivor_drain.go and internal/verify), so the gated-only rule applies to them and not to the mixed-reach sites t-6 and t-8 mark",
+    "if the gate half of the verdict is decorative, deleting requireExecConsent() from verify.go:49 must turn all four mutation spawns into findings",
+    "if unreachability is not fail-closed, severing the verify-to-mutation edge in a fixture must leave the four sites reachable from no command and therefore flagged",
+    "if a new intermediate package hides a spawn, inserting one between verify and gremlins in the fixture must keep the attribution",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-10"
+  wave = 4
+  depends_on = ["t-4", "t-6", "t-7", "t-8", "t-9"]
+  title = "Widen scan roots and add a vacuity floor"
+  files = ["internal/cmd/execconsent_audit_test.go"]
+  description = "Widen TestEverySpawnSiteGatedOrExempt from the fixture set to internal/ and cmd/, assert\nzero findings, and pin a discovery floor so a narrowed walk fails instead of passing\nquietly.\n"
+  covers = ["c-1", "c-2"]
+  test_contract = [
+    "if any real spawn site is ungated and unmarked, TestEverySpawnSiteGatedOrExempt must report zero findings across internal/ and cmd/, each finding printing file:line, the reaching command, and the remedy",
+    "if the walk is narrowed, the run must fail below 30 spawn sites or 20 distinct files — measured today at 41 sites across 27 files, so the floor sits roughly 27% under the real count",
+    "if a scan root is dropped, removing `internal` from the roots must drop the count below the floor and fail",
+    "if a package silently leaves scope, internal/mutation, internal/remote, internal/codex and internal/ship must be asserted inside the scan roots by path, mirroring subprocargs_audit_test.go:548's assertAuditCovers",
+  ]
+  status = "pending"

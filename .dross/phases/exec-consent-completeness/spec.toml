@@ -39,8 +39,8 @@ locked = true
 
 [[decisions]]
 key    = "spawn_surface"
-choice = "Every os/exec construction (exec.Command / exec.CommandContext) anywhere in internal/ and cmd/ counts as a spawn site, including those inside overridable var seams."
-why    = "Mechanical and judgement-free. Enumerating only 'unsafe-looking' argv would put a classifier inside the enumerator, which is the recurring vulnerability trust.go's package comment already names."
+choice = "Every os/exec construction (exec.Command / exec.CommandContext) anywhere in the NON-TEST source of internal/ and cmd/ counts as a spawn site, including those inside overridable var seams. Files ending in _test.go are outside the surface."
+why    = "Mechanical and judgement-free. Enumerating only 'unsafe-looking' argv would put a classifier inside the enumerator, which is the recurring vulnerability trust.go's package comment already names. The _test.go boundary is a file-scope rule, not that classifier: a spawn inside a test file only runs under `go test`, which is itself the command the consent gate authorizes, so gating it would be gating a run already consented to. subprocargs_audit_test.go:345 draws the same boundary, and matching it keeps the repo's two audits scoped alike. Amended at plan time (2026-09-04) after the plan review found the original 'anywhere' wording put 82 fixture spawn sites across 40 files inside a surface the phase never intended to sweep."
 locked = true
 
 [[decisions]]
