@@ -2194,3 +2194,147 @@ func TestFuncLiteralSpawnIsAttributedThroughItsVar(t *testing.T) {
 		t.Errorf("the finding does not name the command that reaches it: %s", found.Why)
 	}
 }
+
+// --- the mutation runners, attributed rather than marked ---
+//
+// This is the concrete case c-6 names: verify → internal/mutation → gremlins.
+// These four files run the repo's own suite, so if the easy way through the
+// sweep were to mark them exempt, the phase would ship a green test proving
+// nothing. They must come out GATED BY REACH, and a marker on any of them must
+// itself be a finding.
+
+// execConsentMutationFiles are the adapter files whose spawns run the repo's
+// own tests.
+var execConsentMutationFiles = []string{
+	"internal/mutation/gremlins.go",
+	"internal/mutation/stryker.go",
+	"internal/mutation/stryker_net.go",
+	"internal/mutation/launcher.go",
+}
+
+// TestMutationSpawnsAreGatedViaVerify is c-6 at its named case.
+//
+// Every one of these sites has `verify` among the gating commands that reach
+// it; gremlins.go and launcher.go additionally have `survivor drain`, which
+// gained its grant in this same phase. The assertion is membership rather than
+// the rendered string, because a site gated by two commands renders both and a
+// substring match on one of them would go red the day the other was added —
+// which is the kind of brittleness this audit exists to remove, not create.
+func TestMutationSpawnsAreGatedViaVerify(t *testing.T) {
+	g := repoExecGraph(t)
+	sites := g.sitesIn(execConsentMutationFiles...)
+	if len(sites) == 0 {
+		t.Fatal("found no spawn sites in internal/mutation — the walk stopped covering the adapters")
+	}
+	seen := map[string]bool{}
+	for _, s := range sites {
+		where := filepath.Base(s.pos.Filename)
+		seen[where] = true
+		if s.class != execReachGated {
+			t.Errorf("%s:%d is %s, want %s — these sites run the repo's own suite", where, s.pos.Line, s.Verdict(), execReachGated)
+		}
+		if !s.reaches("verify") {
+			t.Errorf("%s:%d is not reached by `verify` at all: %s", where, s.pos.Line, s.Verdict())
+		}
+		if s.marked {
+			t.Errorf("%s:%d claims an exemption for a site the gate already covers", where, s.pos.Line)
+		}
+	}
+	for _, rel := range execConsentMutationFiles {
+		if !seen[filepath.Base(rel)] {
+			t.Errorf("%s contributed no spawn site — the adapter set is no longer covered", rel)
+		}
+	}
+}
+
+// TestMarkerOnAMutationSpawnIsAFinding: the sweep must not be clearable by
+// marking. These sites are reached only by gating commands, so a marker on one
+// is a claim nobody needed to make.
+func TestMarkerOnAMutationSpawnIsAFinding(t *testing.T) {
+	g := repoExecGraph(t, [3]string{
+		"gremlins.go",
+		"		return exec.Command(args[0], args[1:]...)",
+		"		//dross:exec-exempt an exemption nobody needed, added by the test to prove it is refused\n\t\treturn exec.Command(args[0], args[1:]...)",
+	})
+	var found execFinding
+	for _, f := range g.findings() {
+		if execFindingIsIn(f, "internal/mutation/gremlins.go") {
+			found = f
+		}
+	}
+	if found.Why == "" {
+		t.Fatalf("a marker on a gated-only mutation spawn was accepted:\n%v", g.findings())
+	}
+	if !strings.Contains(found.Why, "needs no exemption") {
+		t.Errorf("the finding does not say why the marker is wrong: %s", found.Why)
+	}
+}
+
+// TestDeletingVerifysGateFlagsEveryMutationSpawn is the assertion that keeps
+// the attribution honest. If "gated via reach" were a verdict the graph handed
+// out regardless, deleting the gate would change nothing — and every green
+// above would be decorative.
+func TestDeletingVerifysGateFlagsEveryMutationSpawn(t *testing.T) {
+	before := repoExecGraph(t)
+	want := len(before.sitesIn(execConsentMutationFiles...))
+	if want == 0 {
+		t.Fatal("no mutation spawn sites to flag")
+	}
+
+	g := repoExecGraph(t, [3]string{
+		"verify.go",
+		"if err := requireExecConsent(); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t\tphaseID := args[0]",
+		"phaseID := args[0]",
+	})
+	got := 0
+	for _, f := range g.findings() {
+		for _, rel := range execConsentMutationFiles {
+			if execFindingIsIn(f, rel) {
+				got++
+			}
+		}
+	}
+	if got != want {
+		t.Errorf("deleting verify's consent check flagged %d of %d mutation spawns — the gate half of the verdict is partly decorative", got, want)
+	}
+}
+
+// TestSeveringTheGatedEdgeFailsClosed: an edge this walk cannot resolve looks
+// identical to one that does not exist, so a site left reachable from nothing
+// must be flagged rather than waved through. Proven on the fixture, where the
+// edge can be cut cleanly — the repo has two independent paths into
+// internal/mutation, and cutting one proves nothing about the rule.
+func TestSeveringTheGatedEdgeFailsClosed(t *testing.T) {
+	fx := reachFixture(t, [2]string{
+		"			if err := helperpkg.GatedOnly(); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n",
+		"",
+	})
+	site := fx.site(t, `"go", "test"`)
+	if site.class != execReachNone {
+		t.Fatalf("severing the only gated edge left the site %s, want %s", site.Verdict(), execReachNone)
+	}
+	var found bool
+	for _, f := range fx.g.findings() {
+		if strings.Contains(f.Pos, site.pos.String()) && strings.Contains(f.Why, "no command at all") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a site reachable from nothing was waved through:\n%v", fx.g.findings())
+	}
+}
+
+// TestAnExtraHopKeepsTheAttribution: wrapping a spawn in one more package is
+// the cheapest way to hide it from an audit that only looks one call deep. The
+// intermediate is inserted between the gated command and the spawn, and the
+// verdict must not move.
+func TestAnExtraHopKeepsTheAttribution(t *testing.T) {
+	fx := reachFixture(t, [2]string{
+		"func GatedOnly() error { return runFn() }",
+		"func GatedOnly() error { return newIntermediate() }\n\nfunc newIntermediate() error { return runFn() }",
+	})
+	site := fx.site(t, `"go", "test"`)
+	if site.class != execReachGated || !site.reaches("gated") {
+		t.Errorf("an extra hop lost the attribution: %s", site.Verdict())
+	}
+}
