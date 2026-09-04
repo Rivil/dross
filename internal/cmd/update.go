@@ -194,6 +194,7 @@ func runUpdate(ctx context.Context, o updateOpts) error {
 	resync := o.resync
 	if resync == nil {
 		resync = func(newBinary string) error {
+			//dross:exec-exempt self-exec of the binary just downloaded and minisign-verified above; signature verification is what makes this argv trusted, and "install" is a literal
 			cmd := exec.Command(newBinary, "install")
 			cmd.Stdout = o.out
 			cmd.Stderr = o.out

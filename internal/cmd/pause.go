@@ -84,6 +84,7 @@ func autoSnapshot(root string, now time.Time) (string, error) {
 	fmt.Fprintf(&b, "- captured: %s\n", now.Format("2006-01-02 15:04 UTC"))
 
 	branch := "(no git)"
+	//dross:exec-exempt git symbolic-ref resolves a ref name from .git; the argv is dross's own and executes nothing the repo supplied
 	if out, err := exec.Command("git", "-C", repoDir, "symbolic-ref", "--short", "HEAD").Output(); err == nil {
 		branch = strings.TrimSpace(string(out))
 	}
@@ -114,6 +115,7 @@ func autoSnapshot(root string, now time.Time) (string, error) {
 // dirtySummary renders `git status --porcelain` as one line: "clean", or a
 // count plus the first few paths.
 func dirtySummary(repoDir string) string {
+	//dross:exec-exempt git status --porcelain reads the working tree and runs no repo-authored line; no hook fires for it
 	out, err := exec.Command("git", "-C", repoDir, "status", "--porcelain").Output()
 	if err != nil {
 		return "(no git)"

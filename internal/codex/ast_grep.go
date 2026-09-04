@@ -217,5 +217,6 @@ func sortedAstGrepLangs() []string {
 // The binary is named as a literal here, not taken from argv[0], so the
 // subprocess audit gate can resolve this site to a tool and look its policy up.
 var astGrepOutput = func(argv []string) ([]byte, error) {
+	//dross:exec-exempt ast-grep parses source into a syntax tree and prints matches; the argv is astGrepArgv's own, the binary is a literal, and no repo-authored line runs
 	return exec.Command("ast-grep", argv[1:]...).Output()
 }

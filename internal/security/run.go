@@ -32,6 +32,7 @@ func RunID(now time.Time, sha string) string {
 // can't be read (not a git repo, no commits). Best-effort — it never errors, so
 // a missing repo degrades to a stable "nogit" rather than failing a run.
 func ShortSHA(repoDir string) string {
+	//dross:exec-exempt git rev-parse --short HEAD resolves one object name; the argv is fixed here and executes nothing the repo supplied
 	out, err := exec.Command("git", "-C", repoDir, "rev-parse", "--short", "HEAD").Output()
 	if err != nil {
 		return "nogit"

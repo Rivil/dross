@@ -792,6 +792,7 @@ var commandFn = buildCommand
 // entry with a reason in internal/cmd/subprocargs_audit_test.go — accommodation
 // that someone had to write down, rather than a silence nobody chose.
 func buildCommand(argv []string, stdin string) *exec.Cmd {
+	//dross:exec-exempt argv[0] is always the literal ssh or rsync chosen by SSHArgs/SyncArgs/FetchArgs, and every operand is validated against the host and workdir allowlist before the argv exists; any repo-authored line this transport CARRIES is consent-checked by the caller before dispatch (runTestLanes, remote bootstrap and lane preview all resolve the lane grant first)
 	cmd := exec.Command(argv[0])
 	cmd.Args = argv
 	if stdin != "" {

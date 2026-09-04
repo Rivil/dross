@@ -272,6 +272,7 @@ func gitBranchTrim(dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	full := append([]string{"--no-optional-locks", "-C", dir}, args...)
+	//dross:exec-exempt git branch plumbing under --no-optional-locks; the argv is dross's own and reads refs without running a repo-authored line
 	out, err := exec.CommandContext(ctx, "git", full...).Output()
 	if err != nil {
 		return "", err

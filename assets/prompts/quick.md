@@ -80,8 +80,9 @@ If `runtime.test_command` is set and the change is behavioural, **write/update t
 Show `git diff` (filtered to the touched files). Run `dross validate` if any `.dross/` files changed.
 
 Before running it, check consent — dross will not run a repo's test command
-until this machine has explicitly trusted it, and the loop commands below refuse
-without it:
+until this machine has explicitly trusted it. The gate covers every dross
+command that spawns a process, enumerated from the source rather than kept as a
+list of names, so assume a command that runs something refuses without it:
 ```
 dross trust --check
 ```

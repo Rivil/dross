@@ -85,6 +85,13 @@ func f(limit int) error {
 		return out, nil
 	}
 	t.Cleanup(func() { goListDirs = orig })
+
+	// The drain is consent-gated: it shells `go list` and, with --report,
+	// `go test -coverprofile` over the repo's own packages. Every fixture that
+	// drives a gated command needs the grant, or the whole file measures the
+	// refusal instead of the drain. survivor_drain_consent_test.go is where the
+	// refusal is asserted, and it deliberately does NOT call this.
+	trustFixture(t)
 	return dir
 }
 

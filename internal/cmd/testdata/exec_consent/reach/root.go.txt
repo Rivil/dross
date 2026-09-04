@@ -1,0 +1,61 @@
+// The command layer of the reach fixture. Two commands over one helper package:
+// one that gates and one that does not, so every reach class the verdict
+// distinguishes has a witness here rather than only in the repo, where a
+// refactor could quietly remove the last example of one.
+//
+// A fixture, not compiled source — see ungated.go.txt for why .go.txt.
+
+package rootpkg
+
+import (
+	"github.com/spf13/cobra"
+
+	"example.com/fixture/helperpkg"
+)
+
+// Ungated reaches a spawn through TWO NAMED HOPS in another package. Nothing
+// about it is gated, so every site it alone reaches must be flagged.
+func Ungated() *cobra.Command {
+	return &cobra.Command{
+		Use: "ungated",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			if err := helperpkg.HopOne(); err != nil {
+				return err
+			}
+			return helperpkg.Shared()
+		},
+	}
+}
+
+// Gated acts on requireExecConsent's result, which is what makes it gating —
+// the name alone is not enough, or doctor's display-only LaneConsented call
+// would gate doctor.
+func Gated() *cobra.Command {
+	return &cobra.Command{
+		Use: "gated",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			if err := requireExecConsent(); err != nil {
+				return err
+			}
+			if err := helperpkg.GatedOnly(); err != nil {
+				return err
+			}
+			return helperpkg.Shared()
+		},
+	}
+}
+
+// Displaying reads a consent state and never acts on it. It must NOT gate:
+// this is doctor.go's reportLaneConsent in miniature.
+func Displaying() *cobra.Command {
+	return &cobra.Command{
+		Use: "displaying",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			state, cerr := helperpkg.LaneConsented()
+			println(state, cerr)
+			return helperpkg.Displayed()
+		},
+	}
+}
+
+func requireExecConsent() error { return nil }

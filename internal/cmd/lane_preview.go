@@ -11,9 +11,16 @@ package cmd
 // Locked preview_exit_status: it always exits 0 except on a real fault — an
 // unreadable project.toml, an unknown `--lane` name. "No lane matches" and
 // "every lane scoped to nothing" are printed findings, not a verdict. A verdict
-// in the exit status would make a verb that spawns nothing wireable as a CI
-// gate, duplicating `dross test`'s own refusal in a surface that never ran a
-// test.
+// in the exit status would make a verb that runs no TEST wireable as a CI gate,
+// duplicating `dross test`'s own refusal in a surface that measured nothing.
+//
+// Preview runs no test, but it is not free of subprocesses: --probe (the
+// default) opens an ssh to the granted host through the run's own
+// pickRemoteTarget. That reaches a machine, which is authority, so the probe is
+// gated on the same per-lane grant the run is — an ungranted lane's probe is
+// refused HERE, before the connection, and reported as an unresolved host
+// carrying the reason. The exit status is untouched by that refusal, which is
+// what keeps the locked decision above true.
 
 import (
 	"fmt"
@@ -60,8 +67,9 @@ type previewLaneReport struct {
 	ScopedToNothing bool `json:"scoped_to_nothing"`
 	// FenceErr is the lane's own project.toml problem, rendered.
 	FenceErr string `json:"fence_err,omitempty"`
-	// Consent is the lane's grant state — granted, stale, absent — reported and
-	// never acted on.
+	// Consent is the lane's grant state — granted, stale, absent. It is
+	// reported per lane and never stops a lane being previewed; the one thing
+	// it does decide is whether the host may be probed at all (probeBlockedBy).
 	Consent string `json:"consent,omitempty"`
 	// Locality is where the lane would run, or that it is unresolved.
 	Locality string `json:"locality,omitempty"`
@@ -158,9 +166,11 @@ func runLanePreview(files, args []string, lane string, probe, asJSON bool) error
 			Dropped:         pl.Dropped,
 			ScopedToNothing: pl.ScopedToNothing,
 			FenceErr:        renderedErr(pl.FenceErr),
-			// Reported, never acted on. The gate refuses an ungranted lane
-			// here; preview annotates it, which is what makes a line that
-			// WOULD be refused visible before anyone runs it (c-3).
+			// The ANNOTATION is still just a report — a lane's grant state
+			// makes no line stop being previewed, which is what makes a line
+			// that WOULD be refused visible before anyone runs it (c-3). What
+			// the same state now also decides is whether the host may be
+			// contacted at all; see probeBlockedBy in the locality file.
 			Consent: previewConsent(root, repoDir, pl.lane).String(),
 		})
 	}
@@ -185,11 +195,14 @@ func runLanePreview(files, args []string, lane string, probe, asJSON bool) error
 // previewConsent is the lane's grant state, and ONLY that.
 //
 // The error LaneConsented returns beside it is deliberately discarded. It is
-// the run's refusal — the thing that stops an ungranted lane from spawning —
-// and preview spawns nothing, so carrying it would turn an annotation into a
-// gate. laneConsentRefusal's text is never rendered here for the same reason:
-// it tells the user to go and run `dross trust`, which is advice about a run
-// that is not happening.
+// the RUN's refusal — the thing that stops an ungranted lane from spawning its
+// tests — and preview spawns no tests, so rendering it would tell the user to
+// go and run `dross trust` about a run that is not happening.
+//
+// Discarding the error is not discarding the authority. The state itself is
+// read by probeBlockedBy below, which is what stops preview opening an ssh on
+// behalf of a lane nobody granted; the refusal preview renders for that is its
+// own, about the probe, in the host line.
 func previewConsent(root, repoDir string, lane project.TestLane) ConsentState {
 	state, _ := LaneConsented(root, repoDir, lane.Name, laneConsentLine(lane))
 	return state

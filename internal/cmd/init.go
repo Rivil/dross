@@ -168,6 +168,7 @@ func seedRemote(cwd string) (project.Remote, bool) {
 
 // gitRemoteOriginURL returns the origin URL or "" if no remote / no git.
 func gitRemoteOriginURL(cwd string) string {
+	//dross:exec-exempt git remote get-url reads a value out of .git/config and prints it; reading config is not running it
 	cmd := exec.Command("git", "-C", cwd, "remote", "get-url", "origin")
 	out, err := cmd.Output()
 	if err != nil {

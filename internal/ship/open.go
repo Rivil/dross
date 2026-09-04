@@ -64,6 +64,8 @@ func OpenPR(opts OpenOpts) (*OpenResult, error) {
 // --- GitHub via gh ---
 
 // ghCommand is overridable from tests.
+//
+//dross:exec-exempt gh is the forge API client; every argv reaching it is built by this package and fenced by argfence, and gh runs no repo-authored line
 var ghCommand = func(args ...string) *exec.Cmd { return exec.Command("gh", args...) }
 
 func openGitHubPR(opts OpenOpts) (*OpenResult, error) {

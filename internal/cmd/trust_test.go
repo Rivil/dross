@@ -322,6 +322,8 @@ func TestGatedCommandsRefuse(t *testing.T) {
 		{"changes record", func(t *testing.T) error {
 			return runCmd(t, Changes(), "record", "01-x", "t-1", "--files", "a.go")
 		}},
+		{"survivor drain", func(t *testing.T) error { return runCmd(t, Survivor(), "drain") }},
+		{"verify results", func(t *testing.T) error { return runCmd(t, Verify(), "results", "01-x") }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -346,10 +348,12 @@ func TestExecGatedSetIsExplicit(t *testing.T) {
 	want := []string{
 		"changes record",
 		"state bump",
+		"survivor drain",
 		"task next",
 		"task status in_progress",
 		"test",
 		"verify",
+		"verify results",
 	}
 	got := append([]string(nil), execGatedCommands...)
 	sort.Strings(got)
@@ -357,9 +361,9 @@ func TestExecGatedSetIsExplicit(t *testing.T) {
 		t.Fatalf("execGatedCommands = %v, want %v", got, want)
 	}
 	// The declaration must match reality: every named command actually refuses.
-	// TestGatedCommandsRefuse drives exactly these five, so a name added here
+	// TestGatedCommandsRefuse drives exactly these, so a name added here
 	// without a matching row (or a call site) shows up there.
-	if len(execGatedCommands) != 6 {
+	if len(execGatedCommands) != 8 {
 		t.Errorf("the gated set changed size — add or remove the matching row in TestGatedCommandsRefuse")
 	}
 }
@@ -381,6 +385,13 @@ func TestGateDoesNotBrickReadOnly(t *testing.T) {
 	}
 	if err := runCmd(t, Task(), "show", "01-x", "t-1"); err != nil {
 		t.Errorf("`task show` refused without consent: %v", err)
+	}
+	// `survivor list` reads the store and spawns nothing. It sits beside the
+	// drain in the same command group, which is exactly why it is pinned: a
+	// gate applied to the group rather than to the subcommand would take it
+	// with it, and reading your own recorded dispositions is diagnosis.
+	if err := runCmd(t, Survivor(), "list"); err != nil {
+		t.Errorf("`survivor list` refused without consent: %v", err)
 	}
 }
 
