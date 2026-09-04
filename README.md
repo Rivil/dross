@@ -405,12 +405,12 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] `dross issue pull` returns only issues dross did not author, and a shipped phase's task cards leave task-in-review by themselves
 - [x] `/dross-plan` walks every unresolved gray area one turn each, with no multiSelect pre-selection
 
-### Milestone v1.6 — lane truth: the test gate runs what the task actually touched (active)
+### Milestone v1.6 — lane truth: the test gate runs what the task actually touched (complete)
 
-- [ ] A task's pre-commit gate runs only the `[[runtime.test_lane]]` whose `match` globs its files, names the lane and command it ran, and never invokes the other lane's runner
-- [ ] A lane whose toolchain is absent on the granted remote runs locally, says so every time — naming the toolchain and host — and offers to install it there
-- [ ] Task paths are translated into each lane runner's selector form, and a selector matching nothing is reported as a miss rather than a failing gate
-- [ ] A lane may declare a `prepare` command between sync and test, so remote build prerequisites are dross's job rather than hidden in each repo's test command
+- [x] A task's pre-commit gate runs only the `[[runtime.test_lane]]` whose `match` globs its files, names the lane and command it ran, and never invokes the other lane's runner
+- [x] A lane whose toolchain is absent on the granted remote runs locally, says so every time — naming the toolchain and host — and offers to install it there
+- [x] Task paths are translated into each lane runner's selector form, and a selector matching nothing is reported as a miss rather than a failing gate
+- [x] A lane may declare a `prepare` command between sync and test, so remote build prerequisites are dross's job rather than hidden in each repo's test command
 
 ## Telemetry
 
