@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -63,11 +64,20 @@ type execFinding struct {
 	Pos  string
 	Call string
 	Why  string
+	// NoRemedy suppresses the "gate it or mark it exempt" tail for findings
+	// where neither move is the fix.
+	NoRemedy bool
 }
 
 func (f execFinding) String() string {
-	return fmt.Sprintf("%s: %s(…) %s — gate it or mark it exempt with %s <reason>",
-		f.Pos, f.Call, f.Why, execExemptMarker)
+	s := fmt.Sprintf("%s: %s(…) %s", f.Pos, f.Call, f.Why)
+	if f.NoRemedy {
+		// The remedy is omitted where it would be wrong advice. A site the
+		// gate already covers must not be told to mark itself exempt — that
+		// is the very move rule 9 exists to refuse.
+		return s
+	}
+	return s + " — gate it or mark it exempt with " + execExemptMarker + " <reason>"
 }
 
 // execExemption is a parsed marker. Reason is empty for a bare marker, which is
@@ -98,44 +108,18 @@ func execExemptMarkers(fset *token.FileSet, f *ast.File) map[int]execExemption {
 	return out
 }
 
-// auditExecConsentFile returns the findings for one parsed file plus the number
-// of spawn sites it saw. The count is what makes a vacuous pass detectable.
+// auditExecConsentFile is the single-file view of the audit, kept for the tests
+// whose subject is one file. It is the graph over a file set of one — reach
+// still runs, and a file with no command in it simply reaches nothing.
 func auditExecConsentFile(fset *token.FileSet, f *ast.File) ([]execFinding, int) {
-	markers := execExemptMarkers(fset, f)
-	var out []execFinding
-	sites := 0
+	return auditExecFiles(fset, []*ast.File{f})
+}
 
-	ast.Inspect(f, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		name, _, _, _, isSpawn := spawnArgvOf(call)
-		// spawnArgvOf also recognises the git/gh helper wrappers, which are not
-		// os/exec constructions. The locked spawn_surface is the construction
-		// itself, so only the exec.* shapes count here.
-		if !isSpawn || !strings.HasPrefix(name, "exec.") {
-			return true
-		}
-		sites++
-		pos := fset.Position(call.Pos())
-		finding := func(why string) {
-			out = append(out, execFinding{Pos: pos.String(), Call: name, Why: why})
-		}
-		marker, marked := markers[pos.Line]
-		switch {
-		case !marked:
-			finding("is not behind a consent gate and carries no exemption marker")
-		case marker.Reason == "":
-			finding("carries a reasonless " + execExemptMarker + " marker")
-		case len([]rune(marker.Reason)) < execExemptMinReason:
-			finding(fmt.Sprintf(
-				"carries a %s marker whose reason is %d characters; state in at least %d why this call cannot reach repo-authored code",
-				execExemptMarker, len([]rune(marker.Reason)), execExemptMinReason))
-		}
-		return true
-	})
-	return out, sites
+// auditExecFiles is the audit: build the reach graph over every file, then read
+// each spawn site's verdict off it.
+func auditExecFiles(fset *token.FileSet, files []*ast.File) ([]execFinding, int) {
+	g := buildExecGraph(fset, files)
+	return g.findings(), len(g.sites)
 }
 
 // execConsentVacuity is the discovery floor, factored out of the sweep so it can
@@ -157,6 +141,7 @@ func sweepExecConsent(t *testing.T, root string, roots []string) ([]execFinding,
 	var findings []execFinding
 	sites := 0
 
+	var files []*ast.File
 	for _, r := range roots {
 		err := filepath.WalkDir(filepath.Join(root, r), func(path string, d os.DirEntry, err error) error {
 			if err != nil {
@@ -169,15 +154,17 @@ func sweepExecConsent(t *testing.T, root string, roots []string) ([]execFinding,
 			if perr != nil {
 				return perr
 			}
-			fs, n := auditExecConsentFile(fset, f)
-			findings = append(findings, fs...)
-			sites += n
+			files = append(files, f)
 			return nil
 		})
 		if err != nil {
 			t.Fatalf("walk %s: %v", r, err)
 		}
 	}
+	// ONE graph over the whole set, never a graph per file: reach crosses
+	// packages, and a per-file audit would report every cross-package call as
+	// leading nowhere.
+	findings, sites = auditExecFiles(fset, files)
 	return findings, sites
 }
 
@@ -457,5 +444,1467 @@ func TestExecConsentFlagsItsOwnSnippets(t *testing.T) {
 	}
 	if checked != headers {
 		t.Fatalf("parsed %d rows but exercised %d — the table is being silently truncated", headers, checked)
+	}
+}
+
+// --- reach ---
+//
+// The other half of the verdict. t-1's rule was "marked or flagged", which any
+// author can satisfy by marking everything; that would produce a green sweep
+// proving nothing. What makes a marker meaningful is that most sites should not
+// need one — they are already behind the consent gate — and the only way to
+// know which is to follow the calls.
+//
+// The graph is built from the same ASTs the sites come from, with no type
+// checker, so its resolution rules are stated rather than inferred:
+//
+//   - `foo(…)`        resolves in the CALLER'S package only, which is what Go
+//                     itself does for an unqualified name.
+//   - `pkg.Foo(…)`    resolves through the file's imports to that package's
+//                     declaration. Deterministic.
+//   - `x.Foo(…)`      needs the receiver's type, so a small local inference
+//                     runs: parameters, receivers, `var` declarations, `:=`
+//                     bindings, range variables, and the RESULT TYPES of any
+//                     function in the file set. A receiver whose type is not
+//                     inferable resolves to NOTHING, which is the safe
+//                     direction — a spawn reachable from no command is itself a
+//                     finding, so a lost edge fails closed rather than open.
+//                     When the inferred type is an INTERFACE, the call fans out
+//                     to every type in the file set whose method set contains
+//                     the interface's, which is how `adapter.Run()` finds every
+//                     mutation adapter without `verify` ever naming Gremlins.
+//                     When those implementers span more than one package and
+//                     disagree about reaching a spawn, the ambiguity is
+//                     REPORTED — that is the case where the union is covering
+//                     for a resolution nobody can verify by reading.
+//   - `var f = g`     is an alias edge, and `var f = func(){…}` is a node with
+//                     the literal's body. Both are how this codebase makes a
+//                     subprocess substitutable in tests, so an edge set that
+//                     stopped at package-level vars would lose most of the
+//                     interesting reach.
+//
+// The inference is what keeps the graph honest at this size. Resolving a method
+// by NAME alone — every `Run` in every imported package — put `exec.Cmd.Run` in
+// verify.go next to `mutation.Adapter.Run` and dragged every mutation spawn
+// into the reach of half the binary.
+//
+// AddCommand is deliberately NOT a reach edge. `Survivor()` constructs its
+// children, so following those calls would make every parent reach every
+// child's spawns — and `survivor drain`'s gated spawn would come out MIXED,
+// reached by the ungated container that merely built it. The AddCommand
+// arguments are recorded as TREE edges instead, which is what turns a
+// constructor into the path `survivor drain`.
+//
+// GATING is a name rule plus a use rule, and it needs both. The name rule alone
+// (`requireExecConsent`, or any identifier ending in `Consented`) would mark
+// doctor as gating on the strength of reportLaneConsent, which reads a lane's
+// consent state to PRINT it. So a function gates only when the call's result
+// reaches a branch that STOPS: an `if` over a value the call bound, or over the
+// call itself, whose body returns, continues or breaks. Nothing consults a
+// roster of known helpers — c-1 kills hand-maintained lists on both sides of
+// the verdict, and a `FooConsented` invented tomorrow gates its caller with no
+// edit here.
+
+// execPart is one body belonging to a node, with the file and (for a method or
+// function) the declaration whose signature seeds the type environment.
+type execPart struct {
+	file *ast.File
+	decl *ast.FuncDecl
+	body ast.Node
+}
+
+// execFunc is one node: a declared function, a method, or a package-level var
+// holding a function.
+type execFunc struct {
+	key   string
+	pkg   string
+	parts []execPart
+	calls map[string]bool
+	// children are AddCommand targets — the command TREE, not reach.
+	children []string
+	gates    bool
+	// use is the cobra Use string's first word, empty for a non-command.
+	use string
+}
+
+// execCommand is a cobra command with its full path and everything it reaches.
+type execCommand struct {
+	key   string
+	use   string
+	path  string
+	gates bool
+	reach map[string]bool
+}
+
+// execSite is one spawn site with the function it sits in.
+type execSite struct {
+	pos    token.Position
+	call   string
+	owner  string
+	marker execExemption
+	marked bool
+	class  string
+	// gatedVia and ungatedVia are EVERY command that reaches this site, split
+	// by whether it gates. Both are kept whole rather than reduced to one
+	// name: a site can be gated by two commands and ungated by a third, and a
+	// test asking "is verify among them" must not depend on sort order.
+	gatedVia   []string
+	ungatedVia []string
+}
+
+// gatedBy is the first gated command reaching the site, for rendering.
+func (s *execSite) gatedBy() string { return execFirst(s.gatedVia) }
+
+// ungated is the first ungated command reaching the site, for rendering.
+func (s *execSite) ungated() string { return execFirst(s.ungatedVia) }
+
+func execFirst(xs []string) string {
+	if len(xs) == 0 {
+		return ""
+	}
+	return xs[0]
+}
+
+// reaches reports whether the named command reaches this site at all.
+func (s *execSite) reaches(cmd string) bool {
+	for _, c := range append(append([]string{}, s.gatedVia...), s.ungatedVia...) {
+		if c == cmd {
+			return true
+		}
+	}
+	return false
+}
+
+// Verdict is the site's reach class, rendered. Tests read this rather than
+// re-deriving it, so "gated via verify" means one thing everywhere.
+func (s *execSite) Verdict() string {
+	switch s.class {
+	case execReachGated:
+		return "gated via " + strings.Join(s.gatedVia, ", ")
+	case execReachMixed:
+		return "mixed: gated via " + strings.Join(s.gatedVia, ", ") + ", ungated via " + strings.Join(s.ungatedVia, ", ")
+	case execReachUngated:
+		return "ungated via " + strings.Join(s.ungatedVia, ", ")
+	default:
+		return execReachNone
+	}
+}
+
+const (
+	execReachGated   = "gated"
+	execReachMixed   = "mixed"
+	execReachUngated = "ungated"
+	execReachNone    = "unreachable"
+)
+
+// execGraph is the whole analysis over one file set.
+type execGraph struct {
+	fset *token.FileSet
+	// scope maps package name -> declared name -> node key, for resolving an
+	// unqualified call and a qualified one alike.
+	scope map[string]map[string]string
+	// methods maps a bare method name -> every node key declaring it.
+	methods map[string][]string
+	// typeMethods maps "pkg.Type" -> its method names, for deciding which
+	// concrete types satisfy an interface.
+	typeMethods map[string]map[string]bool
+	// ifaces maps "pkg.Iface" -> its method set.
+	ifaces map[string]map[string]bool
+	// results maps a node key -> its declared result types, normalised.
+	results map[string][]string
+	funcs   map[string]*execFunc
+	sites   []*execSite
+	cmds    []*execCommand
+	// ambiguous names an interface fan-out whose implementers span packages
+	// and disagree about reaching a spawn.
+	ambiguous []execFinding
+	markers   map[string]map[int]execExemption
+}
+
+func (g *execGraph) node(key, pkg string) *execFunc {
+	if n, ok := g.funcs[key]; ok {
+		return n
+	}
+	n := &execFunc{key: key, pkg: pkg, calls: map[string]bool{}}
+	g.funcs[key] = n
+	return n
+}
+
+func (g *execGraph) declare(pkg, name, key string) {
+	if g.scope[pkg] == nil {
+		g.scope[pkg] = map[string]string{}
+	}
+	// First declaration wins. A duplicate within one package is a receiver
+	// distinction this map cannot express; the method table carries those.
+	if _, ok := g.scope[pkg][name]; !ok {
+		g.scope[pkg][name] = key
+	}
+}
+
+// buildExecGraph parses the file set into nodes, edges, commands and sites.
+func buildExecGraph(fset *token.FileSet, files []*ast.File) *execGraph {
+	g := &execGraph{
+		fset:        fset,
+		scope:       map[string]map[string]string{},
+		methods:     map[string][]string{},
+		typeMethods: map[string]map[string]bool{},
+		ifaces:      map[string]map[string]bool{},
+		results:     map[string][]string{},
+		funcs:       map[string]*execFunc{},
+		markers:     map[string]map[int]execExemption{},
+	}
+
+	// Pass 1: interfaces, so a fan-out has something to fan out over.
+	for _, f := range files {
+		for _, d := range f.Decls {
+			gd, ok := d.(*ast.GenDecl)
+			if !ok || gd.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				ts, ok := spec.(*ast.TypeSpec)
+				if !ok {
+					continue
+				}
+				it, ok := ts.Type.(*ast.InterfaceType)
+				if !ok {
+					continue
+				}
+				set := map[string]bool{}
+				for _, m := range it.Methods.List {
+					for _, nm := range m.Names {
+						set[nm.Name] = true
+					}
+				}
+				g.ifaces[f.Name.Name+"."+ts.Name.Name] = set
+			}
+		}
+	}
+
+	// Pass 2: every declaration, before any call is resolved. A single pass
+	// would resolve forward references to nothing.
+	for _, f := range files {
+		pkg := f.Name.Name
+		g.markers[fset.Position(f.Pos()).Filename] = execExemptMarkers(fset, f)
+		imports := execImports(f)
+		for _, d := range f.Decls {
+			switch d := d.(type) {
+			case *ast.FuncDecl:
+				key := pkg + "." + d.Name.Name
+				if d.Recv != nil {
+					recv := execTypeString(d.Recv.List[0].Type, pkg, imports)
+					key = recv + "." + d.Name.Name
+					g.methods[d.Name.Name] = append(g.methods[d.Name.Name], key)
+					if g.typeMethods[recv] == nil {
+						g.typeMethods[recv] = map[string]bool{}
+					}
+					g.typeMethods[recv][d.Name.Name] = true
+				} else {
+					g.declare(pkg, d.Name.Name, key)
+				}
+				g.results[key] = execResultTypes(d.Type, pkg, imports)
+				n := g.node(key, pkg)
+				if d.Body != nil {
+					n.parts = append(n.parts, execPart{file: f, decl: d, body: d.Body})
+				}
+			case *ast.GenDecl:
+				if d.Tok != token.VAR {
+					continue
+				}
+				for _, spec := range d.Specs {
+					vs, ok := spec.(*ast.ValueSpec)
+					if !ok {
+						continue
+					}
+					for i, nm := range vs.Names {
+						if i >= len(vs.Values) || nm.Name == "_" {
+							continue
+						}
+						key := pkg + "." + nm.Name
+						g.declare(pkg, nm.Name, key)
+						n := g.node(key, pkg)
+						n.parts = append(n.parts, execPart{file: f, body: vs.Values[i]})
+					}
+				}
+			}
+		}
+	}
+
+	// Pass 3: walk every node's bodies for edges, sites, gating and commands.
+	for _, n := range g.funcs {
+		for _, part := range n.parts {
+			g.walk(n, part)
+		}
+		g.detectGating(n)
+	}
+
+	g.buildCommands()
+	g.classify()
+	return g
+}
+
+// execImports maps the identifier a file uses for each import to the package
+// name we key on — the last path element, unless the file gave an alias.
+func execImports(f *ast.File) map[string]string {
+	out := map[string]string{}
+	for _, imp := range f.Imports {
+		path := strings.Trim(imp.Path.Value, `"`)
+		parts := strings.Split(path, "/")
+		name := parts[len(parts)-1]
+		if imp.Name != nil {
+			out[imp.Name.Name] = name
+			continue
+		}
+		out[name] = name
+	}
+	return out
+}
+
+// execTypeString normalises a type expression to "pkg.Type", with `[]` kept as
+// a prefix and a map reduced to its VALUE type — the only part an index
+// expression can produce. An unresolvable type is the empty string, which every
+// caller reads as "do not guess".
+func execTypeString(e ast.Expr, pkg string, imports map[string]string) string {
+	switch t := e.(type) {
+	case *ast.StarExpr:
+		return execTypeString(t.X, pkg, imports)
+	case *ast.ParenExpr:
+		return execTypeString(t.X, pkg, imports)
+	case *ast.Ident:
+		return pkg + "." + t.Name
+	case *ast.SelectorExpr:
+		x, ok := t.X.(*ast.Ident)
+		if !ok {
+			return ""
+		}
+		target, isPkg := imports[x.Name]
+		if !isPkg {
+			return ""
+		}
+		return target + "." + t.Sel.Name
+	case *ast.ArrayType:
+		inner := execTypeString(t.Elt, pkg, imports)
+		if inner == "" {
+			return ""
+		}
+		return "[]" + inner
+	case *ast.MapType:
+		inner := execTypeString(t.Value, pkg, imports)
+		if inner == "" {
+			return ""
+		}
+		return "[]" + inner
+	}
+	return ""
+}
+
+// execResultTypes is a signature's result types, normalised.
+func execResultTypes(ft *ast.FuncType, pkg string, imports map[string]string) []string {
+	if ft.Results == nil {
+		return nil
+	}
+	var out []string
+	for _, f := range ft.Results.List {
+		typ := execTypeString(f.Type, pkg, imports)
+		n := len(f.Names)
+		if n == 0 {
+			n = 1
+		}
+		for i := 0; i < n; i++ {
+			out = append(out, typ)
+		}
+	}
+	return out
+}
+
+// execScope is one body's local type environment.
+type execScope struct {
+	g       *execGraph
+	pkg     string
+	imports map[string]string
+	vars    map[string]string
+}
+
+// walk collects one node's edges, spawn sites and command shape.
+func (g *execGraph) walk(owner *execFunc, part execPart) {
+	imports := execImports(part.file)
+	body := part.body
+
+	// A package-level `var f = g` is an ALIAS, not a body: the value IS the
+	// function. Walking it as an expression would find no call and drop the
+	// edge that makes the seam followable.
+	switch v := body.(type) {
+	case *ast.Ident, *ast.SelectorExpr:
+		sc := &execScope{g: g, pkg: owner.pkg, imports: imports, vars: map[string]string{}}
+		for _, key := range sc.resolveCallee(v.(ast.Expr)) {
+			owner.calls[key] = true
+		}
+		return
+	case *ast.FuncLit:
+		body = v.Body
+	}
+
+	sc := &execScope{g: g, pkg: owner.pkg, imports: imports, vars: map[string]string{}}
+	sc.seed(part.decl)
+	// A package-level `var f = func(x T){…}` carries its parameters on the
+	// literal, not on a declaration. Missing them left every receiver inside
+	// the seam untyped, which silently unhooked the var seams this codebase
+	// uses for exactly the spawns this audit is about.
+	if lit, ok := part.body.(*ast.FuncLit); ok {
+		sc.seedFuncType(lit.Type)
+	}
+	sc.collect(body)
+
+	skip := map[ast.Node]bool{}
+	ast.Inspect(body, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.CompositeLit:
+			if use := execCobraUse(n, imports); use != "" {
+				owner.use = use
+			}
+		case *ast.CallExpr:
+			if sel, ok := n.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "AddCommand" {
+				// TREE edges. Marked for skipping so the constructor does not
+				// also inherit its children's reach.
+				for _, a := range n.Args {
+					child, ok := a.(*ast.CallExpr)
+					if !ok {
+						continue
+					}
+					skip[child] = true
+					for _, key := range sc.resolveCallee(child.Fun) {
+						owner.children = append(owner.children, key)
+					}
+				}
+				return true
+			}
+			if name, _, _, _, isSpawn := spawnArgvOf(n); isSpawn && strings.HasPrefix(name, "exec.") {
+				pos := g.fset.Position(n.Pos())
+				m, marked := g.markers[pos.Filename][pos.Line]
+				g.sites = append(g.sites, &execSite{
+					pos: pos, call: name, owner: owner.key, marker: m, marked: marked,
+				})
+				return true
+			}
+			if skip[n] {
+				return true
+			}
+			for _, key := range sc.resolveCallee(n.Fun) {
+				owner.calls[key] = true
+			}
+		}
+		return true
+	})
+}
+
+// seed puts a declaration's receiver, parameters and named results into scope.
+func (sc *execScope) seed(decl *ast.FuncDecl) {
+	if decl == nil {
+		return
+	}
+	add := func(fl *ast.FieldList) {
+		if fl == nil {
+			return
+		}
+		for _, f := range fl.List {
+			typ := execTypeString(f.Type, sc.pkg, sc.imports)
+			for _, nm := range f.Names {
+				sc.vars[nm.Name] = typ
+			}
+		}
+	}
+	add(decl.Recv)
+	sc.seedFuncType(decl.Type)
+}
+
+// seedFuncType puts a signature's parameters and named results into scope.
+func (sc *execScope) seedFuncType(ft *ast.FuncType) {
+	for _, fl := range []*ast.FieldList{ft.Params, ft.Results} {
+		if fl == nil {
+			continue
+		}
+		for _, f := range fl.List {
+			typ := execTypeString(f.Type, sc.pkg, sc.imports)
+			for _, nm := range f.Names {
+				sc.vars[nm.Name] = typ
+			}
+		}
+	}
+}
+
+// collect walks a body for every binding whose type can be inferred.
+//
+// Flat rather than block-scoped on purpose: a shadowed name would be resolved
+// to whichever binding this walk saw last, and the cost of that is an edge that
+// may not exist. An edge that may not exist can only ADD ungated reach, which
+// is the direction that fails closed.
+func (sc *execScope) collect(body ast.Node) {
+	ast.Inspect(body, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.FuncLit:
+			for _, f := range n.Type.Params.List {
+				typ := execTypeString(f.Type, sc.pkg, sc.imports)
+				for _, nm := range f.Names {
+					sc.vars[nm.Name] = typ
+				}
+			}
+		case *ast.DeclStmt:
+			gd, ok := n.Decl.(*ast.GenDecl)
+			if !ok || gd.Tok != token.VAR {
+				return true
+			}
+			for _, spec := range gd.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for i, nm := range vs.Names {
+					switch {
+					case vs.Type != nil:
+						sc.vars[nm.Name] = execTypeString(vs.Type, sc.pkg, sc.imports)
+					case i < len(vs.Values):
+						sc.vars[nm.Name] = sc.infer(vs.Values[i])
+					}
+				}
+			}
+		case *ast.AssignStmt:
+			sc.bind(n.Lhs, n.Rhs)
+		case *ast.RangeStmt:
+			if n.Value == nil {
+				return true
+			}
+			id, ok := n.Value.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			sc.vars[id.Name] = strings.TrimPrefix(sc.infer(n.X), "[]")
+		}
+		return true
+	})
+}
+
+// bind records the types an assignment produces.
+func (sc *execScope) bind(lhs, rhs []ast.Expr) {
+	if len(rhs) == 1 && len(lhs) > 1 {
+		call, ok := rhs[0].(*ast.CallExpr)
+		if !ok {
+			return
+		}
+		results := sc.callResults(call)
+		for i, l := range lhs {
+			id, ok := l.(*ast.Ident)
+			if !ok || i >= len(results) {
+				continue
+			}
+			sc.vars[id.Name] = results[i]
+		}
+		return
+	}
+	for i, l := range lhs {
+		id, ok := l.(*ast.Ident)
+		if !ok || i >= len(rhs) {
+			continue
+		}
+		if typ := sc.infer(rhs[i]); typ != "" {
+			sc.vars[id.Name] = typ
+		}
+	}
+}
+
+// callResults is a call's result types, empty when the callee is outside the
+// file set.
+func (sc *execScope) callResults(call *ast.CallExpr) []string {
+	keys := sc.resolveCallee(call.Fun)
+	if len(keys) != 1 {
+		return nil
+	}
+	return sc.g.results[keys[0]]
+}
+
+// infer is the local type inference: enough to name a receiver, and silent
+// about everything else.
+func (sc *execScope) infer(e ast.Expr) string {
+	switch v := e.(type) {
+	case *ast.Ident:
+		if typ, ok := sc.vars[v.Name]; ok && typ != "" {
+			return typ
+		}
+		// A bare type name in value position is a METHOD EXPRESSION —
+		// `(*Gremlins).buildCmd`, which this codebase uses to make a spawn
+		// substitutable. Reading it as an unknown variable severed every such
+		// seam and left the adapter spawns reachable from nothing.
+		return sc.g.knownType(sc.pkg + "." + v.Name)
+	case *ast.UnaryExpr:
+		return sc.infer(v.X)
+	case *ast.ParenExpr:
+		return sc.infer(v.X)
+	case *ast.StarExpr:
+		return sc.infer(v.X)
+	case *ast.CompositeLit:
+		return execTypeString(v.Type, sc.pkg, sc.imports)
+	case *ast.TypeAssertExpr:
+		if v.Type == nil {
+			return ""
+		}
+		return execTypeString(v.Type, sc.pkg, sc.imports)
+	case *ast.IndexExpr:
+		return strings.TrimPrefix(sc.infer(v.X), "[]")
+	case *ast.SelectorExpr:
+		x, ok := v.X.(*ast.Ident)
+		if !ok {
+			return ""
+		}
+		if target, isPkg := sc.imports[x.Name]; isPkg {
+			return sc.g.knownType(target + "." + v.Sel.Name)
+		}
+		return ""
+	case *ast.CallExpr:
+		res := sc.callResults(v)
+		if len(res) == 0 {
+			return ""
+		}
+		return res[0]
+	}
+	return ""
+}
+
+// knownType returns name if the file set declares it as a type with methods or
+// as an interface, and the empty string otherwise.
+func (g *execGraph) knownType(name string) string {
+	if _, ok := g.typeMethods[name]; ok {
+		return name
+	}
+	if _, ok := g.ifaces[name]; ok {
+		return name
+	}
+	return ""
+}
+
+// resolveCallee turns a called expression into the node keys it may reach.
+func (sc *execScope) resolveCallee(e ast.Expr) []string {
+	switch fn := e.(type) {
+	case *ast.Ident:
+		if key, ok := sc.g.scope[sc.pkg][fn.Name]; ok {
+			return []string{key}
+		}
+	case *ast.SelectorExpr:
+		if x, ok := fn.X.(*ast.Ident); ok {
+			if target, isPkg := sc.imports[x.Name]; isPkg && sc.vars[x.Name] == "" {
+				if key, ok := sc.g.scope[target][fn.Sel.Name]; ok {
+					return []string{key}
+				}
+				return nil
+			}
+		}
+		return sc.g.methodsOn(sc.infer(fn.X), fn.Sel.Name)
+	}
+	return nil
+}
+
+// methodsOn resolves a method call on a known receiver type.
+//
+// A concrete type resolves to exactly one method. An INTERFACE fans out to
+// every type whose method set contains the interface's — the union, never a
+// pick, because picking would have to choose and choosing the gated candidate
+// is how an ungated site turns green.
+func (g *execGraph) methodsOn(recv, sel string) []string {
+	if recv == "" {
+		return nil
+	}
+	recv = strings.TrimPrefix(recv, "[]")
+	if set, ok := g.ifaces[recv]; ok {
+		if !set[sel] {
+			return nil
+		}
+		return g.implementers(recv, sel)
+	}
+	key := recv + "." + sel
+	if _, ok := g.funcs[key]; ok {
+		return []string{key}
+	}
+	return nil
+}
+
+// implementers is every method named sel on a type satisfying iface.
+func (g *execGraph) implementers(iface, sel string) []string {
+	want := g.ifaces[iface]
+	var out []string
+	for typ, have := range g.typeMethods {
+		if !have[sel] {
+			continue
+		}
+		ok := true
+		for m := range want {
+			if !have[m] {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			out = append(out, typ+"."+sel)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// execCobraUse returns a cobra.Command literal's Use string, first word only.
+func execCobraUse(lit *ast.CompositeLit, imports map[string]string) string {
+	sel, ok := lit.Type.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "Command" {
+		return ""
+	}
+	x, ok := sel.X.(*ast.Ident)
+	if !ok || imports[x.Name] != "cobra" {
+		return ""
+	}
+	for _, elt := range lit.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		if k, ok := kv.Key.(*ast.Ident); !ok || k.Name != "Use" {
+			continue
+		}
+		if use, ok := stringLit(kv.Value); ok {
+			return strings.Fields(use)[0]
+		}
+	}
+	return ""
+}
+
+// isExecConsentCall reports whether a call is a consent check BY NAME.
+//
+// By the SHAPE of the name rather than by a list: `requireExecConsent` plus
+// anything ending in `Consented`. A roster of known helpers here would be the
+// hand-maintained list c-1 exists to kill, one level down.
+func isExecConsentCall(call *ast.CallExpr) bool {
+	name := ""
+	switch fn := call.Fun.(type) {
+	case *ast.Ident:
+		name = fn.Name
+	case *ast.SelectorExpr:
+		name = fn.Sel.Name
+	}
+	return name == "requireExecConsent" || strings.HasSuffix(name, "Consented")
+}
+
+// detectGating decides whether a node acts on a consent verdict.
+//
+// Two steps, because the interesting cases bind first and branch later: collect
+// the identifiers a consent call bound, then look for a branch that STOPS on
+// one of them — a return, a continue, a break. A switch that prints does not
+// count, which is what keeps doctor out of the gated set even though
+// reportLaneConsent calls LaneConsented and binds its error.
+func (g *execGraph) detectGating(n *execFunc) {
+	bound := map[string]bool{}
+	for _, part := range n.parts {
+		ast.Inspect(part.body, func(node ast.Node) bool {
+			assign, ok := node.(*ast.AssignStmt)
+			if !ok || len(assign.Rhs) != 1 {
+				return true
+			}
+			call, ok := assign.Rhs[0].(*ast.CallExpr)
+			if !ok || !isExecConsentCall(call) {
+				return true
+			}
+			for _, lhs := range assign.Lhs {
+				if id, ok := lhs.(*ast.Ident); ok && id.Name != "_" {
+					bound[id.Name] = true
+				}
+			}
+			return true
+		})
+	}
+
+	for _, part := range n.parts {
+		ast.Inspect(part.body, func(node ast.Node) bool {
+			switch node := node.(type) {
+			case *ast.ReturnStmt:
+				for _, r := range node.Results {
+					if call, ok := r.(*ast.CallExpr); ok && isExecConsentCall(call) {
+						n.gates = true
+					}
+				}
+			case *ast.IfStmt:
+				if !execHasJump(node.Body) {
+					return true
+				}
+				ast.Inspect(node.Cond, func(c ast.Node) bool {
+					switch c := c.(type) {
+					case *ast.Ident:
+						if bound[c.Name] {
+							n.gates = true
+						}
+					case *ast.CallExpr:
+						if isExecConsentCall(c) {
+							n.gates = true
+						}
+					}
+					return true
+				})
+			}
+			return true
+		})
+	}
+}
+
+// execHasJump reports whether a block can stop the flow it is in.
+func execHasJump(block *ast.BlockStmt) bool {
+	found := false
+	ast.Inspect(block, func(n ast.Node) bool {
+		switch n.(type) {
+		case *ast.ReturnStmt, *ast.BranchStmt:
+			found = true
+		}
+		return true
+	})
+	return found
+}
+
+// buildCommands turns command constructors into paths and reach sets.
+//
+// The top-level container's own Use is dropped from its descendants' paths, so
+// a path reads `survivor drain` rather than `dross survivor drain` — the same
+// spelling execGatedCommands uses, which is what lets a reader compare them.
+func (g *execGraph) buildCommands() {
+	isChild := map[string]bool{}
+	for _, n := range g.funcs {
+		for _, c := range n.children {
+			isChild[c] = true
+		}
+	}
+
+	byKey := map[string]*execCommand{}
+	var keys []string
+	for key := range g.funcs {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		n := g.funcs[key]
+		if n.use == "" {
+			continue
+		}
+		c := &execCommand{key: key, use: n.use}
+		byKey[key] = c
+		g.cmds = append(g.cmds, c)
+	}
+
+	seen := map[string]bool{}
+	var assign func(key, prefix string)
+	assign = func(key, prefix string) {
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		if c := byKey[key]; c != nil {
+			c.path = strings.TrimSpace(prefix + " " + c.use)
+			prefix = c.path
+		}
+		n, ok := g.funcs[key]
+		if !ok {
+			return
+		}
+		for _, child := range n.children {
+			assign(child, prefix)
+		}
+	}
+	for _, key := range keys {
+		if isChild[key] {
+			continue
+		}
+		n := g.funcs[key]
+		// A root that CONTAINS commands is a container: its Use names the
+		// binary, and repeating it in every descendant's path would say the
+		// same word forty times. A root with no children is a command in its
+		// own right and keeps its Use.
+		if c := byKey[key]; c != nil && len(n.children) > 0 {
+			c.path = c.use
+			seen[key] = true
+			for _, child := range n.children {
+				assign(child, "")
+			}
+			continue
+		}
+		assign(key, "")
+	}
+	for _, c := range g.cmds {
+		if c.path == "" {
+			c.path = c.use
+		}
+		c.reach = g.closure(c.key)
+		for key := range c.reach {
+			if g.funcs[key].gates {
+				c.gates = true
+				break
+			}
+		}
+	}
+}
+
+// closure is every node reachable from key over CALL edges.
+func (g *execGraph) closure(key string) map[string]bool {
+	out := map[string]bool{}
+	stack := []string{key}
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if out[cur] {
+			continue
+		}
+		out[cur] = true
+		n, ok := g.funcs[cur]
+		if !ok {
+			continue
+		}
+		for callee := range n.calls {
+			if !out[callee] {
+				stack = append(stack, callee)
+			}
+		}
+	}
+	return out
+}
+
+// classify assigns every site its reach class.
+func (g *execGraph) classify() {
+	for _, s := range g.sites {
+		var gated, ungated []string
+		for _, c := range g.cmds {
+			if !c.reach[s.owner] {
+				continue
+			}
+			if c.gates {
+				gated = append(gated, c.path)
+			} else {
+				ungated = append(ungated, c.path)
+			}
+		}
+		sort.Strings(gated)
+		sort.Strings(ungated)
+		s.gatedVia, s.ungatedVia = gated, ungated
+		switch {
+		case len(gated) == 0 && len(ungated) == 0:
+			s.class = execReachNone
+		case len(ungated) == 0:
+			s.class = execReachGated
+		case len(gated) == 0:
+			s.class = execReachUngated
+		default:
+			s.class = execReachMixed
+		}
+	}
+	g.reportAmbiguities()
+}
+
+// reportAmbiguities names every interface fan-out whose implementers span
+// packages AND disagree about reaching a spawn.
+//
+// Only that case. A shared method name whose candidates neither reach a
+// subprocess cannot change a verdict, and reporting it would bury the one that
+// can — while a fan-out inside a single package is the ordinary shape of an
+// adapter set, resolved the same way whichever member is meant.
+func (g *execGraph) reportAmbiguities() {
+	spawns := map[string]bool{}
+	for _, s := range g.sites {
+		spawns[s.owner] = true
+	}
+	reaches := map[string]bool{}
+	for key := range g.funcs {
+		for k := range g.closure(key) {
+			if spawns[k] {
+				reaches[key] = true
+				break
+			}
+		}
+	}
+	var ifaceNames []string
+	for name := range g.ifaces {
+		ifaceNames = append(ifaceNames, name)
+	}
+	sort.Strings(ifaceNames)
+	for _, iface := range ifaceNames {
+		for sel := range g.ifaces[iface] {
+			keys := g.implementers(iface, sel)
+			if len(keys) < 2 {
+				continue
+			}
+			pkgs := map[string]bool{}
+			var with, without int
+			for _, k := range keys {
+				pkgs[g.funcs[k].pkg] = true
+				if reaches[k] {
+					with++
+				} else {
+					without++
+				}
+			}
+			if len(pkgs) < 2 || with == 0 || without == 0 {
+				continue
+			}
+			g.ambiguous = append(g.ambiguous, execFinding{
+				Pos:      "interface " + iface + "." + sel,
+				Call:     sel,
+				NoRemedy: true,
+				Why: fmt.Sprintf("fans out to %v across %d packages, and only some of them reach a spawn — "+
+					"this walk takes the union rather than choosing, but a reader cannot verify which is meant",
+					keys, len(pkgs)),
+			})
+		}
+	}
+	sort.Slice(g.ambiguous, func(i, j int) bool { return g.ambiguous[i].Pos < g.ambiguous[j].Pos })
+}
+
+// findings is the verdict for every site, plus the reported ambiguities.
+func (g *execGraph) findings() []execFinding {
+	var out []execFinding
+	for _, s := range g.sites {
+		finding := func(why string, noRemedy bool) {
+			out = append(out, execFinding{Pos: s.pos.String(), Call: s.call, Why: why, NoRemedy: noRemedy})
+		}
+		if s.class == execReachGated {
+			// A marker HERE is itself the finding. Without this the whole
+			// sweep can be cleared by marking every site, and the gate half of
+			// the verdict becomes dead code nobody notices.
+			if s.marked {
+				finding("a site reached only by gated commands needs no exemption — it is "+s.Verdict()+"; delete the marker", true)
+			}
+			continue
+		}
+		if !s.marked {
+			switch s.class {
+			case execReachMixed:
+				finding("is reachable from ungated command "+quote(s.ungated())+" as well as gated "+quote(s.gatedBy()), false)
+			case execReachUngated:
+				finding("is reachable from ungated command "+quote(s.ungated())+" and no gated one", false)
+			default:
+				finding("is reachable from no command at all, so no gate can cover it", false)
+			}
+			continue
+		}
+		switch {
+		case s.marker.Reason == "":
+			finding("carries a reasonless "+execExemptMarker+" marker", false)
+		case len([]rune(s.marker.Reason)) < execExemptMinReason:
+			finding(fmt.Sprintf(
+				"carries a %s marker whose reason is %d characters; state in at least %d why this call cannot reach repo-authored code",
+				execExemptMarker, len([]rune(s.marker.Reason)), execExemptMinReason), false)
+		}
+	}
+	return append(out, g.ambiguous...)
+}
+
+// siteAt returns the site at a file's line, for tests asserting one verdict.
+func (g *execGraph) siteAt(t *testing.T, base string, line int) *execSite {
+	t.Helper()
+	for _, s := range g.sites {
+		if filepath.Base(s.pos.Filename) == base && s.pos.Line == line {
+			return s
+		}
+	}
+	t.Fatalf("no spawn site at %s:%d", base, line)
+	return nil
+}
+
+// commandNamed returns the command whose path matches.
+func (g *execGraph) commandNamed(t *testing.T, path string) *execCommand {
+	t.Helper()
+	for _, c := range g.cmds {
+		if c.path == path {
+			return c
+		}
+	}
+	var paths []string
+	for _, c := range g.cmds {
+		paths = append(paths, c.path)
+	}
+	sort.Strings(paths)
+	t.Fatalf("no command %q; found %v", path, paths)
+	return nil
+}
+
+// --- reach tests ---
+
+// reachFixture parses the two-package reach fixture, applying any source
+// rewrites first. Rewriting rather than adding a third file is deliberate: the
+// claims below are about a SHAPE changing — a var seam becoming a literal, a
+// marker appearing — and a separate fixture per shape drifts from the original
+// the moment either is edited.
+func reachFixture(t *testing.T, rewrites ...[2]string) *reachFx {
+	t.Helper()
+	root := repoRootForDocs(t)
+	dir := filepath.Join(root, "internal", "cmd", "testdata", "exec_consent", "reach")
+	fset := token.NewFileSet()
+	fx := &reachFx{lines: map[string][]string{}}
+	var files []*ast.File
+	for _, name := range []string{"root.go.txt", "helper.go.txt"} {
+		path := filepath.Join(dir, name)
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := string(body)
+		for _, r := range rewrites {
+			if !strings.Contains(src, r[0]) {
+				continue
+			}
+			src = strings.Replace(src, r[0], r[1], 1)
+		}
+		f, perr := parser.ParseFile(fset, path, src, parser.ParseComments)
+		if perr != nil {
+			t.Fatalf("%s: %v", name, perr)
+		}
+		// The REWRITTEN text, kept so a site can be found by what it spawns.
+		// Re-reading the file from disk would index the original, and every
+		// rewrite that adds a line would silently look one line off.
+		fx.lines[path] = strings.Split(src, "\n")
+		files = append(files, f)
+	}
+	fx.g = buildExecGraph(fset, files)
+	return fx
+}
+
+// reachFx is a parsed reach fixture: the graph plus the source it was built
+// from, which is not the source on disk once a rewrite has been applied.
+type reachFx struct {
+	g     *execGraph
+	lines map[string][]string
+}
+
+// site finds a fixture spawn site by the argv it spawns, so an assertion
+// survives the fixture gaining a line.
+func (fx *reachFx) site(t *testing.T, marker string) *execSite {
+	t.Helper()
+	for _, s := range fx.g.sites {
+		lines := fx.lines[s.pos.Filename]
+		if s.pos.Line-1 >= len(lines) {
+			continue
+		}
+		if strings.Contains(lines[s.pos.Line-1], marker) {
+			return s
+		}
+	}
+	t.Fatalf("no fixture spawn site whose line contains %q", marker)
+	return nil
+}
+
+// repoExecGraph is the graph over this repository's own non-test source. The
+// repo-wide zero-findings assertion is t-10's; what it is for HERE is the
+// claims that are only meaningful against real code — that doctor does not
+// reach the mutation runner, and that the gate half of the verdict tells
+// doctor's display-only consent read from verify's acted-on one.
+func repoExecGraph(t *testing.T) *execGraph {
+	t.Helper()
+	root := repoRootForDocs(t)
+	fset := token.NewFileSet()
+	var files []*ast.File
+	for _, r := range []string{"internal", "cmd"} {
+		err := filepath.WalkDir(filepath.Join(root, r), func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			f, perr := parser.ParseFile(fset, path, nil, parser.ParseComments)
+			if perr != nil {
+				return perr
+			}
+			files = append(files, f)
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", r, err)
+		}
+	}
+	return buildExecGraph(fset, files)
+}
+
+// TestExecReachCrossesPackages is RECALL. The fixture's command reaches its
+// spawn through two NAMED hops in another package; an edge set that stopped at
+// the package boundary would report the site as reachable from nothing, which
+// is a finding for the wrong reason and would hide the real one.
+func TestExecReachCrossesPackages(t *testing.T) {
+	fx := reachFixture(t)
+	g := fx.g
+	site := fx.site(t, `"git", "log"`)
+	if !site.reaches("ungated") {
+		t.Fatalf("the site is not attributed to the command that reaches it: %s", site.Verdict())
+	}
+	if site.class != execReachUngated {
+		t.Errorf("class = %s, want %s (%s)", site.class, execReachUngated, site.Verdict())
+	}
+	var found bool
+	for _, f := range g.findings() {
+		if strings.Contains(f.Pos, "helper.go.txt") && strings.Contains(f.Why, `"ungated"`) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no finding names the ungated command that reaches it: %v", g.findings())
+	}
+}
+
+// TestExecReachDoesNotDegenerate is PRECISION, and it is the assertion that
+// keeps the gate half of the verdict alive. A graph where everything reaches
+// everything makes every site MIXED, every site need a marker, and the whole
+// sweep clearable by marking. `dross doctor` runs no mutation adapter, so it
+// must not reach the one that spawns gremlins.
+func TestExecReachDoesNotDegenerate(t *testing.T) {
+	g := repoExecGraph(t)
+	doctor := g.commandNamed(t, "doctor")
+	verify := g.commandNamed(t, "verify")
+
+	var gremlins *execSite
+	for _, s := range g.sites {
+		if filepath.Base(s.pos.Filename) == "gremlins.go" {
+			gremlins = s
+			break
+		}
+	}
+	if gremlins == nil {
+		t.Fatal("no spawn site in internal/mutation/gremlins.go — the walk stopped covering it")
+	}
+	if doctor.reach[gremlins.owner] {
+		t.Errorf("`dross doctor` reaches %s, which spawns gremlins — the graph has degenerated", gremlins.owner)
+	}
+	if !verify.reach[gremlins.owner] {
+		t.Errorf("`dross verify` does NOT reach %s — the graph lost the edge c-6 is about", gremlins.owner)
+	}
+}
+
+// TestExecReachFollowsVarSeams: this codebase makes a subprocess substitutable
+// by assigning it to a package-level var, so an edge set that stopped at those
+// would lose most of the reach worth having. Both spellings must work — the
+// alias and the literal — because a refactor between them is not a change in
+// what runs.
+func TestExecReachFollowsVarSeams(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		rewrites [][2]string
+	}{
+		{"alias", nil},
+		{"literal", [][2]string{{
+			"var runFn = doSpawn",
+			"var runFn = func() error { return doSpawn() }",
+		}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fx := reachFixture(t, tc.rewrites...)
+			site := fx.site(t, `"go", "test"`)
+			if !site.reaches("gated") {
+				t.Fatalf("the var seam was not followed: %s", site.Verdict())
+			}
+			if site.class != execReachGated {
+				t.Errorf("class = %s, want %s (%s)", site.class, execReachGated, site.Verdict())
+			}
+		})
+	}
+}
+
+// TestExecUnreachableIsAFinding: an edge this walk could not resolve looks
+// exactly like an absent one, so "reached by no command" must fail closed. The
+// alternative reads a resolution failure as "nothing to gate here".
+func TestExecUnreachableIsAFinding(t *testing.T) {
+	fx := reachFixture(t)
+	g := fx.g
+	site := fx.site(t, `"cargo", "build"`)
+	if site.class != execReachNone {
+		t.Fatalf("class = %s, want %s", site.class, execReachNone)
+	}
+	var found bool
+	for _, f := range g.findings() {
+		if strings.Contains(f.Pos, site.pos.String()) && strings.Contains(f.Why, "no command at all") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a site reachable from nothing was waved through: %v", g.findings())
+	}
+}
+
+// TestExecMixedReachNeedsAMarker: a site reached by BOTH a gated and an ungated
+// command is the shape ship_recover.go's gitTrim and internal/remote are in.
+// Unmarked it is a finding naming the ungated reach; marked it passes, which is
+// the only green state those files can reach.
+func TestExecMixedReachNeedsAMarker(t *testing.T) {
+	const spawn = `exec.Command("rsync", "-a", "src", "dst")`
+	const marked = "//dross:exec-exempt rsync moves a tree and executes no repo-authored line\n\treturn " + spawn
+
+	fx := reachFixture(t)
+	g := fx.g
+	site := fx.site(t, `"rsync"`)
+	if site.class != execReachMixed {
+		t.Fatalf("class = %s, want %s (%s)", site.class, execReachMixed, site.Verdict())
+	}
+	var named bool
+	for _, f := range g.findings() {
+		if strings.Contains(f.Pos, site.pos.String()) && strings.Contains(f.Why, `"ungated"`) && strings.Contains(f.Why, `"gated"`) {
+			named = true
+		}
+	}
+	if !named {
+		t.Errorf("the mixed finding does not name both reaches: %v", g.findings())
+	}
+
+	withMarker := reachFixture(t, [2]string{"return " + spawn, marked})
+	for _, f := range withMarker.g.findings() {
+		if strings.Contains(f.Pos, "helper.go.txt") && strings.Contains(f.Call, "exec.") && strings.Contains(f.Why, "rsync") {
+			t.Errorf("a marked mixed-reach site was still flagged: %v", f)
+		}
+	}
+	marker := withMarker.site(t, `"rsync"`)
+	if !marker.marked {
+		t.Fatal("the rewritten fixture did not take the marker")
+	}
+	for _, f := range withMarker.g.findings() {
+		if strings.Contains(f.Pos, marker.pos.String()) {
+			t.Errorf("a marked mixed-reach site has no green state: %v", f)
+		}
+	}
+}
+
+// TestExecGatedOnlySiteRejectsAMarker is rule 9, and without it the sweep is
+// clearable by marking every site — after which t-9's attribution proves
+// nothing and the gate half of the verdict is dead code.
+func TestExecGatedOnlySiteRejectsAMarker(t *testing.T) {
+	fx := reachFixture(t, [2]string{
+		`	return exec.Command("go", "test", "./...").Run()`,
+		"\t//dross:exec-exempt this reason is long enough to pass the prose floor\n\treturn exec.Command(\"go\", \"test\", \"./...\").Run()",
+	})
+	g := fx.g
+	site := fx.site(t, `"go", "test"`)
+	if !site.marked {
+		t.Fatal("the rewritten fixture did not take the marker")
+	}
+	if site.class != execReachGated {
+		t.Fatalf("class = %s, want %s — the case this rule is about", site.class, execReachGated)
+	}
+	var found execFinding
+	for _, f := range g.findings() {
+		if strings.Contains(f.Pos, site.pos.String()) {
+			found = f
+		}
+	}
+	if found.Why == "" {
+		t.Fatalf("a marker on a gated-only site was accepted: %v", g.findings())
+	}
+	if !strings.Contains(found.Why, "a site reached only by gated commands needs no exemption") {
+		t.Errorf("the finding does not say why the marker is wrong: %s", found.Why)
+	}
+	if strings.Contains(found.String(), "mark it exempt") {
+		t.Errorf("the finding advises the very move it is refusing:\n%s", found.String())
+	}
+}
+
+// TestExecGatingIsANameRuleNotARoster: a consent helper invented tomorrow must
+// gate its caller with no edit here. A roster of known helpers would be the
+// hand-maintained list c-1 exists to kill, one level down.
+func TestExecGatingIsANameRuleNotARoster(t *testing.T) {
+	src := `package cmd
+
+import "os/exec"
+
+func FooConsented() error { return nil }
+
+func gatedByANameNobodyListed() error {
+	if err := FooConsented(); err != nil {
+		return err
+	}
+	return exec.Command("git", "status").Run()
+}
+`
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "invented.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := buildExecGraph(fset, []*ast.File{f})
+	if !g.funcs["cmd.gatedByANameNobodyListed"].gates {
+		t.Error("an identifier ending in Consented, acted on, did not gate its caller")
+	}
+}
+
+// TestExecGatingRequiresActingOnTheResult is the other half of the name rule,
+// and the reason it needs a second half. doctor's reportLaneConsent calls
+// LaneConsented and binds its error — to PRINT it. A rule that stopped at the
+// name would mark doctor as gating and green every site doctor reaches.
+func TestExecGatingRequiresActingOnTheResult(t *testing.T) {
+	g := repoExecGraph(t)
+	if g.funcs["cmd.reportLaneConsent"].gates {
+		t.Error("doctor's display-only LaneConsented read was counted as a gate")
+	}
+	if g.commandNamed(t, "doctor").gates {
+		t.Error("`dross doctor` was counted as gating — the gate half of the verdict is now decorative")
+	}
+	if !g.commandNamed(t, "verify").gates {
+		t.Error("`dross verify` was NOT counted as gating, though it acts on requireExecConsent")
+	}
+
+	// The same distinction in the fixture, where the shape is visible.
+	fx := reachFixture(t)
+	if fx.g.commandNamed(t, "displaying").gates {
+		t.Error("a command that prints a consent state was counted as gating")
+	}
+	if !fx.g.commandNamed(t, "gated").gates {
+		t.Error("a command that returns on requireExecConsent was not counted as gating")
+	}
+	site := fx.site(t, `"markdownlint"`)
+	if site.class != execReachUngated {
+		t.Errorf("a site reached only by the display-only command is %s, want %s", site.class, execReachUngated)
+	}
+}
+
+// TestExecReachReportsAmbiguity: when an interface fan-out lands in more than
+// one package and the candidates disagree about reaching a spawn, the union
+// this walk takes is covering for a resolution nobody can verify by reading.
+// Silently attributing it to the gated candidate is how an ungated site turns
+// green, so it is reported instead.
+func TestExecReachReportsAmbiguity(t *testing.T) {
+	files := map[string]string{
+		"iface.go": `package one
+
+type Runner interface{ Go() error }
+
+type Quiet struct{}
+
+func (Quiet) Go() error { return nil }
+
+func Drive(r Runner) error { return r.Go() }
+`,
+		"other.go": `package two
+
+import "os/exec"
+
+type Loud struct{}
+
+func (Loud) Go() error { return exec.Command("git", "gc").Run() }
+`,
+	}
+	fset := token.NewFileSet()
+	var parsed []*ast.File
+	for name, src := range files {
+		f, err := parser.ParseFile(fset, name, src, parser.ParseComments)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parsed = append(parsed, f)
+	}
+	g := buildExecGraph(fset, parsed)
+	if len(g.ambiguous) == 0 {
+		t.Fatal("a cross-package fan-out where only one candidate spawns was resolved silently")
+	}
+	if !strings.Contains(g.ambiguous[0].Why, "across 2 packages") {
+		t.Errorf("the report does not say what is ambiguous: %s", g.ambiguous[0].Why)
+	}
+	var reported bool
+	for _, f := range g.findings() {
+		if strings.HasPrefix(f.Pos, "interface ") {
+			reported = true
+		}
+	}
+	if !reported {
+		t.Error("the ambiguity was recorded but never reported as a finding")
 	}
 }
