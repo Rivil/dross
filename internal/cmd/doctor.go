@@ -1240,6 +1240,7 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 		Printf("      %s\n", p.Runtime.TestCommand)
 		Printf("    Fix (only after reading that line): `dross trust`\n")
 	}
+	reportExecGatedSurface()
 	issues += reportLaneConsent(root, repoDir, p)
 	Print("")
 
@@ -1247,6 +1248,22 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 	checkMutationToolchain(p)
 
 	return issues
+}
+
+// reportExecGatedSurface says what the whole-suite grant authorizes, and where
+// the answer actually comes from.
+//
+// The roster is READ from execGatedCommands rather than restated, and no count
+// is printed. A section that spelled the size out in prose was true until the
+// day it wasn't, and the reader had no way to tell which day that was.
+//
+// The exemption marker is named here, beside the state, because that is where
+// someone learns the gate exists. An escape hatch documented only in a test
+// file is one that gets rediscovered by working around it.
+func reportExecGatedSurface() {
+	Printf("  Authorizes the dross commands that spawn a process: %s.\n", strings.Join(execGatedCommands, ", "))
+	Printf("  The gated surface is enumerated from the source, not listed here; a spawn that\n")
+	Printf("  cannot reach repo-authored code carries a //dross:exec-exempt <reason> marker.\n")
 }
 
 // reportLaneConsent prints one row per declared [[runtime.test_lane]], on the

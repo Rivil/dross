@@ -695,33 +695,43 @@ func findLane(p *project.Project, name string) (project.TestLane, error) {
 
 // --- the gate ---
 
-// execGatedCommands is the CLOSED set of commands the consent gate covers,
-// declared here rather than inferred from which call sites happen to call
-// requireExecConsent. TestExecGatedSetIsExplicit asserts the two agree, so a
-// command cannot silently join or leave the set.
+// execGatedCommands is the roster of commands whose RunE calls
+// requireExecConsent, declared here rather than inferred from the call sites so
+// TestExecGatedSetIsExplicit can assert the two agree — a command cannot
+// silently join or leave it.
 //
-// The set is the loop's chokepoints, not "everything that touches a phase".
-// Two boundaries are deliberate:
+// It is NOT the description of the gated surface, and reading it as one is what
+// let `survivor drain` shell `go list` and `go test -coverprofile` over an
+// untrusted repo for a whole milestone. The surface is DERIVED:
+// TestEverySpawnSiteGatedOrExempt reads every os/exec construction out of
+// internal/ and cmd/, follows the call graph to the commands that reach each
+// one, and requires it to be reachable only from gating commands or to carry a
+// //dross:exec-exempt marker saying why it cannot reach repo-authored code. A
+// spawn added tomorrow is in scope the day it is written, with nothing here to
+// keep in step.
+//
+// What this roster still answers is which commands REFUSE, and where. It is the
+// loop's chokepoints, not "everything that touches a phase". Two boundaries are
+// deliberate:
 //
 //   - Read-only and post-hoc commands stay out. `dross status`, `dross doctor`
 //     and `task status … done` must keep working in an untrusted tree, or the
 //     gate bricks the very commands a user reaches for to understand why dross
 //     is refusing. A gate that makes diagnosis impossible gets disabled.
 //
-//   - `verify`, `test` and `survivor drain` are in it because they are the
-//     commands that spawn the suite itself — `dross test` is the execution
-//     site the prompts now call, and the drain shells `go list` and `go test
-//     -coverprofile` over the repo's own packages, so gating them is gating
-//     the run rather than the step boundary around it. The drain rides
-//     runtime.test_command's grant per the locked drain_grant decision:
+//   - The commands that spawn the repo's own suite are in it: `verify` and
+//     `test` run it directly, and `survivor drain` shells `go list` and `go
+//     test -coverprofile` over every package. Gating those is gating the run
+//     rather than the step boundary around it. The drain rides
+//     runtime.test_command's grant per the locked drain_grant decision —
 //     consenting to "dross may run this repo's suite here" is the same
 //     permission the drain needs, and a separate grant family would cost
-//     another trust surface for no additional authority. The remaining
-//     members are in it because they are the loop's step boundaries: refusing
-//     there stops an execute run before it reaches the step that runs tests.
-//     The locked exec_consent_gate decision admits what this cannot do —
-//     nothing stops an agent typing `go test` directly. The CLI covers the
-//     CLI.
+//     another trust surface for no additional authority.
+//
+//   - The rest are in it as the loop's STEP BOUNDARIES: refusing there stops
+//     an execute run before it reaches the step that runs tests. The locked
+//     exec_consent_gate decision admits what this cannot do — nothing stops an
+//     agent typing `go test` directly. The CLI covers the CLI.
 var execGatedCommands = []string{
 	"changes record",
 	"state bump",
