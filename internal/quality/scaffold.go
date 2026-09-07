@@ -3,6 +3,7 @@ package quality
 import (
 	"fmt"
 
+	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/phase"
 )
 
@@ -44,12 +45,20 @@ func criterionText(f Finding) string {
 }
 
 // WriteScaffoldSpec builds the remediation spec from the ledger and writes it as
-// TOML to path, using phase.Spec.Save so the output matches the repo's spec.toml
-// formatting and round-trips through phase.LoadSpec.
-func WriteScaffoldSpec(path, phaseID, title string, l Ledger) error {
+// TOML to the contained path, using phase.Spec.Save so the output matches the
+// repo's spec.toml formatting and round-trips through phase.LoadSpec.
+//
+// The Contained crosses into phase.Spec.Save as its JOINED form. That boundary
+// is deliberate and is the one place in this package where unwrapping is
+// correct: phase.saveTOML is a func(path string) whose atomic write (encode to
+// <path>.tmp, then rename) is crash-safety pathfence.WriteFile does not
+// replicate, and internal/phase is not retyped by this phase. Rel() here would
+// resolve against the process working directory and scatter spec.toml wherever
+// the command happened to run.
+func WriteScaffoldSpec(c pathfence.Contained, phaseID, title string, l Ledger) error {
 	spec, err := ScaffoldSpec(phaseID, title, l)
 	if err != nil {
 		return err
 	}
-	return spec.Save(path)
+	return spec.Save(c.String())
 }

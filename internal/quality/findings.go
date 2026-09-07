@@ -1,12 +1,13 @@
 package quality
 
 import (
+	"bytes"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // Risk is the contextual maintainability-risk assigned to a finding by the
@@ -104,23 +105,37 @@ func (l Ledger) Survivors() []Finding {
 	return out
 }
 
-// Save writes the ledger as TOML to path.
-func Save(path string, l Ledger) error {
-	f, err := os.Create(path)
-	if err != nil {
+// Save writes the ledger as TOML to the contained path.
+//
+// It takes a pathfence.Contained rather than a string because this is where the
+// path meets the filesystem: the type has no constructor outside pathfence, so a
+// caller that skipped the containment check has no value to pass and fails to
+// build. The write goes through the pathfence seam for the same reason — the
+// former os.Create here took a plain string, with nothing but convention tying
+// it to a check that ran two frames up.
+//
+// Encoding into a buffer first is what lets the seam do the write: the seam
+// takes bytes, and a mid-encode failure now leaves the target untouched rather
+// than truncated.
+func Save(c pathfence.Contained, l Ledger) error {
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(l); err != nil {
 		return err
 	}
-	defer f.Close()
-	return toml.NewEncoder(f).Encode(l)
+	return pathfence.WriteFile(c, buf.Bytes(), 0o644)
 }
 
 // Load reads and parses a findings.toml ledger. It returns an error (never
 // panics) on missing or garbled input, so a malformed ledger fails the run
 // cleanly rather than crashing the scaffold writer downstream.
-func Load(path string) (Ledger, error) {
+func Load(c pathfence.Contained) (Ledger, error) {
+	b, err := pathfence.ReadFile(c)
+	if err != nil {
+		return Ledger{}, fmt.Errorf("load findings ledger %s: %w", c, err)
+	}
 	var l Ledger
-	if _, err := toml.DecodeFile(path, &l); err != nil {
-		return Ledger{}, fmt.Errorf("load findings ledger %s: %w", path, err)
+	if err := toml.Unmarshal(b, &l); err != nil {
+		return Ledger{}, fmt.Errorf("load findings ledger %s: %w", c, err)
 	}
 	return l, nil
 }
