@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // Scope is the file set a phase's mutation score is allowed to be computed
@@ -316,6 +317,38 @@ func diffPath(p string) string {
 	return strings.TrimPrefix(p, "b/")
 }
 
+// ValidateRecorded refuses a changes.json task file that resolves outside the
+// repo. It returns ONLY an error — it produces no value — and it is meant to be
+// called BEFORE NewScope.
+//
+// That ordering is the whole point. NormalizePath already reports ok=false for
+// "../x", so an escaping recorded path never reaches Scope.Files: it lands in
+// the rejected list and is reported as `ignored out-of-repo path` on Degraded
+// while the run goes on to PASS. That soft downgrade is the live bug — a
+// missing file is stale bookkeeping, but a path escaping the repo is a corrupt
+// or hand-edited artifact, and skipping it silently narrows the mutation scope
+// while the run still reports pass. Gating here is what turns it into an abort
+// (the escape_failure_mode lock).
+//
+// The refusal names the offending path, the artifact it was loaded from and the
+// root it escaped, so a hand-edited changes.json can be fixed from the message
+// alone.
+//
+// A blank entry is skipped rather than refused: an empty string is bookkeeping
+// noise, not an escape, and turning it into an abort is a behaviour change this
+// gate does not own.
+func ValidateRecorded(root string, recorded []string) error {
+	for _, p := range recorded {
+		if strings.TrimSpace(p) == "" {
+			continue
+		}
+		if _, err := pathfence.Contain(root, "changes.json", p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // NormalizePath rewrites a path into the canonical scope key: slash-separated,
 // repo-relative, cleaned, no leading "./". It reports ok=false for a path that
 // names something outside the repo, which then never becomes a Contains match.
@@ -341,15 +374,21 @@ func NormalizePath(root, p string) (string, bool) {
 			p = strings.TrimPrefix(p, root+"/")
 		}
 	}
-	if path.IsAbs(p) {
-		// Absolute and not under the root: a different tree entirely.
+	// The lexical in-tree test is pathfence's — one implementation, shared with
+	// the containment check the recorded set is gated by. What stays here is
+	// this caller's own policy, which pathfence deliberately takes no position
+	// on: an absolute path that IS under the root was already stripped above,
+	// so anything still absolute is a different tree entirely (InTree reports
+	// that as out); and "." names the repo root rather than a file in it, which
+	// pathfence calls in-tree and this caller must not.
+	clean, ok := pathfence.InTree(p)
+	if !ok {
 		return "", false
 	}
-	p = path.Clean(p)
-	if p == "." || p == ".." || strings.HasPrefix(p, "../") {
+	if clean == "" || clean == "." {
 		return "", false
 	}
-	return p, true
+	return clean, true
 }
 
 // normalizeRoot canonicalises the repo root for prefix stripping.

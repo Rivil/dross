@@ -7,10 +7,13 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/pflag"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/verify"
 )
@@ -456,5 +459,116 @@ func TestVerifyPersistsKeyAndStateIntoTestsJSON(t *testing.T) {
 	}
 	if !strings.Contains(o.Note, "01-persist") {
 		t.Errorf("routed entry lost its destination: %+v", o)
+	}
+}
+
+// --- t-5: an escaping changes.json path aborts the run ----------------------
+
+// seedEscapingChanges hand-edits a phase's changes.json to record one in-repo
+// file and one path escaping the repo, and seeds a REAL file at that path
+// outside the tree.
+//
+// The real file is the point. Without it the run would be stopped by the `gone`
+// lane — the path does not exist — and the test would pass whether or not the
+// gate exists. With it, a run that reached os.Stat would have found the file
+// and dispatched it to a mutation adapter, so only the gate can refuse it.
+// It returns the absolute path of the seeded file.
+func seedEscapingChanges(t *testing.T, dir, phaseID string) string {
+	t.Helper()
+	outside := filepath.Join(filepath.Dir(dir), "x.go")
+	if err := os.WriteFile(outside, []byte("package outside\n\nfunc X() bool { return true }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Remove(outside) })
+
+	root := filepath.Join(dir, ".dross")
+	path := changes.FilePath(root, phaseID)
+	ch, err := changes.Load(path, phaseID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch.Record("t-1", []string{"a.go", "../x.go"}, "abc1234", "", nil)
+	if err := ch.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	return outside
+}
+
+// assertEscapeRefusal checks the refusal is diagnosable (c-5) and is the HARD
+// lane, not the soft one.
+func assertEscapeRefusal(t *testing.T, dir string, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("verify accepted a changes.json recording a path outside the repo")
+	}
+	for _, want := range []string{"../x.go", "changes.json", dir} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal does not name %q:\n%s", want, err.Error())
+		}
+	}
+	// The escape must not have been softened into a degraded note or a skip.
+	for _, forbidden := range []string{"ignored out-of-repo path", "gone", "skipped"} {
+		if strings.Contains(err.Error(), forbidden) {
+			t.Errorf("the escape was downgraded (%q) rather than refused:\n%s", forbidden, err.Error())
+		}
+	}
+}
+
+// TestVerifyRefusesEscapingRecordedPathEndToEnd drives the real CLI. A stub
+// adapter is installed deliberately: without the gate this run SUCCEEDS and
+// writes both artefacts, so the assertions below are a must-trip rather than a
+// tautology.
+func TestVerifyRefusesEscapingRecordedPathEndToEnd(t *testing.T) {
+	dir := scopedVerifyRepo(t, "escape")
+	phaseSpec(t, "01-escape")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go")
+	mustSetBase(t, "01-escape", "base")
+	seedEscapingChanges(t, dir, "01-escape")
+
+	useStubAdapter(t, &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})})
+
+	err := runCmd(t, Verify(), "01-escape")
+	assertEscapeRefusal(t, dir, err)
+
+	// Nothing was written: the refusal lands before RunScoped, so neither
+	// artefact exists to be mistaken for a verdict.
+	root := filepath.Join(dir, ".dross")
+	testsPath, verifyPath := verify.FilePaths(root, "01-escape")
+	for _, p := range []string{testsPath, verifyPath} {
+		if _, statErr := os.Stat(p); statErr == nil {
+			t.Errorf("%s was written for a refused run", filepath.Base(p))
+		}
+	}
+}
+
+// TestVerifyResultsRefusesEscapingRecordedPath covers the detached
+// finish/collect path, which rebuilds the same scope from the same inputs.
+// Guarding only the attached call site leaves this red.
+func TestVerifyResultsRefusesEscapingRecordedPath(t *testing.T) {
+	dir := scopedVerifyRepo(t, "escape-detached")
+	phaseSpec(t, "01-escape-detached")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go")
+	mustSetBase(t, "01-escape-detached", "base")
+	seedEscapingChanges(t, dir, "01-escape-detached")
+
+	root := filepath.Join(dir, ".dross")
+	if err := recordDetachedRun(root, dir, detachedRun{
+		Phase: "01-escape-detached", RunID: "r-1", Host: "helicon", Workdir: "/srv/x",
+		RunDir: ".dross-runs/r-1", DispatchedAt: time.Now().UTC(), State: "running",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "finished", HasExit: true, ExitCode: 0}, nil)
+
+	assertEscapeRefusal(t, dir, collectDetached("01-escape-detached"))
+
+	testsPath, verifyPath := verify.FilePaths(root, "01-escape-detached")
+	for _, p := range []string{testsPath, verifyPath} {
+		if _, statErr := os.Stat(p); statErr == nil {
+			t.Errorf("%s was written for a refused collect", filepath.Base(p))
+		}
 	}
 }

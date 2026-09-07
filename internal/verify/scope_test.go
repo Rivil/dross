@@ -1,11 +1,13 @@
 package verify
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // TestScopeNormalisationCollapsesSpellings pins the premise the whole filter
@@ -405,5 +407,94 @@ func TestNewScopeSortsHunkRanges(t *testing.T) {
 		if got[i-1].Start > got[i].Start {
 			t.Errorf("ranges are not ascending at %d: %v", i, got)
 		}
+	}
+}
+
+// TestValidateRecordedRefusesEscape is the gate that turns the soft lane into
+// an abort. c-5 is asserted directly: the refusal must name the offending path,
+// the artifact it was loaded from, and the root it escaped, as three separate
+// facts — a message carrying only one of them cannot be acted on.
+func TestValidateRecordedRefusesEscape(t *testing.T) {
+	const root = "/repo"
+	err := ValidateRecorded(root, []string{"a.go", "../x.go"})
+	if err == nil {
+		t.Fatal("ValidateRecorded accepted a recorded path escaping the repo")
+	}
+	if !errors.Is(err, pathfence.ErrEscapes) {
+		t.Errorf("error is not pathfence.ErrEscapes: %v", err)
+	}
+	for _, want := range []string{"../x.go", "changes.json", root} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal does not name %q — a hand-edited changes.json cannot be fixed from it:\n%s",
+				want, err.Error())
+		}
+	}
+}
+
+// TestValidateRecordedRefusesAbsolute pins the absolute_paths lock on this
+// lane too: an absolute recorded path is one machine's layout, and it carries
+// its own sentinel because it never escapes.
+func TestValidateRecordedRefusesAbsolute(t *testing.T) {
+	err := ValidateRecorded("/repo", []string{"/etc/passwd"})
+	if !errors.Is(err, pathfence.ErrAbsolute) {
+		t.Fatalf("ValidateRecorded(/etc/passwd) = %v, want pathfence.ErrAbsolute", err)
+	}
+}
+
+// TestValidateRecordedPassesInTreePaths: the gate must not fire on ordinary
+// bookkeeping. A blank entry is skipped rather than refused — an empty string
+// is noise, not an escape, and turning it into an abort is a behaviour change
+// this gate does not own.
+func TestValidateRecordedPassesInTreePaths(t *testing.T) {
+	if err := ValidateRecorded("/repo", []string{
+		"a.go", "./internal/b.go", `internal\c.go`, "internal/../internal/d.go", "   ", "",
+	}); err != nil {
+		t.Fatalf("ValidateRecorded refused ordinary recorded paths: %v", err)
+	}
+	if err := ValidateRecorded("/repo", nil); err != nil {
+		t.Fatalf("ValidateRecorded(nil) = %v, want nil", err)
+	}
+}
+
+// TestGitLaneStillDegradesOnEscape proves the hard rule is NOT over-applied.
+// The gate belongs to the recorded lane only: git's own out-of-repo paths keep
+// their soft downgrade, because git is not a hand-edited artifact and aborting
+// a run over one would turn a tooling quirk into a blocked phase.
+func TestGitLaneStillDegradesOnEscape(t *testing.T) {
+	s := NewScope(ScopeInput{Root: "/repo", Git: []string{"a.go", "../outside.go"}})
+
+	if want := []string{"a.go"}; !reflect.DeepEqual(s.Files, want) {
+		t.Fatalf("files = %v want %v", s.Files, want)
+	}
+	if !strings.Contains(strings.Join(s.Degraded, "\n"), `ignored out-of-repo path "../outside.go"`) {
+		t.Errorf("a git-supplied out-of-repo path lost its degraded entry: %v", s.Degraded)
+	}
+}
+
+// TestNormalizePathKeepsItsOwnAnswers pins the three verdicts that are this
+// caller's policy rather than pathfence's, now that the lexical test is
+// delegated. pathfence.InTree calls "." IN-TREE (it takes no position on the
+// dot, since its other consumer needs one); this caller must keep answering
+// "out", because "." names the repo root and not a file in it. Contains is
+// asserted alongside, since that is the consumer the verdict actually reaches.
+func TestNormalizePathKeepsItsOwnAnswers(t *testing.T) {
+	s := NewScope(ScopeInput{Root: "/repo", Git: []string{"a.go"}})
+
+	for _, in := range []string{"../x", "/other/tree", ".", "..", "/repo", ""} {
+		got, ok := NormalizePath("/repo", in)
+		if ok {
+			t.Errorf("NormalizePath(%q) = (%q, true), want out-of-scope", in, got)
+		}
+		if got != "" {
+			t.Errorf("NormalizePath(%q) returned %q on the false branch, want the empty key", in, got)
+		}
+		if s.Contains(in) {
+			t.Errorf("Scope.Contains(%q) is true — an out-of-scope path became a scope match", in)
+		}
+	}
+
+	// The delegation must not have cost the in-tree answers.
+	if got, ok := NormalizePath("/repo", `./internal\a.go`); !ok || got != "internal/a.go" {
+		t.Errorf(`NormalizePath("./internal\a.go") = (%q, %v), want ("internal/a.go", true)`, got, ok)
 	}
 }
