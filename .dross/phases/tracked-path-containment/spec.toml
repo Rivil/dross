@@ -60,3 +60,21 @@
   text = "Symlink-resolving containment: close the hole where a lexically-contained path is a symlink pointing outside the repo."
   why = "Different threat model from a mistyped artifact — it presumes an attacker who can already write into the tree. Belongs with the artifact-content threats secret-detection handles."
   target = "secret-detection"
+
+[[deferred]]
+  text = "survivor internal/compilefence/compilefence.go:61 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "mutation-range-provenance"
+  survivor = "365503d33114f65e"
+
+[[deferred]]
+  text = "survivor internal/compilefence/compilefence.go:80 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "mutation-range-provenance"
+  survivor = "5d74aadbbae679b7"
+
+[[deferred]]
+  text = "survivor internal/compilefence/compilefence.go:81 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "mutation-range-provenance"
+  survivor = "695a2b44f32b1b43"
