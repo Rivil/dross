@@ -5,165 +5,225 @@ Plan: 11 tasks across 4 waves
 
 ## BLOCKING
 
-- [test-contract] `assertDoesNotCompile` is unreachable from four of the five tasks
-  that depend on it. t-1 puts the helper in `internal/pathfence/pathfence_test.go`
-  ("this task also adds the shared test helper"), but a `_test.go` identifier in
-  package `pathfence` is visible only to that package's own test binary. t-3's
-  contract uses it from `internal/security` / `internal/quality` tests, t-5 and
-  t-11 from `internal/cmd`, t-8 from `internal/cmd`. There is no shared test-helper
-  package in this repo to fall back on — I checked all 34 dirs under `internal/`;
-  none is a testutil/dtest package and no non-test file exports an `Assert*` helper.
-  Five test-contract lines cannot compile as written, and they are the lines that
-  carry the c-4 "fails to build" guarantee at every adopted site.
-  Suggestion: name the helper's home explicitly — a non-test file in a small
-  exported package (`internal/buildfence`, or an exported non-test function in
-  `internal/pathfence`) — and add that file to t-1's `files`. Until it has an
-  importable home, four tasks' primary assertions are unsatisfiable.
+- [antipatterns] t-3 retypes `Load`, `Save` and `WriteScaffoldSpec` in both scan
+  packages, but its file list misses three non-test callers, each of which
+  breaks at compile:
+    - `internal/security/lifecycle.go:60` — `Load(filepath.Join(runDir, "findings.toml"))`
+      inside `ResolveItem`
+    - `internal/quality/lifecycle.go:60` — the same call
+    - `internal/cmd/quality_findings_test.go:71` — `quality.Save(filepath.Join(runDir, "findings.toml"), led)`,
+      a file in neither t-3's nor t-11's list
+  The caller derivation that was redone for t-3 in an earlier round stopped at
+  `findings.go`/`scaffold.go` and their own tests; it did not sweep the packages'
+  other files or the two `*_findings_test.go` files in `internal/cmd`.
+  Suggestion: add `internal/security/lifecycle.go`, `internal/quality/lifecycle.go`
+  and `internal/cmd/quality_findings_test.go` to t-3's file list. `lifecycle.go`
+  builds its path from `runDir` with `filepath.Join`, so each call site becomes a
+  `pathfence.Contain(runDir, "run directory", "findings.toml")` — worth a contract
+  line, since `ResolveItem` is a live read path this phase would otherwise leave
+  outside the type.
 
-- [test-contract] t-8's redProofDocSHA and doctor contract lines cannot pass once
-  `redProofPin.Doc` is `pathfence.Contained`. "redProofDocSHA on the same doc
-  returns a containment error, not an os.ReadFile error — asserted on the message"
-  requires calling `redProofDocSHA` with an escaping doc; if it takes a `Contained`
-  (as the description states) no test can construct that argument, because `Contain`
-  is the only constructor and it refuses. The same applies to "doctor over that
-  record reports the containment refusal as an escape rather than under the
-  'cannot be read' wording": the plan says both that `discoverRedProofPins`
-  constructs pins by calling `Contain` and that the refusal surfaces at
-  `doctor.go:604-608`. Those are mutually exclusive — a pin that fails `Contain`
-  at discovery never reaches :604. And the discovery path behaves differently than
-  the plan assumes: `redProofChecks` (doctor.go:567-570) collapses any discovery
-  error into a single `could not read red-proof pins: %v` line and returns, so one
-  escaping doc suppresses every other pin's verdict. That regression is undeclared.
-  Suggestion: decide where `Contain` runs — at discovery (and then rewrite both
-  contract lines to assert the `redProofChecks` line, and state the
-  one-bad-pin-hides-the-rest consequence), or per-pin inside `redProofPinLines`
-  (and keep the :604 arm split, but then `discoverRedProofPins` must keep `Doc` a
-  string, which contradicts the retype).
-
-- [coverage] t-3 moves the real `os.*` calls into `internal/security` and
-  `internal/quality`, but t-10's residual scan does not cover those packages. The
-  scan's declared set is internal/cmd, internal/verify, internal/phase,
-  internal/changes, internal/testlane, internal/remote. t-3's contract line
-  ("t-10's scan over both packages reports no direct os.* call on a contained
-  path") names a scan that never visits them. After t-3, `security.Save`,
-  `security.Load`, `security.WriteScaffoldSpec` and their quality twins are exactly
-  the "reader that unwraps a checked value with `.String()` to reach os.*" that
-  c-4's residual clause promises to catch, and nothing catches them. This is the
-  write path c-3 is about, so the hole is in the criterion's own centre.
-  Suggestion: add internal/security and internal/quality to t-10's scanned package
-  set and to its vacuity guard ("visits at least one file in each of the six named
-  packages" becomes eight), or delete the claim from t-3's contract and say plainly
-  that those two packages are guarded by the type alone.
+- [test-contract] t-3's `WriteScaffoldSpec` cannot do its I/O through the
+  pathfence seam, so the contract line "WriteScaffoldSpec still writes a spec a
+  subsequent phase scaffold can read in both packages" cannot pass as designed.
+  Both bodies end in `return spec.Save(path)` (`internal/security/scaffold.go:52`,
+  `internal/quality/scaffold.go:54`), where `spec` is a `*phase.Spec` and
+  `phase.Spec.Save` (`internal/phase/phase.go:459` → `saveTOML:476`, which does
+  `os.MkdirAll` + `os.Create(path+".tmp")`) takes a plain string. t-1 makes
+  `Contained.String()` the ROOT-relative form and puts the joined absolute path
+  out of reach on purpose, so `spec.Save(c.String())` writes `./spec.toml`
+  relative to the process working directory — the wrong file, silently. The three
+  ways out all cost a decision no task owns: retype or split `phase.Spec.Save`
+  (nothing in this plan touches `internal/phase/phase.go`), add an absolute
+  accessor (exactly what t-10's scan exists to ban), or duplicate `saveTOML`'s
+  atomic-tmp-write in both scan packages and drop the "matches the repo's
+  spec.toml formatting" guarantee the doc comment at `scaffold.go:44-46` claims.
+  Suggestion: decide this at plan time, not mid-task. The cheapest shape that
+  keeps every guarantee is a marshal/writer seam in `internal/phase` — e.g.
+  `func (s *Spec) Encode() ([]byte, error)` — with `WriteScaffoldSpec` doing
+  `pathfence.WriteFile(c, b, 0o644)`; that needs `internal/phase/phase.go` and its
+  test added to t-3's file list, and t-3's `depends_on` is unaffected.
 
 ## FLAG
 
-- [antipattern] t-8 does not say where `discoverRedProofPins` gets a containment
-  root. It takes only `root` (the `.dross` dir, redproof.go:119); `Contain` needs
-  the repo root. Two resolutions exist and they have different file scopes: derive
-  `filepath.Dir(root)` internally (no signature change, file list stands), or add a
-  `repoDir` parameter — which breaks two production callers that are NOT in t-8's
-  file list, `internal/cmd/redproof_lifecycle.go:39` and
-  `internal/cmd/redproof_repoint_cmd.go:46`.
-  Suggestion: state the derivation in the description. If the signature changes,
-  add both files.
+- [antipatterns] t-8's claim that "FOUR EXISTING CONSUMERS ... are accounted for
+  here rather than discovered during execution" is not exhaustive. Two more:
+    - `internal/cmd/redproof_set_test.go:173` — `if found.Doc != "fixtures/hostile-config-c5/RUN.md"`,
+      the identical string-comparison shape as the enumerated
+      `hostile_config_test.go:435`. The file is in the list, so it compiles-breaks
+      visibly, but the enumeration that justified the list missed it.
+    - `internal/cmd/redproof_repoint_cmd.go:99` — `Printf("...", pin.Phase, plan.Doc, ...)`.
+      Benign (`%s` on a `fmt.Stringer`), but the file is in no task's list at all
+      even though it holds a live reference to a retyped field.
+  Suggestion: add `redproof_repoint_cmd.go` to t-8's file list and extend the
+  enumeration to six.
 
-- [test-contract] t-1's line `Contain(root, a, "a/../b.md")` returns
-  `Join(root, "b.md")` contradicts the same task's `String()` rule. `abs` is
-  unexported and `String()` returns `rel`, so nothing outside pathfence can observe
-  `Join(root, "b.md")`; from inside the package the test can read `abs` directly,
-  but then the line is asserting a field, not a return value.
-  Suggestion: reword to assert the internal `abs` field, or assert
-  `String() == "b.md"` and leave the join to the seam test that already chdirs away.
+- [test-contract] t-8 breaks `TestDiscoverRedProofPinsFindsRecordedPin`
+  (`internal/cmd/redproof_set_test.go:149`) in a way the plan does not anticipate,
+  and the repair silently weakens the test. It discovers pins from a THROWAWAY
+  root (`liveRecordRoot(t, repo, "config-trust-hardening")`) and then reads the doc
+  against the REAL repo (`redProofDocSHA(repoRootForDocs(t), found.Doc)`), because
+  `fixtures/hostile-config-c5/RUN.md` exists only under the real tree. Once
+  `discoverRedProofPins` Contains against `filepath.Dir(root)` and
+  `redProofDocSHA` takes only a `Contained`, the caller can no longer supply a
+  different root: the seam reads at the throwaway path and the test fails. It is
+  repairable inside an owned file (rebuild the `Contained` with
+  `pathfence.Contain(repoRootForDocs(t), ...)`), but that stops exercising a
+  discovery-produced value, which is the whole point of a test whose own comment
+  says it "reads THIS repo, not a fixture".
+  Suggestion: name this in t-8's description with the intended repair, and add a
+  contract line pinning that the test still asserts on the pin discovery
+  produced.
 
-- [test-contract] t-7 changes testlane's normalization on darwin without asserting
-  it. `testlane.normalize` uses `filepath.ToSlash` (match.go:128); pathfence's
-  `InTree` folds backslashes unconditionally (t-1, deliberately). For `a\b/../c`
-  testlane returns `"c"` today on darwin and `"a/c"` through `InTree`. t-7's
-  contract asserts neither form. This is precisely the divergence t-1 documents as
-  load-bearing, left unpinned in the one task that consumes it.
-  Suggestion: add a line fixing testlane's answer for a backslash-carrying path,
-  whichever way you decide it should go.
+- [test-contract] t-10's literal scan states two different exemption rationales
+  and leaves the adjacency window undefined. The rule is written as "a `..`
+  COMPARISON in a path context (adjacent to filepath.Separator, os.PathSeparator,
+  "../", path.Clean, path.Base, filepath.Rel or filepath.IsAbs)", but the
+  rev-list sites are then exempted BY SHAPE (concatenation, not comparison) while
+  refguard's is exempted by "no path call nearby". Only one live site has a path
+  marker in the same function — `doctor.go:980`'s `"origin/"+mainBranch+".."+mainBranch`
+  sits 18 lines after `filepath.Join` at `doctor.go:962`, both inside
+  `leakedPhaseCommits`. If the executor implements adjacency as the primary rule
+  rather than shape, t-10 lands red against the live tree on arrival.
+  Suggestion: state the rule as shape-first (concatenation operands are never in
+  the comparison class), and pin the window explicitly — same statement, or N
+  lines — so the fixture set and the live tree agree.
 
-- [test-contract] t-5 does not pin `NormalizePath`'s false-branch return. It
-  returns `""` today (scope.go:349-351); `InTree`'s false branch returns the
-  cleaned path, and t-1 pins that deliberately. t-5's contract asserts only
-  `ok=false`. `NewScope` is unaffected (it appends the raw input to `rejected`,
-  scope.go:114 and :135), but `NormalizePath` is exported.
-  Suggestion: one line asserting `NormalizePath("../x")` still returns `("", false)`.
+- [wave-order] Two contract lines assert against work owned by a LATER wave, so
+  neither can be verified at its own task gate: t-3 line 2 ("t-10's scan over both
+  packages reports no direct os.* call ... asserted by a must-trip testdata
+  fixture") is wave 2 against wave 4, and t-8 line 9 ("asserted by t-10's scan
+  over the post-fix file plus a must-trip testdata fixture") is wave 3 against
+  wave 4. t-11 line 4 has the same forward reference but says "asserted there",
+  which reads correctly as delegation.
+  Suggestion: reword t-3 line 2 and t-8 line 9 to the t-11 form, so the executor
+  does not write a second local scan to satisfy them.
 
-- [coverage] c-4's first clause — "every site that opens a tracked-artifact path
-  accepts a value only the shared check can construct" — is built by t-3, t-5, t-8
-  and t-11, none of which list c-4 in `covers`. Only t-10, the guard, claims it.
-  Cut or descope any of those four and c-4 still looks covered while the guarantee
-  is gone.
-  Suggestion: add c-4 to the `covers` of the tasks that do the retyping.
+- [granularity] Four tasks are at or over the 5-file mark: t-8 (10 files, 4 of
+  them non-test source across `redproof*`/`doctor`), t-3 (8 files, two packages),
+  t-10 (7 files, though 5 are testdata), t-5 (6 files spanning `internal/verify`
+  and `internal/cmd`). t-8 is the one that reads genuinely oversized — it retypes
+  two struct fields, moves five os calls to the seam, changes a doctor arm, and
+  carries an accepted behavioural regression.
+  Suggestion: no action required for t-3/t-5/t-10. Consider splitting t-8 into the
+  retype-plus-discovery half and the `applyRedProofRepoint` seam half; they are
+  separable and the second is the task's stated centre of gravity.
 
-- [claim] t-1's compile-fence precedent is misquoted. "ceiling_test.go:287 declares
-  `module mutantproof`" — the file is `internal/mutation/ceiling_test.go` (path
-  unqualified in the plan) and the `module mutantproof` write is at :290, with the
-  `package mutantproof` source at :293. The substance of the warning is right; the
-  citation is not.
-  Suggestion: correct to `internal/mutation/ceiling_test.go:290`.
+- [granularity] t-1 builds two unrelated packages. `internal/compilefence` has no
+  dependency on `internal/pathfence` and is consumed by five contract lines across
+  t-3, t-5, t-8, t-10 and t-11. Bundling them means the compile fence cannot land
+  or be reviewed on its own, and t-1 already carries 17 contract lines.
+  Suggestion: optional — a wave-1 `internal/compilefence` task with t-1 depending
+  on nothing changes no wave numbers (both stay wave 1) and makes the two
+  self-tests of `AssertDoesNotCompile` a gate of their own.
 
-- [claim] Three more line-number drifts, all small but all wrong: t-5 cites
-  "NormalizePath (scope.go:349)" — the function is at scope.go:327, and :349 is its
-  `".."` arm; t-5 cites "scope.go:167" for the `ignored out-of-repo path` append —
-  it is at :169; t-6 cites "saveIfValid (task.go:438)" — `saveIfValid` is at :439
-  and its `ValidatePlan` call at :440.
-  Suggestion: fix them; the executor navigates by these.
+- [antipatterns] t-1's I/O seam is `ReadFile`/`WriteFile`/`Stat` only, with no
+  `Create`/`OpenFile`, and t-3 needs one. `Save` currently streams:
+  `f, err := os.Create(path)` then `toml.NewEncoder(f).Encode(l)`
+  (`internal/security/findings.go:104-110`, `internal/quality/findings.go:108-114`),
+  and `Load` uses `toml.DecodeFile(path, &l)` — a third-party function that also
+  takes a string. Both must be rewritten to buffer (encode to a `bytes.Buffer`
+  then `pathfence.WriteFile`; `pathfence.ReadFile` then `toml.Decode`), which
+  changes the written file's permissions from `os.Create`'s `0666 &^ umask` to
+  whatever `fs.FileMode` the call passes. None of this is stated.
+  Suggestion: say in t-3 that the encode buffers, and name the mode explicitly
+  (`0o644` matches the repo's other writers) so it is a decision rather than a
+  side effect.
 
-- [granularity] Three split candidates. t-8 touches 10 files (six of them tests
-  adapting one retyped symbol) and carries the phase's densest design decision.
-  t-3 touches 8 files across two packages. t-5 touches 6 files across two packages
-  and does two separable jobs (the gate and the conversion) that the description
-  itself insists are separate.
-  Suggestion: at minimum consider splitting t-8's `redProofDocSHA` retype + its
-  five test call sites from the `applyRedProofRepoint` seam adoption.
+- [test-contract] t-4's four contract lines call `checkRedProofDoc("/abs/x.md")`,
+  `checkRedProofDoc("../x.md")` and so on with one argument; the function is
+  `checkRedProofDoc(repoDir, doc string)` (`internal/cmd/redproof_set.go:149`) and
+  the task does not change its arity.
+  Suggestion: shorthand is fine in prose, but the root matters here — the
+  refusals must fire against a real `repoDir` for the is-a-directory and
+  does-not-exist arms to be distinguishable. Restate with both arguments.
 
 ## NOTE
 
-- [wave-order] The wave arithmetic is correct against this repo's rule. Every
-  `depends_on` lands strictly greater than its deepest dependency under
-  `deriveWave` (internal/phase/plan_edit.go:54-70), and t-10's deepest dep is wave
-  3 (t-8, t-11) so wave 4 is right. I checked all 11 file lists pairwise: no two
-  tasks in the same wave share a file. t-2's note on why it carries no `depends_on`
-  despite sharing a directory with t-1 is correct — declaring one would push it to
-  wave 2 and cascade t-9 and t-10.
+- [strengths] The path-shaped field enumeration is exactly right. An independent
+  `go/ast` walk over `internal/project`, `internal/phase`, `internal/changes` and
+  `internal/verify`, using the plan's own tag set and its string/[]string type
+  test, returns exactly the 16 fields t-2 names — no more, no fewer — and
+  `project.Remote.Public` (a bool at `project.go:231`) is correctly dropped by the
+  type test without a carve-out. t-9's "at least 10" vacuity guard holds with
+  margin, and the three declared false positives (`verify.Scope.Source`,
+  `verify.LanguageRun.Files`, `verify.CriterionResult.Tests`) are precisely the
+  three the walker reaches.
 
-- [antipattern] t-2's insistence on `package pathfence_test` is right and catches a
-  failure that would otherwise appear only in wave 2: `fields_test.go` imports
-  internal/changes, internal/verify, internal/phase and internal/project, and t-5
-  and t-6 make two of those import pathfence. An internal test file would compile
-  green in wave 1 and cycle in wave 2.
+- [strengths] The compile-fence mechanics reproduce exactly as documented. A temp
+  module `github.com/Rivil/dross/tmpfence` with `require`+`replace` and `-mod=mod`
+  builds clean against `internal/argfence` (exit 0); the identical tree with
+  `module mutantproof` fails with `use of internal package
+  github.com/Rivil/dross/internal/argfence not allowed`. And
+  `pf.Contained{rel: "x"}` from another package fails with `cannot refer to
+  unexported field rel in struct literal of type pf.Contained` — the exact
+  substring t-1's contract pins — while `pf.Contained{}` compiles, which is why
+  the seam's zero-value refusal has to be its own contract line. Both are stated
+  correctly and both matter.
 
-- [claim] t-11's per-site call map is accurate. All eight `containedPath` sites are
-  where the plan says (security.go:45,152,160,204; quality.go:39,122,130,150), the
-  two `os.WriteFile` report writers are at security.go:229 and quality.go:166, and
-  the doc comment making the never-true finding-derived claim is at
-  security.go:184-187. The correction of the earlier "they all write" error landed.
+- [strengths] t-5's split of the gate from the conversion is the right shape, and
+  the "THE UNION SURVIVES" contract line is a real falsifier: a `containScope`
+  fed `ValidateRecorded`'s recorded set passes every other line in the task and
+  fails only that one. The rationale is grounded in the live comment at
+  `verify.go:84-89`.
 
-- [claim] t-9's tag-option finding is real and load-bearing: every field it must
-  reach in internal/project carries `,omitempty` (project.go:274-280, :284), so an
-  exact whole-tag match finds none of them. The field enumeration is also complete
-  — 16 tagged path-shaped fields exist across the four packages, 15 are
-  string/[]string, and `project.Remote.Public` (bool, project.go:231) is the only
-  one the type test drops, exactly as claimed. The ">= 10" vacuity guard is
-  satisfiable with margin, and t-2's by-name list accounts for all 15.
+- [coverage] Every criterion appears in at least one task's `covers`, and no
+  criterion promises something no task builds. c-4's residual clause and c-6's
+  declaration clause both now map onto concrete work (t-10 halves one and two,
+  t-2 plus t-9).
 
-- [claim] t-10's "legal non-path `..`" shapes check out: topology.go:80,
-  doctor.go:980, milestone.go:1035 and basebranch.go:69 are all `a+".."+b` string
-  concatenation, and refguard.go:56 is `strings.Contains` with no path call
-  anywhere in the function. The marker set as specified does not reach any of them.
+- [wave-order] Wave order is legal throughout. Every dependent's wave is strictly
+  greater than its deepest dependency's, satisfying `deriveWave`
+  (`internal/phase/plan_edit.go:54-70`) and the move guard (`:287`). No two
+  same-wave tasks share a file; t-1 and t-2 share the `internal/pathfence`
+  directory but not a file, and the plan already documents why forcing a
+  `depends_on` there would cost two wave levels for nothing.
 
-- [claim] The live `os.WriteFile(p, []byte(b.String()), 0o644)` instances t-10
-  bans exist today at security.go:229 and quality.go:166 and are removed by t-11
-  (wave 3) before t-10 (wave 4) scans — the ordering works. The test-file exclusion
-  is also justified: internal/cmd/mutation_remote_wiring_test.go:47 is the shape it
-  describes.
+- [antipatterns] The literal-scan exemption set is complete. A repo-wide grep for
+  `".."` in non-test Go under `internal/` returns exactly ten sites: the five this
+  phase removes (`redproof_set.go:158`, `security.go:194`, `scope.go:349`,
+  `match.go:141`, `remote.go:329`) and the five t-10 exempts
+  (`topology.go:80`, `basebranch.go:69`, `doctor.go:980`, `milestone.go:1035`,
+  `refguard.go:56`). Nothing else would trip the scan.
+
+- [test-contract] `path.Clean("")` returns `"."`, so t-1's `InTree("") == ("", true)`
+  needs an explicit empty check before cleaning. Satisfiable, not free.
+
+- [test-contract] t-9's line "the option-carrying form that EVERY real
+  internal/project field uses" overstates: `project.TestLane.Match`
+  (`project.go:101`) is tagged `toml:"match"` with no option. The contract line is
+  still worth keeping — every `Paths` field and `Env.Files` do carry `,omitempty`
+  — only the "EVERY" is wrong.
+
+- [test-contract] The slash-form contract line discriminates exactly as claimed:
+  `path.Clean(strings.ReplaceAll(`a\b/../c`, `\`, "/"))` is `"a/c"` while
+  `path.Clean(filepath.ToSlash(`a\b/../c`))` is `"c"` on darwin. Confirmed by
+  running it.
+
+- [antipatterns] Line-number drift, cosmetic only: `filepath.ToSlash(pin.Doc)` is
+  at `redproof_repoint.go:121`, not `:117`; the two read-error messages are at
+  `:145`/`:149`, not `:146`/`:150`; the discovery-error message arm is at
+  `doctor.go:569`, not `:568`; and `module mutantproof` is at
+  `internal/mutation/ceiling_test.go:290`, not `ceiling_test.go:287` — the plan
+  never names that file's package. Every other cited line landed exactly:
+  `security.go:188`/`:194`, `redproof_set.go:149`, `scope.go:328`/`:349`,
+  `verifyscope.go:24` with all 8 test call sites, `verify.go:82`/`:90`/`:587`/
+  `:588`/`:1189`, `plan_edit.go:82`, `task.go:439`, `match.go:134`/`:137`/`:141`,
+  `remote.go:329`, `redproof.go:103-107`/`:134`, `doctor.go:48`/`:566-570`/`:587`/
+  `:604`/`:608`, `redproof_repoint.go:41-53`/`:47-49`/`:142`/`:143`/`:147`/`:155`/
+  `:156`/`:164`, `project.go:274-280`/`:284`, and
+  `mutation_remote_wiring_test.go:47`.
+
+- [forbidden-actions] No violations. `.dross/rules.toml` carries only r-01
+  (run `make install` after editing prompts or Go code, which applies at execute
+  time), and there is no `~/.claude/dross/rules.toml`. Separately: `verify.go`'s
+  comment at `:1183` cites "rule r-02", which `rules.toml` does not define — a
+  pre-existing repo inconsistency, not this plan's.
 
 ## Summary
-Structurally sound and unusually well-verified against the tree, but three
-blocking defects remain: the compile-fence helper has no importable home for four
-of the five tasks that use it, t-8's redProofDocSHA and doctor contract lines
-cannot pass once the field is retyped, and t-3 relocates the real writes into two
-packages t-10's residual scan never visits.
+
+The plan is well-grounded — its field enumeration is exactly right and its
+compile-fence mechanics reproduce verbatim — but t-3 is not executable as
+written: its caller set misses three non-test call sites, and `WriteScaffoldSpec`
+cannot reach the seam because it delegates to `phase.Spec.Save`, which takes a
+string and which no task owns.
