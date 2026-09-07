@@ -33,6 +33,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // Selection is what Select found: which lanes to run, and every path it could
@@ -131,17 +133,25 @@ func normalize(p string) (norm string, inTree bool) {
 		// than being reported as an escape, which it is not.
 		return "", true
 	}
-	// filepath.IsAbs as well as the leading slash: on Windows a drive-letter
-	// path is absolute without one, and an absolute path is out of the tree
-	// wherever it came from.
-	if filepath.IsAbs(p) || strings.HasPrefix(s, "/") {
+	// filepath.IsAbs on the RAW path, kept as its own arm ahead of the shared
+	// check: on Windows a drive-letter path is absolute without a leading
+	// slash, and pathfence folds backslashes to slashes unconditionally, which
+	// makes path.IsAbs("C:/x") false — so InTree alone would call `C:\x`
+	// in-tree.
+	//
+	// This arm is deliberately NOT covered by a test. filepath.IsAbs(`C:\x`) is
+	// false on darwin too, and CI is ubuntu-only, so a test would bucket the
+	// path in-tree with or without the arm and would pass identically against a
+	// build that dropped it. A test that cannot fail is worse than none: the
+	// risk is recorded here instead of falsely covered.
+	if filepath.IsAbs(p) {
 		return path.Clean(s), false
 	}
-	c := path.Clean(s)
-	if c == ".." || strings.HasPrefix(c, "../") {
-		return c, false
-	}
-	return c, true
+	// The leading-slash and ..-escape tests are pathfence's — one containment
+	// rule, not two. InTree returns the CLEANED path on its false branch too,
+	// which this caller needs: the escaped bucket reports what the path
+	// resolved to ("internal/../../x" buckets as "../x"), not the raw spelling.
+	return pathfence.InTree(s)
 }
 
 // matchGlob reports whether one lane pattern matches one normalized path.

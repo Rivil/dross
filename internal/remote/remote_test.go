@@ -1032,3 +1032,51 @@ func TestExecScriptRefusesBeforeItReachesTheTransport(t *testing.T) {
 		})
 	}
 }
+
+// TestRunDirRefusalsStayUnsafeTargetErrors is the delegation's contract. The
+// segment test is pathfence's now, but callers distinguish a refusal from a
+// transport failure on ErrUnsafeTarget — a bare pathfence error here would
+// break every one of them, and would do it silently, since the message would
+// still read like a refusal.
+func TestRunDirRefusalsStayUnsafeTargetErrors(t *testing.T) {
+	for _, bad := range []string{"", ".", "..", "../escape", "a/b", "/abs", `a\b`} {
+		_, err := RunDir(bad)
+		if err == nil {
+			t.Errorf("RunDir accepted %q", bad)
+			continue
+		}
+		if !errors.Is(err, ErrUnsafeTarget) {
+			t.Errorf("RunDir(%q) error is not ErrUnsafeTarget: %v", bad, err)
+		}
+	}
+}
+
+// TestRunDirKeepsItsOwnEmptyMessage: the empty-id arm stays at the call site,
+// ahead of the shared check. pathfence.Segment refuses an empty id too, so the
+// arm is easy to delete as redundant — and deleting it would replace a specific
+// message with a generic one for the case a caller hits most often.
+func TestRunDirKeepsItsOwnEmptyMessage(t *testing.T) {
+	_, err := RunDir("")
+	if err == nil {
+		t.Fatal("RunDir accepted an empty run id")
+	}
+	if !strings.Contains(err.Error(), "empty run id") {
+		t.Errorf("the empty-id message was lost to a generic segment refusal: %v", err)
+	}
+	if !errors.Is(err, ErrUnsafeTarget) {
+		t.Errorf("empty-id refusal is not ErrUnsafeTarget: %v", err)
+	}
+}
+
+// TestRunDirAcceptsAWellFormedID is the positive control: the delegation must
+// not have made every id fail, which would make the refusal assertions above
+// pass for the wrong reason.
+func TestRunDirAcceptsAWellFormedID(t *testing.T) {
+	got, err := RunDir("r-20260830-2201")
+	if err != nil {
+		t.Fatalf("RunDir rejected a well-formed id: %v", err)
+	}
+	if got != ".dross-runs/r-20260830-2201" {
+		t.Errorf("RunDir = %q, want %q", got, ".dross-runs/r-20260830-2201")
+	}
+}
