@@ -436,8 +436,17 @@ func taskMove() *cobra.Command {
 // saveIfValid runs the pre-write integrity guard (phase.ValidatePlan) and writes
 // plan.toml only when the plan is valid, so a rejected mutation leaves the file
 // byte-unchanged. spec may be nil (skips the covers->criterion check).
+//
+// It resolves the repo root itself rather than taking it as a parameter: all
+// four mutating verbs reach here through loadPhasePlanAndSpec, none of them
+// carries the root, and the containment gate must not be disableable by a
+// caller that simply forgot to pass one.
 func saveIfValid(plan *phase.Plan, spec *phase.Spec, path string) error {
-	if err := phase.ValidatePlan(plan, spec); err != nil {
+	root, err := FindRoot()
+	if err != nil {
+		return err
+	}
+	if err := phase.ValidatePlan(plan, spec, filepath.Dir(root)); err != nil {
 		return err
 	}
 	return plan.Save(path)
