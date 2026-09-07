@@ -1,0 +1,33 @@
+// Must-NOT-trip fixture: the two legal ".." shapes in this repo, recognised by
+// SHAPE rather than by an exemption list — an exemption list would go stale the
+// moment a fifth rev-range call site is added.
+package scanfixture
+
+import (
+	"fmt"
+	"strings"
+)
+
+// A git rev-list RANGE is string concatenation, not a path comparison. Four
+// live sites have this shape: topology.go, basebranch.go, doctor.go and
+// milestone.go.
+func aheadCount(main, work string) []string {
+	return []string{"rev-list", "--count", main + ".." + work}
+}
+
+func aheadOfOrigin(base string) []string {
+	return []string{"rev-list", "origin/" + base + ".." + base}
+}
+
+// refguard's shape: strings.Contains over a REF name, in a function that makes
+// no path call at all. git forbids ".." in a ref for its own reasons, which is
+// a different rule from containment and must stay.
+func validateGitRef(name string) error {
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("unsafe git ref: %q contains \"..\"", name)
+	}
+	if strings.Contains(name, "@{") {
+		return fmt.Errorf("unsafe git ref: %q contains \"@{\"", name)
+	}
+	return nil
+}

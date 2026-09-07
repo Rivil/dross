@@ -1,0 +1,44 @@
+// Must-trip fixture for the unwrap ban. Every call here reaches an os.* with an
+// accessor call inside an argument, and each is a distinct reason the ban
+// exists.
+package scanfixture
+
+import (
+	"os"
+	"strings"
+
+	"github.com/Rivil/dross/internal/pathfence"
+)
+
+// stringUnwrap: this WORKS at runtime — String() is the joined absolute form —
+// which is exactly why nothing but the scan catches it. The ban is policy: the
+// seam is the audited way in.
+func stringUnwrap(c pathfence.Contained) ([]byte, error) {
+	return os.ReadFile(c.String())
+}
+
+// relUnwrap is worse: Rel() resolves against the process working directory
+// rather than the containment root, so this reads or writes the wrong file. A
+// scan banning only String() would let this through.
+func relUnwrap(c pathfence.Contained) ([]byte, error) {
+	return os.ReadFile(c.Rel())
+}
+
+// statUnwrap and removeUnwrap cover the rest of the os verb set.
+func statUnwrap(c pathfence.Contained) error {
+	_, err := os.Stat(c.String())
+	return err
+}
+
+func removeUnwrap(c pathfence.Contained) error {
+	return os.Remove(c.Rel())
+}
+
+// builderWrite is the TYPE-BLIND case, and it is a must-trip on purpose. b is a
+// strings.Builder, not a Contained, so this is a false positive in the strict
+// sense — and the scan reports it anyway, because ast alone cannot tell the two
+// apart and exempting the shape would silently exempt the real one too. The
+// remedy is to route through the seam, or to assign before the call.
+func builderWrite(p string, b *strings.Builder) error {
+	return os.WriteFile(p, []byte(b.String()), 0o644)
+}

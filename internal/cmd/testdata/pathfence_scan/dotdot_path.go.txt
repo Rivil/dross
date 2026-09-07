@@ -1,0 +1,48 @@
+// Must-trip fixture for the literal scan: a ".." comparison in a PATH context,
+// which is the second containment implementation this phase exists to remove.
+//
+// Both shapes here are the ones that were actually in the tree — neither
+// matches a marker set calibrated only on the post-fix source, so a regression
+// reintroducing either has to go red on a fixture rather than on the live code
+// it would be reintroduced into.
+package scanfixture
+
+import (
+	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+)
+
+// containedPath as it stood in internal/cmd/security.go: filepath.Rel plus an
+// os.PathSeparator-joined prefix test.
+func containedPath(runDir, name string) (string, error) {
+	p := filepath.Join(runDir, name)
+	rel, err := filepath.Rel(runDir, p)
+	if err != nil {
+		return "", err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("path %q escapes the run directory", name)
+	}
+	return p, nil
+}
+
+// RunDir as it stood in internal/remote/remote.go: path.Base equality with a
+// bare ".." arm.
+func runDir(runID string) (string, error) {
+	if runID != path.Base(runID) || runID == "." || runID == ".." {
+		return "", fmt.Errorf("run id %q is not a single path segment", runID)
+	}
+	return path.Join(".dross-runs", runID), nil
+}
+
+// The testlane / verify shape: clean, then test the cleaned string.
+func normalize(p string) (string, bool) {
+	c := path.Clean(p)
+	if c == ".." || strings.HasPrefix(c, "../") {
+		return c, false
+	}
+	return c, true
+}
