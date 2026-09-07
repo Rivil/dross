@@ -17,7 +17,7 @@
 
 [[criteria]]
   id = "c-4"
-  text = "Containment is enforced by the type system, not by a hand-maintained list: every site that opens a tracked-artifact path accepts a value only the shared check can construct, so a consumer that skips the check fails to build. A residual test covers the gap types cannot — a reader of a declared path field that reaches os.* with a raw string fails the suite."
+  text = "Containment is enforced by the type system, not by a hand-maintained list: every site that opens a tracked-artifact path accepts a value only the shared check can construct, so a consumer that skips the check fails to build. A residual test covers the gap types cannot — a reader that unwraps a checked value with `.String()` to reach os.* fails the suite."
 
 [[criteria]]
   id = "c-5"
@@ -50,6 +50,11 @@
   choice = "Lexical containment only — the check compares cleaned path strings and does not call filepath.EvalSymlinks. The limit is documented on the shared helper."
   why = "Lexical checking is deterministic and works on paths that do not exist yet, which the write path needs. EvalSymlinks requires the target to exist, is still TOCTOU-racy, and would not close the hole it appears to. The threat this phase addresses is a mistyped or hand-edited artifact, not an attacker who can already write symlinks into the repo."
   locked = true
+
+[[deferred]]
+  text = "Raw-string reader scan: a brand-new consumer that loads a declared path field and calls os.* on the raw string, never touching the Contained type at all."
+  why = "Not reachable from go/parser + go/ast — deciding that an os.* argument traces back to a declared path field is dataflow over resolved types, needing go/types (golang.org/x/tools/go/packages). The type system covers this wherever the value is carried as a Contained; what is left uncovered is a field that stays a plain string because it must marshal. Split out of c-4 at plan time on 2026-09-07 after the third review found the criterion promised a scan no task built."
+  target = "secret-detection"
 
 [[deferred]]
   text = "Symlink-resolving containment: close the hole where a lexically-contained path is a symlink pointing outside the repo."
