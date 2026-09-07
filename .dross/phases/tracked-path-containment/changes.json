@@ -3,6 +3,15 @@
   "base": "milestone/v1.7",
   "base_commit": "c71c6ae6b8480868052f44ed2df13be6f895f001",
   "tasks": {
+    "quick-1": {
+      "files": [
+        "internal/cmd/survivor.go",
+        "internal/cmd/survivor_test.go"
+      ],
+      "commit": "aa2be1b",
+      "completed_at": "2026-09-07T17:31:55.800431Z",
+      "notes": "quick: route survivors to unscaffolded roadmap phases (survivor route now uses the shared validDeferredTarget gate)"
+    },
     "t-1": {
       "files": [
         "internal/pathfence/pathfence.go",
