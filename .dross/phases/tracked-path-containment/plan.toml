@@ -126,8 +126,8 @@ quality_test.go:160) collapse onto the shared behaviour.
   test_contract = [
     "grep for \"func containedPath\" across internal/ finds nothing — the second implementation is gone, not merely unused",
     "Every case containedPath refused still refuses, and the message now names the run dir and the artifact, so a delegation that drops the c-5 context fails the tightened assertions",
-    "A scan-run ledger name of \"../main.go\" refuses and leaves no file at Join(runDir, \"..\", \"main.go\"), asserted by stat-ing the parent directory before and after the run",
-    "An absolute ledger name \"/tmp/x/spec.toml\" returns ErrAbsolute instead of being silently re-rooted under the run dir (absolute_paths lock)",
+    "All eight call sites pass a Contained built from the run dir, asserted structurally: no site reconstructs its path with filepath.Join on the run dir. The escaping-name cases are NOT asserted here — every site passes a string literal (\"findings.toml\", \"spec.toml\", \"report.md\"), so no code path drives a caller-supplied name and the refusal itself belongs to t-1's contract. containedPath's doc comment at security.go:185-186 claims a finding-derived name; that has never been true, and the replacement comment says what the guard actually does",
+    "The caller-controlled input is the run dir (args[0]), not the name: a run dir that does not exist still produces a refusal from the seam rather than a partial write, so the guard covers the input a user can actually supply",
     "Both the security and quality run-dir paths are asserted, so repointing one command and leaving the other fails",
     "The write goes through pathfence.WriteFile: a site that unwraps Contained with .String() and calls os.WriteFile is reported by t-10's residual scan, so the type cannot be reduced to a decorative wrapper here",
   ]
@@ -213,7 +213,7 @@ internal/cmd.
     "internal/phase/plan_edit.go",
     "internal/phase/plan_edit_test.go",
     "internal/cmd/task.go",
-    "internal/cmd/task_lifecycle_test.go",
+    "internal/cmd/task_test.go",
   ]
   description = """
 ValidatePlan (plan_edit.go:82) gains a repo-root parameter and runs each task's
