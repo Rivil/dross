@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/findings"
+	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/quality"
 )
 
@@ -36,7 +36,7 @@ func qualityFindings() *cobra.Command {
 		Name:      "quality",
 		StatePath: quality.StatePath,
 		ItemsForRun: func(runDir string) ([]findings.Item, string, error) {
-			ledgerPath, err := containedPath(runDir, "findings.toml")
+			ledgerPath, err := pathfence.Contain(runDir, runDirArtifact, "findings.toml")
 			if err != nil {
 				return nil, "", err
 			}
@@ -119,7 +119,7 @@ func qualityScaffold() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			runDir := args[0]
-			ledgerPath, err := containedPath(runDir, "findings.toml")
+			ledgerPath, err := pathfence.Contain(runDir, runDirArtifact, "findings.toml")
 			if err != nil {
 				return err
 			}
@@ -127,7 +127,7 @@ func qualityScaffold() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			outPath, err := containedPath(runDir, "spec.toml")
+			outPath, err := pathfence.Contain(runDir, runDirArtifact, "spec.toml")
 			if err != nil {
 				return err
 			}
@@ -144,10 +144,10 @@ func qualityScaffold() *cobra.Command {
 }
 
 // writeQualityRunReport writes the human report.md (with the tool-coverage
-// manifest) into the run dir, through containedPath so it can never escape the
+// manifest) into the run dir, through pathfence so it can never escape the
 // sandbox.
 func writeQualityRunReport(runDir string, m quality.Manifest) error {
-	reportPath, err := containedPath(runDir, "report.md")
+	reportPath, err := pathfence.Contain(runDir, runDirArtifact, "report.md")
 	if err != nil {
 		return err
 	}
@@ -163,5 +163,5 @@ func writeQualityRunReport(runDir string, m quality.Manifest) error {
 		fmt.Fprintf(&b, "- %s (%s) — %s\n", t.Name, t.Dimension, status)
 	}
 	b.WriteString("\n## Findings\n\n_(populated by the dross-quality audit, highest maintainability-risk first)_\n")
-	return os.WriteFile(reportPath, []byte(b.String()), 0o644)
+	return pathfence.WriteFile(reportPath, []byte(b.String()), 0o644)
 }

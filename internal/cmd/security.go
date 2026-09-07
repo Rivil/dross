@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/findings"
+	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/security"
 )
 
@@ -42,7 +43,7 @@ func securityFindings() *cobra.Command {
 		Name:      "security",
 		StatePath: security.StatePath,
 		ItemsForRun: func(runDir string) ([]findings.Item, string, error) {
-			ledgerPath, err := containedPath(runDir, "findings.toml")
+			ledgerPath, err := pathfence.Contain(runDir, runDirArtifact, "findings.toml")
 			if err != nil {
 				return nil, "", err
 			}
@@ -149,7 +150,7 @@ func securityScaffold() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			runDir := args[0]
-			ledgerPath, err := containedPath(runDir, "findings.toml")
+			ledgerPath, err := pathfence.Contain(runDir, runDirArtifact, "findings.toml")
 			if err != nil {
 				return err
 			}
@@ -157,7 +158,7 @@ func securityScaffold() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			outPath, err := containedPath(runDir, "spec.toml")
+			outPath, err := pathfence.Contain(runDir, runDirArtifact, "spec.toml")
 			if err != nil {
 				return err
 			}
@@ -181,27 +182,16 @@ func pathArg(args []string) string {
 	return "."
 }
 
-// containedPath joins name onto runDir and guarantees the result stays inside
-// runDir. A finding-derived name like "../main.go" is refused, so a run can never
-// write outside its sandbox — the command is read-only with respect to the rest
-// of the repo.
-func containedPath(runDir, name string) (string, error) {
-	p := filepath.Join(runDir, name)
-	rel, err := filepath.Rel(runDir, p)
-	if err != nil {
-		return "", err
-	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-		return "", fmt.Errorf("path %q escapes the run directory", name)
-	}
-	return p, nil
-}
+// runDirArtifact names the artifact in every pathfence refusal raised here, so a
+// message reads "run directory: %q resolves outside <run dir>" rather than
+// naming a file the user never edited.
+const runDirArtifact = "run directory"
 
 // writeRunReport writes the human report.md (with the tool-coverage manifest and the
-// dockle image-scan decision) into the run dir, through containedPath so it can never
+// dockle image-scan decision) into the run dir, through pathfence so it can never
 // escape the sandbox.
 func writeRunReport(runDir string, m security.Manifest, dec security.DockleDecision) error {
-	reportPath, err := containedPath(runDir, "report.md")
+	reportPath, err := pathfence.Contain(runDir, runDirArtifact, "report.md")
 	if err != nil {
 		return err
 	}
@@ -226,5 +216,5 @@ func writeRunReport(runDir string, m security.Manifest, dec security.DockleDecis
 		}
 	}
 	b.WriteString("\n## Findings\n\n_(populated by the dross-secure audit)_\n")
-	return os.WriteFile(reportPath, []byte(b.String()), 0o644)
+	return pathfence.WriteFile(reportPath, []byte(b.String()), 0o644)
 }
