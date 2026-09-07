@@ -16,6 +16,7 @@ import (
 
 	"github.com/Rivil/dross/internal/argfence"
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/phase"
 )
 
@@ -146,23 +147,32 @@ func checkRedProofReplay(replay string, provided bool) (string, error) {
 // checkRedProofDoc refuses a doc path that does not resolve to a file inside
 // the repo, and returns it slash-normalised for storage. A pin naming a doc
 // that isn't there is a pin no reader can follow.
+//
+// The containment half — absolute, and ..-escaping — is pathfence.Contain's
+// now, so this is no longer a second implementation of the same test. Three
+// refusals remain this function's own and must survive the delegation: the
+// empty flag (which reports the MISSING FLAG, before any containment question
+// is asked), the directory, and the absent file. The last two probe through
+// pathfence.Stat on the Contained value rather than re-joining repoDir with a
+// raw string, so the check never reconstructs a path the fence already built.
+//
+// The return stays repo-relative slash text: what changes.json stores is a
+// portable string, not a Contained.
 func checkRedProofDoc(repoDir, doc string) (string, error) {
 	doc = strings.TrimSpace(doc)
 	if doc == "" {
 		return "", fmt.Errorf("--doc is required")
 	}
-	if filepath.IsAbs(doc) {
-		return "", fmt.Errorf("--doc %q must be repo-relative: an absolute path is one machine's layout, not a path the next reader has", doc)
+	c, err := pathfence.Contain(repoDir, "--doc", doc)
+	if err != nil {
+		return "", err
 	}
-	clean := filepath.Clean(doc)
-	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("--doc %q escapes the repository", doc)
-	}
-	if isDir(filepath.Join(repoDir, clean)) {
-		return "", fmt.Errorf("--doc %q is a directory, not the doc that replays the proof", doc)
-	}
-	if !fileExists(filepath.Join(repoDir, clean)) {
+	info, err := pathfence.Stat(c)
+	if err != nil {
 		return "", fmt.Errorf("--doc %q does not exist under %s", doc, repoDir)
 	}
-	return filepath.ToSlash(clean), nil
+	if info.IsDir() {
+		return "", fmt.Errorf("--doc %q is a directory, not the doc that replays the proof", doc)
+	}
+	return c.Rel(), nil
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/Rivil/dross/internal/argfence"
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // redProofSetFixture is a repo with one phase dir, one commit, and a doc to
@@ -406,5 +407,110 @@ func TestDoctorHintDegradesGracefully(t *testing.T) {
 		if strings.Contains(hint, stale) {
 			t.Errorf("the degraded hint still offers %q despite having no fork point:\n%s", stale, hint)
 		}
+	}
+}
+
+// TestCheckRedProofDocDelegatesContainment pins the swap done in t-4: the
+// absolute and ..-escaping arms are pathfence's now, so they must carry
+// pathfence's sentinels. Asserting on errors.Is rather than on wording is the
+// point — it is what proves the delegation happened rather than the old inline
+// test being reworded.
+func TestCheckRedProofDocDelegatesContainment(t *testing.T) {
+	repoDir := t.TempDir()
+
+	for _, tc := range []struct {
+		name, doc string
+		want      error
+	}{
+		{"absolute", filepath.Join(string(filepath.Separator), "abs", "x.md"), pathfence.ErrAbsolute},
+		{"escapes", filepath.Join("..", "x.md"), pathfence.ErrEscapes},
+		{"deep escape", filepath.Join("..", "..", "etc", "passwd"), pathfence.ErrEscapes},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := checkRedProofDoc(repoDir, tc.doc)
+			if err == nil {
+				t.Fatalf("checkRedProofDoc(%q) returned %q, want a refusal", tc.doc, got)
+			}
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("checkRedProofDoc(%q) error = %v, want %v", tc.doc, err, tc.want)
+			}
+			// c-5: the message must be diagnosable on its own.
+			for _, want := range []string{"--doc", repoDir} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("refusal does not name %q:\n%s", want, err.Error())
+				}
+			}
+		})
+	}
+}
+
+// TestCheckRedProofDocKeepsItsOwnRefusals covers what the delegation must NOT
+// have swallowed. Three refusals stay this function's own, and each keeps a
+// distinct message: a contained-but-absent doc, a contained directory, and the
+// empty flag — which must still report the MISSING FLAG rather than a
+// containment error, since it is answered before containment is asked.
+func TestCheckRedProofDocKeepsItsOwnRefusals(t *testing.T) {
+	repoDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repoDir, "docs", "proof"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Empty: the missing-flag message, and NOT a containment error.
+	_, err := checkRedProofDoc(repoDir, "   ")
+	if err == nil {
+		t.Fatal("checkRedProofDoc accepted an empty --doc")
+	}
+	if !strings.Contains(err.Error(), "--doc is required") {
+		t.Errorf("empty --doc must report the missing flag, got: %v", err)
+	}
+	if errors.Is(err, pathfence.ErrEscapes) || errors.Is(err, pathfence.ErrAbsolute) {
+		t.Errorf("empty --doc reported a containment error; the flag check must run first: %v", err)
+	}
+
+	// Contained but absent.
+	_, err = checkRedProofDoc(repoDir, "docs/proof/GONE.md")
+	if err == nil {
+		t.Fatal("checkRedProofDoc accepted a doc that does not exist")
+	}
+	if !strings.Contains(err.Error(), "does not exist under") {
+		t.Errorf("absent doc lost its own message: %v", err)
+	}
+
+	// Contained, exists, but is a directory — a distinct message from the above.
+	_, err = checkRedProofDoc(repoDir, "docs/proof")
+	if err == nil {
+		t.Fatal("checkRedProofDoc accepted a directory")
+	}
+	if !strings.Contains(err.Error(), "is a directory") {
+		t.Errorf("directory refusal lost its own message: %v", err)
+	}
+}
+
+// TestCheckRedProofDocReturnsRepoRelativeSlashForm pins the return shape. What
+// changes.json stores is portable text, so a delegation that started handing
+// back pathfence's joined absolute form would write a pin keyed to one
+// machine's layout — the exact failure the absolute-path refusal exists to
+// prevent, arriving through the back door.
+func TestCheckRedProofDocReturnsRepoRelativeSlashForm(t *testing.T) {
+	repoDir := t.TempDir()
+	mustWrite(t, filepath.Join(repoDir, "fixtures", "proof", "RUN.md"), "# proof\n")
+
+	got, err := checkRedProofDoc(repoDir, filepath.Join("fixtures", "proof", "RUN.md"))
+	if err != nil {
+		t.Fatalf("checkRedProofDoc refused a valid nested doc: %v", err)
+	}
+	if got != "fixtures/proof/RUN.md" {
+		t.Fatalf("checkRedProofDoc = %q, want the repo-relative slash form %q", got, "fixtures/proof/RUN.md")
+	}
+	if filepath.IsAbs(got) || strings.HasPrefix(got, repoDir) {
+		t.Fatalf("checkRedProofDoc returned a joined absolute path (%q) — the stored field is repo-relative", got)
+	}
+	// A "./"-prefixed spelling of the same doc normalises to the same stored text.
+	same, err := checkRedProofDoc(repoDir, "./fixtures/proof/RUN.md")
+	if err != nil {
+		t.Fatalf("checkRedProofDoc refused a ./-prefixed doc: %v", err)
+	}
+	if same != got {
+		t.Errorf("checkRedProofDoc(%q) = %q, want it to clean to %q", "./fixtures/proof/RUN.md", same, got)
 	}
 }
