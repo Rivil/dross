@@ -909,6 +909,11 @@
       "issue": "DRO-357",
       "plan_status": "done",
       "board_state": "task-in-review"
+    },
+    "tracked-path-containment/t-3": {
+      "issue": "DRO-358",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     }
   },
   "dismissed": [
