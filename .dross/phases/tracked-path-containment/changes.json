@@ -2,5 +2,40 @@
   "phase": "tracked-path-containment",
   "base": "milestone/v1.7",
   "base_commit": "c71c6ae6b8480868052f44ed2df13be6f895f001",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/pathfence/pathfence.go",
+        "internal/pathfence/pathfence_test.go",
+        "internal/compilefence/compilefence.go",
+        "internal/compilefence/compilefence_test.go"
+      ],
+      "commit": "fcc36fe",
+      "completed_at": "2026-09-07T10:43:31.472414Z",
+      "landmarks": [
+        {
+          "feature": "tracked-path containment",
+          "symbol": "Contain",
+          "loc": "internal/pathfence/pathfence.go:98",
+          "what": "one lexical containment check returning a Contained only it can construct, with an I/O seam that takes the type instead of a string"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go"
+      ],
+      "commit": "61f4b44",
+      "completed_at": "2026-09-07T10:47:12.014111Z",
+      "landmarks": [
+        {
+          "feature": "tracked-path containment",
+          "symbol": "Fields",
+          "loc": "internal/pathfence/fields.go:72",
+          "what": "every path-shaped schema field declared consumed-with-a-carrier or not-consumed-with-a-reason, so a new consumer cannot be added silently"
+        }
+      ]
+    }
+  }
 }

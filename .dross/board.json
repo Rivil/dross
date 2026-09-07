@@ -899,6 +899,16 @@
       "issue": "DRO-200",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "tracked-path-containment/t-1": {
+      "issue": "DRO-356",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tracked-path-containment/t-2": {
+      "issue": "DRO-357",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     }
   },
   "dismissed": [
