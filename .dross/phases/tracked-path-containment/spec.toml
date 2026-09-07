@@ -25,7 +25,7 @@
 
 [[criteria]]
   id = "c-6"
-  text = "Every path-shaped field in the .dross schemas is accounted for: each is either consumed through the shared check, or carries an explicit declaration that nothing opens it, so adding a consumer for `env.files` or a testlane path without routing it through the check fails the enumerating test."
+  text = "Every path-shaped field in the .dross schemas is accounted for: each is either consumed through the shared check, or carries an explicit declaration that nothing opens it, so adding a path-shaped field without declaring it — or declaring a field consumed when its carrier is not the checked type — fails the enumerating test."
 
 [[decisions]]
   key = "artifact_scope"
