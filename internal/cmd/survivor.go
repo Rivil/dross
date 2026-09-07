@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -163,8 +162,15 @@ func survivorRoute() *cobra.Command {
 			}
 			// Validate the destination BEFORE touching the spec, so routing to
 			// a typo'd slug leaves nothing half-written behind.
-			if _, err := os.Stat(phase.Dir(root, target)); err != nil {
-				return fmt.Errorf("no such phase %q to route to: %w", target, err)
+			//
+			// Through the SHARED gate, per the locked target_validation
+			// decision: a slug parked in a milestone's phases array is a valid
+			// destination even though nobody has scaffolded it yet. A phase
+			// directory exists only once someone STARTS that phase, so a
+			// stat-only check could accept only a phase already underway or
+			// finished — the opposite of where debt belongs.
+			if err := validDeferredTarget(root, target); err != nil {
+				return err
 			}
 			specPath := filepath.Join(phase.Dir(root, s.CurrentPhase), "spec.toml")
 			spec, err := phase.LoadSpec(specPath)
