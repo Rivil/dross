@@ -1326,7 +1326,7 @@
   op = "CONDITIONALS_NEGATION"
   text = "case f.Consumed == nil && f.NotConsumed == nil:"
   line = 97
-  reason = "gremlins reports these switch{} case-conditions NOT COVERED although the suite provably executes every arm. Proven by go test -coverprofile ./internal/pathfence on 2026-09-07: the blocks for all four arms of Validate's disposition switch read count=1 (97.50,98.154 / 99.50,100.76 / 101.26,102.51 / 105.29,106.50), but each block begins at the column AFTER the case colon, so the condition's own columns belong to no block at all. go-cover attributes nothing to a case condition, and gremlins only builds mutants on lines the profile shows as covered. Adding tests cannot kill these — the tests already run them. Dispositions are asserted by name in the fields_test.go Validate suite."
+  category = "gremlins-attribution-ceiling"
   accepted_in = "tracked-path-containment"
 
 [[accepted]]
@@ -1335,7 +1335,7 @@
   op = "CONDITIONALS_NEGATION"
   text = "case f.Consumed != nil && f.NotConsumed != nil:"
   line = 99
-  reason = "gremlins reports these switch{} case-conditions NOT COVERED although the suite provably executes every arm. Proven by go test -coverprofile ./internal/pathfence on 2026-09-07: the blocks for all four arms of Validate's disposition switch read count=1 (97.50,98.154 / 99.50,100.76 / 101.26,102.51 / 105.29,106.50), but each block begins at the column AFTER the case colon, so the condition's own columns belong to no block at all. go-cover attributes nothing to a case condition, and gremlins only builds mutants on lines the profile shows as covered. Adding tests cannot kill these — the tests already run them. Dispositions are asserted by name in the fields_test.go Validate suite."
+  category = "gremlins-attribution-ceiling"
   accepted_in = "tracked-path-containment"
 
 [[accepted]]
@@ -1344,7 +1344,7 @@
   op = "CONDITIONALS_NEGATION"
   text = "case f.Consumed != nil:"
   line = 101
-  reason = "gremlins reports these switch{} case-conditions NOT COVERED although the suite provably executes every arm. Proven by go test -coverprofile ./internal/pathfence on 2026-09-07: the blocks for all four arms of Validate's disposition switch read count=1 (97.50,98.154 / 99.50,100.76 / 101.26,102.51 / 105.29,106.50), but each block begins at the column AFTER the case colon, so the condition's own columns belong to no block at all. go-cover attributes nothing to a case condition, and gremlins only builds mutants on lines the profile shows as covered. Adding tests cannot kill these — the tests already run them. Dispositions are asserted by name in the fields_test.go Validate suite."
+  category = "gremlins-attribution-ceiling"
   accepted_in = "tracked-path-containment"
 
 [[accepted]]
@@ -1353,7 +1353,7 @@
   op = "CONDITIONALS_NEGATION"
   text = "case f.NotConsumed != nil:"
   line = 105
-  reason = "gremlins reports these switch{} case-conditions NOT COVERED although the suite provably executes every arm. Proven by go test -coverprofile ./internal/pathfence on 2026-09-07: the blocks for all four arms of Validate's disposition switch read count=1 (97.50,98.154 / 99.50,100.76 / 101.26,102.51 / 105.29,106.50), but each block begins at the column AFTER the case colon, so the condition's own columns belong to no block at all. go-cover attributes nothing to a case condition, and gremlins only builds mutants on lines the profile shows as covered. Adding tests cannot kill these — the tests already run them. Dispositions are asserted by name in the fields_test.go Validate suite."
+  category = "gremlins-attribution-ceiling"
   accepted_in = "tracked-path-containment"
 
 [[accepted]]
@@ -1362,7 +1362,7 @@
   op = "ARITHMETIC_BASE"
   text = "Why: \"ValidatePlan gates these at WRITE time and opens nothing; a validator \" +"
   line = 141
-  reason = "ARITHMETIC_BASE on a string-concatenation '+' inside the package-level var fields = []Field{...} composite literal. A package-level declaration initializer is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all — not a block with count 0, no block. Proven by go test -coverprofile ./internal/pathfence on 2026-09-07: the profile jumps straight from fields.go:119.2,119.13 to 216.42,225.2, leaving the entire literal (lines ~135-214) unblocked. Gremlins only builds and runs mutants on lines the profile shows as covered, so these mutants are never compiled, never run, and can never be killed by any test a caller could write. The registry's content is asserted structurally by Validate and by the two-way walker in internal/cmd/pathfence_fields_test.go."
+  category = "const-initializer-arithmetic"
   accepted_in = "tracked-path-containment"
 
 [[accepted]]
@@ -1371,7 +1371,7 @@
   op = "ARITHMETIC_BASE"
   text = "\"constructs no Contained, so it proves nothing about a reader. Every \" +"
   line = 142
-  reason = "ARITHMETIC_BASE on a string-concatenation '+' inside the package-level var fields = []Field{...} composite literal. A package-level declaration initializer is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all — not a block with count 0, no block. Proven by go test -coverprofile ./internal/pathfence on 2026-09-07: the profile jumps straight from fields.go:119.2,119.13 to 216.42,225.2, leaving the entire literal (lines ~135-214) unblocked. Gremlins only builds and runs mutants on lines the profile shows as covered, so these mutants are never compiled, never run, and can never be killed by any test a caller could write. The registry's content is asserted structurally by Validate and by the two-way walker in internal/cmd/pathfence_fields_test.go."
+  category = "const-initializer-arithmetic"
   accepted_in = "tracked-path-containment"
 
 [[accepted]]
@@ -1380,7 +1380,7 @@
   op = "ARITHMETIC_BASE"
   text = "Why: \"an env-file load order dross records but never opens itself; the shell \" +"
   line = 153
-  reason = "ARITHMETIC_BASE on a string-concatenation '+' inside the package-level var fields = []Field{...} composite literal. A package-level declaration initializer is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all — not a block with count 0, no block. Proven by go test -coverprofile ./internal/pathfence on 2026-09-07: the profile jumps straight from fields.go:119.2,119.13 to 216.42,225.2, leaving the entire literal (lines ~135-214) unblocked. Gremlins only builds and runs mutants on lines the profile shows as covered, so these mutants are never compiled, never run, and can never be killed by any test a caller could write. The registry's content is asserted structurally by Validate and by the two-way walker in internal/cmd/pathfence_fields_test.go."
+  category = "const-initializer-arithmetic"
   accepted_in = "tracked-path-containment"
 
 [[accepted]]
@@ -1389,7 +1389,7 @@
   op = "ARITHMETIC_BASE"
   text = "Why: \"glob PATTERNS matched against candidate paths, not paths themselves. \" +"
   line = 163
-  reason = "ARITHMETIC_BASE on a string-concatenation '+' inside the package-level var fields = []Field{...} composite literal. A package-level declaration initializer is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all — not a block with count 0, no block. Proven by go test -coverprofile ./internal/pathfence on 2026-09-07: the profile jumps straight from fields.go:119.2,119.13 to 216.42,225.2, leaving the entire literal (lines ~135-214) unblocked. Gremlins only builds and runs mutants on lines the profile shows as covered, so these mutants are never compiled, never run, and can never be killed by any test a caller could write. The registry's content is asserted structurally by Validate and by the two-way walker in internal/cmd/pathfence_fields_test.go."
+  category = "const-initializer-arithmetic"
   accepted_in = "tracked-path-containment"
 
 [[accepted]]
@@ -1398,7 +1398,7 @@
   op = "ARITHMETIC_BASE"
   text = "Why: \"an ENUM LABEL (git-only / changes-only / union / none) recording which \" +"
   line = 191
-  reason = "ARITHMETIC_BASE on a string-concatenation '+' inside the package-level var fields = []Field{...} composite literal. A package-level declaration initializer is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all — not a block with count 0, no block. Proven by go test -coverprofile ./internal/pathfence on 2026-09-07: the profile jumps straight from fields.go:119.2,119.13 to 216.42,225.2, leaving the entire literal (lines ~135-214) unblocked. Gremlins only builds and runs mutants on lines the profile shows as covered, so these mutants are never compiled, never run, and can never be killed by any test a caller could write. The registry's content is asserted structurally by Validate and by the two-way walker in internal/cmd/pathfence_fields_test.go."
+  category = "const-initializer-arithmetic"
   accepted_in = "tracked-path-containment"
 
 [[accepted]]
@@ -1407,7 +1407,7 @@
   op = "ARITHMETIC_BASE"
   text = "\"inputs contributed to the scope. The `source` tag is path-shaped; the \" +"
   line = 192
-  reason = "ARITHMETIC_BASE on a string-concatenation '+' inside the package-level var fields = []Field{...} composite literal. A package-level declaration initializer is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all — not a block with count 0, no block. Proven by go test -coverprofile ./internal/pathfence on 2026-09-07: the profile jumps straight from fields.go:119.2,119.13 to 216.42,225.2, leaving the entire literal (lines ~135-214) unblocked. Gremlins only builds and runs mutants on lines the profile shows as covered, so these mutants are never compiled, never run, and can never be killed by any test a caller could write. The registry's content is asserted structurally by Validate and by the two-way walker in internal/cmd/pathfence_fields_test.go."
+  category = "const-initializer-arithmetic"
   accepted_in = "tracked-path-containment"
 
 [[accepted]]
@@ -1416,7 +1416,7 @@
   op = "ARITHMETIC_BASE"
   text = "Why: \"paths a mutation TOOL reported in its own output, recorded verbatim for \" +"
   line = 200
-  reason = "ARITHMETIC_BASE on a string-concatenation '+' inside the package-level var fields = []Field{...} composite literal. A package-level declaration initializer is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all — not a block with count 0, no block. Proven by go test -coverprofile ./internal/pathfence on 2026-09-07: the profile jumps straight from fields.go:119.2,119.13 to 216.42,225.2, leaving the entire literal (lines ~135-214) unblocked. Gremlins only builds and runs mutants on lines the profile shows as covered, so these mutants are never compiled, never run, and can never be killed by any test a caller could write. The registry's content is asserted structurally by Validate and by the two-way walker in internal/cmd/pathfence_fields_test.go."
+  category = "const-initializer-arithmetic"
   accepted_in = "tracked-path-containment"
 
 [[accepted]]
@@ -1425,5 +1425,5 @@
   op = "ARITHMETIC_BASE"
   text = "Why: \"TEST NAMES (e.g. TestContainRefusesEscape), not paths. The `tests` tag \" +"
   line = 208
-  reason = "ARITHMETIC_BASE on a string-concatenation '+' inside the package-level var fields = []Field{...} composite literal. A package-level declaration initializer is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all — not a block with count 0, no block. Proven by go test -coverprofile ./internal/pathfence on 2026-09-07: the profile jumps straight from fields.go:119.2,119.13 to 216.42,225.2, leaving the entire literal (lines ~135-214) unblocked. Gremlins only builds and runs mutants on lines the profile shows as covered, so these mutants are never compiled, never run, and can never be killed by any test a caller could write. The registry's content is asserted structurally by Validate and by the two-way walker in internal/cmd/pathfence_fields_test.go."
+  category = "const-initializer-arithmetic"
   accepted_in = "tracked-path-containment"
