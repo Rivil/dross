@@ -17,12 +17,12 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // reachability is the three-way verdict. Three, not a bool, because "I cannot
@@ -103,7 +103,16 @@ func classifyReachability(repoDir, sha string) (reachability, string, error) {
 type redProofPin struct {
 	Phase string
 	SHA   string
-	Doc   string
+	// Doc is CONTAINED, not a string. It is loaded from changes.json — a
+	// committed, hand-editable artifact — and its readers copy it into a
+	// cmd-local plan struct before anything opens it, which is exactly the
+	// shape a dataflow scan cannot follow and the type system can. Only
+	// discoverRedProofPins can populate it, and only by calling Contain.
+	//
+	// Safe to type because neither this struct nor redProofRepointPlan is
+	// serialized: both carry no struct tags and nothing marshals them, unlike
+	// changes.RedProof.Doc, which must stay a string to round-trip.
+	Doc pathfence.Contained
 }
 
 // discoverRedProofPins finds every red proof recorded under root by CONVENTION:
@@ -116,7 +125,24 @@ type redProofPin struct {
 // dirs carry none, and that is the normal case. A changes.json that will not
 // parse IS an error naming the file — a record dross cannot read is a problem
 // to surface, not one to skip past quietly.
-func discoverRedProofPins(root string) ([]redProofPin, error) {
+//
+// A doc that escapes the repo is the same kind of problem and is treated the
+// same way: discovery returns an ERROR on the first escape and the whole
+// red-proof check aborts. That is escape_failure_mode applied here — a
+// changes.json carrying an escaping doc is a corrupt artifact, and a corrupt
+// artifact stops the run rather than being reported per-pin beside sound ones.
+// The accepted cost is that one escaping doc suppresses every other pin's
+// verdict in doctor output; the softer per-pin lane was considered and
+// rejected, and the regression is pinned by a test rather than left as prose.
+//
+// repoDir is a PARAMETER rather than filepath.Dir(root), even though the two
+// are equal in production. The callers already keep them apart — redProofChecks
+// and doomedRedProofPlans both take both — and deriving one here would leave
+// doctor resolving reachability against the repoDir it was handed and docs
+// against a different root. That is also what lets the hermetic tests point
+// discovery at a throwaway .dross while still reading this repo's real pinned
+// doc, which is the whole basis of the false-positive gate.
+func discoverRedProofPins(root, repoDir string) ([]redProofPin, error) {
 	matches, err := filepath.Glob(filepath.Join(root, "phases", "*", changes.File))
 	if err != nil {
 		return nil, fmt.Errorf("scan for red-proof pins: %w", err)
@@ -131,7 +157,11 @@ func discoverRedProofPins(root string) ([]redProofPin, error) {
 		if c.RedProof == nil || strings.TrimSpace(c.RedProof.SHA) == "" {
 			continue
 		}
-		pins = append(pins, redProofPin{Phase: phaseID, SHA: c.RedProof.SHA, Doc: c.RedProof.Doc})
+		doc, err := pathfence.Contain(repoDir, "changes.json red_proof.doc", c.RedProof.Doc)
+		if err != nil {
+			return nil, fmt.Errorf("phase %s: %w", phaseID, err)
+		}
+		pins = append(pins, redProofPin{Phase: phaseID, SHA: c.RedProof.SHA, Doc: doc})
 	}
 	// Glob order is filesystem order; sorting keeps doctor's output stable
 	// between machines so a diff of two runs means something.
@@ -142,8 +172,12 @@ func discoverRedProofPins(root string) ([]redProofPin, error) {
 // redProofDocSHA reads the pin the prose doc claims, so the record and the doc
 // can be cross-checked. A doc that has drifted from the record is a doc lying
 // to the human reader who follows it, even while the record stays sound.
-func redProofDocSHA(repoDir, doc string) (string, error) {
-	body, err := os.ReadFile(filepath.Join(repoDir, doc))
+// It takes a Contained rather than a repoDir and a string: the read goes
+// through the pathfence seam, so a caller that never ran the containment check
+// has no value to pass and fails to build. An escaping doc is refused at
+// discovery and never reaches here at all.
+func redProofDocSHA(doc pathfence.Contained) (string, error) {
+	body, err := pathfence.ReadFile(doc)
 	if err != nil {
 		return "", err
 	}

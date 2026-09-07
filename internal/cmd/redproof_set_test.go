@@ -154,7 +154,7 @@ func TestDiscoverRedProofPinsFindsRecordedPin(t *testing.T) {
 	// gitignored file could answer instead (hermetic_dross_read_test.go).
 	root := liveRecordRoot(t, repo, "config-trust-hardening")
 
-	pins, err := discoverRedProofPins(root)
+	pins, err := discoverRedProofPins(root, repo)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -170,10 +170,10 @@ func TestDiscoverRedProofPinsFindsRecordedPin(t *testing.T) {
 	if !strings.HasPrefix(found.SHA, "a6ef729") {
 		t.Errorf("recorded sha = %q, want the a6ef729 replay commit", found.SHA)
 	}
-	if found.Doc != "fixtures/hostile-config-c5/RUN.md" {
-		t.Errorf("recorded doc = %q, want fixtures/hostile-config-c5/RUN.md", found.Doc)
+	if found.Doc.Rel() != "fixtures/hostile-config-c5/RUN.md" {
+		t.Errorf("recorded doc = %q, want fixtures/hostile-config-c5/RUN.md", found.Doc.Rel())
 	}
-	docSHA, err := redProofDocSHA(repoRootForDocs(t), found.Doc)
+	docSHA, err := redProofDocSHA(found.Doc)
 	if err != nil {
 		t.Fatalf("read pinned doc: %v", err)
 	}

@@ -169,7 +169,7 @@ func TestRepointUpdatesDoc(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	docSHA, err := redProofDocSHA(f.repoDir, f.doc)
+	docSHA, err := redProofDocSHA(containedDoc(t, f.repoDir, f.doc))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +267,7 @@ func TestRepointNarrowsToNamedPhase(t *testing.T) {
 	if named.RedProof.SHA == namedPinned {
 		t.Error("the named phase was not repaired")
 	}
-	namedDocSHA, err := redProofDocSHA(f.repoDir, namedDoc)
+	namedDocSHA, err := redProofDocSHA(containedDoc(t, f.repoDir, namedDoc))
 	if err != nil {
 		t.Fatal(err)
 	}

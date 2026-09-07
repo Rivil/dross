@@ -16,11 +16,11 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // redProofRepointVerdict is what planning decided. A refusal is NOT a verdict:
@@ -43,7 +43,12 @@ type redProofRepointPlan struct {
 	Verdict redProofRepointVerdict
 	OldSHA  string
 	NewSHA  string
-	Doc     string
+	// Doc is CONTAINED. It arrives already checked from the pin, so this
+	// struct cannot be built with a doc nobody validated, and applyRedProofRepoint
+	// opens it through the pathfence seam rather than re-joining it. Format it
+	// with Rel() in anything an operator reads: String() is the joined absolute
+	// form and would leak one machine's layout.
+	Doc pathfence.Contained
 	// Files is every path the apply would touch, repo-relative. It is part of
 	// the plan rather than derived at write time so a dry run cannot understate
 	// what an apply will do.
@@ -118,7 +123,10 @@ func planRedProofRepoint(root, repoDir string, pin redProofPin, excludedRefs []s
 	p.Why = why
 	p.Files = []string{
 		filepath.ToSlash(mustRelToRepo(repoDir, changes.FilePath(root, pin.Phase))),
-		filepath.ToSlash(pin.Doc),
+		// Rel() already IS the repo-relative slash form, which is what Files
+		// is documented to carry — no ToSlash needed, and String() here would
+		// put an absolute path into a list a dry run prints as repo-relative.
+		pin.Doc.Rel(),
 	}
 	return p, nil
 }
@@ -139,21 +147,24 @@ func applyRedProofRepoint(p redProofRepointPlan) error {
 	if p.Verdict != repointRepair {
 		return nil
 	}
-	docPath := filepath.Join(p.repoDir, filepath.FromSlash(p.Doc))
-	info, err := os.Stat(docPath)
+	// No join: p.Doc is already the checked, joined value, and all four file
+	// operations below go through the pathfence seam. The rollback write is
+	// included deliberately — it is the call a partial adoption is most likely
+	// to leave behind as the one unguarded path.
+	info, err := pathfence.Stat(p.Doc)
 	if err != nil {
-		return fmt.Errorf("phase %s: read %s: %w", p.Phase, p.Doc, err)
+		return fmt.Errorf("phase %s: read %s: %w", p.Phase, p.Doc.Rel(), err)
 	}
-	orig, err := os.ReadFile(docPath)
+	orig, err := pathfence.ReadFile(p.Doc)
 	if err != nil {
-		return fmt.Errorf("phase %s: read %s: %w", p.Phase, p.Doc, err)
+		return fmt.Errorf("phase %s: read %s: %w", p.Phase, p.Doc.Rel(), err)
 	}
-	rewritten, _, err := redProofRewriteDoc(p.Doc, string(orig), p.OldSHA, p.NewSHA)
+	rewritten, _, err := redProofRewriteDoc(p.Doc.Rel(), string(orig), p.OldSHA, p.NewSHA)
 	if err != nil {
 		return fmt.Errorf("phase %s: %w", p.Phase, err)
 	}
-	if err := os.WriteFile(docPath, []byte(rewritten), info.Mode().Perm()); err != nil {
-		return fmt.Errorf("phase %s: write %s: %w", p.Phase, p.Doc, err)
+	if err := pathfence.WriteFile(p.Doc, []byte(rewritten), info.Mode().Perm()); err != nil {
+		return fmt.Errorf("phase %s: write %s: %w", p.Phase, p.Doc.Rel(), err)
 	}
 
 	recordPath := changes.FilePath(p.root, p.Phase)
@@ -161,12 +172,12 @@ func applyRedProofRepoint(p redProofRepointPlan) error {
 		// Roll back, so the tree never carries a doc that pins a commit the
 		// record does not. Restoring is best-effort by necessity — if it fails
 		// too, the error names both files so the operator knows where to look.
-		if rerr := os.WriteFile(docPath, orig, info.Mode().Perm()); rerr != nil {
+		if rerr := pathfence.WriteFile(p.Doc, orig, info.Mode().Perm()); rerr != nil {
 			return fmt.Errorf("phase %s: %s could not be updated (%v) AND %s could not be restored (%v) — both files need checking by hand",
-				p.Phase, recordPath, err, p.Doc, rerr)
+				p.Phase, recordPath, err, p.Doc.Rel(), rerr)
 		}
 		return fmt.Errorf("phase %s: %s could not be updated (%w), so %s was restored to its original bytes — nothing was repointed",
-			p.Phase, recordPath, err, p.Doc)
+			p.Phase, recordPath, err, p.Doc.Rel())
 	}
 	return nil
 }

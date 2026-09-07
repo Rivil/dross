@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // reachRepo builds a repo whose only origin ref is refs/remotes/origin/main,
@@ -201,7 +202,7 @@ func TestDiscoverRedProofPinsFindsLaterPhase(t *testing.T) {
 		"some-later-phase":       {SHA: "deadbee", Doc: "fixtures/later/RUN.md"},
 	})
 
-	pins, err := discoverRedProofPins(root)
+	pins, err := discoverRedProofPins(root, filepath.Dir(root))
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -213,7 +214,7 @@ func TestDiscoverRedProofPinsFindsLaterPhase(t *testing.T) {
 	for _, p := range pins {
 		if p.Phase == "some-later-phase" {
 			found = true
-			if p.SHA != "deadbee" || p.Doc != "fixtures/later/RUN.md" {
+			if p.SHA != "deadbee" || p.Doc.Rel() != "fixtures/later/RUN.md" {
 				t.Errorf("later phase's pin = %+v, want its own sha/doc", p)
 			}
 		}
@@ -233,7 +234,7 @@ func TestDiscoverRedProofPinsSkipsUnpinnedPhases(t *testing.T) {
 		"unpinned-b": nil,
 	})
 
-	pins, err := discoverRedProofPins(root)
+	pins, err := discoverRedProofPins(root, filepath.Dir(root))
 	if err != nil {
 		t.Fatalf("discover errored on a phase with no red_proof entry: %v", err)
 	}
@@ -245,7 +246,7 @@ func TestDiscoverRedProofPinsSkipsUnpinnedPhases(t *testing.T) {
 // TestDiscoverRedProofPinsNoPhases covers the empty repo: no phases dir at all
 // is nothing to check, not a failure.
 func TestDiscoverRedProofPinsNoPhases(t *testing.T) {
-	pins, err := discoverRedProofPins(filepath.Join(t.TempDir(), ".dross"))
+	pins, err := discoverRedProofPins(filepath.Join(t.TempDir(), ".dross"), t.TempDir())
 	if err != nil {
 		t.Fatalf("discover on a root with no phases dir: %v", err)
 	}
@@ -271,7 +272,7 @@ func TestRedProofDocSHA(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			mustWrite(t, filepath.Join(dir, "RUN.md"), "# proof\n\n"+tc.line+"\n")
-			got, err := redProofDocSHA(dir, "RUN.md")
+			got, err := redProofDocSHA(containedDoc(t, dir, "RUN.md"))
 			if err != nil {
 				t.Fatalf("redProofDocSHA: %v", err)
 			}
@@ -285,7 +286,7 @@ func TestRedProofDocSHA(t *testing.T) {
 // TestRedProofDocSHAMissingFile: a pin naming a doc that is not there is an
 // error the caller must see, not an empty SHA that reads as "no pin recorded".
 func TestRedProofDocSHAMissingFile(t *testing.T) {
-	if _, err := redProofDocSHA(t.TempDir(), "nope/RUN.md"); err == nil {
+	if _, err := redProofDocSHA(containedDoc(t, t.TempDir(), "nope/RUN.md")); err == nil {
 		t.Error("expected an error for a pin naming a doc that does not exist")
 	}
 }
@@ -310,7 +311,7 @@ func docLines(t *testing.T, docRel, docBody string) []doctorLine {
 		}
 		mustWrite(t, path, docBody)
 	}
-	return redProofPinLines(dir, dir, redProofPin{Phase: "phase-x", SHA: sha, Doc: docRel})
+	return redProofPinLines(dir, dir, redProofPin{Phase: "phase-x", SHA: sha, Doc: containedDoc(t, dir, docRel)})
 }
 
 func hasIssueMentioning(lines []doctorLine, want string) bool {
@@ -368,8 +369,36 @@ func TestRedProofDocAgreeingWithTheRecordIsClean(t *testing.T) {
 	}
 	mustWrite(t, path, "# red proof\n\nbase commit: `"+sha+"`\n")
 
-	lines := redProofPinLines(dir, dir, redProofPin{Phase: "phase-x", SHA: sha, Doc: "fixtures/x/RUN.md"})
+	lines := redProofPinLines(dir, dir, redProofPin{Phase: "phase-x", SHA: sha, Doc: containedDoc(t, dir, "fixtures/x/RUN.md")})
 	if len(lines) != 1 || lines[0].level != doctorOK {
 		t.Errorf("a reachable pin agreeing with its doc did not come back clean: %+v", lines)
 	}
 }
+
+// containedDoc builds the pathfence.Contained that discoverRedProofPins would
+// build for a doc, so a test can call redProofDocSHA — which takes a Contained
+// now, and by design cannot be handed a raw string.
+func containedDoc(t *testing.T, repoDir, doc string) pathfence.Contained {
+	t.Helper()
+	c, err := pathfence.Contain(repoDir, "changes.json red_proof.doc", doc)
+	if err != nil {
+		t.Fatalf("Contain(%q, %q): %v", repoDir, doc, err)
+	}
+	return c
+}
+
+// redProofPin.Doc is pinned at COMPILE time, so a build that reverted it to a
+// string fails here rather than in whichever reader noticed first.
+//
+// The usual compilefence fixture cannot be used: redProofPin is unexported, so
+// no other module can name the type at all. A typed variable is the stronger
+// assertion anyway — it is checked on every build of this package, not only
+// when the fence runs — and it is the guarantee an AST scan could not deliver
+// for this field, whose readers copy it into a cmd-local plan struct before
+// anything opens it.
+var (
+	_ pathfence.Contained                         = redProofPin{}.Doc
+	_ pathfence.Contained                         = redProofRepointPlan{}.Doc
+	_ func(pathfence.Contained) (string, error)   = redProofDocSHA
+	_ func(string, string) ([]redProofPin, error) = discoverRedProofPins
+)

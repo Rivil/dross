@@ -36,7 +36,7 @@ func doomedRedProofRef(phaseID string) string {
 // pin this phase owns is the one the hooks exist for, and its refusals are
 // surfaced by the caller.
 func doomedRedProofPlans(root, repoDir, phaseID string) ([]redProofRepointPlan, error) {
-	pins, err := discoverRedProofPins(root)
+	pins, err := discoverRedProofPins(root, repoDir)
 	if err != nil {
 		return nil, err
 	}

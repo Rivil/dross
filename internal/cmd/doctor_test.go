@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
@@ -2565,5 +2566,59 @@ func TestDoctorSkipsStrandedCheckWhenBoardDisabled(t *testing.T) {
 	}
 	if strings.Contains(out, "Board mirrors:") {
 		t.Errorf("the stranded section ran with board sync off:\n%s", out)
+	}
+}
+
+// --- t-8: an escaping red_proof.doc aborts the whole red-proof section ------
+
+// TestDoctorReportsAnEscapingDocAtDiscovery pins the message the operator gets.
+// It has to be distinguishable from the per-pin unreadable-doc arm: a corrupt
+// path and a missing file need different fixes, and "which cannot be read"
+// would send the reader looking for a file that was never the problem.
+func TestDoctorReportsAnEscapingDocAtDiscovery(t *testing.T) {
+	root := pinFixture(t, map[string]*changes.RedProof{
+		"escaping": {SHA: "a6ef729", Doc: "../../victim.md"},
+	})
+	repoDir := filepath.Dir(root)
+
+	lines, present := redProofChecks(root, repoDir)
+	if !present {
+		t.Fatal("doctor reported no red-proof section for a record that carries a pin")
+	}
+	if len(lines) != 1 || lines[0].level != doctorIssue {
+		t.Fatalf("want exactly one issue line, got %+v", lines)
+	}
+	text := lines[0].text
+	for _, want := range []string{"../../victim.md", "changes.json", repoDir} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the discovery refusal does not name %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "which cannot be read") {
+		t.Errorf("a corrupt path was reported with the missing-file wording, which names the wrong fix:\n%s", text)
+	}
+}
+
+// TestOneEscapingDocSuppressesEveryOtherVerdict pins the ACCEPTED REGRESSION as
+// a test rather than leaving it as prose in the plan.
+//
+// Discovery refuses the whole record when any doc escapes, so a sound pin
+// alongside it loses its verdict. That is the cost of the hard lane and it was
+// chosen over a per-pin skip. Pinning it here means a later change that quietly
+// softens discovery — restoring the other verdicts — goes red and has to be
+// argued for rather than slipped in.
+func TestOneEscapingDocSuppressesEveryOtherVerdict(t *testing.T) {
+	root := pinFixture(t, map[string]*changes.RedProof{
+		"escaping": {SHA: "a6ef729", Doc: "../../victim.md"},
+		"sound":    {SHA: "a6ef729", Doc: "fixtures/proof/RUN.md"},
+	})
+
+	lines, _ := redProofChecks(root, filepath.Dir(root))
+	if len(lines) != 1 {
+		t.Fatalf("want exactly one line for the whole section, got %+v — discovery has been "+
+			"softened into a per-pin skip, which is the lane escape_failure_mode rejects", lines)
+	}
+	if strings.Contains(lines[0].text, "sound") {
+		t.Errorf("the sound pin still earned a verdict: %q", lines[0].text)
 	}
 }

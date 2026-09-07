@@ -3,8 +3,12 @@ package cmd
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -93,9 +97,20 @@ func (f repointFixture) squashMerge(t *testing.T) {
 	mustGit(t, f.repoDir, "fetch", "-q", "--prune", "origin")
 }
 
+// plan builds the repoint plan for the fixture's pin, failing the test if it
+// cannot — every caller below needs a plan, not an error.
+func (f repointFixture) plan(t *testing.T) redProofRepointPlan {
+	t.Helper()
+	p, err := planRedProofRepoint(f.root, f.repoDir, f.pin(t), nil)
+	if err != nil {
+		t.Fatalf("planRedProofRepoint: %v", err)
+	}
+	return p
+}
+
 func (f repointFixture) pin(t *testing.T) redProofPin {
 	t.Helper()
-	pins, err := discoverRedProofPins(f.root)
+	pins, err := discoverRedProofPins(f.root, f.repoDir)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -410,5 +425,218 @@ func TestPlanExcludedRef(t *testing.T) {
 	}
 	if without.Verdict != repointNothingToDo {
 		t.Errorf("with no exclusion, verdict = %q, want %q — the pin is still reachable today", without.Verdict, repointNothingToDo)
+	}
+}
+
+// --- t-8: an escaping red_proof.doc never reaches a write -------------------
+
+// escapingDocFixture rewrites the fixture's pin to name a doc OUTSIDE the repo,
+// seeds a real file there, and returns its path and hash.
+//
+// The file is real and carries a valid `base commit:` line for a sha the record
+// does not pin. That is deliberate on two counts: an unguarded repoint would
+// find it and rewrite it in place (so the hash is a genuine must-trip, not a
+// no-op over a missing file), and a doctor run that ever READ it would emit a
+// prose-disagrees-with-record line naming that sha — so the absence of that sha
+// from doctor's output proves the read never happened.
+func escapingDocFixture(t *testing.T, f repointFixture) (path, hash, docSHA string) {
+	t.Helper()
+	docSHA = "1111111111111111111111111111111111111111"
+	path = filepath.Join(filepath.Dir(f.repoDir), "victim.md")
+	mustWrite(t, path, "# victim\n\n**base commit: `"+docSHA+"`**\n")
+	t.Cleanup(func() { os.Remove(path) })
+
+	rec := changes.FilePath(f.root, f.phase)
+	c, err := changes.Load(rec, f.phase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.RedProof.Doc = "../victim.md"
+	if err := c.Save(rec); err != nil {
+		t.Fatal(err)
+	}
+	return path, hashFile(t, path), docSHA
+}
+
+// assertDocEscapeRefusal checks the refusal is diagnosable: it names the doc,
+// the artifact it was loaded from, and the root it escaped (c-5).
+func assertDocEscapeRefusal(t *testing.T, repoDir string, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("an escaping red_proof.doc was accepted")
+	}
+	for _, want := range []string{"../victim.md", "changes.json", repoDir} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal does not name %q:\n%s", want, err.Error())
+		}
+	}
+}
+
+// TestRepointRefusesAnEscapingDocAndWritesNothing is the c-2/c-3 end-to-end.
+// The refusal has to land at DISCOVERY, before any plan is built — a guard
+// placed after os.WriteFile would leave the outside file already rewritten and
+// still pass a test that only checked for an error.
+func TestRepointRefusesAnEscapingDocAndWritesNothing(t *testing.T) {
+	for _, apply := range []bool{false, true} {
+		name := "dry-run"
+		if apply {
+			name = "apply"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := newRepointFixture(t)
+			f.pushPhaseBranch(t)
+			f.squashMerge(t)
+			victim, before, _ := escapingDocFixture(t, f)
+
+			args := []string{"red-proof", "repoint", f.phase}
+			if apply {
+				args = append(args, "--apply")
+			}
+			chdir(t, f.repoDir)
+			assertDocEscapeRefusal(t, f.repoDir, runCmd(t, Phase(), args...))
+
+			// A plan that PRINTED an escaping doc as "would write" is a refusal
+			// the operator never gets, so the dry run must refuse too.
+			if after := hashFile(t, victim); after != before {
+				t.Errorf("the file outside the repo was rewritten: %s", victim)
+			}
+		})
+	}
+}
+
+// TestEscapingDocIsNeverRead proves the refusal precedes the doc read.
+// discoverRedProofPins returns an error and no pins at all, so redProofDocSHA
+// is never reached — and once it takes a Contained, no test could hand it an
+// escaping doc to assert that directly.
+func TestEscapingDocIsNeverRead(t *testing.T) {
+	f := newRepointFixture(t)
+	_, _, docSHA := escapingDocFixture(t, f)
+
+	pins, err := discoverRedProofPins(f.root, f.repoDir)
+	assertDocEscapeRefusal(t, f.repoDir, err)
+	if pins != nil {
+		t.Errorf("a refused discovery still returned pins: %+v", pins)
+	}
+
+	// Doctor's whole red-proof section, and nothing in it may quote the sha
+	// that only the victim file carries — that sha can only appear if
+	// something opened the file.
+	lines, _ := redProofChecks(f.root, f.repoDir)
+	for _, l := range lines {
+		if strings.Contains(l.text, docSHA) {
+			t.Errorf("the escaping doc was READ — its sha reached doctor output: %q", l.text)
+		}
+	}
+}
+
+// TestRepointPlanKeepsTheDocRepoRelative pins the two places a Contained could
+// start leaking one machine's layout into operator-facing output: the Files
+// list a dry run prints as repo-relative, and the error messages.
+func TestRepointPlanKeepsTheDocRepoRelative(t *testing.T) {
+	f := newRepointFixture(t)
+	f.pushPhaseBranch(t)
+	f.squashMerge(t)
+
+	plan := f.plan(t)
+	if plan.Doc.Rel() != f.doc {
+		t.Errorf("plan.Doc.Rel() = %q, want %q", plan.Doc.Rel(), f.doc)
+	}
+	if !slices.Contains(plan.Files, f.doc) {
+		t.Fatalf("plan.Files = %v, want it to carry the repo-relative %q", plan.Files, f.doc)
+	}
+	for _, p := range plan.Files {
+		if filepath.IsAbs(p) || strings.Contains(p, f.repoDir) {
+			t.Errorf("plan.Files carries an absolute path %q — the list is documented as repo-relative", p)
+		}
+	}
+}
+
+// TestApplyRepointErrorsPrintTheRelativeDoc drives the failure arm: the record
+// write fails, so the rollback path formats the doc. A Contained formatted
+// without Rel() would put the absolute path in front of the operator here.
+func TestApplyRepointErrorsPrintTheRelativeDoc(t *testing.T) {
+	f := newRepointFixture(t)
+	f.pushPhaseBranch(t)
+	f.squashMerge(t)
+	plan := f.plan(t)
+
+	// Make the RECORD FILE unwritable so the doc write succeeds and the record
+	// write fails — the rollback arm. The file rather than its directory: the
+	// record is rewritten in place, so a read-only dir does not stop it.
+	rec := changes.FilePath(f.root, f.phase)
+	if err := os.Chmod(rec, 0o400); err != nil {
+		t.Fatalf("cannot make the record read-only here: %v", err)
+	}
+	t.Cleanup(func() { os.Chmod(rec, 0o644) })
+
+	err := applyRedProofRepoint(plan)
+	if err == nil {
+		if os.Geteuid() == 0 {
+			t.Skip("running as root: file permissions cannot produce a failed write")
+		}
+		t.Fatal("the record write succeeded despite a read-only file, so the rollback arm was never reached " +
+			"and this assertion measured nothing")
+	}
+	if !strings.Contains(err.Error(), f.doc) {
+		t.Errorf("the error does not name the repo-relative doc %q:\n%s", f.doc, err)
+	}
+	// The record path in this message is legitimately absolute and always was;
+	// what must not appear is the DOC in joined form, which is what a bare %s
+	// of the Contained would print.
+	if abs := filepath.Join(f.repoDir, f.doc); strings.Contains(err.Error(), abs) {
+		t.Errorf("the error prints the doc as %q — the Contained was formatted without Rel():\n%s", abs, err)
+	}
+}
+
+// TestApplyRepointMakesNoDirectOSCall is the structural half. The five file
+// operations on the doc go through the pathfence seam; the rollback write at
+// the end is the one a partial adoption is most likely to leave behind, and it
+// is indistinguishable from the guarded version in any behavioural test.
+func TestApplyRepointMakesNoDirectOSCall(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "redproof_repoint.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fn *ast.FuncDecl
+	for _, d := range file.Decls {
+		if f, ok := d.(*ast.FuncDecl); ok && f.Name.Name == "applyRedProofRepoint" {
+			fn = f
+		}
+	}
+	if fn == nil {
+		t.Fatal("applyRedProofRepoint is gone — this guard is now vacuous")
+	}
+	seam := 0
+	ast.Inspect(fn, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		pkg, _ := sel.X.(*ast.Ident)
+		if pkg == nil {
+			return true
+		}
+		switch pkg.Name {
+		case "os":
+			t.Errorf("%s:%d: os.%s on the doc — every file operation here goes through the pathfence seam",
+				"redproof_repoint.go", fset.Position(call.Pos()).Line, sel.Sel.Name)
+		case "pathfence":
+			seam++
+		case "filepath":
+			if sel.Sel.Name == "Join" || sel.Sel.Name == "FromSlash" {
+				t.Errorf("%s:%d: filepath.%s — the doc arrives already joined; re-deriving it undoes the check",
+					"redproof_repoint.go", fset.Position(call.Pos()).Line, sel.Sel.Name)
+			}
+		}
+		return true
+	})
+	// Stat, ReadFile, WriteFile and the rollback WriteFile.
+	if seam != 4 {
+		t.Errorf("applyRedProofRepoint makes %d pathfence seam calls, want 4 (Stat, ReadFile, WriteFile, rollback WriteFile)", seam)
 	}
 }
