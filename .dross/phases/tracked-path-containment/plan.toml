@@ -11,12 +11,27 @@
   ]
   description = """
 New leaf package (imports nothing from internal/ — the argfence / hostallow /
-configenum shape) with three predicates over one lexical rule, plus typed
-sentinels:
-  Contain(root, artifact, p) (string, error)  — refuse, for join-onto-a-root
-  InTree(p string) (clean string, ok bool)    — classify, root-less
-  Segment(label, id string) error             — single-segment
+configenum shape) built around a type only the check can construct:
+
+  type Contained struct{ p string }   // unexported field — no literal elsewhere
+  func (Contained) String() string
+  Contain(root, artifact, p) (Contained, error)  — refuse, join-onto-a-root
+  InTree(p string) (clean string, ok bool)       — classify, root-less
+  Segment(label, id string) error                — single-segment
   ErrEscapes, ErrAbsolute
+
+Contained carries an unexported field, so no package outside pathfence can
+construct one except through Contain — a caller that skips the check has no
+value to pass and fails to build. The I/O seam takes it rather than a string:
+
+  ReadFile(Contained) ([]byte, error)
+  WriteFile(Contained, []byte, fs.FileMode) error
+  Stat(Contained) (fs.FileInfo, error)
+
+The seam is what makes the type load-bearing: os.ReadFile takes a string and
+always will, so the guarantee is "a site that opens a tracked path through the
+seam cannot have skipped the check", with t-10's residual test covering the
+sites that reach for os.* directly.
 InTree takes no root: its two consumers differ on root handling (verify strips
 one, testlane has none), so pathfence owns only the lexical ..-and-absolute
 test and each caller keeps its own root and empty/dot policy. Lexical only —
@@ -26,12 +41,17 @@ symlink limit and why (symlink_resolution lock).
 Slash form throughout: both InTree consumers already work in slash form
 (verify.NormalizePath replaces backslashes then uses path.Clean;
 testlane.normalize does filepath.ToSlash then path.Clean), so pathfence
-normalises with filepath.ToSlash + path.Clean and returns slash-form strings on
-every platform. Contain returns an OS-form joined path, since its callers hand
-it straight to os.*.
+normalises with an UNCONDITIONAL strings.ReplaceAll of backslash to slash, then
+path.Clean — the form verify.NormalizePath already uses (scope.go:328, with the
+comment at :323-325 explaining why it is unconditional rather than
+platform-gated). filepath.ToSlash is the identity on darwin and would leave the
+rule untested on the machine the suite runs on. InTree returns slash form on
+every platform; Contained holds an OS-form joined path for the I/O seam.
 """
   covers = ["c-1", "c-3", "c-5"]
   test_contract = [
+    "Contained cannot be constructed outside pathfence: a compile-time assertion fixture (a _test package attempting a composite literal) is asserted to fail to build, so the unexported field that carries the whole guarantee cannot be quietly exported",
+    "The I/O seam refuses a zero Contained: ReadFile(Contained{}), WriteFile and Stat each error rather than operating on the empty path, so a caller that declares the variable without assigning it fails loudly instead of touching the working directory",
     "Contain(root, \"changes.json\", \"../x.go\") errors and the message contains \"../x.go\", \"changes.json\" and the root, asserted as three separate strings.Contains rather than one golden string",
     "Contain(root, a, \"/etc/passwd\") matches errors.Is(err, ErrAbsolute) and NOT ErrEscapes, so deleting the IsAbs branch cannot pass by falling through to the escape branch",
     "Contain(root, a, \"a/../b.md\") returns Join(root, \"b.md\") — an interior \"..\" landing inside is not an escape — while \"..\" and \"../\" both error",
@@ -41,7 +61,7 @@ it straight to os.*.
     "Segment(\"run id\", \"a/b\") and Segment(\"run id\", \"..\") both error; Segment(\"run id\", \"run-123\") returns nil",
     "Contain never touches the filesystem: with root naming a directory that does not exist, \"report.md\" is still accepted",
     "A symlink under root pointing outside is ACCEPTED, in a test named for the symlink_resolution lock, so the documented lexical limit is pinned rather than assumed",
-    "InTree returns slash form on every platform: InTree(`a\\b/../c`) returns (\"a/c\", true), so the choice between path.Clean and filepath.Clean is pinned rather than left to whichever separator the test machine happens to use",
+    "InTree returns slash form on darwin as well as Windows: InTree(`a\\b/../c`) returns (\"a\", true) — the backslash is a separator, so \"..\" pops \"b\" and leaves \"a\". A filepath.ToSlash implementation returns \"c\" here on darwin, so this line fails the platform-gated version rather than passing on both",
   ]
   status = "pending"
 
@@ -58,8 +78,15 @@ Fields declares one entry per path-shaped .dross schema field: Struct, Field,
 toml key, Artifact, and a Disposition of exactly Consumed (naming the routing
 function) or NotConsumed (with Why and the reader sites allowed to touch it).
 Disposition classifies READERS — a field nothing opens is NotConsumed even if a
-validator gates it at write time, because t-10 defines a join site by its file
-I/O. This is the artifact t-9 and t-10 both judge against.
+validator gates it at write time, since a validator constructs no Contained.
+
+Schema fields stay string / []string: they are serialized to changes.json,
+plan.toml and tests.json, and a Contained's unexported field cannot marshal.
+The type therefore lives on the DERIVED value — what the routing function
+returns and what the I/O seam accepts — so a Consumed entry is a claim about
+its routing function's return type, not about the stored field's type.
+
+This is the artifact t-9 and t-10 both judge against.
 """
   covers = ["c-6"]
   test_contract = [
@@ -69,7 +96,9 @@ I/O. This is the artifact t-9 and t-10 both judge against.
     "Fields covers by name at minimum changes.TaskRecord.Files, changes.RedProof.Doc, verify.Scope.Files, phase.Task.Files, project.Env.Files, project.Paths.{Source,Tests,E2E,Migrations,Schemas,I18n,Public} and project.TestLane.Match — asserted by name, so deleting a declaration to make a later guard pass fails here first",
     "The three path-shaped-by-tag-but-not-by-meaning fields t-9's walker will reach — verify.Scope.Source (an enum label), verify.LanguageRun.Files (tool output paths) and verify.CriterionResult.Tests (test names) — each carry a NotConsumed entry whose Why names why the tag is misleading, so the walker's false positives are declared rather than special-cased in the walker",
     "phase.Task.Files is declared NotConsumed with a Why naming ValidatePlan as a write-time gate that opens nothing, and the two print-only readers (internal/cmd/task.go, internal/cmd/issue_task.go) as its allowed readers",
-    "changes.TaskRecord.Files and verify.Scope.Files are both declared Consumed naming verify.ValidateRecorded as their routing function — the entry t-10's guarded-set rule resolves through, so a Consumed entry naming a function that does not exist fails here before t-10 reports it as an unguarded site",
+    "changes.TaskRecord.Files, verify.Scope.Files and changes.RedProof.Doc are each declared Consumed naming the constructor that produces their Contained value (verify.ValidateRecorded for the first two, discoverRedProofPins for the third); an entry naming a function that does not exist fails here rather than surfacing as a mystery two tasks later",
+    "Every Consumed entry's routing function returns pathfence.Contained or []pathfence.Contained, asserted by reflecting on the named function's signature — so an entry whose routing function still returns a bare string fails, which is what makes the disposition a fact about the code rather than a promise about it",
+    "The stored fields themselves are asserted to remain string or []string, so a well-meaning change typing changes.RedProof.Doc as Contained — which would silently break changes.json round-tripping, since the unexported field cannot marshal — fails here rather than at a user's next verify",
   ]
   status = "pending"
 
@@ -87,9 +116,11 @@ I/O. This is the artifact t-9 and t-10 both judge against.
   description = """
 Delete containedPath (security.go:188) and repoint all eight call sites —
 security.go:45,152,160,204 and quality.go:39,122,130,150 — at pathfence.Contain
-with the run dir as root and "run directory" as the artifact. The two
-duplicated test blocks (security_test.go:281, quality_test.go:160) collapse
-onto the shared behaviour.
+with the run dir as root and "run directory" as the artifact. Each site keeps
+the returned Contained and writes through pathfence.WriteFile rather than
+unwrapping it to a string, so the type is load-bearing at these sites rather
+than decorative. The two duplicated test blocks (security_test.go:281,
+quality_test.go:160) collapse onto the shared behaviour.
 """
   covers = ["c-1", "c-3"]
   test_contract = [
@@ -98,6 +129,7 @@ onto the shared behaviour.
     "A scan-run ledger name of \"../main.go\" refuses and leaves no file at Join(runDir, \"..\", \"main.go\"), asserted by stat-ing the parent directory before and after the run",
     "An absolute ledger name \"/tmp/x/spec.toml\" returns ErrAbsolute instead of being silently re-rooted under the run dir (absolute_paths lock)",
     "Both the security and quality run-dir paths are asserted, so repointing one command and leaving the other fails",
+    "The write goes through pathfence.WriteFile: a site that unwraps Contained with .String() and calls os.WriteFile is reported by t-10's residual scan, so the type cannot be reduced to a decorative wrapper here",
   ]
   status = "pending"
 
@@ -115,7 +147,10 @@ checkRedProofDoc (redproof_set.go:149) drops its IsAbs and ".." arms and calls
 pathfence.Contain, keeping its is-a-directory refusal, its does-not-exist
 refusal and its ToSlash return. Split from the run-dir repointing: that is
 mechanical delegation of one helper, this drops two refusal arms while three
-others must survive.
+others must survive. Its is-a-directory and does-not-exist probes go through
+pathfence.Stat on the Contained value, so the check itself never re-joins a raw
+string. It still returns the ToSlash form for storage — the stored field is
+repo-relative text, not a Contained.
 """
   covers = ["c-1", "c-3"]
   test_contract = [
@@ -150,11 +185,12 @@ feeding mutationCandidates at :90) and the detached finish/collect one
 therefore precedes phaseScope, mutationCandidates and DetachSteps.
 NormalizePath's own ".." literal is replaced by pathfence.InTree, keeping its
 local root-stripping and its dot-is-out arm. mutationCandidates also calls
-pathfence.InTree on each path before os.Stat — defence in depth only: it takes
-files []string and reads no field selector, so it is invisible to t-10's scan
-either way, and what actually satisfies that scan is the ValidateRecorded call
-in the two reader functions. NewScope's signature is unchanged and
-internal/verify stays I/O-free.
+pathfence.Stat rather than os.Stat, taking the []pathfence.Contained that
+ValidateRecorded returns instead of a []string — so the path that reaches the
+filesystem is one the check constructed, and a caller that hands it raw strings
+fails to build. NewScope's signature is unchanged; internal/verify stays
+I/O-free, since Contain does no I/O and the seam is only called from
+internal/cmd.
 """
   covers = ["c-2", "c-5"]
   test_contract = [
@@ -164,7 +200,7 @@ internal/verify stays I/O-free.
     "The git lane is unchanged: a git-supplied out-of-repo path still lands in Degraded as an ignored out-of-repo path rather than aborting, so the hard rule is not over-applied",
     "The detached finish/collect path refuses on the same fixture, so guarding only the attached call site leaves a red test",
     "NormalizePath(\"../x\"), (\"/other/tree\") and (\".\") still return ok=false with Contains false for each — the dot case is asserted explicitly, since pathfence.InTree calls dot in-tree and this caller must keep its own answer",
-    "mutationCandidates refuses an escaping entry rather than stat-ing it, asserted directly against the function so the guard survives a caller that stops going through ValidateRecorded",
+    "mutationCandidates takes []pathfence.Contained: a fixture passing it raw strings is asserted to fail to compile, so the escaping-path refusal cannot be bypassed by a future caller that skips ValidateRecorded",
   ]
   status = "pending"
 
@@ -249,7 +285,12 @@ and then rewrites that file; redproof.go:146 (redProofDocSHA) reads it the same
 way. checkRedProofDoc guards only `red-proof set`, so a hand-edited
 red_proof.doc reaches a write outside the repo today. Both joins go through
 pathfence.Contain with "changes.json red_proof.doc" as the artifact, refusing
-before the plan is returned.
+before the plan is returned. redProofRepointPlan.Doc and redProofPin.Doc change
+from string to pathfence.Contained, so the containment is carried by the value
+rather than re-derived at each reader — this is the field whose readers copy it
+into a cmd-local struct, which is exactly the shape an AST scan cannot follow
+and the type system can. redProofDocSHA takes a Contained and reads through the
+seam.
 
 doctor.go:604-608 already emits a doctorIssue on any redProofDocSHA error, so
 the refusal surfaces with no change — but it frames it as "which cannot be
@@ -264,6 +305,7 @@ keeps the cannot-be-read wording.
     "redProofDocSHA on the same doc returns a containment error, not an os.ReadFile error — asserted on the message, so a fix that merely relies on the file not existing fails",
     "doctor over that record reports the containment refusal as an escape rather than under the \"cannot be read\" wording, so the two failure kinds stay distinguishable to the operator reading doctor output",
     "A contained doc still repoints, still hashes and still passes doctor, so the guard did not break the working path",
+    "discoverRedProofPins constructs its pins by calling Contain, so redProofPin.Doc cannot be populated from an unchecked string — a fixture assigning a raw string to that field is asserted to fail to compile, which is the guarantee the previous AST-scan design could not deliver for this field",
   ]
   status = "pending"
 
@@ -295,48 +337,41 @@ pathfence.Fields in both directions.
   id         = "t-10"
   wave       = 3
   depends_on = ["t-3", "t-4", "t-5", "t-6", "t-7", "t-8", "t-9"]
-  title      = "Guard: every join site routes through pathfence"
+  title      = "Residual guard: no raw os.* on a declared path field"
   files = ["internal/cmd/pathfence_enum_test.go"]
   description = """
-Two derived scans, no hand-maintained site list. Modelled on
-enum_divergence_test.go: go/parser + go/ast, no x/tools.
+The type system carries the enumeration now: every Consumed field is typed
+pathfence.Contained, so a consumer that skips the check has no value to pass and
+fails to build. t-2 asserts that typing. This task covers only what types cannot.
 
-A join site is GUARDED when its body calls pathfence.* OR calls a routing
-function named by a Consumed entry in pathfence.Fields. The second arm is
-required, not a convenience: after t-5 the two live readers — the `dross verify`
-RunE closure (verify.go:57-146, reads rec.Files at :74 and scope.Files at :90)
-and collectDetached (verify.go:518, reads r.Files at :585 and scope.Files at
-:587) — route through verify.ValidateRecorded, which is where the pathfence call
-lives. A literal pathfence.*-only rule would report both as unguarded on correct
-code. The accepted set is derived from the registry, which t-9 already guards,
-so it is not the hand-maintained list c-4 forbids.
+Two scans, both go/parser + go/ast, no type checking — the earlier design needed
+receiver-type resolution that ast alone cannot do, and dropping the dataflow
+ambition is what makes these buildable from the stated toolset:
 
-Selector disambiguation: `.Files` is not unique to the declared structs — it
-also sits on redProofRepointPlan, mutation.Result and verify.LanguageRun. The
-scan matches a selector only when the receiver resolves to the declaring
-package's type, so a same-named field on an undeclared struct is not reported.
+  (a) Raw-string escape: within internal/cmd, internal/verify, internal/phase,
+      internal/changes, internal/testlane and internal/remote, a call to
+      os.Stat / os.Open / os.ReadFile / os.WriteFile / os.Remove whose argument
+      is or contains a Contained unwrapped by .String() fails. This is a
+      syntactic pattern on the call argument — no dataflow — and it is what stops
+      the Contained type being reduced to decoration at an adopted site.
 
-Known limit, stated here so c-4 is not read as wider than the mechanism: the
-scan is ONE HOP — it matches a function that both reads a declared field's
-selector and performs file I/O. A chain that passes the value through an
-intermediate function or struct is not followed. mutationCandidates is an
-example rather than a counter-example: it takes files []string and reads no
-selector, so it is never in the scanned set at all, and what covers the
-motivating chain is the ValidateRecorded call in the two reader functions above.
-A future consumer that launders a path through two hops still escapes the scan.
+  (b) Literal scan: the ".." path-context comparisons this phase removes.
+
+What this does NOT catch, stated so c-4 is not read as wider: a brand-new
+consumer that loads a path field and calls os.ReadFile on the raw string,
+never touching Contained at all. The type stops that only where the field is
+typed Contained — which is why t-2's type assertion, not this scan, is the
+load-bearing half of c-4.
 """
   covers = ["c-1", "c-4"]
   test_contract = [
-    "Join-site scan: for every pathfence.Fields entry, any non-test function that reads that field's selector AND calls filepath.Join / os.Stat / os.Open / os.ReadFile / os.WriteFile / os.Remove fails unless its body calls pathfence.* OR a routing function named by a Consumed entry, naming the function",
-    "The routing-function arm is asserted on the real code: the `dross verify` RunE closure and collectDetached both pass by calling verify.ValidateRecorded and neither calls pathfence directly, so a pathfence.*-only rule leaves two red sites on correct code",
-    "A fixture reading a same-named `.Files` selector on a struct with no Fields entry is NOT reported, so the receiver-type disambiguation is falsifiable rather than incidental",
-    "A NotConsumed entry that acquires such a consumer fails with \"declared not-consumed but <fn> opens it\" — c-6's stated failure mode (an env.files or testlane consumer added without routing) made falsifiable",
-    "A Consumed entry whose named routing function does not appear among the guarded join sites fails, so \"consumed through the shared check\" is checked rather than asserted",
-    "The one-hop limit is pinned by its own fixture: a two-hop launder (function A reads the selector, function B does the os.Stat) is asserted as NOT caught, so the limit is a documented, tested boundary rather than an unnoticed gap",
+    "A fixture calling os.ReadFile(c.String()) on a Contained is reported, naming file:line, so unwrapping the type to reach raw os.* is caught at every adopted site",
+    "A fixture calling pathfence.ReadFile(c) is NOT reported, so the scan distinguishes the seam from the escape rather than banning all I/O",
+    "The scan reports the security.go and quality.go run-dir writers if they are reverted to os.WriteFile with an unwrapped path, asserted as a must-trip fixture rather than only against the post-fix tree",
     "Literal scan: any \"..\" comparison in a path context (adjacent to filepath.Separator, os.PathSeparator, \"../\", path.Clean, path.Base, filepath.Rel or filepath.IsAbs) outside internal/pathfence fails, naming file:line",
-    "The two shapes this phase removes are asserted as fixtures the scan MUST trip — security.go's os.PathSeparator form and remote.go's path.Base form — since neither matches the narrower marker set a scan calibrated only on the post-fix tree would carry, and a regression reintroducing either must go red",
-    "The two legal non-path \"..\" shapes are recognised BY SHAPE, not by an exemption list — git rev-list ranges are string concatenation (a+\"..\"+b, at topology.go, basebranch.go, doctor.go and milestone.go), refguard's is strings.Contains over a ref name with no path call nearby — and both shapes are asserted as fixtures that must NOT trip the scan, so the shape rule is itself tested",
-    "Walker self-tests: an in-test fixture with one guarded and one unguarded consumer yields exactly the unguarded one, and a fixture whose consumer was refactored out reports an error rather than an empty set",
-    "Vacuity guard: the walk finds at least one join site per Consumed entry and at least one \"..\" literal (inside internal/pathfence)",
+    "The two shapes this phase removes are asserted as fixtures the scan MUST trip — security.go's os.PathSeparator form and remote.go's path.Base form — since neither matches a marker set calibrated only on the post-fix tree, and a regression reintroducing either must go red",
+    "The two legal non-path \"..\" shapes are recognised BY SHAPE, not by an exemption list — git rev-list ranges are string concatenation (a+\"..\"+b, at topology.go, basebranch.go, doctor.go and milestone.go), refguard's is strings.Contains over a ref name with no path call nearby — and both are asserted as fixtures that must NOT trip the scan, so the shape rule is itself tested",
+    "Walker self-tests: a fixture with one unwrapping call and one seam call yields exactly the unwrapping one, and a fixture whose call was refactored out reports an error rather than an empty set",
+    "Vacuity guard: the literal walk finds at least one \"..\" literal (inside internal/pathfence) and the raw-string walk visits at least one file in each of the six named packages, so a walk that silently stops visiting fails rather than passing green",
   ]
   status = "pending"

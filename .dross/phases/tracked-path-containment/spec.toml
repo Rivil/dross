@@ -17,7 +17,7 @@
 
 [[criteria]]
   id = "c-4"
-  text = "A test enumerates the sites that join a tracked-artifact path onto a root, rather than checking a hand-maintained list, so a newly added consumer that skips the shared check fails the suite."
+  text = "Containment is enforced by the type system, not by a hand-maintained list: every site that opens a tracked-artifact path accepts a value only the shared check can construct, so a consumer that skips the check fails to build. A residual test covers the gap types cannot — a reader of a declared path field that reaches os.* with a raw string fails the suite."
 
 [[criteria]]
   id = "c-5"
