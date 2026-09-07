@@ -78,3 +78,24 @@
   why = "surviving mutant routed out of a verify run"
   target = "mutation-range-provenance"
   survivor = "695a2b44f32b1b43"
+
+[[deferred]]
+  id = "f1b1b4359fc352ac"
+  text = "Containment's regression guards rest on three hand-maintained lists that fail SILENTLY when stale: scannedPackages (internal/cmd/pathfence_enum_test.go:44, 8 of 36 internal packages — argfence and hostallow, the sibling fence packages, are unscanned and the literal ban has no per-directory vacuity guard), pathShapedTags (pathfence_fields_test.go:43, a closed 11-word tag vocabulary), and schemaDirs (pathfence_fields_test.go:35, 4 dirs). Plus the containedVar name list at security_test.go:526, where renaming a local silences the .String() arm. Harden them: derive the package set, widen the tag rule, or add vacuity guards that fail when a list stops matching anything."
+  why = "The phase's stated goal was containment enforced 'by the type system, not by a hand-maintained list'. The type fence delivers that; the three AST scans backstopping it reintroduce exactly the burden the spec set out to avoid. Proven by experiment on 2026-09-07 during verify: adding string fields tagged workdir/output_dir/spec to phase.Task — a struct in a SCANNED dir — left the full suite green, and detachedRun.RunDir (internal/cmd/local.go:287) is missed on both axes today."
+
+[[deferred]]
+  id = "860fbefe9a16aa80"
+  text = "containScope double-prefixes its error: internal/cmd/verifyscope.go:125 passes artifact \"verify scope\" into pathfence.Contain, then :127 wraps it again with fmt.Errorf(\"verify scope: %w\", err), so the user sees 'verify scope: verify scope: \"...\" resolves outside ...'. Drop one of the two."
+  why = "User-facing, and invisible to the strings.Contains-based message assertions that cover the rest of the diagnosability criterion (c-5), so no existing test will ever catch it."
+
+[[deferred]]
+  id = "8f3379574b1d5ce5"
+  text = "The absolute-path refusal in pathfence has no message-content test. TestContainAbsoluteIsItsOwnSentinel (internal/pathfence/pathfence_test.go:85) and TestValidateRecordedRefusesAbsolute (internal/verify/scope_test.go:437) assert only the ErrAbsolute sentinel. Add the same three-part Contains assertion the escape branch has — offending path, artifact, root."
+  why = "The message at pathfence.go:105-107 does carry all three facts, but nothing guards it, so a reword dropping the root ships undetected. That is exactly the failure c-5 exists to prevent, on the sibling branch of the same check."
+  target = "secret-detection"
+
+[[deferred]]
+  id = "c1681da56e037477"
+  text = "c-2's 'not dispatched to a mutation adapter' clause is inferred, not asserted: stubMutationAdapter.Run records the files it was handed in s.got, but the escape-refusal tests (internal/cmd/verify_scoping_test.go:521,549) never assert it is empty. One line would check the clause directly instead of deriving it from err != nil plus absent artifacts."
+  why = "Also nothing observes the ABSENCE of a stat — 'refused before any file I/O' rests on reading call ordering, so a future refactor that stat-ed inside NewScope would pass every current assertion."
