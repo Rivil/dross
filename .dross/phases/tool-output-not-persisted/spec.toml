@@ -67,3 +67,9 @@
   text = "Source-side enumeration: walk every site where a value derived from an exec invocation becomes a string, and require each to be terminal-only or the shared recorder."
   why = "Rejected in favour of the sink registry at spec time — it is a go/types-scale reach analysis over a codebase that spawns git everywhere. Belongs with secret-detection, whose milestone criterion demands both halves: output not persisted at all, plus a pattern-based detector."
   target = "secret-detection"
+
+[[deferred]]
+  id = "a1f0a6f51a442945"
+  text = "After `dross survivor accept`, the only way to recompute unclassified_in_scope is a full mutation re-run: `dross verify results` consumes the detached run record on collect, so a second collect refuses with 'no detached run recorded on this machine', and there is no re-derive verb. The lifecycle classification is a pure function of tests.json plus survivors.toml, both already on disk. Observed 2026-09-09 verifying tool-output-not-persisted: draining 32 ceiling survivors would have cost a second 1h40m gremlins leg to move one integer, so the field was written by hand instead. Wanted: a `dross verify reclassify <phase>` (or an idempotent `verify results`) that re-runs Skeleton over the existing tests.json."
+  why = "The survivor-drain rule tells the user to drain then re-run verify; on a repo whose mutation leg is 1h40m that instruction is effectively unaffordable, so the drain loop gets short-circuited by hand — which is exactly the false-bookkeeping path the rule exists to prevent."
+  target = "mutation-score-truth"
