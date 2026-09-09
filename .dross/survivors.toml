@@ -34,6 +34,14 @@
   name = "detach-seam-body"
   reason = "The body of a `var detach* = func(...)` process-construction seam in internal/cmd/verify.go — detachSync, detachStatus, detachCancel. Every test in verify_detach_test.go, verify_results_test.go and verify_status_test.go replaces the whole var, so these bodies never execute: a live `go test -coverprofile ./internal/cmd` on 2026-08-31 reports count 0 for every block covering lines 167, 363, 367 and 568-573. Executing them would mean spawning real ssh, because remote.commandFn — the transport seam these bodies bottom out in — is unexported and unreachable from package cmd, and the phase's locked tests_spawn_no_ssh decision forbids a test that needs a host. Their effect is asserted instead of their line: the stubs return the same errors the real bodies would propagate, and TestResultsOnAnUnreachableHostIsNotAVerdict, TestDispatchPushesBeforeItStarts and TestCancelAgainstAnUnreachableHostStillClearsButSaysSo pin what the caller does with them. Move the seam boundary below remote.Exec, or export a transport stub from internal/remote, and these become reachable and owe tests rather than this reason."
 
+[[category]]
+  name = "gremlins-switch-case"
+  reason = "gremlins attributes no go-cover block to a bare `switch { case ... }` case-condition, so every arm reports NOT_COVERED even when a test drives it. Validate's arms are each exercised by TestValidateNamesEveryMalformedShape with a written-down expected message (no disposition, >1 disposition, blank Carrier, empty Why, no Writer, no SourcedFrom, duplicate name). Tooling attribution limit, not a test gap — see dross_gremlins_switchcase_ceiling."
+
+[[category]]
+  name = "gremlins-var-initializer"
+  reason = "the `+` is string-literal concatenation inside `var fields = []Field{...}`, the package-level registry. gremlins attributes no go-cover block to a package-level var initializer, so every operator in the declaration reports NOT_COVERED. There is nothing a test could assert to kill it either: the operands are constant prose, and what the registry must hold is asserted structurally by TestRegistryPinsEveryDeclaredField (name + disposition + count) and by Validate's non-empty Why/Writers rules, not by matching the prose verbatim."
+
 [[accepted]]
   key = "742de35850fac7e6"
   file = "internal/cmd/survivor.go"
@@ -1427,3 +1435,291 @@
   line = 208
   category = "const-initializer-arithmetic"
   accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "00aad70020843f46"
+  file = "internal/toolfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set == 0:"
+  line = 144
+  category = "gremlins-switch-case"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "faa9b759b6a45958"
+  file = "internal/toolfence/fields.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case set > 1:"
+  line = 146
+  category = "gremlins-switch-case"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "2b0e99f70412b4da"
+  file = "internal/toolfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set > 1:"
+  line = 146
+  category = "gremlins-switch-case"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "16117ae482689c5f"
+  file = "internal/toolfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.Recorded != nil:"
+  line = 148
+  category = "gremlins-switch-case"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "1b3acf0544db4270"
+  file = "internal/toolfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.NotToolStream != nil:"
+  line = 152
+  category = "gremlins-switch-case"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "f597bb3708895fb1"
+  file = "internal/toolfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.Renderable != nil:"
+  line = 159
+  category = "gremlins-switch-case"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "c84ab53d5bbbb990"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"composed as \\\"mutation adapter <tool> failed: \\\" + LanguageRun.Error. It is \" +"
+  line = 197
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "0e6b29bc410f49fc"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"how a failed leg reaches a human at all, and forbidding a composer to render \" +"
+  line = 198
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "15278f8924a6c8a2"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"it would delete the Findings section from every PR body while removing no \" +"
+  line = 199
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "f85e5d29af472b4a"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"tool output — the record it interpolates carries none. Pinned rather than \" +"
+  line = 200
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "9aa4e889abc044a4"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"asserted: persist_toolfence_test.go fixes this field to exactly the recorder \" +"
+  line = 201
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "9f6b1fd3852da20b"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"the redacted top-level message of a dross command's own error, kept only for \" +"
+  line = 211
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "8ae76e9d0b5d3cce"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"the CarriesDetail allowlist so the `other` bucket is not opaque. An adapter \" +"
+  line = 212
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "62ef2ef2e9e5e470"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"dross's own reason no adapter ran on a file — a missing extension mapping, or \" +"
+  line = 220
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "e28a9845768eab33"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"a path that no longer exists in the working tree. No tool is invoked on a \" +"
+  line = 221
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "0d7ccdf7e3f041c9"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"the agent's own note on a criterion's verdict. No Go code assigns it: \" +"
+  line = 232
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "d53fd0f24575e241"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"Skeleton writes the field empty and it is filled in by the agent editing \" +"
+  line = 233
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "46d531f82c4f6559"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"authored by the agent editing verify.toml (no Go writer; the stale-declaration \" +"
+  line = 236
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "6eca6a2845b8ad2a"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"the survivor-lifecycle state's explanation — routed to <target>, acceptance \" +"
+  line = 244
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "04d83978cb636ee5"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"withheld, identity unresolved. Composed by dross from its own survivor ledger, \" +"
+  line = 245
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "300747b89c42ba01"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"dross's own list of what the scope could not establish. The git-failure \" +"
+  line = 253
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "02ee2af3a63b561b"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"entries interpolate gitReason(err), whose exec error renders as \\\"exit status 1\\\" \" +"
+  line = 254
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "9a8fb23cf536eb31"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"— it carries no tool output only because exec.ExitError.Error() omits the \" +"
+  line = 255
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "d33fda28f3ed57a0"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"stderr that .Output() captured. That is a stdlib PROPERTY this entry relies \" +"
+  line = 256
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "fd5c31b8b48fa4d9"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"on, not a guarantee dross makes; a writer switching to CombinedOutput would \" +"
+  line = 257
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "86345120968bca7e"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"make the claim false. []string rather than a scalar, which is why the walker \" +"
+  line = 258
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "6285ba116a3f4657"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"the mutated source slice, read out of the tool's PARSED REPORT (a mutant's \" +"
+  line = 269
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "2d9c9bcc277625cf"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"replacement text), not out of its captured stdout. It is the project's own \" +"
+  line = 270
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "b5928b475acf1300"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"source as the tool rewrote it. Untagged on this struct — capitalised in \" +"
+  line = 271
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "69b6a222ed194656"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"tests.json — which is why the walker matches untagged exported string fields \" +"
+  line = 272
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "07ab3eedba418d65"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"the same survivor-lifecycle explanation as OutOfScopeMutant.Note, applied to \" +"
+  line = 280
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "721ff6002b37d97a"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"an in-scope survivor. Composed by dross from its own ledger. Untagged, as \" +"
+  line = 281
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
