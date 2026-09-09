@@ -1319,3 +1319,111 @@
   text = "return false, 0, fmt.Errorf(\"push of %d local commit(s) on %s failed: %w\\n%s\\n\"+"
   line = 1054
   reason = "ARITHMETIC_BASE mutates + to - on a string concatenation joining the two halves of the ahead-push failure message; the mutant does not compile and is never viable, so no test a caller could write can kill it. The branch it sits in is covered by TestMilestonePushHeadRefusedAheadPushNamesCommitCount, which asserts the message names the exact commit count that would be lost at --finalize. Same class as the accepted string-concat entry on the remote-restore table; the standing fix is the deferred item that teaches the gremlins adapter to drop these before they reach the survivor list at all."
+
+[[accepted]]
+  key = "00055a8a8fa719fd"
+  file = "internal/pathfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.Consumed == nil && f.NotConsumed == nil:"
+  line = 97
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "4b6cf3537d63041a"
+  file = "internal/pathfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.Consumed != nil && f.NotConsumed != nil:"
+  line = 99
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "5d536c93b05cc880"
+  file = "internal/pathfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.Consumed != nil:"
+  line = 101
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "d068356e35e5acce"
+  file = "internal/pathfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.NotConsumed != nil:"
+  line = 105
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "709e23135976a3e0"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"ValidatePlan gates these at WRITE time and opens nothing; a validator \" +"
+  line = 141
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "96ef6b73f72cff14"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"constructs no Contained, so it proves nothing about a reader. Every \" +"
+  line = 142
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "f3267416de3b9515"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"an env-file load order dross records but never opens itself; the shell \" +"
+  line = 153
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "d96394c1c8b29972"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"glob PATTERNS matched against candidate paths, not paths themselves. \" +"
+  line = 163
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "afec035a1d99da28"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"an ENUM LABEL (git-only / changes-only / union / none) recording which \" +"
+  line = 191
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "4b70699c88303253"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"inputs contributed to the scope. The `source` tag is path-shaped; the \" +"
+  line = 192
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "43e9be2007cbd072"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"paths a mutation TOOL reported in its own output, recorded verbatim for \" +"
+  line = 200
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "d8a183dbe40db22a"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"TEST NAMES (e.g. TestContainRefusesEscape), not paths. The `tests` tag \" +"
+  line = 208
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"

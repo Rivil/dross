@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/Rivil/dross/internal/findings"
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // StatePath returns the durable findings state ledger for the quality audit:
@@ -57,7 +58,13 @@ func ResolveItem(root, id string) (findings.Item, error) {
 	if err != nil {
 		return findings.Item{}, err
 	}
-	ledger, err := Load(filepath.Join(runDir, "findings.toml"))
+	// The join is a Contain against the run dir: the run dir is the containment
+	// ROOT (a plain string by design), and "findings.toml" is the path inside it.
+	ledgerPath, err := pathfence.Contain(runDir, "run directory", "findings.toml")
+	if err != nil {
+		return findings.Item{}, err
+	}
+	ledger, err := Load(ledgerPath)
 	if err != nil {
 		return findings.Item{}, err
 	}

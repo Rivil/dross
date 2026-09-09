@@ -1,0 +1,229 @@
+{
+  "phase": "tracked-path-containment",
+  "pr": 120,
+  "base": "milestone/v1.7",
+  "base_commit": "c71c6ae6b8480868052f44ed2df13be6f895f001",
+  "status": "shipped",
+  "tasks": {
+    "quick-1": {
+      "files": [
+        "internal/cmd/survivor.go",
+        "internal/cmd/survivor_test.go"
+      ],
+      "commit": "aa2be1b",
+      "completed_at": "2026-09-07T17:31:55.800431Z",
+      "notes": "quick: route survivors to unscaffolded roadmap phases (survivor route now uses the shared validDeferredTarget gate)"
+    },
+    "t-1": {
+      "files": [
+        "internal/pathfence/pathfence.go",
+        "internal/pathfence/pathfence_test.go",
+        "internal/compilefence/compilefence.go",
+        "internal/compilefence/compilefence_test.go"
+      ],
+      "commit": "fcc36fe",
+      "completed_at": "2026-09-07T10:43:31.472414Z",
+      "landmarks": [
+        {
+          "feature": "tracked-path containment",
+          "symbol": "Contain",
+          "loc": "internal/pathfence/pathfence.go:98",
+          "what": "one lexical containment check returning a Contained only it can construct, with an I/O seam that takes the type instead of a string"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/pathfence_enum_test.go",
+        "internal/cmd/pathfence_carrier_test.go",
+        "internal/cmd/testdata/pathfence_scan/unwrap_os.go.txt",
+        "internal/cmd/testdata/pathfence_scan/seam_ok.go.txt",
+        "internal/cmd/testdata/pathfence_scan/rundir_revert.go.txt",
+        "internal/cmd/testdata/pathfence_scan/dotdot_path.go.txt",
+        "internal/cmd/testdata/pathfence_scan/dotdot_revrange.go.txt"
+      ],
+      "commit": "1329f00",
+      "completed_at": "2026-09-07T13:12:04.247043Z",
+      "landmarks": [
+        {
+          "feature": "tracked-path containment",
+          "symbol": "carrierType",
+          "loc": "internal/cmd/pathfence_carrier_test.go:27",
+          "what": "declared carriers are asserted really typed Contained, and two fixture-driven AST scans ban unwrapping into os.* and any second dot-dot test outside pathfence"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/security.go",
+        "internal/cmd/quality.go",
+        "internal/cmd/security_test.go",
+        "internal/cmd/quality_test.go",
+        "internal/cmd/quality_findings_test.go"
+      ],
+      "commit": "b8ad0ef",
+      "completed_at": "2026-09-07T11:14:46.460739Z",
+      "landmarks": [
+        {
+          "feature": "tracked-path containment",
+          "symbol": "runDirArtifact",
+          "loc": "internal/cmd/security.go:188",
+          "what": "containedPath deleted; all eight security/quality run-dir sites build and pass through a pathfence.Contained"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go"
+      ],
+      "commit": "61f4b44",
+      "completed_at": "2026-09-07T10:47:12.014111Z",
+      "landmarks": [
+        {
+          "feature": "tracked-path containment",
+          "symbol": "Fields",
+          "loc": "internal/pathfence/fields.go:72",
+          "what": "every path-shaped schema field declared consumed-with-a-carrier or not-consumed-with-a-reason, so a new consumer cannot be added silently"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/security/findings.go",
+        "internal/security/scaffold.go",
+        "internal/security/findings_test.go",
+        "internal/security/scaffold_test.go",
+        "internal/quality/findings.go",
+        "internal/quality/scaffold.go",
+        "internal/quality/findings_test.go",
+        "internal/quality/scaffold_test.go",
+        "internal/security/lifecycle.go",
+        "internal/quality/lifecycle.go"
+      ],
+      "commit": "d211f29",
+      "completed_at": "2026-09-07T10:58:10.922262Z",
+      "landmarks": [
+        {
+          "feature": "tracked-path containment",
+          "symbol": "security.Save",
+          "loc": "internal/security/findings.go:116",
+          "what": "scan-ledger I/O takes pathfence.Contained and writes through the seam, so the path reaching the filesystem was constructed by the check"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/redproof_set.go",
+        "internal/cmd/redproof_set_test.go"
+      ],
+      "commit": "5feedb0",
+      "completed_at": "2026-09-07T11:20:18.256426Z",
+      "landmarks": [
+        {
+          "feature": "tracked-path containment",
+          "symbol": "checkRedProofDoc",
+          "loc": "internal/cmd/redproof_set.go:161",
+          "what": "red-proof --doc containment delegates to pathfence.Contain and probes through pathfence.Stat, keeping its own empty/directory/absent refusals"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/verify/scope.go",
+        "internal/verify/scope_test.go",
+        "internal/cmd/verifyscope.go",
+        "internal/cmd/verifyscope_test.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_scoping_test.go"
+      ],
+      "commit": "c323a62",
+      "completed_at": "2026-09-07T11:34:21.073829Z",
+      "landmarks": [
+        {
+          "feature": "tracked-path containment",
+          "symbol": "verify.ValidateRecorded",
+          "loc": "internal/verify/scope.go:340",
+          "what": "an escaping changes.json task file aborts verify before any file I/O instead of degrading into a passing run"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/phase/plan_edit.go",
+        "internal/phase/plan_edit_test.go",
+        "internal/cmd/task.go",
+        "internal/cmd/task_test.go"
+      ],
+      "commit": "bf22e93",
+      "completed_at": "2026-09-07T11:48:23.559162Z",
+      "landmarks": [
+        {
+          "feature": "tracked-path containment",
+          "symbol": "phase.ValidatePlan",
+          "loc": "internal/phase/plan_edit.go:95",
+          "what": "plan.toml task files are contained on the write side, refused alongside every other plan defect in one error"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/testlane/match.go",
+        "internal/testlane/match_test.go",
+        "internal/remote/remote.go",
+        "internal/remote/remote_test.go"
+      ],
+      "commit": "2598325",
+      "completed_at": "2026-09-07T12:10:06.769369Z",
+      "landmarks": [
+        {
+          "feature": "tracked-path containment",
+          "symbol": "testlane.normalize",
+          "loc": "internal/testlane/match.go:129",
+          "what": "lane matching and remote run-id validation share pathfence's lexical check while keeping their own escaped-vs-unmatched and ErrUnsafeTarget policies"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/redproof.go",
+        "internal/cmd/redproof_test.go",
+        "internal/cmd/redproof_repoint.go",
+        "internal/cmd/redproof_repoint_test.go",
+        "internal/cmd/redproof_repoint_cmd.go",
+        "internal/cmd/redproof_repoint_cmd_test.go",
+        "internal/cmd/redproof_lifecycle.go",
+        "internal/cmd/redproof_lifecycle_test.go",
+        "internal/cmd/redproof_set_test.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go",
+        "internal/cmd/hostile_config_test.go"
+      ],
+      "commit": "0c84c5f",
+      "completed_at": "2026-09-07T13:04:10.534708Z",
+      "landmarks": [
+        {
+          "feature": "tracked-path containment",
+          "symbol": "discoverRedProofPins",
+          "loc": "internal/cmd/redproof.go:145",
+          "what": "red-proof pins carry a pathfence.Contained doc built at discovery, so an escaping red_proof.doc aborts the check before any read or repoint write"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/pathfence_fields_test.go"
+      ],
+      "commit": "6f6d1e0",
+      "completed_at": "2026-09-07T12:16:10.688347Z",
+      "landmarks": [
+        {
+          "feature": "tracked-path containment",
+          "symbol": "TestEveryPathShapedFieldIsDeclared",
+          "loc": "internal/cmd/pathfence_fields_test.go:47",
+          "what": "an AST walk over the schema packages fails on any path-shaped field missing from the registry, and on any registry entry whose field is gone"
+        }
+      ]
+    }
+  }
+}

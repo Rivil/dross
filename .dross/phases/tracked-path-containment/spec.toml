@@ -1,0 +1,101 @@
+[phase]
+  id = "tracked-path-containment"
+  title = "tracked-path-containment"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "Containment is one shared implementation: both existing call sites — `containedPath` in internal/cmd/security.go and the `--doc` escape test in internal/cmd/redproof_set.go — route through it, and no second `..`-prefix test remains in non-test code."
+
+[[criteria]]
+  id = "c-2"
+  text = "A path loaded from a tracked artifact that resolves outside its root is refused before any file I/O: a changes.json whose task `files` names `../x` fails the verify scope instead of being stat-ed or dispatched to a mutation adapter."
+
+[[criteria]]
+  id = "c-3"
+  text = "The write path keeps its containment through the shared check: a finding-derived name like `../main.go` still cannot cause a scan run to write outside its run directory."
+
+[[criteria]]
+  id = "c-4"
+  text = "Containment is enforced by the type system, not by a hand-maintained list: every site that opens a tracked-artifact path accepts a value only the shared check can construct, so a consumer that skips the check fails to build. A residual test covers the gap types cannot — a reader that unwraps a checked value with `.String()` to reach os.* fails the suite."
+
+[[criteria]]
+  id = "c-5"
+  text = "A refusal is diagnosable: the error names the offending path, the artifact it was loaded from, and the root it escaped, so a hand-edited changes.json can be fixed from the message alone."
+
+[[criteria]]
+  id = "c-6"
+  text = "Every path-shaped field in the .dross schemas is accounted for: each is either consumed through the shared check, or carries an explicit declaration that nothing opens it, so adding a path-shaped field without declaring it — or declaring a field consumed when its carrier is not the checked type — fails the enumerating test."
+
+[[decisions]]
+  key = "artifact_scope"
+  choice = "Every path-shaped field in the .dross schemas is in scope. Fields that reach file I/O today — changes.json and plan.toml task `files`, plus the already-guarded run-dir and redproof `--doc` sites — go through the shared check; fields nothing currently opens (env.files, testlane paths) carry an explicit not-consumed declaration that the enumerating test reads."
+  why = "Scoping to today's consumers would leave the same bug one field over the moment a consumer is added. Declaring the dormant fields instead of guarding them keeps the obligation tracked without asserting a guarantee no test can falsify."
+  locked = true
+
+[[decisions]]
+  key = "escape_failure_mode"
+  choice = "An escaping path is a hard error that aborts the run. It does not join the soft `gone` lane that mutationCandidates uses for files that no longer exist."
+  why = "A missing file is stale bookkeeping; an escaping path is a corrupt or tampered artifact. Skipping it would silently narrow the mutation scope while the run still reports pass — the false-green shape. Failing loud matches the milestone's gate framing."
+  locked = true
+
+[[decisions]]
+  key = "absolute_paths"
+  choice = "The shared check rejects absolute paths outright, adopting checkRedProofDoc's stricter rule at every site. containedPath's current behaviour — letting filepath.Join silently re-root them — does not survive the merge."
+  why = "A tracked artifact is read on every machine that clones the repo, so an absolute path is one machine's layout and is always a mistake. Re-rooting turns that mistake into a confusing file-not-found instead of naming the real problem. Silently re-rooting never escapes, so this is a diagnosability choice, not a security one."
+  locked = true
+
+[[decisions]]
+  key = "symlink_resolution"
+  choice = "Lexical containment only — the check compares cleaned path strings and does not call filepath.EvalSymlinks. The limit is documented on the shared helper."
+  why = "Lexical checking is deterministic and works on paths that do not exist yet, which the write path needs. EvalSymlinks requires the target to exist, is still TOCTOU-racy, and would not close the hole it appears to. The threat this phase addresses is a mistyped or hand-edited artifact, not an attacker who can already write symlinks into the repo."
+  locked = true
+
+[[deferred]]
+  text = "Raw-string reader scan: a brand-new consumer that loads a declared path field and calls os.* on the raw string, never touching the Contained type at all."
+  why = "Not reachable from go/parser + go/ast — deciding that an os.* argument traces back to a declared path field is dataflow over resolved types, needing go/types (golang.org/x/tools/go/packages). The type system covers this wherever the value is carried as a Contained; what is left uncovered is a field that stays a plain string because it must marshal. Split out of c-4 at plan time on 2026-09-07 after the third review found the criterion promised a scan no task built."
+  target = "secret-detection"
+
+[[deferred]]
+  text = "Symlink-resolving containment: close the hole where a lexically-contained path is a symlink pointing outside the repo."
+  why = "Different threat model from a mistyped artifact — it presumes an attacker who can already write into the tree. Belongs with the artifact-content threats secret-detection handles."
+  target = "secret-detection"
+
+[[deferred]]
+  text = "survivor internal/compilefence/compilefence.go:61 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "mutation-range-provenance"
+  survivor = "365503d33114f65e"
+
+[[deferred]]
+  text = "survivor internal/compilefence/compilefence.go:80 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "mutation-range-provenance"
+  survivor = "5d74aadbbae679b7"
+
+[[deferred]]
+  text = "survivor internal/compilefence/compilefence.go:81 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "mutation-range-provenance"
+  survivor = "695a2b44f32b1b43"
+
+[[deferred]]
+  id = "f1b1b4359fc352ac"
+  text = "Containment's regression guards rest on three hand-maintained lists that fail SILENTLY when stale: scannedPackages (internal/cmd/pathfence_enum_test.go:44, 8 of 36 internal packages — argfence and hostallow, the sibling fence packages, are unscanned and the literal ban has no per-directory vacuity guard), pathShapedTags (pathfence_fields_test.go:43, a closed 11-word tag vocabulary), and schemaDirs (pathfence_fields_test.go:35, 4 dirs). Plus the containedVar name list at security_test.go:526, where renaming a local silences the .String() arm. Harden them: derive the package set, widen the tag rule, or add vacuity guards that fail when a list stops matching anything."
+  why = "The phase's stated goal was containment enforced 'by the type system, not by a hand-maintained list'. The type fence delivers that; the three AST scans backstopping it reintroduce exactly the burden the spec set out to avoid. Proven by experiment on 2026-09-07 during verify: adding string fields tagged workdir/output_dir/spec to phase.Task — a struct in a SCANNED dir — left the full suite green, and detachedRun.RunDir (internal/cmd/local.go:287) is missed on both axes today."
+
+[[deferred]]
+  id = "860fbefe9a16aa80"
+  text = "containScope double-prefixes its error: internal/cmd/verifyscope.go:125 passes artifact \"verify scope\" into pathfence.Contain, then :127 wraps it again with fmt.Errorf(\"verify scope: %w\", err), so the user sees 'verify scope: verify scope: \"...\" resolves outside ...'. Drop one of the two."
+  why = "User-facing, and invisible to the strings.Contains-based message assertions that cover the rest of the diagnosability criterion (c-5), so no existing test will ever catch it."
+
+[[deferred]]
+  id = "8f3379574b1d5ce5"
+  text = "The absolute-path refusal in pathfence has no message-content test. TestContainAbsoluteIsItsOwnSentinel (internal/pathfence/pathfence_test.go:85) and TestValidateRecordedRefusesAbsolute (internal/verify/scope_test.go:437) assert only the ErrAbsolute sentinel. Add the same three-part Contains assertion the escape branch has — offending path, artifact, root."
+  why = "The message at pathfence.go:105-107 does carry all three facts, but nothing guards it, so a reword dropping the root ships undetected. That is exactly the failure c-5 exists to prevent, on the sibling branch of the same check."
+  target = "secret-detection"
+
+[[deferred]]
+  id = "c1681da56e037477"
+  text = "c-2's 'not dispatched to a mutation adapter' clause is inferred, not asserted: stubMutationAdapter.Run records the files it was handed in s.got, but the escape-refusal tests (internal/cmd/verify_scoping_test.go:521,549) never assert it is empty. One line would check the clause directly instead of deriving it from err != nil plus absent artifacts."
+  why = "Also nothing observes the ABSENCE of a stat — 'refused before any file I/O' rests on reading call ordering, so a future refactor that stat-ed inside NewScope would pass every current assertion."

@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 var (
@@ -326,8 +328,12 @@ func RunDir(runID string) (string, error) {
 	if runID == "" {
 		return "", fmt.Errorf("remote: empty run id: %w", ErrUnsafeTarget)
 	}
-	if runID != path.Base(runID) || runID == "." || runID == ".." {
-		return "", fmt.Errorf("remote: run id %q is not a single path segment: %w", runID, ErrUnsafeTarget)
+	// The segment test is pathfence's — one containment rule, not two — but the
+	// refusal stays wrapped in ErrUnsafeTarget. Callers distinguish a refusal
+	// from a transport failure on that sentinel, so returning a bare pathfence
+	// error here would break every one of them.
+	if err := pathfence.Segment("run id", runID); err != nil {
+		return "", fmt.Errorf("remote: %w: %w", err, ErrUnsafeTarget)
 	}
 	return path.Join(RunsDirName, runID), nil
 }

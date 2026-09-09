@@ -564,9 +564,16 @@ const (
 // redProofChecks classifies every discovered red-proof pin. present is false
 // when the repo records none, so projects without red proofs get no section.
 func redProofChecks(root, repoDir string) ([]doctorLine, bool) {
-	pins, err := discoverRedProofPins(root)
+	pins, err := discoverRedProofPins(root, repoDir)
 	if err != nil {
-		return []doctorLine{{doctorIssue, fmt.Sprintf("could not read red-proof pins: %v", err)}}, true
+		// One line, and every pin dropped. Discovery refuses the whole record
+		// when a doc escapes the repo — a corrupt artifact stops the run — so
+		// an escaping doc suppresses the other pins' verdicts. That is the
+		// accepted cost of the hard lane, pinned by a test rather than left as
+		// prose. The wording says "could not be read" nowhere on purpose: the
+		// per-pin unreadable-doc arm below is a different diagnosis, and an
+		// operator has to be able to tell a corrupt path from a missing file.
+		return []doctorLine{{doctorIssue, fmt.Sprintf("red-proof pins could not be read: %v", err)}}, true
 	}
 	if len(pins) == 0 {
 		return nil, false
@@ -584,7 +591,7 @@ func redProofChecks(root, repoDir string) ([]doctorLine, bool) {
 func redProofPinLines(root, repoDir string, pin redProofPin) []doctorLine {
 	verdict, why, err := classifyReachability(repoDir, pin.SHA)
 	if err != nil {
-		return []doctorLine{{doctorIssue, fmt.Sprintf("%s: cannot check the pin in %s: %v", pin.Phase, pin.Doc, err)}}
+		return []doctorLine{{doctorIssue, fmt.Sprintf("%s: cannot check the pin in %s: %v", pin.Phase, pin.Doc.Rel(), err)}}
 	}
 
 	var lines []doctorLine
@@ -592,33 +599,33 @@ func redProofPinLines(root, repoDir string, pin redProofPin) []doctorLine {
 	case reachUnreachable:
 		lines = append(lines, doctorLine{doctorIssue, fmt.Sprintf(
 			"%s: %s pins %s, which is unreachable — %s. Fix: %s",
-			pin.Phase, pin.Doc, pin.SHA, why, redProofRepointHint(root, repoDir, pin))})
+			pin.Phase, pin.Doc.Rel(), pin.SHA, why, redProofRepointHint(root, repoDir, pin))})
 	case reachIndeterminate:
 		lines = append(lines, doctorLine{doctorWarn, fmt.Sprintf(
 			"%s: cannot determine whether %s (pinned by %s) is reachable — %s",
-			pin.Phase, short(pin.SHA), pin.Doc, why)})
+			pin.Phase, short(pin.SHA), pin.Doc.Rel(), why)})
 	}
 
 	// The doc cross-check runs whatever the verdict: it is a separate claim
 	// about a separate artefact, and a shallow clone can still read a file.
-	docSHA, docErr := redProofDocSHA(repoDir, pin.Doc)
+	docSHA, docErr := redProofDocSHA(pin.Doc)
 	switch {
 	case docErr != nil:
 		lines = append(lines, doctorLine{doctorIssue, fmt.Sprintf(
-			"%s: pins %s as its replay doc, which cannot be read: %v", pin.Phase, pin.Doc, docErr)})
+			"%s: pins %s as its replay doc, which cannot be read: %v", pin.Phase, pin.Doc.Rel(), docErr)})
 	case docSHA == "":
 		lines = append(lines, doctorLine{doctorIssue, fmt.Sprintf(
 			"%s: %s carries no `base commit:` line, so nothing cross-checks the recorded %s",
-			pin.Phase, pin.Doc, short(pin.SHA))})
+			pin.Phase, pin.Doc.Rel(), short(pin.SHA))})
 	case !sameCommitSHA(docSHA, pin.SHA):
 		lines = append(lines, doctorLine{doctorIssue, fmt.Sprintf(
 			"%s: %s says base commit %s but the record pins %s — the prose and the record disagree",
-			pin.Phase, pin.Doc, docSHA, pin.SHA)})
+			pin.Phase, pin.Doc.Rel(), docSHA, pin.SHA)})
 	}
 
 	if len(lines) == 0 {
 		lines = append(lines, doctorLine{doctorOK, fmt.Sprintf(
-			"%s: %s pins %s, %s", pin.Phase, pin.Doc, short(pin.SHA), why)})
+			"%s: %s pins %s, %s", pin.Phase, pin.Doc.Rel(), short(pin.SHA), why)})
 	}
 	return lines
 }

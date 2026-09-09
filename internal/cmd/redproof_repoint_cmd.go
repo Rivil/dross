@@ -43,7 +43,7 @@ func phaseRedProofRepoint() *cobra.Command {
 			}
 			repoDir := filepath.Dir(root)
 
-			pins, err := discoverRedProofPins(root)
+			pins, err := discoverRedProofPins(root, repoDir)
 			if err != nil {
 				return err
 			}
@@ -96,7 +96,10 @@ func repointOnePin(root, repoDir string, pin redProofPin, apply bool) bool {
 		return true
 	}
 
-	Printf("%s: %s pins %s, which has rotted — %s\n", pin.Phase, plan.Doc, plan.OldSHA, plan.Why)
+	// Rel(): plan.Doc is a Contained, whose String() is the joined absolute
+	// path. A bare %s here would print one machine's layout in a line the
+	// operator reads as a repo-relative doc name.
+	Printf("%s: %s pins %s, which has rotted — %s\n", pin.Phase, plan.Doc.Rel(), plan.OldSHA, plan.Why)
 	Printf("  proposed: %s (%s's fork point)\n", plan.NewSHA, pin.Phase)
 	verb := "would write"
 	if apply {

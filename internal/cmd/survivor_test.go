@@ -504,3 +504,91 @@ func TestSurvivorUnknownSubcommandExitsNonZero(t *testing.T) {
 		t.Fatal("dross survivor frob exited 0, want a non-zero unknown-subcommand error")
 	}
 }
+
+// setupSurvivorMilestoneFixture parks a slug in a milestone's phases array that
+// has NO phase directory — modelled on this repo's own roadmap, where
+// `mutation-range-provenance` sits in v1.7's array unscaffolded. A phase
+// directory exists only once someone STARTS that phase, so this is the ordinary
+// shape of a routing destination, not an edge case.
+func setupSurvivorMilestoneFixture(t *testing.T) string {
+	t.Helper()
+	dir := setupSurvivorFixture(t)
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v1.7.toml"),
+		"phases = [\"alpha\", \"beta\", \"unscaffolded-successor\"]\n\n"+
+			"[milestone]\n  version = \"v1.7\"\n  title = \"Roadmap\"\n")
+	return dir
+}
+
+// TestSurvivorRouteAcceptsMilestoneOnlySlug is the regression: routing debt to a
+// phase that is on the roadmap but not yet scaffolded must succeed.
+//
+// It failed before this fix because survivorRoute validated the destination with
+// its own os.Stat(phase.Dir(...)) instead of the shared gate, so it could only
+// ever accept a phase already underway or finished — the opposite of where debt
+// belongs. Found on 2026-09-07 while draining tracked-path-containment, where
+// three survivors could not be routed to `mutation-range-provenance`.
+func TestSurvivorRouteAcceptsMilestoneOnlySlug(t *testing.T) {
+	dir := setupSurvivorMilestoneFixture(t)
+
+	if err := runCmd(t, Survivor(), "route", "internal/x.go:4",
+		"--op", "CONDITIONALS_BOUNDARY", "--target", "unscaffolded-successor"); err != nil {
+		t.Fatalf("route to a milestone-array-only slug should succeed: %v", err)
+	}
+
+	alpha, err := phase.LoadSpec(filepath.Join(dir, ".dross", "phases", "alpha", "spec.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(alpha.Deferred) != 1 {
+		t.Fatalf("current phase spec has %d deferred entries, want 1", len(alpha.Deferred))
+	}
+	if alpha.Deferred[0].Target != "unscaffolded-successor" {
+		t.Errorf("routed entry target = %q, want unscaffolded-successor", alpha.Deferred[0].Target)
+	}
+	if alpha.Deferred[0].Survivor == "" {
+		t.Error("routed entry carries no survivor key")
+	}
+}
+
+// TestSurvivorRouteAndDeferredRouteAgreeOnTargets is the drift guard that would
+// have caught this bug. The locked target_validation decision says one rule, one
+// implementation: a slug is valid if a phase directory exists for it OR it
+// appears in any milestone's phases array. survivorRoute was a third
+// implementation that had never been enrolled, so it silently disagreed.
+//
+// For every slug in the table, the two verbs must reach the same verdict. A slug
+// one accepts and the other rejects is a destination reachable by one route and
+// dangling by the other.
+func TestSurvivorRouteAndDeferredRouteAgreeOnTargets(t *testing.T) {
+	for _, tc := range []struct {
+		slug      string
+		wantValid bool
+		why       string
+	}{
+		{"beta", true, "scaffolded phase directory"},
+		{"unscaffolded-successor", true, "milestone phases array only, no directory"},
+		{"no-such-phase", false, "neither a directory nor a roadmap entry"},
+	} {
+		t.Run(tc.slug, func(t *testing.T) {
+			dir := setupSurvivorMilestoneFixture(t)
+
+			surErr := runCmd(t, Survivor(), "route", "internal/x.go:4",
+				"--op", "CONDITIONALS_BOUNDARY", "--target", tc.slug)
+			if (surErr == nil) != tc.wantValid {
+				t.Fatalf("survivor route --target %s: err=%v, want valid=%v (%s)",
+					tc.slug, surErr, tc.wantValid, tc.why)
+			}
+
+			// Same question, other verb, same fixture shape.
+			chdir(t, dir)
+			defErr := runCmd(t, Deferred(), "route", "beta", "0", "--target", tc.slug)
+			// `deferred route` needs an item to route; a missing-index error is
+			// not a target verdict, so only the target-shaped rejection counts.
+			defRejectedTarget := defErr != nil && strings.Contains(defErr.Error(), "--target")
+			if defRejectedTarget == tc.wantValid {
+				t.Errorf("deferred route --target %s rejected=%v but survivor route valid=%v — the two verbs disagree (%s)",
+					tc.slug, defRejectedTarget, tc.wantValid, tc.why)
+			}
+		})
+	}
+}

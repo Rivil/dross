@@ -14,6 +14,7 @@ import (
 
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
@@ -79,7 +80,10 @@ func Verify() *cobra.Command {
 			// correctness fix, not a mode: without it a survivor in an
 			// untouched file of the same package gates this phase, and a
 			// neighbour's kills inflate its score.
-			scope := phaseScope(filepath.Dir(root), ch.Base, recorded)
+			scope, err := phaseScope(filepath.Dir(root), ch.Base, recorded)
+			if err != nil {
+				return err
+			}
 
 			// The UNION is what gets mutated, not just the recorded files. A
 			// file git saw change but no task recorded would otherwise never
@@ -87,7 +91,11 @@ func Verify() *cobra.Command {
 			// the same escape hatch this phase closes on the attribution side.
 			// Widening happens here, at dispatch; the post-Report filter never
 			// narrows it back.
-			files, gone := mutationCandidates(filepath.Dir(root), scope.Files)
+			candidates, err := containScope(filepath.Dir(root), scope)
+			if err != nil {
+				return err
+			}
+			files, gone := mutationCandidates(candidates)
 			if len(files) == 0 && len(gone) == 0 {
 				Print("verify: no changes recorded for this phase and nothing changed since the base.")
 				Print("Run /dross-execute first, or record changes manually with `dross changes record`.")
@@ -584,8 +592,15 @@ func collectDetached(phaseID string) error {
 	for taskID, r := range ch.Tasks {
 		filesByTask[taskID] = r.Files
 	}
-	scope := phaseScope(repoDir, ch.Base, verify.FilesFromChanges(filesByTask))
-	files, gone := mutationCandidates(repoDir, scope.Files)
+	scope, err := phaseScope(repoDir, ch.Base, verify.FilesFromChanges(filesByTask))
+	if err != nil {
+		return err
+	}
+	candidates, err := containScope(repoDir, scope)
+	if err != nil {
+		return err
+	}
+	files, gone := mutationCandidates(candidates)
 
 	adapters, _, err := configuredAdaptersFn(proj, root, false)
 	if err != nil {
@@ -1186,12 +1201,27 @@ func dockerPrefix(p *project.Project) string {
 //     changes.json, so recording them as skips would seed four to six
 //     permanent NOTEs into every verify.toml — a standing backlog no phase can
 //     ever drain, which is what rule r-02 forbids.
-func mutationCandidates(repoDir string, files []string) (dispatch, gone []string) {
-	for _, f := range files {
+//
+// It takes []pathfence.Contained rather than []string because this is where a
+// scope path meets the filesystem: the Stat below goes through the pathfence
+// seam, so a caller that skipped the containment check has no value to pass and
+// fails to build. containScope is the only way to get one.
+//
+// The RETURNS stay []string. dispatch feeds the mutation adapters and gone
+// feeds the skip report, and both consume plain repo-relative paths — the
+// containment guarantee is about what reached the filesystem, not about what
+// the adapters are handed afterwards.
+func mutationCandidates(files []pathfence.Contained) (dispatch, gone []string) {
+	for _, c := range files {
+		// Rel(), not String(): this is a repo-relative prefix test, and the
+		// joined absolute form never carries a ".dross/" prefix. Neither
+		// accessor reaches an os.* argument here, so both are legal under the
+		// residual scan; only one of them is correct.
+		f := c.Rel()
 		if f == ".dross" || strings.HasPrefix(f, ".dross/") {
 			continue
 		}
-		if _, err := os.Stat(filepath.Join(repoDir, f)); err != nil {
+		if _, err := pathfence.Stat(c); err != nil {
 			gone = append(gone, f)
 			continue
 		}

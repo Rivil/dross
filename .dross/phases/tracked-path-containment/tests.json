@@ -1,0 +1,2705 @@
+{
+  "phase": "tracked-path-containment",
+  "generated_at": "2026-09-07T15:08:04.598321Z",
+  "languages": [
+    {
+      "name": "go",
+      "tool": "gremlins",
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go",
+        "internal/cmd/hostile_config_test.go",
+        "internal/cmd/pathfence_carrier_test.go",
+        "internal/cmd/pathfence_enum_test.go",
+        "internal/cmd/pathfence_fields_test.go",
+        "internal/cmd/quality.go",
+        "internal/cmd/quality_findings_test.go",
+        "internal/cmd/quality_test.go",
+        "internal/cmd/redproof.go",
+        "internal/cmd/redproof_lifecycle.go",
+        "internal/cmd/redproof_lifecycle_test.go",
+        "internal/cmd/redproof_repoint.go",
+        "internal/cmd/redproof_repoint_cmd.go",
+        "internal/cmd/redproof_repoint_cmd_test.go",
+        "internal/cmd/redproof_repoint_test.go",
+        "internal/cmd/redproof_set.go",
+        "internal/cmd/redproof_set_test.go",
+        "internal/cmd/redproof_test.go",
+        "internal/cmd/security.go",
+        "internal/cmd/security_test.go",
+        "internal/cmd/task.go",
+        "internal/cmd/task_test.go",
+        "internal/cmd/testdata/pathfence_scan/dotdot_path.go.txt",
+        "internal/cmd/testdata/pathfence_scan/dotdot_revrange.go.txt",
+        "internal/cmd/testdata/pathfence_scan/rundir_revert.go.txt",
+        "internal/cmd/testdata/pathfence_scan/seam_ok.go.txt",
+        "internal/cmd/testdata/pathfence_scan/unwrap_os.go.txt",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_scoping_test.go",
+        "internal/cmd/verifyscope.go",
+        "internal/cmd/verifyscope_test.go",
+        "internal/compilefence/compilefence.go",
+        "internal/compilefence/compilefence_test.go",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go",
+        "internal/pathfence/pathfence.go",
+        "internal/pathfence/pathfence_test.go",
+        "internal/phase/plan_edit.go",
+        "internal/phase/plan_edit_test.go",
+        "internal/quality/findings.go",
+        "internal/quality/findings_test.go",
+        "internal/quality/lifecycle.go",
+        "internal/quality/scaffold.go",
+        "internal/quality/scaffold_test.go",
+        "internal/remote/remote.go",
+        "internal/remote/remote_test.go",
+        "internal/security/findings.go",
+        "internal/security/findings_test.go",
+        "internal/security/lifecycle.go",
+        "internal/security/scaffold.go",
+        "internal/security/scaffold_test.go",
+        "internal/testlane/match.go",
+        "internal/testlane/match_test.go",
+        "internal/verify/scope.go",
+        "internal/verify/scope_test.go"
+      ],
+      "mutation": {
+        "Tool": "gremlins",
+        "Killed": 896,
+        "Survived": 60,
+        "Timeout": 0,
+        "Errors": 0,
+        "Score": 0.9372384937238494,
+        "Surviving": [
+          {
+            "File": "internal/cmd/verify.go",
+            "Line": 177,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "ec603fea4bc70ee2",
+            "Lifecycle": "accepted",
+            "Note": "The body of a `var detach* = func(...)` process-construction seam in internal/cmd/verify.go — detachSync, detachStatus, detachCancel. Every test in verify_detach_test.go, verify_results_test.go and verify_status_test.go replaces the whole var, so these bodies never execute: a live `go test -coverprofile ./internal/cmd` on 2026-08-31 reports count 0 for every block covering lines 167, 363, 367 and 568-573. Executing them would mean spawning real ssh, because remote.commandFn — the transport seam these bodies bottom out in — is unexported and unreachable from package cmd, and the phase's locked tests_spawn_no_ssh decision forbids a test that needs a host. Their effect is asserted instead of their line: the stubs return the same errors the real bodies would propagate, and TestResultsOnAnUnreachableHostIsNotAVerdict, TestDispatchPushesBeforeItStarts and TestCancelAgainstAnUnreachableHostStillClearsButSaysSo pin what the caller does with them. Move the seam boundary below remote.Exec, or export a transport stub from internal/remote, and these become reachable and owe tests rather than this reason."
+          },
+          {
+            "File": "internal/cmd/verify.go",
+            "Line": 389,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "b58cb617602cac6e",
+            "Lifecycle": "accepted",
+            "Note": "The body of a `var detach* = func(...)` process-construction seam in internal/cmd/verify.go — detachSync, detachStatus, detachCancel. Every test in verify_detach_test.go, verify_results_test.go and verify_status_test.go replaces the whole var, so these bodies never execute: a live `go test -coverprofile ./internal/cmd` on 2026-08-31 reports count 0 for every block covering lines 167, 363, 367 and 568-573. Executing them would mean spawning real ssh, because remote.commandFn — the transport seam these bodies bottom out in — is unexported and unreachable from package cmd, and the phase's locked tests_spawn_no_ssh decision forbids a test that needs a host. Their effect is asserted instead of their line: the stubs return the same errors the real bodies would propagate, and TestResultsOnAnUnreachableHostIsNotAVerdict, TestDispatchPushesBeforeItStarts and TestCancelAgainstAnUnreachableHostStillClearsButSaysSo pin what the caller does with them. Move the seam boundary below remote.Exec, or export a transport stub from internal/remote, and these become reachable and owe tests rather than this reason."
+          },
+          {
+            "File": "internal/cmd/verify.go",
+            "Line": 393,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "4b0446237dd04163",
+            "Lifecycle": "accepted",
+            "Note": "The body of a `var detach* = func(...)` process-construction seam in internal/cmd/verify.go — detachSync, detachStatus, detachCancel. Every test in verify_detach_test.go, verify_results_test.go and verify_status_test.go replaces the whole var, so these bodies never execute: a live `go test -coverprofile ./internal/cmd` on 2026-08-31 reports count 0 for every block covering lines 167, 363, 367 and 568-573. Executing them would mean spawning real ssh, because remote.commandFn — the transport seam these bodies bottom out in — is unexported and unreachable from package cmd, and the phase's locked tests_spawn_no_ssh decision forbids a test that needs a host. Their effect is asserted instead of their line: the stubs return the same errors the real bodies would propagate, and TestResultsOnAnUnreachableHostIsNotAVerdict, TestDispatchPushesBeforeItStarts and TestCancelAgainstAnUnreachableHostStillClearsButSaysSo pin what the caller does with them. Move the seam boundary below remote.Exec, or export a transport stub from internal/remote, and these become reachable and owe tests rather than this reason."
+          },
+          {
+            "File": "internal/cmd/verify.go",
+            "Line": 738,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "1356a6e766535468",
+            "Lifecycle": "accepted",
+            "Note": "The gremlins switch-case attribution ceiling, proven live on this exact line rather than by analogy. The line is 'case serr != nil:' in verifyStatus's status switch, and a go test -coverprofile ./internal/cmd run on 2026-08-31 reports count 1 for the block spanning 621-625 — the arm executes — while the gremlins report for the same tree marks it NOT COVERED and therefore never builds a mutant for it. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. The arm is directly asserted by TestStatusLabelsARecordedStateAsRecorded in internal/cmd/verify_status_test.go, which stubs detachStatus to return a transport error and requires the printed line to carry both 'recorded' and 'did not answer' — the whole point being that an unverified state is never printed as though it were observed. Adding tests cannot kill this mutant, because a test already runs the line. See the gremlins-attribution-ceiling category and TestAttributionCeilingIsReal for the general proof."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 106,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "8050884712acc62f",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 106,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "8050884712acc62f",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 108,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "de94300e7681c476",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 108,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "de94300e7681c476",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 111,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "f2b8e6bc447a05eb",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 111,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "f2b8e6bc447a05eb",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 177,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "9f6d0e6b8fa5ab9b",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 277,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "54e08c890d4694bd",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 280,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "b91bfa24fdf586c0",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 280,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "89f2fa68e2d27733",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 413,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "f1f5b5ca57ba6394",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 415,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "ef37177ea24e0368",
+            "Lifecycle": "accepted",
+            "Note": "Dead by construction, not untested: detectMissingPhaseDirs (internal/cmd/repair_phasedirs.go) returns a nil error on every path — a missing origin ref, an unreadable .dross/phases tree and an empty listing are all \"nothing known\" by design — so missingDirsErr is never non-nil and this arm cannot be reached by any fixture. Pinned by TestDetectMissingPhaseDirsNeverErrors, which fails the day the function reports a real error, at which point the arm becomes reachable and owes a test rather than this reason."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 417,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "e7956d86bc3d1b73",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 417,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "e7956d86bc3d1b73",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 446,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "ce81e615d18b28b1",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 613,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "7838ed0a7daca324",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. These two arms (the replay doc cannot be read; the doc carries no base-commit line) are asserted line-for-line by TestRedProofUnreadableDocIsAnIssue and TestRedProofDocWithoutABaseCommitLineIsAnIssue, with TestRedProofDocAgreeingWithTheRecordIsClean pinning the green path they are distinguished from."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 616,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "b808ff3a5274aed1",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. These two arms (the replay doc cannot be read; the doc carries no base-commit line) are asserted line-for-line by TestRedProofUnreadableDocIsAnIssue and TestRedProofDocWithoutABaseCommitLineIsAnIssue, with TestRedProofDocAgreeingWithTheRecordIsClean pinning the green path they are distinguished from."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 1584,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "414c717115f74a03",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+          },
+          {
+            "File": "internal/cmd/doctor.go",
+            "Line": 1606,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "cb3b8dac437177c3",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+          },
+          {
+            "File": "internal/cmd/redproof_repoint_cmd.go",
+            "Line": 162,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "07659e3ec30d13f2",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/compilefence/compilefence.go",
+            "Line": 81,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "695a2b44f32b1b43",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/compilefence/compilefence.go",
+            "Line": 80,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "5d74aadbbae679b7",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/compilefence/compilefence.go",
+            "Line": 61,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "365503d33114f65e",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 97,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "00055a8a8fa719fd",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 99,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "4b6cf3537d63041a",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 99,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "4b6cf3537d63041a",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 101,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "5d536c93b05cc880",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 97,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "00055a8a8fa719fd",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 105,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "d068356e35e5acce",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 142,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "96ef6b73f72cff14",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 141,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "709e23135976a3e0",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 153,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "f3267416de3b9515",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 163,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "d96394c1c8b29972",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 192,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "4b70699c88303253",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 191,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "afec035a1d99da28",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 200,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "43e9be2007cbd072",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/pathfence/fields.go",
+            "Line": 208,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "d8a183dbe40db22a",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/remote/remote.go",
+            "Line": 769,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "cfe3741c8c0ef9a8",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+          },
+          {
+            "File": "internal/remote/remote.go",
+            "Line": 771,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "421a488234549be2",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+          },
+          {
+            "File": "internal/remote/remote.go",
+            "Line": 771,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "421a488234549be2",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+          },
+          {
+            "File": "internal/remote/remote.go",
+            "Line": 771,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "421a488234549be2",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+          },
+          {
+            "File": "internal/remote/remote.go",
+            "Line": 771,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "421a488234549be2",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+          },
+          {
+            "File": "internal/remote/remote.go",
+            "Line": 771,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "421a488234549be2",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+          },
+          {
+            "File": "internal/remote/remote.go",
+            "Line": 775,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "394b2fc32d7aa079",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+          },
+          {
+            "File": "internal/remote/remote.go",
+            "Line": 775,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "394b2fc32d7aa079",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+          },
+          {
+            "File": "internal/remote/remote.go",
+            "Line": 775,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "394b2fc32d7aa079",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+          },
+          {
+            "File": "internal/remote/remote.go",
+            "Line": 804,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "07bfd62e7fab1a96",
+            "Lifecycle": "accepted",
+            "Note": "The 'if stdin != \"\"' guard lives inside the process-construction seam (launcherCommand) that every remote test replaces, so executing it would mean spawning the real ssh — the one thing those tests exist to avoid. Its effect is asserted instead of its line: TestRemoteEnvExportsPrecedeTheCommand and TestGremlinsRemoteRunOrderAndArgv both read the script back off the recorded stdin, which is only there because this branch attaches it, and TestRemoteNilCarriesNoScript pins the empty-stdin side."
+          },
+          {
+            "File": "internal/verify/scope.go",
+            "Line": 152,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "eafc28a069169896",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/verify/scope.go",
+            "Line": 152,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "89b1d0ebd34a7589",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/verify/scope.go",
+            "Line": 152,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "eafc28a069169896",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/verify/scope.go",
+            "Line": 152,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "89b1d0ebd34a7589",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/verify/scope.go",
+            "Line": 154,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "7be8190b55e43484",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/verify/scope.go",
+            "Line": 154,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "d0df948dd0650e34",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/verify/scope.go",
+            "Line": 156,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "a3b61f6ed11078be",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/verify/scope.go",
+            "Line": 156,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "dd6d55632a94d070",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          },
+          {
+            "File": "internal/verify/scope.go",
+            "Line": 261,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "1ab0a93a037fdf79",
+            "Lifecycle": "accepted",
+            "Note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+          }
+        ],
+        "NotCovered": 60
+      },
+      "measured_on": "helicon"
+    }
+  ],
+  "out_of_scope": [
+    {
+      "file": "internal/cmd/test_lane_install.go",
+      "line": 286,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "01c1a84fcf199fc2",
+      "lifecycle": "accepted",
+      "note": "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+    },
+    {
+      "file": "internal/cmd/update.go",
+      "line": 181,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "67bbc496d8103359",
+      "lifecycle": "accepted",
+      "note": "Unreachable in a test by construction: this block runs only when updateOpts.targetPath is empty, and it resolves the target to os.Executable() — which, under `go test`, is the running test binary. update.AtomicReplace would then overwrite the test binary mid-run, so every test in update_test.go (TestUpdateAppliesAndResyncs and its siblings) must pass an explicit targetPath, and the default-resolution branch is skipped by all of them. The branch is real in production and untestable in-process; exercising it would destroy the process exercising it."
+    },
+    {
+      "file": "internal/cmd/update.go",
+      "line": 184,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "2f4b2750232fddbd",
+      "lifecycle": "accepted",
+      "note": "Unreachable in a test by construction: this block runs only when updateOpts.targetPath is empty, and it resolves the target to os.Executable() — which, under `go test`, is the running test binary. update.AtomicReplace would then overwrite the test binary mid-run, so every test in update_test.go (TestUpdateAppliesAndResyncs and its siblings) must pass an explicit targetPath, and the default-resolution branch is skipped by all of them. The branch is real in production and untestable in-process; exercising it would destroy the process exercising it."
+    },
+    {
+      "file": "internal/cmd/project.go",
+      "line": 82,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "570d2fdc4eb27db2",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/project.go",
+      "line": 84,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "919acc418a9a0821",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/deferred.go",
+      "line": 169,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "df5f8952de532770",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/state.go",
+      "line": 270,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "e0a52d6f5c8d7569",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/watch.go",
+      "line": 149,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "08ec1d7666c48b32",
+      "lifecycle": "accepted",
+      "note": "gremlins reports this line NOT COVERED although the suite provably executes it: a go test -coverprofile run over TestSuggestPrecedence reports count=1 for the block at watch.go:130.24, while gremlins marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the case CONDITION's own columns belong to no block, and gremlins only builds mutants on lines the profile shows as covered. TestSuggestPrecedence pins both the boundary and the negation directly — reconcilable=1 must NOT suggest the batch verb and reconcilable=2 must — so adding tests cannot kill these; the tests already exist and already run the line."
+    },
+    {
+      "file": "internal/cmd/watch.go",
+      "line": 149,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "5c88045d72401675",
+      "lifecycle": "accepted",
+      "note": "gremlins reports this line NOT COVERED although the suite provably executes it: a go test -coverprofile run over TestSuggestPrecedence reports count=1 for the block at watch.go:130.24, while gremlins marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the case CONDITION's own columns belong to no block, and gremlins only builds mutants on lines the profile shows as covered. TestSuggestPrecedence pins both the boundary and the negation directly — reconcilable=1 must NOT suggest the batch verb and reconcilable=2 must — so adding tests cannot kill these; the tests already exist and already run the line."
+    },
+    {
+      "file": "internal/cmd/watch.go",
+      "line": 154,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "928e3536acd36ece",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/watch.go",
+      "line": 154,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "739beac06e8e62e1",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/issue.go",
+      "line": 237,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "b3bca090eb817d72",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/lane_install.go",
+      "line": 155,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "3a6b02474271a0b3",
+      "lifecycle": "accepted",
+      "note": "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+    },
+    {
+      "file": "internal/cmd/repair.go",
+      "line": 131,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "e6e177e15d5ffcf2",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/repair.go",
+      "line": 133,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "f57b2f9dd061303d",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/repair.go",
+      "line": 133,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "f57b2f9dd061303d",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 80,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "b8ff967b67f96d9e",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 80,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "8550041424bd9279",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 80,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "b8ff967b67f96d9e",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 80,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "8550041424bd9279",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 82,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "bb3a21ac111537ea",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 82,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "e51d801a8015aaf5",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 127,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "d52a461e0f28435b",
+      "lifecycle": "accepted",
+      "note": "Unreachable given the curated data, not untested: CuratedMisreaches sorts by command path and only falls back to comparing tokens when two entries SHARE a path. All four curated entries have distinct command paths, so sort.Slice never invokes the tie-break. Pinned by TestCuratedMisreachPathsAreDistinct, which also asserts the primary path ordering — add a second entry under an existing path and that test fails, making the tie-break reachable and owing a real ordering test instead of this reason."
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 127,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "960198b17e257f5c",
+      "lifecycle": "accepted",
+      "note": "Unreachable given the curated data, not untested: CuratedMisreaches sorts by command path and only falls back to comparing tokens when two entries SHARE a path. All four curated entries have distinct command paths, so sort.Slice never invokes the tie-break. Pinned by TestCuratedMisreachPathsAreDistinct, which also asserts the primary path ordering — add a second entry under an existing path and that test fails, making the tie-break reachable and owing a real ordering test instead of this reason."
+    },
+    {
+      "file": "internal/cmd/remote_bootstrap.go",
+      "line": 184,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "cd19e310c5a973a4",
+      "lifecycle": "accepted",
+      "note": "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+    },
+    {
+      "file": "internal/cmd/remote_bootstrap.go",
+      "line": 189,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "30dcd7db2eecf398",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/remote_bootstrap.go",
+      "line": 228,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "1427e5d3fcc1800d",
+      "lifecycle": "accepted",
+      "note": "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+    },
+    {
+      "file": "internal/cmd/remote_bootstrap.go",
+      "line": 230,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "a8d3d9876b2def80",
+      "lifecycle": "accepted",
+      "note": "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+    },
+    {
+      "file": "internal/cmd/remote_bootstrap.go",
+      "line": 241,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "6e71b90a4ed4fec4",
+      "lifecycle": "accepted",
+      "note": "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+    },
+    {
+      "file": "internal/cmd/ship.go",
+      "line": 284,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "da9683b212e497f3",
+      "lifecycle": "accepted",
+      "note": "Unreachable given the caller, not untested: ship runs autoCommitDrossDirt immediately above this guard, which does git add .dross and commits, and its pre-stage gate refuses any non-.dross dirt before anything is staged at all. The index is therefore empty on every path into the guard, so its commit branch cannot be reached. TestAutoCommitDrossDirtLeavesTheIndexEmpty pins that premise for both the dirty and clean cases and fails the day autoCommitDrossDirt stops draining the index, at which point the branch becomes reachable and owes a test rather than this reason."
+    },
+    {
+      "file": "internal/cmd/ship.go",
+      "line": 576,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "8facc7fea486a231",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/ship.go",
+      "line": 576,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "8facc7fea486a231",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/ship.go",
+      "line": 578,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "b391c1a5b1496088",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/ship.go",
+      "line": 578,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "b391c1a5b1496088",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/ship.go",
+      "line": 580,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "2fd95c208f2dd748",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/root.go",
+      "line": 61,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "65e701d659c601c1",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/milestone_dependents.go",
+      "line": 158,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "c84bb90c5fdb562c",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/milestone_dependents.go",
+      "line": 160,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "b36db01df5cbb210",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/milestone_dependents.go",
+      "line": 160,
+      "op": "INVERT_NEGATIVES",
+      "language": "go",
+      "key": "90a89fcc0c93c7b9",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/milestone_dependents.go",
+      "line": 160,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "d0c1c73cf5c9f87e",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 95,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "c52f92cc35982cda",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 99,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "fa5ac88f46292d4a",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 304,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "d978f429d092ab26",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 309,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "57293670addabbd3",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 314,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "ee552310d9ef3bd7",
+      "lifecycle": "accepted",
+      "note": "An equivalent mutant, not a coverage gap: this arm is `case code \u003c 0 || code \u003e 255` in laneSelectorProblems, and the two arms above it already match code == 0 and code == 255 exactly. CONDITIONALS_BOUNDARY can only widen `\u003c` to `\u003c=` or `\u003e` to `\u003e=`, and both widenings admit only the two values the earlier cases have already consumed — so no input reaches the mutated comparison and no assertion can distinguish the mutant from the original. Killing it would require deleting the explicit 0 and 255 arms, which exist to give each code its own refusal message (TestValidateRejectsUnusableEmptyExitCodes asserts the distinct needles \"success code\", \"transport-failure\" and \"0-255\" per code). The reachable half of this arm is covered: the out-of-range case drives 300 through dross validate and asserts the 0-255 refusal."
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 314,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "c7f84a5caf3f19aa",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 314,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "ee552310d9ef3bd7",
+      "lifecycle": "accepted",
+      "note": "An equivalent mutant, not a coverage gap: this arm is `case code \u003c 0 || code \u003e 255` in laneSelectorProblems, and the two arms above it already match code == 0 and code == 255 exactly. CONDITIONALS_BOUNDARY can only widen `\u003c` to `\u003c=` or `\u003e` to `\u003e=`, and both widenings admit only the two values the earlier cases have already consumed — so no input reaches the mutated comparison and no assertion can distinguish the mutant from the original. Killing it would require deleting the explicit 0 and 255 arms, which exist to give each code its own refusal message (TestValidateRejectsUnusableEmptyExitCodes asserts the distinct needles \"success code\", \"transport-failure\" and \"0-255\" per code). The reachable half of this arm is covered: the out-of-range case drives 300 through dross validate and asserts the 0-255 refusal."
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 314,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "c7f84a5caf3f19aa",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 368,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "95057f14e22b9e4a",
+      "lifecycle": "accepted",
+      "note": "Attribution ceiling, proven per-mutant rather than by category: this is a switch{} case condition in laneToolchainProblems, so go-cover attributes no block to its columns and gremlins never builds or runs the mutant (it is reported NOT COVERED, not executed-and-survived). Applying the mutation by hand and running go test ./internal/cmd -run Toolchain turns the suite red: TestValidateAcceptsAbsentAndDeclaredToolchains fails, because negating the blank-entry arm makes validate reject the legitimate toolchain = [\"mise\"] lane. The test that would catch this breakage already exists and already catches it."
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 370,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "da63dd0716ff940c",
+      "lifecycle": "accepted",
+      "note": "Attribution ceiling, proven per-mutant rather than by category: this is a switch{} case condition in laneToolchainProblems, so go-cover attributes no block to its columns and gremlins never builds or runs the mutant (reported NOT COVERED, not executed-and-survived). Applying \u003e 1 -\u003e \u003e= 1 by hand and running go test ./internal/cmd -run Toolchain turns the suite red in six tests, including TestValidateAcceptsAbsentAndDeclaredToolchains and TestLaneAddWritesToolchainInFlagOrder: widening the boundary makes every single-binary entry read as a command line, so validate rejects toolchains that lane add itself writes. Already caught by existing tests."
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 370,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "aae374b2bffb7a5a",
+      "lifecycle": "accepted",
+      "note": "Attribution ceiling, proven per-mutant rather than by category: this is a switch{} case condition in laneToolchainProblems, so go-cover attributes no block to its columns and gremlins never builds or runs the mutant (reported NOT COVERED, not executed-and-survived). Applying \u003e 1 -\u003e \u003c= 1 by hand and running go test ./internal/cmd -run Toolchain turns the suite red in eight tests, including TestValidateNamesLaneWithUnusableToolchainEntries (the command-line subtest stops being refused) and TestValidateAcceptsAbsentAndDeclaredToolchains (single-binary entries start being refused). Both directions of the arm are already asserted."
+    },
+    {
+      "file": "internal/cmd/phase.go",
+      "line": 438,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "96af9ac8d2c3b95e",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/phase.go",
+      "line": 440,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "5fafdd3feef11dd4",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/phase.go",
+      "line": 931,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "08b98041fe733176",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/gitignore.go",
+      "line": 48,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "cac86369304b7dc1",
+      "lifecycle": "accepted",
+      "note": "A package-level declaration initializer — a const, or a var whose composite literal is built at init — is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all: not a block with count 0, no block. Gremlins only builds and runs mutants on lines the profile shows as covered, so such a line's mutant is never compiled, never run, and can never be killed by any test a caller could write. Proven by TestConstInitializerHasNoCoverageBlock in internal/mutation/ceiling_test.go (the fixture's const line sits in no block while its statement lines do) and by TestNoCoverageBlockIsNotACoverageGap in internal/survivor/evidence_test.go, which pins the distinction from an ordinary coverage gap — a gap is a block that never ran, and a test can close it. Distinct from the attribution ceiling: there the line runs and the tool disagrees; here the line is structurally uninstrumentable."
+    },
+    {
+      "file": "internal/cmd/gitignore.go",
+      "line": 47,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "0f7ff16de78d0188",
+      "lifecycle": "accepted",
+      "note": "A package-level declaration initializer — a const, or a var whose composite literal is built at init — is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all: not a block with count 0, no block. Gremlins only builds and runs mutants on lines the profile shows as covered, so such a line's mutant is never compiled, never run, and can never be killed by any test a caller could write. Proven by TestConstInitializerHasNoCoverageBlock in internal/mutation/ceiling_test.go (the fixture's const line sits in no block while its statement lines do) and by TestNoCoverageBlockIsNotACoverageGap in internal/survivor/evidence_test.go, which pins the distinction from an ordinary coverage gap — a gap is a block that never ran, and a test can close it. Distinct from the attribution ceiling: there the line runs and the tool disagrees; here the line is structurally uninstrumentable."
+    },
+    {
+      "file": "internal/cmd/gitignore.go",
+      "line": 46,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "48cac81a1a5e0bc7",
+      "lifecycle": "accepted",
+      "note": "A package-level declaration initializer — a const, or a var whose composite literal is built at init — is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all: not a block with count 0, no block. Gremlins only builds and runs mutants on lines the profile shows as covered, so such a line's mutant is never compiled, never run, and can never be killed by any test a caller could write. Proven by TestConstInitializerHasNoCoverageBlock in internal/mutation/ceiling_test.go (the fixture's const line sits in no block while its statement lines do) and by TestNoCoverageBlockIsNotACoverageGap in internal/survivor/evidence_test.go, which pins the distinction from an ordinary coverage gap — a gap is a block that never ran, and a test can close it. Distinct from the attribution ceiling: there the line runs and the tool disagrees; here the line is structurally uninstrumentable."
+    },
+    {
+      "file": "internal/cmd/gitignore.go",
+      "line": 66,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "f0f2e97a783fbeb1",
+      "lifecycle": "accepted",
+      "note": "A package-level declaration initializer — a const, or a var whose composite literal is built at init — is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all: not a block with count 0, no block. Gremlins only builds and runs mutants on lines the profile shows as covered, so such a line's mutant is never compiled, never run, and can never be killed by any test a caller could write. Proven by TestConstInitializerHasNoCoverageBlock in internal/mutation/ceiling_test.go (the fixture's const line sits in no block while its statement lines do) and by TestNoCoverageBlockIsNotACoverageGap in internal/survivor/evidence_test.go, which pins the distinction from an ordinary coverage gap — a gap is a block that never ran, and a test can close it. Distinct from the attribution ceiling: there the line runs and the tool disagrees; here the line is structurally uninstrumentable."
+    },
+    {
+      "file": "internal/cmd/gitignore.go",
+      "line": 65,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "68d51f164866815b",
+      "lifecycle": "accepted",
+      "note": "A package-level declaration initializer — a const, or a var whose composite literal is built at init — is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all: not a block with count 0, no block. Gremlins only builds and runs mutants on lines the profile shows as covered, so such a line's mutant is never compiled, never run, and can never be killed by any test a caller could write. Proven by TestConstInitializerHasNoCoverageBlock in internal/mutation/ceiling_test.go (the fixture's const line sits in no block while its statement lines do) and by TestNoCoverageBlockIsNotACoverageGap in internal/survivor/evidence_test.go, which pins the distinction from an ordinary coverage gap — a gap is a block that never ran, and a test can close it. Distinct from the attribution ceiling: there the line runs and the tool disagrees; here the line is structurally uninstrumentable."
+    },
+    {
+      "file": "internal/cmd/gitignore.go",
+      "line": 64,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "7c6fb95f3d81167c",
+      "lifecycle": "accepted",
+      "note": "A package-level declaration initializer — a const, or a var whose composite literal is built at init — is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all: not a block with count 0, no block. Gremlins only builds and runs mutants on lines the profile shows as covered, so such a line's mutant is never compiled, never run, and can never be killed by any test a caller could write. Proven by TestConstInitializerHasNoCoverageBlock in internal/mutation/ceiling_test.go (the fixture's const line sits in no block while its statement lines do) and by TestNoCoverageBlockIsNotACoverageGap in internal/survivor/evidence_test.go, which pins the distinction from an ordinary coverage gap — a gap is a block that never ran, and a test can close it. Distinct from the attribution ceiling: there the line runs and the tool disagrees; here the line is structurally uninstrumentable."
+    },
+    {
+      "file": "internal/cmd/survivor.go",
+      "line": 303,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "742de35850fac7e6",
+      "lifecycle": "accepted",
+      "note": "Defensive branch unreachable through the CLI: survivor list resolves reasons via Store.ReasonFor, which only errors when an acceptance has no reason and no resolvable category — and Load rejects both of those before list ever sees the store (TestLoadRejectsHandEditedReasonlessEntry, TestCategoryResolution). The guard is kept in case Load's validation ever loosens; it cannot be exercised while that validation holds."
+    },
+    {
+      "file": "internal/cmd/survivor.go",
+      "line": 303,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "742de35850fac7e6",
+      "lifecycle": "accepted",
+      "note": "Defensive branch unreachable through the CLI: survivor list resolves reasons via Store.ReasonFor, which only errors when an acceptance has no reason and no resolvable category — and Load rejects both of those before list ever sees the store (TestLoadRejectsHandEditedReasonlessEntry, TestCategoryResolution). The guard is kept in case Load's validation ever loosens; it cannot be exercised while that validation holds."
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 105,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "05f0338039800ccf",
+      "lifecycle": "accepted",
+      "note": "Unreachable without a TTY on stdin: `dross env set` reads the secret with term.ReadPassword(int(os.Stdin.Fd())), which fails outright when stdin is not a terminal, and the guard immediately above returns that error — so no line after it can run. term.ReadPassword is called directly on the real fd with no seam to inject a pty, and a Go test binary never has one. TestEnvCover_SetReadPasswordErrorsOnNonTTY pins the reachable half: the command fails cleanly rather than storing an empty or garbage secret. Remove or seam that read and these lines become reachable and owe tests rather than this reason."
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 109,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "e1dbef123483111f",
+      "lifecycle": "accepted",
+      "note": "Unreachable without a TTY on stdin: `dross env set` reads the secret with term.ReadPassword(int(os.Stdin.Fd())), which fails outright when stdin is not a terminal, and the guard immediately above returns that error — so no line after it can run. term.ReadPassword is called directly on the real fd with no seam to inject a pty, and a Go test binary never has one. TestEnvCover_SetReadPasswordErrorsOnNonTTY pins the reachable half: the command fails cleanly rather than storing an empty or garbage secret. Remove or seam that read and these lines become reachable and owe tests rather than this reason."
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 114,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "32cfc0f3981611ef",
+      "lifecycle": "accepted",
+      "note": "Unreachable without a TTY on stdin: `dross env set` reads the secret with term.ReadPassword(int(os.Stdin.Fd())), which fails outright when stdin is not a terminal, and the guard immediately above returns that error — so no line after it can run. term.ReadPassword is called directly on the real fd with no seam to inject a pty, and a Go test binary never has one. TestEnvCover_SetReadPasswordErrorsOnNonTTY pins the reachable half: the command fails cleanly rather than storing an empty or garbage secret. Remove or seam that read and these lines become reachable and owe tests rather than this reason."
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 119,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "25a2bee296c5727a",
+      "lifecycle": "accepted",
+      "note": "Unreachable without a TTY on stdin: `dross env set` reads the secret with term.ReadPassword(int(os.Stdin.Fd())), which fails outright when stdin is not a terminal, and the guard immediately above returns that error — so no line after it can run. term.ReadPassword is called directly on the real fd with no seam to inject a pty, and a Go test binary never has one. TestEnvCover_SetReadPasswordErrorsOnNonTTY pins the reachable half: the command fails cleanly rather than storing an empty or garbage secret. Remove or seam that read and these lines become reachable and owe tests rather than this reason."
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 148,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "d20cbcdcf9d2e529",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/footer_coverage.go",
+      "line": 52,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "2a845b586a6c46b8",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/footer_coverage.go",
+      "line": 55,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "b7c74e48a4862dab",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/footer_coverage.go",
+      "line": 58,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "b5ddcc58cdde21aa",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/footer_coverage.go",
+      "line": 60,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "50fe59a84e58fd2d",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/status.go",
+      "line": 494,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "5cd804cb4301552d",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/status.go",
+      "line": 494,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "43f3ee380345b6b8",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/status.go",
+      "line": 496,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "cbe0c58e5d2cb069",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/status.go",
+      "line": 496,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "7a36fb899b36807b",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/status.go",
+      "line": 496,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "38470da216963a96",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/status.go",
+      "line": 524,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "f2ccf21f766939d9",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/status.go",
+      "line": 526,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "b1b3323d3c458a3c",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/statusline.go",
+      "line": 189,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "ba29537aba9784ed",
+      "lifecycle": "accepted",
+      "note": "Unreachable without a TTY on stdin: interactiveConfirm returns false at term.IsTerminal(os.Stdin.Fd()) before ever parsing an answer, and the guard calls term.IsTerminal directly on the real fd — there is no seam to inject a fake terminal, and a Go test binary never has one. TestInteractiveConfirmRefusesWithoutATTY pins the reachable half (no TTY means no consent, so a non-interactive install cannot clobber a foreign statusLine) and would fail if that guard were removed, at which point this line becomes reachable and owes a test rather than this reason."
+    },
+    {
+      "file": "internal/cmd/statusline.go",
+      "line": 189,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "ba29537aba9784ed",
+      "lifecycle": "accepted",
+      "note": "Unreachable without a TTY on stdin: interactiveConfirm returns false at term.IsTerminal(os.Stdin.Fd()) before ever parsing an answer, and the guard calls term.IsTerminal directly on the real fd — there is no seam to inject a fake terminal, and a Go test binary never has one. TestInteractiveConfirmRefusesWithoutATTY pins the reachable half (no TTY means no consent, so a non-interactive install cannot clobber a foreign statusLine) and would fail if that guard were removed, at which point this line becomes reachable and owes a test rather than this reason."
+    },
+    {
+      "file": "internal/cmd/lane_preview.go",
+      "line": 262,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "fa6e99b07880ba83",
+      "lifecycle": "accepted",
+      "note": "switch-case condition: gremlins attributes no coverage block to a 'case X != \"\":' expression. Proven exercised — go coverage shows block 249.24,253.64 count=1 under TestMalformedLaneIsAFindingNotAFault, which asserts the exact 'lane bad — would not run:' string this branch prints. Tooling attribution ceiling, not a test gap."
+    },
+    {
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 23,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "4296aba7fc10199c",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 23,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "4296aba7fc10199c",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 25,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "656a800e0c49e82b",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 25,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "656a800e0c49e82b",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 27,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "6ae95da642b1e841",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/remote_bootstrap_cmd.go",
+      "line": 177,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "cf7d3f9891cb9046",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/cmd/remote_bootstrap_cmd.go",
+      "line": 205,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "6467e5accd9da8c2",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/phase/phase.go",
+      "line": 253,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "5b1df21097ad0a06",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/phase/phase.go",
+      "line": 253,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "961ea2e0f678ec6f",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/phase/phase.go",
+      "line": 253,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "5b1df21097ad0a06",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/phase/phase.go",
+      "line": 253,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "961ea2e0f678ec6f",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/phase/phase.go",
+      "line": 253,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "5b1df21097ad0a06",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/phase/phase.go",
+      "line": 253,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "961ea2e0f678ec6f",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/phase/phase.go",
+      "line": 253,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "5b1df21097ad0a06",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    },
+    {
+      "file": "internal/phase/phase.go",
+      "line": 253,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "961ea2e0f678ec6f",
+      "lifecycle": "accepted",
+      "note": "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count\u003e=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+    }
+  ],
+  "scope": {
+    "files": [
+      ".dross/board.json",
+      ".dross/phases/tracked-path-containment/REVIEW.md",
+      ".dross/phases/tracked-path-containment/changes.json",
+      ".dross/phases/tracked-path-containment/panel/mvp.md",
+      ".dross/phases/tracked-path-containment/panel/risk.md",
+      ".dross/phases/tracked-path-containment/panel/synthesis.md",
+      ".dross/phases/tracked-path-containment/panel/verification.md",
+      ".dross/phases/tracked-path-containment/plan.toml",
+      ".dross/phases/tracked-path-containment/spec.toml",
+      ".dross/project.toml",
+      "internal/cmd/doctor.go",
+      "internal/cmd/doctor_test.go",
+      "internal/cmd/hostile_config_test.go",
+      "internal/cmd/pathfence_carrier_test.go",
+      "internal/cmd/pathfence_enum_test.go",
+      "internal/cmd/pathfence_fields_test.go",
+      "internal/cmd/quality.go",
+      "internal/cmd/quality_findings_test.go",
+      "internal/cmd/quality_test.go",
+      "internal/cmd/redproof.go",
+      "internal/cmd/redproof_lifecycle.go",
+      "internal/cmd/redproof_lifecycle_test.go",
+      "internal/cmd/redproof_repoint.go",
+      "internal/cmd/redproof_repoint_cmd.go",
+      "internal/cmd/redproof_repoint_cmd_test.go",
+      "internal/cmd/redproof_repoint_test.go",
+      "internal/cmd/redproof_set.go",
+      "internal/cmd/redproof_set_test.go",
+      "internal/cmd/redproof_test.go",
+      "internal/cmd/security.go",
+      "internal/cmd/security_test.go",
+      "internal/cmd/task.go",
+      "internal/cmd/task_test.go",
+      "internal/cmd/testdata/pathfence_scan/dotdot_path.go.txt",
+      "internal/cmd/testdata/pathfence_scan/dotdot_revrange.go.txt",
+      "internal/cmd/testdata/pathfence_scan/rundir_revert.go.txt",
+      "internal/cmd/testdata/pathfence_scan/seam_ok.go.txt",
+      "internal/cmd/testdata/pathfence_scan/unwrap_os.go.txt",
+      "internal/cmd/verify.go",
+      "internal/cmd/verify_scoping_test.go",
+      "internal/cmd/verifyscope.go",
+      "internal/cmd/verifyscope_test.go",
+      "internal/compilefence/compilefence.go",
+      "internal/compilefence/compilefence_test.go",
+      "internal/pathfence/fields.go",
+      "internal/pathfence/fields_test.go",
+      "internal/pathfence/pathfence.go",
+      "internal/pathfence/pathfence_test.go",
+      "internal/phase/plan_edit.go",
+      "internal/phase/plan_edit_test.go",
+      "internal/quality/findings.go",
+      "internal/quality/findings_test.go",
+      "internal/quality/lifecycle.go",
+      "internal/quality/scaffold.go",
+      "internal/quality/scaffold_test.go",
+      "internal/remote/remote.go",
+      "internal/remote/remote_test.go",
+      "internal/security/findings.go",
+      "internal/security/findings_test.go",
+      "internal/security/lifecycle.go",
+      "internal/security/scaffold.go",
+      "internal/security/scaffold_test.go",
+      "internal/testlane/match.go",
+      "internal/testlane/match_test.go",
+      "internal/verify/scope.go",
+      "internal/verify/scope_test.go"
+    ],
+    "hunks": {
+      ".dross/board.json": [
+        {
+          "start": 45,
+          "end": 46
+        },
+        {
+          "start": 902,
+          "end": 916
+        }
+      ],
+      ".dross/phases/tracked-path-containment/REVIEW.md": [
+        {
+          "start": 1,
+          "end": 229
+        }
+      ],
+      ".dross/phases/tracked-path-containment/changes.json": [
+        {
+          "start": 1,
+          "end": 218
+        }
+      ],
+      ".dross/phases/tracked-path-containment/panel/mvp.md": [
+        {
+          "start": 1,
+          "end": 154
+        }
+      ],
+      ".dross/phases/tracked-path-containment/panel/risk.md": [
+        {
+          "start": 1,
+          "end": 259
+        }
+      ],
+      ".dross/phases/tracked-path-containment/panel/synthesis.md": [
+        {
+          "start": 1,
+          "end": 379
+        }
+      ],
+      ".dross/phases/tracked-path-containment/panel/verification.md": [
+        {
+          "start": 1,
+          "end": 238
+        }
+      ],
+      ".dross/phases/tracked-path-containment/plan.toml": [
+        {
+          "start": 1,
+          "end": 123
+        }
+      ],
+      ".dross/phases/tracked-path-containment/spec.toml": [
+        {
+          "start": 1,
+          "end": 62
+        }
+      ],
+      ".dross/project.toml": [
+        {
+          "start": 3,
+          "end": 3
+        }
+      ],
+      "internal/cmd/doctor.go": [
+        {
+          "start": 567,
+          "end": 567
+        },
+        {
+          "start": 569,
+          "end": 576
+        },
+        {
+          "start": 594,
+          "end": 594
+        },
+        {
+          "start": 602,
+          "end": 602
+        },
+        {
+          "start": 606,
+          "end": 606
+        },
+        {
+          "start": 611,
+          "end": 611
+        },
+        {
+          "start": 615,
+          "end": 615
+        },
+        {
+          "start": 619,
+          "end": 619
+        },
+        {
+          "start": 623,
+          "end": 623
+        },
+        {
+          "start": 628,
+          "end": 628
+        }
+      ],
+      "internal/cmd/doctor_test.go": [
+        {
+          "start": 16,
+          "end": 16
+        },
+        {
+          "start": 2571,
+          "end": 2624
+        }
+      ],
+      "internal/cmd/hostile_config_test.go": [
+        {
+          "start": 414,
+          "end": 414
+        },
+        {
+          "start": 429,
+          "end": 429
+        },
+        {
+          "start": 435,
+          "end": 437
+        }
+      ],
+      "internal/cmd/pathfence_carrier_test.go": [
+        {
+          "start": 1,
+          "end": 110
+        }
+      ],
+      "internal/cmd/pathfence_enum_test.go": [
+        {
+          "start": 1,
+          "end": 376
+        }
+      ],
+      "internal/cmd/pathfence_fields_test.go": [
+        {
+          "start": 1,
+          "end": 246
+        }
+      ],
+      "internal/cmd/quality.go": [
+        {
+          "start": 12,
+          "end": 12
+        },
+        {
+          "start": 39,
+          "end": 39
+        },
+        {
+          "start": 122,
+          "end": 122
+        },
+        {
+          "start": 130,
+          "end": 130
+        },
+        {
+          "start": 147,
+          "end": 147
+        },
+        {
+          "start": 150,
+          "end": 150
+        },
+        {
+          "start": 166,
+          "end": 166
+        }
+      ],
+      "internal/cmd/quality_findings_test.go": [
+        {
+          "start": 71,
+          "end": 71
+        }
+      ],
+      "internal/cmd/quality_test.go": [
+        {
+          "start": 125,
+          "end": 125
+        },
+        {
+          "start": 148,
+          "end": 148
+        },
+        {
+          "start": 159,
+          "end": 162
+        },
+        {
+          "start": 174,
+          "end": 174
+        }
+      ],
+      "internal/cmd/redproof.go": [
+        {
+          "start": 25,
+          "end": 25
+        },
+        {
+          "start": 106,
+          "end": 115
+        },
+        {
+          "start": 128,
+          "end": 145
+        },
+        {
+          "start": 160,
+          "end": 164
+        },
+        {
+          "start": 175,
+          "end": 180
+        }
+      ],
+      "internal/cmd/redproof_lifecycle.go": [
+        {
+          "start": 39,
+          "end": 39
+        }
+      ],
+      "internal/cmd/redproof_lifecycle_test.go": [
+        {
+          "start": 128,
+          "end": 128
+        },
+        {
+          "start": 144,
+          "end": 144
+        }
+      ],
+      "internal/cmd/redproof_repoint.go": [
+        {
+          "start": 23,
+          "end": 23
+        },
+        {
+          "start": 46,
+          "end": 51
+        },
+        {
+          "start": 126,
+          "end": 129
+        },
+        {
+          "start": 150,
+          "end": 154
+        },
+        {
+          "start": 156,
+          "end": 156
+        },
+        {
+          "start": 158,
+          "end": 158
+        },
+        {
+          "start": 160,
+          "end": 160
+        },
+        {
+          "start": 162,
+          "end": 162
+        },
+        {
+          "start": 166,
+          "end": 167
+        },
+        {
+          "start": 175,
+          "end": 175
+        },
+        {
+          "start": 177,
+          "end": 177
+        },
+        {
+          "start": 180,
+          "end": 180
+        }
+      ],
+      "internal/cmd/redproof_repoint_cmd.go": [
+        {
+          "start": 46,
+          "end": 46
+        },
+        {
+          "start": 99,
+          "end": 102
+        }
+      ],
+      "internal/cmd/redproof_repoint_cmd_test.go": [
+        {
+          "start": 172,
+          "end": 172
+        },
+        {
+          "start": 270,
+          "end": 270
+        }
+      ],
+      "internal/cmd/redproof_repoint_test.go": [
+        {
+          "start": 6,
+          "end": 8
+        },
+        {
+          "start": 11,
+          "end": 11
+        },
+        {
+          "start": 100,
+          "end": 110
+        },
+        {
+          "start": 113,
+          "end": 113
+        },
+        {
+          "start": 430,
+          "end": 642
+        }
+      ],
+      "internal/cmd/redproof_set.go": [
+        {
+          "start": 19,
+          "end": 19
+        },
+        {
+          "start": 150,
+          "end": 160
+        },
+        {
+          "start": 166,
+          "end": 168
+        },
+        {
+          "start": 170,
+          "end": 172
+        },
+        {
+          "start": 174,
+          "end": 174
+        },
+        {
+          "start": 177,
+          "end": 177
+        }
+      ],
+      "internal/cmd/redproof_set_test.go": [
+        {
+          "start": 12,
+          "end": 12
+        },
+        {
+          "start": 157,
+          "end": 157
+        },
+        {
+          "start": 173,
+          "end": 174
+        },
+        {
+          "start": 176,
+          "end": 176
+        },
+        {
+          "start": 412,
+          "end": 516
+        }
+      ],
+      "internal/cmd/redproof_test.go": [
+        {
+          "start": 11,
+          "end": 11
+        },
+        {
+          "start": 205,
+          "end": 205
+        },
+        {
+          "start": 217,
+          "end": 217
+        },
+        {
+          "start": 237,
+          "end": 237
+        },
+        {
+          "start": 249,
+          "end": 249
+        },
+        {
+          "start": 275,
+          "end": 275
+        },
+        {
+          "start": 289,
+          "end": 289
+        },
+        {
+          "start": 314,
+          "end": 314
+        },
+        {
+          "start": 372,
+          "end": 372
+        },
+        {
+          "start": 377,
+          "end": 404
+        }
+      ],
+      "internal/cmd/security.go": [
+        {
+          "start": 13,
+          "end": 13
+        },
+        {
+          "start": 46,
+          "end": 46
+        },
+        {
+          "start": 153,
+          "end": 153
+        },
+        {
+          "start": 161,
+          "end": 161
+        },
+        {
+          "start": 185,
+          "end": 188
+        },
+        {
+          "start": 191,
+          "end": 191
+        },
+        {
+          "start": 194,
+          "end": 194
+        },
+        {
+          "start": 219,
+          "end": 219
+        }
+      ],
+      "internal/cmd/security_test.go": [
+        {
+          "start": 4,
+          "end": 7
+        },
+        {
+          "start": 14,
+          "end": 14
+        },
+        {
+          "start": 16,
+          "end": 16
+        },
+        {
+          "start": 146,
+          "end": 146
+        },
+        {
+          "start": 169,
+          "end": 169
+        },
+        {
+          "start": 283,
+          "end": 304
+        },
+        {
+          "start": 306,
+          "end": 321
+        },
+        {
+          "start": 323,
+          "end": 327
+        },
+        {
+          "start": 329,
+          "end": 329
+        },
+        {
+          "start": 331,
+          "end": 331
+        },
+        {
+          "start": 333,
+          "end": 333
+        },
+        {
+          "start": 335,
+          "end": 336
+        },
+        {
+          "start": 338,
+          "end": 349
+        },
+        {
+          "start": 361,
+          "end": 361
+        },
+        {
+          "start": 378,
+          "end": 378
+        },
+        {
+          "start": 396,
+          "end": 396
+        },
+        {
+          "start": 430,
+          "end": 587
+        }
+      ],
+      "internal/cmd/task.go": [
+        {
+          "start": 439,
+          "end": 443
+        },
+        {
+          "start": 445,
+          "end": 449
+        }
+      ],
+      "internal/cmd/task_test.go": [
+        {
+          "start": 999,
+          "end": 1048
+        }
+      ],
+      "internal/cmd/testdata/pathfence_scan/dotdot_path.go.txt": [
+        {
+          "start": 1,
+          "end": 48
+        }
+      ],
+      "internal/cmd/testdata/pathfence_scan/dotdot_revrange.go.txt": [
+        {
+          "start": 1,
+          "end": 33
+        }
+      ],
+      "internal/cmd/testdata/pathfence_scan/rundir_revert.go.txt": [
+        {
+          "start": 1,
+          "end": 33
+        }
+      ],
+      "internal/cmd/testdata/pathfence_scan/seam_ok.go.txt": [
+        {
+          "start": 1,
+          "end": 36
+        }
+      ],
+      "internal/cmd/testdata/pathfence_scan/unwrap_os.go.txt": [
+        {
+          "start": 1,
+          "end": 44
+        }
+      ],
+      "internal/cmd/verify.go": [
+        {
+          "start": 17,
+          "end": 17
+        },
+        {
+          "start": 83,
+          "end": 86
+        },
+        {
+          "start": 94,
+          "end": 98
+        },
+        {
+          "start": 595,
+          "end": 603
+        },
+        {
+          "start": 1204,
+          "end": 1220
+        },
+        {
+          "start": 1224,
+          "end": 1224
+        }
+      ],
+      "internal/cmd/verify_scoping_test.go": [
+        {
+          "start": 10,
+          "end": 10
+        },
+        {
+          "start": 14,
+          "end": 14
+        },
+        {
+          "start": 16,
+          "end": 16
+        },
+        {
+          "start": 464,
+          "end": 574
+        }
+      ],
+      "internal/cmd/verifyscope.go": [
+        {
+          "start": 7,
+          "end": 7
+        },
+        {
+          "start": 14,
+          "end": 15
+        },
+        {
+          "start": 21,
+          "end": 27
+        },
+        {
+          "start": 32,
+          "end": 36
+        },
+        {
+          "start": 45,
+          "end": 45
+        },
+        {
+          "start": 52,
+          "end": 52
+        },
+        {
+          "start": 68,
+          "end": 68
+        },
+        {
+          "start": 85,
+          "end": 85
+        },
+        {
+          "start": 91,
+          "end": 91
+        },
+        {
+          "start": 103,
+          "end": 132
+        }
+      ],
+      "internal/cmd/verifyscope_test.go": [
+        {
+          "start": 4,
+          "end": 4
+        },
+        {
+          "start": 7,
+          "end": 7
+        },
+        {
+          "start": 11,
+          "end": 11
+        },
+        {
+          "start": 41,
+          "end": 53
+        },
+        {
+          "start": 60,
+          "end": 60
+        },
+        {
+          "start": 85,
+          "end": 85
+        },
+        {
+          "start": 103,
+          "end": 103
+        },
+        {
+          "start": 112,
+          "end": 112
+        },
+        {
+          "start": 132,
+          "end": 132
+        },
+        {
+          "start": 151,
+          "end": 151
+        },
+        {
+          "start": 168,
+          "end": 168
+        },
+        {
+          "start": 201,
+          "end": 201
+        },
+        {
+          "start": 233,
+          "end": 354
+        }
+      ],
+      "internal/compilefence/compilefence.go": [
+        {
+          "start": 1,
+          "end": 150
+        }
+      ],
+      "internal/compilefence/compilefence_test.go": [
+        {
+          "start": 1,
+          "end": 167
+        }
+      ],
+      "internal/pathfence/fields.go": [
+        {
+          "start": 1,
+          "end": 225
+        }
+      ],
+      "internal/pathfence/fields_test.go": [
+        {
+          "start": 1,
+          "end": 250
+        }
+      ],
+      "internal/pathfence/pathfence.go": [
+        {
+          "start": 1,
+          "end": 218
+        }
+      ],
+      "internal/pathfence/pathfence_test.go": [
+        {
+          "start": 1,
+          "end": 290
+        }
+      ],
+      "internal/phase/plan_edit.go": [
+        {
+          "start": 8,
+          "end": 9
+        },
+        {
+          "start": 82,
+          "end": 89
+        },
+        {
+          "start": 91,
+          "end": 95
+        },
+        {
+          "start": 131,
+          "end": 144
+        }
+      ],
+      "internal/phase/plan_edit_test.go": [
+        {
+          "start": 256,
+          "end": 256
+        },
+        {
+          "start": 380,
+          "end": 380
+        },
+        {
+          "start": 400,
+          "end": 400
+        },
+        {
+          "start": 563,
+          "end": 627
+        }
+      ],
+      "internal/quality/findings.go": [
+        {
+          "start": 4,
+          "end": 4
+        },
+        {
+          "start": 10,
+          "end": 10
+        },
+        {
+          "start": 108,
+          "end": 122
+        },
+        {
+          "start": 125,
+          "end": 125
+        },
+        {
+          "start": 131,
+          "end": 135
+        },
+        {
+          "start": 137,
+          "end": 138
+        }
+      ],
+      "internal/quality/findings_test.go": [
+        {
+          "start": 4,
+          "end": 5
+        },
+        {
+          "start": 8,
+          "end": 8
+        },
+        {
+          "start": 10,
+          "end": 13
+        },
+        {
+          "start": 16,
+          "end": 27
+        },
+        {
+          "start": 94,
+          "end": 94
+        },
+        {
+          "start": 96,
+          "end": 96
+        },
+        {
+          "start": 99,
+          "end": 99
+        },
+        {
+          "start": 105,
+          "end": 105
+        },
+        {
+          "start": 111,
+          "end": 111
+        },
+        {
+          "start": 114,
+          "end": 114
+        },
+        {
+          "start": 124,
+          "end": 251
+        }
+      ],
+      "internal/quality/lifecycle.go": [
+        {
+          "start": 9,
+          "end": 9
+        },
+        {
+          "start": 61,
+          "end": 67
+        }
+      ],
+      "internal/quality/scaffold.go": [
+        {
+          "start": 6,
+          "end": 6
+        },
+        {
+          "start": 48,
+          "end": 58
+        },
+        {
+          "start": 63,
+          "end": 63
+        }
+      ],
+      "internal/quality/scaffold_test.go": [
+        {
+          "start": 4,
+          "end": 4
+        },
+        {
+          "start": 69,
+          "end": 70
+        },
+        {
+          "start": 73,
+          "end": 73
+        },
+        {
+          "start": 81,
+          "end": 107
+        }
+      ],
+      "internal/remote/remote.go": [
+        {
+          "start": 30,
+          "end": 31
+        },
+        {
+          "start": 331,
+          "end": 336
+        }
+      ],
+      "internal/remote/remote_test.go": [
+        {
+          "start": 1035,
+          "end": 1082
+        }
+      ],
+      "internal/security/findings.go": [
+        {
+          "start": 4,
+          "end": 4
+        },
+        {
+          "start": 10,
+          "end": 10
+        },
+        {
+          "start": 104,
+          "end": 118
+        },
+        {
+          "start": 121,
+          "end": 121
+        },
+        {
+          "start": 127,
+          "end": 131
+        },
+        {
+          "start": 133,
+          "end": 134
+        }
+      ],
+      "internal/security/findings_test.go": [
+        {
+          "start": 4,
+          "end": 5
+        },
+        {
+          "start": 8,
+          "end": 8
+        },
+        {
+          "start": 10,
+          "end": 13
+        },
+        {
+          "start": 16,
+          "end": 27
+        },
+        {
+          "start": 52,
+          "end": 52
+        },
+        {
+          "start": 54,
+          "end": 54
+        },
+        {
+          "start": 57,
+          "end": 57
+        },
+        {
+          "start": 63,
+          "end": 63
+        },
+        {
+          "start": 69,
+          "end": 69
+        },
+        {
+          "start": 72,
+          "end": 72
+        },
+        {
+          "start": 82,
+          "end": 209
+        }
+      ],
+      "internal/security/lifecycle.go": [
+        {
+          "start": 9,
+          "end": 9
+        },
+        {
+          "start": 61,
+          "end": 67
+        }
+      ],
+      "internal/security/scaffold.go": [
+        {
+          "start": 6,
+          "end": 6
+        },
+        {
+          "start": 46,
+          "end": 56
+        },
+        {
+          "start": 61,
+          "end": 61
+        }
+      ],
+      "internal/security/scaffold_test.go": [
+        {
+          "start": 4,
+          "end": 4
+        },
+        {
+          "start": 69,
+          "end": 70
+        },
+        {
+          "start": 73,
+          "end": 73
+        },
+        {
+          "start": 81,
+          "end": 107
+        }
+      ],
+      "internal/testlane/match.go": [
+        {
+          "start": 36,
+          "end": 37
+        },
+        {
+          "start": 136,
+          "end": 147
+        },
+        {
+          "start": 150,
+          "end": 154
+        }
+      ],
+      "internal/testlane/match_test.go": [
+        {
+          "start": 330,
+          "end": 396
+        }
+      ],
+      "internal/verify/scope.go": [
+        {
+          "start": 12,
+          "end": 12
+        },
+        {
+          "start": 320,
+          "end": 351
+        },
+        {
+          "start": 377,
+          "end": 385
+        },
+        {
+          "start": 388,
+          "end": 388
+        },
+        {
+          "start": 391,
+          "end": 391
+        }
+      ],
+      "internal/verify/scope_test.go": [
+        {
+          "start": 4,
+          "end": 4
+        },
+        {
+          "start": 10,
+          "end": 10
+        },
+        {
+          "start": 412,
+          "end": 500
+        }
+      ]
+    },
+    "base": "c71c6ae6b8480868052f44ed2df13be6f895f001",
+    "source": "git+changes"
+  },
+  "measured_on": "helicon"
+}

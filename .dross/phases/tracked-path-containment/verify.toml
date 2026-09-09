@@ -1,0 +1,106 @@
+[verify]
+  phase = "tracked-path-containment"
+  generated_at = 2026-09-07T15:08:04.598321Z
+  verdict = "partial"
+  finalized = true
+  finalized_at = 2026-09-09T07:50:40.082823Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9372384937238494
+  mutants_killed = 896
+  mutants_survived = 60
+  mutants_not_covered = 60
+  mutants_in_scope = 956
+  unclassified_in_scope = 0
+  criteria_total = 6
+  criteria_covered = 3
+  criteria_uncovered = 3
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 896
+    survived = 60
+    timeout = 0
+    in_scope = 956
+    score = 0.9372384937238494
+    file_count = 56
+    measured_on = "helicon"
+
+[[criterion]]
+  id = "c-1"
+  status = "weak"
+  tests = ["internal/cmd/security_test.go:438:TestContainedPathIsGone", "internal/cmd/redproof_set_test.go:418:TestCheckRedProofDocDelegatesContainment", "internal/cmd/redproof_set_test.go:452:TestCheckRedProofDocKeepsItsOwnRefusals", "internal/cmd/redproof_set_test.go:492:TestCheckRedProofDocReturnsRepoRelativeSlashForm", "internal/cmd/security_test.go:472:TestRunDirSitesPassContainedThrough", "internal/cmd/pathfence_enum_test.go:339:TestNoSecondDotDotImplementation"]
+  notes = "Three of four clauses are solidly covered. containedPath is deleted (only a non-compiled .go.txt fixture retains the name) and TestCheckRedProofDocDelegatesContainment asserts on the ErrAbsolute/ErrEscapes SENTINELS, so a reworded inline reimplementation fails rather than passes. All eight run-dir sites plus redproof.go:160 and verifyscope.go:125 route through pathfence.Contain.\n\nWEAK on the clause 'no second ..-prefix test remains in non-test code'. The state is correct today — grepped every non-test .go in all 36 internal packages and cmd/, no \"..\" literal outside the scanned set — but TestNoSecondDotDotImplementation has three regression holes, verified against the source:\n  1. scannedPackages (pathfence_enum_test.go:44) covers 8 of 36 internal packages. The sibling fence packages argfence and hostallow are NOT scanned, and unlike the unwrap scan there is no per-directory vacuity guard on the literal ban.\n  2. pathMarkers (pathfence_enum_test.go:53) omits filepath.Join, path.Join, filepath.Dir and filepath.Split, so `p := filepath.Join(root, n); return !strings.HasPrefix(p, \"..\")` has no marker and the whole function is skipped. Join is the most common way to build the path, making this the most plausible escaping shape.\n  3. findPathDotDot (pathfence_enum_test.go:326) reports only lit.Value == `\"..\"`. A check written solely as HasPrefix(clean, \"../\") reports nothing. Lower severity than 1 and 2: a verbatim copy of pathfence.go:217 carries both arms and does trip the scan; only an incomplete copy escapes, and that copy is buggy on its own terms.\n"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/verify/scope_test.go:417:TestValidateRecordedRefusesEscape", "internal/cmd/verifyscope_test.go:255:TestPhaseScopeRefusesEscapingRecordedPath", "internal/cmd/verify_scoping_test.go:521:TestVerifyRefusesEscapingRecordedPathEndToEnd", "internal/cmd/verify_scoping_test.go:549:TestVerifyResultsRefusesEscapingRecordedPath", "internal/verify/scope_test.go:463:TestGitLaneStillDegradesOnEscape"]
+  notes = "The gate is genuinely upstream of all file I/O: verify.ValidateRecorded is the FIRST statement of phaseScope (internal/cmd/verifyscope.go:33), ahead of the first git subprocess and of NewScope; ValidateRecorded is pure and calls only pathfence.Contain, which never touches the filesystem (pinned by TestContainNeverTouchesTheFilesystem). The only stat on a scope path is pathfence.Stat at internal/cmd/verify.go:1224, reached strictly after the gate on both the attached (verify.go:83->94->98) and detached (595->599->603) chains.\n\nThe escape_failure_mode lock — hard error, not the soft 'gone' lane — is tested in BOTH directions, which is what makes this covered rather than weak: assertEscapeRefusal (verify_scoping_test.go:499) forbids \"ignored out-of-repo path\"/\"gone\"/\"skipped\" in the message, while TestGitLaneStillDegradesOnEscape pins that the git lane still soft-degrades. A blanket abort cannot satisfy both. The e2e fixture seedEscapingChanges (:476) CREATES the outside ../x.go on disk, so the gone lane cannot be what makes the test pass — it is a real must-trip, not a tautology.\n"
+
+[[criterion]]
+  id = "c-3"
+  status = "weak"
+  tests = ["internal/cmd/security_test.go:472:TestRunDirSitesPassContainedThrough", "internal/cmd/security_test.go:536:TestRunDirSitesCannotUnwrap", "internal/security/findings_test.go:94:TestLoadAndSaveRequireContainedPath", "internal/quality/findings_test.go:136:TestLoadAndSaveRequireContainedPath", "internal/security/scaffold_test.go:88:TestWriteScaffoldSpecWritesIntoRunDirNotCwd", "internal/cmd/redproof_repoint_test.go:479:TestRepointRefusesAnEscapingDocAndWritesNothing"]
+  notes = "The structural guarantee is real and well guarded — the compile fences make a skipped check a build failure, TestRunDirSitesPassContainedThrough is the ONLY thing that fails if a site reverts to filepath.Join(runDir, ...) (no behavioural test can see that), and TestWriteScaffoldSpecWritesIntoRunDirNotCwd chdirs away before writing to catch a Rel()-for- String() unwrap.\n\nWEAK because the criterion as worded is unfalsifiable. All eight run-dir sites pass COMPILE-TIME STRING LITERALS as p (\"findings.toml\" x2, \"spec.toml\", \"report.md\"); verified directly. The only variable is runDir, which is the containment ROOT, and for scaffold it is args[0] (operator CLI input) while for run it is <timestamp>-<shortSHA>. No finding-derived name reaches a filename anywhere: Finding.File feeds only Fingerprint() and state.toml content, and Finding.ID/Title reach only spec CONTENT. The '../main.go' phrasing is inherited verbatim from the deleted containedPath doc comment (git show b8ad0ef^:internal/cmd/security.go:184), whose four call sites were also all literals — so the scenario was never reachable, before or after.\n\nTwo scan-side assertions are dead weight and should not be counted: assertRunDirContainment (security_test.go:303) exercises pathfence.Contain in ISOLATION with no write involved, and the filepath.Walk prefix checks in TestSecurityRunReadOnly/TestQualityRunReadOnly are vacuous — Walk cannot yield a path outside its own root.\n\nWhat keeps this weak rather than uncovered: the genuinely behavioural traversal-refusal-on- write lives on the red-proof side, TestRepointRefusesAnEscapingDocAndWritesNothing, which asserts the outside file's hash is unchanged in both dry-run and --apply. The plan maps that to c-3 via t-4/t-8.\n"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/pathfence/pathfence_test.go:23:TestContainedCannotBeConstructedOutsidePackage", "internal/cmd/security_test.go:536:TestRunDirSitesCannotUnwrap", "internal/security/findings_test.go:94:TestLoadAndSaveRequireContainedPath", "internal/pathfence/pathfence_test.go:48:TestSeamRefusesZeroContained", "internal/cmd/pathfence_enum_test.go:69:TestNoUnwrappedPathReachesAnOSCall", "internal/cmd/pathfence_enum_test.go:92:TestUnwrapScanTripsOnItsFixtures", "internal/cmd/pathfence_enum_test.go:134:TestUnwrapScanSkipsTestFiles", "internal/compilefence/compilefence_test.go:49:TestPositiveControl"]
+  notes = "Best-covered criterion in the phase, and honest about where the guarantee stops. Contain is the only function returning a Contained; TestContainedCannotBeConstructedOutsidePackage runs a real go build over a temp module and requires the failure to name 'cannot refer to unexported field' rather than accepting any build error. TestRunDirSitesCannotUnwrap is the strongest of the set because it pins the BOUNDARY, not the type: inserting .String() between Contain and security.Load must fail to build.\n\nThe zero-value hole is disclosed rather than papered over — compilefence_test.go:105 asserts Contained{} MUST remain legal, and it is closed at runtime by check() at the seam (TestSeamRefusesZeroContained over ReadFile/WriteFile/Stat). So c-4's 'fails to build' is precisely true of SETTING a field, not of Contained{}, and the tests say so.\n\ncompilefence guards two false-green mechanics of its own: the temp module must sit under github.com/Rivil/dross/ or internal-package visibility would fail every build and make every negative assertion vacuous, and AssertDoesNotCompile requires an expected message so unknown-field and unexported-field failures stay distinguishable.\n\nThe residual scan flags an accessor ANYWHERE inside an os.* argument subtree (unwrapAccessor:279), so os.ReadFile(filepath.Join(c.String(), \"x\")) trips too. It is fixture-self-tested with exact finding counts, has a per-directory vacuity guard (pathfence_enum_test.go:82), and TestUnwrapScanSkipsTestFiles runs identical source under both filenames to isolate the filter. It inherits c-1's 8-of-36-package scan scope, but that matters less here: the type fence covers every package and the scan only backstops direct os.* residue.\n"
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/pathfence/pathfence_test.go:68:TestContainEscapeNamesPathArtifactAndRoot", "internal/verify/scope_test.go:417:TestValidateRecordedRefusesEscape", "internal/cmd/verifyscope_test.go:266:TestPhaseScopeRefusesEscapingRecordedPath", "internal/cmd/verify_scoping_test.go:503:assertEscapeRefusal"]
+  notes = "Not errors.Is theatre. Four tests assert message CONTENT as three independent strings.Contains checks over {offending path, artifact, root} — at the pathfence, verify, cmd and end-to-end layers. That shape is what lets a reworded message stay green while a message that drops a fact fails; a single full-message equality would not. Source: pathfence.go:110-113, \"%s: %q resolves outside %s: %w\".\n\nThe artifact label is meaningfully threaded at all nine live call sites (\"changes.json\", \"changes.json red_proof.doc\", \"--doc\", \"plan.toml\", \"run directory\" x2, runDirArtifact x2, \"verify scope\"), not a generic constant.\n\nScoped to the escape branch, which is what the criterion names ('the root it escaped'). See the two FLAG findings for the absolute-path branch and the double-prefix defect.\n"
+
+[[criterion]]
+  id = "c-6"
+  status = "weak"
+  tests = ["internal/cmd/pathfence_fields_test.go:50:TestEveryPathShapedFieldIsDeclared", "internal/cmd/pathfence_fields_test.go:82:TestWalkerFindsANonEmptySet", "internal/cmd/pathfence_fields_test.go:110:TestWalkerSelfTest", "internal/cmd/pathfence_carrier_test.go:49:TestDeclaredCarriersAreContained", "internal/cmd/pathfence_carrier_test.go:68:TestEveryConsumedCarrierIsBound", "internal/pathfence/fields_test.go:*:Validate suite"]
+  notes = "The walker is genuine, not a hand-written list: pathShapedFieldsInSrc (pathfence_fields_test.go:170) parses go/ast over real *ast.TypeSpec -> *ast.StructType declarations, and the check is two-way — an undeclared path-shaped field fails, and a stale entry naming a struct/field that no longer exists fails at :68, with a tag mismatch failing at :73. Vacuity-guarded by TestWalkerFindsANonEmptySet (fails under 10 found). Falsified live in a scratch copy: adding `Doc string `toml:\"doc\"`` to phase.Task produced 'undeclared path-shaped field phase.Task.Doc'.\n\nWEAK because c-6's claim is 'adding a path-shaped field without declaring it fails the enumerating test', and that is disproven by experiment on two axes, both hand-maintained:\n  1. TAG VOCABULARY. pathShapedTags (pathfence_fields_test.go:43) is a closed 11-word map {files, doc, path, source, tests, e2e, migrations, schemas, i18n, public, match}. Adding string fields tagged `workdir`, `output_dir` and `spec` to phase.Task — a struct in a SCANNED dir — left the full suite green.\n  2. SCAN SCOPE. schemaDirs (:35) is exactly four dirs: ../project, ../phase, ../changes, ../verify. internal/cmd, remote, testlane, security, quality and every other package are invisible, with no completeness guard on the list.\n\nLive demonstration of both: detachedRun.RunDir (internal/cmd/local.go:287, `toml:\"run_dir\"`) is a path-shaped string field in a .dross schema and is absent from pathfence.Fields(). The walker misses it twice over — wrong package AND a tag outside the vocabulary. Severity is limited because .dross/local.toml is gitignored and machine-local, so RunDir is not a repo-supplied tracked artifact and sits outside this phase's threat model; the value is also Segment-validated at mint time by remote.RunDir. But it proves the scope gap on a field that exists today.\n\nThe SECOND clause of c-6 is genuinely covered: TestDeclaredCarriersAreContained uses REAL types via reflect.TypeOf(containScope).Out(0) vs reflect.SliceOf(Contained) and reflect.TypeOf(redProofPin{}).FieldByName(\"Doc\"), so a carrier reverted to string fails on type identity, and TestEveryConsumedCarrierIsBound iterates the registry with a seen==0 vacuity guard. Residual hole: the check is per-carrier-NAME, not per-field — declaring a field Consumed with a real but unrelated carrier passes green (confirmed by experiment).\n"
+
+[[finding]]
+  severity = "NOTE"
+  text = "All four BLOCKING findings raised by this verify run are RESOLVED; the verdict was amended from \"fail\" to \"partial\" on 2026-09-09 to reflect that. (1) The root blocker — `dross survivor route --target` refusing an unscaffolded roadmap phase because internal/cmd/survivor.go:167 validated the destination with os.Stat(phase.Dir(...)) — was fixed in aa2be1b. It was a locked-decision violation rather than a missing feature: validDeferredTarget already existed as the shared gate for `deferred add`, `deferred route` and `validate`, and survivor route was a fourth call site carrying its own stat. The fix swaps in that shared gate and adds a regression test plus a drift guard, both proven red against pre-fix code. (2)(3)(4) The three undispositioned survivors at internal/compilefence/compilefence.go:61, :80 and :81 were routed to mutation-range-provenance in d8e4c53, which the fixed gate now permits. They are an ordinary coverage gap, not a mutation ceiling — their coverage blocks read count=0 because AssertDoesNotCompile and AssertCompiles are exercised only from other packages' tests while compilefence_test.go calls build() directly, and gremlins scopes per-package. No measurement was re-run for this amendment: the mutation numbers above are the original helicon run r-20260907-132210 over an unchanged tree. The verdict is `partial` rather than `pass` on the criteria mapping alone — c-1, c-3 and c-6 remain weak, for the reasons recorded against each and in the hand-maintained-list FLAG below."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-1/c-4/c-6: three separate guards each rest on a HAND-MAINTAINED list — scannedPackages (8 of 36 packages), pathShapedTags (11 tags), schemaDirs (4 dirs) — plus the containedVar name list in TestRunDirSitesPassContainedThrough (security_test.go:526), where renaming a local silences the .String() arm. The phase's stated goal was containment enforced 'by the type system, not by a hand-maintained list'. The type fence delivers that; the three AST scans backstopping it reintroduce exactly the maintenance burden the spec set out to avoid. Each list is a silent-failure surface: none fails when it falls out of date, it simply stops finding things."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-5: the absolute-path refusal has no message-content test anywhere. TestContainAbsoluteIsItsOwnSentinel (pathfence_test.go:85) and TestValidateRecordedRefusesAbsolute (scope_test.go:437) assert only the ErrAbsolute sentinel. The message at pathfence.go:105-107 does carry path, artifact and root, but nothing guards it, so a reword dropping the root ships undetected — the exact failure c-5 exists to prevent, on the sibling branch."
+
+[[finding]]
+  severity = "FLAG"
+  text = "containScope double-prefixes its error: internal/cmd/verifyscope.go:125 passes artifact \"verify scope\" into pathfence.Contain, then :127 wraps it again with fmt.Errorf(\"verify scope: %w\", err), producing `verify scope: verify scope: \"...\" resolves outside ...`. User-facing and invisible to the strings.Contains-based assertions."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-2: nothing asserts the ABSENCE of a stat. 'Refused before any file I/O' is established by reading call ordering plus 'no artifacts written', not by instrumenting the filesystem — a future refactor that stat-ed inside NewScope would pass every current assertion. Relatedly, stubMutationAdapter.got records the files handed to the adapter but is never asserted empty in the refusal tests, so c-2's 'or dispatched to a mutation adapter' clause is inferred from err != nil rather than checked."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-1: TestContainedPathIsGone (security_test.go:438) is name-only — it fails on a FuncDecl literally named containedPath, so a duplicate implementation resurrected under any other name is invisible to it."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation: score 0.94 over 956 in-scope mutants (killed=896, survived=60, timeout=0, errors=0), measured on helicon via detached run r-20260907-132210. All 60 survivors are NOT COVERED by construction; efficacy over the 896 reachable mutants is 1.00. A further 96 out-of-scope survivors were filtered as belonging to files this phase did not touch."
+
+[[finding]]
+  severity = "NOTE"
+  text = "12 in-hunk survivors were accepted this run against two pre-existing categories, each proven by an observed `go test -coverprofile` run on 2026-09-07 rather than asserted. Switch-case conditions (fields.go:97,99,101,105): all four arms of Validate's disposition switch report count=1, but each coverage block begins at the column AFTER the case colon, so the condition's own columns belong to no block — gremlins-attribution-ceiling. String-concat '+' inside the package-level var fields literal (fields.go:141,142,153,163,191,192,200,208): the profile jumps straight from 119.2,119.13 to 216.42,225.2, leaving lines ~135-214 with no block at all — const-initializer-arithmetic."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The 3 compilefence survivors are NOT a ceiling and must not be accepted: their coverage blocks read count=0, an ordinary gap. AssertDoesNotCompile (58-67) and AssertCompiles (78-84) are exercised only from other packages' tests (pathfence, security, quality, cmd) while compilefence_test.go calls build() directly in every test, and gremlins scopes per-package. A recording testing.TB stub in compilefence_test.go would exercise both wrappers and kill all three."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Deferred at spec time and still open, both targeted at secret-detection: the raw-string reader scan (a consumer that loads a declared path field and calls os.* on the raw string, never touching Contained — needs go/types dataflow, not reachable from go/parser) and symlink-resolving containment. The lexical-only limit is documented on pathfence.Contain per the symlink_resolution lock."

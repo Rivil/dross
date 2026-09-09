@@ -1,0 +1,36 @@
+// Must-NOT-trip fixture: the scan distinguishes the seam from the escape rather
+// than banning all file I/O in the scanned packages.
+package scanfixture
+
+import (
+	"io/fs"
+
+	"github.com/Rivil/dross/internal/pathfence"
+)
+
+func readThroughSeam(c pathfence.Contained) ([]byte, error) {
+	return pathfence.ReadFile(c)
+}
+
+func writeThroughSeam(c pathfence.Contained, body []byte, mode fs.FileMode) error {
+	return pathfence.WriteFile(c, body, mode)
+}
+
+func statThroughSeam(c pathfence.Contained) (fs.FileInfo, error) {
+	return pathfence.Stat(c)
+}
+
+// Accessors are fine everywhere EXCEPT inside an os.* argument: this formats
+// for a human and opens nothing.
+func describe(c pathfence.Contained) string {
+	return "doc " + c.Rel() + " (at " + c.String() + ")"
+}
+
+// Assigning first is the documented remedy for the type-blind case: the
+// accessor call is no longer inside the os.* argument.
+func assignFirst(c pathfence.Contained) ([]byte, error) {
+	p := c.String()
+	return readRaw(p)
+}
+
+func readRaw(p string) ([]byte, error) { return nil, nil }
