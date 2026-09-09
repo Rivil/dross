@@ -66,7 +66,6 @@
     "slug:secret-detection": "DRO-350",
     "slug:supply-chain-currency": "DRO-347",
     "slug:tool-output-not-persisted": "DRO-344",
-    "slug:tracked-path-containment": "DRO-343",
     "someday:id:010e057c10c922c6": "DRO-286",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
@@ -87,14 +86,17 @@
     "someday:id:20d239bfa5341306": "DRO-62",
     "someday:id:215d2ae2e7799d69": "DRO-102",
     "someday:id:2385fc70268180d1": "DRO-83",
+    "someday:id:245f4ad61d9e038a": "DRO-372",
     "someday:id:24da6d2754488290": "DRO-41",
     "someday:id:26a2f16243a1ffbe": "DRO-220",
     "someday:id:29eda0e6b5c6ffba": "DRO-180",
     "someday:id:2a662adc6c7edb5f": "DRO-73",
+    "someday:id:2bb055bad7b4e16c": "DRO-376",
     "someday:id:2d576654430ab9a2": "DRO-93",
     "someday:id:2e734f46572de8ca": "DRO-110",
     "someday:id:3701d0add3074097": "DRO-91",
     "someday:id:3a0d7d3147d7b585": "DRO-115",
+    "someday:id:3c94db28021a4eff": "DRO-375",
     "someday:id:3d97976a9b813c12": "DRO-69",
     "someday:id:3d9baeead7292172": "DRO-109",
     "someday:id:3e10687c24c50dd5": "DRO-66",
@@ -160,12 +162,14 @@
     "someday:id:ab84f90d28487b7a": "DRO-17",
     "someday:id:ad762bc624279cdf": "DRO-104",
     "someday:id:ae17cb02fa7db2fc": "DRO-82",
+    "someday:id:ae21c5406535724d": "DRO-374",
     "someday:id:ae6631594447a24e": "DRO-55",
     "someday:id:b32165178110b56a": "DRO-325",
     "someday:id:b328f16cd8693b82": "DRO-260",
     "someday:id:b38eb66d043ad477": "DRO-160",
     "someday:id:b4794de89d962714": "DRO-63",
     "someday:id:b85eb8099f7b6714": "DRO-43",
+    "someday:id:b8f43560bffd1d37": "DRO-373",
     "someday:id:bbfec942cd67b785": "DRO-65",
     "someday:id:bd1e72da1a5f0812": "DRO-353",
     "someday:id:bd34f0c4f23160c8": "DRO-113",
@@ -908,17 +912,57 @@
     "tracked-path-containment/t-1": {
       "issue": "DRO-356",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
+    },
+    "tracked-path-containment/t-10": {
+      "issue": "DRO-371",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "tracked-path-containment/t-11": {
+      "issue": "DRO-364",
+      "plan_status": "done",
+      "board_state": "task-complete"
     },
     "tracked-path-containment/t-2": {
       "issue": "DRO-357",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "tracked-path-containment/t-3": {
       "issue": "DRO-358",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
+    },
+    "tracked-path-containment/t-4": {
+      "issue": "DRO-365",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "tracked-path-containment/t-5": {
+      "issue": "DRO-366",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "tracked-path-containment/t-6": {
+      "issue": "DRO-367",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "tracked-path-containment/t-7": {
+      "issue": "DRO-368",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "tracked-path-containment/t-8": {
+      "issue": "DRO-369",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "tracked-path-containment/t-9": {
+      "issue": "DRO-370",
+      "plan_status": "done",
+      "board_state": "task-complete"
     }
   },
   "dismissed": [

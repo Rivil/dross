@@ -52,28 +52,33 @@
   locked = true
 
 [[deferred]]
+  id = "245f4ad61d9e038a"
   text = "Raw-string reader scan: a brand-new consumer that loads a declared path field and calls os.* on the raw string, never touching the Contained type at all."
   why = "Not reachable from go/parser + go/ast — deciding that an os.* argument traces back to a declared path field is dataflow over resolved types, needing go/types (golang.org/x/tools/go/packages). The type system covers this wherever the value is carried as a Contained; what is left uncovered is a field that stays a plain string because it must marshal. Split out of c-4 at plan time on 2026-09-07 after the third review found the criterion promised a scan no task built."
   target = "secret-detection"
 
 [[deferred]]
+  id = "b8f43560bffd1d37"
   text = "Symlink-resolving containment: close the hole where a lexically-contained path is a symlink pointing outside the repo."
   why = "Different threat model from a mistyped artifact — it presumes an attacker who can already write into the tree. Belongs with the artifact-content threats secret-detection handles."
   target = "secret-detection"
 
 [[deferred]]
+  id = "ae21c5406535724d"
   text = "survivor internal/compilefence/compilefence.go:61 (CONDITIONALS_NEGATION)"
   why = "surviving mutant routed out of a verify run"
   target = "mutation-range-provenance"
   survivor = "365503d33114f65e"
 
 [[deferred]]
+  id = "3c94db28021a4eff"
   text = "survivor internal/compilefence/compilefence.go:80 (CONDITIONALS_NEGATION)"
   why = "surviving mutant routed out of a verify run"
   target = "mutation-range-provenance"
   survivor = "5d74aadbbae679b7"
 
 [[deferred]]
+  id = "2bb055bad7b4e16c"
   text = "survivor internal/compilefence/compilefence.go:81 (ARITHMETIC_BASE)"
   why = "surviving mutant routed out of a verify run"
   target = "mutation-range-provenance"
