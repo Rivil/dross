@@ -1,0 +1,63 @@
+[phase]
+  id = "tool-output-not-persisted"
+  title = "tool-output-not-persisted"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "Recording a failed tool invocation is one shared implementation: every mutation adapter that can fail with a tool error routes through it, and no adapter formats its own failure prose. The record carries the tool, its exit status, the byte count captured, and the stderr pointer."
+
+[[criteria]]
+  id = "c-2"
+  text = "No tool-derived output text reaches disk: a stryker leg that fails because no report was written records exit status, bytes captured and the stderr pointer in both tests.json and verify.toml, and the 40-line head quote embedded in that error today appears in neither file."
+
+[[criteria]]
+  id = "c-3"
+  text = "The live diagnostic is unchanged: the full tool stream still tees to the terminal as it arrives, and a failing run still prints the head of that output at the failure point, so the cause is readable next to the error instead of only thousands of lines up."
+
+[[criteria]]
+  id = "c-4"
+  text = "Every persisted schema field that may carry tool-derived text is declared in one registry, and every assignment to a declared field comes from the shared recorder — a new writer assigning raw text to a declared field, or a new such sink added without a declaration, fails the enumerating test."
+
+[[criteria]]
+  id = "c-5"
+  text = "No PR body or PR comment dross composes renders a declared subprocess-derived field, proven by a test that enumerates the composers and fails when it enumerates none."
+
+[[criteria]]
+  id = "c-6"
+  text = "No board issue body dross composes renders a declared subprocess-derived field, proven by the same enumerating test over the board composers."
+
+[[decisions]]
+  key = "cut_point"
+  choice = "The cut is at error construction, not at the persistence boundary. Adapters never build an error string containing tool output: stryker prints the head quote to stderr at the failure point and returns a structured error, so nothing downstream needs to scrub."
+  why = "A scrubber can only strip shapes it was told about, so not creating the string is the stronger guarantee, and it matches the milestone's 'captured subprocess output is not persisted at all' half. A boundary scrub would also leave the raw string live in memory for any new writer to pick up."
+  locked = true
+
+[[decisions]]
+  key = "stderr_pointer"
+  choice = "The recorded pointer is fixed prose naming the tool and stating that its full output went to this run's stderr. No log file is written and no path is recorded."
+  why = "dross cannot know where its own stderr was redirected — nohup, CI capture, a detached remote run — so a recorded path would often be wrong. Writing a log file would re-persist exactly what the milestone forbids."
+  locked = true
+
+[[decisions]]
+  key = "guard_shape"
+  choice = "Declare the sinks, enumerate the writers: a registry names the persisted fields that may carry tool-derived text, and the guard walks every assignment to them, failing unless the value came from the shared recorder. Source-side enumeration of exec-derived strings is out of scope."
+  why = "Tractable with go/ast, and it is the registry-plus-residual shape tracked-path-containment already proved. Source-side enumeration is a far wider reach analysis over a codebase that spawns git everywhere."
+  locked = true
+
+[[decisions]]
+  key = "terminal_requote"
+  choice = "The headBuffer stays. On a failure the head of the tool output is re-printed to stderr at the failure point, exactly as it is quoted into the error message today."
+  why = "The quote exists because the cause sits at the HEAD of a long stream the user has already watched scroll past. Dropping it on the grounds that the stream teed live would regress the diagnosis c-3 promises to keep unchanged."
+  locked = true
+
+[[decisions]]
+  key = "no_migration"
+  choice = "New runs only — no migration pass over existing artifacts and no scrub on read."
+  why = "No verify.toml or tests.json on disk currently records a leg error, so there is nothing to migrate, and both files are rewritten by every verify run."
+  locked = true
+
+[[deferred]]
+  text = "Source-side enumeration: walk every site where a value derived from an exec invocation becomes a string, and require each to be terminal-only or the shared recorder."
+  why = "Rejected in favour of the sink registry at spec time — it is a go/types-scale reach analysis over a codebase that spawns git everywhere. Belongs with secret-detection, whose milestone criterion demands both halves: output not persisted at all, plus a pattern-based detector."
+  target = "secret-detection"
