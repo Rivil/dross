@@ -50,3 +50,8 @@
   id = "4841efdde12bd371"
   text = "TestNoCommandCountSurvivesAnywhere does not grep ARCHITECTURE.md"
   why = "it covers every .go file and every shipped prompt, but a stale 'closed set of six loop commands' claim survived in ARCHITECTURE.md and had to be found by hand during the exec-consent-completeness ship; nothing stops it returning there"
+
+[[deferred]]
+  id = "4ba7aa62aab78d49"
+  text = "finalizeVerify's idempotency guard is the `finalized = true` marker in verify.toml, not the recorded verdict — so an AMENDED verdict never re-records. `dross verify finalize` reports \"already recorded\" and exits 0 while telemetry.jsonl keeps the superseded verdict, leaving verify.toml and every gate reading the outcome event silently disagreeing. Fix: compare the file's verdict against the last recorded outcome event and re-emit when they differ, rather than short-circuiting on the marker alone. ARCHITECTURE.md's Verification entry documents the marker-as-guard behaviour and needs updating with the fix."
+  why = "Hit live on 2026-09-09 shipping tracked-path-containment: the verdict was amended fail -> partial, finalize no-opped, and stats kept reporting fail. Only caught by reading telemetry.jsonl directly; the workaround was hand-flipping finalized = false. This is the false-green shape v1.7 exists to close — a gate reporting success off a stale value."
