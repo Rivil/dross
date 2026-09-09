@@ -1,9 +1,9 @@
 [verify]
   phase = "tracked-path-containment"
   generated_at = 2026-09-07T15:08:04.598321Z
-  verdict = "fail"
+  verdict = "partial"
   finalized = true
-  finalized_at = 2026-09-07T15:49:08.739913Z
+  finalized_at = 2026-09-09T07:50:40.082823Z
 
 [summary]
   mutation_status = "measured"
@@ -13,7 +13,7 @@
   mutants_survived = 60
   mutants_not_covered = 60
   mutants_in_scope = 956
-  unclassified_in_scope = 3
+  unclassified_in_scope = 0
   criteria_total = 6
   criteria_covered = 3
   criteria_uncovered = 3
@@ -66,20 +66,8 @@
   notes = "The walker is genuine, not a hand-written list: pathShapedFieldsInSrc (pathfence_fields_test.go:170) parses go/ast over real *ast.TypeSpec -> *ast.StructType declarations, and the check is two-way — an undeclared path-shaped field fails, and a stale entry naming a struct/field that no longer exists fails at :68, with a tag mismatch failing at :73. Vacuity-guarded by TestWalkerFindsANonEmptySet (fails under 10 found). Falsified live in a scratch copy: adding `Doc string `toml:\"doc\"`` to phase.Task produced 'undeclared path-shaped field phase.Task.Doc'.\n\nWEAK because c-6's claim is 'adding a path-shaped field without declaring it fails the enumerating test', and that is disproven by experiment on two axes, both hand-maintained:\n  1. TAG VOCABULARY. pathShapedTags (pathfence_fields_test.go:43) is a closed 11-word map {files, doc, path, source, tests, e2e, migrations, schemas, i18n, public, match}. Adding string fields tagged `workdir`, `output_dir` and `spec` to phase.Task — a struct in a SCANNED dir — left the full suite green.\n  2. SCAN SCOPE. schemaDirs (:35) is exactly four dirs: ../project, ../phase, ../changes, ../verify. internal/cmd, remote, testlane, security, quality and every other package are invisible, with no completeness guard on the list.\n\nLive demonstration of both: detachedRun.RunDir (internal/cmd/local.go:287, `toml:\"run_dir\"`) is a path-shaped string field in a .dross schema and is absent from pathfence.Fields(). The walker misses it twice over — wrong package AND a tag outside the vocabulary. Severity is limited because .dross/local.toml is gitignored and machine-local, so RunDir is not a repo-supplied tracked artifact and sits outside this phase's threat model; the value is also Segment-validated at mint time by remote.RunDir. But it proves the scope gap on a field that exists today.\n\nThe SECOND clause of c-6 is genuinely covered: TestDeclaredCarriersAreContained uses REAL types via reflect.TypeOf(containScope).Out(0) vs reflect.SliceOf(Contained) and reflect.TypeOf(redProofPin{}).FieldByName(\"Doc\"), so a carrier reverted to string fails on type identity, and TestEveryConsumedCarrierIsBound iterates the registry with a seen==0 vacuity guard. Residual hole: the check is per-carrier-NAME, not per-field — declaring a field Consumed with a real but unrelated carrier passes green (confirmed by experiment).\n"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/compilefence/compilefence.go:81 (ARITHMETIC_BASE) — undispositioned. Routing to mutation-range-provenance is blocked by the survivor.go:167 defect below."
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/compilefence/compilefence.go:80 (CONDITIONALS_NEGATION) — undispositioned. Routing to mutation-range-provenance is blocked by the survivor.go:167 defect below."
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/compilefence/compilefence.go:61 (CONDITIONALS_NEGATION) — undispositioned. Routing to mutation-range-provenance is blocked by the survivor.go:167 defect below."
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "`dross survivor route --target` cannot route debt to a phase that is on the milestone roadmap but not yet scaffolded. internal/cmd/survivor.go:167 validates the destination with os.Stat(phase.Dir(root, target)), and a phase directory exists only once someone STARTS that phase — so the check can only ever accept a phase already underway or finished, the opposite of where debt belongs. This phase's own spec.toml already carries two [[deferred]] entries targeting the equally-unscaffolded secret-detection, so the CLI is stricter than spec-time authoring. Fix: accept a slug present in the current milestone's phases array, falling back to the directory stat. Same class as the 2026-08-13 bug where a bare `dross phase list` was used as the ordering source and made every unstarted successor invisible. This is the sole reason the verdict is fail rather than partial."
+  severity = "NOTE"
+  text = "All four BLOCKING findings raised by this verify run are RESOLVED; the verdict was amended from \"fail\" to \"partial\" on 2026-09-09 to reflect that. (1) The root blocker — `dross survivor route --target` refusing an unscaffolded roadmap phase because internal/cmd/survivor.go:167 validated the destination with os.Stat(phase.Dir(...)) — was fixed in aa2be1b. It was a locked-decision violation rather than a missing feature: validDeferredTarget already existed as the shared gate for `deferred add`, `deferred route` and `validate`, and survivor route was a fourth call site carrying its own stat. The fix swaps in that shared gate and adds a regression test plus a drift guard, both proven red against pre-fix code. (2)(3)(4) The three undispositioned survivors at internal/compilefence/compilefence.go:61, :80 and :81 were routed to mutation-range-provenance in d8e4c53, which the fixed gate now permits. They are an ordinary coverage gap, not a mutation ceiling — their coverage blocks read count=0 because AssertDoesNotCompile and AssertCompiles are exercised only from other packages' tests while compilefence_test.go calls build() directly, and gremlins scopes per-package. No measurement was re-run for this amendment: the mutation numbers above are the original helicon run r-20260907-132210 over an unchanged tree. The verdict is `partial` rather than `pass` on the criteria mapping alone — c-1, c-3 and c-6 remain weak, for the reasons recorded against each and in the hand-maintained-list FLAG below."
 
 [[finding]]
   severity = "FLAG"
