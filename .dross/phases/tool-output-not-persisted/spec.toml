@@ -57,6 +57,12 @@
   why = "No verify.toml or tests.json on disk currently records a leg error, so there is nothing to migrate, and both files are rewritten by every verify run."
   locked = true
 
+[[decisions]]
+  key = "renderable_derivation"
+  choice = "A persisted field derived from a recorded field — verify.Finding.Text, composed as \"mutation adapter <tool> failed: \" + LanguageRun.Error — is declared Renderable and may be rendered by a PR or board composer. c-5 and c-6 bind the declared subprocess-derived fields themselves, not values derived from a record whose own text is already scrubbed."
+  why = "Finding.Text is how a failed leg reaches a human at all; forbidding it would delete the Findings section from every PR body while removing no tool output, because the record it interpolates carries none. The exception is only as safe as the pin that keeps it derived, so it is checkable rather than asserted: t-8 pins verify.toml's finding.text to exactly the recorder line under that prefix, and a composer interpolating anything else fails there."
+  locked = true
+
 [[deferred]]
   text = "Source-side enumeration: walk every site where a value derived from an exec invocation becomes a string, and require each to be terminal-only or the shared recorder."
   why = "Rejected in favour of the sink registry at spec time — it is a go/types-scale reach analysis over a codebase that spawns git everywhere. Belongs with secret-detection, whose milestone criterion demands both halves: output not persisted at all, plus a pattern-based detector."
