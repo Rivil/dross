@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -146,16 +147,29 @@ func (s *StrykerNet) Run(files []string) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd.Stdout = os.Stderr // streamed; not captured
-	cmd.Stderr = os.Stderr
+	// TEED, not captured — the identical gap Stryker.JS closed and gremlins
+	// carried until this phase: the stream reached the terminal and nothing
+	// retained a prefix, so a failure could say nothing about what the tool
+	// printed.
+	head := &headBuffer{limit: strykerHeadBytes}
+	sink := io.MultiWriter(os.Stderr, head)
+	cmd.Stdout = sink
+	cmd.Stderr = sink
+	// Retained past the branch: the exit status is what tells a reportless run
+	// apart from a clean one, and findReport cannot see it.
+	exitStatus := 0
 	if err := cmd.Run(); err != nil {
 		// Surviving mutants → non-zero exit, same as Stryker.JS. The
 		// adapter only fails when invocation itself failed (binary
 		// missing, project not found).
 		var exitErr *exec.ExitError
 		if !errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("stryker.net invocation failed: %w (is stryker-net installed? `dotnet tool install -g dotnet-stryker`)", err)
+			head.printHead(os.Stderr, "stryker.net", strykerHeadLines)
+			fmt.Fprintln(os.Stderr)
+			return nil, fmt.Errorf("stryker.net invocation failed: %w (is stryker-net installed? `dotnet tool install -g dotnet-stryker`)",
+				RecordToolFailure("stryker.net", exitDidNotStart, Observed(head.observed())).wrapping(err))
 		}
+		exitStatus = exitErr.ExitCode()
 	}
 
 	// Fetched to the output dir's PARENT: the remote source is the tree itself,
@@ -167,7 +181,20 @@ func (s *StrykerNet) Run(files []string) (*Report, error) {
 
 	reportPath, err := findReport(outDir)
 	if err != nil {
-		return nil, err
+		// Discriminated HERE, not inside findReport. findReport is a
+		// package-level function called directly by tests and by the launcher,
+		// and it has no access to the exit status — so recording inside it
+		// would have to invent one. Only the no-report case is a tool failure:
+		// the walk failure and the missing-output-dir case are dross's own
+		// diagnostics about the filesystem and pass through untouched.
+		var nr *noReportError
+		if !errors.As(err, &nr) {
+			return nil, err
+		}
+		head.printHead(os.Stderr, "stryker.net", strykerHeadLines)
+		fmt.Fprintln(os.Stderr)
+		return nil, fmt.Errorf("stryker.net wrote no mutation-report.json under %s: %w", outDir,
+			RecordToolFailure("stryker.net", exitStatus, Observed(head.observed())))
 	}
 	b, err := os.ReadFile(reportPath)
 	if err != nil {
@@ -292,6 +319,21 @@ func (s *StrykerNet) buildCmd(args []string) *exec.Cmd {
 }
 
 // findReport walks outDir looking for a file named "mutation-report.json".
+// noReportError is findReport's "the tool wrote nothing" return, made
+// DISCRIMINABLE without changing what it says.
+//
+// findReport has three failure returns and only this one is a tool failure —
+// the other two are dross's own diagnostics about the filesystem. Run's call
+// site has to tell them apart, and it is the only place with the exit status to
+// record. A typed error rather than a reworded one: findReport's direct callers
+// (stryker_net_test.go, and launcher_test.go indirectly) pin this message
+// verbatim, and they get no exit status to record.
+type noReportError struct{ outDir string }
+
+func (e *noReportError) Error() string {
+	return fmt.Sprintf("stryker.net wrote no mutation-report.json under %s — check stryker config", e.outDir)
+}
+
 // Stryker.NET writes to varying paths between versions:
 //   - newer: <outDir>/reports/mutation-report.json
 //   - older: <outDir>/<timestamp>/reports/mutation-report.json
@@ -332,7 +374,7 @@ func findReport(outDir string) (string, error) {
 		return "", fmt.Errorf("walk %s: %w", outDir, err)
 	}
 	if len(found) == 0 {
-		return "", fmt.Errorf("stryker.net wrote no mutation-report.json under %s — check stryker config", outDir)
+		return "", &noReportError{outDir: outDir}
 	}
 	sort.Slice(found, func(i, j int) bool { return found[i].mod > found[j].mod })
 	return found[0].path, nil
