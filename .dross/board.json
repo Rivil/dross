@@ -911,6 +911,51 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "tool-output-not-persisted/t-1": {
+      "issue": "DRO-379",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-2": {
+      "issue": "DRO-380",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-3": {
+      "issue": "DRO-381",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-4": {
+      "issue": "DRO-382",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-5": {
+      "issue": "DRO-383",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-6": {
+      "issue": "DRO-385",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-7": {
+      "issue": "DRO-386",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-8": {
+      "issue": "DRO-387",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-9": {
+      "issue": "DRO-384",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "tracked-path-containment/t-1": {
       "issue": "DRO-356",
       "plan_status": "done",

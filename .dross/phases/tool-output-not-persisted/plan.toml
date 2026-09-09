@@ -1,295 +1,101 @@
+task_seq = 0
+
 [phase]
-id = "tool-output-not-persisted"
+  id = "tool-output-not-persisted"
 
 [[task]]
-id    = "t-1"
-wave  = 1
-title = "Add the shared tool-failure recorder"
-files = [
-  "internal/mutation/toolfail.go",
-  "internal/mutation/toolfail_test.go",
-  "internal/mutation/stryker.go",
-]
-description = """
-toolfail.go holds the unexported record type, the constructor
-RecordToolFailure(tool string, exit int, c capture), and the carrier
-RecordLegError(err) returning a named LegError type. `capture` has two
-constructors — Observed(n int) and NotCaptured(why string) — so a detached run
-records `output was not captured; this run was detached` rather than a
-structurally false `0 bytes`. Error() is fixed prose naming the tool, its exit
-status, the capture clause and the stderr pointer; Unwrap preserves the wrapped
-error's identity. headBuffer moves here from stryker.go, gains a `seen` counter
-totalling every byte written (not the retained prefix), and a printHead(w, tool,
-n) replacing quote() — the banner is tool-parameterised, since t-4 routes
-gremlins and stryker.net through the same helper.
-"""
-covers = ["c-1", "c-3"]
-test_contract = [
-  "a headBuffer with a 64 KiB limit fed 100 KiB reports 102400 bytes; a record built from buf.Len() reads the saturated 65536 and fails",
-  "reflect pins RecordToolFailure's parameter list as exactly (string, int, capture) and the record type as having no exported field — adding a second string or a []byte parameter fails, which are the only two routes by which captured output could re-enter",
-  "a canary fed through the headBuffer appears nowhere in the returned error's text, at any truncation length",
-  "Error() dropping the exit status, the capture clause, or the stderr-pointer sentence fails",
-  "Error() built from Observed(n) says the number is tool output OBSERVED, not retained — the wording c-1 and c-2 word as `captured` is pinned here so verify.toml and the criterion cannot be read as disagreeing next to a 64 KiB cap",
-  "a record built from NotCaptured names why nothing was captured and contains no byte count at all; substituting Observed(0) for it fails",
-  "Error() contains the tool name as a bare token, so telemetry's mutation bucket — which keys on the substrings `stryker`, `gremlins` and `mutation adapter` at telemetry.go:316 — keeps classifying these errors; a rewording that drops the tool name pushes them into `other` and fails here",
-  "errors.Is(record wrapping a sentinel, sentinel) holds, or the RemoteTransport classification silently stops firing",
-  "printHead(w, `stryker`, n) writes byte-for-byte what quote() produced, header line and continuation tail included; called with another tool name it writes the identical shape with that name substituted",
-  "a start failure (no *exec.ExitError) records `did not start`, not exit status -1",
-]
-status = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Add the shared tool-failure recorder"
+  files = ["internal/mutation/toolfail.go", "internal/mutation/toolfail_test.go", "internal/mutation/stryker.go"]
+  description = "toolfail.go holds the unexported record type, the constructor\nRecordToolFailure(tool string, exit int, c capture), and the carrier\nRecordLegError(err) returning a named LegError type. `capture` has two\nconstructors — Observed(n int) and NotCaptured(why string) — so a detached run\nrecords `output was not captured; this run was detached` rather than a\nstructurally false `0 bytes`. Error() is fixed prose naming the tool, its exit\nstatus, the capture clause and the stderr pointer; Unwrap preserves the wrapped\nerror's identity. headBuffer moves here from stryker.go, gains a `seen` counter\ntotalling every byte written (not the retained prefix), and a printHead(w, tool,\nn) replacing quote() — the banner is tool-parameterised, since t-4 routes\ngremlins and stryker.net through the same helper.\n"
+  covers = ["c-1", "c-3"]
+  test_contract = ["a headBuffer with a 64 KiB limit fed 100 KiB reports 102400 bytes; a record built from buf.Len() reads the saturated 65536 and fails", "reflect pins RecordToolFailure's parameter list as exactly (string, int, capture) and the record type as having no exported field — adding a second string or a []byte parameter fails, which are the only two routes by which captured output could re-enter", "a canary fed through the headBuffer appears nowhere in the returned error's text, at any truncation length", "Error() dropping the exit status, the capture clause, or the stderr-pointer sentence fails", "Error() built from Observed(n) says the number is tool output OBSERVED, not retained — the wording c-1 and c-2 word as `captured` is pinned here so verify.toml and the criterion cannot be read as disagreeing next to a 64 KiB cap", "a record built from NotCaptured names why nothing was captured and contains no byte count at all; substituting Observed(0) for it fails", "Error() contains the tool name as a bare token, so telemetry's mutation bucket — which keys on the substrings `stryker`, `gremlins` and `mutation adapter` at telemetry.go:316 — keeps classifying these errors; a rewording that drops the tool name pushes them into `other` and fails here", "errors.Is(record wrapping a sentinel, sentinel) holds, or the RemoteTransport classification silently stops firing", "printHead(w, `stryker`, n) writes byte-for-byte what quote() produced, header line and continuation tail included; called with another tool name it writes the identical shape with that name substituted", "a start failure (no *exec.ExitError) records `did not start`, not exit status -1"]
+  status = "done"
 
 [[task]]
-id    = "t-2"
-wave  = 1
-title = "Declare the tool-text sink registry"
-files = [
-  "internal/toolfence/fields.go",
-  "internal/toolfence/fields_test.go",
-]
-description = """
-A leaf package mirroring pathfence.Fields: Field{Struct, Field, Tag, Artifact}
-with exactly one disposition. Three dispositions — Recorded{Carrier} for a field
-written only through the carrier, NotToolStream{Why, Writers} for a persisted
-text field provably not captured stream, and Renderable{Why, SourcedFrom} for a
-field derived from a Recorded one that a composer may print (spec decision
-renderable_derivation). Entries: Recorded — verify.LanguageRun.Error,
-verify.LegSummary.Error; Renderable — verify.Finding.Text; NotToolStream —
-telemetry.Event.ErrorDetail, verify.SkippedFile.Reason,
-verify.CriterionResult.Notes, verify.OutOfScopeMutant.Note,
-verify.Scope.Degraded, mutation.Mutant.Snippet, mutation.Mutant.Note.
-Scope.Degraded is a []string, so the registry and walker cover slice-of-string
-sinks as well as scalars; its Why records that it holds gitReason(err) values
-and carries no tool output only because exec.ExitError.Error() omits the stderr
-that .Output() captured — a stdlib property, not a guarantee. A package doc
-comment states the registry's scope — the internal/cmd, verify, mutation and
-telemetry path, where the recorder is the only writer — and why the
-agent-authored ledgers (security.Finding, quality.Finding, techdebt.Finding) are
-a separate problem rather than an oversight. It also defines what `Writer` means
-for a field no Go code writes (CriterionResult.Notes is authored by the agent
-editing verify.toml), so the stale-declaration arm is not expected to resolve it
-to a call site.
-"""
-covers = ["c-4"]
-test_contract = [
-  "Validate, fed synthetic entries, names each of: no disposition, more than one disposition, Recorded with a blank Carrier, NotToolStream with an empty Why, NotToolStream naming no Writer, Renderable with no SourcedFrom, and a duplicated Name — so a Validate returning nil unconditionally cannot pass",
-  "the by-name pin fails when any of LanguageRun.Error, LegSummary.Error, Finding.Text, CriterionResult.Notes, Scope.Degraded or telemetry.Event.ErrorDetail is deleted, and fails on a count check so a new entry cannot be added unpinned",
-  "the scope statement is asserted, not just written: the test names the four walked roots and fails if the registry declares a field from a package outside them without the doc comment being updated",
-]
-status = "pending"
+  id = "t-2"
+  wave = 1
+  title = "Declare the tool-text sink registry"
+  files = ["internal/toolfence/fields.go", "internal/toolfence/fields_test.go"]
+  description = "A leaf package mirroring pathfence.Fields: Field{Struct, Field, Tag, Artifact}\nwith exactly one disposition. Three dispositions — Recorded{Carrier} for a field\nwritten only through the carrier, NotToolStream{Why, Writers} for a persisted\ntext field provably not captured stream, and Renderable{Why, SourcedFrom} for a\nfield derived from a Recorded one that a composer may print (spec decision\nrenderable_derivation). Entries: Recorded — verify.LanguageRun.Error,\nverify.LegSummary.Error; Renderable — verify.Finding.Text; NotToolStream —\ntelemetry.Event.ErrorDetail, verify.SkippedFile.Reason,\nverify.CriterionResult.Notes, verify.OutOfScopeMutant.Note,\nverify.Scope.Degraded, mutation.Mutant.Snippet, mutation.Mutant.Note.\nScope.Degraded is a []string, so the registry and walker cover slice-of-string\nsinks as well as scalars; its Why records that it holds gitReason(err) values\nand carries no tool output only because exec.ExitError.Error() omits the stderr\nthat .Output() captured — a stdlib property, not a guarantee. A package doc\ncomment states the registry's scope — the internal/cmd, verify, mutation and\ntelemetry path, where the recorder is the only writer — and why the\nagent-authored ledgers (security.Finding, quality.Finding, techdebt.Finding) are\na separate problem rather than an oversight. It also defines what `Writer` means\nfor a field no Go code writes (CriterionResult.Notes is authored by the agent\nediting verify.toml), so the stale-declaration arm is not expected to resolve it\nto a call site.\n"
+  covers = ["c-4"]
+  test_contract = ["Validate, fed synthetic entries, names each of: no disposition, more than one disposition, Recorded with a blank Carrier, NotToolStream with an empty Why, NotToolStream naming no Writer, Renderable with no SourcedFrom, and a duplicated Name — so a Validate returning nil unconditionally cannot pass", "the by-name pin fails when any of LanguageRun.Error, LegSummary.Error, Finding.Text, CriterionResult.Notes, Scope.Degraded or telemetry.Event.ErrorDetail is deleted, and fails on a count check so a new entry cannot be added unpinned", "the scope statement is asserted, not just written: the test names the four walked roots and fails if the registry declares a field from a package outside them without the doc comment being updated"]
+  status = "done"
 
 [[task]]
-id         = "t-3"
-wave       = 2
-depends_on = ["t-1"]
-title      = "Route stryker's failure paths through the recorder"
-files = [
-  "internal/mutation/stryker.go",
-  "internal/mutation/stryker_test.go",
-  "internal/mutation/stryker_failure_test.go",
-]
-description = """
-The missing-report branch stops building its error from head.quote: it prints the
-head to os.Stderr at the failure point via printHead and returns the record
-wrapped with the dross-authored context — `stryker did not write a report at
-<path>: %w` — so the expected report path survives in the error while the tool's
-own output does not. The initial-test truncation note stays as fixed prose.
-checkInstrumented prints its head to stderr and keeps its own dropped-path
-message, without the embedded quote — the tool succeeded there and the
-dropped-path list is the whole diagnostic. The existing pins in stryker_test.go
-MOVE rather than relax: :749 (cause is inside err.Error()) becomes an assertion
-that the cause is in captured stderr, and :948's newline cap on the error is
-retargeted at the stderr block so it cannot pass vacuously. :454 and :457 stay
-green unchanged, which is what the wrapping above is for.
-"""
-covers = ["c-1", "c-2", "c-3"]
-test_contract = [
-  "with strykerBuildCmd stubbed to print CANARY-A, exit 3 and write no report: the error contains `exit status 3` and NOT CANARY-A, while captured stderr contains CANARY-A twice — once teed live, once under the re-printed head banner. Deleting the re-print fails the stderr half; keeping the quote in the error fails the other",
-  "the error still says `did not write a report` and still names s.reportPath(), so stryker_test.go:454 and :457 pass without edit — a record returned bare, unwrapped, fails them",
-  "the retargeted newline cap counts lines in the stderr block, not the error, so a printHead that stopped emitting anything fails instead of passing on a one-line error",
-  "the truncation note still attaches when the head contains strykerInitialTestFailureText and does not when it doesn't",
-  "checkInstrumented's error still names every dropped path and still adds the `stryker said so itself` hint when the head matched, while carrying no quoted output",
-]
-status = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Route stryker's failure paths through the recorder"
+  files = ["internal/mutation/stryker.go", "internal/mutation/stryker_test.go", "internal/mutation/stryker_failure_test.go", "internal/mutation/toolfail.go"]
+  description = "The missing-report branch stops building its error from head.quote: it prints the\nhead to os.Stderr at the failure point via printHead and returns the record\nwrapped with the dross-authored context — `stryker did not write a report at\n<path>: %w` — so the expected report path survives in the error while the tool's\nown output does not. The initial-test truncation note stays as fixed prose.\ncheckInstrumented prints its head to stderr and keeps its own dropped-path\nmessage, without the embedded quote — the tool succeeded there and the\ndropped-path list is the whole diagnostic. The existing pins in stryker_test.go\nMOVE rather than relax: :749 (cause is inside err.Error()) becomes an assertion\nthat the cause is in captured stderr, and :948's newline cap on the error is\nretargeted at the stderr block so it cannot pass vacuously. :454 and :457 stay\ngreen unchanged, which is what the wrapping above is for.\n"
+  covers = ["c-1", "c-2", "c-3"]
+  depends_on = ["t-1"]
+  test_contract = ["with strykerBuildCmd stubbed to print CANARY-A, exit 3 and write no report: the error contains `exit status 3` and NOT CANARY-A, while captured stderr contains CANARY-A twice — once teed live, once under the re-printed head banner. Deleting the re-print fails the stderr half; keeping the quote in the error fails the other", "the error still says `did not write a report` and still names s.reportPath(), so stryker_test.go:454 and :457 pass without edit — a record returned bare, unwrapped, fails them", "the retargeted newline cap counts lines in the stderr block, not the error, so a printHead that stopped emitting anything fails instead of passing on a one-line error", "the truncation note still attaches when the head contains strykerInitialTestFailureText and does not when it doesn't", "checkInstrumented's error still names every dropped path and still adds the `stryker said so itself` hint when the head matched, while carrying no quoted output"]
+  status = "done"
 
 [[task]]
-id         = "t-4"
-wave       = 2
-depends_on = ["t-1"]
-title      = "Route gremlins and stryker.net through the recorder"
-files = [
-  "internal/mutation/gremlins.go",
-  "internal/mutation/stryker_net.go",
-  "internal/mutation/stryker_net_test.go",
-  "internal/mutation/gremlins_failure_test.go",
-  "internal/mutation/stryker_net_failure_test.go",
-]
-description = """
-THREE gremlins failure sites, not two: the attached loop's invocation-failed and
-reportless-exit paths, and Gremlins.Collect's detached fatal path (gremlins.go:566,
-wrapping ReportlessExit) — the path this repo actually runs. The detached site
-records NotCaptured, since a detached run tees nothing; the attached sites gain
-the headBuffer tee gremlins lacks today. stryker.net's invocation-failed path
-routes the same way and gains the same tee (stryker_net.go:149 is the identical
-uncaptured-stdout gap). Its no-report case is recorded at the CALL SITE,
-stryker_net.go:168, not inside findReport — findReport is a package-level
-function (:302) called directly by stryker_net_test.go and indirectly by
-launcher_test.go, and it has no access to Run's exit status. The call site
-discriminates findReport's three returns: the no-report case becomes a record
-carrying the retained exit status, while the walk failure and dir-not-exist cases
-pass through unchanged as dross-authored diagnostics. findReport's own messages
-are unchanged, so stryker_net_test.go:105's `no mutation-report.json` pin stays
-green. Launcher transport errors are untouched.
-"""
-covers = ["c-1"]
-test_contract = [
-  "errors.As(err, &record) succeeds on all THREE gremlins fatal paths — attached invocation-failed, attached reportless-exit, and Collect's detached site — and each message names the real exit status; reverting any to a bare fmt.Errorf fails",
-  "the detached Collect record carries NotCaptured naming the detached run, not `0 bytes` — substituting Observed(0) fails",
-  "a reportless-exit record satisfies errors.Is(err, remote.ErrRemoteCommand), so verify.go's and cmd/test.go's classification off the live error value keeps firing",
-  "the remote-ssh-could-not-start path still names the host and satisfies errors.Is(err, remote.ErrTransport), so verify still grades it BLOCKING rather than FLAG",
-  "if gremlins' attached output stops being teed, its record reports 0 bytes observed and the test fails — and the symmetric assertion holds for stryker.net",
-  "stryker.net's no-report error names tool and exit status through the recorder and no longer says `check stryker config`; recording it inside findReport instead of at :168 fails, because findReport's direct callers in stryker_net_test.go get no exit status to record",
-  "findReport's walk-failure and dir-not-exist returns reach the caller unconverted — turning either into a record fails, since neither is a tool exit",
-]
-status = "pending"
+  id = "t-4"
+  wave = 2
+  title = "Route gremlins and stryker.net through the recorder"
+  files = ["internal/mutation/gremlins.go", "internal/mutation/stryker_net.go", "internal/mutation/stryker_net_test.go", "internal/mutation/gremlins_failure_test.go", "internal/mutation/stryker_net_failure_test.go"]
+  description = "THREE gremlins failure sites, not two: the attached loop's invocation-failed and\nreportless-exit paths, and Gremlins.Collect's detached fatal path (gremlins.go:566,\nwrapping ReportlessExit) — the path this repo actually runs. The detached site\nrecords NotCaptured, since a detached run tees nothing; the attached sites gain\nthe headBuffer tee gremlins lacks today. stryker.net's invocation-failed path\nroutes the same way and gains the same tee (stryker_net.go:149 is the identical\nuncaptured-stdout gap). Its no-report case is recorded at the CALL SITE,\nstryker_net.go:168, not inside findReport — findReport is a package-level\nfunction (:302) called directly by stryker_net_test.go and indirectly by\nlauncher_test.go, and it has no access to Run's exit status. The call site\ndiscriminates findReport's three returns: the no-report case becomes a record\ncarrying the retained exit status, while the walk failure and dir-not-exist cases\npass through unchanged as dross-authored diagnostics. findReport's own messages\nare unchanged, so stryker_net_test.go:105's `no mutation-report.json` pin stays\ngreen. Launcher transport errors are untouched.\n"
+  covers = ["c-1"]
+  depends_on = ["t-1"]
+  test_contract = ["errors.As(err, &record) succeeds on all THREE gremlins fatal paths — attached invocation-failed, attached reportless-exit, and Collect's detached site — and each message names the real exit status; reverting any to a bare fmt.Errorf fails", "the detached Collect record carries NotCaptured naming the detached run, not `0 bytes` — substituting Observed(0) fails", "a reportless-exit record satisfies errors.Is(err, remote.ErrRemoteCommand), so verify.go's and cmd/test.go's classification off the live error value keeps firing", "the remote-ssh-could-not-start path still names the host and satisfies errors.Is(err, remote.ErrTransport), so verify still grades it BLOCKING rather than FLAG", "if gremlins' attached output stops being teed, its record reports 0 bytes observed and the test fails — and the symmetric assertion holds for stryker.net", "stryker.net's no-report error names tool and exit status through the recorder and no longer says `check stryker config`; recording it inside findReport instead of at :168 fails, because findReport's direct callers in stryker_net_test.go get no exit status to record", "findReport's walk-failure and dir-not-exist returns reach the caller unconverted — turning either into a record fails, since neither is a tool exit"]
+  status = "done"
 
 [[task]]
-id         = "t-5"
-wave       = 2
-depends_on = ["t-1"]
-title      = "Funnel leg errors through the recorder carrier"
-files = [
-  "internal/verify/verify.go",
-  "internal/verify/legerror_test.go",
-]
-description = """
-One change: verify.go:565's `Error: err.Error()` becomes
-`Error: RecordLegError(err).String()`. The field stays a marshalling `string`
-(pathfence's precedent: the wrapper's unexported fields cannot marshal, so the
-type lives on the derived value), and LegSummary.Error's population from
-LanguageRun.Error at verify.go:693 is already in place and untouched. Without
-this the c-4 walker's assignment arm is red against the live tree.
-"""
-covers = ["c-1", "c-4"]
-test_contract = [
-  "a reflect check on RecordLegError's Out(0) fails the moment it reverts to string — the named type is what t-7's accepted-RHS arm keys on",
-  "LanguageRun.Error and LegSummary.Error stay Go `string` and still round-trip through tests.json and verify.toml unchanged; changing either field's type fails here rather than at the serializer",
-  "a leg failing with a non-tool error (an argfence refusal) still records that error's text, asserted by substring, so the funnel cannot swallow dross-authored diagnostics — this is also what lets t-3 leave checkInstrumented's own prose intact",
-  "reverting the assignment to err.Error() fails the t-7 walker",
-]
-status = "pending"
+  id = "t-5"
+  wave = 2
+  title = "Funnel leg errors through the recorder carrier"
+  files = ["internal/verify/verify.go", "internal/verify/legerror_test.go"]
+  description = "One change: verify.go:565's `Error: err.Error()` becomes\n`Error: RecordLegError(err).String()`. The field stays a marshalling `string`\n(pathfence's precedent: the wrapper's unexported fields cannot marshal, so the\ntype lives on the derived value), and LegSummary.Error's population from\nLanguageRun.Error at verify.go:693 is already in place and untouched. Without\nthis the c-4 walker's assignment arm is red against the live tree.\n"
+  covers = ["c-1", "c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["a reflect check on RecordLegError's Out(0) fails the moment it reverts to string — the named type is what t-7's accepted-RHS arm keys on", "LanguageRun.Error and LegSummary.Error stay Go `string` and still round-trip through tests.json and verify.toml unchanged; changing either field's type fails here rather than at the serializer", "a leg failing with a non-tool error (an argfence refusal) still records that error's text, asserted by substring, so the funnel cannot swallow dross-authored diagnostics — this is also what lets t-3 leave checkInstrumented's own prose intact", "reverting the assignment to err.Error() fails the t-7 walker"]
+  status = "done"
 
 [[task]]
-id         = "t-6"
-wave       = 3
-depends_on = ["t-3", "t-4"]
-title      = "Ban tool output inside error constructors"
-files = [
-  "internal/mutation/toolfence_residual_test.go",
-]
-description = """
-An AST scan over every non-test file in internal/mutation. Its own task rather
-than folded into t-3/t-4: folded, it is red until the second adapter lands and
-gets loosened to pass against the first.
-"""
-covers = ["c-1"]
-test_contract = [
-  "any argument of errors.New, fmt.Errorf or fmt.Sprintf that contains a call to headBuffer.printHead or a read of head.buf is reported",
-  "a self-test drives the same scanner over an in-test fixture where errors.New(h.printHead(...)) IS reported and fmt.Fprint(os.Stderr, ...) is NOT, so a scanner that stopped matching fails on a written-down answer instead of passing vacuously",
-]
-status = "pending"
+  id = "t-6"
+  wave = 3
+  title = "Ban tool output inside error constructors"
+  files = ["internal/mutation/toolfence_residual_test.go"]
+  description = "An AST scan over every non-test file in internal/mutation. Its own task rather\nthan folded into t-3/t-4: folded, it is red until the second adapter lands and\ngets loosened to pass against the first.\n"
+  covers = ["c-1"]
+  depends_on = ["t-3", "t-4"]
+  test_contract = ["any argument of errors.New, fmt.Errorf or fmt.Sprintf that contains a call to headBuffer.printHead or a read of head.buf is reported", "a self-test drives the same scanner over an in-test fixture where errors.New(h.printHead(...)) IS reported and fmt.Fprint(os.Stderr, ...) is NOT, so a scanner that stopped matching fails on a written-down answer instead of passing vacuously"]
+  status = "done"
 
 [[task]]
-id         = "t-7"
-wave       = 3
-depends_on = ["t-2", "t-5"]
-title      = "Walk the declared sinks and their writers"
-files = [
-  "internal/cmd/toolfence_enum_test.go",
-  "internal/cmd/toolfence_carrier_test.go",
-  "internal/cmd/testdata/toolfence/writer_ok.go.txt",
-  "internal/cmd/testdata/toolfence/writer_raw.go.txt",
-  "internal/cmd/testdata/toolfence/undeclared_sink.go.txt",
-]
-description = """
-Placed in internal/cmd beside pathfence_enum_test.go — internal/cmd imports the
-registry, so the walker cannot live in internal/toolfence. FOUR walk roots: `.`
-(internal/cmd itself), ../verify, ../mutation and ../telemetry. internal/cmd is
-in scope because it holds three declared fields' live writers — verify.go:646
-constructs the LanguageRun carrying the Recorded Error, verify.go:825 assigns
-SkippedFile.Reason, and telemetry.go:61 is Event.ErrorDetail's only writer in the
-tree. Matching rule is written down and asserted: EXACT match against the tag
-vocabulary {error, message, note, notes, detail, output, stderr, reason, text,
-degraded}, over both string and []string fields, with untagged exported string
-fields on serialized structs matched by lowercased field name so mutation.Mutant
-(which carries no tags) is not silently excluded.
-"""
-covers = ["c-4"]
-test_contract = [
-  "writer_raw, assigning a string literal to LegSummary.Error, trips the guard; writer_ok, assigning RecordLegError(err).String(), does not — the accepted arm covers a method call or conversion wrapping the carrier's return, not only a bare call",
-  "a writer_raw variant placed under the internal/cmd root trips the guard too, so the package holding three declared fields' writers is provably walked rather than declared walked",
-  "undeclared_sink — a persisted struct with json:`stderr` and no registry entry — trips the undeclared arm",
-  "renaming verify.LanguageRun.Error without updating the registry fails the stale-declaration arm",
-  "an RHS that copies an already-declared field (LegSummary.Error = lr.Error) is accepted, without needing a no-op wrapper",
-  "the exemption is pinned from both sides: a raw fmt.Sprintf assigned to a NotToolStream field is ACCEPTED (this is what keeps lifecycle.go's Mutant.Note assignments green), and flipping a Recorded entry to NotToolStream to silence writer_raw FAILS — so reclassification is not the cheap way out of a future red",
-  "the vocabulary is asserted exact: adding a synthetic field tagged `notes` to a walked struct trips the undeclared arm, and one tagged `footnote` does not — so a prefix-matching regression is visible rather than silently widening the guard",
-  "a []string field tagged `degraded` is seen by both arms; restricting the walk to string-typed fields fails",
-  "vacuity floor: fewer than three declared fields found, or zero assignment sites seen in each of the four roots, fails",
-]
-status = "pending"
+  id = "t-7"
+  wave = 3
+  title = "Walk the declared sinks and their writers"
+  files = ["internal/cmd/toolfence_enum_test.go", "internal/cmd/toolfence_carrier_test.go", "internal/cmd/testdata/toolfence/writer_ok.go.txt", "internal/cmd/testdata/toolfence/writer_raw.go.txt", "internal/cmd/testdata/toolfence/undeclared_sink.go.txt"]
+  description = "Placed in internal/cmd beside pathfence_enum_test.go — internal/cmd imports the\nregistry, so the walker cannot live in internal/toolfence. FOUR walk roots: `.`\n(internal/cmd itself), ../verify, ../mutation and ../telemetry. internal/cmd is\nin scope because it holds three declared fields' live writers — verify.go:646\nconstructs the LanguageRun carrying the Recorded Error, verify.go:825 assigns\nSkippedFile.Reason, and telemetry.go:61 is Event.ErrorDetail's only writer in the\ntree. Matching rule is written down and asserted: EXACT match against the tag\nvocabulary {error, message, note, notes, detail, output, stderr, reason, text,\ndegraded}, over both string and []string fields, with untagged exported string\nfields on serialized structs matched by lowercased field name so mutation.Mutant\n(which carries no tags) is not silently excluded.\n"
+  covers = ["c-4"]
+  depends_on = ["t-2", "t-5"]
+  test_contract = ["writer_raw, assigning a string literal to LegSummary.Error, trips the guard; writer_ok, assigning RecordLegError(err).String(), does not — the accepted arm covers a method call or conversion wrapping the carrier's return, not only a bare call", "a writer_raw variant placed under the internal/cmd root trips the guard too, so the package holding three declared fields' writers is provably walked rather than declared walked", "undeclared_sink — a persisted struct with json:`stderr` and no registry entry — trips the undeclared arm", "renaming verify.LanguageRun.Error without updating the registry fails the stale-declaration arm", "an RHS that copies an already-declared field (LegSummary.Error = lr.Error) is accepted, without needing a no-op wrapper", "the exemption is pinned from both sides: a raw fmt.Sprintf assigned to a NotToolStream field is ACCEPTED (this is what keeps lifecycle.go's Mutant.Note assignments green), and flipping a Recorded entry to NotToolStream to silence writer_raw FAILS — so reclassification is not the cheap way out of a future red", "the vocabulary is asserted exact: adding a synthetic field tagged `notes` to a walked struct trips the undeclared arm, and one tagged `footnote` does not — so a prefix-matching regression is visible rather than silently widening the guard", "a []string field tagged `degraded` is seen by both arms; restricting the walk to string-typed fields fails", "vacuity floor: fewer than three declared fields found, or zero assignment sites seen in each of the four roots, fails"]
+  status = "done"
 
 [[task]]
-id         = "t-8"
-wave       = 3
-depends_on = ["t-3", "t-5"]
-title      = "Prove the failed leg reaches disk clean"
-files = [
-  "internal/verify/persist_toolfence_test.go",
-]
-description = """
-A stryker leg stubbed to print CANARY-B and exit 1 without a report, driven
-through RunScoped, Tests.Save, Skeleton and Verify.Save into a t.TempDir(); the
-bytes are read back off disk.
-"""
-covers = ["c-2"]
-test_contract = [
-  "tests.json AND verify.toml each contain `exit status 1`, the observed byte count and the stderr-pointer sentence, and neither contains CANARY-B nor the string `the head of stryker's output`. Both asserted, so a fix applied to one writer and not the other fails",
-  "verify.toml's finding.text for that leg is exactly the recorder line prefixed by `mutation adapter stryker failed: `, so interpolating anything else into the finding fails here — this is the pin the renderable_derivation decision rests on",
-  "RemoteTransport stays false, so the finding is FLAG and the phase is not falsely marked BLOCKING",
-  "if LegSummary.Error stops being populated from LanguageRun.Error the test fails on verify.toml's empty error field — a dead leg reading as a clean run",
-]
-status = "pending"
+  id = "t-8"
+  wave = 3
+  title = "Prove the failed leg reaches disk clean"
+  files = ["internal/verify/persist_toolfence_test.go"]
+  description = "A stryker leg stubbed to print CANARY-B and exit 1 without a report, driven\nthrough RunScoped, Tests.Save, Skeleton and Verify.Save into a t.TempDir(); the\nbytes are read back off disk.\n"
+  covers = ["c-2"]
+  depends_on = ["t-3", "t-5"]
+  test_contract = ["tests.json AND verify.toml each contain `exit status 1`, the observed byte count and the stderr-pointer sentence, and neither contains CANARY-B nor the string `the head of stryker's output`. Both asserted, so a fix applied to one writer and not the other fails", "verify.toml's finding.text for that leg is exactly the recorder line prefixed by `mutation adapter stryker failed: `, so interpolating anything else into the finding fails here — this is the pin the renderable_derivation decision rests on", "RemoteTransport stays false, so the finding is FLAG and the phase is not falsely marked BLOCKING", "if LegSummary.Error stops being populated from LanguageRun.Error the test fails on verify.toml's empty error field — a dead leg reading as a clean run"]
+  status = "done"
 
 [[task]]
-id         = "t-9"
-wave       = 2
-depends_on = ["t-2"]
-title      = "Enumerate PR and board body composers"
-files = [
-  "internal/cmd/toolfence_composer_test.go",
-  "internal/cmd/testdata/toolfence_composer/leaky_body.go.txt",
-]
-description = """
-One file in package cmd: three of the four named composers (renderPhaseBody,
-milestoneBody, renderTaskBody) are unexported in cmd and ship.BuildPRBody is
-exported, so only a cmd-side test can call all four. Depends on t-2's registry
-alone — it builds its own synthetic phase.Spec / verify.Verify / phase.Plan and
-never reads the carrier, so it is wave 2. Both proof halves run: every Recorded
-field is filled with its own canary and each named composer is CALLED, plus an
-AST scan keyed on the SINK rather than on composer function shape — every
-assignment to forge.IssueInput.Body, forge.IssuePatch.Body, ship.OpenOpts.Body
-and a comment's Body field. Sink-keying is what makes the four literal body
-sites visible: milestone.go:281, issue.go:609, issue.go:785 and issue.go:1337
-are inline fmt.Sprintf assignments, not funcs returning a body, so a
-func-shaped scan resolves none of them. `dross ship comment` is enumerated as a
-pass-through with a Why: its body comes only from --body / --body-file.
-"""
-covers = ["c-5", "c-6"]
-test_contract = [
-  "no composer's output contains any canary; a composer rendering a Renderable field (Finding.Text) is allowed and does not trip it",
-  "the sink-keyed scan resolves all four inline body sites (milestone.go:281, issue.go:609, issue.go:785, issue.go:1337) alongside the four named composers; a scan keyed on func shape finds none of the four and fails the count",
-  "the leaky_body fixture, assigning a fmt.Sprintf of leg.Error to a forge.IssueInput.Body, trips the scan",
-  "the enumeration fails when the resolved composer set is empty, counted PER GROUP so a vacuous board half cannot hide behind a healthy PR half",
-  "a named composer that no longer resolves fails rather than silently leaving the set — renaming BuildPRBody must break it",
-  "the ship-comment pass-through assertion fails if that command starts reading project state",
-]
-status = "pending"
+  id = "t-9"
+  wave = 2
+  title = "Enumerate PR and board body composers"
+  files = ["internal/cmd/toolfence_composer_test.go", "internal/cmd/testdata/toolfence_composer/leaky_body.go.txt"]
+  description = "One file in package cmd: three of the four named composers (renderPhaseBody,\nmilestoneBody, renderTaskBody) are unexported in cmd and ship.BuildPRBody is\nexported, so only a cmd-side test can call all four. Depends on t-2's registry\nalone — it builds its own synthetic phase.Spec / verify.Verify / phase.Plan and\nnever reads the carrier, so it is wave 2. Both proof halves run: every Recorded\nfield is filled with its own canary and each named composer is CALLED, plus an\nAST scan keyed on the SINK rather than on composer function shape — every\nassignment to forge.IssueInput.Body, forge.IssuePatch.Body, ship.OpenOpts.Body\nand a comment's Body field. Sink-keying is what makes the four literal body\nsites visible: milestone.go:281, issue.go:609, issue.go:785 and issue.go:1337\nare inline fmt.Sprintf assignments, not funcs returning a body, so a\nfunc-shaped scan resolves none of them. `dross ship comment` is enumerated as a\npass-through with a Why: its body comes only from --body / --body-file.\n"
+  covers = ["c-5", "c-6"]
+  depends_on = ["t-2"]
+  test_contract = ["no composer's output contains any canary; a composer rendering a Renderable field (Finding.Text) is allowed and does not trip it", "the sink-keyed scan resolves all four inline body sites (milestone.go:281, issue.go:609, issue.go:785, issue.go:1337) alongside the four named composers; a scan keyed on func shape finds none of the four and fails the count", "the leaky_body fixture, assigning a fmt.Sprintf of leg.Error to a forge.IssueInput.Body, trips the scan", "the enumeration fails when the resolved composer set is empty, counted PER GROUP so a vacuous board half cannot hide behind a healthy PR half", "a named composer that no longer resolves fails rather than silently leaving the set — renaming BuildPRBody must break it", "the ship-comment pass-through assertion fails if that command starts reading project state"]
+  status = "done"
