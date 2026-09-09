@@ -107,7 +107,9 @@ func (f *toolFailure) Error() string {
 	if f.exit == exitDidNotStart {
 		b.WriteString(" did not start")
 	} else {
-		fmt.Fprintf(&b, " exited with status %d", f.exit)
+		// "exit status N", matching what exec.ExitError itself renders, so a
+		// reader grepping for the familiar phrase finds it.
+		fmt.Fprintf(&b, " failed with exit status %d", f.exit)
 	}
 	b.WriteString("; ")
 	b.WriteString(f.cap.clause())

@@ -742,12 +742,18 @@ func TestStrykerReportlessErrorNamesHeadOfOutput(t *testing.T) {
 	const cause = "Missing required environment variable: DATABASE_URL"
 	defer noisyStryker(t, s, "INFO Stryker Starting\n"+cause, 1, nil)()
 
-	_, _, err := captureStderr(t, func() (*Report, error) { return s.Run([]string{"src/a.ts"}) })
+	out, _, err := captureStderr(t, func() (*Report, error) { return s.Run([]string{"src/a.ts"}) })
 	if err == nil {
 		t.Fatal("a reportless failure returned nil error")
 	}
-	if !strings.Contains(err.Error(), cause) {
-		t.Errorf("the error does not quote the real cause:\n%v", err)
+	// MOVED, not relaxed. The cause must still reach the reader — it just
+	// reaches them on the terminal, at the failure point, instead of inside a
+	// string dross then writes to tests.json and verify.toml.
+	if !strings.Contains(out, cause) {
+		t.Errorf("the real cause was not re-printed to stderr at the failure point:\n%s", out)
+	}
+	if strings.Contains(err.Error(), cause) {
+		t.Errorf("the tool's own output is back inside the error, which is what gets persisted:\n%v", err)
 	}
 	if strings.Contains(err.Error(), "check stryker config") {
 		t.Errorf("the misleading advice is still there:\n%v", err)
@@ -782,23 +788,34 @@ func TestStrykerHardFailsOnUninstrumentedFile(t *testing.T) {
 	}
 }
 
-// TestStrykerDropWarningIsQuoted: stryker's own wording for the fault, carried
-// through verbatim so a user can search for it.
-func TestStrykerDropWarningIsQuoted(t *testing.T) {
+// TestStrykerDropWarningReachesTheTerminal: stryker's own wording for the fault,
+// carried through verbatim so a user can search for it.
+//
+// MOVED, not relaxed, by the same cut as the reportless path: the warning is
+// the TOOL's text, so it goes to the terminal at the failure point and not into
+// an error dross persists. What stays in the error is dross's own hint telling
+// the reader to look for it there.
+func TestStrykerDropWarningReachesTheTerminal(t *testing.T) {
 	s := &Stryker{ProjectRoot: t.TempDir()}
 	const warning = `Glob pattern "src/routes/x/[id]/y.ts" did not result in any files.`
 	defer noisyStryker(t, s, "WARN ProjectReader "+warning, 0, func(p string) {
 		writeReport(t, p, "src/a.ts")
 	})()
 
-	_, _, err := captureStderr(t, func() (*Report, error) {
+	out, _, err := captureStderr(t, func() (*Report, error) {
 		return s.Run([]string{"src/a.ts", "src/routes/x/[id]/y.ts"})
 	})
 	if err == nil {
 		t.Fatal("a dropped glob returned nil error")
 	}
-	if !strings.Contains(err.Error(), warning) {
-		t.Errorf("stryker's own warning is not in the error:\n%v", err)
+	if !strings.Contains(out, warning) {
+		t.Errorf("stryker's own warning was not re-printed to stderr:\n%s", out)
+	}
+	if strings.Contains(err.Error(), warning) {
+		t.Errorf("stryker's own wording is inside the error, which is what gets persisted:\n%v", err)
+	}
+	if !strings.Contains(err.Error(), strykerDropWarningText) {
+		t.Errorf("the error no longer tells the reader what to look for:\n%v", err)
 	}
 }
 
@@ -945,8 +962,25 @@ func TestStrykerHeadBufferIsBoundedAndDoesNotSwallowTheStream(t *testing.T) {
 	if got, want := len(out), lines*(len(line)+1); got < want {
 		t.Errorf("the stream was truncated: os.Stderr got %d bytes, want the full %d", got, want)
 	}
-	if n := strings.Count(err.Error(), "\n"); n > strykerHeadLines+10 {
-		t.Errorf("the error quoted %d lines; it must quote at most ~%d", n, strykerHeadLines)
+	// RETARGETED at the stderr block. Counting lines in the error would now
+	// pass vacuously — the error carries no quoted output at all — so a
+	// printHead that had stopped emitting anything would look fine. The cap
+	// belongs on the thing that is actually bounded.
+	const banner = "the head of stryker's output"
+	i := strings.Index(out, banner)
+	if i < 0 {
+		t.Fatalf("the head was never re-printed to stderr; the line cap below would be vacuous")
+	}
+	block := out[i:]
+	n := strings.Count(block, "\n")
+	if n > strykerHeadLines+10 {
+		t.Errorf("the re-printed head is %d lines; it must be at most ~%d", n, strykerHeadLines)
+	}
+	if n < strykerHeadLines {
+		t.Errorf("the re-printed head is only %d lines; the stream was long enough for %d", n, strykerHeadLines)
+	}
+	if strings.Contains(err.Error(), line) {
+		t.Errorf("the tool's output is inside the error: %v", err)
 	}
 }
 

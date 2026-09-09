@@ -115,14 +115,19 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 	sink := io.MultiWriter(os.Stderr, head)
 	cmd.Stdout = sink
 	cmd.Stderr = sink
-	if err := cmd.Run(); err != nil {
+	// Retained past the branch below: the exit status is the one fact about a
+	// reportless run worth recording, and it is only available here.
+	runErr := cmd.Run()
+	exitStatus := 0
+	if runErr != nil {
 		// Stryker exits non-zero when surviving mutants exist —
 		// that's a successful run with bad results, not an adapter
 		// failure. We still try to read the report.
 		var exitErr *exec.ExitError
-		if !errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("stryker invocation failed: %w (is stryker installed in the project? `npm i -D %s` or equivalent)", err, strykerPin)
+		if !errors.As(runErr, &exitErr) {
+			return nil, fmt.Errorf("stryker invocation failed: %w (is stryker installed in the project? `npm i -D %s` or equivalent)", runErr, strykerPin)
 		}
+		exitStatus = exitErr.ExitCode()
 	}
 
 	if err := lr.fetchReport("", reportPath); err != nil {
@@ -138,17 +143,25 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 			// the instrumenter. The config was fine each time and the real
 			// cause was sitting at the HEAD of the output, which the user had
 			// just watched scroll past. Quote it.
-			var quoted strings.Builder
-			head.printHead(&quoted, "stryker", strykerHeadLines)
-			msg := fmt.Sprintf("stryker did not write a report at %s.\n%s", reportPath, quoted.String())
+			// The head goes to the TERMINAL, not into the error. The user
+			// has already watched the whole stream scroll past, so the cause
+			// is re-printed here, at the failure point, where they are
+			// looking — and the error carries only facts ABOUT that output
+			// (spec decision cut_point). Nothing downstream has to scrub,
+			// because the string was never built.
+			head.printHead(os.Stderr, "stryker", strykerHeadLines)
+			fmt.Fprintln(os.Stderr)
+			err := fmt.Errorf("stryker did not write a report at %s: %w",
+				reportPath, RecordToolFailure("stryker", exitStatus, Observed(head.observed())))
 			// Attached only on an initial-test-run abort. Unconditionally it
 			// would claim a truncated failure list on aborts that never
 			// printed one — a bad --mutate glob, a missing runner, a crash in
-			// the instrumenter (locked decision note_trigger).
+			// the instrumenter (locked decision note_trigger). Fixed
+			// dross-authored prose, so it stays in the error.
 			if head.contains(strykerInitialTestFailureText) {
-				msg += "\n" + strykerInitialTestTruncationNote
+				err = fmt.Errorf("%w\n%s", err, strykerInitialTestTruncationNote)
 			}
-			return nil, errors.New(msg)
+			return nil, err
 		}
 		return nil, fmt.Errorf("read stryker report: %w", err)
 	}
@@ -266,9 +279,14 @@ func (s *Stryker) checkInstrumented(data []byte, requested []string, head *headB
 	if head.contains(strykerDropWarningText) {
 		msg += "stryker said so itself — look for \"" + strykerDropWarningText + "\" below.\n"
 	}
-	var quoted strings.Builder
-	head.printHead(&quoted, "stryker", strykerHeadLines)
-	return fmt.Errorf("%s\n%s", msg, quoted.String())
+	// The tool SUCCEEDED here — it wrote a report, it just did not instrument
+	// everything. So there is no tool failure to record, and the dropped-path
+	// list is the whole diagnostic. The head still goes to the terminal, where
+	// the "did not result in any files" line the hint points at is readable.
+	fmt.Fprintln(os.Stderr)
+	head.printHead(os.Stderr, "stryker", strykerHeadLines)
+	fmt.Fprintln(os.Stderr)
+	return errors.New(msg)
 }
 
 // strykerPin is the exact @stryker-mutator/core version dross invokes.
