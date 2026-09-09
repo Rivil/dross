@@ -1,7 +1,6 @@
 package mutation
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -139,12 +138,14 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 			// the instrumenter. The config was fine each time and the real
 			// cause was sitting at the HEAD of the output, which the user had
 			// just watched scroll past. Quote it.
-			msg := fmt.Sprintf("stryker did not write a report at %s.\n%s", reportPath, head.quote(strykerHeadLines))
+			var quoted strings.Builder
+			head.printHead(&quoted, "stryker", strykerHeadLines)
+			msg := fmt.Sprintf("stryker did not write a report at %s.\n%s", reportPath, quoted.String())
 			// Attached only on an initial-test-run abort. Unconditionally it
 			// would claim a truncated failure list on aborts that never
 			// printed one — a bad --mutate glob, a missing runner, a crash in
 			// the instrumenter (locked decision note_trigger).
-			if strings.Contains(head.buf.String(), strykerInitialTestFailureText) {
+			if head.contains(strykerInitialTestFailureText) {
 				msg += "\n" + strykerInitialTestTruncationNote
 			}
 			return nil, errors.New(msg)
@@ -173,53 +174,6 @@ const (
 	strykerHeadBytes = 64 << 10
 	strykerHeadLines = 40
 )
-
-// headBuffer retains the first `limit` bytes written through it and silently
-// discards the rest, always reporting a full write so it can sit inside an
-// io.MultiWriter without truncating the stream its sibling is rendering.
-type headBuffer struct {
-	limit int
-	buf   bytes.Buffer
-}
-
-func (h *headBuffer) Write(p []byte) (int, error) {
-	if room := h.limit - h.buf.Len(); room > 0 {
-		if len(p) <= room {
-			h.buf.Write(p)
-		} else {
-			h.buf.Write(p[:room])
-		}
-	}
-	// len(p), never the amount kept: a short count is an io.ErrShortWrite to
-	// io.MultiWriter, which would abort the write to os.Stderr as well and
-	// truncate the live output the moment the cap was reached.
-	return len(p), nil
-}
-
-// quote renders at most n lines of the retained head, indented, for embedding
-// in an error.
-func (h *headBuffer) quote(n int) string {
-	text := strings.TrimRight(h.buf.String(), "\n")
-	if text == "" {
-		return "stryker produced no output at all — it may not have started."
-	}
-	lines := strings.Split(text, "\n")
-	truncated := false
-	if len(lines) > n {
-		lines, truncated = lines[:n], true
-	}
-	var b strings.Builder
-	b.WriteString("the head of stryker's output, which is where the cause is:\n\n")
-	for _, l := range lines {
-		b.WriteString("    ")
-		b.WriteString(l)
-		b.WriteString("\n")
-	}
-	if truncated {
-		b.WriteString("    … (output continues above)\n")
-	}
-	return b.String()
-}
 
 // strykerDropWarningText is Stryker's own wording when a --mutate glob resolves
 // to no file (@stryker-mutator/core, src/fs/project-reader.ts). Named here so
@@ -309,10 +263,12 @@ func (s *Stryker) checkInstrumented(data []byte, requested []string, head *headB
 			"Refusing to report a score over the rest: a partial run looks exactly like a complete one,\n"+
 			"which is how six route files vanished from a run unnoticed on 2026-08-26.\n",
 		len(dropped), strings.Join(dropped, ", "))
-	if strings.Contains(head.buf.String(), strykerDropWarningText) {
+	if head.contains(strykerDropWarningText) {
 		msg += "stryker said so itself — look for \"" + strykerDropWarningText + "\" below.\n"
 	}
-	return fmt.Errorf("%s\n%s", msg, head.quote(strykerHeadLines))
+	var quoted strings.Builder
+	head.printHead(&quoted, "stryker", strykerHeadLines)
+	return fmt.Errorf("%s\n%s", msg, quoted.String())
 }
 
 // strykerPin is the exact @stryker-mutator/core version dross invokes.
