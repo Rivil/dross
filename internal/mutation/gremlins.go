@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -212,8 +213,15 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		if err != nil {
 			return nil, err
 		}
-		cmd.Stdout = os.Stderr // streamed; not captured (long-running)
-		cmd.Stderr = os.Stderr
+		// TEED, not captured. The stream still reaches the terminal as it
+		// arrives; a bounded prefix is retained so a failure can re-print the
+		// head at the failure point and report how much output went past.
+		// Gremlins had no tee at all before this — a reportless exit named a
+		// code and nothing else.
+		head := &headBuffer{limit: strykerHeadBytes}
+		sink := io.MultiWriter(os.Stderr, head)
+		cmd.Stdout = sink
+		cmd.Stderr = sink
 
 		// Echo the exact invocation before running — cheap diagnostic for
 		// copy-paste re-runs.
@@ -238,7 +246,10 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 					return nil, fmt.Errorf("remote ssh for gremlins on %s could not be started: %w: %v\n  invocation: %s",
 						g.Remote.Host, remote.ErrTransport, err, invocation)
 				}
-				return nil, fmt.Errorf("gremlins invocation failed: %w\n  invocation: %s\n  (is gremlins installed? `go install github.com/go-gremlins/gremlins/cmd/gremlins@latest`)", err, invocation)
+				head.printHead(os.Stderr, "gremlins", strykerHeadLines)
+				fmt.Fprintln(os.Stderr)
+				return nil, fmt.Errorf("gremlins invocation failed: %w\n  invocation: %s\n  (is gremlins installed? `go install github.com/go-gremlins/gremlins/cmd/gremlins@latest`)",
+					RecordToolFailure("gremlins", exitDidNotStart, Observed(head.observed())).wrapping(err), invocation)
 			}
 			// Over ssh the SAME exit channel carries the remote program's code
 			// and ssh's own transport failures, so the tolerance above has to be
@@ -271,7 +282,13 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 			// over before measuring, and calling that "no covered mutants"
 			// reports the package as fine to ignore.
 			if fatal := lr.reportlessExitFatal("gremlins", toolExit); fatal != nil {
-				return nil, fmt.Errorf("%w\n  invocation: %s", fatal, invocation)
+				// Two %w: the refusal keeps its identity (remote.ErrRemoteCommand,
+				// which verify grades on) AND the record is reachable by
+				// errors.As. The head goes to the terminal, never into either.
+				head.printHead(os.Stderr, "gremlins", strykerHeadLines)
+				fmt.Fprintln(os.Stderr)
+				return nil, fmt.Errorf("%w: %w\n  invocation: %s",
+					fatal, RecordToolFailure("gremlins", toolExit, Observed(head.observed())), invocation)
 			}
 			// No report — gremlins gathered no covered mutants for this
 			// package and exited without writing. Exclude, don't fail: only
@@ -564,7 +581,13 @@ func (g *Gremlins) Collect(steps []PackageStep, host string) (*Report, error) {
 			// collectDetached remains the backstop.
 			if code, ok := g.stepExit(s); ok {
 				if fatal := ReportlessExit("gremlins", host, code); fatal != nil {
-					return nil, fmt.Errorf("package %s: %w", s.Package, fatal)
+					// The path this repo actually runs. A detached run tees
+					// nothing anywhere this process can see, so the capture is
+					// NotCaptured — recording `0 bytes` here would claim the
+					// tool was silent when the truth is that nobody was watching.
+					return nil, fmt.Errorf("package %s: %w: %w", s.Package, fatal,
+						RecordToolFailure("gremlins", code,
+							NotCaptured("this run was detached, so no output was teed to a terminal")))
 				}
 			}
 			skip(s.Package, UnmeasuredMissing, "no report — gremlins gathered no covered mutants")

@@ -1,0 +1,28 @@
+package verify
+
+// The must-trip fixture for the undeclared arm: a persisted struct carrying a
+// text field the registry never declared.
+//
+// `stderr` is in the vocabulary and the field is a string, so it matches. What
+// makes it a fault is that nothing says where the value comes from — a new sink
+// added to a schema with no disposition is exactly the gap the registry exists
+// to close, and it must fail rather than pass by not being noticed.
+type ToolRun struct {
+	Tool   string `json:"tool"`
+	Stderr string `json:"stderr,omitempty"`
+}
+
+// The must-NOT-trip sibling: a text-shaped field whose tag is outside the
+// vocabulary. A prefix-matching regression would report this one, silently
+// widening the guard past what the registry can answer for.
+type Annotation struct {
+	Footnote string `json:"footnote,omitempty"`
+	Slug     string `json:"slug"`
+	Count    int    `json:"notes"`
+}
+
+// The []string arm: a slice-of-string sink is a sink. Restricting the walk to
+// scalar strings would miss verify.Scope.Degraded entirely.
+type Degradation struct {
+	Degraded []string `json:"degraded,omitempty"`
+}

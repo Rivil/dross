@@ -1,0 +1,82 @@
+[verify]
+  phase = "tool-output-not-persisted"
+  generated_at = 2026-09-11T12:12:38.858947Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-09-11T12:14:47.617676Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.8735632183908046
+  mutants_killed = 228
+  mutants_survived = 33
+  mutants_not_covered = 33
+  mutants_in_scope = 261
+  unclassified_in_scope = 0
+  criteria_total = 6
+  criteria_covered = 6
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 228
+    survived = 33
+    timeout = 0
+    in_scope = 261
+    score = 0.8735632183908046
+    file_count = 23
+    measured_on = "helicon"
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/mutation/toolfail_test.go:TestRecordErrorClauses", "internal/mutation/toolfail_test.go:TestRecordToolFailureShape", "internal/mutation/toolfail_test.go:TestRecordStartFailure", "internal/mutation/toolfail_test.go:TestRecordRealExitStatusOne", "internal/mutation/toolfail_test.go:TestRecordLegErrorCarriesTheText", "internal/mutation/toolfail_test.go:TestNotCapturedCarriesNoByteCount", "internal/mutation/gremlins_failure_test.go:TestGremlinsReportlessExitIsRecorded", "internal/mutation/gremlins_failure_test.go:TestGremlinsDetachedCollectRecordsNotCaptured", "internal/mutation/stryker_net_failure_test.go:TestStrykerNetNoReportIsRecordedAtTheCallSite", "internal/mutation/stryker_failure_test.go:TestStrykerReportlessSplitsTerminalFromError", "internal/mutation/toolfence_residual_test.go:TestNoToolOutputInsideAnErrorConstructor"]
+  notes = "The record and its four facts are pinned, and all three adapters now assert errors.As(err, &toolFailure) — gremlins (3 sites), stryker.net (2) and, since t-10, stryker's reportless path — so reproducing the wording inline no longer passes. Both 2026-09-09 in-hunk survivors are closed: toolfail.go:139 (RecordLegError nil-guard) is KILLED this run by the new package-local TestRecordLegErrorCarriesTheText (228 killed vs 227). toolfail.go:25 still reports NOT_COVERED, and the previous run's diagnosis of it was wrong: it is a package-level const, go-cover emits no block for the line (confirmed with -coverprofile), so gremlins never runs the mutant regardless of assertions. Applying it by hand (-1 -> 1) fails TestRecordRealExitStatusOne on both arms; accepted under const-initializer-arithmetic with that proof. The residual guard's blind spot (laundered strings.Builder shape) is documented as the exact pre-phase shape and deferred to secret-detection."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/verify/persist_toolfence_test.go:TestFailedLegReachesDiskClean", "internal/verify/persist_toolfence_test.go:TestPersistenceAssertionsCanFire", "internal/mutation/stryker_failure_test.go:TestStrykerReportlessSplitsTerminalFromError"]
+  notes = "Both artifacts are read back off disk and asserted for the exit status, the observed byte count and the stderr pointer, and against the canary and the head banner. Verified by breakage on 2026-09-09: re-embedding the head quote into stryker.go's error fails TestStrykerReportlessSplitsTerminalFromError. TestPersistenceAssertionsCanFire drives the pre-phase leaky error through the same path and asserts the canary DOES land, so the absence checks are shown capable of failing. Seam recorded: strykerBuildCmd is unexported, so the disk-side test builds the leg error through the exported recorder in the shape Stryker.Run returns rather than driving the real adapter; the two halves meet on a duplicated literal at stryker.go:154 and persist_toolfence_test.go:27."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/mutation/stryker_test.go:TestStrykerHeadBufferIsBoundedAndDoesNotSwallowTheStream", "internal/mutation/toolfail_test.go:TestPrintHeadMatchesTheQuoteItReplaced", "internal/mutation/stryker_failure_test.go:TestStrykerReportlessSplitsTerminalFromError", "internal/mutation/stryker_test.go:TestStrykerDropWarningReachesTheTerminal"]
+  notes = "The tee still delivers the full 2.4MB stream to os.Stderr, and printHead is pinned byte-for-byte against the quote() it replaced, including the truncation tail and the silent case. All three adapters assert the cause appears on stderr twice - teed live, then re-printed under the head banner at the failure point. Verified by breakage on 2026-09-09: deleting the re-print fails both the stderr-count assertion and the retargeted line cap."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/toolfence_enum_test.go:TestEveryPersistedTextSinkIsDeclared", "internal/cmd/toolfence_carrier_test.go:TestEveryRecordedWriteComesFromTheCarrier", "internal/cmd/toolfence_carrier_test.go:TestCarrierScanIsCalibrated", "internal/cmd/toolfence_enum_test.go:TestNoStaleDeclaration", "internal/cmd/toolfence_enum_test.go:TestVocabularyIsExact", "internal/cmd/toolfence_carrier_test.go:TestRecordedFieldsCannotBeReclassifiedAway", "internal/toolfence/fields_test.go:TestValidateNamesEveryMalformedShape"]
+  notes = "Both arms are calibrated on fixtures rather than on the tree's post-fix state, and the reclassification escape is closed from both sides. Verified by breakage on 2026-09-09: reverting verify.go:571 to err.Error() reports it by file and line. Reconciliation noted - the criterion says 'every assignment to a declared field comes from the shared recorder', but 8 of the 10 declared fields are NotToolStream or Renderable and are assigned dross-authored prose by design; the disposition is what 'declared' means here, and the carrier arm binds the 2 Recorded ones."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/toolfence_composer_test.go:TestNoComposerRendersARecordedField", "internal/cmd/toolfence_composer_test.go:TestNoBodySinkReadsARecordedField", "internal/cmd/toolfence_composer_test.go:TestBodyScanIsKeyedOnTheSinkNotTheFuncShape", "internal/cmd/toolfence_composer_test.go:TestShipCommentIsAPassThrough"]
+  notes = "Both halves run: the four named composers are called with a canary in every Recorded field, and a sink-keyed AST scan resolves the body sites a func-shaped scan cannot see, with a per-group vacuity floor so an empty PR group fails. ship.go:559 is the only PR-comment site in the tree and its body comes only from --body/--body-file, asserted rather than declared. Verified by breakage on 2026-09-09: making BuildPRBody render LegSummary.Error fails the canary half."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/toolfence_composer_test.go:TestNoBodySinkReadsARecordedField", "internal/cmd/toolfence_composer_test.go:TestBodyScanTripsOnTheLeakyFixture", "internal/cmd/toolfence_composer_test.go:TestNoComposerRendersARecordedField"]
+  notes = "The same enumerating test over the board group: 9 sink sites across issue.go and issue_task.go, including the two inline backlog-item bodies a func-shaped scan resolves as zero. leaky_body.go.txt pins the trip, the Renderable pass, and the err.Error() exclusion on a written-down answer."
+
+[[finding]]
+  severity = "NOTE"
+  text = "toolfail.go:25 (INVERT_NEGATIVES) was accepted this run under const-initializer-arithmetic. The 2026-09-09 BLOCKING read it as a weak-assertion gap; the coverage profile shows the const line has no go-cover block at all, so gremlins never ran the mutant. The new TestRecordRealExitStatusOne kills it when applied by hand and stays as the real guard. unclassified_in_scope was set from 1 to 0 by that accept without re-running the 1h56m leg — the classification is a pure function of tests.json and survivors.toml, and the re-derive gap is already filed (deferred a1f0a6f51a442945)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Both 2026-09-09 FLAGs are closed: stryker's reportless path now carries the errors.As(err, &toolFailure) pin (t-10), and the residual guard's laundered-variable blind spot is documented as the exact pre-phase shape and filed as deferred[2] on secret-detection (board DRO-390) — it is the same dataflow reach the spec parked there at scope time, and the behavioural canaries already fail on the shape."
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation efficacy over the 228 reachable mutants is 1.00; the 0.87 headline is the 33 mutants gremlins attributes no coverage block to, every one accepted with a reason in .dross/survivors.toml. Read the pair, not the headline."
+
+[[finding]]
+  severity = "NOTE"
+  text = "`dross doctor` reports ~90 architecture-link drifts, including this phase's own (LanguageRun.Error, Stryker.Run, strykerPin) and t-10's landmark loc (recorded :200, function is at :204). Advisory; clear with `dross architecture check --fix` before or during ship."

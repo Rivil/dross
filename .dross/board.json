@@ -43,6 +43,7 @@
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10",
     "test-lane-config": "DRO-191",
+    "tool-output-not-persisted": "DRO-378",
     "tracked-path-containment": "DRO-355"
   },
   "quicks": {
@@ -110,6 +111,7 @@
     "someday:id:48b5edeb0556cd3a": "DRO-105",
     "someday:id:49e1846c35c70607": "DRO-314",
     "someday:id:4ba7aa62aab78d49": "DRO-377",
+    "someday:id:500ae4ef27e1788c": "DRO-390",
     "someday:id:5424d79f2f8d3bc5": "DRO-327",
     "someday:id:5610b45525282bf4": "DRO-219",
     "someday:id:5802ad3fe8f08d87": "DRO-34",
@@ -154,6 +156,7 @@
     "someday:id:9fa4386fc04774d6": "DRO-112",
     "someday:id:a0c922d44af899fc": "DRO-78",
     "someday:id:a1eca47a8213daa2": "DRO-207",
+    "someday:id:a1f0a6f51a442945": "DRO-388",
     "someday:id:a3485cb4d13bd717": "DRO-99",
     "someday:id:a3bc77dbd1f99621": "DRO-88",
     "someday:id:a466b845ac09e62e": "DRO-103",
@@ -909,6 +912,56 @@
       "issue": "DRO-200",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "tool-output-not-persisted/t-1": {
+      "issue": "DRO-379",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-10": {
+      "issue": "DRO-389",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-2": {
+      "issue": "DRO-380",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-3": {
+      "issue": "DRO-381",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-4": {
+      "issue": "DRO-382",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-5": {
+      "issue": "DRO-383",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-6": {
+      "issue": "DRO-385",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-7": {
+      "issue": "DRO-386",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-8": {
+      "issue": "DRO-387",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-9": {
+      "issue": "DRO-384",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "tracked-path-containment/t-1": {
       "issue": "DRO-356",

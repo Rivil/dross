@@ -1,0 +1,178 @@
+{
+  "phase": "tool-output-not-persisted",
+  "pr": 121,
+  "base": "milestone/v1.7",
+  "base_commit": "5118892a2129c2b7abbd2fcda6903dac0092cbac",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/mutation/toolfail.go",
+        "internal/mutation/toolfail_test.go",
+        "internal/mutation/stryker.go"
+      ],
+      "commit": "99eacac",
+      "completed_at": "2026-09-09T13:42:42.920824Z",
+      "landmarks": [
+        {
+          "feature": "mutation tool-failure recording",
+          "symbol": "RecordToolFailure",
+          "loc": "internal/mutation/toolfail.go:79",
+          "what": "shared record for a failed tool invocation carrying tool, exit status, observed byte count and a fixed stderr pointer, with the head buffer rendered to a writer instead of into an error string"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/mutation/toolfail_test.go",
+        "internal/mutation/stryker_failure_test.go",
+        "internal/mutation/stryker.go",
+        "internal/mutation/toolfence_residual_test.go"
+      ],
+      "commit": "69bfc6e",
+      "completed_at": "2026-09-11T10:13:20.579799Z",
+      "landmarks": [
+        {
+          "feature": "tool-failure recorder",
+          "symbol": "TestRecordRealExitStatusOne",
+          "loc": "internal/mutation/toolfail_test.go:200",
+          "what": "package-local kills for the exit-sentinel and RecordLegError nil-guard mutants; stryker reportless path pinned as a toolFailure record via errors.As"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/toolfence/fields.go",
+        "internal/toolfence/fields_test.go"
+      ],
+      "commit": "9aeefe5",
+      "completed_at": "2026-09-09T13:46:44.397918Z",
+      "landmarks": [
+        {
+          "feature": "tool-text sink fencing",
+          "symbol": "toolfence.Fields",
+          "loc": "internal/toolfence/fields.go:110",
+          "what": "registry declaring every persisted field that may carry tool-derived text with one of three dispositions plus the four walked roots"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/mutation/stryker.go",
+        "internal/mutation/stryker_test.go",
+        "internal/mutation/stryker_failure_test.go",
+        "internal/mutation/toolfail.go"
+      ],
+      "commit": "44692fa",
+      "completed_at": "2026-09-09T14:08:07.164481Z",
+      "landmarks": [
+        {
+          "feature": "mutation tool-failure recording",
+          "symbol": "Stryker.Run",
+          "loc": "internal/mutation/stryker.go:139",
+          "what": "reportless and uninstrumented paths print the head to stderr and return a record, so the tool's own output stops reaching the error dross persists"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/mutation/gremlins.go",
+        "internal/mutation/stryker_net.go",
+        "internal/mutation/stryker_net_test.go",
+        "internal/mutation/gremlins_failure_test.go",
+        "internal/mutation/stryker_net_failure_test.go"
+      ],
+      "commit": "6a2661a",
+      "completed_at": "2026-09-09T14:17:25.843862Z",
+      "landmarks": [
+        {
+          "feature": "mutation tool-failure recording",
+          "symbol": "noReportError",
+          "loc": "internal/mutation/stryker_net.go:296",
+          "what": "gremlins' three fatal paths and stryker.net's two route through the recorder, both adapters gain the head tee, and stryker.net's no-report case is discriminated at the call site where the exit status lives"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/verify/verify.go",
+        "internal/verify/legerror_test.go"
+      ],
+      "commit": "9aadc75",
+      "completed_at": "2026-09-09T14:21:04.469843Z",
+      "landmarks": [
+        {
+          "feature": "tool-text sink fencing",
+          "symbol": "RunScoped",
+          "loc": "internal/verify/verify.go:565",
+          "what": "the persisted leg-error string comes from mutation.RecordLegError, the named carrier the sink walker accepts"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/mutation/toolfence_residual_test.go"
+      ],
+      "commit": "91beef3",
+      "completed_at": "2026-09-09T14:30:59.75475Z",
+      "landmarks": [
+        {
+          "feature": "tool-text sink fencing",
+          "symbol": "scanErrorConstructors",
+          "loc": "internal/mutation/toolfence_residual_test.go:155",
+          "what": "AST ban on rendering the retained head buffer inside any error constructor in internal/mutation"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/toolfence_enum_test.go",
+        "internal/cmd/toolfence_carrier_test.go",
+        "internal/cmd/testdata/toolfence/writer_ok.go.txt",
+        "internal/cmd/testdata/toolfence/writer_raw.go.txt",
+        "internal/cmd/testdata/toolfence/undeclared_sink.go.txt"
+      ],
+      "commit": "cdff6ee",
+      "completed_at": "2026-09-09T14:43:42.480503Z",
+      "landmarks": [
+        {
+          "feature": "tool-text sink fencing",
+          "symbol": "scanRecordedWrites",
+          "loc": "internal/cmd/toolfence_carrier_test.go:198",
+          "what": "two-way walk over four roots requiring every persisted text sink to be declared and every write to a Recorded field to come from the carrier"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/verify/persist_toolfence_test.go"
+      ],
+      "commit": "4f920d8",
+      "completed_at": "2026-09-09T14:47:22.058584Z",
+      "landmarks": [
+        {
+          "feature": "tool-text sink fencing",
+          "symbol": "TestFailedLegReachesDiskClean",
+          "loc": "internal/verify/persist_toolfence_test.go:47",
+          "what": "a failed leg driven to disk carries exit status, byte count and stderr pointer in both tests.json and verify.toml and no tool output"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/toolfence_composer_test.go",
+        "internal/cmd/testdata/toolfence_composer/leaky_body.go.txt"
+      ],
+      "commit": "bb5a248",
+      "completed_at": "2026-09-09T14:28:51.843098Z",
+      "landmarks": [
+        {
+          "feature": "tool-text sink fencing",
+          "symbol": "bodySites",
+          "loc": "internal/cmd/toolfence_composer_test.go:246",
+          "what": "sink-keyed enumeration of every PR and board body composer, proving none renders a declared subprocess-derived field"
+        }
+      ]
+    }
+  }
+}

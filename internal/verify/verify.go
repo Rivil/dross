@@ -562,7 +562,13 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 				// leg with no provenance sends the reader to the wrong box.
 				MeasuredOn: MeasuredOnHost(AdapterHost(a)),
 				Files:      byAdapter[name],
-				Error:      err.Error(),
+				// Through the carrier, never err.Error() directly. The named
+				// type is what the toolfence walker keys on: a Recorded field
+				// accepts an assignment only when the recorder produced the
+				// value, and a bare string gives the guard nothing to see.
+				// The carrier does not rewrite the error — an adapter that
+				// failed on a dross-authored diagnostic must keep saying so.
+				Error: mutation.RecordLegError(err).String(),
 				// Classified while the error VALUE is still live. Everything
 				// downstream sees only Error, a string, and errors.Is cannot be
 				// re-run against prose.

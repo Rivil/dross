@@ -1,0 +1,27 @@
+package verify
+
+import "fmt"
+
+// The must-trip fixture for the assignment arm.
+
+// A string literal straight into a Recorded field.
+func writeRawLiteral() LegSummary {
+	return LegSummary{
+		Tool:  "stryker",
+		Error: "stryker blew up",
+	}
+}
+
+// A composed string into a Recorded field — the shape that would put a tool's
+// own output back on disk.
+func writeRawComposed(tool string, head string) LegSummary {
+	var ls LegSummary
+	ls.Error = fmt.Sprintf("%s failed:\n%s", tool, head)
+	return ls
+}
+
+// err.Error() is not the carrier. It is the exact assignment this phase
+// replaced at verify.go's record-and-continue site.
+func writeRawErrorMethod(err error) LanguageRun {
+	return LanguageRun{Error: err.Error()}
+}

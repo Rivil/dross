@@ -1,7 +1,6 @@
 package mutation
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -116,14 +115,19 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 	sink := io.MultiWriter(os.Stderr, head)
 	cmd.Stdout = sink
 	cmd.Stderr = sink
-	if err := cmd.Run(); err != nil {
+	// Retained past the branch below: the exit status is the one fact about a
+	// reportless run worth recording, and it is only available here.
+	runErr := cmd.Run()
+	exitStatus := 0
+	if runErr != nil {
 		// Stryker exits non-zero when surviving mutants exist —
 		// that's a successful run with bad results, not an adapter
 		// failure. We still try to read the report.
 		var exitErr *exec.ExitError
-		if !errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("stryker invocation failed: %w (is stryker installed in the project? `npm i -D %s` or equivalent)", err, strykerPin)
+		if !errors.As(runErr, &exitErr) {
+			return nil, fmt.Errorf("stryker invocation failed: %w (is stryker installed in the project? `npm i -D %s` or equivalent)", runErr, strykerPin)
 		}
+		exitStatus = exitErr.ExitCode()
 	}
 
 	if err := lr.fetchReport("", reportPath); err != nil {
@@ -138,16 +142,27 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 			// variable, a --mutate list that resolved to nothing, a crash in
 			// the instrumenter. The config was fine each time and the real
 			// cause was sitting at the HEAD of the output, which the user had
-			// just watched scroll past. Quote it.
-			msg := fmt.Sprintf("stryker did not write a report at %s.\n%s", reportPath, head.quote(strykerHeadLines))
+			// just watched scroll past.
+			//
+			// The head goes to the TERMINAL, not into the error. The user
+			// has already watched the whole stream scroll past, so the cause
+			// is re-printed here, at the failure point, where they are
+			// looking — and the error carries only facts ABOUT that output
+			// (spec decision cut_point). Nothing downstream has to scrub,
+			// because the string was never built.
+			head.printHead(os.Stderr, "stryker", strykerHeadLines)
+			fmt.Fprintln(os.Stderr)
+			err := fmt.Errorf("stryker did not write a report at %s: %w",
+				reportPath, RecordToolFailure("stryker", exitStatus, Observed(head.observed())))
 			// Attached only on an initial-test-run abort. Unconditionally it
 			// would claim a truncated failure list on aborts that never
 			// printed one — a bad --mutate glob, a missing runner, a crash in
-			// the instrumenter (locked decision note_trigger).
-			if strings.Contains(head.buf.String(), strykerInitialTestFailureText) {
-				msg += "\n" + strykerInitialTestTruncationNote
+			// the instrumenter (locked decision note_trigger). Fixed
+			// dross-authored prose, so it stays in the error.
+			if head.contains(strykerInitialTestFailureText) {
+				err = fmt.Errorf("%w\n%s", err, strykerInitialTestTruncationNote)
 			}
-			return nil, errors.New(msg)
+			return nil, err
 		}
 		return nil, fmt.Errorf("read stryker report: %w", err)
 	}
@@ -173,53 +188,6 @@ const (
 	strykerHeadBytes = 64 << 10
 	strykerHeadLines = 40
 )
-
-// headBuffer retains the first `limit` bytes written through it and silently
-// discards the rest, always reporting a full write so it can sit inside an
-// io.MultiWriter without truncating the stream its sibling is rendering.
-type headBuffer struct {
-	limit int
-	buf   bytes.Buffer
-}
-
-func (h *headBuffer) Write(p []byte) (int, error) {
-	if room := h.limit - h.buf.Len(); room > 0 {
-		if len(p) <= room {
-			h.buf.Write(p)
-		} else {
-			h.buf.Write(p[:room])
-		}
-	}
-	// len(p), never the amount kept: a short count is an io.ErrShortWrite to
-	// io.MultiWriter, which would abort the write to os.Stderr as well and
-	// truncate the live output the moment the cap was reached.
-	return len(p), nil
-}
-
-// quote renders at most n lines of the retained head, indented, for embedding
-// in an error.
-func (h *headBuffer) quote(n int) string {
-	text := strings.TrimRight(h.buf.String(), "\n")
-	if text == "" {
-		return "stryker produced no output at all — it may not have started."
-	}
-	lines := strings.Split(text, "\n")
-	truncated := false
-	if len(lines) > n {
-		lines, truncated = lines[:n], true
-	}
-	var b strings.Builder
-	b.WriteString("the head of stryker's output, which is where the cause is:\n\n")
-	for _, l := range lines {
-		b.WriteString("    ")
-		b.WriteString(l)
-		b.WriteString("\n")
-	}
-	if truncated {
-		b.WriteString("    … (output continues above)\n")
-	}
-	return b.String()
-}
 
 // strykerDropWarningText is Stryker's own wording when a --mutate glob resolves
 // to no file (@stryker-mutator/core, src/fs/project-reader.ts). Named here so
@@ -309,10 +277,17 @@ func (s *Stryker) checkInstrumented(data []byte, requested []string, head *headB
 			"Refusing to report a score over the rest: a partial run looks exactly like a complete one,\n"+
 			"which is how six route files vanished from a run unnoticed on 2026-08-26.\n",
 		len(dropped), strings.Join(dropped, ", "))
-	if strings.Contains(head.buf.String(), strykerDropWarningText) {
+	if head.contains(strykerDropWarningText) {
 		msg += "stryker said so itself — look for \"" + strykerDropWarningText + "\" below.\n"
 	}
-	return fmt.Errorf("%s\n%s", msg, head.quote(strykerHeadLines))
+	// The tool SUCCEEDED here — it wrote a report, it just did not instrument
+	// everything. So there is no tool failure to record, and the dropped-path
+	// list is the whole diagnostic. The head still goes to the terminal, where
+	// the "did not result in any files" line the hint points at is readable.
+	fmt.Fprintln(os.Stderr)
+	head.printHead(os.Stderr, "stryker", strykerHeadLines)
+	fmt.Fprintln(os.Stderr)
+	return errors.New(msg)
 }
 
 // strykerPin is the exact @stryker-mutator/core version dross invokes.
