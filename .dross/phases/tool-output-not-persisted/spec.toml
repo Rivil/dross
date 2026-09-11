@@ -64,6 +64,7 @@
   locked = true
 
 [[deferred]]
+  id = "8b6e571d6de2a7dd"
   text = "Source-side enumeration: walk every site where a value derived from an exec invocation becomes a string, and require each to be terminal-only or the shared recorder."
   why = "Rejected in favour of the sink registry at spec time — it is a go/types-scale reach analysis over a codebase that spawns git everywhere. Belongs with secret-detection, whose milestone criterion demands both halves: output not persisted at all, plus a pattern-based detector."
   target = "secret-detection"
