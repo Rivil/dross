@@ -1723,3 +1723,13 @@
   line = 281
   category = "gremlins-var-initializer"
   accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "355692065237ac43"
+  file = "internal/mutation/toolfail.go"
+  op = "INVERT_NEGATIVES"
+  text = "const exitDidNotStart = -1"
+  line = 25
+  category = "const-initializer-arithmetic"
+  reason = "Confirmed 2026-09-11 with go test -coverprofile over internal/mutation: no coverage block exists at toolfail.go:25 while RecordLegError's guard at :139 shows count 1, so gremlins never compiles or runs this mutant. It IS killable in reality: applying the mutation by hand (-1 -> 1) fails TestRecordRealExitStatusOne on both arms ('exit status 1' absent, 'did not start' present). The 2026-09-09 verify misread this survivor as a weak-assertion gap in TestRecordStartFailure; that test was still worth adding, but the survivor is the const-initializer ceiling."
+  accepted_in = "tool-output-not-persisted"
