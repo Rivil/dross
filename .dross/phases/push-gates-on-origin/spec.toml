@@ -1,0 +1,59 @@
+[phase]
+  id = "push-gates-on-origin"
+  title = "push-gates-on-origin"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "The PR-record push is gated on origin/phase/<id> versus the local branch after a fetch, not on the local index: a record commit that exists locally but not on origin is pushed on the next run even when nothing new is staged."
+
+[[criteria]]
+  id = "c-2"
+  text = "The shipped status (state.json and changes.json) is written only after the push carrying the PR record has succeeded. When that push fails, dross status, phase list and watch do not report the phase as shipped, and status names the retry: re-run dross ship."
+
+[[criteria]]
+  id = "c-3"
+  text = "Re-running dross ship on a phase whose PR is already open does not open a second PR: it recognises the existing PR, pushes the pending record, and reports the existing PR. The ship prompt's 'do not re-run dross ship' guidance is replaced by that retry."
+
+[[criteria]]
+  id = "c-4"
+  text = "The failure path has a test: the record push fails after the PR opens, the phase is not reported shipped, and a second run pushes the record so origin's phase/<id> tip carries the PR number."
+
+[[criteria]]
+  id = "c-5"
+  text = "When changes.json carries no PR number, ship queries the provider for an open PR with head phase/<id> before creating one; a hit is recorded and pushed, never a second PR."
+
+[[decisions]]
+  key = "shipped_timing"
+  choice = "One durable point: state.json and changes.json flip to shipped together, only after the push that carries the PR record succeeds. Between PR-open and that push the phase still reads verified, and status names the retry."
+  why = "Today the state marker is written before the first push, so a failed push still reports shipped and status sends the user to merge a PR whose record never reached origin. A single flip point after the last network step is the only state that cannot lie; a second 'record pending' marker would be two states to keep honest."
+  locked = true
+
+[[decisions]]
+  key = "existing_pr_source"
+  choice = "Record first, provider fallback: a re-run reads the phase's own changes.json pr number and skips PR creation; only when the record carries no number does it query the provider for an open PR with head phase/<id>, and only when that finds nothing does it create one."
+  why = "The record is the thing that needs pushing anyway, so it is the cheapest and most direct signal; the provider lookup covers the narrow window where ship died between opening the PR and writing the record, which is the one case the record cannot answer."
+  locked = true
+
+[[decisions]]
+  key = "failed_push_residue"
+  choice = "A failed record push leaves the local record commit in place; it is the unit the next run retries. Nothing is rolled back."
+  why = "Rolling the commit back would re-create it on retry with a different SHA for no gain, and the origin-ahead gate exists precisely so a local-only commit is found and pushed rather than hidden."
+  locked = true
+
+[[decisions]]
+  key = "diverged_phase_branch"
+  choice = "When origin/phase/<id> is both ahead of and behind local (review commits pushed from elsewhere), the record push refuses with a guided error naming the pull or --force path; it never merges or force-pushes on its own."
+  why = "Mirrors the base safety net, which stays out of true divergence and leaves it to the user; an unguided force-with-lease from the record push would clobber commits the user did not author here."
+  locked = true
+
+[[decisions]]
+  key = "shared_origin_gate"
+  choice = "The origin-ahead comparison is one shared helper used by both the base safety net and the PR-record push; neither carries its own copy."
+  why = "The milestone thesis is symmetric controls: the scoping audit named this exact asymmetry, an origin comparison before pushing a base but not before pushing a PR record. Two copies would re-open the gap the first time one is edited."
+  locked = true
+
+[[deferred]]
+  text = "Azure DevOps as a ship/PR provider alongside github, gitlab, forgejo/gitea and bitbucket."
+  why = "Next milestone, not v1.7 — a new provider is a capability, not a control gap."
+  target = "azure-devops-provider"
