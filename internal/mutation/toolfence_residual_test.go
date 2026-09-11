@@ -28,9 +28,14 @@ import (
 //
 // WHAT THIS DOES NOT CATCH, so c-1 is not read as wider than it is: a value
 // laundered through an intermediate variable — `s := head.buf.String()` on one
-// line and `errors.New(s)` on the next. Deciding that an error argument traces
-// back to the head buffer is dataflow over resolved types, which is the
-// source-side enumeration this phase deferred to secret-detection.
+// line and `errors.New(s)` on the next. That is not a hypothetical: it is the
+// EXACT shape this phase removed from stryker.go, which rendered the head into
+// a strings.Builder and passed quoted.String() to fmt.Errorf on the next line.
+// Re-introducing that branch verbatim passes this guard (proven at verify);
+// it is the behavioural canaries — TestStrykerReportlessSplitsTerminalFromError
+// and TestFailedLegReachesDiskClean — that catch it. Deciding that an error
+// argument traces back to the head buffer is dataflow over resolved types,
+// which is the source-side enumeration this phase deferred to secret-detection.
 
 // errorConstructors are the calls whose arguments become a persisted string.
 var errorConstructors = map[string]bool{

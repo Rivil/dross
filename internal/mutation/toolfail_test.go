@@ -196,6 +196,36 @@ func TestRecordStartFailure(t *testing.T) {
 	}
 }
 
+// TestRecordRealExitStatusOne is the counterpart TestRecordStartFailure cannot
+// be. That test passes exitDidNotStart as the very value it asserts on, so a
+// sentinel of 1 still reads "did not start" and the test still passes — while
+// every tool that really exited 1 would be reported as never having started.
+// A LITERAL 1 here is the only thing that tells the two apart.
+func TestRecordRealExitStatusOne(t *testing.T) {
+	got := RecordToolFailure("stryker", 1, Observed(4)).Error()
+
+	if !strings.Contains(got, "exit status 1") {
+		t.Errorf("a real exit status of 1 is not reported as one: %q", got)
+	}
+	if strings.Contains(got, "did not start") {
+		t.Errorf("exit status 1 collides with the did-not-start sentinel: %q", got)
+	}
+}
+
+// TestRecordLegErrorCarriesTheText is the recorder's only package-local test
+// of RecordLegError. Its nil-guard has one caller in internal/verify, which a
+// per-package mutation run cannot see; without this, inverting the guard
+// survives in this package while the carrier goes empty for every real error.
+func TestRecordLegErrorCarriesTheText(t *testing.T) {
+	const text = "gremlins failed with exit status 2"
+	if got := RecordLegError(errors.New(text)).String(); got != text {
+		t.Errorf("RecordLegError(%q).String() = %q — the carrier dropped the error's text", text, got)
+	}
+	if got := RecordLegError(nil).String(); got != "" {
+		t.Errorf("RecordLegError(nil).String() = %q, want empty", got)
+	}
+}
+
 // TestPrintHeadMatchesTheQuoteItReplaced is the byte-for-byte golden. The head
 // is the live diagnostic c-3 promises to keep unchanged, so its rendering is
 // pinned against exactly what quote() emitted before it was parameterised.

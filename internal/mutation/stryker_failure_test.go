@@ -1,6 +1,7 @@
 package mutation
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -36,6 +37,14 @@ func TestStrykerReportlessSplitsTerminalFromError(t *testing.T) {
 	}
 	if !strings.Contains(out, "the head of stryker's output") {
 		t.Errorf("the head was not re-printed at the failure point:\n%s", out)
+	}
+
+	// The record itself, not its prose. gremlins and stryker.net pin this the
+	// same way; without it, reproducing the wording inline would pass every
+	// assertion below while breaking c-1's one shared implementation.
+	var rec *toolFailure
+	if !errors.As(err, &rec) {
+		t.Fatalf("the reportless path returned a bare error, not a record: %v", err)
 	}
 
 	// The facts ABOUT the output, which are what the record carries.

@@ -142,7 +142,8 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 			// variable, a --mutate list that resolved to nothing, a crash in
 			// the instrumenter. The config was fine each time and the real
 			// cause was sitting at the HEAD of the output, which the user had
-			// just watched scroll past. Quote it.
+			// just watched scroll past.
+			//
 			// The head goes to the TERMINAL, not into the error. The user
 			// has already watched the whole stream scroll past, so the cause
 			// is re-printed here, at the failure point, where they are
