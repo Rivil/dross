@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 10
 
 [phase]
   id = "tool-output-not-persisted"
@@ -98,4 +98,14 @@ task_seq = 0
   covers = ["c-5", "c-6"]
   depends_on = ["t-2"]
   test_contract = ["no composer's output contains any canary; a composer rendering a Renderable field (Finding.Text) is allowed and does not trip it", "the sink-keyed scan resolves all four inline body sites (milestone.go:281, issue.go:609, issue.go:785, issue.go:1337) alongside the four named composers; a scan keyed on func shape finds none of the four and fails the count", "the leaky_body fixture, assigning a fmt.Sprintf of leg.Error to a forge.IssueInput.Body, trips the scan", "the enumeration fails when the resolved composer set is empty, counted PER GROUP so a vacuous board half cannot hide behind a healthy PR half", "a named composer that no longer resolves fails rather than silently leaving the set — renaming BuildPRBody must break it", "the ship-comment pass-through assertion fails if that command starts reading project state"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 4
+  title = "Kill the two recorder survivors and pin stryker's record structurally"
+  files = ["internal/mutation/toolfail_test.go", "internal/mutation/stryker_failure_test.go", "internal/mutation/stryker.go", "internal/mutation/toolfence_residual_test.go"]
+  description = "Close verify's c-1 findings. toolfail.go:25 survives because no package-local test asserts a real exit status of 1 through a literal; toolfail.go:139 survives because RecordLegError has no package-local test. Add both assertions. Pin stryker's reportless path with errors.As(err, &toolFailure) so it matches gremlins and stryker.net structurally, not by prose. Replace the stale 'Quote it.' comment block above stryker.go's reportless branch, and name the laundered-variable shape (the exact pre-phase shape) in the residual guard's blind-spot note."
+  covers = ["c-1"]
+  test_contract = ["if exitDidNotStart is flipped to 1, TestRecordRealExitStatusOne fails", "if RecordLegError's nil-guard is inverted, TestRecordLegErrorCarriesTheText fails", "if stryker's reportless path returns prose instead of a toolFailure record, TestStrykerReportlessSplitsTerminalFromError fails"]
   status = "done"

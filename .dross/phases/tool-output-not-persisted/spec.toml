@@ -73,3 +73,9 @@
   text = "After `dross survivor accept`, the only way to recompute unclassified_in_scope is a full mutation re-run: `dross verify results` consumes the detached run record on collect, so a second collect refuses with 'no detached run recorded on this machine', and there is no re-derive verb. The lifecycle classification is a pure function of tests.json plus survivors.toml, both already on disk. Observed 2026-09-09 verifying tool-output-not-persisted: draining 32 ceiling survivors would have cost a second 1h40m gremlins leg to move one integer, so the field was written by hand instead. Wanted: a `dross verify reclassify <phase>` (or an idempotent `verify results`) that re-runs Skeleton over the existing tests.json."
   why = "The survivor-drain rule tells the user to drain then re-run verify; on a repo whose mutation leg is 1h40m that instruction is effectively unaffordable, so the drain loop gets short-circuited by hand — which is exactly the false-bookkeeping path the rule exists to prevent."
   target = "mutation-score-truth"
+
+[[deferred]]
+  id = "500ae4ef27e1788c"
+  text = "The t-6 residual guard (TestNoToolOutputInsideAnErrorConstructor) misses the laundered-variable shape: rendering the head into a strings.Builder on one line and passing quoted.String() to fmt.Errorf on the next — the exact pre-phase stryker.go branch. Re-introducing it verbatim passes the guard; only the behavioural canaries catch it. Closing it needs function-local taint over the head buffer, which is the dataflow enumeration already parked on secret-detection."
+  why = "Same reach analysis as the source-side enumeration deferred at spec time; the behavioural canaries (TestStrykerReportlessSplitsTerminalFromError, TestFailedLegReachesDiskClean) already fail on the shape, so the guard's gap is not a persistence gap."
+  target = "secret-detection"

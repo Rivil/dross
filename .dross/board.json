@@ -111,6 +111,7 @@
     "someday:id:48b5edeb0556cd3a": "DRO-105",
     "someday:id:49e1846c35c70607": "DRO-314",
     "someday:id:4ba7aa62aab78d49": "DRO-377",
+    "someday:id:500ae4ef27e1788c": "DRO-390",
     "someday:id:5424d79f2f8d3bc5": "DRO-327",
     "someday:id:5610b45525282bf4": "DRO-219",
     "someday:id:5802ad3fe8f08d87": "DRO-34",
@@ -914,6 +915,11 @@
     },
     "tool-output-not-persisted/t-1": {
       "issue": "DRO-379",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-output-not-persisted/t-10": {
+      "issue": "DRO-389",
       "plan_status": "done",
       "board_state": "task-in-review"
     },

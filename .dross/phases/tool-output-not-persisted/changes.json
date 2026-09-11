@@ -20,6 +20,24 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/mutation/toolfail_test.go",
+        "internal/mutation/stryker_failure_test.go",
+        "internal/mutation/stryker.go",
+        "internal/mutation/toolfence_residual_test.go"
+      ],
+      "commit": "69bfc6e",
+      "completed_at": "2026-09-11T10:13:20.579799Z",
+      "landmarks": [
+        {
+          "feature": "tool-failure recorder",
+          "symbol": "TestRecordRealExitStatusOne",
+          "loc": "internal/mutation/toolfail_test.go:200",
+          "what": "package-local kills for the exit-sentinel and RecordLegError nil-guard mutants; stryker reportless path pinned as a toolFailure record via errors.As"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/toolfence/fields.go",
