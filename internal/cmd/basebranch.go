@@ -51,8 +51,10 @@ func BaseBranch() *cobra.Command {
 // sit unpushed and re-seed base divergence at the next squash-merge. Local-only
 // writers like pause never push; the commands already doing network absorb it.
 //
-// After a fetch it examines rev-list origin/<base>..<base>:
-//   - empty (or origin/<base> doesn't exist yet) → no-op
+// It reads the shared origin comparison (compareWithOrigin — the
+// shared_origin_gate locked decision: the same reading gates the PR-record
+// push, and neither carries its own copy) and applies its own policy:
+//   - origin/<base> missing, or local not ahead → no-op
 //   - every ahead commit touches only .dross/ paths → git push origin <base>
 //   - any ahead commit touches a non-.dross path → refuse and push nothing;
 //     unpushed code on the base is a real divergence the user must reconcile
@@ -60,31 +62,21 @@ func BaseBranch() *cobra.Command {
 // A failed push is a hard error (the push_failure locked decision):
 // proceeding past it would re-seed the exact divergence this exists to kill.
 func pushBaseIfAheadDrossOnly(repoDir, base string) (pushed bool, err error) {
-	if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
-		return false, fmt.Errorf("git fetch: %w\n%s", err, out)
-	}
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/remotes/origin/"+base)...) != nil {
-		return false, nil // no origin/<base> to be ahead of
-	}
-	ahead, err := gitTrim(repoDir, gitRefArgs("rev-list", nil, "origin/"+base+".."+base)...)
+	d, err := compareWithOrigin(repoDir, base)
 	if err != nil {
-		return false, fmt.Errorf("git rev-list origin/%s..%s: %w", base, base, err)
+		return false, err
 	}
-	if ahead == "" {
-		return false, nil
+	if d.Missing || len(d.Ahead) == 0 {
+		return false, nil // no origin/<base> to be ahead of, or level with it
 	}
-	behind, err := gitTrim(repoDir, gitRefArgs("rev-list", nil, base+"..origin/"+base)...)
-	if err != nil {
-		return false, fmt.Errorf("git rev-list %s..origin/%s: %w", base, base, err)
-	}
-	if behind != "" {
+	if d.Behind {
 		// True divergence (ahead AND behind): a push can't fast-forward, and
 		// the ff-only / --recover machinery downstream owns this state with
 		// its own guided errors — the safety net stays out of it. It only
 		// handles the purely-ahead base, where origin/<base> is an ancestor.
 		return false, nil
 	}
-	for _, sha := range strings.Fields(ahead) {
+	for _, sha := range d.Ahead {
 		files, err := gitTrim(repoDir, gitRefArgs("diff-tree", []string{"--no-commit-id", "--name-only", "-r", "--root"}, sha)...)
 		if err != nil {
 			return false, fmt.Errorf("git diff-tree %s: %w", sha, err)
