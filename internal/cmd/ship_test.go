@@ -433,8 +433,22 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	if ch.PR != 99 {
 		t.Errorf("changes.json should carry the opened PR number 99, got %d", ch.PR)
 	}
-	if msg := mustGit(t, dir, "log", "-1", "--pretty=%s"); msg != "chore(dross): record PR #99 for x" {
-		t.Errorf("HEAD should be the PR-record commit, got: %q", msg)
+	// shipped_timing: the record commit is followed by the shipped-marker
+	// commit, pushed after the record push landed — so HEAD is the marker,
+	// local HEAD is origin's tip, and origin's changes.json carries BOTH the
+	// PR number and the shipped status.
+	if msg := mustGit(t, dir, "log", "-1", "--pretty=%s"); msg != "chore(dross): mark x shipped" {
+		t.Errorf("HEAD should be the shipped-marker commit, got: %q", msg)
+	}
+	if local, remote := mustGit(t, dir, "rev-parse", "HEAD"), mustGit(t, remoteDir, "rev-parse", "phase/x"); local != remote {
+		t.Errorf("local HEAD %s != origin phase/x %s — a ship commit was left unpushed", local, remote)
+	}
+	var pushed changes.Changes
+	if err := json.Unmarshal([]byte(mustGit(t, remoteDir, "show", "phase/x:.dross/phases/x/changes.json")), &pushed); err != nil {
+		t.Fatalf("parse pushed changes.json: %v", err)
+	}
+	if pushed.PR != 99 || pushed.Status != changes.StatusShipped {
+		t.Errorf("origin's changes.json should carry pr 99 + status shipped, got pr=%d status=%q", pushed.PR, pushed.Status)
 	}
 	// There is no `chore(dross): ship x` commit any more: state.json was the
 	// only thing it ever carried, and that write is machine-local now.
@@ -514,9 +528,10 @@ func TestShipPushesPRRecordToPhaseBranch(t *testing.T) {
 		t.Errorf("pushed changes.json should carry base \"main\", got %q (base write left local-only)", pushed.Base)
 	}
 
-	// And the pushed tip must be the record commit itself.
-	if msg := mustGit(t, remoteDir, "log", "-1", "--pretty=%s", "phase/x"); msg != "chore(dross): record PR #99 for x" {
-		t.Errorf("pushed phase/x tip should be the PR-record commit, got: %q", msg)
+	// And the record commit itself must be in the pushed history (the
+	// shipped-marker commit follows it, so it is one behind the tip).
+	if log := mustGit(t, remoteDir, "log", "--pretty=%s", "phase/x"); !strings.Contains(log, "chore(dross): record PR #99 for x") {
+		t.Errorf("pushed phase/x should carry the PR-record commit, got:\n%s", log)
 	}
 }
 
@@ -586,6 +601,19 @@ func TestShipDoesNotPersistPRWhenOpenFails(t *testing.T) {
 	if msg := mustGit(t, dir, "log", "-1", "--pretty=%s"); strings.Contains(msg, "record PR") {
 		t.Errorf("no PR-record commit should exist when open fails, HEAD: %q", msg)
 	}
+	// shipped_timing: the state flip happens after the record push, so a
+	// failed open leaves state reading whatever it read before — never
+	// shipped. A flip left ahead of OpenPR fails here.
+	st, err := state.Load(filepath.Join(dir, ".dross", state.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.CurrentPhaseStatus == "shipped" {
+		t.Error("state reads shipped although no PR was opened")
+	}
+	if ch.Status == changes.StatusShipped {
+		t.Error("changes.json reads shipped although no PR was opened")
+	}
 }
 
 // shipCapture records what a mock provider received, so --auto assertions
@@ -596,6 +624,7 @@ type shipCapture struct {
 	openedBase   string
 	openedHead   string
 	reviewersHit bool
+	posts        int // POST /pulls count — one per PR actually opened
 }
 
 // shipMockFlow stands up a bare-init "remote" plus a mock Forgejo server for
@@ -604,6 +633,14 @@ type shipCapture struct {
 // mirrors TestShipFullFlowAgainstMockProvider's setup, factored out so the
 // --auto tests don't duplicate the httptest scaffolding.
 func shipMockFlow(t *testing.T, dir string) *shipCapture {
+	t.Helper()
+	cap, _ := shipMockFlowRemote(t, dir)
+	return cap
+}
+
+// shipMockFlowRemote is shipMockFlow returning the bare origin's path too, for
+// tests that install hooks on it or read its refs.
+func shipMockFlowRemote(t *testing.T, dir string) (*shipCapture, string) {
 	t.Helper()
 	remoteDir := t.TempDir()
 	mustGit(t, remoteDir, "init", "-q", "--bare")
@@ -620,6 +657,7 @@ func shipMockFlow(t *testing.T, dir string) *shipCapture {
 			cap.openedBody, _ = doc["body"].(string)
 			cap.openedBase, _ = doc["base"].(string)
 			cap.openedHead, _ = doc["head"].(string)
+			cap.posts++
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"number":99,"html_url":"https://forge.example/me/p/pulls/99"}`))
 			return
@@ -643,7 +681,7 @@ func shipMockFlow(t *testing.T, dir string) *shipCapture {
 		t.Fatal(err)
 	}
 	gitCommit(t, dir, "test: point api_base at mock")
-	return cap
+	return cap, remoteDir
 }
 
 // TestShipAutoRequestsZeroReviewers proves c-1's reviewer behaviour: with
@@ -818,36 +856,7 @@ func TestShipAutoJSONComposable(t *testing.T) {
 // clean tree, never bail on "nothing to commit".
 func TestShipIsReShippable(t *testing.T) {
 	dir := shipFixture(t, "https://forge.example/me/p.git")
-
-	remoteDir := t.TempDir()
-	mustGit(t, remoteDir, "init", "-q", "--bare")
-	mustGit(t, dir, "remote", "set-url", "origin", remoteDir)
-	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/pulls") && r.Method == "POST" {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"number":99,"html_url":"https://forge.example/me/p/pulls/99"}`))
-			return
-		}
-		if strings.HasSuffix(r.URL.Path, "/requested_reviewers") {
-			_, _ = w.Write([]byte(`[]`))
-			return
-		}
-		_, _ = w.Write([]byte(`{}`))
-	}))
-	t.Cleanup(server.Close)
-
-	// The API lives on a different host from [remote].url here, which is the
-	// case the machine-local escape hatch exists for: authorize it by hand on
-	// this machine, never through committed config.
-	if err := runCmd(t, Local(), "set", "allow_hosts", server.Listener.Addr().String()); err != nil {
-		t.Fatal(err)
-	}
-	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
-		t.Fatal(err)
-	}
-	gitCommit(t, dir, "test: point api_base at mock")
+	cap := shipMockFlow(t, dir)
 
 	// First ship — resolves the phase from current_phase and leaves it set.
 	if err := runCmd(t, Ship()); err != nil {
@@ -858,12 +867,21 @@ func TestShipIsReShippable(t *testing.T) {
 	}
 
 	// Second ship — current_phase is still set, so no argument is needed. It
-	// must succeed and leave a clean tree (re-writes the same shipped status).
-	if err := runCmd(t, Ship()); err != nil {
-		t.Fatalf("re-ship should be idempotent, got: %v", err)
-	}
+	// must succeed, leave a clean tree, open NO second PR (c-3: the record
+	// names #99 and that wins), and report the existing PR by number.
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship()); err != nil {
+			t.Fatalf("re-ship should be idempotent, got: %v", err)
+		}
+	})
 	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
 		t.Errorf("tree should be clean after re-ship, got: %q", st)
+	}
+	if cap.posts != 1 {
+		t.Errorf("POST /pulls across two runs = %d, want 1 — the re-run opened a second PR", cap.posts)
+	}
+	if !strings.Contains(out, "#99") {
+		t.Errorf("re-run should report the existing PR by number:\n%s", out)
 	}
 
 	s, err := state.Load(filepath.Join(dir, ".dross", state.File))
@@ -1024,18 +1042,23 @@ func TestShipCover_ResultTag(t *testing.T) {
 	boom := errors.New("boom")
 	res := &ship.OpenResult{URL: "u", Number: 7}
 	cases := []struct {
-		name string
-		err  error
-		res  *ship.OpenResult
-		want string
+		name     string
+		err      error
+		res      *ship.OpenResult
+		existing bool
+		want     string
 	}{
-		{"failed", boom, nil, "failed"},
-		{"partial", boom, res, "partial"},
-		{"opened", nil, res, "opened"},
-		{"noop", nil, nil, "noop"},
+		{"failed", boom, nil, false, "failed"},
+		{"partial", boom, res, false, "partial"},
+		{"opened", nil, res, false, "opened"},
+		{"noop", nil, nil, false, "noop"},
+		// A re-run whose record already named the PR opened nothing.
+		{"existing", nil, res, true, "existing"},
+		// existing without a result is not a re-run shape; it stays noop.
+		{"existing-nil", nil, nil, true, "noop"},
 	}
 	for _, c := range cases {
-		if got := shipResultTag(c.res, c.err); got != c.want {
+		if got := shipResultTag(c.res, c.err, c.existing); got != c.want {
 			t.Errorf("%s: shipResultTag = %q, want %q", c.name, got, c.want)
 		}
 	}
@@ -1484,5 +1507,451 @@ func TestAutoCommitDrossDirtLeavesTheIndexEmpty(t *testing.T) {
 					err, staged)
 			}
 		})
+	}
+}
+
+// ---- push-gates-on-origin: the record push is gated on origin and the
+// shipped flip happens after it (c-1, c-3, c-4). ----
+
+// installPreReceive writes a pre-receive hook on the bare origin. The script
+// reads the standard `old new ref` lines on stdin.
+func installPreReceive(t *testing.T, remoteDir, script string) string {
+	t.Helper()
+	hook := filepath.Join(remoteDir, "hooks", "pre-receive")
+	if err := os.MkdirAll(filepath.Dir(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\n"+script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return hook
+}
+
+// rejectSubjectHook is a pre-receive script that refuses any push whose new
+// tip's subject contains needle, and accepts everything else.
+func rejectSubjectHook(needle string) string {
+	return `while read old new ref; do
+  if git log -1 --format=%s "$new" | grep -q '` + needle + `'; then
+    echo 'refused by policy hook' >&2
+    exit 1
+  fi
+done
+exit 0
+`
+}
+
+// installForeignCommitAfterPush writes a post-receive hook on the bare origin
+// that, once, lands a foreign commit on top of the pushed phase/x tip — but
+// only when the pushed tip's subject contains needle ("" = the first push of
+// any subject). It simulates a review commit pushed from elsewhere in the
+// window between two of ship's own pushes.
+func installForeignCommitAfterPush(t *testing.T, remoteDir, needle string) {
+	t.Helper()
+	hook := filepath.Join(remoteDir, "hooks", "post-receive")
+	if err := os.MkdirAll(filepath.Dir(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := `#!/bin/sh
+marker="$(dirname "$0")/foreign-done"
+[ -e "$marker" ] && exit 0
+export GIT_AUTHOR_NAME=other GIT_AUTHOR_EMAIL=other@example.com
+export GIT_COMMITTER_NAME=other GIT_COMMITTER_EMAIL=other@example.com
+while read old new ref; do
+  [ "$ref" = "refs/heads/phase/x" ] || continue
+  if [ -n "` + needle + `" ] && ! git log -1 --format=%s "$new" | grep -q '` + needle + `'; then
+    continue
+  fi
+  tree=$(git rev-parse "$new^{tree}")
+  c=$(echo "review: foreign commit from elsewhere" | git commit-tree "$tree" -p "$new")
+  git update-ref refs/heads/phase/x "$c" "$new"
+  touch "$marker"
+done
+exit 0
+`
+	if err := os.WriteFile(hook, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func loadChangesX(t *testing.T, dir string) *changes.Changes {
+	t.Helper()
+	ch, err := changes.Load(changes.FilePath(filepath.Join(dir, ".dross"), "x"), "x")
+	if err != nil {
+		t.Fatalf("load changes.json: %v", err)
+	}
+	return ch
+}
+
+func loadStateT(t *testing.T, dir string) *state.State {
+	t.Helper()
+	st, err := state.Load(filepath.Join(dir, ".dross", state.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
+}
+
+func historyCount(st *state.State, needle string) int {
+	n := 0
+	for _, a := range st.History {
+		if strings.Contains(a.Action, needle) {
+			n++
+		}
+	}
+	return n
+}
+
+func originChangesX(t *testing.T, remoteDir string) changes.Changes {
+	t.Helper()
+	var pushed changes.Changes
+	if err := json.Unmarshal([]byte(mustGit(t, remoteDir, "show", "phase/x:.dross/phases/x/changes.json")), &pushed); err != nil {
+		t.Fatalf("parse pushed changes.json: %v", err)
+	}
+	return pushed
+}
+
+// TestShipFailedRecordPushIsNotShipped is c-4's load-bearing case. The first
+// push and the PR open succeed; the push carrying the PR record is refused.
+// The phase must NOT read shipped anywhere, the record commit stays local as
+// the retry unit (failed_push_residue), status names the retry — and a second
+// run pushes the record so origin's tip carries the PR number, opening no
+// second PR (c-3).
+func TestShipFailedRecordPushIsNotShipped(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap, remoteDir := shipMockFlowRemote(t, dir)
+	// status answers the shipped/pending question from local refs only and
+	// stays silent without origin/<base>; give it one.
+	mustGit(t, dir, "push", "-q", "origin", "main")
+	hook := installPreReceive(t, remoteDir, rejectSubjectHook("record PR"))
+
+	err := runCmd(t, Ship())
+	if err == nil {
+		t.Fatal("ship must fail when the record push is refused")
+	}
+	if !strings.Contains(err.Error(), "dross ship x") {
+		t.Errorf("error should name the retry `dross ship x`: %v", err)
+	}
+
+	st := loadStateT(t, dir)
+	if st.CurrentPhaseStatus == "shipped" {
+		t.Error("state reads shipped although the record never reached origin")
+	}
+	if historyCount(st, "shipped x") != 0 {
+		t.Errorf("history carries `shipped x` after a failed record push: %+v", st.History)
+	}
+	ch := loadChangesX(t, dir)
+	if ch.PR != 99 {
+		t.Errorf("local record should carry pr 99 (the retry unit), got %d", ch.PR)
+	}
+	if ch.Status == changes.StatusShipped {
+		t.Error("local changes.json reads shipped — the status must not ride the record commit")
+	}
+	if msg := mustGit(t, dir, "log", "-1", "--pretty=%s"); msg != "chore(dross): record PR #99 for x" {
+		t.Errorf("HEAD should be the local record commit, got %q", msg)
+	}
+	if pushed := originChangesX(t, remoteDir); pushed.PR != 0 {
+		t.Errorf("origin's changes.json should not carry the PR yet, got %d", pushed.PR)
+	}
+	if phaseDone(filepath.Join(dir, ".dross"), "x") {
+		t.Error("phaseDone reads true for a phase whose record never reached origin")
+	}
+	listOut := captureStdout(t, func() { runCmd(t, Phase(), "list") })
+	if strings.Contains(listOut, "✓ x") {
+		t.Errorf("phase list ticks x as done:\n%s", listOut)
+	}
+	statusOut := captureStdout(t, func() { runCmd(t, Status()) })
+	if strings.Contains(statusOut, "shipped:") {
+		t.Errorf("status reports shipped:\n%s", statusOut)
+	}
+	if !strings.Contains(statusOut, "dross ship") {
+		t.Errorf("status should name the ship retry:\n%s", statusOut)
+	}
+
+	// Second run: the refusal is gone. The record is ahead of origin and goes
+	// out at the origin gate; no second PR; the flip lands.
+	if err := os.Remove(hook); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship()); err != nil {
+			t.Fatalf("second ship should push the record: %v", err)
+		}
+	})
+	if cap.posts != 1 {
+		t.Errorf("POST /pulls across both runs = %d, want 1", cap.posts)
+	}
+	if pushed := originChangesX(t, remoteDir); pushed.PR != 99 || pushed.Status != changes.StatusShipped {
+		t.Errorf("origin's changes.json after the retry: pr=%d status=%q, want 99/shipped", pushed.PR, pushed.Status)
+	}
+	if st := loadStateT(t, dir); st.CurrentPhaseStatus != "shipped" {
+		t.Errorf("state should read shipped after the retry, got %q", st.CurrentPhaseStatus)
+	}
+	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
+		t.Errorf("tree should be clean after the retry, got %q", st)
+	}
+	if !strings.Contains(out, "#99") {
+		t.Errorf("retry should report the existing PR by number:\n%s", out)
+	}
+}
+
+// TestShipPushesLocalOnlyRecordWithNothingStaged (c-1): after a clean ship,
+// wind origin's phase/x back one commit. The index is clean, so the old
+// `diff --cached --quiet` gate would push nothing; the origin gate sees the
+// local-only commit and pushes it.
+func TestShipPushesLocalOnlyRecordWithNothingStaged(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap, remoteDir := shipMockFlowRemote(t, dir)
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+	tip := mustGit(t, remoteDir, "rev-parse", "phase/x")
+	mustGit(t, remoteDir, "update-ref", "refs/heads/phase/x", tip+"~1")
+	if staged := mustGit(t, dir, "diff", "--cached", "--name-only"); staged != "" {
+		t.Fatalf("fixture broke: index must be clean, got %q", staged)
+	}
+
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("re-run: %v", err)
+	}
+	if got := mustGit(t, remoteDir, "rev-parse", "phase/x"); got != mustGit(t, dir, "rev-parse", "HEAD") {
+		t.Errorf("origin phase/x = %s, want local HEAD — the local-only commit was not pushed", got)
+	}
+	if cap.posts != 1 {
+		t.Errorf("POST /pulls = %d, want 1", cap.posts)
+	}
+}
+
+// TestShipInSyncIssuesNoPush: a re-run on a branch already level with origin
+// pushes nothing at all — a hook that refuses every push must never fire.
+func TestShipInSyncIssuesNoPush(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	_, remoteDir := shipMockFlowRemote(t, dir)
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+	marker := filepath.Join(remoteDir, "hooks", "push-attempted")
+	installPreReceive(t, remoteDir, "touch '"+marker+"'\necho refused >&2\nexit 1\n")
+
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("re-run on an in-sync branch must not push, got: %v", err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a push was attempted on a branch already level with origin")
+	}
+}
+
+// TestShipDivergedPhaseBranchRefusesThenForces (diverged_phase_branch): a
+// foreign commit on origin's phase/x plus a local commit is a divergence;
+// the re-run refuses naming the pull and --force, opens nothing, moves
+// nothing. With --force the re-run lands local HEAD on origin.
+func TestShipDivergedPhaseBranchRefusesThenForces(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap, remoteDir := shipMockFlowRemote(t, dir)
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+	pushForeignToOrigin(t, dir)
+	commitLocal(t, dir, "review-fix.txt")
+	remoteBefore := mustGit(t, remoteDir, "rev-parse", "phase/x")
+
+	err := runCmd(t, Ship())
+	if err == nil {
+		t.Fatal("a diverged phase branch must refuse")
+	}
+	for _, want := range []string{"git pull", "--force"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should name %q: %v", want, err)
+		}
+	}
+	if cap.posts != 1 {
+		t.Errorf("POST /pulls = %d, want 1", cap.posts)
+	}
+	if after := mustGit(t, remoteDir, "rev-parse", "phase/x"); after != remoteBefore {
+		t.Errorf("refusal must move nothing: origin phase/x %s -> %s", remoteBefore, after)
+	}
+
+	if err := runCmd(t, Ship(), "--force"); err != nil {
+		t.Fatalf("--force re-run: %v", err)
+	}
+	if got := mustGit(t, remoteDir, "rev-parse", "phase/x"); got != mustGit(t, dir, "rev-parse", "HEAD") {
+		t.Errorf("after --force origin phase/x = %s, want local HEAD", got)
+	}
+}
+
+// TestShipMarkerPushFailureIsShippedButErrors pins stage (f)'s deliberate
+// second retry state: the record push landed, both markers flipped, and only
+// the push of the shipped-marker commit failed. The phase IS shipped — both
+// markers say so, only origin's copy lags — so the error says shipped and
+// names the re-run, --json is still emitted, and the re-run pushes the marker.
+func TestShipMarkerPushFailureIsShippedButErrors(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	_, remoteDir := shipMockFlowRemote(t, dir)
+	hook := installPreReceive(t, remoteDir, rejectSubjectHook("mark x shipped"))
+
+	var err error
+	out := captureStdout(t, func() { err = runCmd(t, Ship(), "--json") })
+	if err == nil {
+		t.Fatal("a refused marker push must return an error")
+	}
+	for _, want := range []string{"shipped", "dross ship"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should mention %q: %v", want, err)
+		}
+	}
+	var obj struct {
+		Number int `json:"number"`
+	}
+	if jerr := json.Unmarshal([]byte(strings.TrimSpace(out)), &obj); jerr != nil || obj.Number != 99 {
+		t.Errorf("--json must still be emitted with number 99 before the error, got %q (%v)", out, jerr)
+	}
+	if st := loadStateT(t, dir); st.CurrentPhaseStatus != "shipped" {
+		t.Errorf("state should read shipped — the record is on origin; got %q", st.CurrentPhaseStatus)
+	}
+	if ch := loadChangesX(t, dir); ch.Status != changes.StatusShipped {
+		t.Errorf("changes.json should read shipped, got %q", ch.Status)
+	}
+
+	if err := os.Remove(hook); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("re-run should push the marker: %v", err)
+	}
+	if msg := mustGit(t, remoteDir, "log", "-1", "--pretty=%s", "phase/x"); msg != "chore(dross): mark x shipped" {
+		t.Errorf("origin tip should be the marker commit after the re-run, got %q", msg)
+	}
+}
+
+// TestShipFlipIsAtomic: the two markers flip together — both true after a
+// clean ship, both false after the c-4 failure.
+func TestShipFlipIsAtomic(t *testing.T) {
+	t.Run("clean ship", func(t *testing.T) {
+		dir := shipFixture(t, "https://forge.example/me/p.git")
+		shipMockFlow(t, dir)
+		if err := runCmd(t, Ship()); err != nil {
+			t.Fatalf("ship: %v", err)
+		}
+		stateShipped := loadStateT(t, dir).CurrentPhaseStatus == "shipped"
+		recordShipped := loadChangesX(t, dir).Status == changes.StatusShipped
+		if !stateShipped || !recordShipped {
+			t.Errorf("markers disagree after a clean ship: state=%v record=%v", stateShipped, recordShipped)
+		}
+	})
+	t.Run("failed record push", func(t *testing.T) {
+		dir := shipFixture(t, "https://forge.example/me/p.git")
+		_, remoteDir := shipMockFlowRemote(t, dir)
+		installPreReceive(t, remoteDir, rejectSubjectHook("record PR"))
+		if err := runCmd(t, Ship()); err == nil {
+			t.Fatal("expected the record push to be refused")
+		}
+		stateShipped := loadStateT(t, dir).CurrentPhaseStatus == "shipped"
+		recordShipped := loadChangesX(t, dir).Status == changes.StatusShipped
+		if stateShipped || recordShipped {
+			t.Errorf("a marker flipped before the record push landed: state=%v record=%v", stateShipped, recordShipped)
+		}
+	})
+}
+
+// TestShipJSONReportsExistingPR pins the re-run's --json shape: the existing
+// number, result "existing", and an EMPTY url — changes.json stores none, and
+// a fabricated one would be a lie.
+func TestShipJSONReportsExistingPR(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	shipMockFlow(t, dir)
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship(), "--json"); err != nil {
+			t.Fatalf("re-run --json: %v", err)
+		}
+	})
+	var obj struct {
+		URL    string `json:"url"`
+		Number int    `json:"number"`
+		Result string `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &obj); err != nil {
+		t.Fatalf("parse --json output %q: %v", out, err)
+	}
+	if obj.Number != 99 || obj.Result != "existing" || obj.URL != "" {
+		t.Errorf("got %+v, want {URL:\"\" Number:99 Result:existing}", obj)
+	}
+}
+
+// TestShipRecordPushDivergedNamesPull: a foreign commit lands on origin's
+// phase/x between the branch push (b) and the record push (e). The record
+// push refuses with pushPhaseBranch's own guidance — pull and --force — not
+// the bare re-run, which would loop on the same refusal. The record commit
+// stays as HEAD; nothing reads shipped.
+func TestShipRecordPushDivergedNamesPull(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	_, remoteDir := shipMockFlowRemote(t, dir)
+	installForeignCommitAfterPush(t, remoteDir, "")
+
+	err := runCmd(t, Ship())
+	if err == nil {
+		t.Fatal("the record push into a diverged branch must refuse")
+	}
+	for _, want := range []string{"git pull --rebase origin phase/x", "--force"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should name %q: %v", want, err)
+		}
+	}
+	if msg := mustGit(t, dir, "log", "-1", "--pretty=%s"); msg != "chore(dross): record PR #99 for x" {
+		t.Errorf("HEAD should be the record commit, got %q", msg)
+	}
+	if st := loadStateT(t, dir); st.CurrentPhaseStatus == "shipped" {
+		t.Error("state reads shipped although the record never reached origin")
+	}
+}
+
+// TestShipMarkerPushDivergedNamesPull: the foreign commit lands between the
+// record push (e) and the marker push (f). The phase is shipped — both
+// markers flipped — and the error carries the pull / --force guidance so the
+// re-run cannot loop on the same refusal.
+func TestShipMarkerPushDivergedNamesPull(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	_, remoteDir := shipMockFlowRemote(t, dir)
+	installForeignCommitAfterPush(t, remoteDir, "record PR")
+
+	err := runCmd(t, Ship())
+	if err == nil {
+		t.Fatal("the marker push into a diverged branch must refuse")
+	}
+	for _, want := range []string{"shipped", "git pull --rebase origin phase/x", "--force"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should name %q: %v", want, err)
+		}
+	}
+	if st := loadStateT(t, dir); st.CurrentPhaseStatus != "shipped" {
+		t.Errorf("state should read shipped — the record is on origin; got %q", st.CurrentPhaseStatus)
+	}
+	if ch := loadChangesX(t, dir); ch.Status != changes.StatusShipped {
+		t.Errorf("changes.json should read shipped, got %q", ch.Status)
+	}
+}
+
+// TestShipBehindOnlyRefusesBeforeOpen: origin's phase/x is one commit ahead
+// of local before the first ship. The origin gate refuses naming the pull —
+// before any PR exists, before any record commit.
+func TestShipBehindOnlyRefusesBeforeOpen(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap, _ := shipMockFlowRemote(t, dir)
+	mustGit(t, dir, "push", "-q", "-u", "origin", "phase/x")
+	pushForeignToOrigin(t, dir)
+
+	err := runCmd(t, Ship())
+	if err == nil {
+		t.Fatal("a behind-only phase branch must refuse")
+	}
+	if !strings.Contains(err.Error(), "git pull --rebase origin phase/x") {
+		t.Errorf("error should name the pull: %v", err)
+	}
+	if cap.posts != 0 {
+		t.Errorf("POST /pulls = %d, want 0 — refused before open", cap.posts)
+	}
+	if log := mustGit(t, dir, "log", "--pretty=%s"); strings.Contains(log, "record PR") {
+		t.Errorf("no record commit may exist:\n%s", log)
 	}
 }
