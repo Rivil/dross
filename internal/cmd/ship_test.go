@@ -109,6 +109,10 @@ func TestBuildCommentOptsCarriesAuthUser(t *testing.T) {
 // Returns the repo dir.
 func shipFixture(t *testing.T, originURL string) string {
 	t.Helper()
+	// The provider fallback (existing_pr_source) asks the forge for an open
+	// PR by head on a first ship. The hand-rolled forgejo mocks answer only
+	// POST /pulls, so stub the seam to "none" here; c-5 tests override it.
+	stubOpenPRByHead(t, nil, nil)
 	dir := t.TempDir()
 	gitInit(t, dir, originURL)
 	chdir(t, dir)
@@ -1953,5 +1957,165 @@ func TestShipBehindOnlyRefusesBeforeOpen(t *testing.T) {
 	}
 	if log := mustGit(t, dir, "log", "--pretty=%s"); strings.Contains(log, "record PR") {
 		t.Errorf("no record commit may exist:\n%s", log)
+	}
+}
+
+// ---- c-5: provider fallback when the record carries no PR number. ----
+
+// headStub records what the FindOpenPRByHead seam was asked.
+type headStub struct {
+	calls int
+	heads []string
+}
+
+// stubOpenPRByHead replaces ship.FindOpenPRByHeadFunc for the test (restored
+// on cleanup, mirroring stubPRMerged) with one that returns res/err and
+// records each call.
+func stubOpenPRByHead(t *testing.T, res *ship.OpenResult, err error) *headStub {
+	t.Helper()
+	st := &headStub{}
+	prev := ship.FindOpenPRByHeadFunc
+	ship.FindOpenPRByHeadFunc = func(_ ship.OpenOpts, head string) (*ship.OpenResult, error) {
+		st.calls++
+		st.heads = append(st.heads, head)
+		return res, err
+	}
+	t.Cleanup(func() { ship.FindOpenPRByHeadFunc = prev })
+	return st
+}
+
+// TestShipRecoversPRAfterDeathBeforeRecord is c-5's load-bearing shape: ship
+// died between opening the PR and writing the record, so changes.json carries
+// no number. The re-run asks the provider by head, records the hit, opens no
+// second PR, and pushes the record so origin's tip carries it.
+func TestShipRecoversPRAfterDeathBeforeRecord(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap, remoteDir := shipMockFlowRemote(t, dir)
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+	// Model the death: the record loses its PR number (and the status that
+	// only ever follows it).
+	ch := loadChangesX(t, dir)
+	ch.PR = 0
+	ch.Status = ""
+	if err := ch.Save(changes.FilePath(filepath.Join(dir, ".dross"), "x")); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, dir, "test: drop the PR record")
+	stub := stubOpenPRByHead(t, &ship.OpenResult{Number: 77, URL: "https://forge.example/me/p/pulls/77"}, nil)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship()); err != nil {
+			t.Fatalf("re-run: %v", err)
+		}
+	})
+	if stub.calls != 1 || len(stub.heads) != 1 || stub.heads[0] != "phase/x" {
+		t.Errorf("lookup calls = %d heads = %v, want one call with phase/x", stub.calls, stub.heads)
+	}
+	if cap.posts != 1 {
+		t.Errorf("POST /pulls = %d, want 1 — the re-run opened a second PR", cap.posts)
+	}
+	if pushed := originChangesX(t, remoteDir); pushed.PR != 77 {
+		t.Errorf("origin's changes.json should carry the recovered PR 77, got %d", pushed.PR)
+	}
+	if !strings.Contains(out, "#77") {
+		t.Errorf("re-run should report the recovered PR by number:\n%s", out)
+	}
+}
+
+// A first ship with nothing open: the lookup says none, exactly one PR opens.
+func TestShipLookupNoneOpensOnce(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap := shipMockFlow(t, dir)
+	stub := stubOpenPRByHead(t, nil, nil)
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+	if stub.calls != 1 || cap.posts != 1 {
+		t.Errorf("lookup calls = %d, POST /pulls = %d; want 1 and 1", stub.calls, cap.posts)
+	}
+}
+
+// A lookup that fails refuses BEFORE opening — fail-closed. "Could not check"
+// read as "none" is the duplicate the lookup exists to prevent.
+func TestShipLookupFailureRefusesBeforeOpen(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap := shipMockFlow(t, dir)
+	stubOpenPRByHead(t, nil, errors.New("boom"))
+
+	err := runCmd(t, Ship())
+	if err == nil {
+		t.Fatal("a failed lookup must refuse")
+	}
+	if !strings.Contains(err.Error(), "dross ship") {
+		t.Errorf("error should name the re-run: %v", err)
+	}
+	if cap.posts != 0 {
+		t.Errorf("POST /pulls = %d, want 0", cap.posts)
+	}
+	if log := mustGit(t, dir, "log", "--pretty=%s"); strings.Contains(log, "record PR") {
+		t.Errorf("no record commit may exist:\n%s", log)
+	}
+	if ch := loadChangesX(t, dir); ch.PR != 0 {
+		t.Errorf("changes.json pr should stay 0, got %d", ch.PR)
+	}
+}
+
+// An unwired provider announces the skip and opens.
+func TestShipLookupUnsupportedNarratesSkipAndOpens(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap := shipMockFlow(t, dir)
+	stubOpenPRByHead(t, nil, ship.ErrHeadPRLookupUnsupported)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship()); err != nil {
+			t.Fatalf("ship: %v", err)
+		}
+	})
+	if !strings.Contains(out, "skipped") {
+		t.Errorf("the skip must be announced:\n%s", out)
+	}
+	if cap.posts != 1 {
+		t.Errorf("POST /pulls = %d, want 1", cap.posts)
+	}
+}
+
+// Record first: with pr 99 recorded, the provider is never asked on a
+// re-run. A lookup-first mutant fails here.
+func TestShipRecordWinsOverLookup(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	shipMockFlow(t, dir)
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+	stub := stubOpenPRByHead(t, &ship.OpenResult{Number: 555}, nil)
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("re-run: %v", err)
+	}
+	if stub.calls != 0 {
+		t.Errorf("lookup calls = %d, want 0 — the record wins, the provider is never asked", stub.calls)
+	}
+	if ch := loadChangesX(t, dir); ch.PR != 99 {
+		t.Errorf("record should still read 99, got %d", ch.PR)
+	}
+}
+
+// --no-push and --print-body return before any network: no lookup.
+func TestShipEarlyReturnsSkipLookup(t *testing.T) {
+	for _, flag := range []string{"--no-push", "--print-body"} {
+		t.Run(flag, func(t *testing.T) {
+			dir := shipFixture(t, "https://forge.example/me/p.git")
+			shipMockFlow(t, dir)
+			stub := stubOpenPRByHead(t, nil, errors.New("must not be called"))
+			captureStdout(t, func() {
+				if err := runCmd(t, Ship(), flag); err != nil {
+					t.Fatalf("ship %s: %v", flag, err)
+				}
+			})
+			if stub.calls != 0 {
+				t.Errorf("%s: lookup calls = %d, want 0", flag, stub.calls)
+			}
+		})
 	}
 }

@@ -330,8 +330,6 @@ func Ship() *cobra.Command {
 				narrate("%s already on origin\n", phaseBranch)
 			}
 
-			// (c) Open the PR — unless the record already names one, in
-			//     which case the run is a retry and there is nothing to open.
 			hosts, herr := remotePolicy(root, repoDir, p)
 			if herr != nil {
 				return herr
@@ -342,6 +340,35 @@ func Ship() *cobra.Command {
 			opts.Title = title
 			opts.Body = body
 			opts.Draft = draft
+
+			// (b') Record first, provider fallback (the existing_pr_source
+			//      locked decision). Only when the record carries no number
+			//      is the provider asked for an open PR with head phase/<id>
+			//      — the narrow window where ship died between opening the
+			//      PR and writing the record, which the record cannot
+			//      answer. A hit is recorded like a re-run's existing PR; an
+			//      unwired provider announces the skip and opens; any other
+			//      lookup failure refuses before OpenPR — fail-closed, since
+			//      "could not check" read as "none" is the duplicate this
+			//      exists to prevent.
+			var existingURL string
+			if existingPR == 0 {
+				found, ferr := ship.FindOpenPRByHeadFunc(opts, phaseBranch)
+				switch {
+				case ferr == nil && found != nil && found.Number > 0:
+					existingPR = found.Number
+					existingURL = found.URL
+					narrate("found open PR #%d for %s — recording it rather than opening a second\n", found.Number, phaseBranch)
+				case errors.Is(ferr, ship.ErrHeadPRLookupUnsupported):
+					narrate("open-PR lookup skipped: %s does not support it; opening\n", p.Remote.Provider)
+				case ferr != nil:
+					return fmt.Errorf("could not check origin for an open PR on %s: %w; fix and re-run `dross ship %s`", phaseBranch, ferr, phaseID)
+				}
+			}
+
+			// (c) Open the PR — unless the record (or the lookup above)
+			//     already names one, in which case the run is a retry and
+			//     there is nothing to open.
 			if auto {
 				// Per-invocation, non-destructive: request zero reviewers
 				// for this run without mutating remote.reviewers config.
@@ -358,8 +385,8 @@ func Ship() *cobra.Command {
 			if existing {
 				// changes.json stores no URL, so a re-run reports the
 				// number alone; the URL is the first run's or the provider
-				// page.
-				res = &ship.OpenResult{Number: existingPR}
+				// page. A provider hit carries its URL through.
+				res = &ship.OpenResult{Number: existingPR, URL: existingURL}
 				narrate("PR #%d already open — pushing the pending record\n", existingPR)
 			} else {
 				res, err = ship.OpenPR(opts)
