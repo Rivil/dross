@@ -57,3 +57,8 @@
   text = "Azure DevOps as a ship/PR provider alongside github, gitlab, forgejo/gitea and bitbucket."
   why = "Next milestone, not v1.7 — a new provider is a capability, not a control gap."
   target = "azure-devops-provider"
+
+[[deferred]]
+  id = "07eb18769ce8106e"
+  text = "dross verify has no offline re-score: after draining survivors with 'dross survivor accept|route', the only way to refresh tests.json/verify.toml lifecycle states and unclassified_in_scope is a full mutation re-run — 'dross verify results' refuses once the run has been collected (local record deleted) and no command re-applies ApplyLifecycle over the on-disk report. Add 'dross verify rescore <phase>' (or make 'results' idempotent over the kept report) so a disposition-only change re-gates in seconds."
+  why = "Hit 2026-09-12 verifying push-gates-on-origin: 10 switch-case ceiling survivors accepted, no code change, and closing the gate honestly cost a second 1h40m leg on helicon; the alternative was hand-editing the artefacts the verdict rests on."
