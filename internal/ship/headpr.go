@@ -8,10 +8,11 @@ import (
 	"github.com/Rivil/dross/internal/configenum"
 )
 
-// ErrHeadPRLookupUnsupported is returned by FindOpenPRByHead for providers
-// whose open-PR-by-head query isn't wired yet. Ship announces the skip and
-// falls through to opening a PR — an unwired backend is a supported shape,
-// distinguishable from a lookup that failed.
+// ErrHeadPRLookupUnsupported is the sentinel FindOpenPRByHead returns for a
+// provider whose open-PR-by-head query isn't wired. Ship announces the skip
+// and falls through to opening a PR — an unwired backend is a supported shape,
+// distinguishable from a lookup that failed. Every shipped provider answers
+// today; the sentinel stays declared for the deferred azure-devops arm.
 var ErrHeadPRLookupUnsupported = errors.New("open-PR-by-head lookup is not supported for this provider")
 
 // FindOpenPRByHead returns the open PR whose head branch is exactly head, or
@@ -28,8 +29,10 @@ func FindOpenPRByHead(opts OpenOpts, head string) (*OpenResult, error) {
 		return gitHubOpenPRByHead(head)
 	case "forgejo", "gitea":
 		return forgejoOpenPRByHead(opts, head)
-	case "gitlab", "bitbucket":
-		return nil, ErrHeadPRLookupUnsupported
+	case "gitlab":
+		return gitlabOpenMRBySource(opts, head)
+	case "bitbucket":
+		return bbOpenPRBySource(opts, head)
 	default:
 		return nil, fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())
 	}

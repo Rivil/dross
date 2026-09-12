@@ -10,6 +10,7 @@ import (
 	"github.com/Rivil/dross/internal/redact"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -142,6 +143,48 @@ func bitbucketPRStatus(opts OpenOpts) (PRStatus, error) {
 		return PRStatus{}, fmt.Errorf("parse bitbucket PR #%d: %w", opts.PRNumber, err)
 	}
 	return PRStatus{Merged: strings.EqualFold(pr.State, "MERGED"), BaseRef: pr.Destination.Branch.Name}, nil
+}
+
+// bbOpenPRBySource returns the open PR whose source branch is head, or
+// (nil, nil) when there is none. Bitbucket Cloud filters server-side through
+// its q= query language; both the branch name and the state are quoted so a
+// head carrying a space or an operator stays a literal.
+func bbOpenPRBySource(opts OpenOpts, head string) (*OpenResult, error) {
+	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser, opts.Hosts)
+	if err != nil {
+		return nil, err
+	}
+	workspace, slug, err := bbRepoRef(opts.URL)
+	if err != nil {
+		return nil, err
+	}
+	q := fmt.Sprintf(`source.branch.name=%q AND state="OPEN"`, head)
+	endpoint := strings.TrimRight(opts.APIBase, "/") +
+		fmt.Sprintf("/repositories/%s/%s/pullrequests?q=%s", workspace, slug, url.QueryEscape(q))
+	rb, status, err := bbRequest("GET", endpoint, opts.AuthEnv, user, token, nil)
+	if err != nil {
+		return nil, fmt.Errorf("list open PRs from %s: %w", head, err)
+	}
+	if status >= 300 {
+		return nil, fmt.Errorf("list open PRs from %s: HTTP %d: %s", head, status, string(rb))
+	}
+	var page struct {
+		Values []struct {
+			ID    int `json:"id"`
+			Links struct {
+				HTML struct {
+					Href string `json:"href"`
+				} `json:"html"`
+			} `json:"links"`
+		} `json:"values"`
+	}
+	if err := json.Unmarshal(rb, &page); err != nil {
+		return nil, fmt.Errorf("parse open PRs from %s: %w", head, err)
+	}
+	if len(page.Values) == 0 {
+		return nil, nil
+	}
+	return &OpenResult{Number: page.Values[0].ID, URL: page.Values[0].Links.HTML.Href}, nil
 }
 
 // bbReviewerRefs maps configured reviewer strings to Bitbucket user objects.

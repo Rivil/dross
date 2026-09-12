@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
+	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/hostallow"
 )
 
@@ -144,14 +146,10 @@ func TestFindOpenPRByHeadForgejo500IsError(t *testing.T) {
 	}
 }
 
-// Unwired providers report the sentinel, so ship can announce the skip;
-// an unknown provider is a plain error, distinguishable from it.
-func TestFindOpenPRByHeadUnsupportedVsUnknown(t *testing.T) {
-	for _, p := range []string{"gitlab", "bitbucket"} {
-		if _, err := FindOpenPRByHead(OpenOpts{Provider: p}, "phase/x"); !errors.Is(err, ErrHeadPRLookupUnsupported) {
-			t.Errorf("%s: got %v, want ErrHeadPRLookupUnsupported", p, err)
-		}
-	}
+// An unknown provider is a plain error naming the supported list — never the
+// ErrHeadPRLookupUnsupported sentinel, which is reserved for a known provider
+// whose lookup isn't wired (none today; the deferred azure-devops arm).
+func TestFindOpenPRByHeadUnknownProviderIsPlainError(t *testing.T) {
 	_, err := FindOpenPRByHead(OpenOpts{Provider: "sourcehut"}, "phase/x")
 	if err == nil {
 		t.Fatal("expected an error for an unknown provider")
@@ -159,14 +157,20 @@ func TestFindOpenPRByHeadUnsupportedVsUnknown(t *testing.T) {
 	if errors.Is(err, ErrHeadPRLookupUnsupported) {
 		t.Error("an unknown provider should not report as merely unsupported")
 	}
+	if !strings.Contains(err.Error(), configenum.ShipProviders.List()) {
+		t.Errorf("message must be derived from ShipProviders, got: %v", err)
+	}
 }
 
-// Mirror of TestOpenPRsTargetingFuncDefaultsToOpenPRsTargeting.
+// Mirror of TestOpenPRsTargetingFuncDefaultsToOpenPRsTargeting: the seam
+// delegates to FindOpenPRByHead, proven by the dispatch's own unknown-provider
+// error coming back through it.
 func TestFindOpenPRByHeadFuncDefaultsToFindOpenPRByHead(t *testing.T) {
 	if FindOpenPRByHeadFunc == nil {
 		t.Fatal("FindOpenPRByHeadFunc must be a non-nil overridable var")
 	}
-	if _, err := FindOpenPRByHeadFunc(OpenOpts{Provider: "bitbucket"}, "phase/x"); !errors.Is(err, ErrHeadPRLookupUnsupported) {
+	_, err := FindOpenPRByHeadFunc(OpenOpts{Provider: "sourcehut"}, "phase/x")
+	if err == nil || !strings.Contains(err.Error(), configenum.ShipProviders.List()) {
 		t.Errorf("FindOpenPRByHeadFunc should delegate to FindOpenPRByHead, got: %v", err)
 	}
 }
