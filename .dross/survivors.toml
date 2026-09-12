@@ -772,15 +772,6 @@
   accepted_in = "survivor-drain"
 
 [[accepted]]
-  key = "da9683b212e497f3"
-  file = "internal/cmd/ship.go"
-  op = "CONDITIONALS_NEGATION"
-  text = "if out, err := gitCombined(repoDir, \"commit\", \"-m\", shipMsg); err != nil {"
-  line = 264
-  reason = "Unreachable given the caller, not untested: ship runs autoCommitDrossDirt immediately above this guard, which does git add .dross and commits, and its pre-stage gate refuses any non-.dross dirt before anything is staged at all. The index is therefore empty on every path into the guard, so its commit branch cannot be reached. TestAutoCommitDrossDirtLeavesTheIndexEmpty pins that premise for both the dirty and clean cases and fails the day autoCommitDrossDirt stops draining the index, at which point the branch becomes reachable and owes a test rather than this reason."
-  accepted_in = "survivor-drain"
-
-[[accepted]]
   key = "96af9ac8d2c3b95e"
   file = "internal/cmd/phase.go"
   op = "CONDITIONALS_NEGATION"
@@ -1730,6 +1721,78 @@
   op = "INVERT_NEGATIVES"
   text = "const exitDidNotStart = -1"
   line = 25
-  category = "const-initializer-arithmetic"
   reason = "Confirmed 2026-09-11 with go test -coverprofile over internal/mutation: no coverage block exists at toolfail.go:25 while RecordLegError's guard at :139 shows count 1, so gremlins never compiles or runs this mutant. It IS killable in reality: applying the mutation by hand (-1 -> 1) fails TestRecordRealExitStatusOne on both arms ('exit status 1' absent, 'did not start' present). The 2026-09-09 verify misread this survivor as a weak-assertion gap in TestRecordStartFailure; that test was still worth adding, but the survivor is the const-initializer ceiling."
+  category = "const-initializer-arithmetic"
   accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "42134cc83e6018c2"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case ferr == nil && found != nil && found.Number > 0:"
+  line = 358
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "50919a010c495368"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ferr == nil && found != nil && found.Number > 0:"
+  line = 358
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "d10c623b19d4e08d"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ferr != nil:"
+  line = 364
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "c78e5c7e85fb9fa5"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case existing && res != nil:"
+  line = 612
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "3f8ec78670a777cd"
+  file = "internal/cmd/originpush.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case d.Missing, len(d.Ahead) > 0 && !d.Behind:"
+  line = 72
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "c1bdfd1d107c4522"
+  file = "internal/cmd/originpush.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d.Missing, len(d.Ahead) > 0 && !d.Behind:"
+  line = 72
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "f419b9832f55879b"
+  file = "internal/cmd/originpush.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(d.Ahead) == 0 && !d.Behind:"
+  line = 74
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "fc66d1b6d218d872"
+  file = "internal/cmd/originpush.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d.Behind && len(d.Ahead) == 0:"
+  line = 76
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
