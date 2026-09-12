@@ -679,6 +679,41 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "push-gates-on-origin/t-1": {
+      "issue": "DRO-393",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "push-gates-on-origin/t-2": {
+      "issue": "DRO-394",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "push-gates-on-origin/t-3": {
+      "issue": "DRO-395",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "push-gates-on-origin/t-4": {
+      "issue": "DRO-398",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "push-gates-on-origin/t-5": {
+      "issue": "DRO-396",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "push-gates-on-origin/t-6": {
+      "issue": "DRO-397",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "push-gates-on-origin/t-7": {
+      "issue": "DRO-399",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "red-proof-repoint/t-1": {
       "issue": "DRO-126"
     },

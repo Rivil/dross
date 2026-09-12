@@ -2,5 +2,127 @@
   "phase": "push-gates-on-origin",
   "base": "milestone/v1.7",
   "base_commit": "b98afd060acae27d431f1decd3a6f99b6f179c0d",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/originpush.go",
+        "internal/cmd/originpush_test.go",
+        "internal/cmd/basebranch.go"
+      ],
+      "commit": "31f4c2d",
+      "completed_at": "2026-09-12T07:43:33.456165Z",
+      "landmarks": [
+        {
+          "feature": "origin push gate",
+          "symbol": "pushPhaseBranch",
+          "loc": "internal/cmd/originpush.go:65",
+          "what": "one shared compareWithOrigin reading gates both the base safety net and the phase-branch push; four-arm pushPhaseBranch refuses behind-only and diverged with guided pull/--force errors"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/ship/headpr.go",
+        "internal/ship/headpr_test.go",
+        "internal/ship/forgejo.go",
+        "internal/ship/forgejo_test.go"
+      ],
+      "commit": "99f5c23",
+      "completed_at": "2026-09-12T07:47:12.661139Z",
+      "landmarks": [
+        {
+          "feature": "open PR lookup by head",
+          "symbol": "FindOpenPRByHead",
+          "loc": "internal/ship/headpr.go:25",
+          "what": "provider-dispatched open-PR-by-head query (github via gh, forgejo via shared forgejoListOpenPRs) with exported seam and ErrHeadPRLookupUnsupported sentinel; nil-nil only for not-found"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go",
+        "internal/watch/drift_test.go"
+      ],
+      "commit": "5ec035d",
+      "completed_at": "2026-09-12T07:52:50.678962Z",
+      "landmarks": [
+        {
+          "feature": "status shipped signal",
+          "symbol": "recordPushPending",
+          "loc": "internal/cmd/status.go:578",
+          "what": "shipped = state.json OR record status; PR number with neither is record-pending and status/suggestNext name re-run dross ship instead of the merge; merged outranks pending"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "assets/prompts/ship.md",
+        "internal/cmd/ship_prompt_test.go"
+      ],
+      "commit": "4f32233",
+      "completed_at": "2026-09-12T08:07:42.347827Z",
+      "landmarks": [
+        {
+          "feature": "ship prompt retry guidance",
+          "symbol": "TestShipPromptReRunIsTheRetry",
+          "loc": "assets/prompts/ship.md:203",
+          "what": "ship.md names re-running dross ship as the retry (never a second PR), documents the gated push/record/mark order, and adds the record-push-failed recovery item"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/ship/headpr.go",
+        "internal/ship/gitlab.go",
+        "internal/ship/bitbucket.go",
+        "internal/ship/gitlab_test.go",
+        "internal/ship/bitbucket_test.go",
+        "internal/ship/headpr_test.go"
+      ],
+      "commit": "c79fc2a",
+      "completed_at": "2026-09-12T07:56:40.371666Z",
+      "landmarks": [
+        {
+          "feature": "open PR lookup by head",
+          "symbol": "gitlabOpenMRBySource",
+          "loc": "internal/ship/gitlab.go:178",
+          "what": "gitlab (source_branch+state=opened) and bitbucket (q= source.branch.name AND state=OPEN) arms of FindOpenPRByHead; every shipped provider answers, sentinel kept for azure-devops"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "867c569",
+      "completed_at": "2026-09-12T08:04:34.175273Z",
+      "landmarks": [
+        {
+          "feature": "ship record push gate",
+          "symbol": "Ship",
+          "loc": "internal/cmd/ship.go:421",
+          "what": "ship is an ordered ladder gated on origin: branch push -\u003e open-or-reuse PR -\u003e record commit -\u003e record push -\u003e shipped flip (state+record together) -\u003e marker push; a failed record push leaves the phase verified and names re-run dross ship"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go",
+        "internal/cmd/hostpolicy_test.go"
+      ],
+      "commit": "d136ae3",
+      "completed_at": "2026-09-12T08:12:05.28222Z",
+      "landmarks": [
+        {
+          "feature": "ship record push gate",
+          "symbol": "Ship",
+          "loc": "internal/cmd/ship.go:344",
+          "what": "record-first provider fallback: with no recorded PR number ship asks FindOpenPRByHeadFunc for an open PR on phase/\u003cid\u003e before opening; hit recorded, unsupported narrated, failure refuses fail-closed"
+        }
+      ]
+    }
+  }
 }
