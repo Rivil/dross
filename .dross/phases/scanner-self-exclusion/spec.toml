@@ -1,0 +1,48 @@
+[phase]
+  id = "scanner-self-exclusion"
+  title = "scanner-self-exclusion"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "stack.DetectLanguages on the dross repo root returns exactly [\"go\"]: testdata/ and fixtures/ directories are skipped by the extension walk, and the same skip set applies to Detect and MarkerProfiles, so a fixture-only extension never surfaces a language."
+
+[[criteria]]
+  id = "c-2"
+  text = "The tech-debt scan over dross's own tree reports zero marker findings from internal/techdebt/: the marker regex line, the package doc, and the marker-bearing test fixtures are excluded, and a test pins it."
+
+[[criteria]]
+  id = "c-3"
+  text = "The tech-debt scan skips testdata/ and fixtures/ paths using the same skip set as c-1, so fixture files yield no long-line or oversized-file findings."
+
+[[criteria]]
+  id = "c-4"
+  text = "A gitleaks run driven by /dross-secure reports zero generic-api-key hits on dross: dross emits an allowlist covering the 16-hex identity-id shape, the secure prompt passes it to gitleaks via --config, and a test pins that the allowlist matches the shape."
+
+[[criteria]]
+  id = "c-5"
+  text = "dross security detect names the exclusions in effect (skipped directories and the gitleaks allowlist location), so a run's manifest records what was scoped out rather than silently narrowing."
+
+[[decisions]]
+  key = "skip_dir_set"
+  choice = "testdata and fixtures join the existing hardcoded skipDirs; no project.toml override for the skip set. One shared definition is consumed by language detection, the tech-debt path filter, and the gitleaks allowlist emitter."
+  why = "The existing skipDirs (node_modules, vendor, dist, .dross) are hardcoded and the milestone names exactly these two directories; a second copy per scanner is the drift the milestone's symmetric-controls thesis exists to prevent."
+  locked = true
+
+[[decisions]]
+  key = "techdebt_exemption"
+  choice = "A [techdebt] exclude glob list in project.toml; dross's own project.toml lists internal/techdebt/. No inline annotation and no hardcoded package path."
+  why = "One mechanism covers .go, .md and .toml alike and is a knob adopters get too; an inline //dross:techdebt-exempt would need ~16 tags and cannot reach non-Go files, and a hardcoded internal/techdebt path puts dross-repo knowledge inside a general scanner."
+  locked = true
+
+[[decisions]]
+  key = "allowlist_delivery"
+  choice = "dross security run writes gitleaks.toml into the run directory; the secure prompt passes --config <run-dir>/gitleaks.toml. Nothing is committed to the adopter repo and no root .gitleaks.toml is scaffolded."
+  why = "Every adopter's .dross/tests.json carries the same 16-hex identity ids, so a committed file in dross's repo would fix only dross; emitting per run shields every adopter with nothing to drift."
+  locked = true
+
+[[decisions]]
+  key = "allowlist_scope"
+  choice = "The allowlist covers the identity-hash shape only (16-hex in id/key context, anywhere in the tree); .dross/ is not path-excluded from gitleaks."
+  why = "A path exclusion would make .dross/ a blind spot for the secret scanner — exactly where s-2 showed subprocess output can land — while the shape rule alone clears all 241 current hits including the two in internal/."
+  locked = true

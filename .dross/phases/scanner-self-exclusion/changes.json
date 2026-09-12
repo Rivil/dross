@@ -1,0 +1,6 @@
+{
+  "phase": "scanner-self-exclusion",
+  "base": "milestone/v1.7",
+  "base_commit": "94278b9f24f72886cad3885be5c8ed08c83a9766",
+  "tasks": {}
+}
