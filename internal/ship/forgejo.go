@@ -111,56 +111,89 @@ func forgejoPRStatus(opts OpenOpts) (PRStatus, error) {
 	return PRStatus{Merged: pr.Merged, BaseRef: pr.Base.Ref}, nil
 }
 
-// forgejoOpenPRsTargeting lists the open PRs whose base.ref is base,
-// paginating through Gitea/Forgejo's list-pulls endpoint (default 30/page)
-// and filtering client-side: the endpoint has no base= query parameter, so a
-// naive query filter would silently include every base's open PRs.
+// forgejoPR is one raw item from Gitea/Forgejo's list-pulls endpoint — the
+// fields both by-base and by-head callers filter on and map out.
+type forgejoPR struct {
+	Number  int    `json:"number"`
+	Title   string `json:"title"`
+	HTMLURL string `json:"html_url"`
+	Head    struct {
+		Ref string `json:"ref"`
+	} `json:"head"`
+	Base struct {
+		Ref string `json:"ref"`
+	} `json:"base"`
+}
+
+// forgejoListOpenPRs lists every open PR on the repo, paginating through
+// Gitea/Forgejo's list-pulls endpoint (default 30/page). The endpoint has no
+// base= or head= query parameter, so callers filter client-side on the raw
+// items — one lister, two filters, rather than two page loops.
 //
-// A lookup failure is always an error, never an empty or partial slice: an
-// empty slice reads as "no dependents" and authorizes an irreversible branch
-// delete.
-func forgejoOpenPRsTargeting(opts OpenOpts, base string) ([]BasePR, error) {
+// A lookup failure is always an error, never an empty or partial slice: the
+// by-base caller reads empty as "no dependents" and authorizes an
+// irreversible branch delete; the by-head caller reads it as "no PR yet" and
+// opens a duplicate.
+func forgejoListOpenPRs(opts OpenOpts) ([]forgejoPR, error) {
 	owner, repo, token, err := forgejoTarget(opts)
 	if err != nil {
 		return nil, err
 	}
 
 	const limit = 50
-	var out []BasePR
+	var out []forgejoPR
 	for page := 1; ; page++ {
 		endpoint := strings.TrimRight(opts.APIBase, "/") + fmt.Sprintf(
 			"/repos/%s/%s/pulls?state=open&page=%d&limit=%d", owner, repo, page, limit)
 		respBody, status, err := jsonGet(endpoint, opts.AuthEnv, token)
 		if err != nil {
-			return nil, fmt.Errorf("list open PRs targeting %s: %w", base, err)
+			return nil, fmt.Errorf("list open PRs: %w", err)
 		}
 		if status >= 300 {
-			return nil, fmt.Errorf("list open PRs targeting %s: HTTP %d: %s", base, status, string(respBody))
+			return nil, fmt.Errorf("list open PRs: HTTP %d: %s", status, string(respBody))
 		}
-		var prs []struct {
-			Number  int    `json:"number"`
-			Title   string `json:"title"`
-			HTMLURL string `json:"html_url"`
-			Head    struct {
-				Ref string `json:"ref"`
-			} `json:"head"`
-			Base struct {
-				Ref string `json:"ref"`
-			} `json:"base"`
-		}
+		var prs []forgejoPR
 		if err := json.Unmarshal(respBody, &prs); err != nil {
-			return nil, fmt.Errorf("parse open PRs targeting %s: %w", base, err)
+			return nil, fmt.Errorf("parse open PRs: %w", err)
 		}
-		for _, pr := range prs {
-			if pr.Base.Ref != base {
-				continue
-			}
-			out = append(out, BasePR{Number: pr.Number, Title: pr.Title, URL: pr.HTMLURL, HeadRefName: pr.Head.Ref})
-		}
+		out = append(out, prs...)
 		if len(prs) < limit {
 			return out, nil
 		}
 	}
+}
+
+// forgejoOpenPRsTargeting lists the open PRs whose base.ref is base — the
+// client-side filter over forgejoListOpenPRs (see there for why).
+func forgejoOpenPRsTargeting(opts OpenOpts, base string) ([]BasePR, error) {
+	prs, err := forgejoListOpenPRs(opts)
+	if err != nil {
+		return nil, fmt.Errorf("targeting %s: %w", base, err)
+	}
+	var out []BasePR
+	for _, pr := range prs {
+		if pr.Base.Ref != base {
+			continue
+		}
+		out = append(out, BasePR{Number: pr.Number, Title: pr.Title, URL: pr.HTMLURL, HeadRefName: pr.Head.Ref})
+	}
+	return out, nil
+}
+
+// forgejoOpenPRByHead returns the open PR whose head.ref is exactly head, or
+// (nil, nil) when there is none — the same lister as the by-base query, with
+// the other filter.
+func forgejoOpenPRByHead(opts OpenOpts, head string) (*OpenResult, error) {
+	prs, err := forgejoListOpenPRs(opts)
+	if err != nil {
+		return nil, fmt.Errorf("by head %s: %w", head, err)
+	}
+	for _, pr := range prs {
+		if pr.Head.Ref == head {
+			return &OpenResult{Number: pr.Number, URL: pr.HTMLURL}, nil
+		}
+	}
+	return nil, nil
 }
 
 // jsonGet performs an authenticated GET against a Forgejo/Gitea REST endpoint,
