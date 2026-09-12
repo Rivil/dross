@@ -17,7 +17,7 @@
 
 [[criteria]]
   id = "c-4"
-  text = "A gitleaks run driven by /dross-secure reports zero generic-api-key hits on dross: dross emits an allowlist covering the 16-hex identity-id shape, the secure prompt passes it to gitleaks via --config, and a test pins that the allowlist matches the shape."
+  text = "A gitleaks run driven by /dross-secure reports zero identity-shape hits on dross (no finding whose secret is a bare 16-hex id): dross emits an allowlist covering the 16-hex identity-id shape, the secure prompt passes it to gitleaks via --config, and a test pins that the allowlist matches the shape. Residual hits outside that shape are findings for the secure run to dismiss, not for the allowlist to widen."
 
 [[criteria]]
   id = "c-5"
@@ -46,3 +46,13 @@
   choice = "The allowlist covers the identity-hash shape only (16-hex in id/key context, anywhere in the tree); .dross/ is not path-excluded from gitleaks."
   why = "A path exclusion would make .dross/ a blind spot for the secret scanner — exactly where s-2 showed subprocess output can land — while the shape rule alone clears all 241 current hits including the two in internal/."
   locked = true
+
+[[deferred]]
+  id = "6e152e9e753162c5"
+  text = "dross validate should compile-check each [techdebt] exclude glob (checkGlob at internal/cmd/validate.go already does this for lane patterns) and report a `techdebt.exclude[N] does not compile` problem line"
+  why = "Dropped from scanner-self-exclusion t-2 on 2026-09-12: no criterion demands it and dross techdebt hard-errors on a bad pattern at scan time; a validate-time catch is a nicety"
+
+[[deferred]]
+  id = "6144f7eecebde5c0"
+  text = "/dross-options and options.md do not surface the [techdebt] exclude knob added by scanner-self-exclusion, so an adopter cannot discover it through the options command"
+  why = "Flagged out of scope by the scanner-self-exclusion plan panel on 2026-09-12; a follow-up quick once the knob ships"
