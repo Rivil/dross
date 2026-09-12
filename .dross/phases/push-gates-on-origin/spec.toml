@@ -54,6 +54,7 @@
   locked = true
 
 [[deferred]]
+  id = "08c4b7d2d98b673e"
   text = "Azure DevOps as a ship/PR provider alongside github, gitlab, forgejo/gitea and bitbucket."
   why = "Next milestone, not v1.7 — a new provider is a capability, not a control gap."
   target = "azure-devops-provider"
