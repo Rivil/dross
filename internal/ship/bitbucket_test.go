@@ -291,3 +291,101 @@ func TestOpenPRMessageListsShipProviders(t *testing.T) {
 		t.Errorf("message omits an implemented backend: %v", err)
 	}
 }
+
+func bbHeadOpts(server *httptest.Server, authUser string) OpenOpts {
+	return OpenOpts{
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
+		AuthEnv: "MOCK_BB_TOKEN", AuthUser: authUser,
+	}
+}
+
+// TestBitbucketHeadLookupQueryAndAuth: the q= filter names the source branch
+// and the OPEN state, Basic auth carries auth_user, and values[0].id /
+// links.html.href map to the result.
+func TestBitbucketHeadLookupQueryAndAuth(t *testing.T) {
+	t.Setenv("MOCK_BB_TOKEN", "secret")
+	var gotPath, gotQ, gotAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotQ = r.URL.Query().Get("q")
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"values":[{"id":9,"links":{"html":{"href":"https://bitbucket.org/acme/widget/pull-requests/9"}}}]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	res, err := FindOpenPRByHead(bbHeadOpts(server, "wsuser"), "phase/x")
+	if err != nil {
+		t.Fatalf("FindOpenPRByHead: %v", err)
+	}
+	if res == nil || res.Number != 9 {
+		t.Fatalf("got %+v, want Number 9", res)
+	}
+	if res.URL != "https://bitbucket.org/acme/widget/pull-requests/9" {
+		t.Errorf("URL = %q", res.URL)
+	}
+	if want := "/repositories/acme/widget/pullrequests"; gotPath != want {
+		t.Errorf("path = %q, want %q", gotPath, want)
+	}
+	if !strings.Contains(gotQ, `source.branch.name="phase/x"`) {
+		t.Errorf("q missing source.branch.name=\"phase/x\": %q", gotQ)
+	}
+	if !strings.Contains(gotQ, `state="OPEN"`) {
+		t.Errorf("q missing state=\"OPEN\": %q", gotQ)
+	}
+	if want := wantBasic("wsuser", "secret"); gotAuth != want {
+		t.Errorf("Authorization = %q, want %q", gotAuth, want)
+	}
+}
+
+func TestBitbucketHeadLookupNoMatch(t *testing.T) {
+	t.Setenv("MOCK_BB_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"values":[]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	res, err := FindOpenPRByHead(bbHeadOpts(server, "wsuser"), "phase/x")
+	if err != nil {
+		t.Fatalf("FindOpenPRByHead: %v", err)
+	}
+	if res != nil {
+		t.Errorf("got %+v, want nil for no open PR", res)
+	}
+}
+
+// Missing auth_user is refused before any request (bbCredentials path).
+func TestBitbucketHeadLookupMissingAuthUser(t *testing.T) {
+	t.Setenv("MOCK_BB_TOKEN", "secret")
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+
+	res, err := FindOpenPRByHead(bbHeadOpts(server, ""), "phase/x")
+	if err == nil || res != nil {
+		t.Fatalf("missing auth_user must be (nil, err), got (%+v, %v)", res, err)
+	}
+	if !strings.Contains(err.Error(), "auth_user") {
+		t.Errorf("error should name auth_user: %v", err)
+	}
+	if called {
+		t.Error("no request may be made without credentials")
+	}
+}
+
+func TestBitbucketHeadLookup401IsError(t *testing.T) {
+	t.Setenv("MOCK_BB_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(server.Close)
+
+	res, err := FindOpenPRByHead(bbHeadOpts(server, "wsuser"), "phase/x")
+	if err == nil || res != nil {
+		t.Fatalf("a 401 must be (nil, err), got (%+v, %v)", res, err)
+	}
+}

@@ -253,39 +253,6 @@ func Ship() *cobra.Command {
 				narrate("auto-committed .dross-only bookkeeping\n")
 			}
 
-			// 5) Mark the phase shipped. Ship deliberately does NOT write
-			//    the completed-state transition: a phase is not complete
-			//    until its PR is merged, and ship runs before that is known.
-			//    `dross phase complete` is the sole writer of the completion
-			//    record, behind its merge gate. What ship records is the
-			//    intermediate truth — current_phase stays set, status becomes
-			//    "shipped" — so status surfaces can name the open PR instead
-			//    of claiming a completion nothing confirmed.
-			//
-			//    Idempotent: a re-ship after review edits re-writes the same
-			//    status, the `shipped <id>` entry is history-scan-guarded so
-			//    it never doubles up, and the commit below only runs when
-			//    something actually staged.
-			s.CurrentPhaseStatus = "shipped"
-			if !historyHasAction(s, "shipped "+phaseID) {
-				s.Touch(fmt.Sprintf("shipped %s", phaseID))
-			}
-			if err := s.Save(filepath.Join(root, state.File)); err != nil {
-				return fmt.Errorf("save state: %w", err)
-			}
-			// The write stays local: state.json is gitignored (locked
-			// state_tracking), so there is nothing to stage — an explicit
-			// `git add .dross/state.json` here hard-fails on "paths are
-			// ignored by one of your .gitignore files". Anything else the
-			// auto-commit above left staged still gets its commit.
-			if err := gitNoOut(repoDir, "diff", "--cached", "--quiet"); err != nil {
-				// Non-nil err means there IS a staged change to commit.
-				shipMsg := fmt.Sprintf("chore(dross): ship %s", phaseID)
-				if out, err := gitCombined(repoDir, "commit", "-m", shipMsg); err != nil {
-					return fmt.Errorf("git commit: %w\n%s", err, out)
-				}
-			}
-
 			// 6) Resolve the PR base: the active milestone's integration
 			//    branch when it exists, else main (rollout_cutover /
 			//    no_milestone_fallback via the shared resolver). Resolved
@@ -330,23 +297,39 @@ func Ship() *cobra.Command {
 				narrate("pushed unpushed .dross chores on %s (recorded quick_base) to origin\n", quickBase)
 			}
 
-			// 7) Push phase/<id> directly. The provider's squash-merge will
-			//    collapse the per-task commits into one on the base; no
-			//    client-side synthetic branch needed.
-			pushArgs := gitRefArgs("push", []string{"-u"}, "origin", phaseBranch)
-			if forcePush {
-				// --force-with-lease guards against clobbering a concurrent
-				// push from another machine without requiring the user to
-				// know the remote SHA.
-				pushArgs = gitRefArgs("push", []string{"-u", "--force-with-lease"}, "origin", phaseBranch)
+			// Everything past the base safety net is an ordered ladder of
+			// stages, each gated on the one before, with ONE durable flip
+			// point at the end (the shipped_timing locked decision): the
+			// shipped markers are written only after the push that carries
+			// the PR record has landed. Between PR-open and that push the
+			// phase still reads verified, and status names the retry.
+			//
+			// (a) Load the record: a PR number already there means this is
+			//     a re-run (the existing_pr_source locked decision — the
+			//     record is read before any provider is asked).
+			ch, err := changes.Load(changes.FilePath(root, phaseID), phaseID)
+			if err != nil {
+				return fmt.Errorf("load changes.json: %w", err)
 			}
-			pushOut, perr := gitCombined(repoDir, pushArgs...)
-			if perr != nil {
-				return fmt.Errorf("git push: %w\n%s", perr, pushOut)
-			}
-			narrate("Pushed %s to origin\n", phaseBranch)
+			existingPR := ch.PR
+			changesRel := filepath.Join(".dross", "phases", phaseID, changes.File)
 
-			// 8) Open the PR via the provider (base resolved in step 6).
+			// (b) Push phase/<id>, gated on origin rather than on the index:
+			//     a record commit left local by a failed run is ahead of
+			//     origin and goes out here whether or not anything is
+			//     staged. A behind-only or diverged branch refuses BEFORE
+			//     any PR exists, with pushPhaseBranch's own pull / --force
+			//     guidance (the diverged_phase_branch locked decision).
+			pushed, err := pushPhaseBranch(repoDir, phaseBranch, forcePush)
+			if err != nil {
+				return err
+			}
+			if pushed {
+				narrate("Pushed %s to origin\n", phaseBranch)
+			} else {
+				narrate("%s already on origin\n", phaseBranch)
+			}
+
 			hosts, herr := remotePolicy(root, repoDir, p)
 			if herr != nil {
 				return herr
@@ -357,6 +340,35 @@ func Ship() *cobra.Command {
 			opts.Title = title
 			opts.Body = body
 			opts.Draft = draft
+
+			// (b') Record first, provider fallback (the existing_pr_source
+			//      locked decision). Only when the record carries no number
+			//      is the provider asked for an open PR with head phase/<id>
+			//      — the narrow window where ship died between opening the
+			//      PR and writing the record, which the record cannot
+			//      answer. A hit is recorded like a re-run's existing PR; an
+			//      unwired provider announces the skip and opens; any other
+			//      lookup failure refuses before OpenPR — fail-closed, since
+			//      "could not check" read as "none" is the duplicate this
+			//      exists to prevent.
+			var existingURL string
+			if existingPR == 0 {
+				found, ferr := ship.FindOpenPRByHeadFunc(opts, phaseBranch)
+				switch {
+				case ferr == nil && found != nil && found.Number > 0:
+					existingPR = found.Number
+					existingURL = found.URL
+					narrate("found open PR #%d for %s — recording it rather than opening a second\n", found.Number, phaseBranch)
+				case errors.Is(ferr, ship.ErrHeadPRLookupUnsupported):
+					narrate("open-PR lookup skipped: %s does not support it; opening\n", p.Remote.Provider)
+				case ferr != nil:
+					return fmt.Errorf("could not check origin for an open PR on %s: %w; fix and re-run `dross ship %s`", phaseBranch, ferr, phaseID)
+				}
+			}
+
+			// (c) Open the PR — unless the record (or the lookup above)
+			//     already names one, in which case the run is a retry and
+			//     there is nothing to open.
 			if auto {
 				// Per-invocation, non-destructive: request zero reviewers
 				// for this run without mutating remote.reviewers config.
@@ -368,91 +380,110 @@ func Ship() *cobra.Command {
 				// requested" line and zeroes the telemetry count too.
 				opts.Reviewers = nil
 			}
-			res, err := ship.OpenPR(opts)
-			if err != nil && res == nil {
-				return fmt.Errorf("open PR: %w", err)
-			}
-			if res != nil {
-				narrate("PR opened: %s (#%d)\n", res.URL, res.Number)
-				// Read opts.Reviewers, not p.Remote.Reviewers: under --auto
-				// the former is cleared, so no reviewers were actually
-				// requested and this line must stay silent.
-				if len(opts.Reviewers) > 0 {
-					narrate("Reviewers requested: %s\n", strings.Join(opts.Reviewers, ", "))
+			var res *ship.OpenResult
+			existing := existingPR > 0
+			if existing {
+				// changes.json stores no URL, so a re-run reports the
+				// number alone; the URL is the first run's or the provider
+				// page. A provider hit carries its URL through.
+				res = &ship.OpenResult{Number: existingPR, URL: existingURL}
+				narrate("PR #%d already open — pushing the pending record\n", existingPR)
+			} else {
+				res, err = ship.OpenPR(opts)
+				if err != nil && res == nil {
+					return fmt.Errorf("open PR: %w", err)
+				}
+				if res != nil {
+					narrate("PR opened: %s (#%d)\n", res.URL, res.Number)
+					// Read opts.Reviewers, not p.Remote.Reviewers: under
+					// --auto the former is cleared, so no reviewers were
+					// actually requested and this line must stay silent.
+					if len(opts.Reviewers) > 0 {
+						narrate("Reviewers requested: %s\n", strings.Join(opts.Reviewers, ", "))
+					}
+				}
+				if err != nil {
+					// Non-fatal post-PR errors (e.g. reviewer add failed).
+					narrate("Warning: %v\n", err)
 				}
 			}
-			if err != nil {
-				// Non-fatal post-PR errors (e.g. reviewer add failed).
-				narrate("Warning: %v\n", err)
-			}
-			narrate("Marked %s shipped — once the PR merges, `dross phase complete %s` writes the completion record\n", phaseID, phaseID)
 
-			// Persist the opened PR number into the phase-scoped changes.json
-			// so `dross phase complete` can gate on THIS phase's authoritative
-			// merge status (a phase-scoped record can't be dragged forward in
-			// cumulative state history the way the completion breadcrumb is).
-			// Only when a real PR number is known — never write PR:0. Commit it
-			// onto phase/<id> AND push it: the PR number is known only after the
-			// PR is opened (post first-push), so this record can't ride the
-			// initial push — it needs a second push so the open PR (and thus its
-			// squash-merge) carries the recorded number onto the base branch's
-			// changes.json, where mergeGate reads it. A local-only post-push
-			// commit (the old behaviour) never reached the base, so mergeGate's
-			// authoritative recorded-PR path was unreachable and every
-			// squash-merged completion fell back to the ancestry check and
-			// refused. The --no-push path returned earlier (no PR), so this is
-			// naturally skipped there.
+			// (d) Record the PR number and the base it was opened against in
+			//     the phase-scoped changes.json — the record `dross phase
+			//     complete` gates its merge check on — and commit it onto
+			//     phase/<id>. NOT the shipped status: that is the flip at
+			//     (f), and it must not ride a commit whose push has not
+			//     landed yet. Commit only when the add staged something, so
+			//     a re-run recording the same pair is not an error.
 			if res != nil && res.Number > 0 {
 				if err := changes.SetPR(root, phaseID, res.Number); err != nil {
 					return fmt.Errorf("persist PR number: %w", err)
 				}
-				// The authoritative half of base_write_timing: what the PR was
-				// actually opened against wins over the value create recorded,
-				// if the two ever diverge (a milestone scoped after the fork is
-				// the ordinary way that happens). It rides the same commit and
-				// push as the PR number, so the squash carries base and pr onto
-				// the base branch together and `dross phase complete` reads a
-				// consistent pair.
+				// The authoritative half of base_write_timing: what the PR
+				// was actually opened against wins over the value create
+				// recorded, if the two ever diverge (a milestone scoped
+				// after the fork is the ordinary way that happens).
 				if err := changes.SetBase(root, phaseID, baseBranch); err != nil {
 					return fmt.Errorf("persist PR base branch: %w", err)
 				}
-				// Rides the same write as pr and base: a phase with an open PR
-				// is shipped, and that is the first durable point anything can
-				// tell how far the phase got without reading state history.
-				if err := changes.SetStatus(root, phaseID, changes.StatusShipped); err != nil {
-					return fmt.Errorf("persist phase status: %w", err)
+				if err := commitIfStaged(repoDir, changesRel, fmt.Sprintf("chore(dross): record PR #%d for %s", res.Number, phaseID)); err != nil {
+					return err
 				}
-				changesRel := filepath.Join(".dross", "phases", phaseID, changes.File)
-				if out, err := gitCombined(repoDir, gitPathArgs("add", nil, changesRel)...); err != nil {
-					return fmt.Errorf("git add changes.json: %w\n%s", err, out)
-				}
-				// Only commit + push when the add actually staged a change, so a
-				// re-ship that records the same PR number doesn't error on
-				// "nothing to commit" and doesn't fire a redundant push.
-				if err := gitNoOut(repoDir, "diff", "--cached", "--quiet"); err != nil {
-					prMsg := fmt.Sprintf("chore(dross): record PR #%d for %s", res.Number, phaseID)
-					if out, err := gitCombined(repoDir, "commit", "-m", prMsg); err != nil {
-						return fmt.Errorf("git commit PR number: %w\n%s", err, out)
-					}
-					// Push the record onto the phase branch so it reaches the
-					// open PR / squash / base. Mirror the initial push's
-					// force-with-lease handling under --force.
-					recordPushArgs := gitRefArgs("push", nil, "origin", phaseBranch)
-					if forcePush {
-						recordPushArgs = gitRefArgs("push", []string{"--force-with-lease"}, "origin", phaseBranch)
-					}
-					if out, err := gitCombined(repoDir, recordPushArgs...); err != nil {
-						return fmt.Errorf("git push PR record: %w\n%s", err, out)
-					}
+			}
+
+			// (e) Push the record. A failure here is a hard error and leaves
+			//     the record commit in place (the failed_push_residue locked
+			//     decision): it is the unit the next run retries, and the
+			//     origin gate at (b) is what finds it. A divergence refusal
+			//     carries pushPhaseBranch's own pull / --force guidance, never
+			//     the bare re-run — a re-run would loop on the same refusal.
+			if res != nil && res.Number > 0 {
+				if pushed, err := pushPhaseBranch(repoDir, phaseBranch, forcePush); err != nil {
+					return fmt.Errorf("%w\nthe PR record for #%d is committed locally but not on origin — re-run `dross ship %s` to push the record", err, res.Number, phaseID)
+				} else if pushed {
 					narrate("Pushed PR record to %s\n", phaseBranch)
 				}
 			}
 
-			// 8) Telemetry — capture shape of this ship without leaking
-			//    repo URL, body content, or reviewer names.
+			// (f) The flip. Only now — the record is on origin — do both
+			//     markers read shipped, together: state.json (machine-local,
+			//     gitignored, so nothing to stage) and changes.json's status
+			//     (tracked, so a fresh clone reads it). The status write is a
+			//     second commit pushed on its own; if THAT push fails the
+			//     phase IS shipped — both markers say so and only origin's
+			//     copy lags — so the error says shipped and names the re-run,
+			//     after the JSON and telemetry below have been emitted.
+			//
+			//     Idempotent: a re-run re-writes the same status, the
+			//     `shipped <id>` entry is history-scan-guarded so it never
+			//     doubles up, and the commit only runs when something staged.
+			var markerErr error
+			if res != nil && res.Number > 0 {
+				s.CurrentPhaseStatus = "shipped"
+				if !historyHasAction(s, "shipped "+phaseID) {
+					s.Touch(fmt.Sprintf("shipped %s", phaseID))
+				}
+				if err := s.Save(filepath.Join(root, state.File)); err != nil {
+					return fmt.Errorf("save state: %w", err)
+				}
+				if err := changes.SetStatus(root, phaseID, changes.StatusShipped); err != nil {
+					return fmt.Errorf("persist phase status: %w", err)
+				}
+				if err := commitIfStaged(repoDir, changesRel, fmt.Sprintf("chore(dross): mark %s shipped", phaseID)); err != nil {
+					return err
+				}
+				if _, err := pushPhaseBranch(repoDir, phaseBranch, forcePush); err != nil {
+					markerErr = fmt.Errorf("%w\n%s is shipped (PR #%d) but the shipped marker is committed locally and not on origin — re-run `dross ship %s` to push it", err, phaseID, res.Number, phaseID)
+				} else {
+					narrate("Marked %s shipped — once the PR merges, `dross phase complete %s` writes the completion record\n", phaseID, phaseID)
+				}
+			}
+
+			// Telemetry — capture shape of this ship without leaking repo
+			// URL, body content, or reviewer names.
 			tags := map[string]string{
 				"provider": p.Remote.Provider,
-				"result":   shipResultTag(res, err),
+				"result":   shipResultTag(res, err, existing),
 			}
 			if draft {
 				tags["draft"] = "true"
@@ -475,12 +506,14 @@ func Ship() *cobra.Command {
 			// --json: emit a single machine-readable object on stdout (the
 			// only thing printed under --json, since narration was suppressed).
 			// Composable with --auto — result is the same shipResultTag bucket.
+			// Emitted BEFORE a marker-push error is returned: the phase is
+			// shipped and the caller must learn its number either way.
 			if jsonOut {
 				out := struct {
 					URL    string `json:"url"`
 					Number int    `json:"number"`
 					Result string `json:"result"`
-				}{Result: shipResultTag(res, err)}
+				}{Result: shipResultTag(res, err, existing)}
 				if res != nil {
 					out.URL = res.URL
 					out.Number = res.Number
@@ -490,6 +523,9 @@ func Ship() *cobra.Command {
 					return fmt.Errorf("marshal --json output: %w", mErr)
 				}
 				Print(string(b))
+			}
+			if markerErr != nil {
+				return markerErr
 			}
 			return nil
 		},
@@ -571,8 +607,10 @@ func shipComment() *cobra.Command {
 
 // shipResultTag classifies a ship's outcome into a single token. Used
 // for the telemetry "result" tag so ship outcomes are easy to bucket.
-func shipResultTag(res *ship.OpenResult, err error) string {
+func shipResultTag(res *ship.OpenResult, err error, existing bool) string {
 	switch {
+	case existing && res != nil:
+		return "existing" // re-run: the record already named the PR; nothing opened
 	case err != nil && res == nil:
 		return "failed"
 	case err != nil && res != nil:
@@ -582,4 +620,20 @@ func shipResultTag(res *ship.OpenResult, err error) string {
 	default:
 		return "noop"
 	}
+}
+
+// commitIfStaged stages rel and commits it under msg when — and only when —
+// the add actually staged a change, so a re-run that re-writes the same
+// content neither errors on "nothing to commit" nor grows the log.
+func commitIfStaged(repoDir, rel, msg string) error {
+	if out, err := gitCombined(repoDir, gitPathArgs("add", nil, rel)...); err != nil {
+		return fmt.Errorf("git add %s: %w\n%s", rel, err, out)
+	}
+	if gitNoOut(repoDir, "diff", "--cached", "--quiet") == nil {
+		return nil // nothing staged
+	}
+	if out, err := gitCombined(repoDir, "commit", "-m", msg); err != nil {
+		return fmt.Errorf("git commit: %w\n%s", err, out)
+	}
+	return nil
 }

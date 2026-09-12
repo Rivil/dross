@@ -126,6 +126,15 @@ func TestMergeGateDoesNotDegradeOnHostRefusal(t *testing.T) {
 		ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
 			return ship.PRStatus{}, fmt.Errorf("wrapped: %w", hostallow.ErrRefused)
 		}
+		// The by-head lookup is ship's own (existing_pr_source); the merge
+		// gate has no business asking it, and a stub that fails the test
+		// pins that.
+		prevHead := ship.FindOpenPRByHeadFunc
+		t.Cleanup(func() { ship.FindOpenPRByHeadFunc = prevHead })
+		ship.FindOpenPRByHeadFunc = func(ship.OpenOpts, string) (*ship.OpenResult, error) {
+			t.Error("mergeGate must never look up an open PR by head")
+			return nil, nil
+		}
 
 		var out string
 		err := captureInto(t, &out, func() error {

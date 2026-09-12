@@ -376,3 +376,60 @@ func TestShipPromptClosesTaskCardsAfterPhaseComplete(t *testing.T) {
 		t.Error("the task close is emitted after the wrap section, where the run has already finished reporting")
 	}
 }
+
+// TestShipPromptReRunIsTheRetry (c-3): the "do not re-run dross ship" guidance
+// is gone — a re-run is the sanctioned retry. §5's On-failure block says so,
+// §4's step list describes the gated push -> open-or-reuse -> record -> mark
+// order the binary actually runs, and Recovery gains the record-push item.
+func TestShipPromptReRunIsTheRetry(t *testing.T) {
+	content := shipPromptContent(t)
+
+	for _, stale := range []string{"do not re-run", "would open a second pr"} {
+		if strings.Contains(content, stale) {
+			t.Errorf("ship.md still carries the retired guidance %q", stale)
+		}
+	}
+
+	onFailure := promptSection(t, content, "on failure:")
+	if !strings.Contains(onFailure, "re-run dross ship") && !strings.Contains(onFailure, "re-running dross ship") {
+		t.Errorf("ship.md §5 On-failure must name re-running dross ship as safe:\n%s", onFailure)
+	}
+	for _, needle := range []string{"dross ship --force", "git pull --rebase origin phase/<id>"} {
+		if !strings.Contains(onFailure, needle) {
+			t.Errorf("ship.md §5 On-failure must name %q for the refusal it answers", needle)
+		}
+	}
+	// A re-run reports the number, not a URL: changes.json stores none. The
+	// slice runs from the re-run sentence to the next heading.
+	rerun := strings.Index(onFailure, "re-run")
+	if rerun < 0 {
+		rerun = strings.Index(onFailure, "re-running")
+	}
+	if rerun >= 0 && strings.Contains(onFailure[rerun:], "<pr-url>") {
+		t.Error("ship.md §5 claims a re-run returns a PR URL — changes.json stores none")
+	}
+
+	recovery := promptSection(t, content, "## recovery")
+	for _, needle := range []string{"record push", "dross ship"} {
+		if !strings.Contains(recovery, needle) {
+			t.Errorf("ship.md Recovery must name %q", needle)
+		}
+	}
+
+	// §4's CLI step list: the gate precedes the open, the record precedes
+	// the mark, and the mark is explicitly last.
+	steps := promptSection(t, content, "## 4. ship")
+	order := []string{"gates phase/<id> on origin", "opens the pr", "commits the pr record", "marks the phase shipped"}
+	last := -1
+	for _, needle := range order {
+		at := strings.Index(steps, needle)
+		if at < 0 {
+			t.Errorf("ship.md §4 step list missing %q", needle)
+			continue
+		}
+		if at < last {
+			t.Errorf("ship.md §4 step %q is out of order", needle)
+		}
+		last = at
+	}
+}

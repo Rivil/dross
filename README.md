@@ -424,6 +424,10 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [ ] No persisted artifact or published PR body carries recognisable secret material — captured output is not persisted, and what is persisted is scanned
 - [ ] `internal/cmd` holds cobra wiring only; every domain it carries today lives in a package of its own, provable by import direction
 
+### Milestone v1.8 — Azure DevOps provider: ship and board sync reach a fifth forge (planning)
+
+- [ ] Azure DevOps works as a ship/PR provider alongside GitHub, GitLab, Forgejo/Gitea and Bitbucket
+
 ## Telemetry
 
 Dross records local-only usage events at `~/.claude/dross/telemetry.jsonl`. The intent is single-developer self-observation — a dogfood log you can read back later to find where the tool gets in your way.

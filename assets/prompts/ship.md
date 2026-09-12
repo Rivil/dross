@@ -109,10 +109,11 @@ Run `dross ship <phase-id>`, optionally with `--draft` and/or `--body-file`.
 
 The CLI:
 1. Re-checks the verify gate and that HEAD is on `phase/<id>`
-2. `git push -u origin phase/<id>`
-3. Opens the PR via the provider API
+2. Gates `phase/<id>` on origin — fetches and compares; a branch that is ahead or new is pushed (`-u`), a level one is left alone, a behind-only one refuses naming `git pull --rebase origin phase/<id>`, a diverged one refuses naming the pull or `dross ship --force`
+3. Opens the PR via the provider API — skipped when the phase's record (or the provider, when the record carries no number) already has an open PR for `phase/<id>`
 4. Requests reviewers
-5. Updates `state.json` with the shipped action + PR URL
+5. Commits the PR record (`chore(dross): record PR #N for <id>`) and pushes it through the same origin gate
+6. **Only then** marks the phase shipped — `state.json` and the record's status flip together, and the marker commit is pushed. Until that push lands the phase still reads verified, and `dross status` names the retry.
 
 ## 5. CI gate
 
@@ -131,7 +132,7 @@ If the provider reports no checks were registered — GitHub/Forgejo report none
    - Forgejo: log URL is in the commit status payload (`target_url`); `WebFetch` it.
    - GitLab: the failed job's `web_url` is in the pipeline's jobs (`GET <api_base>/projects/<id>/pipelines/<pipeline-id>/jobs`); `WebFetch` the trace or surface the job URL.
 2. Diagnose. Edit + commit the fix on `phase/<id>`, one commit per logical fix following `repo.commit_convention`.
-3. `git push origin phase/<id>` — appends to the open PR. Do NOT re-run `dross ship` (would open a second PR). If you rebase or amend, use `git push --force-with-lease` (or `dross ship --force`).
+3. `git push origin phase/<id>` — appends to the open PR. Re-running `dross ship` is also safe: it recognises the open PR, pushes anything pending on `phase/<id>`, and reports the existing PR by number (the URL is the one from the first run or the provider page; `changes.json` stores no url). If ship refuses a diverged branch, `dross ship --force` is the path (it force-with-leases); if it refuses a behind-only one, `git pull --rebase origin phase/<id>` first. If you rebase or amend by hand, use `git push --force-with-lease`.
 4. Loop back to "Watch checks". Cap at 3 fix iterations — if checks still fail after 3 cycles, stop and hand back to the user.
 
 **On pass:** continue to §6.
@@ -191,7 +192,7 @@ If the PR opened but reviewer-request failed, surface that — it's non-fatal bu
 
 ## Recovery
 
-Most ships finish clean: §6's squash-merge plus `dross phase complete` fast-forwards the phase's recorded base from origin and tears down the branch. When the merge step goes sideways, recover with a dross command — **never hand-edit `.dross/` or re-commit it by hand.** That manual surgery is exactly what drifted in the past; a dross command owns the restore and the commit. The three mid-merge failure states and their one-command fixes:
+Most ships finish clean: §6's squash-merge plus `dross phase complete` fast-forwards the phase's recorded base from origin and tears down the branch. When the merge step goes sideways, recover with a dross command — **never hand-edit `.dross/` or re-commit it by hand.** That manual surgery is exactly what drifted in the past; a dross command owns the restore and the commit. The four mid-flight failure states and their one-command fixes:
 
 1. **Fast-forward abort.** `dross phase complete` stops with a "fast-forward … failed" error — local main has diverged from origin/main (a stray commit on main, or a legacy completion chore). Fix: **`dross phase complete --recover`** — it resets main to origin and restores the cumulative `.dross/` tree in one shot, then finishes the completion. Pass `--recover` only after reading the abort: it is a destructive reset of local main.
 
@@ -199,7 +200,9 @@ Most ships finish clean: §6's squash-merge plus `dross phase complete` fast-for
 
 3. **Dirty tree after push.** `dross ship` returned but `git status` is not clean — an older ship left its post-push `.dross/` write uncommitted, and `dross phase complete` refuses on a dirty tree. Fix: re-run **`dross ship`** — it is idempotent and commits its own post-push `.dross/` records, leaving a clean tree. You stage nothing yourself.
 
-If you find yourself reaching for git plumbing against `.dross/`, stop — one of the three commands above already covers it.
+4. **Record push failed.** `dross ship` opened the PR but the push carrying its record was refused — the error names the retry. `dross status` reads the phase as verified, not shipped, and prints `pending: … re-run dross ship <id>`. Fix: run **`dross ship <phase-id>`** again — it recognises the open PR, pushes the record, then flips the phase to shipped. A refusal naming `git pull --rebase` or `--force` means origin's `phase/<id>` moved under you; do that first. (The mirror case — the record landed but the shipped-marker push failed — reports the phase *as* shipped and names the same re-run.)
+
+If you find yourself reaching for git plumbing against `.dross/`, stop — one of the four commands above already covers it.
 
 ## Subagent review panel — DEFERRED
 

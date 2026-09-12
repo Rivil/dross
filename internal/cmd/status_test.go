@@ -983,16 +983,18 @@ func clearShippedStatus(t *testing.T, root string) {
 	}
 }
 
-// TestStatusShippedFromPRRecordAlone: changes.json's PR number is the TRACKED
-// half of the signal — it rides on the phase branch, where the machine-local
-// status field cannot. Any machine that did not run the ship itself (a fresh
-// clone, a second workstation) has exactly this shape: a PR record and no
-// status. Seeding both lets Go short-circuit the guard's first term and leave
-// the record path unexecuted, so dropping the status half is what forces it to
+// TestStatusShippedFromPRRecordAlone: changes.json is the TRACKED half of the
+// signal — it rides on the phase branch, where the machine-local state.json
+// cannot. Any machine that did not run the ship itself (a fresh clone, a
+// second workstation) has exactly this shape: a record reading shipped and no
+// state. Seeding both lets Go short-circuit the guard's first term and leave
+// the record path unexecuted, so dropping the state half is what forces it to
 // answer.
 func TestStatusShippedFromPRRecordAlone(t *testing.T) {
 	dir := shippedBranchFixture(t)
 	clearShippedStatus(t, filepath.Join(dir, ".dross"))
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/changes.json"),
+		`{"phase":"x","pr":42,"base":"main","status":"shipped","tasks":{}}`)
 
 	out := captureStdout(t, func() { runCmd(t, Status()) })
 
@@ -1001,6 +1003,102 @@ func TestStatusShippedFromPRRecordAlone(t *testing.T) {
 	}
 	if !strings.Contains(out, "#42") {
 		t.Errorf("the shipped line should name the open PR:\n%s", out)
+	}
+}
+
+// suggestableShippedFixture fills in what suggestNext walks before it reaches
+// the merge consult — project name and runtime mode, a milestone, and a
+// spec/plan/verify trio reading done+pass — so a shippedBranchFixture can be
+// asked for its next step rather than for /dross-init or /dross-spec.
+func suggestableShippedFixture(t *testing.T, dir string) {
+	t.Helper()
+	mustRunSet(t, "project.name", "test-app")
+	mustRunSet(t, "runtime.mode", "native")
+	if err := runCmd(t, State(), "set", "current_milestone", "v1.0"); err != nil {
+		t.Fatal(err)
+	}
+	pdir := filepath.Join(dir, ".dross", "phases", "x")
+	mustWrite(t, filepath.Join(pdir, "spec.toml"), "[phase]\n  id = \"x\"\n  title = \"x\"\n")
+	mustWrite(t, filepath.Join(pdir, "plan.toml"), `[phase]
+id = "x"
+[[task]]
+id = "t-1"
+wave = 1
+title = "work"
+files = ["src/x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+	mustWrite(t, filepath.Join(pdir, "verify.toml"), "[verify]\nphase = \"x\"\nverdict = \"pass\"\n")
+}
+
+// TestStatusRecordPendingNamesRetry (c-2): a PR number with neither marker
+// reading shipped is the shipped_timing window — the PR opened, the push
+// carrying its record failed. Status must not call it shipped (that sends the
+// user to merge a PR whose record never reached origin); it names the retry.
+// Before this phase the line keyed on pr != 0 alone and printed shipped here.
+func TestStatusRecordPendingNamesRetry(t *testing.T) {
+	dir := shippedBranchFixture(t)
+	clearShippedStatus(t, filepath.Join(dir, ".dross"))
+	suggestableShippedFixture(t, dir)
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+	if strings.Contains(out, "shipped:") {
+		t.Errorf("an unpushed record is not shipped:\n%s", out)
+	}
+	if !strings.Contains(out, "re-run `dross ship x`") {
+		t.Errorf("status must name the retry:\n%s", out)
+	}
+	if !strings.Contains(out, "#42") {
+		t.Errorf("the pending line should name the open PR:\n%s", out)
+	}
+
+	got := suggestFor(t, dir)
+	if !strings.Contains(got, "dross ship x") {
+		t.Errorf("next step must be the ship retry, got:\n%s", got)
+	}
+	if strings.Contains(got, "merge the open PR") {
+		t.Errorf("a PR whose record is not on origin must not be advised to merge:\n%s", got)
+	}
+}
+
+// TestStatusLegacyStateShippedOutranksMissingRecordStatus: a record written
+// before Status existed carries a PR number and nothing else. On the machine
+// that shipped it, state.json still reads shipped — and that outranks the
+// missing record status, so the phase keeps reading shipped. A pending shape
+// that ignores state fails here.
+func TestStatusLegacyStateShippedOutranksMissingRecordStatus(t *testing.T) {
+	dir := shippedBranchFixture(t)
+	suggestableShippedFixture(t, dir)
+	// Fixture precondition: pr 42, no status, state shipped.
+	ch, err := changes.Load(changes.FilePath(filepath.Join(dir, ".dross"), "x"), "x")
+	if err != nil || ch.PR != 42 || ch.Status != "" {
+		t.Fatalf("fixture must carry pr 42 and no status, got %+v (%v)", ch, err)
+	}
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+	if !strings.Contains(out, "shipped:") {
+		t.Errorf("state shipped must outrank a missing record status:\n%s", out)
+	}
+	if strings.Contains(out, "re-run `dross ship x`") {
+		t.Errorf("a legacy shipped phase must not be told to re-ship:\n%s", out)
+	}
+	if got := suggestFor(t, dir); strings.Contains(got, "dross ship x") {
+		t.Errorf("next step must not be the ship retry on a legacy shipped phase:\n%s", got)
+	}
+}
+
+// TestStatusCompleteRecordSuppressesBothLines (control): a complete record
+// closes the question — neither the shipped line nor the retry fires.
+func TestStatusCompleteRecordSuppressesBothLines(t *testing.T) {
+	dir := shippedBranchFixture(t)
+	clearShippedStatus(t, filepath.Join(dir, ".dross"))
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/changes.json"),
+		`{"phase":"x","pr":42,"base":"main","status":"complete","tasks":{}}`)
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+	if strings.Contains(out, "shipped:") || strings.Contains(out, "pending:") {
+		t.Errorf("a complete record must suppress both lines:\n%s", out)
 	}
 }
 
@@ -1329,10 +1427,12 @@ func mergeOracleFixture(t *testing.T, slug string) string {
 	return dir
 }
 
-// writeOracleChanges writes the phase's changes.json with a PR number and base.
-func writeOracleChanges(t *testing.T, dir, slug string, pr int, base string) {
+// writeOracleChanges writes the phase's changes.json with a PR number, base
+// and status. A shipped ship writes pr + status="shipped" together; pr with
+// an empty status is the record-pending shape (or a legacy pre-status record).
+func writeOracleChanges(t *testing.T, dir, slug string, pr int, base, status string) {
 	t.Helper()
-	body := fmt.Sprintf(`{"phase":%q,"pr":%d,"base":%q,"tasks":{}}`, slug, pr, base)
+	body := fmt.Sprintf(`{"phase":%q,"pr":%d,"base":%q,"status":%q,"tasks":{}}`, slug, pr, base, status)
 	mustWrite(t, filepath.Join(dir, ".dross", "phases", slug, "changes.json"), body)
 }
 
@@ -1347,7 +1447,7 @@ func oracleState(t *testing.T, dir, slug string) string {
 // HEAD first and answers ok=false here; the oracle must still see the merge.
 func TestPhaseMergeStateKeysOnThePhaseNotHEAD(t *testing.T) {
 	dir := mergeOracleFixture(t, "auth")
-	writeOracleChanges(t, dir, "auth", 42, "main")
+	writeOracleChanges(t, dir, "auth", 42, "main", "shipped")
 	mustGit(t, dir, "merge", "-q", "--no-ff", "-m", "merge auth", "phase/auth")
 	mustGit(t, dir, "push", "-q", "origin", "main")
 
@@ -1366,7 +1466,7 @@ func TestPhaseMergeStateKeysOnThePhaseNotHEAD(t *testing.T) {
 // leaked into the ancestry logic would come back `open`.
 func TestPhaseMergeStateNoPRIsItsOwnAnswer(t *testing.T) {
 	dir := mergeOracleFixture(t, "auth")
-	writeOracleChanges(t, dir, "auth", 0, "main")
+	writeOracleChanges(t, dir, "auth", 0, "main", "")
 	if got := oracleState(t, dir, "auth"); got != mergeNoPR {
 		t.Errorf("phaseMergeState with no recorded PR = %q, want %q", got, mergeNoPR)
 	}
@@ -1383,7 +1483,7 @@ func TestPhaseMergeStateNoPRIsItsOwnAnswer(t *testing.T) {
 // not on origin/<base>.
 func TestPhaseMergeStateOpenNeedsAPositiveObservation(t *testing.T) {
 	dir := mergeOracleFixture(t, "auth")
-	writeOracleChanges(t, dir, "auth", 42, "main")
+	writeOracleChanges(t, dir, "auth", 42, "main", "shipped")
 	if got := oracleState(t, dir, "auth"); got != mergeOpen {
 		t.Errorf("phaseMergeState with an unmerged branch = %q, want %q", got, mergeOpen)
 	}
@@ -1397,7 +1497,7 @@ func TestPhaseMergeStateUncertaintyIsAlwaysUnknown(t *testing.T) {
 	t.Run("missing origin base ref", func(t *testing.T) {
 		dir := mergeOracleFixture(t, "auth")
 		// A base recorded as a milestone branch that was never pushed.
-		writeOracleChanges(t, dir, "auth", 42, "milestone/v9")
+		writeOracleChanges(t, dir, "auth", 42, "milestone/v9", "shipped")
 		if got := oracleState(t, dir, "auth"); got != mergeUnknown {
 			t.Errorf("phaseMergeState with no origin/milestone/v9 = %q, want %q", got, mergeUnknown)
 		}
@@ -1405,7 +1505,7 @@ func TestPhaseMergeStateUncertaintyIsAlwaysUnknown(t *testing.T) {
 
 	t.Run("deleted phase branch", func(t *testing.T) {
 		dir := mergeOracleFixture(t, "auth")
-		writeOracleChanges(t, dir, "auth", 42, "main")
+		writeOracleChanges(t, dir, "auth", 42, "main", "shipped")
 		// `dross phase complete` deletes the branch on the way out; a fresh
 		// clone never had it. Neither is evidence the PR is still open.
 		mustGit(t, dir, "branch", "-D", "phase/auth")
@@ -1416,7 +1516,7 @@ func TestPhaseMergeStateUncertaintyIsAlwaysUnknown(t *testing.T) {
 
 	t.Run("base past the squash scan limit", func(t *testing.T) {
 		dir := mergeOracleFixture(t, "auth")
-		writeOracleChanges(t, dir, "auth", 42, "main")
+		writeOracleChanges(t, dir, "auth", 42, "main", "shipped")
 		for i := 0; i <= staleSquashScanLimit; i++ {
 			mustWrite(t, filepath.Join(dir, fmt.Sprintf("m%d.txt", i)), "x\n")
 			mustGit(t, dir, "add", ".")
@@ -1493,6 +1593,18 @@ func TestStatusShippedLineStillFiresOnAShippedRecord(t *testing.T) {
 // the SessionStart hook actually runs.
 func terminalPhaseFixture(t *testing.T, slug string, pr int) string {
 	t.Helper()
+	status := ""
+	if pr > 0 {
+		status = "shipped"
+	}
+	return terminalPhaseFixtureStatus(t, slug, pr, status)
+}
+
+// terminalPhaseFixtureStatus is terminalPhaseFixture with the record's status
+// chosen by the caller — "" with a PR number is the legacy / record-pending
+// shape.
+func terminalPhaseFixtureStatus(t *testing.T, slug string, pr int, status string) string {
+	t.Helper()
 	dir := t.TempDir()
 	remote := t.TempDir()
 	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
@@ -1536,7 +1648,7 @@ covers = ["c-1"]
 status = "done"
 `)
 	mustWrite(t, filepath.Join(pdir, "verify.toml"), "[verify]\nphase = \""+slug+"\"\nverdict = \"pass\"\n")
-	writeOracleChanges(t, dir, slug, pr, "main")
+	writeOracleChanges(t, dir, slug, pr, "main", status)
 	return dir
 }
 
@@ -1573,6 +1685,25 @@ func TestSuggestNextMergedPRAdvisesCompletion(t *testing.T) {
 	}
 	if strings.Contains(got, "/dross-ship") {
 		t.Errorf("a merged PR must not be advised to ship again:\n%s", got)
+	}
+}
+
+// TestSuggestNextMergedLegacyRecordStillCompletes: a merged PR is done
+// whatever its record says. A legacy record ({pr:42, no status}) on a phase
+// whose branch is already in origin/main's ancestry must name the completion,
+// not the ship retry — the retry arm sits AFTER the merged consult, and moving
+// it ahead fails this.
+func TestSuggestNextMergedLegacyRecordStillCompletes(t *testing.T) {
+	dir := terminalPhaseFixtureStatus(t, "auth", 42, "")
+	mustGit(t, dir, "merge", "-q", "--no-ff", "-m", "merge auth", "phase/auth")
+	mustGit(t, dir, "push", "-q", "origin", "main")
+
+	got := suggestFor(t, dir)
+	if !strings.Contains(got, "dross phase complete auth") {
+		t.Errorf("a merged legacy record should name `dross phase complete auth`, got:\n%s", got)
+	}
+	if strings.Contains(got, "dross ship auth") {
+		t.Errorf("a merged PR must not be advised to re-ship its record:\n%s", got)
 	}
 }
 

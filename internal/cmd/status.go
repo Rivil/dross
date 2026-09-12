@@ -87,8 +87,14 @@ func Status() *cobra.Command {
 			// open PR and the base it waits on rather than warning about it.
 			// Read-only; status never mutates.
 			if sh, ok := shippedUnmergedPhase(root, st, mainBranch); ok {
-				Printf("shipped:   phase/%s — PR #%d not merged on origin/%s yet\n", sh.phaseID, sh.pr, sh.base)
-				Printf("           merge it, then `dross phase complete %s` writes the completion record\n", sh.phaseID)
+				if sh.recordPending {
+					// PR open, record not on origin: the shipped_timing
+					// window. Not shipped — ship is the retry.
+					Printf("pending:   phase/%s — PR #%d is open but its record has not reached origin; re-run `dross ship %s`\n", sh.phaseID, sh.pr, sh.phaseID)
+				} else {
+					Printf("shipped:   phase/%s — PR #%d not merged on origin/%s yet\n", sh.phaseID, sh.pr, sh.base)
+					Printf("           merge it, then `dross phase complete %s` writes the completion record\n", sh.phaseID)
+				}
 			}
 
 			// Last activity
@@ -292,10 +298,19 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 		mainBranch = "main"
 	}
 	if !changes.Complete(root, st.CurrentPhase) {
-		switch phaseMergeState(root, filepath.Dir(root), st.CurrentPhase, mainBranch) {
-		case mergeMerged:
+		merge := phaseMergeState(root, filepath.Dir(root), st.CurrentPhase, mainBranch)
+		if merge == mergeMerged {
 			return "`dross phase complete " + st.CurrentPhase + "` — the PR is merged; this writes the completion record"
-		case mergeOpen:
+		}
+		// A PR whose record never reached origin sits between merged and
+		// open on purpose: a merged PR is done whatever its record says (a
+		// legacy record with no status is exactly this shape), but an open
+		// one whose record is still local needs the record pushed before
+		// anyone is told to merge it. Ship is the retry.
+		if pr, pending := recordPushPending(root, st, st.CurrentPhase); pending {
+			return "`dross ship " + st.CurrentPhase + "` — push the PR record for #" + strconv.Itoa(pr)
+		}
+		if merge == mergeOpen {
 			return "merge the open PR, then `dross phase complete " + st.CurrentPhase + "` — it writes the completion record"
 		}
 		// mergeNoPR and mergeUnknown fall through: nothing was observed that
@@ -545,6 +560,36 @@ type shippedPhase struct {
 	phaseID string
 	pr      int
 	base    string
+	// recordPending: the PR is open but neither marker reads shipped — the
+	// record commit never reached origin. Status names the retry, not the
+	// merge.
+	recordPending bool
+}
+
+// recordPushPending derives the "record pending" shape from the two markers,
+// with no field of its own: the phase's record carries a PR number but not
+// the shipped status, and state.json does not read shipped either. The
+// shipped_timing decision flips both markers only after the push carrying the
+// record lands, so this shape means exactly "PR opened, record push failed".
+//
+// A shipped state.json outranks a missing record status: records written
+// before Status existed carry a PR number and nothing else, and the machine
+// that shipped them still reads shipped. Complete is the caller's suppressor.
+func recordPushPending(root string, st *state.State, phaseID string) (pr int, pending bool) {
+	ch, err := changes.Load(changes.FilePath(root, phaseID), phaseID)
+	if err != nil || ch == nil || ch.PR == 0 {
+		return 0, false
+	}
+	if ch.Status == changes.StatusShipped || stateShipped(st, phaseID) {
+		return ch.PR, false
+	}
+	return ch.PR, true
+}
+
+// stateShipped reports whether state.json names phaseID as the current phase
+// and reads shipped.
+func stateShipped(st *state.State, phaseID string) bool {
+	return st != nil && st.CurrentPhase == phaseID && st.CurrentPhaseStatus == "shipped"
 }
 
 // shippedUnmergedPhase reports whether the working copy is sitting on a phase
@@ -558,9 +603,11 @@ type shippedPhase struct {
 // `dross phase complete` confirms the merge. The window is now deliberate and
 // long-lived, and status simply names it.
 //
-// The shipped signal is current_phase_status, with the phase's recorded PR
-// number as the fallback for a state that lost the status (a fresh clone, a
-// hand-edited state.json) but still carries the tracked record.
+// The shipped signal is either marker — current_phase_status (machine-local)
+// or the record's own status (tracked, so a fresh clone reads it). A PR
+// number with neither is reported too, but as record-pending: the PR opened
+// and the push carrying its record failed, so the retry is named instead of
+// the merge.
 //
 // The merged-check is retained and is the reason this is not a bare status
 // read: the post-merge/pre-complete window is exactly what this phase makes
@@ -594,10 +641,13 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 			sh.base = ch.Base
 		}
 	}
-	shippedStatus := st.CurrentPhase == phaseID && st.CurrentPhaseStatus == "shipped"
-	if !shippedStatus && sh.pr == 0 {
+	// The shipped signal is either marker: state.json (machine-local) or the
+	// record's status (tracked, so a fresh clone reads it). A PR number with
+	// neither is the record-pending shape — reported, but as a retry.
+	if sh.pr == 0 {
 		return none, false
 	}
+	_, sh.recordPending = recordPushPending(root, st, phaseID)
 	// A completion record closes the question: complete confirmed the merge and
 	// wrote it. The PR record above outlives that — it stays on the phase
 	// branch — so without this a completed phase visited from its old branch
