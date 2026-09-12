@@ -1,0 +1,68 @@
+[verify]
+  phase = "push-gates-on-origin"
+  generated_at = 2026-09-12T12:00:24.298322Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-09-12T12:00:54.351502Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9512195121951219
+  mutants_killed = 429
+  mutants_survived = 22
+  mutants_not_covered = 22
+  mutants_in_scope = 451
+  unclassified_in_scope = 0
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 429
+    survived = 22
+    timeout = 0
+    in_scope = 451
+    score = 0.9512195121951219
+    file_count = 20
+    measured_on = "helicon"
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/ship_test.go:TestShipPushesLocalOnlyRecordWithNothingStaged", "internal/cmd/originpush_test.go:TestOriginCmpSeesUnfetchedRemoteCommit", "internal/cmd/originpush_test.go:TestPushPhaseBranchAheadCleanIndexPushes", "internal/cmd/originpush_test.go:TestBaseBranchCarriesNoOwnRevList"]
+  notes = "Origin's phase/x is wound back one commit with a clean index; the re-run pushes and origin tip == local HEAD with POST /pulls still 1. Fetch-before-compare pinned by the unfetched-remote-commit test; shared_origin_gate pinned by the base branch carrying no rev-list of its own."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/ship_test.go:TestShipFailedRecordPushIsNotShipped", "internal/cmd/ship_test.go:TestShipFlipIsAtomic", "internal/cmd/status_test.go:TestStatusRecordPendingNamesRetry", "internal/cmd/status_test.go:TestStatusLegacyStateShippedOutranksMissingRecordStatus", "internal/watch/drift_test.go:TestDriftPROpenButStateNotShipped"]
+  notes = "Pre-receive hook rejects the record push: state != shipped, changes.status != shipped, phaseDone false, phase list has no tick, status has no shipped: line and names dross ship. Flip atomicity asserted both ways; watch classifies PR-without-marker as verified-unshipped."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/ship_test.go:TestShipFailedRecordPushIsNotShipped", "internal/cmd/ship_test.go:TestShipJSONReportsExistingPR", "internal/cmd/ship_test.go:TestShipInSyncIssuesNoPush", "internal/cmd/ship_test.go:TestShipRecordWinsOverLookup", "internal/cmd/ship_prompt_test.go:TestShipPromptReRunIsTheRetry"]
+  notes = "Second run after the refusal: POST /pulls == 1 across both runs, origin record 99/shipped, output names #99; --json reports result=existing. Prompt test asserts the retired 'do not re-run' guidance is gone and §5/§4 name the re-run and the gated order."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/ship_test.go:TestShipFailedRecordPushIsNotShipped"]
+  notes = "The criterion's exact scenario: record push refused after the PR opens, not reported shipped, hook removed, second run pushes and originChangesX.PR == 99 with status shipped."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/ship_test.go:TestShipRecoversPRAfterDeathBeforeRecord", "internal/cmd/ship_test.go:TestShipLookupNoneOpensOnce", "internal/cmd/ship_test.go:TestShipLookupFailureRefusesBeforeOpen", "internal/cmd/ship_test.go:TestShipLookupUnsupportedNarratesSkipAndOpens", "internal/ship/headpr_test.go:TestFindOpenPRByHeadGitHubArgv", "internal/ship/headpr_test.go:TestFindOpenPRByHeadForgejoPaginates", "internal/ship/gitlab_test.go", "internal/ship/bitbucket_test.go"]
+  notes = "Record with PR=0 and a stub hit of 77: exactly one lookup for phase/x, POST /pulls == 1, origin record carries 77. None/failure/unsupported arms each pinned; all four shipped providers have by-head lookup tests."
+
+[[finding]]
+  severity = "NOTE"
+  text = "10 in-hunk survivors (ship.go:358/364/612, originpush.go:72/74/76) are bare switch case-conditions under the gremlins attribution ceiling; each arm is driven by a named test above. Accepted under gremlins-attribution-ceiling in f710376; efficacy over the 429 reachable mutants is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Two detached legs on helicon (r-20260912-081334, r-20260912-100703) with identical counts; the second existed only to re-read dispositions — DRO-400 files the missing offline re-score."
