@@ -38,6 +38,8 @@ func TestSecurePromptMandatedSections(t *testing.T) {
 		{"c-5 propose-then-ask before locking the scaffold", []string{"propose-then-ask before locking"}},
 		{"c-1/c-3 post-scan reconcile against prior state", []string{"dross security findings reconcile"}},
 		{"private-code semgrep no-egress guidance", []string{"metrics=off", "config auto", "semgrep.dev", "private"}},
+		{"c-4 gitleaks run-dir allowlist via --config", []string{"gitleaks", "--config", "gitleaks.toml", "run-dir", "allowlist"}},
+		{"c-5 detect names exclusions", []string{"exclusions"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -48,6 +50,57 @@ func TestSecurePromptMandatedSections(t *testing.T) {
 			}
 		})
 	}
+
+	// c-4's needles must sit in ONE paragraph — the gitleaks bullet — not be
+	// scattered across the prompt, and that bullet's exemplar must keep
+	// --config ahead of the ` -- ` separator (the fence discipline the semgrep
+	// exemplar already follows). Paragraphs are split on blank lines, bullets on
+	// their leading "- ".
+	t.Run("c-4 gitleaks bullet is one paragraph with --config before --", func(t *testing.T) {
+		var bullet string
+		for _, para := range strings.Split(content, "\n\n") {
+			for _, item := range strings.Split(para, "\n   - ") {
+				flat := strings.Join(strings.Fields(item), " ")
+				ok := true
+				for _, n := range []string{"gitleaks", "--config", "gitleaks.toml", "run-dir", "allowlist"} {
+					if !strings.Contains(flat, n) {
+						ok = false
+						break
+					}
+				}
+				if ok {
+					bullet = flat
+				}
+			}
+		}
+		if bullet == "" {
+			t.Fatal("no single paragraph of secure.md carries gitleaks, --config, gitleaks.toml, run-dir and allowlist together — the gitleaks bullet is missing or split")
+		}
+		ex := strings.Index(bullet, "gitleaks git")
+		if ex < 0 {
+			t.Fatalf("the gitleaks bullet has no `gitleaks git` exemplar: %s", bullet)
+		}
+		tail := bullet[ex:]
+		cfg, sep := strings.Index(tail, "--config"), strings.Index(tail, " -- ")
+		if cfg < 0 || sep < 0 || sep < cfg {
+			t.Errorf("the gitleaks exemplar does not put --config ahead of the ` -- ` separator: %.120s", tail)
+		}
+	})
+
+	// c-5: the exclusions mention must live in the Detect step, not elsewhere.
+	t.Run("c-5 exclusions named in the detect step", func(t *testing.T) {
+		at := strings.Index(content, "1. detect")
+		if at < 0 {
+			t.Fatal("secure.md has no `1. Detect` step")
+		}
+		end := strings.Index(content[at:], "2. plan")
+		if end < 0 {
+			t.Fatal("secure.md has no `2. Plan` step after Detect")
+		}
+		if !strings.Contains(content[at:at+end], "exclusions") {
+			t.Errorf("the Detect step does not mention exclusions:\n%s", content[at:at+end])
+		}
+	})
 }
 
 // TestSecurePromptFencesScannerOperands carries c-2's semgrep leg.
