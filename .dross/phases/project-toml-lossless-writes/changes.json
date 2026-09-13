@@ -2,5 +2,105 @@
   "phase": "project-toml-lossless-writes",
   "base": "milestone/v1.7",
   "base_commit": "11de0e2a47658ae161741e7978124a1dab5fb9ae",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/project/patch.go",
+        "internal/project/patch_value.go",
+        "internal/project/patch_test.go",
+        "internal/project/testdata/lossless.toml"
+      ],
+      "commit": "e2f9e79",
+      "completed_at": "2026-09-13T15:23:50.753622Z",
+      "landmarks": [
+        {
+          "feature": "project config lossless writes",
+          "symbol": "apply",
+          "loc": "internal/project/patch.go:607",
+          "what": "raw-byte project.toml patcher: indexDoc classifies lines/spans (headers·keys·multi-line values·CRLF), apply splices set/delete/append-elem/delete-elem ops re-indexing per op, refuses inline tables by line; renderValue via encodeFresh"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/project/patch_diff.go",
+        "internal/project/patch_diff_test.go",
+        "internal/project/patch.go"
+      ],
+      "commit": "4c0739f",
+      "completed_at": "2026-09-13T15:30:30.985863Z",
+      "landmarks": [
+        {
+          "feature": "project config lossless writes",
+          "symbol": "diff",
+          "loc": "internal/project/patch_diff.go:105",
+          "what": "diff(old·new *Project) walks encoder-canonical generic trees into per-leaf set/delete ops·per-element array-of-tables ops (positional edit when lengths match, deep-equal match + delete/append otherwise); unclassifiable shape errors by path; encodeCanonical routes through encodeFresh"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/project/project.go",
+        "internal/project/project_test.go",
+        "internal/project/save_lossless_test.go"
+      ],
+      "commit": "918e396",
+      "completed_at": "2026-09-13T15:38:02.814349Z",
+      "landmarks": [
+        {
+          "feature": "project config lossless writes",
+          "symbol": "Project.Save",
+          "loc": "internal/project/project.go:459",
+          "what": "Save is the sole project.toml writer: existing file → Load·diff·apply·canonical-verify·atomic temp+fsync+rename (mode kept, read-only refused, zero ops = no write); absent path → encodeFresh, the package's single encoder call site"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/project_lossless_test.go"
+      ],
+      "commit": "e607595",
+      "completed_at": "2026-09-13T15:43:05.828695Z",
+      "landmarks": [
+        {
+          "feature": "project config lossless writes",
+          "symbol": "TestLosslessUnmodeledKeysSurviveEveryWriter",
+          "loc": "internal/cmd/project_lossless_test.go:218",
+          "what": "in-process cobra matrix (state set version·project set scalar/array/absent-key/sub-table/--unset·issue enable/disable·test lane add/edit/remove·stack apply) asserts exact changed-line sets and that comments + unmodeled keys survive every writer; real project.toml bump = one-line diff"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/project_writer_pin_test.go"
+      ],
+      "commit": "f8cfa5c",
+      "completed_at": "2026-09-13T15:47:08.54497Z",
+      "landmarks": [
+        {
+          "feature": "project config lossless writes",
+          "symbol": "projectWriterViolations",
+          "loc": "internal/cmd/project_writer_pin_test.go:60",
+          "what": "go/ast guard: outside internal/project no os.WriteFile/Create/OpenFile/Rename on a project.File/'project.toml' path (incl. two-step ident) and no toml.NewEncoder/Marshal except to os.Stdout in files touching project.File; inside it one encoder (encodeFresh) with an allowlisted caller set and writeAtomic as the only file writer"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "README.md",
+        "ARCHITECTURE.md",
+        "internal/cmd/lossless_docs_test.go"
+      ],
+      "commit": "c11128f",
+      "completed_at": "2026-09-13T15:51:09.946566Z",
+      "landmarks": [
+        {
+          "feature": "project config lossless writes",
+          "symbol": "README Updating subsection",
+          "loc": "README.md:180",
+          "what": "README states project set / state set version are surgical and per-repo bans (codriver.nvim r-01) are safe to retire; ARCHITECTURE Configuration entry names Save as sole writer + the raw-byte patcher with resolving anchors; both pinned by lossless_docs_test.go"
+        }
+      ]
+    }
+  }
 }

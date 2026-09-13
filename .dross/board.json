@@ -683,6 +683,36 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "project-toml-lossless-writes/t-1": {
+      "issue": "DRO-413",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "project-toml-lossless-writes/t-2": {
+      "issue": "DRO-414",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "project-toml-lossless-writes/t-3": {
+      "issue": "DRO-415",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "project-toml-lossless-writes/t-4": {
+      "issue": "DRO-416",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "project-toml-lossless-writes/t-5": {
+      "issue": "DRO-417",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "project-toml-lossless-writes/t-6": {
+      "issue": "DRO-418",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "push-gates-on-origin/t-1": {
       "issue": "DRO-393",
       "plan_status": "done",
