@@ -575,3 +575,389 @@ func TestFixtureLoads(t *testing.T) {
 		t.Errorf("state_map = %v", p.Board.StateMap)
 	}
 }
+
+// --- coverage the first verify found missing (t-7) --------------------------
+//
+// Every test below targets a path the 2026-09-13 mutation run reported NOT
+// COVERED: shapes dross's own encoder never writes but a hand-edited file can
+// carry, and the refusals that keep a shape the patcher does not follow from
+// being guessed at. Each one asserts the span, the decoded name or the exact
+// changed lines, never just "no error".
+
+func TestIndexLiteralStrings(t *testing.T) {
+	src := []byte("[t]\n" +
+		"p = 'C:\\path # not a comment'  # real\n" +
+		"m = '''\nline ] one\nline = two\n'''\n" +
+		"tail = '''x''''\n" +
+		"next = 1\n")
+	d := mustIndex(t, src)
+
+	_, p := keyLineFor(t, d, []string{"t"}, "p")
+	if got := string(src[p.valStart:p.valEnd]); got != `'C:\path # not a comment'` {
+		t.Errorf("literal span = %q", got)
+	}
+	if got := string(src[p.valEnd:d.lines[1].end]); got != "  # real" {
+		t.Errorf("trailing after literal = %q", got)
+	}
+
+	i, m := keyLineFor(t, d, []string{"t"}, "m")
+	if i != 2 || m.endLine != 5 {
+		t.Errorf("multi-line literal spans %d..%d, want 2..5", i, m.endLine)
+	}
+	if got := string(src[m.valStart:m.valEnd]); got != "'''\nline ] one\nline = two\n'''" {
+		t.Errorf("multi-line literal span = %q", got)
+	}
+
+	// A fourth quote belongs to the string, not the delimiter.
+	_, tail := keyLineFor(t, d, []string{"t"}, "tail")
+	if got := string(src[tail.valStart:tail.valEnd]); got != "'''x''''" {
+		t.Errorf("four-quote tail span = %q", got)
+	}
+	if j, _ := keyLineFor(t, d, []string{"t"}, "next"); j != 7 {
+		t.Errorf("next indexed at line %d, want 7", j)
+	}
+	tree := decodeTree(t, src)
+	if got, _ := lookup(tree, []string{"t"}, -1, "tail"); got != "x'" {
+		t.Errorf("decoder reads tail as %q, want %q — the span disagrees with TOML", got, "x'")
+	}
+
+	for name, bad := range map[string]string{
+		"unterminated literal":            "[t]\np = 'open\n",
+		"unterminated literal at EOF":     "[t]\np = 'open",
+		"unterminated multi-line literal": "[t]\nm = '''\nnever closed\n",
+	} {
+		if _, err := indexDoc([]byte(bad)); err == nil || !strings.Contains(err.Error(), "unterminated") {
+			t.Errorf("%s: err = %v, want an unterminated refusal", name, err)
+		}
+	}
+}
+
+func TestIndexMultilineBasicEscapesAndExtraQuotes(t *testing.T) {
+	// A \" inside must not close the string, and one extra quote before the
+	// delimiter is content.
+	src := []byte("[t]\ns = \"\"\"a \\\" b\"\"\"\"\nnext = 1\n")
+	d := mustIndex(t, src)
+	_, kl := keyLineFor(t, d, []string{"t"}, "s")
+	if got := string(src[kl.valStart:kl.valEnd]); got != "\"\"\"a \\\" b\"\"\"\"" {
+		t.Errorf("span = %q", got)
+	}
+	tree := decodeTree(t, src)
+	if got, _ := lookup(tree, []string{"t"}, -1, "s"); got != `a " b"` {
+		t.Errorf("decoder reads s as %q", got)
+	}
+	if _, err := indexDoc([]byte("[t]\ns = \"\"\"never\n")); err == nil || !strings.Contains(err.Error(), "unterminated") {
+		t.Errorf("unterminated multi-line basic: err = %v", err)
+	}
+}
+
+func TestIndexQuotedKeyEscapes(t *testing.T) {
+	src := []byte("[t]\n" +
+		"\"a\\\"b\" = 1\n" +
+		"\"t\\tab\" = 2\n" +
+		"\"e\\u00e9\" = 3\n" +
+		"\"g\\U0001F600\" = 4\n" +
+		"\"bs\\\\\" = 5\n" +
+		"\"ctl\\b\\f\\n\\r\" = 6\n")
+	d := mustIndex(t, src)
+	for _, want := range []string{"a\"b", "t\tab", "e\u00e9", "g\U0001F600", "bs\\", "ctl\b\f\n\r"} {
+		keyLineFor(t, d, []string{"t"}, want)
+	}
+	// The index agrees with the decoder on every one of them.
+	tree := decodeTree(t, src)
+	for _, want := range []string{"a\"b", "t\tab", "e\u00e9", "g\U0001F600", "bs\\", "ctl\b\f\n\r"} {
+		if _, ok := lookup(tree, []string{"t"}, -1, want); !ok {
+			t.Errorf("decoder has no key %q", want)
+		}
+	}
+
+	for name, tc := range map[string]struct{ src, want string }{
+		"unknown escape":      {"[t]\n\"x\\q\" = 1\n", "unknown escape"},
+		"short unicode":       {"[t]\n\"x\\u12\" = 1\n", "short unicode escape"},
+		"bad unicode hex":     {"[t]\n\"x\\u12zz\" = 1\n", "bad unicode escape"},
+		"short long unicode":  {"[t]\n\"x\\U0001F6\" = 1\n", "short unicode escape"},
+		"unterminated quoted": {"[t]\n\"x = 1\n", "unterminated"},
+	} {
+		_, err := indexDoc([]byte(tc.src))
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want %q", name, err, tc.want)
+		}
+	}
+	// A dangling backslash cannot survive scanBasic, so unescapeBasic is
+	// asked directly.
+	if _, err := unescapeBasic(`x\`); err == nil || !strings.Contains(err.Error(), "dangling escape") {
+		t.Errorf("dangling escape: err = %v", err)
+	}
+	if got, err := unescapeBasic("plain"); err != nil || got != "plain" {
+		t.Errorf("no-escape fast path = %q, %v", got, err)
+	}
+}
+
+func TestIndexLiteralKeyKeepsDots(t *testing.T) {
+	src := []byte("[t]\n'a.b' = 1\n\"c.d\" . e = 2\n")
+	d := mustIndex(t, src)
+	keyLineFor(t, d, []string{"t"}, "a.b")
+	_, kl := keyLineFor(t, d, []string{"t", "c.d"}, "e")
+	if got := string(src[kl.keyStart:kl.lastKeyStart]); got != "\"c.d\" . " {
+		t.Errorf("dotted prefix with spaces = %q", got)
+	}
+	tree := decodeTree(t, src)
+	if _, ok := lookup(tree, []string{"t"}, -1, "a.b"); !ok {
+		t.Error("decoder has no key a.b")
+	}
+	if _, ok := lookup(tree, []string{"t", "c.d"}, -1, "e"); !ok {
+		t.Error("decoder has no key c.d.e")
+	}
+}
+
+func TestIndexRefusesMalformedLines(t *testing.T) {
+	for name, tc := range map[string]struct{ src, want string }{
+		"no key":                 {"[t]\n= 1\n", "expected a key"},
+		"no equals":              {"[t]\nk 1\n", "expected '='"},
+		"no value":               {"[t]\nk =\n", "missing value"},
+		"no value at EOF":        {"[t]\nk = ", "missing value"},
+		"unterminated string":    {"[t]\nk = \"open\n", "unterminated string"},
+		"trailing junk":          {"[t]\nk = \"v\" x\n", "unexpected \"x\" after value"},
+		"header unclosed":        {"[t\nk = 1\n", "expected ]"},
+		"array header unclosed":  {"[[t]\nk = 1\n", "expected ]]"},
+		"header trailing junk":   {"[t] x\n", "unexpected \"x\" after value"},
+		"header bad key":         {"[\"x\\q\"]\nk = 1\n", "line 1: header: unknown escape"},
+		"unterminated array":     {"[t]\nk = [1,\n", "unterminated [...]"},
+		"unterminated inline":    {"[t]\nk = { a = 1\n", "unterminated {...}"},
+		"line number in message": {"[t]\nok = 1\nbad\n", "line 3"},
+	} {
+		_, err := indexDoc([]byte(tc.src))
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want %q", name, err, tc.want)
+		}
+	}
+}
+
+func TestFirstBytesTruncates(t *testing.T) {
+	if got := firstBytes([]byte("abc\ndef"), 12); got != "abc" {
+		t.Errorf("newline: %q", got)
+	}
+	if got := firstBytes([]byte("abcdefghijklmnop"), 5); got != "abcde" {
+		t.Errorf("length: %q", got)
+	}
+	if got := firstBytes([]byte("ab"), 5); got != "ab" {
+		t.Errorf("short input: %q", got)
+	}
+}
+
+func TestScanBracketedNested(t *testing.T) {
+	src := []byte("[t]\narr = [ # opening comment ]\n  [\"a]\", 'b#'], # c ]\n  [1, [2, 3]],\n]\nnext = 1\n")
+	d := mustIndex(t, src)
+	i, kl := keyLineFor(t, d, []string{"t"}, "arr")
+	if i != 1 || kl.endLine != 4 {
+		t.Errorf("arr spans %d..%d, want 1..4", i, kl.endLine)
+	}
+	if got := string(src[kl.valStart:kl.valEnd]); !strings.HasSuffix(got, "\n]") || kl.inline {
+		t.Errorf("span = %q inline = %v", got, kl.inline)
+	}
+	if j, _ := keyLineFor(t, d, []string{"t"}, "next"); j != 5 {
+		t.Errorf("next at line %d, want 5", j)
+	}
+	// An inline table anywhere inside an array marks the key inline.
+	d = mustIndex(t, []byte("[t]\narr = [ { a = 1 }, 2 ]\n"))
+	if _, kl := keyLineFor(t, d, []string{"t"}, "arr"); !kl.inline {
+		t.Error("array holding an inline table not flagged inline")
+	}
+	// A string inside the array that fails to scan is the array's error.
+	if _, err := indexDoc([]byte("[t]\narr = [ \"open ]\n")); err == nil || !strings.Contains(err.Error(), "unterminated") {
+		t.Errorf("bad string inside array: err = %v", err)
+	}
+}
+
+func TestScanValueBareStopsBeforeCommentAndTabs(t *testing.T) {
+	src := []byte("[t]\nn = 42\t \t# c\nb = true\nlast = 7")
+	d := mustIndex(t, src)
+	_, n := keyLineFor(t, d, []string{"t"}, "n")
+	if got := string(src[n.valStart:n.valEnd]); got != "42" {
+		t.Errorf("bare span = %q", got)
+	}
+	_, last := keyLineFor(t, d, []string{"t"}, "last")
+	if got := string(src[last.valStart:last.valEnd]); got != "7" || d.finalNewline {
+		t.Errorf("unterminated last value = %q finalNewline = %v", got, d.finalNewline)
+	}
+}
+
+func TestApplySetDottedKeyMirrorsSpelling(t *testing.T) {
+	src := []byte("[board]\n  provider = \"x\"\n  state_map.planned = \"Open\"\n  # after\n\n[paths]\n")
+	out := mustApply(t, src, set("board.state_map", "uat", "UAT"))
+	assertChanged(t, src, out, []string{`  state_map.uat = "UAT"`}, nil)
+	if !bytes.Contains(out, []byte("  state_map.planned = \"Open\"\n  state_map.uat = \"UAT\"\n  # after\n")) {
+		t.Errorf("dotted key did not land after its sibling:\n%s", out)
+	}
+	// Replacing through the dotted spelling touches only the value.
+	out = mustApply(t, src, set("board.state_map", "planned", "Todo"))
+	assertChanged(t, src, out, []string{`  state_map.planned = "Todo"`}, []string{`  state_map.planned = "Open"`})
+}
+
+func TestApplySetRootKey(t *testing.T) {
+	root := func(key string, value any) op {
+		return op{kind: opKey, table: nil, elem: -1, key: key, value: value}
+	}
+	src := []byte("# top\ntitle = \"x\"\n\n[project]\n  name = \"y\"\n")
+	out := mustApply(t, src, root("author", "z"))
+	assertChanged(t, src, out, []string{`author = "z"`}, nil)
+	if !bytes.HasPrefix(out, []byte("# top\ntitle = \"x\"\nauthor = \"z\"\n\n[project]\n")) {
+		t.Errorf("root key did not land after the last root key:\n%s", out)
+	}
+
+	// No root key yet: the key goes at the very top, ahead of every header.
+	src = []byte("[project]\n  name = \"y\"\n")
+	out = mustApply(t, src, root("title", "t"))
+	if !bytes.HasPrefix(out, []byte("title = \"t\"\n[project]\n")) {
+		t.Errorf("first root key did not land at the top:\n%s", out)
+	}
+
+	// An empty document.
+	out = mustApply(t, nil, root("title", "t"))
+	if string(out) != "title = \"t\"\n" {
+		t.Errorf("empty doc = %q", out)
+	}
+
+	// Deleting a root key removes only its line.
+	src = []byte("title = \"x\"\nauthor = \"z\"\n\n[project]\n  name = \"y\"\n")
+	out = mustApply(t, src, root("author", nil))
+	assertChanged(t, src, out, nil, []string{`author = "z"`})
+}
+
+func TestQualifyRefusals(t *testing.T) {
+	src := []byte("[[a]]\n  k = 1\n\n  [a.sub]\n    s = 1\n\n[[a]]\n  k = 2\n\n[plain]\n  p = 1\n")
+	for name, tc := range map[string]struct {
+		o    op
+		want string
+	}{
+		"table nested in array element": {op{kind: opKey, table: []string{"a", "sub"}, elem: -1, key: "s", value: 2}, "a table nested inside one of its elements"},
+		"array op without element":      {op{kind: opKey, table: []string{"a"}, elem: -1, key: "k", value: 2}, "names no element"},
+		"element out of range":          {op{kind: opKey, table: []string{"a"}, elem: 5, key: "k", value: 2}, "has 2 element(s), no element 5; append it instead"},
+		"delete element out of range":   {op{kind: opDeleteElem, table: []string{"a"}, elem: 2}, "no element 2"},
+		"delete absent key":             {op{kind: opKey, table: []string{"plain"}, elem: -1, key: "nope", value: nil}, "plain.nope is not present"},
+		"append body not a block":       {op{kind: opAppendElem, table: []string{"a"}, elem: -1, value: "x"}, "must be a block or map[string]any"},
+	} {
+		out, err := apply(src, []op{tc.o})
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want %q", name, err, tc.want)
+		}
+		if !bytes.Equal(out, src) {
+			t.Errorf("%s: bytes changed on a refused op", name)
+		}
+	}
+	// An element the index says exists but no header carries is an index
+	// bug, and setKey says so rather than inventing a header.
+	d := mustIndex(t, src)
+	if _, err := d.setKey([]seg{{"a", 0}, {"ghost", 0}}, "k", 1); err == nil || !strings.Contains(err.Error(), "has no header line") {
+		t.Errorf("ghost element: err = %v", err)
+	}
+	if _, err := d.deleteElem([]seg{{"a", 7}}); err == nil || !strings.Contains(err.Error(), "has no header line") {
+		t.Errorf("ghost delete: err = %v", err)
+	}
+}
+
+func TestRemoveBlockBlankHandling(t *testing.T) {
+	del := func(elem int) op { return op{kind: opDeleteElem, table: []string{"a"}, elem: elem} }
+
+	// The first block of the file has no blank above it, so the blanks
+	// below go with it and the next block becomes the first.
+	src := []byte("[[a]]\n  k = 1\n\n\n[[a]]\n  k = 2\n")
+	if out := mustApply(t, src, del(0)); string(out) != "[[a]]\n  k = 2\n" {
+		t.Errorf("first block removal left:\n%q", out)
+	}
+
+	// A middle block takes every blank above it and leaves the ones below,
+	// so the neighbours keep exactly one separator.
+	src = []byte("[[a]]\n  k = 1\n\n\n[[a]]\n  k = 2\n\n[[a]]\n  k = 3\n")
+	if out := mustApply(t, src, del(1)); string(out) != "[[a]]\n  k = 1\n\n[[a]]\n  k = 3\n" {
+		t.Errorf("middle block removal left:\n%q", out)
+	}
+
+	// The last block, unterminated: the file ends where the previous EOL is.
+	src = []byte("[[a]]\n  k = 1\n\n[[a]]\n  k = 2")
+	if out := mustApply(t, src, del(1)); string(out) != "[[a]]\n  k = 1\n" {
+		t.Errorf("unterminated last block removal left:\n%q", out)
+	}
+}
+
+func TestRemoveLinesUnterminatedTail(t *testing.T) {
+	src := []byte("[a]\n  k = 1\n  j = 2")
+	out := mustApply(t, src, set("a", "j", nil))
+	if string(out) != "[a]\n  k = 1\n" {
+		t.Errorf("deleting the unterminated last line left %q", out)
+	}
+	// And a lone unterminated root key leaves an empty file, not a stray EOL.
+	if out := mustApply(t, []byte("k = 1"), op{kind: opKey, elem: -1, key: "k"}); len(out) != 0 {
+		t.Errorf("deleting the only line left %q", out)
+	}
+}
+
+func TestToBlockOrder(t *testing.T) {
+	got, err := toBlock(map[string]any{"why": "w", "choice": "c", "locked_at": "d"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (block{{"choice", "c"}, {"locked_at", "d"}, {"why", "w"}}); !reflect.DeepEqual(got, want) {
+		t.Errorf("map keys not sorted: %v", got)
+	}
+	in := block{{"z", 1}, {"a", 2}}
+	if got, err := toBlock(in); err != nil || !reflect.DeepEqual(got, in) {
+		t.Errorf("block passthrough = %v, %v", got, err)
+	}
+	if _, err := toBlock(42); err == nil || !strings.Contains(err.Error(), "not int") {
+		t.Errorf("scalar body: err = %v", err)
+	}
+}
+
+func TestOpStringNamesEveryShape(t *testing.T) {
+	for _, tc := range []struct {
+		o    op
+		want string
+	}{
+		{op{kind: opKey, table: []string{"a", "b"}, elem: -1, key: "k", value: 1}, "set a.b.k"},
+		{op{kind: opKey, table: []string{"a"}, elem: 2, key: "k"}, "delete a[2].k"},
+		{op{kind: opAppendElem, table: []string{"a"}, elem: -1}, "append [[a]]"},
+		{op{kind: opDeleteElem, table: []string{"a"}, elem: 0}, "delete [[a[0]]]"},
+	} {
+		if got := tc.o.String(); got != tc.want {
+			t.Errorf("%#v.String() = %q, want %q", tc.o, got, tc.want)
+		}
+	}
+}
+
+func TestAppendElemSubTableErrorsPropagate(t *testing.T) {
+	src := []byte("[[a]]\n  k = 1\n")
+	// A sub-table whose key cannot be rendered fails the whole append,
+	// leaving the bytes alone.
+	out, err := apply(src, []op{{kind: opAppendElem, table: []string{"a"}, elem: -1, value: block{{"k", 2}, {"", block{{"s", 1}}}}}})
+	if err == nil || !strings.Contains(err.Error(), "empty key") {
+		t.Errorf("empty sub-table key: err = %v", err)
+	}
+	if !bytes.Equal(out, src) {
+		t.Errorf("bytes changed on a refused append")
+	}
+	// And a sub-table body carrying a value that cannot render fails too.
+	out, err = apply(src, []op{{kind: opAppendElem, table: []string{"a"}, elem: -1, value: block{{"k", 2}, {"sub", block{{"s", make(chan int)}}}}}})
+	if err == nil {
+		t.Errorf("unrenderable sub-table value was appended:\n%s", out)
+	}
+	if !bytes.Equal(out, src) {
+		t.Errorf("bytes changed on a refused append")
+	}
+	// The valid shape, for contrast: keys, then a blank, then the sub-table.
+	// (mustApply's normalize does not model a nested block, so the decoded
+	// tree is checked directly.)
+	out, err = apply(src, []op{{kind: opAppendElem, table: []string{"a"}, elem: -1, value: block{{"k", 2}, {"sub", block{{"s", 1}}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasSuffix(out, []byte("\n[[a]]\n  k = 2\n\n  [a.sub]\n    s = 1\n")) {
+		t.Errorf("append with sub-table rendered:\n%s", out)
+	}
+	elems, _ := decodeTree(t, out)["a"].([]map[string]any)
+	if len(elems) != 2 {
+		t.Fatalf("decoder sees %d elements, want 2", len(elems))
+	}
+	if sub, _ := elems[1]["sub"].(map[string]any); sub["s"] != int64(1) {
+		t.Errorf("decoder sees a[1].sub = %#v", elems[1]["sub"])
+	}
+}

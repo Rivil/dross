@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -307,5 +308,30 @@ func TestDiffUsesOneEncoderHelper(t *testing.T) {
 	}
 	if !strings.Contains(string(src), "return encodeFresh(p)") {
 		t.Error("encodeCanonical no longer routes through encodeFresh")
+	}
+}
+
+// TestClassifyStructAndUnknown: the two arms of classify that a Project's
+// own tree never reaches today — a struct leaf (time.Time decodes as one)
+// renders as a scalar, and a kind the differ has no shape for is refused
+// by path rather than skipped.
+func TestClassifyStructAndUnknown(t *testing.T) {
+	if k, err := classify([]string{"p", "when"}, time.Now()); err != nil || k != kindLeaf {
+		t.Errorf("time.Time: kind = %v, err = %v; want a leaf", k, err)
+	}
+	for _, v := range []any{"s", true, int64(1), 1.5, []any{"a"}} {
+		if k, err := classify(nil, v); err != nil || k != kindLeaf {
+			t.Errorf("%T: kind = %v, err = %v; want a leaf", v, k, err)
+		}
+	}
+	if k, err := classify(nil, map[string]any{}); err != nil || k != kindTable {
+		t.Errorf("map: kind = %v, err = %v; want a table", k, err)
+	}
+	if k, err := classify(nil, []map[string]any{}); err != nil || k != kindArrayOfTables {
+		t.Errorf("[]map: kind = %v, err = %v; want an array of tables", k, err)
+	}
+	_, err := classify([]string{"repo", "odd"}, 42)
+	if err == nil || !strings.Contains(err.Error(), "repo.odd") || !strings.Contains(err.Error(), "cannot classify a int") {
+		t.Errorf("int: err = %v, want a refusal naming repo.odd and the type", err)
 	}
 }

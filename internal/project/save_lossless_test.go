@@ -386,3 +386,117 @@ func TestSaveRefusesReadOnlyFile(t *testing.T) {
 		t.Errorf("read-only file changed:\n%s", got)
 	}
 }
+
+// TestSaveVerifyNamesDifferingKey: a patch that decodes fine but as a
+// different struct — a wrong literal in the right slot — is caught by the
+// canonical re-encode, and the error names the line that differs so the
+// failing key is in the message. TestSaveRefusesUnverifiedPatch injects a
+// type error that fails decode first and never reaches this comparison.
+func TestSaveVerifyNamesDifferingKey(t *testing.T) {
+	src := fixture(t)
+	path := seed(t, src)
+	p := mustLoad(t, path)
+	p.Project.Version = "2.0.0.0"
+
+	orig := planOps
+	planOps = func(old, new *Project) ([]op, error) {
+		ops, err := diff(old, new)
+		if err != nil {
+			return nil, err
+		}
+		ops[0].value = "3.0.0.0"
+		return ops, nil
+	}
+	defer func() { planOps = orig }()
+
+	err := p.Save(path)
+	if err == nil {
+		t.Fatal("a patch that loads as a different struct was written")
+	}
+	// The message %q-quotes each line, so the inner quotes arrive escaped.
+	for _, want := range []string{"would not load as saved", `at "version = \"3.0.0.0\""`, `(wanted "version = \"2.0.0.0\"")`, "left untouched"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q lacks %q", err, want)
+		}
+	}
+	if got := mustRead(t, path); !bytes.Equal(got, src) {
+		t.Errorf("original bytes were replaced:\n%s", got)
+	}
+
+	// The direct comparison, with the shorter side on each end: a canonical
+	// document that is a strict prefix of the other still names a line.
+	if err := verifyPatched([]byte("[project]\n  name = \"fixture\"\n"), p, path); err == nil || !strings.Contains(err.Error(), "would not load as saved at") {
+		t.Errorf("shorter patched doc: err = %v", err)
+	}
+	if err := verifyPatched([]byte("[project]\n  name = \"fixture\"\n"), &Project{}, path); err == nil || !strings.Contains(err.Error(), "would not load as saved at") {
+		t.Errorf("longer patched doc: err = %v", err)
+	}
+	if err := verifyPatched([]byte("[project]\n  name = \"x\"\n\n[mutation]\n  remote_host = \"h\"\n"), p, path); err == nil || !strings.Contains(err.Error(), "does not load") {
+		t.Errorf("undecodable patched doc: err = %v", err)
+	}
+}
+
+// TestWriteAtomicFailurePaths: each refusal leaves the original bytes and no
+// temp file. An unwritable directory refuses the temp file; a path that is a
+// directory refuses the rename.
+func TestWriteAtomicFailurePaths(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	if err := os.WriteFile(path, []byte("orig\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	noStray := func(step string) {
+		t.Helper()
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range entries {
+			if e.Name() != "project.toml" && e.Name() != "adir" {
+				t.Errorf("%s: stray file %s", step, e.Name())
+			}
+		}
+	}
+
+	// Rename onto a directory.
+	adir := filepath.Join(dir, "adir")
+	if err := os.Mkdir(adir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(adir, "child"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := writeAtomic(adir, []byte("new\n"), 0o644)
+	if err == nil || !strings.Contains(err.Error(), "rename") {
+		t.Errorf("rename onto a directory: err = %v", err)
+	}
+	noStray("rename")
+	if got := mustRead(t, path); string(got) != "orig\n" {
+		t.Errorf("neighbour changed: %q", got)
+	}
+
+	// The happy path, for the mode it applies.
+	if err := writeAtomic(path, []byte("new\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := os.Stat(path); st.Mode().Perm() != 0o600 {
+		t.Errorf("mode = %v, want 0600", st.Mode().Perm())
+	}
+	noStray("happy")
+
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	err = writeAtomic(path, []byte("newer\n"), 0o644)
+	if err == nil || !strings.Contains(err.Error(), "create") {
+		t.Errorf("unwritable directory: err = %v", err)
+	}
+	if got := mustRead(t, path); string(got) != "new\n" {
+		t.Errorf("bytes changed after a refused temp file: %q", got)
+	}
+}

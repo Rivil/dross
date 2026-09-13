@@ -788,9 +788,12 @@ func (d *doc) setKey(table []seg, key string, value any) ([]byte, error) {
 	}
 
 	if len(table) == 0 {
+		// Only root keys anchor a root key: a document whose keys all live
+		// under headers gets it at the top, ahead of the first header,
+		// which is the one place TOML lets a root key sit.
 		after := -1
 		for _, ln := range d.lines {
-			if ln.kind == lineKey {
+			if ln.kind == lineKey && ln.key.hdrLine < 0 {
 				after = ln.key.endLine
 			}
 		}
