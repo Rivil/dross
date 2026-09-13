@@ -3,6 +3,17 @@
   "base": "milestone/v1.7",
   "base_commit": "11de0e2a47658ae161741e7978124a1dab5fb9ae",
   "tasks": {
+    "quick-1": {
+      "files": [
+        "internal/remote/remote.go",
+        "internal/remote/remote_test.go",
+        "internal/cmd/test.go",
+        "internal/cmd/test_remote_test.go"
+      ],
+      "commit": "a6c945b",
+      "completed_at": "2026-09-13T18:49:14.790785Z",
+      "notes": "quick: protect .dross-runs from rsync --delete; warn on in-flight run (DRO-419)"
+    },
     "t-1": {
       "files": [
         "internal/project/patch.go",
