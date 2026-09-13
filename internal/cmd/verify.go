@@ -1114,15 +1114,21 @@ func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.
 	if err != nil {
 		return nil, mutationTuning{}, err
 	}
-	// Project root for stryker is the runtime's cwd — host cwd for native,
-	// or the host cwd for docker (we read the report via bind-mounted fs).
-	// If docker volume layout diverges, this is where we'd surface config.
-	cwd, _ := os.Getwd()
-	cacheVars := profileCacheVars(p, filepath.Dir(root))
+	// Project root is the directory holding .dross — the repo root — and
+	// never the process cwd. FindRoot walks UP to find .dross, so a verify
+	// launched from a subdirectory still resolves the project; but every
+	// adapter's ProjectRoot is also the rsync SOURCE a remote run pushes onto
+	// the granted workdir with --delete. With cwd here, `cd web && dross
+	// verify` synced web/ over the whole remote tree and deleted everything
+	// beside it (feastahead on helicon, 2026-09-13). For docker mode the
+	// report is read through the bind-mounted fs at the same root; if a
+	// volume layout ever diverges, this is where to surface config.
+	repoRoot := filepath.Dir(root)
+	cacheVars := profileCacheVars(p, repoRoot)
 	all := []mutation.Adapter{
 		&mutation.Stryker{
 			Prefix:      mt.Prefix,
-			ProjectRoot: cwd,
+			ProjectRoot: repoRoot,
 			Workdir:     p.Mutation.Stryker.Workdir,
 			Remote:      mt.Target,
 			CacheVars:   cacheVars,
@@ -1132,8 +1138,8 @@ func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.
 			// stryker resolves differently.
 			PackageManager: p.Stack.PackageManager,
 		},
-		mt.gremlins(cwd, p, cacheVars),
-		&mutation.StrykerNet{Prefix: mt.Prefix, ProjectRoot: cwd, Remote: mt.Target, CacheVars: cacheVars},
+		mt.gremlins(repoRoot, p, cacheVars),
+		&mutation.StrykerNet{Prefix: mt.Prefix, ProjectRoot: repoRoot, Remote: mt.Target, CacheVars: cacheVars},
 	}
 	if len(p.Mutation.Adapters) == 0 {
 		return all, mt, nil
