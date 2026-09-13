@@ -64,7 +64,6 @@
     "slug:ast-aware-mutation-ranges": "DRO-349",
     "slug:cmd-package-decomposition": "DRO-351",
     "slug:mutation-range-provenance": "DRO-348",
-    "slug:scanner-self-exclusion": "DRO-346",
     "slug:secret-detection": "DRO-350",
     "slug:supply-chain-currency": "DRO-347",
     "someday:id:010e057c10c922c6": "DRO-286",
@@ -901,37 +900,37 @@
     "scanner-self-exclusion/t-1": {
       "issue": "DRO-405",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "scanner-self-exclusion/t-2": {
       "issue": "DRO-406",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "scanner-self-exclusion/t-3": {
       "issue": "DRO-407",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "scanner-self-exclusion/t-4": {
       "issue": "DRO-408",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "scanner-self-exclusion/t-5": {
       "issue": "DRO-409",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "scanner-self-exclusion/t-6": {
       "issue": "DRO-410",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "scanner-self-exclusion/t-7": {
       "issue": "DRO-411",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-lane-config/t-1": {
       "issue": "DRO-192",
