@@ -15,6 +15,7 @@ import (
 	"github.com/Rivil/dross/internal/findings"
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/security"
+	"github.com/Rivil/dross/internal/stack"
 )
 
 func TestSecurityCommandRegistered(t *testing.T) {
@@ -584,4 +585,106 @@ func f(runDir string) {
 	_ = quality.WriteScaffoldSpec(c.String(), "07-x", "x", quality.Ledger{})
 }
 `, "as pathfence.Contained value in argument to quality.WriteScaffoldSpec")
+}
+
+// TestSecurityDetectNamesExclusions: detect names what it scopes out — every
+// name in the shared skip set and the gitleaks allowlist file — so a run's
+// narrowing is on the record before anything is written (c-5).
+func TestSecurityDetectNamesExclusions(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "main.go"), "package main")
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Security(), "detect", dir); err != nil {
+			t.Fatalf("detect: %v", err)
+		}
+	})
+	if !strings.Contains(out, "exclusions:") {
+		t.Fatalf("detect output has no exclusions block:\n%s", out)
+	}
+	for _, name := range stack.SkipDirs() {
+		if !strings.Contains(out, name) {
+			t.Errorf("detect output does not name skipped directory %q:\n%s", name, out)
+		}
+	}
+	if !strings.Contains(out, "gitleaks.toml") {
+		t.Errorf("detect output does not name the gitleaks allowlist:\n%s", out)
+	}
+	// detect is read-only: no run dir may appear.
+	if _, err := os.Stat(filepath.Join(dir, ".dross", "security")); !os.IsNotExist(err) {
+		t.Errorf("detect created .dross/security (stat err=%v) — it must stay read-only", err)
+	}
+}
+
+// TestSecurityRunWritesGitleaksConfig: run writes the allowlist into the run
+// dir, announces its path, and report.md names a path that exists — a report
+// naming a file that was never written fails the Stat.
+func TestSecurityRunWritesGitleaksConfig(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Security(), "run", "."); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	})
+	secDir := filepath.Join(dir, ".dross", "security")
+	runDir := filepath.Join(secDir, soleRunDir(t, secDir))
+	cfgPath := filepath.Join(runDir, security.GitleaksConfigName)
+	body, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("run did not write %s: %v", security.GitleaksConfigName, err)
+	}
+	if !strings.Contains(string(body), "useDefault = true") {
+		t.Fatalf("gitleaks.toml does not extend the default rules:\n%s", body)
+	}
+	// FindRoot resolves symlinks (macOS /var → /private/var), so compare the
+	// announced path by its resolved form.
+	resolved, err := filepath.EvalSymlinks(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "gitleaks allowlist: "+resolved) {
+		t.Errorf("run stdout does not announce the allowlist path %q:\n%s", resolved, out)
+	}
+	report, err := os.ReadFile(filepath.Join(runDir, "report.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var named string
+	for _, line := range strings.Split(string(report), "\n") {
+		if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "- gitleaks allowlist: "); ok {
+			named = strings.TrimSpace(rest)
+		}
+	}
+	if named == "" {
+		t.Fatalf("report.md has no `gitleaks allowlist:` line:\n%s", report)
+	}
+	if _, err := os.Stat(named); err != nil {
+		t.Fatalf("report.md names allowlist %q but it does not exist: %v", named, err)
+	}
+}
+
+// TestSecurityRunReportRecordsExclusions: report.md carries an Exclusions
+// section listing the skipped directories and the allowlist file.
+func TestSecurityRunReportRecordsExclusions(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Security(), "run", "."); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	secDir := filepath.Join(dir, ".dross", "security")
+	report, err := os.ReadFile(filepath.Join(secDir, soleRunDir(t, secDir), "report.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, needle := range []string{"## Exclusions", "testdata", "fixtures", "gitleaks.toml"} {
+		if !strings.Contains(string(report), needle) {
+			t.Errorf("report.md missing %q:\n%s", needle, report)
+		}
+	}
 }

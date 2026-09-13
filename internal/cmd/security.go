@@ -76,9 +76,24 @@ func securityDetect() *cobra.Command {
 				}
 				Printf("  [missing]   %s  — %s\n", t.Name, t.Install)
 			}
+			printExclusions(m.Exclusions, "(written into the run dir by dross security run)")
 			return nil
 		},
 	}
+}
+
+// printExclusions names what the scan scopes out — the shared skip set and the
+// gitleaks allowlist location — so neither detect nor run narrows silently.
+// note qualifies the allowlist line: detect has not written the file yet, run
+// has.
+func printExclusions(x security.Exclusions, note string) {
+	Print("exclusions:")
+	Printf("  skipped directories: %s\n", strings.Join(x.SkippedDirs, ", "))
+	if note != "" {
+		Printf("  gitleaks allowlist: %s %s\n", x.Allowlist, note)
+		return
+	}
+	Printf("  gitleaks allowlist: %s\n", x.Allowlist)
 }
 
 func securityRun() *cobra.Command {
@@ -109,6 +124,14 @@ func securityRun() *cobra.Command {
 			img := resolveImage(image)
 			_, dockleErr := securityLookPath(security.DockleBin)
 			dec := security.DecideDockle(img, dockleErr == nil)
+			// The per-run gitleaks allowlist lands beside report.md so the secure
+			// prompt can pass it via --config; the manifest then names the
+			// concrete path rather than the bare file name.
+			allowlist, err := security.WriteGitleaksConfig(runDir, m.Exclusions.SkippedDirs)
+			if err != nil {
+				return err
+			}
+			m.Exclusions.Allowlist = allowlist
 			if err := writeRunReport(runDir, m, dec); err != nil {
 				return err
 			}
@@ -125,6 +148,7 @@ func securityRun() *cobra.Command {
 			} else {
 				Printf("  dockle: skipped — %s\n", dec.Reason)
 			}
+			Printf("  gitleaks allowlist: %s\n", m.Exclusions.Allowlist)
 			return nil
 		},
 	}
@@ -215,6 +239,9 @@ func writeRunReport(runDir string, m security.Manifest, dec security.DockleDecis
 			fmt.Fprintf(&b, "  install: %s\n", dec.Install)
 		}
 	}
+	b.WriteString("\n## Exclusions\n\n")
+	fmt.Fprintf(&b, "- skipped directories: %s\n", strings.Join(m.Exclusions.SkippedDirs, ", "))
+	fmt.Fprintf(&b, "- gitleaks allowlist: %s\n", m.Exclusions.Allowlist)
 	b.WriteString("\n## Findings\n\n_(populated by the dross-secure audit)_\n")
 	return pathfence.WriteFile(reportPath, []byte(b.String()), 0o644)
 }
