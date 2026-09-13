@@ -26,7 +26,7 @@ task_seq = 6
 
 [[task]]
   id = "t-3"
-  wave = 2
+  wave = 3
   title = "Make Save diff-driven, verified, atomic"
   files = ["internal/project/project.go", "internal/project/project_test.go", "internal/project/save_lossless_test.go"]
   description = "Save(path) keeps its signature and stays the ONLY project.toml writer. Path absent →\nencodeFresh (the only toml.NewEncoder call site left in the package, Indent \"  \" as today;\ninit/onboard and ~30 test call sites unchanged). Path present → ReadFile, Load (a decode\nrefusal — including the remote_host trap — returns the error, never falls back to whole-file\nencode), diff, apply, then VERIFY: encodeFresh(Load(patched)) must equal encodeFresh(p)\n(canonical re-encode, so nil-vs-empty-slice and map order cannot false-positive); on\nmismatch return an error naming the first differing key and leave the file untouched.\nWrite via temp file in the same dir + fsync + rename, preserving the original mode. Zero\nops → no write at all (mtime untouched). onboard's overwrite of an existing project.toml\nbecomes a patch as a consequence.\nEncoder hand-off (plan-review flag 3): fold t-2's encodeCanonical into encodeFresh (or make\nencodeCanonical call encodeFresh) so that after this task internal/project has exactly ONE\nBurntSushi encoder call site — no toml.Marshal anywhere in the package — which t-5 pins."
@@ -37,7 +37,7 @@ task_seq = 6
 
 [[task]]
   id = "t-4"
-  wave = 3
+  wave = 4
   title = "Prove every writer path is lossless end to end"
   files = ["internal/cmd/project_lossless_test.go"]
   description = "One fixture project.toml seeded with: a leading `# ` header comment, a mid-table comment\ninside [runtime], an inline `# why` after version, `note = \"hand-added\"` under\n[[competition]], a note under [[stack.locked]], an unmodeled [custom] table, an unmodeled\nkey in [remote], a multi-line non_goals = [ … ], three [[runtime.test_lane]] blocks (one\ncarrying a comment), 2-space indentation; a go.mod beside it so `stack apply` resolves the\ngo profile. Helper onlyLinesChanged(t, before, after, wantAdded, wantRemoved) asserts the\nadded/removed line set is exactly the targeted key(s). Each subtest runs the real cobra\ncommand in-process (runCmd, chdir, mustRead from cmd_test.go) in a t.TempDir root; after\nevery write a shared assertion requires both note keys, [custom], the unmodeled [remote]\nkey and every `# ` comment line to survive (c-2). Writer matrix: state set version;\nproject set (scalar, stack.languages array, remote.reviewers absent-key insert,\nboard.state_map.planned + board.fields.state absent-subtable, --unset scalar, --unset last\nstate_map key); issue enable/disable; test lane add / edit --command / remove (middle of\nthree); stack apply. Plus a copy of the repo's own tracked .dross/project.toml with only the\nversion bumped through state set version.\n"
@@ -48,7 +48,7 @@ task_seq = 6
 
 [[task]]
   id = "t-5"
-  wave = 3
+  wave = 4
   title = "Pin the single project.toml write path"
   files = ["internal/cmd/project_writer_pin_test.go"]
   description = "go/ast scan (same technique and FLAG/PASS snippet-table self-check as\nhermetic_dross_read_test.go) of every non-test .go under internal/: (a) outside\ninternal/project, any os.WriteFile / os.Create / os.OpenFile / os.Rename whose path\nargument mentions project.File or the literal \"project.toml\" — including the two-step\n`p := filepath.Join(root, project.File); os.WriteFile(p, …)` shape — is a violation;\n(b) outside internal/project, any toml.NewEncoder / toml.Marshal whose argument is not\nos.Stdout and whose enclosing file references project.File is a violation; (c) inside\ninternal/project, exactly one toml.NewEncoder call site exists, its enclosing FuncDecl is\nencodeFresh, and encodeFresh's only callers are Save and the verify step. Violations are\ncomputed by a pure function over source text so the teeth are proven on synthetic input.\nWave 3 (not 1) because clause (c) is false until t-3 lands.\nClause (c) counts toml.Marshal alongside toml.NewEncoder inside internal/project (plan-review\nflag 3): the differ's tree conversion and the verify step both go through encodeFresh, so\ntoml.Marshal call sites in the package are zero — a future re-encode fallback written as\ntoml.Marshal(p) is caught the same as a second NewEncoder."
@@ -59,7 +59,7 @@ task_seq = 6
 
 [[task]]
   id = "t-6"
-  wave = 4
+  wave = 5
   title = "Document the fix and retire the per-repo bans"
   files = ["README.md", "ARCHITECTURE.md", "internal/cmd/lossless_docs_test.go"]
   description = "README's `### Updating` section gains a short subsection stating that `dross project set`\nand `dross state set version` are now surgical — comments and unknown keys survive, only the\ntargeted line changes — so per-repo rules banning them (e.g. codriver.nvim's r-01) are safe\nto retire. The `dross project {show,get,set}` table row is NOT also edited (one location,\none pin). ARCHITECTURE.md's project-config entry names Save as the sole project.toml writer\nand the raw-byte patcher with internal/project/patch.go file:line pointers (same pin shape\nas TestArchitectureNamesHermeticGuard). No PR-body task: ship.BuildPRBody\n(internal/ship/body.go:20) renders every spec criterion verbatim, so c-5's own wording lands\nin the PR; the README note is what outlives it. Lands after t-4 so the lossless claim is\nwritten only once the tests that prove it exist.\n"
