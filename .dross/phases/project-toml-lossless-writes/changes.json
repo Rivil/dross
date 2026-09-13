@@ -14,6 +14,15 @@
       "completed_at": "2026-09-13T18:49:14.790785Z",
       "notes": "quick: protect .dross-runs from rsync --delete; warn on in-flight run (DRO-419)"
     },
+    "quick-2": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/mutation_remote_wiring_test.go"
+      ],
+      "commit": "b02ebc0",
+      "completed_at": "2026-09-13T19:01:50.016914Z",
+      "notes": "quick: mutation adapters' ProjectRoot pinned to the repo root, never cwd (feastahead helicon tree wipe)"
+    },
     "t-1": {
       "files": [
         "internal/project/patch.go",
