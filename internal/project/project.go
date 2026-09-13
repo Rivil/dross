@@ -3,8 +3,13 @@
 package project
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -408,8 +413,18 @@ type Competitor struct {
 
 // Load reads a project.toml file.
 func Load(path string) (*Project, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("decode %s: %w", path, err)
+	}
+	return decode(src, path)
+}
+
+// decode is Load on bytes already in hand — the same decoder and the same
+// refusals, so a patched document is judged exactly as the file would be.
+func decode(src []byte, path string) (*Project, error) {
 	var p Project
-	if _, err := toml.DecodeFile(path, &p); err != nil {
+	if _, err := toml.Decode(string(src), &p); err != nil {
 		return nil, fmt.Errorf("decode %s: %w", path, err)
 	}
 	// A nil Project alongside the error, not a partly-usable one: no caller
@@ -420,17 +435,142 @@ func Load(path string) (*Project, error) {
 	return &p, nil
 }
 
-// Save writes a project.toml file (overwrites).
+// planOps is the diff step Save runs, as a variable so a test can hand Save
+// an op the patcher renders wrongly and prove the verify step refuses it.
+var planOps = diff
+
+// Save writes p to path. It is the ONLY project.toml writer in dross.
+//
+// A path that does not exist yet gets the encoder's fresh document. A path
+// that does is PATCHED: the file is loaded, diffed against p, and only the
+// lines the differing fields occupy are rewritten — comments, hand-added
+// keys, indentation and line endings elsewhere survive byte-for-byte. The
+// patched text is then decoded and re-encoded canonically and must match p's
+// own canonical form, so a patcher bug can never replace the file with a
+// document that loads differently; on mismatch the file is left untouched.
+//
+// A file Load refuses (the remote_host trap, a decode error) is never fallen
+// back to a whole-file encode: the error is returned and the bytes stay.
+// No differing field means no write at all — not even an mtime bump.
+//
+// The bytes land via a temp file in the same directory, fsynced and renamed
+// over the original with its mode preserved, so a crash mid-write leaves
+// either the old document or the new one, never a truncated one.
 func (p *Project) Save(path string) error {
-	f, err := os.Create(path)
+	existing, err := os.ReadFile(path)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("read %s: %w", path, err)
+		}
+		fresh, err := encodeFresh(p)
+		if err != nil {
+			return fmt.Errorf("encode project.toml: %w", err)
+		}
+		return writeAtomic(path, fresh, 0o644)
+	}
+
+	old, err := decode(existing, path)
+	if err != nil {
+		return err
+	}
+	ops, err := planOps(old, p)
+	if err != nil {
+		return fmt.Errorf("diff %s: %w", path, err)
+	}
+	if len(ops) == 0 {
+		return nil
+	}
+	patched, err := apply(existing, ops)
+	if err != nil {
+		return fmt.Errorf("patch %s: %w", path, err)
+	}
+	if err := verifyPatched(patched, p, path); err != nil {
+		return err
+	}
+
+	// A read-only file refuses the write the way os.Create did. The rename
+	// below would replace it regardless — only the directory's permission
+	// gates a rename — and a permission the user set on the file is not
+	// something atomicity should route around.
+	if f, err := os.OpenFile(path, os.O_WRONLY, 0); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	} else {
+		f.Close()
+	}
+	mode := fs.FileMode(0o644)
+	if st, err := os.Stat(path); err == nil {
+		mode = st.Mode().Perm()
+	}
+	return writeAtomic(path, patched, mode)
+}
+
+// verifyPatched proves the patched text loads as p: both are re-encoded
+// canonically, so nil-vs-empty slices and map order cannot false-positive,
+// and the first differing line is named so the failing key is in the error.
+func verifyPatched(patched []byte, p *Project, path string) error {
+	got, err := decode(patched, path)
+	if err != nil {
+		return fmt.Errorf("patched %s does not load; the file was left untouched: %w", path, err)
+	}
+	want, err := encodeFresh(p)
+	if err != nil {
+		return fmt.Errorf("encode project.toml: %w", err)
+	}
+	have, err := encodeFresh(got)
+	if err != nil {
+		return fmt.Errorf("encode patched project.toml: %w", err)
+	}
+	if bytes.Equal(have, want) {
+		return nil
+	}
+	wl, hl := strings.Split(string(want), "\n"), strings.Split(string(have), "\n")
+	for i := 0; i < len(wl) || i < len(hl); i++ {
+		var w, h string
+		if i < len(wl) {
+			w = wl[i]
+		}
+		if i < len(hl) {
+			h = hl[i]
+		}
+		if w != h {
+			return fmt.Errorf("patched %s would not load as saved at %q (wanted %q); the file was left untouched",
+				path, strings.TrimSpace(h), strings.TrimSpace(w))
+		}
+	}
+	return fmt.Errorf("patched %s would not load as saved; the file was left untouched", path)
+}
+
+// writeAtomic writes data to path through a temp file in the same directory,
+// fsynced and renamed into place, with the requested mode.
+func writeAtomic(path string, data []byte, mode fs.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return fmt.Errorf("create %s: %w", path, err)
 	}
-	defer f.Close()
-	enc := toml.NewEncoder(f)
-	enc.Indent = "  "
-	if err := enc.Encode(p); err != nil {
-		return fmt.Errorf("encode project.toml: %w", err)
+	tmpName := tmp.Name()
+	cleanup := func() { os.Remove(tmpName) }
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		cleanup()
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		cleanup()
+		return fmt.Errorf("sync %s: %w", path, err)
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return fmt.Errorf("close %s: %w", path, err)
+	}
+	if err := os.Chmod(tmpName, mode); err != nil {
+		cleanup()
+		return fmt.Errorf("chmod %s: %w", path, err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		cleanup()
+		return fmt.Errorf("rename %s: %w", path, err)
 	}
 	return nil
 }
