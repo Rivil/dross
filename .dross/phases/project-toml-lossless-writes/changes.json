@@ -112,6 +112,24 @@
           "what": "README states project set / state set version are surgical and per-repo bans (codriver.nvim r-01) are safe to retire; ARCHITECTURE Configuration entry names Save as sole writer + the raw-byte patcher with resolving anchors; both pinned by lossless_docs_test.go"
         }
       ]
+    },
+    "t-7": {
+      "files": [
+        "internal/project/patch_test.go",
+        "internal/project/patch_diff_test.go",
+        "internal/project/save_lossless_test.go",
+        "internal/project/patch.go"
+      ],
+      "commit": "d74fa25",
+      "completed_at": "2026-09-13T18:57:26.496816Z",
+      "landmarks": [
+        {
+          "feature": "project config lossless writes",
+          "symbol": "TestIndexLiteralStrings",
+          "loc": "internal/project/patch_test.go:590",
+          "what": "hand-edited TOML shapes the encoder never writes (literal/multi-line strings·escaped quoted keys·dotted-key sub-tables·root keys) and every patcher refusal are pinned; coverage 74→92%; root-key anchor bug fixed"
+        }
+      ]
     }
   }
 }
