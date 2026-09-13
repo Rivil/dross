@@ -1,40 +1,45 @@
 [phase]
-id        = "project-toml-lossless-writes"
-title     = "project-toml-lossless-writes"
-milestone = "v1.7"
+  id = "project-toml-lossless-writes"
+  title = "project-toml-lossless-writes"
+  milestone = "v1.7"
 
 [[criteria]]
-id   = "c-1"
-text = "Any dross command that writes a single project.toml field leaves every other line — comments included — byte-identical."
+  id = "c-1"
+  text = "Any dross command that writes a single project.toml field leaves every other line — comments included — byte-identical."
 
 [[criteria]]
-id   = "c-2"
-text = "An unschematized key already present in project.toml (e.g. a hand-added `note` under [[competition]]) survives every write path, not just ones dross's Go struct recognizes."
+  id = "c-2"
+  text = "An unschematized key already present in project.toml (e.g. a hand-added `note` under [[competition]]) survives every write path, not just ones dross's Go struct recognizes."
 
 [[criteria]]
-id   = "c-3"
-text = "One shared surgical text-patch write path backs every project.toml writer (state set version, project set, --unset, any future one) — a newly added writer can't reintroduce the bug."
+  id = "c-3"
+  text = "One shared surgical text-patch write path backs every project.toml writer (state set version, project set, --unset, any future one) — a newly added writer can't reintroduce the bug."
 
 [[criteria]]
-id   = "c-4"
-text = "A test seeds a project.toml with comments plus an unmodeled key, writes through each affected path, and asserts nothing but the targeted field changed."
+  id = "c-4"
+  text = "A test seeds a project.toml with comments plus an unmodeled key, writes through each affected path, and asserts nothing but the targeted field changed."
 
 [[criteria]]
-id   = "c-5"
-text = "The PR/changelog for this fix explicitly notes that per-repo bans on `dross project set` / `dross state set version` (e.g. codriver.nvim's r-01) are now safe to retire."
+  id = "c-5"
+  text = "The PR/changelog for this fix explicitly notes that per-repo bans on `dross project set` / `dross state set version` (e.g. codriver.nvim's r-01) are now safe to retire."
 
 [[criteria]]
-id   = "c-6"
-text = "The surgical write path also covers list/array and table fields (stack.languages, remote.reviewers, board.state_map/fields, [[competition]] array-of-tables) — not just scalars — so no project.toml writer round-trips the whole file regardless of field type."
+  id = "c-6"
+  text = "The surgical write path also covers list/array and table fields (stack.languages, remote.reviewers, board.state_map/fields, [[competition]] array-of-tables) — not just scalars — so no project.toml writer round-trips the whole file regardless of field type."
 
 [[decisions]]
-key    = "serialization_approach"
-choice = "Surgical text-patch on the raw file bytes, no new TOML dependency — keep BurntSushi/toml for reads/validation only."
-why    = "Adopting a comment-preserving AST library would be a new locked dependency and a bigger migration; a shared patcher achieves byte-identical preservation without touching the existing read/validate path."
-locked = true
+  key = "serialization_approach"
+  choice = "Surgical text-patch on the raw file bytes, no new TOML dependency — keep BurntSushi/toml for reads/validation only."
+  why = "Adopting a comment-preserving AST library would be a new locked dependency and a bigger migration; a shared patcher achieves byte-identical preservation without touching the existing read/validate path."
+  locked = true
 
 [[decisions]]
-key    = "field_type_scope"
-choice = "The patcher covers every project.toml value shape this phase: scalars, lists/arrays, tables (board.state_map/fields), and array-of-tables ([[competition]], [[stack.locked]])."
-why    = "Limiting to scalars would leave dross project set's list/table writes still fully round-tripping and still capable of dropping comments/unknown keys — the bug would only be half-fixed."
-locked = true
+  key = "field_type_scope"
+  choice = "The patcher covers every project.toml value shape this phase: scalars, lists/arrays, tables (board.state_map/fields), and array-of-tables ([[competition]], [[stack.locked]])."
+  why = "Limiting to scalars would leave dross project set's list/table writes still fully round-tripping and still capable of dropping comments/unknown keys — the bug would only be half-fixed."
+  locked = true
+
+[[deferred]]
+  id = "04f05bd102d7d492"
+  text = "Remote sync wipes in-flight detached runs: SyncArgs (internal/remote/remote.go:561) runs rsync --delete with an exclude list derived from the LOCAL tree's ignored paths, and .dross-runs/ is neither gitignored nor present locally, so any dross test / dross verify sync while a detached run is in flight deletes <workdir>/.dross-runs/<run> on the host — the run's state/exit/pid files vanish, verify results reports rc=14 (gone), and the gremlins process keeps burning cores as an orphan. Fix: protect the runs dir from --delete (rsync --filter 'P /.dross-runs' or --exclude=/.dross-runs) in SyncArgs with a test on the argv, plus a dispatch-time refusal/warning when a detached run for this host is already recorded. Observed 2026-09-13 verifying project-toml-lossless-writes."
+  why = "Found while verifying project-toml-lossless-writes; a remote-transport bug, outside this phase's diff. One-off quick task, not a phase."
