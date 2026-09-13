@@ -846,13 +846,46 @@ func (d *doc) deleteKey(table []seg, key string) ([]byte, error) {
 	if nd.lines[h].hdr.array {
 		return out, nil
 	}
-	end := nd.blockEnd(h)
-	for j := h + 1; j < end; j++ {
-		if nd.lines[j].kind != lineBlank {
+	path := nd.lines[h].hdr.path
+	for {
+		if nd.shelters(h) {
+			return out, nil
+		}
+		out = nd.removeBlock(h, h)
+		// The parent may now shelter nothing either — a [runtime.services]
+		// whose last [runtime.services.x] just went — so walk up while
+		// that holds. An array element is never removed this way.
+		path = path[:len(path)-1]
+		if len(path) == 0 {
+			return out, nil
+		}
+		if nd, err = indexDoc(out); err != nil {
+			return nil, err
+		}
+		h = nd.lastHeader(func(x *header) bool { return !x.array && slices.Equal(x.path, path) })
+		if h < 0 {
 			return out, nil
 		}
 	}
-	return nd.removeBlock(h, h), nil
+}
+
+// shelters reports whether header line h still has a reason to exist: a key
+// (modeled or not) or a comment in its own block, or a sub-table header
+// beneath it anywhere in the document.
+func (d *doc) shelters(h int) bool {
+	end := d.blockEnd(h)
+	for j := h + 1; j < end; j++ {
+		if d.lines[j].kind != lineBlank {
+			return true
+		}
+	}
+	path := d.lines[h].hdr.path
+	for j, ln := range d.lines {
+		if j != h && ln.kind == lineHeader && hasSegPrefix(ln.hdr.path, path) {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *doc) deleteElem(target []seg) ([]byte, error) {
