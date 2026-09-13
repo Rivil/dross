@@ -24,6 +24,7 @@ type Project struct {
 	Env         Env               `toml:"env" json:"env"`
 	Goals       Goals             `toml:"goals" json:"goals"`
 	Mutation    Mutation          `toml:"mutation,omitempty" json:"mutation,omitempty"`
+	Techdebt    Techdebt          `toml:"techdebt,omitempty" json:"techdebt,omitempty"`
 	Constraints map[string]string `toml:"constraints,omitempty" json:"constraints,omitempty"`
 	Competition []Competitor      `toml:"competition,omitempty" json:"competition,omitempty"`
 }
@@ -291,6 +292,24 @@ type Goals struct {
 	Audience        string   `toml:"audience,omitempty" json:"audience,omitempty"`
 	NonGoals        []string `toml:"non_goals,omitempty" json:"non_goals,omitempty"`
 	Differentiators []string `toml:"differentiators,omitempty" json:"differentiators,omitempty"`
+}
+
+// Techdebt holds the knobs for `dross techdebt`. The table is optional; an
+// absent one leaves Exclude nil and the scan covers every tracked file outside
+// the shared skip set (stack.SkipDirs).
+type Techdebt struct {
+	// Exclude lists repo-relative patterns the tech-debt scan leaves out — the
+	// one mechanism for exempting a package (dross's own internal/techdebt/,
+	// whose marker regex and fixtures would otherwise report themselves) or a
+	// file class, covering .go, .md and .toml alike. Semantics, in order:
+	//   - an entry ending in "/" is a directory prefix ("internal/techdebt/"
+	//     drops everything beneath it, but not internal/techdebtx/);
+	//   - any other entry is a path.Match glob against the repo-relative slash
+	//     path and, when the pattern has no "/", also against the base name
+	//     ("*.golden" drops docs/a.golden as well as a.golden).
+	// A pattern that does not compile is a scan-time error, not a silent
+	// no-op; validate does not pre-check globs (deferred).
+	Exclude []string `toml:"exclude,omitempty" json:"exclude,omitempty"`
 }
 
 // Mutation holds per-adapter knobs for the mutation testing pipeline.

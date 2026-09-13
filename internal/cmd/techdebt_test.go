@@ -172,3 +172,169 @@ func TestTrackedFilesSegmentMatchIsNotSubstring(t *testing.T) {
 		}
 	}
 }
+
+// skipSetFixtureRepo lays out the tree TestTrackedFilesSkipsFixtureDirs enumerates:
+// two fixture-dir files that trip the size heuristics, a build/ script with a
+// marker, and two files that must survive — one under a directory whose name
+// merely starts with "testdata".
+func skipSetFixtureRepo(t *testing.T) (dir string, skipped, kept []string) {
+	t.Helper()
+	dir = t.TempDir()
+	big := strings.Repeat("line\n", 700)
+	wide := strings.Repeat("x", 500) + "\n"
+	files := map[string]string{
+		"fixtures/big.txt":      big,
+		"testdata/wide.txt":     wide,
+		"build/x.sh":            "#!/bin/sh\n# TODO remove\n",
+		"testdata-like/keep.go": "package keep\n",
+		"src/ok.go":             "package ok\n",
+	}
+	for rel, body := range files {
+		mustWrite(t, filepath.Join(dir, filepath.FromSlash(rel)), body)
+	}
+	for _, rel := range []string{"fixtures/big.txt", "testdata/wide.txt", "build/x.sh"} {
+		skipped = append(skipped, filepath.Join(dir, filepath.FromSlash(rel)))
+	}
+	for _, rel := range []string{"testdata-like/keep.go", "src/ok.go"} {
+		kept = append(kept, filepath.Join(dir, filepath.FromSlash(rel)))
+	}
+	return dir, skipped, kept
+}
+
+// TestTrackedFilesSkipsFixtureDirs pins the shared skip set onto BOTH
+// enumeration branches (c-3): fixture files that would fire the size
+// heuristics, and a build/ script with a marker, never reach the scan, while a
+// directory that merely starts with "testdata" survives (segment, not
+// substring). The raw set is scanned too, proving the thresholds would have
+// fired had the files been admitted.
+func TestTrackedFilesSkipsFixtureDirs(t *testing.T) {
+	check := func(t *testing.T, dir string, skipped, kept []string) {
+		t.Helper()
+		got, err := trackedFiles(dir)
+		if err != nil {
+			t.Fatalf("trackedFiles: %v", err)
+		}
+		gotSet := map[string]bool{}
+		for _, p := range got {
+			gotSet[p] = true
+		}
+		for _, p := range kept {
+			if !gotSet[p] {
+				t.Errorf("trackedFiles dropped %s — a substring match on the skip set, or a missing branch", p)
+			}
+		}
+		for _, p := range skipped {
+			if gotSet[p] {
+				t.Errorf("trackedFiles admitted %s — the shared skip set is not applied on this branch", p)
+			}
+		}
+		if len(got) != len(kept) {
+			t.Errorf("trackedFiles = %v, want exactly %v", got, kept)
+		}
+		if fs := techdebt.Scan(got, techdebt.DefaultThresholds); len(fs) != 0 {
+			t.Errorf("scan over the enumerated set yielded %d findings, want 0: %+v", len(fs), fs)
+		}
+		raw := techdebt.Scan(append(append([]string{}, skipped...), kept...), techdebt.DefaultThresholds)
+		want := map[string]int{techdebt.ClassOversizedFile: 1, techdebt.ClassLongLine: 1, techdebt.ClassMarker: 1}
+		for class, n := range want {
+			c := 0
+			for _, f := range raw {
+				if f.Class == class {
+					c++
+				}
+			}
+			if c != n {
+				t.Errorf("raw scan: %d %s findings, want %d (the fixtures must trip the thresholds for the test to prove anything)", c, class, n)
+			}
+		}
+	}
+
+	t.Run("git ls-files branch", func(t *testing.T) {
+		dir, skipped, kept := skipSetFixtureRepo(t)
+		mustGit(t, dir, "init", "-q", "-b", "main")
+		mustGit(t, dir, "add", "-f", ".")
+		check(t, dir, skipped, kept)
+	})
+	t.Run("no-git walk branch", func(t *testing.T) {
+		dir, skipped, kept := skipSetFixtureRepo(t)
+		check(t, dir, skipped, kept)
+	})
+}
+
+// techdebtExcludeRepo inits a dross repo whose project.toml carries the given
+// [techdebt] exclude list, plus one marker file inside and one outside it.
+func techdebtExcludeRepo(t *testing.T, exclude string) string {
+	t.Helper()
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(filepath.Join(dir, ".dross", "project.toml"), os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("\n[techdebt]\n  exclude = [" + exclude + "]\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(dir, "skipme", "a.go"), "package a // FIXME inside the exclude\n")
+	mustWrite(t, filepath.Join(dir, "keep.go"), "package k // TODO outside it\n")
+	return dir
+}
+
+// TestTechdebtAppliesProjectExclude (c-2): the command honours [techdebt]
+// exclude on both enumeration branches — the excluded marker never reaches the
+// report, the kept one does.
+func TestTechdebtAppliesProjectExclude(t *testing.T) {
+	check := func(t *testing.T, dir string) {
+		t.Helper()
+		if err := runCmd(t, Techdebt()); err != nil {
+			t.Fatalf("techdebt: %v", err)
+		}
+		tdDir := filepath.Join(dir, ".dross", "techdebt")
+		report, err := os.ReadFile(filepath.Join(tdDir, soleRunDir(t, tdDir), techdebt.ReportName))
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(report)
+		if !strings.Contains(s, "keep.go") {
+			t.Errorf("report lost the kept file's marker:\n%s", s)
+		}
+		if strings.Contains(s, "skipme") {
+			t.Errorf("report contains the excluded file — [techdebt] exclude not applied:\n%s", s)
+		}
+	}
+	t.Run("git ls-files branch", func(t *testing.T) {
+		dir := techdebtExcludeRepo(t, `"skipme/"`)
+		mustGit(t, dir, "init", "-q", "-b", "main")
+		mustGit(t, dir, "add", "-f", ".")
+		check(t, dir)
+	})
+	t.Run("no-git walk branch", func(t *testing.T) {
+		check(t, techdebtExcludeRepo(t, `"skipme/"`))
+	})
+}
+
+// TestTechdebtBadExcludeErrors: a pattern that does not compile is the command's
+// error, naming the entry, and no run dir is written — a typo must never widen
+// the scan silently or leave a half-run behind.
+func TestTechdebtBadExcludeErrors(t *testing.T) {
+	dir := techdebtExcludeRepo(t, `"["`)
+	err := runCmd(t, Techdebt())
+	if err == nil {
+		t.Fatal("techdebt succeeded with an uncompilable exclude pattern")
+	}
+	if !strings.Contains(err.Error(), `"["`) {
+		t.Fatalf("error %q does not name the bad entry", err)
+	}
+	if entries, rerr := os.ReadDir(filepath.Join(dir, ".dross", "techdebt")); rerr == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				t.Errorf("run dir %s was written despite the exclude error", e.Name())
+			}
+		}
+	}
+}

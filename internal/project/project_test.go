@@ -483,3 +483,55 @@ func TestDeclaredPrepareRenders(t *testing.T) {
 		t.Errorf("round-trip lost the prepare: %q", got)
 	}
 }
+
+// TestProjectTechdebtExcludeRoundTrip pins the [techdebt] exclude list through a
+// Load → Save → Load cycle: dropping omitempty or mis-tagging the field breaks the
+// second Load, and order is preserved because the entries are applied in order.
+func TestProjectTechdebtExcludeRoundTrip(t *testing.T) {
+	body := `[techdebt]
+  exclude = ["internal/techdebt/", "*.golden"]
+`
+	dir := t.TempDir()
+	src := filepath.Join(dir, "project.toml")
+	if err := os.WriteFile(src, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Load(src)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := []string{"internal/techdebt/", "*.golden"}
+	if !reflect.DeepEqual(p.Techdebt.Exclude, want) {
+		t.Fatalf("Exclude after first Load = %v, want %v", p.Techdebt.Exclude, want)
+	}
+	dst := filepath.Join(dir, "saved.toml")
+	if err := p.Save(dst); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	again, err := Load(dst)
+	if err != nil {
+		t.Fatalf("second Load: %v", err)
+	}
+	if !reflect.DeepEqual(again.Techdebt.Exclude, want) {
+		t.Fatalf("Exclude after round trip = %v, want %v", again.Techdebt.Exclude, want)
+	}
+}
+
+// TestProjectNoTechdebtSectionIsNil: an adopter without a [techdebt] table gets a
+// nil Exclude (scan everything) and no error — the knob is opt-in.
+func TestProjectNoTechdebtSectionIsNil(t *testing.T) {
+	body := `[project]
+  name = "x"
+`
+	path := filepath.Join(t.TempDir(), "project.toml")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if p.Techdebt.Exclude != nil {
+		t.Fatalf("Exclude = %v, want nil with no [techdebt] table", p.Techdebt.Exclude)
+	}
+}
