@@ -11,7 +11,7 @@ task_seq = 7
   description = "Add \"testdata\" and \"fixtures\" to the existing skipDirs map (detect.go:27). Export\nSkipDir(name string) bool (segment predicate) and SkipDirs() []string (sorted copy)\nas the one shared definition. No walker changes: extsInTree, detectLanguagesFrom and\nMarkerProfiles already consult the map; the `path != root` guard stays.\n"
   covers = ["c-1", "c-3"]
   test_contract = ["TestDetectLanguagesDrossRootIsGoOnly: DetectLanguages(repoRoot) == exactly []string{\"go\"} — red today (`dross security detect .` prints go, javascript, svelte, typescript from fixtures/ and internal/mutation/testdata); if either name leaks back into any of the three walks the exact-equality fails", "TestSkipDirIsSegmentNotSubstring: tempdir with mytestdata/a.py, a FILE named testdata.py, and testdata/b.rb; DetectLanguages returns python and NOT ruby — a substring/prefix comparison fails the first assertion, a missing IsDir guard fails the second", "TestDetectFixtureOnlyExtIsUnsupported: a root holding only fixtures/a.kt → Detect returns Unsupported (today: kotlin)", "TestMarkerProfilesSkipsFixtures: root holding only fixtures/iac/Dockerfile → MarkerProfiles == []; move the Dockerfile to root → [\"docker\"]; fails if MarkerProfiles is not on the shared set", "TestSkipDirsSingleDefinition: SkipDirs() contains .dross, testdata, fixtures, node_modules, vendor and is sort.StringsAreSorted; a go/ast walk over non-_test .go files under internal/ (the internal/cmd/hermetic_dross_read_test.go technique) finds the string literal \"testdata\" or \"fixtures\" inside a CompositeLit only in internal/stack/detect.go — a second map/slice copy per scanner fails. Not a grep: internal/verify/verify.go:359 compares seg == \"testdata\" in IsTestdataPath (mutation-scope rule, Go testdata semantics only) and is the known out-of-scope sibling"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-2"
@@ -21,7 +21,7 @@ task_seq = 7
   description = "Add `Techdebt Techdebt` to Project (toml:\"techdebt,omitempty\" json:\"techdebt,omitempty\")\nwith `Exclude []string` (toml:\"exclude,omitempty\" json:\"exclude,omitempty\"), mirroring\nMutation (project.go:299). Doc comment states the semantics t-4 implements: repo-relative;\ntrailing \"/\" = directory prefix; otherwise path.Match. No validate-time glob check\n(deferred).\n"
   covers = ["c-2"]
   test_contract = ["TestProjectTechdebtExcludeRoundTrip: Load a body with `[techdebt]\\n exclude = [\"internal/techdebt/\", \"*.golden\"]`, Save to a temp path, Load again → Exclude deep-equals the original in order; dropping omitempty or mis-tagging fails the second Load", "TestProjectNoTechdebtSectionIsNil: a project.toml with no [techdebt] table → p.Techdebt.Exclude == nil and no error", "Existing TestTomlFieldsCarryMatchingJSONTags (internal/cmd/json_tag_parity_test.go:48) fails if the json tags are missing"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-3"
@@ -31,7 +31,7 @@ task_seq = 7
   description = "New file: const GitleaksConfigName = \"gitleaks.toml\"; IdentityIDAllowlist (compiled\n*regexp.Regexp, pattern `(?i)\\b(id|key)\\b[\"']?\\s*[:=]\\s*[\"']?[0-9a-f]{16}\\b[\"']?` — the\ntrailing \\b is load-bearing: without it a 17/18/32-hex value satisfies {16} and is silenced,\nverified live on gitleaks 8.30.1); renderGitleaksConfig(skipped []string) string emitting\n`[extend] useDefault = true`, one [[allowlists]] with regexTarget = \"line\", the regex, and a\ndescription naming the skipped dirs (the shared set's only role here — never a `paths` key);\nWriteGitleaksConfig(runDir string, skipped []string) (string, error) via pathfence.Contain +\npathfence.WriteFile, returning the written path, idempotent on re-invocation."
   covers = ["c-4"]
   test_contract = ["TestGitleaksConfigExtendsDefault: decode the written file with BurntSushi into {Extend struct{UseDefault bool}} and require true — drop or rename [extend] and this fails (the only thing between --config and a zero-rule scan)", "TestIdentityIDAllowlistShape (table, regex parsed back out of the written TOML, not the Go constant): MUST match `\"key\": \"b91bfa24fdf586c0\"`, `\"Key\": \"50919a010c495368\"`, `key = \"919acc418a9a0821\"`, `id = 30dcd7db2eecf398`; MUST NOT match `\"password\": \"08ec1d7666c48b32\"`, `token = \"08ec1d7666c48b32\"`, a bare 16-hex with no id/key context, 15-hex, 17-hex, 18-hex, 32-hex, or AKIAIOSFODNN7EXAMPLE — widening the class/length fails a NOT row, narrowing fails a match row", "TestGitleaksConfigNotPathExcluded: the written TOML has no `paths` key at any level — pins allowlist_scope so a later path exclusion for .dross/, testdata/ or vendor/ is caught", "TestGitleaksConfigContained: a runDir with `..` or a symlink out is refused by pathfence; on success the path is filepath.Join(runDir, GitleaksConfigName) and a second call succeeds with identical bytes", "TestGitleaksLiveAllowlist (t.Skip with a message unless gitleaks is on PATH — never a silent pass): temp tree with tests.json holding `\"key\": \"b91bfa24fdf586c0\"` (entropy high enough to fire; 50919a010c495368 does NOT) and leak.txt holding a concat-built sk_test_… stripe token (NOT AKIAIOSFODNN7EXAMPLE — gitleaks' default aws rule allowlists .+EXAMPLE$); `gitleaks dir <tmp> --no-banner --exit-code 1 --config <emitted> --report-format json --report-path <out>` exits 1 with the stripe finding and NO finding on tests.json; the same command without --config DOES report tests.json (positive control) — exit 0 with config = rules disabled, an identity-id finding = regexTarget/regex wrong for the real tool", "TestGitleaksDrossTreeNoIdentityHits (gitleaks-gated, skipped under -short): `gitleaks git <repoRoot> --config <emitted> --report-format json` yields no finding whose Secret matches ^[0-9a-f]{16}$ — c-4's zero-identity-shape-hits leg on dross itself"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-4"
@@ -41,7 +41,7 @@ task_seq = 7
   description = "Filter(repoDir string, paths, excludes []string) ([]string, error): each path is made\nrepoDir-relative slash form; an entry ending in \"/\" is a directory prefix; any other\nentry is path.Match'd against the rel path and, when the pattern has no \"/\", also against\nthe base name. path.ErrBadPattern is returned as `techdebt.exclude %q: %w` with a nil\nslice — never swallowed, never the unfiltered input. Pure function; no stack import (the\nskip set is applied by the enumerator in t-6).\n"
   covers = ["c-2"]
   test_contract = ["TestFilterTrailingSlashIsPrefix: `internal/techdebt/` drops internal/techdebt/scan.go and internal/techdebt/deep/nested.go, keeps internal/techdebtx/a.go and internal/techdebt.go — handing the entry straight to path.Match keeps the first two and fails", "TestFilterGlobIsRepoRelative: `*.golden` drops docs/a.golden and a.golden (base-name rule); `docs/*.md` drops docs/a.md but keeps docs/sub/a.md; `internal/*/scan.go` drops internal/techdebt/scan.go — matching against the absolute path (which starts with the tempdir) fails the last", "TestFilterBadPatternErrors: `[\"[abc\"]` returns an error whose text contains `[abc` and a nil slice", "TestFilterEmptyIsIdentity: nil excludes returns the input unchanged"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-5"
@@ -52,7 +52,7 @@ task_seq = 7
   covers = ["c-5", "c-4"]
   depends_on = ["t-1", "t-3"]
   test_contract = ["TestManifestCarriesExclusions: BuildManifest(...).Exclusions.SkippedDirs deep-equals stack.SkipDirs() (contains testdata, fixtures, .dross) — a private copy in security fails (the drift pin)", "TestSecurityDetectNamesExclusions: captureStdout of `security detect <tmp>` contains `exclusions:`, every name from stack.SkipDirs(), and `gitleaks.toml`", "TestSecurityRunWritesGitleaksConfig: after `run .`, the sole run dir contains gitleaks.toml whose body has `useDefault = true`; stdout contains `gitleaks allowlist: ` + that path; AND report.md's `gitleaks allowlist:` line names a path that os.Stat succeeds on — a report naming a file that was never written fails the Stat", "TestSecurityRunReportRecordsExclusions: report.md contains `## Exclusions`, testdata, fixtures and gitleaks.toml", "Existing TestSecurityRunReadOnly (security_test.go:343) stays green unchanged — the new file lands inside .dross/security/<run>/"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-6"
@@ -63,7 +63,7 @@ task_seq = 7
   covers = ["c-2", "c-3"]
   depends_on = ["t-1", "t-2", "t-4"]
   test_contract = ["TestTechdebtSelfScanExcludesOwnPackage (real repo; project.toml is tracked so the hermetic_dross_read guard is satisfied): trackedFiles(repoRoot) → Filter(excludes from .dross/project.toml) → Scan(DefaultThresholds) yields zero findings whose File is under internal/techdebt/; negative control in the same test: the unfiltered set yields ≥1 marker there (13–16 today: markerRe at scan.go:47, the package doc, scan_test.go/run_test.go fixtures), so deleting the project.toml line or the Filter call fails naming the first re-admitted finding; over-exclusion guard: len(filtered) > 0, len(raw)-len(filtered) >= 6 (the package tracks 7 files) and len(raw)-len(filtered) < len(raw)/2 — a match-all exclude fails the last bound instead of passing vacuously", "TestTrackedFilesSkipsFixtureDirs (synthetic git repo, both branches as sub-tests): tracked fixtures/big.txt (700 lines), testdata/wide.txt (one 500-char line), testdata-like/keep.go and src/ok.go; trackedFiles returns only the last two; Scan over them yields 0 findings while Scan over the raw four yields 1 oversized-file + 1 long-line (proves the thresholds would have fired) — wiring the set into only one branch fails the other sub-test; a substring match drops testdata-like/keep.go and fails", "TestTechdebtAppliesProjectExclude (cmd, both branches): Init a tempdir, write `[techdebt] exclude = [\"skipme/\"]`, files skipme/a.go (FIXME) and keep.go (TODO); the report contains keep.go and not skipme/a.go both under `git init && git add` and without", "TestTechdebtDrossTreeNoFixtureFindings (real repo): no finding whose File contains /testdata/ or /fixtures/ (69 tracked files under those names today)", "TestTechdebtBadExcludeErrors: `exclude = [\"[\"]` makes `dross techdebt` return an error naming the entry and write no run dir", "Existing TestTrackedFilesExcludesDrossDir, TestTrackedFilesSegmentMatchIsNotSubstring and TestTechdebtEnumeratesTrackedFiles stay green unchanged", "TestTrackedFilesSkipsFixtureDirs additionally tracks build/x.sh (with a TODO) and asserts it is dropped on both branches — pins that the full shared set, not only testdata/fixtures, governs the tech-debt enumerator"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-7"
@@ -74,4 +74,4 @@ task_seq = 7
   covers = ["c-4", "c-5"]
   depends_on = ["t-5"]
   test_contract = ["TestSecurePromptMandatedSections (secure_prompt_test.go:29) gains case `c-4 gitleaks run-dir allowlist via --config` with needles gitleaks, --config, gitleaks.toml, run-dir, allowlist in one paragraph, and --config appearing before ` -- ` on that line (fence discipline) — removing the bullet or reordering the operand fails exactly this sub-test", "Same test gains case `c-5 detect names exclusions` with needle `exclusions` in the Detect step"]
-  status = "pending"
+  status = "done"

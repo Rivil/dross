@@ -2,5 +2,122 @@
   "phase": "scanner-self-exclusion",
   "base": "milestone/v1.7",
   "base_commit": "94278b9f24f72886cad3885be5c8ed08c83a9766",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/stack/detect.go",
+        "internal/stack/detect_test.go"
+      ],
+      "commit": "4680283",
+      "completed_at": "2026-09-13T06:30:21.110939Z",
+      "landmarks": [
+        {
+          "feature": "scanner skip set",
+          "symbol": "SkipDir",
+          "loc": "internal/stack/detect.go:49",
+          "what": "testdata+fixtures join the one shared skipDirs; SkipDir/SkipDirs exported for every scanner; AST pin forbids a second copy"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/project/project.go",
+        "internal/project/project_test.go"
+      ],
+      "commit": "377ed84",
+      "completed_at": "2026-09-13T06:32:15.720209Z",
+      "landmarks": [
+        {
+          "feature": "tech-debt scan",
+          "symbol": "Techdebt",
+          "loc": "internal/project/project.go:300",
+          "what": "[techdebt] exclude = [...] in project.toml — trailing / = dir prefix else path.Match glob; opt-in, nil when absent"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/security/gitleaks.go",
+        "internal/security/gitleaks_test.go"
+      ],
+      "commit": "dea6cf6",
+      "completed_at": "2026-09-13T06:36:24.623381Z",
+      "landmarks": [
+        {
+          "feature": "secret-scan allowlist",
+          "symbol": "WriteGitleaksConfig",
+          "loc": "internal/security/gitleaks.go:53",
+          "what": "per-run gitleaks.toml extending default rules with one line-target allowlist for 16-hex id/key identity ids; no path exclusion; proven live on gitleaks 8.30.1"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/techdebt/filter.go",
+        "internal/techdebt/filter_test.go"
+      ],
+      "commit": "f0463bd",
+      "completed_at": "2026-09-13T06:38:18.323121Z",
+      "landmarks": [
+        {
+          "feature": "tech-debt scan",
+          "symbol": "Filter",
+          "loc": "internal/techdebt/filter.go:29",
+          "what": "pure repo-relative exclude filter — trailing / is a dir prefix, else path.Match on rel path (+base name for bare globs); bad pattern errors by name"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/security/recon.go",
+        "internal/security/recon_test.go",
+        "internal/cmd/security.go",
+        "internal/cmd/security_test.go"
+      ],
+      "commit": "f9f6ac4",
+      "completed_at": "2026-09-13T06:41:49.634175Z",
+      "landmarks": [
+        {
+          "feature": "security audit manifest",
+          "symbol": "Exclusions",
+          "loc": "internal/security/recon.go:27",
+          "what": "manifest records skipped dirs (stack.SkipDirs) + gitleaks allowlist path; detect prints exclusions:, run writes gitleaks.toml into the run dir and report.md gains ## Exclusions"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/techdebt.go",
+        "internal/cmd/techdebt_test.go",
+        "internal/cmd/techdebt_selfscan_test.go",
+        ".dross/project.toml"
+      ],
+      "commit": "6b90c82",
+      "completed_at": "2026-09-13T06:45:25.175566Z",
+      "landmarks": [
+        {
+          "feature": "tech-debt scan",
+          "symbol": "trackedFiles",
+          "loc": "internal/cmd/techdebt.go:88",
+          "what": "both enumeration branches prune stack.SkipDir; [techdebt] exclude applied via Filter before NewRun; dross excludes internal/techdebt/ — self-scan pinned on the real repo"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "assets/prompts/secure.md",
+        "internal/cmd/secure_prompt_test.go"
+      ],
+      "commit": "3e307b9",
+      "completed_at": "2026-09-13T06:47:42.474807Z",
+      "landmarks": [
+        {
+          "feature": "security audit prompt",
+          "symbol": "secure.md §2 Tooling sweep",
+          "loc": "assets/prompts/secure.md:94",
+          "what": "Detect step names the exclusions: block; Sweep gains gitleaks bullet with exemplar gitleaks git --config \u003crun-dir\u003e/gitleaks.toml -- . (extends defaults, identity ids only, no path exclusion)"
+        }
+      ]
+    }
+  }
 }
