@@ -1,8 +1,15 @@
 package stack
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -737,5 +744,166 @@ func TestNormalizeExtAddsExactlyOneDot(t *testing.T) {
 	// Idempotent: normalising twice must not accumulate dots.
 	if got := normalizeExt(normalizeExt("go")); got != ".go" {
 		t.Errorf("normalizeExt is not idempotent: %q", got)
+	}
+}
+
+// TestDetectLanguagesDrossRootIsGoOnly is the c-1 keystone: the dross repo carries
+// JavaScript, Svelte and TypeScript sources under fixtures/ and
+// internal/mutation/testdata, and before the shared skip set gained those two names
+// `dross security detect .` listed all four languages. Exact equality means a
+// fixture-only extension leaking back through any walk fails here.
+func TestDetectLanguagesDrossRootIsGoOnly(t *testing.T) {
+	isolateHome(t)
+	got, err := DetectLanguages(repoRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, []string{"go"}) {
+		t.Fatalf("DetectLanguages(repoRoot) = %v, want exactly [go] — a fixture-only extension surfaced as a language", got)
+	}
+}
+
+// TestSkipDirIsSegmentNotSubstring pins the skip as a whole-segment, directory-only
+// predicate: a directory whose name merely contains "testdata" is walked, a FILE
+// named testdata.py is counted, and only the real testdata/ directory is pruned.
+func TestSkipDirIsSegmentNotSubstring(t *testing.T) {
+	dir := t.TempDir()
+	for _, d := range []string{"mytestdata", "testdata"} {
+		if err := os.MkdirAll(filepath.Join(dir, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeFile(t, filepath.Join(dir, "mytestdata"), "a.py", "print(1)\n")
+	writeFile(t, dir, "testdata.py", "print(2)\n")
+	writeFile(t, filepath.Join(dir, "testdata"), "b.rb", "puts 1\n")
+
+	rubyProfile := &Profile{ID: "ruby", Signals: Signals{Exts: []string{".rb"}}}
+	got, err := detectLanguagesFrom(dir, []*Profile{pythonProfile(), rubyProfile})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsLang(got, "python") {
+		t.Fatalf("languages = %v, want python — mytestdata/ or testdata.py was pruned, so the skip is a substring/prefix match or ignores IsDir", got)
+	}
+	if containsLang(got, "ruby") {
+		t.Fatalf("languages = %v, must not include ruby — testdata/ was descended", got)
+	}
+	if SkipDir("mytestdata") || SkipDir("testdata.py") || !SkipDir("testdata") {
+		t.Fatal("SkipDir must match the exact segment only")
+	}
+}
+
+// TestDetectFixtureOnlyExtIsUnsupported: a root whose only source lives under
+// fixtures/ has no stack of its own.
+func TestDetectFixtureOnlyExtIsUnsupported(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "fixtures"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "fixtures"), "a.kt", "fun main() {}\n")
+	kotlin := &Profile{ID: "kotlin", Signals: Signals{Exts: []string{".kt"}}}
+	if got := Detect(dir, []*Profile{goProfile(), kotlin}); got != Unsupported {
+		t.Fatalf("Detect = %q, want %q — fixtures/ was descended by extsInTree", got, Unsupported)
+	}
+}
+
+// TestMarkerProfilesSkipsFixtures pins MarkerProfiles onto the shared set: a marker
+// file under fixtures/ is invisible, the same file at root surfaces the profile.
+func TestMarkerProfilesSkipsFixtures(t *testing.T) {
+	docker := &Profile{ID: "docker", Signals: Signals{FilePatterns: dockerFilePatterns}}
+	profiles := []*Profile{docker}
+
+	dir := t.TempDir()
+	iac := filepath.Join(dir, "fixtures", "iac")
+	if err := os.MkdirAll(iac, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, iac, "Dockerfile", "FROM scratch\n")
+	if got := MarkerProfiles(dir, profiles); len(got) != 0 {
+		t.Fatalf("MarkerProfiles = %v, want [] — fixtures/ was descended", got)
+	}
+
+	if err := os.Rename(filepath.Join(iac, "Dockerfile"), filepath.Join(dir, "Dockerfile")); err != nil {
+		t.Fatal(err)
+	}
+	if got := MarkerProfiles(dir, profiles); !reflect.DeepEqual(got, []string{"docker"}) {
+		t.Fatalf("MarkerProfiles = %v, want [docker] after moving the Dockerfile to root", got)
+	}
+}
+
+// TestSkipDirsSingleDefinition pins the skip_dir_set decision from both ends: the
+// exported view carries every expected name in sorted order, and no other non-test
+// Go file under internal/ spells "testdata" or "fixtures" inside a composite
+// literal — a second map/slice copy per scanner is the drift this forbids. It is
+// a go/ast walk, not a grep: internal/verify/verify.go compares seg == "testdata"
+// in IsTestdataPath (a BinaryExpr, Go testdata semantics for mutation scope) and
+// is the known, deliberately out-of-scope sibling.
+func TestSkipDirsSingleDefinition(t *testing.T) {
+	got := SkipDirs()
+	for _, want := range []string{".dross", "testdata", "fixtures", "node_modules", "vendor"} {
+		if !containsLang(got, want) {
+			t.Fatalf("SkipDirs() = %v, missing %q", got, want)
+		}
+	}
+	if !sort.StringsAreSorted(got) {
+		t.Fatalf("SkipDirs() = %v, want sorted", got)
+	}
+	got[0] = "mutated"
+	if SkipDirs()[0] == "mutated" {
+		t.Fatal("SkipDirs() must return a copy")
+	}
+
+	root := repoRoot(t)
+	internalDir := filepath.Join(root, "internal")
+	owner := filepath.Join(internalDir, "stack", "detect.go")
+	var offenders []string
+	err := filepath.WalkDir(internalDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if path != internalDir && SkipDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		fset := token.NewFileSet()
+		file, perr := parser.ParseFile(fset, path, nil, 0)
+		if perr != nil {
+			return perr
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			lit, ok := n.(*ast.CompositeLit)
+			if !ok {
+				return true
+			}
+			for _, elt := range lit.Elts {
+				if kv, ok := elt.(*ast.KeyValueExpr); ok {
+					elt = kv.Key
+				}
+				bl, ok := elt.(*ast.BasicLit)
+				if !ok || bl.Kind != token.STRING {
+					continue
+				}
+				val, uerr := strconv.Unquote(bl.Value)
+				if uerr != nil {
+					continue
+				}
+				if (val == "testdata" || val == "fixtures") && path != owner {
+					offenders = append(offenders, fset.Position(bl.Pos()).String())
+				}
+			}
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(offenders) > 0 {
+		t.Fatalf("skip-set names spelled outside internal/stack/detect.go — consume stack.SkipDir/SkipDirs instead:\n  %s", strings.Join(offenders, "\n  "))
 	}
 }
