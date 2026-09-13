@@ -527,6 +527,14 @@ func ParseStatus(out string) (RunStatus, error) {
 //     deletion, and every report location is gitignored, so a stale remote
 //     REPORT survives this. Staleness of reports is the launcher's explicit rm,
 //     not this flag.
+//   - RunsProtectRule keeps --delete away from RunsDirName. That directory
+//     exists only on the host — nothing on this side ever creates it, so it is
+//     neither tracked nor gitignored here, and the exclude list (built from
+//     what git ignores LOCALLY) never names it. Without the protect rule every
+//     sync — a `dross test` while a leg is in flight, a second phase's
+//     dispatch — deleted the live run's state/exit/pid directory out from
+//     under it: `verify results` then reported the run gone while gremlins
+//     kept burning the host's cores as an orphan. Measured 2026-09-13.
 //   - the ignore rule keeps dependency dirs and build output off the wire. In
 //     a git work tree it is --exclude-from naming the repo's own ignored-path
 //     list, asked of git rather than approximated; elsewhere it stays the
@@ -575,6 +583,7 @@ func SyncArgs(t Target, localRoot string) ([]string, func(), error) {
 		"rsync",
 		"-az",
 		"--delete",
+		RunsProtectRule,
 		ignore,
 		// The trailing slash is load-bearing: without it rsync creates
 		// <workdir>/<basename>/ and every remote path in the run is off by one
@@ -583,6 +592,13 @@ func SyncArgs(t Target, localRoot string) ([]string, func(), error) {
 		t.Host + ":" + t.Workdir,
 	}, cleanup, nil
 }
+
+// RunsProtectRule is the rsync filter that shields RunsDirName on the host from
+// --delete. `P` is rsync's protect modifier: the receiver keeps a matching
+// path even though the sender has no such file. Anchored with a leading /
+// so only the workdir's own runs directory is meant, and written as one argv
+// element without shell quotes for the same reason gitignoreMergeRule is.
+const RunsProtectRule = "--filter=P /" + RunsDirName
 
 // ignoreRule returns the single rsync argv element that keeps ignored paths off
 // the wire, plus a cleanup func for any temp file it had to write.
