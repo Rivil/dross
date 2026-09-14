@@ -1,0 +1,48 @@
+[phase]
+  id = "mutation-range-provenance"
+  title = "mutation-range-provenance"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "Ranged runner landed: a Stryker verify run for a phase whose hunks cover a subset of a file's lines instruments only the ranged mutants (`file:start-end` argv), while gremlins and any Scope without hunks run whole files — fail-open at every level; ported from `feat/mutate-changed-lines` onto v1.7 with its tests green."
+
+[[criteria]]
+  id = "c-2"
+  text = "Every scoped run persists, per file and per adapter, the effective mutation ranges actually passed to the tool (post-pad, post-merge) and the pad constant applied, alongside the raw hunks in tests.json; verify.toml's scope summary states them — so a run's claimed scope is provable from its own record, not inferred from argv."
+
+[[criteria]]
+  id = "c-3"
+  text = "Every fail-open fallback to whole-file mutation (adapter lacks RangeRunner, scope has no hunks, malformed range, file in scope but absent from hunks) is recorded in the run record as a named reason per file/adapter and surfaced in verify output — a run that measured whole files never reads as a ranged one."
+
+[[criteria]]
+  id = "c-4"
+  text = "The three survivors routed here from tracked-path-containment (internal/compilefence/compilefence.go:61 CONDITIONALS_NEGATION, :80 CONDITIONALS_NEGATION, :81 ARITHMETIC_BASE) are killed by tests in compilefence's own package, or accepted via `dross survivor accept --reason` citing a concrete justification — none is re-listed for the next run."
+
+[[criteria]]
+  id = "c-5"
+  text = "`dross verify scope <phase-id>` prints the last run's provenance from tests.json: in-scope files, raw hunks, and per leg the effective ranges (with pad) and any whole-file fallback with its reason; `--json` emits the same record verbatim. Exits non-zero naming the fix when no run exists."
+
+[[decisions]]
+  key = "landing_method"
+  choice = "Cherry-pick the two `feat/mutate-changed-lines` commits (1da3f73, 21e354b) onto the phase branch and adapt them to the 29 commits v1.7 has moved since; delete the feature branch local + origin once this phase ships."
+  why = "The commits carry the measured Stryker rationale (mutant counts per range width) that a fresh rewrite would lose; the branch is 29 behind and must not linger as a second history."
+  locked = true
+
+[[decisions]]
+  key = "pad_constant"
+  choice = "`hunkContextLines` stays at 25, untuned; it is recorded with each effective range rather than adjusted."
+  why = "The milestone criterion retires the heuristic in ast-aware-mutation-ranges rather than tuning its constant; this phase's job is to make its residue visible, not to move it."
+  locked = true
+
+[[decisions]]
+  key = "range_record_home"
+  choice = "Effective ranges and fallback reasons live on the existing per-language-leg record (LanguageRun): `ranges` map file→[{start,end,pad}] and `whole_file` map file→reason. Scope stays the pure pre-run input."
+  why = "Ranges are adapter-specific — gremlins has none — so the leg is the honest owner; putting per-adapter output on the adapter-agnostic Scope would blur input and result."
+  locked = true
+
+[[decisions]]
+  key = "fallback_severity"
+  choice = "Split by cause: adapter-lacks-RangeRunner and file-absent-from-hunks are informational only; a malformed range or a hunk-less Scope on a range-capable adapter is appended to Scope.Degraded so the run prints the existing degraded warning."
+  why = "Whole-file is more measurement, never less, so a structural fallback cannot make a pass dishonest — but a lost hunk on an adapter that could have used it is a lost signal and must surface as one."
+  locked = true
