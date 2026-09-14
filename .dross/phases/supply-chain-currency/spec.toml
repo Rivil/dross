@@ -1,0 +1,47 @@
+[phase]
+  id = "supply-chain-currency"
+  title = "supply-chain-currency"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "`govulncheck ./...` reports zero vulnerabilities reachable from dross code on the toolchain go.mod pins (today: 4 stdlib advisories, all on the update-download path)."
+
+[[criteria]]
+  id = "c-2"
+  text = "One toolchain source of truth: go.mod carries a `toolchain` directive; ci.yml and release.yml resolve setup-go from it (`go-version-file`) instead of a hand-copied patch string; a test fails if any of the three disagree."
+
+[[criteria]]
+  id = "c-3"
+  text = "Direct dependencies are at their latest release and `go mod tidy -diff` is empty on the committed tree; CI fails on tidy drift."
+
+[[criteria]]
+  id = "c-4"
+  text = "The release job builds with `-mod=readonly` (goreleaser's `go mod tidy` before-hook removed) and runs `govulncheck` in the release job itself, so the graph scanned is provably the graph in the shipped binaries."
+
+[[criteria]]
+  id = "c-5"
+  text = "No `${{ }}` expression appears inside any `run:` block in `.github/workflows/*.yml` — values reach the shell via `env:`; a test enumerates the workflow files and fails on the pattern."
+
+[[decisions]]
+  key = "toolchain_line"
+  choice = "go.mod pins `go 1.27.0` + `toolchain go1.27.1`; ci.yml and release.yml read it via go-version-file."
+  why = "1.25 fell out of Go's two-minor support window when 1.27.0 shipped; 1.27 is the line with the longest remaining patch support. helicon's gremlins host (go1.26.1) auto-fetches it once via GOTOOLCHAIN=auto."
+  locked = true
+
+[[decisions]]
+  key = "release_govulncheck_failure"
+  choice = "A govulncheck finding in the release job fails the release — no allowlist, no `|| true`."
+  why = "Matches ci.yml's existing stance; a finding at release time means a new advisory landed after CI went green, and shipping it is exactly what the milestone criterion forbids."
+  locked = true
+
+[[decisions]]
+  key = "run_block_expression_rule"
+  choice = "Ban every `${{ }}` expression inside `run:`, not only untrusted contexts."
+  why = "A blanket rule is testable without a trust taxonomy; both current uses move to env: trivially, and the two-source pattern can't creep back in."
+  locked = true
+
+[[deferred]]
+  text = "Dependabot/Renovate config (gomod + github-actions, weekly, grouped) so dependency and action currency stays true after this phase."
+  why = "New standing mechanism, not a one-shot fix; c-3 is point-in-time by design."
+  target = "dependency-update-automation"

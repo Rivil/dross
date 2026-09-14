@@ -43,6 +43,7 @@
     "remote-toolchain-bootstrap": "DRO-129",
     "remote-toolchain-install": "DRO-246",
     "scanner-self-exclusion": "DRO-404",
+    "supply-chain-currency": "DRO-423",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10",
     "test-lane-config": "DRO-191",
@@ -970,6 +971,26 @@
       "issue": "DRO-411",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "supply-chain-currency/t-1": {
+      "issue": "DRO-424",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "supply-chain-currency/t-2": {
+      "issue": "DRO-427",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "supply-chain-currency/t-3": {
+      "issue": "DRO-425",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "supply-chain-currency/t-4": {
+      "issue": "DRO-426",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "test-lane-config/t-1": {
       "issue": "DRO-192",

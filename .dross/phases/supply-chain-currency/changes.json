@@ -1,0 +1,79 @@
+{
+  "phase": "supply-chain-currency",
+  "pr": 125,
+  "base": "milestone/v1.7",
+  "base_commit": "2641600cb6dabc7b5147c02d800ef028143db028",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "go.mod",
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+        "internal/cmd/toolchain_source_test.go",
+        "internal/mutation/ceiling_test.go"
+      ],
+      "commit": "3dcfcc7",
+      "completed_at": "2026-09-14T09:19:17.288254Z",
+      "landmarks": [
+        {
+          "feature": "toolchain single source",
+          "symbol": "TestToolchainSingleSource",
+          "loc": "internal/cmd/toolchain_source_test.go:27",
+          "what": "go.mod toolchain directive is the one Go pin; ci.yml/release.yml setup-go@v7 read it via go-version-file and a test fails on any second source"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "go.mod",
+        "go.sum",
+        ".github/workflows/ci.yml"
+      ],
+      "commit": "2dcc7ef",
+      "completed_at": "2026-09-14T09:27:12.945092Z",
+      "landmarks": [
+        {
+          "feature": "dependency currency",
+          "symbol": "go.mod require",
+          "loc": "go.mod:8",
+          "what": "direct deps at latest (toml 1.6, cobra 1.10.2, x/mod 0.41, x/term 0.46, pflag 1.0.10) and ci.yml fails on go mod tidy -diff drift"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        ".github/workflows/release.yml",
+        ".github/workflows/ci.yml",
+        ".goreleaser.yaml",
+        "internal/cmd/release_pipeline_test.go"
+      ],
+      "commit": "80fc6dd",
+      "completed_at": "2026-09-14T09:21:46.178736Z",
+      "landmarks": [
+        {
+          "feature": "release supply-chain gate",
+          "symbol": "TestReleaseJobRunsGovulncheck",
+          "loc": "internal/cmd/release_pipeline_test.go:48",
+          "what": "release job builds with -mod=readonly (goreleaser tidy hook gone) and runs pinned govulncheck before goreleaser so the scanned graph is the shipped graph"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        ".github/workflows/release.yml",
+        "internal/cmd/workflow_run_expressions_test.go"
+      ],
+      "commit": "2ab35b4",
+      "completed_at": "2026-09-14T09:23:58.685733Z",
+      "landmarks": [
+        {
+          "feature": "workflow expression hygiene",
+          "symbol": "runBlockExpressions",
+          "loc": "internal/cmd/workflow_run_expressions_test.go:27",
+          "what": "no ${{ }} inside any run: block — values reach the shell via env:; a line-based scanner sweeps .github/workflows/*.yml"
+        }
+      ]
+    }
+  }
+}
