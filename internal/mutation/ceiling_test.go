@@ -164,24 +164,30 @@ func mutantsOn(all []ceilingMutant, line int) []ceilingMutant {
 
 // TestAttributionCeilingIsReal is the proof the gremlins-attribution-ceiling
 // category cites. A switch-case CONDITION that the test suite provably
-// executes — count>=1 in a live coverage profile — is still reported NOT
-// COVERED by gremlins. go-cover's block for a case arm begins at the colon, so
-// the condition's own columns belong to no block and gremlins, reading that
-// profile, concludes the line was never run.
+// executes is still reported NOT COVERED by gremlins. go-cover never opens a
+// block on the condition's own columns: through go1.26 the arm's block began
+// at the colon, from go1.27 it begins at the arm body — so under either layout
+// gremlins, reading that profile, concludes the condition line was never run.
+//
+// Execution is therefore proved through the arm BODY, not the condition line:
+// `return "lower"` can only run once the condition above it evaluated true, so
+// count>=1 on the body line is proof the condition executed, independent of
+// which block boundary the toolchain's cover tool draws.
 //
 // This is why those survivors cannot be killed by writing more tests: the tests
 // already run them. Without this test the category's reason is an assertion,
 // and an acceptance resting on an assertion is indistinguishable from a wrong one.
 func TestAttributionCeilingIsReal(t *testing.T) {
 	caseLine := ceilingSourceLine(t, "case r >= 'a' && r <= 'z':")
+	bodyLine := ceilingSourceLine(t, `return "lower"`)
 	blocks := ceilingCoverage(t)
 
-	count, inBlock := coveredCount(blocks, caseLine)
+	count, inBlock := coveredCount(blocks, bodyLine)
 	if !inBlock {
-		t.Fatalf("fixture line %d is in no coverage block — the fixture no longer exercises the switch", caseLine)
+		t.Fatalf("fixture line %d (the arm body) is in no coverage block — the fixture no longer exercises the switch", bodyLine)
 	}
 	if count < 1 {
-		t.Fatalf("fixture line %d has coverage count %d, want >=1: the proof needs the line PROVABLY executed", caseLine, count)
+		t.Fatalf("fixture line %d (the arm body) has coverage count %d, want >=1: the proof needs the condition on line %d PROVABLY executed", bodyLine, count, caseLine)
 	}
 
 	got := mutantsOn(ceilingReport(t), caseLine)

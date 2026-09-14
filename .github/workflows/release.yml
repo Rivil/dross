@@ -68,15 +68,20 @@ jobs:
           git tag "$tag"
           git push origin "$tag"
 
-      - uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a  # v5.2.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         if: steps.tag.outputs.new_tag != ''
         with:
-          # Exact patch, matching ci.yml. This is the toolchain that builds the
-          # binaries users download, so it must not be the one unpinned input
-          # in an otherwise pinned pipeline — and it should never be older than
-          # the version CI gates on (go1.25.13 clears GO-2026-6218/6090/5972/5026).
-          go-version: '1.25.13'
+          # Same single source as ci.yml: go.mod's `toolchain` directive. This
+          # is the toolchain that builds the binaries users download, so it
+          # must be exactly the one CI gated on — reading both from go.mod
+          # makes that a structural fact rather than two strings kept in sync
+          # by hand. TestToolchainSingleSource fails on any `go-version:` key.
+          go-version-file: go.mod
           cache: true
+
+      - name: go version
+        if: steps.tag.outputs.new_tag != ''
+        run: go version
 
       # goreleaser's `signs:` block shells out to the `minisign` CLI, which is not
       # present on the runner by default. Install it from Ubuntu's signed apt repo

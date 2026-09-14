@@ -1,6 +1,8 @@
 module github.com/Rivil/dross
 
-go 1.25.0
+go 1.27.0
+
+toolchain go1.27.1
 
 require (
 	aead.dev/minisign v0.3.0
