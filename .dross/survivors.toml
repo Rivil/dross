@@ -1796,3 +1796,336 @@
   line = 76
   category = "gremlins-attribution-ceiling"
   accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "64b506ef3dd7034a"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(rest) == 0:"
+  line = 127
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "e1c87f2f04729df7"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case rest[0] == '#':"
+  line = 129
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "2528bd865a3572b5"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case rest[0] == '[':"
+  line = 131
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "e14c0aebb8abaaee"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case pos < len(src) && src[pos] == '\"':"
+  line = 299
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "dcfe215e604e2d39"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case pos < len(src) && src[pos] == '\"':"
+  line = 299
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "6894f23552413ba8"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case pos < len(src) && src[pos] == '\\'':"
+  line = 308
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "91d4b9eb31f39411"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case pos < len(src) && src[pos] == '\\'':"
+  line = 308
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "131b4d359f3f31ff"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case src[pos] == '\"':"
+  line = 360
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "d773fa2519956c38"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case src[pos] == '\\'':"
+  line = 364
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "523388133cc09b78"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case src[pos] == '[':"
+  line = 366
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "43e1ca521b8929cc"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case src[pos] == '{':"
+  line = 368
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "bc4d3b092098c49b"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case src[pos] == '\"':"
+  line = 391
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "ffeda0ac960809d6"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == open:"
+  line = 464
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "25e850532cefcc21"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == close:"
+  line = 466
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "d31af888696bdae0"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == '\"' || c == '\\'':"
+  line = 471
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "111ed6205875a7ff"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == '#':"
+  line = 477
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "ffd08944a80981e6"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == '{':"
+  line = 481
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "81b4c6cfff68274f"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case h >= '0' && h <= '9':"
+  line = 528
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "841d519f18017ef5"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case h >= '0' && h <= '9':"
+  line = 528
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "edcc08d7dcd6259d"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case h >= 'a' && h <= 'f':"
+  line = 530
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "833978b59c41e3f9"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case h >= 'a' && h <= 'f':"
+  line = 530
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "6793212a57c9ef71"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case h >= 'A' && h <= 'F':"
+  line = 532
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "d017c5c156def884"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case h >= 'A' && h <= 'F':"
+  line = 532
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "3e29033b708754e1"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case o.kind == opAppendElem:"
+  line = 660
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "f0915b713bfd0fe6"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case o.elem < 0 && isArray:"
+  line = 662
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "e6694aa4e444428e"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case o.elem < 0 && isArray:"
+  line = 662
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "246403e13ec90440"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case o.elem >= 0 && o.elem >= n:"
+  line = 664
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "5e284d15ae7907bc"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case o.elem >= 0 && o.elem >= n:"
+  line = 664
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "07b5fd810ed23374"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "if h := d.lastHeader(func(x *header) bool { return slices.Equal(x.path, table) }); h >= 0 {"
+  line = 768
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "885556a14f7c04b4"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if h := d.lastHeader(func(x *header) bool { return slices.Equal(x.path, table) }); h >= 0 {"
+  line = 768
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "5cb75ec48cb164c1"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "if h := d.lastHeader(func(x *header) bool { return hasNamePrefix(x.path, prefix) }); h >= 0 {"
+  line = 821
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "e5c028c960a94569"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if h := d.lastHeader(func(x *header) bool { return hasNamePrefix(x.path, prefix) }); h >= 0 {"
+  line = 821
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "44b74058c6abb7fa"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "if h := d.lastHeader(func(x *header) bool { return hasNamePrefix(x.path, names) }); h >= 0 {"
+  line = 928
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "2cf09974a5b5fee1"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if h := d.lastHeader(func(x *header) bool { return hasNamePrefix(x.path, names) }); h >= 0 {"
+  line = 928
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "35ec167a24dc7a24"
+  file = "internal/cmd/redproof_replay.go"
+  op = "ARITHMETIC_BASE"
+  text = "const redProofReplayTimeout = 20 * time.Minute"
+  line = 40
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "1e92ac12a621397a"
+  file = "internal/remote/remote.go"
+  op = "ARITHMETIC_BASE"
+  text = "const RunsProtectRule = \"--filter=P /\" + RunsDirName"
+  line = 601
+  reason = "const initializer for a string (RunsProtectRule = \"--filter=P /\" + RunsDirName): go-cover instruments no block for package-level const declarations and ARITHMETIC_BASE has no meaning on string concatenation, so the mutant cannot be built or observed by any test. Its value is pinned by TestSyncArgsProtectsDetachedRunsFromDelete on the rsync argv."
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "90b742483f92661b"
+  file = "internal/project/patch.go"
+  op = "ARITHMETIC_BASE"
+  text = "return nil, fmt.Errorf(\"line %d: value runs past end of file\", lineNo+1)"
+  line = 264
+  reason = "The 'value runs past end of file' error is unreachable by construction: parseKeyLine's endLine is lineNo plus the newlines inside the scanned value span, and scanValue only extends a span across lines that exist in src, so endLine can never exceed len(d.lines) when the guard is evaluated — it is defensive against a future indexer change. The mutated arithmetic on lineNo+1 changes only the text of an error no input can trigger, so no test can distinguish it. The span-termination paths either side of the guard are pinned by TestIndexLiteralStrings (unterminated literal at EOF, no trailing newline) and TestIndexMultilineBasicEscapesAndExtraQuotes (unterminated multi-line basic string)."
+  accepted_in = "project-toml-lossless-writes"

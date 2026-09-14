@@ -419,3 +419,44 @@ func TestSkipMutationNeedsNoRemote(t *testing.T) {
 		t.Errorf("--skip-mutation probed the remote %d times", *calls)
 	}
 }
+
+// TestAdapterProjectRootIsTheRepoRootFromASubdirectory: ProjectRoot is the
+// rsync SOURCE a remote run pushes onto the granted workdir with --delete.
+// FindRoot resolves .dross from any subdirectory, so a verify launched from
+// one has to push the same tree as one launched from the root — with cwd as
+// the source, `cd web && dross verify` synced web/ over the whole remote
+// tree and deleted every sibling (feastahead on helicon, 2026-09-13).
+func TestAdapterProjectRootIsTheRepoRootFromASubdirectory(t *testing.T) {
+	root := wiringFixture(t, map[string]string{
+		"mutation_remote_host":    "helicon",
+		"mutation_remote_workdir": "/srv/dross",
+	}, false)
+	stubProbe(t, 32, nil)
+	repo := filepath.Dir(root)
+	sub := filepath.Join(repo, "web")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, sub)
+
+	adapters, _, err := configuredAdapters(loadWiringProject(t, root), root, false)
+	if err != nil {
+		t.Fatalf("configuredAdapters: %v", err)
+	}
+	for _, a := range adapters {
+		var got string
+		switch v := a.(type) {
+		case *mutation.Gremlins:
+			got = v.ProjectRoot
+		case *mutation.Stryker:
+			got = v.ProjectRoot
+		case *mutation.StrykerNet:
+			got = v.ProjectRoot
+		default:
+			t.Fatalf("unexpected adapter %T", a)
+		}
+		if got != repo {
+			t.Errorf("%s: ProjectRoot = %q, want the repo root %q (cwd was %q)", a.Name(), got, repo, sub)
+		}
+	}
+}

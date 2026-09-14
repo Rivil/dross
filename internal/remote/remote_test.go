@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -43,7 +44,7 @@ func TestSyncArgsCarriesTheLockedFlags(t *testing.T) {
 	// Each of these is a locked decision, not a stylistic choice: dropping
 	// --delete leaves deleted files on the remote, and dropping the .gitignore
 	// filter puts node_modules and build output on the wire.
-	for _, want := range []string{"--delete", "--filter=:- .gitignore"} {
+	for _, want := range []string{"--delete", "--filter=:- .gitignore", "--filter=P /.dross-runs"} {
 		if !contains(argv, want) {
 			t.Errorf("argv is missing %q: %v", want, argv)
 		}
@@ -680,6 +681,63 @@ func TestSyncArgsExcludesAnchoredRulesInNonRootGitignores(t *testing.T) {
 		if !strings.Contains(listing, present) {
 			t.Errorf("%s did NOT reach the wire, but must:\n%s", present, listing)
 		}
+	}
+}
+
+// TestSyncArgsProtectsDetachedRunsFromDelete: the host's RunsDirName exists on
+// no sender, so --delete removed it on every sync and a detached run lost its
+// state/exit/pid directory mid-flight (helicon, 2026-09-13: `verify results`
+// reported the run gone while gremlins kept running as an orphan).
+//
+// The discriminating pair is on the RECEIVER: a live run directory and a stale
+// file, neither present at the source. The stale file must still be listed
+// for deletion — --delete is a locked flag and this must not blunt it — while
+// the run directory must not. A dry run against a destination that lacks both
+// would list nothing and pass on an argv with no protect rule at all.
+func TestSyncArgsProtectsDetachedRunsFromDelete(t *testing.T) {
+	if _, err := exec.LookPath("rsync"); err != nil {
+		t.Skip("rsync not installed")
+	}
+	src := t.TempDir()
+	dst := t.TempDir()
+	write := func(base, rel, body string) {
+		t.Helper()
+		p := filepath.Join(base, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(src, "keep.txt", "x")
+	write(dst, "keep.txt", "x")
+	write(dst, RunsDirName+"/r-20260913-163536/state", "running")
+	write(dst, RunsDirName+"/r-20260913-163536/pid", "4171859")
+	write(dst, "stale.txt", "x")
+
+	argv, cleanup, err := SyncArgs(target(), src)
+	if err != nil {
+		t.Fatalf("SyncArgs = %v", err)
+	}
+	defer cleanup()
+
+	run := append([]string{}, argv[1:len(argv)-2]...)
+	run = append(run, "--dry-run", "--itemize-changes", src+"/", dst+"/")
+	out, err := exec.Command(argv[0], run...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("rsync %v: %v: %s", run, err, out)
+	}
+	listing := string(out)
+
+	if strings.Contains(listing, RunsDirName) {
+		t.Errorf("the host's %s reached --delete:\n%s", RunsDirName, listing)
+	}
+	// rsync pads the itemized verb differently by version (`*deleting   x` on
+	// Linux 3.x, `deleting x` on macOS 2.6), so match the verb and the name,
+	// not the whitespace between them.
+	if !regexp.MustCompile(`deleting\s+stale\.txt`).MatchString(listing) {
+		t.Errorf("--delete no longer removes a stale receiver file — the protect rule is too wide:\n%s", listing)
 	}
 }
 

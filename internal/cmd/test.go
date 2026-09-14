@@ -873,6 +873,16 @@ func syncTreeTo(t remote.Target, repoDir string) error {
 	if err != nil {
 		return err
 	}
+	// The sync no longer destroys a detached run (SyncArgs protects the host's
+	// runs directory), but the suite about to start will share the host's
+	// cores with it, and a mutation leg's per-mutant timeouts are sized from an
+	// unloaded baseline. Said once, not refused: the run is safe, and whether
+	// the slowdown is worth it is the user's call.
+	if runs, rerr := readDetachedRuns(filepath.Join(root, RootDirName), root); rerr == nil {
+		if w := inFlightRunWarning(runs, t); w != "" {
+			fmt.Fprintln(os.Stderr, w)
+		}
+	}
 	sync, cleanup, err := remote.SyncArgs(t, root)
 	if err != nil {
 		return err
@@ -884,6 +894,31 @@ func syncTreeTo(t remote.Target, repoDir string) error {
 		return remoteFailure("rsync", t.Host, err)
 	}
 	return nil
+}
+
+// inFlightRunWarning names the recorded detached run, if any, that is running
+// or scheduled on the very host and workdir this sync is about to push to.
+// Pure over the record list so the wording is testable without a host; empty
+// when nothing is in flight there.
+func inFlightRunWarning(runs []detachedRun, t remote.Target) string {
+	for _, r := range runs {
+		if r.Host != t.Host || r.Workdir != t.Workdir {
+			continue
+		}
+		switch r.State {
+		case "running", "scheduled", "":
+			return fmt.Sprintf("warning: detached run %s (%s) is %s on %s — the sync leaves it alone, but this suite will compete with it for the host's cores",
+				r.RunID, r.Phase, stateWord(r), t.Host)
+		}
+	}
+	return ""
+}
+
+func stateWord(r detachedRun) string {
+	if r.Scheduled() {
+		return "scheduled"
+	}
+	return "running"
 }
 
 // runRemoteLine runs one command line on the already-synced target.

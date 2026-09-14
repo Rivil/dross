@@ -258,3 +258,32 @@ func TestRunRemoteCommandWithoutScriptReadsNoStdin(t *testing.T) {
 		t.Errorf("a command with no script did not complete, got %q", got)
 	}
 }
+
+// TestInFlightRunWarningNamesTheRunOnThisHost: a sync that lands on the host
+// and workdir of a recorded, uncollected run says so — once, naming the run —
+// and stays silent for a run elsewhere or one already finished. The sync
+// itself is safe (remote.SyncArgs protects the runs directory); the warning
+// is about the suite competing with the leg for cores, so it must not become
+// a refusal and must not fire when no contest exists.
+func TestInFlightRunWarningNamesTheRunOnThisHost(t *testing.T) {
+	here := remote.Target{Host: "helicon", Workdir: "/srv/dross"}
+	runs := []detachedRun{
+		{Phase: "elsewhere", RunID: "r-1", Host: "other", Workdir: "/srv/dross", State: "running"},
+		{Phase: "done", RunID: "r-2", Host: "helicon", Workdir: "/srv/dross", State: "finished"},
+		{Phase: "other-tree", RunID: "r-3", Host: "helicon", Workdir: "/srv/else", State: "running"},
+	}
+	if w := inFlightRunWarning(runs, here); w != "" {
+		t.Errorf("warned with nothing in flight on this host+workdir: %q", w)
+	}
+
+	runs = append(runs, detachedRun{Phase: "lossless", RunID: "r-4", Host: "helicon", Workdir: "/srv/dross", State: "running"})
+	w := inFlightRunWarning(runs, here)
+	for _, want := range []string{"warning:", "r-4", "lossless", "running", "helicon", "leaves it alone"} {
+		if !strings.Contains(w, want) {
+			t.Errorf("warning %q does not say %q", w, want)
+		}
+	}
+	if strings.Contains(w, "r-1") || strings.Contains(w, "r-2") || strings.Contains(w, "r-3") {
+		t.Errorf("warning names a run that is not on this host+workdir: %q", w)
+	}
+}

@@ -1,6 +1,10 @@
 package project
 
 import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -533,5 +537,60 @@ func TestProjectNoTechdebtSectionIsNil(t *testing.T) {
 	}
 	if p.Techdebt.Exclude != nil {
 		t.Fatalf("Exclude = %v, want nil with no [techdebt] table", p.Techdebt.Exclude)
+	}
+}
+
+// TestProjectPackageHasOneEncoder pins the encoder hand-off: every non-test
+// file in this package makes exactly one BurntSushi encoder call between
+// them — toml.NewEncoder or toml.Marshal — and it lives in encodeFresh. A
+// second call site is a re-encode path the patcher does not verify, which is
+// the whole-file overwrite this phase exists to remove.
+func TestProjectPackageHasOneEncoder(t *testing.T) {
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {
+		return !strings.HasSuffix(fi.Name(), "_test.go")
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sites []string
+	for _, pkg := range pkgs {
+		for name, f := range pkg.Files {
+			for _, decl := range f.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok {
+					continue
+				}
+				ast.Inspect(fn, func(n ast.Node) bool {
+					call, ok := n.(*ast.CallExpr)
+					if !ok {
+						return true
+					}
+					sel, ok := call.Fun.(*ast.SelectorExpr)
+					if !ok {
+						return true
+					}
+					pkg, ok := sel.X.(*ast.Ident)
+					if !ok || pkg.Name != "toml" {
+						return true
+					}
+					if sel.Sel.Name == "NewEncoder" || sel.Sel.Name == "Marshal" {
+						sites = append(sites, fmt.Sprintf("%s in %s (%s)", sel.Sel.Name, fn.Name.Name, filepath.Base(name)))
+					}
+					return true
+				})
+			}
+		}
+	}
+	if len(sites) != 1 || !strings.HasPrefix(sites[0], "NewEncoder in encodeFresh") {
+		t.Errorf("encoder call sites = %v, want exactly [NewEncoder in encodeFresh]", sites)
+	}
+	// The differ's tree conversion still routes through encodeFresh.
+	src, err := os.ReadFile("patch_diff.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), "return encodeFresh(p)") {
+		t.Error("encodeCanonical no longer routes through encodeFresh")
 	}
 }

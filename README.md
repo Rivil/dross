@@ -173,6 +173,12 @@ That is the guard working. git overwrites an *ignored* working-tree file without
 
 `dross doctor` reports the same condition, with the same fix, before you hit it.
 
+#### `project set` and `state set version` are now surgical — retire the per-repo bans
+
+Every dross command that writes `project.toml` — `dross project set`, `dross project set --unset`, `dross state set version`, `dross issue enable/disable`, `dross test lane add/edit/remove`, `dross stack apply` — now goes through one lossless write path: the file is patched on its raw bytes, so only the targeted line changes and every comment, hand-added key, indentation choice and line ending survives byte-for-byte. Lists (`stack.languages`), tables (`board.state_map`, `board.fields`) and array-of-tables blocks (`[[stack.locked]]`, `[[runtime.test_lane]]`) are patched the same way, one key or one block at a time; a whole-file re-encode only happens when the file does not exist yet.
+
+Earlier versions re-encoded the whole struct on every write and dropped anything the schema did not model, which is why some repos carry a rule banning these commands (codriver.nvim's `r-01`, for example). Those bans are **safe to retire**: run `dross rule remove <id>` and let the commands write the file again.
+
 ### Manual binary download
 
 GoReleaser publishes archives for `darwin/arm64` (primary), `darwin/amd64`, `linux/arm64`, `linux/amd64`, and `windows/arm64`+`windows/amd64` on every `v*` tag. Grab the matching archive from [releases](https://github.com/Rivil/dross/releases) — `.tar.gz` on macOS/Linux, `.zip` on Windows — extract, drop the `dross` binary (`dross.exe` on Windows) on your PATH, then run `dross install` to set up the slash commands and prompts.
