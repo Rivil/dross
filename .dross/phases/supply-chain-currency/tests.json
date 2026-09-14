@@ -1,0 +1,248 @@
+{
+  "phase": "supply-chain-currency",
+  "generated_at": "2026-09-14T09:56:17.94986Z",
+  "languages": null,
+  "skipped": [
+    {
+      "file": ".github/workflows/ci.yml",
+      "reason": "no mutation adapter for .yml"
+    },
+    {
+      "file": ".github/workflows/release.yml",
+      "reason": "no mutation adapter for .yml"
+    },
+    {
+      "file": ".goreleaser.yaml",
+      "reason": "no mutation adapter for .yaml"
+    },
+    {
+      "file": "go.mod",
+      "reason": "no mutation adapter for .mod"
+    },
+    {
+      "file": "go.sum",
+      "reason": "no mutation adapter for .sum"
+    },
+    {
+      "file": "internal/cmd/release_pipeline_test.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/cmd/toolchain_source_test.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/cmd/workflow_run_expressions_test.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/mutation/ceiling_test.go",
+      "reason": "no mutation adapter for .go"
+    }
+  ],
+  "scope": {
+    "files": [
+      ".dross/board.json",
+      ".dross/milestones/v1.7.toml",
+      ".dross/phases/supply-chain-currency/REVIEW.md",
+      ".dross/phases/supply-chain-currency/changes.json",
+      ".dross/phases/supply-chain-currency/plan.toml",
+      ".dross/phases/supply-chain-currency/spec.toml",
+      ".dross/project.toml",
+      ".github/workflows/ci.yml",
+      ".github/workflows/release.yml",
+      ".goreleaser.yaml",
+      "go.mod",
+      "go.sum",
+      "internal/cmd/release_pipeline_test.go",
+      "internal/cmd/toolchain_source_test.go",
+      "internal/cmd/workflow_run_expressions_test.go",
+      "internal/mutation/ceiling_test.go"
+    ],
+    "hunks": {
+      ".dross/board.json": [
+        {
+          "start": 46,
+          "end": 46
+        },
+        {
+          "start": 975,
+          "end": 994
+        }
+      ],
+      ".dross/milestones/v1.7.toml": [
+        {
+          "start": 1,
+          "end": 1
+        }
+      ],
+      ".dross/phases/supply-chain-currency/REVIEW.md": [
+        {
+          "start": 1,
+          "end": 36
+        }
+      ],
+      ".dross/phases/supply-chain-currency/changes.json": [
+        {
+          "start": 1,
+          "end": 77
+        }
+      ],
+      ".dross/phases/supply-chain-currency/plan.toml": [
+        {
+          "start": 1,
+          "end": 45
+        }
+      ],
+      ".dross/phases/supply-chain-currency/spec.toml": [
+        {
+          "start": 1,
+          "end": 47
+        }
+      ],
+      ".dross/project.toml": [
+        {
+          "start": 3,
+          "end": 3
+        }
+      ],
+      ".github/workflows/ci.yml": [
+        {
+          "start": 29,
+          "end": 29
+        },
+        {
+          "start": 31,
+          "end": 40
+        },
+        {
+          "start": 43,
+          "end": 55
+        },
+        {
+          "start": 69,
+          "end": 69
+        },
+        {
+          "start": 92,
+          "end": 92
+        },
+        {
+          "start": 94,
+          "end": 94
+        },
+        {
+          "start": 97,
+          "end": 99
+        }
+      ],
+      ".github/workflows/release.yml": [
+        {
+          "start": 32,
+          "end": 38
+        },
+        {
+          "start": 48,
+          "end": 53
+        },
+        {
+          "start": 56,
+          "end": 56
+        },
+        {
+          "start": 76,
+          "end": 77
+        },
+        {
+          "start": 80,
+          "end": 80
+        },
+        {
+          "start": 84,
+          "end": 84
+        },
+        {
+          "start": 87,
+          "end": 92
+        },
+        {
+          "start": 95,
+          "end": 112
+        }
+      ],
+      ".goreleaser.yaml": [
+        {
+          "start": 5,
+          "end": 8
+        }
+      ],
+      "go.mod": [
+        {
+          "start": 3,
+          "end": 5
+        },
+        {
+          "start": 9,
+          "end": 13
+        },
+        {
+          "start": 18,
+          "end": 19
+        }
+      ],
+      "go.sum": [
+        {
+          "start": 3,
+          "end": 5
+        },
+        {
+          "start": 9,
+          "end": 22
+        }
+      ],
+      "internal/cmd/release_pipeline_test.go": [
+        {
+          "start": 1,
+          "end": 107
+        }
+      ],
+      "internal/cmd/toolchain_source_test.go": [
+        {
+          "start": 1,
+          "end": 176
+        }
+      ],
+      "internal/cmd/workflow_run_expressions_test.go": [
+        {
+          "start": 1,
+          "end": 163
+        }
+      ],
+      "internal/mutation/ceiling_test.go": [
+        {
+          "start": 167,
+          "end": 175
+        },
+        {
+          "start": 182,
+          "end": 182
+        },
+        {
+          "start": 185,
+          "end": 185
+        },
+        {
+          "start": 187,
+          "end": 187
+        },
+        {
+          "start": 190,
+          "end": 190
+        }
+      ]
+    },
+    "base": "2641600cb6dabc7b5147c02d800ef028143db028",
+    "source": "git+changes"
+  },
+  "measured_on": "local"
+}
