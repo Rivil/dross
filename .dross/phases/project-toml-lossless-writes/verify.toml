@@ -1,69 +1,55 @@
 [verify]
   phase = "project-toml-lossless-writes"
-  generated_at = 2026-09-13T18:39:28.275563Z
-  verdict = "fail"
-  finalized = true
-  finalized_at = 2026-09-13T18:41:58.445862Z
+  generated_at = 2026-09-14T07:27:51.432524Z
+  verdict = "pending"
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.7393715341959335
-  mutants_killed = 400
-  mutants_survived = 141
-  mutants_not_covered = 141
-  mutants_in_scope = 541
-  unclassified_in_scope = 141
+  mutation_score = 0.935064935064935
+  mutants_killed = 864
+  mutants_survived = 60
+  mutants_not_covered = 60
+  mutants_in_scope = 924
+  unclassified_in_scope = 46
   criteria_total = 6
-  criteria_covered = 3
-  criteria_uncovered = 3
+  criteria_covered = 0
+  criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 400
-    survived = 141
+    killed = 864
+    survived = 60
     timeout = 0
-    in_scope = 541
-    score = 0.7393715341959335
-    file_count = 14
+    in_scope = 924
+    score = 0.935064935064935
+    file_count = 20
     measured_on = "helicon"
 
 [[criterion]]
   id = "c-1"
-  status = "weak"
-  tests = ["internal/cmd/project_lossless_test.go:TestLosslessStateSetVersion", "internal/cmd/project_lossless_test.go:TestLosslessRealProjectTomlOneLineDiff", "internal/project/save_lossless_test.go:TestSaveNoopIsByteIdentical", "internal/project/save_lossless_test.go:TestSaveSingleFieldChangesOneLine"]
-  notes = "Exact changed-line-set assertions hold for every fixture shape tested, but 130 in-hunk mutants in patch.go are NOT COVERED: the literal-string scanners (scanLiteral, scanMultilineLiteral: 0%), quoted-key escapes (unescapeBasic: 5.9%), firstBytes (0%) and branches of setKey/parseKeyPath/qualify/scanBracketed/removeBlock never run. A hand-edited file using '…' / '''…''' strings or escaped quoted keys is a surface the criterion claims and no test exercises."
+  status = "unknown"
 
 [[criterion]]
   id = "c-2"
-  status = "weak"
-  tests = ["internal/cmd/project_lossless_test.go:TestLosslessUnmodeledKeysSurviveEveryWriter", "internal/project/patch_test.go:TestApplyKeepsHeaderThatHoldsUnmodeledKey"]
-  notes = "The 14-step writer matrix greps every note/comment/[custom]/unmodeled key after each write and is strong for the fixture's shapes; downgraded with c-1 because the unmodeled-content scanners that decide a value span (literal strings, escaped keys) are unexercised in-hunk code."
+  status = "unknown"
 
 [[criterion]]
   id = "c-3"
-  status = "covered"
-  tests = ["internal/cmd/project_writer_pin_test.go:TestNoWriterBypassesProjectSave", "internal/cmd/project_writer_pin_test.go:TestEncodeFreshIsTheOnlyEncoder", "internal/cmd/project_writer_pin_test.go:TestWriterPinCatchesIndirectPath", "internal/project/patch_diff_test.go:TestDiffUsesOneEncoderHelper"]
-  notes = "go/ast scan of every non-test file under internal/ with teeth proven on synthetic two-step/literal/rename/Marshal shapes; the one surviving mutant in patch_diff.go:91 (classify) is a shape-error branch, not the single-writer guarantee."
+  status = "unknown"
 
 [[criterion]]
   id = "c-4"
-  status = "covered"
-  tests = ["internal/cmd/project_lossless_test.go:TestLosslessUnmodeledKeysSurviveEveryWriter", "internal/cmd/project_lossless_test.go:onlyLinesChanged"]
-  notes = "The criterion asks for the test itself: losslessFixture seeds comments + two hand-added notes + [custom] + an unmodeled [remote] key, every writer runs in-process, onlyLinesChanged asserts the exact added/removed set. Present and observed green on helicon."
+  status = "unknown"
 
 [[criterion]]
   id = "c-5"
-  status = "covered"
-  tests = ["internal/cmd/lossless_docs_test.go:TestReadmeRetiresProjectSetBans"]
-  notes = "README `### Updating` subsection must name both commands, \"safe to retire\" and \"r-01\" exactly once; ship.BuildPRBody renders the criterion text verbatim into the PR."
+  status = "unknown"
 
 [[criterion]]
   id = "c-6"
-  status = "weak"
-  tests = ["internal/cmd/project_lossless_test.go:TestLosslessArrayWriteIsOneLine", "internal/cmd/project_lossless_test.go:TestLosslessSubtableCreatedOnFirstWrite", "internal/cmd/project_lossless_test.go:TestLosslessLaneRemoveLeavesSiblings", "internal/cmd/project_lossless_test.go:TestLosslessLaneAddEditOneBlock", "internal/project/save_lossless_test.go:TestSaveArrayOfTablesAlignment", "internal/project/save_lossless_test.go:TestSaveMapTablesAreLeafOps"]
-  notes = "Array, sub-table and array-of-tables writes are proven one-line/one-block on header-spelled tables, but setKey's dotted-key branch (`state_map.x = …` spelled inside [board], patch.go:787-802) and its root-table insert are in-hunk NOT COVERED — a table the user spelled with dotted keys is untested for insertion."
+  status = "unknown"
 
 [[finding]]
   severity = "BLOCKING"
@@ -76,38 +62,6 @@
 [[finding]]
   severity = "BLOCKING"
   text = "gremlins mutant survived: internal/project/patch.go:131 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:194 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:202 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:217 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:217 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:239 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:251 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:255 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:260 (ARITHMETIC_BASE)"
 
 [[finding]]
   severity = "BLOCKING"
@@ -139,38 +93,6 @@
 
 [[finding]]
   severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:310 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:313 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:313 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:313 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:340 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:340 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:343 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:343 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
   text = "gremlins mutant survived: internal/project/patch.go:360 (CONDITIONALS_NEGATION)"
 
 [[finding]]
@@ -187,87 +109,7 @@
 
 [[finding]]
   severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:377 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
   text = "gremlins mutant survived: internal/project/patch.go:391 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:404 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:417 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:424 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:433 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:433 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:433 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:433 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:436 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:445 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:446 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:446 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:449 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:450 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:450 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:450 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:450 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:450 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:450 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:451 (INCREMENT_DECREMENT)"
 
 [[finding]]
   severity = "BLOCKING"
@@ -295,62 +137,6 @@
 
 [[finding]]
   severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:494 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:494 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:494 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:495 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:499 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:500 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:500 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:518 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:521 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:521 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:521 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:525 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:525 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:525 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
   text = "gremlins mutant survived: internal/project/patch.go:528 (CONDITIONALS_BOUNDARY)"
 
 [[finding]]
@@ -364,14 +150,6 @@
 [[finding]]
   severity = "BLOCKING"
   text = "gremlins mutant survived: internal/project/patch.go:528 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:529 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:529 (ARITHMETIC_BASE)"
 
 [[finding]]
   severity = "BLOCKING"
@@ -391,18 +169,6 @@
 
 [[finding]]
   severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:531 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:531 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:531 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
   text = "gremlins mutant survived: internal/project/patch.go:532 (CONDITIONALS_BOUNDARY)"
 
 [[finding]]
@@ -416,30 +182,6 @@
 [[finding]]
   severity = "BLOCKING"
   text = "gremlins mutant survived: internal/project/patch.go:532 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:533 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:533 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:533 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:586 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:586 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:657 (ARITHMETIC_BASE)"
 
 [[finding]]
   severity = "BLOCKING"
@@ -479,160 +221,16 @@
 
 [[finding]]
   severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:787 (ARITHMETIC_BASE)"
+  text = "gremlins mutant survived: internal/project/patch.go:821 (CONDITIONALS_BOUNDARY)"
 
 [[finding]]
   severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:787 (ARITHMETIC_BASE)"
+  text = "gremlins mutant survived: internal/project/patch.go:821 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:787 (ARITHMETIC_BASE)"
+  text = "gremlins mutant survived: internal/project/patch.go:928 (CONDITIONALS_BOUNDARY)"
 
 [[finding]]
   severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:787 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:791 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:791 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:793 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:797 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:797 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:802 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:802 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:818 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:818 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:894 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:894 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:925 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:925 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:988 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:992 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:1052 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:1052 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:1069 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:1069 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:1069 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:1069 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:1069 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:1070 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch_diff.go:91 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/project.go:527 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/project.go:527 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/project.go:527 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/project.go:527 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/project.go:527 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/project.go:529 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/project.go:529 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/project.go:532 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/project.go:532 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/project.go:535 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "FLAG"
-  text = "All 141 survivors are NOT COVERED (0 lived among 400 reached — efficacy 1.00 over reachable code). go test -cover on internal/project confirms real gaps rather than the switch-case attribution ceiling: scanLiteral, scanMultilineLiteral, firstBytes 0%; unescapeBasic 5.9%; toBlock 18%; scanString 40%; verifyPatched 43% (mismatch line-naming loop never runs — TestSaveRefusesUnverifiedPatch injects a type error that fails decode first); writeAtomic 44%; setKey dotted-key and root-table branches. Kill them with tests in a hardening task rather than accepting: hand-edited files can carry every one of these shapes."
-
-[[finding]]
-  severity = "NOTE"
-  text = "First detached run r-20260913-163536 was destroyed mid-flight: dross test's rsync --delete sync does not protect <workdir>/.dross-runs. Orphan killed on helicon, re-dispatched as r-20260913-164337 (this result). Bug filed as deferred[0] / DRO-419."
+  text = "gremlins mutant survived: internal/project/patch.go:928 (CONDITIONALS_NEGATION)"
