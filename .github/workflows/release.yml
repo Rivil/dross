@@ -29,8 +29,13 @@ jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      # Pin proxy + checksum DB. NOT -mod=readonly: goreleaser's `go mod tidy`
-      # before-hook needs a writable module graph.
+      # Same hardening as ci.yml: pin proxy + checksum DB and refuse any mid-job
+      # mutation of go.mod/go.sum. -mod=readonly is what makes the govulncheck
+      # step below meaningful — the graph it scans is, by construction, the
+      # graph goreleaser then builds from, because neither step may change it.
+      # (goreleaser's `go mod tidy` before-hook, which needed a writable graph,
+      # is gone: a tidy tree is CI's job, not the release's.)
+      GOFLAGS: -mod=readonly
       GOPROXY: https://proxy.golang.org,direct
       GOSUMDB: sum.golang.org
     steps:
@@ -82,6 +87,20 @@ jobs:
       - name: go version
         if: steps.tag.outputs.new_tag != ''
         run: go version
+
+      # Supply-chain gate on the release itself. CI already runs this on every
+      # PR, but an advisory can land between that green and the merge to main;
+      # scanning here — on the readonly graph the binaries are about to be built
+      # from — is the only run that proves the shipped graph is clean. Pinned,
+      # never @latest; no allowlist and no `|| true`: a finding fails the
+      # release (TestReleaseJobRunsGovulncheck pins all three properties).
+      - name: install govulncheck
+        if: steps.tag.outputs.new_tag != ''
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+
+      - name: govulncheck
+        if: steps.tag.outputs.new_tag != ''
+        run: govulncheck ./...
 
       # goreleaser's `signs:` block shells out to the `minisign` CLI, which is not
       # present on the runner by default. Install it from Ubuntu's signed apt repo
