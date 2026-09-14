@@ -45,6 +45,14 @@ jobs:
       - name: go version
         run: go version
 
+      # Tidy drift gate: the committed go.mod/go.sum must already be the tidy
+      # graph. -diff exits non-zero and prints the delta instead of rewriting
+      # (which -mod=readonly would refuse anyway). Release builds readonly with
+      # no tidy hook, so drift caught here is drift that would otherwise fail —
+      # or silently reshape — the release build.
+      - name: go mod tidy -diff
+        run: go mod tidy -diff
+
       - name: go vet
         run: go vet ./...
 
