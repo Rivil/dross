@@ -46,3 +46,8 @@
   choice = "Split by cause: adapter-lacks-RangeRunner and file-absent-from-hunks are informational only; a malformed range or a hunk-less Scope on a range-capable adapter is appended to Scope.Degraded so the run prints the existing degraded warning."
   why = "Whole-file is more measurement, never less, so a structural fallback cannot make a pass dishonest — but a lost hunk on an adapter that could have used it is a lost signal and must surface as one."
   locked = true
+
+[[deferred]]
+  id = "285dca82787c2b6a"
+  text = "dross verify rescore <phase>: re-skeleton verify.toml from recorded reports (reports/gremlins/*.json) through the verify results pipeline after a post-collection survivor accept"
+  why = "verify results consumes the run record, so an accept made after collection leaves verify.toml's summary stale with no verb to recompute it; recorded as a NOTE in project-toml-lossless-writes/verify.toml"
