@@ -43,6 +43,7 @@
     "remote-toolchain-bootstrap": "DRO-129",
     "remote-toolchain-install": "DRO-246",
     "scanner-self-exclusion": "DRO-404",
+    "supply-chain-currency": "DRO-423",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10",
     "test-lane-config": "DRO-191",
