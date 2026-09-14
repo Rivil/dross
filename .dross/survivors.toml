@@ -2104,15 +2104,6 @@
   accepted_in = "project-toml-lossless-writes"
 
 [[accepted]]
-  key = "90b742483f92661b"
-  file = "internal/project/patch.go"
-  op = "ARITHMETIC_BASE"
-  text = "return nil, fmt.Errorf(\"line %d: value runs past end of file\", lineNo+1)"
-  line = 264
-  reason = "The 'value runs past end of file' error is unreachable by construction: indexDoc only extends a multi-line value span while a continuation line exists, so lineNo can never exceed the file's line count when this branch is evaluated — the guard is defensive against a future indexer change. The mutated arithmetic on lineNo+1 changes only the text of an error no input can trigger, so no test can distinguish it."
-  accepted_in = "project-toml-lossless-writes"
-
-[[accepted]]
   key = "35ec167a24dc7a24"
   file = "internal/cmd/redproof_replay.go"
   op = "ARITHMETIC_BASE"
@@ -2128,4 +2119,13 @@
   text = "const RunsProtectRule = \"--filter=P /\" + RunsDirName"
   line = 601
   reason = "const initializer for a string (RunsProtectRule = \"--filter=P /\" + RunsDirName): go-cover instruments no block for package-level const declarations and ARITHMETIC_BASE has no meaning on string concatenation, so the mutant cannot be built or observed by any test. Its value is pinned by TestSyncArgsProtectsDetachedRunsFromDelete on the rsync argv."
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "90b742483f92661b"
+  file = "internal/project/patch.go"
+  op = "ARITHMETIC_BASE"
+  text = "return nil, fmt.Errorf(\"line %d: value runs past end of file\", lineNo+1)"
+  line = 264
+  reason = "The 'value runs past end of file' error is unreachable by construction: parseKeyLine's endLine is lineNo plus the newlines inside the scanned value span, and scanValue only extends a span across lines that exist in src, so endLine can never exceed len(d.lines) when the guard is evaluated — it is defensive against a future indexer change. The mutated arithmetic on lineNo+1 changes only the text of an error no input can trigger, so no test can distinguish it. The span-termination paths either side of the guard are pinned by TestIndexLiteralStrings (unterminated literal at EOF, no trailing newline) and TestIndexMultilineBasicEscapesAndExtraQuotes (unterminated multi-line basic string)."
   accepted_in = "project-toml-lossless-writes"
