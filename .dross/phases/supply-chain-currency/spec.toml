@@ -42,6 +42,7 @@
   locked = true
 
 [[deferred]]
+  id = "6ecba2da20b3a6d3"
   text = "Dependabot/Renovate config (gomod + github-actions, weekly, grouped) so dependency and action currency stays true after this phase."
   why = "New standing mechanism, not a one-shot fix; c-3 is point-in-time by design."
   target = "dependency-update-automation"

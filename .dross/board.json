@@ -67,9 +67,9 @@
   "backlog": {
     "slug:ast-aware-mutation-ranges": "DRO-349",
     "slug:cmd-package-decomposition": "DRO-351",
+    "slug:dependency-update-automation": "DRO-428",
     "slug:mutation-range-provenance": "DRO-348",
     "slug:secret-detection": "DRO-350",
-    "slug:supply-chain-currency": "DRO-347",
     "someday:id:010e057c10c922c6": "DRO-286",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
@@ -132,6 +132,7 @@
     "someday:id:6953a18634519ce3": "DRO-244",
     "someday:id:6e152e9e753162c5": "DRO-402",
     "someday:id:6e9a60c539934c23": "DRO-40",
+    "someday:id:6ecba2da20b3a6d3": "DRO-429",
     "someday:id:6f43c4001c862759": "DRO-124",
     "someday:id:7300a61dfb556269": "DRO-118",
     "someday:id:75415f41886564d8": "DRO-315",
@@ -975,22 +976,22 @@
     "supply-chain-currency/t-1": {
       "issue": "DRO-424",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "supply-chain-currency/t-2": {
       "issue": "DRO-427",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "supply-chain-currency/t-3": {
       "issue": "DRO-425",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "supply-chain-currency/t-4": {
       "issue": "DRO-426",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-lane-config/t-1": {
       "issue": "DRO-192",
