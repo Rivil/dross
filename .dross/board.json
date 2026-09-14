@@ -29,6 +29,7 @@
     "mirror-terminal-state": "DRO-149",
     "multilang-verify-signal": "DRO-28",
     "mutation-diff-scope": "DRO-9",
+    "mutation-range-provenance": "DRO-430",
     "mutation-score-truth": "DRO-30",
     "phase-create-adoption": "DRO-31",
     "plan-gray-area-walkthrough": "DRO-29",
