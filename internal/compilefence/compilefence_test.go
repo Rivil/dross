@@ -1,12 +1,15 @@
 package compilefence
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -164,4 +167,102 @@ func TestNoProductionCodeImportsCompilefence(t *testing.T) {
 		t.Errorf("import walk visited only %d non-test .go files; it is not covering the repo", seen)
 	}
 	_ = ast.Print // keep go/ast referenced if the walk above is ever simplified
+}
+
+// recorder is a testing.TB whose Fatalf records instead of failing the test
+// that owns it. It exists so AssertDoesNotCompile / AssertCompiles can be
+// driven from INSIDE this package: every other test here calls build()
+// directly, so the two assertion bodies never executed under this package's
+// own test binary and read as uncovered to a per-package mutation run.
+//
+// Fatalf still ends the goroutine it is called on (runtime.Goexit), exactly as
+// the real one does, so an assertion that fails records ONE message and never
+// runs on to a second check over stale state — the recorder mirrors testing.T
+// rather than inventing a laxer contract. run() supplies that goroutine.
+type recorder struct {
+	*testing.T
+	fatals []string
+}
+
+func (r *recorder) Helper() {}
+
+func (r *recorder) Fatalf(format string, args ...any) {
+	r.fatals = append(r.fatals, fmt.Sprintf(format, args...))
+	runtime.Goexit()
+}
+
+// run drives fn on its own goroutine so a recorded Fatalf can Goexit without
+// taking the calling test down with it.
+func (r *recorder) run(fn func(tb testing.TB)) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		fn(r)
+	}()
+	wg.Wait()
+}
+
+func newRecorder(t *testing.T) *recorder {
+	if testing.Short() {
+		t.Skip("runs go build")
+	}
+	return &recorder{T: t}
+}
+
+func TestAssertDoesNotCompileRefusesACompilingFixture(t *testing.T) {
+	rec := newRecorder(t)
+	rec.run(func(tb testing.TB) { AssertDoesNotCompile(tb, importsInternal, "x") })
+	if len(rec.fatals) != 1 {
+		t.Fatalf("want exactly one Fatalf, got %d: %q", len(rec.fatals), rec.fatals)
+	}
+	if !strings.Contains(rec.fatals[0], "COMPILED but should not have") {
+		t.Errorf("want the compiled-but-should-not wording, got:\n%s", rec.fatals[0])
+	}
+}
+
+func TestAssertDoesNotCompileAcceptsTheRightRefusal(t *testing.T) {
+	rec := newRecorder(t)
+	rec.run(func(tb testing.TB) {
+		AssertDoesNotCompile(tb, setsUnexportedField, "cannot refer to unexported field")
+	})
+	if len(rec.fatals) != 0 {
+		t.Fatalf("a correctly refused fixture must record no Fatalf, got %q", rec.fatals)
+	}
+}
+
+func TestAssertDoesNotCompileRefusesTheWrongReason(t *testing.T) {
+	rec := newRecorder(t)
+	rec.run(func(tb testing.TB) {
+		AssertDoesNotCompile(tb, setsUnknownField, "cannot refer to unexported field")
+	})
+	if len(rec.fatals) != 1 {
+		t.Fatalf("want exactly one Fatalf, got %d: %q", len(rec.fatals), rec.fatals)
+	}
+	if !strings.Contains(rec.fatals[0], "WRONG reason") {
+		t.Errorf("want the wrong-reason wording, got:\n%s", rec.fatals[0])
+	}
+}
+
+func TestAssertCompilesRefusesABrokenFixture(t *testing.T) {
+	rec := newRecorder(t)
+	rec.run(func(tb testing.TB) { AssertCompiles(tb, setsUnexportedField) })
+	if len(rec.fatals) != 1 {
+		t.Fatalf("want exactly one Fatalf, got %d: %q", len(rec.fatals), rec.fatals)
+	}
+	// Both halves of the concatenated message: a mutant that breaks the `+`
+	// between them cannot compile, and one that drops a half must read wrong.
+	for _, want := range []string{"compile fence itself is broken", "so every AssertDoesNotCompile"} {
+		if !strings.Contains(rec.fatals[0], want) {
+			t.Errorf("Fatalf lacks %q:\n%s", want, rec.fatals[0])
+		}
+	}
+}
+
+func TestAssertCompilesAcceptsACleanFixture(t *testing.T) {
+	rec := newRecorder(t)
+	rec.run(func(tb testing.TB) { AssertCompiles(tb, importsInternal) })
+	if len(rec.fatals) != 0 {
+		t.Fatalf("a clean fixture must record no Fatalf, got %q", rec.fatals)
+	}
 }
