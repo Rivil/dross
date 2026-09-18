@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -219,6 +220,21 @@ type LanguageRun struct {
 	// reads and fixes, while a leg that never ran means this phase has no
 	// evidence about that language at all — which must not be verifiable past.
 	RemoteTransport bool `json:"remote_transport,omitempty"`
+
+	// Ranges records, per file, the effective line ranges this leg's adapter
+	// was actually told to mutate — post-pad, post-merge, with the pad that
+	// produced them. Scope.Hunks keeps the raw diff; this keeps what the tool
+	// was told, so a run's claimed scope is provable from its own record. It
+	// lives on the leg rather than the Scope because ranges are adapter-
+	// specific (gremlins has none): the leg is the honest owner of its own
+	// output, and the Scope stays the pure pre-run input. Absent on a leg
+	// that ranged nothing.
+	Ranges map[string][]EffectiveRange `json:"ranges,omitempty"`
+	// WholeFile names every file this leg mutated WHOLE rather than by range,
+	// with the reason from the closed set in range_provenance.go. A leg that
+	// measured whole files must never read as a ranged one, so the fallback
+	// is a named fact here, not an absence in Ranges.
+	WholeFile map[string]string `json:"whole_file,omitempty"`
 }
 
 type SkippedFile struct {
@@ -510,13 +526,6 @@ func Run(phaseID string, files []string, adapters []mutation.Adapter) (*Tests, e
 	return RunScoped(phaseID, files, adapters, nil)
 }
 
-// RunScoped is Run with diff scoping applied to each leg's report. A nil scope
-// is the unscoped behaviour, which is what Run passes.
-//
-// Filtering happens AFTER each adapter returns. What the adapter was
-// dispatched to mutate is not narrowed here — narrowing the dispatch would
-// change which mutants exist, and this is only about which of them this phase
-// is answerable for.
 // hunkContextLines pads each changed hunk before it becomes a mutation range.
 //
 // WHY A PAD IS NECESSARY AT ALL, measured rather than assumed. A mutant is
@@ -582,40 +591,43 @@ func padAndMerge(in []Range) []mutation.Range {
 	return out
 }
 
-// runAdapter dispatches one adapter's leg, narrowed to the phase's changed
-// LINES when the adapter can express that and the scope actually knows them.
+// runPlanned dispatches one adapter's leg the way its RangePlan says: by
+// range when the adapter can express it AND the plan found something to
+// narrow, whole otherwise. The plan is what gets recorded, and this is the
+// only place it is executed — so the record and the dispatch cannot disagree.
 //
-// The two guards are not the same guard, and both are load-bearing:
-//
-//   - an adapter that does not implement RangeRunner (gremlins, stryker-net)
-//     keeps the plain Run it has always had. Asserting the interface without
-//     checking would stop the Go leg running at all.
-//   - a scope with NO hunks — a degraded diff, a base ref that went missing —
-//     falls back to whole-file scope rather than mutating nothing. phaseScope
-//     already degrades loudly rather than narrowing quietly; narrowing to an
-//     empty set here would undo exactly that.
-//
-// Per-file fail-open lives one level down, in the adapter: a file present in
-// the scope but absent from Hunks is mutated whole.
-func runAdapter(a mutation.Adapter, files []string, scope *Scope) (*mutation.Report, error) {
-	rr, ok := a.(mutation.RangeRunner)
-	if !ok || scope == nil || len(scope.Hunks) == 0 {
-		return a.Run(files)
+// Both guards are load-bearing. Asserting RangeRunner without checking would
+// stop the Go leg running at all; an empty Dispatch is every file falling
+// open (no hunks, all absent, all malformed), and narrowing to an empty set
+// would mutate nothing where the record says whole.
+func runPlanned(a mutation.Adapter, files []string, plan RangePlan) (*mutation.Report, error) {
+	if rr, ok := a.(mutation.RangeRunner); ok && len(plan.Dispatch) > 0 {
+		return rr.RunRanges(files, plan.Dispatch)
 	}
-	ranges := make(map[string][]mutation.Range, len(scope.Hunks))
-	for _, f := range files {
-		hunks := scope.Hunks[f]
-		if len(hunks) == 0 {
-			continue
-		}
-		ranges[f] = padAndMerge(hunks)
-	}
-	if len(ranges) == 0 {
-		return a.Run(files)
-	}
-	return rr.RunRanges(files, ranges)
+	return a.Run(files)
 }
 
+// appendDegraded adds a plan's Degraded lines to the scope, nil-safe and
+// deduped: a nil scope has nowhere to record them (and nothing to degrade),
+// and a line already present would print the same warning twice.
+func appendDegraded(scope *Scope, lines []string) {
+	if scope == nil {
+		return
+	}
+	for _, l := range lines {
+		if !slices.Contains(scope.Degraded, l) {
+			scope.Degraded = append(scope.Degraded, l)
+		}
+	}
+}
+
+// RunScoped is Run with diff scoping applied to each leg's report. A nil scope
+// is the unscoped behaviour, which is what Run passes.
+//
+// Filtering happens AFTER each adapter returns. What the adapter was
+// DISPATCHED to mutate is narrowed too, when the adapter can range and the
+// scope knows its hunks (PlanRanges) — and that decision is recorded on the
+// leg before the tool runs, so a failed leg still says what it was told.
 func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scope *Scope) (*Tests, error) {
 	t := &Tests{
 		Phase:       phaseID,
@@ -648,7 +660,17 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 
 	for _, name := range names {
 		a := adapterByName[name]
-		report, err := runAdapter(a, byAdapter[name], scope)
+		// Planned once, recorded on whichever leg results, and executed
+		// from the same value: provenance is known before the tool runs.
+		plan := PlanRanges(a, byAdapter[name], scope)
+		appendDegraded(scope, plan.Degraded)
+		// Recorded as ABSENT when empty, never as an empty object: omitempty
+		// drops it on the way out, so the loaded record would otherwise
+		// differ from the one that was saved.
+		if len(plan.WholeFile) == 0 {
+			plan.WholeFile = nil
+		}
+		report, err := runPlanned(a, byAdapter[name], plan)
 		if err != nil {
 			// Record-and-continue: adapters run in sorted-name order, so a
 			// failing early adapter (e.g. stryker misconfigured) must not
@@ -672,6 +694,11 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 				// downstream sees only Error, a string, and errors.Is cannot be
 				// re-run against prose.
 				RemoteTransport: errors.Is(err, remote.ErrTransport),
+				// Stamped on the failure too: what the tool was TOLD is known
+				// whether or not it answered, and a failed ranged leg that
+				// forgot its ranges would be re-read as a whole-file one.
+				Ranges:    plan.Ranges,
+				WholeFile: plan.WholeFile,
 			})
 			continue
 		}
@@ -687,6 +714,8 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 			MeasuredOn: MeasuredOnHost(AdapterHost(a)),
 			Files:      byAdapter[name],
 			Mutation:   kept,
+			Ranges:     plan.Ranges,
+			WholeFile:  plan.WholeFile,
 		})
 	}
 

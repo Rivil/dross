@@ -203,3 +203,43 @@ func TestRunScopedPassesPaddedRanges(t *testing.T) {
 		t.Errorf("dispatched ranges = %v, want [{75 129}]", got)
 	}
 }
+
+// The recorded ranges ARE the dispatched ranges: one plan, executed and
+// persisted from the same value. A second loop deriving the record would be a
+// place for the two to drift.
+func TestRecordedRangesAreTheDispatchedRanges(t *testing.T) {
+	a := &rangingAdapter{name: "stryker"}
+	files := []string{"src/a.ts", "src/b.ts", "src/c.ts"}
+	scope := scopeWithHunks(files, map[string][]Range{
+		"src/a.ts": {{Start: 10, End: 12}},
+		"src/b.ts": {{Start: 100, End: 104}, {Start: 120, End: 121}},
+	})
+	tests, err := RunScoped("p", files, []mutation.Adapter{a}, scope)
+	if err != nil {
+		t.Fatalf("RunScoped: %v", err)
+	}
+	if !a.rangedCall {
+		t.Fatal("the ranged arm was not taken")
+	}
+	lr := tests.Languages[0]
+	if len(lr.Ranges) != len(a.ranRanges) {
+		t.Fatalf("recorded %d files, dispatched %d", len(lr.Ranges), len(a.ranRanges))
+	}
+	for f, dispatched := range a.ranRanges {
+		recorded := lr.Ranges[f]
+		if len(recorded) != len(dispatched) {
+			t.Fatalf("%s: recorded %v, dispatched %v", f, recorded, dispatched)
+		}
+		for i := range dispatched {
+			if recorded[i].Start != dispatched[i].Start || recorded[i].End != dispatched[i].End {
+				t.Errorf("%s[%d]: recorded %v, dispatched %v", f, i, recorded[i], dispatched[i])
+			}
+			if recorded[i].Pad != hunkContextLines {
+				t.Errorf("%s[%d]: pad = %d, want %d", f, i, recorded[i].Pad, hunkContextLines)
+			}
+		}
+	}
+	if got := lr.WholeFile["src/c.ts"]; got != WholeFileAbsentFromHunks {
+		t.Errorf("c.ts whole_file = %q, want %q", got, WholeFileAbsentFromHunks)
+	}
+}

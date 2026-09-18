@@ -643,6 +643,12 @@ func collectDetached(phaseID string) error {
 	}
 	kept, dropped := verify.FilterReport(report, scope, "go")
 	t.OutOfScope = append(t.OutOfScope, dropped...)
+	// The same planner the attached path runs, so a collected leg carries the
+	// same provenance an attached one would — whole_file for every file, with
+	// its reason — rather than nothing. A ZERO Gremlins, not the tuned
+	// constructor: PlanRanges is pure and only type-asserts RangeRunner, and
+	// this path must not build anything that could run.
+	plan := verify.PlanRanges(&mutation.Gremlins{}, files, scope)
 	t.Languages = append(t.Languages, verify.LanguageRun{
 		Name: "go",
 		Tool: "gremlins",
@@ -652,6 +658,8 @@ func collectDetached(phaseID string) error {
 		MeasuredOn: verify.MeasuredOnHost(rec.Host),
 		Files:      files,
 		Mutation:   kept,
+		Ranges:     plan.Ranges,
+		WholeFile:  plan.WholeFile,
 	})
 
 	if err := finishVerify(root, phaseID, spec, t, verify.MeasuredOnHost(rec.Host), gone); err != nil {
