@@ -228,3 +228,56 @@ func TestRangeValidEdges(t *testing.T) {
 		}
 	}
 }
+
+// ProvenanceOf is the seam `dross verify scope` reads through, and its only
+// callers live in internal/cmd — so the nil-scope branch at the top of it was
+// killed by TestVerifyScopeJSONIsTheRecordVerbatim over there and by nothing
+// here, where gremlins scores it (verify run r-20260918-073404). Both arms
+// are pinned in-package: a scoped record projects its Files and Hunks by
+// value, an unscoped one projects neither and does not dereference nil.
+func TestProvenanceOfProjectsScopeAndToleratesNil(t *testing.T) {
+	files := []string{"a.ts", "b.go"}
+	hunks := map[string][]Range{"a.ts": {{Start: 10, End: 12}}}
+	scoped := &Tests{
+		Phase: "p",
+		Scope: scopeWithHunks(files, hunks),
+		Languages: []LanguageRun{
+			{Name: "typescript", Tool: "stryker", Files: []string{"a.ts"},
+				Ranges: map[string][]EffectiveRange{"a.ts": {{Start: 1, End: 37, Pad: 25}}}},
+			{Name: "go", Tool: "gremlins", Files: []string{"b.go"},
+				WholeFile: map[string]string{"b.go": WholeFileNoRangeRunner}},
+		},
+	}
+	p := ProvenanceOf(scoped)
+	if p.Phase != "p" {
+		t.Errorf("Phase = %q, want p", p.Phase)
+	}
+	if !reflect.DeepEqual(p.Files, scoped.Scope.Files) {
+		t.Errorf("Files = %v, scope has %v", p.Files, scoped.Scope.Files)
+	}
+	if !reflect.DeepEqual(p.Hunks, scoped.Scope.Hunks) {
+		t.Errorf("Hunks = %v, scope has %v", p.Hunks, scoped.Scope.Hunks)
+	}
+	if len(p.Legs) != 2 {
+		t.Fatalf("Legs = %+v, want both legs", p.Legs)
+	}
+	for i, lr := range scoped.Languages {
+		leg := p.Legs[i]
+		if leg.Name != lr.Name || leg.Tool != lr.Tool || !reflect.DeepEqual(leg.Files, lr.Files) {
+			t.Errorf("legs[%d] = %+v, run has name=%s tool=%s files=%v", i, leg, lr.Name, lr.Tool, lr.Files)
+		}
+		if !reflect.DeepEqual(leg.Ranges, lr.Ranges) || !reflect.DeepEqual(leg.WholeFile, lr.WholeFile) {
+			t.Errorf("legs[%d] provenance = ranges %v whole_file %v, run has %v / %v",
+				i, leg.Ranges, leg.WholeFile, lr.Ranges, lr.WholeFile)
+		}
+	}
+
+	unscoped := &Tests{Phase: "old", Languages: scoped.Languages}
+	q := ProvenanceOf(unscoped) // must not panic on the nil Scope
+	if q.Files != nil || q.Hunks != nil {
+		t.Errorf("an unscoped record projected files=%v hunks=%v, want neither", q.Files, q.Hunks)
+	}
+	if len(q.Legs) != 2 {
+		t.Errorf("an unscoped record lost its legs: %+v", q.Legs)
+	}
+}

@@ -503,6 +503,66 @@ func TestVerifyCover_ScopeFileListTruncation(t *testing.T) {
 	}
 }
 
+// wholeFileLegFixture builds a Tests with one gremlins leg whose whole_file
+// map carries n files under a single reason, named like scopeSummaryFile so
+// absence assertions mean absence.
+func wholeFileLegFixture(n int) *verify.Tests {
+	wf := make(map[string]string, n)
+	for i := 0; i < n; i++ {
+		wf[scopeSummaryFile(i)] = verify.WholeFileNoRangeRunner
+	}
+	return &verify.Tests{
+		Phase:     "01-cov",
+		Languages: []verify.LanguageRun{{Name: "go", Tool: "gremlins", WholeFile: wf}},
+	}
+}
+
+// TestVerifyCover_WholeFileListTruncation drives the >cap side of
+// printRangeProvenance's own truncation — a twin of the scope line's, with its
+// own subtraction at a different site, so it owes its own exact figure: over a
+// cap of 12, 15 whole-file entries read "(+3 more)" while the ×count still
+// reports the full set. Surfaced by verify run r-20260918-073404, where this
+// line printed "(+11 more)" with nothing asserting the 11.
+func TestVerifyCover_WholeFileListTruncation(t *testing.T) {
+	const over = 3
+	out := captureStdout(t, func() { printRangeProvenance(wholeFileLegFixture(scopeFileListCap + over)) })
+
+	if !strings.Contains(out, " (+3 more)") {
+		t.Errorf("expected exactly %q for %d whole-file entries over a cap of %d\n--- out ---\n%s",
+			" (+3 more)", scopeFileListCap+over, scopeFileListCap, out)
+	}
+	if want := fmt.Sprintf("whole-file gremlins ×%d — %s:", scopeFileListCap+over, verify.WholeFileNoRangeRunner); !strings.Contains(out, want) {
+		t.Errorf("the ×count must report the full set (%q):\n%s", want, out)
+	}
+	if last := scopeSummaryFile(scopeFileListCap - 1); !strings.Contains(out, last) {
+		t.Errorf("expected the %dth file %q to be named:\n%s", scopeFileListCap, last, out)
+	}
+	for i := scopeFileListCap; i < scopeFileListCap+over; i++ {
+		if name := scopeSummaryFile(i); strings.Contains(out, name) {
+			t.Errorf("file %q is past the cap and must not be named:\n%s", name, out)
+		}
+	}
+	if strings.Contains(out, "ranged") {
+		t.Errorf("a leg with no ranges printed as ranged:\n%s", out)
+	}
+}
+
+// TestVerifyCover_WholeFileListAtCapIsNotTruncated pins the boundary of the
+// same condition: exactly cap entries name every file and print no suffix.
+func TestVerifyCover_WholeFileListAtCapIsNotTruncated(t *testing.T) {
+	out := captureStdout(t, func() { printRangeProvenance(wholeFileLegFixture(scopeFileListCap)) })
+
+	if strings.Contains(out, "more)") {
+		t.Errorf("exactly %d entries is at the cap, not over it — no suffix expected:\n%s",
+			scopeFileListCap, out)
+	}
+	for i := 0; i < scopeFileListCap; i++ {
+		if name := scopeSummaryFile(i); !strings.Contains(out, name) {
+			t.Errorf("expected every file at the cap to be named, missing %q:\n%s", name, out)
+		}
+	}
+}
+
 // TestVerifyCover_ScopeFileListAtCapIsNotTruncated pins the boundary: exactly
 // cap files print every name and no suffix at all. A `>=` mutant on the
 // truncation condition prints "(+0 more)" here and fails.
