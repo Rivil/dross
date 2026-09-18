@@ -133,6 +133,22 @@
           "what": "end-to-end pin that the scope pipeline's hunk keys and the adapter's dispatched paths share one vocabulary — a real two-line edit reaches RunRanges as {15,66} pad 25"
         }
       ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/verify_test.go",
+        "internal/verify/range_provenance_test.go"
+      ],
+      "commit": "62ff540",
+      "completed_at": "2026-09-18T10:14:04.099962Z",
+      "landmarks": [
+        {
+          "feature": "mutation range provenance",
+          "symbol": "TestVerifyCover_WholeFileListTruncation",
+          "loc": "internal/cmd/verify_test.go:526",
+          "what": "in-package pins for the whole-file (+N more) overflow count and ProvenanceOf's nil-scope projection — the two in-hunk survivors r-20260918-073404 left"
+        }
+      ]
     }
   }
 }

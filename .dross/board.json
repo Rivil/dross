@@ -726,6 +726,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "mutation-range-provenance/t-8": {
+      "issue": "DRO-440",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "project-toml-lossless-writes/t-1": {
       "issue": "DRO-413",
       "plan_status": "done",

@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 8
 
 [phase]
   id = "mutation-range-provenance"
@@ -76,4 +76,15 @@ task_seq = 0
   covers = ["c-1", "c-2"]
   depends_on = ["t-4"]
   test_contract = ["if Scope.Hunks keys and the dispatched paths ever differ in form, TestRangedDispatchReachesTheAdapterEndToEnd fails while every hand-built-scope test passes — the adapter must receive a non-empty map keyed by the edited file's repo-relative slash path, and tests.json's languages[0].ranges names that file with pad 25 and whole_file is empty", "if rangeKey forgets the workdir prefix, t-1's ported TestRunArgsEmitsLineRanges (internal/mutation/range_test.go) fails — cited here as the pin for the adapter side of the key contract, not re-implemented"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 6
+  title = "Pin the whole-file overflow suffix and ProvenanceOf's nil-scope branch in-package"
+  files = ["internal/cmd/verify_test.go", "internal/verify/range_provenance_test.go"]
+  description = "Verify run r-20260918-073404 left two in-hunk gaps that gremlins' per-package scope can see: printRangeProvenance's `(+N more)` overflow suffix at internal/cmd/verify.go:1492 duplicates the scope-line truncation at :1443 but has no >scopeFileListCap fixture (TestVerifyOutputNamesWholeFileLegs uses one file), and ProvenanceOf's `if t.Scope != nil` at internal/verify/range_provenance.go:171 is killed only cross-package by TestVerifyScopeJSONIsTheRecordVerbatim. Add a test beside TestVerifyCover_ScopeFileListTruncation that builds a leg with cap+3 whole_file entries under one reason and asserts the exact `(+3 more)` figure, the ×count reporting the full set, the cap-th file named and the overflow files absent; add an in-package ProvenanceOf test covering both the scoped projection (Files/Hunks copied) and the nil-scope projection (empty, no panic). Tests only — no production change. The three routed survivors (ab007299a72231a1, f7481a33e1ecc4b7, 95185582a1ad79bb) are discharged by the next verify run, not edited by hand."
+  covers = ["c-3", "c-5"]
+  depends_on = ["t-5", "t-6"]
+  test_contract = ["if the overflow subtraction at verify.go:1492 flips or the slice boundary shifts, TestVerifyCover_WholeFileListTruncation fails — captureStdout over printRangeProvenance with scopeFileListCap+3 whole-file entries contains exactly \" (+3 more)\", \"×15\", the 12th file's name, and none of the 13th–15th", "if ProvenanceOf stops copying Scope.Files/Hunks or panics on a nil Scope, TestProvenanceOfProjectsScopeAndToleratesNil fails — a scoped Tests projects DeepEqual Files and Hunks; a nil-Scope Tests projects empty Files/Hunks and the leg list intact"]
   status = "done"
