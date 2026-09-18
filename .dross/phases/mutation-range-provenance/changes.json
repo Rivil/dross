@@ -3,6 +3,20 @@
   "base": "milestone/v1.7",
   "base_commit": "c201b2aabdc89abd51c1162593a5d3afbc30eaea",
   "tasks": {
+    "quick-1": {
+      "files": [
+        "internal/mutation/stryker.go",
+        "internal/mutation/range_test.go",
+        "internal/mutation/stryker_test.go",
+        "internal/mutation/reuse_report_test.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_scoping_test.go",
+        "internal/cmd/verify_reuse_report_test.go"
+      ],
+      "commit": "d79c793",
+      "completed_at": "2026-09-18T16:08:38.704945Z",
+      "notes": "quick: tolerate zero-mutant files in checkInstrumented; add dross verify --reuse-report"
+    },
     "t-1": {
       "files": [
         "internal/mutation/adapter.go",
