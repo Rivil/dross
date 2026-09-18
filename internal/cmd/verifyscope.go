@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/verify"
@@ -129,4 +132,94 @@ func containScope(repoDir string, s *verify.Scope) ([]pathfence.Contained, error
 		out = append(out, c)
 	}
 	return out, nil
+}
+
+// verifyScope is `dross verify scope <phase-id>`: the last run's range
+// provenance, read from tests.json and nothing else. It answers the question
+// the score cannot — "which lines did this run actually instrument, and where
+// did it fall back to the whole file, and why" — from the record the run
+// itself wrote, so a claimed scope is checkable rather than inferred.
+func verifyScope() *cobra.Command {
+	var asJSON bool
+	c := &cobra.Command{
+		Use:   "scope <phase-id>",
+		Short: "Print the last verify run's range provenance: in-scope files, raw hunks, and per leg the effective ranges or whole-file fallback",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			phaseID := args[0]
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			testsPath, _ := verify.FilePaths(root, phaseID)
+			tests, err := verify.LoadTests(testsPath)
+			if err != nil {
+				return err
+			}
+			if tests == nil {
+				// The fix is named, not implied: a missing record is not an
+				// empty scope, and "not found" would leave the reader to
+				// guess whether the phase or the run is what is absent.
+				return fmt.Errorf("no verify run recorded for %s — run `dross verify %s` first", phaseID, phaseID)
+			}
+			prov := verify.ProvenanceOf(tests)
+			if asJSON {
+				b, err := json.MarshalIndent(prov, "", "  ")
+				if err != nil {
+					return err
+				}
+				Print(string(b))
+				return nil
+			}
+			printProvenance(tests, prov)
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&asJSON, "json", false, "emit the provenance record as JSON — the same values, nothing re-rendered")
+	return c
+}
+
+// printProvenance is the human form: scope header, each in-scope file with its
+// raw hunks, then per leg what ranged and what fell back. A leg recorded
+// before provenance existed says so rather than printing as whole-file — the
+// record does not know, and neither must the readout claim to.
+func printProvenance(t *verify.Tests, p verify.Provenance) {
+	if t.Scope == nil {
+		Printf("verify scope: phase %s — unscoped run (no scope recorded)\n", p.Phase)
+	} else {
+		base := "no base resolved"
+		if t.Scope.Base != "" {
+			base = "base " + short(t.Scope.Base)
+		}
+		Printf("verify scope: phase %s — %d file(s) from %s, %s\n", p.Phase, len(p.Files), t.Scope.Source, base)
+	}
+	for _, f := range p.Files {
+		hunks := p.Hunks[f]
+		if len(hunks) == 0 {
+			Printf("  %s (no hunks)\n", f)
+			continue
+		}
+		spans := make([]string, 0, len(hunks))
+		for _, h := range hunks {
+			spans = append(spans, fmt.Sprintf("%d-%d", h.Start, h.End))
+		}
+		Printf("  %s  hunks %s\n", f, strings.Join(spans, ", "))
+	}
+	for _, leg := range p.Legs {
+		Printf("leg %s (%s): %d file(s)\n", leg.Name, leg.Tool, len(leg.Files))
+		if len(leg.Ranges) == 0 && len(leg.WholeFile) == 0 {
+			Print("  no range provenance recorded")
+			continue
+		}
+		for _, f := range sortedMapKeys(leg.Ranges) {
+			spans := make([]string, 0, len(leg.Ranges[f]))
+			for _, r := range leg.Ranges[f] {
+				spans = append(spans, fmt.Sprintf("%d-%d (pad %d)", r.Start, r.End, r.Pad))
+			}
+			Printf("  ranged %s  %s\n", f, strings.Join(spans, ", "))
+		}
+		for _, f := range sortedMapKeys(leg.WholeFile) {
+			Printf("  whole-file %s — %s\n", f, leg.WholeFile[f])
+		}
+	}
 }

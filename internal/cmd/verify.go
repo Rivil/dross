@@ -163,6 +163,7 @@ func Verify() *cobra.Command {
 	c.AddCommand(verifyFinalize())
 	c.AddCommand(verifyResults())
 	c.AddCommand(verifyStatus())
+	c.AddCommand(verifyScope())
 	return c
 }
 

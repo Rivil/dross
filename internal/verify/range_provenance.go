@@ -2,6 +2,7 @@ package verify
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Rivil/dross/internal/mutation"
 )
@@ -131,4 +132,54 @@ func firstMalformed(hunks []Range) (Range, bool) {
 		}
 	}
 	return Range{}, false
+}
+
+// Provenance is the range-provenance projection of one recorded run: what
+// `dross verify scope <phase>` prints, and what its --json emits. It is a
+// field-for-field copy of the loaded Tests — the same VALUES, nothing
+// re-rendered — so the command answers "what did this run actually measure"
+// from the record itself rather than from a summary of it.
+//
+// It lives beside the fields it projects rather than in internal/cmd so the
+// shape of the record and the shape of its readout cannot drift apart
+// unnoticed. Files here is a copy of Scope.Files — an in-scope path list dross
+// has already contained on the way in — and is never opened by anything that
+// reads this type.
+type Provenance struct {
+	Phase       string             `json:"phase"`
+	GeneratedAt time.Time          `json:"generated_at"`
+	Files       []string           `json:"files"`
+	Hunks       map[string][]Range `json:"hunks,omitempty"`
+	Legs        []ProvenanceLeg    `json:"legs"`
+}
+
+// ProvenanceLeg is one LanguageRun's provenance: what it was dispatched, what
+// it ranged, and what it mutated whole.
+type ProvenanceLeg struct {
+	Name      string                      `json:"name"`
+	Tool      string                      `json:"tool"`
+	Files     []string                    `json:"files"`
+	Ranges    map[string][]EffectiveRange `json:"ranges,omitempty"`
+	WholeFile map[string]string           `json:"whole_file,omitempty"`
+}
+
+// ProvenanceOf projects a loaded Tests. A run recorded with no scope (a
+// plain Run) projects empty Files and Hunks rather than nil-dereferencing —
+// the readout must be able to say "unscoped" about an old record.
+func ProvenanceOf(t *Tests) Provenance {
+	p := Provenance{Phase: t.Phase, GeneratedAt: t.GeneratedAt}
+	if t.Scope != nil {
+		p.Files = t.Scope.Files
+		p.Hunks = t.Scope.Hunks
+	}
+	for _, lr := range t.Languages {
+		p.Legs = append(p.Legs, ProvenanceLeg{
+			Name:      lr.Name,
+			Tool:      lr.Tool,
+			Files:     lr.Files,
+			Ranges:    lr.Ranges,
+			WholeFile: lr.WholeFile,
+		})
+	}
+	return p
 }

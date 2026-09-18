@@ -203,6 +203,25 @@ var fields = []Field{
 		},
 	},
 	{
+		Struct: "verify.Provenance", Field: "Files", Tag: "files", Artifact: "tests.json",
+		NotConsumed: &NotConsumedBy{
+			Why: "a READOUT of verify.Scope.Files — the projection `dross verify scope` " +
+				"prints and emits as --json. Copied field-for-field from a loaded " +
+				"tests.json, whose Files were already contained on the way in; nothing " +
+				"opens these paths, they are printed.",
+			Readers: []string{"internal/cmd/verifyscope.go (verify scope: print / --json)"},
+		},
+	},
+	{
+		Struct: "verify.ProvenanceLeg", Field: "Files", Tag: "files", Artifact: "tests.json",
+		NotConsumed: &NotConsumedBy{
+			Why: "a READOUT of verify.LanguageRun.Files — the paths the leg was " +
+				"dispatched, copied verbatim into the `dross verify scope` projection. " +
+				"Printed beside the leg's ranges and whole-file reasons, never opened.",
+			Readers: []string{"internal/cmd/verifyscope.go (verify scope: print / --json)"},
+		},
+	},
+	{
 		Struct: "verify.CriterionResult", Field: "Tests", Tag: "tests", Artifact: "tests.json",
 		NotConsumed: &NotConsumedBy{
 			Why: "TEST NAMES (e.g. TestContainRefusesEscape), not paths. The `tests` tag " +

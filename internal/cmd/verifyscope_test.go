@@ -1,13 +1,17 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/verify"
 )
@@ -350,5 +354,153 @@ func TestContainScopeHandlesNilScope(t *testing.T) {
 	got, err := containScope("/repo", nil)
 	if err != nil || got != nil {
 		t.Fatalf("containScope(nil) = (%v, %v), want (nil, nil)", got, err)
+	}
+}
+
+// ---- `dross verify scope <phase>` -------------------------------------------
+
+// seedTests writes a tests.json for phase id under the current .dross root.
+func seedTests(t *testing.T, root, id string, tests *verify.Tests) string {
+	t.Helper()
+	tests.Phase = id
+	testsPath, _ := verify.FilePaths(root, id)
+	if err := tests.Save(testsPath); err != nil {
+		t.Fatal(err)
+	}
+	return testsPath
+}
+
+// provenanceFixture is one ranged stryker leg and one whole-file gremlins leg
+// over a scope with one raw hunk.
+func provenanceFixture() *verify.Tests {
+	return &verify.Tests{
+		GeneratedAt: time.Date(2026, 9, 18, 7, 0, 0, 0, time.UTC),
+		Scope: verify.NewScope(verify.ScopeInput{
+			Root: "/repo", Recorded: []string{"src/a.ts", "x.go"},
+			Hunks: map[string][]verify.Range{"src/a.ts": {{Start: 10, End: 12}}},
+		}),
+		Languages: []verify.LanguageRun{
+			{
+				Name: "typescript", Tool: "stryker", Files: []string{"src/a.ts"},
+				Mutation: &mutation.Report{Tool: "stryker", Killed: 1},
+				Ranges:   map[string][]verify.EffectiveRange{"src/a.ts": {{Start: 1, End: 37, Pad: 25}}},
+			},
+			{
+				Name: "go", Tool: "gremlins", Files: []string{"x.go"},
+				Mutation:  &mutation.Report{Tool: "gremlins", Killed: 2},
+				WholeFile: map[string]string{"x.go": verify.WholeFileNoRangeRunner},
+			},
+		},
+	}
+}
+
+func TestVerifyScopeWithoutARunNamesTheFix(t *testing.T) {
+	chdirDross(t)
+	var err error
+	out := captureStdout(t, func() {
+		err = runCmd(t, Verify(), "scope", "ghost")
+	})
+	if err == nil {
+		t.Fatal("a phase with no run must be an error, not an empty readout")
+	}
+	for _, want := range []string{"ghost", "dross verify ghost"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q", err, want)
+		}
+	}
+	if out != "" {
+		t.Errorf("stdout must be empty on the error path, got %q", out)
+	}
+}
+
+func TestVerifyScopePrintsRawAndEffective(t *testing.T) {
+	root := chdirDross(t)
+	seedTests(t, root, "prov", provenanceFixture())
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Verify(), "scope", "prov"); err != nil {
+			t.Fatalf("verify scope: %v", err)
+		}
+	})
+	for _, want := range []string{"src/a.ts", "10-12", "1-37 (pad 25)"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("readout lacks %q:\n%s", want, out)
+		}
+	}
+	var sawWholeFile bool
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "whole-file") && strings.Contains(line, verify.WholeFileNoRangeRunner) {
+			sawWholeFile = true
+		}
+	}
+	if !sawWholeFile {
+		t.Errorf("no line names the gremlins leg whole-file with its reason:\n%s", out)
+	}
+}
+
+func TestVerifyScopeJSONIsTheRecordVerbatim(t *testing.T) {
+	root := chdirDross(t)
+	testsPath := seedTests(t, root, "prov", provenanceFixture())
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Verify(), "scope", "prov", "--json"); err != nil {
+			t.Fatalf("verify scope --json: %v", err)
+		}
+	})
+	if !strings.HasPrefix(strings.TrimSpace(out), "{") {
+		t.Fatalf("--json must emit nothing before the record:\n%s", out)
+	}
+	var got verify.Provenance
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("stdout is not a Provenance record: %v\n%s", err, out)
+	}
+	loaded, err := verify.LoadTests(testsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Files, loaded.Scope.Files) {
+		t.Errorf("files = %v, record has %v", got.Files, loaded.Scope.Files)
+	}
+	if !reflect.DeepEqual(got.Hunks, loaded.Scope.Hunks) {
+		t.Errorf("hunks = %v, record has %v", got.Hunks, loaded.Scope.Hunks)
+	}
+	if len(got.Legs) != len(loaded.Languages) {
+		t.Fatalf("%d legs emitted, record has %d", len(got.Legs), len(loaded.Languages))
+	}
+	for i, leg := range got.Legs {
+		lr := loaded.Languages[i]
+		if !reflect.DeepEqual(leg.Ranges, lr.Ranges) {
+			t.Errorf("legs[%d].ranges = %v, record has %v", i, leg.Ranges, lr.Ranges)
+		}
+		if !reflect.DeepEqual(leg.WholeFile, lr.WholeFile) {
+			t.Errorf("legs[%d].whole_file = %v, record has %v", i, leg.WholeFile, lr.WholeFile)
+		}
+	}
+	// Structured, not pretty-printed: the range is an object with its pad,
+	// never a "1-37" string.
+	if strings.Contains(out, `"1-37"`) {
+		t.Errorf("--json re-rendered a range as a string:\n%s", out)
+	}
+	if !strings.Contains(out, `"pad": 25`) {
+		t.Errorf("--json lost the pad:\n%s", out)
+	}
+}
+
+func TestVerifyScopeOnAPreProvenanceRecordSaysSo(t *testing.T) {
+	root := chdirDross(t)
+	old := provenanceFixture()
+	for i := range old.Languages {
+		old.Languages[i].Ranges = nil
+		old.Languages[i].WholeFile = nil
+	}
+	seedTests(t, root, "old", old)
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Verify(), "scope", "old"); err != nil {
+			t.Fatalf("verify scope on an old record: %v", err)
+		}
+	})
+	if n := strings.Count(out, "no range provenance recorded"); n != len(old.Languages) {
+		t.Errorf("want %d legs marked unrecorded, got %d:\n%s", len(old.Languages), n, out)
+	}
+	if strings.Contains(out, "ranged") {
+		t.Errorf("a pre-provenance record printed as ranged:\n%s", out)
 	}
 }
