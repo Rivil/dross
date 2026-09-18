@@ -51,3 +51,27 @@
   id = "285dca82787c2b6a"
   text = "dross verify rescore <phase>: re-skeleton verify.toml from recorded reports (reports/gremlins/*.json) through the verify results pipeline after a post-collection survivor accept"
   why = "verify results consumes the run record, so an accept made after collection leaves verify.toml's summary stale with no verb to recompute it; recorded as a NOTE in project-toml-lossless-writes/verify.toml"
+
+[[deferred]]
+  text = "survivor internal/cmd/verify.go:1492 (INVERT_NEGATIVES)"
+  why = "surviving mutant routed out of a verify run"
+  target = "ast-aware-mutation-ranges"
+  survivor = "ab007299a72231a1"
+
+[[deferred]]
+  text = "survivor internal/cmd/verify.go:1492 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "ast-aware-mutation-ranges"
+  survivor = "f7481a33e1ecc4b7"
+
+[[deferred]]
+  text = "survivor internal/verify/range_provenance.go:171 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "ast-aware-mutation-ranges"
+  survivor = "95185582a1ad79bb"
+
+[[deferred]]
+  id = "61f8ee8221eaeb27"
+  text = "Filter a leg's recorded files and whole_file reasons to the files its adapter Supports(): the gremlins leg currently lists non-Go scope files (README.md, assets/prompts/verify.md) and PlanRanges tags each one adapter-lacks-range-runner, so the whole-file count over-reads by the non-Go files in scope"
+  why = "Surfaced by this phase's own verify run (r-20260918-073404): the leg's files list has always carried non-Go entries, and the new reason map inherited that instead of narrowing to what the adapter can mutate. Cosmetic — no mutant is scored or missed — so it rides with the phase that reworks range planning."
+  target = "ast-aware-mutation-ranges"

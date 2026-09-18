@@ -2129,3 +2129,57 @@
   line = 264
   reason = "The 'value runs past end of file' error is unreachable by construction: parseKeyLine's endLine is lineNo plus the newlines inside the scanned value span, and scanValue only extends a span across lines that exist in src, so endLine can never exceed len(d.lines) when the guard is evaluated — it is defensive against a future indexer change. The mutated arithmetic on lineNo+1 changes only the text of an error no input can trigger, so no test can distinguish it. The span-termination paths either side of the guard are pinned by TestIndexLiteralStrings (unterminated literal at EOF, no trailing newline) and TestIndexMultilineBasicEscapesAndExtraQuotes (unterminated multi-line basic string)."
   accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "e310e98a1ee7c205"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"a READOUT of verify.Scope.Files — the projection `dross verify scope` \" +"
+  line = 208
+  category = "const-initializer-arithmetic"
+  accepted_in = "mutation-range-provenance"
+
+[[accepted]]
+  key = "2246926ea0d0e284"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"prints and emits as --json. Copied field-for-field from a loaded \" +"
+  line = 209
+  category = "const-initializer-arithmetic"
+  accepted_in = "mutation-range-provenance"
+
+[[accepted]]
+  key = "a779d67c307c9547"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"tests.json, whose Files were already contained on the way in; nothing \" +"
+  line = 210
+  category = "const-initializer-arithmetic"
+  accepted_in = "mutation-range-provenance"
+
+[[accepted]]
+  key = "b1a5ea0c6255471f"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"a READOUT of verify.LanguageRun.Files — the paths the leg was \" +"
+  line = 218
+  category = "const-initializer-arithmetic"
+  accepted_in = "mutation-range-provenance"
+
+[[accepted]]
+  key = "a83b7bb9e6714555"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"dispatched, copied verbatim into the `dross verify scope` projection. \" +"
+  line = 219
+  category = "const-initializer-arithmetic"
+  accepted_in = "mutation-range-provenance"
+
+[[accepted]]
+  key = "3b84c99f86b1c3c6"
+  file = "internal/cmd/verifyscope.go"
+  op = "ARITHMETIC_BASE"
+  text = "base = \"base \" + short(t.Scope.Base)"
+  line = 192
+  reason = "ARITHMETIC_BASE swaps the + on a string concatenation (base = \"base \" + short(t.Scope.Base)) for -, *, / or %; none of those compiles on strings, so the mutant is never viable and no test a caller could write can kill it. The line's behaviour is covered from internal/cmd by TestVerifyScopePrintsRawAndEffective, which asserts the header line prints. Same class as the accepted string-concat entry at internal/cmd/milestone.go:1054; the standing fix is the deferred item that teaches the gremlins adapter to drop uncompilable string-operator mutants before they reach the survivor list."
+  accepted_in = "mutation-range-provenance"
