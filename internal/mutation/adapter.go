@@ -136,6 +136,16 @@ type Range struct {
 	End   int
 }
 
+// Valid reports whether r is a range a tool could honour: lines are counted
+// from 1 and the range must not run backwards. It is the ONE definition of
+// well-formed shared by the adapter that emits ranges (stryker's argv builder)
+// and the verify layer that plans them — two predicates would let verify
+// dispatch a range stryker then refuses, and the refusal's whole-file fallback
+// would be a fact the run record never learned.
+func (r Range) Valid() bool {
+	return r.Start >= 1 && r.End >= r.Start
+}
+
 // RangeRunner is the OPTIONAL half of Adapter: an adapter that can restrict
 // mutation to a file's changed LINES rather than the whole file.
 //

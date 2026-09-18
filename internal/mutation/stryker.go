@@ -407,7 +407,7 @@ func (s *Stryker) runArgs(files []string, ranges map[string][]Range) (argv []str
 		// misdescribes the run is how a scope problem hides.
 		bad := -1
 		for i, r := range rs {
-			if r.Start <= 0 || r.End < r.Start {
+			if !r.Valid() {
 				bad = i
 				break
 			}
