@@ -39,6 +39,7 @@ func Verify() *cobra.Command {
 	var skipMutation bool
 	var detach bool
 	var detachAt string
+	var reuseReport bool
 	c := &cobra.Command{
 		Use:   "verify <phase-id>",
 		Short: "Run mutation testing per language and write tests.json + verify.toml skeleton",
@@ -110,6 +111,11 @@ func Verify() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if reuseReport {
+				if err := applyReuseReport(adapters, skipMutation, detach); err != nil {
+					return err
+				}
+			}
 
 			if detach {
 				// Refused rather than run locally. The whole point of the flag
@@ -160,11 +166,38 @@ func Verify() *cobra.Command {
 		"start the run on the granted host and return immediately; collect it later with `dross verify results <phase>`")
 	c.Flags().StringVar(&detachAt, "at", "",
 		"with --detach, start the run at HH:MM (next occurrence) or an RFC3339 instant, on the host's clock")
+	c.Flags().BoolVar(&reuseReport, "reuse-report", false,
+		"stryker only: parse the report already on disk instead of launching a run (path + mtime are printed; other legs still run)")
 	c.AddCommand(verifyFinalize())
 	c.AddCommand(verifyResults())
 	c.AddCommand(verifyStatus())
 	c.AddCommand(verifyScope())
 	return c
+}
+
+// applyReuseReport turns --reuse-report on for every stryker adapter in the
+// list. It is an explicit opt-in that changes what a run measures, so the two
+// flags that make it meaningless refuse: --skip-mutation runs no adapter at
+// all, and --detach launches on the host — a reused report is precisely a run
+// that is NOT launched.
+func applyReuseReport(adapters []mutation.Adapter, skip, detach bool) error {
+	if skip {
+		return errors.New("--reuse-report with --skip-mutation: nothing runs under --skip-mutation, so there is no leg to reuse a report for")
+	}
+	if detach {
+		return errors.New("--reuse-report with --detach: a reused report is a run that is not launched; drop one of the two")
+	}
+	applied := false
+	for _, a := range adapters {
+		if s, ok := a.(*mutation.Stryker); ok {
+			s.ReuseReport = true
+			applied = true
+		}
+	}
+	if !applied {
+		return errors.New("--reuse-report: no stryker adapter is configured for this project, so there is no report to reuse")
+	}
+	return nil
 }
 
 // detachSpawn is the seam every detached dispatch goes through, swapped in

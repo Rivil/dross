@@ -761,9 +761,14 @@ func TestStrykerReportlessErrorNamesHeadOfOutput(t *testing.T) {
 }
 
 // TestStrykerHardFailsOnUninstrumentedFile is locked decision drop_behaviour.
+//
+// The drop is the one stryker itself reports — a --mutate glob that resolved
+// to no file prints strykerDropWarningText at project-read time. Absence from
+// the report WITHOUT that warning is a file with nothing mutable (2026-09-18)
+// and is tolerated by TestCheckInstrumentedToleratesAWholeFileWithNoMutants.
 func TestStrykerHardFailsOnUninstrumentedFile(t *testing.T) {
 	s := &Stryker{ProjectRoot: t.TempDir()}
-	defer noisyStryker(t, s, "done", 0, func(p string) {
+	defer noisyStryker(t, s, "INFO ProjectReader Globbing expression \"src/c.ts\" "+strykerDropWarningText+".\ndone", 0, func(p string) {
 		writeReport(t, p, "src/a.ts", "src/b.ts") // asked for three
 	})()
 

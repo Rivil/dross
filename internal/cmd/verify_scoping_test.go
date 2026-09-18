@@ -228,6 +228,13 @@ func TestScopingHasNoOptOut(t *testing.T) {
 		// the attribution; a scheduled run scopes exactly as the immediate one
 		// it would otherwise have been.
 		"at": true,
+		// Moves where the stryker REPORT comes from — the file already on
+		// disk instead of a fresh launch — not what it scopes to. The reuse
+		// arm computes the same requested/narrowed set from the same scoped
+		// file list, and the parsed report goes through the same post-Report
+		// filter, so a reused report cannot be a wider run either. What it
+		// CAN be is stale, which is why it prints the report's mtime.
+		"reuse-report": true,
 	}
 
 	var got []string

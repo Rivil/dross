@@ -212,11 +212,42 @@ func TestCheckInstrumentedStillRefusesWhenStrykerWarnedItDropped(t *testing.T) {
 	}
 }
 
-// An unnarrowed file missing from the report is the 2026-08-26 fault, and it
-// refuses exactly as it did before.
-func TestCheckInstrumentedStillRefusesAnUnnarrowedDrop(t *testing.T) {
+// An unnarrowed file can ALSO contribute zero mutants — a declarations-only
+// .d.ts, a .svelte whose script is imports and a Props interface — and stryker
+// omits it from the report's files entirely. On 2026-09-18 that refused a
+// complete 7h48m run over 181 files for two such files. Without stryker's own
+// drop warning in the head, absence is tolerated and named on stderr.
+func TestCheckInstrumentedToleratesAWholeFileWithNoMutants(t *testing.T) {
 	s := &Stryker{Workdir: "web"}
 	head := &headBuffer{limit: 1 << 10}
+	out, _, err := captureStderr(t, func() (*Report, error) {
+		return nil, s.checkInstrumented(
+			[]byte(reportWithOnlyA),
+			[]string{"src/a.ts", "src/app.d.ts", "src/b.ts"},
+			map[string]bool{},
+			head,
+		)
+	})
+	if err != nil {
+		t.Fatalf("whole files with no mutants must not refuse the run without stryker's warning: %v", err)
+	}
+	if want := "2 whole file(s) contributed no mutants"; !strings.Contains(out, want) {
+		t.Errorf("stderr lacks %q:\n%s", want, out)
+	}
+	for _, f := range []string{"src/app.d.ts", "src/b.ts"} {
+		if !strings.Contains(out, f) {
+			t.Errorf("stderr must name %s:\n%s", f, out)
+		}
+	}
+}
+
+// The 2026-08-26 fault — a --mutate glob that resolved to nothing — still
+// refuses for an unnarrowed file, because stryker warns about it and the
+// warning is what the guard keys on now.
+func TestCheckInstrumentedStillRefusesAnUnnarrowedDropStrykerWarnedAbout(t *testing.T) {
+	s := &Stryker{Workdir: "web"}
+	head := &headBuffer{limit: 1 << 10}
+	head.Write([]byte("some banner\n" + strykerDropWarningText + "\nmore\n"))
 	err := s.checkInstrumented(
 		[]byte(reportWithOnlyA),
 		[]string{"src/a.ts", "src/b.ts"},
@@ -224,7 +255,10 @@ func TestCheckInstrumentedStillRefusesAnUnnarrowedDrop(t *testing.T) {
 		head,
 	)
 	if err == nil {
-		t.Error("an unnarrowed file absent from the report must refuse")
+		t.Fatal("an unnarrowed file absent from the report must refuse when stryker warned it dropped a glob")
+	}
+	if !strings.Contains(err.Error(), "src/b.ts") || !strings.Contains(err.Error(), strykerDropWarningText) {
+		t.Errorf("refusal must name the file and point at stryker's warning: %v", err)
 	}
 }
 
