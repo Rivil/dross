@@ -690,6 +690,41 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "mutation-range-provenance/t-1": {
+      "issue": "DRO-432",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mutation-range-provenance/t-2": {
+      "issue": "DRO-433",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mutation-range-provenance/t-3": {
+      "issue": "DRO-434",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mutation-range-provenance/t-4": {
+      "issue": "DRO-435",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mutation-range-provenance/t-5": {
+      "issue": "DRO-436",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mutation-range-provenance/t-6": {
+      "issue": "DRO-438",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mutation-range-provenance/t-7": {
+      "issue": "DRO-437",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "project-toml-lossless-writes/t-1": {
       "issue": "DRO-413",
       "plan_status": "done",
