@@ -427,6 +427,37 @@ type LegSummary struct {
 	// hosts were involved and leaves the reader to guess which score belongs to
 	// which — and the guess is exactly what makes two runs comparable or not.
 	MeasuredOn string `toml:"measured_on,omitempty"`
+
+	// Pad, Ranges and WholeFile restate the leg's range provenance in a shape
+	// an agent or a human reads without opening tests.json: Ranges is one
+	// "file:start-end" per effective range, WholeFile one "file — reason" per
+	// file the leg mutated whole, both sorted. Flat strings rather than tables
+	// on purpose — verify.toml is the readable summary and tests.json /
+	// `dross verify scope --json` are the machine record. All three are
+	// omitted when empty, so a leg that ranged nothing never claims a pad and
+	// a verify.toml written before they existed round-trips unchanged.
+	Pad       int      `toml:"pad,omitzero"`
+	Ranges    []string `toml:"ranges,omitempty"`
+	WholeFile []string `toml:"whole_file,omitempty"`
+}
+
+// legProvenance flattens a leg's recorded ranges and whole-file reasons into
+// the LegSummary strings. The pad is the one every effective range carries
+// (PlanRanges stamps hunkContextLines on all of them); zero when there are
+// none, so a whole-file leg states no pad.
+func legProvenance(lr LanguageRun) (pad int, ranges, whole []string) {
+	for f, rs := range lr.Ranges {
+		for _, r := range rs {
+			ranges = append(ranges, fmt.Sprintf("%s:%d-%d", f, r.Start, r.End))
+			pad = r.Pad
+		}
+	}
+	for f, reason := range lr.WholeFile {
+		whole = append(whole, f+" — "+reason)
+	}
+	sort.Strings(ranges)
+	sort.Strings(whole)
+	return pad, ranges, whole
 }
 
 type VerifySummary struct {
@@ -817,6 +848,9 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 	// mutant in ten, and the mean called it 0.50.
 	var timeouts int
 	for _, lr := range t.Languages {
+		// Stated for the error leg too: what the tool was told is known
+		// whether or not it answered.
+		pad, ranges, whole := legProvenance(lr)
 		if lr.Mutation == nil {
 			// Recorded, not skipped: a leg that failed is a leg that measured
 			// nothing, and leaving it out would make the run look like it only
@@ -827,6 +861,9 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 				Error:      lr.Error,
 				FileCount:  len(lr.Files),
 				MeasuredOn: lr.MeasuredOn,
+				Pad:        pad,
+				Ranges:     ranges,
+				WholeFile:  whole,
 			})
 			continue
 		}
@@ -858,6 +895,9 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 			Score:      mutation.PooledScore(lr.Mutation.Killed, lr.Mutation.Survived, lr.Mutation.Timeout),
 			FileCount:  len(lr.Files),
 			MeasuredOn: lr.MeasuredOn,
+			Pad:        pad,
+			Ranges:     ranges,
+			WholeFile:  whole,
 		})
 	}
 	// Every mutant the tools produced landed outside this phase's files. The

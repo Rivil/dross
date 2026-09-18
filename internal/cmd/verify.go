@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -1453,6 +1454,45 @@ func printScopeSummary(t *verify.Tests, v *verify.Verify) {
 	}
 	for _, d := range t.Scope.Degraded {
 		Printf("  scope degraded: %s\n", d)
+	}
+	printRangeProvenance(t)
+}
+
+// printRangeProvenance says, per leg, how the scope was applied: `ranged` for
+// the files the tool was told to narrow, `whole-file` with its reason for the
+// rest. A leg that ranged nothing never prints the word "ranged" — a run that
+// measured whole files must not read as a ranged one.
+func printRangeProvenance(t *verify.Tests) {
+	for _, lr := range t.Languages {
+		if n := len(lr.Ranges); n > 0 {
+			pad := 0
+			for _, rs := range lr.Ranges {
+				if len(rs) > 0 {
+					pad = rs[0].Pad
+					break
+				}
+			}
+			Printf("  ranged %s %d file(s) (pad %d)\n", lr.Tool, n, pad)
+		}
+		byReason := map[string][]string{}
+		for f, reason := range lr.WholeFile {
+			byReason[reason] = append(byReason[reason], f)
+		}
+		reasons := make([]string, 0, len(byReason))
+		for r := range byReason {
+			reasons = append(reasons, r)
+		}
+		sort.Strings(reasons)
+		for _, r := range reasons {
+			files := byReason[r]
+			sort.Strings(files)
+			suffix := ""
+			if len(files) > scopeFileListCap {
+				suffix = fmt.Sprintf(" (+%d more)", len(files)-scopeFileListCap)
+				files = files[:scopeFileListCap]
+			}
+			Printf("  whole-file %s ×%d — %s: %s%s\n", lr.Tool, len(byReason[r]), r, strings.Join(files, ", "), suffix)
+		}
 	}
 }
 
