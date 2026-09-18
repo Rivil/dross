@@ -298,7 +298,7 @@ func (s *Stryker) checkInstrumented(data []byte, requested []string, narrowed ma
 		}
 	}
 	if len(dropped) > 0 && len(narrowed) > 0 &&
-		!strings.Contains(head.buf.String(), strykerDropWarningText) {
+		!head.contains(strykerDropWarningText) {
 		kept := dropped[:0]
 		var quiet []string
 		for _, d := range dropped {

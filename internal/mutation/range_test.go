@@ -233,3 +233,13 @@ func TestCheckInstrumentedStillRefusesAnUnnarrowedDrop(t *testing.T) {
 func TestStrykerImplementsRangeRunner(t *testing.T) {
 	var _ RangeRunner = (*Stryker)(nil)
 }
+
+// The other side of the same contract: gremlins mutates Go packages and takes
+// no line scope, so it must NOT satisfy RangeRunner. If it ever grows a
+// RunRanges method, RunScoped would start narrowing a leg that cannot honour
+// the narrowing — a run claiming ranges it never applied.
+func TestGremlinsDoesNotImplementRangeRunner(t *testing.T) {
+	if _, ok := any(&Gremlins{}).(RangeRunner); ok {
+		t.Fatal("Gremlins implements RangeRunner; gremlins must run whole files")
+	}
+}
