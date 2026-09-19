@@ -22,6 +22,21 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/mutation/construct_test.go"
+      ],
+      "commit": "7f936e0",
+      "completed_at": "2026-09-19T12:34:37.901714Z",
+      "landmarks": [
+        {
+          "feature": "AST-aware mutation ranges",
+          "symbol": "TestLabelInPackage",
+          "loc": "internal/mutation/construct_test.go:224",
+          "what": "Construct.Label's two arms pinned in package mutation so the per-package mutation run covers them"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/verify_reuse_report_test.go"

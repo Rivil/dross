@@ -1,4 +1,4 @@
-task_seq = 9
+task_seq = 10
 
 [phase]
   id = "ast-aware-mutation-ranges"
@@ -96,4 +96,15 @@ task_seq = 9
   covers = ["c-1", "c-4"]
   depends_on = ["t-7"]
   test_contract = ["if the construct span recovers nothing the retired pad window would have missed, TestConstructRangeRecoversTheDeepMutant fails — with the changed line L inside big(), N(pad window: max(1,L-25)..L+25, hard-coded 25 with a comment naming it as the retired heuristic) < N(construct span); the sanity arm N(line alone) < N(construct span) also holds; and the range must not leak: constructs[0].Start == the `export function big(` line read from the fixture and constructs[0].End < small's first line", "if the plugin choice is wrong per extension, TestBabelParsesGenericsAndJSX fails — a .ts with `<T>` generics resolves (no jsx plugin), a .tsx with JSX resolves (jsx plugin), a .ts containing JSX returns ErrASTUnavailable with a parse position; against the real @babel/parser in the fixture tree, skipped without it", "if the JS span dumper and the Go expansion disagree, TestRealParserSpansMatchTheExpansion fails — two hunks inside big() → one construct; a hunk on the blank line between big and small → Kind \"hunk\" with its own span; a hunk straddling big's last line and small's first → both constructs", "if an unresolvable parser is not classified, TestUnresolvableParserIsUnavailable fails — Workdir pointed at a t.TempDir() with no node_modules → ErrASTUnavailable whose detail names \"@babel/parser\"", "if the fixture shrinks or loses coverage, TestDeepFixtureStaysDeep fails — big's body < 40 lines, the changed line sits < 26 lines below `export function big(`, or long.test.ts stops importing ./long; TestFixtureTestCoversTheSource extended to long.ts"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 5
+  title = "Pin Construct.Label in its own package"
+  files = ["internal/mutation/construct_test.go"]
+  description = "Two in-hunk survivors at internal/mutation/construct.go:40 (CONDITIONALS_NEGATION on `c.Name == \"\"`) and :43 (ARITHMETIC_BASE on the `Kind + \" \" + Name` join) read NOT_COVERED because Label is exercised only from package verify (TestLabelOmitsAMissingName) and the node-gated e2e, and gremlins scores per package. Add TestLabelInPackage to construct_test.go: a Construct with an empty Name labels as exactly its Kind (no trailing space), and one with a Name as \"Kind Name\". Gate on go test ./internal/mutation/ locally + dross test; verify by re-running dross verify (detached) and checking a527a8d5b0db6ca6 / 300da816ae586738 are absent."
+  covers = ["c-3"]
+  depends_on = ["t-7"]
+  test_contract = ["if the empty-Name arm at construct.go:40 is negated, TestLabelInPackage fails — {Kind:\"ExpressionStatement\"} must label as exactly \"ExpressionStatement\", and {Kind:\"FunctionDeclaration\",Name:\"run\"} as \"FunctionDeclaration run\"", "observed at verify time: the re-run lists neither 300da816ae586738 nor a527a8d5b0db6ca6"]
   status = "done"

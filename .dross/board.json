@@ -231,6 +231,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "ast-aware-mutation-ranges/t-10": {
+      "issue": "DRO-458",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "ast-aware-mutation-ranges/t-2": {
       "issue": "DRO-450",
       "plan_status": "done",
