@@ -40,6 +40,7 @@ func Verify() *cobra.Command {
 	var detach bool
 	var detachAt string
 	var reuseReport bool
+	var baseOverride string
 	c := &cobra.Command{
 		Use:   "verify <phase-id>",
 		Short: "Run mutation testing per language and write tests.json + verify.toml skeleton",
@@ -82,7 +83,8 @@ func Verify() *cobra.Command {
 			// correctness fix, not a mode: without it a survivor in an
 			// untouched file of the same package gates this phase, and a
 			// neighbour's kills inflate its score.
-			scope, err := phaseScope(filepath.Dir(root), ch.Base, recorded)
+			scope, err := phaseScope(filepath.Dir(root),
+				scopeBase{Branch: ch.Base, ForkPoint: ch.BaseCommit, Override: baseOverride}, recorded)
 			if err != nil {
 				return err
 			}
@@ -168,6 +170,8 @@ func Verify() *cobra.Command {
 		"with --detach, start the run at HH:MM (next occurrence) or an RFC3339 instant, on the host's clock")
 	c.Flags().BoolVar(&reuseReport, "reuse-report", false,
 		"stryker only: parse the report already on disk instead of launching a run (path + mtime are printed; other legs still run)")
+	c.Flags().StringVar(&baseOverride, "base", "",
+		"diff from this commit instead of the resolved fork point (a merged phase falls back to changes.json's base_commit automatically; use this when it has none)")
 	c.AddCommand(verifyFinalize())
 	c.AddCommand(verifyResults())
 	c.AddCommand(verifyStatus())
@@ -531,7 +535,8 @@ func classifyFetch(host string, err error) error {
 
 // verifyResults registers `dross verify results <phase>`.
 func verifyResults() *cobra.Command {
-	return &cobra.Command{
+	var baseOverride string
+	c := &cobra.Command{
 		Use:   "results <phase-id>",
 		Short: "Collect a detached mutation run and write tests.json + verify.toml",
 		Args:  cobra.ExactArgs(1),
@@ -546,9 +551,14 @@ func verifyResults() *cobra.Command {
 			if err := requireExecConsent(); err != nil {
 				return err
 			}
-			return collectDetached(args[0])
+			return collectDetachedFrom(args[0], baseOverride)
 		},
 	}
+	// The scope is rebuilt at collection, so a run dispatched with --base has
+	// to be collected with the same one or the two would disagree.
+	c.Flags().StringVar(&baseOverride, "base", "",
+		"diff from this commit instead of the resolved fork point; pass the same value the run was dispatched with")
+	return c
 }
 
 // collectDetached is `verify results`: read the record, ask the host it names,
@@ -559,6 +569,12 @@ func verifyResults() *cobra.Command {
 // half-finished run would carry a score computed over the packages that
 // happened to be done, and it would look exactly like a complete one.
 func collectDetached(phaseID string) error {
+	return collectDetachedFrom(phaseID, "")
+}
+
+// collectDetachedFrom is collectDetached with an explicit --base; the scope
+// rebuilt here resolves its fork point exactly as the attached path does.
+func collectDetachedFrom(phaseID, baseOverride string) error {
 	root, err := FindRoot()
 	if err != nil {
 		return err
@@ -627,7 +643,9 @@ func collectDetached(phaseID string) error {
 	for taskID, r := range ch.Tasks {
 		filesByTask[taskID] = r.Files
 	}
-	scope, err := phaseScope(repoDir, ch.Base, verify.FilesFromChanges(filesByTask))
+	scope, err := phaseScope(repoDir,
+		scopeBase{Branch: ch.Base, ForkPoint: ch.BaseCommit, Override: baseOverride},
+		verify.FilesFromChanges(filesByTask))
 	if err != nil {
 		return err
 	}

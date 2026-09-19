@@ -48,11 +48,101 @@ func writeScopeFile(t *testing.T, dir, rel, body string) {
 // test should stop rather than nil-deref.
 func mustPhaseScope(t *testing.T, repoDir, base string, recorded []string) *verify.Scope {
 	t.Helper()
-	s, err := phaseScope(repoDir, base, recorded)
+	s, err := phaseScope(repoDir, scopeBase{Branch: base}, recorded)
 	if err != nil {
 		t.Fatalf("phaseScope(%q, %q, %v): %v", repoDir, base, recorded, err)
 	}
 	return s
+}
+
+// mergePhaseIntoBase lands phase/x on base with a real merge commit and leaves
+// HEAD on base — the state every post-ship re-verify runs from. Returns the
+// fork point (what changes.json's base_commit would hold).
+func mergePhaseIntoBase(t *testing.T, dir string) (fork string) {
+	t.Helper()
+	fork = mustGit(t, dir, "rev-parse", "base")
+	mustGit(t, dir, "checkout", "-q", "base")
+	mustGit(t, dir, "merge", "-q", "--no-ff", "-m", "merge phase/x", "phase/x")
+	mustGit(t, dir, "branch", "-q", "-D", "phase/x")
+	return fork
+}
+
+// TestPhaseScopeAfterMergeDiffsFromTheRecordedForkPoint: once the phase has
+// merged, merge-base(base, HEAD) is HEAD and the git leg would contribute
+// nothing — the run that motivated this (feastahead, 2026-09-19) collapsed a
+// 209-hunk ranged scope into 86 whole files and still said pass. With the
+// fork point recorded, the diff is base_commit..HEAD and the hunks survive.
+func TestPhaseScopeAfterMergeDiffsFromTheRecordedForkPoint(t *testing.T) {
+	dir := scopeRepo(t)
+	writeScopeFile(t, dir, "a.go", strings.Repeat("// line\n", 21))
+	mustGit(t, dir, "commit", "-qam", "phase work")
+	fork := mergePhaseIntoBase(t, dir)
+
+	s, err := phaseScope(dir, scopeBase{Branch: "base", ForkPoint: fork}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Base != fork {
+		t.Errorf("base = %q want the recorded fork point %q", s.Base, fork)
+	}
+	if !s.Contains("a.go") {
+		t.Errorf("git side lost after merge: files = %v", s.Files)
+	}
+	if len(s.Hunks["a.go"]) == 0 {
+		t.Errorf("hunks lost after merge: %v", s.Hunks)
+	}
+	if !slices.ContainsFunc(s.Degraded, func(d string) bool { return strings.Contains(d, "phase already merged") }) {
+		t.Errorf("a substituted base must be named on Degraded: %v", s.Degraded)
+	}
+}
+
+// TestPhaseScopeAfterMergeWithoutForkPointNamesTheFlag: a pre-base_commit
+// record has nothing to fall back to. The lane is still changes-only, but the
+// reason now says WHY and names the fix, instead of the generic "git
+// contributed no files".
+func TestPhaseScopeAfterMergeWithoutForkPointNamesTheFlag(t *testing.T) {
+	dir := scopeRepo(t)
+	writeScopeFile(t, dir, "a.go", strings.Repeat("// line\n", 21))
+	mustGit(t, dir, "commit", "-qam", "phase work")
+	mergePhaseIntoBase(t, dir)
+
+	s, err := phaseScope(dir, scopeBase{Branch: "base"}, []string{"a.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Source != verify.SourceChangesOnly {
+		t.Errorf("source = %q want %q", s.Source, verify.SourceChangesOnly)
+	}
+	if !slices.ContainsFunc(s.Degraded, func(d string) bool { return strings.Contains(d, "--base") }) {
+		t.Errorf("degraded must name --base as the fix: %v", s.Degraded)
+	}
+}
+
+// TestPhaseScopeBaseOverrideWins: --base beats both the merge-base and the
+// recorded fork point, on the phase branch as well as after the merge; a rev
+// that does not resolve is an error, never a degraded whole-file run.
+func TestPhaseScopeBaseOverrideWins(t *testing.T) {
+	dir := scopeRepo(t)
+	writeScopeFile(t, dir, "a.go", strings.Repeat("// line\n", 21))
+	mustGit(t, dir, "commit", "-qam", "phase work")
+	fork := mustGit(t, dir, "rev-parse", "base")
+
+	s, err := phaseScope(dir, scopeBase{Branch: "no-such-ref", Override: fork}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Base != fork || !s.Contains("a.go") {
+		t.Errorf("override not honoured: base=%q files=%v", s.Base, s.Files)
+	}
+	if !slices.ContainsFunc(s.Degraded, func(d string) bool { return strings.Contains(d, "--base") }) {
+		t.Errorf("an overridden base must be named on Degraded: %v", s.Degraded)
+	}
+
+	if _, err := phaseScope(dir, scopeBase{Branch: "base", Override: "no-such-rev"}, nil); err == nil {
+		t.Error("an unresolvable --base must be an error, not a degraded scope")
+	} else if !strings.Contains(err.Error(), "no-such-rev") {
+		t.Errorf("error must name the rev: %v", err)
+	}
 }
 
 // TestPhaseScopeFallsBackWithoutBase: a phase whose changes.json never got a
@@ -250,7 +340,7 @@ func TestPhaseScopeFencesBaseRef(t *testing.T) {
 var (
 	_ func([]pathfence.Contained) ([]string, []string)           = mutationCandidates
 	_ func(string, *verify.Scope) ([]pathfence.Contained, error) = containScope
-	_ func(string, string, []string) (*verify.Scope, error)      = phaseScope
+	_ func(string, scopeBase, []string) (*verify.Scope, error)   = phaseScope
 )
 
 // TestPhaseScopeRefusesEscapingRecordedPath is the gate. It must abort, not
@@ -259,7 +349,7 @@ var (
 func TestPhaseScopeRefusesEscapingRecordedPath(t *testing.T) {
 	dir := scopeRepo(t)
 
-	s, err := phaseScope(dir, "base", []string{"a.go", "../x.go"})
+	s, err := phaseScope(dir, scopeBase{Branch: "base"}, []string{"a.go", "../x.go"})
 	if err == nil {
 		t.Fatal("phaseScope accepted a recorded path escaping the repo")
 	}
@@ -287,7 +377,7 @@ func TestPhaseScopeDoesNotAbortOnGitPaths(t *testing.T) {
 	writeScopeFile(t, dir, "a.go", strings.Repeat("// changed\n", 20))
 	mustGit(t, dir, "commit", "-qam", "phase edit")
 
-	s, err := phaseScope(dir, "base", nil)
+	s, err := phaseScope(dir, scopeBase{Branch: "base"}, nil)
 	if err != nil {
 		t.Fatalf("phaseScope errored on a git-only scope: %v", err)
 	}

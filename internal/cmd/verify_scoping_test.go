@@ -235,6 +235,17 @@ func TestScopingHasNoOptOut(t *testing.T) {
 		// filter, so a reused report cannot be a wider run either. What it
 		// CAN be is stale, which is why it prints the report's mtime.
 		"reuse-report": true,
+		// Moves where the diff STARTS, not whether one is taken. It exists
+		// for the post-merge case, where merge-base(base, HEAD) is HEAD and
+		// the git side would otherwise contribute nothing at all. It is not
+		// free of narrowing: a base LATER than the true fork yields fewer
+		// hunks, and on a ranged stryker leg fewer hunks is fewer instrumented
+		// lines (the recorded files themselves never leave scope — the union
+		// with changes.json holds). That is accepted because the value is an
+		// explicit, user-typed commit, resolved or refused (never degraded),
+		// and named on Scope.Degraded so the run prints the substitution —
+		// the same trust changes.json's own base_commit already carries.
+		"base": true,
 	}
 
 	var got []string

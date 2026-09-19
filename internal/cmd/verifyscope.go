@@ -32,7 +32,15 @@ import (
 // tree. A scope that shifted with unsaved edits could not be reproduced from
 // the recorded base and the commit history, and c-6 is exactly the requirement
 // that a mis-scoped run stays diagnosable after the fact.
-func phaseScope(repoDir, base string, recorded []string) (*verify.Scope, error) {
+//
+// The base is the phase's fork point, and it is resolved in three tiers (see
+// resolveScopeBase): an explicit --base wins outright, the merge-base of the
+// recorded branch and HEAD is the normal case, and once the phase has MERGED —
+// HEAD sits on the base branch, so that merge-base is HEAD itself and the diff
+// is empty — the recorded base_commit stands in. Without that tier a post-merge
+// re-verify silently collapsed to the changes-only, whole-file scope while
+// still reporting pass.
+func phaseScope(repoDir string, base scopeBase, recorded []string) (*verify.Scope, error) {
 	if err := verify.ValidateRecorded(repoDir, recorded); err != nil {
 		return nil, err
 	}
@@ -42,16 +50,12 @@ func phaseScope(repoDir, base string, recorded []string) (*verify.Scope, error) 
 		Recorded: recorded,
 	}
 
-	if strings.TrimSpace(base) == "" {
-		in.Degraded = append(in.Degraded,
-			"changes.json records no base branch, so no git diff could be taken")
-		return verify.NewScope(in), nil
+	sha, degraded, err := resolveScopeBase(repoDir, base)
+	if err != nil {
+		return nil, err
 	}
-
-	sha, err := gitTrim(repoDir, gitRefArgs("merge-base", nil, base, "HEAD")...)
-	if err != nil || sha == "" {
-		in.Degraded = append(in.Degraded,
-			fmt.Sprintf("could not resolve merge-base of %q and HEAD: %v", base, gitReason(err)))
+	in.Degraded = append(in.Degraded, degraded...)
+	if sha == "" {
 		return verify.NewScope(in), nil
 	}
 	// The resolved sha, not the ref it came from: a base branch that has since
@@ -92,6 +96,67 @@ func phaseScope(repoDir, base string, recorded []string) (*verify.Scope, error) 
 	in.Degraded = append(in.Degraded, degraded...)
 
 	return verify.NewScope(in), nil
+}
+
+// scopeBase carries the three things the diff base can be resolved from.
+type scopeBase struct {
+	Branch    string // changes.json `base` — the branch the phase forked from
+	ForkPoint string // changes.json `base_commit` — the sha Branch held at the fork; "" on old records
+	Override  string // --base <rev>: an explicit fork point that beats both
+}
+
+// resolveScopeBase picks the sha the phase diff starts from. It returns "" with
+// the reason on degraded when no usable base exists — the changes-only lane —
+// and an error only for an Override that does not resolve: the user typed that
+// rev, and a typo degrading into whole-file measurement would hide exactly the
+// mistake the flag exists to correct.
+//
+// The post-merge tier keys on merge-base(Branch, HEAD) == HEAD. On the phase
+// branch the merge-base is the fork point and never HEAD; once the phase has
+// merged and HEAD is on Branch, it always is, and the honest diff is
+// base_commit..HEAD. That range can carry sibling work merged since the fork,
+// which is more measurement, never less — but it is a substituted base, so it
+// is named on Degraded rather than left to read as the ordinary path.
+func resolveScopeBase(repoDir string, b scopeBase) (sha string, degraded []string, err error) {
+	if rev := strings.TrimSpace(b.Override); rev != "" {
+		sha, err = gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, rev+"^{commit}")...)
+		if err != nil || sha == "" {
+			return "", nil, fmt.Errorf("--base %q does not resolve to a commit: %s", rev, gitReason(err))
+		}
+		return sha, []string{fmt.Sprintf("base overridden by --base: diffing %s..HEAD", short(sha))}, nil
+	}
+
+	branch := strings.TrimSpace(b.Branch)
+	if branch == "" {
+		return "", []string{"changes.json records no base branch, so no git diff could be taken"}, nil
+	}
+
+	sha, err = gitTrim(repoDir, gitRefArgs("merge-base", nil, branch, "HEAD")...)
+	if err != nil || sha == "" {
+		return "", []string{fmt.Sprintf("could not resolve merge-base of %q and HEAD: %v", branch, gitReason(err))}, nil
+	}
+
+	// --verify, because rev-parse only honours --end-of-options in that mode
+	// and otherwise echoes it as output.
+	head, err := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "HEAD^{commit}")...)
+	if err != nil || head != sha {
+		// A HEAD that will not resolve is left to the diff steps to report;
+		// the ordinary tier holds.
+		return sha, nil, nil
+	}
+
+	fork := strings.TrimSpace(b.ForkPoint)
+	if fork == "" {
+		return "", []string{fmt.Sprintf(
+			"phase already merged (merge-base of %q and HEAD is HEAD itself) and changes.json records no base_commit; pass --base <fork-sha> to diff from the fork point", branch)}, nil
+	}
+	forkSHA, err := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, fork+"^{commit}")...)
+	if err != nil || forkSHA == "" {
+		return "", []string{fmt.Sprintf(
+			"phase already merged and the recorded base_commit %s does not resolve: %s; pass --base <fork-sha>", short(fork), gitReason(err))}, nil
+	}
+	return forkSHA, []string{fmt.Sprintf(
+		"phase already merged: diffing recorded fork point %s..HEAD, which may include sibling work merged since", short(forkSHA))}, nil
 }
 
 // gitReason renders a git failure for a degraded entry. exec errors carry only
