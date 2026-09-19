@@ -96,6 +96,10 @@ var table = map[string]Rule{
 		Kind: Reject,
 		Why:  "npx consumes leading-dash arguments itself before the wrapped binary sees them",
 	},
+	"node": {
+		Kind: Reject,
+		Why:  "node reads options ahead of the script operand and honours no end-of-options token; the only positional dross passes is the literal `-`, the request rides on stdin",
+	},
 	"dotnet": {
 		Kind: Reject,
 		Why:  "dotnet and stryker.net both parse options positionally with no end-of-options token",
