@@ -120,6 +120,8 @@ func TestRegistryCoversEveryKnownFieldByName(t *testing.T) {
 		"verify.Scope.Source",
 		"verify.LanguageRun.Files",
 		"verify.CriterionResult.Tests",
+		"verify.Provenance.Files",
+		"verify.ProvenanceLeg.Files",
 	}
 
 	have := map[string]bool{}

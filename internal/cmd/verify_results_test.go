@@ -472,6 +472,47 @@ func TestCollectWritesTheSameArtefactsAnAttachedRunWould(t *testing.T) {
 	}
 }
 
+// TestCollectRecordsWholeFileProvenance: the detached leg goes through the
+// same planner the attached path runs, so it names every dispatched file as
+// whole-file with the gremlins reason — not nothing, which would leave a
+// collected run indistinguishable from one that never recorded provenance.
+func TestCollectRecordsWholeFileProvenance(t *testing.T) {
+	const id = "collect"
+	dir := collectRepo(t, id)
+	root := filepath.Join(dir, RootDirName)
+
+	if err := collectDetached(id); err != nil {
+		t.Fatalf("collectDetached: %v", err)
+	}
+	testsPath, _ := verify.FilePaths(root, id)
+	raw, err := os.ReadFile(testsPath)
+	if err != nil {
+		t.Fatalf("tests.json was not written: %v", err)
+	}
+	if strings.Contains(string(raw), `"ranges"`) {
+		t.Errorf("a gremlins leg must carry no ranges key:\n%s", raw)
+	}
+	got, err := verify.LoadTests(testsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Languages) != 1 {
+		t.Fatalf("want one go leg, got %+v", got.Languages)
+	}
+	leg := got.Languages[0]
+	if len(leg.Files) == 0 {
+		t.Fatal("the leg dispatched no files")
+	}
+	for _, f := range leg.Files {
+		if reason := leg.WholeFile[f]; reason != verify.WholeFileNoRangeRunner {
+			t.Errorf("whole_file[%s] = %q, want %q", f, reason, verify.WholeFileNoRangeRunner)
+		}
+	}
+	if len(leg.WholeFile) != len(leg.Files) {
+		t.Errorf("whole_file names %d files, leg dispatched %d", len(leg.WholeFile), len(leg.Files))
+	}
+}
+
 // TestCollectRefusesWhenOnePackageFailedBeforeMeasuring is the end-to-end
 // version of the false-green, and the shape the run-level guard cannot see.
 //

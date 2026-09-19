@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -219,6 +220,21 @@ type LanguageRun struct {
 	// reads and fixes, while a leg that never ran means this phase has no
 	// evidence about that language at all — which must not be verifiable past.
 	RemoteTransport bool `json:"remote_transport,omitempty"`
+
+	// Ranges records, per file, the effective line ranges this leg's adapter
+	// was actually told to mutate — post-pad, post-merge, with the pad that
+	// produced them. Scope.Hunks keeps the raw diff; this keeps what the tool
+	// was told, so a run's claimed scope is provable from its own record. It
+	// lives on the leg rather than the Scope because ranges are adapter-
+	// specific (gremlins has none): the leg is the honest owner of its own
+	// output, and the Scope stays the pure pre-run input. Absent on a leg
+	// that ranged nothing.
+	Ranges map[string][]EffectiveRange `json:"ranges,omitempty"`
+	// WholeFile names every file this leg mutated WHOLE rather than by range,
+	// with the reason from the closed set in range_provenance.go. A leg that
+	// measured whole files must never read as a ranged one, so the fallback
+	// is a named fact here, not an absence in Ranges.
+	WholeFile map[string]string `json:"whole_file,omitempty"`
 }
 
 type SkippedFile struct {
@@ -411,6 +427,37 @@ type LegSummary struct {
 	// hosts were involved and leaves the reader to guess which score belongs to
 	// which — and the guess is exactly what makes two runs comparable or not.
 	MeasuredOn string `toml:"measured_on,omitempty"`
+
+	// Pad, Ranges and WholeFile restate the leg's range provenance in a shape
+	// an agent or a human reads without opening tests.json: Ranges is one
+	// "file:start-end" per effective range, WholeFile one "file — reason" per
+	// file the leg mutated whole, both sorted. Flat strings rather than tables
+	// on purpose — verify.toml is the readable summary and tests.json /
+	// `dross verify scope --json` are the machine record. All three are
+	// omitted when empty, so a leg that ranged nothing never claims a pad and
+	// a verify.toml written before they existed round-trips unchanged.
+	Pad       int      `toml:"pad,omitzero"`
+	Ranges    []string `toml:"ranges,omitempty"`
+	WholeFile []string `toml:"whole_file,omitempty"`
+}
+
+// legProvenance flattens a leg's recorded ranges and whole-file reasons into
+// the LegSummary strings. The pad is the one every effective range carries
+// (PlanRanges stamps hunkContextLines on all of them); zero when there are
+// none, so a whole-file leg states no pad.
+func legProvenance(lr LanguageRun) (pad int, ranges, whole []string) {
+	for f, rs := range lr.Ranges {
+		for _, r := range rs {
+			ranges = append(ranges, fmt.Sprintf("%s:%d-%d", f, r.Start, r.End))
+			pad = r.Pad
+		}
+	}
+	for f, reason := range lr.WholeFile {
+		whole = append(whole, f+" — "+reason)
+	}
+	sort.Strings(ranges)
+	sort.Strings(whole)
+	return pad, ranges, whole
 }
 
 type VerifySummary struct {
@@ -510,13 +557,108 @@ func Run(phaseID string, files []string, adapters []mutation.Adapter) (*Tests, e
 	return RunScoped(phaseID, files, adapters, nil)
 }
 
+// hunkContextLines pads each changed hunk before it becomes a mutation range.
+//
+// WHY A PAD IS NECESSARY AT ALL, measured rather than assumed. A mutant is
+// matched by the line its span STARTS on, and a mutant can enclose the changed
+// line while starting above it. Measured against Stryker 9.6.1 on 2026-09-03
+// with src/lib/utils/portion-cascade.ts, whose three mutants all concern the
+// single statement on line 29:
+//
+//	--mutate portion-cascade.ts        3 mutants
+//	--mutate portion-cascade.ts:29-29  2 mutants   <- the block mutant is LOST
+//	--mutate portion-cascade.ts:20-30  3 mutants
+//
+// The missing one is the function-body block statement, whose span opens on
+// line 28. An unpadded range would have reported that line fully killed while
+// never generating the mutant that covers it — a scoped run that measures less
+// than it claims, which is the exact failure narrowing exists to avoid.
+//
+// WHY 25, and what it still does not buy. Measured on the four files of the
+// phase this was built for (ingredient-density-prod-seed, base 153a855e):
+//
+//	                        whole file   hunk only   +-5   +-25   +-100
+//	recipe.ts                     1360           0     5     19      71
+//	db/schema.ts                  1832           1     -     22       -
+//	admin-ingredients.ts           526           -     -      7       -
+//
+// 25 recovers the enclosing-block mutants at roughly 1-2% of the whole-file
+// count, where 100 costs three times as much for cases a hunk that size would
+// usually have covered anyway. It is a HEURISTIC and it has a real residue: a
+// mutant whose span opens more than 25 lines above the hunk — a long function,
+// a large object literal — is still missed. That is a known limitation of
+// line-scoping, not a bug to be fixed by a larger number, and the honest fix is
+// an AST-aware range that a future change can build on this seam.
+const hunkContextLines = 25
+
+// padAndMerge widens each range by hunkContextLines and merges any that then
+// overlap or touch. Merging is not cosmetic: two overlapping specs for one file
+// make the argv claim a scope it does not have, and a reader diffing --mutate
+// against the report would be comparing against a double-counted set.
+func padAndMerge(in []Range) []mutation.Range {
+	if len(in) == 0 {
+		return nil
+	}
+	padded := make([]mutation.Range, 0, len(in))
+	for _, r := range in {
+		start := r.Start - hunkContextLines
+		if start < 1 {
+			start = 1
+		}
+		padded = append(padded, mutation.Range{Start: start, End: r.End + hunkContextLines})
+	}
+	sort.Slice(padded, func(i, j int) bool { return padded[i].Start < padded[j].Start })
+	out := []mutation.Range{padded[0]}
+	for _, r := range padded[1:] {
+		last := &out[len(out)-1]
+		if r.Start <= last.End+1 {
+			if r.End > last.End {
+				last.End = r.End
+			}
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// runPlanned dispatches one adapter's leg the way its RangePlan says: by
+// range when the adapter can express it AND the plan found something to
+// narrow, whole otherwise. The plan is what gets recorded, and this is the
+// only place it is executed — so the record and the dispatch cannot disagree.
+//
+// Both guards are load-bearing. Asserting RangeRunner without checking would
+// stop the Go leg running at all; an empty Dispatch is every file falling
+// open (no hunks, all absent, all malformed), and narrowing to an empty set
+// would mutate nothing where the record says whole.
+func runPlanned(a mutation.Adapter, files []string, plan RangePlan) (*mutation.Report, error) {
+	if rr, ok := a.(mutation.RangeRunner); ok && len(plan.Dispatch) > 0 {
+		return rr.RunRanges(files, plan.Dispatch)
+	}
+	return a.Run(files)
+}
+
+// appendDegraded adds a plan's Degraded lines to the scope, nil-safe and
+// deduped: a nil scope has nowhere to record them (and nothing to degrade),
+// and a line already present would print the same warning twice.
+func appendDegraded(scope *Scope, lines []string) {
+	if scope == nil {
+		return
+	}
+	for _, l := range lines {
+		if !slices.Contains(scope.Degraded, l) {
+			scope.Degraded = append(scope.Degraded, l)
+		}
+	}
+}
+
 // RunScoped is Run with diff scoping applied to each leg's report. A nil scope
 // is the unscoped behaviour, which is what Run passes.
 //
 // Filtering happens AFTER each adapter returns. What the adapter was
-// dispatched to mutate is not narrowed here — narrowing the dispatch would
-// change which mutants exist, and this is only about which of them this phase
-// is answerable for.
+// DISPATCHED to mutate is narrowed too, when the adapter can range and the
+// scope knows its hunks (PlanRanges) — and that decision is recorded on the
+// leg before the tool runs, so a failed leg still says what it was told.
 func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scope *Scope) (*Tests, error) {
 	t := &Tests{
 		Phase:       phaseID,
@@ -549,7 +691,17 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 
 	for _, name := range names {
 		a := adapterByName[name]
-		report, err := a.Run(byAdapter[name])
+		// Planned once, recorded on whichever leg results, and executed
+		// from the same value: provenance is known before the tool runs.
+		plan := PlanRanges(a, byAdapter[name], scope)
+		appendDegraded(scope, plan.Degraded)
+		// Recorded as ABSENT when empty, never as an empty object: omitempty
+		// drops it on the way out, so the loaded record would otherwise
+		// differ from the one that was saved.
+		if len(plan.WholeFile) == 0 {
+			plan.WholeFile = nil
+		}
+		report, err := runPlanned(a, byAdapter[name], plan)
 		if err != nil {
 			// Record-and-continue: adapters run in sorted-name order, so a
 			// failing early adapter (e.g. stryker misconfigured) must not
@@ -573,6 +725,11 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 				// downstream sees only Error, a string, and errors.Is cannot be
 				// re-run against prose.
 				RemoteTransport: errors.Is(err, remote.ErrTransport),
+				// Stamped on the failure too: what the tool was TOLD is known
+				// whether or not it answered, and a failed ranged leg that
+				// forgot its ranges would be re-read as a whole-file one.
+				Ranges:    plan.Ranges,
+				WholeFile: plan.WholeFile,
 			})
 			continue
 		}
@@ -588,6 +745,8 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 			MeasuredOn: MeasuredOnHost(AdapterHost(a)),
 			Files:      byAdapter[name],
 			Mutation:   kept,
+			Ranges:     plan.Ranges,
+			WholeFile:  plan.WholeFile,
 		})
 	}
 
@@ -689,6 +848,9 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 	// mutant in ten, and the mean called it 0.50.
 	var timeouts int
 	for _, lr := range t.Languages {
+		// Stated for the error leg too: what the tool was told is known
+		// whether or not it answered.
+		pad, ranges, whole := legProvenance(lr)
 		if lr.Mutation == nil {
 			// Recorded, not skipped: a leg that failed is a leg that measured
 			// nothing, and leaving it out would make the run look like it only
@@ -699,6 +861,9 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 				Error:      lr.Error,
 				FileCount:  len(lr.Files),
 				MeasuredOn: lr.MeasuredOn,
+				Pad:        pad,
+				Ranges:     ranges,
+				WholeFile:  whole,
 			})
 			continue
 		}
@@ -730,6 +895,9 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 			Score:      mutation.PooledScore(lr.Mutation.Killed, lr.Mutation.Survived, lr.Mutation.Timeout),
 			FileCount:  len(lr.Files),
 			MeasuredOn: lr.MeasuredOn,
+			Pad:        pad,
+			Ranges:     ranges,
+			WholeFile:  whole,
 		})
 	}
 	// Every mutant the tools produced landed outside this phase's files. The

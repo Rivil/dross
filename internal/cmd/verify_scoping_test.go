@@ -228,6 +228,13 @@ func TestScopingHasNoOptOut(t *testing.T) {
 		// the attribution; a scheduled run scopes exactly as the immediate one
 		// it would otherwise have been.
 		"at": true,
+		// Moves where the stryker REPORT comes from — the file already on
+		// disk instead of a fresh launch — not what it scopes to. The reuse
+		// arm computes the same requested/narrowed set from the same scoped
+		// file list, and the parsed report goes through the same post-Report
+		// filter, so a reused report cannot be a wider run either. What it
+		// CAN be is stale, which is why it prints the report's mtime.
+		"reuse-report": true,
 	}
 
 	var got []string
@@ -570,5 +577,68 @@ func TestVerifyResultsRefusesEscapingRecordedPath(t *testing.T) {
 		if _, statErr := os.Stat(p); statErr == nil {
 			t.Errorf("%s was written for a refused collect", filepath.Base(p))
 		}
+	}
+}
+
+// stubRangeAdapter is stubMutationAdapter with the optional RangeRunner half:
+// it records the range map RunScoped handed it, so a test can see whether the
+// real scope pipeline narrowed anything.
+type stubRangeAdapter struct {
+	stubMutationAdapter
+	ranges map[string][]mutation.Range
+}
+
+func (s *stubRangeAdapter) RunRanges(files []string, ranges map[string][]mutation.Range) (*mutation.Report, error) {
+	s.ranges = ranges
+	return s.stubMutationAdapter.Run(files)
+}
+
+// TestVerifyOutputNamesWholeFileLegs: a leg that measured whole files must
+// say so and never read as ranged; a leg that ranged must say that and never
+// call its ranged file whole-file. Same fixture as
+// TestScopingAttributionHoldsEndToEnd, read through stdout this once because
+// the printed line IS the claim under test.
+func TestVerifyOutputNamesWholeFileLegs(t *testing.T) {
+	dir := scopedVerifyRepo(t, "wording")
+	phaseSpec(t, "01-wording")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go only")
+	mustSetBase(t, "01-wording", "base")
+
+	// Gremlins' shape: Adapter, not RangeRunner.
+	useStubAdapter(t, &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})})
+	out := runVerifyCapturing(t, "01-wording")
+
+	var sawWholeFile bool
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "whole-file") && strings.Contains(line, verify.WholeFileNoRangeRunner) {
+			sawWholeFile = true
+		}
+	}
+	if !sawWholeFile {
+		t.Errorf("no line names the gremlins leg whole-file with its reason:\n%s", out)
+	}
+	if strings.Contains(out, "ranged") {
+		t.Errorf("a whole-file run printed as ranged:\n%s", out)
+	}
+
+	// The other side: a RangeRunner over the same repo is told a.go's padded
+	// range and prints as ranged, never whole-file for that file.
+	ranger := &stubRangeAdapter{stubMutationAdapter: stubMutationAdapter{name: "stryker", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}}
+	useStubAdapter(t, ranger)
+	out = runVerifyCapturing(t, "01-wording")
+
+	if !strings.Contains(out, "ranged stryker 1 file(s) (pad 25)") {
+		t.Errorf("a ranged leg did not print as ranged:\n%s", out)
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "whole-file") && strings.Contains(line, "a.go") {
+			t.Errorf("the ranged file printed as whole-file: %s", line)
+		}
+	}
+	if len(ranger.ranges["a.go"]) == 0 {
+		t.Errorf("the stub was never handed a.go's range: %v", ranger.ranges)
 	}
 }

@@ -1,0 +1,170 @@
+{
+  "phase": "mutation-range-provenance",
+  "pr": 126,
+  "base": "milestone/v1.7",
+  "base_commit": "c201b2aabdc89abd51c1162593a5d3afbc30eaea",
+  "status": "shipped",
+  "tasks": {
+    "quick-1": {
+      "files": [
+        "internal/mutation/stryker.go",
+        "internal/mutation/range_test.go",
+        "internal/mutation/stryker_test.go",
+        "internal/mutation/reuse_report_test.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_scoping_test.go",
+        "internal/cmd/verify_reuse_report_test.go"
+      ],
+      "commit": "d79c793",
+      "completed_at": "2026-09-18T16:08:38.704945Z",
+      "notes": "quick: tolerate zero-mutant files in checkInstrumented; add dross verify --reuse-report"
+    },
+    "t-1": {
+      "files": [
+        "internal/mutation/adapter.go",
+        "internal/mutation/stryker.go",
+        "internal/mutation/range_test.go",
+        "internal/mutation/argv_test.go",
+        "internal/mutation/stryker_test.go",
+        "internal/verify/verify.go",
+        "internal/verify/range_dispatch_test.go"
+      ],
+      "commit": "8c3f734",
+      "completed_at": "2026-09-18T06:41:19.531968Z",
+      "landmarks": [
+        {
+          "feature": "ranged mutation runs",
+          "symbol": "RunScoped",
+          "loc": "internal/verify/verify.go:619",
+          "what": "Stryker legs instrument only the phase's padded hunks (file:start-end) via optional RangeRunner; gremlins and hunk-less scopes fall open to whole files"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/compilefence/compilefence_test.go",
+        ".dross/survivors.toml"
+      ],
+      "commit": "f38ad0b",
+      "completed_at": "2026-09-18T06:44:25.934184Z",
+      "landmarks": [
+        {
+          "feature": "compile fence",
+          "symbol": "recorder",
+          "loc": "internal/compilefence/compilefence_test.go:182",
+          "what": "recorder TB exercises AssertDoesNotCompile/AssertCompiles in-package so the three routed survivors (:61 :80 :81) are killed under gremlins' per-package scope"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/mutation/adapter.go",
+        "internal/mutation/stryker.go",
+        "internal/verify/range_provenance.go",
+        "internal/verify/range_provenance_test.go"
+      ],
+      "commit": "e876c4b",
+      "completed_at": "2026-09-18T06:49:14.231391Z",
+      "landmarks": [
+        {
+          "feature": "mutation range provenance",
+          "symbol": "PlanRanges",
+          "loc": "internal/verify/range_provenance.go:74",
+          "what": "pure per-leg planner classifies each file as ranged (EffectiveRange with pad) or whole-file with a closed named reason; Range.Valid is the one validator shared with stryker's argv"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/verify/verify.go",
+        "internal/verify/range_dispatch_test.go",
+        "internal/verify/range_record_test.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_results_test.go"
+      ],
+      "commit": "bf2baf5",
+      "completed_at": "2026-09-18T06:53:28.291293Z",
+      "landmarks": [
+        {
+          "feature": "mutation range provenance",
+          "symbol": "runPlanned",
+          "loc": "internal/verify/verify.go:603",
+          "what": "every leg (attached, detached, failed) persists ranges + whole_file in tests.json from the one RangePlan it dispatched; plan Degraded lines land on Scope deduped"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/verify/verify.go",
+        "internal/verify/range_summary_test.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_scoping_test.go"
+      ],
+      "commit": "034a1ed",
+      "completed_at": "2026-09-18T06:57:42.150419Z",
+      "landmarks": [
+        {
+          "feature": "mutation range provenance",
+          "symbol": "printRangeProvenance",
+          "loc": "internal/cmd/verify.go:1465",
+          "what": "verify.toml legs state pad/ranges/whole_file as flat strings and verify output prints ranged vs whole-file per leg with the reason; a whole-file leg never reads as ranged"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/verifyscope.go",
+        "internal/cmd/verifyscope_test.go",
+        "internal/cmd/verify.go",
+        "internal/verify/range_provenance.go",
+        "assets/prompts/verify.md",
+        "internal/cmd/verify_prompt_test.go",
+        "README.md",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go"
+      ],
+      "commit": "2027f99",
+      "completed_at": "2026-09-18T07:24:33.197856Z",
+      "notes": "deviation approved: pathfence registry entries for Provenance.Files / ProvenanceLeg.Files",
+      "landmarks": [
+        {
+          "feature": "mutation range provenance",
+          "symbol": "verifyScope",
+          "loc": "internal/cmd/verifyscope.go:142",
+          "what": "`dross verify scope \u003cphase\u003e` prints raw hunks beside per-leg effective ranges and whole-file reasons from tests.json; --json emits verify.Provenance verbatim; no run → error naming the fix"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/verify_range_e2e_test.go"
+      ],
+      "commit": "26097fa",
+      "completed_at": "2026-09-18T06:59:52.627305Z",
+      "landmarks": [
+        {
+          "feature": "ranged mutation runs",
+          "symbol": "TestRangedDispatchReachesTheAdapterEndToEnd",
+          "loc": "internal/cmd/verify_range_e2e_test.go:26",
+          "what": "end-to-end pin that the scope pipeline's hunk keys and the adapter's dispatched paths share one vocabulary — a real two-line edit reaches RunRanges as {15,66} pad 25"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/verify_test.go",
+        "internal/verify/range_provenance_test.go"
+      ],
+      "commit": "62ff540",
+      "completed_at": "2026-09-18T10:14:04.099962Z",
+      "landmarks": [
+        {
+          "feature": "mutation range provenance",
+          "symbol": "TestVerifyCover_WholeFileListTruncation",
+          "loc": "internal/cmd/verify_test.go:526",
+          "what": "in-package pins for the whole-file (+N more) overflow count and ProvenanceOf's nil-scope projection — the two in-hunk survivors r-20260918-073404 left"
+        }
+      ]
+    }
+  }
+}

@@ -29,6 +29,7 @@
     "mirror-terminal-state": "DRO-149",
     "multilang-verify-signal": "DRO-28",
     "mutation-diff-scope": "DRO-9",
+    "mutation-range-provenance": "DRO-430",
     "mutation-score-truth": "DRO-30",
     "phase-create-adoption": "DRO-31",
     "plan-gray-area-walkthrough": "DRO-29",
@@ -62,6 +63,7 @@
     "1.7.11.1": "DRO-420",
     "1.7.11.2": "DRO-422",
     "1.7.2.1": "DRO-359",
+    "1.7.7.1": "DRO-442",
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
@@ -96,6 +98,7 @@
     "someday:id:245f4ad61d9e038a": "DRO-372",
     "someday:id:24da6d2754488290": "DRO-41",
     "someday:id:26a2f16243a1ffbe": "DRO-220",
+    "someday:id:285dca82787c2b6a": "DRO-431",
     "someday:id:29eda0e6b5c6ffba": "DRO-180",
     "someday:id:2a662adc6c7edb5f": "DRO-73",
     "someday:id:2bb055bad7b4e16c": "DRO-376",
@@ -125,6 +128,7 @@
     "someday:id:59d5dcbbcbec81c2": "DRO-301",
     "someday:id:5c2c048407b679b5": "DRO-159",
     "someday:id:6144f7eecebde5c0": "DRO-403",
+    "someday:id:61f8ee8221eaeb27": "DRO-439",
     "someday:id:62841da45ed858fe": "DRO-267",
     "someday:id:64cd228356c9fce5": "DRO-76",
     "someday:id:6606a4ae3d228907": "DRO-52",
@@ -204,6 +208,7 @@
     "someday:id:eb18c798fb88a7c4": "DRO-51",
     "someday:id:ec4021c1dc775718": "DRO-58",
     "someday:id:ec525c193f4d6717": "DRO-79",
+    "someday:id:ec9abaedcbc6fce4": "DRO-441",
     "someday:id:ed3c65534e6dca2d": "DRO-114",
     "someday:id:ee252a290b75a800": "DRO-80",
     "someday:id:ee3c2f06092c862f": "DRO-316",
@@ -687,6 +692,46 @@
       "issue": "DRO-156",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "mutation-range-provenance/t-1": {
+      "issue": "DRO-432",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mutation-range-provenance/t-2": {
+      "issue": "DRO-433",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mutation-range-provenance/t-3": {
+      "issue": "DRO-434",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mutation-range-provenance/t-4": {
+      "issue": "DRO-435",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mutation-range-provenance/t-5": {
+      "issue": "DRO-436",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mutation-range-provenance/t-6": {
+      "issue": "DRO-438",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mutation-range-provenance/t-7": {
+      "issue": "DRO-437",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mutation-range-provenance/t-8": {
+      "issue": "DRO-440",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "project-toml-lossless-writes/t-1": {
       "issue": "DRO-413",

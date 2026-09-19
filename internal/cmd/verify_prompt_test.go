@@ -374,3 +374,34 @@ func TestReadmeVerifyRowDescribesLifecycle(t *testing.T) {
 		}
 	}
 }
+
+// TestVerifyPromptReadsRangeProvenance pins the provenance paragraph
+// (mutation-range-provenance c-5): the agent judging a score must know the
+// record says which lines were instrumented and where it fell back, and the
+// command that reads it.
+func TestVerifyPromptReadsRangeProvenance(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "verify.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt := string(b)
+	for _, phrase := range []string{
+		"`whole_file`",
+		"`ranges`",
+		"dross verify scope <phase>",
+		"never called ranged",
+	} {
+		if !strings.Contains(prompt, phrase) {
+			t.Errorf("verify.md lost its range-provenance phrase %q", phrase)
+		}
+	}
+}
+
+// TestReadmeDocumentsVerifyScope: the README command table is the surface a
+// reader scans first; a verb missing from it is a verb nobody runs.
+func TestReadmeDocumentsVerifyScope(t *testing.T) {
+	body := docsBody(t, "README.md")
+	if !strings.Contains(body, "| `dross verify scope <phase>`") {
+		t.Error("README.md has no row for `dross verify scope <phase>`")
+	}
+}

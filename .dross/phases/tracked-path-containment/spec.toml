@@ -67,21 +67,21 @@
   id = "ae21c5406535724d"
   text = "survivor internal/compilefence/compilefence.go:61 (CONDITIONALS_NEGATION)"
   why = "surviving mutant routed out of a verify run"
-  target = "mutation-range-provenance"
+  dismissed = true
   survivor = "365503d33114f65e"
 
 [[deferred]]
   id = "3c94db28021a4eff"
   text = "survivor internal/compilefence/compilefence.go:80 (CONDITIONALS_NEGATION)"
   why = "surviving mutant routed out of a verify run"
-  target = "mutation-range-provenance"
+  dismissed = true
   survivor = "5d74aadbbae679b7"
 
 [[deferred]]
   id = "2bb055bad7b4e16c"
   text = "survivor internal/compilefence/compilefence.go:81 (ARITHMETIC_BASE)"
   why = "surviving mutant routed out of a verify run"
-  target = "mutation-range-provenance"
+  dismissed = true
   survivor = "695a2b44f32b1b43"
 
 [[deferred]]

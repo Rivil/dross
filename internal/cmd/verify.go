@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -38,6 +39,7 @@ func Verify() *cobra.Command {
 	var skipMutation bool
 	var detach bool
 	var detachAt string
+	var reuseReport bool
 	c := &cobra.Command{
 		Use:   "verify <phase-id>",
 		Short: "Run mutation testing per language and write tests.json + verify.toml skeleton",
@@ -109,6 +111,11 @@ func Verify() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if reuseReport {
+				if err := applyReuseReport(adapters, skipMutation, detach); err != nil {
+					return err
+				}
+			}
 
 			if detach {
 				// Refused rather than run locally. The whole point of the flag
@@ -159,10 +166,38 @@ func Verify() *cobra.Command {
 		"start the run on the granted host and return immediately; collect it later with `dross verify results <phase>`")
 	c.Flags().StringVar(&detachAt, "at", "",
 		"with --detach, start the run at HH:MM (next occurrence) or an RFC3339 instant, on the host's clock")
+	c.Flags().BoolVar(&reuseReport, "reuse-report", false,
+		"stryker only: parse the report already on disk instead of launching a run (path + mtime are printed; other legs still run)")
 	c.AddCommand(verifyFinalize())
 	c.AddCommand(verifyResults())
 	c.AddCommand(verifyStatus())
+	c.AddCommand(verifyScope())
 	return c
+}
+
+// applyReuseReport turns --reuse-report on for every stryker adapter in the
+// list. It is an explicit opt-in that changes what a run measures, so the two
+// flags that make it meaningless refuse: --skip-mutation runs no adapter at
+// all, and --detach launches on the host — a reused report is precisely a run
+// that is NOT launched.
+func applyReuseReport(adapters []mutation.Adapter, skip, detach bool) error {
+	if skip {
+		return errors.New("--reuse-report with --skip-mutation: nothing runs under --skip-mutation, so there is no leg to reuse a report for")
+	}
+	if detach {
+		return errors.New("--reuse-report with --detach: a reused report is a run that is not launched; drop one of the two")
+	}
+	applied := false
+	for _, a := range adapters {
+		if s, ok := a.(*mutation.Stryker); ok {
+			s.ReuseReport = true
+			applied = true
+		}
+	}
+	if !applied {
+		return errors.New("--reuse-report: no stryker adapter is configured for this project, so there is no report to reuse")
+	}
+	return nil
 }
 
 // detachSpawn is the seam every detached dispatch goes through, swapped in
@@ -643,6 +678,12 @@ func collectDetached(phaseID string) error {
 	}
 	kept, dropped := verify.FilterReport(report, scope, "go")
 	t.OutOfScope = append(t.OutOfScope, dropped...)
+	// The same planner the attached path runs, so a collected leg carries the
+	// same provenance an attached one would — whole_file for every file, with
+	// its reason — rather than nothing. A ZERO Gremlins, not the tuned
+	// constructor: PlanRanges is pure and only type-asserts RangeRunner, and
+	// this path must not build anything that could run.
+	plan := verify.PlanRanges(&mutation.Gremlins{}, files, scope)
 	t.Languages = append(t.Languages, verify.LanguageRun{
 		Name: "go",
 		Tool: "gremlins",
@@ -652,6 +693,8 @@ func collectDetached(phaseID string) error {
 		MeasuredOn: verify.MeasuredOnHost(rec.Host),
 		Files:      files,
 		Mutation:   kept,
+		Ranges:     plan.Ranges,
+		WholeFile:  plan.WholeFile,
 	})
 
 	if err := finishVerify(root, phaseID, spec, t, verify.MeasuredOnHost(rec.Host), gone); err != nil {
@@ -1445,6 +1488,45 @@ func printScopeSummary(t *verify.Tests, v *verify.Verify) {
 	}
 	for _, d := range t.Scope.Degraded {
 		Printf("  scope degraded: %s\n", d)
+	}
+	printRangeProvenance(t)
+}
+
+// printRangeProvenance says, per leg, how the scope was applied: `ranged` for
+// the files the tool was told to narrow, `whole-file` with its reason for the
+// rest. A leg that ranged nothing never prints the word "ranged" — a run that
+// measured whole files must not read as a ranged one.
+func printRangeProvenance(t *verify.Tests) {
+	for _, lr := range t.Languages {
+		if n := len(lr.Ranges); n > 0 {
+			pad := 0
+			for _, rs := range lr.Ranges {
+				if len(rs) > 0 {
+					pad = rs[0].Pad
+					break
+				}
+			}
+			Printf("  ranged %s %d file(s) (pad %d)\n", lr.Tool, n, pad)
+		}
+		byReason := map[string][]string{}
+		for f, reason := range lr.WholeFile {
+			byReason[reason] = append(byReason[reason], f)
+		}
+		reasons := make([]string, 0, len(byReason))
+		for r := range byReason {
+			reasons = append(reasons, r)
+		}
+		sort.Strings(reasons)
+		for _, r := range reasons {
+			files := byReason[r]
+			sort.Strings(files)
+			suffix := ""
+			if len(files) > scopeFileListCap {
+				suffix = fmt.Sprintf(" (+%d more)", len(files)-scopeFileListCap)
+				files = files[:scopeFileListCap]
+			}
+			Printf("  whole-file %s ×%d — %s: %s%s\n", lr.Tool, len(byReason[r]), r, strings.Join(files, ", "), suffix)
+		}
 	}
 }
 
