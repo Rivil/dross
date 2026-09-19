@@ -2,5 +2,24 @@
   "phase": "secret-detection",
   "base": "milestone/v1.7",
   "base_commit": "98c39a1466dd60fcf93d38f415b537770a06c880",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/secretscan/rules.go",
+        "internal/secretscan/secretscan.go",
+        "internal/secretscan/payload.go",
+        "internal/secretscan/secretscan_test.go"
+      ],
+      "commit": "e92cc67",
+      "completed_at": "2026-09-19T18:50:04.877077Z",
+      "landmarks": [
+        {
+          "feature": "secret detection",
+          "symbol": "Scan",
+          "loc": "internal/secretscan/secretscan.go:83",
+          "what": "embedded 9-rule credential detector with echo-free Hit fingerprints, dross:allow-secret line marker, and ScanPayload/ScanArgv walkers for publish transports"
+        }
+      ]
+    }
+  }
 }
