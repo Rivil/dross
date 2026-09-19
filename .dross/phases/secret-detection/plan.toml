@@ -22,7 +22,7 @@ task_seq = 8
   covers = ["c-3"]
   depends_on = ["t-1"]
   test_contract = ["if the non-git fallback walk or the location format breaks, TestValidateRefusesOnArtifactSecret fails — temp dir (no git), Init(), `.dross/phases/p/notes.md` (a path validate hand-lists nowhere) with a synthesized gitlab token on line 4 → runCmd(Validate()) errors, output contains `gitlab-pat at .dross/phases/p/notes.md:4 (len=` and no 6-byte window of the token", "if --others or --exclude-standard is dropped from the git enumeration, TestScopeIsTrackedPlusStageable fails — temp git repo with the seeded gitignore; tracked `.dross/board.json` clean, UNTRACKED `.dross/notes.md` with a token, IGNORED `.dross/security/run1/gitleaks.json` with a token → exactly one hit, at `.dross/notes.md`", "if the marker is not honoured inside toml, TestValidateAllowMarkerHonouredInToml fails — `.dross/phases/p/spec.toml` line `text = \"<synth token>\" # dross:allow-secret` → validate exits 0 with no `secret:` line; the same file without the marker fails", "if an unreadable artifact is skipped instead of refused, TestScanErrorIsARefusalNotASkip fails — a `.dross/x.toml` with mode 000 (skipped on Windows) → validate reports `secret scan: … permission denied` as a problem rather than exiting 0", "if the scan is short-circuited by an earlier problem, TestValidateSecretProblemsAreLast fails — a malformed spec.toml AND a token in another phase → both problems print"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-3"
@@ -33,7 +33,7 @@ task_seq = 8
   covers = ["c-2"]
   depends_on = ["t-1"]
   test_contract = ["if the screen moves after http.NewRequest/client.Do, TestCreateIssueRefusedBeforeRequest fails — ×4 backends against an httptest server counting requests: CreateIssue(IssueInput{Body: \"line1\\n<synth atlassian token>\"}) returns an error that errors.As a *secretscan.ErrHit naming `atlassian-token` and `:body` (forge/github/youtrack) or `:fields.description` (jira, inside ADF), and the request counter is 0", "if a body patch bypasses the screen, TestUpdateIssueBodyPatchRefused fails — ×4: UpdateIssue(key, IssuePatch{Body: &tok}) → refused, 0 requests; UpdateIssue with clean Labels only → the request goes out", "if a publish path with no Body field escapes, TestEnsureMilestoneDescriptionRefused fails — YouTrack EnsureMilestoneEntity(\"epic\", \"v9\", \"<synth pem header line>\") and Jira EnsureMilestoneEntity(\"version\", …) refused with `pem-private-key`, 0 requests", "if the gate breaks ordinary board sync, TestBoardPublishBenignBodyPosts fails — renderPhaseBody-shaped text carrying a 16-hex identity id, a 40-hex SHA and a UUID posts (counter == 1) on every backend", "if a nil body is rejected or mutated, TestDoRawNilBodyIsUntouched fails — GET paths pass through with counter == 1", "if the screen reads responses, TestGetAndListAreNotScreened fails — GetIssue/ListIssues against a server whose RESPONSE body carries a synthesized token succeed and return the issue", "if the refusal echoes the value after redact.Err wrapping, TestPayloadErrorNeverEchoes fails — err.Error() from each backend (the string that would reach telemetry err_detail) contains no 6-byte window of the token's variable part"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-4"
@@ -44,7 +44,7 @@ task_seq = 8
   covers = ["c-2"]
   depends_on = ["t-1"]
   test_contract = ["if the argv scan runs after exec, TestOpenPRGitHubRefusedBeforeGh fails — ghCommand stubbed to record invocations; OpenPR(OpenOpts{Provider: \"github\", Body: \"<synth github token on line 3>\"}) returns *secretscan.ErrHit naming `github-token` and `gh --body:3`, and the stub recorded zero invocations", "if only Body is screened, TestOpenPRTitleIsScreenedToo fails — the token in Title → refused at `gh --title:1`", "if any provider's comment path escapes, TestPostCommentRefused fails — github via stub; forgejo, gitlab, bitbucket via httptest counters: PostComment(CommentOpts{Body: pem header}) → `pem-private-key`, zero requests/invocations on every provider", "if only jsonPost carries the screen, TestOpenPRForgejoGitLabBitbucketRefused fails — OpenPR per HTTP provider with a slack-shaped body → refused, request counter 0", "if the gate breaks ordinary shipping, TestOpenPRBenignBodyStillPosts fails — a body holding a 16-hex id, a 40-hex SHA and a UUID reaches the transport on every provider (counter/stub == 1)", "if a raw ghCommand( call survives outside the seam, TestNoRawGhCommandCallOutsideTheSeam fails naming file:line — AST over internal/ship non-test files: the only call whose callee is the identifier ghCommand sits inside screenedGH", "if the marker route does not work on composed bodies, TestAllowMarkerOnBodyLine fails — a PR body whose token line ends with dross:allow-secret posts (stub invoked once)"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-5"

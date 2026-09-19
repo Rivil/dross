@@ -20,6 +20,64 @@
           "what": "embedded 9-rule credential detector with echo-free Hit fingerprints, dross:allow-secret line marker, and ScanPayload/ScanArgv walkers for publish transports"
         }
       ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/secretscan.go",
+        "internal/cmd/validate.go",
+        "internal/cmd/secretscan_scope_test.go"
+      ],
+      "commit": "ab9ef39",
+      "completed_at": "2026-09-19T19:16:39.408957Z",
+      "landmarks": [
+        {
+          "feature": "secret detection",
+          "symbol": "scanDrossArtifacts",
+          "loc": "internal/cmd/secretscan.go:29",
+          "what": "validate fails on any secret-shaped value in a stageable .dross artifact (git ls-files tracked+others / WalkDir fallback), fingerprint-only report, read errors refuse"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/forge/forge.go",
+        "internal/forge/github.go",
+        "internal/forge/jira.go",
+        "internal/forge/youtrack.go",
+        "internal/forge/secretscan_test.go"
+      ],
+      "commit": "0456b59",
+      "completed_at": "2026-09-19T19:26:57.965651Z",
+      "landmarks": [
+        {
+          "feature": "secret detection",
+          "symbol": "(*Client).doRaw",
+          "loc": "internal/forge/forge.go:843",
+          "what": "every board backend's doRaw screens the JSON payload with secretscan.ScanPayload before encoding/http.NewRequest; refusal is a *secretscan.ErrHit that survives redact.Err"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/ship/open.go",
+        "internal/ship/comment.go",
+        "internal/ship/basepr.go",
+        "internal/ship/headpr.go",
+        "internal/ship/merged.go",
+        "internal/ship/bitbucket.go",
+        "internal/ship/gitlab.go",
+        "internal/ship/secretscan_test.go"
+      ],
+      "commit": "7c776b2",
+      "completed_at": "2026-09-19T19:32:45.095067Z",
+      "landmarks": [
+        {
+          "feature": "secret detection",
+          "symbol": "screenedGH",
+          "loc": "internal/ship/open.go:76",
+          "what": "ship's REST transports (jsonPost/bbRequest/gitlabReq) screen payloads and every gh invocation passes through screenedGH's ScanArgv before exec; AST test pins the seam"
+        }
+      ]
     }
   }
 }
