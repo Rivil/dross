@@ -1,58 +1,63 @@
 [phase]
-  id        = "ast-aware-mutation-ranges"
-  title     = "ast-aware-mutation-ranges"
+  id = "ast-aware-mutation-ranges"
+  title = "ast-aware-mutation-ranges"
   milestone = "v1.7"
 
 [[criteria]]
-  id   = "c-1"
+  id = "c-1"
   text = "For a range-capable adapter, every changed hunk widens to the full line span of its enclosing top-level construct (function, class, statement, declaration) in the file's AST, one range per distinct construct; a fixture whose changed line sits >25 lines into a function yields a range starting at the function's first line — the mutant the pad heuristic lost is generated."
 
 [[criteria]]
-  id   = "c-2"
+  id = "c-2"
   text = "`hunkContextLines` and `padAndMerge` are deleted, no `pad` field is persisted anywhere, and the documented pad residue is gone from code comments, ARCHITECTURE.md and the verify prompt — nothing left describes a line-pad heuristic."
 
 [[criteria]]
-  id   = "c-3"
+  id = "c-3"
   text = "Each effective range records the construct it was widened to (`construct`: node kind plus identifier where one exists, `hunk` when no construct encloses the lines) in tests.json; verify.toml's leg summary and `dross verify scope` print it in place of the pad."
 
 [[criteria]]
-  id   = "c-4"
+  id = "c-4"
   text = "When the AST cannot be obtained for a file (no node, parser unresolvable, parse error) the file falls back to whole-file mutation under the closed reason `ast-unavailable`, the detail lands on Scope.Degraded, and verify output prints the degraded warning — a run that lost its precision never reads as a ranged one."
 
 [[criteria]]
-  id   = "c-5"
+  id = "c-5"
   text = "A leg's recorded files and whole_file reasons are filtered to the files its adapter Supports(): the gremlins leg no longer lists README.md or assets/prompts/*.md, and the whole-file count equals the number of mutable files in scope."
 
 [[criteria]]
-  id   = "c-6"
+  id = "c-6"
   text = "The routed survivor internal/cmd/verify.go:115 (`if reuseReport`, CONDITIONALS_NEGATION) is killed by a command-level test — a plain `dross verify` leaves ReuseReport false and `--reuse-report --detach` refuses through the command — or accepted via `dross survivor accept --reason`; it is not re-listed for the next run."
 
 [[decisions]]
-  key    = "ast_source"
+  key = "ast_source"
   choice = "The TS/JS AST comes from `@babel/parser` resolved out of Stryker's own dependency tree (`@stryker-mutator/instrumenter` depends on it), run by `node` in the adapter's Workdir with a script embedded in the dross binary and fed on stdin. No new Go dependency, no cgo, no file written into the repo. The spawn is a gated exec-consent site like every other."
-  why    = "CGO_ENABLED=0 and a three-dep graph rule out tree-sitter and pure-Go TS parsers; Babel is the exact parser Stryker's instrumenter uses, so node spans match mutant locations by construction; a project that can run Stryker locally already has the parser installed."
+  why = "CGO_ENABLED=0 and a three-dep graph rule out tree-sitter and pure-Go TS parsers; Babel is the exact parser Stryker's instrumenter uses, so node spans match mutant locations by construction; a project that can run Stryker locally already has the parser installed."
   locked = true
 
 [[decisions]]
-  key    = "expansion_unit"
+  key = "expansion_unit"
   choice = "Widen to the OUTERMOST enclosing construct below Program (the top-level statement/declaration), full span — never the innermost node. Hunk lines outside any statement stay as the bare hunk."
-  why    = "Stryker keeps a mutant only when its whole location lies inside a range (the measured 29-29 loss of a block opening on 28); every ancestor of a changed line up to the top-level statement can carry a mutant, so only the top-level span guarantees none goes ungenerated. Executor confirms containment semantics against Stryker's source; the unit is sufficient under start-line matching too, so the decision holds either way."
+  why = "Stryker keeps a mutant only when its whole location lies inside a range (the measured 29-29 loss of a block opening on 28); every ancestor of a changed line up to the top-level statement can carry a mutant, so only the top-level span guarantees none goes ungenerated. Executor confirms containment semantics against Stryker's source; the unit is sufficient under start-line matching too, so the decision holds either way."
   locked = true
 
 [[decisions]]
-  key    = "provenance_shape"
+  key = "provenance_shape"
   choice = "EffectiveRange drops `pad` and gains `construct` (string, always set). The closed whole-file reason set gains `ast-unavailable`; the specific cause (missing node, unresolvable parser, parse error with position) goes on the Degraded line, never into the reason value."
-  why    = "The record must say WHY a range is what it is, and the pad was that answer; the construct is the AST-era answer. Keeping one closed reason with detail alongside matches how malformed-range already works."
+  why = "The record must say WHY a range is what it is, and the pad was that answer; the construct is the AST-era answer. Keeping one closed reason with detail alongside matches how malformed-range already works."
   locked = true
 
 [[decisions]]
-  key    = "ast_fallback_severity"
+  key = "ast_fallback_severity"
   choice = "`ast-unavailable` degrades the scope on a range-capable adapter (Scope.Degraded, printed warning), like malformed-range — not informational."
-  why    = "The hunk existed and the adapter could have used it precisely; whole-file keeps the pass honest but a missing parser is an environment fault that would otherwise silently cost every run's narrowing. Same principle as the fallback_severity lock."
+  why = "The hunk existed and the adapter could have used it precisely; whole-file keeps the pass honest but a missing parser is an environment fault that would otherwise silently cost every run's narrowing. Same principle as the fallback_severity lock."
   locked = true
 
 [[decisions]]
-  key    = "planning_locus"
+  key = "planning_locus"
   choice = "Expansion runs locally, pre-dispatch, feeding PlanRanges — the remote runner ships already-expanded argv. PlanRanges stays pure: it consumes resolved ranges, it does not spawn. Absent local node_modules on a remote-only setup is simply ast-unavailable."
-  why    = "The provenance design records from the one plan that was dispatched; a remote-side expansion would make the record inferred from the remote rather than authored locally."
+  why = "The provenance design records from the one plan that was dispatched; a remote-side expansion would make the record inferred from the remote rather than authored locally."
   locked = true
+
+[[deferred]]
+  id = "7bc5df911df4b5c9"
+  text = "Svelte construct resolution: Stryker mutates .svelte via its svelte-parser, but Constructs refuses .svelte pre-spawn (ast-unavailable → whole-file). Resolve <script> block spans through the same parser so Svelte files narrow too."
+  why = "Out of this phase's TS/JS boundary; whole-file fallback is honest measurement, so no mutant is lost meanwhile"
