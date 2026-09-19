@@ -53,18 +53,21 @@
   why = "verify results consumes the run record, so an accept made after collection leaves verify.toml's summary stale with no verb to recompute it; recorded as a NOTE in project-toml-lossless-writes/verify.toml"
 
 [[deferred]]
+  id = "4afa980fa3ed4b57"
   text = "survivor internal/cmd/verify.go:1492 (INVERT_NEGATIVES)"
   why = "surviving mutant routed out of a verify run"
   dismissed = true
   survivor = "ab007299a72231a1"
 
 [[deferred]]
+  id = "193163e0227c0d78"
   text = "survivor internal/cmd/verify.go:1492 (ARITHMETIC_BASE)"
   why = "surviving mutant routed out of a verify run"
   dismissed = true
   survivor = "f7481a33e1ecc4b7"
 
 [[deferred]]
+  id = "021398882b7fa381"
   text = "survivor internal/verify/range_provenance.go:171 (CONDITIONALS_NEGATION)"
   why = "surviving mutant routed out of a verify run"
   dismissed = true
@@ -82,6 +85,7 @@
   why = "Surfaced by re-verifying mutation-range-provenance after t-8: three routes here and three on tracked-path-containment pointed at mutants r-20260918-101535 no longer lists; closing each took two CLI steps and a decision the tooling could have made from the run record."
 
 [[deferred]]
+  id = "82e3e60f30734120"
   text = "survivor internal/cmd/verify.go:115 (CONDITIONALS_NEGATION)"
   why = "surviving mutant routed out of a verify run"
   target = "ast-aware-mutation-ranges"
