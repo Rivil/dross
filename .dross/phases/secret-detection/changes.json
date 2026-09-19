@@ -78,6 +78,84 @@
           "what": "ship's REST transports (jsonPost/bbRequest/gitlabReq) screen payloads and every gh invocation passes through screenedGH's ScanArgv before exec; AST test pins the seam"
         }
       ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/cleantree.go",
+        "internal/cmd/ship.go",
+        "internal/cmd/secretscan_gate_test.go"
+      ],
+      "commit": "e1d7ae3",
+      "completed_at": "2026-09-19T19:40:00.674844Z",
+      "landmarks": [
+        {
+          "feature": "secret gate on .dross commits and ship",
+          "symbol": "autoCommitDrossDirt",
+          "loc": "internal/cmd/cleantree.go:20",
+          "what": "autoCommitDrossDirt and ship pre-flight call the shared scanDrossArtifacts and refuse on a hit before git add / push"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/secretscan/sinks.go",
+        "internal/secretscan/sinks_test.go",
+        "internal/cmd/secretscan_transport_enum_test.go",
+        "internal/cmd/testdata/secretscan/leaky_transport.go.txt"
+      ],
+      "commit": "5dc60b0",
+      "completed_at": "2026-09-19T19:47:33.478761Z",
+      "landmarks": [
+        {
+          "feature": "publish transport registry",
+          "symbol": "Transports",
+          "loc": "internal/secretscan/sinks.go:69",
+          "what": "ten ship/forge egress seams declared Screened/ReadOnly/Seam and judged by an AST walker that flags undeclared or mis-ordered transports"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/secretscan/writers.go",
+        "internal/cmd/secretscan_writer_enum_test.go",
+        "internal/cmd/testdata/secretscan/unregistered_writer.go.txt"
+      ],
+      "commit": "e0b5b19",
+      "completed_at": "2026-09-19T19:56:18.577686Z",
+      "landmarks": [
+        {
+          "feature": "dross artifact writer registry",
+          "symbol": "Writers",
+          "loc": "internal/secretscan/writers.go:80",
+          "what": "every internal/ file reaching a write verb declared UnderDross/MachineLocal/OutsideDross; walker proves reach, ignore seed, and *File-const coverage"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/secretscan_selfscan_test.go",
+        "internal/cmd/env_test.go",
+        "internal/cmd/hermetic_env_test.go",
+        "internal/forge/hostallow_test.go",
+        "internal/forge/hostile_config_test.go",
+        "internal/argfence/policy.go",
+        "internal/security/gitleaks_test.go",
+        ".dross/phases/scanner-self-exclusion/panel/risk.md",
+        ".dross/phases/scanner-self-exclusion/panel/synthesis.md",
+        ".dross/phases/secret-detection/panel/mvp.md",
+        ".dross/phases/secret-detection/panel/synthesis.md",
+        ".dross/phases/secret-detection/panel/verification.md"
+      ],
+      "commit": "636370b",
+      "completed_at": "2026-09-19T20:02:42.606615Z",
+      "landmarks": [
+        {
+          "feature": "secret self-scan of the dross tree",
+          "symbol": "pinnedMarkerSites",
+          "loc": "internal/cmd/secretscan_selfscan_test.go:97",
+          "what": "every tracked file scans clean; silencing dross:allow-secret sites pinned per file; validate proven hermetically over a clone of HEAD"
+        }
+      ]
     }
   }
 }

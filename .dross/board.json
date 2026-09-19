@@ -1090,6 +1090,26 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "secret-detection/t-5": {
+      "issue": "DRO-464",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "secret-detection/t-6": {
+      "issue": "DRO-465",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "secret-detection/t-7": {
+      "issue": "DRO-466",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "secret-detection/t-8": {
+      "issue": "DRO-467",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "supply-chain-currency/t-1": {
       "issue": "DRO-424",
       "plan_status": "done",
