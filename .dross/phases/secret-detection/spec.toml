@@ -1,0 +1,89 @@
+[phase]
+  id = "secret-detection"
+  title = "secret-detection"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "An embedded pattern-based detector recognises common credential shapes — provider-prefixed tokens (ghp_/github_pat_, glpat-, ATATT, AKIA, xox*, sk-*), PEM private-key blocks, `Authorization: Basic|Bearer` values, and key-context assignments (password/token/secret = ≥16 chars) — proven by a hit corpus where every shape is caught and a benign corpus (dross 16-hex identity ids, commit SHAs, UUIDs, base64 test fixtures) with zero false positives."
+
+[[criteria]]
+  id = "c-2"
+  text = "Every publish path — PR body, PR comment, board issue body — runs the detector before the network call and refuses to publish on a hit."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross validate`, and ship's pre-flight which runs it, scans every tracked `.dross/` artifact and fails on a hit, so an agent-authored note carrying a token cannot be committed or shipped."
+
+[[criteria]]
+  id = "c-4"
+  text = "The scanned sinks are enumerated, not hand-listed: a registry-plus-residual test in the toolfence/pathfence shape fails when a `.dross/` writer or a publish composer is not covered by the detector."
+
+[[criteria]]
+  id = "c-5"
+  text = "A hit report never echoes the matched value: it prints the pattern name, `file:line`, and a length/prefix fingerprint only."
+
+[[criteria]]
+  id = "c-6"
+  text = "Running the detector against dross's own tree and its `.dross/` reports zero findings."
+
+[[decisions]]
+  key = "hit_disposition"
+  choice = "A hit refuses the gate — publish call, validate, ship pre-flight — with pattern and file:line. Nothing is scrubbed or rewritten; the user fixes the artifact by hand."
+  why = "Fail closed keeps every hit visible and never mutates a tracked artifact behind the user's back. A scrub-and-proceed leaves a mangled note and hides that the gate ever fired."
+  locked = true
+
+[[decisions]]
+  key = "pattern_source"
+  choice = "The ruleset is a curated set of regexes compiled into the dross binary. gitleaks is not consulted at the gate; it keeps its `dross secure` role untouched."
+  why = "The stack is locked to a single static binary with no runtime deps, so the gate's verdict must not vary by what is on PATH. A compiled ruleset is deterministic everywhere and testable offline."
+  locked = true
+
+[[decisions]]
+  key = "entropy_rules"
+  choice = "Entropy and length are judged only on the value side of a password|token|secret|api_key|authorization assignment. No bare high-entropy rule fires on an unlabelled line."
+  why = "tests.json and telemetry carry hashes, base64 fixtures and 16-hex identity ids; a bare entropy rule would need carve-out after carve-out and make c-6 impossible to hold. Missing an unlabelled unknown-shaped secret is the honest limit of a pattern detector."
+  locked = true
+
+[[decisions]]
+  key = "allowlist_route"
+  choice = "A `dross:allow-secret` marker on the offending line silences that line only. The built-in identity-id shape stays a fixed rule carve-out, not a user allowlist. No project.toml pattern allowlist."
+  why = "Keeps the exemption next to the evidence and reviewable in the diff; a repo-wide regex allowlist can silently disable a rule and lives far from the line it excuses."
+  locked = true
+
+[[decisions]]
+  key = "scan_scope"
+  choice = "The detector covers tracked `.dross/` artifacts and the bodies dross publishes. It does not scan source or the whole commit diff."
+  why = "The milestone criterion names persisted artifacts and PR bodies. Whole-tree secret scanning is gitleaks' job via `dross secure`; duplicating it in the gate would double the false-positive surface for no new guarantee."
+  locked = true
+
+[[deferred]]
+  text = "Source-side enumeration: walk every site where a value derived from an exec invocation becomes a string, and require each to be terminal-only or the shared recorder."
+  why = "Parked by tool-output-not-persisted. A go/types reach analysis, not pattern detection — a different mechanism with a different cost. Routed with the other go/types items so one phase builds the go/packages loader once."
+  target = "exec-taint-enumeration"
+
+[[deferred]]
+  text = "The t-6 residual guard (TestNoToolOutputInsideAnErrorConstructor) misses the laundered-variable shape: head → strings.Builder → fmt.Errorf on the next line. Closing it needs function-local taint over the head buffer."
+  why = "Parked by tool-output-not-persisted. Same go/types analysis; the behavioural canaries already fail on the shape, so no persistence gap is open."
+  target = "exec-taint-enumeration"
+
+[[deferred]]
+  text = "Raw-string reader scan: a new consumer that loads a declared path field and calls os.* on the raw string, never touching the Contained type."
+  why = "Parked by tracked-path-containment. Different sink, same go/types loader and taint walk as the exec enumeration; one phase covers both."
+  target = "exec-taint-enumeration"
+
+[[deferred]]
+  text = "Symlink-resolving containment: a lexically-contained path that is a symlink pointing outside the repo."
+  why = "Parked by tracked-path-containment. Presumes an attacker who can already write into the tree — a threat model nothing in v1.7 addresses. No home yet."
+
+[[deferred]]
+  text = "pathfence's absolute-path refusal has no message-content test — add the same three-part Contains assertion (offending path, artifact, root) the escape branch has (pathfence_test.go:85, scope_test.go:437)."
+  why = "Parked by tracked-path-containment. Quick-task sized, unrelated to secrets; run it as a /dross-quick rather than carrying it as a phase criterion."
+
+[[deferred]]
+  text = "Whole-diff source scanning at commit time — a pre-commit secret gate over source files, not just .dross/ artifacts."
+  why = "Excluded by scan_scope: that is gitleaks' job via `dross secure`, and duplicating it in the gate would double the false-positive surface."
+
+[[deferred]]
+  text = "gitleaks boost at the gate — run gitleaks with the per-run config alongside the embedded rules when it is on PATH."
+  why = "Rejected by pattern_source: the gate's verdict must not vary by machine, and two rule sets can disagree on the same line."

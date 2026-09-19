@@ -1,0 +1,6 @@
+{
+  "phase": "secret-detection",
+  "base": "milestone/v1.7",
+  "base_commit": "98c39a1466dd60fcf93d38f415b537770a06c880",
+  "tasks": {}
+}
