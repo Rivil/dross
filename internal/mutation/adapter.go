@@ -32,8 +32,8 @@ type Report struct {
 	// separately because high NotCovered + low LIVED usually means a
 	// coverage-tool blind spot (e.g. Go's package-init code in top-level
 	// `var` arrays) rather than weak assertions — actionable diagnosis
-	// the score alone can't surface. Other adapters (Stryker, Stryker.NET)
-	// don't report this status and leave the field at zero.
+	// the score alone can't surface. Stryker (and Stryker.NET, which shares
+	// the decoder) report it as NoCoverage; gremlins as "NOT COVERED".
 	NotCovered int
 
 	// Files attributes the same counters per source file: every mutant
@@ -94,6 +94,12 @@ type Mutant struct {
 	Line    int
 	Op      string // operator (e.g. "ConditionalNegation")
 	Snippet string // the surviving mutated source slice
+
+	// NotCovered marks a survivor no test ever executed (stryker NoCoverage,
+	// gremlins NOT COVERED) as opposed to one the tests ran and missed. It
+	// rides into tests.json's surviving rows so a reader can split the two
+	// without going back to the tool's own report.
+	NotCovered bool `json:",omitempty"`
 
 	// Origin is OriginInHunk or OriginInherited once diff scoping has
 	// classified the mutant; empty as the adapter produces it. It lives on

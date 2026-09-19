@@ -204,7 +204,9 @@ func TestStrykerNetRunMakesPathsRepoRelative(t *testing.T) {
 
 	wantFiles := map[string]FileStat{
 		"src/Calculator/Calculator.cs": {Killed: 1, Survived: 1},
-		"src/Calculator/Formatter.cs":  {Survived: 1},
+		// Formatter.cs's one mutant is NoCoverage: a survivor no test reached,
+		// counted as not-covered as well as survived.
+		"src/Calculator/Formatter.cs": {Survived: 1, NotCovered: 1},
 	}
 	if !reflect.DeepEqual(rep.Files, wantFiles) {
 		t.Errorf("per-file keys:\n got %+v\nwant %+v", rep.Files, wantFiles)

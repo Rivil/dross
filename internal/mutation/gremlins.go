@@ -769,9 +769,10 @@ func ParseGremlinsJSON(data []byte) (*Report, error) {
 					r.addFile(f.Filename, FileStat{Survived: 1})
 				}
 				r.Surviving = append(r.Surviving, Mutant{
-					File: f.Filename,
-					Line: m.Line,
-					Op:   m.Type,
+					File:       f.Filename,
+					Line:       m.Line,
+					Op:         m.Type,
+					NotCovered: m.Status == "NOT COVERED",
 					// gremlins doesn't surface the source replacement, only the
 					// mutator type (e.g. CONDITIONALS_NEGATION). That's still
 					// enough for verify to reason about.

@@ -14,7 +14,7 @@ import (
 )
 
 // realistic Stryker output: 1 file, 5 mutants — 3 killed, 1 survived,
-// 1 timeout. NoCoverage rolls up into survived (the test never even ran it).
+// 1 timeout. NoCoverage rolls up into survived AND not-covered (no test ran it).
 const fixtureSimple = `{
   "schemaVersion": "1",
   "thresholds": {"high": 80, "low": 60, "break": null},
@@ -111,6 +111,36 @@ func TestParseStrykerJSONNoCoverageRollsUpAsSurvived(t *testing.T) {
 	}
 	if len(r.Surviving) != 1 || r.Surviving[0].File != "src/auth.ts" {
 		t.Errorf("NoCoverage mutant should be in Surviving list: %+v", r.Surviving)
+	}
+	// ...and as NOT COVERED, at every level the reader can see: the report
+	// aggregate, the per-file row FilterReport rescored from, and the
+	// survivor row itself. Until 2026-09-19 all three said zero.
+	if r.NotCovered != 1 {
+		t.Errorf("NoCoverage must count as not-covered; got NotCovered=%d", r.NotCovered)
+	}
+	if fs := r.Files["src/auth.ts"]; fs.NotCovered != 1 || fs.Survived != 1 {
+		t.Errorf("per-file row must carry not-covered: %+v", fs)
+	}
+	if !r.Surviving[0].NotCovered {
+		t.Errorf("survivor row must be tagged NotCovered: %+v", r.Surviving[0])
+	}
+}
+
+// TestParseStrykerJSONSurvivedIsNotNotCovered is the other half: a mutant the
+// tests ran and missed stays a plain survivor, so the not-covered share can
+// never inflate to hide weak assertions behind "uncoverable".
+func TestParseStrykerJSONSurvivedIsNotNotCovered(t *testing.T) {
+	r, err := ParseStrykerJSON([]byte(fixtureSimple))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.NotCovered != 0 {
+		t.Errorf("plain Survived must not count as not-covered; got %d", r.NotCovered)
+	}
+	for _, m := range r.Surviving {
+		if m.NotCovered {
+			t.Errorf("plain survivor tagged NotCovered: %+v", m)
+		}
 	}
 }
 

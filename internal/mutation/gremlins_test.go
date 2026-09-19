@@ -286,6 +286,17 @@ func TestParseGremlinsJSONCounts(t *testing.T) {
 	if r.NotCovered != 3 {
 		t.Errorf("not_covered: %d want 3", r.NotCovered)
 	}
+	// ...and each of those three survivor rows says so itself, so tests.json
+	// can split "no test reached it" from "the tests missed it" per mutant.
+	tagged := 0
+	for _, m := range r.Surviving {
+		if m.NotCovered {
+			tagged++
+		}
+	}
+	if tagged != 3 {
+		t.Errorf("survivor rows tagged NotCovered: %d want 3: %+v", tagged, r.Surviving)
+	}
 	if r.Timeout != 0 {
 		t.Errorf("timeout: %d want 0", r.Timeout)
 	}

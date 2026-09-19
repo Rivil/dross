@@ -686,7 +686,8 @@ type strykerPos struct {
 //	Survived                → survived (recorded with snippet)
 //	Timeout                 → timeout
 //	RuntimeError, CompileError → errors
-//	NoCoverage              → survived (test never even ran the mutant)
+//	NoCoverage              → survived AND not-covered (no test ran the mutant;
+//	                          the subset verify reports as uncoverable)
 //	Pending, Ignored        → ignored (not counted)
 //
 // Score uses Stryker's convention: killed / (killed + survived + timeout)
@@ -704,13 +705,27 @@ func ParseStrykerJSON(data []byte) (*Report, error) {
 				r.Killed++
 				r.addFile(path, FileStat{Killed: 1})
 			case "Survived", "NoCoverage":
+				// NoCoverage is a survivor — the mutant was not killed — but
+				// one no test reached, which is a different fact from one
+				// the tests ran and missed. Folding it into Survived alone
+				// (as this did until 2026-09-19) printed mutants_not_covered
+				// = 0 against reports carrying thousands of them, so the
+				// "uncoverable by construction" line lied for every
+				// stryker leg.
+				notCovered := m.Status == "NoCoverage"
 				r.Survived++
-				r.addFile(path, FileStat{Survived: 1})
+				if notCovered {
+					r.NotCovered++
+					r.addFile(path, FileStat{Survived: 1, NotCovered: 1})
+				} else {
+					r.addFile(path, FileStat{Survived: 1})
+				}
 				r.Surviving = append(r.Surviving, Mutant{
-					File:    path,
-					Line:    m.Location.Start.Line,
-					Op:      m.MutatorName,
-					Snippet: m.Replacement,
+					File:       path,
+					Line:       m.Location.Start.Line,
+					Op:         m.MutatorName,
+					Snippet:    m.Replacement,
+					NotCovered: notCovered,
 				})
 			case "Timeout":
 				r.Timeout++
