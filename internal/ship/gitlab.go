@@ -14,6 +14,7 @@ import (
 
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/redact"
+	"github.com/Rivil/dross/internal/secretscan"
 )
 
 // --- GitLab via REST ---
@@ -234,6 +235,11 @@ func gitlabAuthHeader(req *http.Request, scheme, token string) {
 // gitlabReq performs a GitLab REST request with the scheme-appropriate auth
 // header, returning the raw body and status. body is JSON-encoded when non-nil.
 func gitlabReq(method, endpoint, authEnv, scheme, token string, body any) ([]byte, int, error) {
+	// Screened before the encoder runs (criterion c-2 of secret-detection).
+	// A nil body — every GET here — passes untouched.
+	if err := secretscan.ScanPayload(method+" "+endpoint, body); err != nil {
+		return nil, 0, err
+	}
 	var buf io.Reader
 	if body != nil {
 		b := new(bytes.Buffer)

@@ -50,7 +50,11 @@ func gitHubOpenPRByHead(head string) (*OpenResult, error) {
 	}
 	// head rides the value slot of its own flag — see openGitHubPR — so a
 	// head of "--state" is a branch name, not a flag overriding the filter.
-	out, err := ghCommand("pr", "list", "--head", head, "--state", "open", "--json", "number,url").CombinedOutput()
+	cmd, err := screenedGH("pr", "list", "--head", head, "--state", "open", "--json", "number,url")
+	if err != nil {
+		return nil, err
+	}
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("gh pr list --head %s: %w\n%s", head, err, string(out))
 	}
