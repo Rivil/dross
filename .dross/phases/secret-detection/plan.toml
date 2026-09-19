@@ -1,0 +1,156 @@
+task_seq = 8
+
+[phase]
+  id = "secret-detection"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Build secretscan rules, scanner, echo-free report"
+  files = ["internal/secretscan/rules.go", "internal/secretscan/secretscan.go", "internal/secretscan/payload.go", "internal/secretscan/secretscan_test.go"]
+  description = "New package. rules.go: fixed table of `Rule{Name, Regex, Prefix}` — github (ghp_/gho_/ghu_/ghs_/ghr_ + 36, github_pat_ + 22..), gitlab (glpat- + 20), atlassian (ATATT + 20..), aws (AKIA|ASIA + 16 upper/digit, carve-out: match ending `EXAMPLE`), slack (xox[abprs]- + 10..), openai/anthropic (sk- optional proj-/ant- + 20..), pem (BEGIN…PRIVATE KEY header line, reported once at the BEGIN line), authorization-header (`authorization` then Basic|Bearer then ≥8 value chars), key-context (key ending in password|passwd|pwd|secret|api_key|access_key|token|authorization, `:` or `=`, value ≥16 chars of `[A-Za-z0-9+/=_.~@!#%^*-]` — `$` and `<>` outside the class so `$GITHUB_TOKEN` and `<your-token>` never match — Shannon entropy ≥ 3.0 bits/char, and the line does NOT match `security.IdentityIDAllowlist`). secretscan.go: `const AllowMarker = \"dross:allow-secret\"`; `Scan(name string, r io.Reader) ([]Hit, error)` line-oriented over `bufio.Reader.ReadBytes('\\n')` (no 64 KB ceiling; CRLF tolerated); a line containing AllowMarker yields no hits; `Hit{Rule, Location, Line, Length, Prefix}`; `(Hit) String()` = `<rule> at <location>:<line> (len=<n>, prefix=<fixed>)`; `Report(hits)` adds one remedy line naming AllowMarker; `ErrHit` typed error carrying `[]Hit` whose `Error()` is `Report`. Prefix is the RULE's fixed literal (ghp_, AKIA, Bearer, -----BEGIN), never bytes of the match; key-context hits carry an empty prefix. payload.go: `ScanPayload(surface string, body any) error` — json.Marshal then json.Unmarshal into `any`, walk every string leaf through `Scan(surface+\":\"+jsonPath, …)`, return `*ErrHit` on the first non-empty hit set, nil body → nil; `ScanArgv(tool string, args []string) error` scans each element with location `<tool> <preceding --flag>` when there is one, else `<tool> argv[i]`. Both pure, so t-3/t-4 are wiring only. Hit corpus is BUILT AT RUNTIME (`\"ghp_\" + strings.Repeat(\"A1b2\", 9)`), never a literal token shape — otherwise t-8's self-scan trips on the tests that prove c-1.\n"
+  covers = ["c-1", "c-5"]
+  test_contract = [
+    "if a rule is added without a corpus entry, or a regex edit stops matching its own shape, TestEveryRuleHasAHitCase fails — the set of rule names equals the hit-corpus map's key set, and each key's runtime-built line yields exactly one Hit whose Rule equals the key",
+    "if any benign shape fires, TestBenignCorpusZeroHits fails naming row and rule — runtime-built rows: 16-hex under `\"key\":`/`id =`/`\"Key\":`, a bare 40-hex SHA and one under `sha = `, a UUID bare and under `id = `, a 60-char base64 run under `\"snippet\":` and `expected =`, `auth_env = \"GITHUB_TOKEN\"`, `token = \"$GITHUB_TOKEN\"`, `Authorization: Bearer <token>`, `[redacted $GITHUB_TOKEN]`, the AWS doc placeholder ending EXAMPLE, a 21-char repetitive value (entropy < 3.0) under `password =`, a 15-char value under `secret =`",
+    "if a carve-out is dead rather than doing work, TestCarveOutsAreNotVacuous fails — each benign carve-out row's one-char mutation DOES fire: 17-hex under `\"key\":` fires key-context, AKIA+16 not ending EXAMPLE fires aws, the repetitive password with entropy pushed ≥3.0 fires",
+    "if the identity carve-out is value-only instead of key-aware, TestKeyContextIdentityCarveOutIsKeyAware fails — `\"password\": \"<16hex>\"` and `token = \"<16hex>\"` DO hit; `\"key\": \"<16hex>\"` does not (pins reuse of security.IdentityIDAllowlist)",
+    "if a PEM block reports per line, TestPEMBlockReportedOnceAtBeginLine fails — a 5-line PEM block gives one Hit, at the BEGIN line",
+    "if the marker silences more or less than its own line, TestAllowMarkerSilencesOnlyItsLine fails — 3-line reader with a synthesized github token on lines 1 and 3 and the marker on line 1 only reports line 3; a marker on a line with two shapes silences both; a marker on the line ABOVE a hit changes nothing; a marker on a clean line changes nothing",
+    "if the scanner uses a bufio.Scanner with the default buffer, TestLongLineIsScannedToTheEnd fails — a single 200 KB line with a synthesized github token in its last 60 bytes is reported at :1",
+    "if any report path prints the match or the line, TestReportNeverEchoesTheValue fails on every iteration — property over 50 random values per rule: the concatenation of Hit.String(), Report() and ErrHit.Error() contains no 6-byte window of the value's variable part; the fixed prefix must be present for prefix rules; key-context reports contain `prefix=` followed by nothing",
+    "if the location format drifts, TestHitLocationIsFileLine fails — Scan(\"notes.md\", …) with the token on line 7 yields Location==\"notes.md\", Line==7, and String() contains `notes.md:7`",
+    "if the payload walk stops at the top level, TestScanPayloadWalksNestedLeaves fails — ScanPayload(\"POST /issue\", nested map with the token at fields.description.content[0].text) reports that json path; a struct body with a json-tagged Body field is reported under the tag name; ScanPayload(\"x\", nil) is nil; []string{\"clean\", \"<token>\"} reports `x:[1]`",
+    "if argv locations lose the flag name, TestScanArgvNamesTheFlag fails — ScanArgv(\"gh\", [pr create --title t --body \"l1\\n<token>\"]) reports `gh --body:2`; a token in a positional after `--` reports `gh argv[3]`",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  depends_on = ["t-1"]
+  title = "Walk .dross artifacts; fail validate on hit"
+  files = ["internal/cmd/secretscan.go", "internal/cmd/validate.go", "internal/cmd/secretscan_scope_test.go"]
+  description = "`listDrossArtifacts(root) ([]string, error)`: when `git rev-parse --is-inside-work-tree` succeeds, `git ls-files -z --cached --others --exclude-standard -- .dross` (tracked PLUS stageable-untracked, .gitignore honoured); otherwise `filepath.WalkDir(.dross)` over every regular file. `scanDrossArtifacts(root) ([]secretscan.Hit, error)` opens each via `pathfence.Contain(root, \"dross-artifact\", rel)`, streams it through `secretscan.Scan` with the root-relative path as location; a read or scan error is a refusal, not a skip. validate.go: after the phase loop, every hit's String() is appended to `problems` under a `secret:` prefix so the existing ✗/exit-1 path fires. internal/cmd tests gate on `dross test` (remote), never --local.\n"
+  covers = ["c-3"]
+  test_contract = [
+    "if the non-git fallback walk or the location format breaks, TestValidateRefusesOnArtifactSecret fails — temp dir (no git), Init(), `.dross/phases/p/notes.md` (a path validate hand-lists nowhere) with a synthesized gitlab token on line 4 → runCmd(Validate()) errors, output contains `gitlab-pat at .dross/phases/p/notes.md:4 (len=` and no 6-byte window of the token",
+    "if --others or --exclude-standard is dropped from the git enumeration, TestScopeIsTrackedPlusStageable fails — temp git repo with the seeded gitignore; tracked `.dross/board.json` clean, UNTRACKED `.dross/notes.md` with a token, IGNORED `.dross/security/run1/gitleaks.json` with a token → exactly one hit, at `.dross/notes.md`",
+    "if the marker is not honoured inside toml, TestValidateAllowMarkerHonouredInToml fails — `.dross/phases/p/spec.toml` line `text = \"<synth token>\" # dross:allow-secret` → validate exits 0 with no `secret:` line; the same file without the marker fails",
+    "if an unreadable artifact is skipped instead of refused, TestScanErrorIsARefusalNotASkip fails — a `.dross/x.toml` with mode 000 (skipped on Windows) → validate reports `secret scan: … permission denied` as a problem rather than exiting 0",
+    "if the scan is short-circuited by an earlier problem, TestValidateSecretProblemsAreLast fails — a malformed spec.toml AND a token in another phase → both problems print",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  depends_on = ["t-1"]
+  title = "Screen forge transports at doRaw"
+  files = ["internal/forge/forge.go", "internal/forge/github.go", "internal/forge/jira.go", "internal/forge/youtrack.go", "internal/forge/secretscan_test.go"]
+  description = "Wiring only. Insert `if err := secretscan.ScanPayload(method+\" \"+endpoint, body); err != nil { return err }` as the FIRST statement of (*Client).doRaw (forge.go:837), (*GitHubClient).doRaw (github.go:368), (*JiraClient).doRaw (jira.go:689), (*YouTrackClient).doRaw (youtrack.go:927), ahead of the encoder and http.NewRequest. The wrapping `do` still applies redact.Err. Four one-line edits cover CreateIssue, UpdateIssue, EnsureMilestone(Entity), labels, comments and every future method.\n"
+  covers = ["c-2"]
+  test_contract = [
+    "if the screen moves after http.NewRequest/client.Do, TestCreateIssueRefusedBeforeRequest fails — ×4 backends against an httptest server counting requests: CreateIssue(IssueInput{Body: \"line1\\n<synth atlassian token>\"}) returns an error that errors.As a *secretscan.ErrHit naming `atlassian-token` and `:body` (forge/github/youtrack) or `:fields.description` (jira, inside ADF), and the request counter is 0",
+    "if a body patch bypasses the screen, TestUpdateIssueBodyPatchRefused fails — ×4: UpdateIssue(key, IssuePatch{Body: &tok}) → refused, 0 requests; UpdateIssue with clean Labels only → the request goes out",
+    "if a publish path with no Body field escapes, TestEnsureMilestoneDescriptionRefused fails — YouTrack EnsureMilestoneEntity(\"epic\", \"v9\", \"<synth pem header line>\") and Jira EnsureMilestoneEntity(\"version\", …) refused with `pem-private-key`, 0 requests",
+    "if the gate breaks ordinary board sync, TestBoardPublishBenignBodyPosts fails — renderPhaseBody-shaped text carrying a 16-hex identity id, a 40-hex SHA and a UUID posts (counter == 1) on every backend",
+    "if a nil body is rejected or mutated, TestDoRawNilBodyIsUntouched fails — GET paths pass through with counter == 1",
+    "if the screen reads responses, TestGetAndListAreNotScreened fails — GetIssue/ListIssues against a server whose RESPONSE body carries a synthesized token succeed and return the issue",
+    "if the refusal echoes the value after redact.Err wrapping, TestPayloadErrorNeverEchoes fails — err.Error() from each backend (the string that would reach telemetry err_detail) contains no 6-byte window of the token's variable part",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  depends_on = ["t-1"]
+  title = "Screen ship HTTP and gh argv transports"
+  files = ["internal/ship/open.go", "internal/ship/comment.go", "internal/ship/basepr.go", "internal/ship/headpr.go", "internal/ship/merged.go", "internal/ship/bitbucket.go", "internal/ship/gitlab.go", "internal/ship/secretscan_test.go"]
+  description = "jsonPost (open.go:132): `ScanPayload(\"POST \"+endpoint, body)` before the encoder. bbRequest (bitbucket.go:51) and gitlabReq (gitlab.go:236): same, first statement. gh argv: open.go gains a package-level `screenedGH(args ...string) (*exec.Cmd, error)` that calls `secretscan.ScanArgv(\"gh\", args)` and only then `ghCommand(args...)`; all five `ghCommand(` call sites (open.go:95, comment.go:68, basepr.go:64, headpr.go:53, merged.go:72) switch to it — five of the eight files are that one-token swap. The `ghCommand` var stays as the test seam. jsonGet (forgejo.go:202) is GET/nil and is not edited.\n"
+  covers = ["c-2"]
+  test_contract = [
+    "if the argv scan runs after exec, TestOpenPRGitHubRefusedBeforeGh fails — ghCommand stubbed to record invocations; OpenPR(OpenOpts{Provider: \"github\", Body: \"<synth github token on line 3>\"}) returns *secretscan.ErrHit naming `github-token` and `gh --body:3`, and the stub recorded zero invocations",
+    "if only Body is screened, TestOpenPRTitleIsScreenedToo fails — the token in Title → refused at `gh --title:1`",
+    "if any provider's comment path escapes, TestPostCommentRefused fails — github via stub; forgejo, gitlab, bitbucket via httptest counters: PostComment(CommentOpts{Body: pem header}) → `pem-private-key`, zero requests/invocations on every provider",
+    "if only jsonPost carries the screen, TestOpenPRForgejoGitLabBitbucketRefused fails — OpenPR per HTTP provider with a slack-shaped body → refused, request counter 0",
+    "if the gate breaks ordinary shipping, TestOpenPRBenignBodyStillPosts fails — a body holding a 16-hex id, a 40-hex SHA and a UUID reaches the transport on every provider (counter/stub == 1)",
+    "if a raw ghCommand( call survives outside the seam, TestNoRawGhCommandCallOutsideTheSeam fails naming file:line — AST over internal/ship non-test files: the only call whose callee is the identifier ghCommand sits inside screenedGH",
+    "if the marker route does not work on composed bodies, TestAllowMarkerOnBodyLine fails — a PR body whose token line ends with dross:allow-secret posts (stub invoked once)",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 3
+  depends_on = ["t-2"]
+  title = "Gate auto-commit and ship pre-flight"
+  files = ["internal/cmd/cleantree.go", "internal/cmd/ship.go", "internal/cmd/secretscan_gate_test.go"]
+  description = "autoCommitDrossDirt calls scanDrossArtifacts(repoDir) BEFORE `git add .dross` and returns *secretscan.ErrHit wrapped as `refusing to auto-commit .dross: …` on a hit — the primitive that turns an untracked note into a commit is the one that refuses, which also covers phase complete / record completion / phase start / milestone prune. ship.go: a new pre-flight step at the top of \"3) Pre-flight gates\" (before the verdict switch, before the --print-body/--no-push returns, before repointDoomedRedProofs/autoCommitDrossDirt) calls scanDrossArtifacts(root) and refuses with `secret in tracked .dross artifact — fix it by hand or mark the line dross:allow-secret, then re-run ship`, so a CLEAN tree with an already-committed token still refuses. Ship calls the shared scanner, not the whole `dross validate` (decided at plan time: pulling all of validate into ship would newly fail ships on schema problems). internal/cmd tests gate on `dross test` (remote), never --local.\n"
+  covers = ["c-3"]
+  test_contract = [
+    "if the ship gate lives only inside autoCommitDrossDirt, TestShipRefusesCommittedSecretOnCleanTree fails — shipFixture + shipMockFlow with a verified phase whose `.dross/phases/p/notes.md` carrying a synthesized token is COMMITTED (tree clean) → `dross ship p` errors naming `notes.md:<line>` before any push: the mock provider records zero requests AND the origin bare repo has no phase/p ref",
+    "if the scan is reordered after `git add`, TestAutoCommitRefusesUntrackedSecretNote fails — untracked `.dross/phases/p/notes.md` with a token; autoCommitDrossDirt(repoDir, \"shipping\") errors, `git status --porcelain` still lists the note as untracked, `git log` has no new chore(dross) commit",
+    "if the secret check pre-empts the existing code-dirt refusal, TestAutoCommitStillRefusesCodeDirtFirst fails — dirty main.go plus a secret note → the error is the existing dirtyTreeError; with only the note → the secret refusal",
+    "if the cleantree placement does not reach non-ship callers, TestPhaseCompleteRefusesOnSecret fails — `dross phase complete p` on a repo whose `.dross/phases/p/changes.json` carries a token → refused, state.json unchanged, no completion event recorded",
+    "if --print-body returns before the scan, TestShipPrintBodyStillScans fails — `dross ship p --print-body` with the committed-secret fixture errors instead of printing the body",
+    "if the ship gate is placed after the commit or push, TestShipGateOrderingIsBeforeAutoCommit fails — AST over ship.go's RunE: the scanDrossArtifacts call has a lower token.Pos than autoCommitDrossDirt and than every pushPhaseBranch/ship.OpenPR call",
+    "if validate and ship drift onto two scanners, TestShipAndValidateShareOneScanner fails — AST over validate.go, ship.go, cleantree.go: each calls scanDrossArtifacts; a second inline walk or a second secretscan.Scan call in any of the three files fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  depends_on = ["t-3", "t-4"]
+  title = "Transport registry + residual scan"
+  files = ["internal/secretscan/sinks.go", "internal/secretscan/sinks_test.go", "internal/cmd/secretscan_transport_enum_test.go", "internal/cmd/testdata/secretscan/leaky_transport.go.txt"]
+  description = "sinks.go: `Transport{Package, Func, Screened *Screened{Call string}, ReadOnly *ReadOnly{Why}}` and `Transports()` listing the nine outbound seams: forge.(*Client).doRaw, forge.(*GitHubClient).doRaw, forge.(*JiraClient).doRaw, forge.(*YouTrackClient).doRaw, ship.jsonPost, ship.bbRequest, ship.gitlabReq, ship.screenedGH (Screened, Call = ScanPayload/ScanArgv), ship.jsonGet (ReadOnly: method literal \"GET\", nil body). `Validate([]Transport) []error` in the toolfence shape. The enum test walks ../ship and ../forge non-test files for every call to http.NewRequest, http.NewRequestWithContext, http.Post, http.Get, (*http.Client).Do, exec.Command, and the ghCommand identifier; each site's enclosing function must be a registered Transport; Screened must contain a secretscan.ScanPayload/ScanArgv call whose Pos() precedes the request call; ReadOnly must have a literal \"GET\" method and nil body. Stale arm: every registered Func resolves to a FuncDecl.\n"
+  covers = ["c-4"]
+  test_contract = [
+    "if a new egress site is added unregistered, TestEveryOutboundSeamIsRegistered fails naming file:line — over the live tree the walk resolves ≥ 9 transport sites across BOTH ../ship and ../forge (per-package vacuity floor) and reports none undeclared; add http.Post(…) anywhere in ship or forge and this fires",
+    "if a screen is moved after its request, TestScreenPrecedesRequestInEveryScreenedTransport fails naming the function — for each Screened entry, Pos(ScanPayload call) < Pos(http.NewRequest | ghCommand call) inside that FuncDecl",
+    "if jsonGet starts sending a body, TestReadOnlyTransportsSendNoBody fails — its http.NewRequest call must have a \"GET\" literal first arg and nil third arg",
+    "if the residual arm is calibrated on the post-fix tree instead of a known answer, TestTransportScanTripsOnTheLeakyFixture fails — leaky_transport.go.txt holds (a) POST with no screen, (b) screen AFTER the request, (c) clean screened func, (d) ghCommand( outside screenedGH, (e) GET/nil declared ReadOnly; the scan must flag a, b, d and pass c, e",
+    "if a registered func is renamed away, TestStaleTransportDeclarationFails fails — a registry entry naming a func that does not exist is reported by the stale arm (fed synthetically)",
+    "if Validate accepts a malformed entry, TestTransportRegistryValidate fails — synthetic entries with no disposition, both dispositions, empty Func, empty ReadOnly.Why, and a duplicate each produce one specific error; the real registry produces none",
+    "if the registry silently shrinks, TestPublishSinkFuncsAreQualified fails — every Func is pkg.Recv.Method or pkg.func over exactly {ship, forge}; count is 9",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  depends_on = ["t-2"]
+  title = "Writer/artifact registry + residual scan"
+  files = ["internal/secretscan/writers.go", "internal/cmd/secretscan_writer_enum_test.go", "internal/cmd/testdata/secretscan/unregistered_writer.go.txt"]
+  description = "writers.go: `Writer{File string; UnderDross *UnderDross{Artifacts []string}; MachineLocal *MachineLocal{IgnoreSeed, Why}; OutsideDross *OutsideDross{Why}}` and `Writers()` — one entry per non-test file in internal/ that calls os.WriteFile, os.Create, os.OpenFile (write flags), or pathfence.WriteFile (34 files today). UnderDross entries are covered by t-2's location-based scope; MachineLocal entries (state.json, local.toml, handoff.md, reap-log.json, security/, quality/, techdebt/) name the ignore seed that keeps them out of git; OutsideDross entries (ARCHITECTURE.md, README, ~/.claude, hooks settings, telemetry.jsonl, install symlinks, gitignore/gitattributes) say why they are not a .dross artifact. Agent-authored artifacts with no Go writer (panel/*.md, REVIEW.md, pr-body.md, proof.md, CriterionResult.Notes) are declared with `Writers: [\"agent\"]` and exempt from the writer-resolution arm. Enum test walks internal/ for the write verbs and requires the enclosing FILE to be declared; stale arm; MachineLocal arm via `git check-ignore`; UnderDross arm via live reach.\n"
+  covers = ["c-4"]
+  test_contract = [
+    "if a file gains a .dross write with no registry line, TestEveryDrossWriterIsDeclared fails naming it — the live walk resolves ≥ 30 writer files and every one is in Writers()",
+    "if a MachineLocal claim is false, TestMachineLocalWritersAreReallyIgnored fails — for each MachineLocal entry, `git check-ignore -q .dross/<path>` exits 0 in a temp repo seeded by ensureDrossGitignore + the security/quality/techdebt scaffolds; remove handoff.md from the seeded ignore block and its entry fails",
+    "if the walker filters an artifact name out (e.g. by extension), TestEveryScannedArtifactIsReached fails — for each UnderDross artifact name (board.json, changes.json, spec.toml, plan.toml, verify.toml, tests.json, survivors.toml, deferred.toml, milestones/*.toml, rules.toml, project.toml, red-proof docs, watch.state.json, panel/*.md …), one concrete instance at a plausible depth holding a synthesized token, git add → scanDrossArtifacts reports ≥ 1 finding AT that path, in BOTH the git and non-git walker modes",
+    "if an OutsideDross entry actually lands under .dross, TestOutOfScopeEntriesAreNotUnderDross fails — ARCHITECTURE.md, telemetry.jsonl, defaults.toml … must not resolve to a path under .dross/",
+    "if the residual arm cannot see a write verb, TestWriterScanTripsOnTheFixture fails — unregistered_writer.go.txt with an os.WriteFile in an undeclared file name is flagged; its second func using os.ReadFile only is not",
+    "if a declared writer file is deleted, TestStaleWriterDeclarationFails fails — a synthetic entry naming internal/nothing/here.go is reported by the stale arm; agent-authored entries are exempt from resolution",
+    "if a new persisted artifact name has no registry line, TestEveryFileConstIsDeclared fails — every `*File = \"…\"` const under internal/ (15 today) matches an artifact name in some Writers() entry",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-8"
+  wave = 4
+  depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5", "t-6", "t-7"]
+  title = "Self-scan the tree; pin the marker set"
+  files = ["internal/cmd/secretscan_selfscan_test.go", "internal/cmd/env_test.go", "internal/cmd/hermetic_env_test.go", "internal/forge/hostallow_test.go", "internal/forge/hostile_config_test.go", "internal/argfence/policy.go", "internal/security/gitleaks_test.go", ".dross/phases/scanner-self-exclusion/panel/risk.md", ".dross/phases/scanner-self-exclusion/panel/synthesis.md"]
+  description = "Append ` // dross:allow-secret` (Go) or ` dross:allow-secret` (md) to the lines that are genuinely secret-shaped fixtures and that t-1's rules fire on: env_test.go:31 (FORGEJO_TOKEN fixture), hermetic_env_test.go:146 (absent-token sentinel), hostallow_test.go:25, hostile_config_test.go:60 (sentinel tokens), argfence/policy.go:69 (`Token: \"--end-of-options\"` — exactly 16 chars, entropy 3.08), gitleaks_test.go:86-87 (password/token-context 16-hex rows), and the two scanner-self-exclusion panel notes carrying the same rows. The AWS placeholder sites (8 lines, 4 files) need no marker (t-1's EXAMPLE carve-out). If the self-scan surfaces anything else — including this phase's own panel/ notes — the fix is a marker on that line or a carve-out with a benign-corpus entry, never a rule deletion. The self-scan test runs `git ls-files -z` at the repo root (skip with a message if not a git checkout), scans every file through secretscan.Scan, asserts zero hits; a second assertion collects every line where the marker actually SILENCED a hit (re-scan with the marker stripped; inert markers in prose do not count) and compares the multiset of basename → count against a pinned table.\n"
+  covers = ["c-6"]
+  test_contract = [
+    "if any tracked file carries an unmarked hit, TestDrossTreeHasNoUnmarkedHits fails listing `file:line rule (len, prefix)` per hit and never the line — add a literal token-shaped string to any test and this fails; remove the EXAMPLE carve-out and it fails on the AWS placeholder sites",
+    "if the walker silently reads nothing, TestSelfScanIsNotVacuous fails — the same file list plus one temp file holding a synthesized hit yields exactly one finding, at that file",
+    "if a marker is added or removed without a table edit, TestAllowMarkerSitesArePinned fails naming the file — silencing markers (marker stripped → line hits) == {env_test.go:1, hermetic_env_test.go:1, hostallow_test.go:1, hostile_config_test.go:1, policy.go:1, gitleaks_test.go:2, risk.md:1, synthesis.md:1} plus whatever this phase's own artifacts need",
+    "if the marker leaks into production code beyond the one known site, TestMarkerNeverAppearsInNonTestGoOutsideArgfence fails — the only non-test .go file carrying the marker is internal/argfence/policy.go",
+    "if the self-scan quietly narrows to .dross/, TestSelfScanCoversTheWholeTreeNotJustDross fails — the scan visited ≥ 1500 files, ≥ 900 under .dross/, and ≥ 1 file outside .dross/",
+    "if the live gate disagrees with the test walk, TestValidateOnDrossItself fails — runCmd(Validate()) from the real repo root exits 0 with no `secret:` line",
+  ]
+  status = "pending"
