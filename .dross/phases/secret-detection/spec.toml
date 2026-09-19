@@ -57,6 +57,12 @@
   why = "The milestone criterion names persisted artifacts and PR bodies. Whole-tree secret scanning is gitleaks' job via `dross secure`; duplicating it in the gate would double the false-positive surface for no new guarantee."
   locked = true
 
+[[decisions]]
+  key = "ship_gate_scope"
+  choice = "Ship's pre-flight calls the shared `scanDrossArtifacts` — the same function `dross validate` uses — not the whole `dross validate`. c-3 is judged on \"ship refuses on a hit via the same scanner\", with an AST test pinning that validate, ship and the auto-commit helper share one scanner."
+  why = "Ship does not run validate today; pulling all of validate into ship would newly fail ships on schema problems in any old phase — a behaviour change the spec did not ask for. Decided at plan time (2026-09-19)."
+  locked = true
+
 [[deferred]]
   text = "Source-side enumeration: walk every site where a value derived from an exec invocation becomes a string, and require each to be terminal-only or the shared recorder."
   why = "Parked by tool-output-not-persisted. A go/types reach analysis, not pattern detection — a different mechanism with a different cost. Routed with the other go/types items so one phase builds the go/packages loader once."
