@@ -701,7 +701,13 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 	// its reason — rather than nothing. A ZERO Gremlins, not the tuned
 	// constructor: PlanRanges is pure and only type-asserts RangeRunner, and
 	// this path must not build anything that could run.
-	plan := verify.PlanRanges(&mutation.Gremlins{}, files, scope)
+	//
+	// Only the files gremlins can mutate: the attached path groups by
+	// Dispatch before it plans, so its leg never lists README.md; the
+	// collected leg must say the same, or its whole-file count over-reads by
+	// every non-Go file in scope.
+	legFiles := mutation.Supported(&mutation.Gremlins{}, files)
+	plan := verify.PlanRanges(&mutation.Gremlins{}, legFiles, scope)
 	t.Languages = append(t.Languages, verify.LanguageRun{
 		Name: "go",
 		Tool: "gremlins",
@@ -709,7 +715,7 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 		// dispatch record named, and re-deriving it here would stamp today's
 		// pool onto a report measured hours ago somewhere else.
 		MeasuredOn: verify.MeasuredOnHost(rec.Host),
-		Files:      files,
+		Files:      legFiles,
 		Mutation:   kept,
 		Ranges:     plan.Ranges,
 		WholeFile:  plan.WholeFile,

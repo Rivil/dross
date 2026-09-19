@@ -179,6 +179,20 @@ type RangeRunner interface {
 // ErrNotImplemented is returned by stub adapters in v0.
 var ErrNotImplemented = errors.New("mutation adapter not yet implemented")
 
+// Supported keeps, in order, the files a can mutate. A leg's recorded file
+// list must be what its tool was actually able to instrument: a scope that
+// also carries README.md hands the gremlins leg a file it never mutates, and
+// a whole-file count that includes it over-reads by exactly that file.
+func Supported(a Adapter, files []string) []string {
+	var out []string
+	for _, f := range files {
+		if a.Supports(f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // Dispatch picks an adapter for a file extension. Returns nil if none.
 func Dispatch(file string, adapters []Adapter) Adapter {
 	for _, a := range adapters {

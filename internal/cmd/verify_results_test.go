@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -513,6 +514,49 @@ func TestCollectRecordsWholeFileProvenance(t *testing.T) {
 	}
 }
 
+// TestCollectLegListsOnlyMutableFiles: a scope that also carries non-Go files
+// (a README, a prompt) must not put them on the gremlins leg. The attached
+// path groups by Dispatch before planning, so its leg never lists them; the
+// collected leg used to hand the raw candidate list to both Files and
+// PlanRanges, and its whole-file count over-read by every such file.
+func TestCollectLegListsOnlyMutableFiles(t *testing.T) {
+	const id = "collect"
+	dir := collectRepo(t, id)
+	root := filepath.Join(dir, RootDirName)
+
+	writeScopeFile(t, dir, "README.md", "# x\n")
+	writeScopeFile(t, dir, "assets/prompts/verify.md", "# verify\n")
+	mustGit(t, dir, "add", "README.md", "assets/prompts/verify.md")
+	mustGit(t, dir, "commit", "-qam", "phase edits docs")
+	if err := runCmd(t, Changes(), "record", id, "t-2", "--files", "README.md,assets/prompts/verify.md"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := collectDetached(id); err != nil {
+		t.Fatalf("collectDetached: %v", err)
+	}
+	testsPath, _ := verify.FilePaths(root, id)
+	got, err := verify.LoadTests(testsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Languages) != 1 {
+		t.Fatalf("want one go leg, got %+v", got.Languages)
+	}
+	leg := got.Languages[0]
+	if !reflect.DeepEqual(leg.Files, []string{"a.go"}) {
+		t.Errorf("leg.Files = %v, want only the mutable a.go", leg.Files)
+	}
+	if len(leg.WholeFile) != 1 || leg.WholeFile["a.go"] != verify.WholeFileNoRangeRunner {
+		t.Errorf("whole_file = %v, want exactly {a.go: %s}", leg.WholeFile, verify.WholeFileNoRangeRunner)
+	}
+	// The scope itself still names the docs: filtering is the LEG's, never
+	// the scope's, or a phase that only edited docs would read as empty.
+	if !containsString(got.Scope.Files, "README.md") {
+		t.Errorf("scope lost README.md: %v", got.Scope.Files)
+	}
+}
+
 // TestCollectRefusesWhenOnePackageFailedBeforeMeasuring is the end-to-end
 // version of the false-green, and the shape the run-level guard cannot see.
 //
@@ -935,4 +979,30 @@ func TestCollectRefusesARunThatProducedNothing(t *testing.T) {
 		t.Errorf("exit code = %d, want %d (failed)", got, exitResultsFailed)
 	}
 	assertNoArtefacts(t, root, id)
+}
+
+// TestRunScopedLegNeverListsUnsupportedFiles pins the attached-path invariant
+// the collector now mirrors: RunScoped groups by Dispatch, so a file no
+// adapter supports lands in Skipped and never on a leg.
+func TestRunScopedLegNeverListsUnsupportedFiles(t *testing.T) {
+	stub := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}
+	files := []string{"a.go", "README.md", "assets/prompts/verify.md"}
+	got, err := verify.RunScoped("p", files, []mutation.Adapter{stub}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Languages) != 1 {
+		t.Fatalf("want one leg, got %+v", got.Languages)
+	}
+	if !reflect.DeepEqual(got.Languages[0].Files, []string{"a.go"}) {
+		t.Errorf("leg.Files = %v, want only a.go", got.Languages[0].Files)
+	}
+	var skipped []string
+	for _, s := range got.Skipped {
+		skipped = append(skipped, s.File)
+	}
+	if !reflect.DeepEqual(skipped, []string{"README.md", "assets/prompts/verify.md"}) {
+		t.Errorf("skipped = %v, want the two docs", skipped)
+	}
 }
