@@ -26,7 +26,7 @@ Concrete facts the contracts rest on (read from the tree, 2026-09-19):
   `.dross/security/**` (gitleaks.json — carries matched secrets) is gitignored.
 - Shapes already in the tree that a naive ruleset would flag: AWS's documented
   example key `AKIAIOSFODNN7EXAMPLE` (10 lines, 4 files incl. 3 tracked .dross
-  artifacts); `token = "08ec1d7666c48b32"` (16-hex identity id, already the
+  artifacts); `token = "08ec1d7666c48b32"` (16-hex identity id, already the dross:allow-secret
   gitleaks carve-out in `internal/security/gitleaks.go:23`); two test fixture
   constants `"s3cr3t-fixture-token-do-not-leak"` / `"s3cr3t-sentinel-do-not-leak"`
   (`internal/forge/hostile_config_test.go:60`, `hostallow_test.go:25`).
@@ -55,7 +55,7 @@ Wave 1
                  TestBenignCorpusIsSilent — 16-hex identity id in id/key AND
                  token context, 40-hex commit SHA, UUID, a 200-char base64 line
                  lifted from tests.json, `Authorization: Bearer <token>`
-                 placeholder, `Token: "--end-of-options"`, `AKIAIOSFODNN7EXAMPLE`:
+                 placeholder, `Token: "--end-of-options"`, `AKIAIOSFODNN7EXAMPLE`: dross:allow-secret
                  zero findings. Non-vacuity twin: each benign line's "one-char
                  mutation" (17-hex, AKIA+16 not ending EXAMPLE) DOES fire, so
                  the carve-out is proven to be doing the work.
@@ -288,7 +288,7 @@ gate.
   without sprinkling allow-markers through test files. Two existing fixture
   constants still need a marker; that is the allow route working as designed.
 - **Key-context rule requires an entropy floor as well as ≥16 chars.**
-  Without it `Token: "--end-of-options"` (argfence/policy.go) and
+  Without it `Token: "--end-of-options"` (argfence/policy.go) and dross:allow-secret
   `DROSS_TEST_ABSENT_TOKEN` fire in the self-scan; the floor is pinned
   two-sided (32-hex fires, constant-name strings do not). Accepted limit: a
   low-entropy real password is missed — the locked entropy_rules decision

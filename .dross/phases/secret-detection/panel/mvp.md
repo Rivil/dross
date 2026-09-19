@@ -35,14 +35,14 @@ Wave 1
        covers:   c-1, c-5
        contract: TestHitCorpusEveryShapeCaught — a table of one line per rule
                  (ghp_, github_pat_, glpat-, ATATT, AKIA, xoxb-, sk-, a PEM
-                 "-----BEGIN RSA PRIVATE KEY-----" block, "Authorization: Basic
+                 "-----BEGIN RSA PRIVATE KEY-----" block, "Authorization: Basic dross:allow-secret
                  <b64>", "Authorization: Bearer <tok>", `password = "<20 chars>"`,
                  `token: '<24 chars>'`, `api_key=<32 chars>`), every value built
                  by string concatenation at runtime so the corpus never sits on
                  disk as a matchable line; dropping any rule leaves its row with
                  zero hits and the test names the missing rule.
                  TestBenignCorpusZeroHits — `"key": "b91bfa24fdf586c0"`,
-                 `id = 30dcd7db2eecf398`, `token = "08ec1d7666c48b32"` (16-hex
+                 `id = 30dcd7db2eecf398`, `token = "08ec1d7666c48b32"` (16-hex dross:allow-secret
                  under a key-context word: the locked identity-id carve-out), a
                  40-hex commit SHA, a UUID, a 200-char base64 fixture on an
                  unlabelled line, `PRIVATE-TOKEN: <token>`, `token = %q`,

@@ -57,7 +57,7 @@ func TestHostileConfigForgeClientsRefuse(t *testing.T) {
 	t.Cleanup(fake.Close)
 
 	p := loadHostileFixture(t)
-	const token = "s3cr3t-fixture-token-do-not-leak"
+	const token = "s3cr3t-fixture-token-do-not-leak" // dross:allow-secret
 	t.Setenv(p.Remote.AuthEnv, token)
 
 	policy := hostallow.Derive(p.Remote.URL, nil)

@@ -28,7 +28,7 @@ func TestEnvListMasksValues(t *testing.T) {
 
 	settings := map[string]any{
 		"env": map[string]any{
-			"FORGEJO_TOKEN": "secret-token-value-12345",
+			"FORGEJO_TOKEN": "secret-token-value-12345", // dross:allow-secret
 			"GITHUB_TOKEN":  "another-secret",
 		},
 		"model": "claude-opus-4-7",

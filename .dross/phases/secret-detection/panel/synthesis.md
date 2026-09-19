@@ -219,7 +219,7 @@ Locked decisions, where each lands: hit_disposition → t-1 `ErrHit` is returned
 
 ### D5 — Entropy floor on key-context values: 3.0 bits/char + markers vs a floor tuned to silence the tree's sentinel constants
 - risk: floor 3.0 (kills `hunter2hunter2hunter2`-class placeholders); the six secret-shaped fixture lines (3.6–4.0 bits) get markers, including one in production code (`argfence/policy.go:69`), guarded by `TestMarkerNeverAppearsInNonTestGoOutsideArgfence`.
-- verification: floor set so `Token: "--end-of-options"` and `DROSS_TEST_ABSENT_TOKEN` are silent without markers; `s3cr3t-…` constants still get markers.
+- verification: floor set so `Token: "--end-of-options"` and `DROSS_TEST_ABSENT_TOKEN` are silent without markers; `s3cr3t-…` constants still get markers. dross:allow-secret
 - mvp: no entropy floor stated; placeholder carve-outs (`<token>`, `%q`, `${VAR}`) only.
 - **Default: risk.** A floor high enough to silence `DROSS_TEST_ABSENT_TOKEN` (~3.5) also silences `MyP@ssw0rd!2024xyz` (3.73) — a real-password shape. The floor exists to kill repetition, not vocabulary; secret-shaped fixtures are exactly what the marker is for, and the pinned marker table makes each one a counted, reviewable exemption.
 - Why it matters: this is the only knob that trades c-1 recall against c-6 marker count; the choice should be visible, not buried in a constant.
