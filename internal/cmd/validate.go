@@ -140,6 +140,23 @@ func Validate() *cobra.Command {
 				}
 			}
 
+			// Secret-shaped values in any stageable .dross artifact. Runs
+			// unconditionally after the structural walk so a malformed spec
+			// never hides a token elsewhere, and reports through the same
+			// ✗ / exit-1 path: a secret in an artifact is a problem with the
+			// artifact, not a separate verdict. The scanner is the one ship
+			// and the auto-commit gate call too (scanDrossArtifacts), so the
+			// three cannot disagree about what counts as a hit. Each line is
+			// a fingerprint — rule, location, length, fixed prefix — never
+			// the value.
+			if hits, err := scanDrossArtifacts(filepath.Dir(root)); err != nil {
+				problems = append(problems, err.Error())
+			} else {
+				for _, h := range hits {
+					problems = append(problems, "secret: "+h.String())
+				}
+			}
+
 			// Warnings print on EVERY run and never touch the exit status.
 			// Repetition is the point (the locked warning_surface decision):
 			// a message that appeared once at declaration time scrolls away
