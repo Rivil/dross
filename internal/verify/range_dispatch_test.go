@@ -1,6 +1,9 @@
 package verify
 
 import (
+	"errors"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Rivil/dross/internal/mutation"
@@ -14,7 +17,10 @@ type rangingAdapter struct {
 	plainCall    bool
 	files        []string
 	constructs   map[string][]mutation.Construct
-	constructErr error
+	constructErr error            // returned for every file when set
+	fileErr      map[string]error // returned for that file only
+	asked        []string         // files Constructs was called for, in order
+	askedBefore  bool             // every Constructs call preceded the run
 }
 
 func (r *rangingAdapter) Name() string              { return r.name }
@@ -35,12 +41,36 @@ func (r *rangingAdapter) RunRanges(files []string, ranges map[string][]mutation.
 
 // Constructs is the canned resolver arm: constructs keyed by file, and an
 // error to return in place of them. Nil constructs with a nil error is a
-// file with no top-level nodes.
+// file with no top-level nodes, which expands to the bare hunk.
 func (r *rangingAdapter) Constructs(file string) ([]mutation.Construct, error) {
+	r.asked = append(r.asked, file)
+	r.askedBefore = !r.rangedCall && !r.plainCall
 	if r.constructErr != nil {
 		return nil, r.constructErr
 	}
+	if err := r.fileErr[file]; err != nil {
+		return nil, err
+	}
 	return r.constructs[file], nil
+}
+
+// rangeOnlyAdapter is a RangeRunner that is NOT a ConstructResolver: it can
+// narrow, but cannot say what encloses a line.
+type rangeOnlyAdapter struct {
+	name       string
+	rangedCall bool
+	plainCall  bool
+}
+
+func (r *rangeOnlyAdapter) Name() string              { return r.name }
+func (r *rangeOnlyAdapter) Supports(file string) bool { return true }
+func (r *rangeOnlyAdapter) Run(_ []string) (*mutation.Report, error) {
+	r.plainCall = true
+	return &mutation.Report{Tool: r.name}, nil
+}
+func (r *rangeOnlyAdapter) RunRanges(_ []string, _ map[string][]mutation.Range) (*mutation.Report, error) {
+	r.rangedCall = true
+	return &mutation.Report{Tool: r.name}, nil
 }
 
 // plainAdapter implements Adapter and NOT RangeRunner — gremlins' shape.
@@ -73,12 +103,11 @@ func TestRunScopedNarrowsToTheChangedLines(t *testing.T) {
 	if !a.rangedCall || a.plainCall {
 		t.Fatalf("wanted the ranged arm; ranged=%v plain=%v", a.rangedCall, a.plainCall)
 	}
-	// PADDED: the hunk is 10-12, and hunkContextLines widens it to 1-37 (the
-	// start clamps at line 1). The pad is asserted on its own in
-	// TestPadAndMergeWidensEachHunk; what this case pins is that a.ts is
-	// narrowed at all and b.ts is not.
-	if got := a.ranRanges["web/src/a.ts"]; len(got) != 1 || got[0].Start != 1 || got[0].End != 37 {
-		t.Errorf("ranges for a.ts = %v, want [{1 37}]", got)
+	// The stub resolves no constructs, so the hunk stays the hunk: 10-12.
+	// Widening is asserted on its own in range_expand_test; what this case
+	// pins is that a.ts is narrowed at all and b.ts is not.
+	if got := a.ranRanges["web/src/a.ts"]; len(got) != 1 || got[0].Start != 10 || got[0].End != 12 {
+		t.Errorf("ranges for a.ts = %v, want [{10 12}]", got)
 	}
 	// b.ts has no hunks, so it carries no range and the adapter mutates it
 	// whole. Its ABSENCE from the map is the fail-open signal — an empty slice
@@ -150,69 +179,121 @@ func TestRunScopedWithANilScopeRunsWholeFiles(t *testing.T) {
 	}
 }
 
-// The pad exists because a mutant can enclose the changed line while starting
-// above it — measured: portion-cascade.ts:29-29 finds 2 of the line's 3
-// mutants, because the function-body block opens on line 28.
-func TestPadAndMergeWidensEachHunk(t *testing.T) {
-	got := padAndMerge([]Range{{Start: 100, End: 104}})
-	want := []mutation.Range{{Start: 75, End: 129}}
-	if len(got) != 1 || got[0] != want[0] {
-		t.Errorf("padAndMerge = %v, want %v", got, want)
-	}
-}
-
-// A hunk near the top of a file must not produce a range starting at or below
-// zero: Stryker's spec is 1-based and runArgs refuses a Start <= 0 by falling
-// back to the whole file, which would silently un-narrow the run.
-func TestPadAndMergeClampsToTheFirstLine(t *testing.T) {
-	got := padAndMerge([]Range{{Start: 3, End: 4}})
-	if len(got) != 1 || got[0].Start != 1 {
-		t.Errorf("padAndMerge = %v, want a range starting at line 1", got)
-	}
-}
-
-// Two hunks whose pads overlap must merge. Two overlapping specs for one file
-// make the argv claim a scope it does not have.
-func TestPadAndMergeMergesOverlappingHunks(t *testing.T) {
-	got := padAndMerge([]Range{{Start: 100, End: 101}, {Start: 120, End: 121}})
-	if len(got) != 1 {
-		t.Fatalf("padAndMerge = %v, want one merged range", got)
-	}
-	if got[0].Start != 75 || got[0].End != 146 {
-		t.Errorf("merged range = %v, want {75 146}", got[0])
-	}
-}
-
-// ...but hunks far apart must stay apart, or narrowing collapses into the
-// whole file one merge at a time.
-func TestPadAndMergeKeepsDistantHunksSeparate(t *testing.T) {
-	got := padAndMerge([]Range{{Start: 10, End: 11}, {Start: 900, End: 901}})
-	if len(got) != 2 {
-		t.Errorf("padAndMerge = %v, want two ranges", got)
-	}
-}
-
-func TestPadAndMergeOnNoHunksIsNil(t *testing.T) {
-	if got := padAndMerge(nil); got != nil {
-		t.Errorf("padAndMerge(nil) = %v, want nil", got)
-	}
-}
-
-// The dispatch must carry the PADDED range, not the raw hunk — otherwise the
-// pad is computed and thrown away.
-func TestRunScopedPassesPaddedRanges(t *testing.T) {
-	a := &rangingAdapter{name: "stryker"}
+// The dispatch must carry the CONSTRUCT span, not the raw hunk — otherwise
+// the resolver is asked and its answer thrown away.
+func TestRunScopedDispatchesTheConstructSpan(t *testing.T) {
+	a := &rangingAdapter{name: "stryker", constructs: map[string][]mutation.Construct{
+		"web/src/a.ts": {{Start: 80, End: 130, Kind: "FunctionDeclaration", Name: "run"}},
+	}}
 	scope := scopeWithHunks(
 		[]string{"web/src/a.ts"},
 		map[string][]Range{"web/src/a.ts": {{Start: 100, End: 104}}},
 	)
-	if _, err := RunScoped("p", []string{"web/src/a.ts"},
-		[]mutation.Adapter{a}, scope); err != nil {
+	tests, err := RunScoped("p", []string{"web/src/a.ts"}, []mutation.Adapter{a}, scope)
+	if err != nil {
 		t.Fatalf("RunScoped: %v", err)
 	}
 	got := a.ranRanges["web/src/a.ts"]
-	if len(got) != 1 || got[0].Start != 75 || got[0].End != 129 {
-		t.Errorf("dispatched ranges = %v, want [{75 129}]", got)
+	if len(got) != 1 || got[0].Start != 80 || got[0].End != 130 {
+		t.Errorf("dispatched ranges = %v, want [{80 130}]", got)
+	}
+	rec := tests.Languages[0].Ranges["web/src/a.ts"]
+	if len(rec) != 1 || rec[0] != (EffectiveRange{Start: 80, End: 130, Construct: "FunctionDeclaration run"}) {
+		t.Errorf("recorded = %v, want the construct span with its label", rec)
+	}
+}
+
+// A RangeRunner with no resolver must not range on bare hunks — that is the
+// ungenerated-mutant hole this phase closes. Every hunked file falls open,
+// the scope degrades, and the plain arm runs.
+func TestRangeRunnerWithoutResolverDegrades(t *testing.T) {
+	a := &rangeOnlyAdapter{name: "stryker"}
+	scope := scopeWithHunks(
+		[]string{"a.ts", "b.ts"},
+		map[string][]Range{"a.ts": {{Start: 10, End: 12}}, "b.ts": {{Start: 3, End: 3}}},
+	)
+	tests, err := RunScoped("p", []string{"a.ts", "b.ts"}, []mutation.Adapter{a}, scope)
+	if err != nil {
+		t.Fatalf("RunScoped: %v", err)
+	}
+	if a.rangedCall || !a.plainCall {
+		t.Errorf("want the plain arm; ranged=%v plain=%v", a.rangedCall, a.plainCall)
+	}
+	lr := tests.Languages[0]
+	for _, f := range []string{"a.ts", "b.ts"} {
+		if lr.WholeFile[f] != WholeFileASTUnavailable {
+			t.Errorf("whole_file[%s] = %q, want %q", f, lr.WholeFile[f], WholeFileASTUnavailable)
+		}
+	}
+	if lr.Ranges != nil {
+		t.Errorf("no file may be ranged, got %v", lr.Ranges)
+	}
+	// scopeWithHunks already carries one degraded line of its own (no git
+	// contribution); the plan's lines land after it.
+	var named int
+	for _, l := range scope.Degraded {
+		if strings.Contains(l, "no construct resolver") && strings.Contains(l, "stryker") {
+			named++
+		}
+	}
+	if named != 2 {
+		t.Errorf("want one degraded line per hunked file naming the cause, got %v", scope.Degraded)
+	}
+}
+
+// The resolver is a spawn per file, so it is asked only for files the
+// planner would range, and always before the tool is dispatched.
+func TestResolverIsAskedOnlyForRangeableFilesAndBeforeDispatch(t *testing.T) {
+	// A plain adapter: never asked (it is not a RangeRunner; the resolver
+	// method is not even reachable).
+	// A hunk-less scope: never asked.
+	a := &rangingAdapter{name: "stryker"}
+	if _, err := RunScoped("p", []string{"a.ts"}, []mutation.Adapter{a},
+		scopeWithHunks([]string{"a.ts"}, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if len(a.asked) != 0 {
+		t.Errorf("a hunk-less scope asked the resolver for %v", a.asked)
+	}
+
+	// Absent from hunks and malformed: never asked; the well-formed
+	// neighbour: asked exactly once, before RunRanges.
+	a = &rangingAdapter{name: "stryker"}
+	scope := scopeWithHunks([]string{"a.ts", "b.ts", "c.ts"}, map[string][]Range{
+		"a.ts": {{Start: 10, End: 12}},
+		"c.ts": {{Start: 0, End: 3}},
+	})
+	if _, err := RunScoped("p", []string{"a.ts", "b.ts", "c.ts"}, []mutation.Adapter{a}, scope); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(a.asked, []string{"a.ts"}) {
+		t.Errorf("resolver asked for %v, want exactly [a.ts]", a.asked)
+	}
+	if !a.askedBefore {
+		t.Error("the resolver was asked after the tool had been dispatched")
+	}
+	if !a.rangedCall {
+		t.Error("the well-formed file did not reach the ranged arm")
+	}
+}
+
+// A resolver that fails falls the file open — it never aborts the leg.
+func TestResolverFailureStillRunsTheLeg(t *testing.T) {
+	a := &rangingAdapter{name: "stryker", constructErr: errors.New("node: not found")}
+	scope := scopeWithHunks([]string{"a.ts"}, map[string][]Range{"a.ts": {{Start: 10, End: 12}}})
+	tests, err := RunScoped("p", []string{"a.ts"}, []mutation.Adapter{a}, scope)
+	if err != nil {
+		t.Fatalf("RunScoped: %v", err)
+	}
+	lr := tests.Languages[0]
+	if lr.Mutation == nil || lr.Error != "" {
+		t.Fatalf("the leg did not run: mutation=%v error=%q", lr.Mutation, lr.Error)
+	}
+	if lr.WholeFile["a.ts"] != WholeFileASTUnavailable {
+		t.Errorf("whole_file[a.ts] = %q, want %q", lr.WholeFile["a.ts"], WholeFileASTUnavailable)
+	}
+	if !a.plainCall || a.rangedCall {
+		t.Errorf("want the plain arm; ranged=%v plain=%v", a.rangedCall, a.plainCall)
 	}
 }
 
@@ -246,8 +327,8 @@ func TestRecordedRangesAreTheDispatchedRanges(t *testing.T) {
 			if recorded[i].Start != dispatched[i].Start || recorded[i].End != dispatched[i].End {
 				t.Errorf("%s[%d]: recorded %v, dispatched %v", f, i, recorded[i], dispatched[i])
 			}
-			if recorded[i].Pad != hunkContextLines {
-				t.Errorf("%s[%d]: pad = %d, want %d", f, i, recorded[i].Pad, hunkContextLines)
+			if recorded[i].Construct == "" {
+				t.Errorf("%s[%d]: recorded range carries no construct", f, i)
 			}
 		}
 	}

@@ -41,10 +41,12 @@ func saveAndRead(t *testing.T, tests *Tests) ([]byte, *Tests) {
 	return raw, loaded
 }
 
-// Raw and effective side by side: the hunk under scope, the padded range
+// Raw and effective side by side: the hunk under scope, the construct span
 // under the leg. That adjacency is what makes the claimed scope provable.
-func TestLegRecordsEffectiveRangesWithPad(t *testing.T) {
-	a := &rangingAdapter{name: "stryker"}
+func TestLegRecordsEffectiveRangesWithConstruct(t *testing.T) {
+	a := &rangingAdapter{name: "stryker", constructs: map[string][]mutation.Construct{
+		"src/a.ts": {{Start: 1, End: 37, Kind: "FunctionDeclaration", Name: "tally"}},
+	}}
 	scope := scopeWithHunks([]string{"src/a.ts"}, map[string][]Range{"src/a.ts": {{Start: 10, End: 12}}})
 	tests, err := RunScoped("p", []string{"src/a.ts"}, []mutation.Adapter{a}, scope)
 	if err != nil {
@@ -53,7 +55,7 @@ func TestLegRecordsEffectiveRangesWithPad(t *testing.T) {
 	raw, loaded := saveAndRead(t, tests)
 	body := compactJSON(t, raw)
 	for _, want := range []string{
-		`"ranges":{"src/a.ts":[{"start":1,"end":37,"pad":25}]}`,
+		`"ranges":{"src/a.ts":[{"start":1,"end":37,"construct":"FunctionDeclaration tally"}]}`,
 		`"hunks":{"src/a.ts":[{"start":10,"end":12}]}`,
 	} {
 		if !strings.Contains(body, want) {

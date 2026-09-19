@@ -2,26 +2,26 @@ package verify
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Rivil/dross/internal/mutation"
 )
 
 // EffectiveRange is one line range as it was actually handed to a mutation
-// tool — post-pad, post-merge — together with the pad that produced it. It is
-// the persisted counterpart of mutation.Range: Scope.Hunks keeps the raw
-// diff, this keeps what the tool was told, and the two sit side by side in
-// tests.json so a run's claimed scope is provable from its own record rather
-// than inferred from argv.
+// tool — widened to the enclosing top-level construct — together with the
+// construct that produced it. It is the persisted counterpart of
+// mutation.Range: Scope.Hunks keeps the raw diff, this keeps what the tool
+// was told, and the two sit side by side in tests.json so a run's claimed
+// scope is provable from its own record rather than inferred from argv.
 type EffectiveRange struct {
 	Start int `json:"start"`
 	End   int `json:"end"`
-	Pad   int `json:"pad"`
 	// Construct names what the range was widened to — a top-level AST
 	// construct's Label(), or ConstructHunk when the lines stayed the raw
-	// hunk. It is the AST-era answer to the question Pad used to answer.
-	// omitempty only until the planner stamps it on every range.
-	Construct string `json:"construct,omitempty"`
+	// hunk. Always set: a range that cannot say why it is what it is would
+	// be the line-pad heuristic's silence under another name.
+	Construct string `json:"construct"`
 }
 
 // Whole-file reasons: the CLOSED set of ways a file in a scoped run ends up
@@ -47,7 +47,30 @@ const (
 	// WholeFileMalformedRange: a raw hunk the tool would refuse. Degrades —
 	// the hunk existed and was lost.
 	WholeFileMalformedRange = "malformed-range"
+	// WholeFileASTUnavailable: the file's top-level constructs could not be
+	// resolved — no node, no parser in the tree, a parse error, a
+	// RangeRunner with no resolver at all. Degrades on a range-capable
+	// adapter: the hunk existed and its precision was lost, and a missing
+	// parser is an environment fault that would otherwise silently cost
+	// every run its narrowing. The cause goes on the Degraded line, never
+	// into this value.
+	WholeFileASTUnavailable = "ast-unavailable"
 )
+
+// ASTResult is one file's construct resolution: what the resolver returned,
+// or why it could not. Exactly one of the two is meaningful.
+type ASTResult struct {
+	Constructs []mutation.Construct
+	Err        error
+}
+
+// ASTIndex is the resolved constructs for every file a leg may range, keyed
+// by the same repo-relative slash path the scope's hunks use. It is built
+// BEFORE PlanRanges (resolveConstructs), so the planner stays pure: it reads
+// the index, it never spawns. A file absent from the index is unresolved,
+// which the planner records as ast-unavailable — the record must say what
+// it did not know, not guess.
+type ASTIndex map[string]ASTResult
 
 // RangePlan is what PlanRanges decided for one adapter's leg, before anything
 // runs. Dispatch is the map to hand RunRanges; Ranges is the same decision in
@@ -73,11 +96,16 @@ type RangePlan struct {
 // nothing to describe. An EMPTY scope — one with no hunks — is different: the
 // run was meant to be scoped and could not be, which is the NoHunks reason.
 //
-// Malformed is judged on the RAW hunk, before padding. padAndMerge clamps a
-// start of 0 up to 1, which would turn {0,3} into a legal {1,28} and hide the
-// malformation the record exists to show. The offending numbers go into the
-// Degraded line, never into the closed reason value.
-func PlanRanges(a mutation.Adapter, files []string, scope *Scope) RangePlan {
+// Malformed is judged on the RAW hunk, before expansion, and before the
+// resolver is ever consulted: a hunk the tool would refuse must surface as
+// exactly that, not be widened into something legal by a construct that
+// happens to enclose it. The offending numbers go into the Degraded line,
+// never into the closed reason value.
+//
+// Per file the order is: absent from hunks → malformed → ast-unavailable →
+// ranged. Ranges and Dispatch are projected from the one expansion in the
+// same loop, so the record and the argv cannot drift.
+func PlanRanges(a mutation.Adapter, files []string, scope *Scope, asts ASTIndex) RangePlan {
 	var plan RangePlan
 	if scope == nil {
 		return plan
@@ -113,12 +141,19 @@ func PlanRanges(a mutation.Adapter, files []string, scope *Scope) RangePlan {
 				"%s: malformed hunk %d-%d in %s; mutating the whole file", a.Name(), bad.Start, bad.End, f))
 			continue
 		}
-		padded := padAndMerge(hunks)
-		plan.Dispatch[f] = padded
-		eff := make([]EffectiveRange, 0, len(padded))
-		for _, r := range padded {
-			eff = append(eff, EffectiveRange{Start: r.Start, End: r.End, Pad: hunkContextLines})
+		res, resolved := asts[f]
+		if !resolved || res.Err != nil {
+			plan.WholeFile[f] = WholeFileASTUnavailable
+			plan.Degraded = append(plan.Degraded, fmt.Sprintf(
+				"%s: AST unavailable for %s (%s); mutating the whole file", a.Name(), f, astDetail(res, resolved)))
+			continue
 		}
+		eff := expandToConstructs(hunks, res.Constructs)
+		dispatch := make([]mutation.Range, 0, len(eff))
+		for _, r := range eff {
+			dispatch = append(dispatch, mutation.Range{Start: r.Start, End: r.End})
+		}
+		plan.Dispatch[f] = dispatch
 		plan.Ranges[f] = eff
 	}
 	if len(plan.Dispatch) == 0 {
@@ -126,6 +161,20 @@ func PlanRanges(a mutation.Adapter, files []string, scope *Scope) RangePlan {
 		plan.Ranges = nil
 	}
 	return plan
+}
+
+// astDetail is the cause printed on the Degraded line: the resolver's own
+// words with the sentinel prefix stripped (it is already the line's subject),
+// or a statement that nothing resolved the file at all.
+func astDetail(res ASTResult, resolved bool) string {
+	if !resolved {
+		return "no construct resolution recorded"
+	}
+	msg := res.Err.Error()
+	if rest, ok := strings.CutPrefix(msg, mutation.ErrASTUnavailable.Error()+": "); ok {
+		return rest
+	}
+	return msg
 }
 
 // firstMalformed returns the first raw hunk that fails mutation.Range.Valid —

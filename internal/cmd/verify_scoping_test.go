@@ -670,9 +670,8 @@ func TestVerifyOutputNamesWholeFileLegs(t *testing.T) {
 }
 
 // TestVerifyOutputNamesTheConstructPerRange: a ranged leg prints one line per
-// range naming what it was widened to. At this wave the planner does not
-// yet stamp a construct, so the line carries the placeholder — and never a
-// pad; the construct label itself is asserted once the planner wires it.
+// range naming what it was widened to — the construct the planner resolved,
+// never a placeholder for a fresh run and never a pad.
 func TestVerifyOutputNamesTheConstructPerRange(t *testing.T) {
 	dir := scopedVerifyRepo(t, "perrange")
 	phaseSpec(t, "01-perrange")
@@ -680,8 +679,10 @@ func TestVerifyOutputNamesTheConstructPerRange(t *testing.T) {
 	mustGit(t, dir, "commit", "-qam", "phase edits a.go only")
 	mustSetBase(t, "01-perrange", "base")
 
+	// The edit is on line 3; the canned construct encloses it.
 	ranger := &stubRangeAdapter{stubMutationAdapter: stubMutationAdapter{name: "stryker", exts: []string{".go"},
-		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}}
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})},
+		constructs: []mutation.Construct{{Start: 1, End: 3, Kind: "FunctionDeclaration", Name: "edited"}}}
 	useStubAdapter(t, ranger)
 	out := runVerifyCapturing(t, "01-perrange")
 
@@ -697,10 +698,64 @@ func TestVerifyOutputNamesTheConstructPerRange(t *testing.T) {
 	if perRange == "" {
 		t.Fatalf("no per-range line for a.go:\n%s", out)
 	}
-	if !strings.HasSuffix(strings.TrimSpace(perRange), "(construct unrecorded)") {
-		t.Errorf("per-range line = %q, want the construct placeholder", perRange)
+	if !strings.HasSuffix(strings.TrimSpace(perRange), "(FunctionDeclaration edited)") {
+		t.Errorf("per-range line = %q, want the resolved construct label", perRange)
+	}
+	if strings.Contains(out, "construct unrecorded") {
+		t.Errorf("a fresh run printed the pre-construct placeholder:\n%s", out)
 	}
 	if strings.Contains(out, "pad") {
 		t.Errorf("verify output still speaks of a pad:\n%s", out)
+	}
+}
+
+// stubRangeNoResolver is a RangeRunner that is NOT a ConstructResolver — a
+// range-capable tool with no way to say what encloses a line.
+type stubRangeNoResolver struct {
+	stubMutationAdapter
+	ranged bool
+}
+
+func (s *stubRangeNoResolver) RunRanges(files []string, _ map[string][]mutation.Range) (*mutation.Report, error) {
+	s.ranged = true
+	return s.stubMutationAdapter.Run(files)
+}
+
+// TestVerifyOutputWarnsWhenTheASTIsUnavailable: c-4 through the command. A
+// hunked file whose constructs cannot be resolved is mutated whole under
+// ast-unavailable, the scope's degraded warning names the file and the
+// cause, and the run never reads as ranged.
+func TestVerifyOutputWarnsWhenTheASTIsUnavailable(t *testing.T) {
+	dir := scopedVerifyRepo(t, "noast")
+	phaseSpec(t, "01-noast")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go only")
+	mustSetBase(t, "01-noast", "base")
+
+	stub := &stubRangeNoResolver{stubMutationAdapter: stubMutationAdapter{name: "stryker", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}}
+	useStubAdapter(t, stub)
+	out := runVerifyCapturing(t, "01-noast")
+
+	var sawWarning, sawWholeFile bool
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "scope degraded") && strings.Contains(line, "AST unavailable for a.go") {
+			sawWarning = true
+		}
+		if strings.Contains(line, "whole-file stryker") && strings.Contains(line, verify.WholeFileASTUnavailable) {
+			sawWholeFile = true
+		}
+	}
+	if !sawWarning {
+		t.Errorf("no degraded warning names the unresolved file:\n%s", out)
+	}
+	if !sawWholeFile {
+		t.Errorf("no whole-file line carries %s:\n%s", verify.WholeFileASTUnavailable, out)
+	}
+	if strings.Contains(out, "ranged") {
+		t.Errorf("a run that lost its precision printed as ranged:\n%s", out)
+	}
+	if stub.ranged {
+		t.Error("RunRanges was called with nothing resolved; the whole-file arm must run")
 	}
 }

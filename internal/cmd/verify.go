@@ -707,7 +707,7 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 	// collected leg must say the same, or its whole-file count over-reads by
 	// every non-Go file in scope.
 	legFiles := mutation.Supported(&mutation.Gremlins{}, files)
-	plan := verify.PlanRanges(&mutation.Gremlins{}, legFiles, scope)
+	plan := verify.PlanRanges(&mutation.Gremlins{}, legFiles, scope, nil)
 	t.Languages = append(t.Languages, verify.LanguageRun{
 		Name: "go",
 		Tool: "gremlins",
