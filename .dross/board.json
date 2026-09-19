@@ -7,6 +7,7 @@
     "v1.7": "DRO-331"
   },
   "phases": {
+    "ast-aware-mutation-ranges": "DRO-448",
     "board-mirror-reaper": "DRO-163",
     "board-sync-truth": "DRO-19",
     "board-task-mirror": "DRO-32",
@@ -145,6 +146,7 @@
     "someday:id:77f61ea051b44f42": "DRO-53",
     "someday:id:794b7474a9e2ac97": "DRO-222",
     "someday:id:7b308a04a43d8cb9": "DRO-22",
+    "someday:id:7bc5df911df4b5c9": "DRO-447",
     "someday:id:7ea6759938b910a4": "DRO-84",
     "someday:id:82da70858aaff13e": "DRO-303",
     "someday:id:82e3e60f30734120": "DRO-443",
