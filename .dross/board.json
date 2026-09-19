@@ -71,7 +71,6 @@
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
-    "slug:ast-aware-mutation-ranges": "DRO-349",
     "slug:cmd-package-decomposition": "DRO-351",
     "slug:dependency-update-automation": "DRO-428",
     "slug:secret-detection": "DRO-350",
@@ -229,52 +228,52 @@
     "ast-aware-mutation-ranges/t-1": {
       "issue": "DRO-449",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "ast-aware-mutation-ranges/t-10": {
       "issue": "DRO-458",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "ast-aware-mutation-ranges/t-2": {
       "issue": "DRO-450",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "ast-aware-mutation-ranges/t-3": {
       "issue": "DRO-451",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "ast-aware-mutation-ranges/t-4": {
       "issue": "DRO-452",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "ast-aware-mutation-ranges/t-5": {
       "issue": "DRO-453",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "ast-aware-mutation-ranges/t-6": {
       "issue": "DRO-454",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "ast-aware-mutation-ranges/t-7": {
       "issue": "DRO-455",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "ast-aware-mutation-ranges/t-8": {
       "issue": "DRO-456",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "ast-aware-mutation-ranges/t-9": {
       "issue": "DRO-457",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "board-mirror-reaper/t-1": {
       "issue": "DRO-164",
