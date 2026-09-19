@@ -1,0 +1,87 @@
+[verify]
+  phase = "ast-aware-mutation-ranges"
+  generated_at = 2026-09-19T12:30:01.549732Z
+  verdict = "fail"
+  finalized = true
+  finalized_at = 2026-09-19T12:32:07.446468Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9653179190751445
+  mutants_killed = 334
+  mutants_survived = 12
+  mutants_not_covered = 12
+  mutants_in_scope = 346
+  unclassified_in_scope = 2
+  criteria_total = 6
+  criteria_covered = 5
+  criteria_uncovered = 1
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 334
+    survived = 12
+    timeout = 0
+    in_scope = 346
+    score = 0.9653179190751445
+    file_count = 26
+    measured_on = "helicon"
+    whole_file = ["internal/argfence/argfence_test.go — adapter-lacks-range-runner", "internal/argfence/policy.go — adapter-lacks-range-runner", "internal/cmd/pad_residue_test.go — adapter-lacks-range-runner", "internal/cmd/subprocargs_audit_test.go — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_range_e2e_test.go — adapter-lacks-range-runner", "internal/cmd/verify_results_test.go — adapter-lacks-range-runner", "internal/cmd/verify_reuse_report_test.go — adapter-lacks-range-runner", "internal/cmd/verify_scoping_test.go — adapter-lacks-range-runner", "internal/cmd/verifyscope.go — adapter-lacks-range-runner", "internal/cmd/verifyscope_test.go — adapter-lacks-range-runner", "internal/mutation/adapter.go — adapter-lacks-range-runner", "internal/mutation/adapter_test.go — adapter-lacks-range-runner", "internal/mutation/astspan.go — adapter-lacks-range-runner", "internal/mutation/construct.go — adapter-lacks-range-runner", "internal/mutation/construct_e2e_test.go — adapter-lacks-range-runner", "internal/mutation/construct_test.go — adapter-lacks-range-runner", "internal/mutation/ts_fixture_test.go — adapter-lacks-range-runner", "internal/verify/range_dispatch_test.go — adapter-lacks-range-runner", "internal/verify/range_expand.go — adapter-lacks-range-runner", "internal/verify/range_expand_test.go — adapter-lacks-range-runner", "internal/verify/range_provenance.go — adapter-lacks-range-runner", "internal/verify/range_provenance_test.go — adapter-lacks-range-runner", "internal/verify/range_record_test.go — adapter-lacks-range-runner", "internal/verify/range_summary_test.go — adapter-lacks-range-runner", "internal/verify/verify.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/verify/range_expand_test.go:TestExpandWidensToTheEnclosingConstruct", "internal/verify/range_dispatch_test.go:TestRunScopedDispatchesTheConstructSpan", "internal/cmd/verify_range_e2e_test.go:TestRangedDispatchReachesTheAdapterEndToEnd", "internal/mutation/construct_e2e_test.go:TestConstructRangeRecoversTheDeepMutant"]
+  notes = "Pure expansion pins hunk→full construct span (a padded window fails it); RunScoped dispatches the span; the cmd e2e proves a real edit reaches RunRanges as {30,50}; the node-gated proof measured against Stryker 9.6.1: construct span 62 mutants vs the retired ±25 window 50 (run locally 2026-09-19, skipped on helicon — no node_modules there)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/pad_residue_test.go:TestNoPadHeuristicResidue", "internal/cmd/pad_residue_test.go:TestPadResidueScanTripsOnItsFixture", "internal/verify/range_provenance_test.go:TestRecordCarriesConstructNotPad"]
+  notes = "Residue scan over the three docs and every shipped .go, calibrated on a fixture that must trip it; reflect pins no Pad field on EffectiveRange/LegSummary and no pad key in a marshalled leg."
+
+[[criterion]]
+  id = "c-3"
+  status = "weak"
+  tests = ["internal/verify/range_record_test.go:TestLegRecordsEffectiveRangesWithConstruct", "internal/verify/range_summary_test.go:TestVerifyTomlStatesEffectiveRanges", "internal/cmd/verifyscope_test.go:TestVerifyScopePrintsRawAndEffective", "internal/cmd/verify_scoping_test.go:TestVerifyOutputNamesTheConstructPerRange", "internal/verify/range_expand_test.go:TestLabelOmitsAMissingName"]
+  notes = "tests.json, verify.toml, verify output and verify scope all pinned. Downgraded: the label's own arms (Construct.Label, construct.go:40/:43) survive in-hunk — Label is exercised only from package verify and the node-gated e2e, so gremlins' per-package run never covers it. Remediation task t-10 pins it in package mutation."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/verify/range_provenance_test.go:TestASTUnavailableDegradesAndFallsWholeOnlyItsOwnFile", "internal/verify/range_dispatch_test.go:TestRangeRunnerWithoutResolverDegrades", "internal/cmd/verify_scoping_test.go:TestVerifyOutputWarnsWhenTheASTIsUnavailable", "internal/mutation/construct_test.go:TestConstructsClassifiesParseError", "internal/mutation/construct_e2e_test.go:TestUnresolvableParserIsUnavailable"]
+  notes = "Reason exact, detail on Degraded, sibling still ranged; a RangeRunner without a resolver falls whole and degrades; the command prints the warning and never says ranged; each real cause (no node, parse position, unresolvable parser, malformed output, timeout) classified under ErrASTUnavailable."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/verify_results_test.go:TestCollectLegListsOnlyMutableFiles", "internal/mutation/adapter_test.go:TestSupportedKeepsOrderAndDropsUnsupported", "internal/cmd/verify_results_test.go:TestRunScopedLegNeverListsUnsupportedFiles"]
+  notes = "Collected leg records only .go files with exactly one whole_file entry per mutable file; observed in this run's own leg: 26 whole-file entries, every one a .go file, none of the 16 non-Go scope entries."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/verify_reuse_report_test.go:TestPlainVerifyLeavesReuseReportOff", "internal/cmd/verify_reuse_report_test.go:TestReuseReportWithDetachRefusesThroughTheCommand"]
+  notes = "Both tests observed red under `if !reuseReport` before commit; this run (r-20260919-103904) lists no survivor at verify.go's reuse-report guard and a22f0ab51a69e9e8 is absent from tests.json."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/mutation/construct.go:40 (CONDITIONALS_NEGATION) — in-hunk, NOT_COVERED: Construct.Label's empty-Name arm has no test in package mutation (TestLabelOmitsAMissingName lives in package verify; the e2e that calls Label is node-gated). Remediation: t-10 pins both arms in-package."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/mutation/construct.go:43 (ARITHMETIC_BASE) — in-hunk, NOT_COVERED: same cause as :40 (two report rows, one key a527a8d5b0db6ca6). Remediation: t-10."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Accepted this run: internal/verify/range_expand.go:83 CONDITIONALS_NEGATION [9e916095d3396cbb] and ARITHMETIC_BASE [8bec72b35d5cabc9] — a switch-case condition gremlins attributes no coverage block to (exercised by TestExpandKeepsUncoveredLinesAsTheBareHunk and the 200-layout property check); internal/mutation/construct.go:71 ARITHMETIC_BASE [5adfd4d9206c88fa] — a package-level var initializer. unclassified_in_scope amended 7 → 2 by hand after the accepts: collection is one-shot and no rescore verb exists (deferred 285dca82787c2b6a)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The c-1 acceptance proof (TestConstructRangeRecoversTheDeepMutant) runs only where node and the fixture's node_modules exist; it passed locally (202s, three Stryker runs: line 0 / ±25 window 50 / construct span 62) and skipped on helicon. DROSS_REQUIRE_E2E turns that skip fatal in CI."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Scope carried 16 non-Go entries (.dross artefacts, docs); the gremlins leg lists none of them — c-5 observed on this run's own record."
