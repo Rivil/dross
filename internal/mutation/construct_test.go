@@ -219,3 +219,24 @@ func TestConstructsEmptyFileIsEmptyNotNil(t *testing.T) {
 		t.Errorf("Constructs = %#v, want an empty non-nil slice", got)
 	}
 }
+
+// Label is what every persisted range names its construct by. Pinned here,
+// in Label's own package, so the per-package mutation run sees both arms —
+// the verify-side test that reads the label cannot cover it for gremlins.
+func TestLabelInPackage(t *testing.T) {
+	for _, tc := range []struct {
+		c    Construct
+		want string
+	}{
+		{Construct{Kind: "ExpressionStatement"}, "ExpressionStatement"},
+		{Construct{Kind: "FunctionDeclaration", Name: "run"}, "FunctionDeclaration run"},
+		{Construct{Kind: "ClassDeclaration", Name: "Tally"}, "ClassDeclaration Tally"},
+	} {
+		if got := tc.c.Label(); got != tc.want {
+			t.Errorf("Label(%+v) = %q, want %q", tc.c, got, tc.want)
+		}
+	}
+	if got := (Construct{Kind: "K"}).Label(); strings.HasSuffix(got, " ") {
+		t.Errorf("an unnamed construct labelled with a trailing space: %q", got)
+	}
+}
