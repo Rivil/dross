@@ -14,6 +14,7 @@ import (
 	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/secretscan"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
 	"github.com/Rivil/dross/internal/verify"
@@ -149,6 +150,22 @@ func Ship() *cobra.Command {
 			}
 
 			// 3) Pre-flight gates.
+			//
+			// Secret gate first — ahead of the verdict switch, the
+			// --print-body / --no-push returns, and the auto-commit below.
+			// autoCommitDrossDirt only fires on a dirty tree, so a token
+			// already COMMITTED into a .dross artifact would otherwise ride
+			// a clean tree straight to the push; this scans the tracked set
+			// regardless. It is the shared scanner, not the whole of
+			// `dross validate` (the ship_gate_scope decision): pulling all
+			// of validate in here would newly fail ships on schema problems
+			// in any old phase.
+			if hits, err := scanDrossArtifacts(repoDir); err != nil {
+				return err
+			} else if len(hits) > 0 {
+				return fmt.Errorf("secret in tracked .dross artifact — fix it by hand or mark the line dross:allow-secret, then re-run ship\n%w",
+					&secretscan.ErrHit{Hits: hits})
+			}
 			if p.Remote.URL == "" || p.Remote.Provider == "" {
 				return errors.New("project has no [remote].url or .provider — run /dross-options or /dross-onboard")
 			}

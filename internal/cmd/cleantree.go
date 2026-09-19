@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/Rivil/dross/internal/secretscan"
 )
 
 // autoCommitDrossDirt is the shared dirty-tree gate behind ship, phase
@@ -31,6 +33,20 @@ func autoCommitDrossDirt(repoDir, action string) (committed bool, err error) {
 				return false, dirtyTreeError(action, status)
 			}
 		}
+	}
+	// Secret gate, AFTER the code-dirt refusal and BEFORE `git add`: this is
+	// the primitive that turns an untracked note into a commit, so it is the
+	// one that refuses — which covers ship, phase complete, record completion,
+	// phase start and milestone prune in one place. Same scanner as validate
+	// and ship's pre-flight (the ship_gate_scope decision); a scan error is a
+	// refusal too, since an artifact it could not read is one it cannot vouch
+	// for.
+	hits, err := scanDrossArtifacts(repoDir)
+	if err != nil {
+		return false, fmt.Errorf("refusing to auto-commit .dross: %w", err)
+	}
+	if len(hits) > 0 {
+		return false, fmt.Errorf("refusing to auto-commit .dross: %w", &secretscan.ErrHit{Hits: hits})
 	}
 	if out, err := gitCombined(repoDir, gitPathArgs("add", nil, ".dross")...); err != nil {
 		return false, fmt.Errorf("git add .dross: %w\n%s", err, out)
