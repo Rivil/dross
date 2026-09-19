@@ -17,6 +17,11 @@ type EffectiveRange struct {
 	Start int `json:"start"`
 	End   int `json:"end"`
 	Pad   int `json:"pad"`
+	// Construct names what the range was widened to — a top-level AST
+	// construct's Label(), or ConstructHunk when the lines stayed the raw
+	// hunk. It is the AST-era answer to the question Pad used to answer.
+	// omitempty only until the planner stamps it on every range.
+	Construct string `json:"construct,omitempty"`
 }
 
 // Whole-file reasons: the CLOSED set of ways a file in a scoped run ends up

@@ -8,11 +8,13 @@ import (
 
 // rangingAdapter records which call arm RunScoped chose, and with what.
 type rangingAdapter struct {
-	name       string
-	ranRanges  map[string][]mutation.Range
-	rangedCall bool
-	plainCall  bool
-	files      []string
+	name         string
+	ranRanges    map[string][]mutation.Range
+	rangedCall   bool
+	plainCall    bool
+	files        []string
+	constructs   map[string][]mutation.Construct
+	constructErr error
 }
 
 func (r *rangingAdapter) Name() string              { return r.name }
@@ -29,6 +31,16 @@ func (r *rangingAdapter) RunRanges(files []string, ranges map[string][]mutation.
 	r.files = files
 	r.ranRanges = ranges
 	return &mutation.Report{Tool: r.name}, nil
+}
+
+// Constructs is the canned resolver arm: constructs keyed by file, and an
+// error to return in place of them. Nil constructs with a nil error is a
+// file with no top-level nodes.
+func (r *rangingAdapter) Constructs(file string) ([]mutation.Construct, error) {
+	if r.constructErr != nil {
+		return nil, r.constructErr
+	}
+	return r.constructs[file], nil
 }
 
 // plainAdapter implements Adapter and NOT RangeRunner — gremlins' shape.
