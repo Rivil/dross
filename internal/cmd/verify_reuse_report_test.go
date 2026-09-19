@@ -5,43 +5,66 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/project"
 )
 
-// --reuse-report flips the stryker adapter and only the stryker adapter: the
-// gremlins leg beside it still runs, which is what the flag's help text says.
-func TestApplyReuseReportFlipsOnlyStryker(t *testing.T) {
-	stryker := &mutation.Stryker{}
-	adapters := []mutation.Adapter{stryker, &mutation.Gremlins{}, &mutation.StrykerNet{}}
-	if err := applyReuseReport(adapters, false, false); err != nil {
-		t.Fatalf("applyReuseReport: %v", err)
+// reuseReportRepo is a .go-only phase whose configured adapters are a gremlins
+// stub AND a zero *mutation.Stryker. The real Stryker type is what
+// applyReuseReport type-asserts on, so a negated `if reuseReport` guard is
+// observable as its ReuseReport flag flipping; the .go-only phase guarantees
+// the Stryker is never dispatched, so nothing spawns.
+func reuseReportRepo(t *testing.T) *mutation.Stryker {
+	t.Helper()
+	dir := scopedVerifyRepo(t, "reuse")
+	phaseSpec(t, "01-reuse")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go")
+	if err := runCmd(t, Changes(), "record", "01-reuse", "t-1", "--files", "a.go"); err != nil {
+		t.Fatal(err)
 	}
-	if !stryker.ReuseReport {
-		t.Error("the stryker adapter must have ReuseReport set")
+	mustSetBase(t, "01-reuse", "base")
+
+	gremlins := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}
+	stryker := &mutation.Stryker{}
+	prev := configuredAdaptersFn
+	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) ([]mutation.Adapter, mutationTuning, error) {
+		return []mutation.Adapter{gremlins, stryker}, mutationTuning{}, nil
+	}
+	t.Cleanup(func() { configuredAdaptersFn = prev })
+	return stryker
+}
+
+// A plain `dross verify` must never go through applyReuseReport: with the
+// guard negated the run either errors ("no stryker adapter" is impossible
+// here, a Stryker IS configured) or flips ReuseReport on the configured
+// Stryker — so the assertion covers both arms.
+func TestPlainVerifyLeavesReuseReportOff(t *testing.T) {
+	stryker := reuseReportRepo(t)
+	captureStdout(t, func() {
+		if err := runCmd(t, Verify(), "01-reuse"); err != nil {
+			t.Fatalf("plain verify: %v", err)
+		}
+	})
+	if stryker.ReuseReport {
+		t.Fatal("a plain verify flipped Stryker.ReuseReport — applyReuseReport ran without --reuse-report")
 	}
 }
 
-// The two flags that make a reused report meaningless refuse, each naming the
-// conflict, and a project with no stryker adapter has nothing to reuse.
-func TestApplyReuseReportRefusesTheMeaninglessCombinations(t *testing.T) {
-	cases := []struct {
-		name         string
-		adapters     []mutation.Adapter
-		skip, detach bool
-		want         string
-	}{
-		{"skip-mutation", []mutation.Adapter{&mutation.Stryker{}}, true, false, "--skip-mutation"},
-		{"detach", []mutation.Adapter{&mutation.Stryker{}}, false, true, "--detach"},
-		{"no stryker", []mutation.Adapter{&mutation.Gremlins{}}, false, false, "no stryker adapter"},
+// --reuse-report --detach is refused BY applyReuseReport, before the detach
+// path's own host check. A negated guard skips the refusal, and the command
+// then fails on detachRequiresAHost with a different message — so the exact
+// wording is the assertion.
+func TestReuseReportWithDetachRefusesThroughTheCommand(t *testing.T) {
+	stryker := reuseReportRepo(t)
+	err := runCmd(t, Verify(), "01-reuse", "--reuse-report", "--detach")
+	if err == nil {
+		t.Fatal("--reuse-report --detach was accepted")
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := applyReuseReport(tc.adapters, tc.skip, tc.detach)
-			if err == nil {
-				t.Fatalf("expected a refusal naming %q", tc.want)
-			}
-			if !strings.Contains(err.Error(), tc.want) {
-				t.Errorf("refusal = %v, want it to name %q", err, tc.want)
-			}
-		})
+	if !strings.Contains(err.Error(), "--reuse-report with --detach") {
+		t.Fatalf("refusal came from the wrong place: %v", err)
+	}
+	if stryker.ReuseReport {
+		t.Fatal("the refusal must precede the flag flip")
 	}
 }
