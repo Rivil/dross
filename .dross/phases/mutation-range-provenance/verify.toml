@@ -1,18 +1,18 @@
 [verify]
   phase = "mutation-range-provenance"
-  generated_at = 2026-09-18T12:14:32.337975Z
+  generated_at = 2026-09-18T19:33:06.896523Z
   verdict = "pass"
   finalized = true
-  finalized_at = 2026-09-18T15:51:19.833995Z
+  finalized_at = 2026-09-19T06:49:11.68844Z
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9395465994962217
-  mutants_killed = 373
-  mutants_survived = 24
-  mutants_not_covered = 24
-  mutants_in_scope = 397
+  mutation_score = 0.9379652605459057
+  mutants_killed = 378
+  mutants_survived = 25
+  mutants_not_covered = 25
+  mutants_in_scope = 403
   unclassified_in_scope = 0
   criteria_total = 5
   criteria_covered = 5
@@ -21,53 +21,53 @@
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 373
-    survived = 24
+    killed = 378
+    survived = 25
     timeout = 0
-    in_scope = 397
-    score = 0.9395465994962217
-    file_count = 24
+    in_scope = 403
+    score = 0.9379652605459057
+    file_count = 26
     measured_on = "helicon"
-    whole_file = ["README.md — adapter-lacks-range-runner", "assets/prompts/verify.md — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/verify_range_e2e_test.go — adapter-lacks-range-runner", "internal/cmd/verify_results_test.go — adapter-lacks-range-runner", "internal/cmd/verify_scoping_test.go — adapter-lacks-range-runner", "internal/cmd/verify_test.go — adapter-lacks-range-runner", "internal/cmd/verifyscope.go — adapter-lacks-range-runner", "internal/cmd/verifyscope_test.go — adapter-lacks-range-runner", "internal/compilefence/compilefence_test.go — adapter-lacks-range-runner", "internal/mutation/adapter.go — adapter-lacks-range-runner", "internal/mutation/argv_test.go — adapter-lacks-range-runner", "internal/mutation/range_test.go — adapter-lacks-range-runner", "internal/mutation/stryker.go — adapter-lacks-range-runner", "internal/mutation/stryker_test.go — adapter-lacks-range-runner", "internal/pathfence/fields.go — adapter-lacks-range-runner", "internal/pathfence/fields_test.go — adapter-lacks-range-runner", "internal/verify/range_dispatch_test.go — adapter-lacks-range-runner", "internal/verify/range_provenance.go — adapter-lacks-range-runner", "internal/verify/range_provenance_test.go — adapter-lacks-range-runner", "internal/verify/range_record_test.go — adapter-lacks-range-runner", "internal/verify/range_summary_test.go — adapter-lacks-range-runner", "internal/verify/verify.go — adapter-lacks-range-runner"]
+    whole_file = ["README.md — adapter-lacks-range-runner", "assets/prompts/verify.md — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/verify_range_e2e_test.go — adapter-lacks-range-runner", "internal/cmd/verify_results_test.go — adapter-lacks-range-runner", "internal/cmd/verify_reuse_report_test.go — adapter-lacks-range-runner", "internal/cmd/verify_scoping_test.go — adapter-lacks-range-runner", "internal/cmd/verify_test.go — adapter-lacks-range-runner", "internal/cmd/verifyscope.go — adapter-lacks-range-runner", "internal/cmd/verifyscope_test.go — adapter-lacks-range-runner", "internal/compilefence/compilefence_test.go — adapter-lacks-range-runner", "internal/mutation/adapter.go — adapter-lacks-range-runner", "internal/mutation/argv_test.go — adapter-lacks-range-runner", "internal/mutation/range_test.go — adapter-lacks-range-runner", "internal/mutation/reuse_report_test.go — adapter-lacks-range-runner", "internal/mutation/stryker.go — adapter-lacks-range-runner", "internal/mutation/stryker_test.go — adapter-lacks-range-runner", "internal/pathfence/fields.go — adapter-lacks-range-runner", "internal/pathfence/fields_test.go — adapter-lacks-range-runner", "internal/verify/range_dispatch_test.go — adapter-lacks-range-runner", "internal/verify/range_provenance.go — adapter-lacks-range-runner", "internal/verify/range_provenance_test.go — adapter-lacks-range-runner", "internal/verify/range_record_test.go — adapter-lacks-range-runner", "internal/verify/range_summary_test.go — adapter-lacks-range-runner", "internal/verify/verify.go — adapter-lacks-range-runner"]
 
 [[criterion]]
   id = "c-1"
   status = "covered"
   tests = ["internal/mutation/range_test.go:TestRunArgsEmitsLineRanges", "internal/mutation/range_test.go:TestRunArgsMutatesAFileWithNoRangesWhole", "internal/mutation/range_test.go:TestGremlinsDoesNotImplementRangeRunner", "internal/verify/range_dispatch_test.go:TestRunScopedNarrowsToTheChangedLines", "internal/verify/range_dispatch_test.go:TestRunScopedWithNoHunksRunsWholeFiles", "internal/verify/range_dispatch_test.go:TestRunScopedStillRunsAnAdapterThatCannotRange", "internal/verify/range_dispatch_test.go:TestRunScopedWithANilScopeRunsWholeFiles", "internal/cmd/verify_range_e2e_test.go:TestRangedDispatchReachesTheAdapterEndToEnd"]
-  notes = "Both layers pinned: runArgs emits `src/lib/server/recipe.ts:120-124` argv (and keeps `requested` bare); RunScoped takes the ranged arm only for a RangeRunner with hunks for its own files and the plain arm for no hunks / nil scope / other files' hunks / a non-ranging adapter; the e2e test proves a real two-line edit reaches RunRanges as {15,66} pad 25. No survivor on this surface in r-20260918-101535."
+  notes = "Both layers pinned: runArgs emits `src/lib/server/recipe.ts:120-124` argv (and keeps `requested` bare); RunScoped takes the ranged arm only for a RangeRunner with hunks for its own files and the plain arm for no hunks / nil scope / other files' hunks / a non-ranging adapter; the e2e test proves a real two-line edit reaches RunRanges as {15,66} pad 25. No survivor on this surface in r-20260918-174439."
 
 [[criterion]]
   id = "c-2"
   status = "covered"
   tests = ["internal/verify/range_record_test.go:TestLegRecordsEffectiveRangesWithPad", "internal/verify/range_provenance_test.go:TestEffectiveRangesArePostPadPostMerge", "internal/verify/range_summary_test.go:TestVerifyTomlStatesEffectiveRanges", "internal/verify/range_summary_test.go:TestGremlinsLegHasNoPad"]
-  notes = "tests.json is asserted to carry the literal `\"ranges\":{\"src/a.ts\":[{\"start\":1,\"end\":37,\"pad\":25}]}` beside `\"hunks\"`; recorded ranges are DeepEqual to padAndMerge's output, not a parallel computation; verify.toml's leg states `pad = 25` / `ranges = [\"src/a.ts:1-37\"]` while the gremlins leg carries neither. This run's own record is the live proof: the leg carries whole_file for all 24 files and no ranges."
+  notes = "tests.json is asserted to carry the literal `\"ranges\":{\"src/a.ts\":[{\"start\":1,\"end\":37,\"pad\":25}]}` beside `\"hunks\"`; recorded ranges are DeepEqual to padAndMerge's output, not a parallel computation; verify.toml's leg states `pad = 25` / `ranges = [\"src/a.ts:1-37\"]` while the gremlins leg carries neither. This run's own record is the live proof: the leg carries whole_file for all 26 files and no ranges."
 
 [[criterion]]
   id = "c-3"
   status = "covered"
   tests = ["internal/verify/range_provenance_test.go:TestNoRangeRunnerIsInformational", "internal/verify/range_provenance_test.go:TestHunklessScopeOnACapableAdapterDegrades", "internal/verify/range_provenance_test.go:TestMalformedHunkFallsBackOnlyItsOwnFile", "internal/verify/range_provenance_test.go:TestFileAbsentFromHunksIsInformational", "internal/verify/range_provenance_test.go:TestWholeFileReasonsAreAClosedSet", "internal/verify/range_record_test.go:TestFailedLegKeepsItsProvenance", "internal/cmd/verify_scoping_test.go:TestVerifyOutputNamesWholeFileLegs", "internal/cmd/verify_test.go:TestVerifyCover_WholeFileListTruncation", "internal/cmd/verify_test.go:TestVerifyCover_WholeFileListAtCapIsNotTruncated"]
-  notes = "All four named reasons are pinned individually and as a closed set, a failed leg keeps them, and the output test asserts a whole-file leg never prints as `ranged`. Was weak in r-20260918-073404 on verify.go:1492 (the `(+N more)` subtraction, INVERT_NEGATIVES + ARITHMETIC_BASE); t-8 added the >cap fixture (cap+3 → exact `(+3 more)`, ×count reports the full set) and the at-cap boundary, and r-20260918-101535 lists neither mutant — killed, not accepted."
+  notes = "All four named reasons are pinned individually and as a closed set, a failed leg keeps them, and the output test asserts a whole-file leg never prints as `ranged`. The `(+N more)` subtraction at verify.go:1492 that made this weak in r-20260918-073404 is pinned >cap and at-cap since t-8 and survives in neither later run."
 
 [[criterion]]
   id = "c-4"
   status = "covered"
   tests = ["internal/compilefence/compilefence_test.go:TestAssertDoesNotCompileRefusesACompilingFixture", "internal/compilefence/compilefence_test.go:TestAssertDoesNotCompileAcceptsTheRightRefusal", "internal/compilefence/compilefence_test.go:TestAssertDoesNotCompileRefusesTheWrongReason", "internal/compilefence/compilefence_test.go:TestAssertCompilesRefusesABrokenFixture", "internal/compilefence/compilefence_test.go:TestAssertCompilesAcceptsACleanFixture"]
-  notes = "The recorder TB drives AssertDoesNotCompile/AssertCompiles in-package and asserts each Fatalf branch by its exact wording. Proof is the run: internal/compilefence/compilefence.go appears nowhere in r-20260918-101535's report (nor in r-20260918-073404's) — not in-scope, not out_of_scope — so :61, :80 and :81 were killed, not accepted; .dross/survivors.toml has no compilefence entry."
+  notes = "The recorder TB drives AssertDoesNotCompile/AssertCompiles in-package and asserts each Fatalf branch by its exact wording. internal/compilefence/compilefence.go appears in none of the three runs' survivor lists — not in-scope, not out_of_scope — so :61, :80 and :81 were killed, not accepted; .dross/survivors.toml has no compilefence entry. The three routed deferreds on tracked-path-containment were dismissed on 2026-09-18."
 
 [[criterion]]
   id = "c-5"
   status = "covered"
   tests = ["internal/cmd/verifyscope_test.go:TestVerifyScopeWithoutARunNamesTheFix", "internal/cmd/verifyscope_test.go:TestVerifyScopePrintsRawAndEffective", "internal/cmd/verifyscope_test.go:TestVerifyScopeJSONIsTheRecordVerbatim", "internal/cmd/verifyscope_test.go:TestVerifyScopeOnAPreProvenanceRecordSaysSo", "internal/verify/range_provenance_test.go:TestProvenanceOfProjectsScopeAndToleratesNil"]
-  notes = "No-run path is a non-nil error naming `dross verify ghost` with empty stdout; the readout prints the raw hunk `10-12` beside `1-37 (pad 25)` and the whole-file reason; --json is unmarshalled as verify.Provenance and DeepEqual'd against the loaded tests.json with a guard that no range was re-rendered as a string. ProvenanceOf's nil-scope guard (range_provenance.go:171), previously killed only cross-package, is now pinned in-package by t-8 and no longer survives. The one in-hunk survivor left on this surface, verifyscope.go:192 ARITHMETIC_BASE, is accepted (string concat — no other operator compiles)."
+  notes = "No-run path is a non-nil error naming `dross verify ghost` with empty stdout; the readout prints the raw hunk `10-12` beside `1-37 (pad 25)` and the whole-file reason; --json is unmarshalled as verify.Provenance and DeepEqual'd against the loaded tests.json with a guard that no range was re-rendered as a string. ProvenanceOf's nil-scope guard is pinned in-package since t-8. The one in-hunk survivor on this surface, verifyscope.go:192 ARITHMETIC_BASE, is accepted (string concat — no other operator compiles)."
 
 [[finding]]
   severity = "NOTE"
-  text = "Re-verify after t-8: r-20260918-073404's three routed in-hunk survivors (internal/cmd/verify.go:1492 INVERT_NEGATIVES + ARITHMETIC_BASE, internal/verify/range_provenance.go:171 CONDITIONALS_NEGATION) are absent from r-20260918-101535 — killed=370→373 with the same 397 in scope. Their routed deferred items on this spec (idx 1–3 → ast-aware-mutation-ranges) are now stale; there is no `dross deferred` verb for a routed survivor whose subject was killed (only unroute→someday and dismiss)."
+  text = "Routed: internal/cmd/verify.go:115 (`if reuseReport`, CONDITIONALS_NEGATION, origin in-hunk, NOT_COVERED) → ast-aware-mutation-ranges [a22f0ab51a69e9e8]. It is quick-1's own guard (d79c793), not any criterion's surface: negated, every plain `dross verify` would go through applyReuseReport — refusing under --detach/--skip-mutation, reusing a stale report otherwise. No test drives the verify command's RunE with the flag. The fix is a command-level test in the shape of TestVerifyDetachDispatchesThroughTheCommand: a plain verify leaves ReuseReport false, and `--reuse-report --detach` refuses through the command. unclassified_in_scope was amended 1 → 0 by hand after routing — collection is one-shot and no rescore verb exists (deferred 285dca82787c2b6a); mutation numbers are the unchanged helicon run r-20260918-174439."
 
 [[finding]]
   severity = "NOTE"
-  text = "The gremlins leg's whole_file map names every one of its 24 files adapter-lacks-range-runner — including README.md and assets/prompts/verify.md, which gremlins never mutates. Inherited: LanguageRun.Files has always listed non-Go scope files and PlanRanges tags each without consulting Supports(). No mutant is scored or missed by it; the `whole-file gremlins ×24` count over-reads by the non-Go files. Routed debt, visible: deferred 61f8ee8221eaeb27 → ast-aware-mutation-ranges (board DRO-439)."
+  text = "The gremlins leg's whole_file map names every one of its 26 files adapter-lacks-range-runner — including README.md and assets/prompts/verify.md, which gremlins never mutates. Inherited: LanguageRun.Files has always listed non-Go scope files and PlanRanges tags each without consulting Supports(). No mutant is scored or missed by it; the `whole-file gremlins ×26` count over-reads by the non-Go files. Routed debt, visible: deferred 61f8ee8221eaeb27 → ast-aware-mutation-ranges (board DRO-439)."
 
 [[finding]]
   severity = "NOTE"
-  text = "Score 0.94 over 397 in-scope mutants is entirely the 24 NOT_COVERED survivors (6 in-hunk, 18 inherited), every one accepted in .dross/survivors.toml under const-initializer-arithmetic / string-concat / gremlins-attribution-ceiling; efficacy over the 373 reachable mutants is 1.00. 128 out-of-scope survivors were filtered before scoring. Every leg is whole-file by construction (gremlins is not a RangeRunner) — the ranged path (c-1/c-2) is proven by unit and e2e tests, not by this run, which has no Stryker leg to exercise it."
+  text = "Score 0.94 over 403 in-scope mutants is entirely the 25 NOT_COVERED survivors: 24 accepted in .dross/survivors.toml (6 in-hunk, 18 inherited; const-initializer-arithmetic / string-concat / gremlins-attribution-ceiling) plus the one routed above; efficacy over the 378 reachable mutants is 1.00. 128 out-of-scope survivors were filtered before scoring. The scope grew from 397 to 403 mutants over 24 → 26 files with quick-1 (checkInstrumented WARN-keyed tolerance + --reuse-report); its other in-hunk mutants were killed. Every leg is whole-file by construction (gremlins is not a RangeRunner) — the ranged path (c-1/c-2) is proven by unit and e2e tests, not by this run, which has no Stryker leg to exercise it."

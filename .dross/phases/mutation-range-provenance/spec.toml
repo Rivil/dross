@@ -80,3 +80,9 @@
   id = "ec9abaedcbc6fce4"
   text = "A close-out verb for routed survivor deferreds whose subject was killed: `dross deferred done <phase> <idx>` (or have `dross verify results` mark a routed item done when its survivor key is absent from a later run of the same scope). Today a killed routed survivor stays routed until someone runs unroute then dismiss by hand, and the destination phase inherits dead items."
   why = "Surfaced by re-verifying mutation-range-provenance after t-8: three routes here and three on tracked-path-containment pointed at mutants r-20260918-101535 no longer lists; closing each took two CLI steps and a decision the tooling could have made from the run record."
+
+[[deferred]]
+  text = "survivor internal/cmd/verify.go:115 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "ast-aware-mutation-ranges"
+  survivor = "a22f0ab51a69e9e8"
