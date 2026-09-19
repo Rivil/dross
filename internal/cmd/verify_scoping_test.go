@@ -597,11 +597,23 @@ func TestVerifyResultsRefusesEscapingRecordedPath(t *testing.T) {
 type stubRangeAdapter struct {
 	stubMutationAdapter
 	ranges map[string][]mutation.Range
+	// constructs is the canned resolver answer for every file; asked records
+	// which files were resolved, in order.
+	constructs []mutation.Construct
+	asked      []string
 }
 
 func (s *stubRangeAdapter) RunRanges(files []string, ranges map[string][]mutation.Range) (*mutation.Report, error) {
 	s.ranges = ranges
 	return s.stubMutationAdapter.Run(files)
+}
+
+func (s *stubRangeAdapter) Constructs(file string) ([]mutation.Construct, error) {
+	s.asked = append(s.asked, file)
+	if s.constructs == nil {
+		return []mutation.Construct{{Start: 30, End: 50, Kind: "FunctionDeclaration", Name: "edited"}}, nil
+	}
+	return s.constructs, nil
 }
 
 // TestVerifyOutputNamesWholeFileLegs: a leg that measured whole files must
@@ -641,8 +653,11 @@ func TestVerifyOutputNamesWholeFileLegs(t *testing.T) {
 	useStubAdapter(t, ranger)
 	out = runVerifyCapturing(t, "01-wording")
 
-	if !strings.Contains(out, "ranged stryker 1 file(s) (pad 25)") {
+	if !strings.Contains(out, "ranged stryker 1 file(s)") {
 		t.Errorf("a ranged leg did not print as ranged:\n%s", out)
+	}
+	if strings.Contains(out, "pad") {
+		t.Errorf("a ranged leg still speaks of a pad:\n%s", out)
 	}
 	for _, line := range strings.Split(out, "\n") {
 		if strings.Contains(line, "whole-file") && strings.Contains(line, "a.go") {
@@ -651,5 +666,41 @@ func TestVerifyOutputNamesWholeFileLegs(t *testing.T) {
 	}
 	if len(ranger.ranges["a.go"]) == 0 {
 		t.Errorf("the stub was never handed a.go's range: %v", ranger.ranges)
+	}
+}
+
+// TestVerifyOutputNamesTheConstructPerRange: a ranged leg prints one line per
+// range naming what it was widened to. At this wave the planner does not
+// yet stamp a construct, so the line carries the placeholder — and never a
+// pad; the construct label itself is asserted once the planner wires it.
+func TestVerifyOutputNamesTheConstructPerRange(t *testing.T) {
+	dir := scopedVerifyRepo(t, "perrange")
+	phaseSpec(t, "01-perrange")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go only")
+	mustSetBase(t, "01-perrange", "base")
+
+	ranger := &stubRangeAdapter{stubMutationAdapter: stubMutationAdapter{name: "stryker", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}}
+	useStubAdapter(t, ranger)
+	out := runVerifyCapturing(t, "01-perrange")
+
+	if !strings.Contains(out, "ranged stryker 1 file(s)") {
+		t.Errorf("no ranged count line:\n%s", out)
+	}
+	var perRange string
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "a.go:") {
+			perRange = line
+		}
+	}
+	if perRange == "" {
+		t.Fatalf("no per-range line for a.go:\n%s", out)
+	}
+	if !strings.HasSuffix(strings.TrimSpace(perRange), "(construct unrecorded)") {
+		t.Errorf("per-range line = %q, want the construct placeholder", perRange)
+	}
+	if strings.Contains(out, "pad") {
+		t.Errorf("verify output still speaks of a pad:\n%s", out)
 	}
 }

@@ -75,7 +75,7 @@ func TestRangedDispatchReachesTheAdapterEndToEnd(t *testing.T) {
 		t.Errorf("dispatched %v, want [{15 66}] (hunk 40-41 padded by 25)", got)
 	}
 
-	// And the record says the same thing, with the pad.
+	// And the record says the same thing.
 	tests, err := verify.LoadTests(filepath.Join(dir, ".dross/phases", phaseID, "tests.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -85,8 +85,8 @@ func TestRangedDispatchReachesTheAdapterEndToEnd(t *testing.T) {
 	}
 	leg := tests.Languages[0]
 	rec := leg.Ranges[file]
-	if len(rec) != 1 || rec[0] != (verify.EffectiveRange{Start: 15, End: 66, Pad: 25}) {
-		t.Errorf("languages[0].ranges[%s] = %v, want [{15 66 25}]", file, rec)
+	if len(rec) != 1 || rec[0].Start != 15 || rec[0].End != 66 {
+		t.Errorf("languages[0].ranges[%s] = %v, want [{15 66}]", file, rec)
 	}
 	if len(leg.WholeFile) != 0 {
 		t.Errorf("whole_file must be empty when every file ranged, got %v", leg.WholeFile)
