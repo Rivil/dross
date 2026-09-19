@@ -29,9 +29,16 @@ test:
 # drops the binary on PATH, then delegates the skills/prompts sync to the freshly
 # built binary in --link mode — symlinking assets/ so edits apply immediately.
 # The binary installs into $HOME/.claude (skills) and $HOME/.claude/dross/prompts.
+# The binary is swapped in by RENAME, never copied over the live file. A
+# copy-over rewrites the inode a running dross may be executing — on macOS that
+# SIGKILLs every later invocation of it (exit 137, no output) until the file is
+# removed — and the rm-first workaround leaves a window with no binary at all,
+# which a long-running caller loop observed as FileNotFoundError mid-install
+# (2026-09-19). mv is atomic: callers keep the old inode until they exit.
+# install.sh has always done it this way; this matches it.
 install: build
 	@mkdir -p $(BIN_DIR)
-	@cp dross $(BIN_DIR)/dross
+	@cp dross $(BIN_DIR)/.dross.tmp.$$$$ && mv -f $(BIN_DIR)/.dross.tmp.$$$$ $(BIN_DIR)/dross
 	@echo "binary  → $(BIN_DIR)/dross"
 	@./dross install --link
 	@echo ""
