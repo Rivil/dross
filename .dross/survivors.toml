@@ -2183,3 +2183,30 @@
   line = 192
   reason = "ARITHMETIC_BASE swaps the + on a string concatenation (base = \"base \" + short(t.Scope.Base)) for -, *, / or %; none of those compiles on strings, so the mutant is never viable and no test a caller could write can kill it. The line's behaviour is covered from internal/cmd by TestVerifyScopePrintsRawAndEffective, which asserts the header line prints. Same class as the accepted string-concat entry at internal/cmd/milestone.go:1054; the standing fix is the deferred item that teaches the gremlins adapter to drop uncompilable string-operator mutants before they reach the survivor list."
   accepted_in = "mutation-range-provenance"
+
+[[accepted]]
+  key = "9e916095d3396cbb"
+  file = "internal/verify/range_expand.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case l == cur.End || l == cur.End+1:"
+  line = 83
+  reason = "switch-case condition in runs(): exercised by TestExpandKeepsUncoveredLinesAsTheBareHunk (multi-line hunks 5-7 and 70-72 take both arms) and TestExpandOutputNeverOverlaps' 200-layout property check; gremlins attributes no coverage block to a case condition (go-cover attribution ceiling, see dross_gremlins_switchcase_ceiling)"
+  accepted_in = "ast-aware-mutation-ranges"
+
+[[accepted]]
+  key = "8bec72b35d5cabc9"
+  file = "internal/verify/range_expand.go"
+  op = "ARITHMETIC_BASE"
+  text = "case l == cur.End || l == cur.End+1:"
+  line = 83
+  reason = "same switch-case line: cur.End+1 adjacency is what coalesces 5,6,7 into one run in TestExpandKeepsUncoveredLinesAsTheBareHunk; a -1 there would split the run and fail it — NOT-COVERED is gremlins' case-condition attribution ceiling, not a test gap"
+  accepted_in = "ast-aware-mutation-ranges"
+
+[[accepted]]
+  key = "5adfd4d9206c88fa"
+  file = "internal/mutation/construct.go"
+  op = "ARITHMETIC_BASE"
+  text = "var constructTimeout = 30 * time.Second"
+  line = 71
+  reason = "package-level var initializer (constructTimeout = 30 * time.Second); TestConstructsClassifiesTimeout overrides the value to exercise the deadline, so the initializer expression itself runs only at package init — gremlins' const/var-initializer attribution ceiling"
+  accepted_in = "ast-aware-mutation-ranges"

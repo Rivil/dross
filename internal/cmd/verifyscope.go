@@ -279,7 +279,7 @@ func printProvenance(t *verify.Tests, p verify.Provenance) {
 		for _, f := range sortedMapKeys(leg.Ranges) {
 			spans := make([]string, 0, len(leg.Ranges[f]))
 			for _, r := range leg.Ranges[f] {
-				spans = append(spans, fmt.Sprintf("%d-%d (pad %d)", r.Start, r.End, r.Pad))
+				spans = append(spans, fmt.Sprintf("%d-%d (%s)", r.Start, r.End, constructLabel(r)))
 			}
 			Printf("  ranged %s  %s\n", f, strings.Join(spans, ", "))
 		}

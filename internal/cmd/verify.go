@@ -701,7 +701,13 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 	// its reason — rather than nothing. A ZERO Gremlins, not the tuned
 	// constructor: PlanRanges is pure and only type-asserts RangeRunner, and
 	// this path must not build anything that could run.
-	plan := verify.PlanRanges(&mutation.Gremlins{}, files, scope)
+	//
+	// Only the files gremlins can mutate: the attached path groups by
+	// Dispatch before it plans, so its leg never lists README.md; the
+	// collected leg must say the same, or its whole-file count over-reads by
+	// every non-Go file in scope.
+	legFiles := mutation.Supported(&mutation.Gremlins{}, files)
+	plan := verify.PlanRanges(&mutation.Gremlins{}, legFiles, scope, nil)
 	t.Languages = append(t.Languages, verify.LanguageRun{
 		Name: "go",
 		Tool: "gremlins",
@@ -709,7 +715,7 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 		// dispatch record named, and re-deriving it here would stamp today's
 		// pool onto a report measured hours ago somewhere else.
 		MeasuredOn: verify.MeasuredOnHost(rec.Host),
-		Files:      files,
+		Files:      legFiles,
 		Mutation:   kept,
 		Ranges:     plan.Ranges,
 		WholeFile:  plan.WholeFile,
@@ -1514,17 +1520,29 @@ func printScopeSummary(t *verify.Tests, v *verify.Verify) {
 // the files the tool was told to narrow, `whole-file` with its reason for the
 // rest. A leg that ranged nothing never prints the word "ranged" — a run that
 // measured whole files must not read as a ranged one.
+// constructLabel is what a readout prints for a range: the construct it was
+// widened to, or a placeholder for a record written before ranges carried
+// one. The placeholder is a statement about the RECORD, not the run — an old
+// tests.json still loads and still says what it measured.
+func constructLabel(r verify.EffectiveRange) string {
+	if r.Construct == "" {
+		return "construct unrecorded"
+	}
+	return r.Construct
+}
+
 func printRangeProvenance(t *verify.Tests) {
 	for _, lr := range t.Languages {
 		if n := len(lr.Ranges); n > 0 {
-			pad := 0
-			for _, rs := range lr.Ranges {
-				if len(rs) > 0 {
-					pad = rs[0].Pad
-					break
+			Printf("  ranged %s %d file(s)\n", lr.Tool, n)
+			// One line per range naming what it was widened to: the
+			// construct is the claim, and a reader checks it against the
+			// raw hunk without opening tests.json.
+			for _, f := range sortedMapKeys(lr.Ranges) {
+				for _, r := range lr.Ranges[f] {
+					Printf("    %s:%d-%d (%s)\n", f, r.Start, r.End, constructLabel(r))
 				}
 			}
-			Printf("  ranged %s %d file(s) (pad %d)\n", lr.Tool, n, pad)
 		}
 		byReason := map[string][]string{}
 		for f, reason := range lr.WholeFile {

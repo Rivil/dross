@@ -93,7 +93,10 @@ var valueTakingFlags = map[string]map[string]bool{
 		"--output": true, "--timeout-coefficient": true,
 		"--workers": true, "--test-cpu": true,
 	},
-	"npx":    {"--mutate": true, "--reporters": true},
+	"npx": {"--mutate": true, "--reporters": true},
+	// node's only dross invocation is `node -` (script on stdin); no option
+	// dross emits takes a value.
+	"node":   {},
 	"dotnet": {"--output": true, "--reporter": true},
 	// `go list -f <template>`: the template is a constant format string at
 	// every call site, but the carve-out has to exist or the value reads as an

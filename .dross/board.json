@@ -7,6 +7,7 @@
     "v1.7": "DRO-331"
   },
   "phases": {
+    "ast-aware-mutation-ranges": "DRO-448",
     "board-mirror-reaper": "DRO-163",
     "board-sync-truth": "DRO-19",
     "board-task-mirror": "DRO-32",
@@ -145,6 +146,7 @@
     "someday:id:77f61ea051b44f42": "DRO-53",
     "someday:id:794b7474a9e2ac97": "DRO-222",
     "someday:id:7b308a04a43d8cb9": "DRO-22",
+    "someday:id:7bc5df911df4b5c9": "DRO-447",
     "someday:id:7ea6759938b910a4": "DRO-84",
     "someday:id:82da70858aaff13e": "DRO-303",
     "someday:id:82e3e60f30734120": "DRO-443",
@@ -224,6 +226,56 @@
     "someday:id:ff40c2cbbd18e7dc": "DRO-94"
   },
   "tasks": {
+    "ast-aware-mutation-ranges/t-1": {
+      "issue": "DRO-449",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "ast-aware-mutation-ranges/t-10": {
+      "issue": "DRO-458",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "ast-aware-mutation-ranges/t-2": {
+      "issue": "DRO-450",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "ast-aware-mutation-ranges/t-3": {
+      "issue": "DRO-451",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "ast-aware-mutation-ranges/t-4": {
+      "issue": "DRO-452",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "ast-aware-mutation-ranges/t-5": {
+      "issue": "DRO-453",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "ast-aware-mutation-ranges/t-6": {
+      "issue": "DRO-454",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "ast-aware-mutation-ranges/t-7": {
+      "issue": "DRO-455",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "ast-aware-mutation-ranges/t-8": {
+      "issue": "DRO-456",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "ast-aware-mutation-ranges/t-9": {
+      "issue": "DRO-457",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "board-mirror-reaper/t-1": {
       "issue": "DRO-164",
       "plan_status": "done",

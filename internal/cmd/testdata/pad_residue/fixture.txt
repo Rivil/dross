@@ -1,0 +1,4 @@
+// Calibration fixture for TestPadResidueScanTripsOnItsFixture: the retired
+// heuristic's exact spelling, so a scanner that stopped matching cannot pass
+// silently. Never copy this line into live source.
+const hunkContextLines = 25

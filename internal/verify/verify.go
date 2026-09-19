@@ -222,8 +222,8 @@ type LanguageRun struct {
 	RemoteTransport bool `json:"remote_transport,omitempty"`
 
 	// Ranges records, per file, the effective line ranges this leg's adapter
-	// was actually told to mutate — post-pad, post-merge, with the pad that
-	// produced them. Scope.Hunks keeps the raw diff; this keeps what the tool
+	// was actually told to mutate — widened to the enclosing top-level
+	// construct, which each range names. Scope.Hunks keeps the raw diff; this keeps what the tool
 	// was told, so a run's claimed scope is provable from its own record. It
 	// lives on the leg rather than the Scope because ranges are adapter-
 	// specific (gremlins has none): the leg is the honest owner of its own
@@ -428,28 +428,26 @@ type LegSummary struct {
 	// which — and the guess is exactly what makes two runs comparable or not.
 	MeasuredOn string `toml:"measured_on,omitempty"`
 
-	// Pad, Ranges and WholeFile restate the leg's range provenance in a shape
-	// an agent or a human reads without opening tests.json: Ranges is one
-	// "file:start-end" per effective range, WholeFile one "file — reason" per
-	// file the leg mutated whole, both sorted. Flat strings rather than tables
-	// on purpose — verify.toml is the readable summary and tests.json /
-	// `dross verify scope --json` are the machine record. All three are
-	// omitted when empty, so a leg that ranged nothing never claims a pad and
-	// a verify.toml written before they existed round-trips unchanged.
-	Pad       int      `toml:"pad,omitzero"`
+	// Ranges and WholeFile restate the leg's range provenance in a shape an
+	// agent or a human reads without opening tests.json: Ranges is one
+	// "file:start-end (construct)" per effective range, WholeFile one
+	// "file — reason" per file the leg mutated whole, both sorted. Flat
+	// strings rather than tables on purpose — verify.toml is the readable
+	// summary and tests.json / `dross verify scope --json` are the machine
+	// record. Both are omitted when empty, so a verify.toml written before
+	// they existed round-trips unchanged.
 	Ranges    []string `toml:"ranges,omitempty"`
 	WholeFile []string `toml:"whole_file,omitempty"`
 }
 
 // legProvenance flattens a leg's recorded ranges and whole-file reasons into
-// the LegSummary strings. The pad is the one every effective range carries
-// (PlanRanges stamps hunkContextLines on all of them); zero when there are
-// none, so a whole-file leg states no pad.
-func legProvenance(lr LanguageRun) (pad int, ranges, whole []string) {
+// the LegSummary strings. Each range carries the construct it was widened
+// to, so the summary states not just what was measured but why the range
+// is the size it is.
+func legProvenance(lr LanguageRun) (ranges, whole []string) {
 	for f, rs := range lr.Ranges {
 		for _, r := range rs {
-			ranges = append(ranges, fmt.Sprintf("%s:%d-%d", f, r.Start, r.End))
-			pad = r.Pad
+			ranges = append(ranges, fmt.Sprintf("%s:%d-%d (%s)", f, r.Start, r.End, r.Construct))
 		}
 	}
 	for f, reason := range lr.WholeFile {
@@ -457,7 +455,7 @@ func legProvenance(lr LanguageRun) (pad int, ranges, whole []string) {
 	}
 	sort.Strings(ranges)
 	sort.Strings(whole)
-	return pad, ranges, whole
+	return ranges, whole
 }
 
 type VerifySummary struct {
@@ -557,69 +555,45 @@ func Run(phaseID string, files []string, adapters []mutation.Adapter) (*Tests, e
 	return RunScoped(phaseID, files, adapters, nil)
 }
 
-// hunkContextLines pads each changed hunk before it becomes a mutation range.
+// resolveConstructs asks a range-capable adapter for the top-level
+// constructs of every file it could range, BEFORE PlanRanges runs — so the
+// planner stays pure and the record is authored from what was resolved here,
+// on this machine, not inferred from the remote (the planning_locus lock).
 //
-// WHY A PAD IS NECESSARY AT ALL, measured rather than assumed. A mutant is
-// matched by the line its span STARTS on, and a mutant can enclose the changed
-// line while starting above it. Measured against Stryker 9.6.1 on 2026-09-03
-// with src/lib/utils/portion-cascade.ts, whose three mutants all concern the
-// single statement on line 29:
+// Only files the planner would range are resolved: a hunk-less scope, a file
+// absent from the hunks and a malformed raw hunk each fall open on their own
+// reason without a spawn. A RangeRunner that is not a ConstructResolver
+// gets an error per file rather than a bare-hunk range — narrowing to the
+// raw hunk is the ungenerated-mutant hole this exists to close.
 //
-//	--mutate portion-cascade.ts        3 mutants
-//	--mutate portion-cascade.ts:29-29  2 mutants   <- the block mutant is LOST
-//	--mutate portion-cascade.ts:20-30  3 mutants
-//
-// The missing one is the function-body block statement, whose span opens on
-// line 28. An unpadded range would have reported that line fully killed while
-// never generating the mutant that covers it — a scoped run that measures less
-// than it claims, which is the exact failure narrowing exists to avoid.
-//
-// WHY 25, and what it still does not buy. Measured on the four files of the
-// phase this was built for (ingredient-density-prod-seed, base 153a855e):
-//
-//	                        whole file   hunk only   +-5   +-25   +-100
-//	recipe.ts                     1360           0     5     19      71
-//	db/schema.ts                  1832           1     -     22       -
-//	admin-ingredients.ts           526           -     -      7       -
-//
-// 25 recovers the enclosing-block mutants at roughly 1-2% of the whole-file
-// count, where 100 costs three times as much for cases a hunk that size would
-// usually have covered anyway. It is a HEURISTIC and it has a real residue: a
-// mutant whose span opens more than 25 lines above the hunk — a long function,
-// a large object literal — is still missed. That is a known limitation of
-// line-scoping, not a bug to be fixed by a larger number, and the honest fix is
-// an AST-aware range that a future change can build on this seam.
-const hunkContextLines = 25
-
-// padAndMerge widens each range by hunkContextLines and merges any that then
-// overlap or touch. Merging is not cosmetic: two overlapping specs for one file
-// make the argv claim a scope it does not have, and a reader diffing --mutate
-// against the report would be comparing against a double-counted set.
-func padAndMerge(in []Range) []mutation.Range {
-	if len(in) == 0 {
+// Every resolver error is recorded, never returned: a parser that is missing
+// or a file it refuses costs that file its precision (whole-file, degraded),
+// not the leg its run.
+func resolveConstructs(a mutation.Adapter, files []string, scope *Scope) ASTIndex {
+	if scope == nil || len(scope.Hunks) == 0 {
 		return nil
 	}
-	padded := make([]mutation.Range, 0, len(in))
-	for _, r := range in {
-		start := r.Start - hunkContextLines
-		if start < 1 {
-			start = 1
-		}
-		padded = append(padded, mutation.Range{Start: start, End: r.End + hunkContextLines})
+	if _, ok := a.(mutation.RangeRunner); !ok {
+		return nil
 	}
-	sort.Slice(padded, func(i, j int) bool { return padded[i].Start < padded[j].Start })
-	out := []mutation.Range{padded[0]}
-	for _, r := range padded[1:] {
-		last := &out[len(out)-1]
-		if r.Start <= last.End+1 {
-			if r.End > last.End {
-				last.End = r.End
-			}
+	cr, hasResolver := a.(mutation.ConstructResolver)
+	idx := make(ASTIndex, len(files))
+	for _, f := range files {
+		hunks := scope.Hunks[f]
+		if len(hunks) == 0 {
 			continue
 		}
-		out = append(out, r)
+		if _, malformed := firstMalformed(hunks); malformed {
+			continue
+		}
+		if !hasResolver {
+			idx[f] = ASTResult{Err: fmt.Errorf("%w: adapter has no construct resolver", mutation.ErrASTUnavailable)}
+			continue
+		}
+		cs, err := cr.Constructs(f)
+		idx[f] = ASTResult{Constructs: cs, Err: err}
 	}
-	return out
+	return idx
 }
 
 // runPlanned dispatches one adapter's leg the way its RangePlan says: by
@@ -691,9 +665,11 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 
 	for _, name := range names {
 		a := adapterByName[name]
-		// Planned once, recorded on whichever leg results, and executed
-		// from the same value: provenance is known before the tool runs.
-		plan := PlanRanges(a, byAdapter[name], scope)
+		// Resolved, then planned once, recorded on whichever leg results,
+		// and executed from the same value: provenance is known before the
+		// tool runs, and the resolver is asked before anything is dispatched.
+		asts := resolveConstructs(a, byAdapter[name], scope)
+		plan := PlanRanges(a, byAdapter[name], scope, asts)
 		appendDegraded(scope, plan.Degraded)
 		// Recorded as ABSENT when empty, never as an empty object: omitempty
 		// drops it on the way out, so the loaded record would otherwise
@@ -850,7 +826,7 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 	for _, lr := range t.Languages {
 		// Stated for the error leg too: what the tool was told is known
 		// whether or not it answered.
-		pad, ranges, whole := legProvenance(lr)
+		ranges, whole := legProvenance(lr)
 		if lr.Mutation == nil {
 			// Recorded, not skipped: a leg that failed is a leg that measured
 			// nothing, and leaving it out would make the run look like it only
@@ -861,7 +837,6 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 				Error:      lr.Error,
 				FileCount:  len(lr.Files),
 				MeasuredOn: lr.MeasuredOn,
-				Pad:        pad,
 				Ranges:     ranges,
 				WholeFile:  whole,
 			})
@@ -895,7 +870,6 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 			Score:      mutation.PooledScore(lr.Mutation.Killed, lr.Mutation.Survived, lr.Mutation.Timeout),
 			FileCount:  len(lr.Files),
 			MeasuredOn: lr.MeasuredOn,
-			Pad:        pad,
 			Ranges:     ranges,
 			WholeFile:  whole,
 		})

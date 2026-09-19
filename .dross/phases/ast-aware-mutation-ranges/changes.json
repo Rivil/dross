@@ -1,0 +1,189 @@
+{
+  "phase": "ast-aware-mutation-ranges",
+  "pr": 127,
+  "base": "milestone/v1.7",
+  "base_commit": "cbcecbbf39a02563a2cbcaa8a6c224e39601ac92",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/mutation/construct.go",
+        "internal/verify/range_expand.go",
+        "internal/verify/range_expand_test.go",
+        "internal/verify/range_dispatch_test.go",
+        "internal/verify/range_provenance.go"
+      ],
+      "commit": "fbd73aa",
+      "completed_at": "2026-09-19T09:52:52.174238Z",
+      "landmarks": [
+        {
+          "feature": "AST-aware mutation ranges",
+          "symbol": "expandToConstructs",
+          "loc": "internal/verify/range_expand.go:30",
+          "what": "raw hunks widen to the full span of each top-level construct they touch; uncovered lines stay bare hunk ranges; output sorted and non-overlapping"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/mutation/construct_test.go"
+      ],
+      "commit": "7f936e0",
+      "completed_at": "2026-09-19T12:34:37.901714Z",
+      "landmarks": [
+        {
+          "feature": "AST-aware mutation ranges",
+          "symbol": "TestLabelInPackage",
+          "loc": "internal/mutation/construct_test.go:224",
+          "what": "Construct.Label's two arms pinned in package mutation so the per-package mutation run covers them"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/verify_reuse_report_test.go"
+      ],
+      "commit": "8468373",
+      "completed_at": "2026-09-19T09:56:14.685701Z",
+      "landmarks": [
+        {
+          "feature": "verify command reuse-report guard",
+          "symbol": "TestPlainVerifyLeavesReuseReportOff",
+          "loc": "internal/cmd/verify_reuse_report_test.go:43",
+          "what": "command-level tests pin that applyReuseReport runs only under --reuse-report and refuses --detach before the host check"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/mutation/adapter.go",
+        "internal/mutation/adapter_test.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_results_test.go"
+      ],
+      "commit": "e48cfbc",
+      "completed_at": "2026-09-19T09:59:57.527846Z",
+      "landmarks": [
+        {
+          "feature": "mutation range provenance",
+          "symbol": "Supported",
+          "loc": "internal/mutation/adapter.go:180",
+          "what": "collected legs record only adapter-supported files so whole-file counts never over-read by non-mutable scope entries"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/argfence/policy.go",
+        "internal/argfence/argfence_test.go",
+        "internal/cmd/subprocargs_audit_test.go"
+      ],
+      "commit": "d637400",
+      "completed_at": "2026-09-19T10:03:07.977445Z",
+      "landmarks": [
+        {
+          "feature": "argv fencing",
+          "symbol": "table",
+          "loc": "internal/argfence/policy.go:99",
+          "what": "node registered as a Reject-policy binary so a derived operand can never be read as a node option"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verifyscope.go",
+        "internal/cmd/verifyscope_test.go",
+        "internal/cmd/verify_scoping_test.go",
+        "internal/cmd/verify_range_e2e_test.go"
+      ],
+      "commit": "692f9b1",
+      "completed_at": "2026-09-19T10:07:16.681027Z",
+      "landmarks": [
+        {
+          "feature": "mutation range provenance",
+          "symbol": "constructLabel",
+          "loc": "internal/cmd/verify.go:1523",
+          "what": "verify output and verify scope print each range with the construct it was widened to; pad-era records read as construct unrecorded"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/verify/range_provenance.go",
+        "internal/verify/verify.go",
+        "internal/verify/range_provenance_test.go",
+        "internal/verify/range_dispatch_test.go",
+        "internal/verify/range_record_test.go",
+        "internal/verify/range_summary_test.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_scoping_test.go",
+        "internal/cmd/verify_range_e2e_test.go"
+      ],
+      "commit": "76c304f",
+      "completed_at": "2026-09-19T10:14:57.619896Z",
+      "landmarks": [
+        {
+          "feature": "AST-aware mutation ranges",
+          "symbol": "resolveConstructs",
+          "loc": "internal/verify/verify.go:560",
+          "what": "range planning resolves top-level constructs before dispatch and widens hunks to them; the line-pad heuristic is deleted and an unresolvable file falls open as ast-unavailable"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/mutation/construct.go",
+        "internal/mutation/astspan.go",
+        "internal/mutation/construct_test.go"
+      ],
+      "commit": "856aa8c",
+      "completed_at": "2026-09-19T10:25:02.516801Z",
+      "landmarks": [
+        {
+          "feature": "AST-aware mutation ranges",
+          "symbol": "Stryker.Constructs",
+          "loc": "internal/mutation/construct.go:99",
+          "what": "top-level construct spans resolved through @babel/parser from Stryker's own dependency tree under node, request on stdin, every failure a named ast-unavailable cause"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "ARCHITECTURE.md",
+        "assets/prompts/verify.md",
+        "README.md",
+        "internal/cmd/pad_residue_test.go",
+        "internal/cmd/testdata/pad_residue/fixture.txt"
+      ],
+      "commit": "80fb2a1",
+      "completed_at": "2026-09-19T10:30:13.522596Z",
+      "landmarks": [
+        {
+          "feature": "AST-aware mutation ranges",
+          "symbol": "TestNoPadHeuristicResidue",
+          "loc": "internal/cmd/pad_residue_test.go:100",
+          "what": "docs describe construct ranges and the five-reason closed set; a calibrated scan keeps the retired pad heuristic out of docs and shipped Go"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/mutation/testdata/ts-project/src/long.ts",
+        "internal/mutation/testdata/ts-project/src/long.test.ts",
+        "internal/mutation/construct_e2e_test.go",
+        "internal/mutation/ts_fixture_test.go"
+      ],
+      "commit": "71d5f9d",
+      "completed_at": "2026-09-19T10:38:42.437351Z",
+      "landmarks": [
+        {
+          "feature": "AST-aware mutation ranges",
+          "symbol": "TestConstructRangeRecoversTheDeepMutant",
+          "loc": "internal/mutation/construct_e2e_test.go:63",
+          "what": "measured against real Stryker: construct span 62 mutants vs retired ±25 window 50 — the pad-lost block mutants are generated and the span never leaks into the next function"
+        }
+      ]
+    }
+  }
+}

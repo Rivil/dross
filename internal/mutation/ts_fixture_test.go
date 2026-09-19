@@ -112,6 +112,51 @@ func TestFixtureTestCoversTheSource(t *testing.T) {
 	if strings.Contains(test, "describe(") {
 		t.Error("the uncovered function is now covered — the fixture must keep one function whose mutants survive")
 	}
+
+	// long.ts is the construct-range fixture; both of its functions are
+	// covered so the whole-file e2e run keeps its score and the construct
+	// proof measures generation, not coverage.
+	longSrc := readFileString(t, filepath.Join(tsFixtureDir, "src", "long.ts"))
+	longTest := readFileString(t, filepath.Join(tsFixtureDir, "src", "long.test.ts"))
+	if !strings.Contains(longTest, "./long") {
+		t.Fatal("long.test.ts does not import ./long — nothing would be covered")
+	}
+	for _, fn := range []string{"big", "small"} {
+		if !strings.Contains(longSrc, "export function "+fn) {
+			t.Errorf("long.ts lost its %s export", fn)
+		}
+		if !strings.Contains(longTest, fn+"(") {
+			t.Errorf("%s is no longer exercised by long.test.ts", fn)
+		}
+	}
+}
+
+// TestDeepFixtureStaysDeep: the construct proof only means something while
+// the edited line sits further from big's first line than the retired pad
+// reached. A fixture that shrank under that would pass the proof vacuously.
+func TestDeepFixtureStaysDeep(t *testing.T) {
+	lines := strings.Split(readFileString(t, filepath.Join(tsFixtureDir, "src", "long.ts")), "\n")
+	find := func(needle string) int {
+		for i, l := range lines {
+			if strings.Contains(l, needle) {
+				return i + 1
+			}
+		}
+		t.Fatalf("long.ts has no line containing %q", needle)
+		return 0
+	}
+	bigStart := find("export function big(")
+	edit := find("dross:deep-edit")
+	smallStart := find("export function small<")
+	if smallStart-bigStart < 40 {
+		t.Errorf("big spans fewer than 40 lines (%d..%d) — the fixture is no longer long", bigStart, smallStart)
+	}
+	if edit-bigStart < 26 {
+		t.Errorf("the deep edit (line %d) is within 25 lines of big's start (line %d) — the retired pad would have reached it", edit, bigStart)
+	}
+	if !strings.Contains(lines[edit-1], "total = 1000") {
+		t.Errorf("the deep-edit line is no longer a mutable statement: %q", lines[edit-1])
+	}
 }
 
 func readJSON(t *testing.T, path string, v any) {

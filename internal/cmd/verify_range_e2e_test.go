@@ -69,13 +69,17 @@ func TestRangedDispatchReachesTheAdapterEndToEnd(t *testing.T) {
 		}
 		t.Fatalf("range map keyed %v, want exactly %q", keys, file)
 	}
-	// Raw hunk {40,41}, padded by 25 → {15,66}: narrowed to the edit, not
-	// clamped to the whole file.
-	if len(got) != 1 || got[0] != (mutation.Range{Start: 15, End: 66}) {
-		t.Errorf("dispatched %v, want [{15 66}] (hunk 40-41 padded by 25)", got)
+	// Raw hunk {40,41} inside the stub's construct {30,50} → the construct
+	// span, never the raw hunk and never the whole file. The stub must have
+	// been asked about exactly this file, by its repo-relative slash path.
+	if len(got) != 1 || got[0] != (mutation.Range{Start: 30, End: 50}) {
+		t.Errorf("dispatched %v, want [{30 50}] (hunk 40-41 widened to its construct)", got)
+	}
+	if len(ranger.asked) != 1 || ranger.asked[0] != file {
+		t.Errorf("resolver asked for %v, want exactly [%s]", ranger.asked, file)
 	}
 
-	// And the record says the same thing, with the pad.
+	// And the record says the same thing.
 	tests, err := verify.LoadTests(filepath.Join(dir, ".dross/phases", phaseID, "tests.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -85,8 +89,8 @@ func TestRangedDispatchReachesTheAdapterEndToEnd(t *testing.T) {
 	}
 	leg := tests.Languages[0]
 	rec := leg.Ranges[file]
-	if len(rec) != 1 || rec[0] != (verify.EffectiveRange{Start: 15, End: 66, Pad: 25}) {
-		t.Errorf("languages[0].ranges[%s] = %v, want [{15 66 25}]", file, rec)
+	if len(rec) != 1 || rec[0] != (verify.EffectiveRange{Start: 30, End: 50, Construct: "FunctionDeclaration edited"}) {
+		t.Errorf("languages[0].ranges[%s] = %v, want [{30 50 FunctionDeclaration edited}]", file, rec)
 	}
 	if len(leg.WholeFile) != 0 {
 		t.Errorf("whole_file must be empty when every file ranged, got %v", leg.WholeFile)

@@ -473,7 +473,7 @@ func provenanceFixture() *verify.Tests {
 			{
 				Name: "typescript", Tool: "stryker", Files: []string{"src/a.ts"},
 				Mutation: &mutation.Report{Tool: "stryker", Killed: 1},
-				Ranges:   map[string][]verify.EffectiveRange{"src/a.ts": {{Start: 1, End: 37, Pad: 25}}},
+				Ranges:   map[string][]verify.EffectiveRange{"src/a.ts": {{Start: 1, End: 37, Construct: "FunctionDeclaration tally"}}},
 			},
 			{
 				Name: "go", Tool: "gremlins", Files: []string{"x.go"},
@@ -511,10 +511,13 @@ func TestVerifyScopePrintsRawAndEffective(t *testing.T) {
 			t.Fatalf("verify scope: %v", err)
 		}
 	})
-	for _, want := range []string{"src/a.ts", "10-12", "1-37 (pad 25)"} {
+	for _, want := range []string{"src/a.ts", "10-12", "1-37 (FunctionDeclaration tally)"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("readout lacks %q:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "pad") {
+		t.Errorf("readout still speaks of a pad:\n%s", out)
 	}
 	var sawWholeFile bool
 	for _, line := range strings.Split(out, "\n") {
@@ -564,13 +567,52 @@ func TestVerifyScopeJSONIsTheRecordVerbatim(t *testing.T) {
 			t.Errorf("legs[%d].whole_file = %v, record has %v", i, leg.WholeFile, lr.WholeFile)
 		}
 	}
-	// Structured, not pretty-printed: the range is an object with its pad,
-	// never a "1-37" string.
+	// Structured, not pretty-printed: the range is an object with its
+	// construct, never a "1-37" string.
 	if strings.Contains(out, `"1-37"`) {
 		t.Errorf("--json re-rendered a range as a string:\n%s", out)
 	}
-	if !strings.Contains(out, `"pad": 25`) {
-		t.Errorf("--json lost the pad:\n%s", out)
+	if !strings.Contains(out, `"construct": "FunctionDeclaration tally"`) {
+		t.Errorf("--json lost the construct:\n%s", out)
+	}
+}
+
+// TestVerifyScopeOnAPadEraRecordSaysUnrecorded: a tests.json written before
+// ranges carried a construct still loads and reads out, with the placeholder
+// standing where the label would be — and the word pad never appears, even
+// though the record itself still carries the key.
+func TestVerifyScopeOnAPadEraRecordSaysUnrecorded(t *testing.T) {
+	root := chdirDross(t)
+	old := provenanceFixture()
+	for i := range old.Languages {
+		for f, rs := range old.Languages[i].Ranges {
+			for j := range rs {
+				rs[j].Construct = ""
+			}
+			old.Languages[i].Ranges[f] = rs
+		}
+	}
+	testsPath := seedTests(t, root, "oldrec", old)
+	// The on-disk record carries the retired key literally, whatever the Go
+	// struct knows about it, so this pins that an old tests.json still loads.
+	raw := mustRead(t, testsPath)
+	patched := strings.Replace(raw, `"end": 37`, `"end": 37, "pad": 25`, 1)
+	if patched == raw {
+		t.Fatalf("fixture did not serialise the expected range: %s", raw)
+	}
+	if err := os.WriteFile(testsPath, []byte(patched), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Verify(), "scope", "oldrec"); err != nil {
+			t.Fatalf("verify scope on a pad-era record: %v", err)
+		}
+	})
+	if !strings.Contains(out, "1-37 (construct unrecorded)") {
+		t.Errorf("a pad-era range must read as construct unrecorded:\n%s", out)
+	}
+	if strings.Contains(out, "pad") {
+		t.Errorf("readout printed the retired pad:\n%s", out)
 	}
 }
 
