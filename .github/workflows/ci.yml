@@ -124,8 +124,14 @@ jobs:
         working-directory: internal/mutation/testdata/ts-project
         run: npm audit --audit-level=high
 
+      # Both node-gated legs: the adapter's whole-file run, and the
+      # construct-range proof (three Stryker runs against the real
+      # @babel/parser in the fixture tree — the ±25 window vs the enclosing
+      # construct). Selected by name because the rest of the package runs in
+      # the `test` job; DROSS_REQUIRE_E2E above turns a skip here into a
+      # failure, which only means something for tests this selector reaches.
       - name: stryker end-to-end mutation run
-        run: go test -count=1 -run TestStrykerRunsEndToEnd ./internal/mutation/
+        run: go test -count=1 -run 'TestStrykerRunsEndToEnd|TestConstructRangeRecoversTheDeepMutant|TestBabelParsesGenericsAndJSX|TestRealParserSpansMatchTheExpansion|TestUnresolvableParserIsUnavailable' ./internal/mutation/
 
   shellcheck:
     runs-on: ubuntu-latest
