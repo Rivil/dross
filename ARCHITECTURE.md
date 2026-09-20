@@ -829,6 +829,24 @@ Two-tier (builtin + project) MUST-FOLLOW rules, merged and rendered via `dross r
 
 _c8b346e · extended root-robustness · 6d33d3b · extended survivor-lifecycle · a6b366d_
 
+### Secret detection
+
+A credential-shaped value cannot leave the repo through dross: an embedded, deterministic detector screens every tracked `.dross/` artifact and every body dross publishes, and a hit **refuses the gate** — publish call, `dross validate`, ship pre-flight, `.dross/` auto-commit — naming the pattern and `file:line` while never echoing the value (locked `hit_disposition`, `pattern_source`). The ruleset is nine regexes compiled into the binary (provider-prefixed tokens, PEM blocks, `Authorization:` values, key-context assignments), so the verdict never varies by what is on PATH; gitleaks keeps its `dross secure` role and is not consulted here. Entropy is judged only on the value side of a `password|token|secret|api_key|authorization` assignment — no bare high-entropy rule — because tests.json and telemetry legitimately carry hashes, base64 and 16-hex identity ids (locked `entropy_rules`); the identity-id shape is a fixed carve-out, and the only user exemption is a `dross:allow-secret` marker on the offending line (locked `allowlist_route`). Scope is persisted artifacts plus published bodies, not source or the whole diff (locked `scan_scope`). Coverage is enumerated, not hand-listed: two registry-plus-residual AST walks in the toolfence/pathfence shape declare every forge/ship egress seam (`Screened`/`ReadOnly`/`Seam`) and every `internal/` file reaching a write verb (`UnderDross`/`MachineLocal`/`OutsideDross`), each with non-vacuity floors and leaky fixtures that must trip, and a self-scan proves the whole tracked tree clean with its silencing sites pinned per file. Ship's pre-flight and the auto-commit helper call the same `scanDrossArtifacts` as validate — never the whole of validate — with an AST test pinning the three on one scanner (locked `ship_gate_scope`). Hit reports print rule, `file:line` and a length/prefix fingerprint; a 50-instance-per-rule corpus asserts no 6-byte window of any value reaches `Hit.String`, `Report` or `ErrHit.Error`.
+
+- `Scan` (nine-rule detector over a reader; echo-free `Hit` fingerprints, `AllowMarker` silences one line) — `internal/secretscan/secretscan.go:92`
+- `Rules` (the compiled ruleset — ghp_/github_pat_, glpat-, ATATT, AKIA, xox*, sk-*, PEM, Authorization, key-context) — `internal/secretscan/rules.go:96`
+- `ScanPayload` / `ScanArgv` (walkers for JSON publish payloads and `gh` argv) — `internal/secretscan/payload.go:21`
+- `scanDrossArtifacts` (validate fails on any hit in a stageable `.dross/` artifact; read errors refuse, never skip) — `internal/cmd/secretscan.go:29`
+- `(*Client).doRaw` (every board backend screens the payload before encoding/`http.NewRequest`; refusal is an `*ErrHit` that survives `redact.Err`) — `internal/forge/forge.go:843`
+- `screenedGH` (ship's REST transports screen payloads and every `gh` invocation passes `ScanArgv` before exec) — `internal/ship/open.go:77`
+- `autoCommitDrossDirt` (auto-commit and ship pre-flight refuse on a hit before `git add` / push) — `internal/cmd/cleantree.go:22`
+- `Transports` (ten ship/forge egress seams declared; AST walker flags an undeclared or mis-ordered transport) — `internal/secretscan/sinks.go:66`
+- `Writers` (every `internal/` file reaching a write verb declared; walker proves reach, ignore seed and `*File`-const coverage) — `internal/secretscan/writers.go:80`
+- `pinnedMarkerSites` (self-scan: the whole tracked tree is clean, `dross:allow-secret` sites pinned per file, validate proven hermetically over a clone of HEAD) — `internal/cmd/secretscan_selfscan_test.go:97`
+- `TestGitHubFineGrainedPATFires` (the `github_pat_` alternation pinned at its 22-char floor; the randomized echo corpus covers both GitHub shapes) — `internal/secretscan/secretscan_test.go:130`
+
+_introduced secret-detection · 636370b_
+
 ### Security audit (dross-secure)
 
 Context-free, read-only multi-pass security audit: real scanners plus an adversarial refute-panel over cold subagents, emitting a verified findings ledger and scaffolding a remediation phase. The `dross security` CLI is the deterministic surface (run dirs, scanner detection, findings→spec scaffold); `secure.md` orchestrates the audit.
