@@ -83,8 +83,8 @@ func TestIdentityIDAllowlistShape(t *testing.T) {
 		{`"Key": "50919a010c495368"`, true},
 		{`key = "919acc418a9a0821"`, true},
 		{`id = 30dcd7db2eecf398`, true},
-		{`"password": "08ec1d7666c48b32"`, false},
-		{`token = "08ec1d7666c48b32"`, false},
+		{`"password": "08ec1d7666c48b32"`, false}, // dross:allow-secret
+		{`token = "08ec1d7666c48b32"`, false},     // dross:allow-secret
 		{`08ec1d7666c48b32`, false},
 		{`"key": "08ec1d7666c48b3"`, false},                  // 15-hex
 		{`"key": "08ec1d7666c48b32a"`, false},                // 17-hex

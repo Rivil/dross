@@ -45,6 +45,7 @@
     "remote-toolchain-bootstrap": "DRO-129",
     "remote-toolchain-install": "DRO-246",
     "scanner-self-exclusion": "DRO-404",
+    "secret-detection": "DRO-459",
     "supply-chain-currency": "DRO-423",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10",
@@ -1068,6 +1069,51 @@
       "issue": "DRO-411",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "secret-detection/t-1": {
+      "issue": "DRO-460",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "secret-detection/t-2": {
+      "issue": "DRO-461",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "secret-detection/t-3": {
+      "issue": "DRO-462",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "secret-detection/t-4": {
+      "issue": "DRO-463",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "secret-detection/t-5": {
+      "issue": "DRO-464",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "secret-detection/t-6": {
+      "issue": "DRO-465",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "secret-detection/t-7": {
+      "issue": "DRO-466",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "secret-detection/t-8": {
+      "issue": "DRO-467",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "secret-detection/t-9": {
+      "issue": "DRO-468",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "supply-chain-currency/t-1": {
       "issue": "DRO-424",

@@ -22,7 +22,7 @@ func allowingSelf(base string) hostallow.Policy { return hostallow.Derive(base, 
 // error string produced on a refused path may contain it.
 const hostileEnv = "DROSS_FIXTURE_TOKEN"
 
-const sentinelToken = "s3cr3t-sentinel-do-not-leak"
+const sentinelToken = "s3cr3t-sentinel-do-not-leak" // dross:allow-secret
 
 // assertRefusedBeforeToken is the shared assertion for all four constructors:
 // the refusal names the host, wraps the policy sentinel, yields no client, and

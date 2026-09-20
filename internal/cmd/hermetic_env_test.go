@@ -143,8 +143,8 @@ func TestHermeticHome_IsIsolated(t *testing.T) {
 // never adopted; reverting that leaves init inheriting absentToken and doctor
 // reporting it unset.
 func TestHermeticHome_HostileGlobalDefaultsDoNotRedden(t *testing.T) {
-	const absentToken = "DROSS_TEST_ABSENT_TOKEN"
-	t.Setenv(absentToken, "") // empty reads as unset to doctor's os.Getenv check
+	const absentToken = "DROSS_TEST_ABSENT_TOKEN" // dross:allow-secret
+	t.Setenv(absentToken, "")                     // empty reads as unset to doctor's os.Getenv check
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)

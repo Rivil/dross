@@ -66,7 +66,7 @@ type Rule struct {
 var table = map[string]Rule{
 	"git": {
 		Kind:  Separator,
-		Token: "--end-of-options",
+		Token: "--end-of-options", // dross:allow-secret
 		Why:   "git >= 2.24 ends option parsing without reclassifying refs as pathspecs; `--` would make a branch name a path",
 	},
 	"gh": {

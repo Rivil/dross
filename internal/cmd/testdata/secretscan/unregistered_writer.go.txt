@@ -1,0 +1,19 @@
+package fixture
+
+// Calibration fixture for the writer residual scan: writeNote reaches a write
+// verb and its file has no registry line; readNote only reads and must not
+// count as a writer.
+
+import "os"
+
+func writeNote(path string, body []byte) error {
+	return os.WriteFile(path, body, 0o644)
+}
+
+func readNote(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
+
+func openForRead(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDONLY, 0)
+}

@@ -1,0 +1,178 @@
+{
+  "phase": "secret-detection",
+  "pr": 128,
+  "base": "milestone/v1.7",
+  "base_commit": "98c39a1466dd60fcf93d38f415b537770a06c880",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/secretscan/rules.go",
+        "internal/secretscan/secretscan.go",
+        "internal/secretscan/payload.go",
+        "internal/secretscan/secretscan_test.go"
+      ],
+      "commit": "e92cc67",
+      "completed_at": "2026-09-19T18:50:04.877077Z",
+      "landmarks": [
+        {
+          "feature": "secret detection",
+          "symbol": "Scan",
+          "loc": "internal/secretscan/secretscan.go:83",
+          "what": "embedded 9-rule credential detector with echo-free Hit fingerprints, dross:allow-secret line marker, and ScanPayload/ScanArgv walkers for publish transports"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/secretscan.go",
+        "internal/cmd/validate.go",
+        "internal/cmd/secretscan_scope_test.go"
+      ],
+      "commit": "ab9ef39",
+      "completed_at": "2026-09-19T19:16:39.408957Z",
+      "landmarks": [
+        {
+          "feature": "secret detection",
+          "symbol": "scanDrossArtifacts",
+          "loc": "internal/cmd/secretscan.go:29",
+          "what": "validate fails on any secret-shaped value in a stageable .dross artifact (git ls-files tracked+others / WalkDir fallback), fingerprint-only report, read errors refuse"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/forge/forge.go",
+        "internal/forge/github.go",
+        "internal/forge/jira.go",
+        "internal/forge/youtrack.go",
+        "internal/forge/secretscan_test.go"
+      ],
+      "commit": "0456b59",
+      "completed_at": "2026-09-19T19:26:57.965651Z",
+      "landmarks": [
+        {
+          "feature": "secret detection",
+          "symbol": "(*Client).doRaw",
+          "loc": "internal/forge/forge.go:843",
+          "what": "every board backend's doRaw screens the JSON payload with secretscan.ScanPayload before encoding/http.NewRequest; refusal is a *secretscan.ErrHit that survives redact.Err"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/ship/open.go",
+        "internal/ship/comment.go",
+        "internal/ship/basepr.go",
+        "internal/ship/headpr.go",
+        "internal/ship/merged.go",
+        "internal/ship/bitbucket.go",
+        "internal/ship/gitlab.go",
+        "internal/ship/secretscan_test.go"
+      ],
+      "commit": "7c776b2",
+      "completed_at": "2026-09-19T19:32:45.095067Z",
+      "landmarks": [
+        {
+          "feature": "secret detection",
+          "symbol": "screenedGH",
+          "loc": "internal/ship/open.go:76",
+          "what": "ship's REST transports (jsonPost/bbRequest/gitlabReq) screen payloads and every gh invocation passes through screenedGH's ScanArgv before exec; AST test pins the seam"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/cleantree.go",
+        "internal/cmd/ship.go",
+        "internal/cmd/secretscan_gate_test.go"
+      ],
+      "commit": "e1d7ae3",
+      "completed_at": "2026-09-19T19:40:00.674844Z",
+      "landmarks": [
+        {
+          "feature": "secret gate on .dross commits and ship",
+          "symbol": "autoCommitDrossDirt",
+          "loc": "internal/cmd/cleantree.go:20",
+          "what": "autoCommitDrossDirt and ship pre-flight call the shared scanDrossArtifacts and refuse on a hit before git add / push"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/secretscan/sinks.go",
+        "internal/secretscan/sinks_test.go",
+        "internal/cmd/secretscan_transport_enum_test.go",
+        "internal/cmd/testdata/secretscan/leaky_transport.go.txt"
+      ],
+      "commit": "5dc60b0",
+      "completed_at": "2026-09-19T19:47:33.478761Z",
+      "landmarks": [
+        {
+          "feature": "publish transport registry",
+          "symbol": "Transports",
+          "loc": "internal/secretscan/sinks.go:69",
+          "what": "ten ship/forge egress seams declared Screened/ReadOnly/Seam and judged by an AST walker that flags undeclared or mis-ordered transports"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/secretscan/writers.go",
+        "internal/cmd/secretscan_writer_enum_test.go",
+        "internal/cmd/testdata/secretscan/unregistered_writer.go.txt"
+      ],
+      "commit": "e0b5b19",
+      "completed_at": "2026-09-19T19:56:18.577686Z",
+      "landmarks": [
+        {
+          "feature": "dross artifact writer registry",
+          "symbol": "Writers",
+          "loc": "internal/secretscan/writers.go:80",
+          "what": "every internal/ file reaching a write verb declared UnderDross/MachineLocal/OutsideDross; walker proves reach, ignore seed, and *File-const coverage"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/secretscan_selfscan_test.go",
+        "internal/cmd/env_test.go",
+        "internal/cmd/hermetic_env_test.go",
+        "internal/forge/hostallow_test.go",
+        "internal/forge/hostile_config_test.go",
+        "internal/argfence/policy.go",
+        "internal/security/gitleaks_test.go",
+        ".dross/phases/scanner-self-exclusion/panel/risk.md",
+        ".dross/phases/scanner-self-exclusion/panel/synthesis.md",
+        ".dross/phases/secret-detection/panel/mvp.md",
+        ".dross/phases/secret-detection/panel/synthesis.md",
+        ".dross/phases/secret-detection/panel/verification.md"
+      ],
+      "commit": "636370b",
+      "completed_at": "2026-09-19T20:02:42.606615Z",
+      "landmarks": [
+        {
+          "feature": "secret self-scan of the dross tree",
+          "symbol": "pinnedMarkerSites",
+          "loc": "internal/cmd/secretscan_selfscan_test.go:97",
+          "what": "every tracked file scans clean; silencing dross:allow-secret sites pinned per file; validate proven hermetically over a clone of HEAD"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/secretscan/secretscan_test.go"
+      ],
+      "commit": "8eff8e6",
+      "completed_at": "2026-09-20T10:25:48.353248Z",
+      "landmarks": [
+        {
+          "feature": "secret detection",
+          "symbol": "TestGitHubFineGrainedPATFires",
+          "loc": "internal/secretscan/secretscan_test.go:130",
+          "what": "github_pat_ fine-grained PAT alternation pinned (22-char floor + randomized echo corpus covers both GitHub shapes)"
+        }
+      ]
+    }
+  }
+}

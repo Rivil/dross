@@ -116,7 +116,7 @@ Wave 1
            back out of the written TOML, not the Go constant): MUST match
            `"key": "b91bfa24fdf586c0"`, `"Key": "50919a010c495368"`,
            `key = "919acc418a9a0821"`, `id = 30dcd7db2eecf398`; MUST NOT match
-           `"password": "08ec1d7666c48b32"`, `token = "08ec1d7666c48b32"`, a bare
+           `"password": "08ec1d7666c48b32"`, `token = "08ec1d7666c48b32"`, a bare dross:allow-secret
            16-hex with no id/key context, 15-hex, 17-hex, 18-hex, 32-hex, or
            `AKIAIOSFODNN7EXAMPLE`. Widening the class/length fails a NOT row;
            narrowing fails a match row.

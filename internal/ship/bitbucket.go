@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/redact"
+	"github.com/Rivil/dross/internal/secretscan"
 	"io"
 	"net/http"
 	"net/url"
@@ -49,6 +50,11 @@ func bbRepoRef(repoURL string) (workspace, slug string, err error) {
 // api_base, which project.DetectRemote autodetects as
 // https://api.bitbucket.org/2.0 for a bitbucket.org remote.
 func bbRequest(method, endpoint, authEnv, user, token string, body any) ([]byte, int, error) {
+	// Screened before the encoder runs (criterion c-2 of secret-detection).
+	// A nil body — every GET here — passes untouched.
+	if err := secretscan.ScanPayload(method+" "+endpoint, body); err != nil {
+		return nil, 0, err
+	}
 	var buf io.Reader
 	if body != nil {
 		b := new(bytes.Buffer)

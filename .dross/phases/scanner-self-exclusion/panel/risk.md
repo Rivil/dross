@@ -138,7 +138,7 @@ Wave 1
            written TOML (parsed, not the Go constant — proves what gitleaks
            will read) MUST match `"key": "08ec1d7666c48b32"`,
            `key = "5c88045d72401675"`, `"id": "928e3536acd36ece"`, and MUST
-           NOT match `"password": "08ec1d7666c48b32"` (wrong keyword),
+           NOT match `"password": "08ec1d7666c48b32"` (wrong keyword), dross:allow-secret
            `"key": "08ec1d7666c48b32aa"` (18 hex), `"key": "08ec1d7666c48b3"`
            (15 hex), `"key": "AKIAIOSFODNN7EXAMPLE"` (not hex),
            `"key": "08EC1D7666C48B32"` (uppercase — identity ids are

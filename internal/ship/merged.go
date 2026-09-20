@@ -69,7 +69,11 @@ func gitHubPRStatus(opts OpenOpts) (PRStatus, error) {
 	// one — so it exits "accepts at most 1 arg(s), received 3". Because
 	// ghCommand is a test double, that shape passes its unit test while ship's
 	// merge-status path is dead against the real binary.
-	out, err := ghCommand("pr", "view", "--json", "state,mergedAt,baseRefName", "--", strconv.Itoa(opts.PRNumber)).CombinedOutput()
+	cmd, err := screenedGH("pr", "view", "--json", "state,mergedAt,baseRefName", "--", strconv.Itoa(opts.PRNumber))
+	if err != nil {
+		return PRStatus{}, err
+	}
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return PRStatus{}, fmt.Errorf("gh pr view #%d: %w\n%s", opts.PRNumber, err, string(out))
 	}
