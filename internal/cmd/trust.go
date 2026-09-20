@@ -1,38 +1,12 @@
 package cmd
 
-// The exec-consent store: dross will not spawn a repo's runtime.test_command
-// until this machine has explicitly consented to that exact command.
-//
-// The threat is a `.dross/` that was not authored here. project.toml is a
-// tracked, committed file, so cloning a repo — or pulling a branch from one —
-// hands dross a test_command chosen by whoever wrote it, and every loop command
-// that runs the suite would execute it without anyone having read the line.
-//
-// Two locked decisions shape this store, and both are load-bearing:
-//
-//   - exec_consent_gate: consent lives in the GITIGNORED .dross/local.toml,
-//     never in project.toml. A committed consent key would be self-authorizing —
-//     the hostile repo would ship both the command and the permission for it.
-//     A clone carries no consent by construction, which is the whole mechanism.
-//     This is the same property readAllowHosts protects for the host allowlist,
-//     and it shares that refusal (refuseTrackedLocal) rather than restating it.
-//
-//   - consent_binding: consent is bound to sha256 of the CONSENTED COMMAND, not
-//     to the repo. The attack this exists for is an already-trusted repo whose
-//     test_command is rewritten by a later pull; repo-scoped consent would
-//     inherit the trust granted to the old command. So a changed command
-//     revokes consent and re-prompts.
-//
-// There is deliberately NO normalizer. Trimming whitespace, collapsing spaces
-// or canonicalising quotes would all be a classifier deciding which edits are
-// "the same command" — and a classifier is exactly the vulnerability this
-// milestone keeps finding. One byte of drift revokes consent. The cost is a
-// re-prompt after a legitimate edit, which is cheap and rare.
+// `dross trust` and the exec-consent gate. The store's semantics —
+// fingerprint binding, the consent states, the tracked-store refusal — live in
+// internal/consent; this file keeps the cobra command, the per-lane grants
+// (t-5 moves them) and requireExecConsent, the refusal every gated RunE runs
+// first.
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -40,234 +14,33 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/consent"
 	"github.com/Rivil/dross/internal/project"
 )
 
-// ConsentState is what the store says about the currently configured
-// runtime.test_command. Every state but ConsentGranted is a refusal; they are
-// distinguished so the message can tell the user which situation they are in,
-// because "stale — the command changed since you trusted it" and "never trusted
-// here" call for very different reactions.
-type ConsentState int
+// ConsentState and the five Consent* constants are the in-package names for
+// consent.State: the lane grants below and the doctor/verify wiring still
+// speak them, and the alias keeps every switch literal compiling.
+type ConsentState = consent.State
 
 const (
-	// ConsentRefused: .dross/local.toml is tracked by git, so the store itself
-	// cannot be trusted and is not read.
-	ConsentRefused ConsentState = iota
-	// ConsentNotApplicable: no runtime.test_command is configured. It is still
-	// a refusal, not a pass — see CheckConsent.
-	ConsentNotApplicable
-	// ConsentAbsent: nothing has ever been trusted in this tree.
-	ConsentAbsent
-	// ConsentStale: something was trusted, but not this command.
-	ConsentStale
-	// ConsentGranted: the configured command matches the consented hash.
-	ConsentGranted
+	ConsentRefused       = consent.Refused
+	ConsentNotApplicable = consent.NotApplicable
+	ConsentAbsent        = consent.Absent
+	ConsentStale         = consent.Stale
+	ConsentGranted       = consent.Granted
 )
 
-func (s ConsentState) String() string {
-	switch s {
-	case ConsentRefused:
-		return "refused"
-	case ConsentNotApplicable:
-		return "not-applicable"
-	case ConsentAbsent:
-		return "absent"
-	case ConsentStale:
-		return "stale"
-	case ConsentGranted:
-		return "granted"
-	}
-	return "unknown"
-}
-
+// The sentinels are consent's, re-exported by identity so errors.Is matches
+// across the boundary.
 var (
-	// ErrNoConsent is returned when this machine has never trusted a command in
-	// this tree.
-	ErrNoConsent = errors.New("no exec consent recorded for this repo")
-	// ErrStaleConsent is returned when a command was trusted but the configured
-	// one has since changed. A distinct sentinel from ErrNoConsent because the
-	// stale case is the attack the binding exists for, and collapsing the two
-	// would report a rewritten test_command as a first run.
-	ErrStaleConsent = errors.New("the consented test command has changed since it was trusted")
-	// ErrNoTestCommand is returned when no runtime.test_command is configured.
-	ErrNoTestCommand = errors.New("no runtime.test_command is configured")
-	// ErrNoLaneCommand is returned for a lane declaring no command. Distinct
-	// from ErrNoTestCommand so a refusal can send the reader to the lane block
-	// rather than to runtime.test_command, which may be perfectly fine.
-	ErrNoLaneCommand = errors.New("this test lane declares no command")
-	// ErrNoLaneInstall is returned for a lane declaring no install line.
-	// Distinct from ErrNoLaneCommand for the reason that one is distinct from
-	// ErrNoConsent: a lane with no install line has nothing to consent to and
-	// is not ungranted, and a caller that read the two as one would ask the
-	// user to trust a line that does not exist.
-	ErrNoLaneInstall = errors.New("this test lane declares no install line")
+	ErrNoConsent       = consent.ErrNoConsent
+	ErrStaleConsent    = consent.ErrStaleConsent
+	ErrNoTestCommand   = consent.ErrNoTestCommand
+	ErrNoLaneCommand   = consent.ErrNoLaneCommand
+	ErrNoLaneInstall   = consent.ErrNoLaneInstall
+	ErrNoReplayConsent = consent.ErrNoReplayConsent
 )
-
-// Fingerprint is the consent binding: hex sha256 of the command, byte for byte.
-//
-// It does not normalize. See the package comment above — a normalizer is a
-// classifier, and the classifier is the vulnerability.
-func Fingerprint(command string) string {
-	sum := sha256.Sum256([]byte(command))
-	return hex.EncodeToString(sum[:])
-}
-
-// CheckConsent reports whether this machine has consented to dross spawning
-// testCmd in the tree rooted at root (with repoDir the enclosing git work tree).
-//
-// Every state but ConsentGranted comes back with a non-nil error, including
-// ConsentNotApplicable. That last one is deliberate and is the case a reader
-// most easily gets wrong: an empty runtime.test_command does NOT mean "nothing
-// will be spawned". `dross verify` still runs its mutation adapters, which shell
-// out to gremlins, which runs the repo's Go tests. A hostile .dross/ that simply
-// leaves test_command blank would sail through a gate that treated empty as
-// nothing to guard. So empty is a refusal too, and the caller can tell the user
-// to configure a command and trust it.
-func CheckConsent(root, repoDir, testCmd string) (ConsentState, error) {
-	if err := refuseTrackedLocal(repoDir); err != nil {
-		return ConsentRefused, err
-	}
-	if testCmd == "" {
-		return ConsentNotApplicable, ErrNoTestCommand
-	}
-	l, err := loadLocal(localPath(root))
-	if err != nil {
-		// An unparseable store is not consent. Fail closed, and say why.
-		return ConsentAbsent, fmt.Errorf("%w: %v", ErrNoConsent, err)
-	}
-	if l.TrustedTestCommand == "" {
-		return ConsentAbsent, ErrNoConsent
-	}
-	if l.TrustedTestCommand != Fingerprint(testCmd) {
-		return ConsentStale, ErrStaleConsent
-	}
-	return ConsentGranted, nil
-}
-
-// GrantConsent records consent for testCmd, storing only its fingerprint.
-//
-// The command itself is never written: the store would then be a second copy of
-// a value project.toml already holds, and a reader comparing against it could
-// not tell a consented command from a recorded one.
-func GrantConsent(root, testCmd string) error {
-	path := localPath(root)
-	l, err := loadLocal(path)
-	if err != nil {
-		return err
-	}
-	l.TrustedTestCommand = Fingerprint(testCmd)
-	return l.save(path)
-}
-
-// --- red-proof replay consent ---
-
-// ErrNoReplayConsent is returned when a red proof's replay command has not been
-// consented to on this machine. Callers match it with errors.Is: a repoint
-// treats "no consent" as unverified-but-proceed, which is a different outcome
-// from "the replay could not be run".
-var ErrNoReplayConsent = errors.New("this machine has not consented to running this red proof's replay command")
-
-// ReplayConsented reports whether line's fingerprint is in local.toml's
-// trusted_replay_commands.
-//
-// Fingerprints, not lines, for the same reason the test command stores one: the
-// store must not become a second copy of a value changes.json already holds,
-// where a reader could not tell a consented command from a recorded one. An
-// unparseable store is not consent — it fails closed.
-func ReplayConsented(root, line string) (bool, error) {
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return false, nil
-	}
-	l, err := loadLocal(localPath(root))
-	if err != nil {
-		return false, fmt.Errorf("%w: %v", ErrNoReplayConsent, err)
-	}
-	want := Fingerprint(line)
-	for _, got := range strings.Split(l.TrustedReplayCommands, ",") {
-		if strings.TrimSpace(got) == want {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// GrantReplayConsent adds line's fingerprint to the consented set, leaving any
-// already-granted replay lines in place: a repo has one replay per phase, and
-// granting one must not silently revoke another.
-func GrantReplayConsent(root, line string) error {
-	path := localPath(root)
-	l, err := loadLocal(path)
-	if err != nil {
-		return err
-	}
-	want := Fingerprint(strings.TrimSpace(line))
-	var kept []string
-	for _, got := range strings.Split(l.TrustedReplayCommands, ",") {
-		if got = strings.TrimSpace(got); got != "" && got != want {
-			kept = append(kept, got)
-		}
-	}
-	l.TrustedReplayCommands = strings.Join(append(kept, want), ",")
-	return l.save(path)
-}
-
-// RunConsented reports whether line's fingerprint is in local.toml's
-// trusted_run_commands.
-//
-// A separate set from the test command's grant on purpose: consent is bound to
-// a specific command string, and one that covered "whatever [runtime] says"
-// would let a dev_command arriving in a pull inherit trust for a line nobody
-// read. An unparseable store is not consent — it fails closed.
-func RunConsented(root, line string) (bool, error) {
-	return fingerprintInSet(root, line, func(l *localStore) string { return l.TrustedRunCommands })
-}
-
-// GrantRunConsent adds line's fingerprint to the run set, leaving the others in
-// place: a repo has many runtime slots, and consenting to `dross run dev` must
-// not silently revoke `dross run migrate`.
-func GrantRunConsent(root, line string) error {
-	path := localPath(root)
-	l, err := loadLocal(path)
-	if err != nil {
-		return err
-	}
-	l.TrustedRunCommands = addFingerprint(l.TrustedRunCommands, strings.TrimSpace(line))
-	return l.save(path)
-}
-
-// fingerprintInSet is the shared read half of the comma-separated grant sets.
-func fingerprintInSet(root, line string, field func(*localStore) string) (bool, error) {
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return false, nil
-	}
-	l, err := loadLocal(localPath(root))
-	if err != nil {
-		return false, err
-	}
-	want := Fingerprint(line)
-	for _, got := range strings.Split(field(l), ",") {
-		if strings.TrimSpace(got) == want {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// addFingerprint returns set with line's fingerprint present exactly once,
-// preserving every other member.
-func addFingerprint(set, line string) string {
-	want := Fingerprint(line)
-	var kept []string
-	for _, got := range strings.Split(set, ",") {
-		if got = strings.TrimSpace(got); got != "" && got != want {
-			kept = append(kept, got)
-		}
-	}
-	return strings.Join(append(kept, want), ",")
-}
 
 // --- per-lane consent ---
 
@@ -368,7 +141,7 @@ func laneConsentLine(lane project.TestLane) string {
 // tracked-store refusal is shared rather than restated: a committed local.toml
 // is a repo authorizing its own lane commands, and it is refused UNREAD.
 func LaneConsented(root, repoDir, name, line string) (ConsentState, error) {
-	if err := refuseTrackedLocal(repoDir); err != nil {
+	if err := consent.RefuseTrackedLocal(repoDir); err != nil {
 		return ConsentRefused, err
 	}
 	if strings.TrimSpace(line) == "" {
@@ -383,7 +156,7 @@ func LaneConsented(root, repoDir, name, line string) (ConsentState, error) {
 	if !ok || got == "" {
 		return ConsentAbsent, ErrNoConsent
 	}
-	if got != Fingerprint(line) {
+	if got != consent.Fingerprint(line) {
 		return ConsentStale, ErrStaleConsent
 	}
 	return ConsentGranted, nil
@@ -405,7 +178,7 @@ func GrantLaneConsent(root, name, line string) error {
 	if l.TrustedLaneCommands == nil {
 		l.TrustedLaneCommands = map[string]string{}
 	}
-	l.TrustedLaneCommands[name] = Fingerprint(line)
+	l.TrustedLaneCommands[name] = consent.Fingerprint(line)
 	return l.save(path)
 }
 
@@ -497,7 +270,7 @@ func laneInstallConsentLine(lane project.TestLane) string {
 // reactions, and a committed local.toml is a repo authorizing its own install
 // commands.
 func LaneInstallConsented(root, repoDir, name, line string) (ConsentState, error) {
-	if err := refuseTrackedLocal(repoDir); err != nil {
+	if err := consent.RefuseTrackedLocal(repoDir); err != nil {
 		return ConsentRefused, err
 	}
 	if strings.TrimSpace(line) == "" {
@@ -512,7 +285,7 @@ func LaneInstallConsented(root, repoDir, name, line string) (ConsentState, error
 	if !ok || got == "" {
 		return ConsentAbsent, ErrNoConsent
 	}
-	if got != Fingerprint(line) {
+	if got != consent.Fingerprint(line) {
 		return ConsentStale, ErrStaleConsent
 	}
 	return ConsentGranted, nil
@@ -530,7 +303,7 @@ func GrantLaneInstallConsent(root, name, line string) error {
 	if l.TrustedLaneInstalls == nil {
 		l.TrustedLaneInstalls = map[string]string{}
 	}
-	l.TrustedLaneInstalls[name] = Fingerprint(line)
+	l.TrustedLaneInstalls[name] = consent.Fingerprint(line)
 	return l.save(path)
 }
 
@@ -623,7 +396,7 @@ func trustLaneInstall(root, name string, check bool) error {
 		}
 		return laneInstallRefusal(lane, state, cerr)
 	}
-	if err := refuseTrackedLocal(repoDir); err != nil {
+	if err := consent.RefuseTrackedLocal(repoDir); err != nil {
 		return err
 	}
 	if strings.TrimSpace(lane.Install) == "" {
@@ -758,48 +531,11 @@ func requireExecConsent() error {
 		return err
 	}
 	testCmd := proj.Runtime.TestCommand
-	state, cerr := CheckConsent(root, filepath.Dir(root), testCmd)
+	state, cerr := consent.CheckConsent(grantStore(root), filepath.Dir(root), testCmd)
 	if cerr == nil {
 		return nil
 	}
-	return consentRefusal(state, cerr, testCmd)
-}
-
-// consentRefusal turns a consent state into the message the user acts on. The
-// states are kept distinct all the way to the text because "you have never
-// trusted anything here" and "what you trusted has since changed" call for very
-// different reactions — the second is the attack the binding exists for, and
-// collapsing it into the first would report it as a routine first run.
-func consentRefusal(state ConsentState, cerr error, testCmd string) error {
-	switch state {
-	case ConsentRefused:
-		return cerr
-	case ConsentNotApplicable:
-		return fmt.Errorf(
-			"refusing to run: no runtime.test_command is configured.\n\n"+
-				"This is not a free pass — mutation adapters still shell out and run this\n"+
-				"repo's tests, so a blank command would be a way around the consent gate\n"+
-				"rather than a reason to skip it.\n\n"+
-				"Set one with `dross project set runtime.test_command \"<cmd>\"`, then run:\n\n"+
-				"    dross trust\n\n%w", cerr)
-	case ConsentStale:
-		return fmt.Errorf(
-			"refusing to run: this repo's test command has CHANGED since you trusted it —\n"+
-				"the recorded consent is stale.\n\n"+
-				"    %s\n\n"+
-				"That is the case this gate exists for: a repo trusted once, whose\n"+
-				"test_command a later pull rewrote. Read the line above; if it is what you\n"+
-				"meant to run, re-consent:\n\n"+
-				"    dross trust\n\n%w", testCmd, cerr)
-	default:
-		return fmt.Errorf(
-			"refusing to run: this repo's test command has not been trusted on this machine.\n\n"+
-				"    %s\n\n"+
-				"dross runs that command (and the mutation tools that wrap it) as you, in\n"+
-				"this checkout. It comes from the repo's tracked project.toml, so a clone\n"+
-				"carries whatever its author wrote. Read the line above, then:\n\n"+
-				"    dross trust\n\n%w", testCmd, cerr)
-	}
+	return consent.Refusal(state, cerr, testCmd)
 }
 
 // --- the command ---
@@ -848,14 +584,14 @@ func Trust() *cobra.Command {
 				// The silent form prompts pre-flight with. Success prints
 				// NOTHING — a prompt that had to parse output around it would
 				// find a way not to run it.
-				state, cerr := CheckConsent(root, repoDir, testCmd)
+				state, cerr := consent.CheckConsent(grantStore(root), repoDir, testCmd)
 				if cerr == nil {
 					return nil
 				}
-				return consentRefusal(state, cerr, testCmd)
+				return consent.Refusal(state, cerr, testCmd)
 			}
 
-			if err := refuseTrackedLocal(repoDir); err != nil {
+			if err := consent.RefuseTrackedLocal(repoDir); err != nil {
 				return err
 			}
 			if testCmd == "" {
@@ -869,7 +605,7 @@ func Trust() *cobra.Command {
 			// thing being consented to; a grant that did not show it would be a
 			// rubber stamp on a line nobody read.
 			Printf("trusting this repo's test command on this machine:\n\n    %s\n\n", testCmd)
-			if err := GrantConsent(root, testCmd); err != nil {
+			if err := consent.GrantConsent(grantStore(root), testCmd); err != nil {
 				return err
 			}
 			Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
@@ -909,7 +645,7 @@ func trustLane(root, name string, check bool) error {
 		}
 		return laneConsentRefusal(lane, state, cerr)
 	}
-	if err := refuseTrackedLocal(repoDir); err != nil {
+	if err := consent.RefuseTrackedLocal(repoDir); err != nil {
 		return err
 	}
 	if strings.TrimSpace(lane.Command) == "" {
@@ -958,7 +694,7 @@ func trustRun(root, name string, check bool) error {
 			slot.Field, slot.Field)
 	}
 	if check {
-		ok, err := RunConsented(root, line)
+		ok, err := consent.RunConsented(grantStore(root), line)
 		if err != nil {
 			return err
 		}
@@ -967,13 +703,13 @@ func trustRun(root, name string, check bool) error {
 		}
 		return runConsentRefusal(slot, line)
 	}
-	if err := refuseTrackedLocal(filepath.Dir(root)); err != nil {
+	if err := consent.RefuseTrackedLocal(filepath.Dir(root)); err != nil {
 		return err
 	}
 	// Printed before the write, in full: a grant that did not show the command
 	// would be a rubber stamp on a line nobody read.
 	Printf("trusting `dross run %s` on this machine:\n\n    %s\n\n", slot.Name, line)
-	if err := GrantRunConsent(root, line); err != nil {
+	if err := consent.GrantRunConsent(grantStore(root), line); err != nil {
 		return err
 	}
 	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
@@ -989,7 +725,7 @@ func trustRun(root, name string, check bool) error {
 // and the replay grant is visibly a different request.
 func trustReplay(root, phaseID string, check bool) error {
 	repoDir := filepath.Dir(root)
-	if err := refuseTrackedLocal(repoDir); err != nil {
+	if err := consent.RefuseTrackedLocal(repoDir); err != nil {
 		return err
 	}
 	line, err := recordedReplayLine(root, phaseID)
@@ -997,7 +733,7 @@ func trustReplay(root, phaseID string, check bool) error {
 		return err
 	}
 	if check {
-		ok, cerr := ReplayConsented(root, line)
+		ok, cerr := consent.ReplayConsented(grantStore(root), line)
 		if cerr != nil {
 			return cerr
 		}
@@ -1010,7 +746,7 @@ func trustReplay(root, phaseID string, check bool) error {
 	// file the repo chose; a grant that did not show it would be consenting to
 	// whatever a clone happened to carry.
 	Printf("trusting %s's red-proof replay command on this machine:\n\n    %s\n\n", phaseID, line)
-	if err := GrantReplayConsent(root, line); err != nil {
+	if err := consent.GrantReplayConsent(grantStore(root), line); err != nil {
 		return err
 	}
 	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)

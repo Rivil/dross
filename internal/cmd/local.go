@@ -14,6 +14,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/consent"
 	"github.com/Rivil/dross/internal/remote"
 )
 
@@ -45,7 +46,9 @@ func Local() *cobra.Command {
 }
 
 // LocalFile is the store's name under .dross/.
-const LocalFile = "local.toml"
+// LocalFile is the store's basename; consent owns the constant because the
+// tracked-store refusal names it.
+const LocalFile = consent.File
 
 // localStore is the closed set of machine-local keys. Adding a key here is the
 // only way to add one to the store — an unknown key is an error, never a
@@ -68,91 +71,18 @@ type localStore struct {
 	// protects exactly that property.
 	AllowHosts string `toml:"allow_hosts,omitempty"`
 
-	// TrustedTestCommand is sha256(runtime.test_command) for the command the
-	// user consented to dross spawning — see trust.go for the whole gate.
+	// Grants is every consent this machine has recorded — the trusted_*
+	// keys — owned by internal/consent and embedded here so the toml encoder
+	// flattens its fields into this file. This struct stays the ONE writer of
+	// local.toml; consent reaches it through grantStore below.
 	//
-	// It is deliberately ABSENT from localKeys: `dross local set` must not be
-	// able to grant it. Consent is granted only by `dross trust`, which prints
-	// the command it is about to trust; a generic key-writer would let an agent
+	// Every grant key is deliberately ABSENT from localKeys: `dross local set`
+	// must not be able to grant one. Consent is granted only by `dross trust`
+	// (and its --replay/--run/--lane/--lane-install forms), which print the
+	// line they are about to trust; a generic key-writer would let an agent
 	// grant consent on the user's behalf without ever showing them what for,
 	// which is the entire thing being defended against.
-	TrustedTestCommand string `toml:"trusted_test_command,omitempty"`
-
-	// TrustedReplayCommands is the comma-separated set of sha256 fingerprints
-	// for the red-proof replay commands this machine has consented to dross
-	// spawning — see redproof_replay.go for what runs them.
-	//
-	// A separate key rather than a reuse of TrustedTestCommand because the two
-	// are different grants: the test command is one line from project.toml, a
-	// replay line is one per phase and arrives from changes.json, which is
-	// TRACKED. A cloned repo can therefore propose the command; consenting to
-	// spawn it is code execution chosen by the repo, so it needs the same
-	// showing-before-writing ceremony the test command gets.
-	//
-	// ABSENT from localKeys, on the TrustedTestCommand precedent: `dross local
-	// set` must not be able to grant it. Only `dross trust --replay <phase-id>`
-	// writes it, and it prints the line first.
-	TrustedReplayCommands string `toml:"trusted_replay_commands,omitempty"`
-
-	// TrustedRunCommands is the comma-separated set of sha256 fingerprints for
-	// the [runtime] slot commands this machine has consented to `dross run`
-	// spawning.
-	//
-	// A third grant rather than a reuse of TrustedTestCommand, for the reason
-	// the binding exists at all: a grant covering "whatever [runtime] happens
-	// to say" would let a dev_command arriving in a pull inherit trust for a
-	// line nobody read. project.toml is TRACKED, so the repo proposes these
-	// commands; consenting to spawn one is code execution the repo chose.
-	//
-	// A SET, like the replay grant: a repo has many runtime slots and granting
-	// `dross run dev` must not silently revoke `dross run migrate`.
-	//
-	// ABSENT from localKeys on the same precedent — only `dross trust --run
-	// <name>` writes it, and it prints the line first.
-	TrustedRunCommands string `toml:"trusted_run_commands,omitempty"`
-
-	// TrustedLaneCommands maps a [[runtime.test_lane]] name to sha256 of that
-	// lane's command line — the per-lane half of the exec-consent gate.
-	//
-	// A MAP keyed by lane name, not a comma-separated fingerprint set like the
-	// replay and run grants beside it. The set shape answers "has this exact
-	// line been trusted?", which is enough when the lines are independent. A
-	// lane's grant has to answer a second question the set cannot: WHICH lane
-	// went stale. With an aggregate or an anonymous set, a one-character edit
-	// to a docs lane's command is indistinguishable from an edit to the Go
-	// lane's, so the gate can only refuse the whole run — and a docs typo that
-	// blocks the Go test gate is a gate people route around. Keyed by name,
-	// one stale lane refuses only itself (the locked lane_consent decision).
-	//
-	// The name is the key, so a RENAMED lane inherits nothing: the lookup
-	// misses and the new name is simply ungranted. That is the correct
-	// direction — a rename is an edit to the lane, and every edit re-prompts.
-	//
-	// ABSENT from localKeys, on the TrustedTestCommand precedent: `dross local
-	// set` must not be able to grant it. Only `dross trust --lane <name>`
-	// writes it, and it prints the command line first.
-	TrustedLaneCommands map[string]string `toml:"trusted_lane_commands,omitempty"`
-
-	// TrustedLaneInstalls maps a [[runtime.test_lane]] name to sha256 of that
-	// lane's declared `install` line — consent to INSTALL that lane's toolchain,
-	// which is a different act from consent to run its suite.
-	//
-	// A second map rather than a second line folded into TrustedLaneCommands'
-	// fingerprint, and that separation is the locked install_consent decision.
-	// Folding it in the way `prepare` is folded in would staleness-refuse a
-	// lane's ordinary TEST runs the moment an install line was added — a line
-	// that has never executed breaking a gate that was passing the day before.
-	// The blast radius differs too: running a suite touches this repo's tree,
-	// while installing changes a machine for everything else that uses it.
-	//
-	// Keyed by lane name on the TrustedLaneCommands precedent, so one lane's
-	// rewritten install line refuses only itself, and a renamed lane inherits
-	// nothing.
-	//
-	// ABSENT from localKeys, for the reason every grant here is: `dross local
-	// set` must not be able to authorize an install. Only `dross trust
-	// --lane-install <name>` writes it, and it prints the line first.
-	TrustedLaneInstalls map[string]string `toml:"trusted_lane_installs,omitempty"`
+	consent.Grants
 
 	// RemoteHost and RemoteWorkdir authorize dross to run this repo's code on
 	// another machine — the mutation adapters and, since remote-test-runner,
@@ -296,7 +226,7 @@ func (d detachedRun) Scheduled() bool { return !d.ScheduledFor.IsZero() }
 
 // readDetachedRuns returns every dispatched-but-uncollected run.
 //
-// It goes through refuseTrackedLocal for the reason readRemoteGrants does: the
+// It goes through consent.RefuseTrackedLocal for the reason readRemoteGrants does: the
 // record names a host and a path a fetch will read from, so a committed store
 // carrying one is a repo pointing this machine's next `verify results` at a
 // directory of its choosing. Refused unread, like every other trust-bearing
@@ -307,7 +237,7 @@ func (d detachedRun) Scheduled() bool { return !d.ScheduledFor.IsZero() }
 // runs outstanding", because that silently re-dispatches a leg already running
 // on the host and leaves two writers for one phase's tests.json.
 func readDetachedRuns(root, repoDir string) ([]detachedRun, error) {
-	if err := refuseTrackedLocal(repoDir); err != nil {
+	if err := consent.RefuseTrackedLocal(repoDir); err != nil {
 		return nil, err
 	}
 	l, err := loadLocal(localPath(root))
@@ -349,7 +279,7 @@ func findDetachedRun(root, repoDir, phaseID string) (*detachedRun, error) {
 // subcommand that does not exist, and it caught exactly that on the first draft
 // of this function. The caller adds the remediation line, where the verbs are.
 func recordDetachedRun(root, repoDir string, rec detachedRun) error {
-	if err := refuseTrackedLocal(repoDir); err != nil {
+	if err := consent.RefuseTrackedLocal(repoDir); err != nil {
 		return err
 	}
 	path := localPath(root)
@@ -376,7 +306,7 @@ func recordDetachedRun(root, repoDir string, rec detachedRun) error {
 // nothing" reports both as done, and a user who mistyped a phase id is told
 // the run is cancelled while it keeps running on the host.
 func clearDetachedRun(root, repoDir, phaseID string) (bool, error) {
-	if err := refuseTrackedLocal(repoDir); err != nil {
+	if err := consent.RefuseTrackedLocal(repoDir); err != nil {
 		return false, err
 	}
 	path := localPath(root)
@@ -475,7 +405,7 @@ func (l *localStore) effectiveRemote() (host, workdir string) {
 // optional, and a fresh clone legitimately has none. Only "git says this is
 // tracked" is an error.
 func readAllowHosts(root, repoDir string) ([]string, error) {
-	if err := refuseTrackedLocal(repoDir); err != nil {
+	if err := consent.RefuseTrackedLocal(repoDir); err != nil {
 		return nil, err
 	}
 	l, err := loadLocal(localPath(root))
@@ -491,32 +421,6 @@ func readAllowHosts(root, repoDir string) ([]string, error) {
 	return hosts, nil
 }
 
-// refuseTrackedLocal is the provenance check every reader of a trust-bearing
-// key in local.toml goes through, extracted so readAllowHosts and the exec
-// consent gate share ONE refusal rather than two that drift apart.
-//
-// It returns nil for a missing or untracked file — local.toml is optional, and
-// a fresh clone legitimately has none. Only "git says this is tracked" is an
-// error, and the file is refused UNREAD in that case: a committed store is
-// either an accident an honest repo wants to know about, or a hostile repo
-// authorizing itself through the one input dross trusts precisely because it is
-// never cloned.
-func refuseTrackedLocal(repoDir string) error {
-	rel := RootDirName + "/" + LocalFile
-	if gitNoOut(repoDir, "ls-files", "--error-unmatch", "--", rel) != nil {
-		return nil
-	}
-	return fmt.Errorf(
-		"refusing to read %s: git reports it tracked.\n\n"+
-			"%s is machine-local by design — it is where this machine records what it\n"+
-			"trusts (API allowlist hosts, the consented test command), so a committed\n"+
-			"copy would let the repo authorize itself. dross will not read a tracked one.\n\n"+
-			"To fix, untrack it and keep the local copy:\n\n"+
-			"    git rm --cached %s\n"+
-			"    git commit -m \"chore: untrack dross local store\"",
-		rel, rel, rel)
-}
-
 // remoteCandidate is one authorized host in the pool.
 type remoteCandidate struct {
 	Host    string `toml:"host"`
@@ -530,7 +434,7 @@ type remoteCandidate struct {
 // Order is the user's declared preference, so honouring it needs no policy of
 // our own.
 //
-// It goes through refuseTrackedLocal for the same reason the consent gate does,
+// It goes through consent.RefuseTrackedLocal for the same reason the consent gate does,
 // and the reason is sharper here: a tracked local.toml naming a remote host is a
 // repo shipping the machine it wants your working tree rsync'd to and your test
 // suite executed on. The file is refused UNREAD in that case.
@@ -546,7 +450,7 @@ type remoteCandidate struct {
 // because "I could not read your config" must never resolve to a silent local
 // run the user thought was remote.
 func readRemoteGrants(root, repoDir string) ([]*remote.Target, error) {
-	if err := refuseTrackedLocal(repoDir); err != nil {
+	if err := consent.RefuseTrackedLocal(repoDir); err != nil {
 		return nil, err
 	}
 	l, err := loadLocal(localPath(root))
@@ -746,6 +650,34 @@ func (l *localStore) save(path string) error {
 	}
 	return nil
 }
+
+// localGrantStore is consent.Store over THIS file: it loads the whole
+// localStore, swaps the embedded Grants, and saves the whole thing back — so
+// consent never learns local.toml's layout and every foreign key (quick_base,
+// the remote grant, tuning, detached runs) survives a grant untouched.
+type localGrantStore struct{ root string }
+
+func (s localGrantStore) Load() (*consent.Grants, error) {
+	l, err := loadLocal(localPath(s.root))
+	if err != nil {
+		return nil, err
+	}
+	g := l.Grants
+	return &g, nil
+}
+
+func (s localGrantStore) Save(g *consent.Grants) error {
+	path := localPath(s.root)
+	l, err := loadLocal(path)
+	if err != nil {
+		return err
+	}
+	l.Grants = *g
+	return l.save(path)
+}
+
+// grantStore is the consent.Store for the tree rooted at root (its .dross).
+func grantStore(root string) consent.Store { return localGrantStore{root: root} }
 
 // readLocalKey is the reader other commands use. Any failure to read the
 // store yields an empty value rather than an error: the store is an

@@ -17,6 +17,7 @@ import (
 
 	"github.com/Rivil/dross/internal/architecture"
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/consent"
 	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/mutationcfg"
@@ -1220,7 +1221,7 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 	// something WAS trusted here and the command has since changed, which is
 	// precisely the signature the consent binding exists to catch.
 	Print("Exec consent:")
-	switch state, cerr := CheckConsent(root, repoDir, p.Runtime.TestCommand); state {
+	switch state, cerr := consent.CheckConsent(grantStore(root), repoDir, p.Runtime.TestCommand); state {
 	case ConsentGranted:
 		Printf("  ✓ this machine has trusted the configured test command\n")
 	case ConsentStale:

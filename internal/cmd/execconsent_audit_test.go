@@ -2172,7 +2172,7 @@ func TestReachProofIsLoadBearing(t *testing.T) {
 	// is about what happens when the check is gone.
 	g := repoExecGraph(t, [3]string{
 		"run.go",
-		"consented, err := RunConsented(root, line)",
+		"consented, err := consent.RunConsented(grantStore(root), line)",
 		"consented, err := true, error(nil)",
 	})
 	var found bool

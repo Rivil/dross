@@ -253,7 +253,7 @@ command = "go test -count=1 ./..."`)
 
 // TestLaneGrantRefusesATrackedStore: a committed local.toml is a repo shipping
 // its own authorization, and the lane grant is exactly as trust-bearing as
-// every other key in that file. It shares refuseTrackedLocal rather than
+// every other key in that file. It shares consent.RefuseTrackedLocal rather than
 // restating the rule, so this test is what proves the share is wired.
 func TestLaneGrantRefusesATrackedStore(t *testing.T) {
 	dir := t.TempDir()
@@ -442,7 +442,7 @@ func TestRevokeLaneConsentDropsOnlyThatLane(t *testing.T) {
 }
 
 // trackedLaneFixture builds a repo at the cwd whose .dross/local.toml is
-// git-tracked, which makes refuseTrackedLocal refuse EVERY lane. It is the only
+// git-tracked, which makes consent.RefuseTrackedLocal refuse EVERY lane. It is the only
 // route to ConsentRefused for a lane, and being repo-wide it refuses the
 // whole-suite grant too — so assertions over it have to isolate the lane half
 // rather than read a total.
