@@ -19,6 +19,7 @@ import (
 // --- runtime-built shapes ---
 
 func ghTok() string      { return "ghp_" + strings.Repeat("A1b2", 9) }
+func ghFineTok() string  { return "github_pat_" + strings.Repeat("Z9_x", 5) + "Qw" } // 22 chars: the floor
 func glTok() string      { return "glpat-" + strings.Repeat("xY9-", 5) }
 func atlTok() string     { return "ATATT" + strings.Repeat("3xF=", 6) }
 func awsKey() string     { return "AKIA" + strings.Repeat("Q7", 8) }
@@ -119,6 +120,24 @@ func TestEveryRuleHasAHitCase(t *testing.T) {
 		if hits[0].Rule != name {
 			t.Errorf("%s: hit rule = %q", name, hits[0].Rule)
 		}
+	}
+}
+
+// TestGitHubFineGrainedPATFires pins the github_pat_ alternation the criterion
+// names by hand: the hit corpus holds one row per rule and that row is the
+// classic ghp_ shape, so without this the fine-grained arm could be deleted
+// from rules.go unnoticed. 22 characters is the rule's floor; 21 must miss.
+func TestGitHubFineGrainedPATFires(t *testing.T) {
+	tok := ghFineTok()
+	if n := len(tok) - len("github_pat_"); n != 22 {
+		t.Fatalf("fixture drifted: want a 22-char body, got %d", n)
+	}
+	hits := scan(t, "corpus", tok)
+	if len(hits) != 1 || hits[0].Rule != "github-token" {
+		t.Fatalf("github_pat_ at 22 chars: want one github-token hit, got %v", hits)
+	}
+	if hits := scan(t, "corpus", tok[:len(tok)-1]); len(hits) != 0 {
+		t.Fatalf("github_pat_ at 21 chars must miss the floor, got %v", hits)
 	}
 }
 
@@ -237,8 +256,14 @@ func randomLine(rng *rand.Rand, rule string) (line, variable string) {
 	const value = alnum + "+/=_.~@!#%^*-"
 	switch rule {
 	case "github-token":
-		v := pick(alnum, 36)
-		return "ghp_" + v, v
+		// Both alternations: the classic 36-char ghp_ and the fine-grained
+		// github_pat_ (22+ chars, underscores allowed).
+		if rng.Intn(2) == 0 {
+			v := pick(alnum, 36)
+			return "ghp_" + v, v
+		}
+		v := pick(alnum+"_", 22+rng.Intn(60))
+		return "github_pat_" + v, v
 	case "gitlab-pat":
 		v := pick(alnum+"_-", 20+rng.Intn(10))
 		return "glpat-" + v, v
