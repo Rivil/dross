@@ -1,0 +1,59 @@
+Foundational files:
+  ✓ project.toml, rules.toml present
+
+Remote:
+  ✗ git origin = origin but project.toml has no [remote] — run /dross-onboard or set manually
+
+.gitattributes:
+  ✓ .dross/ is marked linguist-generated
+
+Branch names:
+  ✓ configured branch names are valid git refs
+
+API host:
+  ✓ configured API hosts are within the allowlist derived from [remote].url
+
+Machine-local store:
+  ✓ .dross/local.toml is gitignored
+
+git version:
+  ✓ git version 2.45.0 supports --end-of-options
+
+Exec consent:
+  ⚠ no runtime.test_command is configured, so the loop commands refuse.
+    Fix: `dross project set runtime.test_command "<cmd>"`, then `dross trust`.
+  Authorizes the dross commands that spawn a process: changes record, state bump, survivor drain, task next, task status in_progress, test, verify, verify results.
+  The gated surface is enumerated from the source, not listed here; a spawn that
+  cannot reach repo-authored code carries a //dross:exec-exempt <reason> marker.
+
+Remote:
+  ⚠ no remote granted — mutation runs and `dross test` run on this machine.
+    Grant one with `dross remote grant <host> <workdir>`.
+
+Mutation toolchain:
+  ⚠ npx is not installed — the stryker adapter needs it to measure TypeScript/JavaScript/Svelte files here.
+    Without it a verify run reports nothing measured rather than a bad score. Fix: install Node 20+ (https://nodejs.org) — npx ships with it
+  ⚠ gremlins is not installed — the gremlins adapter needs it to measure Go files here.
+    Without it a verify run reports nothing measured rather than a bad score. Fix: go install github.com/go-gremlins/gremlins/cmd/gremlins@latest
+  ⚠ dotnet is not installed — the stryker-net adapter needs it to measure C# files here.
+    Without it a verify run reports nothing measured rather than a bad score. Fix: install the .NET SDK (https://dotnet.microsoft.com/download)
+
+Phase branch hygiene:
+  ✓ no recorded phase commits on local main
+
+Task statuses:
+  ✓ every task status is one of pending|in_progress|done|failed
+
+Architecture links:
+  ✓ all ARCHITECTURE.md symbol links resolve
+
+State file:
+  ✓ .dross/state.json is not tracked
+
+Clobbered/missing .dross/ files:
+  ✓ no clobbered or missing tracked .dross/ files
+
+Version:
+  ✓ project.toml and state.json agree on 0.1.0.0
+
+--- exit: 1

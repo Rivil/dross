@@ -1,0 +1,23 @@
+command: verify
+  use: verify <phase-id>
+  short: Run mutation testing per language and write tests.json + verify.toml skeleton
+  flag: --skip-mutation (bool) default="false" noopt="true" usage="do not run mutation tests (record what would have been mutated, skip execution)"
+  flag: --detach (bool) default="false" noopt="true" usage="start the run on the granted host and return immediately; collect it later with `dross verify results <phase>`"
+  flag: --at (string) default="" usage="with --detach, start the run at HH:MM (next occurrence) or an RFC3339 instant, on the host's clock"
+  flag: --reuse-report (bool) default="false" noopt="true" usage="stryker only: parse the report already on disk instead of launching a run (path + mtime are printed; other legs still run)"
+  flag: --base (string) default="" usage="diff from this commit instead of the resolved fork point (a merged phase falls back to changes.json's base_commit automatically; use this when it has none)"
+command: verify finalize
+  use: finalize <phase-id>
+  short: Record the resolved verdict from verify.toml as a telemetry outcome event
+command: verify results
+  use: results <phase-id>
+  short: Collect a detached mutation run and write tests.json + verify.toml
+  flag: --base (string) default="" usage="diff from this commit instead of the resolved fork point; pass the same value the run was dispatched with"
+command: verify scope
+  use: scope <phase-id>
+  short: Print the last verify run's range provenance: in-scope files, raw hunks, and per leg the effective ranges or whole-file fallback
+  flag: --json (bool) default="false" noopt="true" usage="emit the provenance record as JSON — the same values, nothing re-rendered"
+command: verify status
+  use: status
+  short: List detached mutation runs this machine dispatched
+  flag: --cancel (string) default="" usage="cancel the named phase's detached run: kill it on the host and drop the record"

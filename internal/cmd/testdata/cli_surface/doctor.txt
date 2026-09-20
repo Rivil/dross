@@ -1,0 +1,3 @@
+command: doctor
+  use: doctor
+  short: Check project-level health (.dross/project.toml vs reality)
