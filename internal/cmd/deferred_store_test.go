@@ -70,7 +70,7 @@ func TestDeferredListIncludesProjectStore(t *testing.T) {
 }
 
 // TestDeferredEntryIDStaysInternal pins the locked deferred_identity decision:
-// the id is carried in Go (syncBacklog keys on it) but never reaches the JSON a
+// the id is carried in Go (boardsync.SyncBacklog keys on it) but never reaches the JSON a
 // prompt reads, where `<source> <idx>` remains the only handle. Removing the
 // json:"-" tag leaks an `id` key and fails here.
 func TestDeferredEntryIDStaysInternal(t *testing.T) {

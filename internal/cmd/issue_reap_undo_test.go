@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/reaplog"
 )
@@ -114,11 +115,11 @@ func undoRepo(t *testing.T, f *undoYT) string {
 	mustRunSet(t, "board.state_map.task-complete", "Task Done")
 	mustWrite(t, filepath.Join(dir, ".dross", "board.json"), strandedBoard)
 	writeStrandedFixture(t, dir)
-	f.seed("PROJ-1", "In Progress", labelMarker)
-	f.seed("PROJ-2", "In Review", labelMarker)
-	f.seed("PROJ-7", "Open", labelMarker)
-	f.seed("PROJ-20", "Submitted", labelMarker)
-	f.seed("PROJ-40", "Open", labelMarker)
+	f.seed("PROJ-1", "In Progress", boardsync.LabelMarker)
+	f.seed("PROJ-2", "In Review", boardsync.LabelMarker)
+	f.seed("PROJ-7", "Open", boardsync.LabelMarker)
+	f.seed("PROJ-20", "Submitted", boardsync.LabelMarker)
+	f.seed("PROJ-40", "Open", boardsync.LabelMarker)
 	return dir
 }
 

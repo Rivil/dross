@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/board"
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/phase"
@@ -98,11 +99,11 @@ func taskPull(ctx *boardCtx, phaseID string, apply bool) error {
 	// Refused up front, by name. A board with no workflow field cannot express
 	// a task's column, so reporting "no changes" for it would be a lie of
 	// exactly the shape this repo has already fixed once for a failed pull.
-	if !providerHasWorkflowState(ctx.proj.Board.Provider) {
+	if !providerHasWorkflowState(ctx.Proj.Board.Provider) {
 		return fmt.Errorf("board provider %q has no workflow state — its issues are open/closed only, "+
 			"so there is no column for a card to move between.\n\n"+
 			"Task-state pull needs youtrack or jira. The outbound mirror (`dross issue task sync`) "+
-			"still works here; only the inbound direction is unavailable.", ctx.proj.Board.Provider)
+			"still works here; only the inbound direction is unavailable.", ctx.Proj.Board.Provider)
 	}
 
 	plan, _, planPath, err := loadPhasePlanAndSpec(phaseID)
@@ -132,13 +133,13 @@ func collectTaskMoves(ctx *boardCtx, phaseID string, plan *phase.Plan) ([]taskMo
 	var moves []taskMoveVerdict
 	for i := range plan.Task {
 		t := &plan.Task[i]
-		link, ok := ctx.board.TaskLinkFor(phaseID, t.ID)
+		link, ok := ctx.Board.TaskLinkFor(phaseID, t.ID)
 		if !ok || link.Issue == "" {
 			continue // never mirrored; task-sync's job, not ours
 		}
-		iss, err := ctx.client.GetIssue(link.Issue)
+		iss, err := ctx.Client.GetIssue(link.Issue)
 		if err != nil {
-			return nil, wrapBoard(fmt.Errorf("read %s for %s: %w", link.Issue, t.ID, err))
+			return nil, boardsync.Wrap(fmt.Errorf("read %s for %s: %w", link.Issue, t.ID, err))
 		}
 		moves = append(moves, classifyTaskMove(t, link, iss))
 	}
@@ -218,7 +219,7 @@ func reportTaskMoves(ctx *boardCtx, phaseID string, plan *phase.Plan, planPath s
 				if !plan.SetTaskStatus(m.TaskID, m.NewStatus) {
 					return fmt.Errorf("task %s vanished from the plan mid-run", m.TaskID)
 				}
-				ctx.board.SetTaskSynced(phaseID, m.TaskID, m.Issue, m.NewStatus, m.BoardState)
+				ctx.Board.SetTaskSynced(phaseID, m.TaskID, m.Issue, m.NewStatus, m.BoardState)
 				Printf("  %s  %s -> %s (from the board)\n", m.TaskID, m.PlanStatus, m.NewStatus)
 			} else {
 				Printf("  %s  would move %s -> %s (board says %s)\n", m.TaskID, m.PlanStatus, m.NewStatus, m.BoardState)
@@ -243,7 +244,7 @@ func reportTaskMoves(ctx *boardCtx, phaseID string, plan *phase.Plan, planPath s
 		if err := plan.Save(planPath); err != nil {
 			return err
 		}
-		if err := ctx.board.Save(ctx.boardPath); err != nil {
+		if err := ctx.Board.Save(ctx.BoardPath); err != nil {
 			return err
 		}
 		Printf("applied %d move(s) to %s\n", applied, planPath)

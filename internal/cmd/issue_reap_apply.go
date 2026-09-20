@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/reaplog"
 )
@@ -98,7 +99,7 @@ func (e *reapFailure) Error() string { return fmt.Sprintf("%s: %v", e.key, e.err
 func (e *reapFailure) Unwrap() error { return e.err }
 
 // lanesDroppingTheirLink names the lanes whose forward close path also removes
-// the board.json entry — today only the backlog, where reconcileBacklog drops a
+// the board.json entry — today only the backlog, where boardsync.ReconcileBacklog drops a
 // key that has left the live set.
 //
 // Deliberately not every lane. Dropping a link is not tidiness: it is the only
@@ -118,7 +119,7 @@ func applyReap(ctx *boardCtx, plan *reapPlan) error {
 		// Read BEFORE the write. This is the ledger's whole value: a state
 		// captured after the close is the state dross just wrote, and undo
 		// built from it restores nothing.
-		prior, err := ctx.client.GetIssue(card.Key)
+		prior, err := ctx.Client.GetIssue(card.Key)
 		if err != nil || prior == nil {
 			if err == nil {
 				err = fmt.Errorf("issue not found")
@@ -135,10 +136,10 @@ func applyReap(ctx *boardCtx, plan *reapPlan) error {
 			PriorLabels:   prior.Labels,
 		}
 
-		// closeBoardIssue writes the MAPPED lane terminal and verifies the
+		// boardsync.CloseIssue writes the MAPPED lane terminal and verifies the
 		// read-back, so a workflow that accepted the request and refused the
 		// transition is a failure here rather than a false "closed" line.
-		if err := closeBoardIssue(ctx, card.Key, card.Terminal); err != nil {
+		if err := boardsync.CloseIssue(ctx, card.Key, card.Terminal); err != nil {
 			entry.Outcome = reaplog.OutcomeFailed
 			run.Cards = append(run.Cards, entry)
 			failures = append(failures, &reapFailure{key: card.Key, err: err})
@@ -168,7 +169,7 @@ func applyReap(ctx *boardCtx, plan *reapPlan) error {
 		closed++
 	}
 
-	if err := ctx.board.Save(ctx.boardPath); err != nil {
+	if err := ctx.Board.Save(ctx.BoardPath); err != nil {
 		return err
 	}
 	if err := appendReapRun(ctx, run); err != nil {
@@ -193,7 +194,7 @@ func applyReap(ctx *boardCtx, plan *reapPlan) error {
 // terminal, leaving every other label — the marker and the identity labels the
 // discovery sweep depends on — untouched.
 func relabelReapedCard(ctx *boardCtx, card reapCard, prior []string) error {
-	want := statusLabel(card.Terminal)
+	want := boardsync.StatusLabel(card.Terminal)
 	labels := make([]string, 0, len(prior)+1)
 	already := false
 	for _, l := range prior {
@@ -209,8 +210,8 @@ func relabelReapedCard(ctx *boardCtx, card reapCard, prior []string) error {
 		return nil // the only status label is already the right one
 	}
 	labels = append(labels, want)
-	if _, err := ctx.client.UpdateIssue(card.Key, forge.IssuePatch{Labels: &labels}); err != nil {
-		return wrapBoard(err)
+	if _, err := ctx.Client.UpdateIssue(card.Key, forge.IssuePatch{Labels: &labels}); err != nil {
+		return boardsync.Wrap(err)
 	}
 	return nil
 }
@@ -234,9 +235,9 @@ func priorStateOf(iss *forge.Issue) string {
 // dropBacklogLink removes the board.json backlog key pointing at this issue and
 // returns it, so the journal can restore it.
 func dropBacklogLink(ctx *boardCtx, issue string) string {
-	for _, key := range ctx.board.BacklogKeys() {
-		if id, ok := ctx.board.BacklogID(key); ok && id == issue {
-			ctx.board.DeleteBacklog(key)
+	for _, key := range ctx.Board.BacklogKeys() {
+		if id, ok := ctx.Board.BacklogID(key); ok && id == issue {
+			ctx.Board.DeleteBacklog(key)
 			return key
 		}
 	}
@@ -250,7 +251,7 @@ func appendReapRun(ctx *boardCtx, run reaplog.Run) error {
 	if len(run.Cards) == 0 {
 		return nil
 	}
-	path := reaplog.FilePath(ctx.root)
+	path := reaplog.FilePath(ctx.Root)
 	log, err := reaplog.Load(path)
 	if err != nil {
 		return err

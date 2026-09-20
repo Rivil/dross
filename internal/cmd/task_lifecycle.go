@@ -1,6 +1,9 @@
 package cmd
 
-import "github.com/Rivil/dross/internal/phase"
+import (
+	"github.com/Rivil/dross/internal/boardsync"
+	"github.com/Rivil/dross/internal/phase"
+)
 
 // The two task vocabularies, and the conversion between them.
 //
@@ -30,8 +33,8 @@ import "github.com/Rivil/dross/internal/phase"
 // board, and inventing one would need a state-map key no prompt emits — which
 // the lifecycle divergence guard refuses by design.
 var taskLifecycle = map[string]string{
-	phase.StatusInProgress: statusTaskInProgress,
-	phase.StatusDone:       statusTaskInReview,
+	phase.StatusInProgress: boardsync.StatusTaskInProgress,
+	phase.StatusDone:       boardsync.StatusTaskInReview,
 }
 
 // statusTaskComplete is the TASK lane's terminal state, emitted once per phase

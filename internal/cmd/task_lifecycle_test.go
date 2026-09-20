@@ -3,6 +3,7 @@ package cmd
 import (
 	"testing"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/phase"
 )
 
@@ -22,9 +23,9 @@ func TestTerminalTaskStatusIsReadableButNeverDerived(t *testing.T) {
 			statusTaskComplete, got, ok, phase.StatusDone)
 	}
 
-	if lc, _ := lifecycleForPlanStatus(phase.StatusDone); lc != statusTaskInReview {
+	if lc, _ := lifecycleForPlanStatus(phase.StatusDone); lc != boardsync.StatusTaskInReview {
 		t.Errorf("lifecycleForPlanStatus(%q) = %q, want %q — the terminal status must never appear at a per-task execute edge",
-			phase.StatusDone, lc, statusTaskInReview)
+			phase.StatusDone, lc, boardsync.StatusTaskInReview)
 	}
 
 	// The inversion is still exactly the inversion for everything else: only
@@ -50,19 +51,19 @@ func TestTerminalTaskStatusIsReadableButNeverDerived(t *testing.T) {
 // even be spelled.
 //
 // The done verdict is asserted by the run exiting zero rather than by a second
-// read: closeBoardIssue re-reads every card and fails the command unless the
+// read: boardsync.CloseIssue re-reads every card and fails the command unless the
 // tracker agrees, so a fake that closed nothing could not reach this point.
 func TestTerminalRunClearsTheReviewLabel(t *testing.T) {
 	f := newTaskCloseFake(t)
 	dir := taskCloseRepo(t, "forgejo", f, "t-1", "t-2")
 
 	// The execute loop's state: every card mirrored and sitting in review.
-	if err := runCmd(t, Issue(), "task", "sync", "01-auth", "--status", statusTaskInReview); err != nil {
+	if err := runCmd(t, Issue(), "task", "sync", "01-auth", "--status", boardsync.StatusTaskInReview); err != nil {
 		t.Fatalf("seed task-sync: %v", err)
 	}
 	for _, id := range []string{"t-1", "t-2"} {
 		key, _ := loadBoardFile(t, dir).TaskIssue("01-auth", id)
-		if !slicesHas(f.labelsOf(key), statusLabel(statusTaskInReview)) {
+		if !slicesHas(f.labelsOf(key), boardsync.StatusLabel(boardsync.StatusTaskInReview)) {
 			t.Fatalf("%s does not start in review: %v", id, f.labelsOf(key))
 		}
 	}
@@ -83,11 +84,11 @@ func TestTerminalRunClearsTheReviewLabel(t *testing.T) {
 			t.Fatalf("%s lost its link", id)
 		}
 		labels := f.labelsOf(key)
-		if slicesHas(labels, statusLabel(statusTaskInReview)) {
-			t.Errorf("%s still carries %s after finalize: %v", id, statusLabel(statusTaskInReview), labels)
+		if slicesHas(labels, boardsync.StatusLabel(boardsync.StatusTaskInReview)) {
+			t.Errorf("%s still carries %s after finalize: %v", id, boardsync.StatusLabel(boardsync.StatusTaskInReview), labels)
 		}
-		if !slicesHas(labels, statusLabel(statusTaskComplete)) {
-			t.Errorf("%s does not carry %s: %v", id, statusLabel(statusTaskComplete), labels)
+		if !slicesHas(labels, boardsync.StatusLabel(statusTaskComplete)) {
+			t.Errorf("%s does not carry %s: %v", id, boardsync.StatusLabel(statusTaskComplete), labels)
 		}
 		if f.closeCount(key) != 1 {
 			t.Errorf("%s closes = %d, want 1", id, f.closeCount(key))

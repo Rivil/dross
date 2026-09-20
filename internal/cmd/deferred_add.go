@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
@@ -164,12 +165,12 @@ func mirrorDeferredAdd(root string, d deferredEntry) {
 	if err != nil || s.CurrentMilestone == "" {
 		return
 	}
-	it := deferredBacklogItem(d)
+	it := boardsync.DeferredBacklogItem(d)
 	// A brand-new item has no pre-id board link, so there is nothing to migrate
 	// — and leaving the positional key set would let it consult a stale link
 	// recorded for a long-gone item at the same index.
-	it.legacyKey = ""
-	if _, _, err := pushBacklogItems(ctx, s.CurrentMilestone, []backlogItem{it}); err != nil {
+	it.LegacyKey = ""
+	if _, _, err := boardsync.PushBacklogItems(ctx, s.CurrentMilestone, []boardsync.BacklogItem{it}); err != nil {
 		Printf("warning: board mirror failed — %v\n", err)
 		Printf("the item is filed locally; `dross issue backlog sync %s` will mirror it later\n", s.CurrentMilestone)
 		return
@@ -178,7 +179,7 @@ func mirrorDeferredAdd(root string, d deferredEntry) {
 	// "did this reach the tracker?" can only be answered by reading board.json —
 	// which makes the warn-and-continue path indistinguishable from success at a
 	// glance, exactly when it matters most.
-	if key, ok := ctx.board.BacklogID(it.key); ok {
+	if key, ok := ctx.Board.BacklogID(it.Key); ok {
 		Printf("board: %s\n", key)
 	}
 }

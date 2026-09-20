@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/board"
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/phase"
@@ -27,10 +28,6 @@ import (
 //
 // It is a no-op when board sync is off, like every other `dross issue` verb, so
 // the loop prompts call it unconditionally.
-
-// taskLabel marks an issue as mirroring one plan task. The pair is in the label
-// because task ids are unique only within a phase.
-func taskLabel(phaseID, taskID string) string { return "dross/task:" + phaseID + "/" + taskID }
 
 func issueTaskSync() *cobra.Command {
 	var status string
@@ -67,7 +64,7 @@ A no-op when board sync is off.`,
 				// label "dross/status: Task-In-Review" and then miss the map.
 				status = configenum.Normalize(status)
 			}
-			// --close REQUIRES --status. closeBoardIssue defaults an empty
+			// --close REQUIRES --status. boardsync.CloseIssue defaults an empty
 			// status to `complete` — the PHASE lane's terminal state — and
 			// writing that onto task cards is the label collision the
 			// task_terminal_status decision exists to prevent.
@@ -110,7 +107,7 @@ func (e *taskCloseError) Unwrap() error { return e.err }
 
 // syncTasks mirrors one phase's plan tasks.
 func syncTasks(ctx *boardCtx, phaseID, only, status string, doClose bool) error {
-	dir := phase.Dir(ctx.root, phaseID)
+	dir := phase.Dir(ctx.Root, phaseID)
 	plan, err := phase.LoadPlan(filepath.Join(dir, "plan.toml"))
 	if err != nil {
 		return fmt.Errorf("load plan for %s: %w", phaseID, err)
@@ -119,12 +116,12 @@ func syncTasks(ctx *boardCtx, phaseID, only, status string, doClose bool) error 
 	// The phase's own issue is the parent. Resolved once — not per task —
 	// because every child relates to the same one, and re-resolving would be
 	// a tracker round trip per task for an answer that cannot change mid-run.
-	parent, ok := ctx.board.PhaseIssue(phaseID)
+	parent, ok := ctx.Board.PhaseIssue(phaseID)
 	if !ok {
 		return fmt.Errorf("phase %s has no board issue yet — run `dross issue phase sync %s` first", phaseID, phaseID)
 	}
 
-	linker, canLink := ctx.client.(forge.IssueLinker)
+	linker, canLink := ctx.Client.(forge.IssueLinker)
 	warn := &runWarnings{}
 	var refused []string
 
@@ -148,7 +145,7 @@ func syncTasks(ctx *boardCtx, phaseID, only, status string, doClose bool) error 
 			// otherwise print eight identical lines, which is how a warning
 			// becomes scrollback.
 			warn.once(&warn.noLink, "%s cannot relate issues — task issues carry %s and the phase label instead of a link",
-				ctx.proj.Board.Provider, taskLabel(phaseID, "<task>"))
+				ctx.Proj.Board.Provider, boardsync.TaskLabel(phaseID, "<task>"))
 			continue
 		}
 		if err := linker.LinkIssues(parent, key); err != nil {
@@ -162,7 +159,7 @@ func syncTasks(ctx *boardCtx, phaseID, only, status string, doClose bool) error 
 	// Saved before the verdict: the cards that DID close have their links (and,
 	// where they closed, their agreement points) recorded, so a partial run is
 	// resumable rather than repeated wholesale.
-	if err := ctx.board.Save(ctx.boardPath); err != nil {
+	if err := ctx.Board.Save(ctx.BoardPath); err != nil {
 		return err
 	}
 	if len(refused) > 0 {
@@ -198,9 +195,9 @@ func (w *runWarnings) once(gate *bool, format string, args ...any) {
 func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status string, doClose bool, warn *runWarnings) (string, error) {
 	title := fmt.Sprintf("%s/%s — %s", phaseID, t.ID, t.Title)
 	body := renderTaskBody(phaseID, parent, t)
-	labels := []string{labelMarker, phaseLabel(phaseID), taskLabel(phaseID, t.ID)}
+	labels := []string{boardsync.LabelMarker, boardsync.PhaseLabel(phaseID), boardsync.TaskLabel(phaseID, t.ID)}
 	if status != "" {
-		labels = append(labels, statusLabel(status))
+		labels = append(labels, boardsync.StatusLabel(status))
 	}
 
 	key, err := resolveTaskIssue(ctx, phaseID, t.ID)
@@ -208,15 +205,15 @@ func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status str
 		return "", err
 	}
 	if key == "" {
-		iss, err := ctx.client.CreateIssue(forge.IssueInput{Title: title, Body: body, Labels: labels})
+		iss, err := ctx.Client.CreateIssue(forge.IssueInput{Title: title, Body: body, Labels: labels})
 		if err != nil {
-			return "", wrapBoard(err)
+			return "", boardsync.Wrap(err)
 		}
 		key = iss.Key
 	} else {
 		patch := forge.IssuePatch{Title: &title, Body: &body, Labels: &labels}
-		if _, err := ctx.client.UpdateIssue(key, patch); err != nil {
-			return "", wrapBoard(err)
+		if _, err := ctx.Client.UpdateIssue(key, patch); err != nil {
+			return "", boardsync.Wrap(err)
 		}
 	}
 	// The tracker's own field, not the label above. The label is dross talking
@@ -227,17 +224,17 @@ func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status str
 			return "", err
 		}
 	}
-	// The close goes through closeBoardIssue, so a task card is resolved the
+	// The close goes through boardsync.CloseIssue, so a task card is resolved the
 	// same verified way a phase card is — and on the flat boards it plainly
 	// closes rather than refusing by name, which would strand every task card
 	// on forgejo, gitea, gitlab and github forever.
 	if doClose {
-		if err := closeBoardIssue(ctx, key, status); err != nil {
+		if err := boardsync.CloseIssue(ctx, key, status); err != nil {
 			// The LINK is still recorded — losing it would cost a label query
 			// on every later run — but no agreement point: the card did not
 			// reach the state the run was about to claim it had, and
 			// `task-pull` compares against that claim.
-			ctx.board.SetTask(phaseID, t.ID, key)
+			ctx.Board.SetTask(phaseID, t.ID, key)
 			return key, &taskCloseError{taskID: t.ID, err: err}
 		}
 	}
@@ -253,9 +250,9 @@ func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status str
 	// claiming an agreement on a value neither side now shows would make the
 	// next pull read a phantom move.
 	if status != "" {
-		ctx.board.SetTaskSynced(phaseID, t.ID, key, t.Status, status)
+		ctx.Board.SetTaskSynced(phaseID, t.ID, key, t.Status, status)
 	} else {
-		ctx.board.SetTask(phaseID, t.ID, key)
+		ctx.Board.SetTask(phaseID, t.ID, key)
 	}
 	return key, nil
 }
@@ -263,26 +260,26 @@ func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status str
 // resolveTaskIssue finds an existing issue for a task: the board cache first,
 // then the tracker by label.
 //
-// Same two-step as resolvePhaseIssue, and for the same reason: board.json is a
+// Same two-step as boardsync.ResolvePhaseIssue, and for the same reason: board.json is a
 // cache, so an entry that no longer resolves must not shadow the live issue,
 // and a re-clone with no cache must still find what is already there rather
 // than creating a second issue for every task.
 func resolveTaskIssue(ctx *boardCtx, phaseID, taskID string) (string, error) {
-	if key, ok := ctx.board.TaskIssue(phaseID, taskID); ok {
-		if iss, err := ctx.client.GetIssue(key); err == nil && iss != nil && hasMarker(*iss) {
+	if key, ok := ctx.Board.TaskIssue(phaseID, taskID); ok {
+		if iss, err := ctx.Client.GetIssue(key); err == nil && iss != nil && boardsync.HasMarker(*iss) {
 			return key, nil
 		}
 		fmt.Fprintf(os.Stderr, "warning: board.json points %s at %s, which no longer resolves — re-resolving from the tracker\n",
 			board.TaskKey(phaseID, taskID), key)
-		delete(ctx.board.Tasks, board.TaskKey(phaseID, taskID))
+		delete(ctx.Board.Tasks, board.TaskKey(phaseID, taskID))
 	}
-	found, err := ctx.client.ListIssues(forge.IssueFilter{State: "all", Labels: []string{taskLabel(phaseID, taskID)}})
+	found, err := ctx.Client.ListIssues(forge.IssueFilter{State: "all", Labels: []string{boardsync.TaskLabel(phaseID, taskID)}})
 	if err != nil {
-		return "", wrapBoard(err)
+		return "", boardsync.Wrap(err)
 	}
 	var matches []string
 	for _, iss := range found {
-		if hasMarker(iss) {
+		if boardsync.HasMarker(iss) {
 			matches = append(matches, iss.Key)
 		}
 	}
@@ -292,7 +289,7 @@ func resolveTaskIssue(ctx *boardCtx, phaseID, taskID string) (string, error) {
 	sort.Strings(matches)
 	if len(matches) > 1 {
 		fmt.Fprintf(os.Stderr, "warning: %d issues carry %s (%s) — updating %s and leaving the rest\n",
-			len(matches), taskLabel(phaseID, taskID), strings.Join(matches, ", "), matches[0])
+			len(matches), boardsync.TaskLabel(phaseID, taskID), strings.Join(matches, ", "), matches[0])
 	}
 	return matches[0], nil
 }
@@ -328,14 +325,14 @@ func renderTaskBody(phaseID, parent string, t phase.Task) string {
 // how a state reaches a tracker — which is the class of bug this milestone has
 // spent several phases closing.
 func setBoardState(ctx *boardCtx, key, status string, warn *runWarnings) error {
-	switch c := ctx.client.(type) {
+	switch c := ctx.Client.(type) {
 	case *forge.YouTrackClient:
-		if err := c.SetState(key, status, ctx.proj.Board.StateMap); err != nil {
-			return wrapBoard(err)
+		if err := c.SetState(key, status, ctx.Proj.Board.StateMap); err != nil {
+			return boardsync.Wrap(err)
 		}
 	case *forge.JiraClient:
-		if err := c.SetState(key, status, ctx.proj.Board.StateMap); err != nil {
-			return wrapBoard(err)
+		if err := c.SetState(key, status, ctx.Proj.Board.StateMap); err != nil {
+			return boardsync.Wrap(err)
 		}
 	default:
 		// Every other backend has no state field: forge REST models an issue
@@ -345,7 +342,7 @@ func setBoardState(ctx *boardCtx, key, status string, warn *runWarnings) error {
 		// exactly the failure c-5 exists to prevent. Say it once per run,
 		// naming the provider and the value that never reached a column.
 		warn.once(&warn.noState, "%s has no workflow state field — %q is carried as a dross label only, so the tracker's columns will not move",
-			ctx.proj.Board.Provider, status)
+			ctx.Proj.Board.Provider, status)
 	}
 	return nil
 }

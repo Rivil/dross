@@ -10,15 +10,16 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/board"
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 )
 
 func statusLabels(lifecycle string) []string {
-	l := []string{labelMarker}
+	l := []string{boardsync.LabelMarker}
 	if lifecycle != "" {
-		l = append(l, statusLabel(lifecycle))
+		l = append(l, boardsync.StatusLabel(lifecycle))
 	}
 	return l
 }
@@ -27,8 +28,8 @@ func statusLabels(lifecycle string) []string {
 // follows. This is the feature.
 func TestClassifyBoardMoved(t *testing.T) {
 	task := &phase.Task{ID: "t-1", Status: phase.StatusInProgress}
-	link := board.TaskLink{Issue: "PROJ-7", PlanStatus: phase.StatusInProgress, BoardState: statusTaskInProgress}
-	iss := &forge.Issue{Key: "PROJ-7", Labels: statusLabels(statusTaskInReview)}
+	link := board.TaskLink{Issue: "PROJ-7", PlanStatus: phase.StatusInProgress, BoardState: boardsync.StatusTaskInProgress}
+	iss := &forge.Issue{Key: "PROJ-7", Labels: statusLabels(boardsync.StatusTaskInReview)}
 
 	got := classifyTaskMove(task, link, iss)
 	if got.Kind != taskBoardMoved {
@@ -43,17 +44,17 @@ func TestClassifyBoardMoved(t *testing.T) {
 // they last agreed, so dross refuses rather than picking a winner.
 func TestClassifyConflict(t *testing.T) {
 	task := &phase.Task{ID: "t-1", Status: phase.StatusDone} // the plan moved
-	link := board.TaskLink{Issue: "PROJ-7", PlanStatus: phase.StatusInProgress, BoardState: statusTaskInProgress}
-	iss := &forge.Issue{Key: "PROJ-7", Labels: statusLabels(statusTaskInReview)} // and so did the board
+	link := board.TaskLink{Issue: "PROJ-7", PlanStatus: phase.StatusInProgress, BoardState: boardsync.StatusTaskInProgress}
+	iss := &forge.Issue{Key: "PROJ-7", Labels: statusLabels(boardsync.StatusTaskInReview)} // and so did the board
 
 	got := classifyTaskMove(task, link, iss)
 	if got.Kind != taskConflict {
 		t.Fatalf("kind = %v, want taskConflict", got.Kind)
 	}
-	if got.PlanStatus != phase.StatusDone || got.BoardState != statusTaskInReview {
+	if got.PlanStatus != phase.StatusDone || got.BoardState != boardsync.StatusTaskInReview {
 		t.Errorf("the verdict must carry BOTH current values for the refusal to name them: %+v", got)
 	}
-	if got.WasPlan != phase.StatusInProgress || got.WasBoard != statusTaskInProgress {
+	if got.WasPlan != phase.StatusInProgress || got.WasBoard != boardsync.StatusTaskInProgress {
 		t.Errorf("the verdict must carry the agreement point it was judged against: %+v", got)
 	}
 }
@@ -62,8 +63,8 @@ func TestClassifyConflict(t *testing.T) {
 // than pushing — but it must NOT be mistaken for a board move and reverted.
 func TestClassifyPlanMoved(t *testing.T) {
 	task := &phase.Task{ID: "t-1", Status: phase.StatusDone}
-	link := board.TaskLink{Issue: "PROJ-7", PlanStatus: phase.StatusInProgress, BoardState: statusTaskInProgress}
-	iss := &forge.Issue{Key: "PROJ-7", Labels: statusLabels(statusTaskInProgress)}
+	link := board.TaskLink{Issue: "PROJ-7", PlanStatus: phase.StatusInProgress, BoardState: boardsync.StatusTaskInProgress}
+	iss := &forge.Issue{Key: "PROJ-7", Labels: statusLabels(boardsync.StatusTaskInProgress)}
 
 	if got := classifyTaskMove(task, link, iss); got.Kind != taskPlanMoved {
 		t.Errorf("kind = %v, want taskPlanMoved — the local change must not be reverted from the board", got.Kind)
@@ -72,8 +73,8 @@ func TestClassifyPlanMoved(t *testing.T) {
 
 func TestClassifyUnchanged(t *testing.T) {
 	task := &phase.Task{ID: "t-1", Status: phase.StatusInProgress}
-	link := board.TaskLink{Issue: "PROJ-7", PlanStatus: phase.StatusInProgress, BoardState: statusTaskInProgress}
-	iss := &forge.Issue{Key: "PROJ-7", Labels: statusLabels(statusTaskInProgress)}
+	link := board.TaskLink{Issue: "PROJ-7", PlanStatus: phase.StatusInProgress, BoardState: boardsync.StatusTaskInProgress}
+	iss := &forge.Issue{Key: "PROJ-7", Labels: statusLabels(boardsync.StatusTaskInProgress)}
 
 	if got := classifyTaskMove(task, link, iss); got.Kind != taskUnchanged {
 		t.Errorf("kind = %v, want taskUnchanged", got.Kind)
@@ -86,7 +87,7 @@ func TestClassifyUnchanged(t *testing.T) {
 func TestClassifyUnsyncedIsNotAMove(t *testing.T) {
 	task := &phase.Task{ID: "t-1", Status: phase.StatusPending}
 	link := board.TaskLink{Issue: "PROJ-7"} // migrated from the string shape
-	iss := &forge.Issue{Key: "PROJ-7", Labels: statusLabels(statusTaskInReview)}
+	iss := &forge.Issue{Key: "PROJ-7", Labels: statusLabels(boardsync.StatusTaskInReview)}
 
 	got := classifyTaskMove(task, link, iss)
 	if got.Kind != taskUnsynced {
@@ -101,7 +102,7 @@ func TestClassifyUnsyncedIsNotAMove(t *testing.T) {
 // column must not be invented into a plan status that means something else.
 func TestClassifyIgnoresAColumnDrossDoesNotMirror(t *testing.T) {
 	task := &phase.Task{ID: "t-1", Status: phase.StatusInProgress}
-	link := board.TaskLink{Issue: "PROJ-7", PlanStatus: phase.StatusInProgress, BoardState: statusTaskInProgress}
+	link := board.TaskLink{Issue: "PROJ-7", PlanStatus: phase.StatusInProgress, BoardState: boardsync.StatusTaskInProgress}
 	iss := &forge.Issue{Key: "PROJ-7", Labels: statusLabels("uat")} // a phase-level status
 
 	got := classifyTaskMove(task, link, iss)
@@ -146,10 +147,10 @@ func TestProviderWorkflowStateSupport(t *testing.T) {
 }
 
 func TestLifecycleFromLabels(t *testing.T) {
-	if got := lifecycleFromLabels([]string{labelMarker, "dross/status:task-in-review", "other"}); got != statusTaskInReview {
+	if got := lifecycleFromLabels([]string{boardsync.LabelMarker, "dross/status:task-in-review", "other"}); got != boardsync.StatusTaskInReview {
 		t.Errorf("got %q, want task-in-review", got)
 	}
-	if got := lifecycleFromLabels([]string{labelMarker}); got != "" {
+	if got := lifecycleFromLabels([]string{boardsync.LabelMarker}); got != "" {
 		t.Errorf("got %q, want empty when no status label is present", got)
 	}
 }
@@ -157,7 +158,7 @@ func TestLifecycleFromLabels(t *testing.T) {
 // TestTaskPullRefusesAProviderWithoutWorkflowState: reporting "no changes" for
 // a board that cannot answer is the silent-zero fault in a new place.
 func TestTaskPullRefusesAProviderWithoutWorkflowState(t *testing.T) {
-	ctx := &boardCtx{proj: projectWithProvider("forgejo")}
+	ctx := &boardCtx{Proj: projectWithProvider("forgejo")}
 	err := taskPull(ctx, "p1", false)
 	if err == nil {
 		t.Fatal("a board with no workflow field must be refused")
@@ -191,10 +192,10 @@ func pullFixture(t *testing.T, planBody string) (*boardCtx, *phase.Plan, string)
 	root := filepath.Join(dir, ".dross")
 	bd := board.New()
 	ctx := &boardCtx{
-		board:     bd,
-		proj:      projectWithProvider("youtrack"),
-		root:      root,
-		boardPath: filepath.Join(root, board.File),
+		Board:     bd,
+		Proj:      projectWithProvider("youtrack"),
+		Root:      root,
+		BoardPath: filepath.Join(root, board.File),
 	}
 	return ctx, plan, planPath
 }
@@ -219,7 +220,7 @@ func TestReportAppliesABoardMove(t *testing.T) {
 	ctx, plan, planPath := pullFixture(t, pullPlan)
 	moves := []taskMoveVerdict{{
 		TaskID: "t-1", Issue: "PROJ-1", Kind: taskBoardMoved,
-		PlanStatus: phase.StatusInProgress, BoardState: statusTaskInReview,
+		PlanStatus: phase.StatusInProgress, BoardState: boardsync.StatusTaskInReview,
 		NewStatus: phase.StatusDone,
 	}}
 	out := captureStdout(t, func() {
@@ -230,8 +231,8 @@ func TestReportAppliesABoardMove(t *testing.T) {
 	if got := planTask(t, planPath, "t-1").Status; got != phase.StatusDone {
 		t.Errorf("plan status = %q, want done — the board move was not written", got)
 	}
-	link, ok := ctx.board.TaskLinkFor("p1", "t-1")
-	if !ok || link.PlanStatus != phase.StatusDone || link.BoardState != statusTaskInReview {
+	link, ok := ctx.Board.TaskLinkFor("p1", "t-1")
+	if !ok || link.PlanStatus != phase.StatusDone || link.BoardState != boardsync.StatusTaskInReview {
 		t.Errorf("ledger not advanced: %+v — the next run would re-apply this move", link)
 	}
 	if !strings.Contains(out, "applied 1") {
@@ -246,7 +247,7 @@ func TestReportDryRunWritesNothing(t *testing.T) {
 	before := mustRead(t, planPath)
 	moves := []taskMoveVerdict{{
 		TaskID: "t-1", Issue: "PROJ-1", Kind: taskBoardMoved,
-		PlanStatus: phase.StatusInProgress, BoardState: statusTaskInReview,
+		PlanStatus: phase.StatusInProgress, BoardState: boardsync.StatusTaskInReview,
 		NewStatus: phase.StatusDone,
 	}}
 	out := captureStdout(t, func() {
@@ -266,10 +267,10 @@ func TestReportConflictExitsNonZeroAfterApplyingTheRest(t *testing.T) {
 	ctx, plan, planPath := pullFixture(t, pullPlan)
 	moves := []taskMoveVerdict{
 		{TaskID: "t-1", Issue: "PROJ-1", Kind: taskBoardMoved,
-			PlanStatus: phase.StatusInProgress, BoardState: statusTaskInReview, NewStatus: phase.StatusDone},
+			PlanStatus: phase.StatusInProgress, BoardState: boardsync.StatusTaskInReview, NewStatus: phase.StatusDone},
 		{TaskID: "t-2", Issue: "PROJ-2", Kind: taskConflict,
-			PlanStatus: phase.StatusDone, BoardState: statusTaskInProgress,
-			WasPlan: phase.StatusInProgress, WasBoard: statusTaskInReview},
+			PlanStatus: phase.StatusDone, BoardState: boardsync.StatusTaskInProgress,
+			WasPlan: phase.StatusInProgress, WasBoard: boardsync.StatusTaskInReview},
 	}
 	var err error
 	out := captureStdout(t, func() {
@@ -286,7 +287,7 @@ func TestReportConflictExitsNonZeroAfterApplyingTheRest(t *testing.T) {
 		t.Errorf("t-1 = %q — the conflict on t-2 suppressed an unrelated clean move", got)
 	}
 	// And the refusal named both values.
-	if !strings.Contains(out, "CONFLICT") || !strings.Contains(out, statusTaskInProgress) {
+	if !strings.Contains(out, "CONFLICT") || !strings.Contains(out, boardsync.StatusTaskInProgress) {
 		t.Errorf("the conflict must name what each side holds: %s", out)
 	}
 }
@@ -329,10 +330,10 @@ func TestReportNarratesPlanMovedAndUnsynced(t *testing.T) {
 // job, and asking the board about it would be a round trip for nothing.
 func TestCollectTaskMovesSkipsUnmirroredTasks(t *testing.T) {
 	ctx, plan, _ := pullFixture(t, pullPlan)
-	ctx.client = &pullFakeClient{t: t, issues: map[string]*forge.Issue{
-		"PROJ-1": {Key: "PROJ-1", Labels: statusLabels(statusTaskInReview)},
+	ctx.Client = &pullFakeClient{t: t, issues: map[string]*forge.Issue{
+		"PROJ-1": {Key: "PROJ-1", Labels: statusLabels(boardsync.StatusTaskInReview)},
 	}}
-	ctx.board.SetTaskSynced("p1", "t-1", "PROJ-1", phase.StatusInProgress, statusTaskInProgress)
+	ctx.Board.SetTaskSynced("p1", "t-1", "PROJ-1", phase.StatusInProgress, boardsync.StatusTaskInProgress)
 	// t-2 deliberately has no mapping.
 	moves, err := collectTaskMoves(ctx, "p1", plan)
 	if err != nil {
@@ -350,8 +351,8 @@ func TestCollectTaskMovesSkipsUnmirroredTasks(t *testing.T) {
 // fail the run rather than report an empty set of moves.
 func TestCollectTaskMovesSurfacesABoardFailure(t *testing.T) {
 	ctx, plan, _ := pullFixture(t, pullPlan)
-	ctx.client = &pullFakeClient{t: t, err: errors.New("500 from the tracker")}
-	ctx.board.SetTaskSynced("p1", "t-1", "PROJ-1", phase.StatusInProgress, statusTaskInProgress)
+	ctx.Client = &pullFakeClient{t: t, err: errors.New("500 from the tracker")}
+	ctx.Board.SetTaskSynced("p1", "t-1", "PROJ-1", phase.StatusInProgress, boardsync.StatusTaskInProgress)
 	if _, err := collectTaskMoves(ctx, "p1", plan); err == nil {
 		t.Fatal("an unreadable board must not read as 'no moves'")
 	}
@@ -393,13 +394,13 @@ func (f *pullFakeClient) ListIssues(forge.IssueFilter) ([]forge.Issue, error) {
 // difference between a diff you can read and one you re-read every time.
 func TestCollectTaskMovesSortsByTaskID(t *testing.T) {
 	ctx, plan, _ := pullFixture(t, pullPlan)
-	ctx.client = &pullFakeClient{t: t, issues: map[string]*forge.Issue{
-		"PROJ-1": {Key: "PROJ-1", Labels: statusLabels(statusTaskInProgress)},
-		"PROJ-2": {Key: "PROJ-2", Labels: statusLabels(statusTaskInProgress)},
+	ctx.Client = &pullFakeClient{t: t, issues: map[string]*forge.Issue{
+		"PROJ-1": {Key: "PROJ-1", Labels: statusLabels(boardsync.StatusTaskInProgress)},
+		"PROJ-2": {Key: "PROJ-2", Labels: statusLabels(boardsync.StatusTaskInProgress)},
 	}}
 	// Recorded t-2 first, so an unsorted collect would emit t-2 before t-1.
-	ctx.board.SetTaskSynced("p1", "t-2", "PROJ-2", phase.StatusInProgress, statusTaskInProgress)
-	ctx.board.SetTaskSynced("p1", "t-1", "PROJ-1", phase.StatusInProgress, statusTaskInProgress)
+	ctx.Board.SetTaskSynced("p1", "t-2", "PROJ-2", phase.StatusInProgress, boardsync.StatusTaskInProgress)
+	ctx.Board.SetTaskSynced("p1", "t-1", "PROJ-1", phase.StatusInProgress, boardsync.StatusTaskInProgress)
 
 	moves, err := collectTaskMoves(ctx, "p1", plan)
 	if err != nil {
@@ -417,7 +418,7 @@ func TestCollectTaskMovesSortsByTaskID(t *testing.T) {
 // not report an empty board.
 func TestTaskPullSurfacesAMissingPhase(t *testing.T) {
 	ctx, _, _ := pullFixture(t, pullPlan)
-	ctx.client = &pullFakeClient{t: t}
+	ctx.Client = &pullFakeClient{t: t}
 	if err := taskPull(ctx, "no-such-phase", false); err == nil {
 		t.Fatal("an unknown phase must be refused, not read as 'no moves'")
 	}
@@ -427,8 +428,8 @@ func TestTaskPullSurfacesAMissingPhase(t *testing.T) {
 // unreadable board must reach the caller rather than being reported as clean.
 func TestTaskPullSurfacesABoardFailure(t *testing.T) {
 	ctx, _, _ := pullFixture(t, pullPlan)
-	ctx.client = &pullFakeClient{t: t, err: errors.New("502 from the tracker")}
-	ctx.board.SetTaskSynced("p1", "t-1", "PROJ-1", phase.StatusInProgress, statusTaskInProgress)
+	ctx.Client = &pullFakeClient{t: t, err: errors.New("502 from the tracker")}
+	ctx.Board.SetTaskSynced("p1", "t-1", "PROJ-1", phase.StatusInProgress, boardsync.StatusTaskInProgress)
 	err := taskPull(ctx, "p1", false)
 	if err == nil {
 		t.Fatal("a board failure must fail the pull")

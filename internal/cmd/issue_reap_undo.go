@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/reaplog"
 )
@@ -27,13 +28,13 @@ func undoReap(ctx *boardCtx) error {
 	// no column model cannot restore an arbitrary prior column, and the honest
 	// answer is to refuse by name and write nothing rather than reopen every
 	// card into `open` and report success.
-	writer, ok := ctx.client.(forge.StateWriter)
+	writer, ok := ctx.Client.(forge.StateWriter)
 	if !ok {
 		return fmt.Errorf("--undo needs a board whose cards have a workflow state; %s has no column model, so a card that sat in a named column cannot be restored — nothing was written",
-			ctx.proj.Board.Provider)
+			ctx.Proj.Board.Provider)
 	}
 
-	path := reaplog.FilePath(ctx.root)
+	path := reaplog.FilePath(ctx.Root)
 	log, err := reaplog.Load(path)
 	if err != nil {
 		return err
@@ -60,8 +61,8 @@ func undoReap(ctx *boardCtx) error {
 		// column is the load-bearing restore and it has already succeeded.
 		if len(card.PriorLabels) > 0 {
 			labels := card.PriorLabels
-			if _, err := ctx.client.UpdateIssue(card.Issue, forge.IssuePatch{Labels: &labels}); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: restored %s but could not put its labels back: %v\n", card.Issue, wrapBoard(err))
+			if _, err := ctx.Client.UpdateIssue(card.Issue, forge.IssuePatch{Labels: &labels}); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: restored %s but could not put its labels back: %v\n", card.Issue, boardsync.Wrap(err))
 			}
 		}
 		if card.DroppedLink != "" {
@@ -70,7 +71,7 @@ func undoReap(ctx *boardCtx) error {
 		restored++
 	}
 
-	if err := ctx.board.Save(ctx.boardPath); err != nil {
+	if err := ctx.Board.Save(ctx.BoardPath); err != nil {
 		return err
 	}
 
@@ -91,6 +92,6 @@ func undoReap(ctx *boardCtx) error {
 // arms lanesDroppingTheirLink names.
 func restoreDroppedLink(ctx *boardCtx, card reaplog.Card) {
 	if card.Class == "Backlog" {
-		ctx.board.SetBacklog(card.DroppedLink, card.Issue)
+		ctx.Board.SetBacklog(card.DroppedLink, card.Issue)
 	}
 }

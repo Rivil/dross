@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/milestone"
@@ -28,7 +29,7 @@ import (
 
 // reapVerdict is what the classifier concluded about one recorded mirror.
 //
-// It mirrors backlogVerdict's three-way shape deliberately — the load-bearing
+// It mirrors boardsync.BacklogVerdict's three-way shape deliberately — the load-bearing
 // value is the third one, for the same reason: a card no record explains is NOT
 // thereby resolved, and closing on absence of evidence would resolve work
 // nobody finished.
@@ -173,7 +174,7 @@ func buildReapPlan(ctx *boardCtx, cands []candidate) (*reapPlan, error) {
 		if c.verdict == reapStillOpen {
 			continue
 		}
-		done, err := boardIssueIsDone(ctx, c.card.Key)
+		done, err := boardsync.IssueIsDone(ctx, c.card.Key)
 		if err != nil {
 			// A card that cannot be read cannot be shown stranded. Leaving it
 			// out of Cards is the deny-by-default reading; it stays visible as
@@ -261,12 +262,12 @@ func phaseRecordVerdict(root, slug string) (reapVerdict, string) {
 
 func classifyPhaseMirrors(ctx *boardCtx, lane reapLane) []candidate {
 	var out []candidate
-	for _, slug := range sortedMapKeys(ctx.board.Phases) {
-		issue := ctx.board.Phases[slug]
+	for _, slug := range sortedMapKeys(ctx.Board.Phases) {
+		issue := ctx.Board.Phases[slug]
 		if issue == "" {
 			continue
 		}
-		v, why := phaseRecordVerdict(ctx.root, slug)
+		v, why := phaseRecordVerdict(ctx.Root, slug)
 		out = append(out, candidate{card: reapCard{Key: issue, Lane: lane.Name, Terminal: lane.Terminal, Why: why}, verdict: v})
 	}
 	return out
@@ -274,8 +275,8 @@ func classifyPhaseMirrors(ctx *boardCtx, lane reapLane) []candidate {
 
 func classifyTaskMirrors(ctx *boardCtx, lane reapLane) []candidate {
 	var out []candidate
-	for _, key := range sortedMapKeys(ctx.board.Tasks) {
-		link := ctx.board.Tasks[key]
+	for _, key := range sortedMapKeys(ctx.Board.Tasks) {
+		link := ctx.Board.Tasks[key]
 		if link.Issue == "" {
 			continue
 		}
@@ -287,7 +288,7 @@ func classifyTaskMirrors(ctx *boardCtx, lane reapLane) []candidate {
 			})
 			continue
 		}
-		v, why := phaseRecordVerdict(ctx.root, slug)
+		v, why := phaseRecordVerdict(ctx.Root, slug)
 		out = append(out, candidate{card: reapCard{Key: link.Issue, Lane: lane.Name, Terminal: lane.Terminal, Why: why}, verdict: v})
 	}
 	return out
@@ -299,22 +300,22 @@ func classifyTaskMirrors(ctx *boardCtx, lane reapLane) []candidate {
 // The lane is skipped wholesale where the milestones slot does not hold an
 // issue at all — a YouTrack version bundle name, an agile board name, a numeric
 // forge milestone id. That is not a stranded card being ignored: it is not a
-// card. checkMilestoneClosable is the same gate `issue milestone sync --close`
+// card. boardsync.CheckMilestoneClosable is the same gate `issue milestone sync --close`
 // uses, and it exists because a numeric milestone id shares an id space with
 // those backends' issue keys, so addressing it as one would resolve a human's
 // issue #7.
 func classifyMilestoneMirrors(ctx *boardCtx, lane reapLane) []candidate {
-	if err := checkMilestoneClosable(ctx); err != nil {
+	if err := boardsync.CheckMilestoneClosable(ctx); err != nil {
 		return nil
 	}
 	var out []candidate
-	for _, version := range sortedMapKeys(ctx.board.Milestones) {
-		id := ctx.board.Milestones[version]
+	for _, version := range sortedMapKeys(ctx.Board.Milestones) {
+		id := ctx.Board.Milestones[version]
 		if id == "" {
 			continue
 		}
 		card := reapCard{Key: id, Lane: lane.Name, Terminal: lane.Terminal}
-		m, err := milestone.Load(milestone.FilePath(ctx.root, version))
+		m, err := milestone.Load(milestone.FilePath(ctx.Root, version))
 		if err != nil {
 			card.Why = fmt.Sprintf("no milestone toml for %s", version)
 			out = append(out, candidate{card: card, verdict: reapUnattributable})
@@ -332,8 +333,8 @@ func classifyMilestoneMirrors(ctx *boardCtx, lane reapLane) []candidate {
 
 // classifyBacklogMirrors decides each recorded backlog mirror from disk alone.
 //
-// It answers the same three-way question backlogVerdictFor does and returns the
-// same shape, but it cannot reuse that function: backlogVerdictFor resolves a
+// It answers the same three-way question boardsync.BacklogVerdictFor does and returns the
+// same shape, but it cannot reuse that function: boardsync.BacklogVerdictFor resolves a
 // routed item by reading its TARGET PHASE'S CARD, and c-3 forbids a close
 // decision derived from any card's state. Here the routed branch reads the
 // target phase's changes.json instead — the record the card was supposed to be
@@ -370,25 +371,25 @@ func classifyBacklogMirrors(ctx *boardCtx, lane reapLane) ([]candidate, error) {
 	// deferred.Collect, not deferred.EnsureIDs: the latter stamps missing ids
 	// back into spec.toml, and a dry run must not write to disk either. An
 	// id-less entry is still reachable under its legacy positional key.
-	items, err := deferred.Collect(ctx.root)
+	items, err := deferred.Collect(ctx.Root)
 	if err != nil {
 		return nil, err
 	}
 	byKey := map[string]deferredEntry{}
 	for _, d := range items {
 		if d.ID != "" {
-			byKey[deferredBacklogKey(d.ID)] = d
+			byKey[boardsync.DeferredBacklogKey(d.ID)] = d
 		}
 		byKey[deferred.LegacyBacklogKey(d.Source, d.Index)] = d
 	}
-	roadmap, err := roadmapSlugs(ctx.root)
+	roadmap, err := roadmapSlugs(ctx.Root)
 	if err != nil {
 		return nil, err
 	}
 
 	var out []candidate
-	for _, key := range ctx.board.BacklogKeys() {
-		issue, ok := ctx.board.BacklogID(key)
+	for _, key := range ctx.Board.BacklogKeys() {
+		issue, ok := ctx.Board.BacklogID(key)
 		if !ok || issue == "" {
 			continue
 		}
@@ -400,7 +401,7 @@ func classifyBacklogMirrors(ctx *boardCtx, lane reapLane) ([]candidate, error) {
 
 func reapBacklogVerdict(ctx *boardCtx, key string, deferred map[string]deferredEntry, roadmap map[string]string) (reapVerdict, string) {
 	if slug, ok := strings.CutPrefix(key, "slug:"); ok {
-		return slugVerdict(ctx.root, slug, roadmap)
+		return slugVerdict(ctx.Root, slug, roadmap)
 	}
 	d, ok := deferred[key]
 	if !ok {
@@ -411,10 +412,10 @@ func reapBacklogVerdict(ctx *boardCtx, key string, deferred map[string]deferredE
 		return reapStranded, fmt.Sprintf("deferred item %s %d is dismissed", d.Source, d.Index)
 	}
 	if d.Target != "" {
-		if !phase.DirExists(ctx.root, d.Target) {
+		if !phase.DirExists(ctx.Root, d.Target) {
 			// The destination has not been built yet. A routed item whose
 			// target is still on a roadmap is live work, not a lost mirror.
-			v, why := slugVerdict(ctx.root, d.Target, roadmap)
+			v, why := slugVerdict(ctx.Root, d.Target, roadmap)
 			if v == reapStranded {
 				// Unreachable in practice (slugVerdict only strands a
 				// scaffolded slug) but kept explicit rather than assumed.
@@ -422,7 +423,7 @@ func reapBacklogVerdict(ctx *boardCtx, key string, deferred map[string]deferredE
 			}
 			return v, fmt.Sprintf("routed to %s: %s", d.Target, why)
 		}
-		v, why := phaseRecordVerdict(ctx.root, d.Target)
+		v, why := phaseRecordVerdict(ctx.Root, d.Target)
 		switch v {
 		case reapStranded:
 			return reapStranded, fmt.Sprintf("routed to %s; %s", d.Target, why)
@@ -461,8 +462,8 @@ func slugVerdict(root, slug string, roadmap map[string]string) (reapVerdict, str
 // only honest sense — it is classified, listed, and left for a human.
 func classifyQuickMirrors(ctx *boardCtx, lane reapLane) []candidate {
 	var out []candidate
-	for _, ref := range sortedMapKeys(ctx.board.Quicks) {
-		issue := ctx.board.Quicks[ref]
+	for _, ref := range sortedMapKeys(ctx.Board.Quicks) {
+		issue := ctx.Board.Quicks[ref]
 		if issue == "" {
 			continue
 		}

@@ -300,7 +300,7 @@ func flatBoardRepo(t *testing.T, provider, apiBase string) string {
 	return dir
 }
 
-// flatProviders is every backend closeBoardIssue reaches by EXCLUSION. GitHub
+// flatProviders is every backend boardsync.CloseIssue reaches by EXCLUSION. GitHub
 // belongs here for the same reason the other three do — github.go's toIssue
 // populates State and never Resolved — which is why the branch is written as
 // "not YouTrack, not Jira" rather than as an allowlist: a three-name allowlist

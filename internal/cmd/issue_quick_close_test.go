@@ -52,7 +52,7 @@ func TestQuickCloseFailsWhenTheIssueStaysUnresolved(t *testing.T) {
 
 // TestQuickCloseHonoursStateMap proves the quick lane goes through the mapped
 // write rather than the nil-override CloseIssue path: a [board].state_map entry
-// for `complete` — the status closeBoardIssue defaults to — must be the value
+// for `complete` — the status boardsync.CloseIssue defaults to — must be the value
 // that reaches the tracker, not the built-in "Verified".
 func TestQuickCloseHonoursStateMap(t *testing.T) {
 	f := &ytCloseFake{resolved: true}
