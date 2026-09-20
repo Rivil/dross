@@ -42,6 +42,10 @@
   name = "gremlins-var-initializer"
   reason = "the `+` is string-literal concatenation inside `var fields = []Field{...}`, the package-level registry. gremlins attributes no go-cover block to a package-level var initializer, so every operator in the declaration reports NOT_COVERED. There is nothing a test could assert to kill it either: the operands are constant prose, and what the registry must hold is asserted structurally by TestRegistryPinsEveryDeclaredField (name + disposition + count) and by Validate's non-empty Why/Writers rules, not by matching the prose verbatim."
 
+[[category]]
+  name = "cross-package-only-coverage"
+  reason = "ArtifactNames and ValidateWriters in internal/secretscan/writers.go have no in-package test: an in-package go-cover run reports every block in both functions at count 0. Their tests live in internal/cmd (TestWriterRegistryValidate feeds one malformed entry per error arm and asserts the message; TestEveryDrossWriterIsDeclared asserts the live registry validates clean, which kills every negation that would fire on a good entry; TestEveryFileConstIsDeclared consumes ArtifactNames), because the registry's truth is proven against the internal/ tree walk that lives there. gremlins mutates and measures one package at a time, so a mutant here is only ever run against internal/secretscan's own tests and is reported NOT-COVERED regardless of what internal/cmd would catch. Moving the tests in-package would only relocate the AST walk; the mutants are killed today, one package over."
+
 [[accepted]]
   key = "742de35850fac7e6"
   file = "internal/cmd/survivor.go"
@@ -2210,3 +2214,291 @@
   line = 71
   reason = "package-level var initializer (constructTimeout = 30 * time.Second); TestConstructsClassifiesTimeout overrides the value to exercise the deadline, so the initializer expression itself runs only at package init — gremlins' const/var-initializer attribution ceiling"
   accepted_in = "ast-aware-mutation-ranges"
+
+[[accepted]]
+  key = "6a17ee01f41ce365"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set == 0:"
+  line = 102
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "0cc55dc9cd6a58c0"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case set > 1:"
+  line = 104
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "3c3f0391197d4b3c"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set > 1:"
+  line = 104
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "013e83efb8c225df"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case t.Screened != nil:"
+  line = 106
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "ea07f06db71b2f11"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case t.ReadOnly != nil:"
+  line = 110
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "f051f49b7aa86c97"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case t.Seam != nil:"
+  line = 114
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "dc9ddf3447c199ab"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case caller == \"\":"
+  line = 116
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "7bba35982355e11b"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.UnderDross != nil:"
+  line = 88
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "2c0a7db8fbe6a218"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.MachineLocal != nil:"
+  line = 90
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "1f12c32ce7150371"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.OutsideDross != nil:"
+  line = 92
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "455ec75b70d4a771"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if strings.TrimSpace(name) == \"\" {"
+  line = 106
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "6bb93e07ad01b477"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "for _, on := range []bool{w.UnderDross != nil, w.MachineLocal != nil, w.OutsideDross != nil} {"
+  line = 110
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "32bf630377af990c"
+  file = "internal/secretscan/writers.go"
+  op = "INCREMENT_DECREMENT"
+  text = "set++"
+  line = 112
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "2e34f2e6c7f6e32b"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set == 0:"
+  line = 116
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "9b0da82a3806bf2a"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case set > 1:"
+  line = 118
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "2fe69242a047572f"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set > 1:"
+  line = 118
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "75a19da200419cbc"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.UnderDross != nil:"
+  line = 120
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "a8f86d1fdb519e01"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if len(w.UnderDross.Artifacts) == 0 {"
+  line = 121
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "acd159f1b6fcc5d5"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.MachineLocal != nil:"
+  line = 129
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "5b723c06f61a83b0"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if strings.TrimSpace(w.MachineLocal.Path) == \"\" {"
+  line = 130
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "c3588ff11a4fd2db"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if strings.TrimSpace(w.MachineLocal.IgnoreSeed) == \"\" {"
+  line = 133
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "82668736fe34f303"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if strings.TrimSpace(w.MachineLocal.Why) == \"\" {"
+  line = 136
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "21ad5b02cbd71e9d"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.OutsideDross != nil:"
+  line = 139
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "b677b463968debe5"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if strings.TrimSpace(w.OutsideDross.Why) == \"\" {"
+  line = 140
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "900db16660ede07d"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if name == AgentAuthored && w.UnderDross == nil {"
+  line = 144
+  category = "cross-package-only-coverage"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "7f6b918c89c9dded"
+  file = "internal/secretscan/payload.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case i > 0 && isFlag(args[i-1]) && !strings.Contains(args[i-1], \"=\"):"
+  line = 85
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "ae69c57be2fe93c7"
+  file = "internal/secretscan/payload.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case i > 0 && isFlag(args[i-1]) && !strings.Contains(args[i-1], \"=\"):"
+  line = 85
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "ae616c9115f04c12"
+  file = "internal/secretscan/payload.go"
+  op = "INVERT_NEGATIVES"
+  text = "case i > 0 && isFlag(args[i-1]) && !strings.Contains(args[i-1], \"=\"):"
+  line = 85
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "121e817dbeb1b929"
+  file = "internal/secretscan/payload.go"
+  op = "ARITHMETIC_BASE"
+  text = "case i > 0 && isFlag(args[i-1]) && !strings.Contains(args[i-1], \"=\"):"
+  line = 85
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "10b5cbf7f5923d04"
+  file = "internal/secretscan/rules.go"
+  op = "ARITHMETIC_BASE"
+  text = "Regex:  regexp.MustCompile(`(?i)authorization[\"']?\\s*[:=]\\s*[\"']?(?:basic|bearer)\\s+(` + valueClass + `{8,})`),"
+  line = 83
+  category = "const-initializer-arithmetic"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "cf27a1a7f13e6ef7"
+  file = "internal/secretscan/rules.go"
+  op = "ARITHMETIC_BASE"
+  text = "valueClass + `{16,})`),"
+  line = 89
+  category = "const-initializer-arithmetic"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "8274dbb775061358"
+  file = "internal/secretscan/rules.go"
+  op = "ARITHMETIC_BASE"
+  text = "Regex: regexp.MustCompile(`(?i)[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|api[_-]key|access[_-]key|token|authorization)[\"']?\\s*[:=]\\s*[\"']?(` +"
+  line = 88
+  category = "const-initializer-arithmetic"
+  accepted_in = "secret-detection"
