@@ -703,6 +703,14 @@ trusted_run_commands = "dddd"
 	if err := consent.GrantConsent(grantStore(root), cmd); err != nil {
 		t.Fatalf("GrantConsent through grantStore: %v", err)
 	}
+	// The lane grants ride the same writer (t-5): each one lands beside the
+	// others without disturbing a foreign key either.
+	if err := consent.GrantLaneConsent(grantStore(root), "docs", "markdownlint docs"); err != nil {
+		t.Fatalf("GrantLaneConsent through grantStore: %v", err)
+	}
+	if err := consent.GrantLaneInstallConsent(grantStore(root), "go", "go install x@latest"); err != nil {
+		t.Fatalf("GrantLaneInstallConsent through grantStore: %v", err)
+	}
 
 	after, err := loadLocal(localPath(root))
 	if err != nil {
@@ -711,10 +719,13 @@ trusted_run_commands = "dddd"
 	if after.TrustedTestCommand != consent.Fingerprint(cmd) {
 		t.Errorf("trusted_test_command = %q, want the new fingerprint", after.TrustedTestCommand)
 	}
-	// Every OTHER grant survives the write.
+	// Every OTHER grant survives the writes, and the lane grants landed.
 	if after.TrustedReplayCommands != "bbbb,cccc" || after.TrustedRunCommands != "dddd" ||
 		after.TrustedLaneCommands["go"] != "eeee" || after.TrustedLaneCommands["web"] != "ffff" || after.TrustedLaneInstalls["web"] != "gggg" {
-		t.Errorf("a sibling grant was dropped by GrantConsent: %+v", after.Grants)
+		t.Errorf("a sibling grant was dropped by a grant: %+v", after.Grants)
+	}
+	if after.TrustedLaneCommands["docs"] != consent.Fingerprint("markdownlint docs") || after.TrustedLaneInstalls["go"] != consent.Fingerprint("go install x@latest") {
+		t.Errorf("the lane grants did not land through the single writer: %+v", after.Grants)
 	}
 	// And every foreign key is byte-identical to what was seeded.
 	after.Grants = before.Grants

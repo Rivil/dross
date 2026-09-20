@@ -1,6 +1,9 @@
 package cmd
 
-import "github.com/Rivil/dross/internal/consent"
+import (
+	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/project"
+)
 
 // Test-only shims over internal/consent with the root-taking signatures cmd's
 // tests were written against, so cmd_test.go, consent_surface_test.go,
@@ -34,4 +37,42 @@ func RunConsented(root, line string) (bool, error) {
 
 func GrantRunConsent(root, line string) error {
 	return consent.GrantRunConsent(grantStore(root), line)
+}
+
+// --- lane shims (t-5) ---
+
+func laneConsentLine(lane project.TestLane) string        { return consent.LaneLine(lane) }
+func laneInstallConsentLine(lane project.TestLane) string { return consent.LaneInstallLine(lane) }
+
+func LaneConsented(root, repoDir, name, line string) (ConsentState, error) {
+	return consent.LaneConsented(grantStore(root), repoDir, name, line)
+}
+
+func GrantLaneConsent(root, name, line string) error {
+	return consent.GrantLaneConsent(grantStore(root), name, line)
+}
+
+func RevokeLaneConsent(root, name string) error {
+	return consent.RevokeLaneConsent(grantStore(root), name)
+}
+
+func LaneInstallConsented(root, repoDir, name, line string) (ConsentState, error) {
+	return consent.LaneInstallConsented(grantStore(root), repoDir, name, line)
+}
+
+func GrantLaneInstallConsent(root, name, line string) error {
+	return consent.GrantLaneInstallConsent(grantStore(root), name, line)
+}
+
+func RevokeLaneInstallConsent(root, name string) error {
+	return consent.RevokeLaneInstallConsent(grantStore(root), name)
+}
+
+const (
+	laneFrame         = consent.LaneFrame
+	laneTemplateFrame = consent.LaneTemplateFrame
+)
+
+func laneInstallRefusal(lane project.TestLane, state ConsentState, cerr error) error {
+	return consent.LaneInstallRefusal(lane, state, cerr)
 }

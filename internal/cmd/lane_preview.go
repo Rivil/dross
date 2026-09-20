@@ -28,6 +28,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/consent"
 	"github.com/Rivil/dross/internal/project"
 )
 
@@ -204,7 +205,7 @@ func runLanePreview(files, args []string, lane string, probe, asJSON bool) error
 // behalf of a lane nobody granted; the refusal preview renders for that is its
 // own, about the probe, in the host line.
 func previewConsent(root, repoDir string, lane project.TestLane) ConsentState {
-	state, _ := LaneConsented(root, repoDir, lane.Name, laneConsentLine(lane))
+	state, _ := consent.LaneConsented(grantStore(root), repoDir, lane.Name, consent.LaneLine(lane))
 	return state
 }
 

@@ -1292,7 +1292,7 @@ func reportExecGatedSurface() {
 func reportLaneConsent(root, repoDir string, p *project.Project) int {
 	issues := 0
 	for _, lane := range p.Runtime.TestLane {
-		state, cerr := LaneConsented(root, repoDir, lane.Name, laneConsentLine(lane))
+		state, cerr := consent.LaneConsented(grantStore(root), repoDir, lane.Name, consent.LaneLine(lane))
 		switch state {
 		case ConsentGranted:
 			Printf("  ✓ lane %q: trusted\n", lane.Name)

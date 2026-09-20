@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/Rivil/dross/internal/consent"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 )
@@ -241,11 +242,11 @@ func runInstallLocally(argv []string) (string, error) {
 // line, and only the second one belongs to a shared helper.
 func runLaneInstall(root, repoDir string, target *remote.Target, lane project.TestLane, s installStep) (string, error) {
 	if s.Line != "" {
-		state, cerr := LaneInstallConsented(root, repoDir, lane.Name, laneInstallConsentLine(lane))
+		state, cerr := consent.LaneInstallConsented(grantStore(root), repoDir, lane.Name, consent.LaneInstallLine(lane))
 		if cerr != nil {
 			// Refused BEFORE the argv is even rendered, so an ungranted line
 			// never reaches a seam and never reaches a transport.
-			return "", laneInstallRefusal(lane, state, cerr)
+			return "", consent.LaneInstallRefusal(lane, state, cerr)
 		}
 	}
 	argv, err := installArgv(s)

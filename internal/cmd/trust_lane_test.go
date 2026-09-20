@@ -23,6 +23,11 @@ name = "docs"
 match = ["docs/"]
 command = "markdownlint docs"`
 
+// The store-level lane tests — TestOneLaneGoesStaleAlone,
+// TestRenamedLaneInheritsNothing, TestRevokeLaneConsentDropsOnlyThatLane and
+// the framing/forgery tests — moved with the grants to internal/consent. What
+// stays here drives `dross trust --lane` and doctor end to end.
+
 // laneGrantFixture is laneFixture plus the two lanes, returning the .dross root
 // and the repo dir the consent readers take.
 func laneGrantFixture(t *testing.T) (root, repoDir string) {
@@ -43,26 +48,6 @@ func laneState(t *testing.T, root, repoDir, name, line string) ConsentState {
 	t.Helper()
 	state, _ := LaneConsented(root, repoDir, name, line)
 	return state
-}
-
-// TestOneLaneGoesStaleAlone is the locked lane_consent decision, stated as a
-// test: an aggregate hash over every lane's command would make a one-character
-// edit to the docs lane revoke the Go lane too. That is not a smaller
-// inconvenience than it sounds — the Go lane is the pre-commit gate, so a docs
-// typo would block committing until someone re-consented to a suite they never
-// touched, and a gate that behaves like that gets routed around.
-func TestOneLaneGoesStaleAlone(t *testing.T) {
-	root, repoDir := laneGrantFixture(t)
-	mustGrantLane(t, root, "go", "go test -count=1 ./...")
-	mustGrantLane(t, root, "docs", "markdownlint docs")
-
-	// The docs lane's command is edited; the Go lane's is not.
-	if got := laneState(t, root, repoDir, "docs", "markdownlint --fix docs"); got != ConsentStale {
-		t.Errorf("edited lane state = %v, want stale", got)
-	}
-	if got := laneState(t, root, repoDir, "go", "go test -count=1 ./..."); got != ConsentGranted {
-		t.Errorf("untouched lane state = %v, want granted — one lane's edit revoked another's grant", got)
-	}
 }
 
 // TestTrustLaneAccumulates: the store is a map that grows. A grant that
@@ -287,19 +272,6 @@ func TestLaneGrantRefusesATrackedStore(t *testing.T) {
 	}
 }
 
-// TestRenamedLaneInheritsNothing: the grant is keyed by name, so renaming a
-// lane is an edit like any other and the new name starts ungranted. Inheriting
-// would mean a grant issued for `go` silently authorizing whatever `unit` runs.
-func TestRenamedLaneInheritsNothing(t *testing.T) {
-	root, repoDir := laneGrantFixture(t)
-	mustGrantLane(t, root, "go", "go test -count=1 ./...")
-
-	// Same command, new name: the lookup misses.
-	if got := laneState(t, root, repoDir, "unit", "go test -count=1 ./..."); got != ConsentAbsent {
-		t.Errorf("renamed lane state = %v, want absent — it inherited the old name's grant", got)
-	}
-}
-
 // TestTrustLaneCheckDistinguishesTheThreeStates: --check is what a pre-flight
 // runs, and the three answers call for three different reactions. Collapsing
 // stale into absent would report a rewritten command as a routine first run,
@@ -417,30 +389,6 @@ match = ["internal/**"]`)
 	}
 }
 
-// TestRevokeLaneConsentDropsOnlyThatLane is what `dross test lane remove`
-// leans on: a removed lane's grant must not survive to authorize a lane that is
-// later re-added under the same name, while every other lane's grant stands.
-func TestRevokeLaneConsentDropsOnlyThatLane(t *testing.T) {
-	root, repoDir := laneGrantFixture(t)
-	mustGrantLane(t, root, "go", "go test -count=1 ./...")
-	mustGrantLane(t, root, "docs", "markdownlint docs")
-
-	if err := RevokeLaneConsent(root, "docs"); err != nil {
-		t.Fatalf("revoke: %v", err)
-	}
-	if got := laneState(t, root, repoDir, "docs", "markdownlint docs"); got != ConsentAbsent {
-		t.Errorf("revoked lane state = %v, want absent", got)
-	}
-	if got := laneState(t, root, repoDir, "go", "go test -count=1 ./..."); got != ConsentGranted {
-		t.Errorf("revoking one lane dropped another's grant: %v", got)
-	}
-	// Revoking what is already absent is not an error: the caller is asking
-	// for a state that already holds.
-	if err := RevokeLaneConsent(root, "nosuch"); err != nil {
-		t.Errorf("revoking an absent grant errored: %v", err)
-	}
-}
-
 // trackedLaneFixture builds a repo at the cwd whose .dross/local.toml is
 // git-tracked, which makes consent.RefuseTrackedLocal refuse EVERY lane. It is the only
 // route to ConsentRefused for a lane, and being repo-wide it refuses the
@@ -538,72 +486,6 @@ func setLanePrepare(t *testing.T, root, name, prepare string) {
 	}
 	if err := p.Save(path); err != nil {
 		t.Fatal(err)
-	}
-}
-
-// TestLaneConsentFramingSeparatesThePrepareFromTheCommand: the two lines are
-// LENGTH-FRAMED, not concatenated.
-//
-// Naive concatenation hashes {prepare:"a", command:"bc"} and {prepare:"ab",
-// command:"c"} to the same value — which is a lane whose split between
-// bootstrap and suite moved keeping a grant that was issued for neither
-// arrangement. The user reads two lines; the store must bind to the same two.
-func TestLaneConsentFramingSeparatesThePrepareFromTheCommand(t *testing.T) {
-	left := laneConsentLine(project.TestLane{Name: "go", Prepare: "a", Command: "bc"})
-	right := laneConsentLine(project.TestLane{Name: "go", Prepare: "ab", Command: "c"})
-	if left == right {
-		t.Fatalf("a re-split of the same characters produced one consent line: %q", left)
-	}
-	if Fingerprint(left) == Fingerprint(right) {
-		t.Errorf("the two arrangements fingerprint identically — a grant for one authorizes the other")
-	}
-}
-
-// TestLaneWithNoPrepareFingerprintsItsCommandUnchanged is the compatibility
-// half, and it is the assertion that keeps this phase from being a breaking
-// change on every machine: framing applied unconditionally would re-hash every
-// lane grant already written into every local.toml, staling them all over a
-// project.toml nobody edited.
-func TestLaneWithNoPrepareFingerprintsItsCommandUnchanged(t *testing.T) {
-	lane := project.TestLane{Name: "go", Command: "go test -count=1 ./..."}
-	if got := laneConsentLine(lane); got != lane.Command {
-		t.Fatalf("consent line = %q, want the command byte-for-byte", got)
-	}
-
-	// End to end, through the store a pre-phase grant would have written.
-	root, repoDir := laneGrantFixture(t)
-	mustGrantLane(t, root, "go", "go test -count=1 ./...")
-	if got := laneState(t, root, repoDir, "go", laneConsentLine(lane)); got != ConsentGranted {
-		t.Errorf("a grant written before this phase reads as %v, want granted", got)
-	}
-}
-
-// TestFramedBytesCannotForgeALanesGrant: the framed encoding carries a domain
-// separator, so the bytes a prepared lane hashes are not bytes a bare command
-// can occupy.
-//
-// Without it the framing IS a command line: a lane declaring no prepare and a
-// command spelled exactly like the frame would fingerprint to the value the
-// prepared pair was granted, and consent would transfer between two lanes that
-// share no line at all.
-func TestFramedBytesCannotForgeALanesGrant(t *testing.T) {
-	prepared := project.TestLane{Name: "go", Prepare: "make build", Command: "go test"}
-	framed := laneConsentLine(prepared)
-
-	forged := project.TestLane{Name: "go", Command: framed}
-	if got := laneConsentLine(forged); got == framed {
-		t.Fatal("a bare command spelled like the frame hashes the frame itself")
-	}
-	if Fingerprint(laneConsentLine(forged)) == Fingerprint(framed) {
-		t.Error("a no-prepare lane forged the prepared pair's fingerprint")
-	}
-
-	// End to end: grant the PAIR, then ask about the forged lane. Not granted
-	// is the only acceptable answer.
-	root, repoDir := laneGrantFixture(t)
-	mustGrantLane(t, root, "go", framed)
-	if got := laneState(t, root, repoDir, "go", laneConsentLine(forged)); got == ConsentGranted {
-		t.Error("the forged lane was granted by the prepared pair's fingerprint")
 	}
 }
 
