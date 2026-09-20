@@ -71,11 +71,11 @@ func TestRenamedLaneInheritsNothing(t *testing.T) {
 	}
 }
 
-// TestLaneWithNoCommandIsNotApplicable: a lane declaring no command cannot be
+// TestLaneWithNoCommandIsNotApplicableAtTheStore: a lane declaring no command cannot be
 // trusted, because consent binds to a command line and there is none. It is a
 // refusal with its own state, not an absent grant — the fix is to edit the
 // lane, not to run `dross trust`.
-func TestLaneWithNoCommandIsNotApplicable(t *testing.T) {
+func TestLaneWithNoCommandIsNotApplicableAtTheStore(t *testing.T) {
 	store, _, repoDir := consentFixture(t)
 	broken := project.TestLane{Name: "broken"}
 	if got := LaneLine(broken); got != "" {
