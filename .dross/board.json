@@ -1110,6 +1110,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "secret-detection/t-9": {
+      "issue": "DRO-468",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "supply-chain-currency/t-1": {
       "issue": "DRO-424",
       "plan_status": "done",

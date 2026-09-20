@@ -1,4 +1,4 @@
-task_seq = 8
+task_seq = 9
 
 [phase]
   id = "secret-detection"
@@ -88,4 +88,15 @@ task_seq = 8
   covers = ["c-6"]
   depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5", "t-6", "t-7"]
   test_contract = ["if any tracked file carries an unmarked hit, TestDrossTreeHasNoUnmarkedHits fails listing `file:line rule (len, prefix)` per hit and never the line — add a literal token-shaped string to any test and this fails; remove the EXAMPLE carve-out and it fails on the AWS placeholder sites; drop the auth-header value class and it fails on forge.go:863", "if the walker silently reads nothing, TestSelfScanIsNotVacuous fails — the same file list plus one temp file holding a synthesized hit yields exactly one finding, at that file", "if a silencing marker is added or removed without a table edit, TestAllowMarkerSitesArePinned fails naming the file — silencing markers (marker stripped → line hits) == {env_test.go:1, hermetic_env_test.go:1, hostallow_test.go:1, hostile_config_test.go:1, policy.go:1, gitleaks_test.go:2, risk.md:1, synthesis.md:1} plus whatever this phase's own artifacts need; the inert markers in secretscan.go and ship.go do not appear in the multiset", "if a silencing marker leaks into production code beyond the one known site, TestSilencingMarkerNeverAppearsInNonTestGoOutsideArgfence fails — the only non-test .go file whose marker silences a hit is internal/argfence/policy.go; secretscan.go and ship.go carry the literal but silence nothing, and the test asserts that distinction explicitly (stripping their marker yields zero hits)", "if the self-scan quietly narrows to .dross/, TestSelfScanCoversTheWholeTreeNotJustDross fails — the scan visited ≥ 1500 files, ≥ 900 under .dross/, and ≥ 1 file outside .dross/", "if the live gate disagrees with the test walk, TestValidateOnDrossItself fails — in a fresh `git clone` of HEAD in t.TempDir(), runCmd(Validate()) exits 0 with no `secret:` line; a token committed into that clone's .dross/notes.md flips it to exit 1 (non-vacuity)"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 5
+  title = "Exercise the github_pat_ alternation in the hit corpus"
+  files = ["internal/secretscan/secretscan_test.go"]
+  description = "Verify FLAG on c-1: the criterion names github_pat_ explicitly but no test fires that alternation; deleting it from rules.go:45 broke nothing. Add a dedicated fine-grained PAT test (hit at 22 chars, boundary miss at 21) and widen randomLine's github-token arm so the random corpus covers both shapes. Test-only change; rules.go untouched."
+  covers = ["c-1"]
+  depends_on = ["t-1"]
+  test_contract = ["if the github_pat_ alternation is deleted from rules.go, TestGitHubFineGrainedPATFires fails — a github_pat_ + 22-char row yields exactly one github-token hit, and a 21-char row yields none", "if randomLine only ever builds ghp_ shapes, TestReportNeverEchoesTheValue no longer proves github_pat_ echo-freedom — the github-token generator alternates between the classic 36-char and the fine-grained 22+ shapes, and the 50-instance loop fires on every one"]
   status = "done"

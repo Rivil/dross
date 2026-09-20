@@ -156,6 +156,21 @@
           "what": "every tracked file scans clean; silencing dross:allow-secret sites pinned per file; validate proven hermetically over a clone of HEAD"
         }
       ]
+    },
+    "t-9": {
+      "files": [
+        "internal/secretscan/secretscan_test.go"
+      ],
+      "commit": "8eff8e6",
+      "completed_at": "2026-09-20T10:25:48.353248Z",
+      "landmarks": [
+        {
+          "feature": "secret detection",
+          "symbol": "TestGitHubFineGrainedPATFires",
+          "loc": "internal/secretscan/secretscan_test.go:130",
+          "what": "github_pat_ fine-grained PAT alternation pinned (22-char floor + randomized echo corpus covers both GitHub shapes)"
+        }
+      ]
     }
   }
 }
