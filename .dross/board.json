@@ -74,10 +74,11 @@
   "backlog": {
     "slug:cmd-package-decomposition": "DRO-351",
     "slug:dependency-update-automation": "DRO-428",
-    "slug:secret-detection": "DRO-350",
+    "slug:exec-taint-enumeration": "DRO-469",
     "someday:id:010e057c10c922c6": "DRO-286",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
+    "someday:id:031e6c4056e792cc": "DRO-470",
     "someday:id:0323e4284012842f": "DRO-208",
     "someday:id:04f05bd102d7d492": "DRO-419",
     "someday:id:053bcdb6ddc5f57b": "DRO-162",
@@ -135,6 +136,7 @@
     "someday:id:6606a4ae3d228907": "DRO-52",
     "someday:id:66f4a1fc8ec83883": "DRO-70",
     "someday:id:6953a18634519ce3": "DRO-244",
+    "someday:id:6d5c27f8580c1bea": "DRO-472",
     "someday:id:6e152e9e753162c5": "DRO-402",
     "someday:id:6e9a60c539934c23": "DRO-40",
     "someday:id:6ecba2da20b3a6d3": "DRO-429",
@@ -162,6 +164,7 @@
     "someday:id:8aa15f3752fc7827": "DRO-97",
     "someday:id:8b6e571d6de2a7dd": "DRO-391",
     "someday:id:8f3379574b1d5ce5": "DRO-362",
+    "someday:id:92f95cb218fee862": "DRO-475",
     "someday:id:93ce98de1002acab": "DRO-50",
     "someday:id:967609cbf63aac95": "DRO-100",
     "someday:id:969a6d87203fdf51": "DRO-57",
@@ -184,12 +187,14 @@
     "someday:id:ad762bc624279cdf": "DRO-104",
     "someday:id:ae17cb02fa7db2fc": "DRO-82",
     "someday:id:ae6631594447a24e": "DRO-55",
+    "someday:id:b2abcb4ff478e058": "DRO-474",
     "someday:id:b32165178110b56a": "DRO-325",
     "someday:id:b328f16cd8693b82": "DRO-260",
     "someday:id:b38eb66d043ad477": "DRO-160",
     "someday:id:b4794de89d962714": "DRO-63",
     "someday:id:b85eb8099f7b6714": "DRO-43",
     "someday:id:b8f43560bffd1d37": "DRO-373",
+    "someday:id:b91e1b595a02be5f": "DRO-473",
     "someday:id:bbfec942cd67b785": "DRO-65",
     "someday:id:bd1e72da1a5f0812": "DRO-353",
     "someday:id:bd34f0c4f23160c8": "DRO-113",
@@ -200,8 +205,10 @@
     "someday:id:c3db639be8343ccb": "DRO-85",
     "someday:id:c5c048e9871e7f7f": "DRO-60",
     "someday:id:ccf2e24ffabb298f": "DRO-44",
+    "someday:id:cf74a45f05a11bab": "DRO-476",
     "someday:id:d7f9593f2665816b": "DRO-47",
     "someday:id:d81c7a7a91cd0358": "DRO-67",
+    "someday:id:dc676cc2a9792b26": "DRO-471",
     "someday:id:e5ef2935a451c594": "DRO-119",
     "someday:id:e7207129f4d8a7fc": "DRO-48",
     "someday:id:e948eb6e07e8138b": "DRO-16",
@@ -1073,47 +1080,47 @@
     "secret-detection/t-1": {
       "issue": "DRO-460",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "secret-detection/t-2": {
       "issue": "DRO-461",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "secret-detection/t-3": {
       "issue": "DRO-462",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "secret-detection/t-4": {
       "issue": "DRO-463",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "secret-detection/t-5": {
       "issue": "DRO-464",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "secret-detection/t-6": {
       "issue": "DRO-465",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "secret-detection/t-7": {
       "issue": "DRO-466",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "secret-detection/t-8": {
       "issue": "DRO-467",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "secret-detection/t-9": {
       "issue": "DRO-468",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "supply-chain-currency/t-1": {
       "issue": "DRO-424",

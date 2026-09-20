@@ -64,32 +64,39 @@
   locked = true
 
 [[deferred]]
+  id = "031e6c4056e792cc"
   text = "Source-side enumeration: walk every site where a value derived from an exec invocation becomes a string, and require each to be terminal-only or the shared recorder."
   why = "Parked by tool-output-not-persisted. A go/types reach analysis, not pattern detection — a different mechanism with a different cost. Routed with the other go/types items so one phase builds the go/packages loader once."
   target = "exec-taint-enumeration"
 
 [[deferred]]
+  id = "dc676cc2a9792b26"
   text = "The t-6 residual guard (TestNoToolOutputInsideAnErrorConstructor) misses the laundered-variable shape: head → strings.Builder → fmt.Errorf on the next line. Closing it needs function-local taint over the head buffer."
   why = "Parked by tool-output-not-persisted. Same go/types analysis; the behavioural canaries already fail on the shape, so no persistence gap is open."
   target = "exec-taint-enumeration"
 
 [[deferred]]
+  id = "6d5c27f8580c1bea"
   text = "Raw-string reader scan: a new consumer that loads a declared path field and calls os.* on the raw string, never touching the Contained type."
   why = "Parked by tracked-path-containment. Different sink, same go/types loader and taint walk as the exec enumeration; one phase covers both."
   target = "exec-taint-enumeration"
 
 [[deferred]]
+  id = "b91e1b595a02be5f"
   text = "Symlink-resolving containment: a lexically-contained path that is a symlink pointing outside the repo."
   why = "Parked by tracked-path-containment. Presumes an attacker who can already write into the tree — a threat model nothing in v1.7 addresses. No home yet."
 
 [[deferred]]
+  id = "b2abcb4ff478e058"
   text = "pathfence's absolute-path refusal has no message-content test — add the same three-part Contains assertion (offending path, artifact, root) the escape branch has (pathfence_test.go:85, scope_test.go:437)."
   why = "Parked by tracked-path-containment. Quick-task sized, unrelated to secrets; run it as a /dross-quick rather than carrying it as a phase criterion."
 
 [[deferred]]
+  id = "92f95cb218fee862"
   text = "Whole-diff source scanning at commit time — a pre-commit secret gate over source files, not just .dross/ artifacts."
   why = "Excluded by scan_scope: that is gitleaks' job via `dross secure`, and duplicating it in the gate would double the false-positive surface."
 
 [[deferred]]
+  id = "cf74a45f05a11bab"
   text = "gitleaks boost at the gate — run gitleaks with the per-run config alongside the embedded rules when it is on PATH."
   why = "Rejected by pattern_source: the gate's verdict must not vary by machine, and two rule sets can disagree on the same line."
