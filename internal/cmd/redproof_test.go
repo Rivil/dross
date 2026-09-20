@@ -316,7 +316,7 @@ func docLines(t *testing.T, docRel, docBody string) []doctorLine {
 
 func hasIssueMentioning(lines []doctorLine, want string) bool {
 	for _, l := range lines {
-		if l.level == doctorIssue && strings.Contains(l.text, want) {
+		if l.Level == doctorIssue && strings.Contains(l.Text, want) {
 			return true
 		}
 	}
@@ -337,8 +337,8 @@ func TestRedProofUnreadableDocIsAnIssue(t *testing.T) {
 		t.Errorf("the finding does not name the doc: %+v", lines)
 	}
 	for _, l := range lines {
-		if l.level == doctorOK {
-			t.Errorf("a pin with an unreadable doc still earned an OK line: %q", l.text)
+		if l.Level == doctorOK {
+			t.Errorf("a pin with an unreadable doc still earned an OK line: %q", l.Text)
 		}
 	}
 }
@@ -353,8 +353,8 @@ func TestRedProofDocWithoutABaseCommitLineIsAnIssue(t *testing.T) {
 		t.Errorf("a doc with no pin line produced no issue: %+v", lines)
 	}
 	for _, l := range lines {
-		if l.level == doctorOK {
-			t.Errorf("a doc that cross-checks nothing still earned an OK line: %q", l.text)
+		if l.Level == doctorOK {
+			t.Errorf("a doc that cross-checks nothing still earned an OK line: %q", l.Text)
 		}
 	}
 }
@@ -370,7 +370,7 @@ func TestRedProofDocAgreeingWithTheRecordIsClean(t *testing.T) {
 	mustWrite(t, path, "# red proof\n\nbase commit: `"+sha+"`\n")
 
 	lines := redProofPinLines(dir, dir, redProofPin{Phase: "phase-x", SHA: sha, Doc: containedDoc(t, dir, "fixtures/x/RUN.md")})
-	if len(lines) != 1 || lines[0].level != doctorOK {
+	if len(lines) != 1 || lines[0].Level != doctorOK {
 		t.Errorf("a reachable pin agreeing with its doc did not come back clean: %+v", lines)
 	}
 }

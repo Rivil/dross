@@ -523,8 +523,8 @@ func TestEscapingDocIsNeverRead(t *testing.T) {
 	// something opened the file.
 	lines, _ := redProofChecks(f.root, f.repoDir)
 	for _, l := range lines {
-		if strings.Contains(l.text, docSHA) {
-			t.Errorf("the escaping doc was READ — its sha reached doctor output: %q", l.text)
+		if strings.Contains(l.Text, docSHA) {
+			t.Errorf("the escaping doc was READ — its sha reached doctor output: %q", l.Text)
 		}
 	}
 }

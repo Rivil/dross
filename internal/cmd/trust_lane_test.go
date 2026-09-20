@@ -429,7 +429,7 @@ func doctorIssueCount(t *testing.T, out *string) int {
 	return n
 }
 
-// TestDoctorCountsEachRefusedLane: reportLaneConsent prints a ✗ per refused
+// TestDoctorCountsEachRefusedLane: diag.LaneConsent prints a ✗ per refused
 // lane AND increments doctor's issue count, and only the second half moves the
 // exit code. Without this the refused arm could stop counting and every visible
 // symptom would stay identical — doctor would print the refusals and then exit
