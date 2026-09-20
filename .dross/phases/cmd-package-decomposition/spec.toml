@@ -1,0 +1,62 @@
+[phase]
+  id = "cmd-package-decomposition"
+  title = "cmd-package-decomposition"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "Consent and fingerprinting (Fingerprint, CheckConsent, lane/replay/run/install consent, the requireExecConsent gate) live in their own package; internal/cmd keeps only the `trust` subcommand tree and the gate call."
+
+[[criteria]]
+  id = "c-2"
+  text = "Board reconciliation (backlog/phase/milestone sync, reap, task pull) lives in its own package; internal/cmd keeps only the `issue` subcommand tree."
+
+[[criteria]]
+  id = "c-3"
+  text = "Diagnostic checks (red-proof, roadmap duplicates, remote/board combination warnings, config trust, lane consent, mutation toolchain) live in their own package and return structured results; Doctor() in internal/cmd only composes and prints them."
+
+[[criteria]]
+  id = "c-4"
+  text = "Mutation-adapter construction (configuredAdapters, tuning, gremlins/stryker selection, toolchain probe) lives outside internal/cmd; `verify` and `doctor` both consume the single construction path."
+
+[[criteria]]
+  id = "c-5"
+  text = "An architecture test enumerates every package under internal/ and proves the boundary by import direction: cobra is imported only by internal/cmd, no extracted package imports internal/cmd, internal/cmd imports each of the four extracted packages, and internal/cmd files may not import os/exec, net/http or go/ast except those named in a shrink-only baseline — adding a file to the baseline fails the test."
+
+[[criteria]]
+  id = "c-6"
+  text = "No user-visible CLI change: names, flags, output and exit codes of `trust`, `issue`, `doctor` and `verify` are unchanged — the existing internal/cmd tests pass with no assertion edits, and unit tests of moved functions move with the code."
+
+[[decisions]]
+  key = "proof_shape"
+  choice = "The c-5 test asserts cobra exclusivity, the four positive imports, no reverse import of internal/cmd, AND a forbidden-import ratchet on internal/cmd (os/exec, net/http, go/ast)."
+  why = "Exclusivity alone snapshots today's boundary; the ratchet is what makes new domain logic landing in cmd a test failure, which is the milestone's 'provable by import direction' in enforceable form."
+  locked = true
+
+[[decisions]]
+  key = "ratchet_baseline"
+  choice = "The forbidden-import rule carries an explicit shrink-only allowlist of the cmd files still importing os/exec after this phase (the ~13 outside the four named domains). Adding a file fails; removing one passes."
+  why = "18 cmd files import os/exec today and only ~5 belong to the four domains in scope; draining the rest would double the phase. A visible, shrinking baseline keeps the debt honest without inflating scope."
+  locked = true
+
+[[decisions]]
+  key = "adapter_home"
+  choice = "Adapter construction lands in a new thin package internal/mutationcfg that imports project, mutation and remote; internal/mutation stays project-agnostic."
+  why = "internal/mutation today imports only argfence, remote and telemetry; giving it a project dependency would couple the adapter layer to the config schema and drag project into its pure tests."
+  locked = true
+
+[[decisions]]
+  key = "test_policy"
+  choice = "Unit tests of a moved function move into its new package with unexported access intact; internal/cmd retains only tests that drive a cobra command end-to-end."
+  why = "Keeps the export surface minimal and lands mutation-score attribution in the package that owns the code; leaving tests in cmd would force a wide exported API and keep the 281-file test monolith."
+  locked = true
+
+[[deferred]]
+  text = "Drain the remaining os/exec callers out of internal/cmd (cleantree, init, pause, run, stack, update, worktree_files, ship_recover, statusline, techdebt, milestone_stale, redproof_replay, lane_install) so the ratchet baseline reaches empty."
+  why = "Outside the four domains the milestone names; would double this phase."
+  target = "cmd-exec-baseline-drain"
+
+[[deferred]]
+  text = "Move local.go persistence (localStore, remote grants, detached runs, tuning keys) out of internal/cmd into its own package."
+  why = "Fifth domain the milestone criterion does not name; c-1 crosses it via whatever seam the planner picks."
+  target = "cmd-exec-baseline-drain"
