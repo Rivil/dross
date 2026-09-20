@@ -483,7 +483,7 @@ func TestReapedCardCarriesTheLaneTerminalLabel(t *testing.T) {
 	})
 
 	for _, tc := range []struct{ key, want string }{
-		{"PROJ-2", boardsync.StatusLabel(statusTaskComplete)},
+		{"PROJ-2", boardsync.StatusLabel(boardsync.StatusTaskComplete)},
 		{"PROJ-1", boardsync.StatusLabel("complete")},
 	} {
 		if !slicesHas(f.labels[tc.key], tc.want) {

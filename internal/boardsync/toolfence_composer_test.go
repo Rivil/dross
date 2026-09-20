@@ -1,4 +1,4 @@
-package cmd
+package boardsync
 
 import (
 	"fmt"
@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/toolfence"
@@ -25,20 +24,20 @@ import (
 // AST scan proves the shape and nothing about what the shape produces.
 //
 // The scan is keyed on the SINK, not on composer function shape. Three of the
-// four named composers are unexported here and ship.BuildPRBody is exported, so
-// only a cmd-side test can call all four — but the live body sites are mostly
+// four named composers live in this package and ship.BuildPRBody is exported, so
+// a test here can call all four — but the live body sites are mostly
 // not functions at all: they are inline fmt.Sprintf values assigned into a
 // forge.IssueInput or a ship.OpenOpts, and a scan keyed on "func …Body() string"
 // resolves none of them. TestBodyScanIsKeyedOnTheSinkNotTheFuncShape is that
 // difference, written down.
 
 // composerRoots are the packages holding a body composer or a body sink.
-var composerRoots = []string{".", "../ship", "../boardsync"}
+var composerRoots = []string{".", "../ship", "../cmd"}
 
 // namedComposers are the four functions that build a body wholesale. They are
 // CALLED below as well as scanned, so a rename breaks compilation here rather
 // than silently shrinking the set.
-var namedComposers = []string{"RenderPhaseBody", "MilestoneBody", "renderTaskBody", "BuildPRBody"}
+var namedComposers = []string{"RenderPhaseBody", "MilestoneBody", "RenderTaskBody", "BuildPRBody"}
 
 // bodySite is one place a composed body reaches a sink.
 type bodySite struct {
@@ -94,9 +93,9 @@ func TestNoComposerRendersARecordedField(t *testing.T) {
 
 	bodies := map[string]string{
 		"BuildPRBody":     ship.BuildPRBody(spec, v),
-		"renderPhaseBody": boardsync.RenderPhaseBody("p", spec, plan),
-		"milestoneBody":   boardsync.MilestoneBody("v1.7", "- something holds\n"),
-		"renderTaskBody":  renderTaskBody("p", "DRO-1", plan.Task[0]),
+		"renderPhaseBody": RenderPhaseBody("p", spec, plan),
+		"milestoneBody":   MilestoneBody("v1.7", "- something holds\n"),
+		"RenderTaskBody":  RenderTaskBody("p", "DRO-1", plan.Task[0]),
 	}
 
 	for name, body := range bodies {
@@ -146,7 +145,7 @@ func TestNoBodySinkReadsARecordedField(t *testing.T) {
 		}
 	}
 	if len(sites) < 8 {
-		t.Errorf("the scan resolved only %d body sinks; the tree has at least 8 (boardsync's backlog.go/phase.go/milestone.go, issue.go, issue_task.go, ship.go)", len(sites))
+		t.Errorf("the scan resolved only %d body sinks; the tree has at least 8 (backlog.go, phase.go, milestone.go, task.go here; cmd's issue.go; ship's ship.go)", len(sites))
 	}
 
 	// Every file that holds a body sink is reached. Asserted by FILE rather
@@ -157,7 +156,7 @@ func TestNoBodySinkReadsARecordedField(t *testing.T) {
 	for _, s := range sites {
 		byFile[filepath.Base(s.file)] = append(byFile[filepath.Base(s.file)], s.line)
 	}
-	for _, want := range []string{"issue.go", "issue_task.go", "milestone.go", "ship.go", "backlog.go", "phase.go"} {
+	for _, want := range []string{"issue.go", "task.go", "milestone.go", "ship.go", "backlog.go", "phase.go"} {
 		if len(byFile[want]) == 0 {
 			t.Errorf("the scan resolved no body sink in %s, which holds one", want)
 		}
@@ -326,11 +325,11 @@ func bodySites(t *testing.T, roots []string) []bodySite {
 }
 
 // sinkTypes are the composite-literal types whose Body field reaches a forge or
-// a provider. boardsync.BacklogItem is included because its `body` is what issue.go later
+// a provider. BacklogItem is included because its `body` is what issue.go later
 // assigns into forge.IssueInput.Body — the composition happens there, so that is
 // where the scan has to look.
 var sinkTypes = map[string]string{
-	"forge.IssueInput": "board", "forge.IssuePatch": "board", "boardsync.BacklogItem": "board",
+	"forge.IssueInput": "board", "forge.IssuePatch": "board", "BacklogItem": "board",
 	"ship.OpenOpts": "pr", "ship.CommentOpts": "pr", "OpenOpts": "pr", "CommentOpts": "pr",
 }
 
@@ -468,7 +467,7 @@ func goFilesIn(t *testing.T, dir string) []string {
 
 func readCmdSource(t *testing.T, name string) []byte {
 	t.Helper()
-	b, err := os.ReadFile(name)
+	b, err := os.ReadFile(filepath.Join("..", "cmd", name))
 	if err != nil {
 		t.Fatal(err)
 	}

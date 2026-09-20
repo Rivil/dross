@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/boardsync"
 )
 
 // readOnlyYT is a YouTrack stand-in that serves reads and FAILS THE TEST on any
@@ -176,8 +178,8 @@ func TestPhaseAndTaskCardsCarryTheirOwnTerminal(t *testing.T) {
 	if got := cardFor(t, plan.Cards, "PROJ-1").Terminal; got != "complete" {
 		t.Errorf("phase card terminal = %q, want complete", got)
 	}
-	if got := cardFor(t, plan.Cards, "PROJ-2").Terminal; got != statusTaskComplete {
-		t.Errorf("task card terminal = %q, want %s", got, statusTaskComplete)
+	if got := cardFor(t, plan.Cards, "PROJ-2").Terminal; got != boardsync.StatusTaskComplete {
+		t.Errorf("task card terminal = %q, want %s", got, boardsync.StatusTaskComplete)
 	}
 }
 

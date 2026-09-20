@@ -1295,7 +1295,7 @@ func TestIssueCover_listDismissed(t *testing.T) {
 }
 
 // fakeInboundClient is a forge.BoardClient that returns a fixed issue list and
-// records nothing — enough to unit-test collectInbound in isolation.
+// records nothing — enough to unit-test boardsync.CollectInbound in isolation.
 type fakeInboundClient struct{ issues []forge.Issue }
 
 func (f fakeInboundClient) EnsureMilestone(string, string) (string, error)     { return "", nil }
@@ -1307,7 +1307,7 @@ func (f fakeInboundClient) UpdateIssue(string, forge.IssuePatch) (*forge.Issue, 
 func (f fakeInboundClient) CloseIssue(string) error                             { return nil }
 func (f fakeInboundClient) ListIssues(forge.IssueFilter) ([]forge.Issue, error) { return f.issues, nil }
 
-// TestCollectInboundNoMark proves the mark-free reuse path (c-4): collectInbound
+// TestCollectInboundNoMark proves the mark-free reuse path (c-4): boardsync.CollectInbound
 // drops linked/dismissed issues and never stamps last_pull.
 func TestCollectInboundNoMark(t *testing.T) {
 	bd := board.New()
@@ -1321,7 +1321,7 @@ func TestCollectInboundNoMark(t *testing.T) {
 	}}
 	ctx := &boardCtx{Client: client, Board: bd}
 
-	got, err := collectInbound(ctx, forge.IssueFilter{State: "open"})
+	got, err := boardsync.CollectInbound(ctx, forge.IssueFilter{State: "open"})
 	if err != nil {
 		t.Fatalf("collectInbound: %v", err)
 	}
@@ -2080,7 +2080,7 @@ func TestPullAgainstThisReposBoardJSON(t *testing.T) {
 	}
 
 	ctx := &boardCtx{Client: fakeInboundClient{issues: linked}, Board: bd}
-	got, err := collectInbound(ctx, forge.IssueFilter{State: "all"})
+	got, err := boardsync.CollectInbound(ctx, forge.IssueFilter{State: "all"})
 	if err != nil {
 		t.Fatalf("collectInbound: %v", err)
 	}
@@ -2099,7 +2099,7 @@ func TestCollectInboundKeepsDismissedAndHumanVerdicts(t *testing.T) {
 		{Key: "PROJ-21", Title: "a real bug", Labels: []string{"bug"}},
 	}}}
 
-	got, err := collectInbound(ctx, forge.IssueFilter{State: "open"})
+	got, err := boardsync.CollectInbound(ctx, forge.IssueFilter{State: "open"})
 	if err != nil {
 		t.Fatalf("collectInbound: %v", err)
 	}

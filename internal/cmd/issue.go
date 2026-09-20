@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -393,91 +393,6 @@ func issueQuick() *cobra.Command {
 
 // --- pull (inbound triage feed) ---
 
-// collectInbound returns the board's inbound triage feed: issues matching the
-// filter, minus every issue dross authored — one linked in any board.json
-// namespace, one carrying the dross marker label — and minus those dismissed. It is
-// deliberately MARK-FREE — it never stamps last_pull — so read-only callers
-// (dross watch, dross status) share one filter path with `issue pull` and can
-// never re-introduce a board mutation. The filter's State scopes the feed;
-// callers wanting reopen-resurfaces semantics pass State:"open".
-func collectInbound(ctx *boardCtx, filter forge.IssueFilter) ([]forge.Issue, error) {
-	issues, err := ctx.Client.ListIssues(filter)
-	if err != nil {
-		return nil, boardsync.Wrap(err)
-	}
-	var inbound []forge.Issue
-	for _, iss := range issues {
-		// boardsync.HasMarker is the second exclusion basis (exclusion_basis lock):
-		// board.json is branch-local, so a mirror created on a phase branch
-		// that never merged is invisible to IsLinked, while the marker label
-		// travels with the issue itself. Hiding a human-filed issue somebody
-		// tagged `dross` is the cheaper error.
-		if ctx.Board.IsLinked(iss.Key) || ctx.Board.IsDismissed(iss.Key) || boardsync.HasMarker(iss) {
-			continue
-		}
-		inbound = append(inbound, iss)
-	}
-	return inbound, nil
-}
-
-// pullEnvelope is the `issue pull --json` shape. It exists so a board that
-// could not be reached is distinguishable from a board with nothing on it: a
-// bare array collapses both onto `[]`, and every prompt then reports zero
-// inbound issues for a tracker that is simply down.
-//
-// Issues is never null — an empty feed is `[]` — and Error is null on success.
-type pullEnvelope struct {
-	Issues []forge.Issue `json:"issues"`
-	Error  *string       `json:"error"`
-}
-
-// emitPullEnvelope marshals and prints the envelope. Issues is normalised to a
-// non-nil slice so consumers can index it without a null check.
-func emitPullEnvelope(issues []forge.Issue, boardErr error) error {
-	env := pullEnvelope{Issues: issues}
-	if env.Issues == nil {
-		env.Issues = []forge.Issue{}
-	}
-	if boardErr != nil {
-		msg := boardErr.Error()
-		env.Error = &msg
-	}
-	out, err := json.Marshal(env)
-	if err != nil {
-		return err
-	}
-	Print(string(out))
-	return nil
-}
-
-// reportBoardFailure delivers a pull failure the way the caller asked to
-// receive it.
-//
-// Under --json the answer is always the envelope with a non-null .error and a
-// zero exit, because that is the contract status.md and inbox.md publish and
-// the only shape a `jq .issues` consumer survives. A consumer that dies on a
-// parse error reports nothing at all, which is strictly worse than a named
-// failure in a field the prompt already prints — including for the tracked
-// local.toml refusal, whose own wording travels intact so it still reads as
-// something to fix rather than an outage to wait out.
-//
-// Human mode is deliberately NOT changed by this phase. A fetch failure stays a
-// printed no-op, because the workflow prompts call `dross issue …`
-// unconditionally on the promise that it is safe. A setup failure stays fatal
-// (humanFatal), because a person who typed the command wants to know their
-// token is unset, and the seven other openBoard callers exit non-zero on
-// exactly these conditions — only the machine-facing --json contract was broken.
-func reportBoardFailure(asJSON, humanFatal bool, boardErr error) error {
-	if asJSON {
-		return emitPullEnvelope(nil, boardErr)
-	}
-	if humanFatal {
-		return boardErr
-	}
-	Printf("board unreachable: %v\n", boardErr)
-	return nil
-}
-
 func issuePull() *cobra.Command {
 	var labels, state string
 	var asJSON, mark bool
@@ -505,11 +420,11 @@ func issuePull() *cobra.Command {
 				// human-facing commands that should keep exiting non-zero on
 				// exactly these conditions, and degrading them into silent
 				// no-ops is the fault this trades against.
-				return reportBoardFailure(asJSON, true, err)
+				return boardsync.ReportBoardFailure(os.Stdout, asJSON, true, err)
 			}
 			if !enabled {
 				if asJSON {
-					return emitPullEnvelope(nil, nil)
+					return boardsync.EmitPullEnvelope(os.Stdout, nil, nil)
 				}
 				return nil
 			}
@@ -517,13 +432,13 @@ func issuePull() *cobra.Command {
 			if labels != "" {
 				filter.Labels = splitCSV(labels)
 			}
-			inbound, boardErr := collectInbound(ctx, filter)
+			inbound, boardErr := boardsync.CollectInbound(ctx, filter)
 			if boardErr != nil {
 				// A fetch failure is reported, not raised: the workflow
 				// prompts call `dross issue …` unconditionally on the promise
 				// that it is a safe no-op, so a non-zero exit would break
 				// that contract. The signal travels in the payload instead.
-				return reportBoardFailure(asJSON, false, boardErr)
+				return boardsync.ReportBoardFailure(os.Stdout, asJSON, false, boardErr)
 			}
 
 			// Read-only by default so /dross-status can poll without
@@ -537,12 +452,12 @@ func issuePull() *cobra.Command {
 					// consumer told nothing would treat the next run's results
 					// as already-seen. Reported through the envelope like every
 					// other failure rather than raised past it.
-					return reportBoardFailure(asJSON, true, err)
+					return boardsync.ReportBoardFailure(os.Stdout, asJSON, true, err)
 				}
 			}
 
 			if asJSON {
-				return emitPullEnvelope(inbound, nil)
+				return boardsync.EmitPullEnvelope(os.Stdout, inbound, nil)
 			}
 			if len(inbound) == 0 {
 				Print("no new issues on the board")

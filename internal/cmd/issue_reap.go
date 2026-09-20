@@ -92,7 +92,7 @@ type reapLane struct {
 // changed.
 var reapLanes = []reapLane{
 	{Name: "Phases", Terminal: "complete"},
-	{Name: "Tasks", Terminal: statusTaskComplete},
+	{Name: "Tasks", Terminal: boardsync.StatusTaskComplete},
 	{Name: "Milestones", Terminal: "complete"},
 	{Name: "Backlog", Terminal: "complete"},
 	{Name: "Quicks", Terminal: "complete"},
