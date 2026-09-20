@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/mutationcfg"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 )
@@ -174,7 +175,7 @@ func TestBothSitesBuildTheSameGremlins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveMutationTuning: %v", err)
 	}
-	fromDrain := mt.gremlins(fromVerify.ProjectRoot, p, nil)
+	fromDrain := mt.Gremlins(fromVerify.ProjectRoot, p, nil)
 
 	if !reflect.DeepEqual(fromVerify, fromDrain) {
 		t.Errorf("the two construction sites disagree:\n verify: %+v\n drain:  %+v", fromVerify, fromDrain)
@@ -255,7 +256,7 @@ func TestGrantDropsTheDockerPrefixAtBothSites(t *testing.T) {
 	stubProbe(t, 32, nil)
 
 	p := loadWiringProject(t, root)
-	if dockerPrefix(p) == "" {
+	if mutationcfg.DockerPrefix(p) == "" {
 		t.Fatal("the fixture is not in docker mode — this test would prove nothing")
 	}
 
@@ -277,7 +278,7 @@ func TestGrantDropsTheDockerPrefixAtBothSites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g := mt.gremlins(filepath.Dir(root), p, nil)
+	g := mt.Gremlins(filepath.Dir(root), p, nil)
 	if g.Prefix != "" || g.Remote == nil {
 		t.Errorf("the drain site disagrees: Prefix=%q Remote=%+v", g.Prefix, g.Remote)
 	}
@@ -321,7 +322,7 @@ func TestMutualExclusionStaysUnreachableFromBothSites(t *testing.T) {
 func TestNoGrantKeepsTheDockerPrefixUnchanged(t *testing.T) {
 	root := wiringFixture(t, nil, true)
 	p := loadWiringProject(t, root)
-	want := dockerPrefix(p)
+	want := mutationcfg.DockerPrefix(p)
 	if want == "" {
 		t.Fatal("the fixture is not in docker mode")
 	}

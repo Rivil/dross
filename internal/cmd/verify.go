@@ -16,6 +16,7 @@ import (
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/mutationcfg"
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
@@ -1018,101 +1019,33 @@ func finalizeVerify(root, phaseID string) (recorded bool, verdict string, err er
 // the code execution the consent gate exists to prevent.
 var configuredAdaptersFn = configuredAdapters
 
-// mutationTuning is the machine-local half of every adapter's construction:
-// WHERE the run happens, and how parallel it is.
-//
-// It exists because there are two construction sites — configuredAdapters here
-// and runGremlinsOverPackages in the drain — and a knob added to one of them
-// only is a run that behaves differently depending on which command you reached
-// it through. One table read once, applied at both.
-type mutationTuning struct {
-	// Prefix is the local runtime prefix, and is EMPTY whenever Target is set.
-	Prefix string
-	// Target is the granted remote, with Cores filled in by the probe. Nil runs
-	// locally.
-	Target *remote.Target
-	// Workers and TestCPU are the machine-local overrides. Zero means unset,
-	// which the adapters read as "apply your own default" — not as zero.
-	Workers int
-	TestCPU int
-	// FellBackFrom names the host this run meant to use and could not reach;
-	// FallbackWhy is the reason. Both empty on an ordinary run of either kind.
-	//
-	// They are carried rather than dropped because a fallback's numbers were
-	// measured HERE while a remote measurement was expected — and a record that
-	// says only "local" loses the fact that the expectation went unmet.
-	FellBackFrom string
-	FallbackWhy  string
-}
+// mutationTuning is the in-package name for mutationcfg.Tuning — the
+// machine-local half of every adapter's construction, resolved once by
+// mutationcfg.ResolveTuning and applied at both construction sites (verify
+// here, the survivor drain's gremlins run).
+type mutationTuning = mutationcfg.Tuning
 
-// gremlins is the single Gremlins constructor. Both sites go through it, so a
-// knob can only be added in one place.
-func (mt mutationTuning) gremlins(projectRoot string, p *project.Project, cacheVars []string) *mutation.Gremlins {
-	return &mutation.Gremlins{
-		CacheVars:          cacheVars,
-		Prefix:             mt.Prefix,
-		ProjectRoot:        projectRoot,
-		TimeoutCoefficient: p.Mutation.Gremlins.TimeoutCoefficient,
-		Workers:            mt.Workers,
-		TestCPU:            mt.TestCPU,
-		Remote:             mt.Target,
+// localSource is the Source cmd hands mutationcfg: grants and tuning knobs
+// from local.toml, the remote pool walk (with its notices) for host selection,
+// and the stack profile's cache vars. The pool walk stays here on purpose —
+// it narrates skipped hosts to the user, which is a command's concern.
+func localSource(root string) mutationcfg.Source {
+	repoDir := filepath.Dir(root)
+	return mutationcfg.Source{
+		Grants: func() ([]*remote.Target, error) { return readRemoteGrants(root, repoDir) },
+		Tuning: func() (int, int, error) { return readMutationTuning(root) },
+		Select: func(targets []*remote.Target) (*remote.Target, mutationcfg.Selection, error) {
+			target, pool, err := selectRemoteTarget(targets, nil)
+			if err != nil {
+				return nil, mutationcfg.Selection{}, err
+			}
+			if target == nil {
+				return nil, mutationcfg.Selection{Fallback: true, Why: pool.Why}, nil
+			}
+			return target, mutationcfg.Selection{Cores: pool.Candidates[0].Ready.Cores}, nil
+		},
+		CacheVars: profileCacheVars,
 	}
-}
-
-// resolveMutationTuning reads the grant and the tuning knobs, and probes the
-// remote once for the core count the worker default derives from.
-//
-// The probe is unconditional rather than only-when-workers-is-unset, and that is
-// the point: it doubles as the reachability pre-flight. A grant that cannot be
-// reached must abort the command HERE, before a tree is pushed and before any
-// adapter runs, rather than surfacing as an empty report the run cannot
-// distinguish from "nothing to measure".
-//
-// A grant DROPS the docker prefix (the locked docker_prefix_under_remote
-// decision) rather than refusing on it. dockerPrefix gates on runtime.mode,
-// which describes the DEV stack and says nothing about where mutation runs — so
-// aborting on the combination would refuse every docker-mode repo that grants a
-// remote, which is the common case and the one this exists for. Shedding the
-// prefix is also exactly right: the point is to run on the remote's OWN
-// toolchain, and whether that toolchain is present is doctor's question.
-func resolveMutationTuning(p *project.Project, root string) (mutationTuning, error) {
-	targets, err := readRemoteGrants(root, filepath.Dir(root))
-	if err != nil {
-		return mutationTuning{}, err
-	}
-	workers, testCPU, err := readMutationTuning(root)
-	if err != nil {
-		return mutationTuning{}, err
-	}
-	mt := mutationTuning{Workers: workers, TestCPU: testCPU}
-	if len(targets) == 0 {
-		mt.Prefix = dockerPrefix(p)
-		return mt, nil
-	}
-	// Walks the authorized hosts in order and takes the first that answers.
-	// With one candidate this is exactly the previous behaviour.
-	target, pool, perr := selectRemoteTarget(targets, nil)
-	if perr != nil {
-		return mutationTuning{}, fmt.Errorf(
-			"remote mutation host %s is not usable: %w\n"+
-				"Nothing was measured. Check ssh access, run `dross doctor`, or withdraw the grant with `dross mutation remote revoke`.",
-			targets[0].Host, perr)
-	}
-	if target == nil {
-		// A host we could not REACH gives no answer, and the local machine
-		// still can. Aborting here is what forced `dross remote revoke` as a
-		// workaround when helicon was unreachable for hours — the fallback is
-		// per-run and touches no config, so the next run probes again.
-		mt.Prefix = dockerPrefix(p)
-		// The LAST candidate's reason: with one host it is that host's, and
-		// with several it is why the final attempt failed, after each earlier
-		// skip was already printed.
-		mt.FellBackFrom, mt.FallbackWhy = targets[len(targets)-1].Host, pool.Why
-		return mt, nil
-	}
-	target.Cores = pool.Candidates[0].Ready.Cores
-	mt.Target = target
-	return mt, nil
 }
 
 // measuredOnOf resolves a run's provenance from the adapters it used and the
@@ -1170,97 +1103,14 @@ func profileCacheVars(p *project.Project, repoDir string) []string {
 	return sp.MutationCache.Vars
 }
 
-// configuredAdapters returns the list of mutation adapters appropriate
-// for the project, with the runtime prefix or the granted remote applied,
-// plus the tuning it resolved — the caller needs the latter to record where
-// the run's numbers actually came from.
+// configuredAdapters is the production wrapper over mutationcfg.Configured
+// with cmd's localSource: the adapters appropriate for the project, with the
+// runtime prefix or the granted remote applied, plus the tuning it resolved —
+// the caller needs the latter to record where the run's numbers actually came
+// from. configuredAdaptersFn above is bound to it, so it stays a named
+// function rather than a closure.
 func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.Adapter, mutationTuning, error) {
-	if skip {
-		return nil, mutationTuning{}, nil // verify still runs — files end up in Skipped
-	}
-	mt, err := resolveMutationTuning(p, root)
-	if err != nil {
-		return nil, mutationTuning{}, err
-	}
-	// Project root is the directory holding .dross — the repo root — and
-	// never the process cwd. FindRoot walks UP to find .dross, so a verify
-	// launched from a subdirectory still resolves the project; but every
-	// adapter's ProjectRoot is also the rsync SOURCE a remote run pushes onto
-	// the granted workdir with --delete. With cwd here, `cd web && dross
-	// verify` synced web/ over the whole remote tree and deleted everything
-	// beside it (feastahead on helicon, 2026-09-13). For docker mode the
-	// report is read through the bind-mounted fs at the same root; if a
-	// volume layout ever diverges, this is where to surface config.
-	repoRoot := filepath.Dir(root)
-	cacheVars := profileCacheVars(p, repoRoot)
-	all := []mutation.Adapter{
-		&mutation.Stryker{
-			Prefix:      mt.Prefix,
-			ProjectRoot: repoRoot,
-			Workdir:     p.Mutation.Stryker.Workdir,
-			Remote:      mt.Target,
-			CacheVars:   cacheVars,
-			// Only consulted for a remote run, where the host has to install
-			// dependencies before stryker can resolve anything. Passed rather
-			// than defaulted: installing with the wrong manager produces a tree
-			// stryker resolves differently.
-			PackageManager: p.Stack.PackageManager,
-		},
-		mt.gremlins(repoRoot, p, cacheVars),
-		&mutation.StrykerNet{Prefix: mt.Prefix, ProjectRoot: repoRoot, Remote: mt.Target, CacheVars: cacheVars},
-	}
-	if len(p.Mutation.Adapters) == 0 {
-		return all, mt, nil
-	}
-	// [mutation] adapters = [...] allowlist: files whose adapter is filtered
-	// out fall into verify's existing Skipped path downstream.
-	allowed := map[string]bool{}
-	for _, name := range p.Mutation.Adapters {
-		allowed[name] = true
-	}
-	var out []mutation.Adapter
-	for _, a := range all {
-		if allowed[a.Name()] {
-			out = append(out, a)
-		}
-	}
-	return out, mt, nil
-}
-
-// dockerPrefix returns the runtime command prefix for docker mode.
-// For native, returns "". For docker, derives from runtime.test_command
-// (which already has the right shape: "docker compose exec app pnpm test").
-//
-// We strip the trailing runner+args to get the prefix. Field-based
-// (not substring) so a container name that happens to match a runner
-// name (e.g. "docker compose exec node node test.js") doesn't fool us.
-func dockerPrefix(p *project.Project) string {
-	if p.Runtime.Mode != "docker" {
-		return ""
-	}
-	tc := p.Runtime.TestCommand
-	fields := strings.Fields(tc)
-	// The prefix's leading binary must be EXACTLY "docker" — not merely a
-	// string starting with "docker" (HasPrefix would accept "dockerevil",
-	// promoting an arbitrary PATH binary into the exec prefix built below).
-	// project.toml is a committed file, so under clone-and-run this is the
-	// difference between a bounded `docker` invocation and arbitrary code.
-	if len(fields) == 0 || fields[0] != "docker" {
-		return "docker compose exec app"
-	}
-	runners := map[string]bool{
-		"pnpm": true, "npm": true, "yarn": true, "bun": true,
-		"node": true, "deno": true,
-		"go": true, "make": true,
-	}
-	// We need at minimum [docker, compose, exec, <service>] before any
-	// runner, so start scanning from index 4.
-	for i := 4; i < len(fields); i++ {
-		if runners[fields[i]] {
-			return strings.Join(fields[:i], " ")
-		}
-	}
-	return "docker compose exec app"
+	return mutationcfg.Configured(p, root, skip, localSource(root))
 }
 
 // mutationCandidates splits the scope's file set into what may be handed to a

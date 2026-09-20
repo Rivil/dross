@@ -278,37 +278,6 @@ func TestVerifyFinalizeMissingFile(t *testing.T) {
 	}
 }
 
-// dockerPrefix derives the runtime prefix from project.toml. Pin its
-// behaviour so a refactor of TestCommand parsing doesn't silently break
-// docker-routed mutation runs.
-func TestDockerPrefixDerivation(t *testing.T) {
-	cases := []struct {
-		mode, testCmd, want string
-	}{
-		{"native", "pnpm test", ""},
-		{"docker", "docker compose exec app pnpm test", "docker compose exec app"},
-		{"docker", "docker compose exec app npm test", "docker compose exec app"},
-		{"docker", "docker compose exec api yarn test", "docker compose exec api"},
-		{"docker", "docker compose exec app bun test", "docker compose exec app"},
-		{"docker", "docker compose exec node node test.js", "docker compose exec node"},
-		// docker mode but unrecognised runner — falls back to default
-		{"docker", "weird invocation", "docker compose exec app"},
-		// docker mode with no test_command at all — falls back to default
-		{"docker", "", "docker compose exec app"},
-		// self-audit inj-4a: a binary that merely STARTS WITH "docker"
-		// (dockerevil) must NOT be promoted into the exec prefix — the
-		// leading field has to be exactly "docker". Falls back to default.
-		{"docker", "dockerevil compose exec app pnpm test", "docker compose exec app"},
-		{"docker", "docker-malicious run --privileged x", "docker compose exec app"},
-	}
-	for _, c := range cases {
-		p := &project.Project{Runtime: project.Runtime{Mode: c.mode, TestCommand: c.testCmd}}
-		if got := dockerPrefix(p); got != c.want {
-			t.Errorf("dockerPrefix(mode=%q, test=%q) = %q want %q", c.mode, c.testCmd, got, c.want)
-		}
-	}
-}
-
 // --- printVerifySummary coverage (verify.go:248-284) ---
 //
 // These call printVerifySummary directly with hand-built Tests/Verify so
@@ -664,51 +633,6 @@ func TestVerifyCover_RecordOutcomeNilTestsZeroScore(t *testing.T) {
 	body := mustRead(t, telemPath)
 	if strings.Contains(body, "mutation_score") || strings.Contains(body, `"nums"`) {
 		t.Errorf("no mutation_score expected when summary score is 0:\n%s", body)
-	}
-}
-
-// TestConfiguredAdaptersAllowlist pins the [mutation] adapters escape hatch:
-// empty means all adapters; non-empty filters by Name(), so a polyglot repo
-// can run only the adapter that's actually set up.
-func TestConfiguredAdaptersAllowlist(t *testing.T) {
-	// Takes the (adapters, error) pair whole: configuredAdapters can now refuse
-	// — an unreachable granted remote, a tracked local.toml — and a helper that
-	// dropped the error would let this test pass on an empty list.
-	names := func(as []mutation.Adapter, _ mutationTuning, err error) []string {
-		t.Helper()
-		if err != nil {
-			t.Fatalf("configuredAdapters: %v", err)
-		}
-		var out []string
-		for _, a := range as {
-			out = append(out, a.Name())
-		}
-		return out
-	}
-
-	p := &project.Project{}
-	if got := names(configuredAdapters(p, "", false)); len(got) != 3 {
-		t.Fatalf("empty allowlist must return all adapters, got %v", got)
-	}
-
-	p.Mutation.Adapters = []string{"gremlins"}
-	got := names(configuredAdapters(p, "", false))
-	if len(got) != 1 || got[0] != "gremlins" {
-		t.Errorf("allowlist [gremlins] must filter to gremlins only, got %v", got)
-	}
-
-	p.Mutation.Adapters = []string{"stryker", "gremlins"}
-	got = names(configuredAdapters(p, "", false))
-	if len(got) != 2 {
-		t.Errorf("allowlist [stryker gremlins] must keep both, got %v", got)
-	}
-
-	skipped, _, err := configuredAdapters(p, "", true)
-	if err != nil {
-		t.Fatalf("--skip-mutation returned an error: %v", err)
-	}
-	if skipped != nil {
-		t.Errorf("--skip-mutation must still return nil regardless of allowlist, got %v", names(skipped, mutationTuning{}, nil))
 	}
 }
 

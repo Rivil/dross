@@ -19,6 +19,7 @@ import (
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/mutationcfg"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
@@ -1354,64 +1355,24 @@ func printLanePrepare(lane project.TestLane) {
 // about a toolchain the project never needed is noise that trains the reader to
 // skim past the ones that matter.
 func checkMutationToolchain(p *project.Project) {
-	tools, needBy := remoteMutationTools(p)
-	var missing []string
-	for _, tool := range tools {
-		if _, err := execLookPath(tool); err != nil {
-			missing = append(missing, tool)
-		}
-	}
+	missing := mutationcfg.Missing(p, execLookPath)
 	if len(missing) == 0 {
 		return
 	}
 	Print("Mutation toolchain:")
-	for _, tool := range missing {
+	for _, gap := range missing {
 		Printf("  ⚠ %s is not installed — the %s adapter needs it to measure %s files here.\n",
-			tool, needBy[tool], mutationToolLanguage(needBy[tool]))
-		Printf("    Without it a verify run reports nothing measured rather than a bad score. Fix: %s\n", mutationToolInstall[tool])
+			gap.Tool, gap.Adapter, gap.Language)
+		Printf("    Without it a verify run reports nothing measured rather than a bad score. Fix: %s\n", gap.Install)
 	}
 	Print("")
 }
 
 // execLookPath is the PATH lookup seam, so a test can drive both arms without
-// depending on what the developer happens to have installed.
-var execLookPath = exec.LookPath
-
-// mutationToolInstall is how to get each toolchain. A diagnostic that names a
-// gap without naming the fix sends the reader searching.
-var mutationToolInstall = map[string]string{
-	"gremlins": "go install github.com/go-gremlins/gremlins/cmd/gremlins@latest",
-	"npx":      "install Node 20+ (https://nodejs.org) — npx ships with it",
-	"dotnet":   "install the .NET SDK (https://dotnet.microsoft.com/download)",
-}
-
-// mutationToolLanguage names what goes unmeasured, so the warning says what it
-// costs rather than only what is absent.
-func mutationToolLanguage(adapter string) string {
-	switch adapter {
-	case "stryker":
-		return "TypeScript/JavaScript/Svelte"
-	case "stryker-net":
-		return "C#"
-	default:
-		return "Go"
-	}
-}
-
-// remoteAdapterTools maps each mutation adapter to the binary its run needs on
-// the REMOTE host. Only the adapters the project actually runs are probed: a
-// Go-only repo has no business failing doctor because the mutation host has no
-// dotnet.
-var remoteAdapterTools = map[string]string{
-	"gremlins":    "gremlins",
-	"stryker":     "npx",
-	"stryker-net": "dotnet",
-}
-
-// remoteAdapterOrder pins the probe order so doctor's output is stable run to
-// run. Map iteration order is not, and an unstable diagnostic is one nobody can
-// diff against yesterday's.
-var remoteAdapterOrder = []string{"stryker", "gremlins", "stryker-net"}
+// depending on what the developer happens to have installed. It is bound to
+// mutationcfg's seam so doctor and the adapter layer resolve through the same
+// lookup.
+var execLookPath = mutationcfg.LookPath
 
 // remoteProbeFn is the readiness seam.
 //
@@ -1420,33 +1381,6 @@ var remoteAdapterOrder = []string{"stryker", "gremlins", "stryker-net"}
 // would be the worst kind of green: it would pass on a host the run then fails
 // on, which is exactly the mid-run discovery c-5 exists to prevent.
 var remoteProbeFn = remote.Probe
-
-// remoteMutationTools returns the tools to probe for, in a stable order, plus
-// which adapter needs each — so a missing binary can name the adapter that
-// wanted it rather than leaving the user to guess.
-func remoteMutationTools(p *project.Project) ([]string, map[string]string) {
-	allowed := map[string]bool{}
-	for _, name := range p.Mutation.Adapters {
-		allowed[name] = true
-	}
-	var tools []string
-	needBy := map[string]string{}
-	for _, adapter := range remoteAdapterOrder {
-		// An empty allowlist means every adapter runs — the same rule
-		// configuredAdapters applies, and the two must not disagree about which
-		// adapters a repo has.
-		if len(allowed) > 0 && !allowed[adapter] {
-			continue
-		}
-		tool := remoteAdapterTools[adapter]
-		if _, seen := needBy[tool]; seen {
-			continue
-		}
-		tools = append(tools, tool)
-		needBy[tool] = adapter
-	}
-	return tools, needBy
-}
 
 // remoteProbeTools is everything doctor asks the host about, in ONE probe: the
 // mutation adapters' tools first, then every declared lane's toolchain.
@@ -1473,7 +1407,7 @@ func remoteMutationTools(p *project.Project) ([]string, map[string]string) {
 // growing a private derivation of its own, which is exactly the drift its own
 // test forbids.
 func remoteProbeTools(p *project.Project) (tools []string, needBy, laneBy map[string]string) {
-	tools, needBy = remoteMutationTools(p)
+	tools, needBy = mutationcfg.Tools(p)
 	seen := map[string]bool{}
 	for _, tool := range tools {
 		seen[tool] = true
