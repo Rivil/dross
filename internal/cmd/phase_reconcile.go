@@ -103,7 +103,7 @@ var runSubcommand = func(parent *cobra.Command, sub *cobra.Command, args ...stri
 // completed, a breadcrumb read resurrects it here — a long-finished phase whose
 // local branch happens to still exist gets counted as waiting on a completion
 // forever. changes.Complete never scrolls. It is also deliberately narrower
-// than phaseDone, which counts `shipped` as done: a shipped-not-merged phase is
+// than phase.Done, which counts `shipped` as done: a shipped-not-merged phase is
 // exactly what this list is for.
 func reconcilablePhases(root, repoDir string) ([]string, error) {
 	ids, err := phase.List(root)

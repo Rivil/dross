@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/phase"
@@ -1605,7 +1606,7 @@ func acceptedReasons(store *survivor.Store) (map[string]string, error) {
 }
 
 // routedSurvivors builds the key→target map from every phase's [[deferred]]
-// entries. It walks all specs (via collectDeferred) rather than just the
+// entries. It walks all specs (via deferred.Collect) rather than just the
 // current phase's: a survivor routed while phase A was current is still routed
 // when phase B runs, and a phase-local read would resurrect it as unclassified
 // debt the moment the phase changed.
@@ -1614,7 +1615,7 @@ func acceptedReasons(store *survivor.Store) (map[string]string, error) {
 // at a destination — as are entries with no target, which are "someday" and
 // therefore still unclassified.
 func routedSurvivors(root string) (map[string]string, error) {
-	entries, err := collectDeferred(root)
+	entries, err := deferred.Collect(root)
 	if err != nil {
 		return nil, err
 	}

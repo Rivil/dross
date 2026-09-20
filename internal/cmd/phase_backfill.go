@@ -17,7 +17,7 @@ import (
 //
 // 69 phase records on this repo predate changes.json's status field, so six
 // finished milestones report 0/N done. The doneness reader has no fallback to
-// guess with any more (phasedone.go), so the records have to be closed from
+// guess with any more (internal/phase/done.go), so the records have to be closed from
 // evidence — and the evidence has to be strong enough that a 67-record sweep
 // driven by it is safe to run unattended.
 //

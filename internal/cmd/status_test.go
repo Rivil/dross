@@ -1568,7 +1568,7 @@ func TestStatusShippedLineSilentOnACompleteRecordAfterTheBreadcrumbAges(t *testi
 
 // TestStatusShippedLineStillFiresOnAShippedRecord pins the narrowing. Between
 // the push and the merge the record reads `shipped`, and announcing that PR is
-// the entire job of this line. Widening the suppressor to phaseDone — which
+// the entire job of this line. Widening the suppressor to phase.Done — which
 // counts shipped as done — silences the merge gate itself.
 func TestStatusShippedLineStillFiresOnAShippedRecord(t *testing.T) {
 	dir := shippedBranchFixture(t)

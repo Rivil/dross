@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
@@ -280,7 +281,7 @@ func phaseRename() *cobra.Command {
 			if err := m.Save(mPath); err != nil {
 				return err
 			}
-			if err := repointDeferredTarget(root, oldSlug, newSlug); err != nil {
+			if err := deferred.RepointTarget(root, oldSlug, newSlug); err != nil {
 				return err
 			}
 

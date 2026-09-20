@@ -5,7 +5,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/forge"
+	"github.com/Rivil/dross/internal/phase"
 )
 
 // Marker-label discovery: the second source the sweep classifies from.
@@ -171,7 +173,7 @@ func orphanVerdict(ctx *boardCtx, kind orphanKind, artefact string) (reapVerdict
 		// A routed item resolves when its destination phase completed — and a
 		// destination still on a roadmap but unscaffolded is live work, not a
 		// lost mirror.
-		if !phaseDirExists(ctx.root, artefact) {
+		if !phase.DirExists(ctx.root, artefact) {
 			roadmap, err := roadmapSlugs(ctx.root)
 			if err != nil {
 				return reapUnattributable, fmt.Sprintf("could not read the milestone roadmaps: %v", err)
@@ -195,12 +197,12 @@ func orphanVerdict(ctx *boardCtx, kind orphanKind, artefact string) (reapVerdict
 // reapBacklogVerdictByID resolves a deferred item by its stable id and applies
 // the same backlog verdict the linked path uses.
 func reapBacklogVerdictByID(ctx *boardCtx, id string) (reapVerdict, string) {
-	deferred, err := collectDeferred(ctx.root)
+	items, err := deferred.Collect(ctx.root)
 	if err != nil {
 		return reapUnattributable, fmt.Sprintf("could not read the deferred stores: %v", err)
 	}
 	byKey := map[string]deferredEntry{}
-	for _, d := range deferred {
+	for _, d := range items {
 		if d.ID != "" {
 			byKey[deferredBacklogKey(d.ID)] = d
 		}

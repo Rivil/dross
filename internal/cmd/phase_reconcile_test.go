@@ -237,7 +237,7 @@ func TestReconcileCountIgnoresAnAgedOutBreadcrumb(t *testing.T) {
 // TestReconcileCountStillCountsAShippedPhase pins the narrowing. `shipped` is a
 // phase mid-flight between the push and the merge — its branch is exactly what
 // reconcile exists to clear once the PR lands. Widening the suppressor to
-// phaseDone (which counts shipped as done) drops it from the count.
+// phase.Done (which counts shipped as done) drops it from the count.
 func TestReconcileCountStillCountsAShippedPhase(t *testing.T) {
 	dir := reconcileFixture(t, "alpha")
 	writeReconcileStatus(t, dir, "alpha", "shipped")

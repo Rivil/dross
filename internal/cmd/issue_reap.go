@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/phase"
 )
 
 // The reap classifier. `dross issue reap` sweeps mirror cards the forward
@@ -235,8 +237,8 @@ func resolveReapLanes(namespaces []string) ([]reapLane, error) {
 // re-entry surfaces read, so a change to what "complete" means cannot leave the
 // reap lane answering the old question.
 //
-// It is narrower than phaseDone on purpose, and the narrowing is not a second
-// doneness answer: phaseDone answers "did this phase finish its run?", which
+// It is narrower than phase.Done on purpose, and the narrowing is not a second
+// doneness answer: phase.Done answers "did this phase finish its run?", which
 // StatusShipped satisfies. The sweep asks a different question — "has this
 // phase reached the state the Phases lane's terminal claims?" — and only
 // StatusComplete answers that. A record stuck at shipped is a phase whose
@@ -244,7 +246,7 @@ func resolveReapLanes(namespaces []string) ([]reapLane, error) {
 // forward state, not a stranded one. Reaping it would announce a completion the
 // record does not carry, which c-3 forbids.
 func phaseRecordVerdict(root, slug string) (reapVerdict, string) {
-	if !phaseDirExists(root, slug) {
+	if !phase.DirExists(root, slug) {
 		return reapUnattributable, fmt.Sprintf("no phase directory .dross/phases/%s/ — renamed or deleted", slug)
 	}
 	c, err := changes.Load(changes.FilePath(root, slug), slug)
@@ -365,19 +367,19 @@ func roadmapSlugs(root string) (map[string]string, error) {
 }
 
 func classifyBacklogMirrors(ctx *boardCtx, lane reapLane) ([]candidate, error) {
-	// collectDeferred, not ensureDeferredIDs: the latter stamps missing ids
+	// deferred.Collect, not deferred.EnsureIDs: the latter stamps missing ids
 	// back into spec.toml, and a dry run must not write to disk either. An
 	// id-less entry is still reachable under its legacy positional key.
-	deferred, err := collectDeferred(ctx.root)
+	items, err := deferred.Collect(ctx.root)
 	if err != nil {
 		return nil, err
 	}
 	byKey := map[string]deferredEntry{}
-	for _, d := range deferred {
+	for _, d := range items {
 		if d.ID != "" {
 			byKey[deferredBacklogKey(d.ID)] = d
 		}
-		byKey[legacyDeferredBacklogKey(d.Source, d.Index)] = d
+		byKey[deferred.LegacyBacklogKey(d.Source, d.Index)] = d
 	}
 	roadmap, err := roadmapSlugs(ctx.root)
 	if err != nil {
@@ -409,7 +411,7 @@ func reapBacklogVerdict(ctx *boardCtx, key string, deferred map[string]deferredE
 		return reapStranded, fmt.Sprintf("deferred item %s %d is dismissed", d.Source, d.Index)
 	}
 	if d.Target != "" {
-		if !phaseDirExists(ctx.root, d.Target) {
+		if !phase.DirExists(ctx.root, d.Target) {
 			// The destination has not been built yet. A routed item whose
 			// target is still on a roadmap is live work, not a lost mirror.
 			v, why := slugVerdict(ctx.root, d.Target, roadmap)
@@ -440,7 +442,7 @@ func reapBacklogVerdict(ctx *boardCtx, key string, deferred map[string]deferredE
 // card is correctly open, while a slug on no roadmap at all was renamed or
 // deleted and nothing on disk can speak for it.
 func slugVerdict(root, slug string, roadmap map[string]string) (reapVerdict, string) {
-	if phaseDirExists(root, slug) {
+	if phase.DirExists(root, slug) {
 		return reapStranded, fmt.Sprintf("phases/%s/ exists — the slug was scaffolded", slug)
 	}
 	if version, ok := roadmap[slug]; ok {

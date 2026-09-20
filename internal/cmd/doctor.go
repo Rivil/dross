@@ -505,7 +505,7 @@ func Doctor() *cobra.Command {
 			//
 			// c-5: a phase a milestone signed up for, carrying no completion
 			// marker, that `dross phase backfill` cannot close from evidence.
-			// Doneness reads changes.json alone now (phasedone.go), so such a
+			// Doneness reads changes.json alone now (internal/phase/done.go), so such a
 			// phase counts not-done forever with nothing saying why — it is
 			// indistinguishable at every surface from a phase that was never
 			// started. Named here rather than in the sweep's output, following
@@ -1725,11 +1725,11 @@ func backfillResidue(root, repoDir, base string) []backfillResidueEntry {
 				continue
 			}
 			seen[slug] = true
-			if phaseDone(root, slug) {
+			if phase.Done(root, slug) {
 				continue
 			}
 			switch {
-			case !phaseDirExists(root, slug):
+			case !phase.DirExists(root, slug):
 				out = append(out, backfillResidueEntry{slug, "on " + v + "'s roadmap with no phase directory"})
 			case phaseBranchRefCached(repoDir, slug):
 				out = append(out, backfillResidueEntry{slug, "phase/" + slug + " still exists — in flight, not shipped"})

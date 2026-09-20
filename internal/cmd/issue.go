@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,6 +13,7 @@ import (
 
 	"github.com/Rivil/dross/internal/board"
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/milestone"
@@ -489,77 +488,6 @@ func deferredBacklogKey(id string) string { return "someday:id:" + id }
 func deferredLabel(id string) string { return "dross/deferred:" + id }
 func targetLabel(slug string) string { return "dross/target:" + slug }
 
-// legacyDeferredBacklogKey is the positional key dross used before ids existed.
-func legacyDeferredBacklogKey(source string, idx int) string {
-	return fmt.Sprintf("someday:%s#%d", source, idx)
-}
-
-// newDeferredID mints a stable id for a deferred item, retrying on collision
-// with an already-assigned one. A collision would silently merge two items' board
-// links, so it is checked rather than assumed away.
-func newDeferredID(used map[string]bool) (string, error) {
-	for attempt := 0; attempt < 8; attempt++ {
-		var b [8]byte
-		if _, err := rand.Read(b[:]); err != nil {
-			return "", fmt.Errorf("generate deferred id: %w", err)
-		}
-		id := hex.EncodeToString(b[:])
-		if !used[id] {
-			return id, nil
-		}
-	}
-	return "", fmt.Errorf("could not mint a unique deferred id after 8 attempts")
-}
-
-// ensureDeferredIDs backfills an id into every [[deferred]] item that lacks one,
-// writing it back to the owning spec or the project store, and returns the
-// re-collected entries. Specs authored before ids existed are id-less, so the
-// first sync after an upgrade is what gives them a durable identity; a second
-// run must find them already stamped and churn nothing.
-func ensureDeferredIDs(root string) ([]deferredEntry, error) {
-	entries, err := collectDeferred(root)
-	if err != nil {
-		return nil, err
-	}
-	used := map[string]bool{}
-	missing := map[string][]int{}
-	for _, e := range entries {
-		if e.ID != "" {
-			used[e.ID] = true
-			continue
-		}
-		missing[e.Source] = append(missing[e.Source], e.Index)
-	}
-	if len(missing) == 0 {
-		return entries, nil
-	}
-	for source, idxs := range missing {
-		path, err := deferredStore(root, source)
-		if err != nil {
-			return nil, err
-		}
-		spec, err := phase.LoadSpec(path)
-		if err != nil {
-			return nil, err
-		}
-		for _, i := range idxs {
-			if i < 0 || i >= len(spec.Deferred) {
-				continue
-			}
-			id, err := newDeferredID(used)
-			if err != nil {
-				return nil, err
-			}
-			spec.Deferred[i].ID = id
-			used[id] = true
-		}
-		if err := spec.Save(path); err != nil {
-			return nil, fmt.Errorf("save %s: %w", path, err)
-		}
-	}
-	return collectDeferred(root)
-}
-
 // adoptLegacyBacklogKey migrates a pre-id positional link onto the item's id
 // key, so an upgrade re-uses the live issue instead of orphaning it and creating
 // a duplicate.
@@ -613,7 +541,7 @@ func syncBacklog(ctx *boardCtx, version string) error {
 	// Deferred ideas (everything not dismissed). Every item
 	// is stamped with a stable id first: the board link keys on it, so an
 	// id-less item would have no durable handle to key by.
-	deferredItems, err := ensureDeferredIDs(ctx.root)
+	deferredItems, err := deferred.EnsureIDs(ctx.root)
 	if err != nil {
 		return err
 	}
@@ -665,17 +593,17 @@ const (
 // and its board.json key KEPT: an unlinked-but-open mirror is unreachable by
 // every later run, so dropping the link on failure would strand exactly the
 // issue the run was trying to close.
-func reconcileBacklog(ctx *boardCtx, live []backlogItem, deferred []deferredEntry) (int, error) {
+func reconcileBacklog(ctx *boardCtx, live []backlogItem, items []deferredEntry) (int, error) {
 	liveByKey := make(map[string]backlogItem, len(live))
 	for _, it := range live {
 		liveByKey[it.key] = it
 	}
-	byDeferredKey := make(map[string]deferredEntry, len(deferred))
-	for _, d := range deferred {
+	byDeferredKey := make(map[string]deferredEntry, len(items))
+	for _, d := range items {
 		if d.ID != "" {
 			byDeferredKey[deferredBacklogKey(d.ID)] = d
 		}
-		byDeferredKey[legacyDeferredBacklogKey(d.Source, d.Index)] = d
+		byDeferredKey[deferred.LegacyBacklogKey(d.Source, d.Index)] = d
 	}
 
 	closed := 0
@@ -780,7 +708,7 @@ func boardIssueIsDone(ctx *boardCtx, key string) (bool, error) {
 func deferredBacklogItem(d deferredEntry) backlogItem {
 	it := backlogItem{
 		key:       deferredBacklogKey(d.ID),
-		legacyKey: legacyDeferredBacklogKey(d.Source, d.Index),
+		legacyKey: deferred.LegacyBacklogKey(d.Source, d.Index),
 		title:     "[someday] " + d.Text,
 		body:      fmt.Sprintf("Someday idea (from phase `%s`): %s\n\n_Tracked by dross._", d.Source, d.Text),
 		labels:    []string{labelMarker},

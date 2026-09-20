@@ -105,7 +105,7 @@ func TestMilestonePromptOutstandingArmOnlyReports(t *testing.T) {
 // either changed.
 //
 // `dross phase list` left this forbidden list when it started reading doneness
-// through the shared reader (phasedone.go): it is now the same answer rendered
+// through the shared reader (internal/phase/done.go): it is now the same answer rendered
 // per phase, not a second derivation of it.
 func TestMilestonePromptDoesNotDeriveDoneness(t *testing.T) {
 	dispatch := section(t, milestonePromptText(t), "## 0. Pre-flight")
