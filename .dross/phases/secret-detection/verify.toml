@@ -1,9 +1,9 @@
 [verify]
   phase = "secret-detection"
-  generated_at = 2026-09-20T10:01:42.273009Z
-  verdict = "partial"
+  generated_at = 2026-09-20T12:32:43.864181Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-09-20T10:02:41.774149Z
+  finalized_at = 2026-09-20T12:33:25.959874Z
 
 [summary]
   mutation_status = "measured"
@@ -15,8 +15,8 @@
   mutants_in_scope = 928
   unclassified_in_scope = 0
   criteria_total = 6
-  criteria_covered = 5
-  criteria_uncovered = 1
+  criteria_covered = 6
+  criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
@@ -32,9 +32,9 @@
 
 [[criterion]]
   id = "c-1"
-  status = "weak"
-  tests = ["internal/secretscan/secretscan_test.go:TestEveryRuleHasAHitCase", "internal/secretscan/secretscan_test.go:TestBenignCorpusZeroHits", "internal/secretscan/secretscan_test.go:TestCarveOutsAreNotVacuous", "internal/secretscan/secretscan_test.go:TestKeyContextIsKeyAware", "internal/secretscan/secretscan_test.go:TestReportNeverEchoesTheValue"]
-  notes = "Hit corpus pins one instance per rule and the benign corpus (16-hex ids, SHAs, UUIDs, base64, env refs, placeholders) yields zero hits; carve-outs proven non-vacuous. Gap: the criterion names github_pat_ explicitly and no test fires that alternation — the rule matches it (probed in-session) but deleting `|github_pat_[A-Za-z0-9_]{22,}` from rules.go:45 breaks nothing. Basic scheme is exercised via randomLine."
+  status = "covered"
+  tests = ["internal/secretscan/secretscan_test.go:TestEveryRuleHasAHitCase", "internal/secretscan/secretscan_test.go:TestGitHubFineGrainedPATFires", "internal/secretscan/secretscan_test.go:TestBenignCorpusZeroHits", "internal/secretscan/secretscan_test.go:TestCarveOutsAreNotVacuous", "internal/secretscan/secretscan_test.go:TestKeyContextIsKeyAware", "internal/secretscan/secretscan_test.go:TestReportNeverEchoesTheValue"]
+  notes = "Hit corpus pins one instance per rule; benign corpus (16-hex ids, SHAs, UUIDs, base64, env refs, placeholders) yields zero hits; carve-outs proven non-vacuous. The prior FLAG (github_pat_ named but unfired) is closed by t-9: TestGitHubFineGrainedPATFires asserts one github-token hit at the 22-char floor and zero at 21, so deleting the github_pat_ alternation from rules.go:45 reds it; randomLine now coin-flips ghp_/github_pat_ so the 50-instance echo test covers both shapes."
 
 [[criterion]]
   id = "c-2"
@@ -58,7 +58,7 @@
   id = "c-5"
   status = "covered"
   tests = ["internal/secretscan/secretscan_test.go:TestReportNeverEchoesTheValue", "internal/secretscan/secretscan_test.go:TestHitLocationIsFileLine", "internal/forge/secretscan_test.go:TestPayloadErrorNeverEchoes", "internal/cmd/secretscan_gate_test.go:TestShipRefusesCommittedSecretOnCleanTree"]
-  notes = "50 random instances per rule: no 6-byte window of the value appears in Hit.String, Report, or ErrHit.Error; fixed prefix and file:line asserted. Gate tests assert no token echo in refusal text."
+  notes = "50 random instances per rule (now both GitHub shapes): no 6-byte window of the value appears in Hit.String, Report, or ErrHit.Error; fixed prefix and file:line asserted. Gate tests assert no token echo in refusal text."
 
 [[criterion]]
   id = "c-6"
@@ -67,16 +67,12 @@
   notes = "Every tracked file (>=1500, >=900 under .dross/) scans clean; a planted leak yields exactly one hit; validate runs hermetically over a clone of HEAD with tracked .dross overlaid."
 
 [[finding]]
-  severity = "FLAG"
-  text = "c-1: github_pat_ (fine-grained GitHub PAT) is named in the criterion but no test instance fires it; rules.go:45's alternation is untested — add one corpus row (github_pat_ + 22 chars) to TestEveryRuleHasAHitCase's hitCorpus / randomLine"
+  severity = "NOTE"
+  text = "Re-verify after t-9 (test-only amend). Run r-20260920-103638 on helicon: identical to the prior pass — 867 killed, 61 survived, all 61 NOT-COVERED and already accepted (gremlins-attribution-ceiling / const-initializer-arithmetic / cross-package-only-coverage); efficacy over the 867 reachable mutants = 1.00; 0 unclassified in scope. A regex alternation is not a gremlins mutation target, so c-1's closure is proven by the test's assertion shape (22-char hit / 21-char miss), not by a new kill count."
 
 [[finding]]
   severity = "NOTE"
   text = "Hit fingerprint prints the rule's fixed Prefix, not the matched prefix — a github_pat_ hit reports prefix=ghp_. Cosmetic; no value is echoed."
-
-[[finding]]
-  severity = "NOTE"
-  text = "61/928 survivors, all NOT-COVERED, drained by acceptance this run: 7 under gremlins-attribution-ceiling / const-initializer-arithmetic (switch-case conditions in sinks.go/payload.go, var-initializer concat in rules.go; go-cover count>0 in-package), 18 keys (31 rows) in writers.go under new category cross-package-only-coverage (ArtifactNames/ValidateWriters exercised only from internal/cmd). Efficacy over the 867 reachable mutants = 1.00."
 
 [[finding]]
   severity = "NOTE"
