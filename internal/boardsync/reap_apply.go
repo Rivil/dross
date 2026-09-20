@@ -1,13 +1,15 @@
-package cmd
+package boardsync
 
 import (
 	"fmt"
+	"github.com/Rivil/dross/internal/board"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"time"
 
-	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/reaplog"
 )
@@ -34,11 +36,11 @@ import (
 // It is what BOTH the dry run and the apply run walk. A dry run showing only
 // half the inventory would be a plan that does not describe what --apply does,
 // which defeats the point of having one.
-func reapInventory(ctx *boardCtx, namespaces []string) (*reapPlan, []reapCard, error) {
-	if err := validateReapNamespaces(namespaces); err != nil {
+func Inventory(ctx *Ctx, namespaces []string) (*ReapPlan, []ReapCard, error) {
+	if err := ValidateReapNamespaces(namespaces); err != nil {
 		return nil, nil, err
 	}
-	plan, err := classifyReap(ctx, namespaces)
+	plan, err := Classify(ctx, namespaces)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -46,7 +48,7 @@ func reapInventory(ctx *boardCtx, namespaces []string) (*reapPlan, []reapCard, e
 	if err != nil {
 		return nil, nil, err
 	}
-	found, unclassifiable, err := discoverReap(ctx, lanes)
+	found, unclassifiable, err := Discover(ctx, lanes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -77,7 +79,7 @@ func reapInventory(ctx *boardCtx, namespaces []string) (*reapPlan, []reapCard, e
 			plan.Unattributable = append(plan.Unattributable, c)
 		}
 	}
-	var orphans []reapCard
+	var orphans []ReapCard
 	for _, c := range unclassifiable {
 		if !seen[c.Key] {
 			seen[c.Key] = true
@@ -99,7 +101,7 @@ func (e *reapFailure) Error() string { return fmt.Sprintf("%s: %v", e.key, e.err
 func (e *reapFailure) Unwrap() error { return e.err }
 
 // lanesDroppingTheirLink names the lanes whose forward close path also removes
-// the board.json entry — today only the backlog, where boardsync.ReconcileBacklog drops a
+// the board.json entry — today only the backlog, where ReconcileBacklog drops a
 // key that has left the live set.
 //
 // Deliberately not every lane. Dropping a link is not tidiness: it is the only
@@ -110,7 +112,7 @@ var lanesDroppingTheirLink = map[string]bool{"Backlog": true}
 
 // applyReap writes the plan to the board, journalling each card's prior state
 // first.
-func applyReap(ctx *boardCtx, plan *reapPlan) error {
+func Apply(ctx *Ctx, plan *ReapPlan) error {
 	run := reaplog.Run{StartedAt: time.Now().UTC()}
 	var failures []*reapFailure
 	closed := 0
@@ -136,10 +138,10 @@ func applyReap(ctx *boardCtx, plan *reapPlan) error {
 			PriorLabels:   prior.Labels,
 		}
 
-		// boardsync.CloseIssue writes the MAPPED lane terminal and verifies the
+		// CloseIssue writes the MAPPED lane terminal and verifies the
 		// read-back, so a workflow that accepted the request and refused the
 		// transition is a failure here rather than a false "closed" line.
-		if err := boardsync.CloseIssue(ctx, card.Key, card.Terminal); err != nil {
+		if err := CloseIssue(ctx, card.Key, card.Terminal); err != nil {
 			entry.Outcome = reaplog.OutcomeFailed
 			run.Cards = append(run.Cards, entry)
 			failures = append(failures, &reapFailure{key: card.Key, err: err})
@@ -176,12 +178,12 @@ func applyReap(ctx *boardCtx, plan *reapPlan) error {
 		return err
 	}
 
-	Printf("\nreaped %d card(s)", closed)
+	fmt.Fprintf(ctx.out(), "\nreaped %d card(s)", closed)
 	if len(failures) == 0 {
-		Print("")
+		fmt.Fprintln(ctx.out(), "")
 		return nil
 	}
-	Printf(", %d failed:\n", len(failures))
+	fmt.Fprintf(ctx.out(), ", %d failed:\n", len(failures))
 	for _, f := range failures {
 		fmt.Fprintf(os.Stderr, "  %s\n", f.Error())
 	}
@@ -193,8 +195,8 @@ func applyReap(ctx *boardCtx, plan *reapPlan) error {
 // relabelReapedCard rewrites the card's `dross/status:` label to the lane
 // terminal, leaving every other label — the marker and the identity labels the
 // discovery sweep depends on — untouched.
-func relabelReapedCard(ctx *boardCtx, card reapCard, prior []string) error {
-	want := boardsync.StatusLabel(card.Terminal)
+func relabelReapedCard(ctx *Ctx, card ReapCard, prior []string) error {
+	want := StatusLabel(card.Terminal)
 	labels := make([]string, 0, len(prior)+1)
 	already := false
 	for _, l := range prior {
@@ -211,7 +213,7 @@ func relabelReapedCard(ctx *boardCtx, card reapCard, prior []string) error {
 	}
 	labels = append(labels, want)
 	if _, err := ctx.Client.UpdateIssue(card.Key, forge.IssuePatch{Labels: &labels}); err != nil {
-		return boardsync.Wrap(err)
+		return Wrap(err)
 	}
 	return nil
 }
@@ -234,7 +236,7 @@ func priorStateOf(iss *forge.Issue) string {
 
 // dropBacklogLink removes the board.json backlog key pointing at this issue and
 // returns it, so the journal can restore it.
-func dropBacklogLink(ctx *boardCtx, issue string) string {
+func dropBacklogLink(ctx *Ctx, issue string) string {
 	for _, key := range ctx.Board.BacklogKeys() {
 		if id, ok := ctx.Board.BacklogID(key); ok && id == issue {
 			ctx.Board.DeleteBacklog(key)
@@ -247,7 +249,7 @@ func dropBacklogLink(ctx *boardCtx, issue string) string {
 // appendReapRun writes the run to the ledger. A run that closed nothing is not
 // journalled: an empty undo target would shadow the real one, so a second
 // no-op apply would make the previous run unreachable.
-func appendReapRun(ctx *boardCtx, run reaplog.Run) error {
+func appendReapRun(ctx *Ctx, run reaplog.Run) error {
 	if len(run.Cards) == 0 {
 		return nil
 	}
@@ -261,5 +263,47 @@ func appendReapRun(ctx *boardCtx, run reaplog.Run) error {
 }
 
 // reapLogPathFor is the ledger path for a repo root, for callers that hold a
-// dross root rather than a boardCtx.
+// dross root rather than a Ctx.
 func reapLogPathFor(root string) string { return filepath.Join(root, reaplog.File) }
+
+// BoardNamespaceNames enumerates board.Board's map-typed fields — the mirror
+// namespaces themselves, read off the struct rather than transcribed.
+//
+// The flag validates against THIS, not against a literal list beside the flag
+// definition. A namespace added to board.Board becomes a legal --namespace
+// value in the same commit that adds it, and the error a typo produces names
+// the real set rather than a stale copy of it.
+func BoardNamespaceNames() []string {
+	rt := reflect.TypeOf(board.Board{})
+	var out []string
+	for i := 0; i < rt.NumField(); i++ {
+		if f := rt.Field(i); f.Type.Kind() == reflect.Map {
+			out = append(out, f.Name)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// ValidateReapNamespaces refuses an unknown --namespace by name, listing the
+// namespaces that exist.
+func ValidateReapNamespaces(namespaces []string) error {
+	if len(namespaces) == 0 {
+		return nil
+	}
+	known := map[string]bool{}
+	for _, n := range BoardNamespaceNames() {
+		known[strings.ToLower(n)] = true
+	}
+	var unknown []string
+	for _, n := range namespaces {
+		if !known[strings.ToLower(strings.TrimSpace(n))] {
+			unknown = append(unknown, n)
+		}
+	}
+	if len(unknown) > 0 {
+		return fmt.Errorf("unknown --namespace %s; expected one of %s",
+			strings.Join(unknown, ", "), strings.Join(BoardNamespaceNames(), ", "))
+	}
+	return nil
+}

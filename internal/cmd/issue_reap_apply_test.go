@@ -39,7 +39,7 @@ type applyYT struct {
 	// A counter rather than a flag, because the read that has to fail is the
 	// apply-time one. buildReapPlan reads every candidate first — a card
 	// unreadable THEN never reaches plan.Cards at all, it is filed
-	// unattributable, and applyReap's prior-state arm is never entered. Only a
+	// unattributable, and boardsync.Apply's prior-state arm is never entered. Only a
 	// card that was readable when the plan was built and unreadable when the
 	// write came round exercises it.
 	failReadAfter map[string]int
@@ -76,7 +76,7 @@ func (f *applyYT) knownTags() []string {
 			add(l)
 		}
 	}
-	for _, lane := range reapLanes {
+	for _, lane := range boardsync.ReapLanes {
 		add(boardsync.StatusLabel(lane.Terminal))
 	}
 	return out
@@ -538,7 +538,7 @@ func TestRelabelFailureDoesNotFailTheCard(t *testing.T) {
 
 // TestApplyContinuesPastAPriorStateReadFailure is c-5's other half.
 //
-// The write-failure path is covered above; this is the READ. applyReap reads
+// The write-failure path is covered above; this is the READ. boardsync.Apply reads
 // each card's column before closing it, and a tracker that goes away between
 // the plan and the write leaves that read failing. The card must be reported
 // and skipped — never written blind, never journalled as closed — and the rest

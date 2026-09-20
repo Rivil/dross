@@ -66,7 +66,7 @@ func Watch() *cobra.Command {
 				// classify that fails leaves the count at zero and the line
 				// unprinted rather than failing the tick. watch runs on a
 				// timer; it must never be the thing that breaks.
-				if plan, _, cerr := reapInventory(ctx, nil); cerr == nil {
+				if plan, _, cerr := boardsync.Inventory(ctx, nil); cerr == nil {
 					stranded = len(plan.Cards)
 				}
 			}

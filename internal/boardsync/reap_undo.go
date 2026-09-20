@@ -1,10 +1,9 @@
-package cmd
+package boardsync
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/reaplog"
 )
@@ -22,7 +21,7 @@ import (
 // that still is not.
 
 // undoReap restores the cards of the last applied run.
-func undoReap(ctx *boardCtx) error {
+func Undo(ctx *Ctx) error {
 	// The capability gate is asserted HERE, at the call site, rather than on
 	// BoardClient — the same shape the no-linker fallback uses. A backend with
 	// no column model cannot restore an arbitrary prior column, and the honest
@@ -42,7 +41,7 @@ func undoReap(ctx *boardCtx) error {
 	run := log.Last()
 	closed := run.Closed()
 	if len(closed) == 0 {
-		Print("nothing to undo — no applied sweep is recorded")
+		fmt.Fprintln(ctx.out(), "nothing to undo — no applied sweep is recorded")
 		return nil
 	}
 
@@ -62,7 +61,7 @@ func undoReap(ctx *boardCtx) error {
 		if len(card.PriorLabels) > 0 {
 			labels := card.PriorLabels
 			if _, err := ctx.Client.UpdateIssue(card.Issue, forge.IssuePatch{Labels: &labels}); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: restored %s but could not put its labels back: %v\n", card.Issue, boardsync.Wrap(err))
+				fmt.Fprintf(os.Stderr, "warning: restored %s but could not put its labels back: %v\n", card.Issue, Wrap(err))
 			}
 		}
 		if card.DroppedLink != "" {
@@ -75,12 +74,12 @@ func undoReap(ctx *boardCtx) error {
 		return err
 	}
 
-	Printf("restored %d card(s)", restored)
+	fmt.Fprintf(ctx.out(), "restored %d card(s)", restored)
 	if len(failures) == 0 {
-		Print("")
+		fmt.Fprintln(ctx.out(), "")
 		return nil
 	}
-	Printf(", %d failed:\n", len(failures))
+	fmt.Fprintf(ctx.out(), ", %d failed:\n", len(failures))
 	for _, f := range failures {
 		fmt.Fprintf(os.Stderr, "  %s\n", f.Error())
 	}
@@ -90,7 +89,7 @@ func undoReap(ctx *boardCtx) error {
 // restoreDroppedLink puts back the board.json entry the sweep deleted. Only the
 // lanes that drop one record a DroppedLink, so the class switch has exactly the
 // arms lanesDroppingTheirLink names.
-func restoreDroppedLink(ctx *boardCtx, card reaplog.Card) {
+func restoreDroppedLink(ctx *Ctx, card reaplog.Card) {
 	if card.Class == "Backlog" {
 		ctx.Board.SetBacklog(card.DroppedLink, card.Issue)
 	}

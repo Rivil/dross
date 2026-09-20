@@ -1,14 +1,11 @@
-package cmd
+package boardsync
 
 import (
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/Rivil/dross/internal/boardsync"
 )
 
 // ytCard is one card the discovery fake serves.
@@ -82,8 +79,8 @@ func (f *discoverYT) render(c ytCard) string {
 }
 
 func (f *discoverYT) tagNames() []string {
-	seen := map[string]bool{boardsync.LabelMarker: true}
-	out := []string{boardsync.LabelMarker}
+	seen := map[string]bool{LabelMarker: true}
+	out := []string{LabelMarker}
 	for _, c := range f.cards {
 		for _, l := range c.labels {
 			if !seen[l] {
@@ -95,22 +92,10 @@ func (f *discoverYT) tagNames() []string {
 	return out
 }
 
-// discoverRepo is the classify fixture's sibling for the marker sweep.
-func discoverRepo(t *testing.T, f *discoverYT, boardJSON string) (string, *boardCtx) {
+// discoverRepo is ytRepo over the discovery fake.
+func discoverRepo(t *testing.T, f *discoverYT, boardJSON string) (string, *Ctx) {
 	t.Helper()
-	srv := httptest.NewServer(f.handler(t))
-	t.Cleanup(srv.Close)
-	dir := youtrackBoardRepo(t, srv.URL)
-	mustRunSet(t, "board.milestone_mode", "epic")
-	mustWrite(t, filepath.Join(dir, ".dross", "board.json"), boardJSON)
-	ctx, enabled, err := openBoard()
-	if err != nil {
-		t.Fatalf("openBoard: %v", err)
-	}
-	if !enabled {
-		t.Fatal("board sync must be enabled in the fixture")
-	}
-	return dir, ctx
+	return ytRepo(t, f.handler(t), boardJSON)
 }
 
 const emptyBoard = `{"phases":{},"tasks":{},"quicks":{},"milestones":{}}`
@@ -125,12 +110,12 @@ const emptyBoard = `{"phases":{},"tasks":{},"quicks":{},"milestones":{}}`
 // be deleted with the suite still green.
 func TestUnlinkedMirrorIsDiscovered(t *testing.T) {
 	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
-		{key: "DRO-33", labels: []string{boardsync.LabelMarker, boardsync.PhaseLabel("01-lost")}},
+		{key: "DRO-33", labels: []string{LabelMarker, PhaseLabel("01-lost")}},
 	}}
 	dir, ctx := discoverRepo(t, f, emptyBoard)
 	writeChanges(t, dir, "01-lost", "complete")
 
-	linked, err := classifyReap(ctx, nil)
+	linked, err := Classify(ctx, nil)
 	if err != nil {
 		t.Fatalf("classify: %v", err)
 	}
@@ -138,7 +123,7 @@ func TestUnlinkedMirrorIsDiscovered(t *testing.T) {
 		t.Fatal("the fixture is not actually unlinked — board.json accounts for DRO-33")
 	}
 
-	found, unclassifiable, err := discoverReap(ctx, reapLanes)
+	found, unclassifiable, err := Discover(ctx, ReapLanes)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -151,10 +136,10 @@ func TestUnlinkedMirrorIsDiscovered(t *testing.T) {
 	if found[0].card.Key != "DRO-33" || found[0].card.Lane != "Phases" {
 		t.Errorf("orphan = %+v, want DRO-33 in lane Phases", found[0].card)
 	}
-	if found[0].verdict != reapStranded {
+	if found[0].verdict != ReapStranded {
 		t.Errorf("verdict = %v, want stranded", found[0].verdict)
 	}
-	if !strings.Contains(f.queried, boardsync.LabelMarker) {
+	if !strings.Contains(f.queried, LabelMarker) {
 		t.Errorf("issue query %q does not filter on the dross marker", f.queried)
 	}
 }
@@ -164,11 +149,11 @@ func TestUnlinkedMirrorIsDiscovered(t *testing.T) {
 // nothing on disk speaks for it, so it is named rather than dropped or guessed
 // at.
 func TestUnattributableMarkerCardIsNamedNotGuessed(t *testing.T) {
-	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{{key: "DRO-33", labels: []string{boardsync.LabelMarker}}}}
+	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{{key: "DRO-33", labels: []string{LabelMarker}}}}
 	dir, ctx := discoverRepo(t, f, emptyBoard)
 	writeChanges(t, dir, "01-lost", "complete")
 
-	found, unclassifiable, err := discoverReap(ctx, reapLanes)
+	found, unclassifiable, err := Discover(ctx, ReapLanes)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -188,12 +173,12 @@ func TestUnattributableMarkerCardIsNamedNotGuessed(t *testing.T) {
 // card stays open.
 func TestOrphanOfAnIncompletePhaseIsAbsent(t *testing.T) {
 	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
-		{key: "DRO-36", labels: []string{boardsync.LabelMarker, boardsync.PhaseLabel("01-live")}},
+		{key: "DRO-36", labels: []string{LabelMarker, PhaseLabel("01-live")}},
 	}}
 	dir, ctx := discoverRepo(t, f, emptyBoard)
 	writeChanges(t, dir, "01-live", "") // scaffolded, not finished
 
-	found, unclassifiable, err := discoverReap(ctx, reapLanes)
+	found, unclassifiable, err := Discover(ctx, ReapLanes)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -207,13 +192,13 @@ func TestOrphanOfAnIncompletePhaseIsAbsent(t *testing.T) {
 // sweep in both directions — not closed, and not even named.
 func TestHumanFiledCardIsNeverInInventory(t *testing.T) {
 	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
-		{key: "DRO-33", labels: []string{boardsync.LabelMarker, boardsync.PhaseLabel("01-lost")}},
+		{key: "DRO-33", labels: []string{LabelMarker, PhaseLabel("01-lost")}},
 		{key: "DRO-77", labels: []string{"bug"}}, // a human's issue
 	}}
 	dir, ctx := discoverRepo(t, f, emptyBoard)
 	writeChanges(t, dir, "01-lost", "complete")
 
-	found, unclassifiable, err := discoverReap(ctx, reapLanes)
+	found, unclassifiable, err := Discover(ctx, ReapLanes)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -232,19 +217,19 @@ func TestHumanFiledCardIsNeverInInventory(t *testing.T) {
 // card is planned twice and the run's counts lie.
 func TestMarkerCardAlreadyLinkedIsNotDoubleCounted(t *testing.T) {
 	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
-		{key: "PROJ-1", labels: []string{boardsync.LabelMarker, boardsync.PhaseLabel("01-auth")}},
+		{key: "PROJ-1", labels: []string{LabelMarker, PhaseLabel("01-auth")}},
 	}}
 	dir, ctx := discoverRepo(t, f, phaseAndTaskBoard)
 	writeChanges(t, dir, "01-auth", "complete")
 
-	linked, err := classifyReap(ctx, nil)
+	linked, err := Classify(ctx, nil)
 	if err != nil {
 		t.Fatalf("classify: %v", err)
 	}
 	if !hasKey(linked.Cards, "PROJ-1") {
 		t.Fatal("the fixture's linked card is not in the link-derived plan")
 	}
-	found, _, err := discoverReap(ctx, reapLanes)
+	found, _, err := Discover(ctx, ReapLanes)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -259,8 +244,8 @@ func TestMarkerCardAlreadyLinkedIsNotDoubleCounted(t *testing.T) {
 // sources or it scopes neither usefully.
 func TestDiscoveryRespectsTheNamespaceFilter(t *testing.T) {
 	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
-		{key: "DRO-33", labels: []string{boardsync.LabelMarker, boardsync.PhaseLabel("01-lost")}},
-		{key: "DRO-34", labels: []string{boardsync.LabelMarker, boardsync.TaskLabel("01-lost", "t-1")}},
+		{key: "DRO-33", labels: []string{LabelMarker, PhaseLabel("01-lost")}},
+		{key: "DRO-34", labels: []string{LabelMarker, TaskLabel("01-lost", "t-1")}},
 	}}
 	dir, ctx := discoverRepo(t, f, emptyBoard)
 	writeChanges(t, dir, "01-lost", "complete")
@@ -269,7 +254,7 @@ func TestDiscoveryRespectsTheNamespaceFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve lanes: %v", err)
 	}
-	found, _, err := discoverReap(ctx, lanes)
+	found, _, err := Discover(ctx, lanes)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -290,11 +275,11 @@ func TestDiscoveryRespectsTheNamespaceFilter(t *testing.T) {
 // such cards (DRO-36/37/38) on this repo's own board.
 func TestResolvedUnclassifiableCardIsNotALooseEnd(t *testing.T) {
 	open := &discoverYT{
-		cards:    []ytCard{{key: "DRO-36", labels: []string{boardsync.LabelMarker}}},
+		cards:    []ytCard{{key: "DRO-36", labels: []string{LabelMarker}}},
 		resolved: map[string]bool{},
 	}
 	_, ctx := discoverRepo(t, open, emptyBoard)
-	_, unclassifiable, err := discoverReap(ctx, reapLanes)
+	_, unclassifiable, err := Discover(ctx, ReapLanes)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -303,11 +288,11 @@ func TestResolvedUnclassifiableCardIsNotALooseEnd(t *testing.T) {
 	}
 
 	closed := &discoverYT{
-		cards:    []ytCard{{key: "DRO-36", labels: []string{boardsync.LabelMarker}}},
+		cards:    []ytCard{{key: "DRO-36", labels: []string{LabelMarker}}},
 		resolved: map[string]bool{"DRO-36": true},
 	}
 	_, ctx2 := discoverRepo(t, closed, emptyBoard)
-	_, unclassifiable2, err := discoverReap(ctx2, reapLanes)
+	_, unclassifiable2, err := Discover(ctx2, ReapLanes)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -318,7 +303,7 @@ func TestResolvedUnclassifiableCardIsNotALooseEnd(t *testing.T) {
 
 // orphanFor finds one discovered orphan by issue key. The verdict is asserted
 // explicitly at every call site because `found` carries BOTH stranded and
-// unattributable candidates — only reapStillOpen is dropped — so membership
+// unattributable candidates — only ReapStillOpen is dropped — so membership
 // alone would pass a card that regressed from "close it" to "nothing speaks
 // for it".
 func orphanFor(t *testing.T, found []candidate, key string) candidate {
@@ -360,12 +345,12 @@ func TestOrphanTargetFollowsItsDestinationRecord(t *testing.T) {
 	seed := func(t *testing.T, destStatus string) []candidate {
 		t.Helper()
 		f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
-			{key: "DRO-33", labels: []string{boardsync.LabelMarker, boardsync.TargetLabel("02-dest")}},
+			{key: "DRO-33", labels: []string{LabelMarker, TargetLabel("02-dest")}},
 		}}
 		dir, ctx := discoverRepo(t, f, emptyBoard)
 		writeChanges(t, dir, "02-dest", destStatus)
 
-		found, unclassifiable, err := discoverReap(ctx, reapLanes)
+		found, unclassifiable, err := Discover(ctx, ReapLanes)
 		if err != nil {
 			t.Fatalf("discover: %v", err)
 		}
@@ -377,7 +362,7 @@ func TestOrphanTargetFollowsItsDestinationRecord(t *testing.T) {
 
 	t.Run("destination complete strands the card", func(t *testing.T) {
 		c := orphanFor(t, seed(t, "complete"), "DRO-33")
-		if c.verdict != reapStranded {
+		if c.verdict != ReapStranded {
 			t.Errorf("verdict = %v, want stranded", c.verdict)
 		}
 		if c.card.Lane != "Backlog" {
@@ -407,14 +392,14 @@ func TestOrphanTargetFollowsItsDestinationRecord(t *testing.T) {
 // fix was proven only for the linked path.
 func TestOrphanTargetOnAnUnscaffoldedRoadmapSlugIsStillOpen(t *testing.T) {
 	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
-		{key: "DRO-33", labels: []string{boardsync.LabelMarker, boardsync.TargetLabel("not-built-yet")}},
-		{key: "DRO-34", labels: []string{boardsync.LabelMarker, boardsync.TargetLabel("vanished")}},
+		{key: "DRO-33", labels: []string{LabelMarker, TargetLabel("not-built-yet")}},
+		{key: "DRO-34", labels: []string{LabelMarker, TargetLabel("vanished")}},
 	}}
 	dir, ctx := discoverRepo(t, f, emptyBoard)
 	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v9.0.toml"),
 		"phases = [\"not-built-yet\"]\n\n[milestone]\nversion = \"v9.0\"\nstatus = \"active\"\n")
 
-	found, unclassifiable, err := discoverReap(ctx, reapLanes)
+	found, unclassifiable, err := Discover(ctx, ReapLanes)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
@@ -424,7 +409,7 @@ func TestOrphanTargetOnAnUnscaffoldedRoadmapSlugIsStillOpen(t *testing.T) {
 	// The other half, or the assertion above would pass on a discovery path
 	// that simply dropped every unscaffolded target.
 	c := orphanFor(t, found, "DRO-34")
-	if c.verdict != reapUnattributable {
+	if c.verdict != ReapUnattributable {
 		t.Errorf("verdict = %v, want unattributable — a slug on no roadmap with no directory is unexplained, not open", c.verdict)
 	}
 }
@@ -439,15 +424,15 @@ func TestOrphanTargetOnAnUnscaffoldedRoadmapSlugIsStillOpen(t *testing.T) {
 // discovery path that never read the deferred stores would report both cards
 // identically.
 func TestOrphanDeferredResolvesByItemID(t *testing.T) {
-	seed := func(t *testing.T, entry string) ([]candidate, []reapCard) {
+	seed := func(t *testing.T, entry string) ([]candidate, []ReapCard) {
 		t.Helper()
 		f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
-			{key: "DRO-95", labels: []string{boardsync.LabelMarker, boardsync.DeferredLabel("abc123")}},
+			{key: "DRO-95", labels: []string{LabelMarker, DeferredLabel("abc123")}},
 		}}
 		dir, ctx := discoverRepo(t, f, emptyBoard)
 		writeSpec(t, dir, "01-src", "[phase]\nid=\"01-src\"\ntitle=\"Src\"\n\n"+entry)
 
-		found, unclassifiable, err := discoverReap(ctx, reapLanes)
+		found, unclassifiable, err := Discover(ctx, ReapLanes)
 		if err != nil {
 			t.Fatalf("discover: %v", err)
 		}
@@ -457,7 +442,7 @@ func TestOrphanDeferredResolvesByItemID(t *testing.T) {
 	t.Run("a dismissed item is a decision, so its mirror is stranded", func(t *testing.T) {
 		found, _ := seed(t, "[[deferred]]\n  id = \"abc123\"\n  text = \"an idea\"\n  dismissed = true\n")
 		c := orphanFor(t, found, "DRO-95")
-		if c.verdict != reapStranded {
+		if c.verdict != ReapStranded {
 			t.Errorf("verdict = %v, want stranded", c.verdict)
 		}
 		if c.card.Lane != "Backlog" {
@@ -475,7 +460,7 @@ func TestOrphanDeferredResolvesByItemID(t *testing.T) {
 	t.Run("an id no store explains is named, not closed", func(t *testing.T) {
 		found, _ := seed(t, "[[deferred]]\n  id = \"other\"\n  text = \"a different idea\"\n")
 		c := orphanFor(t, found, "DRO-95")
-		if c.verdict != reapUnattributable {
+		if c.verdict != ReapUnattributable {
 			t.Errorf("verdict = %v, want unattributable", c.verdict)
 		}
 		if !strings.Contains(c.card.Why, "abc123") {
@@ -490,16 +475,16 @@ func TestOrphanDeferredResolvesByItemID(t *testing.T) {
 // dropped or resolved against an empty slug.
 func TestOrphanTaskLabelNamingNoPhaseIsUnattributable(t *testing.T) {
 	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
-		{key: "DRO-37", labels: []string{boardsync.LabelMarker, "dross/task:t-1"}},
+		{key: "DRO-37", labels: []string{LabelMarker, "dross/task:t-1"}},
 	}}
 	_, ctx := discoverRepo(t, f, emptyBoard)
 
-	found, _, err := discoverReap(ctx, reapLanes)
+	found, _, err := Discover(ctx, ReapLanes)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
 	c := orphanFor(t, found, "DRO-37")
-	if c.verdict != reapUnattributable {
+	if c.verdict != ReapUnattributable {
 		t.Errorf("verdict = %v, want unattributable", c.verdict)
 	}
 	if !strings.Contains(c.card.Why, "t-1") {

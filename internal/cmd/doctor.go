@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/architecture"
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/diag"
 	"github.com/Rivil/dross/internal/milestone"
@@ -1276,7 +1277,7 @@ func reportStrandedMirrors() {
 		Print("")
 		return
 	}
-	plan, _, err := reapInventory(ctx, nil)
+	plan, _, err := boardsync.Inventory(ctx, nil)
 	if err != nil {
 		Printf("  … could not classify board mirrors (%v)\n", err)
 		Print("")
@@ -1292,7 +1293,7 @@ func reportStrandedMirrors() {
 		byLane[c.Lane]++
 	}
 	Printf("  ! %d stranded board mirror(s) — cards whose artefact finished but whose card did not\n", len(plan.Cards))
-	for _, lane := range reapLanes {
+	for _, lane := range boardsync.ReapLanes {
 		if n := byLane[lane.Name]; n > 0 {
 			Printf("    %-12s %d    Fix: dross issue reap --namespace %s\n", lane.Name, n, lane.Name)
 		}

@@ -722,6 +722,117 @@ func TestTaskSyncEdgeRegexIsNotVacuous(t *testing.T) {
 	}
 }
 
+// TestEveryMirrorLaneHasATerminalEmission above asks whether every mirror class
+// has a way FORWARD to a terminal state. These ask the other half: whether
+// every mirror class has a way BACK — a reap path for the cards the forward
+// lifecycle already left behind.
+//
+// The two questions are separate because the answers were: the forward
+// emissions were added when the lifecycle was fixed, and the ninety cards that
+// predate them are not reachable by any of those lines. A namespace can have a
+// perfect forward path and still have no way to close its history.
+
+// TestEveryMirrorLaneHasATerminalEmission above asks whether every mirror class
+// has a way FORWARD to a terminal state. These ask the other half: whether
+// every mirror class has a way BACK — a reap path for the cards the forward
+// lifecycle already left behind.
+//
+// The two questions are separate because the answers were: the forward
+// emissions were added when the lifecycle was fixed, and the ninety cards that
+// predate them are not reachable by any of those lines. A namespace can have a
+// perfect forward path and still have no way to close its history.
+
+// TestEveryBoardNamespaceHasAReapPath: a map field added to board.Board with no
+// reap lane fails by field name in the same run that adds it.
+func TestEveryBoardNamespaceHasAReapPath(t *testing.T) {
+	fields := boardNamespaceFields(t)
+	for _, field := range fields {
+		lane, ok := ReapLaneFor(field)
+		if !ok {
+			t.Errorf("board.Board has a %s namespace with no reap lane — every stranded %s card would be unreachable by the sweep; add it to ReapLanes", field, field)
+			continue
+		}
+		if lane.Terminal == "" {
+			t.Errorf("the %s reap lane declares no terminal status — the sweep would have nothing to write", field)
+		}
+	}
+
+	// The reverse: a lane naming a namespace that no longer exists is a
+	// classifier arm nothing can ever reach.
+	known := map[string]bool{}
+	for _, f := range fields {
+		known[f] = true
+	}
+	for _, lane := range ReapLanes {
+		if !known[lane.Name] {
+			t.Errorf("ReapLanes describes %q, which is not a board.Board namespace any more — drop it rather than leaving a classifier arm over nothing", lane.Name)
+		}
+	}
+	if len(ReapLanes) == 0 {
+		t.Fatal("the reap lane registry is empty — every assertion here would be vacuous")
+	}
+}
+
+// TestReapTerminalMatchesTheForwardTerminal holds the locked reap_state
+// decision: a reaped card lands in the same state the forward lifecycle writes
+// for its class. A sweep-specific state would make the board two histories and
+// double the mapping — and the mapping is the thing the previous phase made
+// trustworthy.
+func TestReapTerminalMatchesTheForwardTerminal(t *testing.T) {
+	checked := 0
+	for _, field := range boardNamespaceFields(t) {
+		lane, ok := ReapLaneFor(field)
+		if !ok {
+			continue // TestEveryBoardNamespaceHasAReapPath owns the missing case
+		}
+		row, ok := mirrorLanes[field]
+		if !ok {
+			continue // TestEveryMirrorLaneHasATerminalEmission owns that one
+		}
+		checked++
+		if row.reapTerminal != lane.Terminal {
+			t.Errorf("the %s lane reaps to %q but the registry records %q — the two tables have drifted", field, lane.Terminal, row.reapTerminal)
+		}
+		// The backlog lane is the one place the forward path carries no
+		// --status, so its forward terminal is empty and only the reap one is
+		// set. Everywhere else the two must be the same column.
+		if row.terminal != "" && row.terminal != row.reapTerminal {
+			t.Errorf("the %s lane ends forward at %q but reaps to %q — reap_state says a reaped card lands where the forward path puts it", field, row.terminal, row.reapTerminal)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("compared no lanes — the guard would pass vacuously")
+	}
+}
+
+// TestEveryReapTerminalIsMapped: a terminal nothing can resolve is a close that
+// fails on a live board, per provider. Both default maps are checked
+// independently, and the failure names which provider is missing which status.
+func TestEveryReapTerminalIsMapped(t *testing.T) {
+	root := repoRootFromTest(t)
+	maps := map[string]map[string]string{
+		"jira":     stateMapPairs(t, filepath.Join(root, "internal", "forge", "jira.go"), "defaultJiraStateMap"),
+		"youtrack": stateMapPairs(t, filepath.Join(root, "internal", "forge", "youtrack.go"), "defaultYouTrackStateMap"),
+	}
+	for provider, states := range maps {
+		if len(states) == 0 {
+			t.Fatalf("parsed no state-map pairs for %s — every assertion below would be vacuous", provider)
+		}
+	}
+
+	for _, lane := range ReapLanes {
+		if !configenum.LifecycleStatuses.Has(lane.Terminal) {
+			t.Errorf("the %s lane reaps to %q, which is not a lifecycle status (%s) — nothing downstream could validate it", lane.Name, lane.Terminal, configenum.LifecycleStatuses.List())
+			continue
+		}
+		for provider, states := range maps {
+			if _, ok := states[lane.Terminal]; !ok {
+				t.Errorf("%s has no state-map entry for %q, the %s lane's reap terminal — every close in that lane would fail on a %s board", provider, lane.Terminal, lane.Name, provider)
+			}
+		}
+	}
+}
+
 // repoRootFromTest walks up from the package directory to the module root.
 func repoRootFromTest(t *testing.T) string {
 	t.Helper()
