@@ -267,6 +267,7 @@ func testCommandLine(base string, selector []string) string {
 func Test() *cobra.Command {
 	var local bool
 	var files []string
+	var waitFlag string
 	c := &cobra.Command{
 		Use:   "test [selector...]",
 		Short: "Run this repo's test suite",
@@ -315,8 +316,14 @@ func Test() *cobra.Command {
 			// command it never spawns. Each lane's own command still passes
 			// through its own grant below, so nothing is ungated; the gate
 			// just moved to the line that actually runs.
+			// Parsed before any spawn, and threaded as a value from here on:
+			// the cap is an argument of this run, not a mode the package is in.
+			wait, err := parseTestWait(waitFlag)
+			if err != nil {
+				return err
+			}
 			if len(files) > 0 && len(proj.Runtime.TestLane) > 0 {
-				return runTestLanes(root, repoDir, proj, files, local)
+				return runTestLanes(root, repoDir, proj, files, local, wait)
 			}
 			// Before any spawn: a refusal that had already run the suite would
 			// have done the thing it was refusing to authorize.
@@ -324,11 +331,12 @@ func Test() *cobra.Command {
 				return err
 			}
 			line := testCommandLine(proj.Runtime.TestCommand, args)
-			return runTest(root, repoDir, line, local)
+			return runTest(root, repoDir, proj.Project.Name, line, local, wait)
 		},
 	}
 	c.Flags().BoolVar(&local, "local", false, "run on this machine even when a remote is granted")
 	c.Flags().StringArrayVar(&files, "files", nil, "repo-relative path to resolve against the declared test lanes (repeatable)")
+	c.Flags().StringVar(&waitFlag, "wait", defaultTestWait.String(), "how long to wait for a host held by a mutation leg before running alongside it (0 = at once)")
 	c.AddCommand(testLane())
 	return c
 }
@@ -366,7 +374,7 @@ func refuseFilesWithSelector(files, args []string) error {
 // finding on the plan becomes an exit status here and a printed line there,
 // from the same facts, which is the only arrangement in which the two cannot
 // disagree about what would run.
-func runTestLanes(root, repoDir string, proj *project.Project, files []string, local bool) error {
+func runTestLanes(root, repoDir string, proj *project.Project, files []string, local bool, wait time.Duration) error {
 	plan := lanePlan(repoDir, proj, files)
 
 	// Checked FIRST, and it poisons the whole set. Resolving the in-tree half
@@ -496,8 +504,28 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	// copy, and paying for the transfer anyway is the cost c-4 exists to avoid —
 	// but ONE remote-going lane is enough for its host, because that lane
 	// measures the tree it finds and a stale one is the previous run's code.
+	//
+	// Each host is held ONCE for the whole run, before its sync, and released
+	// after the last lane (locked suite_participation): one lock per host,
+	// never one per lane, so two lanes on one host cannot wait on each other.
+	var holds []*suiteHold
+	defer func() {
+		for _, h := range holds {
+			if err := h.Release(); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: release the host lock: %v\n", err)
+			}
+		}
+	}()
 	for _, host := range plannedHosts(verdicts) {
-		if err := syncTreeTo(*byHost[host], repoDir); err != nil {
+		target := *byHost[host]
+		h, err := holdHostForSuite(root, repoDir, proj.Project.Name, target, wait)
+		if err != nil {
+			return err
+		}
+		if h != nil {
+			holds = append(holds, h)
+		}
+		if err := syncTreeTo(target, repoDir); err != nil {
 			return err
 		}
 	}
@@ -831,7 +859,7 @@ func resolveTestTarget(root, repoDir string, local bool, tools []string) (*remot
 }
 
 // runTest executes one test run, here or on the granted host.
-func runTest(root, repoDir, line string, local bool) error {
+func runTest(root, repoDir, projectName, line string, local bool, wait time.Duration) error {
 	// nil tools: a whole-suite run has no lanes to derive a toolchain from, so
 	// the probe asks exactly what it asked before this feature existed and the
 	// lane-less transcript is unchanged.
@@ -845,7 +873,7 @@ func runTest(root, repoDir, line string, local bool) error {
 		}
 		return nil
 	}
-	return runTestRemotely(*target, repoDir, line)
+	return runTestRemotely(root, repoDir, projectName, *target, line, wait)
 }
 
 // runTestRemotely pushes the tree, then runs the suite over ssh.
@@ -858,11 +886,127 @@ func runTest(root, repoDir, line string, local bool) error {
 // apart: one sync for the tree, then one ssh per lane. Fused, every lane would
 // re-push an unchanged checkout, and the wall-clock cost of lanes would scale
 // with the number of lanes rather than with the code they cover.
-func runTestRemotely(t remote.Target, repoDir, line string) error {
+//
+// The host lock comes first — before the sync, because the sync is already
+// work on the host — and is released after the suite, whatever it returned.
+func runTestRemotely(root, repoDir, projectName string, t remote.Target, line string, wait time.Duration) error {
+	h, err := holdHostForSuite(root, repoDir, projectName, t, wait)
+	if err != nil {
+		return err
+	}
+	if h != nil {
+		defer func() {
+			if err := h.Release(); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: release the host lock: %v\n", err)
+			}
+		}()
+	}
 	if err := syncTreeTo(t, repoDir); err != nil {
 		return err
 	}
 	return runRemoteLine(t, line)
+}
+
+// defaultTestWait is how long `dross test` waits for a host a mutation leg
+// holds before running alongside it. Long enough to absorb a leg about to
+// finish; far shorter than a leg, so a task gate is never held for one.
+const defaultTestWait = 10 * time.Minute
+
+// parseTestWait reads --wait. Refused before any spawn, naming the flag: a
+// cap that did not parse must not become the default by accident.
+func parseTestWait(s string) (time.Duration, error) {
+	d, err := time.ParseDuration(strings.TrimSpace(s))
+	if err != nil {
+		return 0, fmt.Errorf("--wait %q is not a duration (want e.g. 10m, 30s, or 0): %w", s, err)
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("--wait %q is negative — a wait cannot be less than 0", s)
+	}
+	return d, nil
+}
+
+// suiteHold is the part of a remote.Hold the suite run needs, carried as
+// data so a test can stand one in.
+type suiteHold struct {
+	Outcome remote.HoldOutcome
+	Other   remote.Holder
+	Release func() error
+}
+
+// testHold is the host-lock seam for a suite run: remote.Acquire behind a
+// var, so tests record the acquisition in sequence with the sync and the ssh.
+var testHold = func(t remote.Target, ev remote.HoldEvents) (*suiteHold, error) {
+	h, err := remote.Acquire(t, ev)
+	if err != nil {
+		return nil, err
+	}
+	return &suiteHold{Outcome: h.Outcome, Other: h.Other, Release: h.Release}, nil
+}
+
+// suiteWarn is where the run's advisories go. A var so a test can pin that
+// the in-flight warning is printed BEFORE the hold — a future-tense warning
+// printed after the wait has resolved would be a lie.
+var suiteWarn = func(msg string) { fmt.Fprintln(os.Stderr, msg) }
+
+// holdHostForSuite takes the host lock for a suite run with a bounded wait,
+// and returns nil when there is nothing to release.
+//
+// This is the locked suite_participation decision executed. The lock exists
+// to keep mutation measurements honest; a suite run under load is slow, not
+// wrong. So an expired wait — and a busy host under --wait 0, which is the
+// same answer with a zero cap — SPAWNS ANYWAY, naming the holder, and exits
+// with the suite's own code; no new code is ever minted for it. A host
+// without flock is warned about once and the suite runs unlocked. Only a
+// host that could not be reached at all refuses, because the sync that
+// follows could not reach it either.
+//
+// The in-flight warning is printed first, before the wait it describes.
+func holdHostForSuite(root, repoDir, projectName string, t remote.Target, wait time.Duration) (*suiteHold, error) {
+	if runs, rerr := readDetachedRuns(root, repoDir); rerr == nil {
+		if w := inFlightRunWarning(runs, t, wait); w != "" {
+			suiteWarn(w)
+		}
+	}
+	t.Lock = remote.LockSpec{
+		Holder: remote.Holder{Project: projectName, RunID: "t-" + time.Now().UTC().Format("20060102-150405")},
+		Wait:   remote.WaitPolicy{Max: wait},
+	}
+	h, err := testHold(t, remote.HoldEvents{Log: os.Stderr, HeartbeatEvery: time.Minute})
+	switch {
+	case err == nil:
+		if h.Outcome == remote.Alongside {
+			suiteWarn(alongsideLine(t.Host, wait, h.Other))
+		}
+		return h, nil
+	case errors.Is(err, remote.ErrHostBusy):
+		// The zero policy's answer for a held host: the same alongside path
+		// as an expired wait, with nothing to release.
+		var be *remote.BusyError
+		var other remote.Holder
+		if errors.As(err, &be) {
+			other = be.Holder
+		}
+		suiteWarn(alongsideLine(t.Host, wait, other))
+		return nil, nil
+	case errors.Is(err, remote.ErrTransport):
+		return nil, &ExitCodeError{Code: exitTransport, Err: fmt.Errorf(
+			"could not reach %s to take the host lock — the suite did not run: %w", t.Host, err)}
+	default:
+		// No flock, or the lock could not be taken: said once, then the
+		// suite runs unlocked — slow under a leg, never wrong.
+		suiteWarn(fmt.Sprintf("warning: the host lock on %s could not be taken (%v) — running the suite without it; see `dross remote bootstrap`", t.Host, err))
+		return nil, nil
+	}
+}
+
+// alongsideLine is the one line an expired wait prints.
+func alongsideLine(host string, wait time.Duration, other remote.Holder) string {
+	who := "another run"
+	if !other.IsZero() {
+		who = other.Name()
+	}
+	return fmt.Sprintf("warning: waited %s for the host lock on %s — still held by %s; running alongside it, sharing the host's cores",
+		wait, host, who)
 }
 
 // syncTreeTo pushes the working tree to the target. The argv builder validates
@@ -873,16 +1017,9 @@ func syncTreeTo(t remote.Target, repoDir string) error {
 	if err != nil {
 		return err
 	}
-	// The sync no longer destroys a detached run (SyncArgs protects the host's
-	// runs directory), but the suite about to start will share the host's
-	// cores with it, and a mutation leg's per-mutant timeouts are sized from an
-	// unloaded baseline. Said once, not refused: the run is safe, and whether
-	// the slowdown is worth it is the user's call.
-	if runs, rerr := readDetachedRuns(filepath.Join(root, RootDirName), root); rerr == nil {
-		if w := inFlightRunWarning(runs, t); w != "" {
-			fmt.Fprintln(os.Stderr, w)
-		}
-	}
+	// The in-flight warning used to live here; it now precedes the host lock
+	// (holdHostForSuite), because it describes the wait that follows and a
+	// warning printed after that wait resolved would be a lie.
 	sync, cleanup, err := remote.SyncArgs(t, root)
 	if err != nil {
 		return err
@@ -900,15 +1037,25 @@ func syncTreeTo(t remote.Target, repoDir string) error {
 // or scheduled on the very host and workdir this sync is about to push to.
 // Pure over the record list so the wording is testable without a host; empty
 // when nothing is in flight there.
-func inFlightRunWarning(runs []detachedRun, t remote.Target) string {
+//
+// The sync no longer destroys a detached run (SyncArgs protects the host's
+// runs directory), and the suite now waits up to the cap for the leg to
+// release the host before sharing its cores — a mutation leg's per-mutant
+// timeouts are sized from an unloaded baseline. Said once, not refused.
+// Under --wait 0 there is no wait to describe, and the old wording stands.
+func inFlightRunWarning(runs []detachedRun, t remote.Target, wait time.Duration) string {
 	for _, r := range runs {
 		if r.Host != t.Host || r.Workdir != t.Workdir {
 			continue
 		}
 		switch r.State {
 		case "running", "scheduled", "":
-			return fmt.Sprintf("warning: detached run %s (%s) is %s on %s — the sync leaves it alone, but this suite will compete with it for the host's cores",
-				r.RunID, r.Phase, stateWord(r), t.Host)
+			if wait == 0 {
+				return fmt.Sprintf("warning: detached run %s (%s) is %s on %s — the sync leaves it alone, but this suite will compete with it for the host's cores",
+					r.RunID, r.Phase, stateWord(r), t.Host)
+			}
+			return fmt.Sprintf("warning: detached run %s (%s) is %s on %s — the sync leaves it alone, and this suite will wait up to %s for it, then share the host's cores",
+				r.RunID, r.Phase, stateWord(r), t.Host, wait)
 		}
 	}
 	return ""
