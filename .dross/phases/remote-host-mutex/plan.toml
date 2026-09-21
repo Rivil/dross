@@ -9,7 +9,9 @@ task_seq = 9
   title = "Lock script builders, parsers, Target.Lock"
   files = ["internal/remote/lock.go", "internal/remote/lock_test.go", "internal/remote/remote.go"]
   description = """
-New internal/remote/lock.go: HostLockPath = "/tmp/dross-host.lock", LockTool = "flock",
+New internal/remote/lock.go: HostLockPath = "/tmp/dross-host.lock" (a package VAR so the
+real-flock tests can point it at a temp file — the suite itself runs under the production
+lock on the remote gate after t-8), LockTool = "flock",
 Holder{Project, Phase, RunID, PID, User, Since}, WaitPolicy{Forever bool, Max time.Duration}
 (zero = no wait), LockSpec{Holder, Wait}, and a `Lock LockSpec` field on Target.
 LockPrelude(spec) renders the ONLY text that ever opens, creates, chmods or writes the
@@ -17,14 +19,19 @@ lock path: a `command -v flock` gate emitting `lock=noflock`, a guarded create +
 `exec 9<PATH` read-only, `flock ... -E 75 9` per policy, a `-ef /dev/fd/9` inode check with
 3 bounded re-opens, the k=v holder record written via `dd of=PATH conv=nocreat status=none`,
 and `lock=waiting|acquired|busy` + `holder.<k>=<v>` protocol lines. No preamble, no cd.
-LockStatusScript + ParseLockStatus (tool presence, held/free by `flock -n` probe, holder);
-ParseHolder. Validate refuses a holder field containing a newline.
+After `lock=busy` under a bounded policy the prelude CONTINUES into the caller's text with
+nothing held (the hold session's keepalive loop then runs unheld; Release returns nil) —
+it never exits the shell itself. LockStatusScript + ParseLockStatus (tool presence, absent
+file = free, held/free by `flock -n` probe, holder); ParseHolder. Validate refuses a holder
+field containing a newline.
 """
   covers = ["c-2", "c-7"]
   test_contract = [
     "if the prelude opens the lock path with O_CREAT (a `flock <path>` form, or any `>`, `>>`, `<>` redirection onto the path outside the create guard), TestLockPreludeOpensWithoutCreate fails — the only open is `exec 9<'/tmp/dross-host.lock'` (the protected_regular EACCES for user B)",
     "if the create is not guarded by `[ -e PATH ] ||` or not followed on the same line by `chmod 0666 PATH`, TestLockPreludeCreatesWorldWritable fails",
-    "if the holder record is written with `printf … > PATH` instead of `dd of=PATH conv=nocreat status=none`, or for a bounded policy the write is reachable on the expired path (clobbering the real holder's record), TestLockPreludeWritesRecordWithoutCreate fails",
+    "if the holder record is written with `printf … > PATH` instead of the pipeline `printf … | dd of=PATH conv=nocreat status=none` — the dd must be preceded by a pipe and carry no if=, or it reads stdin and swallows the hold session's keepalive stream (hang) or writes an empty record in the detached job — or for a bounded policy the write is reachable on the expired path (clobbering the real holder's record), TestLockPreludeWritesRecordWithoutCreate fails",
+    "if after `lock=busy` under a bounded policy the prelude exits the shell rather than continuing into the caller's text, TestLockPreludeBusyDoesNotExit fails — an Alongside hold must keep its session so Release returns nil, not a spurious lost-session error",
+    "if an absent lock path (a host no leg has ever run on) makes LockStatusScript's `exec 9<PATH` kill the shell instead of printing `lock=free` via an `[ -e PATH ] ||` guard before the open, TestLockStatusScriptAbsentFileIsFree fails; ParseLockStatus of that output must yield Held=false with an empty Holder",
     "if Forever does not render `flock -x -E 75 9`, {Max:10m} `flock -w 600 -E 75 9`, zero `flock -n -E 75 9`, or busy is detected by anything other than `$? -eq 75` (so a flock usage error never reads as busy), TestLockPreludeWaitForms fails",
     "if the post-acquisition `[ PATH -ef /dev/fd/9 ]` inode check with its bounded (3) re-open loop ending in `lock=error replaced` is removed, TestLockPreludeChecksTheInode fails",
     "if the fragment does not begin with `command -v flock` emitting `lock=noflock` (exit 0) before any redirection, TestLockPreludeGatesOnFlock fails",
@@ -36,7 +43,8 @@ ParseHolder. Validate refuses a holder field containing a newline.
     "if ParseHolder(\"\") does not return a zero Holder with ok=false, a record missing run= or with a non-integer pid is not an error, or a full record does not round-trip with Since as host-epoch time.Unix, TestParseHolder fails",
     "if LockStatusScript does not use `command -v flock` for the tool line and `flock -n -E 75 9` for the busy probe, print `lock=free` on success and `lock=busy` + holder.* only on 75, or creates the file (any chmod or `: >`), TestLockStatusScriptProbesNeverReads fails",
     "if `tool=no` is not ToolMissing, `lock=free` + a stale record is not Held=false with an EMPTY Holder, `lock=busy` + record does not round-trip Held=true, busy-with-empty-record is not distinguished from busy-with-holder, or output with no tool=/lock= line is not an error, TestParseLockStatus fails",
-    "if two `bash -s` children running the REAL fragment against a temp HostLockPath do not show the second reporting lock=waiting while the first is up and lock=acquired within 1s of the first being SIGKILLed, TestRealFlockSerializesAndReleasesOnKill fails (//go:build linux, t.Skip without flock on PATH; runs on the remote `dross test` gate)",
+    "if two `bash -s` children running the REAL fragment against a temp HostLockPath (never the production path — the suite runs under it on the remote gate) do not show the second reporting lock=waiting while the first is up and lock=acquired within 1s of the first being SIGKILLed, TestRealFlockSerializesAndReleasesOnKill fails (//go:build linux, t.Skip without flock on PATH)",
+    "if a failed record write (a 0644 file left by a creator killed before its chmod, or a dd that rejects its flags) produces anything other than `lock=acquired` with no holder.* lines — a `lock=error`, a bare exit, or a busy reading — TestFailedRecordWriteStillAcquires fails: exclusion holds on the read-only fd regardless of whether the record landed",
   ]
   status = "pending"
 
@@ -45,17 +53,28 @@ ParseHolder. Validate refuses a holder field containing a newline.
   wave = 2
   depends_on = ["t-1"]
   title = "DetachScript locks; StatusScript reports the holder"
-  files = ["internal/remote/remote.go", "internal/remote/remote_test.go"]
+  files = ["internal/remote/remote.go", "internal/remote/remote_test.go", "internal/cmd/verify.go", "internal/cmd/verify_detach_test.go"]
   description = """
 DetachScript composes LockPrelude(t.Lock, Forever) into the INNER script after the --at
 sleep and before `printf '%s' running`; the outer initial state is ALWAYS `scheduled`;
-an empty t.Lock.Holder.RunID is refused with ErrUnsafeTarget. StatusScript appends
-LockStatusScript's probe lines (lock=, holder.<k>=) after the state/exit/pid lines;
-RunStatus gains `Lock LockStatus`; ParseStatus fills it and output with no lock lines
-parses exactly as before.
+an empty t.Lock.Holder.RunID is refused with ErrUnsafeTarget. On `lock=noflock` the inner
+script writes 127 to the exit file, a log line naming flock and `dross doctor`, and
+`finished` — the tool argv never runs (belt and braces: the laptop-side gate is below).
+dispatchDetached stamps Target.Lock = {Holder{Project: project name, Phase: phaseID, RunID:
+the detached run id}, Wait Forever} before building the script, so the refusal and its
+only caller land together (existing verify_detach_test.go fixtures gain the holder), and
+probes the host for LockTool through the existing remoteProbeFn seam BEFORE detachSync,
+refusing with the doctor wording ("flock is not installed on <host> — the host lock needs
+it; run dross doctor") so the user learns why on the laptop, not in a host log.
+StatusScript appends LockStatusScript's
+probe lines (lock=, holder.<k>=) after the state/exit/pid lines; RunStatus gains
+`Lock LockStatus`; ParseStatus fills it and output with no lock lines parses exactly as before.
 """
   covers = ["c-1", "c-3", "c-4"]
   test_contract = [
+    "if dispatchDetached hands DetachScript a target whose Lock.Holder.RunID differs from the recorded run id, or lacks project=/phase=, TestDispatchStampsTheHolder fails — and the seven existing dispatchDetached tests fail with ErrUnsafeTarget if the stamping is skipped",
+    "if after `lock=noflock` the inner text does not write 127 to the exit file and `finished` to the state file before any argv word, or runs the argv anyway, TestDetachedNoflockFinishesWith127 fails — a flock-less host must neither measure unlocked nor sit at scheduled forever",
+    "if remoteProbeFn faked to Missing=[\"flock\"] does not make dispatchDetached refuse before any detachSync/detachSpawn call with a message containing \"flock is not installed on\" and \"dross doctor\", or a healthy probe does not proceed to the sync, TestDispatchRefusesAFlocklessHost fails",
     "if in the inner bash -c text `flock -x` is not after `sleep $((__t - __n))` (when scheduled) and before both `printf '%s' running` and the first argv word, TestDetachScriptLocksBeforeItRuns fails — a run that locks then sleeps holds the host idle; running-before-flock makes status lie",
     "if the prelude is not INSIDE the single-quoted inner string (after `setsid nohup bash -c '`) but in the outer chain, TestDetachLockIsHeldByTheDetachedJob fails — an outer lock is released when ssh returns",
     "if a zero notBefore no longer writes `printf '%s' 'scheduled'` as the outer initial state, TestDetachedRunStartsScheduled fails (the old 'running' assertion in TestDetachScriptEmitsNoSleepWithoutASchedule is flipped)",
@@ -94,7 +113,7 @@ new spawn accepted with reason.
     "if a fake printing lock=waiting + holder lines for {dross, p, r-1, 7, 1700000000}, sleeping 200ms, then lock=acquired does not yield Held with Other.RunID==\"r-1\" and exactly one Log line `waiting on dross/p run r-1 (pid 7) since 2023-11-14T22:13:20Z`, TestAcquirePrintsTheHolderOnce fails",
     "if the same fake over 300ms with HeartbeatEvery=50ms does not produce >=3 `still waiting` lines each naming host, elapsed time and r-1, with none after lock=acquired, TestAcquireHeartbeatsWhileWaiting fails",
     "if lock=waiting with no holder lines panics or prints a blank name instead of a progress line saying the holder is not yet recorded, TestAcquireEmptyRecordIsNotBlank fails",
-    "if a fake printing waiting, record, lock=busy under WaitPolicy{Max:1s} does not return Outcome Alongside with Other filled and err nil, or under the zero policy the SAME output does not return ErrHostBusy naming dross/p run r-1 with no process left running, TestAcquireExpiredRunsAlongside fails",
+    "if a fake printing waiting, record, lock=busy under WaitPolicy{Max:1s} does not return Outcome Alongside with Other filled and err nil — and that Hold's Release() does not return nil with Lost() false while the fake keeps reading stdin — or under the zero policy the SAME output does not return ErrHostBusy naming dross/p run r-1 with Acquire itself tearing the session down (no process left running), TestAcquireExpiredRunsAlongside fails",
     "if a fake printing lock=noflock does not return ErrLockTool whose message contains \"flock\" and \"dross doctor\", TestMissingFlockIsNamed fails",
     "if a fake printing nothing and exiting 0 is treated as Held rather than an error wrapping ErrRemoteCommand, or a fake exiting 255 before any lock= line is not ErrTransport (never ErrHostBusy), TestEmptyAnswerIsNotAnAcquisition fails",
     "if a stand-in that exits early does not flip Lost() to true, or Release() then does not return the exit as an error naming the host, TestLostFlipsWhenTheSessionDies fails",
@@ -139,9 +158,10 @@ host package manager.
   wave = 3
   depends_on = ["t-3"]
   title = "Launcher holds the host once per run"
-  files = ["internal/mutation/launcher.go", "internal/mutation/launcher_test.go", "internal/mutation/launcher_lock_test.go"]
+  files = ["internal/mutation/launcher.go", "internal/mutation/launcher_test.go", "internal/mutation/launcher_lock_test.go", "internal/mutation/launcher_scratch_test.go", "internal/mutation/restore_test.go", "internal/mutation/remote_failure_test.go", "internal/mutation/construct_test.go", "internal/mutation/remote_env_test.go", "internal/mutation/scratch_space_test.go"]
   description = """
-New launcherHold seam (= remote.Acquire) and launcherLog (= os.Stderr). ensureHeld() runs
+New launcherHold seam (= remote.Acquire), launcherLog (= os.Stderr) and launcherHeartbeat
+(= 5m, var — the locked "one-line heartbeat every few minutes"). ensureHeld() runs
 at the top of ensurePushed — before the df probe and the rsync — and stores the *Hold;
 Close releases it after removeRemoteScratch. newLauncher refuses a remote target whose
 Lock.Holder.RunID is empty. Mutation legs use Forever/zero only, so Alongside is
@@ -152,11 +172,12 @@ host and "lock lost" — a perturbed measurement is never recorded.
   covers = ["c-1", "c-3", "c-4"]
   test_contract = [
     "if a two-package gremlins remote run with a fake launcherHold tagging hold/release into the recorder does not record exactly [hold push rm run fetch rm run fetch release] — a second hold anywhere, or push before hold — TestRemoteRunHoldsOnceAcrossEveryPackage fails (locked lock_granularity; the push is inside the hold)",
-    "if Close on a local-run launcher calls Release, or Close twice calls Release more than once, TestCloseReleasesIdempotently fails",
+    "if Close on a local-run launcher calls Release, Close twice calls Release more than once, or a failing removeRemoteScratch skips Release (Release must still be recorded and the rm error returned), TestCloseReleasesIdempotently fails",
+    "if any mutation test that builds a remote.Target inline (launcher_scratch_test.go, restore_test.go, remote_failure_test.go, construct_test.go, remote_env_test.go, scratch_space_test.go) is left without a holder, the package goes red on the anonymous-holder refusal — every inline construction routes through the shared target() helper or carries a RunID",
     "if a fake launcherHold returning ErrHostBusy lets anything spawn through launcherCommand (push or rm), or the adapter's Run error does not satisfy errors.Is(err, remote.ErrHostBusy), TestBusyRefusalSpawnsNothing fails",
     "if a fake returning ErrLockTool lets a push, rm or run spawn, or the error does not name the host and `dross doctor`, TestUnlockableHostIsNeverMeasuredOn fails",
     "if newLauncher accepts a remote Target with a zero Lock (must error naming \"holder\") or rejects the same target with Lock.Holder.RunID=\"r-1\", TestLauncherRefusesAnAnonymousRemoteRun fails (existing launcher tests' target() helper gains a RunID — no-bypass across all three adapters)",
-    "if launcherHold is not invoked with the SAME Target the tool scripts use (except Env) and HoldEvents.Log == launcherLog, so a fake Log buffer does not receive the Waiting line, TestLauncherRoutesWaitLinesToItsLog fails (c-3 attached reaches the terminal)",
+    "if launcherHold is not invoked with the SAME Target the tool scripts use (except Env), HoldEvents.Log == launcherLog and HoldEvents.HeartbeatEvery == launcherHeartbeat (> 0, so a zero never means every-tick or never), so a fake Log buffer does not receive the Waiting line, TestLauncherRoutesWaitLinesToItsLog fails (c-3 attached reaches the terminal)",
     "if a fake whose Lost() flips after package 1 does not make Run return an error naming the host and \"lock lost\" with package 2 never running and any Release error included rather than swallowed, TestLostHoldRefusesToRecord fails",
     "if TestGremlinsRemoteRunOrderAndArgv or TestGremlinsRemotePushesOnceAndFetchesPerPackage lose their push/rm/run/fetch assertions (hold/release are added at the ends), they fail",
   ]
@@ -164,17 +185,21 @@ host and "lock lost" — a perturbed measurement is never recorded.
 
 [[task]]
   id = "t-6"
-  wave = 3
-  depends_on = ["t-3"]
+  wave = 4
+  depends_on = ["t-2", "t-3", "t-5"]
   title = "Verify mints the holder, adds --no-wait, maps busy to 15"
-  files = ["internal/cmd/verify.go", "internal/cmd/verify_scoping_test.go", "internal/cmd/verify_detach_test.go", "internal/cmd/verify_lock_test.go"]
+  files = ["internal/cmd/verify.go", "internal/cmd/survivor_drain.go", "internal/cmd/verify_scoping_test.go", "internal/cmd/verify_detach_test.go", "internal/cmd/verify_lock_test.go", "internal/cmd/mutation_remote_wiring_test.go"]
   description = """
-resolveMutationTuning fills Target.Lock.Holder with {Project: project name, Phase: phaseID
-(empty for the survivor drain), RunID: newRunID(now)} and Wait Forever; `--no-wait` sets the
-zero policy. dispatchDetached uses the same holder with the detached run id. ErrHostBusy from
-RunScoped becomes &ExitCodeError{Code: exitVerifyHostBusy (15)} with the holder in the
-message; nothing is written. `--no-wait --detach` is refused before any ssh, naming both
-flags. "no-wait" is allowlisted in TestScopingHasNoOptOut.
+resolveMutationTuning gains the signature (p, root, phaseID string, wait remote.WaitPolicy)
+and fills Target.Lock.Holder with {Project: project name, Phase: phaseID (empty for the
+survivor drain), RunID: newRunID(now)} and the given policy; verify passes Forever, or the
+zero policy under `--no-wait`; survivor_drain.go (the second caller) passes "" and Forever;
+mutation_remote_wiring_test.go's four call sites gain the two arguments. `dross verify` has
+no --local flag and gains none — the local paths are an ungranted repo or a transport fallback.
+ErrHostBusy from RunScoped becomes &ExitCodeError{Code: exitVerifyHostBusy (15)} with the
+holder in the message; nothing is written. `--no-wait --detach` is refused before any ssh,
+naming both flags. "no-wait" is allowlisted in TestScopingHasNoOptOut. (dispatchDetached's
+stamping landed in t-2.)
 """
   covers = ["c-1", "c-3"]
   test_contract = [
@@ -182,7 +207,8 @@ flags. "no-wait" is allowlisted in TestScopingHasNoOptOut.
     "if `--no-wait` does not yield the zero WaitPolicy, or without the flag Forever is not true, TestNoWaitSetsZeroWait fails",
     "if a fake adapter returning an error wrapping remote.ErrHostBusy does not make Verify() exit 15 (distinct from every code in test.go and the 10–14 results band) printing holder project, phase, run id and since, with no tests.json and no verify.toml written, TestBusyRefusalExitsFifteenAndWritesNothing fails",
     "if `--no-wait --detach` is not refused before any detachSpawn/detachSync call naming both flags, TestNoWaitWithDetachIsRefused fails",
-    "if `--local` or a transport fallback (Target nil) leaves Lock non-zero or reaches launcherHold (must be zero calls), TestLocalVerifyNeverTouchesTheLock fails",
+    "if an ungranted repo or a transport fallback leaves mutationTuning.Target non-nil, or the adapters it builds are anything but local (the recorded adapter fake sees no remote Target and hence no hold), TestLocalVerifyNeverTouchesTheLock fails — asserted against the tuning cmd can see, not mutation's unexported seam; no --local flag is added to verify (TestScopingHasNoOptOut would refuse it)",
+    "if survivor_drain.go's call to resolveMutationTuning does not compile with the new signature or a drain on a granted host builds a launcher without a RunID (refused by t-5), TestDrainStampsAHolder fails — the drain is the second attached remote-mutation caller and must hold the host like verify does",
     "if `--no-wait` with no granted host is anything other than a local run exiting 0, TestNoWaitWithoutAHostIsInert fails",
     "if the detached record's RunID does not equal the run= value inside the DetachScript text detachSpawn received, or that text lacks project=<name> and phase=<id>, TestDetachedHolderIsTheRunID fails (status could not tell waiting-on-me from waiting-on-another)",
     "if TestScopingHasNoOptOut does not pass with \"no-wait\" added, or would pass with any other new flag, the allowlist is broken",
@@ -227,18 +253,22 @@ the lock is held by a RunID other than this record's, the reason line is
 runTest / runTestLanes / runOneLane / runLanePrepare / runRemoteLine — no package-level
 state. A new testHold seam (= remote.Acquire) is called from runTestRemotely / runTestLanes
 BEFORE syncTreeTo with Target.Lock = {Holder{Project, Phase:"", RunID:"t-<stamp>"},
-Wait{Max: wait}} (`--wait 0` -> zero policy: flock -n, hold if free, run at once otherwise);
-Alongside prints the holder and continues; Held or Alongside are released after the last
-lane. ErrLockTool prints one warning naming the host and `dross remote bootstrap`, then runs
-the suite unlocked. `--local` never calls the seam. inFlightRunWarning wording changes from
-"will compete" to "will wait up to <cap> for it, then share the host's cores".
+Wait{Max: wait}}. `--wait 0` is the zero policy (flock -n): Acquire returns Held when the
+host is free and ErrHostBusy when it is not — dross test maps errors.Is(err, ErrHostBusy)
+onto the SAME alongside path as an expired bounded wait (print the holder, spawn at once).
+Held or Alongside are released after the last lane. ErrLockTool prints one warning naming
+the host and `dross remote bootstrap`, then runs the suite unlocked. `--local` never calls
+the seam. inFlightRunWarning is hoisted out of syncTreeTo to the caller and printed BEFORE
+the hold, reworded from "will compete" to "will wait up to <cap> for it, then share the
+host's cores" (under --wait 0 the old "will compete" wording is kept).
 """
   covers = ["c-6", "c-4"]
   test_contract = [
     "if the default does not reach the fake testHold as Lock.Wait.Max == 10m with Forever == false, or `--wait 30s` does not reach it as 30s, TestTestWaitDefaultsToTenMinutes fails",
     "if `--wait abc` or a negative value is not refused before any spawn naming the flag, TestWaitFlagValidation fails",
-    "if `--wait 0` does not reach the seam as the zero policy with the rendered HoldScript containing `flock -n` and no `-w`, or a fake returning Alongside does not still spawn the suite immediately, TestWaitZeroSpawnsAtOnce fails",
-    "if any --wait value (including a huge one) reaches the seam with Forever set, TestTestNeverWaitsForever fails — the ErrHostBusy refusal path is unreachable from dross test by construction",
+    "if `--wait 0` does not reach the seam as the zero policy with the rendered HoldScript containing `flock -n` and no `-w`, or a fake returning ErrHostBusy (the real Acquire's answer for that policy on a busy host) does not still spawn the suite immediately naming the holder, TestWaitZeroSpawnsAtOnce fails — never an error exit (c-6)",
+    "if any --wait value (including a huge one) reaches the seam with Forever set, or an ErrHostBusy from the seam surfaces as an exit code instead of the alongside path, TestTestNeverWaitsForever fails",
+    "if inFlightRunWarning is not recorded BEFORE the hold call (order [warn, hold, sync, ssh, release] with a detached record in flight), TestInFlightWarningPrecedesTheHold fails — a future-tense warning printed after the wait resolved is a lie",
     "if testHold faked to Alongside with Other={dross, remote-host-mutex, r-1, 4242, since} does not spawn the suite's ssh, print exactly ONE stderr line containing \"waited <dur>\", \"r-1\" and \"running alongside\", and exit with the suite's own code (0 on a green fake, never a new code), TestExpiredWaitSpawnsAnywayNamingTheHolder fails",
     "if the recorded order across seams is not [hold, rsync-sync, ssh-suite, release] — and on a two-lane run [hold, sync, ssh, ssh, release], one hold not one per lane, the hold preceding each host's syncTreeTo — TestTestHoldsAcrossSyncAndSuite fails",
     "if a lane returning exitSuiteFailed or a failing spawnRemote does not still record Release after the spawn (N releases for N holds), TestSuiteFailureStillReleases fails",
@@ -250,7 +280,7 @@ the suite unlocked. `--local` never calls the seam. inFlightRunWarning wording c
 
 [[task]]
   id = "t-9"
-  wave = 4
+  wave = 5
   depends_on = ["t-6", "t-7", "t-8"]
   title = "Document the host lock"
   files = ["README.md", "ARCHITECTURE.md", "assets/prompts/verify.md", "internal/cmd/options_docs_test.go"]
