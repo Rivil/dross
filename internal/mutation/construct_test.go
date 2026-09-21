@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/Rivil/dross/internal/remote"
 )
 
 // fakeNode puts a shell script named `node` first on PATH. The script records
@@ -124,7 +122,7 @@ func TestConstructsHonoursPrefixAndNeverTheRemote(t *testing.T) {
 	t.Setenv("PATH", t.TempDir()) // nothing on PATH: the local spawn fails fast
 	s := strykerWithSource(t, "web/src/a.ts", "x\n")
 	s.Prefix = "docker compose exec -T app"
-	s.Remote = &remote.Target{Host: "helicon", Workdir: "/srv/x"}
+	s.Remote = helicon("/srv/x")
 
 	_, err := s.Constructs("web/src/a.ts")
 	if !errors.Is(err, ErrASTUnavailable) {

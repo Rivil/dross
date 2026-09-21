@@ -1,0 +1,181 @@
+{
+  "phase": "remote-host-mutex",
+  "pr": 129,
+  "base": "milestone/v1.7",
+  "base_commit": "e1e7e21aa3c7dceb3583d279683959cb95529730",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/remote/lock.go",
+        "internal/remote/lock_test.go",
+        "internal/remote/remote.go"
+      ],
+      "commit": "6960696",
+      "completed_at": "2026-09-21T08:34:41.259631Z",
+      "landmarks": [
+        {
+          "feature": "host lock",
+          "symbol": "LockPrelude",
+          "loc": "internal/remote/lock.go:150",
+          "what": "flock(1) on /tmp/dross-host.lock via read-only fd 9 with a k=v holder record; prelude never exits and leaves the outcome in $__lock"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/remote/remote.go",
+        "internal/remote/remote_test.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_detach_test.go"
+      ],
+      "commit": "7e87fcb",
+      "completed_at": "2026-09-21T08:43:18.920355Z",
+      "landmarks": [
+        {
+          "feature": "host lock",
+          "symbol": "DetachScript",
+          "loc": "internal/remote/remote.go:385",
+          "what": "detached job takes the host lock inside setsid after the --at sleep and before running; every detached run starts scheduled; status round trip carries lock state + holder"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/remote/hold.go",
+        "internal/remote/hold_test.go",
+        "internal/cmd/subprocargs_audit_test.go"
+      ],
+      "commit": "010490d",
+      "completed_at": "2026-09-21T08:52:17.262885Z",
+      "landmarks": [
+        {
+          "feature": "host lock",
+          "symbol": "Acquire",
+          "loc": "internal/remote/hold.go:139",
+          "what": "attached hold session over ssh stdin with a 30s keepalive / 120s host-side lease; Held or Alongside outcomes, ErrHostBusy with holder, ErrLockTool, Lost()"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_remote_test.go",
+        "internal/cmd/remote_bootstrap.go",
+        "internal/cmd/remote_bootstrap_test.go",
+        "internal/cmd/doctor_lane_toolchain_test.go",
+        "internal/cmd/remote_bootstrap_lane_test.go"
+      ],
+      "commit": "dc272ed",
+      "completed_at": "2026-09-21T09:01:10.077693Z",
+      "landmarks": [
+        {
+          "feature": "host lock",
+          "symbol": "reportHostLock",
+          "loc": "internal/cmd/doctor.go:1680",
+          "what": "doctor's Remote section probes flock as a host tool and names the current holder via the remoteLockStatusFn seam; bootstrap refuses to install flock (util-linux)"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/mutation/launcher.go",
+        "internal/mutation/launcher_test.go",
+        "internal/mutation/launcher_lock_test.go",
+        "internal/mutation/launcher_scratch_test.go",
+        "internal/mutation/restore_test.go",
+        "internal/mutation/remote_failure_test.go",
+        "internal/mutation/construct_test.go",
+        "internal/mutation/remote_env_test.go",
+        "internal/mutation/scratch_space_test.go"
+      ],
+      "commit": "9aaf4c3",
+      "completed_at": "2026-09-21T09:09:11.24425Z",
+      "landmarks": [
+        {
+          "feature": "host lock",
+          "symbol": "ensureHeld",
+          "loc": "internal/mutation/launcher.go:395",
+          "what": "remote mutation launcher takes the host lock once before the push and releases it in Close; anonymous remote runs refused; a lost hold fails the run before its report is read"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/survivor_drain.go",
+        "internal/cmd/verify_scoping_test.go",
+        "internal/cmd/verify_detach_test.go",
+        "internal/cmd/verify_lock_test.go",
+        "internal/cmd/mutation_remote_wiring_test.go",
+        "internal/cmd/trust_test.go",
+        "internal/cmd/verify_reuse_report_test.go",
+        "internal/cmd/verify_results_test.go",
+        "internal/cmd/verify_test.go",
+        "internal/verify/verify.go"
+      ],
+      "commit": "aeaf712",
+      "completed_at": "2026-09-21T09:28:58.950357Z",
+      "landmarks": [
+        {
+          "feature": "host lock",
+          "symbol": "resolveMutationTuning",
+          "loc": "internal/cmd/verify.go:1200",
+          "what": "verify and the survivor drain mint the lock holder (project/phase/run id) once per run; --no-wait refuses a held host with exit 15 naming the holder and writes nothing"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_status_test.go",
+        "internal/cmd/verify_results_test.go"
+      ],
+      "commit": "3e3d4e0",
+      "completed_at": "2026-09-21T09:13:30.660501Z",
+      "landmarks": [
+        {
+          "feature": "host lock",
+          "symbol": "scheduledReason",
+          "loc": "internal/cmd/verify.go:870",
+          "what": "verify status/results explain a scheduled detached run — waiting on a named holder, not started, or an unreadable lock — from the one status round trip; results stays exit 10"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_remote_test.go",
+        "internal/cmd/test_wait_test.go"
+      ],
+      "commit": "2534eb5",
+      "completed_at": "2026-09-21T09:21:01.775863Z",
+      "landmarks": [
+        {
+          "feature": "host lock",
+          "symbol": "holdHostForSuite",
+          "loc": "internal/cmd/test.go:930",
+          "what": "dross test --wait \u003cdur\u003e (default 10m, 0 = at once) takes the host lock per host before the sync and runs alongside a mutation leg once the cap expires, naming the holder; never an error exit"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "README.md",
+        "ARCHITECTURE.md",
+        "assets/prompts/verify.md",
+        "internal/cmd/options_docs_test.go"
+      ],
+      "commit": "1afe3fa",
+      "completed_at": "2026-09-21T09:34:13.429021Z",
+      "landmarks": [
+        {
+          "feature": "host lock",
+          "symbol": "TestReadmeDocumentsTheHostLock",
+          "loc": "internal/cmd/options_docs_test.go:530",
+          "what": "README/ARCHITECTURE/verify.md document the host lock — path, wait and --no-wait, --wait cap, doctor's flock + host busy, crash-safe release — pinned by doc tests"
+        }
+      ]
+    }
+  }
+}

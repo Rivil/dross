@@ -16,7 +16,13 @@ import (
 // --- fixtures ---
 
 func helicon(workdir string) *remote.Target {
-	return &remote.Target{Host: "helicon", Workdir: workdir}
+	return &remote.Target{Host: "helicon", Workdir: workdir, Lock: testLock()}
+}
+
+// testLock is the holder every test target carries: a remote run without one
+// is refused at construction (no-bypass), so the fixtures name themselves.
+func testLock() remote.LockSpec {
+	return remote.LockSpec{Holder: remote.Holder{Project: "dross", Phase: "p", RunID: "r-1"}, Wait: remote.Forever}
 }
 
 // recordRemote swaps the launcher's single process seam for one that records
@@ -100,6 +106,8 @@ func kinds(rec [][]string) []string {
 			out = append(out, "rm")
 		case argv[0] == "ssh":
 			out = append(out, "run")
+		case argv[0] == "hold" || argv[0] == "release":
+			out = append(out, argv[0])
 		default:
 			out = append(out, "?"+argv[0])
 		}
@@ -137,6 +145,9 @@ func TestGremlinsRemoteRunOrderAndArgv(t *testing.T) {
 		}
 	})
 
+	// The host lock rides the same recorder as pseudo-argv ("hold" /
+	// "release"), so its place in the order is an assertion like every other.
+	recordHold(t, rec, nil)
 	g := &Gremlins{ProjectRoot: root, Remote: helicon("/srv/dross")}
 	report, err := g.Run([]string{"internal/argfence/argfence.go"})
 	if err != nil {
@@ -144,11 +155,11 @@ func TestGremlinsRemoteRunOrderAndArgv(t *testing.T) {
 	}
 
 	for _, argv := range *rec {
-		if argv[0] != "ssh" && argv[0] != "rsync" {
+		if argv[0] != "ssh" && argv[0] != "rsync" && argv[0] != "hold" && argv[0] != "release" {
 			t.Fatalf("a remote run spawned %q locally — c-1 requires argv[0] in {ssh, rsync}: %v", argv[0], argv)
 		}
 	}
-	if got, want := kinds(*rec), []string{"push", "rm", "run", "fetch"}; !reflect.DeepEqual(got, want) {
+	if got, want := kinds(*rec), []string{"hold", "push", "rm", "run", "fetch", "release"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("recorded order = %v, want %v\nfull:\n%v", got, want, *rec)
 	}
 
@@ -159,7 +170,7 @@ func TestGremlinsRemoteRunOrderAndArgv(t *testing.T) {
 	// appends: rsync's source and destination are always its last two real
 	// arguments, whereas their offset from the front moves whenever a flag is
 	// added or removed — which is exactly what dropping --exclude=.git did.
-	push := (*rec)[0]
+	push := (*rec)[1] // [0] is the hold
 	src, dst := push[len(push)-3], push[len(push)-2]
 	if src != root+"/" {
 		t.Errorf("rsync source = %q, want %q (the adapter's ProjectRoot)", src, root+"/")
@@ -169,7 +180,7 @@ func TestGremlinsRemoteRunOrderAndArgv(t *testing.T) {
 	}
 
 	// The tool argv reached the remote as the ssh payload, not as a local argv[0].
-	if script := remoteScript((*rec)[2]); !strings.Contains(script, "'gremlins' 'unleash'") ||
+	if script := remoteScript((*rec)[3]); !strings.Contains(script, "'gremlins' 'unleash'") ||
 		!strings.HasPrefix(script, "cd '/srv/dross' && ") {
 		t.Errorf("the gremlins invocation did not reach the remote as a cd'd script: %q", script)
 	}
@@ -207,12 +218,15 @@ func TestGremlinsRemotePushesOnceAndFetchesPerPackage(t *testing.T) {
 		}
 	})
 
+	recordHold(t, rec, nil)
 	g := &Gremlins{ProjectRoot: root, Remote: helicon("/srv/dross")}
 	if _, err := g.Run([]string{"a/x.go", "b/x.go"}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
-	want := []string{"push", "rm", "run", "fetch", "rm", "run", "fetch"}
+	// One hold before the push, one release after the last fetch: the lock
+	// spans every package (locked lock_granularity).
+	want := []string{"hold", "push", "rm", "run", "fetch", "rm", "run", "fetch", "release"}
 	if got := kinds(*rec); !reflect.DeepEqual(got, want) {
 		t.Fatalf("recorded order = %v, want %v", got, want)
 	}
@@ -454,7 +468,7 @@ func TestLauncherRefusesAdapterMissingFromTheReportTable(t *testing.T) {
 // must halve the REMOTE's cores. Reading runtime.NumCPU() here would size a
 // 32-core host's run by this laptop.
 func TestRemoteWorkersDeriveFromTheProbedHost(t *testing.T) {
-	remoteG := &Gremlins{Remote: &remote.Target{Host: "helicon", Workdir: "/srv/dross", Cores: 32}}
+	remoteG := &Gremlins{Remote: &remote.Target{Host: "helicon", Workdir: "/srv/dross", Cores: 32, Lock: testLock()}}
 	args, err := remoteG.buildUnleashArgs("reports/gremlins/x.json", []string{"./pkg"})
 	if err != nil {
 		t.Fatal(err)

@@ -67,6 +67,19 @@ and none of them is a red suite — a run that **did not report** says nothing
 about the tests. On `10` or `11` the run is alive and fine: wait and collect
 again. Never fill in verify.toml from a run you did not collect.
 
+**A `scheduled` run naming a holder is waiting its turn, not stalled.** Every
+remote mutation leg takes the host lock (`/tmp/dross-host.lock`) before it runs,
+so a run dispatched while another repo's leg holds the host reads as `scheduled`
+with a reason line — `waiting on <project>/<phase> run <id> (pid N) since <time>`
+— in `verify status` and `verify results` (still exit `10`). That is the lock
+working: it is **not a failure**, needs no cancel and no cleanup, and the run
+starts by itself the moment the holder releases (a holder that dies releases it
+too — there is no stale lock to clear). An attached `dross verify` waits the same
+way, printing the holder once and a heartbeat every few minutes. Use `--no-wait`
+only for an unattended probe that must not block — it refuses a held host with
+exit `15`, naming the holder, and writes nothing; it never makes the run happen
+sooner.
+
 **Read the score with its denominator.** `dross verify` now prints it that way — `score: 0.90 over 191 in-scope mutant(s)`, plus a second line naming how many of those are uncoverable by construction and what the efficacy is over the rest. Carry both into your report: 0.90 over 10 mutants and 0.90 over 400 are the same number and not the same evidence, and a survivor the tooling cannot reach is a different fact from one the tests missed.
 
 **The score covers only this phase's changed files.** Mutation tools attribute at a coarser granularity than a phase does — gremlins mutates a whole Go package — so every report is filtered against the phase's change set before it reaches these files. A survivor in an untouched sibling is real, but it is not this phase's, and it is neither scored nor flagged here. `[summary].mutants_in_scope` is the denominator that filtering left: read it next to the score, because 0.50 over 2 mutants and 0.50 over 200 are the same number and not the same evidence.

@@ -26,7 +26,7 @@ import (
 // mechanism and is not a reason to accept the avoidable leaks.
 
 func envTarget(env ...remote.EnvVar) *remote.Target {
-	return &remote.Target{Host: "helicon", Workdir: "/srv/dross", Env: env}
+	return &remote.Target{Host: "helicon", Workdir: "/srv/dross", Env: env, Lock: testLock()}
 }
 
 // TestRemoteArgvIsAlwaysTheSameFourElements is the process-list guarantee at

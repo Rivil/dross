@@ -246,6 +246,11 @@ func TestScopingHasNoOptOut(t *testing.T) {
 		// and named on Scope.Degraded so the run prints the substitution —
 		// the same trust changes.json's own base_commit already carries.
 		"base": true,
+		// Moves what happens when the granted host is HELD — refuse with
+		// exit 15 instead of waiting — not what the run scopes to. A run
+		// that refused measured nothing; one that waited scopes exactly as
+		// the immediate one it would otherwise have been.
+		"no-wait": true,
 	}
 
 	var got []string

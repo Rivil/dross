@@ -272,12 +272,12 @@ func TestInFlightRunWarningNamesTheRunOnThisHost(t *testing.T) {
 		{Phase: "done", RunID: "r-2", Host: "helicon", Workdir: "/srv/dross", State: "finished"},
 		{Phase: "other-tree", RunID: "r-3", Host: "helicon", Workdir: "/srv/else", State: "running"},
 	}
-	if w := inFlightRunWarning(runs, here); w != "" {
+	if w := inFlightRunWarning(runs, here, defaultTestWait); w != "" {
 		t.Errorf("warned with nothing in flight on this host+workdir: %q", w)
 	}
 
 	runs = append(runs, detachedRun{Phase: "lossless", RunID: "r-4", Host: "helicon", Workdir: "/srv/dross", State: "running"})
-	w := inFlightRunWarning(runs, here)
+	w := inFlightRunWarning(runs, here, defaultTestWait)
 	for _, want := range []string{"warning:", "r-4", "lossless", "running", "helicon", "leaves it alone"} {
 		if !strings.Contains(w, want) {
 			t.Errorf("warning %q does not say %q", w, want)

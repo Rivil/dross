@@ -49,7 +49,7 @@ func remoteStryker(root, workdir, pm string) *Stryker {
 		ProjectRoot:    root,
 		Workdir:        workdir,
 		PackageManager: pm,
-		Remote:         &remote.Target{Host: "helicon", Workdir: "/srv/dross"},
+		Remote:         helicon("/srv/dross"),
 	}
 }
 
@@ -193,7 +193,7 @@ func TestStrykerNetRemoteRestoresBeforeStryker(t *testing.T) {
 	failLocalSpawns(t)
 	rec := recordRemote(t, nil)
 
-	s := &StrykerNet{ProjectRoot: t.TempDir(), Remote: &remote.Target{Host: "helicon", Workdir: "/srv/dross"}}
+	s := &StrykerNet{ProjectRoot: t.TempDir(), Remote: helicon("/srv/dross")}
 	// No report is delivered, so Run errors on findReport — irrelevant here; the
 	// ordering happened before that.
 	_, _ = s.Run([]string{"src/A.cs"})
@@ -217,7 +217,7 @@ func TestGremlinsRemoteIssuesNoRestore(t *testing.T) {
 	failLocalSpawns(t)
 	rec := recordRemote(t, nil)
 
-	g := &Gremlins{ProjectRoot: t.TempDir(), Remote: &remote.Target{Host: "helicon", Workdir: "/srv/dross"}}
+	g := &Gremlins{ProjectRoot: t.TempDir(), Remote: helicon("/srv/dross")}
 	if _, err := g.Run([]string{"a/x.go"}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestRemoteRestoreFailureIsFatalBeforeTheToolArgv(t *testing.T) {
 // TestRemoteRestoreTableIsClosed: an adapter absent from the table cannot run
 // remotely with no restore at all.
 func TestRemoteRestoreTableIsClosed(t *testing.T) {
-	_, err := newLauncher("mutant-4000", "", &remote.Target{Host: "h", Workdir: "/w"}, "/x", "", nil)
+	_, err := newLauncher("mutant-4000", "", &remote.Target{Host: "h", Workdir: "/w", Lock: testLock()}, "/x", "", nil)
 	if err == nil {
 		t.Fatal("an adapter absent from the restore table was accepted")
 	}

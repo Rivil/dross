@@ -544,8 +544,14 @@ func TestAuditScansMutationAndShip(t *testing.T) {
 // rsync, the two binaries in the table that can execute an arbitrary LOCAL
 // command from a flag (-o ProxyCommand, -e). A scan root that stopped covering
 // it would leave the worst case unwatched.
+//
+// hold.go is the host-lock session: it spawns through remote.go's buildCommand
+// (the accepted "remote.go:argv[…]" entry above covers it — there is ONE exec
+// seam in the package, on purpose) but it is a second file that hands an argv
+// to that seam, and the walk must see it.
 func TestAuditScansRemotePackage(t *testing.T) {
 	assertAuditCovers(t, filepath.Join("internal", "remote", "remote.go"))
+	assertAuditCovers(t, filepath.Join("internal", "remote", "hold.go"))
 }
 
 func assertAuditCovers(t *testing.T, rel string) {

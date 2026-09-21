@@ -177,7 +177,10 @@ func TestPlanUsesConfiguredAdapters(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			// Doctor's adapter set plus the host lock's tool, which every
+			// remote mutation leg needs regardless of adapter.
 			want, _ := remoteMutationTools(p)
+			want = append(want, remote.LockTool)
 			var got []string
 			for _, s := range steps {
 				got = append(got, s.Tool)
@@ -215,8 +218,11 @@ func TestPlanStepsNameTheirTool(t *testing.T) {
 				if s.Tool == "" {
 					t.Errorf("a step names no tool: %+v", s)
 				}
-				if s.Adapter == "" {
+				if s.Adapter == "" && s.Tool != remote.LockTool {
 					t.Errorf("%s: no adapter named — the reader cannot tell why the host needs it", s.Tool)
+				}
+				if s.Tool == remote.LockTool && s.origin() != "host lock" {
+					t.Errorf("%s: origin = %q, want the host lock named", s.Tool, s.origin())
 				}
 				has := 0
 				if s.Present {
@@ -319,5 +325,35 @@ func TestPlanUnknownToolFailsClosed(t *testing.T) {
 	}
 	if !strings.Contains(s.Refusal, "gremlins") {
 		t.Errorf("the refusal does not name the tool: %q", s.Refusal)
+	}
+}
+
+// TestBootstrapRefusesToInstallFlock: the lock's tool is a system package —
+// util-linux — and the locked install_scope line puts it with the runtimes:
+// named, never `go install`ed.
+func TestBootstrapRefusesToInstallFlock(t *testing.T) {
+	probeMissing(t, "flock")
+	steps, err := planBootstrapFor(t, bootstrapTarget, bootstrapProject("gremlins"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, ok := stepFor(steps, "flock")
+	if !ok {
+		t.Fatalf("no flock step in %+v", steps)
+	}
+	if s.Argv != nil {
+		t.Errorf("bootstrap would run %v for flock", s.Argv)
+	}
+	if !strings.Contains(s.Refusal, "util-linux") {
+		t.Errorf("the refusal does not name util-linux: %q", s.Refusal)
+	}
+
+	probeMissing(t)
+	steps, err = planBootstrapFor(t, bootstrapTarget, bootstrapProject("gremlins"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := stepFor(steps, "flock"); !s.Present {
+		t.Errorf("flock present on the host is not a Present step: %+v", s)
 	}
 }

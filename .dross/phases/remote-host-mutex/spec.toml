@@ -1,0 +1,80 @@
+[phase]
+  id = "remote-host-mutex"
+  title = "remote-host-mutex"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "Two remote mutation legs aimed at one host never overlap: the second leg's tool does not start until the first has released the host — attached (`dross verify`) and detached (`--detach`) alike."
+
+[[criteria]]
+  id = "c-2"
+  text = "The exclusion spans projects and workdirs: a leg dispatched from repo A waits on a leg in flight from repo B on the same host — the lock's location is independent of any granted workdir."
+
+[[criteria]]
+  id = "c-3"
+  text = "A waiting run names what it waits on — the holder's project, phase, run id and held-since — on the terminal for an attached leg, and in `dross verify status` / `dross verify results` for a detached one."
+
+[[criteria]]
+  id = "c-4"
+  text = "A holder that dies — process killed, OOM, host reboot — releases the host with no cleanup step; there is no stale-lock state for a user to clear."
+
+[[criteria]]
+  id = "c-5"
+  text = "`dross doctor`'s Remote section reports the lock prerequisite as a missing host tool when it is absent, and names the current holder when the host is busy."
+
+[[criteria]]
+  id = "c-6"
+  text = "`dross test` on a host held by a mutation leg waits for the release up to a cap (default 10m; `--wait <dur>`, `--wait 0` spawns at once), then spawns anyway naming the holder — a task gate is never held for the length of a mutation leg."
+
+[[criteria]]
+  id = "c-7"
+  text = "The exclusion holds across unix users on the host: a leg started by user A waits on one held by user B."
+
+[[decisions]]
+  key = "lock_mechanism"
+  choice = "`flock(1)` on a single system-wide file, `/tmp/dross-host.lock`, created mode 0666. Not a mkdir lock, not a pidfile with liveness checks, not a per-workdir file."
+  why = "A kernel-held flock is released the instant the holder's process dies, which is c-4 with no protocol at all — every pidfile scheme has to re-derive that with a liveness check that is wrong on pid reuse. /tmp is the one path that is sticky and world-writable on every host dross reaches (`/run/lock` is root:lock on Fedora), which c-7 needs; a lock file does not carry results, so the tmpfiles-sweep argument that kept run dirs out of /tmp does not apply. `flock` is then a host requirement, probed like any other tool (c-5)."
+  locked = true
+
+[[decisions]]
+  key = "holder_record"
+  choice = "The holder writes its identity — project name, phase, run id, pid, acquired-at — into the lock file once the lock is held; waiters, `verify status` and doctor read it from there."
+  why = "One file is both the exclusion and the explanation. A sibling holder file would need its own permission story under c-7 (user B cannot overwrite user A's file) and could disagree with who actually holds the flock."
+  locked = true
+
+[[decisions]]
+  key = "lock_granularity"
+  choice = "One acquisition per run, held across every package in the sequence — not per package."
+  why = "Per-package interleaving is fair-share: both runs finish late. FIFO gives the first run its report at the earliest moment and the second an honest wait, and the first run's numbers are not perturbed part-way through."
+  locked = true
+
+[[decisions]]
+  key = "attached_busy_policy"
+  choice = "An attached mutation leg that finds the host held waits for it: the holder is printed once, then a one-line heartbeat every few minutes. `--no-wait` refuses instead, naming the holder, with its own exit code."
+  why = "The session has already accepted blocking for the leg's own duration; a wait is what a person expects a lock to do. Refusing by default turns every collision into a retry, and a cap is a knob someone would tune."
+  locked = true
+
+[[decisions]]
+  key = "suite_participation"
+  choice = "`dross test` takes the same lock but with a bounded wait: default 10m, `--wait <dur>` overrides, `--wait 0` spawns at once. When the cap expires it spawns alongside the mutation leg and names the holder. No local.toml key."
+  why = "The lock exists to keep mutation measurements honest; a suite run under load is slow, not wrong. A short wait absorbs the common case (a leg about to finish) without holding the execute loop's task gate for the ~1h40m a detached verify runs — which is exactly how the two overlap in practice."
+  locked = true
+
+[[decisions]]
+  key = "pool_busy_is_not_a_skip"
+  choice = "In a multi-host pool a held host is NOT skipped: host selection stays transport + toolchain, and the lock is taken on the chosen host — busy means wait."
+  why = "Keeps remote-host-pool's `ordered_candidates_not_a_scheduler` intact: a busy-skip is load balancing by another name, and it would make the measured-on host depend on what else was running that minute."
+  locked = true
+
+[[decisions]]
+  key = "detached_waiting_state"
+  choice = "A detached run waiting for the lock reads as `scheduled` in `verify status` / `results`, with the holder named as the reason — no new state value and no new exit code."
+  why = "`scheduled` already means 'dispatched, not started'; the reason line is what differs (waiting for --at vs waiting on a holder). remote-run-detach's per-state exit-code set stays closed."
+  locked = true
+
+[[decisions]]
+  key = "no_bypass_flag"
+  choice = "No flag disables the lock. `--local` remains the escape hatch for a mutation leg; `--wait 0` is the suite's."
+  why = "A bypass is how the next starvation happens. The two existing escapes already express the only legitimate intents — measure elsewhere, or run the suite now and accept the load."
+  locked = true
