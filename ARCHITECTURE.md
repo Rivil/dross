@@ -798,6 +798,7 @@ Two shapes hold it. A **detached** run composes the prelude inside the `setsid` 
 - `scheduledReason` (what a scheduled detached run is waiting on, for status and results) — `internal/cmd/verify.go:908`
 - `reportHostLock` (doctor names the holder) — `internal/cmd/doctor.go:1687`
 - `TestRealFlockSerializesAndReleasesOnKill` / `TestAKilledHolderReleasesWithNoCleanup` (the kernel's word, on a temp lock path; skipped where flock is absent) — `internal/remote/lock_test.go`, `internal/remote/hold_test.go`
+- `TestReadmeDocumentsTheHostLock` / `TestArchitectureDocumentsTheHostLock` (README, this entry and verify.md pinned to the lock's path, wait and `--no-wait`, `--wait` cap, doctor's flock probe and crash-safe release) — `internal/cmd/options_docs_test.go:542`
 
 _introduced remote-host-mutex_
 
