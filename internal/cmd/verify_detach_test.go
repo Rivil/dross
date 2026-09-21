@@ -19,6 +19,12 @@ type detachRecorder struct {
 	syncs    []string
 	spawnErr error
 	syncErr  error
+	probeErr error
+	missing  []string
+	probed   []string
+	// targets records the Target each spawn received, so the holder stamped
+	// onto it can be asserted against the run the dispatch recorded.
+	targets []remote.Target
 	// order records the sequence of operations by name, which is what makes
 	// "pushed before started" an assertion rather than an assumption.
 	order []string
@@ -26,10 +32,18 @@ type detachRecorder struct {
 
 func (r *detachRecorder) install(t *testing.T) {
 	t.Helper()
-	origSpawn, origSync := detachSpawn, detachSync
-	t.Cleanup(func() { detachSpawn, detachSync = origSpawn, origSync })
+	origSpawn, origSync, origProbe := detachSpawn, detachSync, remoteProbeFn
+	t.Cleanup(func() { detachSpawn, detachSync, remoteProbeFn = origSpawn, origSync, origProbe })
+	// The lock-tool probe precedes the push. A healthy host by default; a
+	// test that wants a flock-less one sets missing.
+	remoteProbeFn = func(tg remote.Target, tools []string) (remote.Readiness, error) {
+		r.probed = append(r.probed, tools...)
+		r.order = append(r.order, "probe")
+		return remote.Readiness{Cores: 8, Missing: r.missing}, r.probeErr
+	}
 	detachSpawn = func(tg remote.Target, script string) (string, error) {
 		r.scripts = append(r.scripts, script)
+		r.targets = append(r.targets, tg)
 		r.order = append(r.order, "spawn")
 		return "", r.spawnErr
 	}
@@ -66,7 +80,7 @@ func TestDispatchReturnsWithoutWaiting(t *testing.T) {
 	rec := &detachRecorder{}
 	rec.install(t)
 
-	if err := dispatchDetached(root, "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{}); err != nil {
+	if err := dispatchDetached(root, "dross", "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{}); err != nil {
 		t.Fatalf("dispatchDetached: %v", err)
 	}
 	if len(rec.scripts) != 1 {
@@ -90,12 +104,13 @@ func TestDispatchPushesBeforeItStarts(t *testing.T) {
 	rec := &detachRecorder{}
 	rec.install(t)
 
-	if err := dispatchDetached(root, "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{}); err != nil {
+	if err := dispatchDetached(root, "dross", "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{}); err != nil {
 		t.Fatalf("dispatchDetached: %v", err)
 	}
-	want := []string{"sync", "spawn"}
-	if len(rec.order) != len(want) || rec.order[0] != want[0] || rec.order[1] != want[1] {
-		t.Errorf("dispatch order = %v, want %v", rec.order, want)
+	// The lock-tool probe precedes the push: a flock-less host is refused
+	// before the tree crosses.
+	if got := strings.Join(rec.order, " "); got != "probe sync spawn" {
+		t.Errorf("dispatch order = %v, want [probe sync spawn]", rec.order)
 	}
 }
 
@@ -110,7 +125,7 @@ func TestDispatchRecordsTheHostItDispatchedTo(t *testing.T) {
 	rec.install(t)
 	target := detachTarget()
 
-	if err := dispatchDetached(root, "remote-run-detach", detachStepsFixture(), target, time.Time{}); err != nil {
+	if err := dispatchDetached(root, "dross", "remote-run-detach", detachStepsFixture(), target, time.Time{}); err != nil {
 		t.Fatalf("dispatchDetached: %v", err)
 	}
 	got, err := findDetachedRun(root, repoDir, "remote-run-detach")
@@ -126,8 +141,11 @@ func TestDispatchRecordsTheHostItDispatchedTo(t *testing.T) {
 	if got.Workdir != target.Workdir {
 		t.Errorf("recorded workdir %q, dispatched to %q", got.Workdir, target.Workdir)
 	}
-	if got.State != "running" {
-		t.Errorf("an immediate dispatch recorded state %q, want running", got.State)
+	// Scheduled, not running: the job takes the host lock before it starts,
+	// so an immediate dispatch is still "not yet started" until the host
+	// says otherwise.
+	if got.State != "scheduled" {
+		t.Errorf("an immediate dispatch recorded state %q, want scheduled", got.State)
 	}
 	if !strings.Contains(rec.scripts[0], got.RunDir) {
 		t.Errorf("the recorded run dir %q is not the one the script uses:\n%s", got.RunDir, rec.scripts[0])
@@ -142,12 +160,12 @@ func TestSecondDispatchIsRefusedByName(t *testing.T) {
 	rec := &detachRecorder{}
 	rec.install(t)
 
-	if err := dispatchDetached(root, "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{}); err != nil {
+	if err := dispatchDetached(root, "dross", "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{}); err != nil {
 		t.Fatalf("first dispatch: %v", err)
 	}
 	syncsAfterFirst := len(rec.syncs)
 
-	err := dispatchDetached(root, "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{})
+	err := dispatchDetached(root, "dross", "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{})
 	if err == nil {
 		t.Fatal("a second dispatch for a phase with a run in flight was accepted")
 	}
@@ -172,7 +190,7 @@ func TestAFailedStartRecordsNothing(t *testing.T) {
 	rec := &detachRecorder{spawnErr: errors.New("ssh: connect to host helicon port 22: No route to host")}
 	rec.install(t)
 
-	if err := dispatchDetached(root, "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{}); err == nil {
+	if err := dispatchDetached(root, "dross", "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{}); err == nil {
 		t.Fatal("a dispatch whose start failed reported success")
 	}
 	got, err := findDetachedRun(root, repoDir, "remote-run-detach")
@@ -194,7 +212,7 @@ func TestScheduledDispatchRecordsItsStartTime(t *testing.T) {
 	rec.install(t)
 	at := time.Now().Add(3 * time.Hour).Truncate(time.Second)
 
-	if err := dispatchDetached(root, "remote-run-detach", detachStepsFixture(), detachTarget(), at); err != nil {
+	if err := dispatchDetached(root, "dross", "remote-run-detach", detachStepsFixture(), detachTarget(), at); err != nil {
 		t.Fatalf("dispatchDetached: %v", err)
 	}
 	got, err := findDetachedRun(root, repoDir, "remote-run-detach")
@@ -549,5 +567,86 @@ func TestVerifyStatusAndCancelThroughTheCommand(t *testing.T) {
 	}
 	if got != nil {
 		t.Error("--cancel through the command left the record behind")
+	}
+}
+
+// --- the host lock's holder ---------------------------------------------------
+
+// TestDispatchStampsTheHolder is c-3 for the detached leg: the identity the
+// host sees is the identity `verify status` looks the run up by. A holder
+// stamped with any other run id would make "waiting on me" and "waiting on
+// another run" indistinguishable.
+func TestDispatchStampsTheHolder(t *testing.T) {
+	root := chdirDross(t)
+	rec := &detachRecorder{}
+	rec.install(t)
+
+	if err := dispatchDetached(root, "dross", "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{}); err != nil {
+		t.Fatalf("dispatchDetached: %v", err)
+	}
+	got, err := findDetachedRun(root, filepath.Dir(root), "remote-run-detach")
+	if err != nil || got == nil {
+		t.Fatalf("no run recorded: %v", err)
+	}
+	if len(rec.targets) != 1 {
+		t.Fatalf("want one spawn, got %d", len(rec.targets))
+	}
+	h := rec.targets[0].Lock.Holder
+	if h.RunID != got.RunID {
+		t.Errorf("holder run id %q != recorded run id %q", h.RunID, got.RunID)
+	}
+	if h.Project != "dross" || h.Phase != "remote-run-detach" {
+		t.Errorf("holder = %+v, want project dross / phase remote-run-detach", h)
+	}
+	if !rec.targets[0].Lock.Wait.Forever {
+		t.Error("a detached run does not wait forever for the host")
+	}
+	// Inside the quoted job the record's words carry the '\'' escape.
+	for _, want := range []string{`project='\''dross'\''`, `phase='\''remote-run-detach'\''`, `run='\''` + got.RunID + `'\''`} {
+		if !strings.Contains(rec.scripts[0], want) {
+			t.Errorf("the dispatched script lacks %s:\n%s", want, rec.scripts[0])
+		}
+	}
+	// The record starts as scheduled whether or not there is an --at.
+	if got.State != "scheduled" {
+		t.Errorf("recorded state = %q, want scheduled", got.State)
+	}
+}
+
+// TestDispatchRefusesAFlocklessHost: the probe goes through the same seam
+// doctor uses, BEFORE the push, so the user learns on the laptop — with the
+// doctor wording — rather than from a host log after the tree crossed.
+func TestDispatchRefusesAFlocklessHost(t *testing.T) {
+	root := chdirDross(t)
+	rec := &detachRecorder{missing: []string{"flock"}}
+	rec.install(t)
+
+	err := dispatchDetached(root, "dross", "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{})
+	if err == nil {
+		t.Fatal("a flock-less host was dispatched to")
+	}
+	for _, want := range []string{"flock is not installed on helicon", "dross doctor"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal lacks %q: %v", want, err)
+		}
+	}
+	if len(rec.syncs) != 0 || len(rec.scripts) != 0 {
+		t.Errorf("a refused dispatch still touched the host: %v", rec.order)
+	}
+	if got, _ := findDetachedRun(root, filepath.Dir(root), "remote-run-detach"); got != nil {
+		t.Error("a refused dispatch recorded a run")
+	}
+
+	// A healthy probe proceeds, probe first.
+	rec2 := &detachRecorder{}
+	rec2.install(t)
+	if err := dispatchDetached(root, "dross", "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{}); err != nil {
+		t.Fatalf("dispatchDetached: %v", err)
+	}
+	if strings.Join(rec2.order, " ") != "probe sync spawn" {
+		t.Errorf("order = %v, want [probe sync spawn]", rec2.order)
+	}
+	if strings.Join(rec2.probed, ",") != "flock" {
+		t.Errorf("probed for %v, want [flock]", rec2.probed)
 	}
 }

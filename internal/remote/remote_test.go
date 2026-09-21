@@ -18,6 +18,21 @@ const host = "helicon"
 
 func target() Target { return Target{Host: host, Workdir: "/srv/x"} }
 
+// lockedTarget is target() with the holder a detached run must carry.
+func lockedTarget() Target {
+	t := target()
+	t.Lock = LockSpec{Holder: Holder{Project: "dross", Phase: "p", RunID: "r-1"}, Wait: Forever}
+	return t
+}
+
+// unquoted strips every single-quoted word from a script, leaving its shell
+// skeleton — so a statement whose quoted argument spans lines reads as the
+// one statement it is.
+func unquoted(script string) string {
+	s := strings.ReplaceAll(script, `'\''`, "")
+	return regexp.MustCompile(`'[^']*'`).ReplaceAllString(s, "''")
+}
+
 // contains reports whether argv carries want as one whole element. Substring
 // matching over a joined argv would pass on a value that is split across two
 // elements, which is exactly the bug an argv test exists to catch.
@@ -767,7 +782,7 @@ func TestSyncArgsFallsBackToTheMergeRuleWithoutGit(t *testing.T) {
 // paths would pass an argv-only assertion.
 func TestDetachScriptQuotesTheRunDirAndArgv(t *testing.T) {
 	dir := ".dross-runs/r 1;touch pwned"
-	script, err := DetachScript(target(), dir, []string{"gremlins", "unleash", "./a b;c"}, time.Time{})
+	script, err := DetachScript(lockedTarget(), dir, []string{"gremlins", "unleash", "./a b;c"}, time.Time{})
 	if err != nil {
 		t.Fatalf("DetachScript = %v", err)
 	}
@@ -793,7 +808,7 @@ func TestDetachScriptQuotesTheRunDirAndArgv(t *testing.T) {
 // exists to remove, and it would only show up an hour later as a run that
 // never reported.
 func TestDetachScriptDetachesFromTheSession(t *testing.T) {
-	script, err := DetachScript(target(), ".dross-runs/r1", []string{"gremlins", "unleash"}, time.Time{})
+	script, err := DetachScript(lockedTarget(), ".dross-runs/r1", []string{"gremlins", "unleash"}, time.Time{})
 	if err != nil {
 		t.Fatalf("DetachScript = %v", err)
 	}
@@ -814,15 +829,21 @@ func TestDetachScriptDetachesFromTheSession(t *testing.T) {
 // date comparison it has no reason to do, and a bug in that arithmetic would
 // delay runs nobody asked to schedule.
 func TestDetachScriptEmitsNoSleepWithoutASchedule(t *testing.T) {
-	script, err := DetachScript(target(), ".dross-runs/r1", []string{"gremlins"}, time.Time{})
+	script, err := DetachScript(lockedTarget(), ".dross-runs/r1", []string{"gremlins"}, time.Time{})
 	if err != nil {
 		t.Fatalf("DetachScript = %v", err)
 	}
 	if strings.Contains(script, "sleep") {
 		t.Errorf("an unscheduled run emitted a sleep:\n%s", script)
 	}
-	if !strings.Contains(script, "printf '%s' 'running'") {
-		t.Errorf("an unscheduled run does not start in the running state:\n%s", script)
+	// Every detached run now starts as scheduled: the job takes the host lock
+	// before it runs, and "dispatched, not yet started" is what scheduled
+	// means whether the wait is for an --at instant or for another holder.
+	if !strings.Contains(script, "printf '%s' 'scheduled'") {
+		t.Errorf("an unscheduled run does not start in the scheduled state:\n%s", script)
+	}
+	if strings.Contains(script, "printf '%s' 'running'") {
+		t.Errorf("a detached run starts as running before it holds the host:\n%s", script)
 	}
 }
 
@@ -834,7 +855,7 @@ func TestDetachScriptEmitsNoSleepWithoutASchedule(t *testing.T) {
 // emitted for the host to make, so both are impossible by construction.
 func TestScheduledRunSleepsAgainstTheHostClock(t *testing.T) {
 	at := time.Date(2026, 8, 31, 2, 0, 0, 0, time.UTC)
-	script, err := DetachScript(target(), ".dross-runs/r1", []string{"gremlins"}, at)
+	script, err := DetachScript(lockedTarget(), ".dross-runs/r1", []string{"gremlins"}, at)
 	if err != nil {
 		t.Fatalf("DetachScript = %v", err)
 	}
@@ -858,7 +879,7 @@ func TestScheduledRunSleepsAgainstTheHostClock(t *testing.T) {
 // script that ran the tool but recorded nothing leaves "finished with
 // failures" and "died without finishing" as the same observation.
 func TestDetachScriptRecordsTheExitCode(t *testing.T) {
-	script, err := DetachScript(target(), ".dross-runs/r1", []string{"gremlins"}, time.Time{})
+	script, err := DetachScript(lockedTarget(), ".dross-runs/r1", []string{"gremlins"}, time.Time{})
 	if err != nil {
 		t.Fatalf("DetachScript = %v", err)
 	}
@@ -883,10 +904,10 @@ func TestDetachScriptRecordsTheExitCode(t *testing.T) {
 // detached run with nothing to run would create a directory, record a pid and
 // report finished having measured nothing.
 func TestDetachScriptRefusesAnEmptyCommand(t *testing.T) {
-	if _, err := DetachScript(target(), ".dross-runs/r1", nil, time.Time{}); err == nil {
+	if _, err := DetachScript(lockedTarget(), ".dross-runs/r1", nil, time.Time{}); err == nil {
 		t.Fatal("a detached run with an empty command was accepted")
 	}
-	if _, err := DetachScript(target(), "", []string{"gremlins"}, time.Time{}); err == nil {
+	if _, err := DetachScript(lockedTarget(), "", []string{"gremlins"}, time.Time{}); err == nil {
 		t.Fatal("a detached run with no run directory was accepted")
 	}
 }
@@ -1019,10 +1040,13 @@ func TestStatusScriptReadsWithoutDisturbing(t *testing.T) {
 // the `&` must terminate a line that starts with setsid. The old shape passed
 // every "contains setsid / contains &" check, so those cannot be the assertion.
 func TestDetachScriptBackgroundsOnlyTheJob(t *testing.T) {
-	script, err := DetachScript(target(), ".dross-runs/r1", []string{"gremlins", "unleash"}, time.Time{})
+	full, err := DetachScript(lockedTarget(), ".dross-runs/r1", []string{"gremlins", "unleash"}, time.Time{})
 	if err != nil {
 		t.Fatalf("DetachScript = %v", err)
 	}
+	// The inner script is one quoted argument spanning many lines; the
+	// statement analysis below is about the OUTER chain's shape.
+	script := unquoted(full)
 
 	var bgLine string
 	for _, line := range strings.Split(script, "\n") {
@@ -1053,7 +1077,7 @@ func TestDetachScriptBackgroundsOnlyTheJob(t *testing.T) {
 	}
 	// And the pid must be captured on its own line AFTER the background job,
 	// which is the only place $! names it.
-	lines := strings.Split(strings.TrimSpace(script), "\n")
+	lines := strings.Split(strings.TrimSpace(full), "\n")
 	last := strings.TrimSpace(lines[len(lines)-1])
 	if !strings.Contains(last, `"$!"`) || !strings.Contains(last, "/pid'") {
 		t.Errorf("the last statement does not record the detached job's pid:\n  %s", last)
@@ -1136,5 +1160,208 @@ func TestRunDirAcceptsAWellFormedID(t *testing.T) {
 	}
 	if got != ".dross-runs/r-20260830-2201" {
 		t.Errorf("RunDir = %q, want %q", got, ".dross-runs/r-20260830-2201")
+	}
+}
+
+// --- the host lock inside the detached job ------------------------------------
+
+// detachInner extracts the `bash -c` argument of a DetachScript — the text
+// the detached job actually runs — by having bash unquote it.
+func detachInner(t *testing.T, script string) string {
+	t.Helper()
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("no bash on PATH")
+	}
+	start := strings.Index(script, "setsid nohup bash -c ")
+	if start < 0 {
+		t.Fatalf("no detached job in:\n%s", script)
+	}
+	rest := script[start+len("setsid nohup bash -c "):]
+	// The job's own redirections appear escaped ('\'') inside the quoted
+	// argument; the outer log redirection is the first bare one.
+	end := strings.Index(rest, " > '.dross-runs/r1/log'")
+	if end < 0 {
+		t.Fatalf("no log redirection after the job in:\n%s", script)
+	}
+	out, err := exec.Command(bash, "-c", "printf '%s' "+rest[:end]).Output()
+	if err != nil {
+		t.Fatalf("unquote the inner script: %v", err)
+	}
+	return string(out)
+}
+
+// TestDetachScriptLocksBeforeItRuns is c-1 for the detached leg: the lock is
+// taken after any --at sleep (a run that locked then slept would hold the
+// host idle) and before the state file says running and before the tool's
+// first word (a run that ran before locking would measure unlocked, and one
+// that said running while in flock would make status lie).
+func TestDetachScriptLocksBeforeItRuns(t *testing.T) {
+	at := time.Date(2026, 8, 31, 2, 0, 0, 0, time.UTC)
+	script, err := DetachScript(lockedTarget(), ".dross-runs/r1", []string{"gremlins", "unleash"}, at)
+	if err != nil {
+		t.Fatalf("DetachScript = %v", err)
+	}
+	inner := detachInner(t, script)
+	sleep := strings.Index(inner, "sleep $((__t - __n))")
+	lock := strings.Index(inner, "flock -x")
+	running := strings.Index(inner, "printf '%s' running")
+	tool := strings.Index(inner, "'gremlins'")
+	if sleep < 0 || lock < 0 || running < 0 || tool < 0 {
+		t.Fatalf("inner script is missing a landmark (sleep %d, flock %d, running %d, tool %d):\n%s", sleep, lock, running, tool, inner)
+	}
+	if !(sleep < lock && lock < running && lock < tool) {
+		t.Errorf("order is sleep=%d flock=%d running=%d tool=%d; want sleep < flock < running, tool:\n%s", sleep, lock, running, tool, inner)
+	}
+	// And the inner text must be a script bash accepts.
+	cmd := exec.Command("bash", "-n")
+	cmd.Stdin = strings.NewReader(inner)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Errorf("inner script does not parse: %v\n%s\n%s", err, out, inner)
+	}
+}
+
+// TestDetachLockIsHeldByTheDetachedJob: a lock taken in the outer chain
+// belongs to the ssh session and is released when ssh returns — which is at
+// once. It has to be inside the single-quoted job.
+func TestDetachLockIsHeldByTheDetachedJob(t *testing.T) {
+	script, err := DetachScript(lockedTarget(), ".dross-runs/r1", []string{"gremlins"}, time.Time{})
+	if err != nil {
+		t.Fatalf("DetachScript = %v", err)
+	}
+	job := strings.Index(script, "setsid nohup bash -c '")
+	lock := strings.Index(script, "flock -x")
+	if job < 0 || lock < 0 || lock < job {
+		t.Errorf("flock (%d) is not inside the detached job (%d):\n%s", lock, job, script)
+	}
+	if !strings.Contains(unquoted(script), "setsid nohup bash -c '' > '' 2>&1 < /dev/null &") {
+		t.Errorf("the job is not one quoted argument to bash -c:\n%s", unquoted(script))
+	}
+}
+
+// TestDetachedRunStartsScheduled: with the lock taken inside the job, every
+// detached run is "dispatched, not yet started" until the job says
+// otherwise — --at or not.
+func TestDetachedRunStartsScheduled(t *testing.T) {
+	script, err := DetachScript(lockedTarget(), ".dross-runs/r1", []string{"gremlins"}, time.Time{})
+	if err != nil {
+		t.Fatalf("DetachScript = %v", err)
+	}
+	if !strings.Contains(script, "printf '%s' 'scheduled' > '.dross-runs/r1/state'") {
+		t.Errorf("the outer initial state is not scheduled:\n%s", script)
+	}
+}
+
+// TestDetachedNoflockFinishesWith127: a host without flock must neither
+// measure unlocked nor sit at scheduled forever. The job records 127, names
+// the tool, and finishes — before any word of the tool's argv.
+func TestDetachedNoflockFinishesWith127(t *testing.T) {
+	script, err := DetachScript(lockedTarget(), ".dross-runs/r1", []string{"gremlins", "unleash"}, time.Time{})
+	if err != nil {
+		t.Fatalf("DetachScript = %v", err)
+	}
+	inner := detachInner(t, script)
+	noflock := strings.Index(inner, `if [ "$__lock" = noflock ]; then`)
+	exit127 := strings.Index(inner, "printf '%s\\n' 127 > '.dross-runs/r1/exit'")
+	finished := strings.Index(inner, "printf '%s' finished > '.dross-runs/r1/state'")
+	tool := strings.Index(inner, "'gremlins'")
+	if noflock < 0 || exit127 < 0 || finished < 0 || tool < 0 {
+		t.Fatalf("inner script is missing a landmark (noflock %d, 127 %d, finished %d, tool %d):\n%s", noflock, exit127, finished, tool, inner)
+	}
+	if !(noflock < exit127 && exit127 < finished && finished < tool) {
+		t.Errorf("noflock handling (%d, %d, %d) is not before the tool (%d):\n%s", noflock, exit127, finished, tool, inner)
+	}
+	if !strings.Contains(inner, "flock is not installed") || !strings.Contains(inner, "dross doctor") {
+		t.Errorf("the noflock log line does not name flock and dross doctor:\n%s", inner)
+	}
+	// The tool runs ONLY in the acquired branch.
+	if !strings.Contains(inner, "else\nprintf '%s' running > '.dross-runs/r1/state'; 'gremlins' 'unleash'; __c=$?") {
+		t.Errorf("the tool is not confined to the acquired branch:\n%s", inner)
+	}
+}
+
+// TestDetachScriptKeepsFdNineOpen is c-4 for the detached job: the tool runs
+// with fd 9 inherited and nothing closes or unlocks it — the lock lives as
+// long as the job.
+func TestDetachScriptKeepsFdNineOpen(t *testing.T) {
+	script, err := DetachScript(lockedTarget(), ".dross-runs/r1", []string{"gremlins"}, time.Time{})
+	if err != nil {
+		t.Fatalf("DetachScript = %v", err)
+	}
+	inner := detachInner(t, script)
+	for _, bad := range []string{"9<&-", "9>&-", "flock -u"} {
+		if strings.Contains(inner, bad) {
+			t.Errorf("the job releases the lock by hand with %q:\n%s", bad, inner)
+		}
+	}
+}
+
+// TestDetachScriptRefusesAnAnonymousHolder: c-3 needs a name. A detached job
+// holding the host under a blank holder is one no waiter can explain.
+func TestDetachScriptRefusesAnAnonymousHolder(t *testing.T) {
+	_, err := DetachScript(target(), ".dross-runs/r1", []string{"gremlins"}, time.Time{})
+	if !errors.Is(err, ErrUnsafeTarget) {
+		t.Errorf("DetachScript with no holder = %v, want ErrUnsafeTarget", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "holder") {
+		t.Errorf("the refusal does not name the holder: %v", err)
+	}
+}
+
+// TestStatusScriptProbesTheLock: the status round trip carries the lock's
+// state, probed rather than read, and ParseStatus surfaces the holder.
+func TestStatusScriptProbesTheLock(t *testing.T) {
+	script, err := StatusScript(target(), ".dross-runs/r1")
+	if err != nil {
+		t.Fatalf("StatusScript = %v", err)
+	}
+	if !strings.Contains(script, "flock -n -E 75 9") {
+		t.Errorf("status script does not probe the lock:\n%s", script)
+	}
+	if strings.Contains(script, "cat "+shellQuote(HostLockPath)) {
+		t.Errorf("status script reads the record without probing:\n%s", script)
+	}
+	st, err := ParseStatus("dir=yes\nstate=scheduled\nexit=\npid=4242\ntool=yes\nlock=busy\n" +
+		"holder.project=proj-b\nholder.phase=phase-x\nholder.run=r-other\nholder.pid=99\nholder.user=u\nholder.since=1700000000\n")
+	if err != nil {
+		t.Fatalf("ParseStatus = %v", err)
+	}
+	if !st.HasLock || !st.Lock.Held {
+		t.Fatalf("lock not read as held: %+v", st)
+	}
+	want := Holder{Project: "proj-b", Phase: "phase-x", RunID: "r-other", PID: 99, User: "u", Since: time.Unix(1700000000, 0)}
+	if st.Lock.Holder != want {
+		t.Errorf("holder = %+v, want %+v", st.Lock.Holder, want)
+	}
+	if st.State != "scheduled" || st.PID != 4242 || st.HasExit {
+		t.Errorf("run fields disturbed by lock lines: %+v", st)
+	}
+	st, err = ParseStatus("dir=yes\nstate=running\ntool=yes\nlock=free\nholder.run=stale\n")
+	if err != nil {
+		t.Fatalf("ParseStatus = %v", err)
+	}
+	if !st.HasLock || st.Lock.Held || !st.Lock.Holder.IsZero() {
+		t.Errorf("a free lock did not parse as free with an empty holder: %+v", st)
+	}
+}
+
+// TestParseStatusWithoutLockLinesIsUnchanged: the existing fixtures parse
+// exactly as before, and output with no lock lines reads as "unknown" rather
+// than free or held.
+func TestParseStatusWithoutLockLinesIsUnchanged(t *testing.T) {
+	st, err := ParseStatus("dir=yes\nstate=finished\nexit=0\npid=7\n")
+	if err != nil {
+		t.Fatalf("ParseStatus = %v", err)
+	}
+	want := RunStatus{DirExists: true, State: "finished", ExitCode: 0, HasExit: true, PID: 7}
+	if st != want {
+		t.Errorf("ParseStatus = %+v, want %+v", st, want)
+	}
+	if st.HasLock {
+		t.Error("lock reported as read with no lock lines present")
+	}
+	_, err = ParseStatus("dir=yes\nstate=scheduled\ntool=yes\nlock=busy\nholder.run=r\nholder.since=abc\n")
+	if err == nil || !strings.Contains(err.Error(), "since") {
+		t.Errorf("a bad holder.since did not fail naming the key: %v", err)
 	}
 }

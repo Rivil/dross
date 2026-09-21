@@ -143,7 +143,7 @@ func Verify() *cobra.Command {
 				if len(steps) == 0 {
 					return fmt.Errorf("nothing to mutate for phase %s — no Go packages in scope", phaseID)
 				}
-				return dispatchDetached(root, phaseID, steps, tuning.Target, notBefore)
+				return dispatchDetached(root, proj.Project.Name, phaseID, steps, tuning.Target, notBefore)
 			}
 
 			if tuning.FellBackFrom != "" {
@@ -304,7 +304,13 @@ func detachSequence(steps []mutation.PackageStep) string {
 // has accepted the script: a record written first would name a run that never
 // started, and the one-run-per-phase guard would then refuse the retry that
 // would have fixed it. A dispatch that fails leaves nothing behind to clean up.
-func dispatchDetached(root, phaseID string, steps []mutation.PackageStep, target *remote.Target, notBefore time.Time) error {
+//
+// The host lock's holder is stamped HERE, with the run id this dispatch mints,
+// so the identity a waiter sees on the host is the identity `verify status`
+// looks the run up by. Stamping it anywhere else would let the two drift —
+// and DetachScript refuses an anonymous holder, so the stamp and its only
+// caller land together.
+func dispatchDetached(root, projectName, phaseID string, steps []mutation.PackageStep, target *remote.Target, notBefore time.Time) error {
 	repoDir := filepath.Dir(root)
 
 	// Checked before the push, which is the expensive part: a phase that
@@ -321,29 +327,51 @@ func dispatchDetached(root, phaseID string, steps []mutation.PackageStep, target
 			existing.DispatchedAt.Format(time.RFC3339), phaseID)
 	}
 
+	// The lock tool is probed before the push, through the same seam doctor
+	// probes through, so a flock-less host is refused on the laptop with the
+	// doctor wording — not discovered in a host log hours later. The script
+	// itself refuses too (exit 127), but that refusal is only readable after
+	// a status round trip.
+	ready, err := remoteProbeFn(*target, []string{remote.LockTool})
+	if err != nil {
+		return fmt.Errorf("probe %s for %s: %w", target.Host, remote.LockTool, err)
+	}
+	for _, m := range ready.Missing {
+		if m == remote.LockTool {
+			return fmt.Errorf("%s is not installed on %s — the host lock needs it; run dross doctor",
+				remote.LockTool, target.Host)
+		}
+	}
+
 	runID := newRunID(time.Now())
 	runDir, err := remote.RunDir(runID)
 	if err != nil {
 		return err
 	}
+	stamped := *target
+	stamped.Lock = remote.LockSpec{
+		Holder: remote.Holder{Project: projectName, Phase: phaseID, RunID: runID},
+		Wait:   remote.Forever,
+	}
 
-	if err := detachSync(*target, repoDir); err != nil {
+	if err := detachSync(stamped, repoDir); err != nil {
 		return fmt.Errorf("push the tree to %s: %w", target.Host, err)
 	}
 
-	script, err := remote.DetachScript(*target, runDir,
+	script, err := remote.DetachScript(stamped, runDir,
 		[]string{"bash", "-c", detachSequence(steps)}, notBefore)
 	if err != nil {
 		return err
 	}
-	if _, err := detachSpawn(*target, script); err != nil {
+	if _, err := detachSpawn(stamped, script); err != nil {
 		return fmt.Errorf("start the detached run on %s: %w", target.Host, err)
 	}
 
-	state := "running"
-	if !notBefore.IsZero() {
-		state = "scheduled"
-	}
+	// Every detached run starts as scheduled: the job takes the host lock
+	// before it runs, so "dispatched, not yet started" is the initial state
+	// whether or not there is an --at. The host's state file says when it
+	// actually started.
+	state := "scheduled"
 	rec := detachedRun{
 		Phase:        phaseID,
 		RunID:        runID,
