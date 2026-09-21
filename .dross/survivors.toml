@@ -46,6 +46,18 @@
   name = "cross-package-only-coverage"
   reason = "ArtifactNames and ValidateWriters in internal/secretscan/writers.go have no in-package test: an in-package go-cover run reports every block in both functions at count 0. Their tests live in internal/cmd (TestWriterRegistryValidate feeds one malformed entry per error arm and asserts the message; TestEveryDrossWriterIsDeclared asserts the live registry validates clean, which kills every negation that would fire on a good entry; TestEveryFileConstIsDeclared consumes ArtifactNames), because the registry's truth is proven against the internal/ tree walk that lives there. gremlins mutates and measures one package at a time, so a mutant here is only ever run against internal/secretscan's own tests and is reported NOT-COVERED regardless of what internal/cmd would catch. Moving the tests in-package would only relocate the AST walk; the mutants are killed today, one package over."
 
+[[category]]
+  name = "host-lock-switch-case"
+  reason = "gremlins attributes no go-cover block to a bare switch{}/select{} case-condition, so each arm reports NOT_COVERED even when a test drives it — a tooling attribution limit, not a test gap (see dross_gremlins_switchcase_ceiling). The host-lock arms here are each asserted: verify.go scheduledReason/status arms by TestStatusNamesWhatAScheduledRunWaitsOn, TestScheduledByOwnRunIDIsNotWaiting, TestScheduledWithFreeLockSaysNotStarted, TestEmptyRecordIsNamedAsSuch, TestLockReadErrorKeepsStatusUseful and TestStatusPointsAFinishedRunAtTheCollectVerb; test.go holdHostForSuite arms by TestExpiredWaitSpawnsAnywayNamingTheHolder, TestMissingFlockWarnsAndRuns and TestTestHoldsAcrossSyncAndSuite; doctor.go reportHostLock arms by TestDoctorReportsMissingFlockAsHostTool, TestDoctorNamesTheCurrentHolder and TestDoctorFreeLockIsOneLine; hold.go event arms by TestMissingFlockIsNamed, TestAcquirePrintsTheHolderOnce, TestAcquireExpiredRunsAlongside and TestReleaseClosesStdinThenWaits (the 2s select timeout); lock.go LockPrelude wait forms by TestLockPreludeWaitForms and TestRealBoundedWaitRunsAlongside, and ParseLockStatus arms value-by-value by TestParseLockStatus."
+
+[[category]]
+  name = "host-lock-var-initializer"
+  reason = "A package-level var initializer (launcherHeartbeat = 5*time.Minute, holdKeepalive = 30*time.Second, holderLull = 300*time.Millisecond) is evaluated at init before any instrumented statement, so go-cover emits no block for its line and gremlins reports every operator in it NOT_COVERED. The values are tuning knobs the tests deliberately shrink (TestVanishedLaptopFreesWithinTheLease, TestAcquireHeartbeatsWhileWaiting, TestLauncherRoutesWaitLinesToItsLog set them via the var), so the initializer's arithmetic is never what a test observes; the wiring that reads them is what is asserted. Tooling attribution limit, not a test gap."
+
+[[category]]
+  name = "host-lock-seam-body"
+  reason = "The body of a `var x = func(...)` process-construction seam — testHold (internal/cmd/test.go), remoteLockStatusFn (internal/cmd/doctor.go), launcherHold (internal/mutation/launcher.go). Each wraps remote.Acquire / remote.ExecScript, which spawn a real ssh hold session; every test replaces the whole var (installHoldRecorder, fakeLockStatus, recordHold) so the body never executes and the err != nil guard reports NOT_COVERED. Same class as the accepted detach-seam-body entries in verify.go: the effect is asserted instead of the line — TestSuiteFailureStillReleases, TestMissingFlockWarnsAndRuns, TestDoctorSkipsLockStatusWithoutFlock, TestBusyRefusalSpawnsNothing and TestUnlockableHostIsNeverMeasuredOn pin what each caller does with the error the real body would propagate. Move the seam boundary below remote.Exec and these become reachable and owe tests rather than this reason."
+
 [[accepted]]
   key = "742de35850fac7e6"
   file = "internal/cmd/survivor.go"
@@ -2121,9 +2133,9 @@
   file = "internal/remote/remote.go"
   op = "ARITHMETIC_BASE"
   text = "const RunsProtectRule = \"--filter=P /\" + RunsDirName"
-  line = 601
-  reason = "const initializer for a string (RunsProtectRule = \"--filter=P /\" + RunsDirName): go-cover instruments no block for package-level const declarations and ARITHMETIC_BASE has no meaning on string concatenation, so the mutant cannot be built or observed by any test. Its value is pinned by TestSyncArgsProtectsDetachedRunsFromDelete on the rsync argv."
-  accepted_in = "project-toml-lossless-writes"
+  line = 673
+  category = "const-initializer-arithmetic"
+  accepted_in = "remote-host-mutex"
 
 [[accepted]]
   key = "90b742483f92661b"
@@ -2502,3 +2514,246 @@
   line = 88
   category = "const-initializer-arithmetic"
   accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "4300a33f7652e936"
+  file = "internal/cmd/verify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case st.State == \"scheduled\":"
+  line = 877
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "442e63bee38d48c1"
+  file = "internal/cmd/verify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case st.Lock.Holder.RunID == rec.RunID:"
+  line = 918
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "9d1ffa3b19fba48d"
+  file = "internal/cmd/test.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 976
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "9833fd87c93e767f"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 1690
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "2e1c6b23770a4eff"
+  file = "internal/remote/hold.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.State == \"noflock\":"
+  line = 286
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "6f61fe4eac30fa9f"
+  file = "internal/remote/hold.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.State == \"acquired\":"
+  line = 289
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "2cfb47ac92c9aab8"
+  file = "internal/remote/hold.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.State == \"waiting\":"
+  line = 292
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "5228460e5728bfd9"
+  file = "internal/remote/hold.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.State == \"busy\":"
+  line = 305
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "3dd65c2d096abf4f"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case spec.Wait.Max > 0:"
+  line = 197
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "ac789011f0bbd90f"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case k == \"tool\":"
+  line = 310
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "4fe52af218f51998"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case k == \"lock\":"
+  line = 315
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "9ef4c6c0ade30df7"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v == \"free\":"
+  line = 318
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "4b4837f1cac1130b"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v == \"busy\":"
+  line = 320
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "93b8a9f610cb44b4"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v == \"noflock\":"
+  line = 322
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "d556fa3f6e9867f5"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case spec.Wait.Max > 0:"
+  line = 197
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "2e1ce5e1c3d86b3a"
+  file = "internal/remote/hold.go"
+  op = "ARITHMETIC_BASE"
+  text = "case <-time.After(2 * time.Second):"
+  line = 425
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "f923151839070da7"
+  file = "internal/mutation/launcher.go"
+  op = "ARITHMETIC_BASE"
+  text = "var launcherHeartbeat = 5 * time.Minute"
+  line = 132
+  category = "host-lock-var-initializer"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "190209543dac1b7b"
+  file = "internal/remote/hold.go"
+  op = "ARITHMETIC_BASE"
+  text = "var holdKeepalive = 30 * time.Second"
+  line = 74
+  category = "host-lock-var-initializer"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "b36292c9bc836ecf"
+  file = "internal/remote/hold.go"
+  op = "ARITHMETIC_BASE"
+  text = "var holderLull = 300 * time.Millisecond"
+  line = 85
+  category = "host-lock-var-initializer"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "69089bea12679633"
+  file = "internal/cmd/test.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 940
+  category = "host-lock-seam-body"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "08f88b0e44f6badf"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 1674
+  category = "host-lock-seam-body"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "d0e3f80d21f4d44c"
+  file = "internal/mutation/launcher.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 119
+  category = "host-lock-seam-body"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "2caf9845fdcc836e"
+  file = "internal/cmd/test.go"
+  op = "ARITHMETIC_BASE"
+  text = "const defaultTestWait = 10 * time.Minute"
+  line = 913
+  category = "const-initializer-arithmetic"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "982d869c110b84f2"
+  file = "internal/remote/hold.go"
+  op = "ARITHMETIC_BASE"
+  text = "Held HoldOutcome = iota + 1"
+  line = 47
+  category = "const-initializer-arithmetic"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "e450c0e981169e60"
+  file = "internal/mutation/stryker.go"
+  op = "ARITHMETIC_BASE"
+  text = "const strykerInitialTestTruncationNote = \"stryker aborted on its initial test run and names ONLY the first failing test above — \" +"
+  line = 292
+  category = "const-initializer-arithmetic"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "17411b76c6bef6d3"
+  file = "internal/mutation/stryker.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"that list is truncated by design, so an unknown number of further failures remain. \" +"
+  line = 293
+  category = "const-initializer-arithmetic"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "97dd2029bdc5a17c"
+  file = "internal/mutation/toolfail.go"
+  op = "ARITHMETIC_BASE"
+  text = "const exitDidNotStart = -1"
+  line = 25
+  category = "const-initializer-arithmetic"
+  accepted_in = "remote-host-mutex"
