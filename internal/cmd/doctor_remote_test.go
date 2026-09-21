@@ -388,8 +388,13 @@ func TestDoctorReportsMissingFlockAsHostTool(t *testing.T) {
 			t.Errorf("the finding lacks %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "adapter needs it") {
-		t.Errorf("flock was reported as an adapter's tool:\n%s", out)
+	// Only the flock line is under test: the local "Mutation toolchain"
+	// section prints its own "adapter needs it" wherever gremlins is not on
+	// PATH (CI), and that line is not about the host lock.
+	for _, l := range strings.Split(out, "\n") {
+		if strings.Contains(l, "flock") && strings.Contains(l, "adapter needs it") {
+			t.Errorf("flock was reported as an adapter's tool:\n%s", l)
+		}
 	}
 
 	fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
