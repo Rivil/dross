@@ -1,0 +1,6 @@
+{
+  "phase": "remote-host-mutex",
+  "base": "milestone/v1.7",
+  "base_commit": "e1e7e21aa3c7dceb3583d279683959cb95529730",
+  "tasks": {}
+}
