@@ -38,6 +38,7 @@ import (
 func Verify() *cobra.Command {
 	var skipMutation bool
 	var detach bool
+	var noWait bool
 	var detachAt string
 	var reuseReport bool
 	var baseOverride string
@@ -54,6 +55,18 @@ func Verify() *cobra.Command {
 				return err
 			}
 			phaseID := args[0]
+			// A flag pair with no coherent meaning, refused before any I/O:
+			// a detached run waits on the host by design (there is no session
+			// to hold), so "do not wait" has nothing to apply to.
+			if noWait && detach {
+				return errors.New("--no-wait with --detach: a detached run waits for the host by design; drop one of the two")
+			}
+			// The attached leg's lock policy (locked attached_busy_policy):
+			// wait for the host, unless told to refuse instead.
+			wait := remote.Forever
+			if noWait {
+				wait = remote.WaitPolicy{}
+			}
 			root, err := FindRoot()
 			if err != nil {
 				return err
@@ -109,7 +122,7 @@ func Verify() *cobra.Command {
 			// A refusal or an unreachable remote aborts HERE, before
 			// RunScoped — so neither tests.json nor verify.toml is written,
 			// and the run never falls back to a local-only adapter list.
-			adapters, tuning, err := configuredAdaptersFn(proj, root, skipMutation)
+			adapters, tuning, err := configuredAdaptersFn(proj, root, skipMutation, phaseID, wait)
 			if err != nil {
 				return err
 			}
@@ -153,6 +166,15 @@ func Verify() *cobra.Command {
 			}
 			t, err := verify.RunScoped(phaseID, files, adapters, scope)
 			if err != nil {
+				if errors.Is(err, remote.ErrHostBusy) {
+					// The host is held and --no-wait said not to wait: a
+					// refusal with its own code, naming the holder, and
+					// nothing written — no leg ran, so there is no run to
+					// record. RunScoped returns this one rather than
+					// recording it as a leg failure for exactly that reason.
+					return &ExitCodeError{Code: exitVerifyHostBusy, Err: fmt.Errorf(
+						"refusing to measure: %w\nWait for it (drop --no-wait), or measure elsewhere", err)}
+				}
 				return err
 			}
 			// Stamped from the adapters the run actually used, not from the
@@ -166,6 +188,8 @@ func Verify() *cobra.Command {
 		"do not run mutation tests (record what would have been mutated, skip execution)")
 	c.Flags().BoolVar(&detach, "detach", false,
 		"start the run on the granted host and return immediately; collect it later with `dross verify results <phase>`")
+	c.Flags().BoolVar(&noWait, "no-wait", false,
+		"refuse (exit 15, naming the holder) instead of waiting when another run holds the granted host")
 	c.Flags().StringVar(&detachAt, "at", "",
 		"with --detach, start the run at HH:MM (next occurrence) or an RFC3339 instant, on the host's clock")
 	c.Flags().BoolVar(&reuseReport, "reuse-report", false,
@@ -450,6 +474,12 @@ const (
 	exitResultsGone        = 14
 )
 
+// exitVerifyHostBusy is `dross verify --no-wait` finding the granted host held
+// by another run. Its own code, outside test.go's 1–8 and the results band
+// above: nothing was measured and nothing was written, and a caller polling
+// on the number must not mistake it for a verdict or for a results state.
+const exitVerifyHostBusy = 15
+
 // detachStatus reads a run's host-side state. Swapped in tests.
 var detachStatus = func(t remote.Target, runDir string) (remote.RunStatus, error) {
 	script, err := remote.StatusScript(t, runDir)
@@ -688,7 +718,7 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 	}
 	files, gone := mutationCandidates(candidates)
 
-	adapters, _, err := configuredAdaptersFn(proj, root, false)
+	adapters, _, err := configuredAdaptersFn(proj, root, false, phaseID, remote.Forever)
 	if err != nil {
 		return err
 	}
@@ -1091,7 +1121,7 @@ func finalizeVerify(root, phaseID string) (recorded bool, verdict string, err er
 // did not shell out. It is what makes "refused" different from "refused after
 // spawning gremlins" — and gremlins runs the untrusted repo's Go tests, which is
 // the code execution the consent gate exists to prevent.
-var configuredAdaptersFn = configuredAdapters
+var configuredAdaptersFn = configuredAdaptersFor
 
 // mutationTuning is the machine-local half of every adapter's construction:
 // WHERE the run happens, and how parallel it is.
@@ -1150,7 +1180,14 @@ func (mt mutationTuning) gremlins(projectRoot string, p *project.Project, cacheV
 // remote, which is the common case and the one this exists for. Shedding the
 // prefix is also exactly right: the point is to run on the remote's OWN
 // toolchain, and whether that toolchain is present is doctor's question.
-func resolveMutationTuning(p *project.Project, root string) (mutationTuning, error) {
+//
+// The host lock's holder is minted HERE, once, for both construction sites:
+// the project name, the phase (empty for a drain, which has none) and a fresh
+// run id, with the caller's wait policy. Every adapter built from this tuning
+// shares the one Target, so a waiter on the host sees one identity for the
+// whole run — and a remote target with no holder is refused by the launcher,
+// so there is no path from this table to an unnamed hold.
+func resolveMutationTuning(p *project.Project, root, phaseID string, wait remote.WaitPolicy) (mutationTuning, error) {
 	targets, err := readRemoteGrants(root, filepath.Dir(root))
 	if err != nil {
 		return mutationTuning{}, err
@@ -1186,6 +1223,10 @@ func resolveMutationTuning(p *project.Project, root string) (mutationTuning, err
 		return mt, nil
 	}
 	target.Cores = pool.Candidates[0].Ready.Cores
+	target.Lock = remote.LockSpec{
+		Holder: remote.Holder{Project: p.Project.Name, Phase: phaseID, RunID: newRunID(time.Now())},
+		Wait:   wait,
+	}
 	mt.Target = target
 	return mt, nil
 }
@@ -1249,11 +1290,14 @@ func profileCacheVars(p *project.Project, repoDir string) []string {
 // for the project, with the runtime prefix or the granted remote applied,
 // plus the tuning it resolved — the caller needs the latter to record where
 // the run's numbers actually came from.
-func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.Adapter, mutationTuning, error) {
+//
+// phaseID and wait are the run's identity on the host lock: what a waiter is
+// told it waits on, and how long this run waits for someone else.
+func configuredAdaptersFor(p *project.Project, root string, skip bool, phaseID string, wait remote.WaitPolicy) ([]mutation.Adapter, mutationTuning, error) {
 	if skip {
 		return nil, mutationTuning{}, nil // verify still runs — files end up in Skipped
 	}
-	mt, err := resolveMutationTuning(p, root)
+	mt, err := resolveMutationTuning(p, root, phaseID, wait)
 	if err != nil {
 		return nil, mutationTuning{}, err
 	}
@@ -1300,6 +1344,14 @@ func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.
 		}
 	}
 	return out, mt, nil
+}
+
+// configuredAdapters is configuredAdaptersFor with no phase and the waiting
+// policy — the construction the wiring tests inspect, where which phase the
+// run belongs to is not the question. Verify itself always goes through
+// configuredAdaptersFn with the phase it was given.
+func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.Adapter, mutationTuning, error) {
+	return configuredAdaptersFor(p, root, skip, "", remote.Forever)
 }
 
 // dockerPrefix returns the runtime command prefix for docker mode.

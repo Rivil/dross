@@ -453,7 +453,7 @@ func detachCmdRepo(t *testing.T, phaseID string, tuning mutationTuning) string {
 	mustSetBase(t, phaseID, "base")
 
 	prev := configuredAdaptersFn
-	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) ([]mutation.Adapter, mutationTuning, error) {
+	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool, _ string, _ remote.WaitPolicy) ([]mutation.Adapter, mutationTuning, error) {
 		return []mutation.Adapter{&mutation.Gremlins{ProjectRoot: dir}}, tuning, nil
 	}
 	t.Cleanup(func() { configuredAdaptersFn = prev })

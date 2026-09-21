@@ -362,7 +362,7 @@ func collectRepo(t *testing.T, phaseID string) string {
 	// A REAL Gremlins: gremlinsAdapter type-asserts the concrete type, and
 	// Collect only reads files, so nothing is spawned.
 	prev := configuredAdaptersFn
-	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) ([]mutation.Adapter, mutationTuning, error) {
+	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool, _ string, _ remote.WaitPolicy) ([]mutation.Adapter, mutationTuning, error) {
 		return []mutation.Adapter{&mutation.Gremlins{ProjectRoot: dir}}, mutationTuning{}, nil
 	}
 	t.Cleanup(func() { configuredAdaptersFn = prev })

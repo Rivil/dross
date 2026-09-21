@@ -170,12 +170,20 @@ func TestBothSitesBuildTheSameGremlins(t *testing.T) {
 	}
 	fromVerify := adapterByName(t, adapters, "gremlins").(*mutation.Gremlins)
 
-	mt, err := resolveMutationTuning(p, root)
+	mt, err := resolveMutationTuning(p, root, "", remote.Forever)
 	if err != nil {
 		t.Fatalf("resolveMutationTuning: %v", err)
 	}
 	fromDrain := mt.gremlins(fromVerify.ProjectRoot, p, nil)
 
+	// Each site mints its own run id on the host lock (a second-resolution
+	// stamp), which is the one field the two are MEANT to differ on; the
+	// holder's project and wait must still agree.
+	if fromVerify.Remote.Lock.Holder.RunID == "" || fromDrain.Remote.Lock.Holder.RunID == "" {
+		t.Errorf("a site built a remote target with no lock holder: verify=%+v drain=%+v",
+			fromVerify.Remote.Lock, fromDrain.Remote.Lock)
+	}
+	fromVerify.Remote.Lock.Holder.RunID, fromDrain.Remote.Lock.Holder.RunID = "", ""
 	if !reflect.DeepEqual(fromVerify, fromDrain) {
 		t.Errorf("the two construction sites disagree:\n verify: %+v\n drain:  %+v", fromVerify, fromDrain)
 	}
@@ -273,7 +281,7 @@ func TestGrantDropsTheDockerPrefixAtBothSites(t *testing.T) {
 	}
 
 	// The drain's site agrees.
-	mt, err := resolveMutationTuning(p, root)
+	mt, err := resolveMutationTuning(p, root, "", remote.Forever)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +313,7 @@ func TestMutualExclusionStaysUnreachableFromBothSites(t *testing.T) {
 				t.Errorf("docker=%v: adapter %q carries BOTH a prefix and a target", docker, a.Name())
 			}
 		}
-		mt, err := resolveMutationTuning(p, root)
+		mt, err := resolveMutationTuning(p, root, "", remote.Forever)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -335,7 +343,7 @@ func TestNoGrantKeepsTheDockerPrefixUnchanged(t *testing.T) {
 			t.Errorf("adapter %q prefix = %q, want %q", a.Name(), got, want)
 		}
 	}
-	mt, err := resolveMutationTuning(p, root)
+	mt, err := resolveMutationTuning(p, root, "", remote.Forever)
 	if err != nil {
 		t.Fatal(err)
 	}
