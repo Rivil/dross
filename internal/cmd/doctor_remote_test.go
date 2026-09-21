@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
@@ -52,9 +53,36 @@ func doctorRemoteFixture(t *testing.T, host, workdir string, adapters []string) 
 	}
 }
 
+// lockStatusFake is what a swapped-in lock probe saw.
+type lockStatusFake struct {
+	calls   int
+	scripts []string
+}
+
+// fakeLockStatus swaps the host-lock probe seam for a fixed answer. Every
+// test that fakes the readiness probe gets a free lock by default (see
+// fakeProbe); a test about the lock installs its own answer over it.
+func fakeLockStatus(t *testing.T, st remote.LockStatus, err error) *lockStatusFake {
+	t.Helper()
+	f := &lockStatusFake{}
+	orig := remoteLockStatusFn
+	remoteLockStatusFn = func(_ remote.Target, script string) (remote.LockStatus, error) {
+		f.calls++
+		f.scripts = append(f.scripts, script)
+		return st, err
+	}
+	t.Cleanup(func() { remoteLockStatusFn = orig })
+	return f
+}
+
 // fakeProbe swaps the readiness seam and returns a pointer to the call count.
+//
+// It also parks the lock probe on a free answer: a healthy host now has its
+// lock read after the readiness probe, and a test that faked only the probe
+// would otherwise reach a real ssh from the lock read.
 func fakeProbe(t *testing.T, fn func(remote.Target, []string) (remote.Readiness, error)) *int {
 	t.Helper()
+	fakeLockStatus(t, remote.LockStatus{}, nil)
 	calls := 0
 	orig := remoteProbeFn
 	remoteProbeFn = func(tgt remote.Target, tools []string) (remote.Readiness, error) {
@@ -112,6 +140,10 @@ func TestDoctorRemoteUngrantedIsAdvisory(t *testing.T) {
 	}
 	if *calls != 0 {
 		t.Errorf("probe called %d times with no grant", *calls)
+	}
+	// And no lock line: there is no host whose lock could be read.
+	if strings.Contains(withoutSection, "host lock") || strings.Contains(withoutSection, "host busy") {
+		t.Errorf("an ungranted repo printed a lock line:\n%s", withoutSection)
 	}
 
 	// Now grant a healthy remote in the same shape of repo: the issue count
@@ -279,9 +311,18 @@ func TestRemoteProbeToolsWithNoLanesIsUnchanged(t *testing.T) {
 
 	tools, needBy, laneBy := remoteProbeTools(p)
 
+	// The adapters' own set, then the host lock's tool — the one addition a
+	// lane-less repo sees, because every remote mutation leg locks the host.
 	want, wantNeedBy := remoteMutationTools(p)
+	want = append(want, remote.LockTool)
 	if !reflect.DeepEqual(tools, want) {
 		t.Errorf("the probe set changed for a lane-less repo:\n got  %v\n want %v", tools, want)
+	}
+	if !reflect.DeepEqual(tools, []string{"gremlins", "flock"}) {
+		t.Errorf("pinned list = %v, want [gremlins flock]", tools)
+	}
+	if _, attributed := wantNeedBy[remote.LockTool]; attributed {
+		t.Error("the lock tool is attributed to an adapter")
 	}
 	if !reflect.DeepEqual(needBy, wantNeedBy) {
 		t.Errorf("the adapter attribution changed:\n got  %v\n want %v", needBy, wantNeedBy)
@@ -291,5 +332,165 @@ func TestRemoteProbeToolsWithNoLanesIsUnchanged(t *testing.T) {
 	}
 	if len(laneBy) != 0 {
 		t.Errorf("a repo with no lanes attributed tools to one: %v", laneBy)
+	}
+}
+
+// --- the host lock -------------------------------------------------------------
+
+// TestDoctorProbesForFlock: the lock's tool rides the one readiness probe,
+// once, after the adapters — so doctor and the run ask the host the same
+// question (c-5).
+func TestDoctorProbesForFlock(t *testing.T) {
+	doctorRemoteFixture(t, "helicon", "/srv/dross", []string{"gremlins"})
+	var asked []string
+	fakeProbe(t, func(_ remote.Target, tools []string) (remote.Readiness, error) {
+		asked = append([]string(nil), tools...)
+		return remote.Readiness{Cores: 8}, nil
+	})
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err != nil {
+		t.Fatalf("doctor: %v\n%s", err, out)
+	}
+	n := 0
+	for _, tool := range asked {
+		if tool == "flock" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("flock probed %d times, want exactly once: %v", n, asked)
+	}
+	if !reflect.DeepEqual(asked, []string{"gremlins", "flock"}) {
+		t.Errorf("probe list = %v, want [gremlins flock]", asked)
+	}
+}
+
+// TestDoctorReportsMissingFlockAsHostTool: a missing flock is an issue in the
+// lock's own words — not "the  adapter needs it" with an empty name, and not
+// silence. A missing adapter tool reads exactly as before.
+func TestDoctorReportsMissingFlockAsHostTool(t *testing.T) {
+	doctorRemoteFixture(t, "helicon", "/srv/dross", []string{"gremlins"})
+	fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
+		return remote.Readiness{Cores: 8}, nil
+	})
+	var healthy string
+	base := doctorIssues(t, &healthy)
+
+	fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
+		return remote.Readiness{Cores: 8, Missing: []string{"flock"}}, nil
+	})
+	var out string
+	if got := doctorIssues(t, &out); got != base+1 {
+		t.Errorf("a missing flock moved issues %d -> %d, want +1:\n%s", base, got, out)
+	}
+	for _, want := range []string{"flock is not installed on helicon", "host lock", "util-linux"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the finding lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "adapter needs it") {
+		t.Errorf("flock was reported as an adapter's tool:\n%s", out)
+	}
+
+	fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
+		return remote.Readiness{Cores: 8, Missing: []string{"gremlins"}}, nil
+	})
+	var adapter string
+	if got := doctorIssues(t, &adapter); got != base+1 {
+		t.Errorf("a missing gremlins moved issues %d -> %d, want +1", base, got)
+	}
+	if !strings.Contains(adapter, "gremlins is not installed on helicon — the gremlins adapter needs it there.") {
+		t.Errorf("the adapter finding changed:\n%s", adapter)
+	}
+}
+
+// TestDoctorNamesTheCurrentHolder is c-5's busy half: who has the host, in
+// the same words every waiter uses, and no issue — a busy host is the lock
+// working.
+func TestDoctorNamesTheCurrentHolder(t *testing.T) {
+	doctorRemoteFixture(t, "helicon", "/srv/dross", []string{"gremlins"})
+	fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
+		return remote.Readiness{Cores: 8}, nil
+	})
+	var free string
+	base := doctorIssues(t, &free)
+
+	since := time.Date(2026, 9, 21, 10, 15, 0, 0, time.UTC)
+	fakeLockStatus(t, remote.LockStatus{Held: true, Holder: remote.Holder{
+		Project: "dross", Phase: "remote-host-mutex", RunID: "r-20260921-101500",
+		PID: 4242, User: "rivil", Since: since,
+	}}, nil)
+	var out string
+	if got := doctorIssues(t, &out); got != base {
+		t.Errorf("a busy host moved the issue count %d -> %d:\n%s", base, got, out)
+	}
+	for _, want := range []string{"host busy", "dross/remote-host-mutex run r-20260921-101500", "pid 4242", "user rivil", "2026-09-21T10:15:00Z"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the busy line lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "host lock free") {
+		t.Errorf("a busy host also printed free:\n%s", out)
+	}
+}
+
+// TestDoctorFreeLockIsOneLine: a free lock is one line, and only one.
+func TestDoctorFreeLockIsOneLine(t *testing.T) {
+	doctorRemoteFixture(t, "helicon", "/srv/dross", []string{"gremlins"})
+	fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
+		return remote.Readiness{Cores: 8}, nil
+	})
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err != nil {
+		t.Fatalf("doctor: %v\n%s", err, out)
+	}
+	n := 0
+	for _, l := range strings.Split(out, "\n") {
+		if strings.Contains(l, "host lock") || strings.Contains(l, "host busy") {
+			n++
+			if !strings.Contains(l, "host lock free") {
+				t.Errorf("unexpected lock line: %s", l)
+			}
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d lock lines, want exactly 1:\n%s", n, out)
+	}
+}
+
+// TestDoctorSkipsLockStatusWithoutFlock: the lock script's own tool gate
+// would only say "no flock" again; the probe already said it.
+func TestDoctorSkipsLockStatusWithoutFlock(t *testing.T) {
+	doctorRemoteFixture(t, "helicon", "/srv/dross", []string{"gremlins"})
+	fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
+		return remote.Readiness{Cores: 8, Missing: []string{"flock"}}, nil
+	})
+	f := fakeLockStatus(t, remote.LockStatus{}, nil)
+	var out string
+	doctorIssues(t, &out)
+	if f.calls != 0 {
+		t.Errorf("the lock probe ran %d times on a flock-less host", f.calls)
+	}
+}
+
+// TestDoctorNeverReadsTheRecordUnprobed: what reaches the host is the probing
+// script. A record is stale the moment its writer dies, so a doctor that read
+// it would report a crashed run as holding the host.
+func TestDoctorNeverReadsTheRecordUnprobed(t *testing.T) {
+	doctorRemoteFixture(t, "helicon", "/srv/dross", []string{"gremlins"})
+	fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
+		return remote.Readiness{Cores: 8}, nil
+	})
+	f := fakeLockStatus(t, remote.LockStatus{}, nil)
+	var out string
+	doctorIssues(t, &out)
+	if f.calls != 1 {
+		t.Fatalf("lock probe ran %d times, want 1", f.calls)
+	}
+	if f.scripts[0] != remote.LockStatusScript() {
+		t.Errorf("the seam received something other than LockStatusScript:\n%s", f.scripts[0])
+	}
+	if !strings.Contains(f.scripts[0], "flock -n") || strings.Contains(f.scripts[0], "cat '"+remote.HostLockPath+"'") {
+		t.Errorf("the script does not probe, or reads the record bare:\n%s", f.scripts[0])
 	}
 }

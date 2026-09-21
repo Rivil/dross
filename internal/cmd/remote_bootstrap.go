@@ -75,7 +75,11 @@ func (s bootstrapStep) origin() string {
 	if s.Lane != "" {
 		return "lane " + s.Lane
 	}
-	return s.Adapter
+	if s.Adapter != "" {
+		return s.Adapter
+	}
+	// Attributed to neither: the one tool every remote mutation leg needs.
+	return "host lock"
 }
 
 // bootstrapRecipe describes how (or whether) one tool can be installed.
@@ -108,6 +112,11 @@ var bootstrapRecipes = map[string]bootstrapRecipe{
 	},
 	"dotnet": {
 		refusal: "dotnet is the .NET SDK itself — install it on the host (bootstrap does not install language runtimes)",
+	},
+	// The host lock's tool is a system package, not something a Go toolchain
+	// installs: the same line install_scope draws for runtimes.
+	remote.LockTool: {
+		refusal: "flock is part of util-linux — install it with the host's package manager (bootstrap does not install system packages)",
 	},
 }
 
