@@ -95,7 +95,7 @@ func TestNoCacheVarsLeavesTheCommandUnchanged(t *testing.T) {
 // TestRemoteScriptExportsScratch: the remote transport carries the same
 // redirection, through the script rather than through cmd.Env.
 func TestRemoteScriptExportsScratch(t *testing.T) {
-	target := &remote.Target{Host: "helicon", Workdir: "/home/rivil/dross"}
+	target := helicon("/home/rivil/dross")
 	l := scratchLauncher(t, target, []string{"GOCACHE"})
 
 	tt, err := l.toolTarget()
@@ -121,7 +121,7 @@ func TestRemoteScriptExportsScratch(t *testing.T) {
 // toolchain alone covers the compiler and leaves the harness's own scratch
 // wherever the host defaults it. On helicon that default is RAM.
 func TestRemoteScriptExportsTmpdir(t *testing.T) {
-	target := &remote.Target{Host: "helicon", Workdir: "/home/rivil/dross"}
+	target := helicon("/home/rivil/dross")
 	l := scratchLauncher(t, target, []string{"GOCACHE"})
 
 	tt, err := l.toolTarget()
@@ -149,7 +149,7 @@ func TestRemoteScriptExportsTmpdir(t *testing.T) {
 // the host's temp, and never inside the tree. This is the locked
 // scratch_location decision as the first live run corrected it.
 func TestRemoteScratchIsBesideWorkdir(t *testing.T) {
-	target := &remote.Target{Host: "helicon", Workdir: "/home/rivil/dross"}
+	target := helicon("/home/rivil/dross")
 	l := scratchLauncher(t, target, []string{"GOCACHE", "GOMODCACHE"})
 
 	tt, err := l.toolTarget()
@@ -180,7 +180,7 @@ func TestRemoteScratchIsBesideWorkdir(t *testing.T) {
 // TestRemoteRunWithNoCacheVarsExportsNothing: the no-op case on the remote side
 // too — a stack declaring none must not gain a TMPDIR it never had.
 func TestRemoteRunWithNoCacheVarsExportsNothing(t *testing.T) {
-	target := &remote.Target{Host: "helicon", Workdir: "/home/rivil/dross"}
+	target := helicon("/home/rivil/dross")
 	l := scratchLauncher(t, target, nil)
 
 	tt, err := l.toolTarget()
@@ -258,7 +258,7 @@ func TestScratchIsReusedWithinARun(t *testing.T) {
 // fails outright against a directory that does not exist — "impossible to create
 // the workdir", and the run ends before measuring anything.
 func TestRemoteScriptCreatesScratchDir(t *testing.T) {
-	target := &remote.Target{Host: "helicon", Workdir: "/home/rivil/dross"}
+	target := helicon("/home/rivil/dross")
 	l := scratchLauncher(t, target, []string{"GOCACHE"})
 	rec := recordRemote(t, nil)
 
@@ -287,7 +287,7 @@ func TestRemoteScriptCreatesScratchDir(t *testing.T) {
 // TestRemoteRunWithNoCacheVarsCreatesNothing: the no-op case must not gain an
 // mkdir it never had.
 func TestRemoteRunWithNoCacheVarsCreatesNothing(t *testing.T) {
-	target := &remote.Target{Host: "helicon", Workdir: "/home/rivil/dross"}
+	target := helicon("/home/rivil/dross")
 	l := scratchLauncher(t, target, nil)
 	rec := recordRemote(t, nil)
 
@@ -304,7 +304,7 @@ func TestRemoteRunWithNoCacheVarsCreatesNothing(t *testing.T) {
 // accumulates a build cache per repo forever — the same unbounded growth,
 // moved to a machine nobody is watching.
 func TestRemoteCloseWipesScratch(t *testing.T) {
-	target := &remote.Target{Host: "helicon", Workdir: "/home/rivil/dross"}
+	target := helicon("/home/rivil/dross")
 	root := t.TempDir()
 	l, err := newLauncher("gremlins", "", target, root, "", []string{"GOCACHE"})
 	if err != nil {
@@ -342,7 +342,7 @@ func TestRemoteCloseWipesScratch(t *testing.T) {
 // TestRemoteWipeRefusesForeignPath: an `rm -rf` is the one command worth being
 // paranoid about. It is built only from a path this code derived itself.
 func TestRemoteWipeRefusesForeignPath(t *testing.T) {
-	target := &remote.Target{Host: "helicon", Workdir: "/home/rivil/dross"}
+	target := helicon("/home/rivil/dross")
 	root := t.TempDir()
 	l, err := newLauncher("gremlins", "", target, root, "", []string{"GOCACHE"})
 	if err != nil {
@@ -353,7 +353,7 @@ func TestRemoteWipeRefusesForeignPath(t *testing.T) {
 	// A workdir swapped underneath the launcher after the scratch was derived.
 	// Both guards must hold: the path no longer matches the derivation, and it
 	// is far too close to the filesystem root to remove.
-	l.Target = &remote.Target{Host: "helicon", Workdir: "/"}
+	l.Target = helicon("/")
 	if err := l.removeRemoteScratch(); err == nil {
 		t.Fatal("a scratch path outside the granted workdir was removed")
 	}
