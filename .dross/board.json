@@ -73,6 +73,7 @@
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
+    "slug:cmd-exec-baseline-drain": "DRO-499",
     "slug:cmd-package-decomposition": "DRO-351",
     "slug:dependency-update-automation": "DRO-428",
     "slug:exec-taint-enumeration": "DRO-469",
@@ -905,47 +906,47 @@
     "remote-host-mutex/t-1": {
       "issue": "DRO-490",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-host-mutex/t-2": {
       "issue": "DRO-491",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-host-mutex/t-3": {
       "issue": "DRO-492",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-host-mutex/t-4": {
       "issue": "DRO-493",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-host-mutex/t-5": {
       "issue": "DRO-494",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-host-mutex/t-6": {
       "issue": "DRO-497",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-host-mutex/t-7": {
       "issue": "DRO-495",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-host-mutex/t-8": {
       "issue": "DRO-496",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-host-mutex/t-9": {
       "issue": "DRO-498",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-run-detach/t-1": {
       "issue": "DRO-278",
