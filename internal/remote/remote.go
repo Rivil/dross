@@ -86,6 +86,13 @@ type Target struct {
 	// shell, so a value that is not a plain canonical absolute path is refused
 	// rather than quoted and hoped for.
 	ScratchBase string
+	// Lock is who takes the host lock for this run and how long they wait for
+	// it. It rides on the target for the same reason Env does: every remote
+	// command in a run is issued under the same hold, and the holder's
+	// identity is what a waiter, `verify status` and doctor name. A zero Lock
+	// is a valid target for commands that do not lock (a probe, a status
+	// read); the callers that DO lock refuse a zero holder themselves.
+	Lock LockSpec
 }
 
 // EnvVar is one variable to export on the remote.
@@ -153,7 +160,7 @@ func (t Target) Validate() error {
 			return fmt.Errorf("remote environment name %q is not a plain variable name: %w", e.Name, ErrUnsafeTarget)
 		}
 	}
-	return nil
+	return t.Lock.Holder.validate()
 }
 
 // In returns the same target rooted at a subdirectory of its workdir — the
