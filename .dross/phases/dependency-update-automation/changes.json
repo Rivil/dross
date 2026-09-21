@@ -1,0 +1,6 @@
+{
+  "phase": "dependency-update-automation",
+  "base": "milestone/v1.7",
+  "base_commit": "dfe06bef9c0b82add6af9df697ee461632538dad",
+  "tasks": {}
+}
