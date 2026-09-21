@@ -639,10 +639,15 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 			rec.RunID, rec.Host, rec.RunDir)}
 	}
 	if !st.HasExit {
-		if rec.Scheduled() && st.State == "scheduled" {
+		// Scheduled is every detached run's initial state now — the job takes
+		// the host lock before it runs — so the guard is on the host's word
+		// alone, and the REASON it has not started is what varies: a future
+		// --at, or another run holding the host. Same exit code either way
+		// (locked detached_waiting_state).
+		if st.State == "scheduled" {
 			return &ExitCodeError{Code: exitResultsScheduled, Err: fmt.Errorf(
-				"run %s on %s has not started yet — scheduled for %s",
-				rec.RunID, rec.Host, rec.ScheduledFor.Format(time.RFC3339))}
+				"run %s on %s has not started yet — %s",
+				rec.RunID, rec.Host, scheduledReason(*rec, st, time.Now()))}
 		}
 		return &ExitCodeError{Code: exitResultsRunning, Err: fmt.Errorf(
 			"run %s on %s is still running (dispatched %s)",
@@ -839,11 +844,54 @@ func printDetachedStatus() error {
 			Printf("  state    gone (the run directory is no longer on %s)\n", r.Host)
 		case st.HasExit:
 			Printf("  state    finished (exit %d) — collect with `dross verify results %s`\n", st.ExitCode, r.Phase)
+		case st.State == "scheduled":
+			Printf("  state    %s\n", st.State)
+			// One reason per line: the --at line above already explains a
+			// run waiting for its instant, so only a run past that (or with
+			// none) says what else it waits on.
+			if why := scheduledWaitLine(r, st, time.Now()); why != "" {
+				Printf("  %s\n", why)
+			}
 		default:
 			Printf("  state    %s\n", st.State)
 		}
 	}
 	return nil
+}
+
+// scheduledWaitLine is what a scheduled run is waiting on, beyond a future
+// --at — or "" when the --at line has already said it.
+//
+// The lock state comes from the SAME status round trip (StatusScript carries
+// LockStatusScript), so naming the holder costs no second probe. The holder
+// is only named when it is someone else: a lock held by this record's own run
+// id is the job racing its own state write, not a wait.
+func scheduledWaitLine(rec detachedRun, st remote.RunStatus, now time.Time) string {
+	if rec.Scheduled() && rec.ScheduledFor.After(now) {
+		return ""
+	}
+	return scheduledReason(rec, st, now)
+}
+
+// scheduledReason renders why a scheduled run has not started, for the
+// results verb's one-line refusal and the status listing alike.
+func scheduledReason(rec detachedRun, st remote.RunStatus, now time.Time) string {
+	switch {
+	case rec.Scheduled() && rec.ScheduledFor.After(now):
+		return fmt.Sprintf("scheduled for %s (host clock)", rec.ScheduledFor.Format(time.RFC3339))
+	case !st.HasLock:
+		// The probe's lock lines were absent (ParseStatus tolerates that).
+		// The listing stays useful; the reason is honestly unknown.
+		return "not started yet (could not read the host lock)"
+	case !st.Lock.Held:
+		return "not started yet"
+	case st.Lock.Holder.RunID == rec.RunID:
+		return "starting (holds the host lock)"
+	case st.Lock.Holder.IsZero():
+		return "waiting on the host lock (holder not yet recorded)"
+	default:
+		return remote.WaitLine(st.Lock.Holder)
+	}
 }
 
 // cancelDetached kills a run on its host and drops the record.
