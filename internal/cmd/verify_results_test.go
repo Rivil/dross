@@ -362,7 +362,7 @@ func collectRepo(t *testing.T, phaseID string) string {
 	// A REAL Gremlins: gremlinsAdapter type-asserts the concrete type, and
 	// Collect only reads files, so nothing is spawned.
 	prev := configuredAdaptersFn
-	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) ([]mutation.Adapter, mutationTuning, error) {
+	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool, _ string, _ remote.WaitPolicy) ([]mutation.Adapter, mutationTuning, error) {
 		return []mutation.Adapter{&mutation.Gremlins{ProjectRoot: dir}}, mutationTuning{}, nil
 	}
 	t.Cleanup(func() { configuredAdaptersFn = prev })
@@ -1005,4 +1005,37 @@ func TestRunScopedLegNeverListsUnsupportedFiles(t *testing.T) {
 	if !reflect.DeepEqual(skipped, []string{"README.md", "assets/prompts/verify.md"}) {
 		t.Errorf("skipped = %v, want the two docs", skipped)
 	}
+}
+
+// TestResultsWaitingOnAHolderIsScheduledNotRunning: a detached run waiting
+// on the host lock reads as scheduled (exit 10, not 11) with the holder
+// named — no new state, no new code (locked detached_waiting_state) — and
+// nothing is written.
+func TestResultsWaitingOnAHolderIsScheduledNotRunning(t *testing.T) {
+	const id = "remote-run-detach"
+	root := resultsFixture(t, id) // no --at
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "scheduled", HasLock: true,
+		Lock: remote.LockStatus{Held: true, Holder: remote.Holder{
+			Project: "proj-b", Phase: "phase-x", RunID: "r-other", PID: 99,
+			Since: time.Date(2026, 9, 21, 9, 0, 0, 0, time.UTC)}}}, nil)
+
+	err := collectDetached(id)
+	if got := exitCodeOf(err); got != exitResultsScheduled {
+		t.Errorf("exit code = %d, want %d (scheduled): %v", got, exitResultsScheduled, err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "waiting on proj-b/phase-x run r-other (pid 99) since 2026-09-21T09:00:00Z") {
+		t.Errorf("the refusal does not name the holder: %v", err)
+	}
+	assertNoArtefacts(t, root, id)
+
+	// Lock free, no --at: not started yet, still 10.
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "scheduled", HasLock: true}, nil)
+	err = collectDetached(id)
+	if got := exitCodeOf(err); got != exitResultsScheduled {
+		t.Errorf("free lock: exit code = %d, want %d: %v", got, exitResultsScheduled, err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "not started yet") {
+		t.Errorf("free lock: %v", err)
+	}
+	assertNoArtefacts(t, root, id)
 }

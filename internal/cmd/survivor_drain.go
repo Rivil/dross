@@ -16,6 +16,7 @@ import (
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/mutationcfg"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/state"
 	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/verify"
@@ -141,8 +142,12 @@ func runGremlinsOverPackages(repoRoot string, pkgs []string) ([]mutation.Unmeasu
 	// running locally while verify ran on the granted remote would classify
 	// survivors against a different machine's measurements — and the drain is
 	// what decides whether a survivor is real.
+	//
+	// No phase: the drain is not a phase's run. It still names itself on the
+	// host lock (project + a fresh run id) and waits for the host like verify
+	// does — it is the second attached remote-mutation caller.
 	root := filepath.Join(repoRoot, RootDirName)
-	mt, err := mutationcfg.ResolveTuning(p, root, localSource(root))
+	mt, err := mutationcfg.ResolveTuning(p, root, localSource(root, hostLock(p, "", remote.Forever)))
 	if err != nil {
 		return nil, err
 	}

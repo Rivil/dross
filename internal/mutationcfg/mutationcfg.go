@@ -137,6 +137,11 @@ type Source struct {
 	Select func(targets []*remote.Target) (*remote.Target, Selection, error)
 	// CacheVars returns the toolchain cache variables the stack declares.
 	CacheVars func(p *project.Project, repoDir string) []string
+	// Lock is the run's identity on the host lock, stamped on the selected
+	// target: who holds it and how long this run waits for someone else. A
+	// zero Lock builds a target with no holder, which the launcher refuses —
+	// so a caller that runs remotely must name itself here.
+	Lock remote.LockSpec
 }
 
 // ResolveTuning reads the grant and the tuning knobs, and probes the remote
@@ -200,6 +205,7 @@ func ResolveTuning(p *project.Project, root string, src Source) (Tuning, error) 
 		return mt, nil
 	}
 	target.Cores = sel.Cores
+	target.Lock = src.Lock
 	mt.Target = target
 	return mt, nil
 }

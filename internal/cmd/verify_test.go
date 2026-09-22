@@ -10,6 +10,7 @@ import (
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/telemetry"
 	"github.com/Rivil/dross/internal/verify"
 )
@@ -761,7 +762,7 @@ func (s *stubMutationAdapter) Run(files []string) (*mutation.Report, error) {
 func useStubAdapter(t *testing.T, a mutation.Adapter) {
 	t.Helper()
 	prev := configuredAdaptersFn
-	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) ([]mutation.Adapter, mutationTuning, error) {
+	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool, _ string, _ remote.WaitPolicy) ([]mutation.Adapter, mutationTuning, error) {
 		return []mutation.Adapter{a}, mutationTuning{}, nil
 	}
 	t.Cleanup(func() { configuredAdaptersFn = prev })

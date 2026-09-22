@@ -86,6 +86,13 @@ type Target struct {
 	// shell, so a value that is not a plain canonical absolute path is refused
 	// rather than quoted and hoped for.
 	ScratchBase string
+	// Lock is who takes the host lock for this run and how long they wait for
+	// it. It rides on the target for the same reason Env does: every remote
+	// command in a run is issued under the same hold, and the holder's
+	// identity is what a waiter, `verify status` and doctor name. A zero Lock
+	// is a valid target for commands that do not lock (a probe, a status
+	// read); the callers that DO lock refuse a zero holder themselves.
+	Lock LockSpec
 }
 
 // EnvVar is one variable to export on the remote.
@@ -153,7 +160,7 @@ func (t Target) Validate() error {
 			return fmt.Errorf("remote environment name %q is not a plain variable name: %w", e.Name, ErrUnsafeTarget)
 		}
 	}
-	return nil
+	return t.Lock.Holder.validate()
 }
 
 // In returns the same target rooted at a subdirectory of its workdir — the
@@ -361,6 +368,24 @@ func RunDir(runID string) (string, error) {
 // existence is the completion signal: a run that died — host rebooted, OOM
 // killer, someone's `pkill` — leaves no exit file, which is what makes
 // "finished with failures" distinguishable from "never finished" at fetch time.
+//
+// The host lock is taken INSIDE the detached job, after any --at sleep and
+// before the state file says running. Inside, because a lock taken by the
+// outer chain belongs to the ssh session and is released the moment ssh
+// returns — which is immediately. After the sleep, because a run that locked
+// and then slept would hold the host idle for the hours it was told to wait.
+// Before running, because a state file that said running while the job sat
+// in flock would make `verify status` lie about what the host is doing. The
+// job therefore starts as `scheduled` whether or not it has an --at: both are
+// "dispatched, not yet started", and the reason it has not started (a future
+// instant, or another holder) is what a status read distinguishes.
+//
+// A host without flock finishes at once with exit 127 and a log line naming
+// the tool, rather than measuring unlocked or sitting at scheduled forever.
+// The dispatching side probes for the tool before it pushes anything, so this
+// is belt and braces — but the belt is on the laptop and the braces are here,
+// and a refusal that only lived on one side would be lost the day the other
+// side's check was refactored away.
 func DetachScript(t Target, runDir string, argv []string, notBefore time.Time) (string, error) {
 	if err := t.Validate(); err != nil {
 		return "", err
@@ -370,6 +395,17 @@ func DetachScript(t Target, runDir string, argv []string, notBefore time.Time) (
 	}
 	if runDir == "" {
 		return "", fmt.Errorf("remote: empty run directory: %w", ErrUnsafeTarget)
+	}
+	if t.Lock.Holder.RunID == "" {
+		// A detached job that holds the host must be nameable by whoever
+		// waits on it. A blank holder is a lock nobody can explain.
+		return "", fmt.Errorf("remote: detached run on %q has no lock holder run id: %w", t.Host, ErrUnsafeTarget)
+	}
+	// Always the unbounded policy: an attached leg waits for the host, and a
+	// detached one has even less reason not to — there is no session to hold.
+	lock, err := LockPrelude(LockSpec{Holder: t.Lock.Holder, Wait: Forever})
+	if err != nil {
+		return "", err
 	}
 
 	q := func(s string) string { return shellQuote(s) }
@@ -384,11 +420,23 @@ func DetachScript(t Target, runDir string, argv []string, notBefore time.Time) (
 	var inner strings.Builder
 	if !notBefore.IsZero() {
 		fmt.Fprintf(&inner, "__t=%d; __n=$(date +%%s); "+
-			"if [ \"$__t\" -gt \"$__n\" ]; then sleep $((__t - __n)); fi; ",
+			"if [ \"$__t\" -gt \"$__n\" ]; then sleep $((__t - __n)); fi\n",
 			notBefore.Unix())
 	}
-	// Written after the sleep, so a scheduled run reads as scheduled until it
-	// actually starts rather than from the moment it was dispatched.
+	inner.WriteString(lock)
+	// The lock's outcome decides whether the tool runs at all. Each refusal
+	// records an exit code and moves the state to finished so a collect sees
+	// a run that ended, not one that is still waiting; the protocol lines the
+	// prelude printed above are already in the log, naming the reason.
+	inner.WriteString("if [ \"$__lock\" = noflock ]; then " +
+		"printf '%s\\n' 'flock is not installed on this host — the host lock needs it and the run did not start; run dross doctor'; " +
+		"printf '%s\\n' 127 > " + exitPath + "; printf '%s' finished > " + statePath + "; " +
+		"elif [ \"$__lock\" != acquired ]; then " +
+		"printf '%s\\n' 'the host lock could not be taken and the run did not start; see the lock= line above'; " +
+		"printf '%s\\n' 126 > " + exitPath + "; printf '%s' finished > " + statePath + "; " +
+		"else\n")
+	// Written after the sleep AND the lock, so a run reads as scheduled until
+	// it actually starts rather than from the moment it was dispatched.
 	inner.WriteString("printf '%s' running > " + statePath + "; ")
 	for i, a := range argv {
 		if i > 0 {
@@ -398,14 +446,13 @@ func DetachScript(t Target, runDir string, argv []string, notBefore time.Time) (
 	}
 	// `$?` is captured before anything else can overwrite it, and the state
 	// file is only moved to finished once the code is durably recorded — a
-	// reader that saw finished with no exit file would have to guess.
+	// reader that saw finished with no exit file would have to guess. fd 9
+	// stays open across the tool and is released when this shell exits: no
+	// unlock is written here, on purpose (see LockPrelude).
 	inner.WriteString("; __c=$?; printf '%s\\n' \"$__c\" > " + exitPath +
-		"; printf '%s' finished > " + statePath)
+		"; printf '%s' finished > " + statePath + "; fi")
 
-	initial := "running"
-	if !notBefore.IsZero() {
-		initial = "scheduled"
-	}
+	initial := "scheduled"
 
 	var b strings.Builder
 	writePreamble(&b, t)
@@ -441,6 +488,12 @@ func DetachScript(t Target, runDir string, argv []string, notBefore time.Time) (
 // has not written anything yet" and "the run directory is gone" is the
 // difference between waiting and reporting a lost run — c-6's distinction, and
 // one that three empty values on their own cannot express.
+//
+// The host lock's state rides along in the same round trip (see
+// LockStatusScript): a run that reads as scheduled is either waiting for its
+// --at instant or waiting on whoever holds the host, and only the lock's
+// holder record can say which. A second ssh for that would double the cost
+// of every status listing.
 func StatusScript(t Target, runDir string) (string, error) {
 	if err := t.Validate(); err != nil {
 		return "", err
@@ -457,6 +510,7 @@ func StatusScript(t Target, runDir string) (string, error) {
 			q(path.Join(runDir, f)) + " 2>/dev/null)\"")
 	}
 	b.WriteByte('\n')
+	b.WriteString(LockStatusScript())
 	return b.String(), nil
 }
 
@@ -472,6 +526,12 @@ type RunStatus struct {
 	ExitCode  int
 	HasExit   bool
 	PID       int
+	// Lock is the host lock's state as the same round trip probed it. Zero
+	// when the output carried no lock lines at all — an older script, or a
+	// probe that never ran — which readers treat as "unknown", never as free.
+	Lock LockStatus
+	// HasLock reports whether Lock was read at all.
+	HasLock bool
 }
 
 // ParseStatus reads StatusScript's output.
@@ -482,9 +542,14 @@ type RunStatus struct {
 func ParseStatus(out string) (RunStatus, error) {
 	var s RunStatus
 	seen := false
+	var lockLines []string
 	for _, line := range strings.Split(out, "\n") {
 		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
 		if !ok {
+			continue
+		}
+		if k == "tool" || k == "lock" || strings.HasPrefix(k, "holder.") {
+			lockLines = append(lockLines, strings.TrimSpace(line))
 			continue
 		}
 		switch k {
@@ -513,6 +578,13 @@ func ParseStatus(out string) (RunStatus, error) {
 	}
 	if !seen {
 		return RunStatus{}, fmt.Errorf("remote: no status lines in output")
+	}
+	if len(lockLines) > 0 {
+		ls, err := ParseLockStatus(strings.Join(lockLines, "\n"))
+		if err != nil {
+			return RunStatus{}, err
+		}
+		s.Lock, s.HasLock = ls, true
 	}
 	return s, nil
 }

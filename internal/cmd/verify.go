@@ -40,6 +40,7 @@ import (
 func Verify() *cobra.Command {
 	var skipMutation bool
 	var detach bool
+	var noWait bool
 	var detachAt string
 	var reuseReport bool
 	var baseOverride string
@@ -56,6 +57,18 @@ func Verify() *cobra.Command {
 				return err
 			}
 			phaseID := args[0]
+			// A flag pair with no coherent meaning, refused before any I/O:
+			// a detached run waits on the host by design (there is no session
+			// to hold), so "do not wait" has nothing to apply to.
+			if noWait && detach {
+				return errors.New("--no-wait with --detach: a detached run waits for the host by design; drop one of the two")
+			}
+			// The attached leg's lock policy (locked attached_busy_policy):
+			// wait for the host, unless told to refuse instead.
+			wait := remote.Forever
+			if noWait {
+				wait = remote.WaitPolicy{}
+			}
 			root, err := FindRoot()
 			if err != nil {
 				return err
@@ -111,7 +124,7 @@ func Verify() *cobra.Command {
 			// A refusal or an unreachable remote aborts HERE, before
 			// RunScoped — so neither tests.json nor verify.toml is written,
 			// and the run never falls back to a local-only adapter list.
-			adapters, tuning, err := configuredAdaptersFn(proj, root, skipMutation)
+			adapters, tuning, err := configuredAdaptersFn(proj, root, skipMutation, phaseID, wait)
 			if err != nil {
 				return err
 			}
@@ -145,7 +158,7 @@ func Verify() *cobra.Command {
 				if len(steps) == 0 {
 					return fmt.Errorf("nothing to mutate for phase %s — no Go packages in scope", phaseID)
 				}
-				return dispatchDetached(root, phaseID, steps, tuning.Target, notBefore)
+				return dispatchDetached(root, proj.Project.Name, phaseID, steps, tuning.Target, notBefore)
 			}
 
 			if tuning.FellBackFrom != "" {
@@ -155,6 +168,15 @@ func Verify() *cobra.Command {
 			}
 			t, err := verify.RunScoped(phaseID, files, adapters, scope)
 			if err != nil {
+				if errors.Is(err, remote.ErrHostBusy) {
+					// The host is held and --no-wait said not to wait: a
+					// refusal with its own code, naming the holder, and
+					// nothing written — no leg ran, so there is no run to
+					// record. RunScoped returns this one rather than
+					// recording it as a leg failure for exactly that reason.
+					return &ExitCodeError{Code: exitVerifyHostBusy, Err: fmt.Errorf(
+						"refusing to measure: %w\nWait for it (drop --no-wait), or measure elsewhere", err)}
+				}
 				return err
 			}
 			// Stamped from the adapters the run actually used, not from the
@@ -168,6 +190,8 @@ func Verify() *cobra.Command {
 		"do not run mutation tests (record what would have been mutated, skip execution)")
 	c.Flags().BoolVar(&detach, "detach", false,
 		"start the run on the granted host and return immediately; collect it later with `dross verify results <phase>`")
+	c.Flags().BoolVar(&noWait, "no-wait", false,
+		"refuse (exit 15, naming the holder) instead of waiting when another run holds the granted host")
 	c.Flags().StringVar(&detachAt, "at", "",
 		"with --detach, start the run at HH:MM (next occurrence) or an RFC3339 instant, on the host's clock")
 	c.Flags().BoolVar(&reuseReport, "reuse-report", false,
@@ -306,7 +330,13 @@ func detachSequence(steps []mutation.PackageStep) string {
 // has accepted the script: a record written first would name a run that never
 // started, and the one-run-per-phase guard would then refuse the retry that
 // would have fixed it. A dispatch that fails leaves nothing behind to clean up.
-func dispatchDetached(root, phaseID string, steps []mutation.PackageStep, target *remote.Target, notBefore time.Time) error {
+//
+// The host lock's holder is stamped HERE, with the run id this dispatch mints,
+// so the identity a waiter sees on the host is the identity `verify status`
+// looks the run up by. Stamping it anywhere else would let the two drift —
+// and DetachScript refuses an anonymous holder, so the stamp and its only
+// caller land together.
+func dispatchDetached(root, projectName, phaseID string, steps []mutation.PackageStep, target *remote.Target, notBefore time.Time) error {
 	repoDir := filepath.Dir(root)
 
 	// Checked before the push, which is the expensive part: a phase that
@@ -323,29 +353,51 @@ func dispatchDetached(root, phaseID string, steps []mutation.PackageStep, target
 			existing.DispatchedAt.Format(time.RFC3339), phaseID)
 	}
 
+	// The lock tool is probed before the push, through the same seam doctor
+	// probes through, so a flock-less host is refused on the laptop with the
+	// doctor wording — not discovered in a host log hours later. The script
+	// itself refuses too (exit 127), but that refusal is only readable after
+	// a status round trip.
+	ready, err := remoteProbeFn(*target, []string{remote.LockTool})
+	if err != nil {
+		return fmt.Errorf("probe %s for %s: %w", target.Host, remote.LockTool, err)
+	}
+	for _, m := range ready.Missing {
+		if m == remote.LockTool {
+			return fmt.Errorf("%s is not installed on %s — the host lock needs it; run dross doctor",
+				remote.LockTool, target.Host)
+		}
+	}
+
 	runID := newRunID(time.Now())
 	runDir, err := remote.RunDir(runID)
 	if err != nil {
 		return err
 	}
+	stamped := *target
+	stamped.Lock = remote.LockSpec{
+		Holder: remote.Holder{Project: projectName, Phase: phaseID, RunID: runID},
+		Wait:   remote.Forever,
+	}
 
-	if err := detachSync(*target, repoDir); err != nil {
+	if err := detachSync(stamped, repoDir); err != nil {
 		return fmt.Errorf("push the tree to %s: %w", target.Host, err)
 	}
 
-	script, err := remote.DetachScript(*target, runDir,
+	script, err := remote.DetachScript(stamped, runDir,
 		[]string{"bash", "-c", detachSequence(steps)}, notBefore)
 	if err != nil {
 		return err
 	}
-	if _, err := detachSpawn(*target, script); err != nil {
+	if _, err := detachSpawn(stamped, script); err != nil {
 		return fmt.Errorf("start the detached run on %s: %w", target.Host, err)
 	}
 
-	state := "running"
-	if !notBefore.IsZero() {
-		state = "scheduled"
-	}
+	// Every detached run starts as scheduled: the job takes the host lock
+	// before it runs, so "dispatched, not yet started" is the initial state
+	// whether or not there is an --at. The host's state file says when it
+	// actually started.
+	state := "scheduled"
 	rec := detachedRun{
 		Phase:        phaseID,
 		RunID:        runID,
@@ -423,6 +475,12 @@ const (
 	exitResultsUnreachable = 13
 	exitResultsGone        = 14
 )
+
+// exitVerifyHostBusy is `dross verify --no-wait` finding the granted host held
+// by another run. Its own code, outside test.go's 1–8 and the results band
+// above: nothing was measured and nothing was written, and a caller polling
+// on the number must not mistake it for a verdict or for a results state.
+const exitVerifyHostBusy = 15
 
 // detachStatus reads a run's host-side state. Swapped in tests.
 var detachStatus = func(t remote.Target, runDir string) (remote.RunStatus, error) {
@@ -613,10 +671,15 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 			rec.RunID, rec.Host, rec.RunDir)}
 	}
 	if !st.HasExit {
-		if rec.Scheduled() && st.State == "scheduled" {
+		// Scheduled is every detached run's initial state now — the job takes
+		// the host lock before it runs — so the guard is on the host's word
+		// alone, and the REASON it has not started is what varies: a future
+		// --at, or another run holding the host. Same exit code either way
+		// (locked detached_waiting_state).
+		if st.State == "scheduled" {
 			return &ExitCodeError{Code: exitResultsScheduled, Err: fmt.Errorf(
-				"run %s on %s has not started yet — scheduled for %s",
-				rec.RunID, rec.Host, rec.ScheduledFor.Format(time.RFC3339))}
+				"run %s on %s has not started yet — %s",
+				rec.RunID, rec.Host, scheduledReason(*rec, st, time.Now()))}
 		}
 		return &ExitCodeError{Code: exitResultsRunning, Err: fmt.Errorf(
 			"run %s on %s is still running (dispatched %s)",
@@ -657,7 +720,7 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 	}
 	files, gone := mutationCandidates(candidates)
 
-	adapters, _, err := configuredAdaptersFn(proj, root, false)
+	adapters, _, err := configuredAdaptersFn(proj, root, false, phaseID, remote.Forever)
 	if err != nil {
 		return err
 	}
@@ -813,11 +876,54 @@ func printDetachedStatus() error {
 			Printf("  state    gone (the run directory is no longer on %s)\n", r.Host)
 		case st.HasExit:
 			Printf("  state    finished (exit %d) — collect with `dross verify results %s`\n", st.ExitCode, r.Phase)
+		case st.State == "scheduled":
+			Printf("  state    %s\n", st.State)
+			// One reason per line: the --at line above already explains a
+			// run waiting for its instant, so only a run past that (or with
+			// none) says what else it waits on.
+			if why := scheduledWaitLine(r, st, time.Now()); why != "" {
+				Printf("  %s\n", why)
+			}
 		default:
 			Printf("  state    %s\n", st.State)
 		}
 	}
 	return nil
+}
+
+// scheduledWaitLine is what a scheduled run is waiting on, beyond a future
+// --at — or "" when the --at line has already said it.
+//
+// The lock state comes from the SAME status round trip (StatusScript carries
+// LockStatusScript), so naming the holder costs no second probe. The holder
+// is only named when it is someone else: a lock held by this record's own run
+// id is the job racing its own state write, not a wait.
+func scheduledWaitLine(rec detachedRun, st remote.RunStatus, now time.Time) string {
+	if rec.Scheduled() && rec.ScheduledFor.After(now) {
+		return ""
+	}
+	return scheduledReason(rec, st, now)
+}
+
+// scheduledReason renders why a scheduled run has not started, for the
+// results verb's one-line refusal and the status listing alike.
+func scheduledReason(rec detachedRun, st remote.RunStatus, now time.Time) string {
+	switch {
+	case rec.Scheduled() && rec.ScheduledFor.After(now):
+		return fmt.Sprintf("scheduled for %s (host clock)", rec.ScheduledFor.Format(time.RFC3339))
+	case !st.HasLock:
+		// The probe's lock lines were absent (ParseStatus tolerates that).
+		// The listing stays useful; the reason is honestly unknown.
+		return "not started yet (could not read the host lock)"
+	case !st.Lock.Held:
+		return "not started yet"
+	case st.Lock.Holder.RunID == rec.RunID:
+		return "starting (holds the host lock)"
+	case st.Lock.Holder.IsZero():
+		return "waiting on the host lock (holder not yet recorded)"
+	default:
+		return remote.WaitLine(st.Lock.Holder)
+	}
 }
 
 // cancelDetached kills a run on its host and drops the record.
@@ -1017,7 +1123,7 @@ func finalizeVerify(root, phaseID string) (recorded bool, verdict string, err er
 // did not shell out. It is what makes "refused" different from "refused after
 // spawning gremlins" — and gremlins runs the untrusted repo's Go tests, which is
 // the code execution the consent gate exists to prevent.
-var configuredAdaptersFn = configuredAdapters
+var configuredAdaptersFn = configuredAdaptersFor
 
 // mutationTuning is the in-package name for mutationcfg.Tuning — the
 // machine-local half of every adapter's construction, resolved once by
@@ -1025,13 +1131,29 @@ var configuredAdaptersFn = configuredAdapters
 // here, the survivor drain's gremlins run).
 type mutationTuning = mutationcfg.Tuning
 
+// hostLock mints the run's identity on the host lock, once, for both
+// construction sites: the project name, the phase (empty for a drain, which
+// has none) and a fresh run id, with the caller's wait policy. Every adapter
+// built from the resulting tuning shares the one Target, so a waiter on the
+// host sees one identity for the whole run — and a remote target with no
+// holder is refused by the launcher, so there is no path from this table to
+// an unnamed hold.
+func hostLock(p *project.Project, phaseID string, wait remote.WaitPolicy) remote.LockSpec {
+	return remote.LockSpec{
+		Holder: remote.Holder{Project: p.Project.Name, Phase: phaseID, RunID: newRunID(time.Now())},
+		Wait:   wait,
+	}
+}
+
 // localSource is the Source cmd hands mutationcfg: grants and tuning knobs
 // from local.toml, the remote pool walk (with its notices) for host selection,
-// and the stack profile's cache vars. The pool walk stays here on purpose —
-// it narrates skipped hosts to the user, which is a command's concern.
-func localSource(root string) mutationcfg.Source {
+// the stack profile's cache vars, and the lock identity a selected host is
+// held under. The pool walk stays here on purpose — it narrates skipped hosts
+// to the user, which is a command's concern.
+func localSource(root string, lock remote.LockSpec) mutationcfg.Source {
 	repoDir := filepath.Dir(root)
 	return mutationcfg.Source{
+		Lock:   lock,
 		Grants: func() ([]*remote.Target, error) { return readRemoteGrants(root, repoDir) },
 		Tuning: func() (int, int, error) { return readMutationTuning(root) },
 		Select: func(targets []*remote.Target) (*remote.Target, mutationcfg.Selection, error) {
@@ -1103,14 +1225,25 @@ func profileCacheVars(p *project.Project, repoDir string) []string {
 	return sp.MutationCache.Vars
 }
 
-// configuredAdapters is the production wrapper over mutationcfg.Configured
+// configuredAdaptersFor is the production wrapper over mutationcfg.Configured
 // with cmd's localSource: the adapters appropriate for the project, with the
 // runtime prefix or the granted remote applied, plus the tuning it resolved —
 // the caller needs the latter to record where the run's numbers actually came
 // from. configuredAdaptersFn above is bound to it, so it stays a named
 // function rather than a closure.
+//
+// phaseID and wait are the run's identity on the host lock: what a waiter is
+// told it waits on, and how long this run waits for someone else.
+func configuredAdaptersFor(p *project.Project, root string, skip bool, phaseID string, wait remote.WaitPolicy) ([]mutation.Adapter, mutationTuning, error) {
+	return mutationcfg.Configured(p, root, skip, localSource(root, hostLock(p, phaseID, wait)))
+}
+
+// configuredAdapters is configuredAdaptersFor with no phase and the waiting
+// policy — the construction the wiring tests inspect, where which phase the
+// run belongs to is not the question. Verify itself always goes through
+// configuredAdaptersFn with the phase it was given.
 func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.Adapter, mutationTuning, error) {
-	return mutationcfg.Configured(p, root, skip, localSource(root))
+	return configuredAdaptersFor(p, root, skip, "", remote.Forever)
 }
 
 // mutationCandidates splits the scope's file set into what may be handed to a

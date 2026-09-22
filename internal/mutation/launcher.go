@@ -24,6 +24,7 @@ package mutation
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -31,6 +32,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Rivil/dross/internal/remote"
 )
@@ -95,7 +97,39 @@ type Launcher struct {
 	pushed bool
 	// restored records the one-shot dependency restore, for the same reason.
 	restored bool
+
+	// hold is the host lock this run holds, taken once before the push and
+	// released by Close — one acquisition per run, across every package (the
+	// locked lock_granularity decision). Nil until taken, and nil again once
+	// released, so a second Close releases nothing twice.
+	hold hostHold
 }
+
+// hostHold is the part of a remote.Hold the launcher uses. An interface so a
+// test can stand in a hold whose Lost() it controls.
+type hostHold interface {
+	Lost() bool
+	Release() error
+}
+
+// launcherHold is the host-lock seam: remote.Acquire, behind a var so tests
+// can record the acquisition in the same sequence as the push and the runs.
+var launcherHold = func(t remote.Target, ev remote.HoldEvents) (hostHold, error) {
+	h, err := remote.Acquire(t, ev)
+	if err != nil {
+		return nil, err
+	}
+	return h, nil
+}
+
+// launcherLog is where a waiting run says what it waits on — the terminal,
+// for an attached leg (c-3).
+var launcherLog io.Writer = os.Stderr
+
+// launcherHeartbeat is the interval between "still waiting" lines while
+// another run holds the host: the locked attached_busy_policy's "one-line
+// heartbeat every few minutes".
+var launcherHeartbeat = 5 * time.Minute
 
 // remoteRestores is the CLOSED table of how each adapter restores its language's
 // dependencies on the remote, before the tool runs.
@@ -219,6 +253,13 @@ func newLauncher(adapter, prefix string, target *remote.Target, projectRoot, wor
 		if err := target.Validate(); err != nil {
 			return nil, err
 		}
+		if target.Lock.Holder.RunID == "" {
+			// No bypass, for any adapter: a remote run holds the host, and a
+			// hold nobody can name is one no waiter can be told about.
+			return nil, fmt.Errorf(
+				"mutation: adapter %q would run on %q with no lock holder — every remote run "+
+					"must carry the run id it holds the host under", adapter, target.Host)
+		}
 		if _, ok := remoteReportPaths[adapter]; !ok {
 			return nil, fmt.Errorf(
 				"mutation: adapter %q has no entry in the remote report table — a remote run "+
@@ -294,18 +335,72 @@ func (l *Launcher) localCacheEnv() ([]string, error) {
 // Close wipes anything this launcher created. Every adapter defers it, so it
 // runs on a clean finish, an adapter failure and an early return alike; it is
 // idempotent because a deferred call must not fight an explicit one.
+//
+// The host lock is released LAST, after the remote scratch is wiped: the
+// wipe is a command on the host and belongs inside the hold like every other
+// one. A failed wipe never skips the release — a held lock nobody is using
+// is the starvation this phase exists to end.
 func (l *Launcher) Close() error {
 	if l == nil {
 		return nil
 	}
+	var errs []error
 	if err := l.removeRemoteScratch(); err != nil {
 		// Same policy as the local wipe (locked wipe_policy): reported, never
 		// fatal. A completed measurement must not be lost to a cleanup error,
 		// and a leak nobody sees is what filled the disk in the first place.
 		fmt.Fprintf(os.Stderr, "mutation: could not remove the remote scratch build cache: %v\n", err)
+		errs = append(errs, err)
 	}
 	l.remoteScratchGone = true
-	return l.scratch.Remove()
+	if l.hold != nil {
+		if l.hold.Lost() {
+			errs = append(errs, l.lockLost())
+		} else if err := l.hold.Release(); err != nil {
+			errs = append(errs, fmt.Errorf("mutation: release the host lock on %s: %w", l.Target.Host, err))
+		}
+		l.hold = nil
+	}
+	if err := l.scratch.Remove(); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
+}
+
+// ensureHeld takes the host lock, exactly once per run. It is the first
+// remote step — before the free-space probe and before the push — because
+// everything after it is work on a host that may be measuring for someone
+// else. ErrHostBusy (the zero policy) and ErrLockTool propagate unchanged
+// for the caller to map.
+func (l *Launcher) ensureHeld() error {
+	if !l.remoteRun() || l.hold != nil {
+		return nil
+	}
+	h, err := launcherHold(*l.Target, remote.HoldEvents{Log: launcherLog, HeartbeatEvery: launcherHeartbeat})
+	if err != nil {
+		return err
+	}
+	l.hold = h
+	return nil
+}
+
+// checkHeld refuses to go on when the hold has been lost mid-run: the host
+// may have been shared since, and a perturbed measurement must never be
+// recorded. The dead session is released so its exit reason rides on the
+// error rather than being swallowed by a later Close.
+func (l *Launcher) checkHeld() error {
+	if l.hold == nil || !l.hold.Lost() {
+		return nil
+	}
+	err := l.lockLost()
+	l.hold = nil
+	return err
+}
+
+func (l *Launcher) lockLost() error {
+	rel := l.hold.Release()
+	return fmt.Errorf("mutation: host lock on %s lost mid-run (%v) — lock lost, the measurement may have been shared and is not recorded",
+		l.Target.Host, rel)
 }
 
 // reportRel resolves the adapter's remote report path through the closed table.
@@ -343,6 +438,12 @@ func (l *Launcher) runRemote(argv []string, stdin string) error {
 func (l *Launcher) ensurePushed() error {
 	if !l.remoteRun() || l.pushed {
 		return nil
+	}
+	// The lock first: the df probe and the push are already work on the
+	// host, and a run that pushed a tree and then waited an hour for the
+	// lock would have overwritten the running leg's workdir underneath it.
+	if err := l.ensureHeld(); err != nil {
+		return err
 	}
 	// Before the push, not after. Refusing here costs one df; refusing after
 	// the sync has already written the whole working tree onto the volume the
@@ -675,6 +776,11 @@ func (l *Launcher) clearReport(key, localPath string) error {
 func (l *Launcher) fetchReport(key, localDest string) error {
 	if !l.remoteRun() {
 		return nil
+	}
+	// The fetch is the step after each package's tool call, so this is where
+	// a hold lost during the run is caught before its report is read.
+	if err := l.checkHeld(); err != nil {
+		return err
 	}
 	rel, err := l.reportRel(key)
 	if err != nil {

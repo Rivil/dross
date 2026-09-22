@@ -331,3 +331,130 @@ func TestCancelSendsTheCancelLineToTheHost(t *testing.T) {
 		}
 	}
 }
+
+// --- what a scheduled run waits on (c-3, detached) ----------------------------
+
+// statusFixture records one run and returns the root. at is the --at
+// instant, zero for none.
+func statusFixture(t *testing.T, at time.Time) string {
+	t.Helper()
+	root := chdirDross(t)
+	if err := recordDetachedRun(root, filepath.Dir(root), detachedRun{
+		Phase: "detachcmd", RunID: "r-mine", Host: "helicon", Workdir: "/srv/x",
+		RunDir: ".dross-runs/r-mine", DispatchedAt: time.Now().UTC(),
+		ScheduledFor: at, State: "scheduled",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func otherHolder() remote.Holder {
+	return remote.Holder{Project: "proj-b", Phase: "phase-x", RunID: "r-other", PID: 99, User: "u",
+		Since: time.Date(2026, 9, 21, 9, 0, 0, 0, time.UTC)}
+}
+
+func statusOut(t *testing.T) string {
+	t.Helper()
+	return captureStdout(t, func() {
+		if err := printDetachedStatus(); err != nil {
+			t.Fatalf("status: %v", err)
+		}
+	})
+}
+
+// TestStatusNamesWhatAScheduledRunWaitsOn: a run that reads as scheduled
+// with no --at is waiting on the host, and the listing says on whom.
+func TestStatusNamesWhatAScheduledRunWaitsOn(t *testing.T) {
+	statusFixture(t, time.Time{})
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "scheduled", HasLock: true,
+		Lock: remote.LockStatus{Held: true, Holder: otherHolder()}}, nil)
+	out := statusOut(t)
+	if !strings.Contains(out, "state    scheduled\n  waiting on proj-b/phase-x run r-other (pid 99) since 2026-09-21T09:00:00Z") {
+		t.Errorf("status does not name the holder after the state:\n%s", out)
+	}
+}
+
+// TestScheduledByOwnRunIDIsNotWaiting: the lock held by this run is the job
+// racing its own state write, not a wait.
+func TestScheduledByOwnRunIDIsNotWaiting(t *testing.T) {
+	statusFixture(t, time.Time{})
+	mine := otherHolder()
+	mine.RunID = "r-mine"
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "scheduled", HasLock: true,
+		Lock: remote.LockStatus{Held: true, Holder: mine}}, nil)
+	out := statusOut(t)
+	if strings.Contains(out, "waiting on") {
+		t.Errorf("a run holding its own lock reads as waiting:\n%s", out)
+	}
+	if !strings.Contains(out, "state    scheduled") {
+		t.Errorf("state line missing:\n%s", out)
+	}
+}
+
+// TestAtScheduledRunKeepsItsReason: a future --at is the reason, and the
+// existing line says it — one reason per line, no holder beside it.
+func TestAtScheduledRunKeepsItsReason(t *testing.T) {
+	at := time.Now().Add(2 * time.Hour).UTC().Truncate(time.Second)
+	statusFixture(t, at)
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "scheduled", HasLock: true,
+		Lock: remote.LockStatus{Held: true, Holder: otherHolder()}}, nil)
+	out := statusOut(t)
+	if !strings.Contains(out, "scheduled for "+at.Format(time.RFC3339)+" (host clock)") {
+		t.Errorf("the --at line is gone:\n%s", out)
+	}
+	if strings.Contains(out, "waiting on") {
+		t.Errorf("a run waiting for its --at also names a holder:\n%s", out)
+	}
+}
+
+// TestRunningRunPrintsNoHolder: state wins — a running run holds the lock
+// itself, and lock lines beside it are not a reason.
+func TestRunningRunPrintsNoHolder(t *testing.T) {
+	statusFixture(t, time.Time{})
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "running", HasLock: true,
+		Lock: remote.LockStatus{Held: true, Holder: otherHolder()}}, nil)
+	out := statusOut(t)
+	if strings.Contains(out, "waiting on") || strings.Contains(out, "r-other") {
+		t.Errorf("a running run printed a holder:\n%s", out)
+	}
+	if !strings.Contains(out, "state    running") {
+		t.Errorf("state line missing:\n%s", out)
+	}
+}
+
+// TestScheduledWithFreeLockSaysNotStarted: nothing holds the host and the job
+// has not moved yet — say so, rather than nothing.
+func TestScheduledWithFreeLockSaysNotStarted(t *testing.T) {
+	statusFixture(t, time.Time{})
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "scheduled", HasLock: true,
+		Lock: remote.LockStatus{Held: false}}, nil)
+	out := statusOut(t)
+	if !strings.Contains(out, "state    scheduled\n  not started yet") {
+		t.Errorf("a scheduled run with a free lock does not say not started yet:\n%s", out)
+	}
+}
+
+// TestEmptyRecordIsNamedAsSuch: held, holder not yet written — a fact, not a
+// blank.
+func TestEmptyRecordIsNamedAsSuch(t *testing.T) {
+	statusFixture(t, time.Time{})
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "scheduled", HasLock: true,
+		Lock: remote.LockStatus{Held: true}}, nil)
+	out := statusOut(t)
+	if !strings.Contains(out, "waiting on the host lock (holder not yet recorded)") {
+		t.Errorf("an empty record is not named as such:\n%s", out)
+	}
+}
+
+// TestLockReadErrorKeepsStatusUseful: lock lines absent from the probe
+// (ParseStatus tolerates it) leaves the state readable and the reason
+// honestly unknown, rather than failing the listing.
+func TestLockReadErrorKeepsStatusUseful(t *testing.T) {
+	statusFixture(t, time.Time{})
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "scheduled"}, nil)
+	out := statusOut(t)
+	if !strings.Contains(out, "state    scheduled") || !strings.Contains(out, "(could not read the host lock)") {
+		t.Errorf("an unreadable lock did not keep the listing useful:\n%s", out)
+	}
+}

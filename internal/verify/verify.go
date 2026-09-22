@@ -679,6 +679,15 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 		}
 		report, err := runPlanned(a, byAdapter[name], plan)
 		if err != nil {
+			if errors.Is(err, remote.ErrHostBusy) {
+				// Not a leg result: the host is held and this run was told
+				// not to wait. Every remote leg takes the same lock, so no
+				// later adapter could run either, and a tests.json recording
+				// "busy" against each leg would be a run that never happened
+				// written down as one that did. The caller maps this to its
+				// own exit code and writes nothing.
+				return nil, err
+			}
 			// Record-and-continue: adapters run in sorted-name order, so a
 			// failing early adapter (e.g. stryker misconfigured) must not
 			// throw away a finished gremlins report.

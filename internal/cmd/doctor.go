@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -1029,6 +1030,15 @@ func remoteProbeTools(p *project.Project) (tools []string, needBy, laneBy map[st
 	for _, tool := range tools {
 		seen[tool] = true
 	}
+	// The host lock's tool rides the same probe, after the adapters and
+	// before the lanes. It belongs to neither attribution: no adapter or
+	// lane wants it — every remote mutation leg does — so the callers that
+	// print "the X adapter needs it" or "lane Y needs it" skip it and doctor
+	// reports it in its own words.
+	if !seen[remote.LockTool] {
+		seen[remote.LockTool] = true
+		tools = append(tools, remote.LockTool)
+	}
 	laneBy = map[string]string{}
 	for _, lane := range p.Runtime.TestLane {
 		for _, tool := range testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain) {
@@ -1166,7 +1176,18 @@ func checkRemoteMutation(root, repoDir string, p *project.Project) int {
 			Printf("  ⚠ %s\n", n)
 		}
 		Printf("  ✓ %s reachable — workdir %s, %d cores (mutation runs and `dross test`)\n", target.Host, target.Workdir, ready.Cores)
+		lockable := true
 		for _, missing := range ready.Missing {
+			if missing == remote.LockTool {
+				// The lock's tool is a host requirement in its own words: no
+				// adapter wanted it, every mutation leg needs it, and a leg
+				// refuses rather than measuring unlocked without it (c-5).
+				Printf("  ✗ %s is not installed on %s — the host lock needs it; mutation legs refuse until it is (util-linux).\n",
+					remote.LockTool, target.Host)
+				issues++
+				lockable = false
+				continue
+			}
 			// One line per missing tool, each naming the adapter that wanted
 			// it: "something is missing" sends the user looking, and the
 			// remedy differs per toolchain.
@@ -1182,10 +1203,57 @@ func checkRemoteMutation(root, repoDir string, p *project.Project) int {
 			Printf("  ✗ %s is not installed on %s — the %s adapter needs it there.\n", missing, target.Host, adapter)
 			issues++
 		}
+		if lockable {
+			reportHostLock(*target)
+		}
 		reportLaneToolchains(target.Host, p, ready.Missing)
 	}
 	Print("")
 	return issues
+}
+
+// remoteLockStatusFn probes the host lock: LockStatusScript over the same
+// transport a run uses, parsed by ParseLockStatus. A seam so doctor's tests
+// can name a holder without a host. It is only reached once the probe has
+// found flock, because the script's own tool gate would just say so again.
+//
+// The script is a parameter rather than built inside, so a test can pin that
+// what reaches the host is the probing script and never a bare read of the
+// record — a record is stale the moment its writer dies.
+var remoteLockStatusFn = func(t remote.Target, script string) (remote.LockStatus, error) {
+	out, err := remote.ExecScript(t, script)
+	if err != nil {
+		return remote.LockStatus{}, err
+	}
+	return remote.ParseLockStatus(out)
+}
+
+// reportHostLock prints one line about the host lock: free, or held by whom.
+//
+// A held lock is ADVISORY, never an issue. Another leg measuring on the host
+// is the system working — the next leg waits its turn — and the line exists
+// so the person reading doctor knows what a wait they are about to see is
+// waiting on (c-5). A probe that could not be read is a warning for the same
+// reason: it says nothing about this repo's health.
+func reportHostLock(t remote.Target) {
+	st, err := remoteLockStatusFn(t, remote.LockStatusScript())
+	switch {
+	case err != nil:
+		Printf("  ⚠ could not read the host lock on %s: %v\n", t.Host, err)
+	case st.ToolMissing:
+		// The probe said flock was there a moment ago; the script disagrees.
+		// Reported rather than reconciled — the host is changing under us.
+		Printf("  ⚠ %s answered the probe but the lock script found no %s\n", t.Host, remote.LockTool)
+	case !st.Held:
+		Printf("  ✓ host lock free\n")
+	case st.Holder.IsZero():
+		Printf("  ℹ host busy: the host lock is held (holder not yet recorded)\n")
+	default:
+		h := st.Holder
+		Printf("  ℹ host busy: held by %s/%s run %s (user %s, pid %d) since %s (%s)\n",
+			h.Project, h.Phase, h.RunID, h.User, h.PID,
+			h.Since.UTC().Format(time.RFC3339), time.Since(h.Since).Round(time.Second))
+	}
 }
 
 // backfillResidueEntry is one roadmap phase backfill cannot close, with why.

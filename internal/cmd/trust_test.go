@@ -10,6 +10,7 @@ import (
 
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // consentFixture builds a git work tree with a complete .dross root and returns
@@ -90,7 +91,7 @@ const gatedTestCommand = "go test -count=1 ./..."
 func refuseAdapters(t *testing.T) {
 	t.Helper()
 	prev := configuredAdaptersFn
-	configuredAdaptersFn = func(p *project.Project, root string, skip bool) ([]mutation.Adapter, mutationTuning, error) {
+	configuredAdaptersFn = func(p *project.Project, root string, skip bool, _ string, _ remote.WaitPolicy) ([]mutation.Adapter, mutationTuning, error) {
 		t.Fatal("verify reached configuredAdapters despite refusing — the refusal spawned the mutation tools it was declining to authorize")
 		return nil, mutationTuning{}, nil
 	}

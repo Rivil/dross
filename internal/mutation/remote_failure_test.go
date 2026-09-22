@@ -91,7 +91,7 @@ func countLeg(rec [][]string, key string) int {
 }
 
 func remoteGremlins(root string) *Gremlins {
-	return &Gremlins{ProjectRoot: root, Remote: &remote.Target{Host: "helicon", Workdir: "/srv/dross"}}
+	return &Gremlins{ProjectRoot: root, Remote: helicon("/srv/dross")}
 }
 
 // TestRemotePushFailureIsFatalAndSpawnsNothing: if the tree never arrived,
@@ -316,7 +316,7 @@ func TestLocalExitTolerationIsUnchanged(t *testing.T) {
 		}
 	}
 
-	rl := &Launcher{Target: &remote.Target{Host: "helicon", Workdir: "/srv/dross"}}
+	rl := &Launcher{Target: helicon("/srv/dross")}
 	if err := rl.remoteExitFatal("gremlins", 0); err != nil {
 		t.Errorf("a clean remote exit was escalated: %v", err)
 	}
@@ -394,7 +394,7 @@ func TestLocalReportlessFailureIsUnchanged(t *testing.T) {
 			t.Errorf("a LOCAL reportless exit %d was escalated: %v", code, err)
 		}
 	}
-	rl := &Launcher{Target: &remote.Target{Host: "helicon", Workdir: "/srv/dross"}}
+	rl := &Launcher{Target: helicon("/srv/dross")}
 	if err := rl.reportlessExitFatal("gremlins", 0); err != nil {
 		t.Errorf("a clean remote exit with no report was escalated: %v", err)
 	}

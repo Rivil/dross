@@ -6,6 +6,7 @@ import (
 
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // reuseReportRepo is a .go-only phase whose configured adapters are a gremlins
@@ -28,7 +29,7 @@ func reuseReportRepo(t *testing.T) *mutation.Stryker {
 		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}
 	stryker := &mutation.Stryker{}
 	prev := configuredAdaptersFn
-	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) ([]mutation.Adapter, mutationTuning, error) {
+	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool, _ string, _ remote.WaitPolicy) ([]mutation.Adapter, mutationTuning, error) {
 		return []mutation.Adapter{gremlins, stryker}, mutationTuning{}, nil
 	}
 	t.Cleanup(func() { configuredAdaptersFn = prev })

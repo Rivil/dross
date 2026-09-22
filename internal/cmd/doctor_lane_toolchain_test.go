@@ -424,6 +424,9 @@ func TestRemoteProbeToolsListIsUnchanged(t *testing.T) {
 	// of, deduped adapter-first — which is exactly what the list meant before
 	// the third return value existed.
 	want, _ := remoteMutationTools(p)
+	// The host lock's tool sits between the adapters and the lanes
+	// (remote-host-mutex); it is the one entry neither derivation produces.
+	want = append(want, remote.LockTool)
 	seen := map[string]bool{}
 	for _, tool := range want {
 		seen[tool] = true
