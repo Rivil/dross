@@ -75,12 +75,12 @@ _c8b346e · extended cli-surface-sweep · d105fd0_
 
 Read inbound issues *off* the board — the direction [Issue board sync](#issue-board-sync) doesn't cover — so `/dross-inbox` and `/dross-status` can triage work filed by other people. Two faults made that read untrustworthy and both are closed. **Label filters OR rather than AND** on every backend: YouTrack and Jira emit a single disjunctive clause (one `tag:` token, one `labels IN (…)`), while GitHub and the REST backends (forgejo/gitea/gitlab) — whose APIs only ever AND a comma-joined `labels` param — fan out one request per label and union the results by issue number, so `--labels bug,feature` returns issues carrying *either*. A label the tracker has never heard of is **dropped and named on stderr** rather than erroring or silently matching nothing (locked `unknown_label`); the drop is not allowed to degrade into an unfiltered whole-board list, and a failure to read the tracker's label index refuses the query instead of guessing the index is empty. **A board failure is distinguishable from an empty board** (locked `pull_failure_signal`): `--json` emits an envelope `{"issues": […], "error": null|"…"}` and keeps exit 0 — the workflow prompts call `dross issue …` unconditionally on the promise it is a safe no-op, so a non-zero exit would break that contract — human mode says the board is unreachable instead of printing "no new issues on the board", and `--mark` refuses to stamp `last_pull` on a pull that failed, so the next run doesn't skip past the window it never actually read. **The feed also excludes what dross itself filed** (locked `exclusion_basis`): an issue linked in *any* board.json namespace — milestones, phases, quicks, backlog items, task cards — or carrying the `dross` marker label is dropped before the feed is built, so a board dross has mirrored a milestone's worth of artefacts onto returns the handful a human actually filed rather than its own writing. The two bases are deliberately redundant: board.json is branch-local, so a mirror created on a phase branch that never merged is invisible to it, while the marker label travels with the issue. Only the milestone slot is shape-gated — its value can be a numeric forge milestone id, which must not suppress the same-numbered human issue — and an empty id never matches, so an empty task link and an empty forge key cannot meet and blank the whole feed.
 
-- `pullEnvelope` (`{issues,error}`; exit 0 preserved, `last_pull` not stamped on failure) — `internal/cmd/issue.go:1390`
+- `boardsync.EmitPullEnvelope` (`{issues,error}`; exit 0 preserved, `last_pull` not stamped on failure) — `internal/boardsync/inbound.go:51`
 - `FilterKnownLabels` (unknown labels dropped + named; index failure refuses the query) — `internal/forge/forge.go:327`
 - `YouTrackClient.buildQuery` / `JiraClient.buildJQL` (single disjunctive clause) — `internal/forge/youtrack.go:814`, `internal/forge/jira.go:249`
 - `GitHubClient.ListIssues` (per-label fan-out unioned by number) — `internal/forge/github.go:201`
 - `Client.listIssuesByLabel` (same fan-out for forgejo/gitea/gitlab) — `internal/forge/forge.go:680`
-- `collectInbound` (mark-free inbound filter, shared with the watch heartbeat; drops linked, dismissed and marker-labelled issues) — `internal/cmd/issue.go:1364`
+- `boardsync.CollectInbound` (mark-free inbound filter, shared with the watch heartbeat; drops linked, dismissed and marker-labelled issues) — `internal/boardsync/inbound.go:18`
 - `Board.IsLinked` (every board.json namespace matched; milestone slot shape-gated; an empty id never matches) — `internal/board/board.go:328`
 - `TestEveryBoardNamespaceIsFiltered` (reflection over `board.Board`'s link maps fails a namespace that escapes the filter) — `internal/board/namespace_guard_test.go:79`
 
@@ -186,6 +186,16 @@ The analyzer catalog now sources language-dedicated tools from the active stack 
 
 _introduced 06-dross-quality · extended 07-stack-profiles · extended 09-marker-file-detection · extended deepen-container-iac-scanning · cea9254_
 
+### Command-layer boundary
+
+`internal/cmd` is the cobra layer and nothing else: consent, board sync, diagnostics, adapter construction and the deferred ledger live in their own packages, and the boundary is proven by import direction rather than held by convention.
+
+- `checkBoundary` (import-direction proof over `internal/`: cobra exclusivity, no reverse import of `internal/cmd`, each extracted package wired in, plus the shrink-only `os/exec` / `net/http` / `go/ast` ratchet and the no-test-lost conservation check) — `internal/cmd/boundary_test.go:142`
+- `TestCLISurfacePinned` (pre-move goldens of the trust / issue / doctor / verify surface, the doctor transcript and the test-name inventory that later moves must leave byte-identical) — `internal/cmd/cli_surface_test.go:178`
+- `TestDoctorRunGolden` (end-to-end c-6 verdict: goldens minted before any move still pass after every extraction) — `internal/cmd/cli_surface_test.go:209`
+
+_introduced cmd-package-decomposition · fc2fc5c_
+
 ### Config-derived subprocess argument safety
 
 A value read out of `.dross/project.toml` is untrusted input to git, not a trusted argument. Two layers hold. Config-derived **ref names** are validated before any git process starts: a leading `-`, or anything `git check-ref-format` rejects, is refused with a named error at `phase complete`, `phase checkout`, `milestone create` and `ship recover`. And every git invocation that passes a config- or user-derived **positional** builds its argv through separator-carrying builders — `--end-of-options` for refs, `--` for pathspecs, deliberately distinct (locked `ref_separator_token`: a `--` in a ref position makes git reinterpret the branch as a pathspec, which is a different bug, not a fix). That second layer closed a real arbitrary-file-write, where `dross repair`'s `git log` took an attacker-supplied `--output=` straight out of config. Coverage is structural rather than by inspection: a repo-wide AST audit fails by `file:line` on any positional that is neither a literal nor a prefix-constant, and the audit is itself self-checked against a FLAG/PASS snippet table so it cannot pass vacuously. That audit covers **every** binary dross spawns, not only git (locked `audit_gate_breadth`): it resolves each spawn site to a binary, looks the binary up in `internal/argfence`'s policy table, and applies whichever defence that tool can actually offer — an end-of-options token for git / `gh` / ast-grep / semgrep, outright rejection of a leading-dash value for gremlins / npx / dotnet / node, which have none (node's only dross invocation is `node -`, two literals with the request on stdin; the policy exists so a derived operand added later is refused). A binary with no table entry is a finding, so a tool nobody anticipated is in scope the day it is added, and a flag demoted *past* a separator is a finding too — in cobra `--` ends flag parsing rather than fencing one token, so a demoted flag silently becomes a positional. The `git >= 2.24` floor `--end-of-options` implies is executed, not assumed.
@@ -219,7 +229,7 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `Doctor` (remote + auth_scheme validation) — `internal/cmd/doctor.go:35`
 - `configenum.Set` (normalising enum home + per-field empty-value policy) — `internal/configenum/configenum.go:32`
 - doctor enum validation via `configenum` Sets — `internal/cmd/doctor.go:117`
-- `remoteCombinationWarnings` (runtime-fatal pairings as advisory warnings) — `internal/cmd/doctor.go:716`
+- `diag.RemoteCombination` (runtime-fatal pairings as advisory warnings) — `internal/diag/combinations.go:15`
 - `Remote.AuthUser` (`[remote].auth_user` schema + dotted read/write) — `internal/project/project.go:241`
 - `forge.Client.do` (basic scheme + construction-time auth_user check) — `internal/forge/forge.go:833`
 - `providerSwitchIn` (go/ast validator↔dispatch divergence guard) — `internal/cmd/enum_divergence_test.go:56`
@@ -276,7 +286,7 @@ Give every deferred idea a destination instead of leaving it write-only: `/dross
 - `Deferred.Target` (schema) — `internal/phase/phase.go:253`
 - `Deferred.Dismissed` (dismissed-state flag) — `internal/phase/phase.go:258`
 - `Deferred` (dross deferred list/route/unroute/dismiss) — `internal/cmd/deferred.go:22`
-- `collectDeferred` (scan + filter) — `internal/cmd/deferred.go:51`
+- `deferred.Collect` (scan + filter — the ledger's collect / address / ids / repoint verbs live in `internal/deferred`; `internal/cmd` keeps only the cobra verbs) — `internal/deferred/deferred.go:93`
 - `deferredRoute` (stamp target on disk) — `internal/cmd/deferred.go:117`
 - `deferredDismiss` (retire to dismissed, someday-only) — `internal/cmd/deferred.go:161`
 - `deferredUnroute` (clear target → someday; idempotent, refuses dismissed) — `internal/cmd/deferred.go:214`
@@ -284,18 +294,18 @@ Give every deferred idea a destination instead of leaving it write-only: `/dross
 - `Deferred.Survivor` (identity key of a routed surviving mutant; preserved across unroute) — `internal/phase/phase.go:265`
 - `deferredAdd` (`dross deferred add`, `--why` / `--target`, one-command filing) — `internal/cmd/deferred_add.go:66`
 - `deferredHome` (current-phase spec when loadable, else the `_project` store; no arm returns "nowhere to put it") — `internal/cmd/deferred_add.go:29`
-- `deferredStore` (reserved `_project` store + stable per-item id) — `internal/cmd/deferred_store.go:36`
+- `deferred.LoadStore` (reserved `_project` store + stable per-item id) — `internal/deferred/deferred.go:79`
 - `validDeferredTarget` (one target rule shared by route, add and validate) — `internal/cmd/deferred_target.go:53`
-- `resolveDeferredSource` (route/unroute/dismiss resolve `_project` through the store helper) — `internal/cmd/deferred.go:334`
+- `deferred.ResolveSource` (route/unroute/dismiss resolve `_project` through the store helper) — `internal/deferred/deferred.go:148`
 - `mirrorDeferredAdd` (same-command board mirror; warns and keeps the local write on failure) — `internal/cmd/deferred_add.go:155`
 - `danglingTargets` (validate walks the store; reserved `phases/_project` dir flagged; rename repoints store entries) — `internal/cmd/validate.go:429`
-- `TestHandoffParksNoHomelessFinding` (self-retiring guard against parking a finding instead of filing it) — `internal/cmd/deferred_homeless_repo_test.go:27`
+- `TestParksHomelessFindingScopesToOpenLoops` (self-retiring guard against parking a finding instead of filing it) — `internal/cmd/deferred_homeless_repo_test.go:40`
 - `/dross-inbox` board-off fallback + dismiss funnel — `assets/prompts/inbox.md`
-- `resolveBacklogIssue` (routed items mirrored with a `dross/target:` label, resolved by identity label) — `internal/cmd/issue.go:838`
-- `lookupPhaseIssue` (target phase's issue for the relates-to link; absent target warns and relinks later) — `internal/cmd/issue.go:808`
+- `resolveBacklogIssue` (routed items mirrored with a `dross/target:` label, resolved by identity label) — `internal/boardsync/backlog.go:313`
+- `lookupPhaseIssue` (target phase's issue for the relates-to link; absent target warns and relinks later) — `internal/boardsync/backlog.go:283`
 - `forge.IssueLinker` (optional link capability: YouTrack + Jira, absent on GitHub by design) — `internal/forge/forge.go:202`
 
-_introduced deferred-item-routing · 6509930 · extended deferred-triage-gaps · 539d475 · extended deferred-unroute-command · fb24bc2 · extended survivor-lifecycle · a6b366d · extended deferred-add-command · 5e86a7b · extended board-sync-truth · a587471_
+_introduced deferred-item-routing · 6509930 · extended deferred-triage-gaps · 539d475 · extended deferred-unroute-command · fb24bc2 · extended survivor-lifecycle · a6b366d · extended deferred-add-command · 5e86a7b · extended board-sync-truth · a587471 · extended cmd-package-decomposition · adc37f7_
 
 ### Detached mutation runs
 
@@ -321,6 +331,21 @@ A collect is **not a second-class verdict**: it goes through the same `finishVer
 - `TestReadmeDocumentsDetachedRuns` (README + verify prompt pin the five result states, so an agent never reads a still-running run as a red suite) — `internal/cmd/options_docs_test.go:401`
 
 _introduced remote-run-detach · 6ad6efa_
+
+### Doctor diagnostics
+
+`dross doctor` runs every repo-health check — red-proof pins, roadmap duplicates, remote/board combination warnings, config trust, lane consent, mutation toolchain — and prints one transcript whose exit code counts only real issues.
+
+- `diag.ConfigTrust` (structured `Section`s for the config-trust ladder: branch names, API hosts, local store, git version, exec consent and the gated surface) — `internal/diag/trust.go:54`
+- `diag.LaneConsent` (per-lane granted / stale / absent; each refused lane is exactly one issue) — `internal/diag/trust.go:257`
+- `diag.RedProof` / `diag.PinLines` — `internal/diag/redproof.go:54`
+- `diag.RoadmapDuplicates` — `internal/diag/roadmap.go:22`
+- `diag.RemoteCombination` / `diag.BoardCombination` — `internal/diag/combinations.go:15`
+- `diag.MutationToolchain` — `internal/diag/toolchain.go:24`
+- `diag.Issues` (the transcript's issue count is what the exit code carries) — `internal/diag/diag.go:54`
+- `Doctor` (gathers inputs, composes and prints; owns no check logic) — `internal/cmd/doctor.go:35`
+
+_introduced cmd-package-decomposition · 328349b_
 
 ### Exec consent audit
 
@@ -356,26 +381,26 @@ Once a repo declares [test lanes](#test-suite-runner) the grant becomes **per la
 
 A lane's `install` line carries **its own** grant, disjoint from the one covering its command and prepare (locked `install_consent`). `dross trust --lane-install <name>` writes it into a separate per-lane map under its own NUL-framed namespace, so adding an install line to a lane that already runs green never staleness-refuses that lane's ordinary test runs — folding it into the lane fingerprint the way prepare was folded in would break a passing gate over a line that has never executed. It is also a different act with a different blast radius than running a suite, so it earns its own consent rather than riding one issued for testing. An ungranted declared line is refused ahead of either install seam and on both surfaces, an edited one reports STALE rather than ABSENT, and a lane with no install line at all is a nothing-to-trust refusal rather than an empty grant.
 
-- `CheckConsent` (state resolution: granted / stale / absent; refuses unread when local.toml is git-tracked) — `internal/cmd/trust.go:127`
-- `Fingerprint` (consent bound to a hash of the consented command, not to the repo) — `internal/cmd/trust.go:111`
+- `consent.CheckConsent` (state resolution: granted / stale / absent; refuses unread when local.toml is git-tracked — the consent core sits in `internal/consent` behind a `Store` seam, and cmd's `localStore` embeds `consent.Grants` as the one local.toml writer) — `internal/consent/consent.go:130`
+- `consent.Fingerprint` (consent bound to a hash of the consented command, not to the repo) — `internal/consent/consent.go:114`
 - `execGatedCommands` (the gated roster; its completeness is enumerated and proven by the [exec consent audit](#exec-consent-audit) rather than counted in a comment) — `internal/cmd/trust.go:150`
 - `requireExecConsent` (the refusal, sited ahead of every spawn of the repo's test command) — `internal/cmd/trust.go:166`
 - `Trust` (`dross trust`, `--check`, `--lane <name>`) — `internal/cmd/trust.go:186`
-- `reportExecGatedSurface` (doctor's exec-consent section — granted / stale / absent pre-flight, the gated roster read off `execGatedCommands`, and the `//dross:exec-exempt` hatch named so it is discoverable outside a test file) — `internal/cmd/doctor.go:1272`
+- `diag.gatedSurface` (doctor's exec-consent section — granted / stale / absent pre-flight, the gated roster read off `execGatedCommands`, and the `//dross:exec-exempt` hatch named so it is discoverable outside a test file) — `internal/diag/trust.go:235`
 - `TestDrainRefusesWithoutConsent` (`dross survivor drain` refuses before `go list`, the mutation adapter or `go test -coverprofile` can spawn — asserted as zero spawns at each seam, not as a non-nil error) — `internal/cmd/survivor_drain_consent_test.go:92`
 - `TestNoCommandCountSurvivesAnywhere` (repo-wide refusal of a stated command count, over every `.go` file and every shipped prompt — the same rot in a second file is the same rot with a longer fuse) — `internal/cmd/execconsent_docs_test.go:112`
 - `TestVerifyRefusesWithoutConsent` (refusal proven to precede exec by a seam that `t.Fatal`s if reached) — `internal/cmd/trust_test.go:101`
-- `TestConsentStates` (four untrusted states as separate subtests, incl. a tracked local.toml) — `internal/cmd/trust_test.go:84`
+- `TestConsentStates` (four untrusted states as separate subtests, incl. a tracked local.toml) — `internal/consent/consent_test.go:65`
 - `TestExecutePromptChecksConsent` / `TestPromptsNeverGrantConsentForTheUser` (prompt pre-flight asserted by index; prompts may not self-grant) — `internal/cmd/consent_surface_test.go:133`
-- `LaneConsented` (per-lane fingerprints in local.toml, keyed by lane name; commandless lane is not-applicable) — `internal/cmd/trust.go:370`
+- `consent.LaneConsented` (per-lane fingerprints in local.toml, keyed by lane name; commandless lane is not-applicable — lane framing and the independent install grant share the consent core's `Store`) — `internal/consent/lane.go:110`
 - `findLane` (an unknown lane names what the repo does declare; a lane-less repo says so and names the verb that declares one) — `internal/cmd/trust.go:96`
-- `RevokeLaneConsent` (`dross test lane remove` drops only that lane's grant) — `internal/cmd/trust.go:418`
+- `consent.RevokeLaneConsent` (`dross test lane remove` drops only that lane's grant) — `internal/consent/lane.go:157`
 - `TestDoctorCountsEachRefusedLane` (each refused lane raises exactly one doctor issue — no ✗ the exit code fails to carry) — `internal/cmd/trust_lane_test.go:443`
-- `laneInstallConsentLine` (the install line framed in its own NUL-delimited namespace, so a lane can never re-split across its fields into a grant issued for neither) — `internal/cmd/trust.go:476`
+- `consent.LaneInstallLine` (the install line framed in its own NUL-delimited namespace, so a lane can never re-split across its fields into a grant issued for neither) — `internal/consent/lane.go:214`
 - `trustLaneInstall` (`dross trust --lane-install <name>`; the shared helper refuses an ungranted declared line ahead of both the local and the remote seam) — `internal/cmd/trust.go:56`
 - `TestTrustLaneInstallWithNoLineRefuses` (a lane with no install line is nothing-to-trust, not an empty grant) — `internal/cmd/trust_lane_install_cmd_test.go:277`
 
-_introduced exec-trust-followups · ca15bb2 · extended test-lane-config · 9ce037a · extended remote-toolchain-install · 1fed76d · extended exec-consent-completeness · a11a9e7_
+_introduced exec-trust-followups · ca15bb2 · extended test-lane-config · 9ce037a · extended remote-toolchain-install · 1fed76d · extended exec-consent-completeness · a11a9e7 · extended cmd-package-decomposition · 989fea7_
 
 ### Findings lifecycle
 
@@ -443,34 +468,37 @@ Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue 
 - `forge.GitHubClient` + `NewGitHubProjects` (repo issues + Projects v2 attach) — `internal/forge/github.go:29`
 - `board.Board` (string readable-id link registry) — `internal/board/board.go:31`
 - `openBoard` (resolves client solely from `[board]`) / `syncBacklog` — `internal/cmd/issue.go:94`
-- `pushBacklogItems` (id-keyed backlog links, title-checked legacy migration, reusable push seam) — `internal/cmd/issue.go:871`
+- `boardsync.PushBacklogItems` (id-keyed backlog links, title-checked legacy migration, reusable push seam) — `internal/boardsync/backlog.go:346`
 - `board.*` dotted config incl. `auth_user` — `internal/cmd/project.go:193`
 - `configenum.LifecycleStatuses` (single lifecycle vocabulary: status label + both forge state maps) — `internal/configenum/configenum.go:134`
 - `issuePhaseSync` (`--status` validated against the set before the enabled short-circuit, then normalised) — `internal/cmd/issue.go:299`
-- `TestStateMapsKeyExactlyTheEmittedStatuses` (bidirectional emitted-statuses ↔ state-map-keys gate) — `internal/cmd/board_lifecycle_divergence_test.go:269`
+- `TestStateMapsKeyExactlyTheEmittedStatuses` (bidirectional emitted-statuses ↔ state-map-keys gate) — `internal/boardsync/board_lifecycle_divergence_test.go:280`
 - `TestShipPromptEmitsTerminalBoardStatuses` (ship emits `shipped` on merge, `complete` at finalize) — `internal/cmd/ship_prompt_test.go:304`
 - `TestYouTrackErrorSnippetTruncatesAndHints` (transport error paths + backlog/subtask calls driven through httptest fakes, not accepted as network seams) — `internal/forge/youtrack_test.go:414`
-- `resolvePhaseIssue` (tracker-first mapping by marker label; board.json is a self-healing cache) — `internal/cmd/issue.go:1053`
+- `boardsync.ResolvePhaseIssue` (tracker-first mapping by marker label; board.json is a self-healing cache) — `internal/boardsync/phase.go:30`
+- `boardsync.SyncPhase` (phase / backlog / milestone mirroring and reconciliation out of `internal/cmd`; `Ctx` narrates through an `Out` resolved at call time) — `internal/boardsync/phase.go:72`
 - `YouTrackClient.applyTags` (dross marker tags on create *and* update, replace semantics) — `internal/forge/youtrack.go:766`
 - `YouTrackClient.CloseIssueAs` (writes the resolved state, then verifies the read-back) — `internal/forge/youtrack.go:325`
 - `YouTrackClient.stateField` (field names read from `[board.fields]`, today's literals as defaults) — `internal/forge/youtrack.go:57`
-- `syncTasks` (`dross issue task sync`: one issue per plan task, related to its phase's, idempotent through board.json) — `internal/cmd/issue_task.go:112`
-- `setBoardState` + `runWarnings` (workflow-field write per provider; each capability gap warned once per RUN, not once per task) — `internal/cmd/issue_task.go:330`
+- `boardsync.SyncTasks` (`dross issue task sync`: one issue per plan task, related to its phase's, idempotent through board.json) — `internal/boardsync/task.go:36`
+- `setBoardState` + `runWarnings` (workflow-field write per provider; each capability gap warned once per RUN, not once per task) — `internal/boardsync/task.go:254`
+- `boardsync.TaskPull` (task-level mirror, inbound task-state pull and the plan↔board lifecycle vocabulary live with the sync core; cmd keeps the verbs and the workflow-state refusal) — `internal/boardsync/task_pull.go:48`
 - `YouTrackClient.ensureStateValue` (a missing State value is created in the project-PRIVATE bundle and retried; a shared bundle is never written) — `internal/forge/youtrack.go:601`
-- `TestTaskEdgesPairTheBoardStatusWithThePlanStatus` (pins WHICH execute edge emits which task status, against the plan-status write beside it) — `internal/cmd/board_lifecycle_divergence_test.go:338`
+- `TestTaskEdgesPairTheBoardStatusWithThePlanStatus` (pins WHICH execute edge emits which task status, against the plan-status write beside it) — `internal/boardsync/board_lifecycle_divergence_test.go:349`
 - `TestStateMapsKeepTheLifecycleStatesDistinct` (uat ≠ in-progress ≠ shipped, and task-in-review ≠ task-in-progress, on both providers' maps) — `internal/forge/state_map_test.go:50`
-- `closeBoardIssue` (the one close path per backend: mapped state or plain close, then a read-back on the tracker's verdict) — `internal/cmd/issue.go:1207`
-- `syncOneTask` (`issue task sync --status`/`--close`: validated status, verified close, agreement point recorded only after the tracker agrees) — `internal/cmd/issue_task.go:198`
-- `statusTaskComplete` (the task lane's own terminal status; readable back off a card, never derived from a plan status) — `internal/cmd/task_lifecycle.go:42`
-- `checkMilestoneClosable` (`issue milestone sync --close`; refuses a version bundle / agile board / numeric milestone id by name) — `internal/cmd/issue.go:334`
-- `reconcileBacklog` (`issue backlog sync --phase`: closes resolved mirrors, names the unattributable, keeps the link on a refused close) — `internal/cmd/issue.go:668`
-- `TestEveryMirrorLaneHasATerminalEmission` (every lane's terminal emission pinned in the prompt corpus, distinct from its working states) — `internal/cmd/board_lifecycle_divergence_test.go:554`
-- `classifyReap` (the sweep's verdict: every mirror class decided from the on-disk record, never the card) — `internal/cmd/issue_reap.go:129`
-- `discoverReap` (marker-label discovery of dross-authored cards no board.json namespace links) — `internal/cmd/issue_reap_discover.go:92`
-- `applyReap` (`issue reap --apply`: per-card failure isolation, prior state journalled before each write) — `internal/cmd/issue_reap_apply.go:112`
-- `undoReap` (`issue reap --undo`: the last run replayed backwards through `forge.StateWriter`) — `internal/cmd/issue_reap_undo.go:24`
+- `boardsync.CloseIssue` (the one close path per backend: mapped state or plain close, then a read-back on the tracker's verdict) — `internal/boardsync/phase.go:184`
+- `syncOneTask` (`issue task sync --status`/`--close`: validated status, verified close, agreement point recorded only after the tracker agrees) — `internal/boardsync/task.go:122`
+- `boardsync.StatusTaskComplete` (the task lane's own terminal status; readable back off a card, never derived from a plan status) — `internal/boardsync/lifecycle.go:44`
+- `boardsync.CheckMilestoneClosable` (`issue milestone sync --close`; refuses a version bundle / agile board / numeric milestone id by name) — `internal/boardsync/milestone.go:21`
+- `boardsync.ReconcileBacklog` (`issue backlog sync --phase`: closes resolved mirrors, names the unattributable, keeps the link on a refused close) — `internal/boardsync/backlog.go:143`
+- `TestEveryMirrorLaneHasATerminalEmission` (every lane's terminal emission pinned in the prompt corpus, distinct from its working states) — `internal/boardsync/board_lifecycle_divergence_test.go:565`
+- `boardsync.Classify` (the sweep's verdict: every mirror class decided from the on-disk record, never the card) — `internal/boardsync/reap.go:137`
+- `boardsync.Discover` (marker-label discovery of dross-authored cards no board.json namespace links) — `internal/boardsync/reap_discover.go:94`
+- `boardsync.Apply` (`issue reap --apply`: per-card failure isolation, prior state journalled before each write) — `internal/boardsync/reap_apply.go:115`
+- `boardsync.Undo` (`issue reap --undo`: the last run replayed backwards through `forge.StateWriter`) — `internal/boardsync/reap_undo.go:24`
+- `boardsync.Inventory` (the reap sweep — classify / discover / apply / undo — lives with the sync core; cmd keeps only the reap verb and the plan printer) — `internal/boardsync/reap_apply.go:39`
 - `forge.StateWriter` (literal-column writes, bypassing the state map; GitHub deliberately does not implement it) — `internal/forge/forge.go:227`
-- `TestEveryBoardNamespaceHasAReapPath` (reflection over board.Board: a new namespace with no reap lane fails by field name) — `internal/cmd/board_lifecycle_divergence_test.go:700`
+- `TestEveryBoardNamespaceHasAReapPath` (reflection over board.Board: a new namespace with no reap lane fails by field name) — `internal/boardsync/board_lifecycle_divergence_test.go:747`
 - `issuePhase` (the mirror verbs as nested parent+child subcommands, no aliases) — `internal/cmd/issue.go:53`
 - `issueReap` (`dross issue reap`: the dry-run plan, `--namespace` validated by reflection) — `internal/cmd/issue_reap_cmd.go:22`
 - `reaplog.Card` (gitignored `.dross/reap-log.json`: prior column recorded *before* the write, failed closes excluded from the undo target) — `internal/reaplog/reaplog.go:50`
@@ -491,7 +519,7 @@ Reconstruct the completion marker for phases that finished before the marker exi
 - `backfillCandidates` (candidates are phase directories with a status-less record, never roadmap arrays) — `internal/cmd/phase_backfill.go:166`
 - `backfillResidue` (doctor's offline advisory naming what backfill cannot close, and why) — `internal/cmd/doctor.go:1279`
 
-_introduced legacy-phase-backfill · 45fad76_
+_introduced legacy-phase-backfill · 45fad76 · extended cmd-package-decomposition · 58e26f3_
 
 ### Machine-local store
 
@@ -613,7 +641,8 @@ Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Sve
 - `strykerPin` (exact `@stryker-mutator/core@9.6.1`, shared by the argv and the install hint) — `internal/mutation/stryker.go:418`
 - `strykerInitialTestFailureText` / `strykerInitialTestTruncationNote` (a no-report abort matching stryker's own initial-test-run header says the failure list is truncated by design) — `internal/mutation/stryker.go:286`
 - `StrykerNet.rePrefixFiles` (absolute `FullPath` → repo-relative) — `internal/mutation/stryker_net.go:240`
-- `dockerPrefix` (exact-`docker` exec-prefix guard) — `internal/cmd/verify.go:1236`
+- `mutationcfg.DockerPrefix` (exact-`docker` exec-prefix guard) — `internal/mutationcfg/mutationcfg.go:273`
+- `mutationcfg.Configured` (one roster + `Source` seam builds every adapter for verify / doctor / drain; toolchain gaps and the docker prefix derive from the same roster) — `internal/mutationcfg/mutationcfg.go:217`
 - `TestStrykerRunsEndToEnd` (the real tool against a committed TS fixture: argv + config + report path + format, together) — `internal/mutation/stryker_e2e_test.go:48`
 - `TestEveryClaimedExtensionDispatches` (every claimed extension reaches an adapter; a dropped switch entry is named) — `internal/verify/dispatch_surface_test.go:42`
 - `checkMutationToolchain` (doctor's advisory for a missing local toolchain, scoped to configured adapters) — `internal/cmd/doctor.go:979`
@@ -634,7 +663,7 @@ A failed tool invocation is recorded **one way**, by every adapter. The cut is a
 - `noReportError` (stryker.net's no-report case, discriminated where the exit status is known) — `internal/mutation/stryker_net.go:331`
 - `TestRecordRealExitStatusOne` (a literal exit status of 1 is not the did-not-start sentinel; `RecordLegError` carries a non-nil error's text) — `internal/mutation/toolfail_test.go:204`
 
-_introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended self-audit · de8b076 · extended config-trust-hardening · 266a84d · extended mutation-diff-scope · 16d4426 · extended survivor-drain · 87ba203 · extended multilang-verify-signal · a58de69 · extended cache-budget-prune · 1b777e4 · extended milestone-push-failure-tests · 4f53aa5 · extended remote-run-detach · daf7206 · extended tool-output-not-persisted · 69bfc6e_
+_introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended self-audit · de8b076 · extended config-trust-hardening · 266a84d · extended mutation-diff-scope · 16d4426 · extended survivor-drain · 87ba203 · extended multilang-verify-signal · a58de69 · extended cache-budget-prune · 1b777e4 · extended milestone-push-failure-tests · 4f53aa5 · extended remote-run-detach · daf7206 · extended tool-output-not-persisted · 69bfc6e · extended cmd-package-decomposition · 4dad99f_
 
 ### Phase base truth
 
@@ -652,9 +681,9 @@ _introduced complete-base-truth · e1f72be_
 
 One reader answers "is this phase done?" for every surface that asks, so `dross status`, `dross milestone progress` and `dross phase list` cannot drift into three different answers over the same phase directory. The authority is the **completion record** — `changes.json`'s monotonic `complete`/`shipped` status marker, written by `dross ship` and `dross phase complete` — never a verify verdict: a phase can pass verification and never open a PR, so verified is not shipped, and counting verdicts is exactly the split v1.4 shipped with, where the status bar read 0/11 while milestone progress read 11/11 over the same eleven directories in the same second. An unscaffolded slug is never done whatever else says so, since a roadmap entry with no phase directory is work that was listed and never built. The record is now the **only** arm: the 50-entry `state.json` history fallback is deleted, so doneness reads `changes.json` alone and gives the same answer on every machine and in a fresh clone, where a machine-local gitignored history reads empty. Deleting it is only safe because the marker is backfillable — [Legacy phase backfill](#legacy-phase-backfill) writes the missing markers onto pre-marker records from evidence, so no historical phase loses its answer with the fallback. The same authority now reaches the four **re-entry** surfaces that had each kept a private copy of the question — `dross watch`'s drift digest, the `dross phase reconcile` count, status's shipped/waiting-on-merge line and the SessionStart re-entry hint. All four read the capped `completed <id>` history breadcrumb, so a long-finished phase came back the moment 50 further state actions aged that breadcrumb out; they read `changes.Complete` instead. That read is deliberately **narrower than `phaseDone`**: it suppresses on `complete` alone and never on `shipped`, because shipped-not-merged is precisely the mid-flight state these surfaces exist to announce — widening it would silence the merge gate. Completion's own idempotency guard in `phase.go` still reads the breadcrumb, and correctly so: it asks whether the write already happened, not whether the phase is done.
 
-- `phaseDone` (entry point; resolves scaffolded-ness itself so a caller holding only a slug never has to) — `internal/cmd/phasedone.go:21`
-- `phaseIsDone` (single-arm answer: scaffolded AND changes.json says finished — no state-history fallback) — `internal/cmd/phasedone.go:42`
-- `phaseDirExists` (scaffolded-ness; an unscaffolded slug is never done) — `internal/cmd/phasedone.go:58`
+- `phase.Done` (entry point; resolves scaffolded-ness itself so a caller holding only a slug never has to) — `internal/phase/done.go:21`
+- `phase.IsDone` (single-arm answer: scaffolded AND changes.json says finished — no state-history fallback) — `internal/phase/done.go:42`
+- `phase.DirExists` (scaffolded-ness; an unscaffolded slug is never done) — `internal/phase/done.go:58`
 - `askAllThree` (cross-command guard: one fixture put to all three commands, failing by name whichever disagrees) — `internal/cmd/completion_record_truth_test.go:51`
 - `changes.Complete` (record-only doneness predicate the four re-entry surfaces share; complete, never shipped) — `internal/changes/changes.go:365`
 - `reconcilablePhases` (reconcile count off the record; its `*state.State` parameter went dead with the breadcrumb read and was removed) — `internal/cmd/phase_reconcile.go:108`
@@ -673,7 +702,7 @@ Create, list, number, migrate, complete, and reorder/insert/rename phases on ded
 - `phaseList` (bare listing: global, cross-milestone, deduped, marked and footered) — `internal/cmd/phase.go:80`
 - `listMilestoneRoadmap` (`--milestone <version>`: one roadmap in array order, unscaffolded slugs listed and counted) — `internal/cmd/phase.go:134`
 - `phase.Ordered` (array order wins over directory-name sort; a slug on two roadmaps emitted once, at its earlier position) — `internal/phase/phase.go:84`
-- `duplicateRoadmapSlugs` (doctor's advisory naming a slug claimed by more than one milestone) — `internal/cmd/doctor.go:681`
+- `diag.RoadmapDuplicates` (doctor's advisory naming a slug claimed by more than one milestone) — `internal/diag/roadmap.go:22`
 - `phaseCreate` — `internal/cmd/phase.go:187`
 - `phaseNumber` — `internal/cmd/phase.go:54`
 - `phaseMigrate` — `internal/cmd/migrate.go:31`
@@ -793,7 +822,7 @@ Two shapes hold it. A **detached** run composes the prelude inside the `setsid` 
 - `remote.Acquire` / `Hold` (the attached session over ssh stdin; keepalive + lease; `Held`, `Alongside`, `ErrHostBusy`, `ErrLockTool`, `Lost`) — `internal/remote/hold.go:139`
 - `remote.DetachScript` (the prelude inside the detached job, after the sleep, before `running`; noflock records 127 and finishes) — `internal/remote/remote.go:389`
 - `mutation.Launcher.ensureHeld` / `checkHeld` (one hold per run before the push; released in `Close`; a lost hold refuses to record) — `internal/mutation/launcher.go:375`
-- `resolveMutationTuning` (mints the holder — project, phase, run id — once for verify and the drain) — `internal/cmd/verify.go:1190`
+- `mutationcfg.ResolveTuning` (mints the holder — project, phase, run id — once for verify and the drain) — `internal/mutationcfg/mutationcfg.go:163`
 - `holdHostForSuite` (`dross test`'s bounded wait and the alongside path) — `internal/cmd/test.go:964`
 - `scheduledReason` (what a scheduled detached run is waiting on, for status and results) — `internal/cmd/verify.go:910`
 - `reportHostLock` (doctor names the holder) — `internal/cmd/doctor.go:1238`
@@ -1234,9 +1263,9 @@ Stated limit, measured rather than assumed: this buys a **free laptop, not a fas
 - `TestOptionsDocumentsTheSelectorSurfaceCorrectly` (README / ARCHITECTURE.md / options.md carry the selector styles, empty-exit codes and miss outcome, guarded by needles plus a flag-parity check against the registered cobra flags) — `internal/cmd/options_docs_test.go:281`
 - `runLanePrepare` (spawns the bootstrap through the same local/remote seams as the command, and re-tags a command-exit failure as exit 7 without touching the transport family) — `internal/cmd/test.go:722`
 - `exitPrepareFailed` (exit **7**, ranked between partial and a red suite so a failed bootstrap can never be read as failing code) — `internal/cmd/test.go:74`
-- `laneConsentLine` (one grant per lane over a framed prepare+command; byte-identical to the bare command for a lane declaring no prepare, so existing grants survive) — `internal/cmd/trust.go:321`
-- `laneTemplateFrame` (the third length-framed consent namespace, binding selector_template and selector_join beside command and prepare) — `internal/cmd/trust.go:292`
-- `laneConsentRefusal` (names the line that actually changed, refuses that lane alone, and keeps STALE distinct from never-trusted) — `internal/cmd/trust.go:566`
+- `consent.LaneLine` (one grant per lane over a framed prepare+command; byte-identical to the bare command for a lane declaring no prepare, so existing grants survive) — `internal/consent/lane.go:61`
+- `consent.LaneTemplateFrame` (the third length-framed consent namespace, binding selector_template and selector_join beside command and prepare) — `internal/consent/lane.go:32`
+- `consent.LaneRefusal` (names the line that actually changed, refuses that lane alone, and keeps STALE distinct from never-trusted) — `internal/consent/lane.go:302`
 - `testLaneEdit` (`dross test lane edit <name>`: every field in place — match, command, selector, empty_exit, template and join — keeping the lane's position; reads cobra's `Changed` so omitted and empty stay distinct, and *stales* the grant instead of revoking it) — `internal/cmd/test_lane.go:385`
 - `laneRefusal` (the one CLI gate for a proposed lane, validating a synthetic one-lane project so a neighbour's fault cannot block the edit that fixes it) — `internal/cmd/test_lane.go:131`
 - `testlane.Expand` (`{path}` repeats the template per path, `{paths}` substitutes them into one instance and joins when declared; the sole shell quoter, so template text and substituted path are quoted by one implementation) — `internal/testlane/template.go:52`
@@ -1256,8 +1285,8 @@ Captured subprocess output is never persisted: tests.json, verify.toml, PR bodie
 - `RunScoped` (the persisted leg-error string comes from the carrier, the one write the walker accepts) — `internal/verify/verify.go:636`
 - `scanRecordedWrites` (two-way walk over four roots: every sink declared, every `Recorded` write from the carrier) — `internal/cmd/toolfence_carrier_test.go:209`
 - `TestEveryPersistedTextSinkIsDeclared` (a new text sink without a declaration, or a stale declaration, is named by file and line) — `internal/cmd/toolfence_enum_test.go:60`
-- `bodySites` (sink-keyed enumeration of every PR and board body composer, with a per-group vacuity floor) — `internal/cmd/toolfence_composer_test.go:302`
-- `TestNoComposerRendersARecordedField` (the four named composers called with a canary in every `Recorded` field) — `internal/cmd/toolfence_composer_test.go:54`
+- `bodySites` (sink-keyed enumeration of every PR and board body composer, with a per-group vacuity floor) — `internal/boardsync/toolfence_composer_test.go:307`
+- `TestNoComposerRendersARecordedField` (the four named composers called with a canary in every `Recorded` field) — `internal/boardsync/toolfence_composer_test.go:54`
 - `TestFailedLegReachesDiskClean` (a failed leg read back off tests.json and verify.toml: facts present, tool text absent, and the leaky twin proves the checks can fire) — `internal/verify/persist_toolfence_test.go:47`
 - `scanErrorConstructors` (residual AST ban on rendering the head buffer inside `errors.New` / `fmt.Errorf` / `fmt.Sprintf`) — `internal/mutation/toolfence_residual_test.go:154`
 
@@ -1310,7 +1339,7 @@ Read-only `/loop` heartbeat: `dross watch --json` surfaces board issues new-sinc
 - `suggestedCommand` (ranked verify→ship→inbox→status) — `internal/cmd/watch.go:135`
 - `watch.State.Diff` (new/carried seen-set delta) — `internal/watch/watch.go:85`
 - `watch.ClassifyDrift` (milestone-scoped phase drift) — `internal/watch/drift.go:42`
-- `collectInbound` (mark-free inbound filter, shared with `issue pull`) — `internal/cmd/issue.go:1364`
+- `boardsync.CollectInbound` (mark-free inbound filter, shared with `issue pull`) — `internal/boardsync/inbound.go:18`
 - `/dross-watch` prompt (non-interactive broadcast) — `assets/prompts/watch.md:1`
 
 _introduced dross-watch · 5694cf5 · extended board-mirror-reaper · 757a576 · extended reentry-signal-truth · f19cc07_
