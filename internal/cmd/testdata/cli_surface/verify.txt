@@ -3,6 +3,7 @@ command: verify
   short: Run mutation testing per language and write tests.json + verify.toml skeleton
   flag: --skip-mutation (bool) default="false" noopt="true" usage="do not run mutation tests (record what would have been mutated, skip execution)"
   flag: --detach (bool) default="false" noopt="true" usage="start the run on the granted host and return immediately; collect it later with `dross verify results <phase>`"
+  flag: --no-wait (bool) default="false" noopt="true" usage="refuse (exit 15, naming the holder) instead of waiting when another run holds the granted host"
   flag: --at (string) default="" usage="with --detach, start the run at HH:MM (next occurrence) or an RFC3339 instant, on the host's clock"
   flag: --reuse-report (bool) default="false" noopt="true" usage="stryker only: parse the report already on disk instead of launching a run (path + mtime are printed; other legs still run)"
   flag: --base (string) default="" usage="diff from this commit instead of the resolved fork point (a merged phase falls back to changes.json's base_commit automatically; use this when it has none)"
