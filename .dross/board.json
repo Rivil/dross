@@ -580,6 +580,21 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "dependency-update-automation/t-1": {
+      "issue": "DRO-621",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "dependency-update-automation/t-2": {
+      "issue": "DRO-622",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "dependency-update-automation/t-3": {
+      "issue": "DRO-623",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "exec-consent-completeness/t-1": {
       "issue": "DRO-333",
       "plan_status": "done",

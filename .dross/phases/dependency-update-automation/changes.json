@@ -2,5 +2,51 @@
   "phase": "dependency-update-automation",
   "base": "milestone/v1.7",
   "base_commit": "dfe06bef9c0b82add6af9df697ee461632538dad",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        ".github/dependabot.yml",
+        "internal/cmd/dependabot_config_test.go"
+      ],
+      "commit": "8963183",
+      "completed_at": "2026-09-22T17:56:07.388851Z",
+      "landmarks": [
+        {
+          "feature": "Supply-chain currency",
+          "symbol": "dependabotEcosystems",
+          "loc": "internal/cmd/dependabot_config_test.go:52",
+          "what": ".github/dependabot.yml raises weekly bump PRs for gomod/github-actions/npm with minor+patch grouped per ecosystem behind a 7-day release-age cooldown; a line-based sweep fails on a dropped ecosystem, a slid schedule, a lost group or cooldown, or a target-branch key"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/action_pins_test.go",
+        "internal/cmd/toolchain_source_test.go"
+      ],
+      "commit": "2f34d78",
+      "completed_at": "2026-09-22T17:56:21.995686Z",
+      "landmarks": [
+        {
+          "feature": "Supply-chain currency",
+          "symbol": "actionPins",
+          "loc": "internal/cmd/action_pins_test.go:46",
+          "what": "every workflow uses: must be a 40-hex SHA with a trailing # vX.Y.Z comment, and TestToolchainSingleSource compares that comment against a v7.0.0 floor by semver so a bot setup-go bump lands without a hand edit"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        ".github/dependabot.yml"
+      ],
+      "completed_at": "2026-09-22T17:57:17.145966Z",
+      "notes": "c-5 evidence, captured 2026-09-22T17:56:38Z on Rivil/dross. Before: 'gh api repos/Rivil/dross/vulnerability-alerts' -\u003e HTTP 404; 'gh api repos/Rivil/dross/automated-security-fixes' -\u003e {\"enabled\":false,\"paused\":false}. Enabled with 'gh api -X PUT' on both endpoints (HTTP 204 each). After: vulnerability-alerts -\u003e HTTP 204; automated-security-fixes -\u003e {\"enabled\":true,\"paused\":false}. No code commit and no new file: the change is a GitHub repo setting. plan.toml declares files = [] for this task, but 'dross changes record' requires at least one --files entry, so this points at the file whose header names both settings (committed as t-1, 8963183) rather than claiming a fresh edit.",
+      "landmarks": [
+        {
+          "feature": "Supply-chain currency",
+          "what": "Dependabot vulnerability alerts and automated security fixes enabled on Rivil/dross, so an advisory against a pinned dep opens a PR the day it lands rather than waiting for the weekly currency run; cooldown never delays a security update"
+        }
+      ]
+    }
+  }
 }
