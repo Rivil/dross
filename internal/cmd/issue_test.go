@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/board"
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/forge"
 )
@@ -850,16 +851,16 @@ func readBoardJSON(dir string) (*struct {
 
 // --- mutation-coverage tests (kill NOT-COVERED mutants in issue.go) ---
 
-// TestIssueCover_wrapBoard exercises both arms of wrapBoard's nil guard
+// TestIssueCover_wrapBoard exercises both arms of boardsync.Wrap's nil guard
 // (issue.go:121). Nil in → nil out; a real error is wrapped under "board:".
 func TestIssueCover_wrapBoard(t *testing.T) {
-	if got := wrapBoard(nil); got != nil {
-		t.Errorf("wrapBoard(nil) = %v, want nil", got)
+	if got := boardsync.Wrap(nil); got != nil {
+		t.Errorf("boardsync.Wrap(nil) = %v, want nil", got)
 	}
 	base := errors.New("boom")
-	got := wrapBoard(base)
+	got := boardsync.Wrap(base)
 	if got == nil {
-		t.Fatal("wrapBoard(non-nil) returned nil, want a wrapped error")
+		t.Fatal("boardsync.Wrap(non-nil) returned nil, want a wrapped error")
 	}
 	if !strings.Contains(got.Error(), "board: boom") {
 		t.Errorf("wrapBoard error = %q, want to contain 'board: boom'", got.Error())
@@ -869,7 +870,7 @@ func TestIssueCover_wrapBoard(t *testing.T) {
 	}
 }
 
-// TestIssueCover_phaseSyncMilestoneLinks drives syncPhase down the
+// TestIssueCover_phaseSyncMilestoneLinks drives boardsync.SyncPhase down the
 // milestone-declared branch: ensureMilestoneLink must succeed and the phase
 // issue is created afterwards (issue.go:419). If the nil-guard is negated the
 // command returns early with no issue created and no output.
@@ -886,7 +887,7 @@ func TestIssueCover_phaseSyncMilestoneLinks(t *testing.T) {
 			// it. Derived from the constant, not spelled out: hard-coding
 			// "dross/status:planning" here is what made these two fixtures the
 			// only casualties of the planned/planning rename.
-			_, _ = fmt.Fprintf(w, `[{"id":1,"name":"dross"},{"id":2,"name":%q}]`, statusLabel(statusPlanned))
+			_, _ = fmt.Fprintf(w, `[{"id":1,"name":"dross"},{"id":2,"name":%q}]`, boardsync.StatusLabel(boardsync.StatusPlanned))
 		case strings.HasSuffix(r.URL.Path, "/labels") && r.Method == "POST":
 			// The phase-identity label is new to this board.
 			w.WriteHeader(http.StatusCreated)
@@ -936,7 +937,7 @@ milestone = "v0.1"
 }
 
 // TestIssueCover_phaseSyncCloseOnCreate drives the close-on-create edge in
-// syncPhase (issue.go:460-461): a brand-new phase issue is created then closed
+// boardsync.SyncPhase (issue.go:460-461): a brand-new phase issue is created then closed
 // in the same call. Success prints "(closed)" and persists the link; negating
 // the CloseIssue error-guard returns early so neither happens.
 func TestIssueCover_phaseSyncCloseOnCreate(t *testing.T) {
@@ -948,7 +949,7 @@ func TestIssueCover_phaseSyncCloseOnCreate(t *testing.T) {
 			// it. Derived from the constant, not spelled out: hard-coding
 			// "dross/status:planning" here is what made these two fixtures the
 			// only casualties of the planned/planning rename.
-			_, _ = fmt.Fprintf(w, `[{"id":1,"name":"dross"},{"id":2,"name":%q}]`, statusLabel(statusPlanned))
+			_, _ = fmt.Fprintf(w, `[{"id":1,"name":"dross"},{"id":2,"name":%q}]`, boardsync.StatusLabel(boardsync.StatusPlanned))
 		case strings.HasSuffix(r.URL.Path, "/labels") && r.Method == "POST":
 			// The phase-identity label is new to this board.
 			w.WriteHeader(http.StatusCreated)
@@ -1060,7 +1061,7 @@ func TestIssueCover_quickClose(t *testing.T) {
 			patched = true
 			_, _ = w.Write([]byte(`{"number":88,"state":"closed"}`))
 		case strings.HasSuffix(r.URL.Path, "/issues/88") && r.Method == "GET":
-			// closeBoardIssue's read-back: the quick lane is verified now, so
+			// boardsync.CloseIssue's read-back: the quick lane is verified now, so
 			// the fake has to answer for the state it just accepted.
 			state := "open"
 			if patched {
@@ -1294,7 +1295,7 @@ func TestIssueCover_listDismissed(t *testing.T) {
 }
 
 // fakeInboundClient is a forge.BoardClient that returns a fixed issue list and
-// records nothing — enough to unit-test collectInbound in isolation.
+// records nothing — enough to unit-test boardsync.CollectInbound in isolation.
 type fakeInboundClient struct{ issues []forge.Issue }
 
 func (f fakeInboundClient) EnsureMilestone(string, string) (string, error)     { return "", nil }
@@ -1306,7 +1307,7 @@ func (f fakeInboundClient) UpdateIssue(string, forge.IssuePatch) (*forge.Issue, 
 func (f fakeInboundClient) CloseIssue(string) error                             { return nil }
 func (f fakeInboundClient) ListIssues(forge.IssueFilter) ([]forge.Issue, error) { return f.issues, nil }
 
-// TestCollectInboundNoMark proves the mark-free reuse path (c-4): collectInbound
+// TestCollectInboundNoMark proves the mark-free reuse path (c-4): boardsync.CollectInbound
 // drops linked/dismissed issues and never stamps last_pull.
 func TestCollectInboundNoMark(t *testing.T) {
 	bd := board.New()
@@ -1318,16 +1319,16 @@ func TestCollectInboundNoMark(t *testing.T) {
 		{Key: "20", Title: "dismissed"},
 		{Key: "21", Title: "fresh"},
 	}}
-	ctx := &boardCtx{client: client, board: bd}
+	ctx := &boardCtx{Client: client, Board: bd}
 
-	got, err := collectInbound(ctx, forge.IssueFilter{State: "open"})
+	got, err := boardsync.CollectInbound(ctx, forge.IssueFilter{State: "open"})
 	if err != nil {
 		t.Fatalf("collectInbound: %v", err)
 	}
 	if len(got) != 1 || got[0].Key != "21" {
 		t.Fatalf("filter wrong, want only #21 inbound, got %v", got)
 	}
-	if !ctx.board.LastPull.IsZero() {
+	if !ctx.Board.LastPull.IsZero() {
 		t.Fatal("collectInbound must be mark-free, but LastPull was stamped")
 	}
 }
@@ -1557,7 +1558,7 @@ func jiraBoardRepo(t *testing.T, apiBase string) string {
 // state map keys. It used to be "planning" while both maps keyed "planned", so
 // this exact shape of phase — the commonest one, the moment right after
 // /dross-plan — warned and skipped its transition. The transition POST is the
-// assertion: if derivePhaseStatus emits anything outside
+// assertion: if boardsync.DerivePhaseStatus emits anything outside
 // configenum.LifecycleStatuses, resolveJiraState returns ok=false, SetState
 // returns early, and the count stays zero.
 func TestIssuePhaseSyncJiraTransitionsALockedButUnstartedPlan(t *testing.T) {
@@ -1645,8 +1646,8 @@ status = "pending"
 	if strings.Contains(stderr, "has no Jira status mapping") {
 		t.Errorf("the derived status is unmapped:\n%s", stderr)
 	}
-	if got := labelsOf(createdFields); !containsStr(got, statusLabel(statusPlanned)) {
-		t.Errorf("create labels = %v, want one of them %q", got, statusLabel(statusPlanned))
+	if got := labelsOf(createdFields); !containsStr(got, boardsync.StatusLabel(boardsync.StatusPlanned)) {
+		t.Errorf("create labels = %v, want one of them %q", got, boardsync.StatusLabel(boardsync.StatusPlanned))
 	}
 
 	// Second sync — the link exists, so the labels ride a PUT to the issue.
@@ -1660,8 +1661,8 @@ status = "pending"
 	if issuePuts != 1 {
 		t.Errorf("second sync should PUT the issue once, got %d", issuePuts)
 	}
-	if got := labelsOf(putFields); !containsStr(got, statusLabel(statusPlanned)) {
-		t.Errorf("label PUT = %v, want one of them %q (not dross/status:planning)", got, statusLabel(statusPlanned))
+	if got := labelsOf(putFields); !containsStr(got, boardsync.StatusLabel(boardsync.StatusPlanned)) {
+		t.Errorf("label PUT = %v, want one of them %q (not dross/status:planning)", got, boardsync.StatusLabel(boardsync.StatusPlanned))
 	}
 	if containsStr(labelsOf(putFields), "dross/status:planning") {
 		t.Error(`the label PUT still carries "dross/status:planning" — the pre-rename value`)
@@ -1801,8 +1802,8 @@ func TestIssuePhaseSyncNormalizesStatusBeforeUse(t *testing.T) {
 		})
 	})
 
-	if got := labelsOf(createdFields); !containsStr(got, statusLabel(statusUAT)) {
-		t.Errorf("labels = %v, want %q — the raw flag value reached statusLabel", got, statusLabel(statusUAT))
+	if got := labelsOf(createdFields); !containsStr(got, boardsync.StatusLabel(boardsync.StatusUAT)) {
+		t.Errorf("labels = %v, want %q — the raw flag value reached statusLabel", got, boardsync.StatusLabel(boardsync.StatusUAT))
 	}
 	if transitionPosts != 1 {
 		t.Errorf("transition POSTs = %d, want 1 — the raw value missed the state map", transitionPosts)
@@ -1813,7 +1814,7 @@ func TestIssuePhaseSyncNormalizesStatusBeforeUse(t *testing.T) {
 }
 
 // TestIssuePhaseSyncStillDerivesWithoutTheFlag pins that the validator does not
-// swallow the absent-flag case: with no --status, syncPhase still derives from
+// swallow the absent-flag case: with no --status, boardsync.SyncPhase still derives from
 // plan progress. A plan with one task done derives in-progress, which is a
 // different answer from t-1's all-pending fixture — so this fails if the
 // derivation is short-circuited rather than merely reaching a valid value.
@@ -1866,8 +1867,8 @@ status = "done"
 			}
 		})
 	})
-	if got := labelsOf(createdFields); !containsStr(got, statusLabel(statusInProgress)) {
-		t.Errorf("labels = %v, want %q derived from the plan", got, statusLabel(statusInProgress))
+	if got := labelsOf(createdFields); !containsStr(got, boardsync.StatusLabel(boardsync.StatusInProgress)) {
+		t.Errorf("labels = %v, want %q derived from the plan", got, boardsync.StatusLabel(boardsync.StatusInProgress))
 	}
 }
 
@@ -1892,11 +1893,11 @@ func TestIssuePhaseSyncStatusFlagHelpNamesTheSet(t *testing.T) {
 // vocabulary to the Set both forge state maps key on.
 //
 // The membership loop is the load-bearing half: retyping any of these constants
-// to a value the Set does not carry — statusUAT as "verify", say — fails
+// to a value the Set does not carry — boardsync.StatusUAT as "verify", say — fails
 // here rather than silently at sync time on a real board, which is how the
 // planning/planned drift survived as long as it did.
 func TestLifecycleVocabularyIsTheConfigenumSet(t *testing.T) {
-	for _, s := range []string{statusPlanned, statusInProgress, statusUAT} {
+	for _, s := range []string{boardsync.StatusPlanned, boardsync.StatusInProgress, boardsync.StatusUAT} {
 		if !configenum.LifecycleStatuses.Has(s) {
 			t.Errorf("issue.go declares lifecycle literal %q, which is not a configenum.LifecycleStatuses member (%s)", s, configenum.LifecycleStatuses.List())
 		}
@@ -2078,8 +2079,8 @@ func TestPullAgainstThisReposBoardJSON(t *testing.T) {
 		t.Fatalf("%s links nothing — this test would pass vacuously", path)
 	}
 
-	ctx := &boardCtx{client: fakeInboundClient{issues: linked}, board: bd}
-	got, err := collectInbound(ctx, forge.IssueFilter{State: "all"})
+	ctx := &boardCtx{Client: fakeInboundClient{issues: linked}, Board: bd}
+	got, err := boardsync.CollectInbound(ctx, forge.IssueFilter{State: "all"})
 	if err != nil {
 		t.Fatalf("collectInbound: %v", err)
 	}
@@ -2093,12 +2094,12 @@ func TestPullAgainstThisReposBoardJSON(t *testing.T) {
 func TestCollectInboundKeepsDismissedAndHumanVerdicts(t *testing.T) {
 	bd := board.New()
 	bd.Dismiss("PROJ-20")
-	ctx := &boardCtx{board: bd, client: fakeInboundClient{issues: []forge.Issue{
+	ctx := &boardCtx{Board: bd, Client: fakeInboundClient{issues: []forge.Issue{
 		{Key: "PROJ-20", Title: "dismissed"},
 		{Key: "PROJ-21", Title: "a real bug", Labels: []string{"bug"}},
 	}}}
 
-	got, err := collectInbound(ctx, forge.IssueFilter{State: "open"})
+	got, err := boardsync.CollectInbound(ctx, forge.IssueFilter{State: "open"})
 	if err != nil {
 		t.Fatalf("collectInbound: %v", err)
 	}

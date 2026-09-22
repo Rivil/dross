@@ -8,6 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/boardsync"
+	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -27,16 +29,16 @@ import (
 func deferredHome(root string) (path, source, note string, err error) {
 	s, err := state.Load(filepath.Join(root, state.File))
 	if err != nil {
-		return deferredStorePath(root), projectStoreSlug,
+		return deferred.StorePath(root), projectStoreSlug,
 			fmt.Sprintf("state.json unreadable (%v) — filed under %s", err, projectStoreSlug), nil
 	}
 	if s.CurrentPhase == "" {
-		return deferredStorePath(root), projectStoreSlug,
+		return deferred.StorePath(root), projectStoreSlug,
 			fmt.Sprintf("no current phase — filed under %s", projectStoreSlug), nil
 	}
 	specPath := filepath.Join(phase.Dir(root, s.CurrentPhase), "spec.toml")
 	if _, err := phase.LoadSpec(specPath); err != nil {
-		return deferredStorePath(root), projectStoreSlug,
+		return deferred.StorePath(root), projectStoreSlug,
 			fmt.Sprintf("current phase %q has no loadable spec.toml — filed under %s", s.CurrentPhase, projectStoreSlug), nil
 	}
 	return specPath, s.CurrentPhase, "", nil
@@ -45,7 +47,7 @@ func deferredHome(root string) (path, source, note string, err error) {
 // mintDeferredID assigns an id unique across every deferred item in the project,
 // so two items filed into the same phase can never collide onto one board link.
 func mintDeferredID(root string) (string, error) {
-	entries, err := collectDeferred(root)
+	entries, err := deferred.Collect(root)
 	if err != nil {
 		return "", err
 	}
@@ -55,7 +57,7 @@ func mintDeferredID(root string) (string, error) {
 			used[e.ID] = true
 		}
 	}
-	return newDeferredID(used)
+	return deferred.NewID(used)
 }
 
 // deferredAdd files a new deferred item from the command line — the verb that
@@ -163,12 +165,12 @@ func mirrorDeferredAdd(root string, d deferredEntry) {
 	if err != nil || s.CurrentMilestone == "" {
 		return
 	}
-	it := deferredBacklogItem(d)
+	it := boardsync.DeferredBacklogItem(d)
 	// A brand-new item has no pre-id board link, so there is nothing to migrate
 	// — and leaving the positional key set would let it consult a stale link
 	// recorded for a long-gone item at the same index.
-	it.legacyKey = ""
-	if _, _, err := pushBacklogItems(ctx, s.CurrentMilestone, []backlogItem{it}); err != nil {
+	it.LegacyKey = ""
+	if _, _, err := boardsync.PushBacklogItems(ctx, s.CurrentMilestone, []boardsync.BacklogItem{it}); err != nil {
 		Printf("warning: board mirror failed — %v\n", err)
 		Printf("the item is filed locally; `dross issue backlog sync %s` will mirror it later\n", s.CurrentMilestone)
 		return
@@ -177,7 +179,7 @@ func mirrorDeferredAdd(root string, d deferredEntry) {
 	// "did this reach the tracker?" can only be answered by reading board.json —
 	// which makes the warn-and-continue path indistinguishable from success at a
 	// glance, exactly when it matters most.
-	if key, ok := ctx.board.BacklogID(it.key); ok {
+	if key, ok := ctx.Board.BacklogID(it.Key); ok {
 		Printf("board: %s\n", key)
 	}
 }
@@ -187,7 +189,7 @@ func mirrorDeferredAdd(root string, d deferredEntry) {
 // case rather than an error.
 func loadDeferredHome(root, path, source string) (*phase.Spec, error) {
 	if source == projectStoreSlug {
-		return loadDeferredStore(root)
+		return deferred.LoadStore(root)
 	}
 	if _, err := os.Stat(path); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)

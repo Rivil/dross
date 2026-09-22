@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/Rivil/dross/internal/boardsync"
 )
 
 // backlogCloseFake is a YouTrack stand-in that additionally models resolution:
@@ -308,7 +310,7 @@ target = "destination"
 `)
 			// The target phase and its board issue already exist.
 			scaffoldBacklogPhase(t, dir, "destination")
-			f.seed("PROJ-900", "destination — Destination", labelMarker, phaseLabel("destination"))
+			f.seed("PROJ-900", "destination — Destination", boardsync.LabelMarker, boardsync.PhaseLabel("destination"))
 			f.mu.Lock()
 			f.resolved["PROJ-900"] = tc.targetResolved
 			f.mu.Unlock()
@@ -402,7 +404,7 @@ text = "an idea"
 func TestUnattributableBacklogKeyIsNeverClosed(t *testing.T) {
 	f := newBacklogCloseFake(t)
 	dir := backlogCloseRepo(t, f.srv.URL, []string{"still-waiting"}, "")
-	f.seed("PROJ-901", "[backlog] someone-elses-slug", labelMarker)
+	f.seed("PROJ-901", "[backlog] someone-elses-slug", boardsync.LabelMarker)
 	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
 		`{"phases":{},"quicks":{},"milestones":{},"backlog":{"slug:someone-elses-slug":"PROJ-901"}}`)
 

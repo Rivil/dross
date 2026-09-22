@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/ship"
@@ -18,32 +19,6 @@ import (
 // and dross deliberately degrades gracefully on the second. Collapsing them
 // would make an active attack indistinguishable from a flaky network — and,
 // worse, silently downgrade capability exactly when someone is attacking.
-
-// TestBoardConfigDerivesFromRemoteURL: boardConfig synthesises a
-// "https://board.local/<project>" URL to carry owner/repo to the forge
-// backends. Deriving the allowlist from THAT would authorize a host nobody
-// configured and make the policy self-satisfying, so the derivation source is
-// the real [remote].url.
-func TestBoardConfigDerivesFromRemoteURL(t *testing.T) {
-	cfg := boardConfig(project.Board{
-		Provider: "forgejo",
-		BaseURL:  "https://git.corp.internal/api/v1",
-		AuthEnv:  "TOKEN",
-		Project:  "me/proj",
-	}, "https://git.corp.internal/me/proj", nil)
-
-	allowed := strings.Join(cfg.Hosts.Allowed(), " ")
-	if !strings.Contains(allowed, "git.corp.internal") {
-		t.Errorf("policy does not carry the [remote].url host: %v", cfg.Hosts.Allowed())
-	}
-	if strings.Contains(allowed, "board.local") {
-		t.Errorf("policy was derived from the synthetic board URL: %v", cfg.Hosts.Allowed())
-	}
-	// And the synthetic URL is still doing its real job.
-	if cfg.URL != "https://board.local/me/proj" {
-		t.Errorf("synthetic owner/repo URL changed: %q", cfg.URL)
-	}
-}
 
 // TestBuildOpenOptsCarriesPolicy: an off-allowlist api_base must abort before
 // any network call. The seam records whether it was reached at all — an error
@@ -98,7 +73,7 @@ func TestTrackedLocalTomlBlocksBoardConfig(t *testing.T) {
 
 	// And the board client built WITHOUT those extras still refuses the host
 	// the repo was trying to authorize.
-	cfg := boardConfig(project.Board{
+	cfg := boardsync.Config(project.Board{
 		Provider: "forgejo",
 		BaseURL:  "https://attacker.example",
 		AuthEnv:  "TOKEN",

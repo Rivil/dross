@@ -12,6 +12,7 @@
     "board-sync-truth": "DRO-19",
     "board-task-mirror": "DRO-32",
     "cache-budget-prune": "DRO-132",
+    "cmd-package-decomposition": "DRO-477",
     "completion-record-truth": "DRO-135",
     "config-value-truth": "DRO-25",
     "deferred-add-command": "DRO-14",
@@ -373,6 +374,61 @@
     },
     "board-task-mirror/t-7": {
       "issue": "DRO-123"
+    },
+    "cmd-package-decomposition/t-1": {
+      "issue": "DRO-478",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-package-decomposition/t-10": {
+      "issue": "DRO-487",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-package-decomposition/t-11": {
+      "issue": "DRO-488",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-package-decomposition/t-2": {
+      "issue": "DRO-479",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-package-decomposition/t-3": {
+      "issue": "DRO-480",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-package-decomposition/t-4": {
+      "issue": "DRO-481",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-package-decomposition/t-5": {
+      "issue": "DRO-482",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-package-decomposition/t-6": {
+      "issue": "DRO-483",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-package-decomposition/t-7": {
+      "issue": "DRO-484",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-package-decomposition/t-8": {
+      "issue": "DRO-486",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-package-decomposition/t-9": {
+      "issue": "DRO-485",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "completion-record-truth/t-1": {
       "issue": "DRO-136",

@@ -1,0 +1,440 @@
+package boardsync
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/Rivil/dross/internal/board"
+	"github.com/Rivil/dross/internal/forge"
+	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/project"
+)
+
+// mustWrite writes body at path, creating parents.
+func mustWrite(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// ytRepo builds a repo dir with a .dross root holding boardJSON, and a Ctx
+// over a YouTrack client in epic mode — the one shape whose milestone slot
+// holds an issue — pointed at the fake behind handler. The allowlist admits
+// the fake through [remote].url, exactly as cmd's openBoard derives it.
+func ytRepo(t *testing.T, handler http.HandlerFunc, boardJSON string) (string, *Ctx) {
+	t.Helper()
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	t.Setenv("MOCK_TOKEN", "secret")
+	dir := t.TempDir()
+	root := filepath.Join(dir, ".dross")
+	mustWrite(t, filepath.Join(root, board.File), boardJSON)
+	p := &project.Project{}
+	p.Remote.URL = srv.URL
+	p.Board = project.Board{Enabled: true, Provider: "youtrack", BaseURL: srv.URL, AuthEnv: "MOCK_TOKEN", Project: "PROJ", MilestoneMode: "epic"}
+	client, err := forge.NewBoard(Config(p.Board, p.Remote.URL, nil))
+	if err != nil {
+		t.Fatalf("forge.NewBoard: %v", err)
+	}
+	bd, err := board.Load(filepath.Join(root, board.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir, &Ctx{Client: client, Board: bd, Proj: p, Root: root, BoardPath: filepath.Join(root, board.File), Out: new(bytes.Buffer)}
+}
+
+// readOnlyYT is a YouTrack stand-in that serves reads and FAILS THE TEST on any
+// request that is not a GET.
+//
+// That inversion is the point of the fixture, not a detail of it: classify is
+// the half of reap that must be safe to run on a live board at any time, so a
+// classifier that reached for a write — or that decided a verdict by patching a
+// card and seeing what stuck — has to redden here rather than on someone's
+// tracker. `resolved` names the cards the tracker already holds done.
+type readOnlyYT struct {
+	resolved map[string]bool
+	gets     int
+}
+
+func (f *readOnlyYT) handler(t *testing.T) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Errorf("classify issued a %s to %s — classification is read-only", r.Method, r.URL.Path)
+			_, _ = io.WriteString(w, `{}`)
+			return
+		}
+		switch {
+		case r.URL.Path == "/api/issueTags":
+			_, _ = io.WriteString(w, `[]`)
+		case r.URL.Path == "/api/issues":
+			_, _ = io.WriteString(w, `[]`)
+		case strings.HasPrefix(r.URL.Path, "/api/issues/"):
+			f.gets++
+			key := strings.TrimPrefix(r.URL.Path, "/api/issues/")
+			resolved := "null"
+			if f.resolved[key] {
+				resolved = "1700000000000"
+			}
+			_, _ = io.WriteString(w, `{"idReadable":"`+key+`","resolved":`+resolved+`}`)
+		default:
+			t.Errorf("unexpected GET %s", r.URL.Path)
+			_, _ = io.WriteString(w, `{}`)
+		}
+	}
+}
+
+// reapRepo is ytRepo over the read-only fake.
+func reapRepo(t *testing.T, f *readOnlyYT, boardJSON string) (string, *Ctx) {
+	t.Helper()
+	return ytRepo(t, f.handler(t), boardJSON)
+}
+
+// writeChanges writes a phase's completion record. status "" writes a record
+// with no status field at all — the pre-status shape, which reads as "unknown",
+// never as "done".
+func writeChanges(t *testing.T, dir, slug, status string) {
+	t.Helper()
+	rec := map[string]any{"phase": slug, "tasks": map[string]any{}}
+	if status != "" {
+		rec["status"] = status
+	}
+	b, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", slug, "changes.json"), string(b))
+}
+
+// cardKeys flattens a plan list to its issue keys, for order-independent
+// comparison.
+func cardKeys(cards []ReapCard) []string {
+	out := make([]string, 0, len(cards))
+	for _, c := range cards {
+		out = append(out, c.Key)
+	}
+	return out
+}
+
+func hasKey(cards []ReapCard, key string) bool {
+	for _, c := range cards {
+		if c.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+func cardFor(t *testing.T, cards []ReapCard, key string) ReapCard {
+	t.Helper()
+	for _, c := range cards {
+		if c.Key == key {
+			return c
+		}
+	}
+	t.Fatalf("no card %s in %v", key, cardKeys(cards))
+	return ReapCard{}
+}
+
+// phaseAndTaskBoard links one phase card and two of its task cards.
+const phaseAndTaskBoard = `{
+  "phases": {"01-auth": "PROJ-1"},
+  "tasks": {"01-auth/t-1": {"issue": "PROJ-2"}, "01-auth/t-2": {"issue": "PROJ-3"}},
+  "quicks": {}, "milestones": {}
+}`
+
+// TestPhaseCardIsClassifiedFromItsCompletionRecord is the load-bearing case for
+// c-3. The two fixtures hold the BOARD STATE IDENTICAL and vary only the record
+// on disk, so a classifier that read iss.State, iss.Resolved or the
+// dross/status label to decide strandedness would return the same answer twice
+// and fail one half of this test whichever way it leaned.
+func TestPhaseCardIsClassifiedFromItsCompletionRecord(t *testing.T) {
+	t.Run("record complete yields the phase card and its tasks", func(t *testing.T) {
+		f := &readOnlyYT{resolved: map[string]bool{}}
+		dir, ctx := reapRepo(t, f, phaseAndTaskBoard)
+		writeChanges(t, dir, "01-auth", "complete")
+
+		plan, err := Classify(ctx, nil)
+		if err != nil {
+			t.Fatalf("classify: %v", err)
+		}
+		for _, want := range []string{"PROJ-1", "PROJ-2", "PROJ-3"} {
+			if !hasKey(plan.Cards, want) {
+				t.Errorf("card %s missing from the plan; got %v", want, cardKeys(plan.Cards))
+			}
+		}
+	})
+
+	t.Run("record with no status yields nothing", func(t *testing.T) {
+		f := &readOnlyYT{resolved: map[string]bool{}}
+		dir, ctx := reapRepo(t, f, phaseAndTaskBoard)
+		writeChanges(t, dir, "01-auth", "") // same cards, same board state
+
+		plan, err := Classify(ctx, nil)
+		if err != nil {
+			t.Fatalf("classify: %v", err)
+		}
+		if len(plan.Cards) != 0 {
+			t.Errorf("plan closes %v off a record with no status — an unknown status is not done", cardKeys(plan.Cards))
+		}
+	})
+}
+
+// TestPhaseAndTaskCardsCarryTheirOwnTerminal: the two lanes end differently and
+// the classifier must say so per card, not once per run. A single shared
+// terminal would leave every task card in the phase lane's `complete`.
+func TestPhaseAndTaskCardsCarryTheirOwnTerminal(t *testing.T) {
+	f := &readOnlyYT{resolved: map[string]bool{}}
+	dir, ctx := reapRepo(t, f, phaseAndTaskBoard)
+	writeChanges(t, dir, "01-auth", "complete")
+
+	plan, err := Classify(ctx, nil)
+	if err != nil {
+		t.Fatalf("classify: %v", err)
+	}
+	if got := cardFor(t, plan.Cards, "PROJ-1").Terminal; got != "complete" {
+		t.Errorf("phase card terminal = %q, want complete", got)
+	}
+	if got := cardFor(t, plan.Cards, "PROJ-2").Terminal; got != StatusTaskComplete {
+		t.Errorf("task card terminal = %q, want %s", got, StatusTaskComplete)
+	}
+}
+
+// TestShippedRecordIsNotYetComplete: shipped is a live forward state, not a
+// stranded one — the phase's finalize half has not run, and reaping it to
+// `complete` would announce a completion no record carries.
+func TestShippedRecordIsNotYetComplete(t *testing.T) {
+	f := &readOnlyYT{resolved: map[string]bool{}}
+	dir, ctx := reapRepo(t, f, phaseAndTaskBoard)
+	writeChanges(t, dir, "01-auth", "shipped")
+
+	plan, err := Classify(ctx, nil)
+	if err != nil {
+		t.Fatalf("classify: %v", err)
+	}
+	if len(plan.Cards) != 0 {
+		t.Errorf("plan closes %v off a shipped record; only complete reaches the phase lane's terminal", cardKeys(plan.Cards))
+	}
+}
+
+// TestPhaseCardWithNoDirectoryIsUnattributable: a record that is absent is not
+// a record that says no. The card is named, never closed.
+func TestPhaseCardWithNoDirectoryIsUnattributable(t *testing.T) {
+	f := &readOnlyYT{resolved: map[string]bool{}}
+	_, ctx := reapRepo(t, f, `{"phases":{"01-gone":"PROJ-9"},"tasks":{},"quicks":{},"milestones":{}}`)
+
+	plan, err := Classify(ctx, nil)
+	if err != nil {
+		t.Fatalf("classify: %v", err)
+	}
+	if hasKey(plan.Cards, "PROJ-9") {
+		t.Error("a phase with no directory on disk was classified stranded")
+	}
+	if !hasKey(plan.Unattributable, "PROJ-9") {
+		t.Errorf("PROJ-9 vanished from the plan entirely; unattributable = %v", cardKeys(plan.Unattributable))
+	}
+}
+
+// TestEpicFollowsMilestoneStatusNotTheCard: the epic's own state says nothing.
+// milestone.toml is the record.
+func TestEpicFollowsMilestoneStatusNotTheCard(t *testing.T) {
+	const bd = `{"phases":{},"tasks":{},"quicks":{},"milestones":{"v1.5":"PROJ-7"}}`
+
+	t.Run("active milestone leaves the epic open", func(t *testing.T) {
+		f := &readOnlyYT{resolved: map[string]bool{}}
+		dir, ctx := reapRepo(t, f, bd)
+		writeMilestoneToml(t, filepath.Join(dir, ".dross"), "v1.5", "active", "")
+
+		plan, err := Classify(ctx, nil)
+		if err != nil {
+			t.Fatalf("classify: %v", err)
+		}
+		if hasKey(plan.Cards, "PROJ-7") {
+			t.Error("an epic whose milestone is still active was classified stranded")
+		}
+	})
+
+	t.Run("complete milestone yields the epic", func(t *testing.T) {
+		f := &readOnlyYT{resolved: map[string]bool{}}
+		dir, ctx := reapRepo(t, f, bd)
+		writeMilestoneToml(t, filepath.Join(dir, ".dross"), "v1.5", "complete", "")
+
+		plan, err := Classify(ctx, nil)
+		if err != nil {
+			t.Fatalf("classify: %v", err)
+		}
+		if !hasKey(plan.Cards, "PROJ-7") {
+			t.Errorf("the epic of a complete milestone is not in the plan; got %v", cardKeys(plan.Cards))
+		}
+	})
+}
+
+// TestSlugBacklogNeedsItsPhaseDir: a `slug:` mirror resolves because the slug
+// was scaffolded. A slug that simply left the set — renamed, or another
+// milestone's — is unattributable, not resolved.
+func TestSlugBacklogNeedsItsPhaseDir(t *testing.T) {
+	f := &readOnlyYT{resolved: map[string]bool{}}
+	dir, ctx := reapRepo(t, f, `{"phases":{},"tasks":{},"quicks":{},"milestones":{},
+	  "backlog":{"slug:built":"PROJ-20","slug:renamed":"PROJ-21"}}`)
+	writeChanges(t, dir, "built", "complete") // creates the phase directory too
+
+	plan, err := Classify(ctx, nil)
+	if err != nil {
+		t.Fatalf("classify: %v", err)
+	}
+	if !hasKey(plan.Cards, "PROJ-20") {
+		t.Errorf("a scaffolded slug's mirror is not in the plan; got %v", cardKeys(plan.Cards))
+	}
+	if hasKey(plan.Cards, "PROJ-21") {
+		t.Error("a slug with no phase directory was classified stranded")
+	}
+	if !hasKey(plan.Unattributable, "PROJ-21") {
+		t.Errorf("PROJ-21 was dropped instead of named; unattributable = %v", cardKeys(plan.Unattributable))
+	}
+}
+
+// TestRoutedBacklogFollowsItsTargetRecord: a routed item resolves only once the
+// phase it was routed INTO has completed — read from that phase's changes.json,
+// never from its card.
+func TestRoutedBacklogFollowsItsTargetRecord(t *testing.T) {
+	seed := func(t *testing.T, targetStatus string) *ReapPlan {
+		t.Helper()
+		f := &readOnlyYT{resolved: map[string]bool{}}
+		dir, ctx := reapRepo(t, f, `{"phases":{},"tasks":{},"quicks":{},"milestones":{},
+		  "backlog":{"someday:id:abc123":"PROJ-30"}}`)
+		writeSpec(t, dir, "01-src", "[phase]\nid=\"01-src\"\ntitle=\"Src\"\n\n"+
+			"[[deferred]]\n  id = \"abc123\"\n  text = \"an idea\"\n  target = \"02-dest\"\n")
+		writeChanges(t, dir, "02-dest", targetStatus)
+		plan, err := Classify(ctx, nil)
+		if err != nil {
+			t.Fatalf("classify: %v", err)
+		}
+		return plan
+	}
+
+	if plan := seed(t, "complete"); !hasKey(plan.Cards, "PROJ-30") {
+		t.Errorf("a routed item whose target completed is not in the plan; got %v", cardKeys(plan.Cards))
+	}
+	if plan := seed(t, ""); hasKey(plan.Cards, "PROJ-30") {
+		t.Error("a routed item was closed while its target phase's record shows no completion")
+	}
+}
+
+// TestAlreadyTerminalIsNotStranded is what makes c-4's post-sweep dry run print
+// an honestly empty plan rather than re-listing everything it just closed.
+func TestAlreadyTerminalIsNotStranded(t *testing.T) {
+	f := &readOnlyYT{resolved: map[string]bool{"PROJ-1": true, "PROJ-2": true, "PROJ-3": true}}
+	dir, ctx := reapRepo(t, f, phaseAndTaskBoard)
+	writeChanges(t, dir, "01-auth", "complete")
+
+	plan, err := Classify(ctx, nil)
+	if err != nil {
+		t.Fatalf("classify: %v", err)
+	}
+	if len(plan.Cards) != 0 || len(plan.Unattributable) != 0 {
+		t.Errorf("cards the tracker already holds resolved are still in the plan: %v / %v",
+			cardKeys(plan.Cards), cardKeys(plan.Unattributable))
+	}
+	if f.gets == 0 {
+		t.Fatal("no card was read back — the already-terminal filter cannot have run")
+	}
+}
+
+// TestEveryPlanCardNamesItsJustifyingRecord: a plan line with no `why` is an
+// unauditable close.
+func TestEveryPlanCardNamesItsJustifyingRecord(t *testing.T) {
+	f := &readOnlyYT{resolved: map[string]bool{}}
+	dir, ctx := reapRepo(t, f, phaseAndTaskBoard)
+	writeChanges(t, dir, "01-auth", "complete")
+
+	plan, err := Classify(ctx, nil)
+	if err != nil {
+		t.Fatalf("classify: %v", err)
+	}
+	if len(plan.Cards) == 0 {
+		t.Fatal("empty plan — nothing to check")
+	}
+	for _, c := range plan.Cards {
+		if strings.TrimSpace(c.Why) == "" {
+			t.Errorf("card %s (%s) names no justifying record", c.Key, c.Lane)
+		}
+	}
+}
+
+// TestUnscaffoldedRoadmapSlugIsStillOpen: the phase directory alone cannot tell
+// "renamed or lost" from "on a roadmap and not built yet" — both are an absent
+// directory — and conflating them made the sweep report live backlog as an
+// unexplained mirror, permanently, on every run.
+//
+// Found on the live board: `slug:reentry-signal-truth` is v1.5's own roadmap and
+// was being named unattributable.
+func TestUnscaffoldedRoadmapSlugIsStillOpen(t *testing.T) {
+	f := &readOnlyYT{resolved: map[string]bool{}}
+	dir, ctx := reapRepo(t, f, `{"phases":{},"tasks":{},"quicks":{},"milestones":{},
+	  "backlog":{"slug:planned":"PROJ-50","slug:vanished":"PROJ-51"}}`)
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v9.0.toml"),
+		"phases = [\"planned\"]\n\n[milestone]\nversion = \"v9.0\"\nstatus = \"active\"\n")
+
+	plan, err := Classify(ctx, nil)
+	if err != nil {
+		t.Fatalf("classify: %v", err)
+	}
+	if hasKey(plan.Cards, "PROJ-50") || hasKey(plan.Unattributable, "PROJ-50") {
+		t.Errorf("a slug still on a roadmap reached the plan; cards=%v unattributable=%v",
+			cardKeys(plan.Cards), cardKeys(plan.Unattributable))
+	}
+	// The other half: a slug on NO roadmap really is unexplained.
+	if !hasKey(plan.Unattributable, "PROJ-51") {
+		t.Errorf("a slug on no roadmap and with no directory was dropped rather than named; unattributable=%v", cardKeys(plan.Unattributable))
+	}
+}
+
+// TestRoutedToAnUnscaffolvedRoadmapTargetIsStillOpen is the same distinction on
+// the routed path: a deferred item routed into a phase nobody has built yet is
+// live work, and its card is correctly open.
+func TestRoutedToAnUnscaffoldedRoadmapTargetIsStillOpen(t *testing.T) {
+	f := &readOnlyYT{resolved: map[string]bool{}}
+	dir, ctx := reapRepo(t, f, `{"phases":{},"tasks":{},"quicks":{},"milestones":{},
+	  "backlog":{"someday:id:abc123":"PROJ-60"}}`)
+	writeSpec(t, dir, "01-src", "[phase]\nid=\"01-src\"\ntitle=\"Src\"\n\n"+
+		"[[deferred]]\n  id = \"abc123\"\n  text = \"an idea\"\n  target = \"not-built-yet\"\n")
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v9.0.toml"),
+		"phases = [\"not-built-yet\"]\n\n[milestone]\nversion = \"v9.0\"\nstatus = \"active\"\n")
+
+	plan, err := Classify(ctx, nil)
+	if err != nil {
+		t.Fatalf("classify: %v", err)
+	}
+	if hasKey(plan.Cards, "PROJ-60") || hasKey(plan.Unattributable, "PROJ-60") {
+		t.Errorf("a routed item whose target is unbuilt roadmap work reached the plan; cards=%v unattributable=%v",
+			cardKeys(plan.Cards), cardKeys(plan.Unattributable))
+	}
+}
+
+// writeMilestoneToml writes a milestone record with the given status and base.
+func writeMilestoneToml(t *testing.T, root, version, status, base string) {
+	t.Helper()
+	m := &milestone.Milestone{}
+	m.Milestone.Version = version
+	m.Milestone.Status = status
+	m.Milestone.Base = base
+	if err := m.Save(milestone.FilePath(root, version)); err != nil {
+		t.Fatalf("save milestone %s: %v", version, err)
+	}
+}
+
+func writeSpec(t *testing.T, dir, phaseID, body string) {
+	t.Helper()
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", phaseID, "spec.toml"), body)
+}

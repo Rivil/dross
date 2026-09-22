@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/mutationcfg"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/state"
@@ -145,11 +146,12 @@ func runGremlinsOverPackages(repoRoot string, pkgs []string) ([]mutation.Unmeasu
 	// No phase: the drain is not a phase's run. It still names itself on the
 	// host lock (project + a fresh run id) and waits for the host like verify
 	// does — it is the second attached remote-mutation caller.
-	mt, err := resolveMutationTuning(p, filepath.Join(repoRoot, RootDirName), "", remote.Forever)
+	root := filepath.Join(repoRoot, RootDirName)
+	mt, err := mutationcfg.ResolveTuning(p, root, localSource(root, hostLock(p, "", remote.Forever)))
 	if err != nil {
 		return nil, err
 	}
-	g := mt.gremlins(repoRoot, p, profileCacheVars(p, repoRoot))
+	g := mt.Gremlins(repoRoot, p, profileCacheVars(p, repoRoot))
 	// Gremlins derives its package set from the directories of the files it is
 	// handed, so one representative path per package is the whole input.
 	files := make([]string, 0, len(pkgs))

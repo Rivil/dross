@@ -236,7 +236,7 @@ func TestDrainStampsAHolder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g := mt.gremlins(filepath.Dir(root), p, nil)
+	g := mt.Gremlins(filepath.Dir(root), p, nil)
 	if g.Remote == nil || g.Remote.Lock.Holder.RunID == "" || g.Remote.Lock.Holder.Project != p.Project.Name {
 		t.Errorf("the drain's target has no usable holder: %+v", g.Remote)
 	}

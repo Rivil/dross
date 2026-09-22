@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/boardsync"
 )
 
 // writeStrandedFixture seeds a repo whose board.json is stranded in all five
@@ -136,7 +138,7 @@ func TestReapWholeBoardCoversFiveLanes(t *testing.T) {
 			t.Fatalf("reap: %v", err)
 		}
 	})
-	want := boardNamespaceFields(t)
+	want := boardsync.BoardNamespaceNames()
 	if len(want) == 0 {
 		t.Fatal("reflection found no namespaces — the guard would pass vacuously")
 	}
@@ -199,7 +201,7 @@ func TestReapNamespaceFilterScopesThePlan(t *testing.T) {
 		if err == nil {
 			t.Fatal("an unknown --namespace was accepted")
 		}
-		for _, lane := range boardNamespaceFields(t) {
+		for _, lane := range boardsync.BoardNamespaceNames() {
 			if !strings.Contains(err.Error(), lane) {
 				t.Errorf("error %q does not name the valid namespace %s", err, lane)
 			}
@@ -212,11 +214,11 @@ func TestReapNamespaceFilterScopesThePlan(t *testing.T) {
 // go stale the moment a namespace is added, and the error a typo produced would
 // name a set that no longer matches reality.
 func TestReapNamespaceSetIsReadOffBoardNotTranscribed(t *testing.T) {
-	got := boardNamespaceNames()
-	want := boardNamespaceFields(t)
+	got := boardsync.BoardNamespaceNames()
+	want := boardsync.BoardNamespaceNames()
 	sort.Strings(want)
 	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("boardNamespaceNames() = %v, want board.Board's map fields %v", got, want)
+		t.Errorf("boardsync.BoardNamespaceNames() = %v, want board.Board's map fields %v", got, want)
 	}
 }
 

@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/consent"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/testlane"
 )
@@ -460,7 +461,7 @@ func testLaneEdit() *cobra.Command {
 			// Mutated IN PLACE rather than removed and appended: the lane
 			// keeps its position, so an edit does not reorder the document and
 			// a diff shows the one line that changed.
-			before := laneConsentLine(p.Runtime.TestLane[idx])
+			before := consent.LaneLine(p.Runtime.TestLane[idx])
 			// Each field is written only when its OWN flag was passed. An
 			// unconditional write would let `--toolchain go` clear a prepare the
 			// user never mentioned — the same omitted-means-clear collapse the
@@ -593,7 +594,7 @@ func testLaneEdit() *cobra.Command {
 			// Only when the consent line actually moved. A trust instruction
 			// printed on a no-op re-set teaches the user that the message
 			// carries no information, and the next real one gets skimmed.
-			if laneConsentLine(lane) != before {
+			if consent.LaneLine(lane) != before {
 				Printf("\nIts grant is now stale — the lane will refuse until you re-read it:\n\n    dross trust --lane %s\n", name)
 			}
 			printLaneWholeTreeWarning(name, lane)
@@ -659,7 +660,7 @@ func testLaneRemove() *cobra.Command {
 			// re-added a lane under that name, which would then start
 			// GRANTED, authorized by a fingerprint issued for whatever the
 			// deleted lane used to run.
-			if err := RevokeLaneConsent(root, name); err != nil {
+			if err := consent.RevokeLaneConsent(grantStore(root), name); err != nil {
 				return err
 			}
 			Printf("lane %q removed; its consent grants — command and install — were dropped.\n", name)

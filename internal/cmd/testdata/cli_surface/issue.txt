@@ -1,0 +1,69 @@
+command: issue
+  use: issue
+  short: Mirror planning onto the issue board and pull inbound issues
+command: issue backlog
+  use: backlog
+  short: Mirror the milestone backlog onto the board
+command: issue backlog sync
+  use: sync [version]
+  short: Sync the milestone backlog (unscaffolded slugs + someday ideas) to the board
+  flag: --phase (string) default="" usage="resolve the version from this phase's spec.toml [phase].milestone (use at ship finalize)"
+command: issue disable
+  use: disable
+  short: Turn off issue-board sync for this project
+command: issue dismiss
+  use: dismiss <issue-id>
+  short: Stop an inbound issue from resurfacing in triage
+command: issue enable
+  use: enable
+  short: Turn on issue-board sync for this project
+command: issue link
+  use: link <phase-id> <issue-id>
+  short: Adopt an existing board issue as a phase's tracking issue
+command: issue list
+  use: list
+  short: Show the current artefact<->issue links from board.json
+command: issue milestone
+  use: milestone
+  short: Mirror a milestone onto the board
+command: issue milestone sync
+  use: sync <version>
+  short: Ensure a board milestone exists for a dross milestone
+  flag: --close (bool) default="false" noopt="true" usage="resolve the milestone's epic (use at milestone finalize; epic mode only)"
+command: issue phase
+  use: phase
+  short: Mirror a phase onto the board
+command: issue phase sync
+  use: sync <phase-id>
+  short: Create or update the board issue for a phase (idempotent)
+  flag: --status (string) default="" usage="lifecycle status label (planned | in-progress | shipped | complete | task-in-progress | task-in-review | task-complete | uat); derived from the plan if unset"
+  flag: --close (bool) default="false" noopt="true" usage="close the issue (use on ship)"
+command: issue pull
+  use: pull
+  short: List open board issues not yet linked to dross work (inbound triage)
+  flag: --labels (string) default="" usage="only issues with these labels (csv, e.g. bug,enhancement)"
+  flag: --state (string) default="open" usage="issue state: open|closed|all"
+  flag: --json (bool) default="false" noopt="true" usage="emit a JSON envelope {issues, error} (for prompt consumption)"
+  flag: --mark (bool) default="false" noopt="true" usage="record the pull time in board.json (otherwise read-only)"
+command: issue quick
+  use: quick <ref> [title]
+  short: Open (or --close) a standalone issue for a quick task
+  flag: --close (bool) default="false" noopt="true" usage="close the quick issue linked to <ref>"
+command: issue reap
+  use: reap
+  short: Close board mirrors the forward lifecycle left stranded
+  flag: --namespace (stringArray) default="[]" usage="limit the sweep to one mirror namespace (repeatable; default: every namespace)"
+  flag: --apply (bool) default="false" noopt="true" usage="write the plan to the board (default: dry run)"
+  flag: --undo (bool) default="false" noopt="true" usage="restore the cards the last applied run closed, to the exact state each held before it"
+command: issue task
+  use: task
+  short: Mirror plan tasks onto the board, and pull board moves back
+command: issue task pull
+  use: pull [phase-id]
+  short: Apply board task-state moves back into plan.toml
+  flag: --apply (bool) default="false" noopt="true" usage="write the moves into plan.toml (default: report only)"
+command: issue task sync
+  use: sync <phase-id> [task-id]
+  short: Mirror a phase's plan tasks as issues, one per task
+  flag: --status (string) default="" usage="lifecycle status to drive the task's state (planned | in-progress | shipped | complete | task-in-progress | task-in-review | task-complete | uat)"
+  flag: --close (bool) default="false" noopt="true" usage="resolve each synced task's issue (use at ship finalize; requires --status)"

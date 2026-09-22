@@ -87,7 +87,7 @@ func phaseList() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// One doneness reader for the whole tool (phasedone.go): this
+			// One doneness reader for the whole tool (internal/phase/done.go): this
 			// listing, `dross status` and `dross milestone progress` count the
 			// same phases done, off the completion record rather than a verify
 			// verdict.
@@ -104,7 +104,7 @@ func phaseList() *cobra.Command {
 			}
 			done := 0
 			for _, id := range phase.Ordered(milestonePhaseOrder(root), ids) {
-				if phaseDone(root, id) {
+				if phase.Done(root, id) {
 					done++
 					Printf("✓ %s\n", id)
 				} else {
@@ -143,10 +143,10 @@ func listMilestoneRoadmap(root, version string) error {
 	done := 0
 	for _, slug := range m.Phases {
 		switch {
-		case phaseDone(root, slug):
+		case phase.Done(root, slug):
 			done++
 			Printf("✓ %s\n", slug)
-		case !phaseDirExists(root, slug):
+		case !phase.DirExists(root, slug):
 			Printf("  %s (not scaffolded)\n", slug)
 		default:
 			Printf("  %s\n", slug)

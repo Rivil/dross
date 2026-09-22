@@ -1,0 +1,288 @@
+{
+  "phase": "cmd-package-decomposition",
+  "pr": 130,
+  "base": "milestone/v1.7",
+  "base_commit": "e1e7e21aa3c7dceb3583d279683959cb95529730",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/cli_surface_test.go",
+        "internal/cmd/testdata/cli_surface/trust.txt",
+        "internal/cmd/testdata/cli_surface/issue.txt",
+        "internal/cmd/testdata/cli_surface/doctor.txt",
+        "internal/cmd/testdata/cli_surface/verify.txt",
+        "internal/cmd/testdata/cli_surface/doctor_run.txt",
+        "internal/cmd/testdata/cli_surface/tests_before.txt"
+      ],
+      "commit": "1e8dd35",
+      "completed_at": "2026-09-20T18:29:24.692994Z",
+      "landmarks": [
+        {
+          "feature": "cmd boundary proof",
+          "symbol": "TestCLISurfacePinned",
+          "loc": "internal/cmd/cli_surface_test.go:176",
+          "what": "pre-move goldens of trust/issue/doctor/verify surface + doctor transcript + test-name inventory that later moves must leave byte-identical"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/boundary_test.go",
+        "internal/cmd/testdata/cli_surface/tests_before.txt"
+      ],
+      "commit": "fc2fc5c",
+      "completed_at": "2026-09-20T19:46:16.979031Z",
+      "landmarks": [
+        {
+          "feature": "cmd boundary proof",
+          "symbol": "checkBoundary",
+          "loc": "internal/cmd/boundary_test.go:135",
+          "what": "import-direction proof over internal/ (cobra exclusivity, no reverse import, extracted packages wired) plus the shrink-only os/exec|net/http|go/ast ratchet and the no-test-lost conservation check"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/cli_surface_test.go",
+        "internal/cmd/testdata/cli_surface/trust.txt",
+        "internal/cmd/testdata/cli_surface/issue.txt",
+        "internal/cmd/testdata/cli_surface/doctor.txt",
+        "internal/cmd/testdata/cli_surface/verify.txt",
+        "internal/cmd/testdata/cli_surface/doctor_run.txt"
+      ],
+      "commit": "dad5a7a",
+      "completed_at": "2026-09-20T19:49:20.226194Z",
+      "landmarks": [
+        {
+          "feature": "cmd boundary proof",
+          "symbol": "TestDoctorRunGolden",
+          "loc": "internal/cmd/cli_surface_test.go:191",
+          "what": "end-to-end c-6 verdict: CLI surface + doctor transcript goldens minted before any move still pass after every extraction; full suite observed green on helicon"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/deferred/deferred.go",
+        "internal/deferred/deferred_test.go",
+        "internal/phase/done.go",
+        "internal/phase/done_test.go",
+        "internal/cmd/deferred.go",
+        "internal/cmd/deferred_store.go",
+        "internal/cmd/phasedone.go",
+        "internal/cmd/issue.go",
+        "internal/cmd/deferred_store_test.go"
+      ],
+      "commit": "adc37f7",
+      "completed_at": "2026-09-20T18:38:37.216027Z",
+      "landmarks": [
+        {
+          "feature": "deferred ledger",
+          "symbol": "Collect",
+          "loc": "internal/deferred/deferred.go:93",
+          "what": "deferred-item ledger (collect/address/ids/repoint) and phase doneness reader (phase.Done) extracted out of internal/cmd; cmd keeps only the cobra verbs"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/mutationcfg/mutationcfg.go",
+        "internal/mutationcfg/toolchain.go",
+        "internal/mutationcfg/mutationcfg_test.go",
+        "internal/mutationcfg/toolchain_test.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/survivor_drain.go",
+        "internal/cmd/mutationcfg_shim_test.go",
+        "internal/cmd/verify_test.go",
+        "internal/cmd/verify_scratch_test.go",
+        "internal/cmd/doctor_lane_toolchain_test.go"
+      ],
+      "commit": "4dad99f",
+      "completed_at": "2026-09-20T18:46:06.403464Z",
+      "landmarks": [
+        {
+          "feature": "mutation adapter construction",
+          "symbol": "Configured",
+          "loc": "internal/mutationcfg/mutationcfg.go:203",
+          "what": "one roster + Source seam builds every adapter for verify/doctor/drain; toolchain gaps and docker prefix derived from the same roster"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/consent/consent.go",
+        "internal/consent/store.go",
+        "internal/consent/consent_test.go",
+        "internal/consent/store_test.go",
+        "internal/cmd/trust.go",
+        "internal/cmd/local.go",
+        "internal/cmd/remote_grant.go",
+        "internal/cmd/redproof_replay.go",
+        "internal/cmd/run.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/consent_shim_test.go",
+        "internal/cmd/trust_test.go",
+        "internal/cmd/local_test.go"
+      ],
+      "commit": "989fea7",
+      "completed_at": "2026-09-20T18:58:06.884372Z",
+      "landmarks": [
+        {
+          "feature": "exec consent gate",
+          "symbol": "CheckConsent",
+          "loc": "internal/consent/consent.go:121",
+          "what": "consent semantics (fingerprint binding, state ladder, tracked-store refusal, replay/run sets) behind a Store seam; cmd's localStore embeds consent.Grants as the one local.toml writer"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/consent/lane.go",
+        "internal/consent/lane_test.go",
+        "internal/cmd/trust.go",
+        "internal/cmd/lane_install.go",
+        "internal/cmd/lane_preview.go",
+        "internal/cmd/lane_preview_locality.go",
+        "internal/cmd/remote_bootstrap.go",
+        "internal/cmd/test.go",
+        "internal/cmd/test_lane.go",
+        "internal/cmd/test_lane_install.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/consent_shim_test.go",
+        "internal/cmd/trust_lane_test.go",
+        "internal/cmd/trust_lane_install_test.go"
+      ],
+      "commit": "3dbe85a",
+      "completed_at": "2026-09-20T19:04:38.818345Z",
+      "landmarks": [
+        {
+          "feature": "exec consent gate",
+          "symbol": "LaneConsented",
+          "loc": "internal/consent/lane.go:101",
+          "what": "per-lane command/prepare/template framing and the independent install grant live with the consent core over the same Store"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/boardsync/ctx.go",
+        "internal/boardsync/backlog.go",
+        "internal/boardsync/phase.go",
+        "internal/boardsync/milestone.go",
+        "internal/boardsync/board_lifecycle_divergence_test.go",
+        "internal/boardsync/config_test.go",
+        "internal/cmd/issue.go",
+        "internal/cmd/board_lifecycle_divergence_test.go",
+        "internal/cmd/toolfence_composer_test.go",
+        "internal/cmd/hostpolicy_test.go",
+        "internal/cmd/hostile_config_test.go",
+        "internal/cmd/friction_window_test.go"
+      ],
+      "commit": "58e26f3",
+      "completed_at": "2026-09-20T19:15:58.101056Z",
+      "landmarks": [
+        {
+          "feature": "board sync",
+          "symbol": "SyncPhase",
+          "loc": "internal/boardsync/phase.go:72",
+          "what": "phase/backlog/milestone mirroring and reconciliation out of internal/cmd; Ctx narrates via Out resolved at call time"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/diag/diag.go",
+        "internal/diag/redproof.go",
+        "internal/diag/roadmap.go",
+        "internal/diag/combinations.go",
+        "internal/diag/trust.go",
+        "internal/diag/toolchain.go",
+        "internal/diag/diag_test.go",
+        "internal/diag/redproof_test.go",
+        "internal/diag/trust_test.go",
+        "internal/diag/toolchain_test.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go",
+        "internal/cmd/redproof_test.go",
+        "internal/cmd/redproof_lifecycle_test.go",
+        "internal/cmd/redproof_repoint_test.go",
+        "internal/cmd/redproof_set_test.go",
+        "internal/cmd/redproof_repoint_cmd_test.go"
+      ],
+      "commit": "328349b",
+      "completed_at": "2026-09-20T19:25:48.569999Z",
+      "landmarks": [
+        {
+          "feature": "doctor diagnostics",
+          "symbol": "ConfigTrust",
+          "loc": "internal/diag/trust.go:52",
+          "what": "doctor's red-proof/roadmap/combination/config-trust/lane/toolchain checks return structured Lines from internal/diag; Doctor() only gathers inputs and prints"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/boardsync/reap.go",
+        "internal/boardsync/reap_discover.go",
+        "internal/boardsync/reap_apply.go",
+        "internal/boardsync/reap_undo.go",
+        "internal/boardsync/reap_classify_test.go",
+        "internal/boardsync/reap_discover_test.go",
+        "internal/boardsync/reap_apply_test.go",
+        "internal/boardsync/reap_undo_test.go",
+        "internal/cmd/issue_reap.go",
+        "internal/cmd/issue_reap_discover.go",
+        "internal/cmd/issue_reap_apply.go",
+        "internal/cmd/issue_reap_undo.go",
+        "internal/cmd/issue_reap_cmd.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/issue_reap_classify_test.go",
+        "internal/cmd/issue_reap_discover_test.go",
+        "internal/cmd/issue_reap_apply_test.go",
+        "internal/cmd/issue_reap_undo_test.go"
+      ],
+      "commit": "482d330",
+      "completed_at": "2026-09-20T19:42:16.726845Z",
+      "landmarks": [
+        {
+          "feature": "board sync",
+          "symbol": "Inventory",
+          "loc": "internal/boardsync/reap_apply.go:37",
+          "what": "stranded-mirror classify/discover/apply/undo (the reap sweep) lives with the sync core; cmd keeps only the reap verb and plan printer"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/boardsync/task.go",
+        "internal/boardsync/task_pull.go",
+        "internal/boardsync/lifecycle.go",
+        "internal/boardsync/inbound.go",
+        "internal/boardsync/task_test.go",
+        "internal/boardsync/task_pull_test.go",
+        "internal/boardsync/lifecycle_test.go",
+        "internal/boardsync/toolfence_composer_test.go",
+        "internal/cmd/issue_task.go",
+        "internal/cmd/issue_task_pull.go",
+        "internal/cmd/task_lifecycle.go",
+        "internal/cmd/issue.go",
+        "internal/cmd/issue_task_pull_test.go",
+        "internal/cmd/issue_task_state_test.go",
+        "internal/cmd/task_lifecycle_test.go",
+        "internal/cmd/toolfence_composer_test.go"
+      ],
+      "commit": "25977a1",
+      "completed_at": "2026-09-20T19:34:58.209363Z",
+      "landmarks": [
+        {
+          "feature": "board sync",
+          "symbol": "TaskPull",
+          "loc": "internal/boardsync/task_pull.go:64",
+          "what": "task-level mirror (SyncTasks), inbound task-state pull and the plan\u003c-\u003eboard lifecycle vocabulary live with the sync core; cmd keeps the verbs and the workflow-state refusal"
+        }
+      ]
+    }
+  }
+}

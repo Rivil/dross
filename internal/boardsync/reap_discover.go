@@ -1,11 +1,13 @@
-package cmd
+package boardsync
 
 import (
 	"fmt"
 	"sort"
 	"strings"
 
+	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/forge"
+	"github.com/Rivil/dross/internal/phase"
 )
 
 // Marker-label discovery: the second source the sweep classifies from.
@@ -75,7 +77,7 @@ func orphanIdentity(labels []string) (kind orphanKind, artefact string, ok bool)
 		}
 	}
 	for _, l := range labels {
-		if l == labelQuick {
+		if l == LabelQuick {
 			return orphanQuick, "", true
 		}
 	}
@@ -89,15 +91,15 @@ func orphanIdentity(labels []string) (kind orphanKind, artefact string, ok bool)
 // marker but no identity label anything can be recovered from. Those are
 // REPORTED, never closed: dross wrote them, so they are not a human's issue to
 // leave alone, but nothing on disk can be shown to speak for them.
-func discoverReap(ctx *boardCtx, lanes []reapLane) (found []candidate, unclassifiable []reapCard, err error) {
-	byLane := map[string]reapLane{}
+func Discover(ctx *Ctx, lanes []ReapLane) (found []candidate, unclassifiable []ReapCard, err error) {
+	byLane := map[string]ReapLane{}
 	for _, l := range lanes {
 		byLane[l.Name] = l
 	}
 
-	issues, err := ctx.client.ListIssues(forge.IssueFilter{State: "open", Labels: []string{labelMarker}})
+	issues, err := ctx.Client.ListIssues(forge.IssueFilter{State: "open", Labels: []string{LabelMarker}})
 	if err != nil {
-		return nil, nil, wrapBoard(err)
+		return nil, nil, Wrap(err)
 	}
 	sort.Slice(issues, func(i, j int) bool { return issues[i].Key < issues[j].Key })
 
@@ -110,13 +112,13 @@ func discoverReap(ctx *boardCtx, lanes []reapLane) (found []candidate, unclassif
 		// being protected — a human's issue is never touched, never even named
 		// — is too important to hold only as long as every backend's filter is
 		// exact. A card without the marker is not dross's to reason about.
-		if !hasLabel(iss.Labels, labelMarker) {
+		if !hasLabel(iss.Labels, LabelMarker) {
 			continue
 		}
 		// Deduped against the links here, so a card present in both sources is
 		// classified exactly once — by the board.json walk, which knows which
 		// namespace recorded it without having to infer it from a label.
-		if ctx.board.IsLinked(iss.Key) {
+		if ctx.Board.IsLinked(iss.Key) {
 			continue
 		}
 		kind, artefact, ok := orphanIdentity(iss.Labels)
@@ -127,10 +129,10 @@ func discoverReap(ctx *boardCtx, lanes []reapLane) (found []candidate, unclassif
 			// forever, which is exactly the inert re-listing the
 			// survivor-drain habit exists to stop — and it would keep a
 			// post-sweep plan from ever reading clean.
-			if done, derr := boardIssueIsDone(ctx, iss.Key); derr == nil && done {
+			if done, derr := IssueIsDone(ctx, iss.Key); derr == nil && done {
 				continue
 			}
-			unclassifiable = append(unclassifiable, reapCard{
+			unclassifiable = append(unclassifiable, ReapCard{
 				Key: iss.Key,
 				Why: "carries the dross marker but no identity label — nothing on disk can be shown to speak for it",
 			})
@@ -142,11 +144,11 @@ func discoverReap(ctx *boardCtx, lanes []reapLane) (found []candidate, unclassif
 			continue // this lane is not in the requested namespace filter
 		}
 		v, why := orphanVerdict(ctx, kind, artefact)
-		if v == reapStillOpen {
+		if v == ReapStillOpen {
 			continue
 		}
 		found = append(found, candidate{
-			card:    reapCard{Key: iss.Key, Lane: lane, Terminal: spec.Terminal, Why: why},
+			card:    ReapCard{Key: iss.Key, Lane: lane, Terminal: spec.Terminal, Why: why},
 			verdict: v,
 		})
 	}
@@ -155,61 +157,61 @@ func discoverReap(ctx *boardCtx, lanes []reapLane) (found []candidate, unclassif
 
 // orphanVerdict routes a recovered artefact through the same record-derived
 // gates the linked cards use. It owns no evidence of its own.
-func orphanVerdict(ctx *boardCtx, kind orphanKind, artefact string) (reapVerdict, string) {
+func orphanVerdict(ctx *Ctx, kind orphanKind, artefact string) (ReapVerdict, string) {
 	switch kind {
 	case orphanPhase:
-		return phaseRecordVerdict(ctx.root, artefact)
+		return phaseRecordVerdict(ctx.Root, artefact)
 	case orphanTask:
 		// dross/task:<phase>/<task> — the phase half carries the completion
 		// record; a task has none of its own.
 		slug, _, ok := strings.Cut(artefact, "/")
 		if !ok || slug == "" {
-			return reapUnattributable, fmt.Sprintf("task label %q names no phase", artefact)
+			return ReapUnattributable, fmt.Sprintf("task label %q names no phase", artefact)
 		}
-		return phaseRecordVerdict(ctx.root, slug)
+		return phaseRecordVerdict(ctx.Root, slug)
 	case orphanTarget:
 		// A routed item resolves when its destination phase completed — and a
 		// destination still on a roadmap but unscaffolded is live work, not a
 		// lost mirror.
-		if !phaseDirExists(ctx.root, artefact) {
-			roadmap, err := roadmapSlugs(ctx.root)
+		if !phase.DirExists(ctx.Root, artefact) {
+			roadmap, err := roadmapSlugs(ctx.Root)
 			if err != nil {
-				return reapUnattributable, fmt.Sprintf("could not read the milestone roadmaps: %v", err)
+				return ReapUnattributable, fmt.Sprintf("could not read the milestone roadmaps: %v", err)
 			}
-			v, why := slugVerdict(ctx.root, artefact, roadmap)
+			v, why := slugVerdict(ctx.Root, artefact, roadmap)
 			return v, fmt.Sprintf("routed to %s: %s", artefact, why)
 		}
-		v, why := phaseRecordVerdict(ctx.root, artefact)
-		if v == reapStranded {
+		v, why := phaseRecordVerdict(ctx.Root, artefact)
+		if v == ReapStranded {
 			return v, fmt.Sprintf("routed to %s; %s", artefact, why)
 		}
 		return v, why
 	case orphanDeferred:
 		return reapBacklogVerdictByID(ctx, artefact)
 	case orphanQuick:
-		return reapUnattributable, "quick has no completion record on disk — close it by hand if it finished"
+		return ReapUnattributable, "quick has no completion record on disk — close it by hand if it finished"
 	}
-	return reapUnattributable, fmt.Sprintf("identity kind %q has no record to read", kind)
+	return ReapUnattributable, fmt.Sprintf("identity kind %q has no record to read", kind)
 }
 
 // reapBacklogVerdictByID resolves a deferred item by its stable id and applies
 // the same backlog verdict the linked path uses.
-func reapBacklogVerdictByID(ctx *boardCtx, id string) (reapVerdict, string) {
-	deferred, err := collectDeferred(ctx.root)
+func reapBacklogVerdictByID(ctx *Ctx, id string) (ReapVerdict, string) {
+	items, err := deferred.Collect(ctx.Root)
 	if err != nil {
-		return reapUnattributable, fmt.Sprintf("could not read the deferred stores: %v", err)
+		return ReapUnattributable, fmt.Sprintf("could not read the deferred stores: %v", err)
 	}
-	byKey := map[string]deferredEntry{}
-	for _, d := range deferred {
+	byKey := map[string]deferred.Entry{}
+	for _, d := range items {
 		if d.ID != "" {
-			byKey[deferredBacklogKey(d.ID)] = d
+			byKey[DeferredBacklogKey(d.ID)] = d
 		}
 	}
-	roadmap, err := roadmapSlugs(ctx.root)
+	roadmap, err := roadmapSlugs(ctx.Root)
 	if err != nil {
-		return reapUnattributable, fmt.Sprintf("could not read the milestone roadmaps: %v", err)
+		return ReapUnattributable, fmt.Sprintf("could not read the milestone roadmaps: %v", err)
 	}
-	return reapBacklogVerdict(ctx, deferredBacklogKey(id), byKey, roadmap)
+	return reapBacklogVerdict(ctx, DeferredBacklogKey(id), byKey, roadmap)
 }
 
 // hasLabel reports whether a label set contains name.

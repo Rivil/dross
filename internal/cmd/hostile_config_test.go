@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -253,7 +254,7 @@ var vectorDrivers = map[string]func(t *testing.T, repoDir string, v vector) stri
 			if err != nil {
 				return err
 			}
-			cfg := boardConfig(p.Board, p.Remote.URL, nil)
+			cfg := boardsync.Config(p.Board, p.Remote.URL, nil)
 			return cfg.Hosts.Check("[board].base_url", cfg.APIBase)
 		})
 	},

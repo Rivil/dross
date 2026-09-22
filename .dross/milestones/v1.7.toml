@@ -1,4 +1,4 @@
-phases = ["exec-consent-completeness", "tracked-path-containment", "tool-output-not-persisted", "push-gates-on-origin", "scanner-self-exclusion", "supply-chain-currency", "mutation-range-provenance", "ast-aware-mutation-ranges", "secret-detection", "cmd-package-decomposition", "project-toml-lossless-writes", "remote-host-mutex", "dependency-update-automation", "exec-taint-enumeration", "cmd-exec-baseline-drain"]
+phases = ["exec-consent-completeness", "tracked-path-containment", "tool-output-not-persisted", "push-gates-on-origin", "scanner-self-exclusion", "supply-chain-currency", "mutation-range-provenance", "ast-aware-mutation-ranges", "secret-detection", "cmd-package-decomposition", "project-toml-lossless-writes", "remote-host-mutex", "dependency-update-automation", "exec-taint-enumeration", "cmd-exec-baseline-drain", "extracted-package-test-parity"]
 
 [milestone]
   version = "v1.7"

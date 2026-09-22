@@ -447,3 +447,22 @@ func sortedKeys(m map[string]bool) []string {
 	sort.Strings(out)
 	return out
 }
+
+// goFilesIn lists the non-test Go sources in dir. It lived beside the body
+// composer scan until that moved to internal/boardsync with the composers.
+func goFilesIn(t *testing.T, dir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	var out []string
+	for _, e := range entries {
+		n := e.Name()
+		if e.IsDir() || !strings.HasSuffix(n, ".go") || strings.HasSuffix(n, "_test.go") {
+			continue
+		}
+		out = append(out, filepath.Join(dir, n))
+	}
+	return out
+}

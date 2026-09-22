@@ -208,25 +208,6 @@ func TestEveryPromptIssueInvocationResolves(t *testing.T) {
 	}
 }
 
-// TestTaskSyncEdgeRegexIsNotVacuous: taskSyncEdgeRE drives the emit-set that
-// board_lifecycle_divergence_test's execute-edge guard compares against. A
-// rename that leaves the regex on the old spelling silently empties that set
-// and the lifecycle guard then passes on nothing — a guard measuring zero
-// lines is indistinguishable from a guard that agrees.
-func TestTaskSyncEdgeRegexIsNotVacuous(t *testing.T) {
-	matched := 0
-	for _, p := range promptFiles(t) {
-		b, err := os.ReadFile(p)
-		if err != nil {
-			t.Fatal(err)
-		}
-		matched += len(taskSyncEdgeRE.FindAllStringSubmatch(string(b), -1))
-	}
-	if matched == 0 {
-		t.Fatal("taskSyncEdgeRE matches no prompt line — the execute-edge lifecycle guard is running on an empty set")
-	}
-}
-
 // --- the docs ---
 //
 // README and ARCHITECTURE are read by someone deciding what to type. A stale

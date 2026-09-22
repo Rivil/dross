@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/watch"
 	"github.com/spf13/cobra"
@@ -55,7 +56,7 @@ func Watch() *cobra.Command {
 				stranded     int
 			)
 			if ctx, enabled, oerr := openBoard(); oerr == nil && enabled {
-				if issues, lerr := collectInbound(ctx, forge.IssueFilter{State: "open"}); lerr == nil {
+				if issues, lerr := boardsync.CollectInbound(ctx, forge.IssueFilter{State: "open"}); lerr == nil {
 					boardReached = true
 					for _, iss := range issues {
 						feed = append(feed, watch.Item{ID: iss.Key, State: iss.State, Title: iss.Title})
@@ -65,7 +66,7 @@ func Watch() *cobra.Command {
 				// classify that fails leaves the count at zero and the line
 				// unprinted rather than failing the tick. watch runs on a
 				// timer; it must never be the thing that breaks.
-				if plan, _, cerr := reapInventory(ctx, nil); cerr == nil {
+				if plan, _, cerr := boardsync.Inventory(ctx, nil); cerr == nil {
 					stranded = len(plan.Cards)
 				}
 			}

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Rivil/dross/internal/forge"
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/reaplog"
 )
 
@@ -114,11 +114,11 @@ func undoRepo(t *testing.T, f *undoYT) string {
 	mustRunSet(t, "board.state_map.task-complete", "Task Done")
 	mustWrite(t, filepath.Join(dir, ".dross", "board.json"), strandedBoard)
 	writeStrandedFixture(t, dir)
-	f.seed("PROJ-1", "In Progress", labelMarker)
-	f.seed("PROJ-2", "In Review", labelMarker)
-	f.seed("PROJ-7", "Open", labelMarker)
-	f.seed("PROJ-20", "Submitted", labelMarker)
-	f.seed("PROJ-40", "Open", labelMarker)
+	f.seed("PROJ-1", "In Progress", boardsync.LabelMarker)
+	f.seed("PROJ-2", "In Review", boardsync.LabelMarker)
+	f.seed("PROJ-7", "Open", boardsync.LabelMarker)
+	f.seed("PROJ-20", "Submitted", boardsync.LabelMarker)
+	f.seed("PROJ-40", "Open", boardsync.LabelMarker)
 	return dir
 }
 
@@ -362,25 +362,5 @@ func TestUndoRefusesOnABackendWithoutStateWriter(t *testing.T) {
 	}
 	if requests != 0 {
 		t.Errorf("%d requests were issued by a refused undo", requests)
-	}
-}
-
-// TestJournalledPriorStateFallsBackToTheOpenClosedState: a forge or GitLab
-// board has no column model, so WorkflowState is empty on every card — and
-// those backends ARE StateWriters, so undo really does run against them.
-// Journalling WorkflowState alone would record "" and make every restore write
-// an empty state and fail its read-back.
-func TestJournalledPriorStateFallsBackToTheOpenClosedState(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		iss  forge.Issue
-		want string
-	}{
-		{"a board with a column model", forge.Issue{WorkflowState: "In Review", State: "open"}, "In Review"},
-		{"a flat open/closed board", forge.Issue{State: "open"}, "open"},
-	} {
-		if got := priorStateOf(&tc.iss); got != tc.want {
-			t.Errorf("%s: journalled prior state %q, want %q", tc.name, got, tc.want)
-		}
 	}
 }
