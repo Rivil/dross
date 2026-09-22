@@ -2,11 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"reflect"
-	"sort"
-	"strings"
 
-	"github.com/Rivil/dross/internal/board"
+	"github.com/Rivil/dross/internal/boardsync"
 
 	"github.com/spf13/cobra"
 )
@@ -58,15 +55,15 @@ explains is named as unattributable and left open.`,
 				if len(namespaces) > 0 {
 					return fmt.Errorf("--undo replays the last recorded run verbatim and cannot be scoped by --namespace")
 				}
-				return undoReap(ctx)
+				return boardsync.Undo(ctx)
 			}
-			plan, unclassifiable, err := reapInventory(ctx, namespaces)
+			plan, unclassifiable, err := boardsync.Inventory(ctx, namespaces)
 			if err != nil {
 				return err
 			}
 			printReapPlan(plan, unclassifiable)
 			if apply {
-				return applyReap(ctx, plan)
+				return boardsync.Apply(ctx, plan)
 			}
 			return nil
 		},
@@ -84,9 +81,9 @@ explains is named as unattributable and left open.`,
 // id. A plan that only lists ids asks the reader to take ninety closes on
 // trust; a plan that names `phases/03-auth/changes.json status=complete` beside
 // each one can be argued with.
-func printReapPlan(plan *reapPlan, unclassifiable []reapCard) {
-	byLane := map[string][]reapCard{}
-	unattributableByLane := map[string][]reapCard{}
+func printReapPlan(plan *boardsync.ReapPlan, unclassifiable []boardsync.ReapCard) {
+	byLane := map[string][]boardsync.ReapCard{}
+	unattributableByLane := map[string][]boardsync.ReapCard{}
 	for _, c := range plan.Cards {
 		byLane[c.Lane] = append(byLane[c.Lane], c)
 	}
@@ -95,7 +92,7 @@ func printReapPlan(plan *reapPlan, unclassifiable []reapCard) {
 	}
 
 	lanes := 0
-	for _, lane := range reapLanes {
+	for _, lane := range boardsync.ReapLanes {
 		stranded := byLane[lane.Name]
 		unattributable := unattributableByLane[lane.Name]
 		if len(stranded) == 0 && len(unattributable) == 0 {
@@ -128,46 +125,4 @@ func printReapPlan(plan *reapPlan, unclassifiable []reapCard) {
 	}
 	Printf("\n%d stranded across %d %s, %d unattributable (named, never closed)\n",
 		len(plan.Cards), lanes, plural(lanes, "lane", "lanes"), len(plan.Unattributable))
-}
-
-// boardNamespaceNames enumerates board.Board's map-typed fields — the mirror
-// namespaces themselves, read off the struct rather than transcribed.
-//
-// The flag validates against THIS, not against a literal list beside the flag
-// definition. A namespace added to board.Board becomes a legal --namespace
-// value in the same commit that adds it, and the error a typo produces names
-// the real set rather than a stale copy of it.
-func boardNamespaceNames() []string {
-	rt := reflect.TypeOf(board.Board{})
-	var out []string
-	for i := 0; i < rt.NumField(); i++ {
-		if f := rt.Field(i); f.Type.Kind() == reflect.Map {
-			out = append(out, f.Name)
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
-// validateReapNamespaces refuses an unknown --namespace by name, listing the
-// namespaces that exist.
-func validateReapNamespaces(namespaces []string) error {
-	if len(namespaces) == 0 {
-		return nil
-	}
-	known := map[string]bool{}
-	for _, n := range boardNamespaceNames() {
-		known[strings.ToLower(n)] = true
-	}
-	var unknown []string
-	for _, n := range namespaces {
-		if !known[strings.ToLower(strings.TrimSpace(n))] {
-			unknown = append(unknown, n)
-		}
-	}
-	if len(unknown) > 0 {
-		return fmt.Errorf("unknown --namespace %s; expected one of %s",
-			strings.Join(unknown, ", "), strings.Join(boardNamespaceNames(), ", "))
-	}
-	return nil
 }

@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/consent"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/testlane"
 )
@@ -170,7 +171,7 @@ func runSlotNamed(root string, proj *project.Project, name string, extra []strin
 	}
 
 	line := runCommandLine(base, extra)
-	consented, err := RunConsented(root, line)
+	consented, err := consent.RunConsented(grantStore(root), line)
 	if err != nil {
 		return err
 	}

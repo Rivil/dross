@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/Rivil/dross/internal/boardsync"
 )
 
 // taskCloseFake is a flat issue board that tracks each issue's open/closed
@@ -256,7 +258,7 @@ func TestTaskSyncValidatesStatusBeforeTouchingTheBoard(t *testing.T) {
 }
 
 // TestTaskCloseRequiresAStatus guards the task_terminal_status decision at the
-// flag layer. closeBoardIssue defaults an empty status to `complete` — the
+// flag layer. boardsync.CloseIssue defaults an empty status to `complete` — the
 // PHASE lane's terminal state — so letting --close through without --status
 // would write the phase lane's state onto every task card.
 func TestTaskCloseRequiresAStatus(t *testing.T) {
@@ -293,8 +295,8 @@ func TestTaskSyncNormalizesStatus(t *testing.T) {
 		t.Fatal("t-1 was never mirrored")
 	}
 	labels := f.labelsOf(key)
-	if !slicesHas(labels, statusLabel(statusTaskInReview)) {
-		t.Errorf("labels = %v, want the normalized %s", labels, statusLabel(statusTaskInReview))
+	if !slicesHas(labels, boardsync.StatusLabel(boardsync.StatusTaskInReview)) {
+		t.Errorf("labels = %v, want the normalized %s", labels, boardsync.StatusLabel(boardsync.StatusTaskInReview))
 	}
 	for _, l := range labels {
 		if strings.Contains(l, " Task-In-Review") {

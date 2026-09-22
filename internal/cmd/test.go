@@ -27,7 +27,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/argfence"
-
+	"github.com/Rivil/dross/internal/consent"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/testlane"
@@ -433,12 +433,12 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		// `dross test <selector>` against runtime.test_command. Fingerprinting
 		// the derived line instead would go stale on every new file set and
 		// refuse practically every scoped run.
-		state, cerr := LaneConsented(root, repoDir, pl.lane.Name, laneConsentLine(pl.lane))
+		state, cerr := consent.LaneConsented(grantStore(root), repoDir, pl.lane.Name, consent.LaneLine(pl.lane))
 		if cerr != nil {
 			// Printed AND folded into the outcome. Returning it alone would
 			// lose it whenever another lane goes red and outranks it, and a
 			// consent problem the user never sees is one they never fix.
-			refusal := laneConsentRefusal(pl.lane, state, cerr)
+			refusal := consent.LaneRefusal(pl.lane, state, cerr)
 			Printf("%v\n\n", refusal)
 			worst = worseOutcome(worst, &ExitCodeError{Code: exitLaneRefused, Err: refusal})
 			continue

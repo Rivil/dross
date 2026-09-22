@@ -149,7 +149,7 @@ func TestRepointClearsDoctor(t *testing.T) {
 
 func hasDoctorIssue(lines []doctorLine, phaseID string) bool {
 	for _, l := range lines {
-		if l.level == doctorIssue && strings.Contains(l.text, phaseID) {
+		if l.Level == doctorIssue && strings.Contains(l.Text, phaseID) {
 			return true
 		}
 	}

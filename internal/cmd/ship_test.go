@@ -3,7 +3,13 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/hostallow"
+	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/ship"
+	"github.com/Rivil/dross/internal/state"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,11 +17,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/Rivil/dross/internal/changes"
-	"github.com/Rivil/dross/internal/project"
-	"github.com/Rivil/dross/internal/ship"
-	"github.com/Rivil/dross/internal/state"
 )
 
 // TestBuildOpenOptsMapsGitLabFields pins c-2's wiring: the ship command must
@@ -1656,8 +1657,8 @@ func TestShipFailedRecordPushIsNotShipped(t *testing.T) {
 	if pushed := originChangesX(t, remoteDir); pushed.PR != 0 {
 		t.Errorf("origin's changes.json should not carry the PR yet, got %d", pushed.PR)
 	}
-	if phaseDone(filepath.Join(dir, ".dross"), "x") {
-		t.Error("phaseDone reads true for a phase whose record never reached origin")
+	if phase.Done(filepath.Join(dir, ".dross"), "x") {
+		t.Error("phase.Done reads true for a phase whose record never reached origin")
 	}
 	listOut := captureStdout(t, func() { runCmd(t, Phase(), "list") })
 	if strings.Contains(listOut, "✓ x") {

@@ -620,7 +620,7 @@ func TestExecConsentFlagsItsOwnSnippets(t *testing.T) {
 //
 // GATING is a name rule plus a use rule, and it needs both. The name rule alone
 // (`requireExecConsent`, or any identifier ending in `Consented`) would mark
-// doctor as gating on the strength of reportLaneConsent, which reads a lane's
+// doctor as gating on the strength of diag.LaneConsent, which reads a lane's
 // consent state to PRINT it. So a function gates only when the call's result
 // reaches a branch that STOPS: an `if` over a value the call bound, or over the
 // call itself, whose body returns, continues or breaks. Nothing consults a
@@ -1318,7 +1318,7 @@ func isExecConsentCall(call *ast.CallExpr) bool {
 // the identifiers a consent call bound, then look for a branch that STOPS on
 // one of them — a return, a continue, a break. A switch that prints does not
 // count, which is what keeps doctor out of the gated set even though
-// reportLaneConsent calls LaneConsented and binds its error.
+// diag.LaneConsent calls LaneConsented and binds its error.
 func (g *execGraph) detectGating(n *execFunc) {
 	bound := map[string]bool{}
 	for _, part := range n.parts {
@@ -1972,12 +1972,12 @@ func gatedByANameNobodyListed() error {
 }
 
 // TestExecGatingRequiresActingOnTheResult is the other half of the name rule,
-// and the reason it needs a second half. doctor's reportLaneConsent calls
+// and the reason it needs a second half. doctor's diag.LaneConsent calls
 // LaneConsented and binds its error — to PRINT it. A rule that stopped at the
 // name would mark doctor as gating and green every site doctor reaches.
 func TestExecGatingRequiresActingOnTheResult(t *testing.T) {
 	g := repoExecGraph(t)
-	if g.funcs["cmd.reportLaneConsent"].gates {
+	if g.funcs["diag.LaneConsent"].gates {
 		t.Error("doctor's display-only LaneConsented read was counted as a gate")
 	}
 	if g.commandNamed(t, "doctor").gates {
@@ -2172,7 +2172,7 @@ func TestReachProofIsLoadBearing(t *testing.T) {
 	// is about what happens when the check is gone.
 	g := repoExecGraph(t, [3]string{
 		"run.go",
-		"consented, err := RunConsented(root, line)",
+		"consented, err := consent.RunConsented(grantStore(root), line)",
 		"consented, err := true, error(nil)",
 	})
 	var found bool

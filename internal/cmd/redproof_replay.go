@@ -32,6 +32,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/consent"
 )
 
 // redProofReplayTimeout bounds one replay. A red proof's replay is a test run,
@@ -66,7 +68,7 @@ func runRedProofReplay(root, repoDir, sha, line string) (replayResult, error) {
 	}
 	// FIRST, before any worktree exists and before anything is spawned: an
 	// ungranted line must cost zero side effects.
-	ok, err := ReplayConsented(root, line)
+	ok, err := consent.ReplayConsented(grantStore(root), line)
 	if err != nil {
 		return replayResult{}, err
 	}

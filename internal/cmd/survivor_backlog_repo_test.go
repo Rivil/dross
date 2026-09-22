@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/milestone"
 )
 
@@ -314,7 +315,7 @@ func TestSurvivorBacklogAuditCatchesItsFailureShapes(t *testing.T) {
 func TestSurvivorDrainBacklogClosed(t *testing.T) {
 	root := filepath.Join(repoRootFromTest(t), RootDirName)
 
-	entries, err := collectDeferred(root)
+	entries, err := deferred.Collect(root)
 	if err != nil {
 		t.Fatalf("collect deferred: %v", err)
 	}

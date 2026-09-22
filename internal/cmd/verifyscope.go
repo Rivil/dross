@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -287,4 +288,15 @@ func printProvenance(t *verify.Tests, p verify.Provenance) {
 			Printf("  whole-file %s — %s\n", f, leg.WholeFile[f])
 		}
 	}
+}
+
+// sortedMapKeys gives a map walk a stable order, so two runs over the same
+// input print the same lines.
+func sortedMapKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

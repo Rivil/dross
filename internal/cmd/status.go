@@ -154,7 +154,7 @@ func Status() *cobra.Command {
 // name when the milestone toml is missing or lists no phases (e.g. a
 // freshly-set current_milestone with no scoped toml yet).
 //
-// Doneness comes from phaseDone (phasedone.go), the same reader `dross
+// Doneness comes from phase.Done (internal/phase/done.go), the same reader `dross
 // milestone progress` and `dross phase list` use — never from verify.toml's
 // verdict. Counting verdicts here is what made the status bar disagree with
 // milestone progress across all of v1.4: eleven phases carrying completion
@@ -167,7 +167,7 @@ func renderMilestone(root, version string) {
 	}
 	done := 0
 	for _, id := range m.Phases {
-		if phaseDone(root, id) {
+		if phase.Done(root, id) {
 			done++
 		}
 	}
@@ -657,7 +657,7 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 	// The record, not state.History's `completed <id>` breadcrumb: history is a
 	// capped 50-entry window, so the breadcrumb read went silent again fifty
 	// actions later and the line came back on a phase that finished long ago.
-	// Narrower than phaseDone on purpose — `shipped` is precisely the state
+	// Narrower than phase.Done on purpose — `shipped` is precisely the state
 	// this line exists to announce.
 	if changes.Complete(root, phaseID) {
 		return none, false

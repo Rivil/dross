@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/phase"
 )
 
 // backfillRepo builds a work repo with a real bare origin on disk, so
@@ -348,7 +349,7 @@ func TestBackfillApplyWritesStatusAndEvidence(t *testing.T) {
 	if c.BackfillEvidence == nil || c.BackfillEvidence.SHA != sha {
 		t.Errorf("evidence = %+v, want the ship commit %s", c.BackfillEvidence, sha)
 	}
-	if !phaseDone(root, "alpha") {
+	if !phase.Done(root, "alpha") {
 		t.Error("a backfilled record must read done through the shared reader")
 	}
 }
@@ -372,7 +373,7 @@ func TestBackfillApplyLeavesFailedEvidenceUntouched(t *testing.T) {
 		if before[slug] != after[slug] {
 			t.Errorf("%s failed its evidence test but its record was rewritten:\n%s", slug, after[slug])
 		}
-		if phaseDone(filepath.Join(dir, ".dross"), slug) {
+		if phase.Done(filepath.Join(dir, ".dross"), slug) {
 			t.Errorf("%s was marked done with no evidence", slug)
 		}
 	}
@@ -455,7 +456,7 @@ func TestBackfillRefusesAmbiguousOrdinalPair(t *testing.T) {
 		if !strings.Contains(out, slug+"  unbackfillable") {
 			t.Errorf("%s should be refused as ambiguous:\n%s", slug, out)
 		}
-		if phaseDone(filepath.Join(dir, ".dross"), slug) {
+		if phase.Done(filepath.Join(dir, ".dross"), slug) {
 			t.Errorf("%s was marked off ambiguous evidence", slug)
 		}
 	}

@@ -1,4 +1,4 @@
-package cmd
+package boardsync
 
 import (
 	"go/ast"
@@ -20,7 +20,7 @@ import (
 // Board lifecycle / state-map divergence guard (c-2).
 //
 // The lifecycle vocabulary has two independent sides. dross *emits* a status —
-// from a `--status <literal>` in a workflow prompt, or from derivePhaseStatus
+// from a `--status <literal>` in a workflow prompt, or from DerivePhaseStatus
 // when the flag is absent — and each forge *keys* a state map on one. Nothing
 // in the type system connects them, and they drifted: the producer emitted
 // "planning" while both maps keyed "planned", so the commonest phase shape
@@ -30,9 +30,9 @@ import (
 // entry fails; a state map keyed on a status nothing emits fails.
 //
 // **"Emits" means call sites only** — the `--status <literal>` occurrences in
-// assets/prompts/*.md plus the values derivePhaseStatus can return. Declared Go
-// constants are deliberately NOT counted: issue.go's constants are defined *as*
-// members of configenum.LifecycleStatuses (issue_test.go asserts exactly that),
+// assets/prompts/*.md plus the values DerivePhaseStatus can return. Declared Go
+// constants are deliberately NOT counted: ctx.go's constants are defined *as*
+// members of configenum.LifecycleStatuses (cmd's issue_test.go asserts exactly that),
 // so folding them in would make the emit-set equal the Set by construction and
 // turn this file into a tautology. The point is to catch a status that has a
 // definition but no longer has a caller, which is precisely how "shipped" and
@@ -74,19 +74,20 @@ func emittedStatuses(t *testing.T) map[string]string {
 		t.Fatal("scanned no prompt files — the emit-set would be empty and every assertion below vacuous")
 	}
 
-	// 2. derivePhaseStatus's return values, read as source. Executing the
+	// 2. DerivePhaseStatus's return values, read as source. Executing the
 	// function instead would only reach the branches a fixture happens to
 	// trigger; parsing reaches every return statement, so a new branch is
 	// caught the day it is written.
-	for _, s := range derivePhaseStatusReturns(t, filepath.Join(root, "internal", "cmd", "issue.go")) {
-		out[s] = "internal/cmd/issue.go:derivePhaseStatus"
+	for _, s := range derivePhaseStatusReturns(t, filepath.Join(root, "internal", "boardsync", "phase.go")) {
+		out[s] = "internal/boardsync/phase.go:DerivePhaseStatus"
 	}
 	return out
 }
 
-// derivePhaseStatusReturns resolves every value derivePhaseStatus can return.
-// Returns are written as constant identifiers, so the file's string constants
-// are collected first and the identifiers resolved through them.
+// derivePhaseStatusReturns resolves every value DerivePhaseStatus can return.
+// Returns are written as constant identifiers, so the PACKAGE's string
+// constants are collected first (they live in ctx.go, the function in
+// phase.go) and the identifiers resolved through them.
 func derivePhaseStatusReturns(t *testing.T, path string) []string {
 	t.Helper()
 	fset := token.NewFileSet()
@@ -94,9 +95,19 @@ func derivePhaseStatusReturns(t *testing.T, path string) []string {
 	if err != nil {
 		t.Fatalf("parse %s: %v", path, err)
 	}
+	pkgs, err := parser.ParseDir(fset, filepath.Dir(path), func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", filepath.Dir(path), err)
+	}
+	var decls []ast.Decl
+	for _, pkg := range pkgs {
+		for _, f := range pkg.Files {
+			decls = append(decls, f.Decls...)
+		}
+	}
 
 	consts := map[string]string{}
-	for _, decl := range file.Decls {
+	for _, decl := range decls {
 		gd, ok := decl.(*ast.GenDecl)
 		if !ok || gd.Tok != token.CONST {
 			continue
@@ -121,13 +132,13 @@ func derivePhaseStatusReturns(t *testing.T, path string) []string {
 
 	var fn *ast.FuncDecl
 	for _, decl := range file.Decls {
-		if fd, ok := decl.(*ast.FuncDecl); ok && fd.Name.Name == "derivePhaseStatus" && fd.Body != nil {
+		if fd, ok := decl.(*ast.FuncDecl); ok && fd.Name.Name == "DerivePhaseStatus" && fd.Body != nil {
 			fn = fd
 			break
 		}
 	}
 	if fn == nil {
-		t.Fatalf("no derivePhaseStatus in %s — the emit-set is missing its Go half", path)
+		t.Fatalf("no DerivePhaseStatus in %s — the emit-set is missing its Go half", path)
 	}
 
 	var got []string
@@ -685,6 +696,42 @@ func TestCloseEmissionsCarryAValidStatus(t *testing.T) {
 
 // --- reap coverage ---
 //
+// TestTaskSyncEdgeRegexIsNotVacuous: taskSyncEdgeRE drives the emit-set that
+// board_lifecycle_divergence_test's execute-edge guard compares against. A
+// rename that leaves the regex on the old spelling silently empties that set
+// and the lifecycle guard then passes on nothing — a guard measuring zero
+// lines is indistinguishable from a guard that agrees.
+func TestTaskSyncEdgeRegexIsNotVacuous(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join(repoRootFromTest(t), "assets", "prompts", "*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("globbed no prompts — the guard would pass vacuously")
+	}
+	matched := 0
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		matched += len(taskSyncEdgeRE.FindAllStringSubmatch(string(b), -1))
+	}
+	if matched == 0 {
+		t.Fatal("taskSyncEdgeRE matches no prompt line — the execute-edge lifecycle guard is running on an empty set")
+	}
+}
+
+// TestEveryMirrorLaneHasATerminalEmission above asks whether every mirror class
+// has a way FORWARD to a terminal state. These ask the other half: whether
+// every mirror class has a way BACK — a reap path for the cards the forward
+// lifecycle already left behind.
+//
+// The two questions are separate because the answers were: the forward
+// emissions were added when the lifecycle was fixed, and the ninety cards that
+// predate them are not reachable by any of those lines. A namespace can have a
+// perfect forward path and still have no way to close its history.
+
 // TestEveryMirrorLaneHasATerminalEmission above asks whether every mirror class
 // has a way FORWARD to a terminal state. These ask the other half: whether
 // every mirror class has a way BACK — a reap path for the cards the forward
@@ -700,9 +747,9 @@ func TestCloseEmissionsCarryAValidStatus(t *testing.T) {
 func TestEveryBoardNamespaceHasAReapPath(t *testing.T) {
 	fields := boardNamespaceFields(t)
 	for _, field := range fields {
-		lane, ok := reapLaneFor(field)
+		lane, ok := ReapLaneFor(field)
 		if !ok {
-			t.Errorf("board.Board has a %s namespace with no reap lane — every stranded %s card would be unreachable by the sweep; add it to reapLanes", field, field)
+			t.Errorf("board.Board has a %s namespace with no reap lane — every stranded %s card would be unreachable by the sweep; add it to ReapLanes", field, field)
 			continue
 		}
 		if lane.Terminal == "" {
@@ -716,12 +763,12 @@ func TestEveryBoardNamespaceHasAReapPath(t *testing.T) {
 	for _, f := range fields {
 		known[f] = true
 	}
-	for _, lane := range reapLanes {
+	for _, lane := range ReapLanes {
 		if !known[lane.Name] {
-			t.Errorf("reapLanes describes %q, which is not a board.Board namespace any more — drop it rather than leaving a classifier arm over nothing", lane.Name)
+			t.Errorf("ReapLanes describes %q, which is not a board.Board namespace any more — drop it rather than leaving a classifier arm over nothing", lane.Name)
 		}
 	}
-	if len(reapLanes) == 0 {
+	if len(ReapLanes) == 0 {
 		t.Fatal("the reap lane registry is empty — every assertion here would be vacuous")
 	}
 }
@@ -734,7 +781,7 @@ func TestEveryBoardNamespaceHasAReapPath(t *testing.T) {
 func TestReapTerminalMatchesTheForwardTerminal(t *testing.T) {
 	checked := 0
 	for _, field := range boardNamespaceFields(t) {
-		lane, ok := reapLaneFor(field)
+		lane, ok := ReapLaneFor(field)
 		if !ok {
 			continue // TestEveryBoardNamespaceHasAReapPath owns the missing case
 		}
@@ -773,7 +820,7 @@ func TestEveryReapTerminalIsMapped(t *testing.T) {
 		}
 	}
 
-	for _, lane := range reapLanes {
+	for _, lane := range ReapLanes {
 		if !configenum.LifecycleStatuses.Has(lane.Terminal) {
 			t.Errorf("the %s lane reaps to %q, which is not a lifecycle status (%s) — nothing downstream could validate it", lane.Name, lane.Terminal, configenum.LifecycleStatuses.List())
 			continue
@@ -783,5 +830,24 @@ func TestEveryReapTerminalIsMapped(t *testing.T) {
 				t.Errorf("%s has no state-map entry for %q, the %s lane's reap terminal — every close in that lane would fail on a %s board", provider, lane.Terminal, lane.Name, provider)
 			}
 		}
+	}
+}
+
+// repoRootFromTest walks up from the package directory to the module root.
+func repoRootFromTest(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("could not find module root (no go.mod above %s)", dir)
+		}
+		dir = parent
 	}
 }

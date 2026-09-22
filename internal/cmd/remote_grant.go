@@ -33,6 +33,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/consent"
 	"github.com/Rivil/dross/internal/remote"
 )
 
@@ -136,7 +137,7 @@ func remoteGrant() *cobra.Command {
 			// a committed local.toml would put the authorization on the wire to
 			// every clone — the exact self-authorizing shape this store exists
 			// to prevent.
-			if err := refuseTrackedLocal(filepath.Dir(root)); err != nil {
+			if err := consent.RefuseTrackedLocal(filepath.Dir(root)); err != nil {
 				return err
 			}
 
@@ -239,7 +240,7 @@ func remoteRevoke() *cobra.Command {
 				return err
 			}
 			repoDir := filepath.Dir(root)
-			if err := refuseTrackedLocal(repoDir); err != nil {
+			if err := consent.RefuseTrackedLocal(repoDir); err != nil {
 				return err
 			}
 			l, err := loadLocal(localPath(root))

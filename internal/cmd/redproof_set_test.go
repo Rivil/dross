@@ -363,8 +363,8 @@ func TestDoctorHintNamesRepoint(t *testing.T) {
 	}
 	var hint string
 	for _, l := range lines {
-		if l.level == doctorIssue && strings.Contains(l.text, "unreachable") {
-			hint = l.text
+		if l.Level == doctorIssue && strings.Contains(l.Text, "unreachable") {
+			hint = l.Text
 		}
 	}
 	if hint == "" {

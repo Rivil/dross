@@ -1,6 +1,8 @@
-package cmd
+package boardsync
 
-import "github.com/Rivil/dross/internal/phase"
+import (
+	"github.com/Rivil/dross/internal/phase"
+)
 
 // The two task vocabularies, and the conversion between them.
 //
@@ -18,7 +20,7 @@ import "github.com/Rivil/dross/internal/phase"
 // So the mapping lives here, in one place, testable — rather than being
 // re-derived at each edge that needs it.
 
-// taskLifecycle is the lifecycle status the board carries for a plan status.
+// TaskLifecycle is the lifecycle status the board carries for a plan status.
 // A status with no board meaning maps to "", which callers read as "dross does
 // not mirror this one".
 //
@@ -29,20 +31,20 @@ import "github.com/Rivil/dross/internal/phase"
 // failed also has none. It is a local judgement about a run, not a column on a
 // board, and inventing one would need a state-map key no prompt emits — which
 // the lifecycle divergence guard refuses by design.
-var taskLifecycle = map[string]string{
-	phase.StatusInProgress: statusTaskInProgress,
-	phase.StatusDone:       statusTaskInReview,
+var TaskLifecycle = map[string]string{
+	phase.StatusInProgress: StatusTaskInProgress,
+	phase.StatusDone:       StatusTaskInReview,
 }
 
-// statusTaskComplete is the TASK lane's terminal state, emitted once per phase
+// StatusTaskComplete is the TASK lane's terminal state, emitted once per phase
 // from ship.md's finalize step. It lives here rather than beside issue.go's
 // other status constants because it is the one status with no outbound edge at
 // all — nothing derives it from a plan status; it exists only to be read back
 // off a card — and task_lifecycle.go is where that asymmetry is expressed.
-const statusTaskComplete = "task-complete"
+const StatusTaskComplete = "task-complete"
 
-// boardStatusToPlan is the board->plan direction. It is the inversion of
-// taskLifecycle PLUS one deliberately asymmetric entry, and the asymmetry is
+// BoardStatusToPlan is the board->plan direction. It is the inversion of
+// TaskLifecycle PLUS one deliberately asymmetric entry, and the asymmetry is
 // the point rather than an oversight.
 //
 // The inverted pairs are the per-task execute edges, which move in both
@@ -51,24 +53,24 @@ const statusTaskComplete = "task-complete"
 //
 // task-complete has no inverse pair. It is written once, at ship finalize, over
 // every card in the phase at once — never at a per-task edge — so there is no
-// plan status that should ever DERIVE it. lifecycleForPlanStatus("done") must
+// plan status that should ever DERIVE it. LifecycleForPlanStatus("done") must
 // keep returning task-in-review, or committing a task would mark it as though
 // its whole phase had shipped. The reverse reading is still needed: a card
 // sitting in the terminal column reads back as a done task, not as an
 // unmirrored column an inbound sync has to guess at.
-var boardStatusToPlan = func() map[string]string {
-	inv := make(map[string]string, len(taskLifecycle)+1)
-	for planStatus, lifecycle := range taskLifecycle {
+var BoardStatusToPlan = func() map[string]string {
+	inv := make(map[string]string, len(TaskLifecycle)+1)
+	for planStatus, lifecycle := range TaskLifecycle {
 		inv[lifecycle] = planStatus
 	}
-	inv[statusTaskComplete] = phase.StatusDone
+	inv[StatusTaskComplete] = phase.StatusDone
 	return inv
 }()
 
 // lifecycleForPlanStatus returns the board lifecycle status for a plan task
 // status, and whether the board mirrors that status at all.
-func lifecycleForPlanStatus(planStatus string) (string, bool) {
-	s, ok := taskLifecycle[planStatus]
+func LifecycleForPlanStatus(planStatus string) (string, bool) {
+	s, ok := TaskLifecycle[planStatus]
 	return s, ok
 }
 
@@ -81,7 +83,7 @@ func lifecycleForPlanStatus(planStatus string) (string, bool) {
 // task-in-progress to the same "In Progress", and shipped and complete to the
 // same "Done". Inverting them is ambiguous by construction, whereas the label
 // records exactly what dross last asserted.
-func planStatusForLifecycle(lifecycle string) (string, bool) {
-	s, ok := boardStatusToPlan[lifecycle]
+func PlanStatusForLifecycle(lifecycle string) (string, bool) {
+	s, ok := BoardStatusToPlan[lifecycle]
 	return s, ok
 }

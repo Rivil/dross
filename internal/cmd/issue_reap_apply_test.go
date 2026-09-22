@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/reaplog"
 )
 
@@ -38,7 +39,7 @@ type applyYT struct {
 	// A counter rather than a flag, because the read that has to fail is the
 	// apply-time one. buildReapPlan reads every candidate first — a card
 	// unreadable THEN never reaches plan.Cards at all, it is filed
-	// unattributable, and applyReap's prior-state arm is never entered. Only a
+	// unattributable, and boardsync.Apply's prior-state arm is never entered. Only a
 	// card that was readable when the plan was built and unreadable when the
 	// write came round exercises it.
 	failReadAfter map[string]int
@@ -69,14 +70,14 @@ func (f *applyYT) knownTags() []string {
 			out = append(out, n)
 		}
 	}
-	add(labelMarker)
+	add(boardsync.LabelMarker)
 	for _, ls := range f.labels {
 		for _, l := range ls {
 			add(l)
 		}
 	}
-	for _, lane := range reapLanes {
-		add(statusLabel(lane.Terminal))
+	for _, lane := range boardsync.ReapLanes {
+		add(boardsync.StatusLabel(lane.Terminal))
 	}
 	return out
 }
@@ -208,7 +209,7 @@ func applyRepo(t *testing.T, f *applyYT) string {
 	mustWrite(t, filepath.Join(dir, ".dross", "board.json"), strandedBoard)
 	writeStrandedFixture(t, dir)
 	for _, k := range []string{"PROJ-1", "PROJ-2", "PROJ-7", "PROJ-20", "PROJ-40"} {
-		f.seed(k, "In Review", labelMarker)
+		f.seed(k, "In Review", boardsync.LabelMarker)
 	}
 	return dir
 }
@@ -437,7 +438,7 @@ func TestReapNeverTouchesCorrectlyOpenCards(t *testing.T) {
 	  "tasks": {}, "milestones": {}, "quicks": {}, "backlog": {}
 	}`)
 	writeChanges(t, dir, "02-live", "")
-	f.seed("PROJ-50", "In Progress", labelMarker)
+	f.seed("PROJ-50", "In Progress", boardsync.LabelMarker)
 	f.seed("PROJ-77", "Open") // a human's issue: no marker, in no namespace
 
 	_ = captureStdout(t, func() {
@@ -470,8 +471,8 @@ func TestReapedCardCarriesTheLaneTerminalLabel(t *testing.T) {
 	f := newApplyYT()
 	applyRepo(t, f)
 	// The state the execute loop leaves a task card in.
-	f.labels["PROJ-2"] = []string{labelMarker, taskLabel("01-auth", "t-1"), statusLabel(statusTaskInReview)}
-	f.labels["PROJ-1"] = []string{labelMarker, phaseLabel("01-auth"), statusLabel(statusInProgress)}
+	f.labels["PROJ-2"] = []string{boardsync.LabelMarker, boardsync.TaskLabel("01-auth", "t-1"), boardsync.StatusLabel(boardsync.StatusTaskInReview)}
+	f.labels["PROJ-1"] = []string{boardsync.LabelMarker, boardsync.PhaseLabel("01-auth"), boardsync.StatusLabel(boardsync.StatusInProgress)}
 
 	_ = captureStdout(t, func() {
 		_ = captureStderr(t, func() {
@@ -482,8 +483,8 @@ func TestReapedCardCarriesTheLaneTerminalLabel(t *testing.T) {
 	})
 
 	for _, tc := range []struct{ key, want string }{
-		{"PROJ-2", statusLabel(statusTaskComplete)},
-		{"PROJ-1", statusLabel("complete")},
+		{"PROJ-2", boardsync.StatusLabel(boardsync.StatusTaskComplete)},
+		{"PROJ-1", boardsync.StatusLabel("complete")},
 	} {
 		if !slicesHas(f.labels[tc.key], tc.want) {
 			t.Errorf("%s labels = %v, want the lane terminal %q", tc.key, f.labels[tc.key], tc.want)
@@ -495,7 +496,7 @@ func TestReapedCardCarriesTheLaneTerminalLabel(t *testing.T) {
 		}
 	}
 	// The identity labels the discovery sweep depends on must survive.
-	if !slicesHas(f.labels["PROJ-2"], taskLabel("01-auth", "t-1")) || !slicesHas(f.labels["PROJ-2"], labelMarker) {
+	if !slicesHas(f.labels["PROJ-2"], boardsync.TaskLabel("01-auth", "t-1")) || !slicesHas(f.labels["PROJ-2"], boardsync.LabelMarker) {
 		t.Errorf("PROJ-2 lost an identity label: %v", f.labels["PROJ-2"])
 	}
 }
@@ -537,7 +538,7 @@ func TestRelabelFailureDoesNotFailTheCard(t *testing.T) {
 
 // TestApplyContinuesPastAPriorStateReadFailure is c-5's other half.
 //
-// The write-failure path is covered above; this is the READ. applyReap reads
+// The write-failure path is covered above; this is the READ. boardsync.Apply reads
 // each card's column before closing it, and a tracker that goes away between
 // the plan and the write leaves that read failing. The card must be reported
 // and skipped — never written blind, never journalled as closed — and the rest
