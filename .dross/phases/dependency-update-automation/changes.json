@@ -36,15 +36,29 @@
       ]
     },
     "t-3": {
-      "files": [
-        ".github/dependabot.yml"
-      ],
-      "completed_at": "2026-09-22T17:57:17.145966Z",
-      "notes": "c-5 evidence, captured 2026-09-22T17:56:38Z on Rivil/dross. Before: 'gh api repos/Rivil/dross/vulnerability-alerts' -\u003e HTTP 404; 'gh api repos/Rivil/dross/automated-security-fixes' -\u003e {\"enabled\":false,\"paused\":false}. Enabled with 'gh api -X PUT' on both endpoints (HTTP 204 each). After: vulnerability-alerts -\u003e HTTP 204; automated-security-fixes -\u003e {\"enabled\":true,\"paused\":false}. No code commit and no new file: the change is a GitHub repo setting. plan.toml declares files = [] for this task, but 'dross changes record' requires at least one --files entry, so this points at the file whose header names both settings (committed as t-1, 8963183) rather than claiming a fresh edit.",
+      "files": [],
+      "completed_at": "2026-09-22T18:02:51.983958Z",
+      "notes": "c-5 evidence, captured 2026-09-22T17:56:38Z on Rivil/dross. Before: 'gh api repos/Rivil/dross/vulnerability-alerts' -\u003e HTTP 404; 'gh api repos/Rivil/dross/automated-security-fixes' -\u003e {\"enabled\":false,\"paused\":false}. Enabled with 'gh api -X PUT' on both endpoints (HTTP 204 each). After: vulnerability-alerts -\u003e HTTP 204; automated-security-fixes -\u003e {\"enabled\":true,\"paused\":false}. No code commit and no file: the change is a GitHub repo setting. The in-repo trace is the .github/dependabot.yml header naming both settings (commit 8963183).",
       "landmarks": [
         {
           "feature": "Supply-chain currency",
           "what": "Dependabot vulnerability alerts and automated security fixes enabled on Rivil/dross, so an advisory against a pinned dep opens a PR the day it lands rather than waiting for the weekly currency run; cooldown never delays a security update"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/changes.go",
+        "internal/cmd/changes_test.go"
+      ],
+      "commit": "8f6b4fd",
+      "completed_at": "2026-09-22T18:02:45.991325Z",
+      "landmarks": [
+        {
+          "feature": "Change tracking \u0026 landmarks",
+          "symbol": "requireFilelessTaskInPlan",
+          "loc": "internal/cmd/changes.go:101",
+          "what": "changes record accepts zero --files only when plan.toml's entry for that task declares files = [], so a task whose artifact is a repo setting still leaves a record; a task that names files, or an id absent from the plan, is still rejected"
         }
       ]
     }

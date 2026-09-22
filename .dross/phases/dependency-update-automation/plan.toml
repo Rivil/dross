@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 4
 
 [phase]
   id = "dependency-update-automation"
@@ -31,4 +31,13 @@ task_seq = 0
   description = "Repo setting on Rivil/dross, not a code change: enable Dependabot vulnerability alerts and automated security fixes via `gh api -X PUT`. No Go test can assert a GitHub repo setting, so the artifact is the captured gh api output recorded as c-5 evidence in verify.toml, plus the line in t-1 dependabot.yml header naming the two settings this config depends on — without that pairing, nothing in the repo would show the settings were ever on."
   covers = ["c-5"]
   test_contract = ["if vulnerability alerts are off, `gh api repos/Rivil/dross/vulnerability-alerts` returns 404 instead of 204 (recorded as c-5 evidence at execute time)", "if automated security fixes are off, `gh api repos/Rivil/dross/automated-security-fixes` reports enabled=false (recorded as c-5 evidence at execute time)"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Allow a fileless changes record when the plan declares files = []"
+  files = ["internal/cmd/changes.go", "internal/cmd/changes_test.go"]
+  description = "t-3's plan entry declares files = [] (its artifact is a GitHub repo setting, not a file), but `dross changes record` requires at least one --files entry, so the run had to point t-3 at .github/dependabot.yml and explain the pointer in --notes. Relax the guard narrowly: zero --files is accepted only when plan.toml's entry for that task also declares an empty files list. A task that declares files but records none is still rejected — that guard exists to catch a silent no-op record — and so is a task id absent from the plan."
+  test_contract = ["if `dross changes record` accepts zero --files for a task whose plan entry declares a non-empty files list, TestChangesRecordRejectsFilelessWhenPlanDeclaresFiles fails", "if it rejects zero --files for a task whose plan entry declares files = [], TestChangesRecordAcceptsFilelessPlannedTask fails", "if zero --files is accepted for a task id that does not appear in plan.toml at all, TestChangesRecordRejectsFilelessUnknownTask fails — an unrecognised id must not be a way past the guard", "if a fileless record drops the landmark or notes it was given, TestChangesRecordAcceptsFilelessPlannedTask fails — the record is the only artifact such a task has"]
   status = "done"
