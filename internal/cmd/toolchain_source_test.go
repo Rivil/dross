@@ -17,13 +17,18 @@ import (
 // that wiring (phase supply-chain-currency, criterion c-2): YAML has no mutation
 // adapter, so a content guard is the reproducible regression check.
 
-// setupGoMinSHA is the oldest actions/setup-go commit that honours the
-// `toolchain` directive under `go-version-file` — the v7.0.0 tag. v5.x read only
-// the `go` directive, so the declared toolchain arrived later via GOTOOLCHAIN=auto
-// and the action's installed version was a fiction. Bump this deliberately (and
-// the workflow pins with it) when adopting a newer tag; a workflow pinned to any
-// other SHA fails the test.
-const setupGoMinSHA = "b7ad1dad31e06c5925ef5d2fc7ad053ef454303e" // v7.0.0
+// setupGoMinVersion is the oldest actions/setup-go release that honours the
+// `toolchain` directive under `go-version-file` — v7.0.0. v5.x read only the
+// `go` directive, so the declared toolchain arrived later via GOTOOLCHAIN=auto
+// and the action's installed version was a fiction.
+//
+// The floor is compared by semver against each pin's trailing `# vX.Y.Z`
+// comment rather than against one exact SHA (phase
+// dependency-update-automation, criterion c-3): a Dependabot bump rewrites both
+// the SHA and the comment, and an exact-SHA constant here would turn every such
+// PR red until someone hand-edited this line. The comment is trustworthy
+// because action_pins_test.go requires one on every pin, in that shape.
+const setupGoMinVersion = "v7.0.0"
 
 func TestToolchainSingleSource(t *testing.T) {
 	root := repoRootFromTest(t)
@@ -58,8 +63,11 @@ func TestToolchainSingleSource(t *testing.T) {
 		rel, _ := filepath.Rel(root, wf)
 		for _, s := range setupGoSteps(readRepoFile(t, rel)) {
 			steps++
-			if s.sha != setupGoMinSHA {
-				t.Errorf("%s:%d actions/setup-go pinned to %q; want %s (v7.0.0 — the first tag that reads go.mod's toolchain directive)", rel, s.line, s.sha, setupGoMinSHA)
+			switch {
+			case !semver.IsValid(s.version):
+				t.Errorf("%s:%d actions/setup-go@%s carries version comment %q — a pin's tag must be recorded as a trailing `# vX.Y.Z` comment, which is what makes the floor below comparable", rel, s.line, s.sha, s.version)
+			case semver.Compare(s.version, setupGoMinVersion) < 0:
+				t.Errorf("%s:%d actions/setup-go pinned to %s (%s); want >= %s — the first release that reads go.mod's toolchain directive", rel, s.line, s.sha, s.version, setupGoMinVersion)
 			}
 			if s.goVersion != "" {
 				t.Errorf("%s:%d actions/setup-go carries `go-version: %s` — a second toolchain source; go.mod's toolchain directive is the only one", rel, s.line, s.goVersion)
@@ -74,11 +82,12 @@ func TestToolchainSingleSource(t *testing.T) {
 	}
 }
 
-// setupGoStep is one `uses: actions/setup-go@<sha>` step and the toolchain
-// keys found in its `with:` block.
+// setupGoStep is one `uses: actions/setup-go@<sha>` step, the version recorded
+// in its trailing comment, and the toolchain keys found in its `with:` block.
 type setupGoStep struct {
 	line          int
 	sha           string
+	version       string
 	goVersion     string
 	goVersionFile string
 }
@@ -88,7 +97,9 @@ type setupGoStep struct {
 // follows it. Line-based on purpose: the repo carries no YAML dependency, and a
 // step's `with:` block ends at the next line indented at or above the step's
 // `- uses:` dash. Comment lines and trailing `# ...` comments are dropped
-// first so a comment mentioning `go-version:` is not read as the key.
+// before keys are read, so a comment mentioning `go-version:` is not read as
+// the key — but the `uses:` line's own comment is retained, since that is where
+// the pinned version lives.
 func setupGoSteps(workflow string) []setupGoStep {
 	var (
 		steps []setupGoStep
@@ -96,7 +107,7 @@ func setupGoSteps(workflow string) []setupGoStep {
 		depth = -1
 	)
 	for i, raw := range strings.Split(workflow, "\n") {
-		line := stripYAMLComment(raw)
+		line, comment := splitYAMLComment(raw)
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
@@ -107,7 +118,7 @@ func setupGoSteps(workflow string) []setupGoStep {
 			cur = nil
 		}
 		if rest, ok := strings.CutPrefix(trimmed, "- uses: actions/setup-go@"); ok {
-			cur = &setupGoStep{line: i + 1, sha: strings.TrimSpace(rest)}
+			cur = &setupGoStep{line: i + 1, sha: strings.TrimSpace(rest), version: comment}
 			depth = indent
 			continue
 		}
@@ -127,13 +138,8 @@ func setupGoSteps(workflow string) []setupGoStep {
 }
 
 func stripYAMLComment(line string) string {
-	if strings.HasPrefix(strings.TrimSpace(line), "#") {
-		return ""
-	}
-	if i := strings.Index(line, " #"); i >= 0 {
-		return line[:i]
-	}
-	return line
+	value, _ := splitYAMLComment(line)
+	return value
 }
 
 // TestSetupGoStepScanner pins the line scanner against inline fixtures so the
@@ -161,7 +167,7 @@ func TestSetupGoStepScanner(t *testing.T) {
 `
 	got := setupGoSteps(wf)
 	want := []setupGoStep{
-		{line: 5, sha: "1111", goVersionFile: "go.mod"},
+		{line: 5, sha: "1111", version: "v7.0.0", goVersionFile: "go.mod"},
 		{line: 14, sha: "2222", goVersion: "1.25.13"},
 		{line: 19, sha: "3333"},
 	}
