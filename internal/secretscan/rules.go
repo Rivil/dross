@@ -1,6 +1,7 @@
 package secretscan
 
 import (
+	"bytes"
 	"math"
 	"regexp"
 	"strings"
@@ -22,6 +23,16 @@ type Rule struct {
 	// one place a rule can say "this shape, but not this instance" without
 	// widening the regex into something a reader can no longer check.
 	carveOut func(value string) bool
+
+	// needles are the prefilter: literals of which every Regex match holds at
+	// least one, so a line holding none of them skips the regex. bytes.Contains
+	// is assembly, which the -race tax on the regex VM does not reach. A rule
+	// with no needles always runs its regex (fail open).
+	needles [][]byte
+
+	// fold marks a (?i) rule: its needles are lower-case and are searched in
+	// the ASCII-lowered line.
+	fold bool
 }
 
 // valueClass is the character set a credential value is drawn from. `$`,
@@ -41,47 +52,56 @@ const keyContextMinEntropy = 3.0
 // consulted from anywhere but the binary (pattern_source decision).
 var rules = []Rule{
 	{
-		Name:   "github-token",
-		Regex:  regexp.MustCompile(`\b(gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,})\b`),
-		Prefix: "ghp_",
+		Name:    "github-token",
+		Regex:   regexp.MustCompile(`\b(gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,})\b`),
+		Prefix:  "ghp_",
+		needles: lits("ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"),
 	},
 	{
-		Name:   "gitlab-pat",
-		Regex:  regexp.MustCompile(`\b(glpat-[A-Za-z0-9_-]{20,})`),
-		Prefix: "glpat-",
+		Name:    "gitlab-pat",
+		Regex:   regexp.MustCompile(`\b(glpat-[A-Za-z0-9_-]{20,})`),
+		Prefix:  "glpat-",
+		needles: lits("glpat-"),
 	},
 	{
-		Name:   "atlassian-token",
-		Regex:  regexp.MustCompile(`\b(ATATT[A-Za-z0-9_=-]{20,})`),
-		Prefix: "ATATT",
+		Name:    "atlassian-token",
+		Regex:   regexp.MustCompile(`\b(ATATT[A-Za-z0-9_=-]{20,})`),
+		Prefix:  "ATATT",
+		needles: lits("ATATT"),
 	},
 	{
-		Name:   "aws-access-key",
-		Regex:  regexp.MustCompile(`\b((?:AKIA|ASIA)[A-Z0-9]{16})\b`),
-		Prefix: "AKIA",
+		Name:    "aws-access-key",
+		Regex:   regexp.MustCompile(`\b((?:AKIA|ASIA)[A-Z0-9]{16})\b`),
+		Prefix:  "AKIA",
+		needles: lits("AKIA", "ASIA"),
 		// AKIAIOSFODNN7EXAMPLE is the placeholder every AWS document carries;
 		// it is documentation, not a key.
 		carveOut: func(v string) bool { return strings.HasSuffix(v, "EXAMPLE") },
 	},
 	{
-		Name:   "slack-token",
-		Regex:  regexp.MustCompile(`\b(xox[abprs]-[A-Za-z0-9-]{10,})`),
-		Prefix: "xox",
+		Name:    "slack-token",
+		Regex:   regexp.MustCompile(`\b(xox[abprs]-[A-Za-z0-9-]{10,})`),
+		Prefix:  "xox",
+		needles: lits("xox"),
 	},
 	{
-		Name:   "sk-api-key",
-		Regex:  regexp.MustCompile(`\b(sk-(?:proj-|ant-)?[A-Za-z0-9_-]{20,})`),
-		Prefix: "sk-",
+		Name:    "sk-api-key",
+		Regex:   regexp.MustCompile(`\b(sk-(?:proj-|ant-)?[A-Za-z0-9_-]{20,})`),
+		Prefix:  "sk-",
+		needles: lits("sk-"),
 	},
 	{
-		Name:   "pem-private-key",
-		Regex:  regexp.MustCompile(`(-----BEGIN (?:[A-Z]+ )?PRIVATE KEY(?: BLOCK)?-----)`),
-		Prefix: "-----BEGIN",
+		Name:    "pem-private-key",
+		Regex:   regexp.MustCompile(`(-----BEGIN (?:[A-Z]+ )?PRIVATE KEY(?: BLOCK)?-----)`),
+		Prefix:  "-----BEGIN",
+		needles: lits("PRIVATE KEY"),
 	},
 	{
-		Name:   "authorization-header",
-		Regex:  regexp.MustCompile(`(?i)authorization["']?\s*[:=]\s*["']?(?:basic|bearer)\s+(` + valueClass + `{8,})`),
-		Prefix: "Basic|Bearer",
+		Name:    "authorization-header",
+		Regex:   regexp.MustCompile(`(?i)authorization["']?\s*[:=]\s*["']?(?:basic|bearer)\s+(` + valueClass + `{8,})`),
+		Prefix:  "Basic|Bearer",
+		needles: lits("authorization"),
+		fold:    true,
 	},
 	{
 		Name: "key-context",
@@ -89,11 +109,78 @@ var rules = []Rule{
 			valueClass + `{16,})`),
 		Prefix:   "",
 		carveOut: func(v string) bool { return entropy(v) < keyContextMinEntropy },
+		needles: lits("password", "passwd", "pwd", "secret", "api_key", "api-key",
+			"access_key", "access-key", "token", "authorization"),
+		fold: true,
 	},
 }
 
 // Rules returns the compiled table, in report order.
 func Rules() []Rule { return rules }
+
+func lits(ss ...string) [][]byte {
+	out := make([][]byte, len(ss))
+	for i, s := range ss {
+		out[i] = []byte(s)
+	}
+	return out
+}
+
+// foldEscapes are the only non-ASCII runes (?i) folds onto an ASCII letter:
+// U+017F LONG S matches s and U+212A KELVIN SIGN matches k, so `paſſword`
+// satisfies the key-context regex while holding no ASCII needle. A fold rule
+// runs its regex on any line carrying one — exactly these byte sequences, not
+// "any non-ASCII", since em-dashes are common in .dross prose.
+var foldEscapes = lits("\u017f", "\u212a")
+
+// candidates is the prefilter: bit i is set when rules[i]'s regex could match
+// line. It reads nothing but its arguments, so concurrent scans share it.
+func candidates(line []byte) uint64 { return candidatesIn(rules, line) }
+
+func candidatesIn(rs []Rule, line []byte) uint64 {
+	var mask uint64
+	var folded []byte
+	for i, r := range rs {
+		hay := line
+		if r.fold {
+			if containsAny(line, foldEscapes) {
+				mask |= 1 << i
+				continue
+			}
+			if folded == nil {
+				folded = asciiLower(line)
+			}
+			hay = folded
+		}
+		if len(r.needles) == 0 || containsAny(hay, r.needles) {
+			mask |= 1 << i
+		}
+	}
+	return mask
+}
+
+func containsAny(b []byte, needles [][]byte) bool {
+	for _, n := range needles {
+		if bytes.Contains(b, n) {
+			return true
+		}
+	}
+	return false
+}
+
+// asciiLower maps A-Z to a-z and copies every other byte as is. A multi-byte
+// UTF-8 sequence holds no ASCII byte, so folding can't conjure a needle out of
+// non-ASCII text.
+func asciiLower(b []byte) []byte {
+	out := make([]byte, len(b))
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		out[i] = c
+	}
+	return out
+}
 
 // entropy is the Shannon entropy of s in bits per byte.
 func entropy(s string) float64 {
