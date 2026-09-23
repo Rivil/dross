@@ -2,11 +2,14 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Rivil/dross/internal/secretscan"
@@ -28,27 +31,43 @@ const repoRoot = "../.."
 // repo-relative, or skips the test when this is not a git checkout.
 func selfScanFiles(t *testing.T) []string {
 	t.Helper()
-	cmd := exec.Command("git", "-C", repoRoot, "ls-files", "-z")
-	out, err := cmd.Output()
-	if err != nil {
-		t.Skipf("not a git checkout (git ls-files: %v) — the self-scan needs the tracked set", err)
+	files, skip := selfScanTracked()
+	if skip != "" {
+		t.Skip(skip)
 	}
-	var files []string
+	return files
+}
+
+// selfScanTracked is selfScanFiles without a *testing.T, so the cached walk can
+// run it: a non-empty skip is the reason there is no tracked set.
+func selfScanTracked() (files []string, skip string) {
+	out, err := exec.Command("git", "-C", repoRoot, "ls-files", "-z").Output()
+	if err != nil {
+		return nil, fmt.Sprintf("not a git checkout (git ls-files: %v) — the self-scan needs the tracked set", err)
+	}
 	for _, p := range strings.Split(string(out), "\x00") {
 		if p != "" {
 			files = append(files, p)
 		}
 	}
 	if len(files) == 0 {
-		t.Skip("git ls-files listed nothing")
+		return nil, "git ls-files listed nothing"
 	}
-	return files
+	return files, ""
 }
 
 // scanTracked runs the scanner over every listed file (repo-relative, or
 // absolute for a planted extra) with the given path as each hit's location.
 func scanTracked(t *testing.T, files []string) []secretscan.Hit {
 	t.Helper()
+	hits, err := scanFiles(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hits
+}
+
+func scanFiles(files []string) ([]secretscan.Hit, error) {
 	var hits []secretscan.Hit
 	for _, rel := range files {
 		p := filepath.Join(repoRoot, filepath.FromSlash(rel))
@@ -57,16 +76,73 @@ func scanTracked(t *testing.T, files []string) []secretscan.Hit {
 		}
 		b, err := os.ReadFile(p)
 		if err != nil {
-			t.Fatalf("read %s: %v", rel, err)
+			return nil, fmt.Errorf("read %s: %w", rel, err)
 		}
 		found, err := secretscan.Scan(rel, bytes.NewReader(b))
 		if err != nil {
-			t.Fatalf("scan %s: %v", rel, err)
+			return nil, fmt.Errorf("scan %s: %w", rel, err)
 		}
 		hits = append(hits, found...)
 	}
-	return hits
+	return hits, nil
 }
+
+// walkResult is one tracked-tree walk: its hits, or the error or skip reason
+// that stopped it.
+type walkResult struct {
+	hits []secretscan.Hit
+	err  error
+	skip string
+}
+
+func walkTrackedTree() walkResult {
+	files, skip := selfScanTracked()
+	if skip != "" {
+		return walkResult{skip: skip}
+	}
+	hits, err := scanFiles(files)
+	return walkResult{hits: hits, err: err}
+}
+
+// failer is the part of *testing.T a walkCache reader needs, so a test can
+// read a stubbed cache without failing itself.
+type failer interface {
+	Helper()
+	Skip(args ...any)
+	Fatal(args ...any)
+}
+
+// walkCache runs its walk once per test binary and hands every reader the
+// same result. A stored error or skip is re-raised to each reader, so a first
+// walk that failed never passes a later test an empty — clean-looking — hit
+// set. walks counts the runs of walk, for the once-only assertion.
+type walkCache struct {
+	walk  func() walkResult
+	once  sync.Once
+	res   walkResult
+	walks int
+}
+
+func (c *walkCache) get(t failer) []secretscan.Hit {
+	t.Helper()
+	c.once.Do(func() {
+		c.walks++
+		c.res = c.walk()
+	})
+	if c.res.skip != "" {
+		t.Skip(c.res.skip)
+		return nil
+	}
+	if c.res.err != nil {
+		t.Fatal("tracked-tree walk: ", c.res.err)
+		return nil
+	}
+	return c.res.hits
+}
+
+// trackedHits is the whole-tree scan, shared by every test that needs it:
+// under -race one walk costs the better part of a minute.
+var trackedHits = &walkCache{walk: walkTrackedTree}
 
 // silencingMarkers returns, per repo-relative file, how many marker-bearing
 // lines hit once the marker is stripped.
@@ -114,25 +190,83 @@ var pinnedMarkerSites = map[string]int{
 // TestDrossTreeHasNoUnmarkedHits: zero hits over every tracked file. The
 // failure lists fingerprints only — never a line.
 func TestDrossTreeHasNoUnmarkedHits(t *testing.T) {
-	hits := scanTracked(t, selfScanFiles(t))
+	hits := trackedHits.get(t)
 	for _, h := range hits {
 		t.Errorf("%s:%d %s (len=%d, prefix=%s)", h.Location, h.Line, h.Rule, h.Length, h.Prefix)
 	}
 }
 
 // TestSelfScanIsNotVacuous: the same walk plus one file holding a synthesized
-// hit yields exactly that one finding, at that file.
+// hit yields exactly that one finding, at that file — and the same walk plus a
+// benign file in its place yields none.
 func TestSelfScanIsNotVacuous(t *testing.T) {
-	files := selfScanFiles(t)
+	tree := trackedHits.get(t)
 	dir := t.TempDir()
+	plantAndScan := func(name, line string) []secretscan.Hit {
+		p := filepath.Join(dir, name)
+		mustWrite(t, p, line+"\n")
+		// A fresh slice: appending onto tree could write into the cached
+		// backing array every other reader shares.
+		return append(append([]secretscan.Hit(nil), tree...), scanTracked(t, []string{p})...)
+	}
+
+	if hits := plantAndScan("benign.md", "note: nothing to see"); len(hits) != 0 {
+		t.Fatalf("control: the walk plus a benign file must yield 0 hits, got %d: %v", len(hits), hits)
+	}
 	leak := filepath.Join(dir, "leak.md")
-	mustWrite(t, leak, "note: "+synthGitlabToken()+"\n")
-	hits := scanTracked(t, append(files, leak))
+	hits := plantAndScan("leak.md", "note: "+synthGitlabToken())
 	if len(hits) != 1 {
 		t.Fatalf("want exactly one hit (the planted one), got %d: %v", len(hits), hits)
 	}
 	if hits[0].Location != leak || hits[0].Rule != "gitlab-pat" {
 		t.Fatalf("hit = %v, want gitlab-pat at %s", hits[0], leak)
+	}
+}
+
+// TestSelfScanWalksOnce: the tracked tree is walked once per test binary, no
+// matter how many tests read it.
+func TestSelfScanWalksOnce(t *testing.T) {
+	trackedHits.get(t)
+	trackedHits.get(t)
+	if trackedHits.walks != 1 {
+		t.Fatalf("tracked tree walked %d times, want 1", trackedHits.walks)
+	}
+}
+
+// recordingFailer records what a walkCache reader raised instead of stopping.
+type recordingFailer struct{ skips, fatals []string }
+
+func (*recordingFailer) Helper()             {}
+func (f *recordingFailer) Skip(args ...any)  { f.skips = append(f.skips, fmt.Sprint(args...)) }
+func (f *recordingFailer) Fatal(args ...any) { f.fatals = append(f.fatals, fmt.Sprint(args...)) }
+
+// TestSelfScanCacheReraisesFailure: a walk that failed or skipped is re-raised
+// to every reader, never handed on as an empty hit set.
+func TestSelfScanCacheReraisesFailure(t *testing.T) {
+	cases := []struct {
+		name  string
+		res   walkResult
+		fatal bool
+	}{
+		{"error", walkResult{err: errors.New("git exploded")}, true},
+		{"skip", walkResult{skip: "not a git checkout"}, false},
+	}
+	for _, c := range cases {
+		cache := &walkCache{walk: func() walkResult { return c.res }}
+		for reader := 1; reader <= 2; reader++ {
+			f := &recordingFailer{}
+			cache.get(f)
+			raised, other := f.skips, f.fatals
+			if c.fatal {
+				raised, other = f.fatals, f.skips
+			}
+			if len(raised) != 1 || len(other) != 0 {
+				t.Errorf("%s, reader %d: want the stored %s re-raised once, got skips=%q fatals=%q", c.name, reader, c.name, f.skips, f.fatals)
+			}
+		}
+		if cache.walks != 1 {
+			t.Errorf("%s: walked %d times, want 1", c.name, cache.walks)
+		}
 	}
 }
 

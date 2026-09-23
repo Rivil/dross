@@ -2471,15 +2471,6 @@
   accepted_in = "secret-detection"
 
 [[accepted]]
-  key = "10b5cbf7f5923d04"
-  file = "internal/secretscan/rules.go"
-  op = "ARITHMETIC_BASE"
-  text = "Regex:  regexp.MustCompile(`(?i)authorization[\"']?\\s*[:=]\\s*[\"']?(?:basic|bearer)\\s+(` + valueClass + `{8,})`),"
-  line = 83
-  category = "const-initializer-arithmetic"
-  accepted_in = "secret-detection"
-
-[[accepted]]
   key = "cf27a1a7f13e6ef7"
   file = "internal/secretscan/rules.go"
   op = "ARITHMETIC_BASE"
@@ -2739,3 +2730,57 @@
   line = 25
   category = "const-initializer-arithmetic"
   accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "cc23934aff23856c"
+  file = "cmd/testsummary/table.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.Test == \"\":"
+  line = 29
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "cmd-test-duration"
+
+[[accepted]]
+  key = "442e62396f37d815"
+  file = "cmd/testsummary/stream.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Action == \"build-output\":"
+  line = 109
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "cmd-test-duration"
+
+[[accepted]]
+  key = "692e2b2b9f211162"
+  file = "cmd/testsummary/stream.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Action == \"build-fail\":"
+  line = 111
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "cmd-test-duration"
+
+[[accepted]]
+  key = "56461f6f4673ba68"
+  file = "cmd/testsummary/stream.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Package == \"\":"
+  line = 115
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "cmd-test-duration"
+
+[[accepted]]
+  key = "6a6fc78f8d1988ea"
+  file = "cmd/testsummary/stream.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Test == \"\":"
+  line = 117
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "cmd-test-duration"
+
+[[accepted]]
+  key = "311227d19ebcdc5b"
+  file = "internal/secretscan/rules.go"
+  op = "ARITHMETIC_BASE"
+  text = "Regex:   regexp.MustCompile(`(?i)authorization[\"']?\\s*[:=]\\s*[\"']?(?:basic|bearer)\\s+(` + valueClass + `{8,})`),"
+  line = 101
+  category = "const-initializer-arithmetic"
+  accepted_in = "cmd-test-duration"

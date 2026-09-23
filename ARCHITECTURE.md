@@ -129,6 +129,28 @@ Append-only per-task record of files touched, plus a typed `--landmark` record (
 
 _introduced 1d1f85a · extended 01-architecture-comprehension-layer · extended architecture-doc-enhancements · extended landmark-comma-fix · extended dependency-update-automation · 8f6b4fd_
 
+### CI pipeline
+
+A newer push to a PR cancels the CI run it supersedes while every main push keeps its own run and verdict (main auto-releases), and every CI `go test` streams `-json` under `pipefail` through `cmd/testsummary` with no `-timeout` — go test's 10m default is the wall and a 300s per-package budget warning surfaces regrowth first; YAML has no mutation adapter, so content guards pin the wiring with a pure checker plus a live sweep.
+
+- `concurrency` (per-ref PR group, cancel-in-progress on `pull_request` only; the `run_id` arm gives each main push its own group) — `.github/workflows/ci.yml:18`
+- `go test` step (`set -o pipefail; go test -race -count=1 -json ./... | go run ./cmd/testsummary`) — `.github/workflows/ci.yml:78`
+- `concurrencyProblems` (one top-level block, `ci-` prefix, PR ref arm, `run_id` arm, PR-only cancel; no job-level override) — `internal/cmd/ci_concurrency_test.go:27`
+- `goTestStepProblems` (rejects a go test lacking `-json`, `pipefail` or the testsummary pipe, any `-timeout`, and in the test job any `-short`/`-skip`/`-run` or a lost `-race`/`-count=1`/`./...`) — `internal/cmd/ci_go_test_step_test.go:193`
+
+_introduced cmd-test-duration · d443bd9_
+
+### CI test summary
+
+A stdlib-only reducer turns a `go test -json` stream into a plain go-test log — failed tests' output, timeout panics and build errors kept, passing output dropped — with the test verdict as its exit code, and appends the 20 slowest top-level tests plus per-package totals to `$GITHUB_STEP_SUMMARY` (stdout when unset, for diagnosing a local run), with a non-failing `::warning` per package over 300s.
+
+- `run` (stdin → plain log + timing table; the exit code is the test verdict) — `cmd/testsummary/main.go:25`
+- `reducer.finish` (non-zero on any fail, an empty stream, or a package that never reached a terminal pass/fail/skip) — `cmd/testsummary/stream.go:207`
+- `timingTable` (top-20 top-level tests by elapsed, subtests excluded; package totals from the package event, not a sum of rows) — `cmd/testsummary/table.go:25`
+- `budgetWarnings` (one `::warning` per package over 300s; never changes the exit code) — `cmd/testsummary/table.go:67`
+
+_introduced cmd-test-duration · 338ed8c_
+
 ### Clean-tree gates
 
 Keep `.dross/` bookkeeping from blocking or diverging the git flow. The dirty-tree gates in ship, phase complete, and phase create/start share one helper that auto-commits `.dross/`-only dirt as a single chore commit (per repo convention) instead of refusing, while a tree with any non-`.dross` dirt still refuses having staged nothing. A ship/complete pre-flight safety net then pushes a base branch that is purely ahead of origin by `.dross/`-only chores (pause snapshots, recovery restores), so after any ship/complete/recover local base == origin/base; a code-ahead base refuses and pushes nothing, a diverged base defers to recovery, and a failed push is a hard refusal (proceeding would re-seed the divergence) — local-only writers like pause never touch the network.
@@ -883,10 +905,11 @@ _c8b346e · extended root-robustness · 6d33d3b · extended survivor-lifecycle �
 
 ### Secret detection
 
-A credential-shaped value cannot leave the repo through dross: an embedded, deterministic detector screens every tracked `.dross/` artifact and every body dross publishes, and a hit **refuses the gate** — publish call, `dross validate`, ship pre-flight, `.dross/` auto-commit — naming the pattern and `file:line` while never echoing the value (locked `hit_disposition`, `pattern_source`). The ruleset is nine regexes compiled into the binary (provider-prefixed tokens, PEM blocks, `Authorization:` values, key-context assignments), so the verdict never varies by what is on PATH; gitleaks keeps its `dross secure` role and is not consulted here. Entropy is judged only on the value side of a `password|token|secret|api_key|authorization` assignment — no bare high-entropy rule — because tests.json and telemetry legitimately carry hashes, base64 and 16-hex identity ids (locked `entropy_rules`); the identity-id shape is a fixed carve-out, and the only user exemption is a `dross:allow-secret` marker on the offending line (locked `allowlist_route`). Scope is persisted artifacts plus published bodies, not source or the whole diff (locked `scan_scope`). Coverage is enumerated, not hand-listed: two registry-plus-residual AST walks in the toolfence/pathfence shape declare every forge/ship egress seam (`Screened`/`ReadOnly`/`Seam`) and every `internal/` file reaching a write verb (`UnderDross`/`MachineLocal`/`OutsideDross`), each with non-vacuity floors and leaky fixtures that must trip, and a self-scan proves the whole tracked tree clean with its silencing sites pinned per file. Ship's pre-flight and the auto-commit helper call the same `scanDrossArtifacts` as validate — never the whole of validate — with an AST test pinning the three on one scanner (locked `ship_gate_scope`). Hit reports print rule, `file:line` and a length/prefix fingerprint; a 50-instance-per-rule corpus asserts no 6-byte window of any value reaches `Hit.String`, `Report` or `ErrHit.Error`.
+A credential-shaped value cannot leave the repo through dross: an embedded, deterministic detector screens every tracked `.dross/` artifact and every body dross publishes, and a hit **refuses the gate** — publish call, `dross validate`, ship pre-flight, `.dross/` auto-commit — naming the pattern and `file:line` while never echoing the value (locked `hit_disposition`, `pattern_source`). The ruleset is nine regexes compiled into the binary (provider-prefixed tokens, PEM blocks, `Authorization:` values, key-context assignments), so the verdict never varies by what is on PATH; gitleaks keeps its `dross secure` role and is not consulted here. Entropy is judged only on the value side of a `password|token|secret|api_key|authorization` assignment — no bare high-entropy rule — because tests.json and telemetry legitimately carry hashes, base64 and 16-hex identity ids (locked `entropy_rules`); the identity-id shape is a fixed carve-out, and the only user exemption is a `dross:allow-secret` marker on the offending line (locked `allowlist_route`). Scope is persisted artifacts plus published bodies, not source or the whole diff (locked `scan_scope`). Coverage is enumerated, not hand-listed: two registry-plus-residual AST walks in the toolfence/pathfence shape declare every forge/ship egress seam (`Screened`/`ReadOnly`/`Seam`) and every `internal/` file reaching a write verb (`UnderDross`/`MachineLocal`/`OutsideDross`), each with non-vacuity floors and leaky fixtures that must trip, and a self-scan proves the whole tracked tree clean with its silencing sites pinned per file. Ship's pre-flight and the auto-commit helper call the same `scanDrossArtifacts` as validate — never the whole of validate — with an AST test pinning the three on one scanner (locked `ship_gate_scope`). Hit reports print rule, `file:line` and a length/prefix fingerprint; a 50-instance-per-rule corpus asserts no 6-byte window of any value reaches `Hit.String`, `Report` or `ErrHit.Error`. Each rule carries literal needles, and a pure `candidates` bitmask runs a rule's regex only on a line holding one of them — `(?i)` rules match an ASCII-folded line and fail open on U+017F/U+212A — so needle-free lines never enter the regex VM (the `-race` tax that made each whole-tree self-scan ~74s); a fuzz target proves the prefiltered hit set equal to an every-regex reference.
 
 - `Scan` (nine-rule detector over a reader; echo-free `Hit` fingerprints, `AllowMarker` silences one line) — `internal/secretscan/secretscan.go:92`
-- `Rules` (the compiled ruleset — ghp_/github_pat_, glpat-, ATATT, AKIA, xox*, sk-*, PEM, Authorization, key-context) — `internal/secretscan/rules.go:96`
+- `Rules` (the compiled ruleset — ghp_/github_pat_, glpat-, ATATT, AKIA, xox*, sk-*, PEM, Authorization, key-context) — `internal/secretscan/rules.go:119`
+- `candidates` (per-rule needle bitmask gating each regex; a needle-free rule always runs; pinned by `FuzzPrefilterMatchesRegex`) — `internal/secretscan/rules.go:138`
 - `ScanPayload` / `ScanArgv` (walkers for JSON publish payloads and `gh` argv) — `internal/secretscan/payload.go:21`
 - `scanDrossArtifacts` (validate fails on any hit in a stageable `.dross/` artifact; read errors refuse, never skip) — `internal/cmd/secretscan.go:29`
 - `(*Client).doRaw` (every board backend screens the payload before encoding/`http.NewRequest`; refusal is an `*ErrHit` that survives `redact.Err`) — `internal/forge/forge.go:843`
@@ -894,10 +917,11 @@ A credential-shaped value cannot leave the repo through dross: an embedded, dete
 - `autoCommitDrossDirt` (auto-commit and ship pre-flight refuse on a hit before `git add` / push) — `internal/cmd/cleantree.go:22`
 - `Transports` (ten ship/forge egress seams declared; AST walker flags an undeclared or mis-ordered transport) — `internal/secretscan/sinks.go:66`
 - `Writers` (every `internal/` file reaching a write verb declared; walker proves reach, ignore seed and `*File`-const coverage) — `internal/secretscan/writers.go:80`
-- `pinnedMarkerSites` (self-scan: the whole tracked tree is clean, `dross:allow-secret` sites pinned per file, validate proven hermetically over a clone of HEAD) — `internal/cmd/secretscan_selfscan_test.go:97`
+- `pinnedMarkerSites` (self-scan: the whole tracked tree is clean, `dross:allow-secret` sites pinned per file, validate proven hermetically over a clone of HEAD) — `internal/cmd/secretscan_selfscan_test.go:173`
+- `walkCache.get` (self-scan tests share one tracked-tree walk per test binary; a failed or skipped walk is re-raised to every reader) — `internal/cmd/secretscan_selfscan_test.go:126`
 - `TestGitHubFineGrainedPATFires` (the `github_pat_` alternation pinned at its 22-char floor; the randomized echo corpus covers both GitHub shapes) — `internal/secretscan/secretscan_test.go:130`
 
-_introduced secret-detection · 636370b_
+_introduced secret-detection · 636370b · extended cmd-test-duration · 43a79f2_
 
 ### Security audit (dross-secure)
 
@@ -1128,9 +1152,10 @@ _introduced task-lifecycle-commands · extended task-reordering · extended cli-
 
 ### Tech-debt scan (dross techdebt)
 
-Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (word-boundary) plus size heuristics (oversized files, over-long lines) over git-tracked files — both the ls-files and tree-walk enumeration paths prune the shared `stack.SkipDir` set (`.dross/`, `testdata/`, `fixtures/`, `vendor/`, `build/`, …) so planning artefacts and fixture files don't drown code debt, and a `[techdebt] exclude` glob list in project.toml (trailing `/` = directory prefix, otherwise `path.Match` on the repo-relative path, plus base name for bare globs; a bad pattern is a named command error, never a silent no-filter) lets a repo exempt its own paths — dross lists `internal/techdebt/` so the scanner's marker regex and marker-bearing fixtures never report themselves, pinned by a self-scan on the real repo — written to a prune-proof run dir with a store-level `last_run` that feeds the status action surface. Distinct from the dross-quality analyzer audit — markers are self-flagged debt, not analyzer findings. Surfaced as the `/dross-techdebt` thin skill (shim + prompt over `dross techdebt`), so all three status actions are runnable slash commands.
+Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (word-boundary, with a plain-substring needle gating the regex so marker-free lines never enter it) plus size heuristics (oversized files, over-long lines) over git-tracked files — both the ls-files and tree-walk enumeration paths prune the shared `stack.SkipDir` set (`.dross/`, `testdata/`, `fixtures/`, `vendor/`, `build/`, …) so planning artefacts and fixture files don't drown code debt, and a `[techdebt] exclude` glob list in project.toml (trailing `/` = directory prefix, otherwise `path.Match` on the repo-relative path, plus base name for bare globs; a bad pattern is a named command error, never a silent no-filter) lets a repo exempt its own paths — dross lists `internal/techdebt/` so the scanner's marker regex and marker-bearing fixtures never report themselves, pinned by a self-scan on the real repo — written to a prune-proof run dir with a store-level `last_run` that feeds the status action surface. Distinct from the dross-quality analyzer audit — markers are self-flagged debt, not analyzer findings. Surfaced as the `/dross-techdebt` thin skill (shim + prompt over `dross techdebt`), so all three status actions are runnable slash commands.
 
-- `Scan` — `internal/techdebt/scan.go:53`
+- `Scan` — `internal/techdebt/scan.go:69`
+- `mayHaveMarker` (marker-word needle gating the `\b` regex; gates, never replaces it) — `internal/techdebt/scan.go:56`
 - `NewRun` — `internal/techdebt/run.go:55`
 - `StatePath` — `internal/techdebt/state.go:16`
 - `Techdebt` (CLI) — `internal/cmd/techdebt.go:23`
@@ -1141,7 +1166,7 @@ Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (
 - `actionCatalog` (status actions all slash commands) — `internal/cmd/status.go:443`
 - `/dross-techdebt` thin skill — `assets/prompts/techdebt.md`
 
-_introduced status-action-surfaces-v2 · extended task-reordering · extended self-audit · extended scanner-self-exclusion · 6b90c82_
+_introduced status-action-surfaces-v2 · extended task-reordering · extended self-audit · extended scanner-self-exclusion · 6b90c82 · extended cmd-test-duration · 3f8ade4_
 
 ### Telemetry & stats
 

@@ -1,0 +1,67 @@
+[phase]
+  id = "cmd-test-duration"
+  title = "cmd-test-duration"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "`internal/cmd` under `go test -race` on ubuntu-latest (ci.yml's test job) completes in <= 300s, read from a CI run's timing output — down from 525-597s on 2026-09-23 (baseline ~204s on 2026-09-19)."
+
+[[criteria]]
+  id = "c-2"
+  text = "ci.yml's `go test` step no longer passes `-timeout 20m` (the 3140364 stopgap) and its \"headroom only\" comment is gone; the `-race` run is green under the ceiling in decision `timeout_ceiling`."
+
+[[criteria]]
+  id = "c-3"
+  text = "Every CI `go test` run shows its slowest tests by name and duration, so the next regression is diagnosable from the existing run without a re-run."
+
+[[criteria]]
+  id = "c-4"
+  text = "ci.yml has a per-ref `concurrency:` group with cancel-in-progress, so a newer push to the same ref cancels the superseded run — a dross ship's three pushes cost one full pipeline, not three."
+
+[[criteria]]
+  id = "c-5"
+  text = "`go test -count=1 ./internal/cmd` (project test_command, no -race) completes on the author's laptop within go test's 10m default — measured once as verify evidence, not a CI gate."
+
+[[decisions]]
+  key = "coverage_preserved"
+  choice = "Speed only: every test keeps running under -race on every PR — no skips, no -short split, no non-race job, no real-repo reads swapped for fixtures."
+  why = "The lead suspects guard the repo's real .dross artifacts; hitting the budget by running less would be a vacuous pass."
+  locked = true
+
+[[decisions]]
+  key = "timeout_ceiling"
+  choice = "Drop `-timeout` entirely (go test's 10m default); the timing step emits a non-failing warning annotation when any package exceeds 300s."
+  why = "Regrowth becomes visible at the budget, long before the 10m wall; a warning cannot flake CI on a slow runner."
+  locked = true
+
+[[decisions]]
+  key = "timing_surface"
+  choice = "`$GITHUB_STEP_SUMMARY` table: top 20 slowest tests + per-package totals. Raw -json is not retained."
+  why = "Readable on the run page without expanding logs; no artifact storage spent on green runs."
+  locked = true
+
+[[decisions]]
+  key = "timing_tooling"
+  choice = "Summary built in-repo from `go test -json` — no gotestsum or other third-party tool; failures still render human-readable in the step log."
+  why = "No new supply-chain dependency in CI; raw -json output alone would bury failures in JSON lines."
+  locked = true
+
+[[decisions]]
+  key = "concurrency_scope"
+  choice = "cancel-in-progress only on `pull_request` events; push-to-main runs are never cancelled."
+  why = "main auto-releases, so every main commit keeps its own CI verdict; all three ship pushes land on the PR branch, so c-4's saving is intact."
+  locked = true
+
+[[deferred]]
+  text = "Scope ci.yml's govulncheck to PRs that change go.mod/go.sum, plus a weekly schedule."
+  why = "Measured on run 35850995391: govulncheck is 6s (4s install + 2s scan). Scoping it also drops PR-time detection of new code reaching a vulnerable function in an unchanged graph."
+
+[[deferred]]
+  text = "Fold ci.yml's shellcheck micro-job into another job."
+  why = "Measured on run 35850995391: 6s, runs in parallel, public repo = free Actions minutes — no wall-clock or billing gain."
+
+[[deferred]]
+  id = "650eafe718c4db40"
+  text = "dross ship adopting an already-open PR (FindOpenPRByHead, internal/cmd/ship.go) skips OpenPR entirely: a draft PR stays draft, and ship's generated title, .dross-filtered body and reviewer requests are never applied to it."
+  why = "Surfaced by the cmd-test-duration plan review: t-7's gate opens a draft PR mid-phase to read a CI timing, and ship later adopts it. Worked around by hand in that phase (gh pr ready + body refresh + reviewers); the ship-side fix is its own change."

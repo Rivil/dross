@@ -13,6 +13,7 @@
     "board-task-mirror": "DRO-32",
     "cache-budget-prune": "DRO-132",
     "cmd-package-decomposition": "DRO-477",
+    "cmd-test-duration": "DRO-634",
     "completion-record-truth": "DRO-135",
     "config-value-truth": "DRO-25",
     "deferred-add-command": "DRO-14",
@@ -183,6 +184,7 @@
     "someday:id:633a59504b1350e2": "DRO-529",
     "someday:id:64166d9f34b2423f": "DRO-611",
     "someday:id:64cd228356c9fce5": "DRO-76",
+    "someday:id:650eafe718c4db40": "DRO-635",
     "someday:id:6606a4ae3d228907": "DRO-52",
     "someday:id:66f4a1fc8ec83883": "DRO-70",
     "someday:id:67badd3a637240db": "DRO-534",
@@ -556,6 +558,46 @@
       "issue": "DRO-485",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "cmd-test-duration/t-1": {
+      "issue": "DRO-636",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-test-duration/t-2": {
+      "issue": "DRO-638",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-test-duration/t-3": {
+      "issue": "DRO-639",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-test-duration/t-4": {
+      "issue": "DRO-640",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-test-duration/t-5": {
+      "issue": "DRO-641",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-test-duration/t-6": {
+      "issue": "DRO-642",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-test-duration/t-7": {
+      "issue": "DRO-643",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-test-duration/t-8": {
+      "issue": "DRO-637",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "completion-record-truth/t-1": {
       "issue": "DRO-136",

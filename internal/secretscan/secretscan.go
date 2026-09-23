@@ -89,13 +89,17 @@ func AsErrHit(err error) (*ErrHit, bool) {
 // length, and a scanner with the default 64 KB ceiling would refuse it — or,
 // worse, be tempted to skip it. CRLF is tolerated. A line carrying AllowMarker
 // yields nothing.
-func Scan(name string, r io.Reader) ([]Hit, error) {
+func Scan(name string, r io.Reader) ([]Hit, error) { return scan(name, r, candidates) }
+
+// scan is Scan with the prefilter as a parameter, so a test can run every
+// regex on every line as the reference the prefiltered scan must equal.
+func scan(name string, r io.Reader, prefilter func(line []byte) uint64) ([]Hit, error) {
 	br := bufio.NewReader(r)
 	var hits []Hit
 	for n := 1; ; n++ {
 		line, err := br.ReadBytes('\n')
 		if len(line) > 0 {
-			hits = append(hits, scanLine(name, n, line)...)
+			hits = append(hits, scanLine(name, n, line, prefilter)...)
 		}
 		if err == io.EOF {
 			return hits, nil
@@ -112,13 +116,17 @@ func ScanString(name, s string) []Hit {
 	return hits
 }
 
-func scanLine(name string, n int, line []byte) []Hit {
+func scanLine(name string, n int, line []byte, prefilter func(line []byte) uint64) []Hit {
 	line = bytes.TrimRight(line, "\r\n")
 	if bytes.Contains(line, []byte(AllowMarker)) {
 		return nil
 	}
+	mask := prefilter(line)
 	var hits []Hit
-	for _, rule := range rules {
+	for i, rule := range rules {
+		if mask&(1<<i) == 0 {
+			continue // none of the rule's needles is on the line
+		}
 		for _, m := range rule.Regex.FindAllSubmatchIndex(line, -1) {
 			value := string(line[m[2]:m[3]])
 			if rule.carveOut != nil && rule.carveOut(value) {
