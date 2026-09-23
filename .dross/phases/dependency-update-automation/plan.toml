@@ -1,4 +1,4 @@
-task_seq = 4
+task_seq = 5
 
 [phase]
   id = "dependency-update-automation"
@@ -40,4 +40,14 @@ task_seq = 4
   files = ["internal/cmd/changes.go", "internal/cmd/changes_test.go"]
   description = "t-3's plan entry declares files = [] (its artifact is a GitHub repo setting, not a file), but `dross changes record` requires at least one --files entry, so the run had to point t-3 at .github/dependabot.yml and explain the pointer in --notes. Relax the guard narrowly: zero --files is accepted only when plan.toml's entry for that task also declares an empty files list. A task that declares files but records none is still rejected — that guard exists to catch a silent no-op record — and so is a task id absent from the plan."
   test_contract = ["if `dross changes record` accepts zero --files for a task whose plan entry declares a non-empty files list, TestChangesRecordRejectsFilelessWhenPlanDeclaresFiles fails", "if it rejects zero --files for a task whose plan entry declares files = [], TestChangesRecordAcceptsFilelessPlannedTask fails", "if zero --files is accepted for a task id that does not appear in plan.toml at all, TestChangesRecordRejectsFilelessUnknownTask fails — an unrecognised id must not be a way past the guard", "if a fileless record drops the landmark or notes it was given, TestChangesRecordAcceptsFilelessPlannedTask fails — the record is the only artifact such a task has"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 1
+  title = "Drive setup-go floor and go-version checks with failing inputs"
+  files = ["internal/cmd/toolchain_source_test.go"]
+  description = "verify found c-3 weak: TestToolchainSingleSource's below-floor and go-version branches only ever see real workflows that pass, and real pins sit exactly on v7.0.0. Extract the per-step checks into setupGoStepProblems(s setupGoStep) []string, call it from the live sweep unchanged, and add a table test over synthetic setupGoStep values so each rejection branch is driven by an input that must fail."
+  covers = ["c-3"]
+  test_contract = ["if the below-floor check is dropped, a synthetic step with a # v6.0.0 comment passes and TestSetupGoStepProblems fails", "if the go-version check is dropped, a synthetic step carrying go-version: passes and TestSetupGoStepProblems fails", "if the go-version-file: go.mod check is dropped, a synthetic step without it passes and TestSetupGoStepProblems fails", "if an invalid version comment (empty or non-semver) stops being rejected, TestSetupGoStepProblems fails", "if the floor becomes exclusive or pins to one exact version, a # v7.0.0 or # v7.1.0 step reports a problem and TestSetupGoStepProblems fails"]
   status = "done"

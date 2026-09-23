@@ -600,6 +600,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "dependency-update-automation/t-5": {
+      "issue": "DRO-625",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "exec-consent-completeness/t-1": {
       "issue": "DRO-333",
       "plan_status": "done",

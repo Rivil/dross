@@ -61,6 +61,21 @@
           "what": "changes record accepts zero --files only when plan.toml's entry for that task declares files = [], so a task whose artifact is a repo setting still leaves a record; a task that names files, or an id absent from the plan, is still rejected"
         }
       ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/toolchain_source_test.go"
+      ],
+      "commit": "1bccf75",
+      "completed_at": "2026-09-23T06:27:35.298565Z",
+      "landmarks": [
+        {
+          "feature": "Supply-chain currency",
+          "symbol": "setupGoStepProblems",
+          "loc": "internal/cmd/toolchain_source_test.go:81",
+          "what": "per-step setup-go floor/go-version/go-version-file checks, table-tested against synthetic failing steps"
+        }
+      ]
     }
   }
 }
