@@ -116,6 +116,7 @@
     "someday:id:1f7da51167187ecb": "DRO-261",
     "someday:id:1fef640f34a45430": "DRO-524",
     "someday:id:20d239bfa5341306": "DRO-62",
+    "someday:id:211fd3040434016d": "DRO-645",
     "someday:id:215d2ae2e7799d69": "DRO-102",
     "someday:id:2385fc70268180d1": "DRO-83",
     "someday:id:245f4ad61d9e038a": "DRO-372",
@@ -288,6 +289,7 @@
     "someday:id:b2b926c3b2c34205": "DRO-592",
     "someday:id:b32165178110b56a": "DRO-325",
     "someday:id:b328f16cd8693b82": "DRO-260",
+    "someday:id:b36d9d368deb7c3b": "DRO-644",
     "someday:id:b38eb66d043ad477": "DRO-160",
     "someday:id:b4794de89d962714": "DRO-63",
     "someday:id:b85eb8099f7b6714": "DRO-43",
@@ -562,42 +564,42 @@
     "cmd-test-duration/t-1": {
       "issue": "DRO-636",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "cmd-test-duration/t-2": {
       "issue": "DRO-638",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "cmd-test-duration/t-3": {
       "issue": "DRO-639",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "cmd-test-duration/t-4": {
       "issue": "DRO-640",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "cmd-test-duration/t-5": {
       "issue": "DRO-641",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "cmd-test-duration/t-6": {
       "issue": "DRO-642",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "cmd-test-duration/t-7": {
       "issue": "DRO-643",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "cmd-test-duration/t-8": {
       "issue": "DRO-637",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "completion-record-truth/t-1": {
       "issue": "DRO-136",

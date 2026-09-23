@@ -54,10 +54,12 @@
   locked = true
 
 [[deferred]]
+  id = "b36d9d368deb7c3b"
   text = "Scope ci.yml's govulncheck to PRs that change go.mod/go.sum, plus a weekly schedule."
   why = "Measured on run 35850995391: govulncheck is 6s (4s install + 2s scan). Scoping it also drops PR-time detection of new code reaching a vulnerable function in an unchanged graph."
 
 [[deferred]]
+  id = "211fd3040434016d"
   text = "Fold ci.yml's shellcheck micro-job into another job."
   why = "Measured on run 35850995391: 6s, runs in parallel, public repo = free Actions minutes — no wall-clock or billing gain."
 
