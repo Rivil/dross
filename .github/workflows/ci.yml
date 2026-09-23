@@ -70,8 +70,15 @@ jobs:
       # from ~200s to 525-600s+ in a week and began tripping the default on
       # identical code (PR #131). Headroom only — finding what grew is phase
       # cmd-test-duration, and this ceiling drops back once it lands.
+      #
+      # -json through cmd/testsummary: the log reads as plain go test output
+      # (failures only), and the step summary gets the 20 slowest tests,
+      # per-package totals, and a warning for any package over 300s. pipefail
+      # keeps go test's own exit status in the verdict. TestCIGoTestStepsLive
+      # pins this line.
       - name: go test
-        run: go test -race -count=1 -timeout 20m ./...
+        shell: bash
+        run: set -o pipefail; go test -race -count=1 -timeout 20m -json ./... | go run ./cmd/testsummary
 
       - name: go build
         run: go build ./cmd/dross
@@ -144,8 +151,10 @@ jobs:
       # construct). Selected by name because the rest of the package runs in
       # the `test` job; DROSS_REQUIRE_E2E above turns a skip here into a
       # failure, which only means something for tests this selector reaches.
+      # Piped through cmd/testsummary like the test job's run.
       - name: stryker end-to-end mutation run
-        run: go test -count=1 -run 'TestStrykerRunsEndToEnd|TestConstructRangeRecoversTheDeepMutant|TestBabelParsesGenericsAndJSX|TestRealParserSpansMatchTheExpansion|TestUnresolvableParserIsUnavailable' ./internal/mutation/
+        shell: bash
+        run: set -o pipefail; go test -count=1 -json -run 'TestStrykerRunsEndToEnd|TestConstructRangeRecoversTheDeepMutant|TestBabelParsesGenericsAndJSX|TestRealParserSpansMatchTheExpansion|TestUnresolvableParserIsUnavailable' ./internal/mutation/ | go run ./cmd/testsummary
 
   shellcheck:
     runs-on: ubuntu-latest
