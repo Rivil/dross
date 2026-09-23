@@ -2,5 +2,122 @@
   "phase": "cmd-test-duration",
   "base": "milestone/v1.7",
   "base_commit": "d2d8317e48bd751575043fef5c52704a344b1b90",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/secretscan/rules.go",
+        "internal/secretscan/secretscan.go",
+        "internal/secretscan/prefilter_test.go",
+        "internal/secretscan/export_test.go"
+      ],
+      "commit": "43a79f2",
+      "completed_at": "2026-09-23T12:49:30.993137Z",
+      "landmarks": [
+        {
+          "feature": "secret detection",
+          "symbol": "candidates",
+          "loc": "internal/secretscan/rules.go:138",
+          "what": "per-rule literal needles gate each regex so needle-free lines skip the regex VM; (?i) rules fold ASCII and fail open on U+017F/U+212A"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/techdebt/scan.go",
+        "internal/techdebt/scan_test.go"
+      ],
+      "commit": "3f8ade4",
+      "completed_at": "2026-09-23T12:54:53.035467Z",
+      "landmarks": [
+        {
+          "feature": "tech-debt scan",
+          "symbol": "mayHaveMarker",
+          "loc": "internal/techdebt/scan.go:56",
+          "what": "marker-word needle gates the word-boundary regex so marker-free lines skip the regex VM"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "cmd/testsummary/main.go",
+        "cmd/testsummary/stream.go",
+        "cmd/testsummary/stream_test.go",
+        "cmd/testsummary/fixture_test.go"
+      ],
+      "commit": "338ed8c",
+      "completed_at": "2026-09-23T12:58:33.405543Z",
+      "landmarks": [
+        {
+          "feature": "CI test summary",
+          "symbol": "reducer.finish",
+          "loc": "cmd/testsummary/stream.go:207",
+          "what": "stdlib-only go test -json reducer prints a plain log (failed tests, timeout panics, build errors) and exits non-zero on fail, empty or cut streams"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        ".github/workflows/ci.yml",
+        "internal/cmd/ci_concurrency_test.go"
+      ],
+      "commit": "d443bd9",
+      "completed_at": "2026-09-23T13:01:14.223679Z",
+      "landmarks": [
+        {
+          "feature": "CI pipeline",
+          "symbol": "concurrency",
+          "loc": ".github/workflows/ci.yml:18",
+          "what": "PR runs share a per-ref group and cancel superseded runs; main pushes get a run_id group so they are never cancelled"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "cmd/testsummary/table.go",
+        "cmd/testsummary/table_test.go",
+        "cmd/testsummary/main.go"
+      ],
+      "commit": "b5dde85",
+      "completed_at": "2026-09-23T13:13:34.025601Z",
+      "landmarks": [
+        {
+          "feature": "CI test summary",
+          "symbol": "timingTable",
+          "loc": "cmd/testsummary/table.go:25",
+          "what": "step-summary markdown of the 20 slowest top-level tests and per-package totals, plus a non-failing ::warning per package over 300s"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        ".github/workflows/ci.yml",
+        "internal/cmd/ci_go_test_step_test.go"
+      ],
+      "commit": "97a9d26",
+      "completed_at": "2026-09-23T13:25:59.386996Z",
+      "landmarks": [
+        {
+          "feature": "CI pipeline",
+          "symbol": "go test step",
+          "loc": ".github/workflows/ci.yml:81",
+          "what": "every CI go test runs -json under pipefail through cmd/testsummary for a plain log and a step-summary timing table"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/secretscan_selfscan_test.go"
+      ],
+      "commit": "b54bca0",
+      "completed_at": "2026-09-23T12:53:22.670255Z",
+      "landmarks": [
+        {
+          "feature": "secret detection",
+          "symbol": "walkCache.get",
+          "loc": "internal/cmd/secretscan_selfscan_test.go:126",
+          "what": "self-scan tests walk the tracked tree once per test binary and re-raise a failed or skipped walk to every reader"
+        }
+      ]
+    }
+  }
 }

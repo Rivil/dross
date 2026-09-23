@@ -559,6 +559,41 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "cmd-test-duration/t-1": {
+      "issue": "DRO-636",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-test-duration/t-2": {
+      "issue": "DRO-638",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-test-duration/t-3": {
+      "issue": "DRO-639",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-test-duration/t-4": {
+      "issue": "DRO-640",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-test-duration/t-5": {
+      "issue": "DRO-641",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-test-duration/t-6": {
+      "issue": "DRO-642",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-test-duration/t-8": {
+      "issue": "DRO-637",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "completion-record-truth/t-1": {
       "issue": "DRO-136",
       "plan_status": "done",
