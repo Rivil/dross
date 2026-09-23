@@ -104,6 +104,22 @@
         }
       ]
     },
+    "t-7": {
+      "files": [
+        ".github/workflows/ci.yml",
+        "internal/cmd/ci_go_test_step_test.go"
+      ],
+      "commit": "b59735f",
+      "completed_at": "2026-09-23T15:34:33.423264Z",
+      "landmarks": [
+        {
+          "feature": "CI pipeline",
+          "symbol": "goTestStepProblems",
+          "loc": "internal/cmd/ci_go_test_step_test.go:205",
+          "what": "CI go test runs without -timeout (go test's 10m default is the wall) and the guard rejects any -timeout in a workflow's go test"
+        }
+      ]
+    },
     "t-8": {
       "files": [
         "internal/cmd/secretscan_selfscan_test.go"

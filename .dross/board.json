@@ -589,6 +589,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "cmd-test-duration/t-7": {
+      "issue": "DRO-643",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "cmd-test-duration/t-8": {
       "issue": "DRO-637",
       "plan_status": "done",

@@ -84,4 +84,4 @@ task_seq = 8
   covers = ["c-2", "c-1"]
   depends_on = ["t-1", "t-2", "t-5", "t-6", "t-8"]
   test_contract = ["if a synthetic step containing `-timeout 20m`, `-timeout=20m` or `-timeout 0` is not flagged by goTestStepProblems, TestGoTestStepProblems fails; re-adding any of them to ci.yml fails TestCIGoTestStepsLive naming file:line", "if ci.yml still contains `Headroom only` or `timeout 20m`, TestCIGoTestStepsLive fails", "[CI evidence] the run after this lands is green with internal/cmd's package total ≤300s in the step summary and no `::warning` — the evidence for c-1 and c-2"]
-  status = "pending"
+  status = "done"
