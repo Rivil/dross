@@ -120,13 +120,14 @@ _introduced state-json-branch-safety · extended completion-state-truth · 1ecde
 
 ### Change tracking & landmarks
 
-Append-only per-task record of files touched, plus a typed `--landmark` record (feature/symbol/loc/what) parsed into a structured `Landmarks` array — replacing the old landmark-carried-in-`--notes` convention. Values may contain commas: a comma opens a new pair only at a recognised `key=` boundary (duplicate keys error loudly), and the `--landmark` help text documents the rule.
+Append-only per-task record of files touched, plus a typed `--landmark` record (feature/symbol/loc/what) parsed into a structured `Landmarks` array — replacing the old landmark-carried-in-`--notes` convention. Values may contain commas: a comma opens a new pair only at a recognised `key=` boundary (duplicate keys error loudly), and the `--landmark` help text documents the rule. A record may carry zero `--files` only when plan.toml's entry for that task declares `files = []` (its artifact is a repo setting, not a file); a task that declares files, or an id absent from the plan, is still rejected.
 
 - `Changes.Record` — `internal/changes/changes.go:338`
 - `changes.ParseLandmark` / `Landmark` (comma-in-value join, dup-key error) — `internal/changes/changes.go:141`
 - `Changes` (CLI, repeatable `--landmark`) — `internal/cmd/changes.go:15`
+- `requireFilelessTaskInPlan` (zero `--files` only when the plan declares `files = []`) — `internal/cmd/changes.go:101`
 
-_introduced 1d1f85a · extended 01-architecture-comprehension-layer · extended architecture-doc-enhancements · extended landmark-comma-fix · c896695_
+_introduced 1d1f85a · extended 01-architecture-comprehension-layer · extended architecture-doc-enhancements · extended landmark-comma-fix · extended dependency-update-automation · 8f6b4fd_
 
 ### Clean-tree gates
 
@@ -1070,14 +1071,17 @@ _introduced native-statusline · 46e5025_
 
 ### Supply-chain currency
 
-Keep the build and release pipeline's dependency graph current, single-sourced, and provably the graph that ships. The Go toolchain has exactly one pin — go.mod's `toolchain` directive — and `ci.yml` / `release.yml` resolve `setup-go` from it via `go-version-file` rather than a hand-copied patch string; a test parses all three and fails on any second source. Direct dependencies sit at their latest release and CI fails on `go mod tidy -diff` drift, so the committed graph is the resolved graph. The release job builds with `-mod=readonly` (goreleaser's `go mod tidy` before-hook is gone) and runs a pinned `govulncheck` in the release job itself, so the graph scanned is the graph in the shipped binaries — a finding fails the release, no allowlist. Workflow `run:` blocks carry no `${{ }}` expression at all — values reach the shell via `env:` — and a line-based scanner over `.github/workflows/*.yml` enforces the blanket rule, which is testable without a trust taxonomy.
+Keep the build and release pipeline's dependency graph current, single-sourced, and provably the graph that ships. The Go toolchain has exactly one pin — go.mod's `toolchain` directive — and `ci.yml` / `release.yml` resolve `setup-go` from it via `go-version-file` rather than a hand-copied patch string; a test parses all three and fails on any second source. Direct dependencies sit at their latest release and CI fails on `go mod tidy -diff` drift, so the committed graph is the resolved graph. The release job builds with `-mod=readonly` (goreleaser's `go mod tidy` before-hook is gone) and runs a pinned `govulncheck` in the release job itself, so the graph scanned is the graph in the shipped binaries — a finding fails the release, no allowlist. Workflow `run:` blocks carry no `${{ }}` expression at all — values reach the shell via `env:` — and a line-based scanner over `.github/workflows/*.yml` enforces the blanket rule, which is testable without a trust taxonomy. Dependabot keeps it current: `.github/dependabot.yml` raises weekly PRs for gomod, github-actions and the Stryker npm fixture, minor+patch grouped per ecosystem behind a 7-day release-age cooldown, and the repo's vulnerability alerts and automated security fixes open an advisory PR the day it lands. Every workflow `uses:` is pinned to a 40-hex SHA with a trailing `# vX.Y.Z` comment, and the setup-go floor is compared by semver against that comment, so a bot SHA bump lands without a hand edit.
 
-- `TestToolchainSingleSource` (go.mod `toolchain` is the one Go pin; workflows read it via `go-version-file`) — `internal/cmd/toolchain_source_test.go:28`
+- `TestToolchainSingleSource` (go.mod `toolchain` is the one Go pin; workflows read it via `go-version-file`) — `internal/cmd/toolchain_source_test.go:34`
+- `setupGoStepProblems` (setup-go comment >= v7.0.0 by semver, no `go-version:`, `go-version-file: go.mod`; table-tested with failing steps) — `internal/cmd/toolchain_source_test.go:81`
+- `actionPins` (every workflow `uses:` is a 40-hex SHA with a `# vX.Y.Z` comment) — `internal/cmd/action_pins_test.go:45`
+- `dependabotEcosystems` (three ecosystems, weekly, minor+patch group, 7-day cooldown, no `target-branch`) — `internal/cmd/dependabot_config_test.go:52` / `.github/dependabot.yml`
 - `go.mod` require block (direct deps at latest; `go mod tidy -diff` CI gate) — `go.mod:8` / `.github/workflows/ci.yml`
 - `TestReleaseJobRunsGovulncheck` (release builds `-mod=readonly`, govulncheck before goreleaser) — `internal/cmd/release_pipeline_test.go:47`
 - `runBlockExpressions` (no `${{ }}` inside any `run:` block; scanner sweeps every workflow) — `internal/cmd/workflow_run_expressions_test.go:31`
 
-_introduced supply-chain-currency · 2dcc7ef_
+_introduced supply-chain-currency · extended dependency-update-automation · 8963183_
 
 ### Survivor lifecycle
 
