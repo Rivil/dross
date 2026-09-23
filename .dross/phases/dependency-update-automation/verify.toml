@@ -1,0 +1,80 @@
+[verify]
+  phase = "dependency-update-automation"
+  generated_at = 2026-09-23T06:11:47.439295Z
+  verdict = "partial"
+  finalized = true
+  finalized_at = 2026-09-23T06:12:12.533451Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 1.0
+  mutants_killed = 17
+  mutants_survived = 0
+  mutants_not_covered = 0
+  mutants_in_scope = 17
+  unclassified_in_scope = 0
+  criteria_total = 5
+  criteria_covered = 4
+  criteria_uncovered = 1
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 17
+    survived = 0
+    timeout = 0
+    in_scope = 17
+    score = 1.0
+    file_count = 5
+    measured_on = "helicon"
+    whole_file = ["internal/cmd/action_pins_test.go — adapter-lacks-range-runner", "internal/cmd/changes.go — adapter-lacks-range-runner", "internal/cmd/changes_test.go — adapter-lacks-range-runner", "internal/cmd/dependabot_config_test.go — adapter-lacks-range-runner", "internal/cmd/toolchain_source_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/dependabot_config_test.go:TestDependabotConfigEcosystems", "internal/cmd/dependabot_config_test.go:TestDependabotEcosystemScanner"]
+  notes = "Asserts every required ecosystem block; scanner fixture proves the negative direction (monthly, cooldown -1, target-branch, split minor/patch groups all detected)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/dependabot_config_test.go:TestDependabotConfigCooldown"]
+  notes = "Sweeps every update block for the cooldown, not only the three named ecosystems."
+
+[[criterion]]
+  id = "c-3"
+  status = "weak"
+  tests = ["internal/cmd/toolchain_source_test.go:TestToolchainSingleSource", "internal/cmd/toolchain_source_test.go:TestSetupGoStepScanner"]
+  notes = "Pin-agnostic half holds (floor compared against each pin's # vX.Y.Z, no exact-SHA constant). But the below-floor and go-version error branches only ever see real workflows that pass, and real pins sit exactly on the floor (v7.0.0, Compare==0). No synthetic # v6.0.0 / go-version step is asserted to fail, though t-2's test_contract promised one. Fix: table test over synthetic setupGoStep values."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/action_pins_test.go:TestWorkflowActionsArePinned", "internal/cmd/action_pins_test.go:TestActionPinScanner"]
+  notes = "Live sweep of all workflows plus a negative table rejecting @v4 tag refs, short @abc123 refs, and two-part # v4.4 comments."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  notes = "Repo setting, not code: re-verified live 2026-09-22 — vulnerability-alerts HTTP 204, automated-security-fixes enabled:true."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-3 weak: TestToolchainSingleSource's below-floor and go-version error branches are never driven by a failing input; real pins sit exactly on the floor. Add a table test over synthetic setupGoStep values (# v6.0.0, go-version: carrying step)."
+
+[[finding]]
+  severity = "FLAG"
+  text = "t-1 cites GitHub's own dependabot.yml validation as c-1/c-2 evidence, but GitHub only parses it on the default branch — unobservable pre-merge. Check the repo's Dependabot tab after the ship merge. Mitigated: a real YAML parse confirmed nesting matches the line guard; only GitHub's acceptance of the cooldown key shape is open."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation denominator is small by construction: the only production file changed is internal/cmd/changes.go; the rest are test files. 17/17 killed. 126 out-of-scope survivors filtered; 109 accepted, 0 unclassified."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Both plan-review FLAGs closed — cooldown ecosystem support confirmed and recorded in commit 8963183's body."
+
+[[finding]]
+  severity = "NOTE"
+  text = "t-4 is support work and covers no criterion; its 3 tests pass."
