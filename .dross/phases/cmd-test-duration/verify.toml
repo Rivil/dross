@@ -1,0 +1,77 @@
+[verify]
+  phase = "cmd-test-duration"
+  generated_at = 2026-09-23T18:20:37.286733Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-09-23T18:21:56.672276Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.8902439024390244
+  mutants_killed = 73
+  mutants_survived = 9
+  mutants_not_covered = 9
+  mutants_in_scope = 82
+  unclassified_in_scope = 0
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 73
+    survived = 9
+    timeout = 0
+    in_scope = 82
+    score = 0.8902439024390244
+    file_count = 15
+    measured_on = "helicon"
+    whole_file = ["cmd/testsummary/fixture_test.go — adapter-lacks-range-runner", "cmd/testsummary/main.go — adapter-lacks-range-runner", "cmd/testsummary/stream.go — adapter-lacks-range-runner", "cmd/testsummary/stream_test.go — adapter-lacks-range-runner", "cmd/testsummary/table.go — adapter-lacks-range-runner", "cmd/testsummary/table_test.go — adapter-lacks-range-runner", "internal/cmd/ci_concurrency_test.go — adapter-lacks-range-runner", "internal/cmd/ci_go_test_step_test.go — adapter-lacks-range-runner", "internal/cmd/secretscan_selfscan_test.go — adapter-lacks-range-runner", "internal/secretscan/export_test.go — adapter-lacks-range-runner", "internal/secretscan/prefilter_test.go — adapter-lacks-range-runner", "internal/secretscan/rules.go — adapter-lacks-range-runner", "internal/secretscan/secretscan.go — adapter-lacks-range-runner", "internal/techdebt/scan.go — adapter-lacks-range-runner", "internal/techdebt/scan_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["CI run 35881330711 (900c2d0): internal/cmd -race on ubuntu-latest ok 193.426s", "CI run 35890824314 (46ea374): internal/cmd -race on ubuntu-latest ok 206.038s", "internal/secretscan/prefilter_test.go:TestCandidatesPrunesNeedleFreeLines", "internal/techdebt/scan_test.go:TestMayHaveMarker", "internal/cmd/secretscan_selfscan_test.go:TestSelfScanWalksOnce", "cmd/testsummary/table_test.go:TestBudgetWarning"]
+  notes = "Measured criterion: both CI runs read <=300s (down from 525-597s). The speed mechanisms are pinned by tests that kill the full-cost mutants (all-rules candidate mask, always-true marker gate, a second tree walk); regrowth past 300s is surfaced as a ::warning, never a failure, by locked decision timeout_ceiling."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/ci_go_test_step_test.go:TestCIGoTestStepsLive", "internal/cmd/ci_go_test_step_test.go:TestGoTestStepProblems/-timeout 20m", "internal/cmd/ci_go_test_step_test.go:TestGoTestStepProblems/-timeout=20m", "internal/cmd/ci_go_test_step_test.go:TestGoTestStepProblems/-timeout 0 outside the test job", "CI run 35890824314 (46ea374): test job green, go test -race -count=1 -json ./... with no -timeout"]
+  notes = "The live sweep fails on any -timeout in any workflow's go test and on the literal 'Headroom only' / 'timeout 20m' in ci.yml. First run without the stopgap is green with internal/cmd at 206.0s and no ::warning."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/ci_go_test_step_test.go:TestCIGoTestStepsLive", "cmd/testsummary/table_test.go:TestTableTop20", "cmd/testsummary/table_test.go:TestPackageTotals", "cmd/testsummary/table_test.go:TestSummaryDestination", "cmd/testsummary/table_test.go:TestTableRendersTimedOutRun", "cmd/testsummary/stream_test.go:TestReducerRealFailingModule"]
+  notes = "The live sweep requires exactly the two CI go test invocations (test, mutation-ts) to pipe -json into ./cmd/testsummary; the table tests pin top-20 cap, sort order, subtest exclusion, package totals and append-to-$GITHUB_STEP_SUMMARY. Step logs of runs 35881330711 and 35890824314 read as plain go test output. All 5 in-hunk cmd/testsummary survivors are switch-case attribution-ceiling mutants, accepted."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/ci_concurrency_test.go:TestCIConcurrencyLive", "internal/cmd/ci_concurrency_test.go:TestConcurrencyProblems"]
+  notes = "The live check fails if ci.yml loses its single top-level block, the ci- prefix, the run_id arm for main, the per-ref PR arm, or the PR-only cancel expression; the checker is driven through each rejection branch. Live cancellation of a superseded PR run is observed at ship."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["laptop measurement 2026-09-23T16:15:54Z-16:20:14Z: `dross test --local` (go test -count=1 ./...) exit 0, internal/cmd ok 258.382s"]
+  notes = "One-off verify evidence by spec design, not a gate: internal/cmd finished in 258.4s inside the full no-race suite (4m20s wall), well within go test's 10m default. Laptop was quiet: load 2.4 on 14 cores, 53% memory free; the mutation leg ran on helicon."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-1 and c-5 are measured criteria, not test-gated: regrowth past 300s emits a ::warning (TestBudgetWarning) and never fails CI, by locked decision timeout_ceiling; c-5 is a one-off laptop measurement."
+
+[[finding]]
+  severity = "NOTE"
+  text = "7 in-hunk NOT COVERED survivors accepted this run under existing categories: 5 switch-case conditions (cmd/testsummary/table.go:29, stream.go:109/111/115/117) as gremlins-attribution-ceiling, and the + in the package-level var rules initializer (internal/secretscan/rules.go:101) as const-initializer-arithmetic. Stale acceptance 10b5cbf7f5923d04 (same rules.go line, key moved when gofmt re-aligned Regex:) retired. Efficacy over the 73 reachable mutants = 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Not observed by verify: the rendered Summary-tab tables (rendering is unit-tested; plain step-log output was observed) and c-4's live cancellation, which needs back-to-back PR pushes — check `gh run list --branch phase/cmd-test-duration --event pull_request` after ship."
+
+[[finding]]
+  severity = "NOTE"
+  text = "At ship: PR #132 is an adopted draft, so ship skips OpenPR (deferred 650eafe718c4db40) — by hand run `gh pr ready 132`, refresh the body to ship's generated one, and request reviewers."
