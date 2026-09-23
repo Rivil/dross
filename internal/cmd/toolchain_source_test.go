@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,13 +18,18 @@ import (
 // that wiring (phase supply-chain-currency, criterion c-2): YAML has no mutation
 // adapter, so a content guard is the reproducible regression check.
 
-// setupGoMinSHA is the oldest actions/setup-go commit that honours the
-// `toolchain` directive under `go-version-file` — the v7.0.0 tag. v5.x read only
-// the `go` directive, so the declared toolchain arrived later via GOTOOLCHAIN=auto
-// and the action's installed version was a fiction. Bump this deliberately (and
-// the workflow pins with it) when adopting a newer tag; a workflow pinned to any
-// other SHA fails the test.
-const setupGoMinSHA = "b7ad1dad31e06c5925ef5d2fc7ad053ef454303e" // v7.0.0
+// setupGoMinVersion is the oldest actions/setup-go release that honours the
+// `toolchain` directive under `go-version-file` — v7.0.0. v5.x read only the
+// `go` directive, so the declared toolchain arrived later via GOTOOLCHAIN=auto
+// and the action's installed version was a fiction.
+//
+// The floor is compared by semver against each pin's trailing `# vX.Y.Z`
+// comment rather than against one exact SHA (phase
+// dependency-update-automation, criterion c-3): a Dependabot bump rewrites both
+// the SHA and the comment, and an exact-SHA constant here would turn every such
+// PR red until someone hand-edited this line. The comment is trustworthy
+// because action_pins_test.go requires one on every pin, in that shape.
+const setupGoMinVersion = "v7.0.0"
 
 func TestToolchainSingleSource(t *testing.T) {
 	root := repoRootFromTest(t)
@@ -58,14 +64,8 @@ func TestToolchainSingleSource(t *testing.T) {
 		rel, _ := filepath.Rel(root, wf)
 		for _, s := range setupGoSteps(readRepoFile(t, rel)) {
 			steps++
-			if s.sha != setupGoMinSHA {
-				t.Errorf("%s:%d actions/setup-go pinned to %q; want %s (v7.0.0 — the first tag that reads go.mod's toolchain directive)", rel, s.line, s.sha, setupGoMinSHA)
-			}
-			if s.goVersion != "" {
-				t.Errorf("%s:%d actions/setup-go carries `go-version: %s` — a second toolchain source; go.mod's toolchain directive is the only one", rel, s.line, s.goVersion)
-			}
-			if s.goVersionFile != "go.mod" {
-				t.Errorf("%s:%d actions/setup-go has `go-version-file: %q`; want go.mod", rel, s.line, s.goVersionFile)
+			for _, p := range setupGoStepProblems(s) {
+				t.Errorf("%s:%d %s", rel, s.line, p)
 			}
 		}
 	}
@@ -74,11 +74,33 @@ func TestToolchainSingleSource(t *testing.T) {
 	}
 }
 
-// setupGoStep is one `uses: actions/setup-go@<sha>` step and the toolchain
-// keys found in its `with:` block.
+// setupGoStepProblems reports every way one setup-go step breaks the
+// single-source wiring. It is split out of the sweep so the rejection branches
+// can be driven by synthetic steps: the real workflows all pass, and their pins
+// sit exactly on setupGoMinVersion, so the sweep alone never sees a failure.
+func setupGoStepProblems(s setupGoStep) []string {
+	var problems []string
+	switch {
+	case !semver.IsValid(s.version):
+		problems = append(problems, fmt.Sprintf("actions/setup-go@%s carries version comment %q — a pin's tag must be recorded as a trailing `# vX.Y.Z` comment, which is what makes the floor below comparable", s.sha, s.version))
+	case semver.Compare(s.version, setupGoMinVersion) < 0:
+		problems = append(problems, fmt.Sprintf("actions/setup-go pinned to %s (%s); want >= %s — the first release that reads go.mod's toolchain directive", s.sha, s.version, setupGoMinVersion))
+	}
+	if s.goVersion != "" {
+		problems = append(problems, fmt.Sprintf("actions/setup-go carries `go-version: %s` — a second toolchain source; go.mod's toolchain directive is the only one", s.goVersion))
+	}
+	if s.goVersionFile != "go.mod" {
+		problems = append(problems, fmt.Sprintf("actions/setup-go has `go-version-file: %q`; want go.mod", s.goVersionFile))
+	}
+	return problems
+}
+
+// setupGoStep is one `uses: actions/setup-go@<sha>` step, the version recorded
+// in its trailing comment, and the toolchain keys found in its `with:` block.
 type setupGoStep struct {
 	line          int
 	sha           string
+	version       string
 	goVersion     string
 	goVersionFile string
 }
@@ -88,7 +110,9 @@ type setupGoStep struct {
 // follows it. Line-based on purpose: the repo carries no YAML dependency, and a
 // step's `with:` block ends at the next line indented at or above the step's
 // `- uses:` dash. Comment lines and trailing `# ...` comments are dropped
-// first so a comment mentioning `go-version:` is not read as the key.
+// before keys are read, so a comment mentioning `go-version:` is not read as
+// the key — but the `uses:` line's own comment is retained, since that is where
+// the pinned version lives.
 func setupGoSteps(workflow string) []setupGoStep {
 	var (
 		steps []setupGoStep
@@ -96,7 +120,7 @@ func setupGoSteps(workflow string) []setupGoStep {
 		depth = -1
 	)
 	for i, raw := range strings.Split(workflow, "\n") {
-		line := stripYAMLComment(raw)
+		line, comment := splitYAMLComment(raw)
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
@@ -107,7 +131,7 @@ func setupGoSteps(workflow string) []setupGoStep {
 			cur = nil
 		}
 		if rest, ok := strings.CutPrefix(trimmed, "- uses: actions/setup-go@"); ok {
-			cur = &setupGoStep{line: i + 1, sha: strings.TrimSpace(rest)}
+			cur = &setupGoStep{line: i + 1, sha: strings.TrimSpace(rest), version: comment}
 			depth = indent
 			continue
 		}
@@ -127,13 +151,8 @@ func setupGoSteps(workflow string) []setupGoStep {
 }
 
 func stripYAMLComment(line string) string {
-	if strings.HasPrefix(strings.TrimSpace(line), "#") {
-		return ""
-	}
-	if i := strings.Index(line, " #"); i >= 0 {
-		return line[:i]
-	}
-	return line
+	value, _ := splitYAMLComment(line)
+	return value
 }
 
 // TestSetupGoStepScanner pins the line scanner against inline fixtures so the
@@ -161,7 +180,7 @@ func TestSetupGoStepScanner(t *testing.T) {
 `
 	got := setupGoSteps(wf)
 	want := []setupGoStep{
-		{line: 5, sha: "1111", goVersionFile: "go.mod"},
+		{line: 5, sha: "1111", version: "v7.0.0", goVersionFile: "go.mod"},
 		{line: 14, sha: "2222", goVersion: "1.25.13"},
 		{line: 19, sha: "3333"},
 	}
@@ -172,5 +191,49 @@ func TestSetupGoStepScanner(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("step %d: got %+v, want %+v", i, got[i], want[i])
 		}
+	}
+}
+
+// TestSetupGoStepProblems drives each rejection branch of setupGoStepProblems
+// with a step that must fail, and pins the floor as inclusive and
+// pin-agnostic with steps that must pass. Each want entry is a substring that
+// identifies one problem, in the order the checks run; the count must match
+// exactly, so a dropped check and a spurious extra one both fail.
+func TestSetupGoStepProblems(t *testing.T) {
+	const (
+		invalidComment = "a pin's tag must be recorded"
+		belowFloor     = "want >= " + setupGoMinVersion
+		goVersionKey   = "a second toolchain source"
+		versionFile    = "want go.mod"
+	)
+	ok := func(version string) setupGoStep {
+		return setupGoStep{line: 1, sha: "1111", version: version, goVersionFile: "go.mod"}
+	}
+	for _, tc := range []struct {
+		name string
+		step setupGoStep
+		want []string
+	}{
+		{"floor is inclusive", ok("v7.0.0"), nil},
+		{"bot bump above the floor", ok("v7.1.0"), nil},
+		{"below the floor", ok("v6.0.0"), []string{belowFloor}},
+		{"no version comment", ok(""), []string{invalidComment}},
+		{"comment without the v prefix", ok("7.0.0"), []string{invalidComment}},
+		{"go-version key", setupGoStep{line: 1, sha: "1111", version: "v7.0.0", goVersion: "1.25.13", goVersionFile: "go.mod"}, []string{goVersionKey}},
+		{"no go-version-file", setupGoStep{line: 1, sha: "1111", version: "v7.0.0"}, []string{versionFile}},
+		{"go-version-file not go.mod", setupGoStep{line: 1, sha: "1111", version: "v7.0.0", goVersionFile: "go.work"}, []string{versionFile}},
+		{"every fault at once", setupGoStep{line: 1, sha: "1111", version: "v6.0.0", goVersion: "1.25.13"}, []string{belowFloor, goVersionKey, versionFile}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := setupGoStepProblems(tc.step)
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d problems %q, want %d matching %q", len(got), got, len(tc.want), tc.want)
+			}
+			for i, w := range tc.want {
+				if !strings.Contains(got[i], w) {
+					t.Errorf("problem %d = %q, want it to contain %q", i, got[i], w)
+				}
+			}
+		})
 	}
 }

@@ -1,0 +1,69 @@
+[phase]
+  id = "dependency-update-automation"
+  title = "dependency-update-automation"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "`.github/dependabot.yml` covers `gomod` (/), `github-actions` (/) and `npm` (internal/mutation/testdata/ts-project), weekly, minor+patch grouped into one PR per ecosystem; a test fails if any ecosystem, the weekly schedule, or the grouping is missing."
+
+[[criteria]]
+  id = "c-2"
+  text = "Every ecosystem in dependabot.yml sets a release-age `cooldown` of 7 days, so a just-published release cannot be pulled in during the window in which compromised releases get yanked; the test fails on any ecosystem without it."
+
+[[criteria]]
+  id = "c-3"
+  text = "A bot bump of a SHA-pinned action passes CI without a hand edit: `TestToolchainSingleSource` accepts any `actions/setup-go` pin whose `# vX.Y.Z` comment is >= v7.0.0 (not one exact SHA) and still rejects a tag-only `uses:` or a `go-version:` key."
+
+[[criteria]]
+  id = "c-4"
+  text = "A test enumerates every `uses:` across `.github/workflows/*.yml` and fails on any action not pinned to a 40-hex SHA or lacking a trailing `# vX.Y.Z` comment — the invariant that keeps a bot's SHA bump reviewable."
+
+[[criteria]]
+  id = "c-5"
+  text = "Dependabot vulnerability alerts and security updates are enabled on Rivil/dross (`gh api repos/Rivil/dross/vulnerability-alerts` returns 204; `automated-security-fixes` reports enabled=true), so an advisory against a pinned dep opens a PR the day it lands. Repo setting — verified via gh api, not a Go test."
+
+[[decisions]]
+  key = "update_tool"
+  choice = "Dependabot (GitHub-native), not Renovate."
+  why = "No third-party app with repo write access; matches the hardening posture of supply-chain-currency. Its blind spots (run-block pins) are deferred, not papered over."
+  locked = true
+
+[[decisions]]
+  key = "target_branch"
+  choice = "PRs target `main` (the default); no `target-branch` override."
+  why = "Zero per-milestone config churn; a stale milestone target would silently no-op. The occasional go.sum conflict at milestone-merge time is resolvable and CI re-runs."
+  locked = true
+
+[[decisions]]
+  key = "security_bump_release"
+  choice = "A merged currency bump rides the next phase ship. A merged security bump is released by hand via release.yml `workflow_dispatch` with the next patch tag; documented in the phase."
+  why = "release.yml tags only when project.toml's version changes, so a bot merge cuts no release by construction. Auto-tagging every main merge would break the 'quick task cuts no release' rule — not this phase's call."
+  locked = true
+
+[[decisions]]
+  key = "auto_merge"
+  choice = "No auto-merge; every Dependabot PR is merged by hand."
+  why = "`main` has no branch protection or required checks, so nothing would gate an auto-merge. Revisit once main-branch-protection lands."
+  locked = true
+
+[[decisions]]
+  key = "npm_fixture_scope"
+  choice = "The Stryker fixture is an `npm` ecosystem entry, grouped with cooldown like the others."
+  why = "CI runs `npm audit --audit-level=high` against it with no automated fix path; a bump PR runs the stryker e2e job, so a fixture break is visible before merge."
+  locked = true
+
+[[deferred]]
+  text = "Currency for pins Dependabot cannot reach: `go install govulncheck@vX` inside run:, `node-version:` in setup-node, and go.mod's `toolchain` directive — e.g. a doctor check comparing them against upstream latest."
+  why = "Dependabot has no regex manager; hand-maintained today. Separate mechanism."
+  target = "run-block-pin-currency"
+
+[[deferred]]
+  text = "/dross-watch surfaces open Dependabot PRs with age (\"2 bot PRs open, oldest 12d\") so a bump cannot sit unmerged unseen."
+  why = "New watch capability, not a dependency-config concern."
+  target = "watch-bot-prs"
+
+[[deferred]]
+  text = "Branch protection on main: required ci checks, no direct push — the precondition for safe Dependabot auto-merge."
+  why = "Repo-settings control in its own right; ship's push-to-main flow must be reconciled with it first."
+  target = "main-branch-protection"

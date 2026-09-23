@@ -16,6 +16,7 @@
     "completion-record-truth": "DRO-135",
     "config-value-truth": "DRO-25",
     "deferred-add-command": "DRO-14",
+    "dependency-update-automation": "DRO-620",
     "exec-consent-completeness": "DRO-332",
     "exec-trust-followups": "DRO-2",
     "guard-remedy-ordering": "DRO-27",
@@ -576,6 +577,31 @@
     },
     "completion-record-truth/t-6": {
       "issue": "DRO-138",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "dependency-update-automation/t-1": {
+      "issue": "DRO-621",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "dependency-update-automation/t-2": {
+      "issue": "DRO-622",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "dependency-update-automation/t-3": {
+      "issue": "DRO-623",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "dependency-update-automation/t-4": {
+      "issue": "DRO-624",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "dependency-update-automation/t-5": {
+      "issue": "DRO-625",
       "plan_status": "done",
       "board_state": "task-in-review"
     },

@@ -56,8 +56,12 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      # -timeout 20m, not go test's default 10m: internal/cmd under -race grew
+      # from ~200s to 525-600s+ in a week and began tripping the default on
+      # identical code (PR #131). Headroom only — finding what grew is phase
+      # cmd-test-duration, and this ceiling drops back once it lands.
       - name: go test
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -timeout 20m ./...
 
       - name: go build
         run: go build ./cmd/dross

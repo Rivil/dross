@@ -1,0 +1,76 @@
+[verify]
+  phase = "dependency-update-automation"
+  generated_at = 2026-09-23T08:19:50.000877Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-09-23T09:41:50.236503Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 1.0
+  mutants_killed = 17
+  mutants_survived = 0
+  mutants_not_covered = 0
+  mutants_in_scope = 17
+  unclassified_in_scope = 0
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 17
+    survived = 0
+    timeout = 0
+    in_scope = 17
+    score = 1.0
+    file_count = 5
+    measured_on = "helicon"
+    whole_file = ["internal/cmd/action_pins_test.go — adapter-lacks-range-runner", "internal/cmd/changes.go — adapter-lacks-range-runner", "internal/cmd/changes_test.go — adapter-lacks-range-runner", "internal/cmd/dependabot_config_test.go — adapter-lacks-range-runner", "internal/cmd/toolchain_source_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/dependabot_config_test.go:TestDependabotConfigEcosystems", "internal/cmd/dependabot_config_test.go:TestDependabotConfigNoTargetBranch", "internal/cmd/dependabot_config_test.go:TestDependabotEcosystemScanner"]
+  notes = "Unchanged since the previous verify. Asserts every required ecosystem block; scanner fixture proves the negative direction (monthly, cooldown -1, target-branch, split minor/patch groups all detected)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/dependabot_config_test.go:TestDependabotConfigCooldown"]
+  notes = "Unchanged since the previous verify. Sweeps every update block for the cooldown, not only the three named ecosystems."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/toolchain_source_test.go:TestSetupGoStepProblems", "internal/cmd/toolchain_source_test.go:TestToolchainSingleSource", "internal/cmd/toolchain_source_test.go:TestSetupGoStepScanner"]
+  notes = "Was weak; closed by t-5. TestSetupGoStepProblems drives every rejection branch with a failing synthetic step (# v6.0.0, empty and v-less comments, go-version: key, missing / non-go.mod go-version-file, all faults at once) and pins v7.0.0 and v7.1.0 on sha 1111 as passing, asserting an exact problem count — a dropped check, an exclusive floor, or an exact-version pin each fails it. A tag-only uses: with no comment fails the invalid-comment branch; a tag ref carrying a spoofed # vX.Y.Z comment is caught by the c-4 pin sweep instead."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/action_pins_test.go:TestWorkflowActionsArePinned", "internal/cmd/action_pins_test.go:TestActionPinScanner"]
+  notes = "Unchanged since the previous verify. Live sweep of all workflows plus a negative table rejecting @v4 tag refs, short @abc123 refs, and two-part # v4.4 comments."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  notes = "Repo setting, not code: re-verified live 2026-09-23 — vulnerability-alerts HTTP 204, automated-security-fixes enabled:true."
+
+[[finding]]
+  severity = "NOTE"
+  text = "GitHub parses dependabot.yml only on the default branch, so its own acceptance is observable only after the ship merge — check the repo's Dependabot tab then. Pre-merge evidence (2026-09-23): the committed file passes SchemaStore's vendor.dependabot schema via check-jsonschema, and that schema is strict — a misspelled `cooldwn` key and a string `default-days` were each rejected on all three ecosystems. Downgraded from FLAG at the user's direction."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation denominator is small by construction: the only production file changed is internal/cmd/changes.go; the rest are test files, so setupGoStepProblems and the scanners are not mutated — c-3/c-4 rest on their negative-input tables. 17/17 killed. 126 out-of-scope survivors filtered; 109 accepted, 0 unclassified."
+
+[[finding]]
+  severity = "NOTE"
+  text = "All 17 phase tests pass (targeted local run, 2026-09-23): TestSetupGoStepProblems, TestSetupGoStepScanner, TestToolchainSingleSource, TestWorkflowActionsArePinned, TestActionPinScanner, TestDependabot*, TestChangesRecord*."
+
+[[finding]]
+  severity = "NOTE"
+  text = "t-4 is support work and covers no criterion; its 3 tests pass."

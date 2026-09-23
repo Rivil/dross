@@ -1,0 +1,78 @@
+# Dependabot version updates.
+#
+# Three ecosystems, weekly, each grouping its minor+patch bumps into a single PR
+# and holding every candidate release for 7 days (`cooldown.default-days`) so a
+# compromised release has a window to be yanked before it can be pulled in.
+# Cooldown is a version-update control only — GitHub never delays a security
+# update behind it, which is the behaviour we want.
+#
+# No `target-branch` key on purpose (locked decision target_branch): PRs target
+# `main`. A per-milestone target would be config churn that silently no-ops the
+# moment the milestone branch is merged away.
+#
+# No auto-merge (locked decision auto_merge): `main` carries no branch
+# protection, so nothing would gate one. Every bot PR is merged by hand.
+#
+# Release procedure for a merged bump (locked decision security_bump_release):
+# release.yml tags only when project.toml's version changes, so a bot merge cuts
+# no release by construction. A merged currency bump rides the next phase ship.
+# A merged *security* bump is released by hand — dispatch release.yml via
+# `workflow_dispatch` with the next patch tag.
+#
+# This config depends on two repo settings being enabled on Rivil/dross, which
+# live in GitHub and not in this file:
+#   - vulnerability alerts      (gh api repos/Rivil/dross/vulnerability-alerts -> 204)
+#   - automated security fixes  (gh api repos/Rivil/dross/automated-security-fixes -> enabled=true)
+# Without them an advisory against a pinned dep raises nothing until the next
+# weekly currency run.
+version: 2
+updates:
+  # Go module dependencies for the dross binary itself.
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      gomod-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Actions pinned by SHA in .github/workflows/*.yml. A bump rewrites the SHA
+  # and its trailing `# vX.Y.Z` comment; action_pins_test.go keeps that shape
+  # enforced and toolchain_source_test.go compares the comment by semver so a
+  # setup-go bump lands without a hand edit.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # The Stryker mutation fixture. CI runs `npm audit --audit-level=high` against
+  # it with no automated fix path, and a bump PR runs the stryker e2e job, so a
+  # fixture break is visible before merge.
+  - package-ecosystem: "npm"
+    directory: "/internal/mutation/testdata/ts-project"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      stryker-fixture-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"

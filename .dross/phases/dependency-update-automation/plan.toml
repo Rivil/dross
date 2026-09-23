@@ -1,0 +1,53 @@
+task_seq = 5
+
+[phase]
+  id = "dependency-update-automation"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add dependabot.yml + config guard test"
+  files = [".github/dependabot.yml", "internal/cmd/dependabot_config_test.go"]
+  description = "First step, before writing either file: confirm against current GitHub docs that `cooldown` is honoured for gomod, github-actions and npm, and record what was confirmed — c-2 says every ecosystem, and an ecosystem that ignores the key leaves the guard test green with no 7-day window. Then: new .github/dependabot.yml — three ecosystems, gomod (/), github-actions (/), npm (/internal/mutation/testdata/ts-project) — weekly, each with a minor+patch group and a 7-day release-age cooldown, no target-branch key. Header comment carries the security_bump_release procedure (a merged security bump cuts no release; hand-dispatch release.yml with the next patch tag) and names the two repo settings from t-3 that this config depends on. Guard test is line-based, matching the repo no-YAML-dependency idiom in toolchain_source_test.go / workflow_run_expressions_test.go, with an inline fixture pinning the scanner."
+  covers = ["c-1", "c-2"]
+  test_contract = ["if any of gomod (/), github-actions (/) or npm (/internal/mutation/testdata/ts-project) is dropped from dependabot.yml, the ecosystem sweep in dependabot_config_test.go fails", "if an ecosystem's schedule interval is changed off `weekly`, the same test fails", "if an ecosystem loses its group covering minor+patch updates, the same test fails", "if any ecosystem block lacks a `cooldown` with 7 days of release age, the cooldown test fails", "if the line scanner stops finding ecosystem blocks at all, the inline-fixture test fails — the sweep cannot go green by parsing nothing", "if any ecosystem block carries a `target-branch` key, the config test fails — the locked target_branch decision (PRs target main) would otherwise silently no-op every update while every other assertion stayed green", "if GitHub rejects the committed dependabot.yml (misspelled key, wrong nesting, a `cooldown` shape it ignores), its config validation reports a parse error instead of a clean run for each ecosystem — recorded as c-1/c-2 evidence at execute time; the line-based text sweep cannot see this and would pass regardless"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Pin sweep + version-compared setup-go check"
+  files = ["internal/cmd/action_pins_test.go", "internal/cmd/toolchain_source_test.go"]
+  description = "New sweep over every `uses:` in .github/workflows/*.yml: each must be pinned to a\n40-hex SHA and carry a trailing `# vX.Y.Z` comment. Its line parser (action, sha,\nversion comment) replaces the exact-SHA assertion in TestToolchainSingleSource:\naccept any actions/setup-go pin whose comment is >= v7.0.0 by semver, so a bot SHA\nbump lands without a hand edit. stripYAMLComment currently discards the comment, so\nsetupGoSteps must retain it. The `go-version:` and `go-version-file: go.mod`\nassertions stay as they are.\n"
+  covers = ["c-3", "c-4"]
+  test_contract = ["if any `uses:` in any workflow is pinned to a tag or short ref instead of a 40-hex SHA, the pin sweep in action_pins_test.go fails", "if a SHA-pinned `uses:` loses its trailing `# vX.Y.Z` comment, the pin sweep fails", "if the pin parser stops matching `uses:` lines, its inline-fixture test fails — the sweep cannot pass over an empty set", "if an actions/setup-go step's version comment is below v7.0.0 (e.g. `# v6.0.0`), TestToolchainSingleSource fails", "if actions/setup-go is bumped to a new SHA carrying a `# v7.1.0` comment, TestToolchainSingleSource passes unedited — the bot-bump case the exact-SHA constant used to break", "if a `go-version:` key is re-added to a setup-go step, or `go-version-file: go.mod` is dropped, TestToolchainSingleSource still fails", "a major-only or two-part comment (`# v5`, `# v4.2`) fails the sweep — the accepted shape is a three-part `# vX.Y.Z`, which every pin in ci.yml/release.yml carries today; an action that publishes only a major tag is then a deliberate hand edit, not a silent pass", "if setupGoSteps stops capturing the trailing version comment, or captures a non-empty one for the uncommented `actions/setup-go@3333` fixture line, TestSetupGoStepScanner fails — its three `want` struct literals are updated for the new field in this task"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Enable vulnerability alerts + security updates"
+  files = []
+  description = "Repo setting on Rivil/dross, not a code change: enable Dependabot vulnerability alerts and automated security fixes via `gh api -X PUT`. No Go test can assert a GitHub repo setting, so the artifact is the captured gh api output recorded as c-5 evidence in verify.toml, plus the line in t-1 dependabot.yml header naming the two settings this config depends on — without that pairing, nothing in the repo would show the settings were ever on."
+  covers = ["c-5"]
+  test_contract = ["if vulnerability alerts are off, `gh api repos/Rivil/dross/vulnerability-alerts` returns 404 instead of 204 (recorded as c-5 evidence at execute time)", "if automated security fixes are off, `gh api repos/Rivil/dross/automated-security-fixes` reports enabled=false (recorded as c-5 evidence at execute time)"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Allow a fileless changes record when the plan declares files = []"
+  files = ["internal/cmd/changes.go", "internal/cmd/changes_test.go"]
+  description = "t-3's plan entry declares files = [] (its artifact is a GitHub repo setting, not a file), but `dross changes record` requires at least one --files entry, so the run had to point t-3 at .github/dependabot.yml and explain the pointer in --notes. Relax the guard narrowly: zero --files is accepted only when plan.toml's entry for that task also declares an empty files list. A task that declares files but records none is still rejected — that guard exists to catch a silent no-op record — and so is a task id absent from the plan."
+  test_contract = ["if `dross changes record` accepts zero --files for a task whose plan entry declares a non-empty files list, TestChangesRecordRejectsFilelessWhenPlanDeclaresFiles fails", "if it rejects zero --files for a task whose plan entry declares files = [], TestChangesRecordAcceptsFilelessPlannedTask fails", "if zero --files is accepted for a task id that does not appear in plan.toml at all, TestChangesRecordRejectsFilelessUnknownTask fails — an unrecognised id must not be a way past the guard", "if a fileless record drops the landmark or notes it was given, TestChangesRecordAcceptsFilelessPlannedTask fails — the record is the only artifact such a task has"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 1
+  title = "Drive setup-go floor and go-version checks with failing inputs"
+  files = ["internal/cmd/toolchain_source_test.go"]
+  description = "verify found c-3 weak: TestToolchainSingleSource's below-floor and go-version branches only ever see real workflows that pass, and real pins sit exactly on v7.0.0. Extract the per-step checks into setupGoStepProblems(s setupGoStep) []string, call it from the live sweep unchanged, and add a table test over synthetic setupGoStep values so each rejection branch is driven by an input that must fail."
+  covers = ["c-3"]
+  test_contract = ["if the below-floor check is dropped, a synthetic step with a # v6.0.0 comment passes and TestSetupGoStepProblems fails", "if the go-version check is dropped, a synthetic step carrying go-version: passes and TestSetupGoStepProblems fails", "if the go-version-file: go.mod check is dropped, a synthetic step without it passes and TestSetupGoStepProblems fails", "if an invalid version comment (empty or non-semver) stops being rejected, TestSetupGoStepProblems fails", "if the floor becomes exclusive or pins to one exact version, a # v7.0.0 or # v7.1.0 step reports a problem and TestSetupGoStepProblems fails"]
+  status = "done"
