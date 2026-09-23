@@ -13,6 +13,7 @@
     "board-task-mirror": "DRO-32",
     "cache-budget-prune": "DRO-132",
     "cmd-package-decomposition": "DRO-477",
+    "cmd-test-duration": "DRO-634",
     "completion-record-truth": "DRO-135",
     "config-value-truth": "DRO-25",
     "deferred-add-command": "DRO-14",
