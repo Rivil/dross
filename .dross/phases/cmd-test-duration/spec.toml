@@ -60,3 +60,8 @@
 [[deferred]]
   text = "Fold ci.yml's shellcheck micro-job into another job."
   why = "Measured on run 35850995391: 6s, runs in parallel, public repo = free Actions minutes — no wall-clock or billing gain."
+
+[[deferred]]
+  id = "650eafe718c4db40"
+  text = "dross ship adopting an already-open PR (FindOpenPRByHead, internal/cmd/ship.go) skips OpenPR entirely: a draft PR stays draft, and ship's generated title, .dross-filtered body and reviewer requests are never applied to it."
+  why = "Surfaced by the cmd-test-duration plan review: t-7's gate opens a draft PR mid-phase to read a CI timing, and ship later adopts it. Worked around by hand in that phase (gh pr ready + body refresh + reviewers); the ship-side fix is its own change."

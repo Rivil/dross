@@ -1,4 +1,4 @@
-task_seq = 7
+task_seq = 8
 
 [phase]
   id = "cmd-test-duration"
@@ -6,35 +6,21 @@ task_seq = 7
 [[task]]
   id = "t-1"
   wave = 1
-  title = "Secretscan per-rule prefilter; self-scan walks once"
-  files = ["internal/secretscan/rules.go", "internal/secretscan/secretscan.go", "internal/secretscan/prefilter_test.go", "internal/cmd/secretscan_selfscan_test.go"]
-  description = """
-Each Rule gets an unexported needle set: any-of byte literals checked with bytes.Contains/Index
-(assembly, so it escapes the ~20x -race tax the regex VM pays); the two (?i) rules
-(authorization-header, key-context) also carry an ASCII-fold flag. scanLine runs a rule's regex
-only when a pure, unexported `candidates(line)` bitmask sets that rule's bit. Fail-open: a rule
-with no needles always runs its regex, and so does a fold rule on a line holding U+017F or U+212A
-(those exact byte sequences, not "any non-ASCII" — em-dashes are common in .dross prose). No
-package-level counter (forge and ship scan concurrently). Public API and hit set unchanged.
-In internal/cmd/secretscan_selfscan_test.go the tracked-tree hit set is computed once per test
-binary (sync.Once + a test-only walk counter): TestDrossTreeHasNoUnmarkedHits reads it, and
-TestSelfScanIsNotVacuous scans only its planted file on top of it. Still the real tracked tree —
-no fixture swap (coverage_preserved). internal/cmd tests gate on `dross test` (remote), never a
-local full run. Root cause: a51ecdd (#128) added four whole-tree/.dross regex passes, ~74s each
-under -race.
-"""
+  title = "Add per-rule literal prefilter to secretscan"
+  files = ["internal/secretscan/rules.go", "internal/secretscan/secretscan.go", "internal/secretscan/prefilter_test.go", "internal/secretscan/export_test.go"]
+  description = "Each Rule gets an unexported needle set: any-of byte literals checked with bytes.Contains/Index\n(assembly, so it escapes the ~20x -race tax the regex VM pays); the two (?i) rules\n(authorization-header, key-context) also carry an ASCII-fold flag. scanLine runs a rule's regex\nonly when a pure, unexported `candidates(line)` bitmask sets that rule's bit. Fail-open: a rule\nwith no needles always runs its regex, and so does a fold rule on a line holding U+017F or U+212A\n(those exact byte sequences, not \"any non-ASCII\" — em-dashes are common in .dross prose). No\npackage-level counter (forge and ship scan concurrently). Public API and hit set unchanged.\nprefilter_test.go is `package secretscan_test`, beside the hitCorpus/randomLine/benignCorpus\nhelpers in secretscan_test.go; export_test.go (`package secretscan`) re-exports candidates and a\nconstructor for a Rule with explicit needles, so the seed corpus is never copied.\ninternal/cmd tests gate on `dross test` (remote) — the one exception is c-5's one-off laptop\nmeasurement below. Root cause: a51ecdd (#128) added four whole-tree/.dross regex passes, ~74s each\nunder -race."
   covers = ["c-1", "c-5"]
-  test_contract = [
-    "if a prefiltered scanLine differs from a reference loop that runs every regex on any seed — every hitCorpus() line, 500 randomLine() per rule, every benignCorpus() row, all-caps/mixed-case variants (`PASSWORD: …`, `AUTHORIZATION: BEARER …`) reaching the A/Z fold bounds, runtime-built U+017F/U+212A spellings, multi-rule, CRLF and allow-marker lines — or any regex match occurs with that rule's candidate bit clear, FuzzPrefilterMatchesRegex fails naming the rule (seeds run under plain go test); the mutants dropping `ASIA` from aws-access-key, dropping `token` from key-context, checking a (?i) rule against the un-folded line, and removing the U+017F/U+212A fallback each fail it",
-    "if `paſſword = <hi-entropy>` or a Kelvin-sign `toKen: <hi-entropy>` (both built at runtime) stops yielding a key-context hit, TestUnicodeFoldBypass fails",
-    "if candidates() returns a non-empty mask for a needle-free line (`func main() { fmt.Println(\"hi\") }`, plain TOML/markdown/Go) — the all-rules mutant that silently restores full cost — TestCandidatesPrunesNeedleFreeLines fails (benignCorpus rows are NOT asserted here: they legitimately carry needles)",
-    "if a synthetic Rule with nil needles is not always a candidate, TestNoNeedlesFailsOpen fails; if any rule in Rules() has an empty needle set, TestEveryRuleHasNeedles fails naming the rule",
-    "if the prefilter changes any verdict, one of the unedited TestEveryRuleHasAHitCase, TestBenignCorpusZeroHits, TestKeyContextIsKeyAware, TestCarveOutsAreNotVacuous, TestLongLineIsScannedToTheEnd, TestAllowMarkerSilencesOnlyItsLine or TestValidateOnDrossItself fails",
-    "if the cached tracked-tree hit set is walked more than once per test binary, TestSelfScanWalksOnce fails (two calls to the cached helper, walk counter asserted == 1)",
-    "if TestSelfScanIsNotVacuous's planted gitlab-pat file is not reported on top of the cached walk — remove its mustWrite and it must see 0 hits, not 1 — or the one hit is not gitlab-pat at the planted path, TestSelfScanIsNotVacuous fails",
-    "if prefilter_test.go carries a literal credential shape instead of building it at runtime, TestDrossTreeHasNoUnmarkedHits fails with a hit in that file (pinnedMarkerSites needs no edit)",
-    "[CI evidence] on the gate run's step summary, TestDrossTreeHasNoUnmarkedHits, TestSelfScanIsNotVacuous and TestValidateOnDrossItself are each ≤15s or absent from the top 20 (local -race before: ≈74s, 74s, 96s)",
-  ]
+  test_contract = ["if a prefiltered scanLine differs from a reference loop that runs every regex on any seed — every hitCorpus() line, 500 randomLine() per rule, every benignCorpus() row, all-caps/mixed-case variants (`PASSWORD: …`, `AUTHORIZATION: BEARER …`) reaching the A/Z fold bounds, runtime-built U+017F/U+212A spellings, multi-rule, CRLF and allow-marker lines — or any regex match occurs with that rule's candidate bit clear, FuzzPrefilterMatchesRegex fails naming the rule (seeds run under plain go test); the mutants dropping `ASIA` from aws-access-key, dropping `token` from key-context, checking a (?i) rule against the un-folded line, and removing the U+017F/U+212A fallback each fail it", "if `paſſword = <hi-entropy>` or a Kelvin-sign `toKen: <hi-entropy>` (both built at runtime) stops yielding a key-context hit, TestUnicodeFoldBypass fails", "if candidates() returns a non-empty mask for a needle-free line (`func main() { fmt.Println(\"hi\") }`, plain TOML/markdown/Go) — the all-rules mutant that silently restores full cost — TestCandidatesPrunesNeedleFreeLines fails (benignCorpus rows are NOT asserted here: they legitimately carry needles)", "if a synthetic Rule with nil needles is not always a candidate, TestNoNeedlesFailsOpen fails; if any rule in Rules() has an empty needle set, TestEveryRuleHasNeedles fails naming the rule", "if the prefilter changes any verdict, one of the unedited TestEveryRuleHasAHitCase, TestBenignCorpusZeroHits, TestKeyContextIsKeyAware, TestCarveOutsAreNotVacuous, TestLongLineIsScannedToTheEnd, TestAllowMarkerSilencesOnlyItsLine or TestValidateOnDrossItself fails", "if prefilter_test.go carries a literal credential shape instead of building it at runtime, TestDrossTreeHasNoUnmarkedHits fails with a hit in that file (pinnedMarkerSites needs no edit)", "[CI evidence] on the gate run's step summary, TestDrossTreeHasNoUnmarkedHits, TestSelfScanIsNotVacuous and TestValidateOnDrossItself are each ≤15s or absent from the top 20 (local -race before: ≈74s, 74s, 96s)", "[verify evidence, c-5] one run of `go test -count=1 ./internal/cmd` (project test_command, no -race) on the author's laptop with nothing heavy running finishes within go test's 10m default — a one-off measurement, exempt from the remote-only gate. A stop at ~600s is the default timeout, not a hang, and is recorded as a c-5 miss, not re-run until green; to diagnose a miss, re-run once as `go test -count=1 -json ./internal/cmd | go run ./cmd/testsummary` for the slowest-tests table"]
+  status = "pending"
+
+[[task]]
+  id = "t-8"
+  wave = 1
+  title = "Self-scan tests share one tracked-tree walk"
+  files = ["internal/cmd/secretscan_selfscan_test.go"]
+  description = "In internal/cmd/secretscan_selfscan_test.go the tracked-tree hit set is computed once per test\nbinary (sync.Once + a test-only walk counter): TestDrossTreeHasNoUnmarkedHits reads it, and\nTestSelfScanIsNotVacuous scans only its planted file on top of it. Still the real tracked tree —\nno fixture swap (coverage_preserved). The Once stores the walk's error or skip reason and every\ncaller re-raises it, so a first walk that failed or skipped never hands a later test an empty hit\nset. Independent of t-1: either can land or revert alone. Gates on `dross test` (remote)."
+  covers = ["c-1"]
+  test_contract = ["if the cached tracked-tree hit set is walked more than once per test binary, TestSelfScanWalksOnce fails (two calls to the cached helper, walk counter asserted == 1)", "if a cached walk that failed or skipped hands a later caller a zero-value hit set instead of re-raising the stored error or skip, TestSelfScanCacheReraisesFailure fails (a stubbed walk returning an error, read twice, must fail both readers)", "if TestSelfScanIsNotVacuous stops reporting its planted synthGitlabToken() file on top of the cached walk — planting a benign line in its place must yield 0 hits, not 1 — or the one hit is not gitlab-pat at the planted path, TestSelfScanIsNotVacuous fails", "[CI evidence] on the gate run's step summary, at most one of TestDrossTreeHasNoUnmarkedHits and TestSelfScanIsNotVacuous carries the whole-tree walk's cost — the other is absent from the top 20 or ≤2s"]
   status = "pending"
 
 [[task]]
@@ -42,20 +28,9 @@ under -race.
   wave = 1
   title = "Prefilter techdebt marker scan with needles"
   files = ["internal/techdebt/scan.go", "internal/techdebt/scan_test.go"]
-  description = """
-scanContent runs markerRe only on lines where a pure mayHaveMarker(line) finds TODO/FIXME/HACK/XXX
-(strings.Contains). The needle gates the \\b regex, never replaces it; long-line and oversized-file
-heuristics untouched. Worth ≈24–28s under -race across the three whole-tree passes in
-internal/cmd/techdebt_selfscan_test.go. After t-1 and t-2, `make install` before verify/ship (r-01).
-"""
+  description = "scanContent runs markerRe only on lines where a pure mayHaveMarker(line) finds TODO/FIXME/HACK/XXX\n(strings.Contains). The needle gates the \\b regex, never replaces it; long-line and oversized-file\nheuristics untouched. Worth ≈24–28s under -race across the three whole-tree passes in\ninternal/cmd/techdebt_selfscan_test.go. After t-1 and t-2, `make install` before verify/ship (r-01).\n"
   covers = ["c-1", "c-5"]
-  test_contract = [
-    "if prefiltered scanContent differs from regex-on-every-line on the corpus `TODOList` (needle, no \\b match), `xTODO`, `XXXX`, lowercase `todo`, a marker at end of line, CRLF, a marker at char 500 of a long line, binary content, `x := 1 // FIXME later`, `/* HACK */` and `XXX:`, TestScanPrefilterMatchesRegex fails",
-    "if any of the four words is dropped from the needle list, TestScanPrefilterMatchesRegex and the existing TestScanMarkersMidLineAllKinds fail",
-    "if mayHaveMarker returns true for `return nil` or any needle-free line (the always-true mutant) or false for any of TODO/FIXME/HACK/XXX, TestMayHaveMarker fails",
-    "if the needle replaces rather than gates the \\b regex, the unedited TestScanMarkerWordBoundary fails",
-    "[CI evidence] on the gate run's step summary, TestTechdebtSelfScanExcludesOwnPackage and TestTechdebtDrossTreeNoFixtureFindings are each ≤5s or absent from the top 20 (local -race before: ≈8–9.5s per whole-tree pass; the first test does two)",
-  ]
+  test_contract = ["if prefiltered scanContent differs from regex-on-every-line on the corpus `TODOList` (needle, no \\b match), `xTODO`, `XXXX`, lowercase `todo`, a marker at end of line, CRLF, a marker at char 500 of a long line, binary content, `x := 1 // FIXME later`, `/* HACK */` and `XXX:`, TestScanPrefilterMatchesRegex fails", "if any of the four words is dropped from the needle list, TestScanPrefilterMatchesRegex and the existing TestScanMarkersMidLineAllKinds fail", "if mayHaveMarker returns true for `return nil` or any needle-free line (the always-true mutant) or false for any of TODO/FIXME/HACK/XXX, TestMayHaveMarker fails", "if the needle replaces rather than gates the \\b regex, the unedited TestScanMarkerWordBoundary fails", "[CI evidence] on the gate run's step summary, TestTechdebtSelfScanExcludesOwnPackage and TestTechdebtDrossTreeNoFixtureFindings are each ≤5s or absent from the top 20 (local -race before: ≈8–9.5s per whole-tree pass; the first test does two)"]
   status = "pending"
 
 [[task]]
@@ -63,26 +38,9 @@ internal/cmd/techdebt_selfscan_test.go. After t-1 and t-2, `make install` before
   wave = 1
   title = "Add go test -json reducer with verdict"
   files = ["cmd/testsummary/main.go", "cmd/testsummary/stream.go", "cmd/testsummary/stream_test.go", "cmd/testsummary/fixture_test.go"]
-  description = """
-Stdlib-only package main (goreleaser builds only ./cmd/dross). Reads a `go test -json` stream on
-stdin with a long-line-tolerant reader and prints a plain go-test log: ok/FAIL per package, the
-buffered output of failed tests, failed packages' package-level output (timeout panics included),
-build errors. Passing tests' output is dropped; non-JSON lines pass through. Exits non-zero on any
-fail event, an empty stream, or a stream with no package terminal event.
-main is `os.Exit(run(stdin, stdout, getenv))`. The fixture harness writes a throwaway module from
-INLINE sources into t.TempDir() (never tracked .go files — the audit sweeps walk cmd/ and fatal on
-a parse error) and runs the real `go test -json ./...` once (sync.Once) with GOTOOLCHAIN=local,
-GOWORK=off, GOPROXY=off.
-"""
+  description = "Stdlib-only package main (goreleaser builds only ./cmd/dross). Reads a `go test -json` stream on\nstdin with a long-line-tolerant reader and prints a plain go-test log: ok/FAIL per package, the\nbuffered output of failed tests, failed packages' package-level output (timeout panics included),\nbuild errors. Passing tests' output is dropped; non-JSON lines pass through. A package's terminal\nevent is pass, fail OR skip (go1.27.1 ends a package with no test files in `\"Action\":\"skip\"`).\nExits non-zero on any fail event, an empty stream, or a stream with a package that never reached a\nterminal event. main is `os.Exit(run(stdin, stdout, getenv))`. The fixture harness writes a\nthrowaway module from INLINE sources into t.TempDir() (never tracked .go files — the audit sweeps\nwalk cmd/ and fatal on a parse error) and runs the real `go test -json ./...` once (sync.Once) with\nGOTOOLCHAIN=local, GOWORK=off, GOPROXY=off."
   covers = ["c-3"]
-  test_contract = [
-    "if, on a real-toolchain fixture with one passing and one failing test, the `--- FAIL` line or the t.Error text is missing from stdout, the passing test's t.Log or `=== RUN` lines appear, or the exit is not 1, TestReducerRealFailingModule fails",
-    "if a real-toolchain fixture blocked past `-timeout 1s` does not put `panic: test timed out` and the running test's name on stdout with exit 1, TestReducerRealTimeout fails (shape is what go1.27.1's test2json emits, not a hand-written guess)",
-    "if a real-toolchain fixture that fails to compile does not surface the compiler's file:line on stdout with exit 1, TestReducerRealBuildFailure fails",
-    "if an all-pass stream does not exit 0, an empty stream does not exit non-zero printing `no test events`, or a stream cut mid-package does not flush its buffered output and exit non-zero, TestReducerVerdict fails",
-    "if a 1 MiB single output line or a non-JSON line aborts the reader (a 64 KiB bufio.Scanner ceiling), TestReducerLongAndNonJSONLines fails",
-    "if any non-test file in cmd/testsummary imports a path whose first element contains a dot, TestStdlibOnly fails (locked timing_tooling)",
-  ]
+  test_contract = ["if, on a real-toolchain fixture with one passing and one failing test, the `--- FAIL` line or the t.Error text is missing from stdout, the passing test's t.Log or `=== RUN` lines appear, or the exit is not 1, TestReducerRealFailingModule fails", "if a real-toolchain fixture blocked past `-timeout 1s` does not put `panic: test timed out` and the running test's name on stdout with exit 1, TestReducerRealTimeout fails (shape is what go1.27.1's test2json emits, not a hand-written guess)", "if a real-toolchain fixture that fails to compile does not surface the compiler's file:line on stdout with exit 1, TestReducerRealBuildFailure fails", "if an all-pass stream does not exit 0, an empty stream does not exit non-zero printing `no test events`, or a stream cut mid-package does not flush its buffered output and exit non-zero, TestReducerVerdict fails", "if a 1 MiB single output line or a non-JSON line aborts the reader (a 64 KiB bufio.Scanner ceiling), TestReducerLongAndNonJSONLines fails", "if any non-test file in cmd/testsummary imports a path whose first element contains a dot, TestStdlibOnly fails (locked timing_tooling)", "if a package with no test files (its stream ends `\"Action\":\"skip\"`) is not treated as a finished package, a real-toolchain fixture module holding one test-less package beside a passing one does not exit 0 and TestReducerNoTestFilesPackage fails — under `set -o pipefail` that mutant would redden CI on a green run"]
   status = "pending"
 
 [[task]]
@@ -90,23 +48,9 @@ GOWORK=off, GOPROXY=off.
   wave = 1
   title = "Add PR-only cancel-in-progress concurrency group"
   files = [".github/workflows/ci.yml", "internal/cmd/ci_concurrency_test.go"]
-  description = """
-Before editing, audit ci.yml against ~/.claude/memory/reference_ci_supply_chain_hardening.md and
-reference_ci_pipeline_optimisation.md (global CI hygiene rule) and surface findings. Add a
-top-level block: group `ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}`,
-cancel-in-progress `${{ github.event_name == 'pull_request' }}` — the run_id arm keeps main runs out
-of any shared group (GitHub replaces a pending run in a shared group even without cancel-in-progress).
-Add a pure line-based concurrencyProblems(workflow) checker plus a live sweep, reusing
-splitYAMLComment (action_pins_test.go) and readRepoFile (release_signing_test.go) in the
-TestSetupGoStepProblems shape.
-"""
+  description = "Before editing, audit ci.yml against ~/.claude/memory/reference_ci_supply_chain_hardening.md and\nreference_ci_pipeline_optimisation.md (global CI hygiene rule) and surface findings. Add a\ntop-level block: group `ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}`,\ncancel-in-progress `${{ github.event_name == 'pull_request' }}` — the run_id arm keeps main runs out\nof any shared group (GitHub replaces a pending run in a shared group even without cancel-in-progress).\nAdd a pure line-based concurrencyProblems(workflow) checker plus a live sweep, reusing\nsplitYAMLComment (action_pins_test.go) and readRepoFile (release_signing_test.go) in the\nTestSetupGoStepProblems shape.\n"
   covers = ["c-4"]
-  test_contract = [
-    "if concurrencyProblems does not flag each rejection branch from its own synthetic fixture — `cancel-in-progress: true`, a bare `${{ github.ref }}` group with no run_id arm, a group without the `ci-` prefix, job-level-only concurrency — or flags the correct block, TestConcurrencyProblems fails",
-    "if ci.yml does not carry exactly one top-level (indent 0) concurrency block with zero problems and no job-level override, TestCIConcurrencyLive fails naming ci.yml (deleting the block turns it red)",
-    "if the block moves an expression into a run: or adds a `uses:`, TestWorkflowsHaveNoExpressionsInRun or TestWorkflowActionsArePinned fails",
-    "[CI evidence] on this phase's ship, `gh run list --branch phase/cmd-test-duration` shows every superseded pull_request run `cancelled` and only the newest completed; after merge, no main push run is `cancelled`",
-  ]
+  test_contract = ["if concurrencyProblems does not flag each rejection branch from its own synthetic fixture — `cancel-in-progress: true`, a bare `${{ github.ref }}` group with no run_id arm, a group without the `ci-` prefix, job-level-only concurrency — or flags the correct block, TestConcurrencyProblems fails", "if ci.yml does not carry exactly one top-level (indent 0) concurrency block with zero problems and no job-level override, TestCIConcurrencyLive fails naming ci.yml (deleting the block turns it red)", "if the block moves an expression into a run: or adds a `uses:`, TestWorkflowsHaveNoExpressionsInRun or TestWorkflowActionsArePinned fails", "[CI evidence] on this phase's ship, `gh run list --branch phase/cmd-test-duration --event pull_request` shows every pull_request run that was still in progress when a newer push to the PR arrived as `cancelled` — ship's back-to-back pushes are the case c-4 names; a run that finished before the next push (e.g. t-7's gate run) is correctly `completed`. After merge, no main push run is `cancelled`"]
   status = "pending"
 
 [[task]]
@@ -114,22 +58,10 @@ TestSetupGoStepProblems shape.
   wave = 2
   title = "Render timing table and 300s budget warning"
   files = ["cmd/testsummary/table.go", "cmd/testsummary/table_test.go", "cmd/testsummary/main.go"]
-  description = """
-From t-3's reduced events: a markdown table of the 20 slowest top-level tests (package, test,
-seconds, result) plus per-package totals, appended to $GITHUB_STEP_SUMMARY or printed to stdout
-when it is unset (the c-5 laptop run). One `::warning` line per package over 300s. Neither the
-table nor the warning changes the exit code (locked timeout_ceiling).
-"""
-  covers = ["c-3", "c-2", "c-5"]
+  description = "From t-3's reduced events: a markdown table of the 20 slowest top-level tests (package, test,\nseconds, result) plus per-package totals, appended to $GITHUB_STEP_SUMMARY or printed to stdout\nwhen it is unset (local runs, e.g. diagnosing a c-5 miss). One `::warning` line per package over\n300s. Neither the table nor the warning changes the exit code (locked timeout_ceiling)."
+  covers = ["c-3", "c-2"]
   depends_on = ["t-3"]
-  test_contract = [
-    "if a 25-test, 2-package stream does not yield exactly 20 rows in descending Elapsed order with the 21st-slowest absent, or a subtest (`TestA/x`) takes a row, TestTableTop20 fails (kills the cap, sort-direction and subtest mutants)",
-    "if a per-package total is the sum of its test rows rather than the package-level pass/fail event's Elapsed, TestPackageTotals fails",
-    "if a package at 300.0s emits a warning, a package at 300.1s does not emit exactly one line starting `::warning` naming the package and its seconds, or an all-pass stream with a 301s package exits non-zero, TestBudgetWarning fails",
-    "if the real timed-out fixture stream from t-3 no longer renders the table — package shown FAIL with its elapsed, the test running at timeout named, tests that passed before the panic still listed — TestTableRendersTimedOutRun fails",
-    "if GITHUB_STEP_SUMMARY pointing at a file holding a line does not keep that line first (truncate instead of append), pointing at a directory does not emit a `::warning` while the exit code still equals the test verdict, or unset does not put the table on stdout, TestSummaryDestination fails",
-    "[CI evidence] the run page's Summary tab renders both tables, and a package over 300s shows as a warning annotation",
-  ]
+  test_contract = ["if a 25-test, 2-package stream does not yield exactly 20 rows in descending Elapsed order with the 21st-slowest absent, or a subtest (`TestA/x`) takes a row, TestTableTop20 fails (kills the cap, sort-direction and subtest mutants)", "if a per-package total is the sum of its test rows rather than the package-level pass/fail event's Elapsed, TestPackageTotals fails", "if a package at 300.0s emits a warning, a package at 300.1s does not emit exactly one line starting `::warning` naming the package and its seconds, or an all-pass stream with a 301s package exits non-zero, TestBudgetWarning fails", "if the real timed-out fixture stream from t-3 no longer renders the table — package shown FAIL with its elapsed, the test running at timeout named, tests that passed before the panic still listed — TestTableRendersTimedOutRun fails", "if GITHUB_STEP_SUMMARY pointing at a file holding a line does not keep that line first (truncate instead of append), pointing at a directory does not emit a `::warning` while the exit code still equals the test verdict, or unset does not put the table on stdout, TestSummaryDestination fails", "[CI evidence] the run page's Summary tab renders both tables, and a package over 300s shows as a warning annotation"]
   status = "pending"
 
 [[task]]
@@ -137,23 +69,10 @@ table nor the warning changes the exit code (locked timeout_ceiling).
   wave = 2
   title = "Pipe every CI go test through summarizer"
   files = [".github/workflows/ci.yml", "internal/cmd/ci_go_test_step_test.go"]
-  description = """
-Audit ci.yml first (global CI hygiene rule). Both go test steps (test job, mutation-ts) become
-`set -o pipefail; go test <flags> -json <pkgs> | go run ./cmd/testsummary`. `-timeout 20m` STAYS in
-this task (t-7 drops it after the gate). Add a goTestSteps(workflow) scanner and a
-goTestStepProblems checker. No tee and no upload of the raw -json (locked timing_surface).
-Depends on t-4 only because both edit ci.yml.
-"""
+  description = "Audit ci.yml first (global CI hygiene rule). Both go test steps (test job, mutation-ts) become\n`set -o pipefail; go test <flags> -json <pkgs> | go run ./cmd/testsummary`. `-timeout 20m` STAYS in\nthis task (t-7 drops it after the gate). Add a goTestSteps(workflow) scanner and a\ngoTestStepProblems checker. No tee and no upload of the raw -json (locked timing_surface).\nDepends on t-4 only because both edit ci.yml.\n"
   covers = ["c-3"]
   depends_on = ["t-3", "t-4"]
-  test_contract = [
-    "if goTestStepProblems, driven by synthetic YAML, does not flag by name a piped go test without `set -o pipefail` or `shell: bash`, a go test missing `-json`, a go test not piped into `./cmd/testsummary`, or — in the test job — `-short`, `-skip` or `-run`, or the loss of `-race`, `-count=1` or `./...`, TestGoTestStepProblems fails",
-    "if a fixture holding a single-line `run: go test …`, a `run: |` block, a commented-out `# go test` and a `name: go test` does not yield exactly the two real invocations, TestGoTestStepScanner fails (non-vacuity)",
-    "if the live sweep over .github/workflows/*.yml does not find exactly 2 go test invocations (test, mutation-ts) both clean, TestCIGoTestStepsLive fails — dropping the mutation-ts pipe or deleting cmd/testsummary/main.go turns it red",
-    "if a `tee` or an upload-artifact step carries the -json stream, TestCIGoTestStepsLive fails",
-    "if the summary path reaches the tool as `${{ }}` inside run: instead of the env var $GITHUB_STEP_SUMMARY, TestWorkflowsHaveNoExpressionsInRun fails; TestToolchainSingleSource, TestWorkflowActionsArePinned and TestCIShellcheckCoversScripts stay green unedited",
-    "[CI evidence] on the draft-PR run, the Summary tab shows the top-20 table and package totals for both jobs, and the step log shows `ok …/internal/cmd Ns`, not raw JSON",
-  ]
+  test_contract = ["if goTestStepProblems, driven by synthetic YAML, does not flag by name a piped go test without `set -o pipefail` or `shell: bash`, a go test missing `-json`, a go test not piped into `./cmd/testsummary`, or — in the test job — `-short`, `-skip` or `-run`, or the loss of `-race`, `-count=1` or `./...`, TestGoTestStepProblems fails", "if a fixture holding a single-line `run: go test …`, a `run: |` block, a commented-out `# go test` and a `name: go test` does not yield exactly the two real invocations, TestGoTestStepScanner fails (non-vacuity)", "if the live sweep over .github/workflows/*.yml does not find exactly 2 go test invocations (test, mutation-ts) both clean, TestCIGoTestStepsLive fails — dropping the mutation-ts pipe or deleting cmd/testsummary/main.go turns it red", "if a `tee` or an upload-artifact step carries the -json stream, TestCIGoTestStepsLive fails", "if the summary path reaches the tool as `${{ }}` inside run: instead of the env var $GITHUB_STEP_SUMMARY, TestWorkflowsHaveNoExpressionsInRun fails; TestToolchainSingleSource, TestWorkflowActionsArePinned and TestCIShellcheckCoversScripts stay green unedited", "[CI evidence] on the draft-PR run, the Summary tab shows the top-20 table and package totals for both jobs, and the step log shows `ok …/internal/cmd Ns`, not raw JSON"]
   status = "pending"
 
 [[task]]
@@ -161,20 +80,8 @@ Depends on t-4 only because both edit ci.yml.
   wave = 3
   title = "Drop the -timeout 20m stopgap"
   files = [".github/workflows/ci.yml", "internal/cmd/ci_go_test_step_test.go"]
-  description = """
-GATE before queueing: t-1..t-6 landed; phase/cmd-test-duration pushed and a draft PR opened
-(human-approved — ship adopts it via FindOpenPRByHead); internal/cmd's package total read from that
-run's step summary in a separate turn. ≤300s → run this task (270–300s: surface to the user first,
-it is inside observed 1.39x runner variance). >300s → -timeout 20m stays; add cuts from the table's
-top rows with `dross task add`. The task: audit ci.yml first, remove `-timeout 20m` and its
-"Headroom only" comment block from the test job, and make goTestStepProblems reject any `-timeout`
-in any workflow's go test step (locked timeout_ceiling).
-"""
+  description = "GATE before queueing: t-1..t-6 and t-8 landed; phase/cmd-test-duration pushed and a draft PR opened\n(human-approved) carrying the title and .dross-filtered body ship would generate; internal/cmd's\npackage total read from that run's step summary in a separate turn. ≤300s → run this task\n(270–300s: surface to the user first — inside observed 1.39x runner variance). >300s → -timeout 20m\nstays; add cuts from the table's top rows with `dross task add`.\nAT SHIP: ship adopts the open PR via FindOpenPRByHead and skips OpenPR (internal/cmd/ship.go), so\nby hand run `gh pr ready`, refresh the body to ship's generated one, and request reviewers —\nthe ship-side gap is deferred, not fixed here.\nThe task: audit ci.yml first (global CI hygiene rule), remove `-timeout 20m` and its \"Headroom\nonly\" comment block from the test job, and make goTestStepProblems reject any `-timeout` in any\nworkflow's go test step (locked timeout_ceiling)."
   covers = ["c-2", "c-1"]
-  depends_on = ["t-1", "t-2", "t-5", "t-6"]
-  test_contract = [
-    "if a synthetic step containing `-timeout 20m`, `-timeout=20m` or `-timeout 0` is not flagged by goTestStepProblems, TestGoTestStepProblems fails; re-adding any of them to ci.yml fails TestCIGoTestStepsLive naming file:line",
-    "if ci.yml still contains `Headroom only` or `timeout 20m`, TestCIGoTestStepsLive fails",
-    "[CI evidence] the run after this lands is green with internal/cmd's package total ≤300s in the step summary and no `::warning` — the evidence for c-1 and c-2",
-  ]
+  depends_on = ["t-1", "t-2", "t-5", "t-6", "t-8"]
+  test_contract = ["if a synthetic step containing `-timeout 20m`, `-timeout=20m` or `-timeout 0` is not flagged by goTestStepProblems, TestGoTestStepProblems fails; re-adding any of them to ci.yml fails TestCIGoTestStepsLive naming file:line", "if ci.yml still contains `Headroom only` or `timeout 20m`, TestCIGoTestStepsLive fails", "[CI evidence] the run after this lands is green with internal/cmd's package total ≤300s in the step summary and no `::warning` — the evidence for c-1 and c-2"]
   status = "pending"
