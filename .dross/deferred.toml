@@ -55,3 +55,15 @@
   id = "4ba7aa62aab78d49"
   text = "finalizeVerify's idempotency guard is the `finalized = true` marker in verify.toml, not the recorded verdict — so an AMENDED verdict never re-records. `dross verify finalize` reports \"already recorded\" and exits 0 while telemetry.jsonl keeps the superseded verdict, leaving verify.toml and every gate reading the outcome event silently disagreeing. Fix: compare the file's verdict against the last recorded outcome event and re-emit when they differ, rather than short-circuiting on the marker alone. ARCHITECTURE.md's Verification entry documents the marker-as-guard behaviour and needs updating with the fix."
   why = "Hit live on 2026-09-09 shipping tracked-path-containment: the verdict was amended fail -> partial, finalize no-opped, and stats kept reporting fail. Only caught by reading telemetry.jsonl directly; the workaround was hand-flipping finalized = false. This is the false-green shape v1.7 exists to close — a gate reporting success off a stale value."
+
+[[deferred]]
+  id = "9b63c8fca4d2a808"
+  text = "internal/cmd under `go test -race` on ubuntu-latest grew from ~204s (2026-09-19) to 525-597s (2026-09-23) and crossed go test's 10m default timeout twice on PR #131 with no test hung. Find what grew (per-test timings, e.g. `go test -json` from a CI run), cut it, then drop ci.yml's `-timeout 20m` stopgap back to the default."
+  why = "Surfaced shipping dependency-update-automation; the -timeout 20m stopgap landed in 3140364 (run passed at 597.3s). Lead to rule out: both failures ran on d93b725, whose only change was changes.json status=shipped, so check for tests that read the repo's own .dross tree. The ~602s local-laptop \"hang\" is probably the same default timeout."
+  target = "cmd-test-duration"
+
+[[deferred]]
+  id = "0ff357a83faebe37"
+  text = "ci.yml has no `concurrency:` group with cancel-in-progress, so each dross ship's three pushes (branch, PR record, shipped marker) run three full ~12-minute pipelines on identical Go code (PR #131 ran four overlapping). Add a per-ref concurrency group that cancels superseded runs."
+  why = "CI pipeline-optimisation audit (step 0: auto-cancel superseded runs) during the dependency-update-automation ship; parked with the timeout root cause since both are CI-duration concerns."
+  target = "cmd-test-duration"
