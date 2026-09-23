@@ -202,6 +202,9 @@ func goTestStepProblems(inv goTestInvocation) []string {
 	if !strings.HasPrefix(pipedTo, "go run ./cmd/testsummary") {
 		problems = append(problems, fmt.Sprintf("go test pipes into %q, not `go run ./cmd/testsummary` — no plain log, no timing table", pipedTo))
 	}
+	if hasFlag(args, "-timeout") {
+		problems = append(problems, "go test carries -timeout — timeout_ceiling: go test's 10m default is the wall, and the 300s budget warning shows regrowth before it")
+	}
 	if inv.job == "test" {
 		for _, f := range []string{"-short", "-skip", "-run"} {
 			if hasFlag(args, f) {
@@ -249,6 +252,11 @@ func TestCIGoTestStepsLive(t *testing.T) {
 	}
 	if len(jobs) != 2 || jobs["test"] != 1 || jobs["mutation-ts"] != 1 {
 		t.Errorf("go test invocations by job = %v, want exactly one in test and one in mutation-ts", jobs)
+	}
+	for _, stale := range []string{"Headroom only", "timeout 20m"} {
+		if strings.Contains(readRepoFile(t, ".github/workflows/ci.yml"), stale) {
+			t.Errorf(".github/workflows/ci.yml still carries %q — the -timeout 20m stopgap and its comment are gone (c-2)", stale)
+		}
 	}
 	if src := readRepoFile(t, "cmd/testsummary/main.go"); !strings.Contains(src, "package main") || !strings.Contains(src, "func main()") {
 		t.Error("cmd/testsummary/main.go is not a main package — every CI go test pipes into it")
@@ -307,6 +315,7 @@ func TestGoTestStepProblems(t *testing.T) {
 		pipefail = "without `set -o pipefail` or `shell: bash`"
 		noJSON   = "lacks -json"
 		noPipe   = "not `go run ./cmd/testsummary`"
+		timeout  = "carries -timeout"
 		short    = "carries -short"
 		skip     = "carries -skip"
 		runFlag  = "carries -run"
@@ -334,6 +343,9 @@ func TestGoTestStepProblems(t *testing.T) {
 		{"no -json", step("test", "bash", "set -o pipefail; go test -race -count=1 ./... | go run ./cmd/testsummary"), []string{noJSON}},
 		{"not piped", step("test", "bash", "go test -race -count=1 -json ./..."), []string{noPipe}},
 		{"piped elsewhere", step("test", "bash", "go test -race -count=1 -json ./... | tee out.json"), []string{noPipe}},
+		{"-timeout 20m", step("test", "bash", "set -o pipefail; go test -race -count=1 -timeout 20m -json ./... | go run ./cmd/testsummary"), []string{timeout}},
+		{"-timeout=20m", step("test", "bash", "set -o pipefail; go test -race -count=1 -timeout=20m -json ./... | go run ./cmd/testsummary"), []string{timeout}},
+		{"-timeout 0 outside the test job", step("mutation-ts", "", "set -o pipefail; go test -count=1 -timeout 0 -json -run 'TestX' ./internal/mutation/ | go run ./cmd/testsummary"), []string{timeout}},
 		{"-short", step("test", "bash", "go test -short -race -count=1 -json ./... | go run ./cmd/testsummary"), []string{short}},
 		{"-skip=", step("test", "bash", "go test -skip=TestSlow -race -count=1 -json ./... | go run ./cmd/testsummary"), []string{skip}},
 		{"-run", step("test", "bash", "go test -run TestA -race -count=1 -json ./... | go run ./cmd/testsummary"), []string{runFlag}},

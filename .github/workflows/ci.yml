@@ -66,19 +66,16 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      # -timeout 20m, not go test's default 10m: internal/cmd under -race grew
-      # from ~200s to 525-600s+ in a week and began tripping the default on
-      # identical code (PR #131). Headroom only — finding what grew is phase
-      # cmd-test-duration, and this ceiling drops back once it lands.
-      #
       # -json through cmd/testsummary: the log reads as plain go test output
       # (failures only), and the step summary gets the 20 slowest tests,
       # per-package totals, and a warning for any package over 300s. pipefail
-      # keeps go test's own exit status in the verdict. TestCIGoTestStepsLive
-      # pins this line.
+      # keeps go test's own exit status in the verdict. No -timeout: go test's
+      # 10m default is the wall, and the 300s warning shows regrowth long
+      # before it (decision timeout_ceiling). TestCIGoTestStepsLive pins this
+      # line.
       - name: go test
         shell: bash
-        run: set -o pipefail; go test -race -count=1 -timeout 20m -json ./... | go run ./cmd/testsummary
+        run: set -o pipefail; go test -race -count=1 -json ./... | go run ./cmd/testsummary
 
       - name: go build
         run: go build ./cmd/dross
