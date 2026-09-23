@@ -78,3 +78,8 @@
   choice = "The scans are Go tests only — no CLI command and no doctor section."
   why = "They are repo invariants over dross's own source; a dross user's repo has no dross spawn sites to enumerate, so a user-facing surface would be dead everywhere but here. Same reasoning as exec-consent-completeness."
   locked = true
+
+[[deferred]]
+  id = "878416f6cd34704f"
+  text = "dross status suggests `dross phase reconcile` (\"N phase branches are waiting on a completion\") for phase branches that are merely in progress or scaffolded, and ranks it above the real next step. On 2026-09-23 the two counted branches were exec-taint-enumeration (spec just locked, next = /dross-plan) and extracted-package-test-parity (scaffolded, never started); neither was finished."
+  why = "Reconcile's candidate rule is 'phase/<id> branch exists locally and changes.json has no completion record', which matches every unfinished phase. The merge gate skips them harmlessly, but the status nudge stays wrong for as long as any phase is in flight, and the handoff carried it as an open loop across two pauses."
