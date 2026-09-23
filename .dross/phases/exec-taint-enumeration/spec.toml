@@ -1,0 +1,80 @@
+[phase]
+  id = "exec-taint-enumeration"
+  title = "exec-taint-enumeration"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "Every point where a spawned process's output enters the program (Output/CombinedOutput results, Stdout/Stderr buffers and pipes) is derived from type-checked source, and each such value must end terminal-only, in the shared recorder, or at an in-source marker with prose — any other path fails the test."
+
+[[criteria]]
+  id = "c-2"
+  text = "Taint crosses function boundaries: a spawn-derived value returned from a helper, stored in a struct field, or written through an io.Writer argument stays tainted at its consumers — wrapping the spawn or the conversion in a helper does not hide it, proven by a fixture per channel."
+
+[[criteria]]
+  id = "c-3"
+  text = "Re-introducing the pre-phase stryker.go branch verbatim — head rendered into a strings.Builder, quoted.String() passed to fmt.Errorf on the next line — fails the guard, proven by a fixture carrying that exact shape."
+
+[[criteria]]
+  id = "c-4"
+  text = "A consumer that loads a path field declared in the pathfence field registry and passes its raw string to an os.* call — never constructing a pathfence.Contained — fails the suite, proven by a fixture; a field declared not-consumed that reaches os.* fails too."
+
+[[criteria]]
+  id = "c-5"
+  text = "The new scans walk a package set derived from the module itself: a package added under internal/ or cmd/ is in scope with no list to edit, and a test fails if any package containing a spawn site or a declared-path-field read sits outside the walk."
+
+[[criteria]]
+  id = "c-6"
+  text = "A finding names the file and line where the tainted value escapes, the spawn site (or declared path field) it traces back to, and the remedy — proven by a fixture that introduces one violation of each scan and asserts all three facts in the message."
+
+[[criteria]]
+  id = "c-7"
+  text = "No scan can pass vacuously: each fails when its live-tree walk enumerates fewer sources than a stated floor, and each is pinned by a fixture corpus whose must-trip and must-not-trip answers are written down."
+
+[[criteria]]
+  id = "c-8"
+  text = "The type-checked load happens once per test binary and all scans together add at most 15s to their package's CI test time, read from the timing table cmd-test-duration added."
+
+[[criteria]]
+  id = "c-9"
+  text = "The existing pathfence guards cannot go stale silently: they walk c-5's derived package set, the .String() unwrap ban keys off the pathfence.Contained type rather than a list of local names, and adding a path-shaped string field under an unlisted tag word or in an unlisted schema dir fails the suite — proven by the 2026-09-07 experiment (workdir/output_dir/spec string fields on phase.Task) kept as a must-fail fixture."
+
+[[criteria]]
+  id = "c-10"
+  text = "The exec-consent audit attributes reach through the shared SSA call graph: an interface call resolves to the implementers whose concrete types actually flow to it, so a spawning implementer that is never passed in is not attributed to the command; a dispatch the graph still cannot resolve stays a reported finding, never a silent union; every existing exec-consent calibration fixture keeps its written-down verdict."
+
+[[decisions]]
+  key = "loader_mechanism"
+  choice = "golang.org/x/tools go/packages + go/ssa, imported from _test.go files only. Scoped to this phase: it reverses exec-consent-completeness's no-x/tools precedent for the taint and reach scans."
+  why = "c-2 needs def-use tracking across returns, struct fields and io.Writer arguments; SSA provides it, hand-rolling it over go/types is the phase's riskiest part. Test-only import never links into the shipped binary, so the single-static-binary argument behind the precedent does not apply; Dependabot now tracks the added module."
+  locked = true
+
+[[decisions]]
+  key = "clearance_model"
+  choice = "Taint drops automatically once the value stops being text — converted to int or bool via strconv, ==, strings.Contains/HasPrefix, len. A spawn-derived value that stays text (a SHA or branch sliced out of output) needs an in-source marker with prose at the conversion site."
+  why = "Mechanical and content-blind: a bool or int cannot carry secret text, so exit-code and Contains checks need no ceremony. A sanitizer registry would be another hand-maintained list, the shape v1.7 keeps retiring."
+  locked = true
+
+[[decisions]]
+  key = "taint_sources"
+  choice = "Every exec.Command / exec.CommandContext in non-test source is a taint source — git and gh included. No binary is classified as safe."
+  why = "Matches exec-consent-completeness: a classifier that decides which binaries look dangerous is the recurring vulnerability. git log and gh api output can carry secret material as readily as a mutation tool's."
+  locked = true
+
+[[decisions]]
+  key = "terminal_definition"
+  choice = "Terminal means the concrete os.Stdout / os.Stderr and cobra's OutOrStdout / ErrOrStderr. An error value is never terminal. A generic io.Writer parameter is not terminal — taint is followed to its callers."
+  why = "Error strings are exactly what reached verify.toml before tool-output-not-persisted (its locked cut_point). Treating any io.Writer as terminal would let a strings.Builder launder the head — the c-3 shape."
+  locked = true
+
+[[decisions]]
+  key = "marker_grammar"
+  choice = "The clearance marker is a //dross:-prefixed directive on the line immediately above the conversion, with the same grammar as //dross:exec-exempt: no space after the slashes, reason separated by whitespace, non-empty prose above a length floor. Exact directive name set at plan time."
+  why = "Reason lives next to the code and reads in review; reusing one proven grammar avoids a second parser with its own edge cases."
+  locked = true
+
+[[decisions]]
+  key = "check_surface"
+  choice = "The scans are Go tests only — no CLI command and no doctor section."
+  why = "They are repo invariants over dross's own source; a dross user's repo has no dross spawn sites to enumerate, so a user-facing surface would be dead everywhere but here. Same reasoning as exec-consent-completeness."
+  locked = true

@@ -88,6 +88,7 @@
   id = "f1b1b4359fc352ac"
   text = "Containment's regression guards rest on three hand-maintained lists that fail SILENTLY when stale: scannedPackages (internal/cmd/pathfence_enum_test.go:44, 8 of 36 internal packages — argfence and hostallow, the sibling fence packages, are unscanned and the literal ban has no per-directory vacuity guard), pathShapedTags (pathfence_fields_test.go:43, a closed 11-word tag vocabulary), and schemaDirs (pathfence_fields_test.go:35, 4 dirs). Plus the containedVar name list at security_test.go:526, where renaming a local silences the .String() arm. Harden them: derive the package set, widen the tag rule, or add vacuity guards that fail when a list stops matching anything."
   why = "The phase's stated goal was containment enforced 'by the type system, not by a hand-maintained list'. The type fence delivers that; the three AST scans backstopping it reintroduce exactly the burden the spec set out to avoid. Proven by experiment on 2026-09-07 during verify: adding string fields tagged workdir/output_dir/spec to phase.Task — a struct in a SCANNED dir — left the full suite green, and detachedRun.RunDir (internal/cmd/local.go:287) is missed on both axes today."
+  target = "exec-taint-enumeration"
 
 [[deferred]]
   id = "860fbefe9a16aa80"
