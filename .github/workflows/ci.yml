@@ -9,6 +9,16 @@ on:
 permissions:
   contents: read
 
+# Supersede, don't queue: a newer push to a PR cancels the run it replaces, so
+# a dross ship's back-to-back pushes cost one pipeline, not three. Only PR runs
+# share a group. The run_id arm gives every main push a group of its own —
+# main auto-releases, so each commit keeps its own verdict, and GitHub replaces
+# a pending run in a shared group even without cancel-in-progress.
+# TestCIConcurrencyLive pins this block.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
