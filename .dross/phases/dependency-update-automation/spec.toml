@@ -54,16 +54,19 @@
   locked = true
 
 [[deferred]]
+  id = "8e2025a2bedc57a2"
   text = "Currency for pins Dependabot cannot reach: `go install govulncheck@vX` inside run:, `node-version:` in setup-node, and go.mod's `toolchain` directive — e.g. a doctor check comparing them against upstream latest."
   why = "Dependabot has no regex manager; hand-maintained today. Separate mechanism."
   target = "run-block-pin-currency"
 
 [[deferred]]
+  id = "24a8d9c374b7a898"
   text = "/dross-watch surfaces open Dependabot PRs with age (\"2 bot PRs open, oldest 12d\") so a bump cannot sit unmerged unseen."
   why = "New watch capability, not a dependency-config concern."
   target = "watch-bot-prs"
 
 [[deferred]]
+  id = "6ca46be455801294"
   text = "Branch protection on main: required ci checks, no direct push — the precondition for safe Dependabot auto-merge."
   why = "Repo-settings control in its own right; ship's push-to-main flow must be reconciled with it first."
   target = "main-branch-protection"

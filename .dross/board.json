@@ -76,8 +76,10 @@
   },
   "backlog": {
     "slug:cmd-exec-baseline-drain": "DRO-499",
-    "slug:dependency-update-automation": "DRO-428",
     "slug:exec-taint-enumeration": "DRO-469",
+    "slug:main-branch-protection": "DRO-628",
+    "slug:run-block-pin-currency": "DRO-626",
+    "slug:watch-bot-prs": "DRO-627",
     "someday:id:010e057c10c922c6": "DRO-286",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:0182df9deb7a1aff": "DRO-549",
@@ -115,6 +117,7 @@
     "someday:id:215d2ae2e7799d69": "DRO-102",
     "someday:id:2385fc70268180d1": "DRO-83",
     "someday:id:245f4ad61d9e038a": "DRO-372",
+    "someday:id:24a8d9c374b7a898": "DRO-630",
     "someday:id:24da6d2754488290": "DRO-41",
     "someday:id:2587d7e469007637": "DRO-551",
     "someday:id:25f2647bef34ce5d": "DRO-527",
@@ -184,6 +187,7 @@
     "someday:id:67badd3a637240db": "DRO-534",
     "someday:id:67bc92bf73da8083": "DRO-576",
     "someday:id:6953a18634519ce3": "DRO-244",
+    "someday:id:6ca46be455801294": "DRO-631",
     "someday:id:6d4df4d16ae5bd22": "DRO-526",
     "someday:id:6d5c27f8580c1bea": "DRO-472",
     "someday:id:6e152e9e753162c5": "DRO-402",
@@ -230,6 +234,7 @@
     "someday:id:8ba53caabfc3e89d": "DRO-507",
     "someday:id:8c750ff4afd958ff": "DRO-563",
     "someday:id:8d112784a461cffb": "DRO-520",
+    "someday:id:8e2025a2bedc57a2": "DRO-629",
     "someday:id:8ee60c918d6bfe87": "DRO-589",
     "someday:id:8f3379574b1d5ce5": "DRO-362",
     "someday:id:8fc7378d851b3753": "DRO-575",
@@ -583,27 +588,27 @@
     "dependency-update-automation/t-1": {
       "issue": "DRO-621",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "dependency-update-automation/t-2": {
       "issue": "DRO-622",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "dependency-update-automation/t-3": {
       "issue": "DRO-623",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "dependency-update-automation/t-4": {
       "issue": "DRO-624",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "dependency-update-automation/t-5": {
       "issue": "DRO-625",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "exec-consent-completeness/t-1": {
       "issue": "DRO-333",
