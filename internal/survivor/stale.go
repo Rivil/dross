@@ -35,6 +35,39 @@ type Stale struct {
 	Reason string
 }
 
+// IsStructural reports whether a staleness reason is a fact about the SOURCE —
+// the file is gone, or the text is no longer a whole line of it — rather than
+// about the latest run.
+//
+// The distinction is what makes a structural orphan safe to block on. The key
+// hashes the whole normalized line text, so a text that is no longer a line can
+// never produce that key again: no future run can resurrect the entry, and it
+// suppresses nothing from the moment it goes stale. ReasonSurvivorGone is the
+// opposite case — the source is intact and a later run can report the survivor
+// again — so it is run-scoped and never structural.
+func IsStructural(reason string) bool {
+	return reason == ReasonFileGone || reason == ReasonTextGone
+}
+
+// StructuralOrphans is the one predicate verify and its finalize gate share:
+// every acceptance whose file is gone or whose stored text is no whole
+// normalized line of it, resolved against root.
+//
+// It deliberately takes no observed set. Passing nil to StaleAcceptancesAgainst
+// is what keeps a run-scoped "survivor no longer reported" from ever escalating
+// into a blocking orphan; the IsStructural filter restates that contract here
+// so the two callers cannot drift apart. Unverifiable entries (no text, an
+// unreadable file) are not orphans: "could not look" is not "gone".
+func StructuralOrphans(root string, s *Store) []Stale {
+	var out []Stale
+	for _, st := range StaleAcceptancesAgainst(root, s, nil).Stale {
+		if IsStructural(st.Reason) {
+			out = append(out, st)
+		}
+	}
+	return out
+}
+
 // Unverifiable is an acceptance whose subject could not be checked — an
 // unreadable file, or an entry carrying no recorded text. Deliberately separate
 // from Stale: "I could not look" is not "it is gone", and collapsing the two
