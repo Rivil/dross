@@ -83,3 +83,8 @@
   id = "878416f6cd34704f"
   text = "dross status suggests `dross phase reconcile` (\"N phase branches are waiting on a completion\") for phase branches that are merely in progress or scaffolded, and ranks it above the real next step. On 2026-09-23 the two counted branches were exec-taint-enumeration (spec just locked, next = /dross-plan) and extracted-package-test-parity (scaffolded, never started); neither was finished."
   why = "Reconcile's candidate rule is 'phase/<id> branch exists locally and changes.json has no completion record', which matches every unfinished phase. The merge gate skips them harmlessly, but the status nudge stays wrong for as long as any phase is in flight, and the handoff carried it as an open loop across two pauses."
+
+[[deferred]]
+  id = "77c89a219d7573dc"
+  text = "Seed the five hand-ignored .dross paths in ensureDrossGitignore (internal/cmd/gitignore.go drossIgnoreEntries): handoff.md, reap-log.json, and the security/, quality/ and techdebt/ run dirs. Only state.json and local.toml are seeded today; this repo ignores the other five through its own hand-edited .gitignore, so in a fresh init/onboard repo they are stageable and a `git add .dross` can commit them — including security run output that must never be pre-disclosed on a public repo."
+  why = "Carried undecided across several handoffs; out of scope for exec-taint-enumeration. Seeding them would also move their secretscan classification from UnderDross to MachineLocal (internal/secretscan/writers.go), so the enum test entries change with it."
