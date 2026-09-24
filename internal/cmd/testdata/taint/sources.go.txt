@@ -1,0 +1,106 @@
+Source corpus for the exec-output taint engine (TestExecTaintSources). Every
+kind of spawn-output source reaches errors.New once, on its WANT line; a value
+that only resembles a source must not trip. Every exec.Cmd is a source — no
+binary is classed safe — so the spawns name "git" and the engine must give the
+same verdict when TestExecTaintVerdictIgnoresBinaryName swaps it for "cargo".
+
+-- sources.go --
+package sources
+
+import (
+	"bufio"
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"os/exec"
+)
+
+// output: Output's first result is the stream.
+func output() error {
+	out, err := exec.Command("git", "log", "-1").Output()
+	if err != nil {
+		return err
+	}
+	return errors.New(string(out)) // WANT taint
+}
+
+// combined: CombinedOutput interleaves both streams; same verdict.
+func combined(c *exec.Cmd) error {
+	out, _ := c.CombinedOutput()
+	return errors.New(string(out)) // WANT taint
+}
+
+// stdoutPipe: a line read off StdoutPipe is the stream.
+func stdoutPipe(c *exec.Cmd) error {
+	r, _ := c.StdoutPipe()
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		return errors.New(sc.Text()) // WANT taint
+	}
+	return nil
+}
+
+// stderrPipe: reading StderrPipe to the end is the stream.
+func stderrPipe(c *exec.Cmd) error {
+	r, _ := c.StderrPipe()
+	b, _ := io.ReadAll(r)
+	return errors.New(string(b)) // WANT taint
+}
+
+// exitStderr: with Stderr unset, Output keeps the child's stderr on the
+// *exec.ExitError. Reading it is a source; the error itself renders only
+// "exit status N", so wrapping it with %w is clean.
+func exitStderr() error {
+	_, err := exec.Command("git", "status").Output()
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return errors.New(string(ee.Stderr)) // WANT taint
+	}
+	return fmt.Errorf("git: %w", err)
+}
+
+// stdoutBuffer: whatever object is plugged into Cmd.Stdout receives the stream.
+func stdoutBuffer(c *exec.Cmd) error {
+	var buf bytes.Buffer
+	c.Stdout = &buf
+	if err := c.Run(); err != nil {
+		return err
+	}
+	return errors.New(buf.String()) // WANT taint
+}
+
+// wrapped embeds *exec.Cmd; its promoted Output is exec's own method.
+type wrapped struct{ *exec.Cmd }
+
+func promoted(c *exec.Cmd) error {
+	w := wrapped{c}
+	out, _ := w.Output()
+	return errors.New(string(out)) // WANT taint
+}
+
+// fake has its own Output. Sources are matched by identity, not by name, so
+// this is not one.
+type fake struct{}
+
+func (fake) Output() ([]byte, error) { return []byte("literal"), nil }
+
+func lookalike() error {
+	out, _ := fake{}.Output()
+	return errors.New(string(out))
+}
+
+-- alias.go --
+package sources
+
+import (
+	"errors"
+
+	x "os/exec"
+)
+
+// aliased: os/exec under another import name trips identically.
+func aliased() error {
+	out, _ := x.Command("git", "show", "HEAD").Output()
+	return errors.New(string(out)) // WANT taint
+}
