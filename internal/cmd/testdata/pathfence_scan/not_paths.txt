@@ -1,0 +1,401 @@
+# Serialized string fields that are NOT paths.
+#
+# Every toml- or json-tagged field whose type bottoms out in a string, in every
+# package the shared load matched, is filed exactly once: in
+# pathfence.Fields() if it holds a path, or here if it does not
+# (TestEveryPathShapedFieldIsDeclared, pathfence_fields_test.go).
+#
+# One field per line: <pkg>.<Type>.<Field> <tag>. There is no -update flag —
+# filing a field is a judgement. A new field fails the suite with the exact row
+# to paste; paste it only if the value is not a path.
+#
+# Filing here is not a free pass. The path-field taint scan
+# (pathtaint_audit_test.go) traces every row: a value filed here that reaches a
+# filesystem call is a finding, fixed by declaring the field a path and routing
+# it through pathfence.Contain — never by leaving it here.
+
+# ---- board — board sync state: dismissed issue keys, card links and workflow states
+board.Board.Dismissed dismissed
+board.TaskLink.BoardState board_state
+board.TaskLink.Issue issue
+board.TaskLink.PlanStatus plan_status
+
+# ---- boardsync — a board-pull envelope's error text
+boardsync.PullEnvelope.Error error
+
+# ---- changes — phase bookkeeping: refs, SHAs, statuses, notes, landmark prose, the red-proof replay COMMAND
+changes.BackfillEvidence.SHA sha
+changes.Changes.Base base
+changes.Changes.BaseCommit base_commit
+changes.Changes.Phase phase
+changes.Changes.Status status
+changes.Landmark.Feature feature
+changes.Landmark.Symbol symbol
+changes.Landmark.What what
+changes.RedProof.Replay replay
+changes.RedProof.SHA sha
+changes.TaskRecord.Commit commit
+changes.TaskRecord.Notes notes
+
+# ---- cmd — command-local records: ids, hosts, states, prose, report labels, hook payloads, machine-local settings (hosts, env-var names, worker counts)
+cmd.detachedRun.Host host
+cmd.detachedRun.Phase phase
+cmd.detachedRun.RunID run_id
+cmd.detachedRun.State state
+cmd.localStore.AllowHosts allow_hosts
+cmd.localStore.MutationRemoteEnv mutation_remote_env
+cmd.localStore.MutationRemoteHost mutation_remote_host
+cmd.localStore.MutationTestCPU mutation_test_cpu
+cmd.localStore.MutationWorkers mutation_workers
+cmd.localStore.QuickBase quick_base
+cmd.localStore.RemoteHost remote_host
+cmd.milestoneProgressReport.Remaining remaining
+cmd.milestoneProgressReport.Status status
+cmd.milestoneProgressReport.Unscaffolded unscaffolded
+cmd.milestoneProgressReport.Version version
+cmd.previewLaneReport.Consent consent
+cmd.previewLaneReport.Fallback fallback
+cmd.previewLaneReport.FenceErr fence_err
+cmd.previewLaneReport.Line line
+cmd.previewLaneReport.Locality locality
+cmd.previewLaneReport.Name name
+cmd.previewReport.Host host
+cmd.previewReport.HostState host_state
+cmd.remoteCandidate.Host host
+cmd.sessionStartHookOutput.AdditionalContext additionalcontext
+cmd.sessionStartHookOutput.HookEventName hookeventname
+cmd.sessionStartOutput.SystemMessage systemmessage
+cmd.statsCommand.Command command
+cmd.statsErrorClass.Class class
+cmd.statsOtherShape.Detail detail
+cmd.statsSpan.First first
+cmd.statsSpan.Human human
+cmd.statsSpan.Last last
+cmd.taskListRow.ID id
+cmd.taskListRow.Status status
+cmd.taskListRow.Title title
+cmd.watchDigest.Suggested suggested_command
+
+# ---- consent — consented command LINES and their fingerprints, not paths
+consent.Grants.TrustedReplayCommands trusted_replay_commands
+consent.Grants.TrustedRunCommands trusted_run_commands
+consent.Grants.TrustedTestCommand trusted_test_command
+
+# ---- defaults — machine defaults: provider names, API base URLs, env-var names, reviewers, timestamps
+defaults.RemoteDefaults.APIBase api_base
+defaults.RemoteDefaults.AuthEnv auth_env
+defaults.RemoteDefaults.Provider provider
+defaults.RemoteDefaults.Reviewers reviewers
+defaults.TelemetryDefaults.AskedAt asked_at
+
+# ---- deferred — deferred-item prose and routing: phase ids, target ids, survivor keys
+deferred.Entry.Source source
+deferred.Entry.Survivor survivor
+deferred.Entry.Target target
+deferred.Entry.Text text
+deferred.Entry.Why why
+
+# ---- findings — scan-finding identity and lifecycle: classes, fingerprints, run ids, states, titles
+findings.Record.Class class
+findings.Record.Fingerprint fingerprint
+findings.Record.LastRun last_run
+findings.Record.State state
+findings.Record.Title title
+
+# ---- forge — issue-tracker API payloads: ids, keys, titles, bodies, states, URLs
+forge.adfNode.Text text
+forge.adfNode.Type type
+forge.githubIssue.Body body
+forge.githubIssue.HTMLURL html_url
+forge.githubIssue.NodeID node_id
+forge.githubIssue.State state
+forge.githubIssue.Title title
+forge.gitlabIssueResponse.Description description
+forge.gitlabIssueResponse.Labels labels
+forge.gitlabIssueResponse.State state
+forge.gitlabIssueResponse.Title title
+forge.gitlabIssueResponse.WebURL web_url
+forge.issueResponse.Body body
+forge.issueResponse.HTMLURL html_url
+forge.issueResponse.State state
+forge.issueResponse.Title title
+forge.jiraCreated.ID id
+forge.jiraCreated.Key key
+forge.jiraCreated.Self self
+forge.jiraIssue.Key key
+forge.jiraTransition.ID id
+forge.youtrackIssue.Description description
+forge.youtrackIssue.IDReadable idreadable
+forge.youtrackIssue.Summary summary
+forge.ytStateBundle.ID id
+
+# ---- hooks — Claude Code hook entries: command lines and types
+hooks.hookCommand.Command command
+hooks.hookCommand.Type type
+
+# ---- milestone — milestone metadata: titles, versions, statuses, dates, phase ids, prose
+milestone.Meta.Base base
+milestone.Meta.Shipped shipped
+milestone.Meta.Started started
+milestone.Meta.Status status
+milestone.Meta.Title title
+milestone.Meta.Version version
+milestone.Milestone.Phases phases
+milestone.Scope.NonGoals non_goals
+milestone.Scope.SuccessCriteria success_criteria
+
+# ---- mutation — mutation-tool report fields: statuses, ids, mutator names, source TEXT, languages, module paths
+mutation.astError.Message message
+mutation.astRequest.Source source
+mutation.gremlinsMutation.Status status
+mutation.gremlinsMutation.Type type
+mutation.gremlinsReport.GoModule go_module
+mutation.strykerFile.Language language
+mutation.strykerFile.Source source
+mutation.strykerMutant.Description description
+mutation.strykerMutant.ID id
+mutation.strykerMutant.MutatorName mutatorname
+mutation.strykerMutant.Replacement replacement
+mutation.strykerMutant.Status status
+mutation.strykerMutant.StatusReason statusreason
+mutation.strykerReport.SchemaVersion schemaversion
+
+# ---- phase — spec and plan prose and ids: criteria, decisions, deferred items, task ids, titles, statuses
+phase.Criterion.ID id
+phase.Criterion.Text text
+phase.Decision.Choice choice
+phase.Decision.Key key
+phase.Decision.Why why
+phase.Deferred.ID id
+phase.Deferred.Survivor survivor
+phase.Deferred.Target target
+phase.Deferred.Text text
+phase.Deferred.Why why
+phase.PlanPhase.ID id
+phase.SpecPhase.ID id
+phase.SpecPhase.Milestone milestone
+phase.SpecPhase.Title title
+phase.Task.Covers covers
+phase.Task.DependsOn depends_on
+phase.Task.Description description
+phase.Task.ID id
+phase.Task.Status status
+phase.Task.TestContract test_contract
+phase.Task.Title title
+
+# ---- profile — the developer profile: ratings, directives, the seed label
+profile.Dimension.Confidence confidence
+profile.Dimension.Directive directive
+profile.Dimension.Rating rating
+profile.Profile.Generated generated
+profile.Profile.Source source
+
+# ---- project — project.toml settings that are not paths: names, URLs, commands, branch names, env-var names, enums, prose
+project.Board.AuthEnv auth_env
+project.Board.AuthUser auth_user
+project.Board.BaseURL base_url
+project.Board.GitHubProject github_project
+project.Board.MilestoneMode milestone_mode
+project.Board.Project project
+project.Board.Provider provider
+project.BoardFields.FixVersions fix_versions
+project.BoardFields.State state
+project.BoardFields.Type type
+project.Competitor.Differentiator differentiator
+project.Competitor.Name name
+project.Competitor.URL url
+project.Competitor.WhatTheyDo what_they_do
+project.Env.SecretsLocation secrets_location
+project.Goals.Audience audience
+project.Goals.CoreValue core_value
+project.Goals.Differentiators differentiators
+project.Goals.NonGoals non_goals
+project.LockedChoice.Choice choice
+project.LockedChoice.LockedAt locked_at
+project.LockedChoice.Why why
+project.Mutation.Adapters adapters
+project.Mutation.RemoteHost remote_host
+project.ProjectMeta.Created created
+project.ProjectMeta.Description description
+project.ProjectMeta.Name name
+project.ProjectMeta.Version version
+project.Remote.APIBase api_base
+project.Remote.AuthEnv auth_env
+project.Remote.AuthScheme auth_scheme
+project.Remote.AuthUser auth_user
+project.Remote.ProjectID project_id
+project.Remote.Provider provider
+project.Remote.Reviewers reviewers
+project.Remote.URL url
+project.Repo.BranchPattern branch_pattern
+project.Repo.CommitConvention commit_convention
+project.Repo.GitMainBranch git_main_branch
+project.Repo.Layout layout
+project.Runtime.BuildCommand build_command
+project.Runtime.DevCommand dev_command
+project.Runtime.E2ECommand e2e_command
+project.Runtime.FormatCommand format_command
+project.Runtime.LintCommand lint_command
+project.Runtime.LogsCommand logs_command
+project.Runtime.MigrateCommand migrate_command
+project.Runtime.Mode mode
+project.Runtime.SeedCommand seed_command
+project.Runtime.ShellCommand shell_command
+project.Runtime.StopCommand stop_command
+project.Runtime.TestCommand test_command
+project.Runtime.TestWatch test_watch
+project.Runtime.TypecheckCommand typecheck_command
+project.Service.Admin admin
+project.Service.Health health
+project.Service.URL url
+project.Stack.E2ERunner e2e_runner
+project.Stack.Formatter formatter
+project.Stack.Frameworks frameworks
+project.Stack.Languages languages
+project.Stack.Linter linter
+project.Stack.PackageManager package_manager
+project.Stack.Profile profile
+project.Stack.TestRunner test_runner
+project.Stack.TypeChecker type_checker
+project.TestLane.Command command
+project.TestLane.Install install
+project.TestLane.Name name
+project.TestLane.Prepare prepare
+project.TestLane.Selector selector
+project.TestLane.SelectorJoin selector_join
+project.TestLane.SelectorTemplate selector_template
+project.TestLane.Toolchain toolchain
+
+# ---- quality — quality-finding identity and prose
+quality.Finding.Dimension dimension
+quality.Finding.Evidence evidence
+quality.Finding.ID id
+quality.Finding.Refutation refutation
+quality.Finding.Risk risk
+quality.Finding.Title title
+
+# ---- reaplog — reap-log card records: issue keys, labels, states, links
+reaplog.Card.Class class
+reaplog.Card.DroppedLink dropped_link
+reaplog.Card.Issue issue
+reaplog.Card.Outcome outcome
+reaplog.Card.PriorLabels prior_labels
+reaplog.Card.PriorState prior_state
+
+# ---- rules — rule ids, text, dates
+rules.Rule.Created created
+rules.Rule.ID id
+rules.Rule.Severity severity
+rules.Rule.Text text
+
+# ---- security — security-finding identity and prose
+security.Finding.Class class
+security.Finding.Evidence evidence
+security.Finding.ID id
+security.Finding.Refutation refutation
+security.Finding.Severity severity
+security.Finding.Title title
+
+# ---- ship — forge PR payloads: branch names, titles, URLs
+ship.BasePR.HeadRefName headrefname
+ship.BasePR.Title title
+ship.BasePR.URL url
+ship.forgejoPR.HTMLURL html_url
+ship.forgejoPR.Title title
+
+# ---- stack — stack-profile data: ids, titles, binary NAMES, commands, loadout prose, extensions, env-var names
+stack.Command.Run run
+stack.CommandVariant.Bin bin
+stack.CommandVariant.OS os
+stack.CommandVariant.Run run
+stack.ContentMatch.All all
+stack.ContentMatch.Any any
+stack.Loadout.Conventions conventions
+stack.Loadout.Guardrails guardrails
+stack.Loadout.MCPTools mcp_tools
+stack.MutationCache.Vars vars
+stack.PackageManager.Bin bin
+stack.PackageManager.Name name
+stack.Profile.ID id
+stack.Profile.Title title
+stack.Signals.Exts exts
+stack.Tool.Bin bin
+stack.Tool.Dimension dimension
+stack.Tool.Install install
+stack.Tool.Kind kind
+stack.Tool.Name name
+
+# ---- state — state.json: current milestone/phase ids, status, version, last action
+state.Activity.Action action
+state.State.CurrentMilestone current_milestone
+state.State.CurrentPhase current_phase
+state.State.CurrentPhaseStatus current_phase_status
+state.State.LastAction last_action
+state.State.Version version
+
+# ---- statusline — the Claude Code session id
+statusline.statusInput.SessionID session_id
+
+# ---- survivor — survivor acceptance identity and prose: keys, ops, source TEXT, reasons, categories
+survivor.Acceptance.AcceptedIn accepted_in
+survivor.Acceptance.Category category
+survivor.Acceptance.Key key
+survivor.Acceptance.Op op
+survivor.Acceptance.Reason reason
+survivor.Acceptance.Text text
+survivor.Category.Name name
+survivor.Category.Reason reason
+
+# ---- telemetry — telemetry event fields: command names, error classes, hashed repo ids
+telemetry.Event.Args args
+telemetry.Event.Command cmd
+telemetry.Event.ErrorClass err
+telemetry.Event.ErrorDetail err_detail
+telemetry.Event.Kind kind
+telemetry.Event.Phase phase
+telemetry.Event.RepoHash repo
+
+# ---- update — release metadata: tag names, asset names, download URLs
+update.Asset.Name name
+update.Asset.URL browser_download_url
+update.Release.TagName tag_name
+
+# ---- verify — tests.json/verify.toml prose, ids, statuses, tool names, languages, refs
+verify.CriterionResult.ID id
+verify.CriterionResult.Notes notes
+verify.CriterionResult.Status status
+verify.EffectiveRange.Construct construct
+verify.Finding.Severity severity
+verify.Finding.Text text
+verify.LanguageRun.Error error
+verify.LanguageRun.MeasuredOn measured_on
+verify.LanguageRun.Name name
+verify.LanguageRun.Tool tool
+verify.LegSummary.Error error
+verify.LegSummary.Language language
+verify.LegSummary.MeasuredOn measured_on
+verify.LegSummary.Tool tool
+verify.OutOfScopeMutant.Key key
+verify.OutOfScopeMutant.Language language
+verify.OutOfScopeMutant.Lifecycle lifecycle
+verify.OutOfScopeMutant.Note note
+verify.OutOfScopeMutant.Op op
+verify.Provenance.Phase phase
+verify.ProvenanceLeg.Name name
+verify.ProvenanceLeg.Tool tool
+verify.Scope.Base base
+verify.Scope.Degraded degraded
+verify.SkippedFile.Reason reason
+verify.Tests.MeasuredOn measured_on
+verify.Tests.Phase phase
+verify.VerifyMeta.Phase phase
+verify.VerifyMeta.Verdict verdict
+verify.VerifySummary.MeasuredOn measured_on
+verify.VerifySummary.MutationStatus mutation_status
+
+# ---- watch — watch digest items: ids, titles, states, drift kinds
+watch.Item.ID id
+watch.Item.State state
+watch.Item.Title title
+watch.PhaseDrift.Kind kind
+watch.PhaseDrift.Phase phase

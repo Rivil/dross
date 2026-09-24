@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/pathfence"
+	"github.com/Rivil/dross/internal/survivor"
 )
 
 // The carrier assertion — the load-bearing half of c-4.
@@ -41,6 +42,12 @@ func carrierType(name string) (got, want reflect.Type, ok bool) {
 			return nil, contained, true
 		}
 		return f.Type, contained, true
+	case "survivor.AcceptanceFile":
+		// The stale pass's only route from a hand-editable survivors.toml
+		// entry to the file it names: its first return is what
+		// pathfence.ReadFile takes, so a revert to a joined string is what
+		// would reopen `../outside`.
+		return reflect.TypeOf(survivor.AcceptanceFile).Out(0), contained, true
 	}
 	return nil, nil, false
 }
