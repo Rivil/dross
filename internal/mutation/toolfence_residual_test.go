@@ -31,11 +31,14 @@ import (
 // line and `errors.New(s)` on the next. That is not a hypothetical: it is the
 // EXACT shape this phase removed from stryker.go, which rendered the head into
 // a strings.Builder and passed quoted.String() to fmt.Errorf on the next line.
-// Re-introducing that branch verbatim passes this guard (proven at verify);
-// it is the behavioural canaries — TestStrykerReportlessSplitsTerminalFromError
-// and TestFailedLegReachesDiskClean — that catch it. Deciding that an error
-// argument traces back to the head buffer is dataflow over resolved types,
-// which is the source-side enumeration this phase deferred to secret-detection.
+// Re-introducing that branch verbatim passes this guard. What catches it is
+// the exec-output taint scan, which follows the stream through the tee, the
+// head buffer's Write and the builder by resolved types:
+// TestStrykerPrePhaseBranchTrips (internal/cmd/taint_stryker_test.go) pins
+// that branch, copied verbatim from 6f27eaa^, as a must-trip fixture, and the
+// repo-wide taint gate runs the same engine over this package. The behavioural
+// canaries — TestStrykerReportlessSplitsTerminalFromError and
+// TestFailedLegReachesDiskClean — still prove the runtime half.
 
 // errorConstructors are the calls whose arguments become a persisted string.
 var errorConstructors = map[string]bool{
