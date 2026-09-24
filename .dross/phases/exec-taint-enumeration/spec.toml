@@ -164,7 +164,7 @@
 [[deferred]]
   id = "3d561e984ebf0d4e"
   text = "Before `dross verify` (attached or --detach) dispatches a mutation leg, print the packages it will mutate, the mutant-site count per package (go/ast for gremlins; Stryker's own count where available) and an ETA from per-package throughput recorded on earlier runs on that host, with the basis stated. Record actual per-package durations after each run so the next estimate improves."
-  why = "exec-taint-enumeration's detached run was announced as ~1h40m from a stale memory figure; it mutated 16 whole packages (~5.2k mutant sites, ~3.25k in internal/cmd alone) and ran far longer. The inputs were all known before dispatch, and a go/ast site count takes about a second."
+  why = "exec-taint-enumeration's detached run (16 whole packages, ~5.2k mutant sites, ~3.25k in internal/cmd) took 1h44m. It was announced as ~1h40m from a past phase's duration without checking this run's shape, then re-projected mid-run at ~2.5h because nothing gave per-package throughput; both numbers were guesses. The inputs were all known before dispatch, and a go/ast site count takes about a second."
   target = "verify-eta"
 
 [[deferred]]

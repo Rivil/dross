@@ -4,7 +4,8 @@
     "v1.3": "DRO-7",
     "v1.5": "DRO-134",
     "v1.6": "DRO-188",
-    "v1.7": "DRO-331"
+    "v1.7": "DRO-331",
+    "v1.9": "DRO-694"
   },
   "phases": {
     "ast-aware-mutation-ranges": "DRO-448",
@@ -77,10 +78,24 @@
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
+    "slug:ci-timing-trend": "DRO-701",
     "slug:cmd-exec-baseline-drain": "DRO-499",
-    "slug:exec-taint-enumeration": "DRO-469",
+    "slug:debug-sessions": "DRO-692",
+    "slug:handoff-staleness": "DRO-703",
     "slug:main-branch-protection": "DRO-628",
+    "slug:milestone-closeout-check": "DRO-697",
+    "slug:one-way-door-decisions": "DRO-700",
+    "slug:prompt-behaviour-evals": "DRO-704",
+    "slug:review-comment-ingest": "DRO-693",
+    "slug:review-edge-lenses": "DRO-696",
     "slug:run-block-pin-currency": "DRO-626",
+    "slug:solo-task-review": "DRO-690",
+    "slug:spec-edge-probe": "DRO-695",
+    "slug:spec-fact-drift": "DRO-698",
+    "slug:task-preconditions": "DRO-699",
+    "slug:tool-gate-hooks": "DRO-689",
+    "slug:verify-eta": "DRO-702",
+    "slug:verify-staleness": "DRO-691",
     "slug:watch-bot-prs": "DRO-627",
     "someday:id:00240da43142c2d1": "DRO-678",
     "someday:id:010e057c10c922c6": "DRO-286",
