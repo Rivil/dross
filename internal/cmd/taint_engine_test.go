@@ -71,10 +71,14 @@ import (
 type taintOrigins map[token.Pos]bool
 
 // tlabel is one taint label: a concrete origin, or (param >= 0) the symbolic
-// "whatever the caller passed as parameter param".
+// "whatever the caller passed as parameter param". A filtered parameter label
+// stands for only the part of the caller's taint the policy does not clear —
+// what survives a clearing call (pathfence.Contain) inside a helper, resolved
+// per call site.
 type tlabel struct {
-	origin token.Pos
-	param  int
+	origin   token.Pos
+	param    int
+	filtered bool
 }
 
 func originLabel(p token.Pos) tlabel { return tlabel{origin: p, param: -1} }
@@ -129,7 +133,7 @@ func (s tset) add(o tset) bool {
 func (s tset) key() string {
 	var parts []string
 	for l := range s {
-		parts = append(parts, fmt.Sprintf("%d/%d", l.origin, l.param))
+		parts = append(parts, fmt.Sprintf("%d/%d/%v", l.origin, l.param, l.filtered))
 	}
 	sort.Strings(parts)
 	return strings.Join(parts, ",")
@@ -183,6 +187,26 @@ type taintPolicy struct {
 	ClearAt func(pos token.Position) bool
 	// Remedy is appended to every finding's rendering by the scan's tests.
 	Remedy string
+
+	// The hooks below let a policy other than exec-output judge calls. Each
+	// is optional; the exec policy sets none of them.
+
+	// Opaque names functions the policy judges itself: the engine never
+	// follows into them, and hands every tainted call to Call instead.
+	Opaque func(obj *types.Func) bool
+	// Call judges a tainted value reaching an Opaque function.
+	Call func(e *taintEngine, instr ssa.CallInstruction, obj *types.Func, argIdx []int, isRecv bool, from tset)
+	// External, when set, sees every call into a bodiless function first and
+	// reports whether it judged it; false falls through to the engine's own
+	// classification (terminal / transform / escape).
+	External func(e *taintEngine, instr ssa.CallInstruction, obj *types.Func, argIdx []int, isRecv bool, from tset) bool
+	// Clears reports whether a concrete origin is cleared by the policy's
+	// clearing call; filtered labels drop exactly those origins.
+	Clears func(origin token.Pos) bool
+	// OnlySinks silences the engine's own structural escapes — a return or
+	// write at the program's edge, a package variable, a panic, an
+	// unresolved call. Only what the policy reports through e.report counts.
+	OnlySinks bool
 }
 
 // condEscape is an escape site inside a function that fires only when the
@@ -191,6 +215,8 @@ type condEscape struct {
 	pos  token.Pos
 	fn   *ssa.Function
 	what string
+	// filtered: only the caller's non-clearing taint fires it.
+	filtered bool
 }
 
 // fnSummary is what a function does with taint, in terms of its parameters.
@@ -266,7 +292,7 @@ func (s *fnSummary) key() string {
 	for _, k := range ks {
 		var es []string
 		for _, e := range s.escapes[k] {
-			es = append(es, fmt.Sprintf("%d:%s", e.pos, e.what))
+			es = append(es, fmt.Sprintf("%d:%s:%v", e.pos, e.what, e.filtered))
 		}
 		sort.Strings(es)
 		fmt.Fprintf(&b, "e%d=%s;", k, strings.Join(es, ","))
@@ -298,7 +324,11 @@ type taintEngine struct {
 
 	changed  bool
 	findings map[string]*taintFinding
-	st       *fnState
+	// exact holds each finding's origins as positions, column and all: a
+	// finding keeps one origin per line, and a policy that names what was
+	// read at an origin needs to tell two reads on one line apart.
+	exact map[string]taintOrigins
+	st    *fnState
 }
 
 // fnState is one function's analysis in one round.
@@ -421,6 +451,13 @@ func scannedFuncs(v *srcView) map[*ssa.Function]bool {
 
 // runTaint runs one policy over a view and returns its findings, sorted.
 func runTaint(v *srcView, pol *taintPolicy) []taintFinding {
+	fs, _ := runTaintOrigins(v, pol)
+	return fs
+}
+
+// runTaintOrigins is runTaint that also returns, index for index, the exact
+// origin positions behind each finding.
+func runTaintOrigins(v *srcView, pol *taintPolicy) ([]taintFinding, []taintOrigins) {
 	e := &taintEngine{
 		view:        v,
 		pol:         pol,
@@ -437,6 +474,7 @@ func runTaint(v *srcView, pol *taintPolicy) []taintFinding {
 		termGlobals: map[*ssa.Global]bool{},
 		termFields:  map[*types.Var]bool{},
 		findings:    map[string]*taintFinding{},
+		exact:       map[string]taintOrigins{},
 	}
 	for fn := range ssautil.AllFunctions(v.Prog) {
 		if fn.Blocks == nil || (fn.TypeParams().Len() > 0 && len(fn.TypeArgs()) == 0) {
@@ -475,7 +513,7 @@ func runTaint(v *srcView, pol *taintPolicy) []taintFinding {
 	// function nothing in the program calls reaches code this analysis cannot
 	// see.
 	for _, fn := range e.funcs {
-		if e.callers[fn] > 0 {
+		if e.callers[fn] > 0 || e.pol.OnlySinks {
 			continue
 		}
 		s := e.summaries[fn]
@@ -490,21 +528,28 @@ func runTaint(v *srcView, pol *taintPolicy) []taintFinding {
 		}
 	}
 
-	out := make([]taintFinding, 0, len(e.findings))
-	for _, f := range e.findings {
-		out = append(out, *f)
+	keys := make([]string, 0, len(e.findings))
+	for k := range e.findings {
+		keys = append(keys, k)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		a, b := out[i].Escape, out[j].Escape
+	sort.Slice(keys, func(i, j int) bool {
+		fi, fj := e.findings[keys[i]], e.findings[keys[j]]
+		a, b := fi.Escape, fj.Escape
 		if a.Filename != b.Filename {
 			return a.Filename < b.Filename
 		}
 		if a.Line != b.Line {
 			return a.Line < b.Line
 		}
-		return out[i].What < out[j].What
+		return fi.What < fj.What
 	})
-	return out
+	out := make([]taintFinding, 0, len(keys))
+	exact := make([]taintOrigins, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, *e.findings[k])
+		exact = append(exact, e.exact[k])
+	}
+	return out, exact
 }
 
 // analyze runs one function's round: seed, propagate, and store the summary.
@@ -633,25 +678,57 @@ func (e *taintEngine) sourceInto(v ssa.Value, pos token.Pos, at ssa.Instruction)
 	e.reverse(v, tset{originLabel(pos): true}, at)
 }
 
-// escape reports an escape at pos: at once for the concrete origins, and as a
-// conditional escape in the summary for each parameter label.
+// escape reports one of the engine's own structural escapes. A policy with
+// OnlySinks set does not count them.
 func (e *taintEngine) escape(pos token.Pos, what string, from tset) {
+	if e.pol.OnlySinks {
+		return
+	}
+	e.report(pos, what, from)
+}
+
+// report records an escape at pos: at once for the concrete origins, and as a
+// conditional escape in the summary for each parameter label.
+func (e *taintEngine) report(pos token.Pos, what string, from tset) {
 	st := e.st
 	if o := from.concrete(); len(o) > 0 {
 		e.finding(pos, st.fn, what, o)
 	}
-	for _, p := range from.params() {
-		e.addCondEscape(p, condEscape{pos: pos, fn: st.fn, what: what})
+	for l := range from {
+		if l.param >= 0 {
+			e.addCondEscape(l.param, condEscape{pos: pos, fn: st.fn, what: what, filtered: l.filtered})
+		}
 	}
 }
 
 func (e *taintEngine) addCondEscape(p int, ce condEscape) {
 	for _, have := range e.st.sum.escapes[p] {
-		if have.pos == ce.pos && have.what == ce.what {
+		if have.pos == ce.pos && have.what == ce.what && have.filtered == ce.filtered {
 			return
 		}
 	}
 	e.st.sum.escapes[p] = append(e.st.sum.escapes[p], ce)
+}
+
+// clears reports whether the policy clears a concrete origin.
+func (e *taintEngine) clears(origin token.Pos) bool {
+	return e.pol.Clears != nil && e.pol.Clears(origin)
+}
+
+// filter is what survives a clearing call: concrete origins the policy does
+// not clear, and every parameter label marked filtered, to be resolved per
+// call site.
+func (e *taintEngine) filter(from tset) tset {
+	out := tset{}
+	for l := range from {
+		switch {
+		case l.param >= 0:
+			out[tlabel{param: l.param, filtered: true}] = true
+		case !e.clears(l.origin):
+			out[l] = true
+		}
+	}
+	return out
 }
 
 // finding records an escape at pos with its origins.
@@ -665,6 +742,10 @@ func (e *taintEngine) finding(pos token.Pos, fn *ssa.Function, what string, orig
 	if f == nil {
 		f = &taintFinding{Escape: p, What: what}
 		e.findings[key] = f
+		e.exact[key] = taintOrigins{}
+	}
+	for o := range origins {
+		e.exact[key][o] = true
 	}
 	seen := map[string]bool{}
 	for _, o := range f.Origins {
@@ -1183,6 +1264,10 @@ func (e *taintEngine) call(instr ssa.CallInstruction, v ssa.Value, from tset) {
 	}
 	withBody := false
 	for _, fn := range callees {
+		if obj := calleeObject(fn); obj != nil && e.pol.Opaque != nil && e.pol.Opaque(obj) {
+			e.pol.Call(e, instr, obj, argIdx, isRecv, from)
+			continue
+		}
 		if fn.Blocks != nil {
 			withBody = true
 			continue
@@ -1221,13 +1306,23 @@ func (e *taintEngine) applyCall(instr ssa.CallInstruction) {
 				continue
 			}
 			for k := range argL(l.param) {
-				out[k] = true
+				switch {
+				case !l.filtered:
+					out[k] = true
+				case k.param >= 0:
+					out[tlabel{param: k.param, filtered: true}] = true
+				case !e.clears(k.origin):
+					out[k] = true
+				}
 			}
 		}
 		return out
 	}
 	for _, fn := range e.calleesOf(instr) {
 		if fn.Blocks == nil {
+			continue
+		}
+		if obj := calleeObject(fn); obj != nil && e.pol.Opaque != nil && e.pol.Opaque(obj) {
 			continue
 		}
 		s := e.summaries[fn]
@@ -1266,11 +1361,18 @@ func (e *taintEngine) applyCall(instr ssa.CallInstruction) {
 				continue
 			}
 			for _, ce := range es {
-				if o := l.concrete(); len(o) > 0 {
-					e.finding(ce.pos, ce.fn, ce.what, o)
+				o := taintOrigins{}
+				for k := range l {
+					switch {
+					case k.param >= 0:
+						e.addCondEscape(k.param, condEscape{pos: ce.pos, fn: ce.fn, what: ce.what, filtered: ce.filtered || k.filtered})
+					case ce.filtered && e.clears(k.origin):
+					default:
+						o[k.origin] = true
+					}
 				}
-				for _, q := range l.params() {
-					e.addCondEscape(q, ce)
+				if len(o) > 0 {
+					e.finding(ce.pos, ce.fn, ce.what, o)
 				}
 			}
 		}
@@ -1301,6 +1403,9 @@ func (e *taintEngine) external(instr ssa.CallInstruction, fn *ssa.Function, isRe
 	obj := calleeObject(fn)
 	if obj == nil {
 		e.escape(instr.Pos(), "is passed to "+fn.String(), from)
+		return
+	}
+	if e.pol.External != nil && e.pol.External(e, instr, obj, argIdx, isRecv, from) {
 		return
 	}
 	common := instr.Common()
