@@ -5,7 +5,9 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/pathfence"
+	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/survivor"
 )
 
@@ -48,6 +50,14 @@ func carrierType(name string) (got, want reflect.Type, ok bool) {
 		// pathfence.ReadFile takes, so a revert to a joined string is what
 		// would reopen `../outside`.
 		return reflect.TypeOf(survivor.AcceptanceFile).Out(0), contained, true
+	case "phase.ContainID":
+		// Every id-to-path helper routes a phase id through here — or the
+		// same Contain under phases/ where an import cycle forbids calling
+		// it — before joining it under .dross/phases/.
+		return reflect.TypeOf(phase.ContainID).Out(0), contained, true
+	case "milestone.ContainVersion":
+		// milestone.FilePath's containment of a version under milestones/.
+		return reflect.TypeOf(milestone.ContainVersion).Out(0), contained, true
 	}
 	return nil, nil, false
 }

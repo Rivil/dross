@@ -69,7 +69,8 @@ func (f Field) Name() string { return f.Struct + "." + f.Field }
 // longer exists fails as a stale declaration.
 func Fields() []Field {
 	out := append([]Field(nil), fields...)
-	return append(out, unguessedFields...)
+	out = append(out, unguessedFields...)
+	return append(out, idSegmentFields...)
 }
 
 // Validate reports every way in which a registry is malformed.
@@ -361,6 +362,39 @@ var unguessedFields = []Field{
 	reportPath("stack.PackageManager", "Lockfile", "lockfile", "stack profile TOML",
 		"a lockfile NAME describing the package manager; matched, never opened.",
 		"internal/stack (profile data)"),
+}
+
+// idSegment declares an id or tracker key that becomes a PATH SEGMENT: a phase
+// id joined under .dross/phases/, a milestone version under milestones/. These
+// are read back from hand-editable files and from the issue tracker — a label
+// like dross/phase:../../x is a remote-controlled path segment — so each goes
+// through a Contain-typed carrier (phase.ContainID, milestone.ContainVersion)
+// inside the id-to-path helpers before anything is opened.
+func idSegment(strct, field, tag, artifact, carrier string) Field {
+	return Field{
+		Struct: strct, Field: field, Tag: tag, Artifact: artifact,
+		Consumed: &ConsumedBy{Carrier: carrier},
+	}
+}
+
+var idSegmentFields = []Field{
+	idSegment("board.TaskLink", "Issue", "issue", "board.json", "phase.ContainID"),
+	idSegment("deferred.Entry", "Source", "source", "deferred stores (spec.toml / deferred.toml)", "phase.ContainID"),
+	idSegment("deferred.Entry", "Target", "target", "deferred stores (spec.toml / deferred.toml)", "phase.ContainID"),
+	idSegment("forge.gitlabIssueResponse", "Labels", "labels", "the GitLab issues API response", "phase.ContainID"),
+	idSegment("forge.jiraCreated", "Key", "key", "the Jira create-issue API response", "phase.ContainID"),
+	idSegment("forge.jiraIssue", "Key", "key", "the Jira search API response", "phase.ContainID"),
+	idSegment("forge.youtrackIssue", "IDReadable", "idreadable", "the YouTrack issues API response", "phase.ContainID"),
+	idSegment("milestone.Milestone", "Phases", "phases", "milestones/<version>.toml", "phase.ContainID"),
+	idSegment("phase.Deferred", "ID", "id", "spec.toml", "phase.ContainID"),
+	idSegment("phase.Deferred", "Target", "target", "spec.toml", "phase.ContainID"),
+	idSegment("phase.Task", "ID", "id", "plan.toml", "phase.ContainID"),
+	idSegment("reaplog.Card", "DroppedLink", "dropped_link", "reap-log.json", "phase.ContainID"),
+	idSegment("reaplog.Card", "Issue", "issue", "reap-log.json", "phase.ContainID"),
+	idSegment("reaplog.Card", "PriorLabels", "prior_labels", "reap-log.json", "phase.ContainID"),
+	idSegment("state.State", "CurrentPhase", "current_phase", "state.json", "phase.ContainID"),
+	idSegment("phase.SpecPhase", "Milestone", "milestone", "spec.toml", "milestone.ContainVersion"),
+	idSegment("state.State", "CurrentMilestone", "current_milestone", "state.json", "milestone.ContainVersion"),
 }
 
 // pathsField builds one project.Paths entry. They differ only in name and tag.

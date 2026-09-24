@@ -156,6 +156,24 @@ func TestRegistryCoversEveryKnownFieldByName(t *testing.T) {
 		"stack.Signals.Files",
 		"stack.Signals.FilePatterns",
 		"stack.PackageManager.Lockfile",
+		// ids and tracker keys that become path segments under .dross/
+		"board.TaskLink.Issue",
+		"deferred.Entry.Source",
+		"deferred.Entry.Target",
+		"forge.gitlabIssueResponse.Labels",
+		"forge.jiraCreated.Key",
+		"forge.jiraIssue.Key",
+		"forge.youtrackIssue.IDReadable",
+		"milestone.Milestone.Phases",
+		"phase.Deferred.ID",
+		"phase.Deferred.Target",
+		"phase.Task.ID",
+		"reaplog.Card.DroppedLink",
+		"reaplog.Card.Issue",
+		"reaplog.Card.PriorLabels",
+		"state.State.CurrentPhase",
+		"phase.SpecPhase.Milestone",
+		"state.State.CurrentMilestone",
 	}
 
 	have := map[string]bool{}

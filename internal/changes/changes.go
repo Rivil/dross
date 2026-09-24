@@ -14,14 +14,28 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 const File = "changes.json"
 
-// FilePath is .dross/phases/<phase-id>/changes.json
+// FilePath is .dross/phases/<phase-id>/changes.json. The phase id is a path
+// segment read back from hand-editable files and the tracker, so it is
+// contained under phases/; one that would escape resolves to the refused
+// segment (phase.RefusedSegment — this package cannot import phase), where no
+// changes.json exists.
 func FilePath(root, phaseID string) string {
-	return filepath.Join(root, "phases", phaseID, File)
+	c, err := pathfence.Contain(filepath.Join(root, "phases"), "phase id", phaseID)
+	if err != nil {
+		return filepath.Join(root, "phases", refusedSegment, File)
+	}
+	dir := c.String()
+	return filepath.Join(dir, File)
 }
+
+// refusedSegment mirrors phase.RefusedSegment.
+const refusedSegment = "_refused"
 
 type Changes struct {
 	Phase string `json:"phase"`

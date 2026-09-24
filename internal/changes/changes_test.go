@@ -753,3 +753,20 @@ func TestCompleteTreatsAbsenceAsNotDone(t *testing.T) {
 		t.Error("a nil record must not read complete")
 	}
 }
+
+// TestFilePathContainsThePhaseID: changes.json's phase id is a path segment
+// from hand-editable files; one that would escape phases/ never names a file
+// outside it.
+func TestFilePathContainsThePhaseID(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".dross")
+	phases := filepath.Join(root, "phases")
+	if got := FilePath(root, "auth"); got != filepath.Join(phases, "auth", File) {
+		t.Errorf("FilePath(auth) = %s", got)
+	}
+	for _, id := range []string{"../outside", "../../x", "/abs"} {
+		got := FilePath(root, id)
+		if !strings.HasPrefix(got, phases+string(filepath.Separator)) || got != filepath.Join(phases, "_refused", File) {
+			t.Errorf("FilePath(%q) = %s, want the refused segment inside phases/", id, got)
+		}
+	}
+}

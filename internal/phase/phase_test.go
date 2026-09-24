@@ -1,12 +1,15 @@
 package phase
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 func TestInsertRelative(t *testing.T) {
@@ -612,5 +615,40 @@ func TestDeferredSurvivorRoundTrip(t *testing.T) {
 	}
 	if loaded.Deferred[1].Survivor != "" {
 		t.Errorf("ordinary entry should carry no survivor key, got %q", loaded.Deferred[1].Survivor)
+	}
+}
+
+// TestPhaseIDsAreContained: a phase id is an untrusted path segment — read back
+// from hand-editable files and from tracker keys and labels — so one that
+// would escape phases/ never resolves outside it. Dir lands on the fixed
+// refused segment inside phases/, DirExists reports no directory even when
+// the escaped target exists, and ContainID refuses with ErrEscapes.
+func TestPhaseIDsAreContained(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, ".dross")
+	if err := os.MkdirAll(filepath.Join(root, "phases", "real"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(parent, "outside"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	phases := filepath.Join(root, "phases")
+	for _, id := range []string{"../../outside", "../outside", "/etc", "a/../../x"} {
+		dir := Dir(root, id)
+		if dir != filepath.Join(phases, RefusedSegment) {
+			t.Errorf("Dir(%q) = %s, want the refused segment inside phases/", id, dir)
+		}
+		if _, err := ContainID(root, id); !errors.Is(err, pathfence.ErrEscapes) && !errors.Is(err, pathfence.ErrAbsolute) {
+			t.Errorf("ContainID(%q) = %v, want a containment refusal", id, err)
+		}
+	}
+	if DirExists(root, "../../outside") {
+		t.Error("DirExists stat'ed an escaping slug's real target outside phases/")
+	}
+	if !DirExists(root, "real") || Dir(root, "real") != filepath.Join(phases, "real") {
+		t.Error("an in-tree phase id no longer resolves")
+	}
+	if c, err := ContainID(root, "real"); err != nil || c.Rel() != "real" {
+		t.Errorf("ContainID(real) = %v, %v", c, err)
 	}
 }

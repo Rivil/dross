@@ -22,7 +22,36 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
+
+// RefusedSegment is where an id that would escape its parent directory
+// resolves: one fixed name inside the parent, outside the [a-z0-9-] slug
+// alphabet, so nothing is found there and nothing outside is reached. The
+// id-to-path helpers keep their string signatures — about seventy callers —
+// and a refused id reads as a phase that does not exist.
+const RefusedSegment = "_refused"
+
+// ContainID contains a phase id under root/phases.
+//
+// A phase id is a path SEGMENT read back from hand-editable files —
+// state.json, milestone.toml, deferred stores — and from the issue tracker's
+// keys and labels, so it is untrusted: an id that escapes phases/ (../x, an
+// absolute path) is refused with pathfence.ErrEscapes.
+func ContainID(root, id string) (pathfence.Contained, error) {
+	return pathfence.Contain(filepath.Join(root, "phases"), "phase id", id)
+}
+
+// idDir is id's contained directory, or the refused segment.
+func idDir(root, id string) string {
+	c, err := ContainID(root, id)
+	if err != nil {
+		return filepath.Join(root, "phases", RefusedSegment)
+	}
+	dir := c.String()
+	return dir
+}
 
 // Dir resolves a phase id to its on-disk directory under phases/.
 //
@@ -31,13 +60,14 @@ import (
 // absent, Dir falls back to the prefix-stripped slug when that directory
 // exists. When neither exists it returns the literal phases/<id> unchanged,
 // so callers that build a path for a not-yet-created phase are unaffected.
+// An id that would escape phases/ resolves to phases/RefusedSegment.
 func Dir(root, id string) string {
-	literal := filepath.Join(root, "phases", id)
+	literal := idDir(root, id)
 	if _, err := os.Stat(literal); err == nil {
 		return literal
 	}
 	if stripped := StripLegacyPrefix(id); stripped != id {
-		if alt := filepath.Join(root, "phases", stripped); statDir(alt) {
+		if alt := idDir(root, stripped); statDir(alt) {
 			return alt
 		}
 	}

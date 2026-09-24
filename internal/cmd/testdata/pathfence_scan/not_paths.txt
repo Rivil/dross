@@ -17,7 +17,6 @@
 # ---- board — board sync state: dismissed issue keys, card links and workflow states
 board.Board.Dismissed dismissed
 board.TaskLink.BoardState board_state
-board.TaskLink.Issue issue
 board.TaskLink.PlanStatus plan_status
 
 # ---- boardsync — a board-pull envelope's error text
@@ -89,9 +88,7 @@ defaults.RemoteDefaults.Reviewers reviewers
 defaults.TelemetryDefaults.AskedAt asked_at
 
 # ---- deferred — deferred-item prose and routing: phase ids, target ids, survivor keys
-deferred.Entry.Source source
 deferred.Entry.Survivor survivor
-deferred.Entry.Target target
 deferred.Entry.Text text
 deferred.Entry.Why why
 
@@ -111,7 +108,6 @@ forge.githubIssue.NodeID node_id
 forge.githubIssue.State state
 forge.githubIssue.Title title
 forge.gitlabIssueResponse.Description description
-forge.gitlabIssueResponse.Labels labels
 forge.gitlabIssueResponse.State state
 forge.gitlabIssueResponse.Title title
 forge.gitlabIssueResponse.WebURL web_url
@@ -120,12 +116,9 @@ forge.issueResponse.HTMLURL html_url
 forge.issueResponse.State state
 forge.issueResponse.Title title
 forge.jiraCreated.ID id
-forge.jiraCreated.Key key
 forge.jiraCreated.Self self
-forge.jiraIssue.Key key
 forge.jiraTransition.ID id
 forge.youtrackIssue.Description description
-forge.youtrackIssue.IDReadable idreadable
 forge.youtrackIssue.Summary summary
 forge.ytStateBundle.ID id
 
@@ -140,7 +133,6 @@ milestone.Meta.Started started
 milestone.Meta.Status status
 milestone.Meta.Title title
 milestone.Meta.Version version
-milestone.Milestone.Phases phases
 milestone.Scope.NonGoals non_goals
 milestone.Scope.SuccessCriteria success_criteria
 
@@ -166,19 +158,15 @@ phase.Criterion.Text text
 phase.Decision.Choice choice
 phase.Decision.Key key
 phase.Decision.Why why
-phase.Deferred.ID id
 phase.Deferred.Survivor survivor
-phase.Deferred.Target target
 phase.Deferred.Text text
 phase.Deferred.Why why
 phase.PlanPhase.ID id
 phase.SpecPhase.ID id
-phase.SpecPhase.Milestone milestone
 phase.SpecPhase.Title title
 phase.Task.Covers covers
 phase.Task.DependsOn depends_on
 phase.Task.Description description
-phase.Task.ID id
 phase.Task.Status status
 phase.Task.TestContract test_contract
 phase.Task.Title title
@@ -276,10 +264,7 @@ quality.Finding.Title title
 
 # ---- reaplog — reap-log card records: issue keys, labels, states, links
 reaplog.Card.Class class
-reaplog.Card.DroppedLink dropped_link
-reaplog.Card.Issue issue
 reaplog.Card.Outcome outcome
-reaplog.Card.PriorLabels prior_labels
 reaplog.Card.PriorState prior_state
 
 # ---- rules — rule ids, text, dates
@@ -327,8 +312,6 @@ stack.Tool.Name name
 
 # ---- state — state.json: current milestone/phase ids, status, version, last action
 state.Activity.Action action
-state.State.CurrentMilestone current_milestone
-state.State.CurrentPhase current_phase
 state.State.CurrentPhaseStatus current_phase_status
 state.State.LastAction last_action
 state.State.Version version

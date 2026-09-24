@@ -21,6 +21,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/remote"
 )
 
@@ -538,11 +539,19 @@ type Finding struct {
 	Text     string `toml:"text"`
 }
 
-// FilePaths returns canonical paths for tests.json and verify.toml.
+// FilePaths returns canonical paths for tests.json and verify.toml. The phase
+// id is contained under phases/; one that would escape resolves to the refused
+// segment (phase.RefusedSegment), where neither file exists.
 func FilePaths(root, phaseID string) (tests, verify string) {
-	dir := filepath.Join(root, "phases", phaseID)
+	dir := filepath.Join(root, "phases", refusedPhaseSegment)
+	if c, err := pathfence.Contain(filepath.Join(root, "phases"), "phase id", phaseID); err == nil {
+		dir = c.String()
+	}
 	return filepath.Join(dir, TestsFile), filepath.Join(dir, VerifyFile)
 }
+
+// refusedPhaseSegment mirrors phase.RefusedSegment.
+const refusedPhaseSegment = "_refused"
 
 // Run executes the configured adapters against the given files, grouped
 // by language, and returns the aggregated Tests struct. It does NOT
