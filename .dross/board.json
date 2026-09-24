@@ -709,6 +709,126 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "exec-taint-enumeration/t-1": {
+      "issue": "DRO-649",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-10": {
+      "issue": "DRO-658",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-11": {
+      "issue": "DRO-659",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-12": {
+      "issue": "DRO-668",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-13": {
+      "issue": "DRO-661",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-14": {
+      "issue": "DRO-662",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-15": {
+      "issue": "DRO-663",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-16": {
+      "issue": "DRO-664",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-17": {
+      "issue": "DRO-665",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-18": {
+      "issue": "DRO-666",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-19": {
+      "issue": "DRO-669",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-2": {
+      "issue": "DRO-650",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-20": {
+      "issue": "DRO-670",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-21": {
+      "issue": "DRO-672",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-22": {
+      "issue": "DRO-671",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-23": {
+      "issue": "DRO-660",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-24": {
+      "issue": "DRO-667",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-3": {
+      "issue": "DRO-651",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-4": {
+      "issue": "DRO-652",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-5": {
+      "issue": "DRO-653",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-6": {
+      "issue": "DRO-654",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-7": {
+      "issue": "DRO-655",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-8": {
+      "issue": "DRO-656",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-9": {
+      "issue": "DRO-657",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "lane-host-affinity/t-1": {
       "issue": "DRO-318",
       "plan_status": "done",
