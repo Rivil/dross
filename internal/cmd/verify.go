@@ -1109,6 +1109,11 @@ func finalizeVerify(root, phaseID string) (recorded bool, verdict string, err er
 	if v.Verify.Finalized {
 		return false, v.Verify.Verdict, nil
 	}
+	if v.Verify.Verdict == "pass" {
+		if err := refuseOrphanedAcceptances(root); err != nil {
+			return false, v.Verify.Verdict, err
+		}
+	}
 	t, _ := verify.LoadTests(testsPath) // optional — may be absent under --skip-mutation manual cleanup
 	recordVerifyOutcome(t, v)
 	v.Verify.Finalized = true
@@ -1117,6 +1122,35 @@ func finalizeVerify(root, phaseID string) (recorded bool, verdict string, err er
 		return true, v.Verify.Verdict, fmt.Errorf("write finalized marker to verify.toml: %w", err)
 	}
 	return true, v.Verify.Verdict, nil
+}
+
+// refuseOrphanedAcceptances is finalize's half of the structural-orphan gate:
+// a pass verdict cannot be recorded while the LIVE store holds an acceptance
+// whose file is gone or whose text is no whole line of it.
+//
+// It re-derives the orphans from the tree rather than trusting verify.toml's
+// BLOCKING findings, because the record is editable and the tree is the fact —
+// deleting the finding by hand must not unlock pass. It uses the same
+// predicate verify reports with (survivor.StructuralOrphans, nil observed), so
+// run-scoped staleness never blocks here either. partial and fail are not
+// gated: recording an honest non-pass verdict is always allowed. Ship and
+// phase complete inherit this through their finalize auto-heal.
+func refuseOrphanedAcceptances(root string) error {
+	store, err := survivor.Load(survivor.Path(root))
+	if err != nil {
+		return err
+	}
+	orphans := survivor.StructuralOrphans(filepath.Dir(root), store)
+	if len(orphans) == 0 {
+		return nil
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "verdict=pass refused: %d orphaned acceptance(s) in .dross/%s suppress nothing and no run can revive them — retire each first:",
+		len(orphans), survivor.StoreFile)
+	for _, o := range orphans {
+		fmt.Fprintf(&b, "\n  %s (%s) — %s — dross survivor retire %s", o.File, o.Key, o.Reason, o.Key)
+	}
+	return errors.New(b.String())
 }
 
 // configuredAdaptersFn is the seam a refusal test substitutes to prove verify
@@ -1612,17 +1646,40 @@ func routedSurvivors(root string) (map[string]string, error) {
 	return out, nil
 }
 
-// appendStalenessNotes reports acceptances whose subject is gone (c-5) as
-// NOTEs. Deliberately NOT findings that gate: a stale acceptance is bookkeeping
-// to clean up, and failing a phase over one would punish the phase that
-// happened to run next — the same reasoning as a degraded scope.
+// appendStalenessNotes reports acceptances whose subject is gone (c-5).
+//
+// A STRUCTURAL orphan — file gone, or stored text no whole normalized line of
+// it — is BLOCKING. It used to be a NOTE on the grounds that a stale entry is
+// bookkeeping and failing the next phase over it punishes the wrong phase. That
+// reasoning did not survive contact with a real store: 216 such NOTEs were
+// re-listed unchanged by every verify for weeks, each one an acceptance that
+// suppressed nothing (its key can never be produced again) while reading as a
+// live disposition. A NOTE nobody has to act on is a NOTE nobody acts on. The
+// fix is one command, so the finding names it.
+//
+// The `stale acceptance: <file> (<key>) — <reason>` prefix is kept verbatim:
+// it is what callers grep for.
+//
+// Run-scoped staleness never reaches here — verify passes no observed set — and
+// an entry that could not be checked stays a NOTE: "could not look" is not
+// "gone", and blocking on a permissions blip would push a user to retire a live
+// acceptance.
 func appendStalenessNotes(v *verify.Verify, repoRoot string, store *survivor.Store) {
 	rep := survivor.StaleAcceptances(repoRoot, store)
 	for _, s := range rep.Stale {
+		if !survivor.IsStructural(s.Reason) {
+			// Unreachable with a nil observed set; kept so a future caller
+			// that passes one cannot turn run-scoped staleness into a block.
+			v.Findings = append(v.Findings, verify.Finding{
+				Severity: "NOTE",
+				Text:     fmt.Sprintf("stale acceptance: %s (%s) — %s", s.File, s.Key, s.Reason),
+			})
+			continue
+		}
 		v.Findings = append(v.Findings, verify.Finding{
-			Severity: "NOTE",
-			Text: fmt.Sprintf("stale acceptance: %s (%s) — %s — retire it from .dross/%s",
-				s.File, s.Key, s.Reason, survivor.StoreFile),
+			Severity: "BLOCKING",
+			Text: fmt.Sprintf("stale acceptance: %s (%s) — %s — it suppresses nothing and no run can revive it; retire it: dross survivor retire %s",
+				s.File, s.Key, s.Reason, s.Key),
 		})
 	}
 	for _, u := range rep.Unverifiable {

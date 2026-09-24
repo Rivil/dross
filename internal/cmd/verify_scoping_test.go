@@ -384,11 +384,16 @@ func TestVerifyCorruptStoreFailsLoud(t *testing.T) {
 	}
 }
 
-// TestVerifyReportsStaleAcceptance is c-5 through the CLI: an acceptance whose
-// subject is gone surfaces as exactly one NOTE naming the file and the reason —
-// and changes nothing about the verdict, the score, or the exit code. A stale
-// acceptance is bookkeeping, and failing the phase that happens to run next
-// would punish the wrong thing.
+// TestVerifyReportsStaleAcceptance is c-5 through the CLI, as
+// survivor-store-stale-remeasure c-7 re-decided it: an acceptance whose text is
+// gone surfaces as exactly one BLOCKING finding naming the file, the key, the
+// structural reason and the one command that clears it — and moves nothing
+// else: not the score, not the scope summary.
+//
+// It used to assert the opposite severity. A structural orphan suppresses
+// nothing and no run can revive it (the key hashes the whole line text), so a
+// NOTE was the one severity nobody had to act on — and 216 of them sat in a real
+// store, re-listed by every verify, for weeks.
 func TestVerifyReportsStaleAcceptance(t *testing.T) {
 	dir := lifecycleRepo(t, "stale")
 
@@ -396,8 +401,12 @@ func TestVerifyReportsStaleAcceptance(t *testing.T) {
 		"--op", "CONDITIONALS_NEGATION", "--reason", "unreachable by design"); err != nil {
 		t.Fatal(err)
 	}
+	key := onlyAcceptedKey(t, dir)
 	before := runVerifyCapturing(t, "01-stale")
 	beforeToml := mustRead(t, filepath.Join(dir, ".dross/phases/01-stale/verify.toml"))
+	if got := staleFindings(t, dir, "01-stale"); len(got) != 0 {
+		t.Fatalf("a live acceptance produced stale findings: %+v", got)
+	}
 
 	// Rewrite b.go so the accepted text no longer occurs anywhere in it.
 	writeScopeFile(t, dir, "b.go", "package x\n\nfunc B() string { return \"gone\" }\n")
@@ -407,15 +416,23 @@ func TestVerifyReportsStaleAcceptance(t *testing.T) {
 		t.Errorf("a stale acceptance still counted as suppressing: %s", out)
 	}
 	vbody := mustRead(t, filepath.Join(dir, ".dross/phases/01-stale/verify.toml"))
-	notes := strings.Count(vbody, "stale acceptance: b.go")
-	if notes != 1 {
-		t.Fatalf("want exactly 1 stale-acceptance NOTE, got %d:\n%s", notes, vbody)
+	got := staleFindings(t, dir, "01-stale")
+	if len(got) != 1 {
+		t.Fatalf("want exactly 1 stale-acceptance finding, got %d:\n%s", len(got), vbody)
 	}
-	if !strings.Contains(vbody, survivor.ReasonTextGone) {
-		t.Errorf("stale NOTE must carry the structural reason:\n%s", vbody)
+	f := got[0]
+	if f.Severity != "BLOCKING" {
+		t.Errorf("a text-gone acceptance must be BLOCKING, got %q: %s", f.Severity, f.Text)
 	}
-	if !strings.Contains(vbody, `severity = "NOTE"`) {
-		t.Errorf("staleness must be a NOTE, never a gating finding:\n%s", vbody)
+	wantPrefix := "stale acceptance: b.go (" + key + ") — " + survivor.ReasonTextGone
+	if !strings.HasPrefix(f.Text, wantPrefix) {
+		t.Errorf("finding lost the prefix callers grep for:\n got %q\nwant prefix %q", f.Text, wantPrefix)
+	}
+	if !strings.Contains(f.Text, "dross survivor retire "+key) {
+		t.Errorf("finding does not name the command that clears it: %q", f.Text)
+	}
+	if strings.Contains(f.Text, "--stale") {
+		t.Errorf("finding suggests a --stale sweep, which also retires run-scoped entries: %q", f.Text)
 	}
 	// The score is untouched by staleness in either direction.
 	if scoreLine(t, beforeToml) != scoreLine(t, vbody) {
@@ -424,6 +441,109 @@ func TestVerifyReportsStaleAcceptance(t *testing.T) {
 	if !strings.Contains(before, "in-scope mutants") || !strings.Contains(out, "in-scope mutants") {
 		t.Errorf("scope summary missing from one of the runs")
 	}
+}
+
+// TestVerifyBlocksFileGoneAcceptance is the other structural arm: the file the
+// acceptance names is gone from the tree. Same severity, same command, the
+// file-gone reason.
+func TestVerifyBlocksFileGoneAcceptance(t *testing.T) {
+	dir := lifecycleRepo(t, "filegone")
+
+	if err := runCmd(t, Survivor(), "accept", "b.go:3",
+		"--op", "CONDITIONALS_NEGATION", "--reason", "unreachable by design"); err != nil {
+		t.Fatal(err)
+	}
+	key := onlyAcceptedKey(t, dir)
+	if err := os.Remove(filepath.Join(dir, "b.go")); err != nil {
+		t.Fatal(err)
+	}
+
+	runVerifyCapturing(t, "01-filegone")
+	got := staleFindings(t, dir, "01-filegone")
+	if len(got) != 1 {
+		t.Fatalf("want exactly 1 stale-acceptance finding, got %d: %+v", len(got), got)
+	}
+	f := got[0]
+	if f.Severity != "BLOCKING" {
+		t.Errorf("a file-gone acceptance must be BLOCKING, got %q: %s", f.Severity, f.Text)
+	}
+	if !strings.HasPrefix(f.Text, "stale acceptance: b.go ("+key+") — "+survivor.ReasonFileGone) {
+		t.Errorf("finding does not carry the file-gone reason: %q", f.Text)
+	}
+	if !strings.Contains(f.Text, "dross survivor retire "+key) {
+		t.Errorf("finding does not name the command that clears it: %q", f.Text)
+	}
+}
+
+// TestVerifyKeepsUncheckableAcceptanceANote: an entry that could not be
+// CHECKED is not an entry that is gone. A textless acceptance and one whose
+// file cannot be read stay NOTEs with no retire suggestion — blocking on a
+// permissions blip would push a user to retire a live acceptance.
+func TestVerifyKeepsUncheckableAcceptanceANote(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a mode-000 file; the unreadable arm cannot be staged")
+	}
+	dir := lifecycleRepo(t, "uncheckable")
+
+	// c.go is untracked, so nothing but the staleness pass ever reads it.
+	locked := filepath.Join(dir, "c.go")
+	mustWrite(t, locked, "package x\n\nfunc C() bool { return true }\n")
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o644) })
+
+	const textless, unreadable = "00000000000000aa", "00000000000000bb"
+	mustWrite(t, filepath.Join(dir, ".dross", survivor.StoreFile),
+		"[[accepted]]\n  key = \""+textless+"\"\n  file = \"a.go\"\n  op = \"CONDITIONALS_BOUNDARY\"\n"+
+			"  reason = \"planted: an entry that records no text\"\n\n"+
+			"[[accepted]]\n  key = \""+unreadable+"\"\n  file = \"c.go\"\n  op = \"CONDITIONALS_BOUNDARY\"\n"+
+			"  text = \"func C() bool { return true }\"\n  reason = \"planted: an entry whose file cannot be read\"\n")
+
+	runVerifyCapturing(t, "01-uncheckable")
+	v, err := verify.LoadVerify(filepath.Join(dir, ".dross/phases/01-uncheckable/verify.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{textless, unreadable} {
+		var named []verify.Finding
+		for _, f := range v.Findings {
+			if strings.Contains(f.Text, key) {
+				named = append(named, f)
+			}
+		}
+		if len(named) != 1 {
+			t.Fatalf("want exactly 1 finding naming %s, got %d: %+v", key, len(named), named)
+		}
+		f := named[0]
+		if f.Severity != "NOTE" {
+			t.Errorf("an uncheckable acceptance (%s) must stay a NOTE, got %q: %s", key, f.Severity, f.Text)
+		}
+		if !strings.HasPrefix(f.Text, "acceptance could not be checked:") {
+			t.Errorf("an uncheckable acceptance (%s) was reported as something else: %q", key, f.Text)
+		}
+		if strings.Contains(f.Text, "survivor retire") {
+			t.Errorf("an uncheckable acceptance (%s) was offered for retirement: %q", key, f.Text)
+		}
+	}
+}
+
+// staleFindings returns the phase's findings that carry the staleness prefix,
+// with their severities — counting substrings of the TOML body cannot tell
+// which severity belongs to which finding.
+func staleFindings(t *testing.T, dir, phaseID string) []verify.Finding {
+	t.Helper()
+	v, err := verify.LoadVerify(filepath.Join(dir, ".dross/phases", phaseID, "verify.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []verify.Finding
+	for _, f := range v.Findings {
+		if strings.HasPrefix(f.Text, "stale acceptance: ") {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // scoreLine extracts the mutation_score line from a verify.toml body.
