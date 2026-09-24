@@ -1,77 +1,146 @@
 # Plan Review — exec-taint-enumeration
 
 Reviewed: 2026-09-24
-Plan: 21 tasks across 7 waves
+Plan: 22 tasks across 7 waves
 
 ## BLOCKING
-- [wave-order / test-contract] t-15's scoped gate fails by construction in wave 5. Its contract says "the scoped gate over the 14 migrated files reports any finding". But gitTrim (internal/cmd/ship_recover.go:263) returns `strings.TrimSpace(string(out))` with no marker until t-19 in wave 6, and 10 of t-15's 14 files use gitTrim results. One concrete case: internal/cmd/basebranch.go:79-87 loops over `d.Ahead`, which holds rev-list output set at originpush.go:40. It passes each SHA into a second gitTrim (diff-tree, :80), then formats both the SHA and a diff-tree path into `fmt.Errorf`. That is an error escape in a t-15 file, and only t-19's marker clears it. t-19's own description admits that phase.go, ship_recover.go and cleantree.go carry t-19-type findings, and t-15's gate covers those files too. The panel called the same failure the top coverage defect in the gitCombined case: a gate that goes red on findings no task owns yet.
-  Suggestion: limit t-15's gate to findings whose origin is gitCombined's `CombinedOutput` (ship_recover.go:278), or clear gitTrim's output before t-15 runs. Settle this together with the gitTrim-marker item below, because that fix changes which task owns these findings.
-
-- [coverage — c-4/c-9 remediation] A live raw read of a declared path field has no owning task. survivor.Acceptance.File (`toml:"file"`, internal/survivor/store.go:39) is serialized into the committed .dross/survivors.toml. It is opened raw at internal/survivor/stale.go:101: `os.ReadFile(filepath.Join(root, a.File))`, with no pathfence.Contain. The field lives in a schema dir that isn't listed, under a tag word that isn't listed (`file` is not in pathShapedTags). That makes it exactly the c-9 blind spot, and it is live today. t-8 will enumerate the field and must declare it. Either disposition makes t-12's live gate trip: Consumed means a raw os.ReadFile with no Contain, and NotConsumed means the field reaches os.*. t-12 forbids redeclaring the field to escape. The fix is production code in internal/survivor/stale.go, probably plus a Carrier entry that pulls in pathfence_carrier_test.go, and no task lists either file. t-12's files are all tests. Exec taint has a discovery step in t-9; path taint has none.
-  Suggestion: give the stale.go fix to t-8 or t-12 and add the file to that task. Give t-8 a discovery step like t-9's: when it lands, run the enumeration and the path policy over the live tree, and `dross task add` any site no task owns.
-
-- [locked-decision: clearance_model, taint_sources] t-19's single gitTrim marker clears every gitTrim result, for every caller now and later. The plan puts one marker at gitTrim's conversion (ship_recover.go:271, `return strings.TrimSpace(string(out)), nil`) with prose "true for every caller". gitTrim is called from 22 files, and not all of them receive a SHA or branch:
-  - verifyscope.go:87 reads a `git diff -U0` patch body.
-  - verifyscope.go:71 reads `--name-only` path lists that end up in tests.json.
-  - repair_state.go:87 and phase_backfill.go:101 read `git log` subjects.
-
-  clearance_model places the marker "at the conversion site" where "a SHA or branch [is] sliced out of output". For these callers gitTrim is not that site. taint_sources rejects deciding which binaries are safe, and its reasoning names git log output as able to carry secrets. A marker on the generic runner makes that decision one helper at a time. It would also clear any future gitTrim caller (say `gitTrim(dir, "show", ref)`) with no review. t-10's orphan rule can't catch this, because the marker always clears something.
-  Suggestion: put markers at the caller sites where the SHA, branch or path is sliced out. Alternatively, split gitTrim in two: a ref-resolving helper for rev-parse, symbolic-ref, merge-base and rev-list, whose output shape is fixed, may carry one marker, while diff, log and show reads go through an unmarked runner. Either way t-19's file list grows (at least verifyscope.go, repair_state.go and phase_backfill.go).
+(none)
 
 ## FLAG
-- [test-contract, c-8] t-21's c-8 evidence can't be collected as written. Three problems:
-  - origin/main has no cmd/testsummary. The timing table arrived with #132 on milestone/v1.7. main's latest CI run (2026-09-04, failed) predates every v1.7 phase. So "main's latest run + 15s" has no table and the wrong baseline.
-  - CI runs only on pull_request and on pushes to main, and /dross-ship opens the phase PR only after verify passes. At verify time there is no "phase PR's CI timing table".
-  - "The local -race elapsed time" is measured on the laptop, where this project already treats local internal/cmd runs as unreliable. t-1 correctly uses `dross test` instead.
+- [test-contract / antipattern: files] t-19's verb enforcement is red on arrival and too loose to support the single gitTrim marker.
+  - Red on arrival: doctor.go:950 calls `gitTrim(".", "--version")`. `--version` is not in the fixed-shape set, and no task lists doctor.go. TestGitTrimRunsRefVerbsOnly ("every live gitTrim call site's verb must be in the fixed-shape set") therefore fails on live code that no task owns.
+  - Checks the verb but not its flags. Three verb-legal calls print content, and the one gitTrim marker would clear all of them:
+    - `ls-remote --get-url` prints the configured remote URL, userinfo and token included.
+    - `for-each-ref --format=%(contents)` prints commit and tag messages.
+    - `rev-list --format=%B` prints commit messages.
+  - Verb resolution is unspecified: 33 of the 51 call sites pass the verb as the first argument of gitRefArgs/gitPathArgs rather than to gitTrim.
+  - No floor on sites examined (c-7). A walker that resolves nothing passes, and the marker still clears everything.
 
-  A single package-total delta on internal/cmd is also noisy against a 15s budget.
-  Suggestion: use the latest PR run with the timing table on the milestone/v1.7 base (#132's) as the baseline. Measure with the remote runner's `go test -race -json ./internal/cmd | go run ./cmd/testsummary` before and after, or sum the scan tests' own durations from the -json stream. Write down which number verify reads.
+  Today's callers are clean: for-each-ref uses only `%(refname)`/`%(refname:short)`, and rev-list only `--count`. This is a regression hole, not a live leak.
+  Suggestion: add doctor.go to t-19, either routed through gitRead or with `--version` named in the set. Pin the allowed options per verb, not just the verb. Add a floor (51 sites today) and a must-trip fixture that passes a content flag through gitRefArgs.
 
-- [test-contract, terminal_definition] Nothing classifies writers that print to stdout implicitly. t-5's terminal set is os.Stdout/os.Stderr plus cobra OutOrStdout/ErrOrStderr, and "any other external callee receiving taint is an escape". Read literally, that makes all of these escapes: `fmt.Println(out)`, `fmt.Printf`, cobra's `cmd.Println`/`cmd.Printf`, and the package wrappers `Print`/`Printf` in internal/cmd/root.go:144-147. Non-test source has about 700 such print calls. If they count as escapes, t-9's discovery run floods and the burn-downs start adding markers to prints. If they count as terminal, no contract pins that, and a regression in either direction goes unnoticed.
-  Suggestion: state the classification in t-5. Add must-not-trip rows for `fmt.Println(out)` and `cmd.Println(out)`, and a must-trip row for `fmt.Fprintln(&buf, out)`.
+- [antipattern: files / locked-decision: clearance_model] t-19 owns every gitRead-origin finding "in any file", but one of them lives in a file it doesn't list, and the in-file fix would launder raw diff text. The flow:
+  - verify.ParseHunks copies raw hunk-header lines into its degraded list (`fmt.Sprintf("unparsable hunk header in %s: %q", where, line)` at internal/verify/scope.go:273, and again at :278).
+  - verifyscope.go:97 appends that list to Scope.Degraded, which is serialized to tests.json (`json:"degraded"`, scope.go:53).
+  - A hunk header carries the enclosing source line as function context, so this puts a line of source code into a persisted file.
 
-- [test-contract, c-4/c-9] Nothing can prove a not_paths.txt row wrong. t-12's sources are only pathfence.Fields() entries, so a path field filed in not_paths.txt is never traced, and no check confirms that a not_paths.txt field never reaches an os.* call. fields.go's own standard is that a disposition must be "a declaration a test can falsify". The survivor.Acceptance.File case above could be turned green just by filing the field in not_paths.txt.
-  Suggestion: have t-12 treat not_paths.txt rows like NotConsumed, so a row that reaches any os.* function is a finding.
+  internal/verify/scope.go is not in t-19's files. The only remedy inside t-19's files is a marker above verifyscope.go:95, and that would clear raw diff text. clearance_model reserves markers for SHA, branch or path slices.
+  Suggestion: add internal/verify/scope.go and its test to t-19. Make the degraded entry fixed prose (a file and a count, not the line), or print the line to stderr.
 
-- [test-contract, c-9] t-8 enumerates only tagged fields whose underlying type is string or []string, and no contract says what happens to other path-carrying shapes:
-  - verify's `WholeFile map[string]string` (internal/verify/verify.go:237, json `whole_file`) and `Ranges map[string][]EffectiveRange` are keyed by file path in tests.json.
-  - An untagged exported string field is serialized under its Go name by both BurntSushi/toml and encoding/json.
-  - `*string` fields.
+- [test-contract: gate scope] The burn-down gates use two different scoping rules:
+  - t-15, t-19 and t-22 gate by origin.
+  - t-14, t-16, t-17 and t-18 gate by escape location (a package set or a file list).
+  - t-9's discovery step assigns ownership by origin ("any finding whose origin no burn-down owns").
 
-  A future path field in any of these shapes would sit outside both registries.
-  Suggestion: pin each shape as enumerated or explicitly out of scope, each with a fixture row. Write the boundary into the path-containment entry t-21 rewrites in ARCHITECTURE.md.
+  So a finding whose origin one task owns, but which escapes in another task's files, lands on whichever gate happens to cover that file, or on none until t-21. One concrete case, following the remote hold protocol's text:
+  - ssh stdout goes through remote.ParseStatus, then ParseLockStatus, then ParseHolder (internal/remote/lock.go:356).
+  - The resulting Holder text passes through scheduledReason and remote.WaitLine into `fmt.Errorf` at internal/cmd/verify.go:680.
+  - The origin belongs to t-17, but the escape sits in t-18's gate.
+  - t-18's description covers user-command streams "with no marker" and does not anticipate this.
+  - The natural clearance site is ParseHolder in lock.go. No task lists that file, and t-17's "remote's transport output … never at a marker" reads as forbidding a marker there.
 
-- [locked-decision: marker_grammar / clearance_model] t-10 clears "the tainted values defined on [the marked] line" without requiring that line to be a conversion. A marker directly above `out, err := ghCommand(args...).Output()`, or above `c.Stdout = &buf`, clears the raw output for every later use, error paths included. One comment would undo the fix-not-mark rule. Both locks put the marker above the conversion. The CANARY tests protect only today's sites.
-  Suggestion: add a t-10 must-trip row: a marker whose bound line defines a source value (an Output/CombinedOutput result, or a Stdout/Stderr referent) is itself a finding.
+  The same package holds more escapes that t-17's gate will see but its files don't list: lock.go:382/388 (`unreadable holder pid %q`, `… since %q`), hold.go:310 (BusyError carrying the parsed Holder), and remote.go:565/573.
+  Suggestion: state in t-17 whether the holder and status protocol records count as "transport output" (errors carry fixed prose) or as protocol data (a marker at ParseHolder/ParseStatus), and add internal/remote/lock.go to t-17. Have t-9's discovery step also check that the gate which will see each escape belongs to the task that owns its origin.
 
-- [test-contract, clearance_model] t-5 clears any external call's "numeric/bool" result. byte and rune are numeric types (uint8/int32). So `utf8.DecodeRune(out)`, or `bufio.Reader.ReadByte`/`ReadRune` over a StdoutPipe, yields clean values that `b.WriteRune(r)` or `string(r)` can reassemble into the whole output with no marker. The lock's premise, "a bool or int cannot carry secret text", doesn't hold for a byte stream, and no t-5 row pins this case.
-  Suggestion: exclude byte- and rune-typed results from clearing, or clear only bool and int. Add must-trip rows for a ReadRune loop and a DecodeRune loop.
+- [test-contract] t-21's retirement pass protects only the CANARY tests: "their CANARY tests must still pass". The six scoped files also hold guards that are neither CANARY tests nor zero-findings checks:
+  - t-17's marker ban in stryker.go, gremlins.go and stryker_net.go.
+  - t-18's "no marker on the test.go/run.go/verify.go stream sites".
+  - t-19's TestGitTrimRunsRefVerbsOnly, the only enforcement behind the gitTrim marker.
+  - t-14's and t-16's marker-removal checks.
 
-- [antipattern: files / granularity] t-15 leaves out files that its own compile-atomic change breaks:
-  - switchbranch.go:88/101 return gitCombined's `(string, error)` from guardedFF/guardedResetHard. Deleting gitCombined changes those signatures, and internal/cmd/gitseparator_test.go:188,193 and internal/cmd/refguard_test.go:140,144 call both functions in the two-value form. Neither test file is listed.
-  - internal/cmd/testdata/subprocargs_audit/snippets.txt has six gitCombined rows whose verdicts change once gitCombined leaves gitCallFuncs.
-  - The divergence text at phase.go:414 (help) and :616-619 tells the user to "read the abort first" while printing the output this task removes from the error.
+  These are new names, so TestNoTestLost does not protect them. If they are retired along with the zero-findings checks, the gitTrim marker's claim becomes unenforced. If they stay and each one re-runs the engine over the live program, they count against c-8, and t-21's contract doesn't mention them.
+  Suggestion: have t-21 name every test in the six files that survives, add a contract row that fails if any named guard disappears, and state whether the marker-removal checks share one engine run.
 
-  With 18 listed files (21 counting these), t-15 is already the largest task in the plan. "Compile-atomic" only holds for the final deletion: gitRun can land beside gitCombined and callers can migrate in batches.
-  Suggestion: add the three files and reword the divergence text. Consider splitting "add gitRun and migrate callers" from "delete gitCombined".
+- [antipattern: files / locked-decision: clearance_model] None of t-22's listed dispositions fits init's `remote get-url`. Its output (init.go:177, `strings.TrimSpace(string(out))`) is a URL that can carry userinfo (`https://user:token@host/…`): not a SHA, branch or path, and not merely compared or counted.
+  - The conversion that extracts a safe value is project.DetectRemote/parseGitRemote (internal/project/remote.go:24-57). It rebuilds the URL from host and path and drops the userinfo, but it is outside t-22's files.
+  - doctor.go:101 is a second consumer of gitRemoteOriginURL and prints the raw URL at :111 and :115. doctor.go is in no task.
+  - A marker at init.go:177 would clear a value that can hold a credential.
+
+  Suggestion: name the disposition in t-22. Either put the marker at the host/path extraction in internal/project/remote.go and add that file, or leave the raw URL tainted and confirm it reaches only stdout.
+
+- [test-contract: terminal_definition] (raised in the first review; still unaddressed) The plan never says whether stdout prints are terminal. Every stdout print in internal/cmd goes through Print/Printf (root.go:144-147, which call fmt.Println/fmt.Printf), across 698 call sites. t-5's terminal set lists only writer values and says "any other external callee receiving taint is an escape". Read literally, fmt.Printf is an escape. Verdicts that depend on this:
+  - verify.go:880/888 `Printf("  state    %s\n", st.State)`, where st.State is ssh stdout.
+  - doctor.go:111/115, which print the origin URL.
+  - doctor.go's host-lock holder lines.
+
+  doctor.go is in no task. If prints count as escapes, these findings reach t-21's global gate with no owner.
+  Suggestion: pin fmt.Print/Printf/Println as terminal (implicit os.Stdout) in t-5. Add must-not-trip rows for `fmt.Printf("%s", out)` and a `Printf` wrapper, and a must-trip row for `fmt.Fprint(&buf, out)`.
+
+- [test-contract: c-8] (raised in the first review; still unaddressed) t-21's c-8 evidence can't be read as written:
+  - "main's latest run" is b3df5da (2026-09-04). cmd/testsummary exists only on milestone/v1.7 (#132), so that run has no timing table.
+  - CI runs on `pull_request` and on pushes to main, and the phase PR is opened only after verify. At verify time there is no "phase PR's CI timing table".
+  - "The local -race elapsed time" is a laptop measurement, which this project treats as unreliable (t-1 already uses `dross test`).
+  - t-1's 10s gate is measured on the warm remote runner, but CI may compile dependency export data cold for `go list -export`. The gate doesn't bound the CI number.
+
+  Suggestion: use the latest milestone/v1.7 PR run that has the timing table as the baseline. Measure before and after with `go test -race -json ./internal/cmd | go run ./cmd/testsummary` on the remote runner, and write down which number verify reads.
+
+- [test-contract: c-4/c-9] (raised in the first review; still unaddressed) Nothing checks a not_paths.txt row. t-12's sources are pathfence.Fields() entries only, so a path field filed as "not a path" is never traced. Most of the ~450 walked fields will go into that ledger, and t-8's failure message offers a row to paste, so the easiest way to silence a new path field is a row nothing verifies. survivor.Acceptance.File could have been silenced exactly this way.
+  Suggestion: t-12 treats not_paths.txt rows as sources that never clear. A row that reaches any os.* function is a finding.
+
+- [test-contract: c-9] (partly raised in the first review) t-8 enumerates fields whose "underlying type is string or []string". That misses in-scope path-shaped fields:
+  - `[]RelPath` for `type RelPath string`: its underlying type is `[]RelPath`, not `[]string`. The contract tests only the scalar `type RelPath string`.
+  - `*string`.
+
+  The plan also doesn't say whether these are in or out of scope:
+  - Untagged exported fields, which BurntSushi/toml and encoding/json serialize under the Go name.
+  - Path-keyed maps: verify's `WholeFile map[string]string` (`whole_file`) and `Ranges map[string][]EffectiveRange` (range_provenance.go:216-217, verify.go:232).
+
+  Suggestion: add fixture rows for `[]RelPath` and `*string`. Write the untagged and map boundary into the path-containment entry that t-21 rewrites.
+
+- [locked-decision: clearance_model / marker_grammar] (raised in the first review; still unaddressed) Two ways to clear taint are left unpinned:
+  - t-10 clears "the tainted values defined on that line" but does not require that line to be a conversion. A marker above `out, err := ghCommand(args...).Output()` or `c.Stdout = &buf` clears the whole stream. Both locks put the marker at the conversion. The t-17 and t-18 bans cover only six files.
+  - t-5 clears any numeric or bool result from an external call. byte and rune are numeric, so a `ReadRune`/`DecodeRune` loop feeding `WriteRune` rebuilds the full output with no marker.
+
+  Suggestion: add a t-10 must-trip row where a marker binds a source-defining line (an Output/CombinedOutput result, a Stdout/Stderr referent, or a pipe). Add t-5 must-trip rows for rune and byte loops, or clear only int and bool.
+
+- [antipattern: files / granularity] (raised in the first review; still unaddressed) t-15 leaves out files its own change breaks:
+  - guardedFF and guardedResetHard return gitCombined's `(string, error)` (switchbranch.go:88, :101). Two-value calls to them in gitseparator_test.go:188/193 and refguard_test.go:140/144 stop compiling once gitRun returns only `error`.
+  - testdata/subprocargs_audit/snippets.txt has 6 gitCombined rows. Two of them are FLAG rows (`bare-var-positional`, `path-without-separator`) that stop flagging once gitCombined leaves gitCallFuncs.
+
+  That makes 21 files. "Compile-atomic" applies only to deleting gitCombined; gitRun can land beside it.
+  Suggestion: add the three files. Split into "add gitRun + migrate callers" and "delete gitCombined".
+
+- [granularity] t-8 spans three layers:
+  - Rewriting the test enumeration (pathfence_fields_test.go, plus a ~450-row not_paths.txt).
+  - Production registry data (internal/pathfence/fields.go).
+  - A production fix in another package (internal/survivor/stale.go), with its carrier binding in pathfence_carrier_test.go.
+
+  It also takes on an open-ended "every newly declared field opened raw is fixed here". internal/survivor/stale_test.go, where the `File = "../escape"` contract row would live, is not listed.
+  Suggestion: split candidate. Separate the enumeration rewrite from the survivor remediation, and add stale_test.go.
 
 ## NOTE
-- [antipattern: description accuracy] t-18 says "The `git ls-files` lists in survivor_drain and techdebt get conversion markers." survivor_drain.go:40 actually runs `go list -f {{.Dir}} ./...`; only techdebt.go:90 runs `git ls-files -z`. update.go is in t-18's files and gate scope, but the description never says what changes there (update.go:198-201 sends the install output to `o.out`).
-- [TestNoTestLost] boundary_test.go's TestNoTestLost pins about 4k test names from tests_before.txt. Several tests will survive this phase by name only:
-  - TestDroppingAScanRootFailsTheFloor and TestExecConsentScansTheSpawningPackages: execConsentScanRoots goes away once t-11 reads the whole-module program, and t-11's description never mentions that deletion.
-  - TestUnwrapScanSkipsTestFiles: a Tests:false load makes it trivially true.
-  - TestEveryPathShapedFieldIsDeclared: t-8 deletes pathShapedTags.
+- [amendment check] The first review's three blockers are resolved:
+  - t-15, t-19 and t-22 now gate by origin.
+  - Every content-verb gitTrim caller is in t-19's files: status ×3, log ×2, ls-tree, ls-files ×2, diff-tree, diff ×2. The one exception is doctor.go:950 (see the first FLAG).
+  - t-8 owns stale.go:101 and has a discovery step.
+- [coverage] All ten criteria are covered. t-20 reads c-6's "each scan" as the two tracing scans, exec taint and path fields. The other new findings — t-8's undeclared field, t-4's outside-walk file, t-6's unresolved dispatch and t-10's orphan marker — have message contracts of their own, but they aren't in c-6's fixture. That reading is defensible.
+- [wave-order] Every dependency is real, and no task can move to an earlier wave. Tasks that share files are serialized:
+  - execconsent_audit_test.go: t-2 → t-6 → t-11.
+  - cleantree.go and phase.go: t-15 → t-22.
+  - Five shared files: t-15 → t-19.
 
-  Only t-6 and t-8 mention this constraint. The suite enforces it anyway, so this is a warning, not a gap.
-- [forbidden-actions] There is no global rules file at ~/.claude/dross/rules.toml. Project rule r-01 ("make install" before relying on a change) isn't triggered. t-1's `dross test` and t-21's `dross architecture check` run through the installed binary, but neither depends on Go code this phase changes. No task edits a CI workflow.
+  t-19 and t-22 share no files and can run in parallel.
+- [forbidden-actions] There is no ~/.claude/dross/rules.toml, and no task edits a CI workflow. Project rule r-01 does apply once: t-17 edits internal/remote (the ssh/rsync transport) and t-18 edits internal/cmd/test.go, and together those are the `dross test` path the plan gates on. After they land the installed binary is stale relative to source. Run `make install` before later waves rely on `dross test`, or gate on the pre-phase binary knowingly.
+- [TestNoTestLost] These names in tests_before.txt lose their premise during this phase:
+  - TestDroppingAScanRootFailsTheFloor and TestExecConsentScansTheSpawningPackages (execConsentScanRoots goes away in t-11).
+  - TestEveryPathShapedFieldIsDeclared and TestWalkerFindsANonEmptySet (t-8 deletes schemaDirs and pathShapedTags).
+  - TestUnwrapScanSkipsTestFiles (trivially true under Tests:false).
+
+  Only t-6 and t-8 mention the constraint; t-7 and t-11 don't. The suite enforces it regardless.
+- [antipattern: description] t-18's survivor_drain wording is now correct (`go list`). update.go is still listed without a stated change. update.go:199-200 already sends the install stream to `o.out`, so it may need nothing; saying so would let the scoped gate's zero-findings row carry that claim.
 - [strength] The plan's factual claims match the tree:
   - 39 gitCombined call sites in 14 files, 10 of them in milestone.go.
+  - Five gh `%w\n%s` sites: basepr.go:70, comment.go:89, headpr.go:59, merged.go:78 and open.go:114.
   - 28 spawn files.
-  - Exactly five gh `%w\n%s` sites in internal/ship.
-  - The assertion at comment_test.go:230-231.
-  - The 6f27eaa^ stryker.go line ranges t-13 pins: 115-118, 142, 150, 201-222 and 315.
-- [strength] The engine fails closed by default. Unknown external calls are escapes, a tainted return is an escape until t-9 lands, and every package in the transform set must be exercised by a corpus line. Fixtures build in a separate ssa.Program, so fixture types can't invent edges in the live VTA/CHA graph.
-- [strength] The burn-downs test behaviour, not just scanner verdicts. CANARY stubs check that the tool output lands on stderr and stays out of the returned error (t-14, t-15, t-17, t-18). The global gate lands only after every burn-down. For exec taint, t-9's live discovery run closes the ownership gap the panel found for gitCombined.
+  - The assertion at comment_test.go:230.
+  - The 6f27eaa^ stryker.go lines t-13 pins (115-118, 142, 150 and 315).
+  - The "8 of 36 / 11-tag / 4 schema dirs" text that t-21 removes from ARCHITECTURE.md.
+  - Every existing test and symbol the contracts name.
+- [strength] The engine fails closed. Unknown external calls count as escapes, a tainted return is an escape until t-9 lands, and every transform-set package must be exercised by a corpus line. Fixtures build in their own ssa.Program, so they can't add edges to the live call graph.
+- [strength] The CANARY stub tests check that tool output lands on stderr and stays out of returned errors, not just scanner verdicts. The global gate lands after every burn-down, and the t-8 and t-9 discovery steps route live hits to an owner before the gates that would see them.
 
 ## Summary
-The plan is thorough and its groundwork checks out, but three things block execution: t-15's gate can't go green before t-19 lands, the live raw read of survivor.Acceptance.File (stale.go:101) has no owning task, and t-19's single gitTrim marker would clear diff and log content that the taint_sources lock treats as unsafe.
+Nothing blocks execution: the amendment fixed the first review's three blockers. The remaining risks:
+- The new gitTrim marker is under-enforced: doctor.go's `--version` call breaks the verb check, and content flags on allowed verbs pass it.
+- Taint escapes where the files the owning task lists can't fix it: the remote holder text in verify.go and lock.go, and hunk headers written into tests.json.
+- Six flags from the first review are still open.
