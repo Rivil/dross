@@ -72,6 +72,7 @@ func gitStatusRaw(repoDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	//dross:taint-cleared status --porcelain prints two status letters and a repo path per line, never file content
 	return strings.TrimRight(string(out), "\n"), nil
 }
 

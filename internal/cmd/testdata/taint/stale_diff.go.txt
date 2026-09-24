@@ -1,0 +1,78 @@
+// Regression corpus for milestone_stale's diff | patch-id pipeline
+// (TestStaleDiffBufferNeverReachesAnError). The live patchIDOfDiff keeps the
+// diff buffer — git diff's stdout, fed to patch-id on stdin — off every error
+// it returns, and its copy below is clean. regressedPatchID is the shape it
+// must never drift to: the buffer quoted into the refusal. It must trip.
+package stalediff
+
+import (
+	"bytes"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+)
+
+// patchIDOfDiff is internal/cmd/milestone_stale.go's, argv builder inlined.
+func patchIDOfDiff(repoDir, from, to string) (string, error) {
+	var diff bytes.Buffer
+	d := exec.Command("git", "-C", repoDir, "diff", "--end-of-options", from, to)
+	d.Stdout = &diff
+	if err := d.Run(); err != nil {
+		return "", fmt.Errorf("diff %s..%s: %w", from, to, err)
+	}
+	if diff.Len() == 0 {
+		return "", nil
+	}
+	p := exec.Command("git", "-C", repoDir, "patch-id", "--stable")
+	p.Stdin = &diff
+	out, err := p.Output()
+	if err != nil {
+		return "", fmt.Errorf("patch-id %s..%s: %w", from, to, err)
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) == 0 {
+		return "", nil
+	}
+	return fields[0], nil
+}
+
+func regressedPatchID(repoDir, from, to string) (string, error) {
+	var diff bytes.Buffer
+	d := exec.Command("git", "-C", repoDir, "diff", "--end-of-options", from, to)
+	d.Stdout = &diff
+	if err := d.Run(); err != nil {
+		return "", fmt.Errorf("diff %s..%s: %w", from, to, err)
+	}
+	p := exec.Command("git", "-C", repoDir, "patch-id", "--stable")
+	p.Stdin = &diff
+	out, err := p.Output()
+	if err != nil {
+		return "", fmt.Errorf("patch-id %s..%s failed on:\n%s", from, to, diff.String()) // WANT taint
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) == 0 {
+		return "", nil
+	}
+	return fields[0], nil
+}
+
+// The ids are only compared, as milestone_stale compares them; the error ends
+// on stderr, so the one escape is the error itself.
+func check(repoDir, a, b string, regressed bool) {
+	id := patchIDOfDiff
+	if regressed {
+		id = regressedPatchID
+	}
+	x, err := id(repoDir, a+"^", a)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+	y, err := id(repoDir, b+"^", b)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+	fmt.Println(x == y)
+}

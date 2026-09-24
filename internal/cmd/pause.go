@@ -86,6 +86,7 @@ func autoSnapshot(root string, now time.Time) (string, error) {
 	branch := "(no git)"
 	//dross:exec-exempt git symbolic-ref resolves a ref name from .git; the argv is dross's own and executes nothing the repo supplied
 	if out, err := exec.Command("git", "-C", repoDir, "symbolic-ref", "--short", "HEAD").Output(); err == nil {
+		//dross:taint-cleared symbolic-ref --short HEAD prints the current branch name and nothing else
 		branch = strings.TrimSpace(string(out))
 	}
 	fmt.Fprintf(&b, "- branch: %s\n", branch)
@@ -127,6 +128,7 @@ func dirtySummary(repoDir string) string {
 	paths := make([]string, 0, len(lines))
 	for _, l := range lines {
 		if len(l) > 3 {
+			//dross:taint-cleared a porcelain line is two status letters, a space and a repo path: l[3:] is the path
 			paths = append(paths, strings.TrimSpace(l[3:]))
 		}
 	}

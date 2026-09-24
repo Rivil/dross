@@ -871,6 +871,7 @@ func phaseRefRecordedBase(repoDir, phaseID string) string {
 	if err := json.Unmarshal(out, &ch); err != nil {
 		return ""
 	}
+	//dross:taint-cleared the recorded base branch read out of the phase ref's committed changes.json; nothing else from the blob is kept
 	return ch.Base
 }
 
