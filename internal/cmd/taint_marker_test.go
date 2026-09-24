@@ -40,6 +40,12 @@ type taintMarker struct {
 // findings, plus a finding for every marker that is malformed, sits on a
 // source, or clears nothing.
 func execTaintScan(v *srcView) (taint []taintFinding, markers []taintFinding) {
+	return execTaintScanWith(v, nil)
+}
+
+// execTaintScanWith is execTaintScan that also tells onSource every origin the
+// exec policy seeds, so one engine run serves a gate and its source floor.
+func execTaintScanWith(v *srcView, onSource func(token.Pos)) (taint []taintFinding, markers []taintFinding) {
 	byLine := map[string]*taintMarker{}
 	var all []*taintMarker
 	for _, p := range v.Pkgs {
@@ -54,6 +60,7 @@ func execTaintScan(v *srcView) (taint []taintFinding, markers []taintFinding) {
 	}
 
 	pol := execTaintPolicy()
+	pol.OnSource = onSource
 	seeding := false
 	seed := pol.Seed
 	pol.Seed = func(e *taintEngine, fn *ssa.Function) {

@@ -12,11 +12,13 @@ import (
 	"testing"
 )
 
-// The git plumbing burn-down gate. Scoped BY ORIGIN to one spawn: the
-// exec.Command in gitRun, the effect-only helper whose output goes to stderr.
-// gitTrim's spawn sits in the same file and feeds the same callers, but its
-// findings are t-19's burn-down, not this one's — so this gate keys on the
-// origin's exact line, never on the file.
+// The git plumbing burn-downs' guards: gitRun (effect-only, output to
+// stderr), gitTrim (pinned ref invocations, one marker) and gitRead (content,
+// unmarked). Their zero-findings gates are retired into TestNoSpawnOutputEscapes
+// (taint_audit_test.go); what stays is the verb pin that keeps gitTrim's marker
+// true, and the fixture proving gitRead's content is not cleared by it. The
+// three spawns share a file, so origin scoping keys on the spawn's exact line,
+// never on the file.
 
 // gitHelperSpawnLines returns the file and line(s) of the exec.Command call
 // inside each named helper function in internal/cmd.
@@ -79,18 +81,10 @@ func findingsFromLines(fs []taintFinding, lines map[token.Position]bool) []taint
 	return out
 }
 
-// TestNoGitRunOutputEscapes is the gate: nothing gitRun's spawn printed
-// escapes.
-func TestNoGitRunOutputEscapes(t *testing.T) {
-	taint, _ := execTaintScan(liveView(t))
-	for _, f := range findingsFromLines(taint, gitHelperSpawnLines(t, "gitRun")) {
-		t.Errorf("%s — %s", f, execTaintRemedy)
-	}
-}
-
-// TestGitRunGateIsScopedByOrigin: a finding whose origin is gitTrim's spawn —
-// in the same file, reaching the same kind of error — is not this gate's; one
-// whose origin is gitRun's is.
+// TestGitRunGateIsScopedByOrigin: findingsFromLines keys on a spawn's exact
+// line. A finding whose origin is gitTrim's spawn — in the same file as
+// gitRun's, reaching the same kind of error — is not kept when asking for
+// gitRun's; one whose origin is gitRun's is.
 func TestGitRunGateIsScopedByOrigin(t *testing.T) {
 	runLines := gitHelperSpawnLines(t, "gitRun")
 	trimLines := gitHelperSpawnLines(t, "gitTrim")
@@ -111,39 +105,6 @@ func TestGitRunGateIsScopedByOrigin(t *testing.T) {
 	got := findingsFromLines(fs, runLines)
 	if len(got) != 1 || got[0].Escape.Line != 2 {
 		t.Errorf("the gate kept %v, want only the gitRun-origin finding", got)
-	}
-}
-
-// gitReadCallerFiles are the files t-19's burn-down touches: where gitTrim's
-// content reads moved to gitRead, and where a caller marks the SHA, branch or
-// path it slices out.
-var gitReadCallerFiles = []string{
-	"internal/cmd/ship_recover.go",
-	"internal/cmd/basebranch.go",
-	"internal/cmd/milestone.go",
-	"internal/cmd/phase_backfill.go",
-	"internal/cmd/repair_files.go",
-	"internal/cmd/repair_phasedirs.go",
-	"internal/cmd/repair_state.go",
-	"internal/cmd/secretscan.go",
-	"internal/cmd/verifyscope.go",
-	"internal/verify/scope.go",
-}
-
-// TestNoGitTrimOutputEscapes is the gate for the two reading helpers: nothing
-// gitTrim's or gitRead's spawn printed escapes, wherever it lands, and no
-// marker in the files this burn-down touched is malformed or idle.
-func TestNoGitTrimOutputEscapes(t *testing.T) {
-	taint, markers := execTaintScan(liveView(t))
-	for _, f := range findingsFromLines(taint, gitHelperSpawnLines(t, "gitTrim", "gitRead")) {
-		t.Errorf("%s — %s", f, execTaintRemedy)
-	}
-	root := sourceProgram(t).Root
-	for _, m := range markers {
-		rel, _ := filepath.Rel(root, m.Escape.Filename)
-		if containsString(gitReadCallerFiles, filepath.ToSlash(rel)) {
-			t.Error(m.String())
-		}
 	}
 }
 

@@ -7,27 +7,16 @@ import (
 	"testing"
 )
 
-// The scanner and codex burn-down gate. Scoped BY ORIGIN: a finding belongs
-// here when any of its origins is a spawn in internal/codex, security,
-// quality or techdebt, wherever it escapes. The short SHA each scanner reads
+// The scanner and codex burn-down's guards. Its zero-findings gate is retired
+// into TestNoSpawnOutputEscapes (taint_audit_test.go); what stays is the proof
+// that each marker is load-bearing. A finding is a scanner's when any of its
+// origins is a spawn in internal/codex, security, quality or techdebt,
+// wherever it escapes. The short SHA each scanner reads
 // from git names its run directory, so before it was marked its taint reached
 // every path derived from a run dir — the escapes land all over the tree, the
 // origin stays here.
 
 var scannerOriginDirs = []string{"internal/codex", "internal/security", "internal/quality", "internal/techdebt"}
-
-// TestNoScannerOutputEscapes is the gate: nothing a scanner or codex spawn
-// printed escapes, and every marker in those packages is well formed and
-// clears something.
-func TestNoScannerOutputEscapes(t *testing.T) {
-	taint, markers := execTaintScan(liveView(t))
-	for _, f := range taintFindingsFrom(t, taint, scannerOriginDirs...) {
-		t.Errorf("%s — %s", f, execTaintRemedy)
-	}
-	for _, m := range markerFindingsIn(t, markers, scannerOriginDirs...) {
-		t.Error(m.String())
-	}
-}
 
 // TestScannerRevParseMarkerIsLoadBearing: deleting the rev-parse marker in
 // internal/security/run.go puts findings back, and they name that git spawn as

@@ -9,35 +9,20 @@ import (
 	"testing"
 )
 
-// The tool-stream burn-down gate. Scoped BY ORIGIN to spawns in
-// internal/mutation, internal/remote and internal/compilefence, wherever the
-// value escapes — the host lock's holder record once travelled from an ssh
-// session through BusyError into verify.go, a persisted leg error and a PR
-// body.
+// The tool-stream burn-down's guards: spawns in internal/mutation,
+// internal/remote and internal/compilefence — the host lock's holder record
+// once travelled from an ssh session through BusyError into verify.go, a
+// persisted leg error and a PR body. The zero-findings gate is retired into
+// TestNoSpawnOutputEscapes (taint_audit_test.go).
 //
 // Tool streams end at the terminal or the recorder, never at a marker: the
 // mutation tool runners may not carry //dross:taint-cleared at all. What remote
 // marks is PROTOCOL data — the fields of the lock and status records a dross
 // script writes on the host, admitted only after a shape check.
 
-var toolStreamOriginDirs = []string{"internal/mutation", "internal/remote", "internal/compilefence"}
-
 // toolRunnerFiles are the mutation adapters whose streams are the tool's own
 // output end to end: a marker in them would clear the stream itself.
 var toolRunnerFiles = []string{"stryker.go", "gremlins.go", "stryker_net.go"}
-
-// TestNoToolStreamEscapes is the gate: nothing a mutation, remote or
-// compilefence spawn printed escapes, and every marker in those packages is
-// well formed and clears something.
-func TestNoToolStreamEscapes(t *testing.T) {
-	taint, markers := execTaintScan(liveView(t))
-	for _, f := range taintFindingsFrom(t, taint, toolStreamOriginDirs...) {
-		t.Errorf("%s — %s", f, execTaintRemedy)
-	}
-	for _, m := range markerFindingsIn(t, markers, toolStreamOriginDirs...) {
-		t.Error(m.String())
-	}
-}
 
 // toolRunnerMarkers reports every taint-cleared marker in a tool-runner file
 // of internal/mutation.

@@ -6,49 +6,19 @@ import (
 	"testing"
 )
 
-// The user-command burn-down gate. Scoped BY ORIGIN to the spawns in seven
-// internal/cmd files — the suite, slot and verify streams, lane installs, the
-// self-update, the drain's package discovery and techdebt's file list —
-// wherever their output escapes. A replay's captured tail, quoted into a
-// repoint refusal two files away, is still the suite's output.
+// The user-command burn-down's guards: the spawns in seven internal/cmd files —
+// the suite, slot and verify streams, lane installs, the self-update, the
+// drain's package discovery and techdebt's file list. A replay's captured
+// tail, quoted into a repoint refusal two files away, is still the suite's
+// output. The zero-findings gate is retired into TestNoSpawnOutputEscapes
+// (taint_audit_test.go).
 //
 // The streams of `dross test`, `dross run` and `dross verify` reach the
 // terminal through an OutOrStdout-derived writer and carry no marker: a marker
 // on a stream site would clear the stream itself.
 
-var userCmdOriginFiles = []string{
-	"internal/cmd/lane_install.go",
-	"internal/cmd/run.go",
-	"internal/cmd/test.go",
-	"internal/cmd/update.go",
-	"internal/cmd/verify.go",
-	"internal/cmd/survivor_drain.go",
-	"internal/cmd/techdebt.go",
-}
-
 // streamSiteFiles carry the user's own suite and slot streams.
 var streamSiteFiles = []string{"internal/cmd/test.go", "internal/cmd/run.go", "internal/cmd/verify.go"}
-
-// TestNoUserCommandOutputEscapes is the gate.
-func TestNoUserCommandOutputEscapes(t *testing.T) {
-	taint, markers := execTaintScan(liveView(t))
-	root := sourceProgram(t).Root
-	for _, f := range taint {
-		for _, o := range f.Origins {
-			rel, _ := filepath.Rel(root, o.Filename)
-			if containsString(userCmdOriginFiles, filepath.ToSlash(rel)) {
-				t.Errorf("%s — %s", f, execTaintRemedy)
-				break
-			}
-		}
-	}
-	for _, m := range markers {
-		rel, _ := filepath.Rel(root, m.Escape.Filename)
-		if containsString(userCmdOriginFiles, filepath.ToSlash(rel)) {
-			t.Error(m.String())
-		}
-	}
-}
 
 // TestStreamSitesCarryNoMarker: the suite, slot and verify streams end at the
 // terminal; none of their files may carry a taint-cleared marker.

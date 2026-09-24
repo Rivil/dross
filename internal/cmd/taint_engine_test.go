@@ -203,6 +203,9 @@ type taintPolicy struct {
 	// Clears reports whether a concrete origin is cleared by the policy's
 	// clearing call; filtered labels drop exactly those origins.
 	Clears func(origin token.Pos) bool
+	// OnSource, when set, is told every origin the policy seeds — the source
+	// census a gate's floor counts.
+	OnSource func(pos token.Pos)
 	// OnlySinks silences the engine's own structural escapes — a return or
 	// write at the program's edge, a package variable, a panic, an
 	// unresolved call. Only what the policy reports through e.report counts.
@@ -670,11 +673,17 @@ func (e *taintEngine) taint(v ssa.Value, from tset) bool {
 
 // source taints v with a new origin at pos.
 func (e *taintEngine) source(v ssa.Value, pos token.Pos) {
+	if e.pol.OnSource != nil {
+		e.pol.OnSource(pos)
+	}
 	e.taint(v, tset{originLabel(pos): true})
 }
 
 // sourceInto marks the object v refers to as receiving the stream at pos.
 func (e *taintEngine) sourceInto(v ssa.Value, pos token.Pos, at ssa.Instruction) {
+	if e.pol.OnSource != nil {
+		e.pol.OnSource(pos)
+	}
 	e.reverse(v, tset{originLabel(pos): true}, at)
 }
 

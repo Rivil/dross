@@ -7,10 +7,12 @@ import (
 	"testing"
 )
 
-// The gh burn-down gate. Scoped BY ORIGIN: a finding belongs here when any of
-// its origins is a gh spawn in internal/ship, wherever it escapes — a PR
-// record decoded in ship and quoted into an error in internal/cmd is still
-// gh's output.
+// The gh burn-down's guards. Its zero-findings gate is retired into
+// TestNoSpawnOutputEscapes (taint_audit_test.go), which sees every origin; what
+// stays is the proof that each internal/ship marker is load-bearing. A finding
+// belongs to gh when any of its origins is a gh spawn in internal/ship,
+// wherever it escapes — a PR record decoded in ship and quoted into an error in
+// internal/cmd is still gh's output.
 
 // taintFindingsFrom returns the findings with an origin under any of dirs
 // (repo-relative, slash-separated).
@@ -34,22 +36,6 @@ func taintFindingsFrom(t *testing.T, fs []taintFinding, dirs ...string) []taintF
 			if matched {
 				out = append(out, f)
 				break
-			}
-		}
-	}
-	return out
-}
-
-// markerFindingsIn returns marker findings bound in files under dirs.
-func markerFindingsIn(t *testing.T, ms []taintFinding, dirs ...string) []taintFinding {
-	t.Helper()
-	root := sourceProgram(t).Root
-	var out []taintFinding
-	for _, m := range ms {
-		rel, _ := filepath.Rel(root, m.Escape.Filename)
-		for _, d := range dirs {
-			if strings.HasPrefix(filepath.ToSlash(rel), d+"/") {
-				out = append(out, m)
 			}
 		}
 	}
@@ -110,18 +96,6 @@ func viewWithoutComment(v *srcView, file string, line int) *srcView {
 		}
 	}
 	return &cp
-}
-
-// TestNoGhOutputEscapes is the gate: nothing a gh spawn printed escapes, and
-// every marker in internal/ship is well formed and clears something.
-func TestNoGhOutputEscapes(t *testing.T) {
-	taint, markers := execTaintScan(liveView(t))
-	for _, f := range taintFindingsFrom(t, taint, "internal/ship") {
-		t.Errorf("%s — %s", f, execTaintRemedy)
-	}
-	for _, m := range markerFindingsIn(t, markers, "internal/ship") {
-		t.Error(m.String())
-	}
 }
 
 // TestGhMarkersAreLoadBearing: each marker in internal/ship clears a real gh

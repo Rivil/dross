@@ -12,46 +12,12 @@ import (
 	"github.com/Rivil/dross/internal/state"
 )
 
-// The direct-git burn-down gate. Scoped BY ORIGIN to the seven internal/cmd
-// files that spawn git themselves rather than through gitRun/gitTrim/gitRead —
-// wherever the value escapes. Values only compared or counted need nothing; a
-// SHA, branch or path sliced out is marked at that conversion; everything else
-// is kept off errors and persisted records.
-
-var gitDirectOriginFiles = []string{
-	"internal/cmd/cleantree.go",
-	"internal/cmd/init.go",
-	"internal/cmd/milestone_stale.go",
-	"internal/cmd/pause.go",
-	"internal/cmd/phase.go",
-	"internal/cmd/statusline.go",
-	"internal/cmd/worktree_files.go",
-}
-
-// gitDirectMarkerFiles are where this burn-down's markers live: the seven
-// files, and project's remote parser, which drops userinfo from init's URL.
-var gitDirectMarkerFiles = append(append([]string(nil), gitDirectOriginFiles...), "internal/project/remote.go")
-
-// TestNoDirectGitOutputEscapes is the gate.
-func TestNoDirectGitOutputEscapes(t *testing.T) {
-	taint, markers := execTaintScan(liveView(t))
-	root := sourceProgram(t).Root
-	for _, f := range taint {
-		for _, o := range f.Origins {
-			rel, _ := filepath.Rel(root, o.Filename)
-			if containsString(gitDirectOriginFiles, filepath.ToSlash(rel)) {
-				t.Errorf("%s", execTaintMessage(f))
-				break
-			}
-		}
-	}
-	for _, m := range markers {
-		rel, _ := filepath.Rel(root, m.Escape.Filename)
-		if containsString(gitDirectMarkerFiles, filepath.ToSlash(rel)) {
-			t.Error(m.String())
-		}
-	}
-}
+// The direct-git burn-down's guards: the seven internal/cmd files that spawn
+// git themselves rather than through gitRun/gitTrim/gitRead. Values only
+// compared or counted need nothing; a SHA, branch or path sliced out is marked
+// at that conversion; everything else is kept off errors and persisted records.
+// The zero-findings gate is retired into TestNoSpawnOutputEscapes
+// (taint_audit_test.go); these are the behaviour guards beside it.
 
 // TestStaleDiffBufferNeverReachesAnError: a copy of the live patchIDOfDiff is
 // clean, and the regressed shape — the diff buffer quoted into an error —
