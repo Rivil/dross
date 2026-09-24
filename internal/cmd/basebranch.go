@@ -92,10 +92,10 @@ func pushBaseIfAheadDrossOnly(repoDir, base string) (pushed bool, err error) {
 			}
 		}
 	}
-	if out, err := gitCombined(repoDir, gitRefArgs("push", nil, "origin", base)...); err != nil {
-		return false, fmt.Errorf("safety-net push of .dross chores on %s failed: %w\n%s\n"+
+	if err := gitRun(repoDir, gitRefArgs("push", nil, "origin", base)...); err != nil {
+		return false, fmt.Errorf("safety-net push of .dross chores on %s failed: %w\n"+
 			"Refusing to continue — proceeding would leave %s diverged from origin again.",
-			base, err, out, base)
+			base, err, base)
 	}
 	return true, nil
 }

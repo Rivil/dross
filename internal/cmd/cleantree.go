@@ -48,8 +48,8 @@ func autoCommitDrossDirt(repoDir, action string) (committed bool, err error) {
 	if len(hits) > 0 {
 		return false, fmt.Errorf("refusing to auto-commit .dross: %w", &secretscan.ErrHit{Hits: hits})
 	}
-	if out, err := gitCombined(repoDir, gitPathArgs("add", nil, ".dross")...); err != nil {
-		return false, fmt.Errorf("git add .dross: %w\n%s", err, out)
+	if err := gitRun(repoDir, gitPathArgs("add", nil, ".dross")...); err != nil {
+		return false, fmt.Errorf("git add .dross: %w", err)
 	}
 	// Empty-commit guard: a status entry can stage to nothing (e.g. a change
 	// already reverted); nil means no staged diff, so there is nothing to commit.
@@ -57,8 +57,8 @@ func autoCommitDrossDirt(repoDir, action string) (committed bool, err error) {
 		return false, nil
 	}
 	msg := fmt.Sprintf("chore(dross): auto-commit bookkeeping before %s", action)
-	if out, err := gitCombined(repoDir, "commit", "-m", msg); err != nil {
-		return false, fmt.Errorf("git commit: %w\n%s", err, out)
+	if err := gitRun(repoDir, "commit", "-m", msg); err != nil {
+		return false, fmt.Errorf("git commit: %w", err)
 	}
 	return true, nil
 }

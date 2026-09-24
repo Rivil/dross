@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -180,18 +183,18 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 			"--pre-merge-sha=$(git rev-parse HEAD@{1})", short(sha))
 	}
 
-	if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
-		return fmt.Errorf("git fetch: %w\n%s", err, out)
+	if err := gitRun(repoDir, "fetch", "origin"); err != nil {
+		return fmt.Errorf("git fetch: %w", err)
 	}
-	if out, err := guardedResetHard(repoDir, "origin/"+baseBranch); err != nil {
-		return fmt.Errorf("git reset --hard origin/%s: %w\n%s", baseBranch, err, out)
+	if err := guardedResetHard(repoDir, "origin/"+baseBranch); err != nil {
+		return fmt.Errorf("git reset --hard origin/%s: %w", baseBranch, err)
 	}
 	// Exclude state.json from the restore. A pre-untrack commit still carries a
 	// copy, and restoring it would overwrite the live machine-local file with
 	// whatever history that commit happened to hold — the very clobber this
 	// milestone exists to end (locked state_tracking).
-	if out, err := gitCombined(repoDir, gitRefPathArgs("checkout", nil, []string{sha}, ".dross/", ":(exclude).dross/"+state.File)...); err != nil {
-		return fmt.Errorf("git checkout %s -- .dross/: %w\n%s", short(sha), err, out)
+	if err := gitRun(repoDir, gitRefPathArgs("checkout", nil, []string{sha}, ".dross/", ":(exclude).dross/"+state.File)...); err != nil {
+		return fmt.Errorf("git checkout %s -- .dross/: %w", short(sha), err)
 	}
 
 	// Delta gate. Stage the restored .dross/ and check whether it actually
@@ -208,8 +211,8 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	// This gate used to be correct only because it ran before state.Touch, which
 	// always manufactured a delta. With state.json out of the tree the no-op is
 	// genuinely reachable, and it must exit 0 having written nothing.
-	if out, err := gitCombined(repoDir, "add", ".dross/"); err != nil {
-		return fmt.Errorf("git add: %w\n%s", err, out)
+	if err := gitRun(repoDir, "add", ".dross/"); err != nil {
+		return fmt.Errorf("git add: %w", err)
 	}
 	staged, err := gitTrim(repoDir, "status", "--porcelain")
 	if err != nil {
@@ -231,12 +234,12 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	if err := s.Save(filepath.Join(root, state.File)); err != nil {
 		return fmt.Errorf("save state: %w", err)
 	}
-	if out, err := gitCombined(repoDir, "add", ".dross/"); err != nil {
-		return fmt.Errorf("git add: %w\n%s", err, out)
+	if err := gitRun(repoDir, "add", ".dross/"); err != nil {
+		return fmt.Errorf("git add: %w", err)
 	}
 	msg := fmt.Sprintf("chore(dross): restore .dross/ after squash-merge for %s + merge", phaseID)
-	if out, err := gitCombined(repoDir, "commit", "-m", msg); err != nil {
-		return fmt.Errorf("git commit: %w\n%s", err, out)
+	if err := gitRun(repoDir, "commit", "-m", msg); err != nil {
+		return fmt.Errorf("git commit: %w", err)
 	}
 
 	// Push the restore (c-2): recovery is already a network-bearing command
@@ -271,12 +274,34 @@ func gitTrim(repoDir string, args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func gitCombined(repoDir string, args ...string) (string, error) {
+// gitStderr is where a failed git invocation's own output goes: this process's
+// stderr. Tests swap it to capture what a user would see.
+var gitStderr io.Writer = os.Stderr
+
+// gitRun runs a git command for its effect. On failure git's own output —
+// which can quote file contents, remote responses and hook output — goes to
+// stderr, where the user is already looking, and the caller gets git's exit
+// status only: an error is never the terminal, it can reach telemetry or a
+// persisted record.
+func gitRun(repoDir string, args ...string) error {
 	gitArgvTap(args)
 	full := append([]string{"-C", repoDir}, args...)
 	//dross:exec-exempt the argv is dross's own git plumbing, fenced by gitRefArgs/gitPathArgs before it gets here; none of it runs a repo-authored line
 	out, err := exec.Command("git", full...).CombinedOutput()
-	return string(out), err
+	if err != nil && len(out) > 0 {
+		fmt.Fprintf(gitStderr, "git %s:\n%s\n", gitVerb(args), bytes.TrimRight(out, "\n"))
+	}
+	return err
+}
+
+// gitVerb is the subcommand of a git argv, for labelling its output.
+func gitVerb(args []string) string {
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			return a
+		}
+	}
+	return "command"
 }
 
 func short(sha string) string {

@@ -92,12 +92,12 @@ func repointDoomedRedProofs(root, repoDir, phaseID string) (bool, error) {
 		files = append(files, plan.Files...)
 	}
 
-	if out, err := gitCombined(repoDir, gitPathArgs("add", nil, files...)...); err != nil {
-		return false, fmt.Errorf("stage the repointed red proof: %w\n%s", err, out)
+	if err := gitRun(repoDir, gitPathArgs("add", nil, files...)...); err != nil {
+		return false, fmt.Errorf("stage the repointed red proof: %w", err)
 	}
 	msg := fmt.Sprintf("chore(dross): repoint red proof for %s", phaseID)
-	if out, err := gitCombined(repoDir, "commit", "-m", msg); err != nil {
-		return false, fmt.Errorf("commit the repointed red proof: %w\n%s", err, out)
+	if err := gitRun(repoDir, "commit", "-m", msg); err != nil {
+		return false, fmt.Errorf("commit the repointed red proof: %w", err)
 	}
 	return true, nil
 }

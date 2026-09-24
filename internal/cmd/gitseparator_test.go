@@ -185,12 +185,12 @@ func TestSwitchHelpersArgvCarriesSeparator(t *testing.T) {
 	})
 	t.Run("guardedFF", func(t *testing.T) {
 		seen := recordGitArgv(t)
-		_, _ = guardedFF(dir, "target")
+		_ = guardedFF(dir, "target")
 		assertSeparatedBefore(t, seen(), "merge", "target", "--end-of-options")
 	})
 	t.Run("guardedResetHard", func(t *testing.T) {
 		seen := recordGitArgv(t)
-		_, _ = guardedResetHard(dir, "target")
+		_ = guardedResetHard(dir, "target")
 		assertSeparatedBefore(t, seen(), "reset", "target", "--end-of-options")
 	})
 }

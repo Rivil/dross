@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -132,9 +133,94 @@ var acceptedNonLiteralBinaries = map[string]string{
 
 // gitCallFuncs are the helpers whose variadic tail IS a git argv.
 var gitCallFuncs = map[string]bool{
-	"gitCombined": true,
-	"gitNoOut":    true,
-	"gitTrim":     true,
+	"gitRun":   true,
+	"gitNoOut": true,
+	"gitTrim":  true,
+}
+
+// gitHelperSiteFloor is ~25% under each git helper's live call-site count
+// (gitRun 39, gitTrim 51, gitNoOut 41). A helper that fell out of gitCallFuncs
+// would have its every argv skipped by the audit; its count going to zero is
+// how that shows.
+var gitHelperSiteFloor = map[string]int{
+	"gitRun":   29,
+	"gitTrim":  38,
+	"gitNoOut": 30,
+}
+
+// gitHelperSiteFloorErr checks per-helper call-site counts against the floor.
+func gitHelperSiteFloorErr(counts map[string]int) error {
+	for name, floor := range gitHelperSiteFloor {
+		if counts[name] < floor {
+			return fmt.Errorf("the audit examined %d %s call sites, under its floor of %d — %s has left gitCallFuncs or the walk narrowed",
+				counts[name], name, floor, name)
+		}
+	}
+	return nil
+}
+
+// gitHelperSites counts, per git helper, the call sites the audit examines.
+func gitHelperSites(t *testing.T) map[string]int {
+	t.Helper()
+	root := repoRootForDocs(t)
+	fset := token.NewFileSet()
+	counts := map[string]int{}
+	for _, r := range auditRoots {
+		err := filepath.WalkDir(filepath.Join(root, r), func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			f, perr := parser.ParseFile(fset, path, nil, 0)
+			if perr != nil {
+				return perr
+			}
+			ast.Inspect(f, func(n ast.Node) bool {
+				if call, ok := n.(*ast.CallExpr); ok {
+					if name, bin, _, _, ok := spawnArgvOf(call); ok && bin == "git" && gitCallFuncs[name] {
+						counts[name]++
+					}
+				}
+				return true
+			})
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", r, err)
+		}
+	}
+	return counts
+}
+
+// TestGitHelperCallSiteFloor: every git helper's argv is audited at every one
+// of its call sites. Dropping a helper from gitCallFuncs — gitRun above all,
+// the helper every effect-only git call goes through — takes its count to zero.
+func TestGitHelperCallSiteFloor(t *testing.T) {
+	counts := gitHelperSites(t)
+	if err := gitHelperSiteFloorErr(counts); err != nil {
+		t.Error(err)
+	}
+	without := map[string]int{}
+	for k, v := range counts {
+		without[k] = v
+	}
+	delete(without, "gitRun")
+	if gitHelperSiteFloorErr(without) == nil {
+		t.Error("the floor passes with no gitRun call site audited")
+	}
+	atFloor := map[string]int{}
+	for k, v := range gitHelperSiteFloor {
+		atFloor[k] = v
+	}
+	if err := gitHelperSiteFloorErr(atFloor); err != nil {
+		t.Errorf("the floor fails at its own minimum: %v", err)
+	}
+	atFloor["gitRun"]--
+	if gitHelperSiteFloorErr(atFloor) == nil {
+		t.Error("the floor passes one gitRun site under its minimum")
+	}
 }
 
 // auditFinding is one flagged positional.
@@ -248,7 +334,7 @@ func quote(s string) string { return "\"" + s + "\"" }
 func spawnArgvOf(call *ast.CallExpr) (name, bin, binExpr string, args []ast.Expr, ok bool) {
 	switch fn := call.Fun.(type) {
 	case *ast.Ident:
-		// gitCombined(repoDir, args...) — first arg is the repo dir.
+		// gitRun(repoDir, args...) — first arg is the repo dir.
 		if gitCallFuncs[fn.Name] && len(call.Args) > 1 {
 			return fn.Name, "git", "", call.Args[1:], true
 		}
@@ -482,7 +568,7 @@ func auditSnippet(t *testing.T, lines ...string) []auditFinding {
 		"import \"os/exec\"\n" +
 		"var _ = exec.Command\n" +
 		"var ghCommand func(...string) *exec.Cmd\n" +
-		"func gitCombined(dir string, a ...string) (string, error) { return \"\", nil }\n" +
+		"func gitRun(dir string, a ...string) error { return nil }\n" +
 		"func gitNoOut(dir string, a ...string) error { return nil }\n" +
 		"func gitTrim(dir string, a ...string) (string, error) { return \"\", nil }\n" +
 		"func snippet(repoDir, branch, base, ref, path, msg, pkg, dir, fields, num, file, lang, pattern, mutate, chosen, host string) {\n"

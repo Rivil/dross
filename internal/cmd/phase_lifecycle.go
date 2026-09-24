@@ -289,8 +289,8 @@ func phaseRename() *cobra.Command {
 			branchOld, branchNew := "phase/"+oldSlug, "phase/"+newSlug
 			if isDir(filepath.Join(repoDir, ".git")) {
 				if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branchOld); err == nil {
-					if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-m"}, branchOld, branchNew)...); err != nil {
-						return fmt.Errorf("git branch -m %s %s: %w\n%s", branchOld, branchNew, err, out)
+					if err := gitRun(repoDir, gitRefArgs("branch", []string{"-m"}, branchOld, branchNew)...); err != nil {
+						return fmt.Errorf("git branch -m %s %s: %w", branchOld, branchNew, err)
 					}
 				}
 			}

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -70,9 +69,9 @@ func TestTechdebtEnumeratesTrackedFiles(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
-	gitRun(t, dir, "init")
+	mustGit(t, dir, "init")
 	mustWrite(t, filepath.Join(dir, "tracked.go"), "package x // TODO tracked debt\n")
-	gitRun(t, dir, "add", "tracked.go")
+	mustGit(t, dir, "add", "tracked.go")
 	// Staged but not the untracked one — ls-files reads the index, so this is
 	// "tracked" even without a commit.
 	mustWrite(t, filepath.Join(dir, "untracked.go"), "package x // FIXME untracked debt\n")
@@ -92,15 +91,6 @@ func TestTechdebtEnumeratesTrackedFiles(t *testing.T) {
 	}
 	if strings.Contains(s, "untracked.go") {
 		t.Errorf("report scanned an untracked file (violates the tracked-files decision):\n%s", s)
-	}
-}
-
-// gitRun runs a git subcommand in dir and fails the test on error.
-func gitRun(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }
 

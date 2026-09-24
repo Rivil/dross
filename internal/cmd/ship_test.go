@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1506,7 +1507,7 @@ func TestAutoCommitDrossDirtLeavesTheIndexEmpty(t *testing.T) {
 			// The index must be empty afterwards — that is what makes ship's
 			// later staged-changes commit unreachable.
 			if err := gitNoOut(dir, "diff", "--cached", "--quiet"); err != nil {
-				staged, _ := gitCombined(dir, "diff", "--cached", "--name-only")
+				staged := mustGit(t, dir, "diff", "--cached", "--name-only")
 				t.Errorf("the index is not empty after autoCommitDrossDirt (%v) — ship.go's "+
 					"staged-changes commit is now reachable and needs a test, not an acceptance. Staged:\n%s",
 					err, staged)
@@ -2118,5 +2119,46 @@ func TestShipEarlyReturnsSkipLookup(t *testing.T) {
 				t.Errorf("%s: lookup calls = %d, want 0", flag, stub.calls)
 			}
 		})
+	}
+}
+
+// TestShipRecoverFetchFailureOutputGoesToStderr: git's own output can quote
+// remote responses and hook output, so gitRun prints it to stderr and the
+// error carries git's exit status only. A stub git on PATH prints a canary and
+// fails the fetch; every other git call runs for real.
+func TestShipRecoverFetchFailureOutputGoesToStderr(t *testing.T) {
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git not on PATH")
+	}
+	dir := t.TempDir()
+	gitInit(t, dir, filepath.Join(t.TempDir(), "origin.git"))
+	mustWrite(t, filepath.Join(dir, ".dross", "project.toml"), "[project]\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "init")
+
+	stub := t.TempDir()
+	script := "#!/bin/sh\nfor a in \"$@\"; do\n  if [ \"$a\" = fetch ]; then echo CANARY-GIT; echo CANARY-GIT >&2; exit 1; fi\ndone\nexec " + realGit + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(stub, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", stub+string(os.PathListSeparator)+os.Getenv("PATH"))
+	var stderr strings.Builder
+	prev := gitStderr
+	gitStderr = &stderr
+	defer func() { gitStderr = prev }()
+
+	err = runDrossRecovery(dir, filepath.Join(dir, ".dross"), &state.State{}, "p", "", "main")
+	if err == nil {
+		t.Fatal("a failing fetch did not fail the recovery")
+	}
+	if strings.Contains(err.Error(), "CANARY-GIT") {
+		t.Errorf("git's output reached the error: %q", err)
+	}
+	if !strings.Contains(err.Error(), "git fetch") || !strings.Contains(err.Error(), "exit status 1") {
+		t.Errorf("err = %q, want the subcommand and git's exit status", err)
+	}
+	if !strings.Contains(stderr.String(), "CANARY-GIT") {
+		t.Errorf("stderr = %q, want git's own output there", stderr.String())
 	}
 }

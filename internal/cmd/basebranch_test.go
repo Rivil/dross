@@ -312,6 +312,11 @@ func TestPushBaseRejectedPushSurfacesGitOutput(t *testing.T) {
 	mustGit(t, dir, "add", ".dross")
 	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): pause snapshot")
 
+	var stderr strings.Builder
+	prev := gitStderr
+	gitStderr = &stderr
+	defer func() { gitStderr = prev }()
+
 	pushed, err := pushBaseIfAheadDrossOnly(dir, "main")
 	if err == nil {
 		t.Fatalf("a refused push must be a hard error (pushed=%v)", pushed)
@@ -324,9 +329,13 @@ func TestPushBaseRejectedPushSurfacesGitOutput(t *testing.T) {
 			t.Errorf("error %q does not mention %q", err, want)
 		}
 	}
-	// git's own output must survive into the message — it is the only thing
-	// that says WHY the push was refused.
-	if !strings.Contains(err.Error(), "refused by policy hook") && !strings.Contains(err.Error(), "rejected") {
-		t.Errorf("error %q carries none of git's output", err)
+	// git's own output must reach the user — it is the only thing that says
+	// WHY the push was refused — and it reaches them on stderr, where they
+	// are looking, not in the error, which can outlive the run.
+	if !strings.Contains(stderr.String(), "refused by policy hook") && !strings.Contains(stderr.String(), "rejected") {
+		t.Errorf("stderr %q carries none of git's output", stderr.String())
+	}
+	if strings.Contains(err.Error(), "refused by policy hook") {
+		t.Errorf("error %q carries git's output", err)
 	}
 }

@@ -509,8 +509,8 @@ destructive reset of the local base branch; read the abort first.`,
 				recordedPR = ch.PR
 			}
 
-			if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
-				return fmt.Errorf("git fetch: %w\n%s", err, out)
+			if err := gitRun(repoDir, "fetch", "origin"); err != nil {
+				return fmt.Errorf("git fetch: %w", err)
 			}
 
 			// Safety net (c-2): .dross-only chores sitting unpushed on the
@@ -603,7 +603,7 @@ destructive reset of the local base branch; read the abort first.`,
 				}
 			}
 
-			if out, err := guardedFF(repoDir, "origin/"+reconcileBranch); err != nil {
+			if err := guardedFF(repoDir, "origin/"+reconcileBranch); err != nil {
 				// The ff abort IS the divergence signal: local <branch> holds
 				// commits origin/<branch> doesn't. The clean-tree guard above
 				// already ran, so no uncommitted work is at risk. The merge
@@ -613,10 +613,10 @@ destructive reset of the local base branch; read the abort first.`,
 				// Without --recover, refuse and point at the fix, changing
 				// nothing destructive.
 				if !recoverFlag {
-					return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged.\n%s\n"+
+					return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged (git's abort is printed above).\n"+
 						"Re-run `dross phase complete --recover` to reset %s to origin and restore .dross/ "+
 						"(or use `dross ship recover`). Recovery is a destructive reset of local %s — read the abort first.",
-						reconcileBranch, reconcileBranch, out, reconcileBranch, reconcileBranch)
+						reconcileBranch, reconcileBranch, reconcileBranch, reconcileBranch)
 				}
 				// --recover: the heal restores the tree from the phase tip and
 				// leaves state.json alone.
@@ -725,8 +725,8 @@ destructive reset of the local base branch; read the abort first.`,
 			// Delete the local phase branch (best-effort: only if it exists).
 			localDeleted := false
 			if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+phaseBranch)...); err == nil {
-				if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, phaseBranch)...); err != nil {
-					return fmt.Errorf("git branch -D %s: %w\n%s", phaseBranch, err, out)
+				if err := gitRun(repoDir, gitRefArgs("branch", []string{"-D"}, phaseBranch)...); err != nil {
+					return fmt.Errorf("git branch -D %s: %w", phaseBranch, err)
 				}
 				localDeleted = true
 			}
@@ -744,8 +744,8 @@ destructive reset of the local base branch; read the abort first.`,
 			if remoteRef != "" {
 				// --delete moves ahead of the separator so the remote and the branch are
 				// both plain positionals behind it; git accepts either ordering.
-				if out, err := gitCombined(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", phaseBranch)...); err != nil {
-					return fmt.Errorf("git push origin --delete %s: %w\n%s", phaseBranch, err, out)
+				if err := gitRun(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", phaseBranch)...); err != nil {
+					return fmt.Errorf("git push origin --delete %s: %w", phaseBranch, err)
 				}
 			}
 

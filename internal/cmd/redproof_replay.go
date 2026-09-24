@@ -87,16 +87,16 @@ func runRedProofReplay(root, repoDir, sha, line string) (replayResult, error) {
 	wt := filepath.Join(base, "wt")
 	defer func() { _ = os.RemoveAll(base) }()
 
-	if out, err := gitCombined(repoDir, gitRefArgs("worktree", []string{"add", "--detach"}, wt, sha)...); err != nil {
-		return replayResult{}, fmt.Errorf("replay could not be run: could not check out %s in a worktree: %v: %s", short(sha), err, strings.TrimSpace(out))
+	if err := gitRun(repoDir, gitRefArgs("worktree", []string{"add", "--detach"}, wt, sha)...); err != nil {
+		return replayResult{}, fmt.Errorf("replay could not be run: could not check out %s in a worktree: %v", short(sha), err)
 	}
 	// Registered AFTER the add succeeded and so it runs BEFORE the RemoveAll
 	// above (defers unwind last-first): removing the directory first would
 	// leave git's worktree admin data behind, and the next run inherits a
 	// prunable stale entry.
 	defer func() {
-		_, _ = gitCombined(repoDir, gitRefArgs("worktree", []string{"remove", "--force"}, wt)...)
-		_, _ = gitCombined(repoDir, "worktree", "prune")
+		_ = gitRun(repoDir, gitRefArgs("worktree", []string{"remove", "--force"}, wt)...)
+		_ = gitRun(repoDir, "worktree", "prune")
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), redProofReplayTimeout)

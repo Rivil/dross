@@ -52,8 +52,8 @@ func TestGitDoesNotRefuseIgnoredClobber(t *testing.T) {
 	dir, legacy := legacyStateBranchFixture(t)
 	stPath := filepath.Join(dir, ".dross", state.File)
 
-	if out, err := gitCombined(dir, "checkout", legacy); err != nil {
-		t.Fatalf("precondition: git is expected to ALLOW this switch, got: %v\n%s", err, out)
+	if err := gitRun(dir, "checkout", legacy); err != nil {
+		t.Fatalf("precondition: git is expected to ALLOW this switch, got: %v", err)
 	}
 	s, err := state.Load(stPath)
 	if err != nil {
@@ -127,12 +127,19 @@ func TestCheckoutRefusalPassesThroughOtherErrors(t *testing.T) {
 	mustGit(t, dir, "checkout", "-q", "main")
 	mustWrite(t, filepath.Join(dir, "NOTES.md"), "local copy\n")
 
+	var stderr strings.Builder
+	prev := gitStderr
+	gitStderr = &stderr
+	defer func() { gitStderr = prev }()
+
 	err := checkoutBranch(dir, "other")
 	if err == nil {
 		t.Fatal("expected git to refuse on the untracked NOTES.md")
 	}
-	if !strings.Contains(err.Error(), "NOTES.md") {
-		t.Errorf("git's own text should survive and name the real file: %v", err)
+	// git's own text reaches the user on stderr and names the real file; the
+	// error carries git's exit status, never its prose.
+	if !strings.Contains(stderr.String(), "NOTES.md") {
+		t.Errorf("git's own text should reach stderr and name the real file: %q", stderr.String())
 	}
 	if strings.Contains(err.Error(), "cp .dross/state.json") {
 		t.Errorf("an unrelated refusal was rewritten into the state.json message: %v", err)
@@ -214,7 +221,7 @@ func TestPhaseCompleteSurfacesCheckoutRefusal(t *testing.T) {
 func TestGuardedFFAndResetRefuseTrackedState(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		run  func(dir, ref string) (string, error)
+		run  func(dir, ref string) error
 	}{
 		{"merge --ff-only", guardedFF},
 		{"reset --hard", guardedResetHard},
@@ -222,7 +229,7 @@ func TestGuardedFFAndResetRefuseTrackedState(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir, legacy := legacyStateBranchFixture(t)
 
-			_, err := tc.run(dir, legacy)
+			err := tc.run(dir, legacy)
 			if err == nil {
 				t.Fatalf("%s from a ref that tracks state.json must refuse", tc.name)
 			}
@@ -248,8 +255,8 @@ func TestGuardedOpsRunWhenTargetHasNoCopy(t *testing.T) {
 	mustGit(t, dir, "commit", "-q", "-m", "feat: work")
 	mustGit(t, dir, "checkout", "-q", "main")
 
-	if out, err := guardedFF(dir, "clean-branch"); err != nil {
-		t.Fatalf("a ref with no state.json copy must fast-forward normally: %v\n%s", err, out)
+	if err := guardedFF(dir, "clean-branch"); err != nil {
+		t.Fatalf("a ref with no state.json copy must fast-forward normally: %v", err)
 	}
 	if s, lerr := state.Load(filepath.Join(dir, ".dross", state.File)); lerr != nil || len(s.History) != 12 {
 		t.Errorf("the live state should be untouched by an ordinary ff: %v / %+v", lerr, s)

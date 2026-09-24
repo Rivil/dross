@@ -62,8 +62,8 @@ func restorePathFromRef(repoDir, ref, path string) error {
 	if err := validateGitRef("restore ref", ref); err != nil {
 		return err
 	}
-	if out, err := gitCombined(repoDir, gitRefPathArgs("checkout", nil, []string{ref}, path)...); err != nil {
-		return fmt.Errorf("git checkout %s -- %s: %w\n%s", ref, path, err, out)
+	if err := gitRun(repoDir, gitRefPathArgs("checkout", nil, []string{ref}, path)...); err != nil {
+		return fmt.Errorf("git checkout %s -- %s: %w", ref, path, err)
 	}
 	return nil
 }
