@@ -1,0 +1,457 @@
+[phase]
+  id = "exec-taint-enumeration"
+
+# Decomposed via /dross-plan --panel (risk / mvp / verification + cold judge).
+# The drafts, scores and the 13 resolved disagreements are the audit trail in panel/.
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Load the module once for source scans"
+  files = ["go.mod", "go.sum", "internal/cmd/srcprog_test.go", "internal/cmd/hermetic_env_test.go"]
+  description = '''
+One sync.Once packages.Load("./...") from the repo root (srcprog_test.go, new): Tests:false; syntax +
+types for module packages, export data for deps; Config.Env snapshotted with HOME=ambientHome so the
+loader uses the real go caches, not TestMain's throwaway HOME; any package error is fatal. SSA bodies
+built for module packages only, plus one VTA call graph seeded from CHA. golang.org/x/tools is
+imported from _test.go files only (loader_mechanism lock).
+Gate before t-5: measure load+SSA+VTA under -race on the remote runner (`dross test` — local runs on
+this laptop are unreliable) and record it in the commit body. Over 10s, narrow which SSA bodies /
+VTA scope get built first — never the loaded package set (c-5).
+'''
+  covers = ["c-8"]
+  test_contract = [
+    '''if a second loader appears (a second Once, or a helper bypassing it), TestMain exits with "source program loaded 2 times"; TestOnePackagesLoadCallSite's AST walk of internal/cmd/*_test.go finds exactly one packages.Load and names any other's file:line''',
+    '''if the loader inherits os.Environ() instead of the ambient go caches, TestSharedLoadUsesAmbientGoCaches fails: Config.Env GOCACHE/GOMODCACHE must equal `go env` under ambientHome and neither may sit under TestMain's HOME; with GOPROXY=off the load must still succeed''',
+    '''if loadErrors() swallows a package error, feeding it a synthetic package with one TypeError fails to return an error naming that import path; the live load must have zero Errors/TypeErrors and every package must carry Types, TypesInfo and Syntax''',
+    '''if SSA bodies are built for dependencies (the dominant -race cost), the check that no *ssa.Function with non-nil Blocks lies outside github.com/Rivil/dross fails''',
+    '''if golang.org/x/tools/... enters cmd/dross's import closure or any non-test file imports it, the import-closure test fails; `go mod tidy -diff` must exit 0 (CI's tidy gate)''',
+    '''if a _test.go file enters the load, the check that no CompiledGoFiles entry ends in _test.go fails''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Share exec-exempt grammar with clearance marker"
+  files = ["internal/cmd/execconsent_audit_test.go", "internal/cmd/directive_test.go"]
+  description = '''
+Extract execExemptMarkers into a directive-generic parser (fset, file, directive) keeping the
+execExemptMinReason (20) floor; exec-consent calls it unchanged. Declare the clearance directive
+//dross:taint-cleared (marker_grammar lock: same grammar as //dross:exec-exempt).
+'''
+  covers = ["c-1"]
+  test_contract = [
+    '''if a second, diverging parser is introduced, TestDirectiveGrammarIsShared fails naming the row and directive: every marker-grammar row of testdata/exec_consent/snippets.txt (reasonless, one-word reason, glued, spaced, two lines above, below the call, tab before reason) must get the same verdict under exec-exempt and taint-cleared''',
+    '''if the extraction changes exec-consent behaviour, TestExecConsentMarkerGrammar's three verdicts, TestExecConsentFlagsItsOwnSnippets, or TestExecConsentSkipsTestFiles' 1-site/1-finding fail — all with assertions untouched''',
+    '''if the two directives become interchangeable, a well-formed //dross:taint-cleared above an exec.Command no longer leaves the exec-consent finding in place and the interchangeability test fails''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  depends_on = ["t-1"]
+  title = "Type-check fixtures on the shared import graph"
+  files = ["internal/cmd/ssafixture_test.go", "internal/cmd/srccorpus_test.go", "internal/cmd/testdata/ssa_fixture/root.go.txt", "internal/cmd/testdata/ssa_fixture/helper.go.txt", "internal/cmd/testdata/ssa_fixture/badimport.go.txt", "internal/cmd/testdata/ssa_fixture/typeerror.go.txt", "internal/cmd/testdata/ssa_fixture/want_mismatch.go.txt"]
+  description = '''
+typecheckFixture groups .go.txt files by package clause and type-checks them through an importer
+backed by t-1's type graph (or a sibling fixture package), into a SEPARATE ssa.Program with its own
+VTA — never overlaid into the live load, so fixture types never enter the live call graph. Adds the
+`// WANT <scan>` corpus harness (srccorpus_test.go).
+'''
+  covers = ["c-7"]
+  test_contract = [
+    '''if the importer sees only the stdlib, a two-package fixture importing os/exec, cobra and example.com/fixture/helperpkg fails to type-check on cobra; it must type-check in either file order''',
+    '''if a bad fixture is skipped instead of failing, badimport must fail naming the missing path and typeerror must fail naming file:line; no SSA is ever built from ill-typed source''',
+    '''if the WANT harness drops a mismatch, want_mismatch under a stub scanner fails to report BOTH the MISSED WANT line and the UNEXPECTED finding line; parsed WANT count must equal asserted count (a parser dropping the last annotation fails); an empty corpus dir fails''',
+    '''if fixture isolation breaks, a *_test.go.txt fixture is included, a fixture build calls packages.Load, or a fixture function appears in the live program's call graph — each fails its own assertion''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  depends_on = ["t-1"]
+  title = "Derive the scanned set; cross-check every file"
+  files = ["internal/cmd/srcscope_test.go"]
+  description = '''
+The scanned set is every package t-1 loads under the module path — no roots list. An independent
+go/parser sweep (ignoring build constraints) checks every non-test .go file outside a `testdata`
+segment: any file holding exec.Command/CommandContext, or a selector naming a pathfence.Fields()
+field, must appear in some loaded CompiledGoFiles.
+'''
+  covers = ["c-5", "c-7"]
+  test_contract = [
+    '''if the loaded dir set diverges from the WalkDir set of dirs holding non-test .go files, the dir on only one side is named and the test fails; the set must include internal/cmd, internal/ship, internal/mutation, cmd/dross, cmd/testsummary and assets''',
+    '''if the live set shrinks below a floor ~25% under today's package count, or any path contains /testdata/, the scope-floor test fails''',
+    '''if the cross-check misses an outside-walk file, a temp tree with each of — extra/ missing from the walk; a //go:build ignore file with exec.Command; a nested go.mod module with exec.Command; a build-tagged file reading changes.TaskRecord.Files — fails to report it with its file name and "spawn" or "field read"; with those files in the loaded set nothing is reported''',
+    '''if the live sweep regresses, it must report zero outside-walk files and find at least 20 spawn files (28 today), with both internal/mutation/freespace_{unix,other}.go swept''',
+    '''if the testdata exclusion is a substring match, internal/mutation/testdata/ceiling stays out but a dir named internal/testdatabase must stay in — either inversion fails''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 3
+  depends_on = ["t-3"]
+  title = "Taint sources, in-function flow, sink classes"
+  files = ["internal/cmd/taint_engine_test.go", "internal/cmd/testdata/taint/sources.go.txt", "internal/cmd/testdata/taint/sinks.go.txt"]
+  description = '''
+An engine parameterized by source/sink/clear predicates (t-12 reuses it). Exec sources matched by
+types.Func/Var identity: Output/CombinedOutput results, StdoutPipe/StderrPipe reads, ExitError.Stderr
+reads, referents stored into Cmd.Stdout/Stderr (taint_sources lock: every spawn, no binary classed
+safe). External calls: numeric/bool result clears (clearance_model lock); any other result, error
+included, stays tainted; reverse taint only into a fixed stdlib transform-package set; any other
+external callee receiving taint is an escape. Terminal = os.Stdout/os.Stderr and cobra
+OutOrStdout/ErrOrStderr; an error is never terminal (terminal_definition lock). A tainted return is a
+fail-closed escape until t-9. Exposes a clearAt(pos) hook. Findings carry escape position + origin set.
+'''
+  covers = ["c-1", "c-7"]
+  test_contract = [
+    '''if a source kind is missed, sources.go.txt's Output, CombinedOutput, StdoutPipe/StderrPipe reads, ExitError.Stderr read after errors.As, and &bytes.Buffer on Cmd.Stdout each fail to reach errors.New with exactly one WANT finding; os/exec imported as `x` and an embedded *exec.Cmd's promoted Output() must trip identically''',
+    '''if sources are matched by name, a local type with its own Output() trips; `_, err := c.Output(); fmt.Errorf("git: %w", err)` must also stay clean (ExitError renders only "exit status N")''',
+    '''if the clearance model is wrong, strconv.Atoi(out)'s int into Errorf or its error compared to nil trips, or the error wrapped with %w fails to trip at the wrap line; Contains/HasPrefix/==/len must clear and TrimSpace/Split/Fields/Sprintf must stay tainted''',
+    '''if terminal classification is wrong, Fprintln(os.Stderr, out) or Fprint(cmd.ErrOrStderr(), out) trips, or Fprint(&b, out) into a strings.Builder then errors.New(b.String()) fails to trip''',
+    '''if unknown externals default to allow (a results-only rule), os.WriteFile(p, out, 0o600) and os.Setenv(k, tainted) fail to trip''',
+    '''if the recorder is treated as a blanket sink, RecordToolFailure with a tainted `tool` argument fails to trip; Observed(len(out)) must stay clean''',
+    '''if the verdict sees the binary, fixtures differing only in "git" vs "cargo" give different findings (the finding struct must have no binary field); a transform-set package that is the callee package of no corpus line fails, named''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  depends_on = ["t-2", "t-3"]
+  title = "Route exec-consent reach through the VTA graph"
+  files = ["internal/cmd/execconsent_audit_test.go", "internal/cmd/testdata/exec_consent/dispatch.go.txt", "internal/cmd/testdata/exec_consent/unresolved.go.txt"]
+  description = '''
+AST facts (sites, markers, cobra commands, gating, the AddCommand tree) come from the load's
+pkg.Syntax; every reach edge comes from the shared VTA graph, joined by token.Pos. Delete the
+implementers union, methodsOn and execScope inference. A dispatch is reported — never unioned — when
+VTA yields no callee and a CHA candidate reaches a spawn.
+'''
+  covers = ["c-10"]
+  test_contract = [
+    '''if a calibration verdict shifts, any snippets.txt row loses its FLAG/PASS, headers != rows != exercised, or the header lines stop being byte-identical''',
+    '''if reach verdicts change, git log stops being ungated through two hops, go test stops being gated through the runFn seam, rsync stops being mixed, markdownlint stops being ungated, or cargo stops being "no command at all"; the var-seam, severed-edge and extra-hop tests and TestFuncLiteralSpawnIsAttributedThroughItsVar keep their names and assertions (TestNoTestLost green)''',
+    '''if resolution falls back to CHA/union, dispatch.go.txt's command passing only Quiet{} to Drive(r Runner) is attributed Loud's spawn in the other package; the Drive(Loud{}) twin must attribute it''',
+    '''if the unresolved-dispatch report branch is deleted, unresolved.go.txt's r.Go() on a Runner returned by a bodiless call (with a spawning implementer present) stops being a finding naming the method and call site file:line, and TestExecReachReportsAmbiguity stops saying "across 2 packages"''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  depends_on = ["t-3", "t-4"]
+  title = "Type-key the unwrap ban; walk derived set"
+  files = ["internal/cmd/pathfence_enum_test.go", "internal/cmd/security_test.go", "internal/cmd/testdata/pathfence_scan/unwrap_os.go.txt", "internal/cmd/testdata/pathfence_scan/unwrap_renamed.go.txt"]
+  description = '''
+String()/Rel() flagged only when TypesInfo says the receiver is pathfence.Contained; security_test's
+containedVar name list gets the same type test. Delete scannedPackages: the unwrap and ".." walks
+cover t-4's set (the ".." ban excludes internal/pathfence). Drop the ban message's "assign the string
+to a variable before the call" hint — with a type key, a non-Contained value is never flagged.
+'''
+  covers = ["c-9"]
+  test_contract = [
+    '''if the ban still matches by name, unwrap_os's builderWrite row (strings.Builder.String() in os.WriteFile) trips: it must flip to must-not-trip, the fixture's count goes 5 -> 4, and the other four rows still trip''',
+    '''if the ban keys off local names, unwrap_renamed's `x := c; os.ReadFile(x.String())` is not flagged, or security_test's run-dir check misses renamed.String() on a Contained not named ledgerPath/outPath/reportPath''',
+    '''if the migration regresses a fixture, rundir_revert stops at 3, seam_ok leaves 0, dotdot_path leaves 3, or dotdot_revrange leaves 0; TestDotDotScanSeesTheRealLiterals must still find pathfence's literals and the ban report zero elsewhere''',
+    '''if the walk narrows, either walk failing to visit internal/argfence and internal/hostallow, a derived package visited with zero files, or the ban examining fewer os.* sites than its floor (a walk dropping internal/security falls under it) fails''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  depends_on = ["t-3", "t-4"]
+  title = "Classify every serialized string field"
+  files = ["internal/cmd/pathfence_fields_test.go", "internal/pathfence/fields.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/cmd/testdata/pathfence_scan/task_experiment.go.txt", "internal/cmd/pathfence_carrier_test.go"]
+  description = '''
+Delete schemaDirs and pathShapedTags. Every toml/json-tagged field in a t-4 package whose underlying
+type is string or []string must be declared — in pathfence.Fields() or in the hand-edited testdata
+ledger not_paths.txt — checked in both directions. No -update flag: a failure prints the exact row to
+paste. Undeclared path fields found today (e.g. cmd.detachedRun.RunDir) get registry entries with Why
+and Readers. pathfence_carrier_test.go changes only if a newly found field is Consumed.
+'''
+  covers = ["c-9"]
+  test_contract = [
+    '''if the 2026-09-07 experiment passes again, task_experiment.go.txt (phase.Task plus WorkDir `toml:"workdir"`, OutputDir `toml:"output_dir"`, Spec `toml:"spec"`) fails to yield exactly three undeclared findings, one naming each field; its control without them must yield zero, and it stays in the tree as a must-fail fixture''',
+    '''if the schema set is still a dir list, a tagged string field in a fixture package outside the old four dirs (package remote) is not reported; the live detachedRun.RunDir (internal/cmd/local.go `toml:"run_dir"`) must be walked and declared''',
+    '''if enumeration keys off the literal type, a field of `type RelPath string` is missed; a bool tagged `public` must not be enumerated''',
+    '''if the ledger rots, a not_paths.txt row naming a vanished field fails as stale and a field in both registries fails as double-declared; TestRegistryIsWellFormed stays green over every new entry''',
+    '''if the walker self-test drifts, TestWalkerSelfTest (name kept) fails to include the replay-tagged field, or the walker count drops below its floor ~25% under the measured count (~450)''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-9"
+  wave = 4
+  depends_on = ["t-5"]
+  title = "Carry taint across returns, fields, writers"
+  files = ["internal/cmd/taint_flow_test.go", "internal/cmd/taint_engine_test.go", "internal/cmd/testdata/taint/channels_return.go.txt", "internal/cmd/testdata/taint/channels_field.go.txt", "internal/cmd/testdata/taint/channels_writer.go.txt"]
+  description = '''
+Context-sensitive summaries (param->result, param->field, param->writer-param), applied per call site,
+replace t-5's fail-closed return. Field taint keyed by field. Reverse referent closure through
+MakeInterface, ChangeType, Phi, field loads, transform constructors and params. A tainted Write
+receiver makes its []byte parameter a source.
+On landing: run the exec policy over the live set once and record per-file findings in the task
+notes. Any file no burn-down (t-14..t-19) owns gets `dross task add` before wave 5.
+'''
+  covers = ["c-2"]
+  test_contract = [
+    '''if taint stops at a return, channels_return's a.Rev() returning TrimSpace(string(out)) fed to b's errors.New(a.Rev()) fails to trip at b's line; a caller that only prints Rev() to os.Stderr must stay clean''',
+    '''if summaries are context-insensitive, helper norm(s) called with output at site A and a literal at site B trips at both consumers; only A's must trip''',
+    '''if field taint is whole-struct, channels_field's store to res.Other then read of res.Log trips; output stored in Result.Log by one function and read into Errorf by another must trip''',
+    '''if writer taint is lost or over-broad, channels_writer's Run(w){c.Stdout = w; c.Run()} with a &strings.Builder then errors.New(b.String()) fails to trip, or the os.Stderr / options-struct cmd.OutOrStdout() variants trip; a writer param with no caller must be an escape; a package `var out io.Writer = os.Stderr` never reassigned is terminal, reassigned to a builder trips''',
+    '''if helper wrapping hides taint, a toStr(b) conversion helper feeding Errorf fails to trip; with io.MultiWriter(os.Stderr, head), head.buf.String() into Errorf must trip while a head leaving only via printHead(os.Stderr, …) stays clean''',
+    '''if an SSA edge kind is unhandled, a closure capture, a generic id[T], or a chan string between goroutines (hold.go's shape) fails to carry taint to a tripping Errorf; a two-function recursion must reach its fixpoint with its one finding''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-10"
+  wave = 4
+  depends_on = ["t-2", "t-5"]
+  title = "Add the //dross:taint-cleared conversion marker"
+  files = ["internal/cmd/taint_marker_test.go", "internal/cmd/testdata/taint/markers.go.txt"]
+  description = '''
+Parsed by t-2's parser, the marker binds to the line immediately below and clears only the tainted
+values defined on that line (and their downstream uses). A marker that binds no tainted definition is
+itself an "orphan marker" finding.
+'''
+  covers = ["c-1"]
+  test_contract = [
+    '''if binding is by proximity, a valid marker two lines above `sha := strings.TrimSpace(string(out))` clears it; directly above, it must clear every downstream use of sha''',
+    '''if the directives are conflated, //dross:exec-exempt in the same slot clears something''',
+    '''if orphan markers are silent, a marker whose next line defines no tainted value is not an "orphan marker" finding — blanket-marking a file must fail''',
+    '''if clearance leaks sideways, an Errorf of the raw `out` on the line after a marked conversion fails to trip''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-11"
+  wave = 4
+  depends_on = ["t-6"]
+  title = "Run exec-consent live proofs on shared graph"
+  files = ["internal/cmd/execconsent_audit_test.go"]
+  description = '''
+repoExecGraph reads the shared program and stops re-parsing. The four rewrite tests (run.go consent,
+verify.go gate, open.go marker, gremlins.go marker) become surgery on a COPY of the joined graph —
+drop an edge or toggle a marker at an anchored line. "rewrite never matched" becomes "anchor never
+matched".
+'''
+  covers = ["c-10", "c-8"]
+  test_contract = [
+    '''if exec-consent reloads, the load counter reads more than 1 once every exec-consent test has run''',
+    '''if surgery is ineffective, dropping RunE's consent.RunConsented edge fails to make run.go's spawn "ungated", or dropping verify's requireExecConsent gate fails to flag exactly `want` mutation spawns; an anchor absent from source must fail with "anchor never matched"''',
+    '''if surgery mutates the shared graph, its edge count differs before and after, or TestToolchainSpawnsResolveAsGated goes red under -shuffle=on''',
+    '''if the walk narrows, the 30-site / 20-file floor fails to hold, or restricting the program to cmd/ fails to trip it''',
+    '''if the migration shifts verdicts, execConsentGatedFiles or execConsentMarkedFiles change, or the live tree has any unresolved-dispatch finding — the migration adds no marker to get there''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-12"
+  wave = 5
+  depends_on = ["t-4", "t-8", "t-9"]
+  title = "Trace declared path fields to os.* calls"
+  files = ["internal/cmd/pathtaint_audit_test.go", "internal/cmd/testdata/pathtaint/raw_os.go.txt", "internal/cmd/testdata/pathtaint/contained_ok.go.txt"]
+  description = '''
+A second policy on the engine. Sources: Field/FieldAddr reads of every pathfence.Fields() entry,
+resolved to a types.Var. Sinks: any package-level os function. pathfence.Contain clears a Consumed
+field; a NotConsumed field never clears — opening it through the seam is a finding too. No marker.
+Includes the live gate and its floor. A live hit is fixed with a Contained, never by redeclaring the
+field NotConsumed.
+'''
+  covers = ["c-4", "c-7"]
+  test_contract = [
+    '''if a path-field flow is missed, raw_os fails to trip and name the field for each of: a changes.TaskRecord.Files element into os.ReadFile; project.Env.Files (NotConsumed) into os.Stat; filepath.Join(root, f) into os.Open; os.Lstat (absent from the old osVerbs); a field copied into a struct in another function then into os.Remove''',
+    '''if clearance is wrong, contained_ok's Consumed field -> Contain -> pathfence.ReadFile trips, or a field that is only printed trips; phase.Task.Files (NotConsumed) -> Contain -> pathfence.ReadFile must trip at the consumer's line''',
+    '''if a registry entry silently contributes zero reads, one that does not resolve to a types.Var fails to raise "unresolved declaration"''',
+    '''if the live gate is vacuous or red, the live tree (t-8's new fields included) has any finding, or declared-field reads fall under the floor; the floor must pass at its minimum and fail at min-1''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-13"
+  wave = 5
+  depends_on = ["t-9"]
+  title = "Pin the pre-phase stryker branch as must-trip"
+  files = ["internal/cmd/taint_stryker_test.go", "internal/cmd/testdata/taint/stryker_prephase.go.txt", "internal/mutation/toolfence_residual_test.go"]
+  description = '''
+6f27eaa^'s branch copied verbatim with minimal stubs — the MultiWriter tee, headBuffer, quote() into a
+strings.Builder, the reportless errors.New(msg), checkInstrumented's Errorf — plus the spec's two-line
+`quoted.String()` -> fmt.Errorf paraphrase. toolfence_residual_test.go's "WHAT THIS DOES NOT CATCH"
+note is updated to name this guard.
+'''
+  covers = ["c-3"]
+  test_contract = [
+    '''if the engine misses the c-3 shape, there is no finding at the reportless `return nil, errors.New(msg)`, at checkInstrumented's `fmt.Errorf("%s\n%s", msg, head.quote(...))`, or at the paraphrase's Errorf — each must name the `cmd.Stdout = sink` origin''',
+    '''if the fixture drifts toward a caught shape, its tee, quote() and escape lines stop equalling a const copied from `git show 6f27eaa^:internal/mutation/stryker.go` (115-118, 142, 150, 201-222, 315) and the pin fails — no .git needed on the remote runner''',
+    '''if the engine over-trips, either twin — errors.New(msg) swapped for printHead(os.Stderr, …) plus a fixed-prose error, or &quoted swapped for os.Stderr — yields a finding''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-14"
+  wave = 5
+  depends_on = ["t-9", "t-10", "t-11"]
+  title = "Route gh failure output to stderr"
+  files = ["internal/ship/open.go", "internal/ship/headpr.go", "internal/ship/basepr.go", "internal/ship/merged.go", "internal/ship/comment.go", "internal/ship/comment_test.go", "internal/ship/gh_failure_test.go", "internal/cmd/taint_ship_test.go"]
+  description = '''
+Each of the five `fmt.Errorf("gh …: %w\n%s", err, string(out))` sites prints the output to os.Stderr
+and returns the verb + exit status only. The PR URL and decoded JSON get a marker at the conversion.
+Waits on t-11 because open.go carries a surgery anchor. Scoped gate lives in taint_ship_test.go.
+'''
+  covers = ["c-1"]
+  test_contract = [
+    '''if gh output still reaches an error, with ghCommand stubbed to print CANARY-GH and exit 1, any of the five entry points returns an error containing CANARY-GH (it must hold the subcommand and "exit status 1") or stderr lacks CANARY-GH''',
+    '''if the existing expectation is deleted rather than moved, comment_test.go:230's "want gh's own output included" assertion no longer checks captured stderr''',
+    '''if the burn-down is incomplete, the scoped gate over internal/ship reports any finding; removing any added marker must report that exact line, and t-11's open.go anchor must still match''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-15"
+  wave = 5
+  depends_on = ["t-9", "t-10"]
+  title = "Replace gitCombined with failure-to-stderr gitRun"
+  files = ["internal/cmd/ship_recover.go", "internal/cmd/cleantree.go", "internal/cmd/phase.go", "internal/cmd/repair.go", "internal/cmd/redproof_lifecycle.go", "internal/cmd/phase_lifecycle.go", "internal/cmd/originpush.go", "internal/cmd/switchbranch.go", "internal/cmd/phase_backfill.go", "internal/cmd/basebranch.go", "internal/cmd/repair_files.go", "internal/cmd/redproof_replay.go", "internal/cmd/milestone.go", "internal/cmd/ship.go", "internal/cmd/subprocargs_audit_test.go", "internal/cmd/ship_test.go", "internal/cmd/switchbranch_test.go", "internal/cmd/taint_gitplumbing_test.go"]
+  description = '''
+Add gitRun(repoDir, args...) error to ship_recover.go (already in cmdForbiddenBaseline), keeping
+gitCombined's exec-exempt marker and printing output to stderr on failure. Migrate every
+output-into-error site across the 14 gitCombined caller files (39 call sites; 10 in milestone.go) plus
+redproof_replay's `%v: %s`. Delete gitCombined; swap it for gitRun in gitCallFuncs. Compile-atomic,
+hence 18 files in one task. Scoped gate lives in taint_gitplumbing_test.go.
+'''
+  covers = ["c-1"]
+  test_contract = [
+    '''if git output still reaches an error, with a PATH git stub printing CANARY-GIT and exiting 1, `dross ship recover`'s fetch failure returns an error containing CANARY-GIT, or stderr lacks it''',
+    '''if gitRun escapes the subprocargs audit, leaving it out of gitCallFuncs drops ~40 sites below the new git-helper call-site floor and fails; TestAuditFlagsItsOwnSnippets' snippet, retargeted to gitRun, must still flag''',
+    '''if the migration breaks exec-consent, TestEverySpawnSiteGatedOrExempt or the os/exec import ratchet goes red''',
+    '''if the burn-down is incomplete, the scoped gate over the 14 migrated files reports any finding''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-16"
+  wave = 5
+  depends_on = ["t-9", "t-10"]
+  title = "Burn down codex and scanner taint"
+  files = ["internal/codex/git.go", "internal/codex/ast_grep.go", "internal/security/run.go", "internal/quality/run.go", "internal/techdebt/run.go", "internal/cmd/taint_scanners_test.go"]
+  description = '''
+Each conversion of git log, ast-grep or scanner output into data gets a marker at the narrowest
+conversion, with prose naming what the values are and where they go. Any error carrying tool output
+sends that output to stderr instead. Scoped gate lives in taint_scanners_test.go.
+'''
+  covers = ["c-1"]
+  test_contract = [
+    '''if the burn-down is incomplete, the scoped gate over codex, security, quality and techdebt reports any finding or orphan marker''',
+    '''if a marker is load-bearing but unverified, removing the rev-parse marker in internal/security/run.go fails to report that line naming the git spawn as origin''',
+    '''if a marker is malformed or idle, it fails t-2's grammar or clears no tainted value''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-17"
+  wave = 5
+  depends_on = ["t-9", "t-10", "t-11"]
+  title = "Burn down tool streams in mutation and remote"
+  files = ["internal/mutation/gremlins.go", "internal/mutation/stryker_net.go", "internal/mutation/construct.go", "internal/remote/hold.go", "internal/remote/remote.go", "internal/compilefence/compilefence.go", "internal/cmd/taint_toolstreams_test.go"]
+  description = '''
+Tool streams end at the terminal or the recorder, never at a marker: construct.go's stdout buffer,
+hold.go's stderr sink, remote's transport output. compilefence's CombinedOutput (returned to test
+callers) gets a marker whose prose says it is test-only. Markers are banned in stryker.go,
+gremlins.go and stryker_net.go. Scoped gate lives in taint_toolstreams_test.go.
+'''
+  covers = ["c-1"]
+  test_contract = [
+    '''if ssh output still reaches an error, with holdCommandFn stubbed to write CANARY-SSH and exit 255, the error contains CANARY-SSH, stderr lacks it, or errors.Is(err, remote.ErrTransport) stops holding''',
+    '''if the tool-runner ban lapses, a //dross:taint-cleared in internal/mutation's stryker.go, gremlins.go or stryker_net.go is not itself a finding''',
+    '''if the burn-down is incomplete, the scoped gate over internal/mutation, remote and compilefence reports any finding, or t-11's gremlins.go anchor stops matching''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-18"
+  wave = 5
+  depends_on = ["t-9", "t-10", "t-11"]
+  title = "Burn down user-command streams in cmd"
+  files = ["internal/cmd/lane_install.go", "internal/cmd/run.go", "internal/cmd/test.go", "internal/cmd/update.go", "internal/cmd/verify.go", "internal/cmd/survivor_drain.go", "internal/cmd/techdebt.go", "internal/cmd/taint_usercmds_test.go"]
+  description = '''
+lane_install stops returning its install output — it goes to stderr and the pin moves with it. The
+test/run/verify streams reach Cmd.Stdout through an OutOrStdout-derived writer, with no marker. The
+`git ls-files` lists in survivor_drain and techdebt get conversion markers. Scoped gate lives in
+taint_usercmds_test.go.
+'''
+  covers = ["c-1"]
+  test_contract = [
+    '''if install output still reaches a returned value, with a stub installer printing CANARY-LANE and exiting 2, CANARY-LANE appears in a returned value or is missing from captured stderr''',
+    '''if the burn-down is incomplete or marker-laundered, the scoped gate over these seven files reports any finding, or a marker sits on the test.go, run.go or verify.go stream sites''',
+    '''if anchors break, t-11's run.go or verify.go anchor stops matching''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-19"
+  wave = 6
+  depends_on = ["t-10", "t-15"]
+  title = "Mark or fix git text readers in cmd"
+  files = ["internal/cmd/ship_recover.go", "internal/cmd/cleantree.go", "internal/cmd/init.go", "internal/cmd/milestone_stale.go", "internal/cmd/pause.go", "internal/cmd/phase.go", "internal/cmd/statusline.go", "internal/cmd/worktree_files.go", "internal/cmd/taint_gitplumbing_test.go"]
+  description = '''
+SHAs, branch names, porcelain paths and `git show` bytes from gitTrim get a marker whose prose is
+true for every caller; values only compared or counted need nothing. A strconv error wrapped with %w
+becomes fixed prose; milestone_stale's &diff buffer goes to stderr. Runs after t-15, which shares
+three of these files and the gate file.
+'''
+  covers = ["c-1"]
+  test_contract = [
+    '''if the burn-down is incomplete, the gate in taint_gitplumbing_test.go, extended to these eight files, reports any finding or orphan marker''',
+    '''if the milestone_stale fix regresses, a fixture copy of pre-fix milestone_stale (diff buffer reaching a returned error) fails to trip — it is kept as a regression case''',
+    '''if a marker is malformed or idle, it fails t-2's grammar or clears no tainted value''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-20"
+  wave = 6
+  depends_on = ["t-9", "t-12"]
+  title = "Findings name escape, origin and remedy"
+  files = ["internal/cmd/srcfinding_test.go", "internal/cmd/testdata/taint/one_violation.go.txt", "internal/cmd/testdata/pathtaint/one_violation.go.txt"]
+  description = '''
+One single-violation fixture per tracing scan (exec taint, path fields); the taint spawn sits two
+packages away from the escape. Lines found by anchor text. Escape, origin and remedy asserted as three
+separate facts, so a message that loses one names which.
+'''
+  covers = ["c-6"]
+  test_contract = [
+    '''if the taint message loses a fact, it fails to hold the escape's file:line, the spawn's file:line in the other package, or the remedy ("print it to os.Stderr … or mark the conversion with //dross:taint-cleared <reason>") — the failing fact is named''',
+    '''if the path message loses a fact, it fails to hold the escape's file:line, "changes.TaskRecord.Files", or "construct a pathfence.Contained via pathfence.Contain"''',
+    '''if origins are collapsed, a value merged from two spawns through a phi names only the first origin''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-21"
+  wave = 7
+  depends_on = ["t-7", "t-11", "t-12", "t-14", "t-15", "t-16", "t-17", "t-18", "t-19"]
+  title = "Land live taint gate, floors, budget, docs"
+  files = ["internal/cmd/taint_audit_test.go", "ARCHITECTURE.md", "internal/cmd/taint_ship_test.go", "internal/cmd/taint_gitplumbing_test.go", "internal/cmd/taint_scanners_test.go", "internal/cmd/taint_toolstreams_test.go", "internal/cmd/taint_usercmds_test.go"]
+  description = '''
+TestNoSpawnOutputEscapes runs the exec policy over t-4's full set; it lands after every burn-down so
+it is never red mid-phase. Floors ~25% under measured counts. Retire the five scoped gate files'
+zero-findings checks (the global gate subsumes them; their CANARY behaviour tests stay) — atomic with
+the global gate landing, hence 7 files. ARCHITECTURE.md: exec-consent entry covers VTA reach +
+unresolved dispatch; path-containment entry drops "8 of 36 packages, an 11-tag vocabulary, 4 schema
+dirs … tracked debt"; add an exec-output taint entry.
+'''
+  covers = ["c-1", "c-7", "c-8"]
+  test_contract = [
+    '''if a spawn output escapes anywhere, TestNoSpawnOutputEscapes reports it; sources must meet the source floor across at least the file floor, the floor passes at its minimum and fails at min-1, and a walk restricted to cmd/ falls under it''',
+    '''if a marker clears nothing, the repo-wide census reports an orphan //dross:taint-cleared''',
+    '''if scoped zero-findings checks survive, any of the five scoped gate files still runs the engine for a zero-findings assertion (each engine run counts against c-8); their CANARY tests must still pass''',
+    '''if the docs drift, `dross architecture check` is not clean, the new entry's landmark fails to resolve, or the 8-of-36 / 11-tag / 4-dir figures remain''',
+    '''[verify evidence, c-8] the internal/cmd total in the phase PR's CI timing table is at most main's latest run + 15s; the local -race elapsed time of the scan tests is recorded beside it, and the load-once tests are green on that run''',
+  ]
+  status = "pending"

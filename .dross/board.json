@@ -19,6 +19,7 @@
     "deferred-add-command": "DRO-14",
     "dependency-update-automation": "DRO-620",
     "exec-consent-completeness": "DRO-332",
+    "exec-taint-enumeration": "DRO-648",
     "exec-trust-followups": "DRO-2",
     "guard-remedy-ordering": "DRO-27",
     "lane-host-affinity": "DRO-317",
