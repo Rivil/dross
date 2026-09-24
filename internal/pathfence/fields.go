@@ -269,6 +269,24 @@ func reportPath(strct, field, tag, artifact, why string, readers ...string) Fiel
 }
 
 var unguessedFields = []Field{
+	// ---- opened, and routed through Contain -----------------------------
+	{
+		Struct: "project.MutationStryker", Field: "Workdir", Tag: "workdir", Artifact: "project.toml",
+		Consumed: &ConsumedBy{Carrier: "mutation.ContainStrykerWorkdir"},
+	},
+	{
+		Struct: "verify.OutOfScopeMutant", Field: "File", Tag: "file", Artifact: "tests.json",
+		Consumed: &ConsumedBy{Carrier: "survivor.ContainReported"},
+	},
+	{
+		Struct: "mutation.gremlinsFile", Field: "Filename", Tag: "file_name", Artifact: "the gremlins JSON report",
+		Consumed: &ConsumedBy{Carrier: "survivor.ContainReported"},
+	},
+	{
+		Struct: "mutation.strykerNetRoot", Field: "ProjectRoot", Tag: "projectroot", Artifact: "the Stryker.NET JSON report",
+		Consumed: &ConsumedBy{Carrier: "survivor.ContainReported"},
+	},
+
 	// ---- remote-host locations ------------------------------------------
 	remotePath("cmd.detachedRun", "RunDir", "run_dir", "local.toml", "internal/cmd/verify.go (detached status/collect)"),
 	remotePath("cmd.detachedRun", "Workdir", "workdir", "local.toml", "internal/cmd/test.go", "internal/cmd/verify.go"),
@@ -279,10 +297,6 @@ var unguessedFields = []Field{
 	remotePath("project.Mutation", "RemoteWorkdir", "remote_workdir", "project.toml", "internal/project/project.go"),
 
 	// ---- repo-layout settings recorded, not opened -----------------------
-	reportPath("project.MutationStryker", "Workdir", "workdir", "project.toml",
-		"the repo-relative directory the Stryker leg runs in: handed to the adapter as the child "+
-			"process's Dir and the base its --mutate paths are made relative to.",
-		"internal/cmd/project.go (get/set)", "internal/mutationcfg/mutationcfg.go (adapter config)"),
 	reportPath("project.Repo", "RootRunDir", "root_run_dir", "project.toml",
 		"a repo-layout setting dross records and edits; nothing in this process opens it.",
 		"internal/cmd/project.go (get/set)"),
@@ -322,10 +336,6 @@ var unguessedFields = []Field{
 	reportPath("verify.LegSummary", "Ranges", "ranges", "tests.json",
 		"file:range labels a leg measured, summarised for the report.",
 		"internal/verify/verify.go"),
-	reportPath("verify.OutOfScopeMutant", "File", "file", "tests.json",
-		"the file a mutation tool reported an out-of-scope survivor in, carried into its lifecycle "+
-			"and the report.",
-		"internal/verify/lifecycle.go", "internal/verify/verify.go"),
 
 	// ---- scan findings: where a finding points ---------------------------
 	reportPath("findings.Record", "File", "file", "findings.toml",
@@ -345,12 +355,6 @@ var unguessedFields = []Field{
 	reportPath("mutation.astRequest", "File", "file", "the Stryker AST helper's stdin request",
 		"a path handed to the node AST helper, which opens it itself; dross does not.",
 		"internal/mutation/construct.go"),
-	reportPath("mutation.gremlinsFile", "Filename", "file_name", "the gremlins JSON report",
-		"a file gremlins reported mutating, recorded against its verdict; dross already has the verdict.",
-		"internal/mutation/gremlins.go"),
-	reportPath("mutation.strykerNetRoot", "ProjectRoot", "projectroot", "the Stryker.NET JSON report",
-		"the project root Stryker.NET reports, used as a PREFIX to re-root the files it names.",
-		"internal/mutation/stryker_net.go"),
 
 	// ---- stack profiles: names matched against a listing -------------------
 	reportPath("stack.Signals", "Files", "files", "stack profile TOML",

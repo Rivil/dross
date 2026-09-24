@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/survivor"
@@ -55,6 +56,14 @@ func carrierType(name string) (got, want reflect.Type, ok bool) {
 		// same Contain under phases/ where an import cycle forbids calling
 		// it — before joining it under .dross/phases/.
 		return reflect.TypeOf(phase.ContainID).Out(0), contained, true
+	case "mutation.ContainStrykerWorkdir":
+		// Stryker's workDir and RunRanges route the configured workdir
+		// through here before the report is cleared, fetched or read.
+		return reflect.TypeOf(mutation.ContainStrykerWorkdir).Out(0), contained, true
+	case "survivor.ContainReported":
+		// ResolveAt and ApplicabilityAt contain a tool-reported file here
+		// before reading it.
+		return reflect.TypeOf(survivor.ContainReported).Out(0), contained, true
 	case "milestone.ContainVersion":
 		// milestone.FilePath's containment of a version under milestones/.
 		return reflect.TypeOf(milestone.ContainVersion).Out(0), contained, true

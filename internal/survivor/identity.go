@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // ErrSubjectGone reports that the subject a survivor key would be derived from
@@ -103,6 +105,15 @@ func Resolve(path string, line int, op string) (Resolved, error) {
 	return ResolveSource(src, path, line, op)
 }
 
+// ContainReported contains a repo-relative path a mutation tool reported — read
+// back from its own report (gremlins' file_name, a Stryker.NET path re-rooted
+// under its project root, a tests.json out-of-scope mutant) or typed on the
+// command line — under the repo root before anything opens it: a report can
+// name ../outside.
+func ContainReported(root, rel string) (pathfence.Contained, error) {
+	return pathfence.Contain(root, "mutation report file", rel)
+}
+
 // ResolveAt resolves the survivor at rel (a repo-relative path) by reading
 // root/rel, but derives the key from rel itself.
 //
@@ -112,7 +123,11 @@ func Resolve(path string, line int, op string) (Resolved, error) {
 // absolute path and storing a relative one produces a key nothing can ever
 // match again.
 func ResolveAt(root, rel string, line int, op string) (Resolved, error) {
-	src, err := os.ReadFile(filepath.Join(root, rel))
+	path, err := ContainReported(root, rel)
+	if err != nil {
+		return Resolved{}, err
+	}
+	src, err := pathfence.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return Resolved{}, ErrSubjectGone
