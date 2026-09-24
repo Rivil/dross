@@ -47,6 +47,15 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	code := m.Run()
+	// The shared source program is loaded once per binary (srcprog_test.go); a
+	// second load is a loader that bypassed the sync.Once, doubling the suite's
+	// most expensive setup without any test noticing.
+	if err := srcLoadCountErr(srcProgLoads.Load()); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		if code == 0 {
+			code = 1
+		}
+	}
 	_ = os.RemoveAll(home)
 	os.Exit(code)
 }
