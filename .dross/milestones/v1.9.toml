@@ -1,0 +1,10 @@
+phases = ["spec-edge-probe", "review-edge-lenses", "milestone-closeout-check", "spec-fact-drift", "task-preconditions", "one-way-door-decisions", "ci-timing-trend", "verify-eta", "handoff-staleness", "prompt-behaviour-evals"]
+
+[milestone]
+  version = "v1.9"
+  title = "1.9 workflow depth — ideas ported from superpowers, GSD and gsd-core"
+  status = "planning"
+  started = "2026-09-24"
+  base = "milestone/v1.7"
+
+[scope]

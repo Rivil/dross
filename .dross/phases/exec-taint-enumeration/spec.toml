@@ -118,3 +118,63 @@
   text = "A verb that pulls a PR's review comments (human or bot) and triages each one against the code: accept it into a task via `dross task add`, reject it with a stated technical reason posted back, or route it to a phase. Verify the claim before acting on it; no performative agreement."
   why = "/dross-review posts findings but nothing brings reviewer comments back into the plan. Lower value on this solo repo, where the only reviewer is /dross-review; it pays off on team repos. Source: obra/superpowers receiving-code-review."
   target = "review-comment-ingest"
+
+[[deferred]]
+  id = "ddf9c9e63e17d0fc"
+  text = "/dross-spec edge-case step: propose the two or three edge classes that apply to the phase (from boundary, empty, encoding, ordering, precision, idempotency, concurrency, adjacency) plus must-NOT criteria; each proposal ends covered, dismissed with a reason, or deferred. One decision per turn, never a walk of all eight."
+  why = "Mutation testing cannot flag a branch that was never written; only the spec can. Sources: GSD spec-phase edge probing, github/spec-kit /checklist, Kiro EARS requirements."
+  target = "spec-edge-probe"
+
+[[deferred]]
+  id = "c7d43efe3667c110"
+  text = "/dross-review: add an edge-case lens (a diff that handles some values of an enum, status or flag and silently skips the rest) and a silent-failure lens (swallowed errors, quiet fallbacks)."
+  why = "Targets the gremlins switch-case attribution ceiling that survivors are routinely accepted for, and Go's discarded-error shape. Sources: BMAD Edge Case Hunter (v6.10), anthropics/claude-code pr-review-toolkit silent-failure-hunter."
+  target = "review-edge-lenses"
+
+[[deferred]]
+  id = "c7348fe83200c482"
+  text = "Milestone close-out check before `dross milestone complete`: enumerate what is unresolved (deferred items routed into the milestone, unclassified survivors, phases unverified or unshipped, the milestone's own status) and require each resolved or acknowledged."
+  why = "Close-out misses recur: v0.9 left status=active, the milestone.status-set CLI gap, v1.4 complete with its PR to main never opened. Sources: GSD audit-milestone, open-gsd/gsd-core #2646."
+  target = "milestone-closeout-check"
+
+[[deferred]]
+  id = "c54759da0ff89c69"
+  text = "Before planning, check that the symbols, paths and file:line claims a spec.toml or plan.toml cites still resolve in the tree, reusing the architecture codex's symbol resolver; a claim that resolves to nothing is named before the plan is built on it."
+  why = "exec-taint-enumeration's c-3 text cites quoted.String(), which never existed in real code; the verify had to discover that by hand. Sources: open-gsd/gsd-core #3348 (context-drift pre-check) and #1956 (cross-artifact fact drift)."
+  target = "spec-fact-drift"
+
+[[deferred]]
+  id = "189f66578878a28a"
+  text = "A machine-checkable precondition on a plan.toml task (a command that must exit 0, or a recorded measurement under a bound) that dross checks before the task starts, so a gate written into a task description is enforced rather than read."
+  why = "exec-taint-enumeration's t-1 carried its gate in prose (measure load+SSA+VTA under -race before t-5; over 10s, narrow first). The plan-level form of the check-preconditions-before-dependent-work rule. Source: open-gsd/gsd-core #1949 (precondition task element, design by contract)."
+  target = "task-preconditions"
+
+[[deferred]]
+  id = "1e0a0171b87ba8b1"
+  text = "Tag each locked decision in spec.toml as reversible or one-way (file formats, public CLI surface, a new dependency) and give one-way decisions an explicit confirm step in /dross-spec."
+  why = "Decisions that are expensive to undo (e.g. exec-taint-enumeration's loader_mechanism, which reversed a no-x/tools precedent) currently get the same treatment as cheap ones. Source: open-gsd/gsd-core #1951 (reversibility tagging)."
+  target = "one-way-door-decisions"
+
+[[deferred]]
+  id = "03c01d14d87babd2"
+  text = "Persist per-package CI test time across runs and warn when a package's trend nears its cap (e.g. at 90% of go test's timeout), extending the single-run timing table cmd-test-duration added."
+  why = "internal/cmd crept up to go test's 10m default before anyone noticed, and c-8's budget was read by hand from two runs about 16s apart. Source: open-gsd/gsd-core #4036 (timeout-vs-cap trending, warn at 90%)."
+  target = "ci-timing-trend"
+
+[[deferred]]
+  id = "3d561e984ebf0d4e"
+  text = "Before `dross verify` (attached or --detach) dispatches a mutation leg, print the packages it will mutate, the mutant-site count per package (go/ast for gremlins; Stryker's own count where available) and an ETA from per-package throughput recorded on earlier runs on that host, with the basis stated. Record actual per-package durations after each run so the next estimate improves."
+  why = "exec-taint-enumeration's detached run was announced as ~1h40m from a stale memory figure; it mutated 16 whole packages (~5.2k mutant sites, ~3.25k in internal/cmd alone) and ran far longer. The inputs were all known before dispatch, and a go/ast site count takes about a second."
+  target = "verify-eta"
+
+[[deferred]]
+  id = "23cd8142a6ba122b"
+  text = "Record HEAD when `dross pause` writes .dross/handoff.md, and have resume/status warn when the handoff is many commits behind."
+  why = "Cheap guard against resuming from a stale thread. Sources: GSD forensics state-staleness check, open-gsd/gsd-core #2573."
+  target = "handoff-staleness"
+
+[[deferred]]
+  id = "9b6917084dd5f7cc"
+  text = "Behaviour evals for dross's own slash-command prompts via `claude plugin eval`: a fixture repo with .dross/ state and assertions such as AskUserQuestion precedes git commit in pair mode, and no Edit on plan.toml. Run on demand, never per push."
+  why = "Prompt edits and model upgrades can regress command behaviour with no test noticing. Placed last because the feature shipped in 2026-09, is nondeterministic and token-costly, and can be switched off server-side. Sources: code.claude.com/docs/en/plugin-evals, obra/superpowers writing-skills."
+  target = "prompt-behaviour-evals"
