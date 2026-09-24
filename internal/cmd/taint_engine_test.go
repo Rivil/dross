@@ -325,6 +325,19 @@ type taintEngine struct {
 	termGlobals map[*ssa.Global]bool
 	termFields  map[*types.Var]bool
 
+	// Worklist scheduling. A function is re-analysed only when something it
+	// reads grows: a callee's summary (callersOf), a field it reads
+	// (fieldReaders), a closure write-back at a MakeClosure it holds
+	// (closureSites), or an allocation, captured variable or parameter seed it
+	// owns.
+	callersOf    map[*ssa.Function][]*ssa.Function
+	fieldReaders map[*types.Var][]*ssa.Function
+	closureSites map[*ssa.Function][]*ssa.Function
+	inFuncs      map[*ssa.Function]bool
+	work         []*ssa.Function
+	queued       map[*ssa.Function]bool
+	analyses     int
+
 	changed  bool
 	findings map[string]*taintFinding
 	// exact holds each finding's origins as positions, column and all: a
@@ -461,23 +474,49 @@ func runTaint(v *srcView, pol *taintPolicy) []taintFinding {
 // runTaintOrigins is runTaint that also returns, index for index, the exact
 // origin positions behind each finding.
 func runTaintOrigins(v *srcView, pol *taintPolicy) ([]taintFinding, []taintOrigins) {
+	fs, exact, _ := runTaintWith(v, pol, taintRunOpts{})
+	return fs, exact
+}
+
+// taintRunOpts are test-only run options.
+type taintRunOpts struct {
+	// verifyFixpoint makes one more pass over every function once the
+	// worklist empties, and reports whether anything grew.
+	verifyFixpoint bool
+}
+
+// taintRunStats is what a run cost — the function analyses the worklist made —
+// and, under verifyFixpoint, whether the result was already a fixpoint.
+type taintRunStats struct {
+	Analyses     int
+	Funcs        int
+	FixpointHeld bool
+}
+
+// runTaintWith is the engine proper.
+func runTaintWith(v *srcView, pol *taintPolicy, opts taintRunOpts) ([]taintFinding, []taintOrigins, taintRunStats) {
 	e := &taintEngine{
-		view:        v,
-		pol:         pol,
-		ids:         resolveTaintIDs(v.Prog),
-		callees:     taintCallees(v),
-		callers:     map[*ssa.Function]int{},
-		summaries:   map[*ssa.Function]*fnSummary{},
-		sumKeys:     map[*ssa.Function]string{},
-		objTaint:    map[ssa.Value]taintOrigins{},
-		fieldTaint:  map[*types.Var]taintOrigins{},
-		fvTaint:     map[*ssa.FreeVar]taintOrigins{},
-		fvWrite:     map[*ssa.FreeVar]taintOrigins{},
-		paramSeed:   map[*ssa.Parameter]taintOrigins{},
-		termGlobals: map[*ssa.Global]bool{},
-		termFields:  map[*types.Var]bool{},
-		findings:    map[string]*taintFinding{},
-		exact:       map[string]taintOrigins{},
+		callersOf:    map[*ssa.Function][]*ssa.Function{},
+		fieldReaders: map[*types.Var][]*ssa.Function{},
+		closureSites: map[*ssa.Function][]*ssa.Function{},
+		inFuncs:      map[*ssa.Function]bool{},
+		queued:       map[*ssa.Function]bool{},
+		view:         v,
+		pol:          pol,
+		ids:          resolveTaintIDs(v.Prog),
+		callees:      taintCallees(v),
+		callers:      map[*ssa.Function]int{},
+		summaries:    map[*ssa.Function]*fnSummary{},
+		sumKeys:      map[*ssa.Function]string{},
+		objTaint:     map[ssa.Value]taintOrigins{},
+		fieldTaint:   map[*types.Var]taintOrigins{},
+		fvTaint:      map[*ssa.FreeVar]taintOrigins{},
+		fvWrite:      map[*ssa.FreeVar]taintOrigins{},
+		paramSeed:    map[*ssa.Parameter]taintOrigins{},
+		termGlobals:  map[*ssa.Global]bool{},
+		termFields:   map[*types.Var]bool{},
+		findings:     map[string]*taintFinding{},
+		exact:        map[string]taintOrigins{},
 	}
 	for fn := range ssautil.AllFunctions(v.Prog) {
 		if fn.Blocks == nil || (fn.TypeParams().Len() > 0 && len(fn.TypeArgs()) == 0) {
@@ -497,19 +536,35 @@ func runTaintOrigins(v *srcView, pol *taintPolicy) ([]taintFinding, []taintOrigi
 		}
 	}
 	e.precomputeTerminal()
+	e.indexDependents()
 
+	// Every input only grows, and a function is analysed again after the last
+	// growth of anything it reads, so the worklist stops at the least
+	// fixpoint — the one whole-program rounds reached, at a sixth of the
+	// analyses. The bound is the old one: 200 rounds' worth.
 	const maxRounds = 200
-	for round := 0; ; round++ {
-		if round == maxRounds {
-			panic(fmt.Sprintf("taint engine did not reach a fixpoint in %d rounds", maxRounds))
+	budget := maxRounds * len(e.funcs)
+	e.dirty(e.funcs...)
+	for len(e.work) > 0 {
+		if e.analyses >= budget {
+			panic(fmt.Sprintf("taint engine did not reach a fixpoint in %d analyses", budget))
 		}
+		fn := e.work[0]
+		e.work = e.work[1:]
+		e.queued[fn] = false
+		e.analyze(fn)
+	}
+	stats := taintRunStats{Analyses: e.analyses, Funcs: len(e.funcs)}
+	if opts.verifyFixpoint {
+		// A dependency the worklist missed is an input that grew after its
+		// reader's last analysis: re-analysing everything once would grow a
+		// summary, shared state or the findings.
+		before := e.findingWeight()
 		e.changed = false
 		for _, fn := range e.funcs {
 			e.analyze(fn)
 		}
-		if !e.changed {
-			break
-		}
+		stats.FixpointHeld = !e.changed && e.findingWeight() == before
 	}
 
 	// Fail closed at the program's edge: a write into the parameter of a
@@ -552,7 +607,76 @@ func runTaintOrigins(v *srcView, pol *taintPolicy) ([]taintFinding, []taintOrigi
 		out = append(out, *e.findings[k])
 		exact = append(exact, e.exact[k])
 	}
-	return out, exact
+	return out, exact, stats
+}
+
+// findingWeight counts every finding and every exact origin behind them.
+func (e *taintEngine) findingWeight() int {
+	n := len(e.findings)
+	for _, o := range e.exact {
+		n += len(o)
+	}
+	return n
+}
+
+// indexDependents records, for each piece of shared state the analysis reads,
+// which functions read it.
+func (e *taintEngine) indexDependents() {
+	seenCaller := map[[2]*ssa.Function]bool{}
+	seenField := map[*types.Var]map[*ssa.Function]bool{}
+	seenSite := map[[2]*ssa.Function]bool{}
+	for _, fn := range e.funcs {
+		e.inFuncs[fn] = true
+		for _, b := range fn.Blocks {
+			for _, instr := range b.Instrs {
+				switch in := instr.(type) {
+				case ssa.CallInstruction:
+					for _, callee := range e.calleesOf(in) {
+						if k := [2]*ssa.Function{callee, fn}; !seenCaller[k] {
+							seenCaller[k] = true
+							e.callersOf[callee] = append(e.callersOf[callee], fn)
+						}
+					}
+				case *ssa.FieldAddr:
+					e.addFieldReader(seenField, fieldVar(in.X.Type(), in.Field), fn)
+				case *ssa.Field:
+					e.addFieldReader(seenField, fieldVar(in.X.Type(), in.Field), fn)
+				case *ssa.MakeClosure:
+					if cl, ok := in.Fn.(*ssa.Function); ok {
+						if k := [2]*ssa.Function{cl, fn}; !seenSite[k] {
+							seenSite[k] = true
+							e.closureSites[cl] = append(e.closureSites[cl], fn)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func (e *taintEngine) addFieldReader(seen map[*types.Var]map[*ssa.Function]bool, f *types.Var, fn *ssa.Function) {
+	if f == nil {
+		return
+	}
+	if seen[f] == nil {
+		seen[f] = map[*ssa.Function]bool{}
+	}
+	if !seen[f][fn] {
+		seen[f][fn] = true
+		e.fieldReaders[f] = append(e.fieldReaders[f], fn)
+	}
+}
+
+// dirty queues functions whose inputs grew, and flags the growth for the
+// fixpoint check.
+func (e *taintEngine) dirty(fns ...*ssa.Function) {
+	e.changed = true
+	for _, fn := range fns {
+		if fn != nil && e.inFuncs[fn] && !e.queued[fn] {
+			e.queued[fn] = true
+			e.work = append(e.work, fn)
+		}
+	}
 }
 
 // analyze runs one function's round: seed, propagate, and store the summary.
@@ -564,6 +688,7 @@ func (e *taintEngine) analyze(fn *ssa.Function) {
 		sum:      newSummary(fn.Signature.Results().Len()),
 	}
 	e.st = st
+	e.analyses++
 
 	for i, p := range fn.Params {
 		e.taint(p, tset{paramLabel(i): true})
@@ -615,7 +740,7 @@ func (e *taintEngine) analyze(fn *ssa.Function) {
 	if k := st.sum.key(); e.sumKeys[fn] != k || e.summaries[fn] == nil {
 		e.sumKeys[fn] = k
 		e.summaries[fn] = st.sum
-		e.changed = true
+		e.dirty(e.callersOf[fn]...)
 	}
 }
 
@@ -919,7 +1044,7 @@ func (e *taintEngine) reverseMode(p ssa.Value, from tset, at ssa.Instruction, de
 		// Written back into the captured variable: the function that made
 		// the closure applies it at its MakeClosure next round.
 		if addOrigins(e.fvWrite, x, from.concrete()) {
-			e.changed = true
+			e.dirty(e.closureSites[x.Parent()]...)
 		}
 	case *ssa.Parameter:
 		idx := -1
@@ -948,7 +1073,11 @@ func (e *taintEngine) reverseMode(p ssa.Value, from tset, at ssa.Instruction, de
 // addObject records concrete taint in an allocation, program-wide.
 func (e *taintEngine) addObject(v ssa.Value, from tset) {
 	if addOrigins(e.objTaint, v, from.concrete()) {
-		e.changed = true
+		if in, ok := v.(ssa.Instruction); ok {
+			e.dirty(in.Parent())
+		} else {
+			e.dirty(e.funcs...)
+		}
 	}
 }
 
@@ -960,7 +1089,7 @@ func (e *taintEngine) addField(f *types.Var, from tset) {
 		return
 	}
 	if addOrigins(e.fieldTaint, f, from.concrete()) {
-		e.changed = true
+		e.dirty(e.fieldReaders[f]...)
 	}
 	st := e.st
 	for _, p := range from.params() {
@@ -988,7 +1117,7 @@ func (e *taintEngine) addField(f *types.Var, from tset) {
 // addFreeVar records taint bound into a closure's captured variable.
 func (e *taintEngine) addFreeVar(fv *ssa.FreeVar, from tset) {
 	if addOrigins(e.fvTaint, fv, from.concrete()) {
-		e.changed = true
+		e.dirty(fv.Parent())
 	}
 	st := e.st
 	for _, p := range from.params() {
@@ -1025,7 +1154,7 @@ func (e *taintEngine) seedWriteMethods(t types.Type, origins taintOrigins) {
 				continue
 			}
 			if addOrigins(e.paramSeed, fn.Params[1], origins) {
-				e.changed = true
+				e.dirty(fn)
 			}
 		}
 	}

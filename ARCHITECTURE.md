@@ -438,12 +438,12 @@ The only clearance is a `//dross:taint-cleared <reason>` marker on the line abov
 `TestNoSpawnOutputEscapes` runs the policy over every package the load matches, under a floor on the sources it seeds and the files they sit in that the command package alone cannot meet. It replaced the per-burn-down gates that preceded it; the behaviour guards they carried stay, pinned by name.
 
 - `TestNoSpawnOutputEscapes` (the live gate: zero findings, zero idle or malformed markers, and a source floor `internal/cmd` alone falls under) — `internal/cmd/taint_audit_test.go:69`
-- `runTaint` (the engine: per-function summaries iterated to a program-wide fixpoint; a policy supplies sources, sinks and clearance) — `internal/cmd/taint_engine_test.go:456`
+- `runTaint` (the engine: per-function summaries brought to a program-wide fixpoint by a worklist that re-analyses a function only when something it reads grows — a sixth of the analyses whole-program rounds made; a policy supplies sources, sinks and clearance) — `internal/cmd/taint_engine_test.go:469`
 - `execTaintScan` (the exec policy with markers honoured, and a finding for every marker that is malformed, on a source, or clears nothing) — `internal/cmd/taint_marker_test.go:42`
 - `gitTrim` (ref plumbing only, verb and options pinned by `TestGitTrimRunsRefVerbsOnly`; one marker true for every caller) — `internal/cmd/ship_recover.go:273`
 - `gitRead` (content reads — log, diff, ls-files, status — unmarked; callers mark where they slice) — `internal/cmd/ship_recover.go:290`
 - `TestTaintFindingNamesEscapeOriginRemedy` (escape, every origin and the remedy asserted as separate facts, with the spawn two packages from the escape) — `internal/cmd/srcfinding_test.go:92`
-- `TestExecTaintVerdictIgnoresBinaryName` (the same corpus spawning cargo instead of git yields byte-identical findings) — `internal/cmd/taint_engine_test.go:1807`
+- `TestExecTaintVerdictIgnoresBinaryName` (the same corpus spawning cargo instead of git yields byte-identical findings) — `internal/cmd/taint_engine_test.go:1936`
 - `TestScopedGuardsSurvive` (the retired per-burn-down gates' behaviour guards, each pinned by name in its file) — `internal/cmd/taint_audit_test.go:223`
 - `withoutUserinfo` (a remote's userinfo is cut off before anything parses it, so a token in `remote get-url` never reaches `project.toml`) — `internal/project/remote.go:88`
 
