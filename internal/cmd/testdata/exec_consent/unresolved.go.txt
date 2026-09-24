@@ -1,0 +1,43 @@
+A dispatch the program itself does not pin down (TestUnresolvedDispatchIsReported).
+NewRunner has no body — nothing in the program says which Runner it returns — so
+the call graph resolves r.Go() to no callee, while a CHA candidate (Loud.Go)
+spawns. The audit must REPORT that dispatch, naming the method and its call
+site, rather than union the candidates or wave it through.
+
+-- cmd.go --
+package unresolvedcmd
+
+import (
+	"github.com/spf13/cobra"
+
+	"example.com/fixture/unresolvedlib"
+)
+
+// Blind dispatches on a Runner it cannot see into.
+func Blind() *cobra.Command {
+	return &cobra.Command{
+		Use: "blind",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			r := unresolvedlib.NewRunner()
+			return r.Go()
+		},
+	}
+}
+
+-- lib.go --
+package unresolvedlib
+
+import "os/exec"
+
+type Runner interface{ Go() error }
+
+// NewRunner is declared without a body: its result is opaque to the program.
+func NewRunner() Runner
+
+type Loud struct{}
+
+func (Loud) Go() error { return exec.Command("git", "gc").Run() }
+
+type Quiet struct{}
+
+func (Quiet) Go() error { return nil }
