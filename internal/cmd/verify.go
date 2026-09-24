@@ -1109,6 +1109,11 @@ func finalizeVerify(root, phaseID string) (recorded bool, verdict string, err er
 	if v.Verify.Finalized {
 		return false, v.Verify.Verdict, nil
 	}
+	if v.Verify.Verdict == "pass" {
+		if err := refuseOrphanedAcceptances(root); err != nil {
+			return false, v.Verify.Verdict, err
+		}
+	}
 	t, _ := verify.LoadTests(testsPath) // optional — may be absent under --skip-mutation manual cleanup
 	recordVerifyOutcome(t, v)
 	v.Verify.Finalized = true
@@ -1117,6 +1122,35 @@ func finalizeVerify(root, phaseID string) (recorded bool, verdict string, err er
 		return true, v.Verify.Verdict, fmt.Errorf("write finalized marker to verify.toml: %w", err)
 	}
 	return true, v.Verify.Verdict, nil
+}
+
+// refuseOrphanedAcceptances is finalize's half of the structural-orphan gate:
+// a pass verdict cannot be recorded while the LIVE store holds an acceptance
+// whose file is gone or whose text is no whole line of it.
+//
+// It re-derives the orphans from the tree rather than trusting verify.toml's
+// BLOCKING findings, because the record is editable and the tree is the fact —
+// deleting the finding by hand must not unlock pass. It uses the same
+// predicate verify reports with (survivor.StructuralOrphans, nil observed), so
+// run-scoped staleness never blocks here either. partial and fail are not
+// gated: recording an honest non-pass verdict is always allowed. Ship and
+// phase complete inherit this through their finalize auto-heal.
+func refuseOrphanedAcceptances(root string) error {
+	store, err := survivor.Load(survivor.Path(root))
+	if err != nil {
+		return err
+	}
+	orphans := survivor.StructuralOrphans(filepath.Dir(root), store)
+	if len(orphans) == 0 {
+		return nil
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "verdict=pass refused: %d orphaned acceptance(s) in .dross/%s suppress nothing and no run can revive them — retire each first:",
+		len(orphans), survivor.StoreFile)
+	for _, o := range orphans {
+		fmt.Fprintf(&b, "\n  %s (%s) — %s — dross survivor retire %s", o.File, o.Key, o.Reason, o.Key)
+	}
+	return errors.New(b.String())
 }
 
 // configuredAdaptersFn is the seam a refusal test substitutes to prove verify

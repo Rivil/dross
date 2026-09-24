@@ -11,6 +11,7 @@ import (
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/telemetry"
 	"github.com/Rivil/dross/internal/verify"
 )
@@ -1224,4 +1225,184 @@ func lastVerifyOutcome(t *testing.T) telemetry.Event {
 	}
 	t.Fatal("no verify outcome event recorded")
 	return telemetry.Event{}
+}
+
+// --- finalize refuses pass over structural orphans (survivor-store-stale-remeasure c-7) ---
+
+// setVerdict writes a resolved, unfinalized verdict into a phase's verify.toml —
+// the state /dross-verify leaves before `dross verify finalize`.
+func setVerdict(t *testing.T, dir, phaseID, verdict string) {
+	t.Helper()
+	path := filepath.Join(dir, ".dross/phases", phaseID, "verify.toml")
+	v, err := verify.LoadVerify(path)
+	if err != nil || v == nil {
+		t.Fatalf("load %s: %v", path, err)
+	}
+	v.Verify.Verdict = verdict
+	v.Verify.Finalized = false
+	if err := v.Save(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func finalizedIn(t *testing.T, dir, phaseID string) bool {
+	t.Helper()
+	v, err := verify.LoadVerify(filepath.Join(dir, ".dross/phases", phaseID, "verify.toml"))
+	if err != nil || v == nil {
+		t.Fatalf("load verify.toml: %v", err)
+	}
+	return v.Verify.Finalized
+}
+
+// textGoneOrphan accepts b.go's survivor, rewrites b.go so the accepted text is
+// no longer a line of it, and runs verify — a phase whose store now holds one
+// structural orphan. It returns the orphan's key.
+func textGoneOrphan(t *testing.T, dir, phaseID string) string {
+	t.Helper()
+	if err := runCmd(t, Survivor(), "accept", "b.go:3",
+		"--op", "CONDITIONALS_NEGATION", "--reason", "unreachable by design"); err != nil {
+		t.Fatal(err)
+	}
+	key := onlyAcceptedKey(t, dir)
+	writeScopeFile(t, dir, "b.go", "package x\n\nfunc B() string { return \"gone\" }\n")
+	runVerifyCapturing(t, phaseID)
+	return key
+}
+
+// assertOrphanRefusal checks the refusal names the key, the reason and the
+// command that clears it, and that verify.toml was left unfinalized.
+func assertOrphanRefusal(t *testing.T, err error, dir, phaseID, key, reason string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("verdict=pass finalized over a structural orphan, want a refusal")
+	}
+	for _, want := range []string{key, reason, "dross survivor retire " + key} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal does not name %q:\n%v", want, err)
+		}
+	}
+	if finalizedIn(t, dir, phaseID) {
+		t.Error("a refused pass still wrote finalized = true")
+	}
+}
+
+// TestVerifyFinalizeRefusesPassWithOrphanedAcceptance is c-7's gate: a pass
+// verdict cannot be recorded while the store holds an acceptance whose text is
+// gone. An honest partial or fail on the same repo still finalizes.
+func TestVerifyFinalizeRefusesPassWithOrphanedAcceptance(t *testing.T) {
+	dir := lifecycleRepo(t, "gatepass")
+	key := textGoneOrphan(t, dir, "01-gatepass")
+
+	setVerdict(t, dir, "01-gatepass", "pass")
+	err := runCmd(t, Verify(), "finalize", "01-gatepass")
+	assertOrphanRefusal(t, err, dir, "01-gatepass", key, survivor.ReasonTextGone)
+
+	for _, verdict := range []string{"partial", "fail"} {
+		setVerdict(t, dir, "01-gatepass", verdict)
+		if err := runCmd(t, Verify(), "finalize", "01-gatepass"); err != nil {
+			t.Errorf("verdict=%s refused over an orphan — only pass is gated: %v", verdict, err)
+		}
+		if !finalizedIn(t, dir, "01-gatepass") {
+			t.Errorf("verdict=%s did not finalize", verdict)
+		}
+	}
+}
+
+// TestVerifyFinalizeRefusesPassWithFileGoneAcceptance: the other structural arm.
+func TestVerifyFinalizeRefusesPassWithFileGoneAcceptance(t *testing.T) {
+	dir := lifecycleRepo(t, "gatefile")
+	if err := runCmd(t, Survivor(), "accept", "b.go:3",
+		"--op", "CONDITIONALS_NEGATION", "--reason", "unreachable by design"); err != nil {
+		t.Fatal(err)
+	}
+	key := onlyAcceptedKey(t, dir)
+	if err := os.Remove(filepath.Join(dir, "b.go")); err != nil {
+		t.Fatal(err)
+	}
+	runVerifyCapturing(t, "01-gatefile")
+
+	setVerdict(t, dir, "01-gatefile", "pass")
+	err := runCmd(t, Verify(), "finalize", "01-gatefile")
+	assertOrphanRefusal(t, err, dir, "01-gatefile", key, survivor.ReasonFileGone)
+}
+
+// TestVerifyFinalizeOrphanGateReadsTheTreeNotTheRecord: deleting verify's
+// BLOCKING finding from verify.toml by hand must not unlock pass. The gate
+// re-derives orphans from the live store and tree.
+func TestVerifyFinalizeOrphanGateReadsTheTreeNotTheRecord(t *testing.T) {
+	dir := lifecycleRepo(t, "gaterecord")
+	key := textGoneOrphan(t, dir, "01-gaterecord")
+
+	path := filepath.Join(dir, ".dross/phases/01-gaterecord/verify.toml")
+	v, err := verify.LoadVerify(path)
+	if err != nil || v == nil {
+		t.Fatalf("load verify.toml: %v", err)
+	}
+	kept := v.Findings[:0]
+	removed := 0
+	for _, f := range v.Findings {
+		if strings.HasPrefix(f.Text, "stale acceptance: ") {
+			removed++
+			continue
+		}
+		kept = append(kept, f)
+	}
+	if removed != 1 {
+		t.Fatalf("fixture: want verify to have recorded 1 stale finding to delete, got %d", removed)
+	}
+	v.Findings = kept
+	v.Verify.Verdict = "pass"
+	if err := v.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	err = runCmd(t, Verify(), "finalize", "01-gaterecord")
+	assertOrphanRefusal(t, err, dir, "01-gaterecord", key, survivor.ReasonTextGone)
+}
+
+// TestVerifyFinalizePassAfterRetire: the refusal names one command, and that
+// command is enough — once the orphan is retired, pass finalizes.
+func TestVerifyFinalizePassAfterRetire(t *testing.T) {
+	dir := lifecycleRepo(t, "gateretire")
+	key := textGoneOrphan(t, dir, "01-gateretire")
+
+	setVerdict(t, dir, "01-gateretire", "pass")
+	if err := runCmd(t, Verify(), "finalize", "01-gateretire"); err == nil {
+		t.Fatal("fixture: pass finalized before the retire")
+	}
+	if err := runCmd(t, Survivor(), "retire", key); err != nil {
+		t.Fatalf("survivor retire %s: %v", key, err)
+	}
+	if err := runCmd(t, Verify(), "finalize", "01-gateretire"); err != nil {
+		t.Fatalf("pass still refused after `dross survivor retire %s`: %v", key, err)
+	}
+	if !finalizedIn(t, dir, "01-gateretire") {
+		t.Error("pass did not finalize after the retire")
+	}
+}
+
+// TestVerifyFinalizeIgnoresRunScopedOrphan: an acceptance whose text is intact
+// but whose survivor the run did not report is run-scoped — a later run can
+// bring it back — so it never blocks pass.
+func TestVerifyFinalizeIgnoresRunScopedOrphan(t *testing.T) {
+	dir := lifecycleRepo(t, "gatescoped")
+	if err := runCmd(t, Survivor(), "accept", "a.go:3", "--op", "CONDITIONALS_BOUNDARY",
+		"--reason", "accepted so the run can orphan it"); err != nil {
+		t.Fatal(err)
+	}
+	// A run that does not report a.go:3's survivor.
+	useStubAdapter(t, &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(
+			map[string]mutation.FileStat{"a.go": {Killed: 1}, "b.go": {Survived: 1}},
+			mutation.Mutant{File: "b.go", Line: 3, Op: "CONDITIONALS_NEGATION"},
+		)})
+	runVerifyCapturing(t, "01-gatescoped")
+
+	setVerdict(t, dir, "01-gatescoped", "pass")
+	if err := runCmd(t, Verify(), "finalize", "01-gatescoped"); err != nil {
+		t.Fatalf("a run-scoped orphan blocked pass: %v", err)
+	}
+	if !finalizedIn(t, dir, "01-gatescoped") {
+		t.Error("pass did not finalize")
+	}
 }
