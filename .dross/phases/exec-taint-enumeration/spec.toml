@@ -33,7 +33,7 @@
 
 [[criteria]]
   id = "c-8"
-  text = "The type-checked load happens once per test binary and all scans together add at most 15s to their package's CI test time, read from the timing table cmd-test-duration added."
+  text = "The type-checked load happens once per test binary and all scans together add at most 45s to their package's CI test time, read from the timing table cmd-test-duration added. (Raised from 15s on 2026-09-24, accepted by the user: the cost is the ~9 live-tree engine runs under -race that the plan's own gates and per-marker removal guards require. After t-25's worklist scheduler, PR #134 CI run 36031681034 measured internal/cmd at 245.9s against 205.1s on #132 and 211.8s on #133.)"
 
 [[criteria]]
   id = "c-9"
