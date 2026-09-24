@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"go/types"
 	"os"
@@ -14,11 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"golang.org/x/tools/go/callgraph/cha"
-	"golang.org/x/tools/go/callgraph/vta"
-	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/ssa"
-	"golang.org/x/tools/go/ssa/ssautil"
 	"golang.org/x/tools/txtar"
 )
 
@@ -196,12 +191,6 @@ func liveViewUnder(t *testing.T, root string, roots []string) *srcView {
 	return &v
 }
 
-// execConsentScanRoots are the trees the repo-wide gate sweeps. BOTH, not just
-// internal/cmd: the first sweep of the subprocess-argv audit nearly stopped
-// there, and the packages that actually spawn — mutation, remote, codex, ship —
-// all live one level out.
-var execConsentScanRoots = []string{"internal", "cmd"}
-
 // The discovery floor. A walk that quietly stopped matching reports zero
 // findings, which is indistinguishable from success, so the gate also has to
 // find ENOUGH — measured today at 41 sites across 24 files, with the floor set
@@ -242,7 +231,7 @@ func execConsentDistinctFiles(g *execGraph) int {
 // matches), and a floor under both the site and file counts (the walk still
 // matches ENOUGH).
 func TestEverySpawnSiteGatedOrExempt(t *testing.T) {
-	g := sweepExecGraph(t, repoRootForDocs(t), execConsentScanRoots)
+	g := repoExecGraph(t)
 	if err := execConsentVacuity(len(g.sites)); err != nil {
 		t.Fatal(err)
 	}
@@ -269,34 +258,34 @@ func TestExecConsentFloorCatchesANarrowedWalk(t *testing.T) {
 	}
 }
 
-// TestDroppingAScanRootFailsTheFloor: the roots are the one input nobody would
-// notice shrinking. internal/ holds the packages that actually spawn — mutation,
-// remote, codex, ship — so a sweep of cmd/ alone must fall under the floor
-// rather than reporting a clean, much smaller tree.
+// TestDroppingAScanRootFailsTheFloor: the scanned set is derived from the
+// shared load, not listed, so the input nobody would notice shrinking is the
+// program itself. internal/ holds the packages that actually spawn —
+// mutation, remote, codex, ship — so the program restricted to cmd/ must fall
+// under the floor rather than reporting a clean, much smaller tree.
 func TestDroppingAScanRootFailsTheFloor(t *testing.T) {
-	g := sweepExecGraph(t, repoRootForDocs(t), []string{"cmd"})
+	g := buildExecGraph(liveViewUnder(t, sourceProgram(t).Root, []string{"cmd"}))
 	if err := execConsentFloor(len(g.sites), execConsentDistinctFiles(g)); err == nil {
-		t.Errorf("sweeping cmd/ alone found %d sites in %d files and passed the floor — dropping `internal` is invisible",
+		t.Errorf("the program restricted to cmd/ found %d sites in %d files and passed the floor — losing internal/ is invisible",
 			len(g.sites), execConsentDistinctFiles(g))
 	}
 }
 
-// assertExecConsentCovers pins one file inside the scan roots by path, mirroring
-// subprocargs_audit_test.go's assertAuditCovers. A package that left scope would
-// otherwise show up as a smaller, cleaner sweep.
+// assertExecConsentCovers pins one file inside the audited program by path. A
+// package that left the load would otherwise show up as a smaller, cleaner
+// sweep.
 func assertExecConsentCovers(t *testing.T, rel string) {
 	t.Helper()
-	root := repoRootForDocs(t)
-	target := filepath.Join(root, rel)
+	target := filepath.Join(sourceProgram(t).Root, filepath.FromSlash(rel))
 	if _, err := os.Stat(target); err != nil {
 		t.Fatalf("expected %s to exist: %v", rel, err)
 	}
-	for _, r := range execConsentScanRoots {
-		if strings.HasPrefix(target, filepath.Join(root, r)+string(filepath.Separator)) {
+	for _, s := range repoExecGraph(t).sites {
+		if s.pos.Filename == target {
 			return
 		}
 	}
-	t.Errorf("%s is outside the scan roots %v", rel, execConsentScanRoots)
+	t.Errorf("%s holds no spawn site the audit sees — it has left the audited program", rel)
 }
 
 // TestExecConsentScansTheSpawningPackages: the four packages outside
@@ -304,10 +293,10 @@ func assertExecConsentCovers(t *testing.T, rel string) {
 // assumed, because the failure mode is silent.
 func TestExecConsentScansTheSpawningPackages(t *testing.T) {
 	for _, rel := range []string{
-		filepath.Join("internal", "mutation", "gremlins.go"),
-		filepath.Join("internal", "remote", "remote.go"),
-		filepath.Join("internal", "codex", "git.go"),
-		filepath.Join("internal", "ship", "open.go"),
+		"internal/mutation/gremlins.go",
+		"internal/remote/remote.go",
+		"internal/codex/git.go",
+		"internal/ship/open.go",
 	} {
 		assertExecConsentCovers(t, rel)
 	}
@@ -638,6 +627,9 @@ type execFunc struct {
 	fn    *ssa.Function
 	pkg   string
 	gates bool
+	// body is the function's syntax, kept so a surgery can re-decide gating
+	// with one consent call excluded.
+	body ast.Node
 }
 
 // execCommand is a cobra command with its full path and everything it reaches.
@@ -772,10 +764,13 @@ func buildExecGraph(v *srcView) *execGraph {
 			switch s := syn.(type) {
 			case *ast.FuncDecl:
 				if s.Body != nil {
-					ef.gates = execGates(s.Body)
+					ef.body = s.Body
 				}
 			case *ast.FuncLit:
-				ef.gates = execGates(s.Body)
+				ef.body = s.Body
+			}
+			if ef.body != nil {
+				ef.gates = execGates(ef.body, nil)
 			}
 		}
 		g.funcs[ef.key] = ef
@@ -956,7 +951,13 @@ func isExecConsentCall(call *ast.CallExpr) bool {
 // one of them — a return, a continue, a break. A switch that prints does not
 // count, which is what keeps doctor out of the gated set even though
 // diag.LaneConsent calls LaneConsented and binds its error.
-func execGates(body ast.Node) bool {
+//
+// excluded, when set, names consent calls to treat as absent — how a surgery
+// asks what the verdict would be without one gate.
+func execGates(body ast.Node, excluded func(*ast.CallExpr) bool) bool {
+	isConsent := func(call *ast.CallExpr) bool {
+		return isExecConsentCall(call) && (excluded == nil || !excluded(call))
+	}
 	bound := map[string]bool{}
 	ast.Inspect(body, func(node ast.Node) bool {
 		assign, ok := node.(*ast.AssignStmt)
@@ -964,7 +965,7 @@ func execGates(body ast.Node) bool {
 			return true
 		}
 		call, ok := assign.Rhs[0].(*ast.CallExpr)
-		if !ok || !isExecConsentCall(call) {
+		if !ok || !isConsent(call) {
 			return true
 		}
 		for _, lhs := range assign.Lhs {
@@ -980,7 +981,7 @@ func execGates(body ast.Node) bool {
 		switch node := node.(type) {
 		case *ast.ReturnStmt:
 			for _, r := range node.Results {
-				if call, ok := r.(*ast.CallExpr); ok && isExecConsentCall(call) {
+				if call, ok := r.(*ast.CallExpr); ok && isConsent(call) {
 					gates = true
 				}
 			}
@@ -995,7 +996,7 @@ func execGates(body ast.Node) bool {
 						gates = true
 					}
 				case *ast.CallExpr:
-					if isExecConsentCall(c) {
+					if isConsent(c) {
 						gates = true
 					}
 				}
@@ -1144,10 +1145,21 @@ func (g *execGraph) buildCommands(ctorOf map[string]*execCommand) {
 		}
 		c.reach = map[string]bool{}
 		for fn := range g.closureFrom(commandRoots(c.ctor)) {
-			key := execKey(fn)
-			c.reach[key] = true
-			if ef := g.funcs[key]; ef != nil && ef.fn == fn && ef.gates {
+			c.reach[execKey(fn)] = true
+		}
+	}
+	g.decideCommandGates()
+}
+
+// decideCommandGates marks a command gating when any function it reaches acts
+// on a consent verdict.
+func (g *execGraph) decideCommandGates() {
+	for _, c := range g.cmds {
+		c.gates = false
+		for key := range c.reach {
+			if ef := g.funcs[key]; ef != nil && ef.gates {
 				c.gates = true
+				break
 			}
 		}
 	}
@@ -1545,124 +1557,200 @@ var (
 )
 
 // repoExecGraph is the graph over this repository's own non-test source: the
-// shared program, built once. What it is for HERE is the claims that are only
-// meaningful against real code — that doctor does not reach the mutation
-// runner, and that the gate half of the verdict tells doctor's display-only
-// consent read from verify's acted-on one.
-//
-// A rewrite is {file base, before, after}. It is how a test can ask "what
-// would the enumerator say if this gate were deleted" without deleting it —
-// the only way to prove the gate half of the verdict is load-bearing rather
-// than decorative. A rewritten tree is re-type-checked from source.
-func repoExecGraph(t *testing.T, rewrites ...[3]string) *execGraph {
+// shared program (srcprog_test.go), built once. Nothing here re-parses or
+// re-type-checks — a test that needs a different verdict gets one by surgery
+// on a COPY of this graph (withSurgery).
+func repoExecGraph(t *testing.T) *execGraph {
 	t.Helper()
-	if len(rewrites) == 0 {
-		v := liveView(t)
-		repoExecGraphOnce.Do(func() { repoExecGraphVal = buildExecGraph(v) })
-		return repoExecGraphVal
-	}
-	return buildExecGraph(rewrittenModuleView(t, rewrites))
+	v := liveView(t)
+	repoExecGraphOnce.Do(func() { repoExecGraphVal = buildExecGraph(v) })
+	return repoExecGraphVal
 }
 
-// rewrittenModuleView re-type-checks every module package from source with the
-// rewrites applied, on the shared load's dependency types, and lowers it into a
-// program of its own.
-func rewrittenModuleView(t *testing.T, rewrites [][3]string) *srcView {
+// execSurgery is one edit to a copy of the graph, at an anchored line: the
+// line where anchor (which may span lines, and must occur exactly once in the
+// file) begins.
+//
+//   - ungate: the consent call on the anchored line stops counting — the
+//     question "what if this gate were deleted", asked without deleting it.
+//   - unmark: the exemption marker on the anchored line is gone.
+//   - mark:   the spawn on the anchored line carries a marker with reason.
+type execSurgery struct {
+	file   string // repo-relative
+	anchor string
+	op     string
+	reason string
+}
+
+// withSurgery returns a copy of g with the surgeries applied and every verdict
+// re-derived, failing the test if a surgery cannot land. g itself is never
+// touched: the shared graph serves every test in the binary, in any order.
+func (g *execGraph) withSurgery(t *testing.T, ops ...execSurgery) *execGraph {
 	t.Helper()
-	p := sourceProgram(t)
-	live := liveImportable(t)
-	fset := token.NewFileSet()
-	applied := map[string]bool{}
-	files := map[string][]*ast.File{}
-	for _, pkg := range p.Pkgs {
-		for _, path := range pkg.CompiledGoFiles {
-			body, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatal(err)
+	c, err := g.surgery(sourceProgram(t).Root, ops...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+// surgery is withSurgery's error-returning core.
+func (g *execGraph) surgery(root string, ops ...execSurgery) (*execGraph, error) {
+	c := g.clone()
+	for _, op := range ops {
+		path := filepath.Join(root, filepath.FromSlash(op.file))
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		switch n := strings.Count(string(body), op.anchor); n {
+		case 0:
+			return nil, fmt.Errorf("surgery on %s: anchor never matched %q — the test is asserting against source that moved", op.file, op.anchor)
+		case 1:
+		default:
+			return nil, fmt.Errorf("surgery on %s: anchor %q matched %d times — it must name one line", op.file, op.anchor, n)
+		}
+		line := strings.Count(string(body)[:strings.Index(string(body), op.anchor)], "\n") + 1
+		switch op.op {
+		case "ungate":
+			excluded := func(call *ast.CallExpr) bool {
+				p := c.fset.Position(call.Pos())
+				return p.Filename == path && p.Line == line
 			}
-			src := string(body)
-			for _, rw := range rewrites {
-				if filepath.Base(path) != rw[0] || !strings.Contains(src, rw[1]) {
+			hit := false
+			for key, ef := range c.funcs {
+				if ef.body == nil {
 					continue
 				}
-				src = strings.Replace(src, rw[1], rw[2], 1)
-				applied[rw[0]+rw[1]] = true
+				from, to := c.fset.Position(ef.body.Pos()), c.fset.Position(ef.body.End())
+				if from.Filename != path || line < from.Line || line > to.Line {
+					continue
+				}
+				cp := *ef
+				cp.gates = execGates(ef.body, excluded)
+				c.funcs[key] = &cp
+				hit = true
 			}
-			f, err := parser.ParseFile(fset, path, src, parser.ParseComments)
-			if err != nil {
-				t.Fatal(err)
+			if !hit {
+				return nil, fmt.Errorf("surgery on %s:%d: no function body holds the anchored consent call", op.file, line)
 			}
-			files[pkg.PkgPath] = append(files[pkg.PkgPath], f)
+		case "unmark", "mark":
+			target := line
+			if op.op == "unmark" {
+				target = line + 1 // a marker binds the line below it
+			}
+			hit := false
+			for i, s := range c.sites {
+				if s.pos.Filename != path || s.pos.Line != target {
+					continue
+				}
+				cp := *s
+				cp.marked = op.op == "mark"
+				cp.marker = execExemption{}
+				if cp.marked {
+					cp.marker = execExemption{Reason: op.reason}
+				}
+				c.sites[i] = &cp
+				hit = true
+			}
+			if !hit {
+				return nil, fmt.Errorf("surgery on %s:%d: no spawn site on the anchored line", op.file, target)
+			}
+		default:
+			return nil, fmt.Errorf("unknown surgery %q", op.op)
 		}
 	}
-	for _, rw := range rewrites {
-		if !applied[rw[0]+rw[1]] {
-			t.Fatalf("rewrite of %s never matched %q — the test is asserting against source that moved", rw[0], rw[1])
-		}
-	}
+	c.decideCommandGates()
+	c.classify()
+	return c, nil
+}
 
-	var order []string
-	done := map[string]bool{}
-	var visit func(pkg *packages.Package)
-	visit = func(pkg *packages.Package) {
-		if done[pkg.PkgPath] || !inModule(pkg.PkgPath) {
-			return
-		}
-		done[pkg.PkgPath] = true
-		for _, imp := range pkg.Imports {
-			visit(imp)
-		}
-		order = append(order, pkg.PkgPath)
+// clone copies everything a surgery can change — functions' gating, sites'
+// markers and verdicts, commands' gating — and shares what it cannot: the
+// reach edges and each command's reach set.
+func (g *execGraph) clone() *execGraph {
+	c := &execGraph{fset: g.fset, view: g.view, edges: g.edges, markers: g.markers,
+		funcs: make(map[string]*execFunc, len(g.funcs))}
+	for k, f := range g.funcs {
+		c.funcs[k] = f
 	}
-	for _, pkg := range p.Pkgs {
-		visit(pkg)
+	for _, s := range g.sites {
+		cp := *s
+		c.sites = append(c.sites, &cp)
 	}
+	for _, cmd := range g.cmds {
+		cp := *cmd
+		c.cmds = append(c.cmds, &cp)
+	}
+	c.ambiguous = append(c.ambiguous, g.ambiguous...)
+	return c
+}
 
-	checked := map[string]*srcPkg{}
-	importer := importerFunc(func(path string) (*types.Package, error) {
-		if c, ok := checked[path]; ok {
-			return c.Types, nil
-		}
-		if lp, ok := live[path]; ok && !inModule(path) {
-			return lp.Types, nil
-		}
-		return nil, fmt.Errorf("rewritten module: no types for %q", path)
-	})
-	for _, path := range order {
-		info := &types.Info{
-			Types:        map[ast.Expr]types.TypeAndValue{},
-			Instances:    map[*ast.Ident]types.Instance{},
-			Defs:         map[*ast.Ident]types.Object{},
-			Uses:         map[*ast.Ident]types.Object{},
-			Implicits:    map[ast.Node]types.Object{},
-			Selections:   map[*ast.SelectorExpr]*types.Selection{},
-			Scopes:       map[ast.Node]*types.Scope{},
-			FileVersions: map[*ast.File]string{},
-		}
-		conf := &types.Config{Importer: importer}
-		tpkg, err := conf.Check(path, fset, files[path], info)
-		if err != nil {
-			t.Fatalf("rewritten module does not type-check: %v", err)
-		}
-		checked[path] = &srcPkg{Path: path, Types: tpkg, Info: info, Syntax: files[path]}
+// execGraphFingerprint renders every verdict and the reach-edge count, so a
+// test can prove a surgery left the shared graph as it found it.
+func execGraphFingerprint(g *execGraph) string {
+	edges := 0
+	for _, tos := range g.edges {
+		edges += len(tos)
 	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "edges=%d\n", edges)
+	for _, s := range g.sites {
+		fmt.Fprintf(&b, "%s %v %s\n", s.pos, s.marked, s.Verdict())
+	}
+	for _, c := range g.cmds {
+		fmt.Fprintf(&b, "%s %v\n", c.path, c.gates)
+	}
+	return b.String()
+}
 
-	prog := ssa.NewProgram(fset, ssa.InstantiateGenerics)
-	packages.Visit(p.Pkgs, nil, func(pkg *packages.Package) {
-		if pkg.Types != nil && !inModule(pkg.PkgPath) {
-			prog.CreatePackage(pkg.Types, nil, nil, true)
-		}
-	})
-	v := &srcView{Fset: fset, Prog: prog}
-	for _, path := range order {
-		c := checked[path]
-		c.SSA = prog.CreatePackage(c.Types, c.Syntax, c.Info, true)
-		v.Pkgs = append(v.Pkgs, c)
+// execLiveSurgeries are the four live proofs' surgeries, in one place so the
+// isolation test runs every one of them.
+var execLiveSurgeries = []execSurgery{
+	{file: "internal/cmd/run.go", op: "ungate", anchor: "consented, err := consent.RunConsented(grantStore(root), line)"},
+	{file: "internal/cmd/verify.go", op: "ungate",
+		anchor: "if err := requireExecConsent(); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t\tphaseID := args[0]"},
+	{file: "internal/ship/open.go", op: "unmark", anchor: "//dross:exec-exempt gh is the forge API client"},
+	{file: "internal/mutation/gremlins.go", op: "mark", anchor: "		return exec.Command(args[0], args[1:]...)",
+		reason: "an exemption nobody needed, added by the test to prove it is refused"},
+}
+
+// TestSurgeryLeavesTheSharedGraphAlone: every surgery works on a copy. The
+// shared graph's verdicts, gating and reach-edge count are exactly what they
+// were — the property that lets these tests run in any order.
+func TestSurgeryLeavesTheSharedGraphAlone(t *testing.T) {
+	g := repoExecGraph(t)
+	before := execGraphFingerprint(g)
+	after := g.withSurgery(t, execLiveSurgeries...)
+	if got := execGraphFingerprint(g); got != before {
+		t.Error("a surgery changed the shared graph")
 	}
-	prog.Build()
-	v.CHA = cha.CallGraph(prog)
-	v.VTA = vta.CallGraph(ssautil.AllFunctions(prog), v.CHA)
-	return v
+	if execGraphFingerprint(after) == before {
+		t.Error("the surgeries changed nothing — they did not land")
+	}
+}
+
+// TestSurgeryAnchorMustMatch: an anchor absent from source is an error naming
+// it, never a no-op surgery that leaves a green proof standing.
+func TestSurgeryAnchorMustMatch(t *testing.T) {
+	g := repoExecGraph(t)
+	_, err := g.surgery(sourceProgram(t).Root, execSurgery{file: "internal/cmd/run.go", op: "ungate", anchor: "no such line in run.go"})
+	if err == nil || !strings.Contains(err.Error(), "anchor never matched") {
+		t.Errorf("surgery with a missing anchor = %v, want \"anchor never matched\"", err)
+	}
+	_, err = g.surgery(sourceProgram(t).Root, execSurgery{file: "internal/cmd/verify.go", op: "ungate", anchor: "if err := requireExecConsent(); err != nil {"})
+	if err == nil || !strings.Contains(err.Error(), "matched 2 times") {
+		t.Errorf("surgery with an ambiguous anchor = %v, want it refused", err)
+	}
+}
+
+// TestLiveTreeHasNoUnresolvedDispatch: the move onto the call graph left no
+// dispatch next to a spawn that the program does not pin down — and no marker
+// was added to get there.
+func TestLiveTreeHasNoUnresolvedDispatch(t *testing.T) {
+	for _, f := range repoExecGraph(t).ambiguous {
+		t.Error(f.String())
+	}
 }
 
 // TestExecReachCrossesPackages is RECALL. The fixture's command reaches its
@@ -2181,20 +2269,12 @@ func TestUpdateSelfExecIsTheOnlyMarkerHere(t *testing.T) {
 // decorative. Deleting `dross run`'s consent check — in a copy of the source,
 // not on disk — must turn its spawn into a finding that names it.
 func TestReachProofIsLoadBearing(t *testing.T) {
-	// The CALL is removed, not just the branch under it. Leaving
-	// `if err != nil { return err }` standing would still be a function acting
-	// on a consent result — a weaker gate, but a real one — and the assertion
-	// is about what happens when the check is gone.
-	g := repoExecGraph(t, [3]string{
-		"run.go",
-		"consented, err := consent.RunConsented(grantStore(root), line)",
-		"consented, err := true, error(nil)",
-	}, [3]string{
-		// Keeps the consent import used once the call is gone, from package
-		// scope so it lands in init rather than in the command's reach.
-		"run.go",
-		"var spawnRunSlot = func(",
-		"var _ = consent.RunConsented\n\nvar spawnRunSlot = func(",
+	// The CALL stops counting, not just the branch under it: surgery on a copy
+	// of the shared graph re-decides gating with that consent call excluded,
+	// which is what deleting it would leave.
+	g := repoExecGraph(t).withSurgery(t, execSurgery{
+		file: "internal/cmd/run.go", op: "ungate",
+		anchor: "consented, err := consent.RunConsented(grantStore(root), line)",
 	})
 	var found bool
 	for _, f := range g.findings() {
@@ -2317,10 +2397,9 @@ func TestRemoteMarkerNamesTheCallerCheck(t *testing.T) {
 // must produce a finding, and one attributed through the seam rather than
 // "reachable from no command".
 func TestFuncLiteralSpawnIsAttributedThroughItsVar(t *testing.T) {
-	g := repoExecGraph(t, [3]string{
-		"open.go",
-		"//dross:exec-exempt gh is the forge API client",
-		"// (marker removed by the test)",
+	g := repoExecGraph(t).withSurgery(t, execSurgery{
+		file: "internal/ship/open.go", op: "unmark",
+		anchor: "//dross:exec-exempt gh is the forge API client",
 	})
 	var found execFinding
 	for _, f := range g.findings() {
@@ -2395,10 +2474,10 @@ func TestMutationSpawnsAreGatedViaVerify(t *testing.T) {
 // marking. These sites are reached only by gating commands, so a marker on one
 // is a claim nobody needed to make.
 func TestMarkerOnAMutationSpawnIsAFinding(t *testing.T) {
-	g := repoExecGraph(t, [3]string{
-		"gremlins.go",
-		"		return exec.Command(args[0], args[1:]...)",
-		"		//dross:exec-exempt an exemption nobody needed, added by the test to prove it is refused\n\t\treturn exec.Command(args[0], args[1:]...)",
+	g := repoExecGraph(t).withSurgery(t, execSurgery{
+		file: "internal/mutation/gremlins.go", op: "mark",
+		anchor: "		return exec.Command(args[0], args[1:]...)",
+		reason: "an exemption nobody needed, added by the test to prove it is refused",
 	})
 	var found execFinding
 	for _, f := range g.findings() {
@@ -2425,10 +2504,9 @@ func TestDeletingVerifysGateFlagsEveryMutationSpawn(t *testing.T) {
 		t.Fatal("no mutation spawn sites to flag")
 	}
 
-	g := repoExecGraph(t, [3]string{
-		"verify.go",
-		"if err := requireExecConsent(); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t\tphaseID := args[0]",
-		"phaseID := args[0]",
+	g := before.withSurgery(t, execSurgery{
+		file: "internal/cmd/verify.go", op: "ungate",
+		anchor: "if err := requireExecConsent(); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t\tphaseID := args[0]",
 	})
 	got := 0
 	for _, f := range g.findings() {
