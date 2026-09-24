@@ -1,0 +1,133 @@
+[verify]
+  phase = "exec-taint-enumeration"
+  generated_at = 2026-09-24T20:22:43.429736Z
+  verdict = "pending"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9413131900058106
+  mutants_killed = 1620
+  mutants_survived = 101
+  mutants_not_covered = 101
+  mutants_in_scope = 1721
+  unclassified_in_scope = 4
+  criteria_total = 10
+  criteria_covered = 9
+  criteria_uncovered = 1
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 1620
+    survived = 101
+    timeout = 0
+    in_scope = 1721
+    score = 0.9413131900058106
+    file_count = 99
+    measured_on = "helicon"
+    whole_file = ["internal/changes/changes.go — adapter-lacks-range-runner", "internal/changes/changes_test.go — adapter-lacks-range-runner", "internal/cmd/basebranch.go — adapter-lacks-range-runner", "internal/cmd/basebranch_test.go — adapter-lacks-range-runner", "internal/cmd/cleantree.go — adapter-lacks-range-runner", "internal/cmd/directive_test.go — adapter-lacks-range-runner", "internal/cmd/execconsent_audit_test.go — adapter-lacks-range-runner", "internal/cmd/gitseparator_test.go — adapter-lacks-range-runner", "internal/cmd/hermetic_env_test.go — adapter-lacks-range-runner", "internal/cmd/lane_install.go — adapter-lacks-range-runner", "internal/cmd/lane_install_spawn_test.go — adapter-lacks-range-runner", "internal/cmd/milestone.go — adapter-lacks-range-runner", "internal/cmd/originpush.go — adapter-lacks-range-runner", "internal/cmd/pathfence_carrier_test.go — adapter-lacks-range-runner", "internal/cmd/pathfence_enum_test.go — adapter-lacks-range-runner", "internal/cmd/pathfence_fields_test.go — adapter-lacks-range-runner", "internal/cmd/pathtaint_audit_test.go — adapter-lacks-range-runner", "internal/cmd/pause.go — adapter-lacks-range-runner", "internal/cmd/phase.go — adapter-lacks-range-runner", "internal/cmd/phase_backfill.go — adapter-lacks-range-runner", "internal/cmd/phase_lifecycle.go — adapter-lacks-range-runner", "internal/cmd/redproof_lifecycle.go — adapter-lacks-range-runner", "internal/cmd/redproof_replay.go — adapter-lacks-range-runner", "internal/cmd/redproof_repoint_cmd.go — adapter-lacks-range-runner", "internal/cmd/refguard_test.go — adapter-lacks-range-runner", "internal/cmd/repair.go — adapter-lacks-range-runner", "internal/cmd/repair_files.go — adapter-lacks-range-runner", "internal/cmd/repair_phasedirs.go — adapter-lacks-range-runner", "internal/cmd/repair_state.go — adapter-lacks-range-runner", "internal/cmd/secretscan.go — adapter-lacks-range-runner", "internal/cmd/security_test.go — adapter-lacks-range-runner", "internal/cmd/ship.go — adapter-lacks-range-runner", "internal/cmd/ship_recover.go — adapter-lacks-range-runner", "internal/cmd/ship_test.go — adapter-lacks-range-runner", "internal/cmd/srccorpus_test.go — adapter-lacks-range-runner", "internal/cmd/srcfinding_test.go — adapter-lacks-range-runner", "internal/cmd/srcprog_test.go — adapter-lacks-range-runner", "internal/cmd/srcscope_test.go — adapter-lacks-range-runner", "internal/cmd/ssafixture_test.go — adapter-lacks-range-runner", "internal/cmd/subprocargs_audit_test.go — adapter-lacks-range-runner", "internal/cmd/survivor_drain.go — adapter-lacks-range-runner", "internal/cmd/switchbranch.go — adapter-lacks-range-runner", "internal/cmd/switchbranch_test.go — adapter-lacks-range-runner", "internal/cmd/taint_audit_test.go — adapter-lacks-range-runner", "internal/cmd/taint_engine_test.go — adapter-lacks-range-runner", "internal/cmd/taint_flow_test.go — adapter-lacks-range-runner", "internal/cmd/taint_gitdirect_test.go — adapter-lacks-range-runner", "internal/cmd/taint_gitplumbing_test.go — adapter-lacks-range-runner", "internal/cmd/taint_marker_test.go — adapter-lacks-range-runner", "internal/cmd/taint_scanners_test.go — adapter-lacks-range-runner", "internal/cmd/taint_schedule_test.go — adapter-lacks-range-runner", "internal/cmd/taint_ship_test.go — adapter-lacks-range-runner", "internal/cmd/taint_stryker_test.go — adapter-lacks-range-runner", "internal/cmd/taint_toolstreams_test.go — adapter-lacks-range-runner", "internal/cmd/taint_usercmds_test.go — adapter-lacks-range-runner", "internal/cmd/techdebt.go — adapter-lacks-range-runner", "internal/cmd/techdebt_test.go — adapter-lacks-range-runner", "internal/cmd/test_lane_install.go — adapter-lacks-range-runner", "internal/cmd/trust_lane_install_cmd_test.go — adapter-lacks-range-runner", "internal/cmd/verifyscope.go — adapter-lacks-range-runner", "internal/cmd/worktree_files.go — adapter-lacks-range-runner", "internal/codex/ast_grep.go — adapter-lacks-range-runner", "internal/compilefence/compilefence.go — adapter-lacks-range-runner", "internal/milestone/milestone.go — adapter-lacks-range-runner", "internal/milestone/milestone_test.go — adapter-lacks-range-runner", "internal/mutation/inapplicable.go — adapter-lacks-range-runner", "internal/mutation/stryker.go — adapter-lacks-range-runner", "internal/mutation/stryker_test.go — adapter-lacks-range-runner", "internal/mutation/toolfence_residual_test.go — adapter-lacks-range-runner", "internal/pathfence/fields.go — adapter-lacks-range-runner", "internal/pathfence/fields_test.go — adapter-lacks-range-runner", "internal/phase/done.go — adapter-lacks-range-runner", "internal/phase/phase.go — adapter-lacks-range-runner", "internal/phase/phase_test.go — adapter-lacks-range-runner", "internal/project/remote.go — adapter-lacks-range-runner", "internal/project/remote_test.go — adapter-lacks-range-runner", "internal/quality/run.go — adapter-lacks-range-runner", "internal/remote/hold.go — adapter-lacks-range-runner", "internal/remote/hold_test.go — adapter-lacks-range-runner", "internal/remote/lock.go — adapter-lacks-range-runner", "internal/remote/remote.go — adapter-lacks-range-runner", "internal/security/run.go — adapter-lacks-range-runner", "internal/ship/basepr.go — adapter-lacks-range-runner", "internal/ship/comment.go — adapter-lacks-range-runner", "internal/ship/comment_test.go — adapter-lacks-range-runner", "internal/ship/gh_failure_test.go — adapter-lacks-range-runner", "internal/ship/headpr.go — adapter-lacks-range-runner", "internal/ship/merged.go — adapter-lacks-range-runner", "internal/ship/open.go — adapter-lacks-range-runner", "internal/survivor/evidence.go — adapter-lacks-range-runner", "internal/survivor/identity.go — adapter-lacks-range-runner", "internal/survivor/identity_test.go — adapter-lacks-range-runner", "internal/survivor/stale.go — adapter-lacks-range-runner", "internal/survivor/stale_test.go — adapter-lacks-range-runner", "internal/techdebt/run.go — adapter-lacks-range-runner", "internal/verify/scope.go — adapter-lacks-range-runner", "internal/verify/scope_test.go — adapter-lacks-range-runner", "internal/verify/verify.go — adapter-lacks-range-runner", "internal/verify/verify_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "weak"
+  tests = ["internal/cmd/taint_audit_test.go:TestNoSpawnOutputEscapes", "internal/cmd/taint_engine_test.go:TestExecTaintSources", "internal/cmd/taint_engine_test.go:TestExecTaintSinks", "internal/cmd/taint_marker_test.go:TestTaintMarkerCorpus", "internal/cmd/taint_marker_test.go:TestTaintMarkerGrammar", "internal/cmd/directive_test.go:TestDirectiveGrammarIsShared", "internal/cmd/taint_flow_test.go:TestTaintFollowsWriters"]
+  notes = "Live gate + WANT corpora pin Output/CombinedOutput/pipes/ExitError.Stderr/Stdout buffer, terminal sinks, error-never-terminal, recorder, int/bool clearance and marker grammar. Weak: the Stderr-buffer source channel has no fixture of its own — cmd.Stderr is seeded at taint_engine_test.go:1873 but its only fixture (stryker_prephase.go.txt:81) shares its sink with cmd.Stdout, so dropping the Stderr seed passes every fixture and the live gate. Also the protocolToken shape check that justifies remote/lock.go's //dross:taint-cleared marker is untested at index 0 (see lock.go:369 survivor)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/taint_flow_test.go:TestTaintCrossesReturns", "internal/cmd/taint_flow_test.go:TestTaintIsKeyedByField", "internal/cmd/taint_flow_test.go:TestTaintFollowsWriters"]
+  notes = "One fixture per channel (channels_return/field/writer.go.txt), checked both directions by assertCorpus; spawn wrapped in a helper (a.Rev, Run, record) and conversion wrapped in a helper (a.ToStr → b.go:62) both trip."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/taint_stryker_test.go:TestStrykerPrePhaseBranchTrips", "internal/cmd/taint_stryker_test.go:TestStrykerPrePhaseBranchIsPinned", "internal/cmd/taint_stryker_test.go:TestStrykerTwinsStayClean"]
+  notes = "Three WANT findings at stryker_prephase.go.txt:97/117/124, each required to name origin line 80; pins match 6f27eaa^ byte for byte. The spec's quoted.String() never existed in real code — the fixture pins the real shape and a paraphrase."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/pathtaint_audit_test.go:TestPathTaintRawOS", "internal/cmd/pathtaint_audit_test.go:TestPathTaintContainedOK", "internal/cmd/pathtaint_audit_test.go:TestNoDeclaredPathFieldReachesOS"]
+  notes = "raw_os.go.txt: 7 must-trip incl. a Consumed field raw to os.* and a NotConsumed field (project.Env.Files) reaching os.*; contained_ok.go.txt is must-not-trip for contained reads plus must-trip for NotConsumed via the seam."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/srcscope_test.go:TestNoSpawnOrFieldReadOutsideTheLoad", "internal/cmd/srcscope_test.go:TestScannedSetMatchesTheModule", "internal/cmd/srcscope_test.go:TestCrossCheckReportsEachWayOutOfTheLoad", "internal/cmd/srcscope_test.go:TestScannedSetFloor"]
+  notes = "Load is packages.Load(\"./...\"); an independent go/parser sweep fails on any spawning or declared-field-reading file outside the load, and the loaded dirs are compared to a directory walk both ways."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/srcfinding_test.go:TestTaintFindingNamesEscapeOriginRemedy", "internal/cmd/srcfinding_test.go:TestPathFindingNamesEscapeFieldRemedy"]
+  notes = "One-violation fixture per new scan; escape and spawn positions asserted as exact file:line, field named, remedy asserted; assertFacts cuts each fact out to prove each is independently required."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/srccorpus_test.go:TestCorpusHarnessReportsBothDirections", "internal/cmd/srccorpus_test.go:TestEmptyCorpusFails", "internal/cmd/ssafixture_test.go:TestBadFixturesFailLoudly", "internal/cmd/taint_audit_test.go:TestNoSpawnOutputEscapes", "internal/cmd/pathtaint_audit_test.go:TestPathReadFloor", "internal/cmd/pathfence_enum_test.go:TestUnwrapFloorCatchesADroppedPackage"]
+  notes = "Every scan has a stated floor with an at-floor/one-under self-test (exec taint 37/24, path reads 1050, package set 34, unwrap 208, fields 285, exec-consent 30/20) and a fixture corpus whose answers are written down; the harness fails on a missed WANT, an unexpected finding and an empty corpus."
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/srcprog_test.go:TestSourceProgramLoadsOnce", "internal/cmd/srcprog_test.go:TestOnePackagesLoadCallSite", "internal/cmd/hermetic_env_test.go:TestMain (srcProgLoads > 1 fails the binary)", "CI run 36039969327 on 0a98e9d: internal/cmd 229.969s"]
+  notes = "One packages.Load behind sync.Once, enforced three ways. Budget read from the timing table as the criterion specifies: 229.969s ≤ 250.1s (#132 205.1s + 45s) and ≤ 256.8s (#133 211.8s + 45s). The budget itself is checked by reading CI, not by a test."
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/security_test.go:TestContainedStringCheckIsTypeKeyed", "internal/cmd/pathfence_enum_test.go:TestUnwrapScanTripsOnItsFixtures", "internal/cmd/pathfence_fields_test.go:TestWalkerSelfTest", "internal/cmd/pathfence_fields_test.go:TestTaskExperimentStaysAFailure", "internal/cmd/pathfence_fields_test.go:TestEveryPathShapedFieldIsDeclared"]
+  notes = "Guards walk the derived set; unwrap ban is type-keyed (renamed local trips, b.String() does not); unlisted tag word (replay) and unlisted schema dir (remote) fail; task_experiment.go.txt adds WorkDir/OutputDir/Spec to phase.Task and requires exactly those three findings."
+
+[[criterion]]
+  id = "c-10"
+  status = "covered"
+  tests = ["internal/cmd/execconsent_audit_test.go:TestExecDispatchFollowsTheFlow", "internal/cmd/execconsent_audit_test.go:TestUnresolvedDispatchIsReported", "internal/cmd/execconsent_audit_test.go:TestExecConsentCalibrationIsUnchanged", "internal/cmd/execconsent_audit_test.go:TestLiveTreeHasNoUnresolvedDispatch"]
+  notes = "VTA excludes a never-passed spawning implementer (dispatch.go.txt) while its twin that passes Loud{} reaches it; an unresolvable dispatch is a named finding; calibration fixtures unchanged in the diff and their FLAG/PASS headers pinned byte for byte."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pathfence/fields.go:324 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/remote/lock.go:369 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/remote/lock.go:369 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/ship/headpr.go:66 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "stale acceptance: internal/cmd/milestone.go (6efb661ce18f93d2) — mutant no longer produced — retire it from .dross/survivors.toml"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-1: the Stderr-buffer source channel is unpinned — cmd.Stderr is seeded (internal/cmd/taint_engine_test.go:1873) but no fixture assigns cmd.Stderr alone; stryker_prephase.go.txt:81 shares its sink with cmd.Stdout, so removing the Stderr seed passes every fixture and the live gate. Fix: one fixture seeding cmd.Stderr = &buf and escaping buf.String() through fmt.Errorf."
+
+[[finding]]
+  severity = "FLAG"
+  text = "internal/remote/lock.go:369 col 105 (the `>= 0` after the IndexFunc func literal): go cover ends the coverage block at the literal, so gremlins never runs either mutant there. The negation would refuse every valid field and is killed in practice by hold_test.go:550; the boundary (`> 0`) is a real gap — hold_test.go:542-543 put the control character at index 3, nothing tests index 0. Fix: add a leading-control-char case, and replace the func literal with a named func so gremlins can see the line."
+
+[[finding]]
+  severity = "NOTE"
+  text = "internal/ship/headpr.go:66 and internal/pathfence/fields.go:324 survive as string concatenation: `-` on strings does not compile, so neither mutant is viable by construction. fields.go:324 sits in a package-level initializer (no coverage block); headpr.go:66's malformed-JSON branch has no test — the stderr routing there is proven only statically by the taint scan."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Most of c-1/c-2/c-3/c-5/c-6/c-7/c-9/c-10 is implemented in _test.go files (the SSA engine, corpora, floors), which mutation testing does not mutate; their strength is judged from the WANT corpora and harness self-tests, not from the mutation score."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-7: the 1050 path-read floor counts registry reads and not_paths.txt ledger rows together; the registry half cannot silently empty (unresolved declarations and TestEveryPathShapedFieldIsDeclared fail independently), but there is no per-class floor."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-8: the budget was raised from 15s to 45s after measurement (0a98e9d, user-accepted); two CI samples on identical code differ by ~16s (245.9s, 229.97s), so the margin against #132 has been as thin as 4.2s."
