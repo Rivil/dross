@@ -52,8 +52,9 @@ const execExemptMarker = "//dross:exec-exempt"
 
 // execExemptMinReason is the floor on marker prose. A reason has to be long
 // enough to name why the call cannot reach repo-authored code; "status" is the
-// subcommand restated, which is what the marker already sits next to.
-const execExemptMinReason = 20
+// subcommand restated, which is what the marker already sits next to. It is
+// the shared directive floor (directive_test.go).
+const execExemptMinReason = directiveMinReason
 
 // execFinding is one spawn site that is neither gated nor properly exempt.
 //
@@ -82,30 +83,13 @@ func (f execFinding) String() string {
 
 // execExemption is a parsed marker. Reason is empty for a bare marker, which is
 // a different finding from no marker at all.
-type execExemption struct {
-	Reason string
-}
+type execExemption = directive
 
 // execExemptMarkers maps the line a marker EXEMPTS — the one directly below it —
-// to the marker's prose.
+// to the marker's prose. The grammar is the shared directive parser's
+// (directive_test.go), so exec-exempt and taint-cleared cannot drift apart.
 func execExemptMarkers(fset *token.FileSet, f *ast.File) map[int]execExemption {
-	out := map[int]execExemption{}
-	for _, group := range f.Comments {
-		for _, c := range group.List {
-			rest, ok := strings.CutPrefix(c.Text, execExemptMarker)
-			if !ok {
-				continue
-			}
-			// The reason must be separated from the directive. Without this
-			// `//dross:exec-exemptanything` would parse as a marker whose reason
-			// is glued to it, which is a typo passing as an exemption.
-			if rest != "" && !strings.HasPrefix(rest, " ") && !strings.HasPrefix(rest, "\t") {
-				continue
-			}
-			out[fset.Position(c.End()).Line+1] = execExemption{Reason: strings.TrimSpace(rest)}
-		}
-	}
-	return out
+	return directiveMarkers(fset, f, execExemptMarker)
 }
 
 // auditExecConsentFile is the single-file view of the audit, kept for the tests
