@@ -485,7 +485,22 @@ func TestVerifyKeepsUncheckableAcceptanceANote(t *testing.T) {
 	}
 	dir := lifecycleRepo(t, "uncheckable")
 
-	// c.go is untracked, so nothing but the staleness pass ever reads it.
+	// c.go is gitignored, so nothing but the staleness pass ever reads it.
+	// Untracked is not enough: verify fingerprints the tree it measures by
+	// staging the work tree into a scratch index, which cannot read a
+	// mode-000 file and refuses the run before the staleness pass is reached.
+	// Appended, not written: init's .gitignore already carries dross's own
+	// machine-local entries, and dropping them would change the fingerprint.
+	ignore, err := os.OpenFile(filepath.Join(dir, ".gitignore"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ignore.WriteString("\nc.go\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ignore.Close(); err != nil {
+		t.Fatal(err)
+	}
 	locked := filepath.Join(dir, "c.go")
 	mustWrite(t, locked, "package x\n\nfunc C() bool { return true }\n")
 	if err := os.Chmod(locked, 0); err != nil {
