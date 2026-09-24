@@ -90,6 +90,7 @@ func trackedFiles(repoDir string) ([]string, error) {
 	out, err := exec.Command("git", "-C", repoDir, "ls-files", "-z").Output()
 	if err == nil {
 		var paths []string
+		//dross:taint-cleared git ls-files -z prints NUL-separated tracked paths; each becomes a file the scan reads, and nothing else of git's output is kept
 		for _, rel := range strings.Split(strings.TrimRight(string(out), "\x00"), "\x00") {
 			if rel == "" || inSkippedDir(rel) {
 				continue

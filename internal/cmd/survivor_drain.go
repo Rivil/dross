@@ -44,6 +44,7 @@ var goListDirs = func(repoRoot string) ([]string, error) {
 		return nil, fmt.Errorf("go list ./...: %w", err)
 	}
 	var dirs []string
+	//dross:taint-cleared go list -f {{.Dir}} prints one package directory per line; each becomes a gremlins package path, and nothing else of go's output is kept
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		if line != "" {
 			dirs = append(dirs, line)

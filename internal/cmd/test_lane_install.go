@@ -294,7 +294,7 @@ func reportLaneInstall(root, repoDir string, lane project.TestLane, site laneIns
 			Printf("  → %s would install on %s: %s\n", s.Tool, site.Machine, installPreview(s))
 		default:
 			Printf("  → %s installing on %s: %s\n", s.Tool, site.Machine, installPreview(s))
-			if _, err := runLaneInstall(root, repoDir, site.Target, lane, s); err != nil {
+			if err := runLaneInstall(root, repoDir, site.Target, lane, s); err != nil {
 				Printf("    ✗ %v\n", err)
 				failed++
 				continue
