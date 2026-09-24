@@ -1,0 +1,54 @@
+Single-violation fixture for the exec-output taint scan (TestTaintFindingNamesEscapeOriginRemedy).
+One value escapes, into an error in package escape. It was printed by a git
+spawn in package spawn, two packages away, through package relay — and it is a
+phi of two spawns, so the finding must name both origins, not just the first.
+The test finds every line by its anchor comment.
+
+-- spawn.go --
+package spawn
+
+import "os/exec"
+
+// Head is what git printed, from one of two invocations.
+func Head(short bool) string {
+	var out []byte
+	if short {
+		out, _ = exec.Command("git", "rev-parse", "--short", "HEAD").Output() // anchor: spawn-short
+	} else {
+		out, _ = exec.Command("git", "rev-parse", "HEAD").Output() // anchor: spawn-long
+	}
+	return string(out)
+}
+
+-- relay.go --
+package relay
+
+import "example.com/fixture/spawn"
+
+// Describe wraps the head in prose; the relay is where a per-package scan
+// would lose the thread.
+func Describe(short bool) string {
+	return "head is " + spawn.Head(short)
+}
+
+-- escape.go --
+package escape
+
+import (
+	"fmt"
+	"os"
+
+	"example.com/fixture/relay"
+)
+
+// Check quotes the head into an error: the one violation.
+func Check(short bool) error {
+	return fmt.Errorf("unexpected %s", relay.Describe(short)) // anchor: escape
+}
+
+// Run is Check's caller, so the error's return is not itself an edge.
+func Run() {
+	if err := Check(len(os.Args) > 1); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+}
