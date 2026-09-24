@@ -364,6 +364,23 @@
         }
       ]
     },
+    "t-25": {
+      "files": [
+        "internal/cmd/taint_engine_test.go",
+        "internal/cmd/taint_schedule_test.go",
+        "ARCHITECTURE.md"
+      ],
+      "commit": "7261a7b",
+      "completed_at": "2026-09-24T17:03:32.502129Z",
+      "landmarks": [
+        {
+          "feature": "Exec output containment",
+          "symbol": "indexDependents",
+          "loc": "internal/cmd/taint_engine_test.go:624",
+          "what": "worklist scheduler: re-analyse a function only when something it reads grows"
+        }
+      ]
+    },
     "t-3": {
       "files": [
         "internal/cmd/ssafixture_test.go",

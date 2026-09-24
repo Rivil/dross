@@ -1,4 +1,4 @@
-task_seq = 24
+task_seq = 25
 
 [phase]
   id = "exec-taint-enumeration"
@@ -263,4 +263,15 @@ task_seq = 24
   covers = ["c-1"]
   depends_on = ["t-10", "t-15"]
   test_contract = ["if the burn-down is incomplete, the gate in taint_gitdirect_test.go reports any finding whose origin is one of these seven files' own exec spawns, or any orphan marker", "if the milestone_stale fix regresses, a fixture copy of pre-fix milestone_stale (diff buffer reaching a returned error) fails to trip — it is kept as a regression case", "if phase.go's `git show` bytes reach a returned error, a stubbed git printing CANARY-SHOW and exiting 128 puts CANARY-SHOW in the error instead of stderr", "if a marker is malformed or idle, it fails t-2's grammar or clears no tainted value", "if userinfo survives, `remote get-url` stubbed to return https://u:CANARY-TOK@host/o/r yields a detected remote (and project.toml url) containing CANARY-TOK; it must not, and init.go:177 must carry no marker"]
+  status = "done"
+
+[[task]]
+  id = "t-25"
+  wave = 8
+  title = "Schedule the taint engine by worklist"
+  files = ["internal/cmd/taint_engine_test.go", "internal/cmd/taint_schedule_test.go", "ARCHITECTURE.md"]
+  description = "c-8 measured over budget on draft PR #134: internal/cmd 247.9s in CI vs 205.1s (#132) / 211.8s (#133), budget +15s. Local -race timing puts the cost in the engine re-runs (marker-removal guards, both live gates). The engine re-analyses EVERY function each round until nothing changes. Replace the rounds with a worklist: a function is re-analysed only when something it reads grows — a callee's summary, an allocation it owns, a field it reads, a captured variable, a closure write-back at its MakeClosure, a Write-method parameter seed. Verdicts must not move."
+  covers = ["c-8"]
+  depends_on = ["t-21"]
+  test_contract = ["if the worklist stops before the fixpoint (a missed dependency), re-analysing every function once more on the live exec scan with every marker ignored grows a summary, shared state or a finding, and TestWorklistReachesTheFixpoint fails; dropping the field-reader or closure-site dependency must trip it", "if the scheduler regresses to whole-program rounds, the live exec scan's analysis count exceeds its budget, which admits fewer than three whole-program passes; the budget passes at its value and fails one over", "[verify evidence, c-8] the internal/cmd total on PR #134's CI run after this task is at most 15s over the #132/#133 baseline"]
   status = "done"
