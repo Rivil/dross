@@ -3,6 +3,7 @@ package remote
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -298,12 +299,21 @@ func TestEmptyAnswerIsNotAnAcquisition(t *testing.T) {
 		t.Errorf("silent exit 0: Acquire = %v, want ErrRemoteCommand", err)
 	}
 	useStandIn(t, "echo 'ssh: connect refused' >&2; exit 255")
+	var stderr strings.Builder
+	prev := diagStderr
+	diagStderr = &stderr
+	defer func() { diagStderr = prev }()
 	_, err = Acquire(lockedTarget(), HoldEvents{})
 	if !errors.Is(err, ErrTransport) || errors.Is(err, ErrHostBusy) {
 		t.Errorf("exit 255: Acquire = %v, want ErrTransport and never ErrHostBusy", err)
 	}
-	if !strings.Contains(err.Error(), "connect refused") {
-		t.Errorf("stderr is not carried on the error: %v", err)
+	// ssh's own words reach the user on stderr, never the error, which can
+	// outlive the run.
+	if !strings.Contains(stderr.String(), "connect refused") {
+		t.Errorf("ssh's stderr did not reach the terminal: %q", stderr.String())
+	}
+	if strings.Contains(err.Error(), "connect refused") {
+		t.Errorf("ssh's stderr is carried on the error: %v", err)
 	}
 }
 
@@ -474,4 +484,70 @@ func (l *lockedBuffer) String() string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.b.String()
+}
+
+// TestHoldTransportOutputGoesToStderr: what ssh writes to stderr is the
+// transport's own output. It reaches the user on stderr; the error carries the
+// classification only, and stays an ErrTransport.
+func TestHoldTransportOutputGoesToStderr(t *testing.T) {
+	useStandIn(t, "echo CANARY-SSH >&2; exit 255")
+	var stderr strings.Builder
+	prev := diagStderr
+	diagStderr = &stderr
+	defer func() { diagStderr = prev }()
+
+	_, err := Acquire(lockedTarget(), HoldEvents{})
+	if err == nil {
+		t.Fatal("a failed hold session returned no error")
+	}
+	if strings.Contains(err.Error(), "CANARY-SSH") {
+		t.Errorf("ssh's output reached the error: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "CANARY-SSH") {
+		t.Errorf("stderr = %q, want ssh's output there", stderr.String())
+	}
+	if !errors.Is(err, ErrTransport) {
+		t.Errorf("err = %v, want it to stay an ErrTransport", err)
+	}
+}
+
+// TestUnreadableHolderFieldIsFixedProse: a holder record's pid that is not a
+// number names the field in the error; the raw value goes to stderr.
+func TestUnreadableHolderFieldIsFixedProse(t *testing.T) {
+	var stderr strings.Builder
+	prev := diagStderr
+	diagStderr = &stderr
+	defer func() { diagStderr = prev }()
+
+	_, _, err := ParseHolder("holder.run=r1\nholder.pid=CANARY-PID")
+	if err == nil || !strings.Contains(err.Error(), "unreadable holder pid") {
+		t.Fatalf("ParseHolder = %v, want an unreadable holder pid error", err)
+	}
+	if strings.Contains(err.Error(), "CANARY-PID") {
+		t.Errorf("the raw field reached the error: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "CANARY-PID") {
+		t.Errorf("stderr = %q, want the raw field there", stderr.String())
+	}
+}
+
+// TestMalformedHolderYieldsNoHolder: a field that fails the protocol-token
+// shape check is an error with no Holder — the marker clears only what passed.
+func TestMalformedHolderYieldsNoHolder(t *testing.T) {
+	prev := diagStderr
+	diagStderr = io.Discard
+	defer func() { diagStderr = prev }()
+	for _, record := range []string{
+		"holder.run=r1\nholder.project=" + strings.Repeat("x", maxProtocolToken+1),
+		"holder.run=r1\nholder.user=bad\x07bell",
+		"holder.run=bad\x1b[31mred",
+	} {
+		h, ok, err := ParseHolder(record)
+		if err == nil || ok || !h.IsZero() {
+			t.Errorf("ParseHolder(%q) = %+v, %v, %v — want an error and no Holder", record, h, ok, err)
+		}
+	}
+	if h, ok, err := ParseHolder("holder.run=r1\nholder.project=My App\nholder.phase=auth\nholder.pid=7"); err != nil || !ok || h.Project != "My App" {
+		t.Errorf("a well-formed record = %+v, %v, %v", h, ok, err)
+	}
 }

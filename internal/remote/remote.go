@@ -557,12 +557,16 @@ func ParseStatus(out string) (RunStatus, error) {
 			s.DirExists = v == "yes"
 			seen = true
 		case "state":
-			s.State = v
+			st, err := protocolToken("run state", v)
+			if err != nil {
+				return RunStatus{}, err
+			}
+			s.State = st
 		case "exit":
 			if v != "" {
 				n, err := strconv.Atoi(v)
 				if err != nil {
-					return RunStatus{}, fmt.Errorf("remote: unreadable exit code %q: %w", v, err)
+					return RunStatus{}, unreadableField("exit code", v)
 				}
 				s.ExitCode, s.HasExit = n, true
 			}
@@ -570,7 +574,7 @@ func ParseStatus(out string) (RunStatus, error) {
 			if v != "" {
 				n, err := strconv.Atoi(v)
 				if err != nil {
-					return RunStatus{}, fmt.Errorf("remote: unreadable pid %q: %w", v, err)
+					return RunStatus{}, unreadableField("pid", v)
 				}
 				s.PID = n
 			}
@@ -735,6 +739,7 @@ func ignoreRule(root string) (string, func(), error) {
 	}
 	cleanup := func() { os.Remove(f.Name()) }
 	var b strings.Builder
+	//dross:taint-cleared git ls-files -z --others --ignored prints NUL-separated paths the repo ignores; each entry becomes one anchored rsync exclude pattern, and nothing else of git's output is kept
 	for _, p := range strings.Split(string(out), "\x00") {
 		if p == "" {
 			continue
@@ -996,7 +1001,8 @@ func parseCores(host, out string) (int, error) {
 	s := strings.TrimSpace(out)
 	n, err := strconv.Atoi(s)
 	if err != nil {
-		return 0, fmt.Errorf("remote %s: unreadable core count %q: %w", host, s, ErrRemoteCommand)
+		fmt.Fprintf(diagStderr, "remote %s: the core-count probe printed %q\n", host, s)
+		return 0, fmt.Errorf("remote %s: unreadable core count (printed above): %w", host, ErrRemoteCommand)
 	}
 	if n <= 0 {
 		return 0, fmt.Errorf("remote %s: reported %d cores: %w", host, n, ErrRemoteCommand)

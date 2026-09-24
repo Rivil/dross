@@ -2,9 +2,12 @@ package remote
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // HostLockPath is the one file every dross on a host locks before it measures
@@ -89,7 +92,7 @@ func (h Holder) validate() error {
 		{"project", h.Project}, {"phase", h.Phase}, {"run id", h.RunID},
 	} {
 		if strings.ContainsAny(f.v, "\r\n") {
-			return fmt.Errorf("lock holder %s %q contains a newline: %w", f.name, f.v, ErrUnsafeTarget)
+			return fmt.Errorf("lock holder %s contains a newline: %w", f.name, ErrUnsafeTarget)
 		}
 	}
 	return nil
@@ -322,7 +325,8 @@ func ParseLockStatus(out string) (LockStatus, error) {
 			case v == "noflock":
 				s.ToolMissing = true
 			case strings.HasPrefix(v, "error"):
-				return LockStatus{}, fmt.Errorf("remote: host lock probe failed: %s", v)
+				fmt.Fprintf(diagStderr, "remote: host lock probe said: %s\n", v)
+				return LockStatus{}, fmt.Errorf("remote: host lock probe failed (its report is printed above): %w", ErrRemoteCommand)
 			}
 		case strings.HasPrefix(k, "holder."):
 			record = append(record, line)
@@ -342,6 +346,38 @@ func ParseLockStatus(out string) (LockStatus, error) {
 		s.Holder = h
 	}
 	return s, nil
+}
+
+// diagStderr is where a lock or status record dross cannot use is printed:
+// this process's stderr. Tests swap it to capture what a user would see.
+var diagStderr io.Writer = os.Stderr
+
+// maxProtocolToken bounds a record field. A dross-written name — a project, a
+// phase, a run id, a user, a state word — is short; anything longer is not a
+// record this package wrote.
+const maxProtocolToken = 200
+
+// protocolToken admits one field of a holder or status record: the lines a
+// dross script writes on the host, read back through the transport. The lock
+// file is world-writable, so a field is only taken when it has the shape of a
+// dross-written name — single line, printable, bounded — and is refused
+// otherwise, the raw value printed to stderr and the error fixed prose.
+func protocolToken(field, v string) (string, error) {
+	if v == "" {
+		return "", nil
+	}
+	if len(v) > maxProtocolToken || strings.IndexFunc(v, func(r rune) bool { return !unicode.IsPrint(r) }) >= 0 {
+		return "", unreadableField(field, v)
+	}
+	//dross:taint-cleared a record field that passed the protocol-token shape check is a dross-written name — a project, phase, run id, user or state word — not the transport's own output
+	return strings.Clone(v), nil
+}
+
+// unreadableField reports a record field that is not what a dross script
+// writes: the raw value goes to stderr, the error names the field only.
+func unreadableField(field, v string) error {
+	fmt.Fprintf(diagStderr, "remote: unreadable %s in a lock or status record: %q\n", field, v)
+	return fmt.Errorf("remote: unreadable %s in a lock or status record (printed above): %w", field, ErrRemoteCommand)
 }
 
 // ParseHolder reads a holder record: the lock file's own `k=v` lines, or the
@@ -367,27 +403,31 @@ func ParseHolder(record string) (Holder, bool, error) {
 			continue
 		}
 		seen = true
+		var err error
 		switch k {
 		case "project":
-			h.Project = v
+			h.Project, err = protocolToken("holder project", v)
 		case "phase":
-			h.Phase = v
+			h.Phase, err = protocolToken("holder phase", v)
 		case "run":
-			h.RunID = v
+			h.RunID, err = protocolToken("holder run", v)
 		case "user":
-			h.User = v
+			h.User, err = protocolToken("holder user", v)
 		case "pid":
-			n, err := strconv.Atoi(v)
-			if err != nil {
-				return Holder{}, false, fmt.Errorf("remote: unreadable holder pid %q: %w", v, err)
+			n, perr := strconv.Atoi(v)
+			if perr != nil {
+				return Holder{}, false, unreadableField("holder pid", v)
 			}
 			h.PID = n
 		case "since":
-			n, err := strconv.ParseInt(v, 10, 64)
-			if err != nil {
-				return Holder{}, false, fmt.Errorf("remote: unreadable holder since %q: %w", v, err)
+			n, perr := strconv.ParseInt(v, 10, 64)
+			if perr != nil {
+				return Holder{}, false, unreadableField("holder since", v)
 			}
 			h.Since = time.Unix(n, 0)
+		}
+		if err != nil {
+			return Holder{}, false, err
 		}
 	}
 	if !seen {

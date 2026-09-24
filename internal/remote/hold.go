@@ -334,9 +334,7 @@ func (h *Hold) endedEarly() error {
 	var ee *exec.ExitError
 	if errors.As(h.waitErr, &ee) {
 		err := Classify("ssh", h.host, ee.ExitCode())
-		if msg := strings.TrimSpace(h.stderr.String()); msg != "" {
-			return fmt.Errorf("%w: %s", err, msg)
-		}
+		h.printStderr()
 		return err
 	}
 	return fmt.Errorf("hold session on %s: %w: %v", h.host, ErrTransport, h.waitErr)
@@ -408,10 +406,17 @@ func (h *Hold) exitReason() string {
 	if h.waitErr == nil {
 		return "exited 0"
 	}
-	if msg := strings.TrimSpace(h.stderr.String()); msg != "" {
-		return fmt.Sprintf("%v: %s", h.waitErr, msg)
-	}
+	h.printStderr()
 	return h.waitErr.Error()
+}
+
+// printStderr puts what the session's ssh wrote to stderr where the user is
+// looking. It is the transport's own output: it goes to the terminal, never
+// into an error that can outlive the run.
+func (h *Hold) printStderr() {
+	if msg := strings.TrimSpace(h.stderr.String()); msg != "" {
+		fmt.Fprintf(diagStderr, "hold session on %s: ssh said:\n%s\n", h.host, msg)
+	}
 }
 
 // teardown ends a session that never became a Hold: stdin is closed so a
