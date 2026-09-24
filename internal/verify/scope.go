@@ -2,6 +2,8 @@ package verify
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"path"
 	"regexp"
 	"sort"
@@ -238,6 +240,10 @@ func (s *Scope) Empty() bool { return s == nil || len(s.Files) == 0 }
 // about the lines that exist after the change, which is where a mutant lands.
 var hunkHeader = regexp.MustCompile(`^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@`)
 
+// hunkStderr is where ParseHunks puts the raw header lines it could not read:
+// this process's stderr. Tests swap it to capture what a user would see.
+var hunkStderr io.Writer = os.Stderr
+
 // ParseHunks reads unified-diff text (as `git diff -U0` emits it) and returns
 // the changed new-side line ranges per file, plus any reasons the parse was
 // incomplete.
@@ -246,16 +252,29 @@ var hunkHeader = regexp.MustCompile(`^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@`)
 // one unreadable header in it is not a reason to throw away every range that
 // parsed cleanly — the ranges only refine a tag, so the failure mode of losing
 // them all is strictly worse than the failure mode of losing one.
+//
+// A degraded entry is fixed prose naming the file and a count. The unreadable
+// header itself goes to stderr: its function context is the repo's own text,
+// and the entry is persisted to tests.json, where it would outlive the run.
 func ParseHunks(diff string) (map[string][]Range, []string) {
 	var (
 		hunks     map[string][]Range
-		degraded  []string
 		current   string
 		sawHeader bool
+		bad       = map[string]int{}
+		badOrder  []string
 	)
+	unreadable := func(where, line string) {
+		if bad[where] == 0 {
+			badOrder = append(badOrder, where)
+		}
+		bad[where]++
+		fmt.Fprintf(hunkStderr, "unparsable hunk header in %s: %s\n", where, line)
+	}
 	for _, line := range strings.Split(diff, "\n") {
 		switch {
 		case strings.HasPrefix(line, "+++ "):
+			//dross:taint-cleared the new-side path of a `+++ ` file header: a repo path, which is what scope keys on; no patch line reaches it
 			current = diffPath(strings.TrimPrefix(line, "+++ "))
 			sawHeader = true
 		case sawHeader && current == "" && strings.HasPrefix(line, "@@"):
@@ -264,18 +283,12 @@ func ParseHunks(diff string) (map[string][]Range, []string) {
 			// — and they must not attach to whatever file preceded them.
 		case strings.HasPrefix(line, "@@"):
 			m := hunkHeader.FindStringSubmatch(line)
-			if m == nil {
+			if m == nil || current == "" {
 				where := current
 				if where == "" {
 					where = "(before any file header)"
 				}
-				degraded = append(degraded,
-					fmt.Sprintf("unparsable hunk header in %s: %q", where, line))
-				continue
-			}
-			if current == "" {
-				degraded = append(degraded,
-					fmt.Sprintf("hunk header with no file: %q", line))
+				unreadable(where, line)
 				continue
 			}
 			start, _ := strconv.Atoi(m[1])
@@ -293,6 +306,11 @@ func ParseHunks(diff string) (map[string][]Range, []string) {
 			}
 			hunks[current] = append(hunks[current], Range{Start: start, End: start + count - 1})
 		}
+	}
+	var degraded []string
+	for _, where := range badOrder {
+		degraded = append(degraded, fmt.Sprintf(
+			"%d unparsable hunk header(s) in %s (printed to stderr); survivors there cannot be tagged in-hunk", bad[where], where))
 	}
 	return hunks, degraded
 }

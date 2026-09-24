@@ -364,7 +364,8 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 		return reportAlreadyFinalized(repoDir, msBranch, cls.Message)
 	}
 
-	status, err := gitTrim(repoDir, "status", "--porcelain")
+	//dross:taint-cleared status --porcelain prints two status letters and a repo path per line, never file content
+	status, err := gitRead(repoDir, "status", "--porcelain")
 	if err != nil {
 		return fmt.Errorf("git status: %w", err)
 	}

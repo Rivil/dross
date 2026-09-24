@@ -68,13 +68,14 @@ func phaseScope(repoDir string, base scopeBase, recorded []string) (*verify.Scop
 	// non-ASCII bytes arrives as itself rather than as an escaped literal that
 	// would match no mutant. --no-renames emits both sides of a rename, which
 	// puts the old and the new path in scope — the wider, fail-open reading.
-	names, err := gitTrim(repoDir,
+	names, err := gitRead(repoDir,
 		gitRefArgs("diff", []string{"--name-only", "--no-renames", "-z"}, sha, "HEAD")...)
 	if err != nil {
 		in.Degraded = append(in.Degraded,
 			fmt.Sprintf("git diff --name-only against %s failed: %v", short(sha), gitReason(err)))
 		return verify.NewScope(in), nil
 	}
+	//dross:taint-cleared diff --name-only -z prints NUL-separated repo paths, and f is one of them
 	for _, f := range strings.Split(names, "\x00") {
 		if f = strings.TrimSpace(f); f != "" {
 			in.Git = append(in.Git, f)
@@ -84,7 +85,7 @@ func phaseScope(repoDir string, base scopeBase, recorded []string) (*verify.Scop
 	// Hunks refine the in-hunk vs inherited tag only. Losing them costs
 	// precision, never scope, so a failure here degrades and carries on with
 	// the file set already collected.
-	patch, err := gitTrim(repoDir,
+	patch, err := gitRead(repoDir,
 		gitRefArgs("diff", []string{"-U0", "--no-renames", "--no-color"}, sha, "HEAD")...)
 	if err != nil {
 		in.Degraded = append(in.Degraded,

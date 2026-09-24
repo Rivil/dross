@@ -74,12 +74,13 @@ func listDrossArtifacts(repoDir string) ([]string, error) {
 }
 
 func listDrossArtifactsGit(repoDir string) ([]string, error) {
-	out, err := gitTrim(repoDir, gitPathArgs("ls-files",
+	out, err := gitRead(repoDir, gitPathArgs("ls-files",
 		[]string{"-z", "--cached", "--others", "--exclude-standard"}, RootDirName)...)
 	if err != nil {
 		return nil, fmt.Errorf("git ls-files %s: %w", RootDirName, err)
 	}
 	var paths []string
+	//dross:taint-cleared ls-files -z prints NUL-separated repo paths, and p is one of them
 	for _, p := range strings.Split(out, "\x00") {
 		if p == "" {
 			continue

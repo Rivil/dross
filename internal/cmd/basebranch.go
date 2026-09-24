@@ -77,10 +77,11 @@ func pushBaseIfAheadDrossOnly(repoDir, base string) (pushed bool, err error) {
 		return false, nil
 	}
 	for _, sha := range d.Ahead {
-		files, err := gitTrim(repoDir, gitRefArgs("diff-tree", []string{"--no-commit-id", "--name-only", "-r", "--root"}, sha)...)
+		files, err := gitRead(repoDir, gitRefArgs("diff-tree", []string{"--no-commit-id", "--name-only", "-r", "--root"}, sha)...)
 		if err != nil {
 			return false, fmt.Errorf("git diff-tree %s: %w", sha, err)
 		}
+		//dross:taint-cleared diff-tree --name-only prints one repo path per line, and f is one of them
 		for _, f := range strings.Split(files, "\n") {
 			if f == "" {
 				continue

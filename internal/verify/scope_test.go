@@ -147,6 +147,47 @@ func TestParseHunksMalformedHeaderDegrades(t *testing.T) {
 	}
 }
 
+// TestParseHunksDegradedIsFixedProse: an unreadable header's text never
+// reaches Scope.Degraded. Its function context is the repo's own text, and
+// Degraded is persisted to tests.json; the entry names the file and a count,
+// and the raw line goes to stderr.
+func TestParseHunksDegradedIsFixedProse(t *testing.T) {
+	var stderr strings.Builder
+	prev := hunkStderr
+	hunkStderr = &stderr
+	defer func() { hunkStderr = prev }()
+
+	diff := strings.Join([]string{
+		"@@ -1 +z @@ CANARY-HUNK before any file",
+		"+++ b/a.go",
+		"@@ -1,0 +x @@ func CANARY-HUNK()",
+		"@@ -2,0 +y @@ CANARY-HUNK again",
+		"@@ -1,0 +5,2 @@ func fine()",
+		"+++ b/b.go",
+		"@@ -1,0 +3,1 @@",
+	}, "\n")
+	hunks, degraded := ParseHunks(diff)
+	s := NewScope(ScopeInput{Git: []string{"a.go", "b.go"}, Hunks: hunks, Degraded: degraded})
+
+	joined := strings.Join(s.Degraded, "\n")
+	if strings.Contains(joined, "CANARY-HUNK") {
+		t.Errorf("a raw hunk header reached Scope.Degraded: %q", joined)
+	}
+	want := []string{
+		"1 unparsable hunk header(s) in (before any file header) (printed to stderr); survivors there cannot be tagged in-hunk",
+		"2 unparsable hunk header(s) in a.go (printed to stderr); survivors there cannot be tagged in-hunk",
+	}
+	if !reflect.DeepEqual(degraded, want) {
+		t.Errorf("degraded = %q, want file and count only: %q", degraded, want)
+	}
+	if got := strings.Count(stderr.String(), "CANARY-HUNK"); got != 3 {
+		t.Errorf("stderr carries %d of the 3 unreadable headers: %q", got, stderr.String())
+	}
+	if !reflect.DeepEqual(hunks["a.go"], []Range{{5, 6}}) {
+		t.Errorf("the readable header after the bad ones was lost: %v", hunks["a.go"])
+	}
+}
+
 // TestNewScopeUnionFailsOpen: the two sides are unioned, never intersected.
 // An intersecting build returns the narrower set — and the narrowest possible
 // scope is the one that gates nothing, which is the vacuous pass this whole

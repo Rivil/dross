@@ -136,15 +136,17 @@ var gitCallFuncs = map[string]bool{
 	"gitRun":   true,
 	"gitNoOut": true,
 	"gitTrim":  true,
+	"gitRead":  true,
 }
 
 // gitHelperSiteFloor is ~25% under each git helper's live call-site count
-// (gitRun 39, gitTrim 51, gitNoOut 41). A helper that fell out of gitCallFuncs
-// would have its every argv skipped by the audit; its count going to zero is
-// how that shows.
+// (gitRun 39, gitTrim 40, gitRead 11, gitNoOut 41). A helper that fell out of
+// gitCallFuncs would have its every argv skipped by the audit; its count going
+// to zero is how that shows.
 var gitHelperSiteFloor = map[string]int{
 	"gitRun":   29,
-	"gitTrim":  38,
+	"gitTrim":  30,
+	"gitRead":  8,
 	"gitNoOut": 30,
 }
 

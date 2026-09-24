@@ -125,7 +125,7 @@ longer holds the pre-merge .dross/ tree:
 			}
 
 			// Refuse to run on a dirty tree — reset would silently destroy work.
-			status, err := gitTrim(repoDir, "status", "--porcelain")
+			status, err := gitRead(repoDir, "status", "--porcelain")
 			if err != nil {
 				return fmt.Errorf("git status: %w", err)
 			}
@@ -214,7 +214,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	if err := gitRun(repoDir, "add", ".dross/"); err != nil {
 		return fmt.Errorf("git add: %w", err)
 	}
-	staged, err := gitTrim(repoDir, "status", "--porcelain")
+	staged, err := gitRead(repoDir, "status", "--porcelain")
 	if err != nil {
 		return fmt.Errorf("git status: %w", err)
 	}
@@ -263,7 +263,31 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	return nil
 }
 
+// gitTrim runs a REF-plumbing git command and returns its output trimmed:
+// rev-parse, symbolic-ref, merge-base, rev-list, for-each-ref over
+// refname/objectname atoms, ls-remote without --get-url, and bare --version —
+// verb and options pinned by TestGitTrimRunsRefVerbsOnly. What those print is a
+// ref name git validated, an object id, a count or git's version, so the one
+// marker below is true for every caller. Anything that prints content — a log,
+// a diff, a listing, a status — goes through gitRead instead.
 func gitTrim(repoDir string, args ...string) (string, error) {
+	gitArgvTap(args)
+	full := append([]string{"-C", repoDir}, args...)
+	//dross:exec-exempt the argv is dross's own git plumbing, fenced by gitRefArgs/gitPathArgs before it gets here; none of it runs a repo-authored line
+	out, err := exec.Command("git", full...).Output()
+	if err != nil {
+		return "", err
+	}
+	//dross:taint-cleared gitTrim runs only pinned ref invocations (TestGitTrimRunsRefVerbsOnly): it prints ref names, object ids, counts or git's version, never content
+	return strings.TrimSpace(string(out)), nil
+}
+
+// gitRead runs a git command whose output is CONTENT — a log, a diff, a file
+// listing, a status — and returns it trimmed. It carries no marker: a commit
+// subject or a patch line is the repo's text, so each caller marks the line
+// where it slices a SHA, a branch or a path out, and nothing else it keeps
+// may escape.
+func gitRead(repoDir string, args ...string) (string, error) {
 	gitArgvTap(args)
 	full := append([]string{"-C", repoDir}, args...)
 	//dross:exec-exempt the argv is dross's own git plumbing, fenced by gitRefArgs/gitPathArgs before it gets here; none of it runs a repo-authored line
