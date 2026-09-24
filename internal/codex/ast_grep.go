@@ -2,7 +2,9 @@ package codex
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -149,7 +151,10 @@ var runAstGrepFn = func(file, lang, pattern string) ([]astGrepMatch, error) {
 	}
 	var raw []astGrepMatch
 	if err := json.Unmarshal(out, &raw); err != nil {
-		return nil, fmt.Errorf("decode ast-grep JSON: %w", err)
+		// ast-grep's output quotes the source it matched; it goes to stderr,
+		// where the user is looking, and the error stays fixed prose.
+		fmt.Fprintf(os.Stderr, "ast-grep printed output that is not its JSON:\n%s\n", out)
+		return nil, errors.New("decode ast-grep JSON: ast-grep's output is not the JSON it promises (printed above)")
 	}
 	return raw, nil
 }
