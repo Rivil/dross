@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/survivor"
+	"github.com/Rivil/dross/internal/verify"
 )
 
 // orphanFixture is the case source-existence checking structurally cannot see:
@@ -101,6 +103,46 @@ func TestEmptyRunIsAnAnswerNotAnAbsence(t *testing.T) {
 	}
 	if strings.Contains(out, "(no stale acceptances)") {
 		t.Errorf("a run reporting zero survivors left the acceptance un-orphaned:\n%s", out)
+	}
+}
+
+// TestVerifyNeverBlocksARunScopedOrphan: an acceptance whose source text is
+// intact but whose survivor the latest run did not report is RUN-SCOPED
+// staleness. A later run can report that survivor again, so verify must neither
+// block on it nor offer it for retirement — while `survivor list --stale`, which
+// does read the run, still finds it. Blocking here would make every flaky or
+// narrowed run a demand to delete live acceptances.
+func TestVerifyNeverBlocksARunScopedOrphan(t *testing.T) {
+	dir := orphanFixture(t)
+	key := onlyAcceptedKey(t, dir)
+
+	// A run in which a.go:3's survivor is absent — only b.go's survives.
+	useStubAdapter(t, &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(
+			map[string]mutation.FileStat{"a.go": {Killed: 1}, "b.go": {Survived: 1}},
+			mutation.Mutant{File: "b.go", Line: 3, Op: "CONDITIONALS_NEGATION"},
+		)})
+	runVerifyCapturing(t, "01-orphan")
+
+	v, err := verify.LoadVerify(filepath.Join(dir, ".dross/phases/01-orphan/verify.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range v.Findings {
+		if strings.Contains(f.Text, key) && f.Severity == "BLOCKING" {
+			t.Errorf("a run-scoped orphan (%s) blocked the verdict: %s", key, f.Text)
+		}
+		if strings.Contains(f.Text, "survivor retire "+key) {
+			t.Errorf("a run-scoped orphan (%s) was offered for retirement: %s", key, f.Text)
+		}
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Survivor(), "list", "--stale"); err != nil {
+		t.Fatalf("survivor list --stale: %v", err)
+	}
+	if strings.Contains(out, "(no stale acceptances)") || !strings.Contains(out, key) {
+		t.Errorf("the run-scoped orphan dropped out of `survivor list --stale`:\n%s", out)
 	}
 }
 
