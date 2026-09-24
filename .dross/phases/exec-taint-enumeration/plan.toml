@@ -1,4 +1,4 @@
-task_seq = 25
+task_seq = 26
 
 [phase]
   id = "exec-taint-enumeration"
