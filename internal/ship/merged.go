@@ -75,7 +75,7 @@ func gitHubPRStatus(opts OpenOpts) (PRStatus, error) {
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return PRStatus{}, fmt.Errorf("gh pr view #%d: %w\n%s", opts.PRNumber, err, string(out))
+		return PRStatus{}, ghFailed(fmt.Sprintf("gh pr view #%d", opts.PRNumber), err, out)
 	}
 	var view struct {
 		State       string `json:"state"`
@@ -83,7 +83,8 @@ func gitHubPRStatus(opts OpenOpts) (PRStatus, error) {
 		BaseRefName string `json:"baseRefName"`
 	}
 	if err := json.Unmarshal(out, &view); err != nil {
-		return PRStatus{}, fmt.Errorf("parse gh pr view #%d: %w", opts.PRNumber, err)
+		return PRStatus{}, ghUnparseable(fmt.Sprintf("parse gh pr view #%d", opts.PRNumber), out)
 	}
+	//dross:taint-cleared baseRefName is the branch name the forge records for the PR, decoded from gh's --json state,mergedAt,baseRefName
 	return PRStatus{Merged: strings.EqualFold(view.State, "MERGED"), BaseRef: view.BaseRefName}, nil
 }
