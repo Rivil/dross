@@ -1,10 +1,8 @@
 package phase
 
 import (
-	"os"
-	"path/filepath"
-
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // This file is the single doneness reader. `dross status`, `dross milestone
@@ -54,8 +52,13 @@ func IsDone(root, slug string, scaffolded bool) bool {
 	return false
 }
 
-// DirExists reports whether the slug has a directory under .dross/phases/.
+// DirExists reports whether the slug has a directory under .dross/phases/. A
+// slug that would escape phases/ has none.
 func DirExists(root, slug string) bool {
-	fi, err := os.Stat(filepath.Join(root, "phases", slug))
+	c, err := ContainID(root, slug)
+	if err != nil {
+		return false
+	}
+	fi, err := pathfence.Stat(c)
 	return err == nil && fi.IsDir()
 }

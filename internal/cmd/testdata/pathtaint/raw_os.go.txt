@@ -1,0 +1,71 @@
+// Raw-os corpus for the path-field taint scan (TestPathTaintRawOS): every way a
+// declared field reaches a package-level os function without a Contained
+// trips, and the finding names the field it came from.
+package rawos
+
+import (
+	"os"
+	"path/filepath"
+
+	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/state"
+	"github.com/Rivil/dross/internal/survivor"
+)
+
+// A changes.TaskRecord.Files element read straight off disk.
+func readTaskFile(rec changes.TaskRecord) {
+	for _, f := range rec.Files {
+		_, _ = os.ReadFile(f) // WANT pathtaint
+	}
+}
+
+// project.Env.Files is declared NotConsumed: stat-ing it is opening it.
+func statEnvFile(env *project.Env) {
+	if len(env.Files) > 0 {
+		_, _ = os.Stat(env.Files[0]) // WANT pathtaint
+	}
+}
+
+// Joined onto a root: the join keeps the field.
+func openJoined(root string, rec *changes.TaskRecord) {
+	fh, err := os.Open(filepath.Join(root, rec.Files[0])) // WANT pathtaint
+	if err == nil {
+		_ = fh.Close()
+	}
+}
+
+// os.Lstat was absent from the old residual scan's verb list.
+func lstatDoc(rp changes.RedProof) {
+	_, _ = os.Lstat(rp.Doc) // WANT pathtaint
+}
+
+// Copied into a struct in one function, removed in another.
+type pending struct{ target string }
+
+func queueRemoval(a survivor.Acceptance) *pending {
+	return &pending{target: a.File}
+}
+
+func removeCopied(p *pending) {
+	_ = os.Remove(p.target) // WANT pathtaint
+}
+
+// A ledger row is traced too: state.State.Version is filed as not a path, so a
+// file named by it trips, and the finding names the row.
+func readVersionAsFile(s *state.State) {
+	_, _ = os.ReadFile(s.Version + ".toml") // WANT pathtaint
+}
+
+// The environment functions take names and values, not paths.
+func exportDoc(rp *changes.RedProof) {
+	_ = os.Setenv("DROSS_DOC", rp.Doc)
+}
+
+// Two fields read on one line: the finding names the one that reached the
+// open, not its neighbour.
+func readOneOfTwo(rp *changes.RedProof, s *state.State) {
+	doc, ver := rp.Doc, s.Version
+	_ = os.Setenv("DROSS_VERSION", ver)
+	_, _ = os.ReadFile(doc) // WANT pathtaint
+}

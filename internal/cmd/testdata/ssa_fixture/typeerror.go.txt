@@ -1,0 +1,6 @@
+// Must-fail fixture: a type error, reported by file:line instead of lowered
+// into SSA with a hole where the ill-typed expression was.
+package typeerror
+
+// count is declared int and initialised with a string.
+var count int = "three"

@@ -109,6 +109,7 @@ func build(t testing.TB, src string) (string, error) {
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOFLAGS=")
 	out, err := cmd.CombinedOutput()
+	//dross:taint-cleared test-only compile fence: this is the compiler's diagnostics for a fixture this helper just wrote, returned to the calling test's own failure message and nowhere else
 	return string(out), err
 }
 

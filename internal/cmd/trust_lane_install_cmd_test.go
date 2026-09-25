@@ -24,7 +24,7 @@ func installSeamRecorder(t *testing.T) (remoteCalls, localCalls *int) {
 	origRemote, origLocal := remoteExecFn, localInstallFn
 	t.Cleanup(func() { remoteExecFn, localInstallFn = origRemote, origLocal })
 	remoteExecFn = func(remote.Target, []string) (string, error) { rn++; return "", nil }
-	localInstallFn = func([]string) (string, error) { ln++; return "", nil }
+	localInstallFn = func([]string) error { ln++; return nil }
 	return &rn, &ln
 }
 
@@ -37,7 +37,7 @@ func TestUngrantedDeclaredLineNeverReachesASeam(t *testing.T) {
 	step := resolveInstall("staticcheck", lane.Install)
 	rn, ln := installSeamRecorder(t)
 
-	if _, err := runLaneInstall(root, repoDir, nil, lane, step); err == nil {
+	if err := runLaneInstall(root, repoDir, nil, lane, step); err == nil {
 		t.Fatal("an ungranted declared install line was executed")
 	}
 	if *rn != 0 || *ln != 0 {
@@ -47,7 +47,7 @@ func TestUngrantedDeclaredLineNeverReachesASeam(t *testing.T) {
 	if err := runCmd(t, Trust(), "--lane-install", "go"); err != nil {
 		t.Fatalf("dross trust --lane-install: %v", err)
 	}
-	if _, err := runLaneInstall(root, repoDir, nil, lane, step); err != nil {
+	if err := runLaneInstall(root, repoDir, nil, lane, step); err != nil {
 		t.Fatalf("a granted install line was still refused: %v", err)
 	}
 	if *ln != 1 {
@@ -84,7 +84,7 @@ func TestBuiltInRecipeNeedsNoGrant(t *testing.T) {
 		t.Fatalf("the fixture already holds install grants: %v", l.TrustedLaneInstalls)
 	}
 
-	if _, err := runLaneInstall(root, repoDir, nil, docs, step); err != nil {
+	if err := runLaneInstall(root, repoDir, nil, docs, step); err != nil {
 		t.Fatalf("a built-in recipe was gated behind a grant: %v", err)
 	}
 	if *ln != 1 {

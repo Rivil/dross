@@ -35,6 +35,7 @@ func ShortSHA(repoDir string) string {
 	if err != nil {
 		return "nogit"
 	}
+	//dross:taint-cleared git rev-parse --short HEAD prints one abbreviated object name; the trimmed hex SHA names this run's directory and nothing else of git's output is kept
 	return normalizeSHA(string(out))
 }
 

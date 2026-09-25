@@ -1,0 +1,79 @@
+// Clearance corpus for the path-field taint scan (TestPathTaintContainedOK).
+// pathfence.Contain clears a Consumed field — directly or inside a helper — and
+// a field that is only shown is clean. phase.Task.Files is declared
+// NotConsumed: Contain does not clear it, so opening it, even through the seam,
+// trips at the opener's line.
+package containedok
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/pathfence"
+	"github.com/Rivil/dross/internal/phase"
+)
+
+// A Consumed field through Contain and the seam.
+func readConsumed(root string, rec changes.TaskRecord) error {
+	for _, f := range rec.Files {
+		c, err := pathfence.Contain(root, "changes.json", f)
+		if err != nil {
+			return err
+		}
+		if _, err := pathfence.ReadFile(c); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(c.String()), 0o755); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Contain inside a helper clears per call site.
+func containIn(root, p string) (pathfence.Contained, error) {
+	return pathfence.Contain(root, "changes.json", p)
+}
+
+func readViaHelper(root string, rec *changes.TaskRecord) {
+	if c, err := containIn(root, rec.Files[0]); err == nil {
+		_, _ = pathfence.Stat(c)
+	}
+}
+
+// Printed, or carried in an error: a path is meant to be shown.
+func printOnly(rec changes.TaskRecord, t phase.Task) error {
+	fmt.Println(rec.Files)
+	fmt.Fprintln(os.Stderr, t.Files)
+	return fmt.Errorf("task touches %s", filepath.Join(t.Files...))
+}
+
+// NotConsumed through Contain and the seam.
+func readNotConsumed(root string, t phase.Task) {
+	for _, f := range t.Files {
+		c, err := pathfence.Contain(root, "plan.toml", f)
+		if err != nil {
+			continue
+		}
+		_, _ = pathfence.ReadFile(c) // WANT pathtaint
+	}
+}
+
+// ...and through a helper: the finding is the opener's line.
+func openContained(c pathfence.Contained) {
+	_, _ = pathfence.ReadFile(c) // WANT pathtaint
+}
+
+func readNotConsumedViaHelper(root string, t *phase.Task) {
+	if c, err := containIn(root, t.Files[0]); err == nil {
+		openContained(c)
+	}
+}
+
+func readConsumedViaHelper(root string, rec *changes.TaskRecord) {
+	if c, err := containIn(root, rec.Files[0]); err == nil {
+		openContained(c)
+	}
+}

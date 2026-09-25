@@ -1,0 +1,7 @@
+// Must-fail fixture: an import neither the fixture nor the live load provides.
+// The builder must name the missing path, not skip the fixture.
+package badimport
+
+import "example.com/nowhere/missing"
+
+var _ = missing.X

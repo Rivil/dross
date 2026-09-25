@@ -1,0 +1,41 @@
+// Field-channel corpus for the taint engine (TestTaintIsKeyedByField). Field
+// taint is keyed by the field: output stored in Result.Log by one function and
+// read into an error by another trips; a store to Pair.Other never taints a
+// read of Pair.Log.
+package field
+
+import (
+	"errors"
+	"fmt"
+	"os/exec"
+)
+
+type Result struct {
+	Log   string
+	Other string
+}
+
+func record(c *exec.Cmd, res *Result) {
+	out, _ := c.Output()
+	res.Log = string(out)
+}
+
+func report(res *Result) error {
+	return fmt.Errorf("run failed: %s", res.Log) // WANT taint
+}
+
+func reportOther(res *Result) error {
+	return errors.New(res.Other)
+}
+
+type Pair struct {
+	Log   string
+	Other string
+}
+
+func pair(c *exec.Cmd) error {
+	var p Pair
+	out, _ := c.Output()
+	p.Other = string(out)
+	return errors.New(p.Log)
+}

@@ -5,7 +5,11 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/pathfence"
+	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/survivor"
 )
 
 // The carrier assertion — the load-bearing half of c-4.
@@ -41,6 +45,28 @@ func carrierType(name string) (got, want reflect.Type, ok bool) {
 			return nil, contained, true
 		}
 		return f.Type, contained, true
+	case "survivor.AcceptanceFile":
+		// The stale pass's only route from a hand-editable survivors.toml
+		// entry to the file it names: its first return is what
+		// pathfence.ReadFile takes, so a revert to a joined string is what
+		// would reopen `../outside`.
+		return reflect.TypeOf(survivor.AcceptanceFile).Out(0), contained, true
+	case "phase.ContainID":
+		// Every id-to-path helper routes a phase id through here — or the
+		// same Contain under phases/ where an import cycle forbids calling
+		// it — before joining it under .dross/phases/.
+		return reflect.TypeOf(phase.ContainID).Out(0), contained, true
+	case "mutation.ContainStrykerWorkdir":
+		// Stryker's workDir and RunRanges route the configured workdir
+		// through here before the report is cleared, fetched or read.
+		return reflect.TypeOf(mutation.ContainStrykerWorkdir).Out(0), contained, true
+	case "survivor.ContainReported":
+		// ResolveAt and ApplicabilityAt contain a tool-reported file here
+		// before reading it.
+		return reflect.TypeOf(survivor.ContainReported).Out(0), contained, true
+	case "milestone.ContainVersion":
+		// milestone.FilePath's containment of a version under milestones/.
+		return reflect.TypeOf(milestone.ContainVersion).Out(0), contained, true
 	}
 	return nil, nil, false
 }

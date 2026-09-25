@@ -2,6 +2,7 @@ package mutation
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // realistic Stryker output: 1 file, 5 mutants — 3 killed, 1 survived,
@@ -1109,5 +1112,41 @@ func TestStrykerTruncationNoteAbsentOnOtherAborts(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), strykerInitialTestTruncationNote) {
 		t.Errorf("the truncation note was attached to an abort that printed no failure list:\n%v", err)
+	}
+}
+
+// TestStrykerRefusesAnEscapingWorkdir: project.toml's mutation.stryker.workdir
+// is hand-editable, and the Stryker leg clears, fetches and reads its report
+// under it. One that escapes the project root is refused before anything is
+// spawned or touched, and workDir never resolves outside the root.
+func TestStrykerRefusesAnEscapingWorkdir(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "repo")
+	s := &Stryker{ProjectRoot: root, Workdir: "../outside"}
+	if _, err := s.RunRanges([]string{"src/a.ts"}, nil); !errors.Is(err, pathfence.ErrEscapes) {
+		t.Fatalf("RunRanges with an escaping workdir = %v, want a containment refusal", err)
+	}
+	if got := s.workDir(); !strings.HasPrefix(got, root+string(filepath.Separator)) {
+		t.Errorf("workDir() = %s, outside the project root %s", got, root)
+	}
+	if c, err := ContainStrykerWorkdir(root, "packages/web"); err != nil || c.Rel() != "packages/web" {
+		t.Errorf("ContainStrykerWorkdir(packages/web) = %v, %v", c, err)
+	}
+}
+
+// TestInapplicableCeilingReadIsContained: the const-line cache reads files a
+// mutation tool reported; one naming ../outside is not read.
+func TestInapplicableCeilingReadIsContained(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "repo")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(parent, "outside.go"), []byte("package p\n\nconst x = 1 + 2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &constLineCache{root: root}
+	if c.isConstLine("../outside.go", 3) {
+		t.Error("the cache read a file outside the repo root")
 	}
 }

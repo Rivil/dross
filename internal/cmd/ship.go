@@ -643,14 +643,14 @@ func shipResultTag(res *ship.OpenResult, err error, existing bool) string {
 // the add actually staged a change, so a re-run that re-writes the same
 // content neither errors on "nothing to commit" nor grows the log.
 func commitIfStaged(repoDir, rel, msg string) error {
-	if out, err := gitCombined(repoDir, gitPathArgs("add", nil, rel)...); err != nil {
-		return fmt.Errorf("git add %s: %w\n%s", rel, err, out)
+	if err := gitRun(repoDir, gitPathArgs("add", nil, rel)...); err != nil {
+		return fmt.Errorf("git add %s: %w", rel, err)
 	}
 	if gitNoOut(repoDir, "diff", "--cached", "--quiet") == nil {
 		return nil // nothing staged
 	}
-	if out, err := gitCombined(repoDir, "commit", "-m", msg); err != nil {
-		return fmt.Errorf("git commit: %w\n%s", err, out)
+	if err := gitRun(repoDir, "commit", "-m", msg); err != nil {
+		return fmt.Errorf("git commit: %w", err)
 	}
 	return nil
 }

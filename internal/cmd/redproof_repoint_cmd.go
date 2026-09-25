@@ -162,7 +162,8 @@ func checkReplayBeforeRepoint(root, repoDir string, plan redProofRepointPlan) (s
 	case err != nil:
 		return fmt.Sprintf("the replay could not be run at %s, and an error is not evidence the proof went red: %v", short(plan.NewSHA), err), false
 	case !res.Red:
-		return fmt.Sprintf("the replay did NOT go red at %s (exit 0) — the proof does not reproduce there, so moving the pin onto it would record a proof that no longer exists:\n%s", short(plan.NewSHA), res.Tail), false
+		printReplayTail(res.Tail)
+		return fmt.Sprintf("the replay did NOT go red at %s (exit 0) — the proof does not reproduce there, so moving the pin onto it would record a proof that no longer exists (its last lines are printed above)", short(plan.NewSHA)), false
 	}
 	return fmt.Sprintf("verified: the replay went red at %s (exit %d)", short(plan.NewSHA), res.ExitCode), true
 }

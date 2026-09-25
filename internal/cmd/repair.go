@@ -87,8 +87,8 @@ to write the restores and commit the result.`,
 				}
 			}
 
-			if out, err := gitCombined(repoDir, gitPathArgs("add", nil, RootDirName)...); err != nil {
-				return fmt.Errorf("git add %s: %w\n%s", RootDirName, err, out)
+			if err := gitRun(repoDir, gitPathArgs("add", nil, RootDirName)...); err != nil {
+				return fmt.Errorf("git add %s: %w", RootDirName, err)
 			}
 			// Empty-commit guard. Restoring a clobbered tracked file to HEAD's
 			// blob can never itself produce a diff against HEAD — the working
@@ -101,8 +101,8 @@ to write the restores and commit the result.`,
 				return nil
 			}
 			msg := "chore(dross): repair clobbered .dross/ artefacts"
-			if out, err := gitCombined(repoDir, "commit", "-m", msg); err != nil {
-				return fmt.Errorf("git commit: %w\n%s", err, out)
+			if err := gitRun(repoDir, "commit", "-m", msg); err != nil {
+				return fmt.Errorf("git commit: %w", err)
 			}
 			Print("\nrepaired and committed")
 			return nil

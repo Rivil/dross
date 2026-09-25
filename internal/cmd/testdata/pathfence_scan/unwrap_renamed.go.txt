@@ -1,0 +1,25 @@
+// Must-trip fixture: the unwrap ban and the run-dir pass-through check are keyed
+// on the pathfence.Contained TYPE, not on a local's name. A Contained copied into
+// a variable no list would think to hold still unwraps.
+package scanfixture
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/Rivil/dross/internal/pathfence"
+)
+
+// renamedUnwrap trips the unwrap ban: x is a Contained under a new name.
+func renamedUnwrap(c pathfence.Contained) ([]byte, error) {
+	x := c
+	return os.ReadFile(x.String())
+}
+
+// renamedPassOn is the run-dir check's case: a Contained under a name the old
+// ledgerPath/outPath/reportPath list never held, unwrapped where it should pass
+// through. It opens nothing, so the unwrap ban leaves it to that check.
+func renamedPassOn(c pathfence.Contained) {
+	renamed := c
+	fmt.Println(renamed.String())
+}

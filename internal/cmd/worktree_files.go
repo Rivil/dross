@@ -35,6 +35,7 @@ func worktreeChangedFiles(repoDir string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("git status: %w", err)
 	}
+	//dross:taint-cleared status --porcelain prints two status letters and a repo path per line; only the paths are kept
 	return worktreeFilesFromStatus(strings.TrimRight(string(out), "\n")), nil
 }
 

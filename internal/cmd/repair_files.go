@@ -26,11 +26,12 @@ type ClobberedFile struct {
 // state.json is never reported: it is gitignored going forward (locked
 // decision state_tracking), so `git ls-files` never lists it here.
 func detectModifiedOrMissingTracked(repoDir string) ([]ClobberedFile, error) {
-	out, err := gitTrim(repoDir, "ls-files", "--", RootDirName)
+	out, err := gitRead(repoDir, "ls-files", "--", RootDirName)
 	if err != nil {
 		return nil, fmt.Errorf("git ls-files: %w", err)
 	}
 	var found []ClobberedFile
+	//dross:taint-cleared ls-files prints one tracked repo path per line under .dross/, and rel is one of them
 	for _, rel := range strings.Split(out, "\n") {
 		if rel == "" {
 			continue
@@ -62,8 +63,8 @@ func restorePathFromRef(repoDir, ref, path string) error {
 	if err := validateGitRef("restore ref", ref); err != nil {
 		return err
 	}
-	if out, err := gitCombined(repoDir, gitRefPathArgs("checkout", nil, []string{ref}, path)...); err != nil {
-		return fmt.Errorf("git checkout %s -- %s: %w\n%s", ref, path, err, out)
+	if err := gitRun(repoDir, gitRefPathArgs("checkout", nil, []string{ref}, path)...); err != nil {
+		return fmt.Errorf("git checkout %s -- %s: %w", ref, path, err)
 	}
 	return nil
 }

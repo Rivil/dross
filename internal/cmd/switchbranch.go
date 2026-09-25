@@ -40,8 +40,8 @@ func checkoutBranch(repoDir, branch string) error {
 	if err := guardLiveState(repoDir, branch); err != nil {
 		return err
 	}
-	if out, err := gitCombined(repoDir, gitRefArgs("checkout", nil, branch)...); err != nil {
-		return fmt.Errorf("git checkout %s: %w\n%s", branch, err, out)
+	if err := gitRun(repoDir, gitRefArgs("checkout", nil, branch)...); err != nil {
+		return fmt.Errorf("git checkout %s: %w", branch, err)
 	}
 	return nil
 }
@@ -65,8 +65,8 @@ func checkoutBranchNew(repoDir, branch, base string) error {
 	// positional — a separator in front of it would become the branch name.
 	// git refuses an option-shaped value there on its own, and validateGitRef
 	// above refuses it earlier; the separator's job is the base positional.
-	if out, err := gitCombined(repoDir, gitRefArgs("checkout", []string{"-b", branch}, base)...); err != nil {
-		return fmt.Errorf("git checkout -b %s %s: %w\n%s", branch, base, err, out)
+	if err := gitRun(repoDir, gitRefArgs("checkout", []string{"-b", branch}, base)...); err != nil {
+		return fmt.Errorf("git checkout -b %s %s: %w", branch, base, err)
 	}
 	return nil
 }
@@ -76,29 +76,29 @@ func checkoutBranchNew(repoDir, branch, base string) error {
 // an origin ref that still tracks state.json clobbers the live file just as
 // surely — the branch name simply does not change on the way.
 //
-// Returns git's own output alongside the error so callers that read the merge
-// output (the ff-divergence signal `phase complete --recover` keys off) keep it.
-func guardedFF(repoDir, ref string) (string, error) {
+// git's own output on failure — the ff-divergence abort `phase complete
+// --recover` points the user at — is printed to stderr by gitRun, not returned.
+func guardedFF(repoDir, ref string) error {
 	if err := validateGitRef("merge ref", ref); err != nil {
-		return "", err
+		return err
 	}
 	if err := guardLiveState(repoDir, ref); err != nil {
-		return "", err
+		return err
 	}
-	return gitCombined(repoDir, gitRefArgs("merge", []string{"--ff-only"}, ref)...)
+	return gitRun(repoDir, gitRefArgs("merge", []string{"--ff-only"}, ref)...)
 }
 
 // guardedResetHard is `git reset --hard <ref>` behind the same pre-check, for
 // the one caller that has one: `ship recover`'s heal. Same reasoning — the
 // working tree is replaced from the target's tree either way.
-func guardedResetHard(repoDir, ref string) (string, error) {
+func guardedResetHard(repoDir, ref string) error {
 	if err := validateGitRef("reset ref", ref); err != nil {
-		return "", err
+		return err
 	}
 	if err := guardLiveState(repoDir, ref); err != nil {
-		return "", err
+		return err
 	}
-	return gitCombined(repoDir, gitRefArgs("reset", []string{"--hard"}, ref)...)
+	return gitRun(repoDir, gitRefArgs("reset", []string{"--hard"}, ref)...)
 }
 
 // guardLiveState returns a named error when switching to ref would overwrite the

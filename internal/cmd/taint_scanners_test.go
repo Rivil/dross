@@ -1,0 +1,103 @@
+package cmd
+
+import (
+	"go/ast"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// The scanner and codex burn-down's guards. Its zero-findings gate is retired
+// into TestNoSpawnOutputEscapes (taint_audit_test.go); what stays is the proof
+// that each marker is load-bearing. A finding is a scanner's when any of its
+// origins is a spawn in internal/codex, security, quality or techdebt,
+// wherever it escapes. The short SHA each scanner reads
+// from git names its run directory, so before it was marked its taint reached
+// every path derived from a run dir — the escapes land all over the tree, the
+// origin stays here.
+
+var scannerOriginDirs = []string{"internal/codex", "internal/security", "internal/quality", "internal/techdebt"}
+
+// TestScannerRevParseMarkerIsLoadBearing: deleting the rev-parse marker in
+// internal/security/run.go puts findings back, and they name that git spawn as
+// their origin.
+func TestScannerRevParseMarkerIsLoadBearing(t *testing.T) {
+	var marker *taintMarker
+	for _, m := range taintMarkersIn(t, "internal/security") {
+		if filepath.Base(m.file) == "run.go" && strings.Contains(m.Reason, "rev-parse") {
+			m := m
+			marker = &m
+		}
+	}
+	if marker == nil {
+		t.Fatal("internal/security/run.go carries no rev-parse taint-cleared marker")
+	}
+	spawn := spawnLineIn(t, modulePath+"/internal/security", "ShortSHA")
+	taint, _ := execTaintScan(viewWithoutComment(liveView(t), marker.file, marker.line))
+	found := false
+	for _, f := range taint {
+		for _, o := range f.Origins {
+			if o.Filename == marker.file && o.Line == spawn {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("removing the marker at %s:%d reported no finding naming the git spawn at line %d",
+			filepath.Base(marker.file), marker.line, spawn)
+	}
+}
+
+// spawnLineIn is the line of the exec.Command call inside the named top-level
+// function of a live package.
+func spawnLineIn(t *testing.T, pkgPath, fn string) int {
+	t.Helper()
+	v := liveView(t)
+	for _, p := range v.Pkgs {
+		if p.Path != pkgPath {
+			continue
+		}
+		for _, f := range p.Syntax {
+			for _, d := range f.Decls {
+				fd, ok := d.(*ast.FuncDecl)
+				if !ok || fd.Name.Name != fn || fd.Recv != nil || fd.Body == nil {
+					continue
+				}
+				line := 0
+				ast.Inspect(fd.Body, func(n ast.Node) bool {
+					if call, ok := n.(*ast.CallExpr); ok && line == 0 {
+						if obj := execCalleeObject(p.Info, call); obj != nil && obj.Pkg() != nil &&
+							obj.Pkg().Path() == "os/exec" && obj.Name() == "Command" {
+							line = v.Fset.Position(call.Pos()).Line
+						}
+					}
+					return true
+				})
+				if line > 0 {
+					return line
+				}
+			}
+		}
+	}
+	t.Fatalf("no exec.Command in %s.%s", pkgPath, fn)
+	return 0
+}
+
+// TestEveryScannerMarkerIsLoadBearing: each marker in the scanner and codex
+// packages clears a flow a gate would see.
+func TestEveryScannerMarkerIsLoadBearing(t *testing.T) {
+	var all []taintMarker
+	for _, d := range scannerOriginDirs {
+		all = append(all, taintMarkersIn(t, d)...)
+	}
+	if len(all) == 0 {
+		t.Fatal("no taint-cleared marker in the scanner packages — the SHA conversions are unmarked")
+	}
+	for _, m := range all {
+		taint, _ := execTaintScan(viewWithoutComment(liveView(t), m.file, m.line))
+		if len(taintFindingsFrom(t, taint, scannerOriginDirs...)) == 0 {
+			t.Errorf("removing the marker at %s:%d leaves no scanner-origin finding — it clears nothing a gate would see",
+				m.file, m.line)
+		}
+	}
+}

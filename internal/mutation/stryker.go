@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/argfence"
+	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/remote"
 )
 
@@ -92,6 +93,13 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 func (s *Stryker) RunRanges(files []string, ranges map[string][]Range) (*Report, error) {
 	if len(files) == 0 {
 		return &Report{Tool: s.Name()}, nil
+	}
+	// Refused before anything is spawned or read: the workdir is where the
+	// report is cleared, fetched to and read from.
+	if s.Workdir != "" {
+		if _, err := ContainStrykerWorkdir(s.ProjectRoot, s.Workdir); err != nil {
+			return nil, err
+		}
 	}
 	if s.ReuseReport {
 		return s.reuseReport(files, ranges)
@@ -600,7 +608,22 @@ func (s *Stryker) workDir() string {
 	if s.Workdir == "" {
 		return s.ProjectRoot
 	}
-	return filepath.Join(s.ProjectRoot, s.Workdir)
+	c, err := ContainStrykerWorkdir(s.ProjectRoot, s.Workdir)
+	if err != nil {
+		// RunRanges refuses an escaping workdir before any of this runs; a
+		// stray caller still lands inside the project root, where nothing is.
+		return filepath.Join(s.ProjectRoot, "_refused")
+	}
+	dir := c.String()
+	return dir
+}
+
+// ContainStrykerWorkdir contains the Stryker leg's workdir under the project
+// root. It is project.toml's mutation.stryker.workdir — a hand-editable path
+// the report is cleared at, fetched to and read from — so one that escapes the
+// root is refused with pathfence.ErrEscapes.
+func ContainStrykerWorkdir(projectRoot, workdir string) (pathfence.Contained, error) {
+	return pathfence.Contain(projectRoot, "project.toml mutation.stryker.workdir", workdir)
 }
 
 // reportPath is where stryker's json reporter writes, under the workdir.

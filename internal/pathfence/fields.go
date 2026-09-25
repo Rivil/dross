@@ -67,7 +67,11 @@ func (f Field) Name() string { return f.Struct + "." + f.Field }
 // Fields returns the registry. t-9's walker judges it in both directions: a
 // path-shaped field with no entry fails, and an entry naming a field that no
 // longer exists fails as a stale declaration.
-func Fields() []Field { return append([]Field(nil), fields...) }
+func Fields() []Field {
+	out := append([]Field(nil), fields...)
+	out = append(out, unguessedFields...)
+	return append(out, idSegmentFields...)
+}
 
 // Validate reports every way in which a registry is malformed.
 //
@@ -132,6 +136,10 @@ var fields = []Field{
 	{
 		Struct: "changes.RedProof", Field: "Doc", Tag: "doc", Artifact: "changes.json",
 		Consumed: &ConsumedBy{Carrier: "redProofPin.Doc"},
+	},
+	{
+		Struct: "survivor.Acceptance", Field: "File", Tag: "file", Artifact: "survivors.toml",
+		Consumed: &ConsumedBy{Carrier: "survivor.AcceptanceFile"},
 	},
 
 	// ---- NotConsumed: nothing opens these -------------------------------
@@ -229,6 +237,168 @@ var fields = []Field{
 			Readers: []string{"internal/verify (criterion-to-test mapping in the report)"},
 		},
 	},
+}
+
+// The fields below were outside the old walker's four schema directories and
+// eleven tag words, and were found when the enumeration stopped guessing. None
+// of them is opened by this process: each is a location on ANOTHER machine, a
+// path printed or emitted for a reader, a pattern, or a path a tool reported
+// about its own work. The path-field taint scan (pathtaint_audit_test.go) holds
+// every one of these claims to the code.
+
+// remotePath declares a location on the granted remote host. It is an operand
+// in the ssh/rsync argv internal/remote builds — checked there against the host
+// allowlist — and never a path on this machine's filesystem.
+func remotePath(strct, field, tag, artifact string, readers ...string) Field {
+	return Field{
+		Struct: strct, Field: field, Tag: tag, Artifact: artifact,
+		NotConsumed: &NotConsumedBy{
+			Why: "a directory on the REMOTE host, carried into ssh/rsync argv by internal/remote; " +
+				"this process never opens it.",
+			Readers: readers,
+		},
+	}
+}
+
+// reportPath declares a path a command prints or emits for a reader.
+func reportPath(strct, field, tag, artifact, why string, readers ...string) Field {
+	return Field{
+		Struct: strct, Field: field, Tag: tag, Artifact: artifact,
+		NotConsumed: &NotConsumedBy{Why: why, Readers: readers},
+	}
+}
+
+var unguessedFields = []Field{
+	// ---- opened, and routed through Contain -----------------------------
+	{
+		Struct: "project.MutationStryker", Field: "Workdir", Tag: "workdir", Artifact: "project.toml",
+		Consumed: &ConsumedBy{Carrier: "mutation.ContainStrykerWorkdir"},
+	},
+	{
+		Struct: "verify.OutOfScopeMutant", Field: "File", Tag: "file", Artifact: "tests.json",
+		Consumed: &ConsumedBy{Carrier: "survivor.ContainReported"},
+	},
+	{
+		Struct: "mutation.gremlinsFile", Field: "Filename", Tag: "file_name", Artifact: "the gremlins JSON report",
+		Consumed: &ConsumedBy{Carrier: "survivor.ContainReported"},
+	},
+	{
+		Struct: "mutation.strykerNetRoot", Field: "ProjectRoot", Tag: "projectroot", Artifact: "the Stryker.NET JSON report",
+		Consumed: &ConsumedBy{Carrier: "survivor.ContainReported"},
+	},
+
+	// ---- remote-host locations ------------------------------------------
+	remotePath("cmd.detachedRun", "RunDir", "run_dir", "local.toml", "internal/cmd/verify.go (detached status/collect)"),
+	remotePath("cmd.detachedRun", "Workdir", "workdir", "local.toml", "internal/cmd/test.go", "internal/cmd/verify.go"),
+	remotePath("cmd.localStore", "RemoteWorkdir", "remote_workdir", "local.toml", "internal/cmd/local.go", "internal/cmd/remote_grant.go"),
+	remotePath("cmd.localStore", "MutationRemoteWorkdir", "mutation_remote_workdir", "local.toml", "internal/cmd/local.go", "internal/cmd/remote_grant.go"),
+	remotePath("cmd.localStore", "RemoteScratchBase", "remote_scratch_base", "local.toml", "internal/cmd/local.go"),
+	remotePath("cmd.remoteCandidate", "Workdir", "workdir", "local.toml", "internal/cmd/local.go", "internal/cmd/remote_grant.go"),
+	remotePath("project.Mutation", "RemoteWorkdir", "remote_workdir", "project.toml", "internal/project/project.go"),
+
+	// ---- repo-layout settings recorded, not opened -----------------------
+	reportPath("project.Repo", "RootRunDir", "root_run_dir", "project.toml",
+		"a repo-layout setting dross records and edits; nothing in this process opens it.",
+		"internal/cmd/project.go (get/set)"),
+	reportPath("project.Repo", "Workspaces", "workspaces", "project.toml",
+		"workspace directories of a multi-package repo, recorded and edited; never opened.",
+		"internal/cmd/project.go (get/set)"),
+	reportPath("project.Techdebt", "Exclude", "exclude", "project.toml",
+		"path PREFIXES a techdebt scan skips — matched against candidate paths, never opened.",
+		"internal/cmd/techdebt.go (builds the exclusion set)"),
+
+	// ---- printed or emitted for a reader ---------------------------------
+	reportPath("cmd.previewReport", "OutOfTree", "out_of_tree", "`dross test --preview --json` output",
+		"paths a lane preview could not place in the tree, printed and emitted — never opened.",
+		"internal/cmd/lane_preview.go", "internal/cmd/lane_preview_json.go"),
+	reportPath("cmd.previewReport", "Unmatched", "unmatched", "`dross test --preview --json` output",
+		"paths no declared lane matched, printed and emitted — never opened.",
+		"internal/cmd/lane_preview.go", "internal/cmd/lane_preview_json.go"),
+	reportPath("cmd.previewLaneReport", "Dropped", "dropped", "`dross test --preview --json` output",
+		"paths a lane's selector dropped, printed and emitted — never opened.",
+		"internal/cmd/lane_preview.go"),
+	reportPath("cmd.previewLaneReport", "Selector", "selector", "`dross test --preview --json` output",
+		"the selector arguments a lane would append to its command, printed — never opened.",
+		"internal/cmd/lane_preview.go"),
+	reportPath("cmd.statsSummary", "Path", "path", "`dross stats --json` output",
+		"where the telemetry log lives, printed for the reader — the log itself is opened elsewhere, "+
+			"from its own resolved location.",
+		"internal/cmd/stats.go"),
+	reportPath("changes.Landmark", "Loc", "loc", "changes.json",
+		"a file:line pointer recorded for ARCHITECTURE.md, copied into the doc as text.",
+		"internal/changes/changes.go"),
+	reportPath("verify.SkippedFile", "File", "file", "tests.json",
+		"a file the mutation pass skipped, with why — rendered in the report.",
+		"internal/cmd/verify.go", "internal/verify/verify.go"),
+	reportPath("verify.LegSummary", "WholeFile", "whole_file", "tests.json",
+		"files a leg measured whole rather than by range, summarised for the report.",
+		"internal/verify/verify.go"),
+	reportPath("verify.LegSummary", "Ranges", "ranges", "tests.json",
+		"file:range labels a leg measured, summarised for the report.",
+		"internal/verify/verify.go"),
+
+	// ---- scan findings: where a finding points ---------------------------
+	reportPath("findings.Record", "File", "file", "findings.toml",
+		"the file a recorded finding points at — compared and printed, never opened.",
+		"internal/cmd/findings.go", "internal/findings/reconcile.go"),
+	reportPath("security.Finding", "File", "file", "security run findings.toml",
+		"the file a security finding points at — compared across runs and printed.",
+		"internal/security/lifecycle.go"),
+	reportPath("quality.Finding", "File", "file", "quality run findings.toml",
+		"the file a quality finding points at — compared across runs and printed.",
+		"internal/quality/lifecycle.go"),
+
+	// ---- paths a tool reported about its own work --------------------------
+	reportPath("codex.astGrepMatch", "File", "file", "ast-grep --json output",
+		"decoded from ast-grep's own report; dross does not open it.",
+		"internal/codex/ast_grep.go (decoded)"),
+	reportPath("mutation.astRequest", "File", "file", "the Stryker AST helper's stdin request",
+		"a path handed to the node AST helper, which opens it itself; dross does not.",
+		"internal/mutation/construct.go"),
+
+	// ---- stack profiles: names matched against a listing -------------------
+	reportPath("stack.Signals", "Files", "files", "stack profile TOML",
+		"marker FILE NAMES looked up in the set of files the detector listed; never opened.",
+		"internal/stack/detect.go"),
+	reportPath("stack.Signals", "FilePatterns", "file_patterns", "stack profile TOML",
+		"glob PATTERNS matched against listed file names with filepath.Match.",
+		"internal/stack/profile.go"),
+	reportPath("stack.PackageManager", "Lockfile", "lockfile", "stack profile TOML",
+		"a lockfile NAME describing the package manager; matched, never opened.",
+		"internal/stack (profile data)"),
+}
+
+// idSegment declares an id or tracker key that becomes a PATH SEGMENT: a phase
+// id joined under .dross/phases/, a milestone version under milestones/. These
+// are read back from hand-editable files and from the issue tracker — a label
+// like dross/phase:../../x is a remote-controlled path segment — so each goes
+// through a Contain-typed carrier (phase.ContainID, milestone.ContainVersion)
+// inside the id-to-path helpers before anything is opened.
+func idSegment(strct, field, tag, artifact, carrier string) Field {
+	return Field{
+		Struct: strct, Field: field, Tag: tag, Artifact: artifact,
+		Consumed: &ConsumedBy{Carrier: carrier},
+	}
+}
+
+var idSegmentFields = []Field{
+	idSegment("board.TaskLink", "Issue", "issue", "board.json", "phase.ContainID"),
+	idSegment("deferred.Entry", "Source", "source", "deferred stores (spec.toml / deferred.toml)", "phase.ContainID"),
+	idSegment("deferred.Entry", "Target", "target", "deferred stores (spec.toml / deferred.toml)", "phase.ContainID"),
+	idSegment("forge.gitlabIssueResponse", "Labels", "labels", "the GitLab issues API response", "phase.ContainID"),
+	idSegment("forge.jiraCreated", "Key", "key", "the Jira create-issue API response", "phase.ContainID"),
+	idSegment("forge.jiraIssue", "Key", "key", "the Jira search API response", "phase.ContainID"),
+	idSegment("forge.youtrackIssue", "IDReadable", "idreadable", "the YouTrack issues API response", "phase.ContainID"),
+	idSegment("milestone.Milestone", "Phases", "phases", "milestones/<version>.toml", "phase.ContainID"),
+	idSegment("phase.Deferred", "ID", "id", "spec.toml", "phase.ContainID"),
+	idSegment("phase.Deferred", "Target", "target", "spec.toml", "phase.ContainID"),
+	idSegment("phase.Task", "ID", "id", "plan.toml", "phase.ContainID"),
+	idSegment("reaplog.Card", "DroppedLink", "dropped_link", "reap-log.json", "phase.ContainID"),
+	idSegment("reaplog.Card", "Issue", "issue", "reap-log.json", "phase.ContainID"),
+	idSegment("reaplog.Card", "PriorLabels", "prior_labels", "reap-log.json", "phase.ContainID"),
+	idSegment("state.State", "CurrentPhase", "current_phase", "state.json", "phase.ContainID"),
+	idSegment("phase.SpecPhase", "Milestone", "milestone", "spec.toml", "milestone.ContainVersion"),
+	idSegment("state.State", "CurrentMilestone", "current_milestone", "state.json", "milestone.ContainVersion"),
 }
 
 // pathsField builds one project.Paths entry. They differ only in name and tag.

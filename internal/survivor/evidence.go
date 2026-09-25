@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // Evidence answers the only two questions that decide a survivor's fate, and
@@ -216,7 +218,11 @@ func ApplicabilityAt(repoRoot, file string, line int, op string) (Applicability,
 	if op != "ARITHMETIC_BASE" {
 		return Applicable, nil
 	}
-	src, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(file)))
+	path, err := ContainReported(repoRoot, file)
+	if err != nil {
+		return ApplicabilityUnknown, err
+	}
+	src, err := pathfence.ReadFile(path)
 	if err != nil {
 		return ApplicabilityUnknown, err
 	}

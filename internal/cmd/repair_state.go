@@ -84,7 +84,7 @@ func historyFromPhaseCommits(repoDir, mainBranch string) ([]state.Activity, erro
 	if err := validateGitRef("repo.git_main_branch", mainBranch); err != nil {
 		return nil, err
 	}
-	out, err := gitTrim(repoDir, gitRefArgs("log", []string{"--reverse", "--pretty=format:%at\x1f%s"}, mainBranch)...)
+	out, err := gitRead(repoDir, gitRefArgs("log", []string{"--reverse", "--pretty=format:%at\x1f%s"}, mainBranch)...)
 	if err != nil {
 		return nil, fmt.Errorf("git log %s: %w", mainBranch, err)
 	}
@@ -93,6 +93,7 @@ func historyFromPhaseCommits(repoDir, mainBranch string) ([]state.Activity, erro
 	}
 	var history []state.Activity
 	for _, line := range strings.Split(out, "\n") {
+		//dross:taint-cleared a `%at\x1f%s` line of the base branch log: only subjects in the `phase <id>: <title>` shape dross writes at ship are kept, restored to the history they were recorded from
 		ts, subject, found := strings.Cut(line, "\x1f")
 		if !found {
 			continue

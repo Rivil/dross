@@ -60,19 +60,46 @@ func parseGitRemote(raw string) (host, path string) {
 		return "", ""
 	}
 
+	scp := !strings.Contains(raw, "://") && strings.Contains(raw, "@") && strings.Contains(raw, ":")
+	//dross:taint-cleared the remote with its userinfo (user:token@), the one part that carries a credential, cut off by withoutUserinfo; the raw URL stays unmarked in init.go
+	rest := withoutUserinfo(raw, scp)
+
 	// scp-like form: git@host:owner/repo
-	if !strings.Contains(raw, "://") && strings.Contains(raw, "@") && strings.Contains(raw, ":") {
-		afterAt := raw[strings.Index(raw, "@")+1:]
-		colon := strings.Index(afterAt, ":")
+	if scp {
+		colon := strings.Index(rest, ":")
 		if colon < 0 {
 			return "", ""
 		}
-		return afterAt[:colon], afterAt[colon+1:]
+		return rest[:colon], rest[colon+1:]
 	}
 
-	u, err := url.Parse(raw)
+	u, err := url.Parse(rest)
 	if err != nil || u.Host == "" {
 		return "", ""
 	}
 	return u.Host, strings.TrimPrefix(u.Path, "/")
+}
+
+// withoutUserinfo cuts the user[:password]@ off a git remote before anything
+// parses it: a remote can carry a token there (https://user:token@host/…), and
+// what is derived from it is persisted to project.toml. An scp-form remote
+// loses everything up to its first @; a URL loses its authority's userinfo, up
+// to the LAST @ as url.Parse reads it.
+func withoutUserinfo(raw string, scp bool) string {
+	if scp {
+		return raw[strings.Index(raw, "@")+1:]
+	}
+	scheme, rest, ok := strings.Cut(raw, "://")
+	if !ok {
+		return raw
+	}
+	authority, tail, hasTail := strings.Cut(rest, "/")
+	if at := strings.LastIndex(authority, "@"); at >= 0 {
+		authority = authority[at+1:]
+	}
+	out := scheme + "://" + authority
+	if hasTail {
+		out += "/" + tail
+	}
+	return out
 }

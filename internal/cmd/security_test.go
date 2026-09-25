@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
@@ -464,20 +466,19 @@ func TestContainedPathIsGone(t *testing.T) {
 // TestRunDirSitesPassContainedThrough is the structural half of c-1/c-3 for the
 // cmd layer. Behavioural tests cannot see the difference between a site that
 // keeps its Contained and one that unwraps it and re-joins — both open the same
-// file — so the shape is asserted directly:
+// file — so the shape is asserted directly, over the shared load's typed
+// syntax:
 //
 //   - each file builds its paths with exactly four pathfence.Contain calls,
 //   - no site re-derives a path with filepath.Join over the run dir,
-//   - no site unwraps the value it passes on with .String(),
+//   - no site unwraps a Contained with .String() — whatever the local is named,
 //   - neither report writer reaches os.WriteFile behind the seam's back.
 func TestRunDirSitesPassContainedThrough(t *testing.T) {
+	v := liveView(t)
 	for _, file := range []string{"security.go", "quality.go"} {
 		t.Run(file, func(t *testing.T) {
-			fset := token.NewFileSet()
-			f, err := parser.ParseFile(fset, file, nil, 0)
-			if err != nil {
-				t.Fatal(err)
-			}
+			f, info := liveCmdFile(t, v, file)
+			fset := v.Fset
 			contains := 0
 			ast.Inspect(f, func(n ast.Node) bool {
 				call, ok := n.(*ast.CallExpr)
@@ -498,17 +499,80 @@ func TestRunDirSitesPassContainedThrough(t *testing.T) {
 				case pkg != nil && pkg.Name == "filepath" && sel.Sel.Name == "Join" && joinsRunDir(call):
 					t.Errorf("%s:%d: filepath.Join over the run dir — the site must keep the Contained it was given, not re-derive the path",
 						file, fset.Position(call.Pos()).Line)
-				case sel.Sel.Name == "String" && pkg != nil && containedVar(pkg.Name):
-					t.Errorf("%s:%d: %s.String() — the Contained must pass through unconverted; unwrapping here un-moves the boundary t-3 moved",
-						file, fset.Position(call.Pos()).Line, pkg.Name)
 				}
 				return true
 			})
+			for _, hit := range containedStringCalls(fset, info, f) {
+				t.Errorf("%s — the Contained must pass through unconverted; unwrapping here un-moves the boundary t-3 moved", hit)
+			}
 			if contains != 4 {
 				t.Errorf("%s has %d pathfence.Contain calls, want 4 (findings.toml x2, spec.toml, report.md)", file, contains)
 			}
 		})
 	}
+}
+
+// TestContainedStringCheckIsTypeKeyed: the pass-through check finds a
+// Contained's .String() by the receiver's type, so a Contained under a name
+// nobody listed is caught, and a builder's String() is not.
+func TestContainedStringCheckIsTypeKeyed(t *testing.T) {
+	fx := loadFixture(t, fixturePath("pathfence_scan", "unwrap_renamed.go.txt"))
+	var got []string
+	for _, p := range fx.Pkgs {
+		for _, f := range p.Syntax {
+			got = append(got, containedStringCalls(fx.Fset, p.Info, f)...)
+		}
+	}
+	joined := strings.Join(got, "\n")
+	if len(got) != 2 || !strings.Contains(joined, "renamed.String()") || !strings.Contains(joined, "x.String()") {
+		t.Errorf("containedStringCalls = %v, want x.String() and renamed.String()", got)
+	}
+	builder := loadFixture(t, fixturePath("pathfence_scan", "unwrap_os.go.txt"))
+	for _, p := range builder.Pkgs {
+		for _, f := range p.Syntax {
+			for _, hit := range containedStringCalls(builder.Fset, p.Info, f) {
+				if strings.Contains(hit, "b.String()") {
+					t.Errorf("a strings.Builder's String() was read as a Contained unwrap: %s", hit)
+				}
+			}
+		}
+	}
+}
+
+// containedStringCalls reports every .String() called on a pathfence.Contained.
+func containedStringCalls(fset *token.FileSet, info *types.Info, f *ast.File) []string {
+	var out []string
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) != 0 {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "String" || !isContained(info.TypeOf(sel.X)) {
+			return true
+		}
+		pos := fset.Position(call.Pos())
+		out = append(out, fmt.Sprintf("%s:%d: %s.String()", filepath.Base(pos.Filename), pos.Line, types.ExprString(sel.X)))
+		return true
+	})
+	return out
+}
+
+// liveCmdFile is one internal/cmd file's typed syntax from the shared load.
+func liveCmdFile(t *testing.T, v *srcView, base string) (*ast.File, *types.Info) {
+	t.Helper()
+	for _, p := range v.Pkgs {
+		if p.Path != modulePath+"/internal/cmd" {
+			continue
+		}
+		for _, f := range p.Syntax {
+			if filepath.Base(v.Fset.Position(f.Pos()).Filename) == base {
+				return f, p.Info
+			}
+		}
+	}
+	t.Fatalf("internal/cmd/%s is not in the shared load", base)
+	return nil, nil
 }
 
 // joinsRunDir reports whether a filepath.Join call takes runDir as its first
@@ -519,15 +583,6 @@ func joinsRunDir(call *ast.CallExpr) bool {
 	}
 	id, ok := call.Args[0].(*ast.Ident)
 	return ok && id.Name == "runDir"
-}
-
-// containedVar names the locals that hold a Contained at the eight call sites.
-func containedVar(name string) bool {
-	switch name {
-	case "ledgerPath", "outPath", "reportPath":
-		return true
-	}
-	return false
 }
 
 // TestRunDirSitesCannotUnwrap is the compile-time counterpart: inserting a

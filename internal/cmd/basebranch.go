@@ -77,10 +77,11 @@ func pushBaseIfAheadDrossOnly(repoDir, base string) (pushed bool, err error) {
 		return false, nil
 	}
 	for _, sha := range d.Ahead {
-		files, err := gitTrim(repoDir, gitRefArgs("diff-tree", []string{"--no-commit-id", "--name-only", "-r", "--root"}, sha)...)
+		files, err := gitRead(repoDir, gitRefArgs("diff-tree", []string{"--no-commit-id", "--name-only", "-r", "--root"}, sha)...)
 		if err != nil {
 			return false, fmt.Errorf("git diff-tree %s: %w", sha, err)
 		}
+		//dross:taint-cleared diff-tree --name-only prints one repo path per line, and f is one of them
 		for _, f := range strings.Split(files, "\n") {
 			if f == "" {
 				continue
@@ -92,10 +93,10 @@ func pushBaseIfAheadDrossOnly(repoDir, base string) (pushed bool, err error) {
 			}
 		}
 	}
-	if out, err := gitCombined(repoDir, gitRefArgs("push", nil, "origin", base)...); err != nil {
-		return false, fmt.Errorf("safety-net push of .dross chores on %s failed: %w\n%s\n"+
+	if err := gitRun(repoDir, gitRefArgs("push", nil, "origin", base)...); err != nil {
+		return false, fmt.Errorf("safety-net push of .dross chores on %s failed: %w\n"+
 			"Refusing to continue — proceeding would leave %s diverged from origin again.",
-			base, err, out, base)
+			base, err, base)
 	}
 	return true, nil
 }

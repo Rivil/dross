@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -81,6 +82,28 @@ func screenedGH(args ...string) (*exec.Cmd, error) {
 	return ghCommand(args...), nil
 }
 
+// ghStderr is where a failed gh invocation's own output goes: this process's
+// stderr. Tests swap it to capture what a user would see.
+var ghStderr io.Writer = os.Stderr
+
+// ghFailed reports a failed gh invocation. gh's own output — which can carry
+// an API response body — goes to stderr, where the user is already looking,
+// and the error names the subcommand and gh's exit status only. An error is
+// never the terminal: it can reach telemetry or a persisted record.
+func ghFailed(what string, err error, out []byte) error {
+	if len(out) > 0 {
+		fmt.Fprintf(ghStderr, "%s: gh said:\n%s\n", what, bytes.TrimRight(out, "\n"))
+	}
+	return fmt.Errorf("%s: %w", what, err)
+}
+
+// ghUnparseable reports gh output that is not the JSON it promised: the raw
+// output goes to stderr, the error is fixed prose.
+func ghUnparseable(what string, out []byte) error {
+	fmt.Fprintf(ghStderr, "%s: gh printed:\n%s\n", what, bytes.TrimRight(out, "\n"))
+	return fmt.Errorf("%s: gh's output is not the JSON it promises (printed above)", what)
+}
+
 func openGitHubPR(opts OpenOpts) (*OpenResult, error) {
 	if _, err := exec.LookPath("gh"); err != nil {
 		return nil, errors.New("github backend needs the `gh` CLI on PATH (https://cli.github.com)")
@@ -111,13 +134,11 @@ func openGitHubPR(opts OpenOpts) (*OpenResult, error) {
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("gh pr create: %w\n%s", err, string(out))
+		return nil, ghFailed("gh pr create", err, out)
 	}
-	prURL := strings.TrimSpace(string(out))
 	// gh prints the URL on the last line; pick that to be safe.
-	if lines := strings.Split(prURL, "\n"); len(lines) > 0 {
-		prURL = strings.TrimSpace(lines[len(lines)-1])
-	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	prURL := strings.TrimSpace(lines[len(lines)-1])
 	return &OpenResult{
 		Number: parsePRNumber(prURL),
 		URL:    prURL,

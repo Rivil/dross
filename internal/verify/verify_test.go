@@ -1771,3 +1771,21 @@ func TestSingleLegStillRecordsItsLeg(t *testing.T) {
 		t.Errorf("leg score = %v, want 0.75", got.Score)
 	}
 }
+
+// TestFilePathsContainThePhaseID: tests.json and verify.toml hang off a phase
+// id read back from hand-editable files; one that would escape phases/ names
+// only files inside it.
+func TestFilePathsContainThePhaseID(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".dross")
+	tests, ver := FilePaths(root, "auth")
+	if tests != filepath.Join(root, "phases", "auth", TestsFile) || ver != filepath.Join(root, "phases", "auth", VerifyFile) {
+		t.Errorf("FilePaths(auth) = %s, %s", tests, ver)
+	}
+	refused := filepath.Join(root, "phases", "_refused")
+	for _, id := range []string{"../outside", "../../x", "/abs"} {
+		tests, ver := FilePaths(root, id)
+		if filepath.Dir(tests) != refused || filepath.Dir(ver) != refused {
+			t.Errorf("FilePaths(%q) = %s, %s — want both under the refused segment", id, tests, ver)
+		}
+	}
+}

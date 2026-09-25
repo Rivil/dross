@@ -86,7 +86,7 @@ func postGitHubComment(opts CommentOpts) error {
 		if errors.Is(err, exec.ErrNotFound) {
 			return errors.New("github backend needs the `gh` CLI on PATH (https://cli.github.com)")
 		}
-		return fmt.Errorf("gh pr comment: %w\n%s", err, string(out))
+		return ghFailed("gh pr comment", err, out)
 	}
 	return nil
 }

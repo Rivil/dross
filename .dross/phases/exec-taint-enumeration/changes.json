@@ -1,0 +1,563 @@
+{
+  "phase": "exec-taint-enumeration",
+  "pr": 134,
+  "base": "milestone/v1.7",
+  "base_commit": "edce19944cff69a2b813b50ab000459bb0d8f401",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "go.mod",
+        "go.sum",
+        "internal/cmd/srcprog_test.go",
+        "internal/cmd/hermetic_env_test.go"
+      ],
+      "commit": "dffb1d4",
+      "completed_at": "2026-09-24T13:00:13.743584Z",
+      "landmarks": [
+        {
+          "feature": "source-scan program loader",
+          "symbol": "sourceProgram",
+          "loc": "internal/cmd/srcprog_test.go:94",
+          "what": "once-per-binary go/packages load + module-only SSA + CHA-seeded VTA graph shared by every source scan (x/tools test-only)"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/taint_marker_test.go",
+        "internal/cmd/testdata/taint/markers.go.txt"
+      ],
+      "commit": "7a9619f",
+      "completed_at": "2026-09-24T14:14:47.162726Z",
+      "landmarks": [
+        {
+          "feature": "exec-output taint",
+          "symbol": "execTaintScan",
+          "loc": "internal/cmd/taint_marker_test.go:42",
+          "what": "//dross:taint-cleared clears values defined on the line below it; orphan, malformed and on-source markers are findings"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/execconsent_audit_test.go"
+      ],
+      "commit": "c83b59a",
+      "completed_at": "2026-09-24T14:19:34.971114Z",
+      "landmarks": [
+        {
+          "feature": "exec-consent audit",
+          "symbol": "withSurgery",
+          "loc": "internal/cmd/execconsent_audit_test.go:1588",
+          "what": "live proofs run as anchored surgery on a copy of the shared VTA-based graph; no re-parse, shared graph provably untouched"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/pathtaint_audit_test.go",
+        "internal/cmd/testdata/pathtaint/raw_os.go.txt",
+        "internal/cmd/testdata/pathtaint/contained_ok.go.txt",
+        "internal/cmd/taint_engine_test.go"
+      ],
+      "commit": "d2e5de4",
+      "completed_at": "2026-09-24T15:27:37.073404Z",
+      "landmarks": [
+        {
+          "feature": "path-field taint scan",
+          "symbol": "pathTaintScan",
+          "loc": "internal/cmd/pathtaint_audit_test.go:341",
+          "what": "second engine policy tracing registry and ledger field reads to os.* and the pathfence seam; Contain clears Consumed only"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/cmd/taint_stryker_test.go",
+        "internal/cmd/testdata/taint/stryker_prephase.go.txt",
+        "internal/mutation/toolfence_residual_test.go"
+      ],
+      "commit": "d089fe9",
+      "completed_at": "2026-09-24T14:35:22.285359Z",
+      "landmarks": [
+        {
+          "feature": "exec-output taint",
+          "symbol": "TestStrykerPrePhaseBranchTrips",
+          "loc": "internal/cmd/taint_stryker_test.go:81",
+          "what": "6f27eaa^'s tee/headBuffer/quote branch pinned verbatim as a must-trip fixture; its three escapes name the Stdout origin"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/ship/open.go",
+        "internal/ship/headpr.go",
+        "internal/ship/basepr.go",
+        "internal/ship/merged.go",
+        "internal/ship/comment.go",
+        "internal/ship/comment_test.go",
+        "internal/ship/gh_failure_test.go",
+        "internal/cmd/taint_ship_test.go"
+      ],
+      "commit": "c4164e5",
+      "completed_at": "2026-09-24T14:41:14.087116Z",
+      "landmarks": [
+        {
+          "feature": "exec-output taint",
+          "symbol": "ghFailed",
+          "loc": "internal/ship/open.go:93",
+          "what": "gh failures print gh's output to stderr and return subcommand + exit status; origin-scoped gh taint gate"
+        }
+      ]
+    },
+    "t-15": {
+      "files": [
+        "internal/cmd/ship_recover.go",
+        "internal/cmd/cleantree.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/repair.go",
+        "internal/cmd/redproof_lifecycle.go",
+        "internal/cmd/phase_lifecycle.go",
+        "internal/cmd/originpush.go",
+        "internal/cmd/switchbranch.go",
+        "internal/cmd/phase_backfill.go",
+        "internal/cmd/basebranch.go",
+        "internal/cmd/repair_files.go",
+        "internal/cmd/redproof_replay.go",
+        "internal/cmd/milestone.go",
+        "internal/cmd/ship.go",
+        "internal/cmd/subprocargs_audit_test.go",
+        "internal/cmd/ship_test.go",
+        "internal/cmd/switchbranch_test.go",
+        "internal/cmd/gitseparator_test.go",
+        "internal/cmd/refguard_test.go",
+        "internal/cmd/testdata/subprocargs_audit/snippets.txt",
+        "internal/cmd/taint_gitplumbing_test.go",
+        "internal/cmd/techdebt_test.go",
+        "internal/cmd/basebranch_test.go"
+      ],
+      "commit": "80978a5",
+      "completed_at": "2026-09-24T14:50:51.08814Z",
+      "landmarks": [
+        {
+          "feature": "git plumbing",
+          "symbol": "gitRun",
+          "loc": "internal/cmd/ship_recover.go:286",
+          "what": "effect-only git helper: failure output to stderr, exit status to the caller; replaces gitCombined at 39 sites"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        "internal/codex/ast_grep.go",
+        "internal/security/run.go",
+        "internal/quality/run.go",
+        "internal/techdebt/run.go",
+        "internal/cmd/taint_scanners_test.go"
+      ],
+      "commit": "9636800",
+      "completed_at": "2026-09-24T14:54:54.887421Z",
+      "landmarks": [
+        {
+          "feature": "exec-output taint",
+          "symbol": "TestNoScannerOutputEscapes",
+          "loc": "internal/cmd/taint_scanners_test.go:22",
+          "what": "scanner run-dir SHAs marked at their conversion; ast-grep decode failures print to stderr; origin-scoped scanner gate"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "internal/remote/hold.go",
+        "internal/remote/remote.go",
+        "internal/remote/lock.go",
+        "internal/compilefence/compilefence.go",
+        "internal/cmd/taint_toolstreams_test.go",
+        "internal/remote/hold_test.go"
+      ],
+      "commit": "d1fc47d",
+      "completed_at": "2026-09-24T15:02:00.813616Z",
+      "landmarks": [
+        {
+          "feature": "exec-output taint",
+          "symbol": "protocolToken",
+          "loc": "internal/remote/lock.go:365",
+          "what": "remote lock/status fields admitted only as shape-checked protocol tokens; transport stderr to the terminal; tool runners marker-free"
+        }
+      ]
+    },
+    "t-18": {
+      "files": [
+        "internal/cmd/lane_install.go",
+        "internal/cmd/survivor_drain.go",
+        "internal/cmd/techdebt.go",
+        "internal/cmd/taint_usercmds_test.go",
+        "internal/cmd/redproof_replay.go",
+        "internal/cmd/redproof_repoint_cmd.go",
+        "internal/cmd/test_lane_install.go",
+        "internal/cmd/trust_lane_install_cmd_test.go",
+        "internal/cmd/lane_install_spawn_test.go"
+      ],
+      "commit": "7f5a55e",
+      "completed_at": "2026-09-24T15:07:23.356292Z",
+      "landmarks": [
+        {
+          "feature": "exec-output taint",
+          "symbol": "runInstallLocally",
+          "loc": "internal/cmd/lane_install.go:224",
+          "what": "lane installs and red-proof replay tails print tool output to stderr; drain/techdebt path lists marked at conversion"
+        }
+      ]
+    },
+    "t-19": {
+      "files": [
+        "internal/cmd/ship_recover.go",
+        "internal/cmd/basebranch.go",
+        "internal/cmd/milestone.go",
+        "internal/cmd/phase_backfill.go",
+        "internal/cmd/repair_files.go",
+        "internal/cmd/repair_phasedirs.go",
+        "internal/cmd/repair_state.go",
+        "internal/cmd/secretscan.go",
+        "internal/cmd/verifyscope.go",
+        "internal/verify/scope.go",
+        "internal/verify/scope_test.go",
+        "internal/cmd/taint_gitplumbing_test.go",
+        "internal/cmd/subprocargs_audit_test.go",
+        "internal/cmd/testdata/taint/gitread.go.txt"
+      ],
+      "commit": "184567f",
+      "completed_at": "2026-09-24T15:36:53.873679Z",
+      "landmarks": [
+        {
+          "feature": "git read helpers",
+          "symbol": "gitRead",
+          "loc": "internal/cmd/ship_recover.go:290",
+          "what": "unmarked content-read helper; gitTrim pinned to ref verbs with one marker"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/execconsent_audit_test.go",
+        "internal/cmd/directive_test.go"
+      ],
+      "commit": "3d96e5d",
+      "completed_at": "2026-09-24T13:03:42.267639Z",
+      "landmarks": [
+        {
+          "feature": "in-source directive markers",
+          "symbol": "directiveMarkers",
+          "loc": "internal/cmd/directive_test.go:45",
+          "what": "one //dross: directive parser (position-bound, prose floor 20) shared by exec-exempt and the new taint-cleared marker"
+        }
+      ]
+    },
+    "t-20": {
+      "files": [
+        "internal/cmd/srcfinding_test.go",
+        "internal/cmd/testdata/taint/one_violation.go.txt",
+        "internal/cmd/testdata/pathtaint/one_violation.go.txt"
+      ],
+      "commit": "dce6608",
+      "completed_at": "2026-09-24T15:40:43.736756Z",
+      "landmarks": [
+        {
+          "feature": "finding message facts",
+          "symbol": "assertFacts",
+          "loc": "internal/cmd/srcfinding_test.go:76",
+          "what": "escape, origin(s) and remedy asserted as separate facts for both tracing scans"
+        }
+      ]
+    },
+    "t-21": {
+      "files": [
+        "internal/cmd/taint_audit_test.go",
+        "ARCHITECTURE.md",
+        "internal/cmd/taint_ship_test.go",
+        "internal/cmd/taint_gitplumbing_test.go",
+        "internal/cmd/taint_gitdirect_test.go",
+        "internal/cmd/taint_scanners_test.go",
+        "internal/cmd/taint_toolstreams_test.go",
+        "internal/cmd/taint_usercmds_test.go",
+        "internal/cmd/taint_engine_test.go",
+        "internal/cmd/taint_marker_test.go"
+      ],
+      "commit": "b4ac077",
+      "completed_at": "2026-09-24T16:00:11.253448Z",
+      "landmarks": [
+        {
+          "feature": "Exec output containment",
+          "symbol": "TestNoSpawnOutputEscapes",
+          "loc": "internal/cmd/taint_audit_test.go:69",
+          "what": "live exec-output taint gate over every loaded package with source floors"
+        }
+      ]
+    },
+    "t-22": {
+      "files": [
+        "internal/cmd/cleantree.go",
+        "internal/cmd/pause.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/worktree_files.go",
+        "internal/project/remote.go",
+        "internal/project/remote_test.go",
+        "internal/cmd/taint_gitdirect_test.go",
+        "internal/cmd/testdata/taint/stale_diff.go.txt"
+      ],
+      "commit": "9ef9f66",
+      "completed_at": "2026-09-24T15:49:23.008392Z",
+      "landmarks": [
+        {
+          "feature": "remote userinfo cut",
+          "symbol": "withoutUserinfo",
+          "loc": "internal/project/remote.go:88",
+          "what": "remote URL userinfo cut before parsing; direct git spawn conversions marked"
+        }
+      ]
+    },
+    "t-23": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/done.go",
+        "internal/phase/phase_test.go",
+        "internal/changes/changes.go",
+        "internal/changes/changes_test.go",
+        "internal/verify/verify.go",
+        "internal/verify/verify_test.go",
+        "internal/milestone/milestone.go",
+        "internal/milestone/milestone_test.go",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/cmd/pathfence_carrier_test.go"
+      ],
+      "commit": "3ce2300",
+      "completed_at": "2026-09-24T14:31:07.320833Z",
+      "landmarks": [
+        {
+          "feature": "path containment",
+          "symbol": "ContainID",
+          "loc": "internal/phase/phase.go:42",
+          "what": "phase ids / milestone versions contained under .dross/phases|milestones before any open; escaping ids resolve to a fixed _refused segment"
+        }
+      ]
+    },
+    "t-24": {
+      "files": [
+        "internal/mutation/stryker.go",
+        "internal/mutation/inapplicable.go",
+        "internal/mutation/stryker_test.go",
+        "internal/survivor/evidence.go",
+        "internal/survivor/identity.go",
+        "internal/survivor/identity_test.go",
+        "internal/pathfence/fields.go",
+        "internal/cmd/pathfence_carrier_test.go"
+      ],
+      "commit": "bb20e9c",
+      "completed_at": "2026-09-24T15:14:23.144939Z",
+      "landmarks": [
+        {
+          "feature": "path containment",
+          "symbol": "ContainReported",
+          "loc": "internal/survivor/identity.go:113",
+          "what": "tool-reported files and the Stryker workdir contained under the repo root before any read, clear or fetch"
+        }
+      ]
+    },
+    "t-25": {
+      "files": [
+        "internal/cmd/taint_engine_test.go",
+        "internal/cmd/taint_schedule_test.go",
+        "ARCHITECTURE.md"
+      ],
+      "commit": "7261a7b",
+      "completed_at": "2026-09-24T17:03:32.502129Z",
+      "landmarks": [
+        {
+          "feature": "Exec output containment",
+          "symbol": "indexDependents",
+          "loc": "internal/cmd/taint_engine_test.go:624",
+          "what": "worklist scheduler: re-analyse a function only when something it reads grows"
+        }
+      ]
+    },
+    "t-27": {
+      "files": [
+        "internal/cmd/testdata/taint/sources.go.txt"
+      ],
+      "commit": "93130af",
+      "completed_at": "2026-09-25T06:30:47.741435Z",
+      "landmarks": [
+        {
+          "feature": "exec-output taint",
+          "symbol": "stderrBuffer",
+          "loc": "internal/cmd/testdata/taint/sources.go.txt:75",
+          "what": "source corpus pins the Cmd.Stderr buffer channel on its own WANT line, independent of Stdout"
+        }
+      ]
+    },
+    "t-28": {
+      "files": [
+        "internal/remote/lock.go",
+        "internal/remote/hold_test.go"
+      ],
+      "commit": "319e797",
+      "completed_at": "2026-09-25T06:30:47.754021Z",
+      "landmarks": [
+        {
+          "feature": "Host lock",
+          "symbol": "notPrintable",
+          "loc": "internal/remote/lock.go:378",
+          "what": "protocolToken refuses a record field holding any non-printable rune, first rune included"
+        }
+      ]
+    },
+    "t-29": {
+      "files": [
+        "internal/ship/gh_failure_test.go"
+      ],
+      "commit": "4ea715b",
+      "completed_at": "2026-09-25T06:48:57.248562Z",
+      "landmarks": [
+        {
+          "feature": "exec-output taint",
+          "symbol": "TestGhUnparseableOutputGoesToStderr",
+          "loc": "internal/ship/gh_failure_test.go:67",
+          "what": "both gh JSON lookups (base and head PR) keep unparseable gh output on stderr and out of the error"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/ssafixture_test.go",
+        "internal/cmd/srccorpus_test.go",
+        "internal/cmd/testdata/ssa_fixture/root.go.txt",
+        "internal/cmd/testdata/ssa_fixture/helper.go.txt",
+        "internal/cmd/testdata/ssa_fixture/badimport.go.txt",
+        "internal/cmd/testdata/ssa_fixture/typeerror.go.txt",
+        "internal/cmd/testdata/ssa_fixture/want_mismatch.go.txt"
+      ],
+      "commit": "cf7d61a",
+      "completed_at": "2026-09-24T13:11:26.532374Z",
+      "landmarks": [
+        {
+          "feature": "source-scan fixture programs",
+          "symbol": "typecheckFixture",
+          "loc": "internal/cmd/ssafixture_test.go:184",
+          "what": "fixtures type-checked on the live load's types into an isolated SSA program + a two-way // WANT corpus harness"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/srcscope_test.go"
+      ],
+      "commit": "aae1461",
+      "completed_at": "2026-09-24T13:15:43.629654Z",
+      "landmarks": [
+        {
+          "feature": "source-scan scope",
+          "symbol": "sweepOutsideLoad",
+          "loc": "internal/cmd/srcscope_test.go:136",
+          "what": "scanned set = every loaded module package; a constraint-blind parse sweep fails on any spawn/field-read file the load never type-checked"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/taint_engine_test.go",
+        "internal/cmd/testdata/taint/sources.go.txt",
+        "internal/cmd/testdata/taint/sinks.go.txt"
+      ],
+      "commit": "19cd34b",
+      "completed_at": "2026-09-24T13:30:04.228175Z",
+      "landmarks": [
+        {
+          "feature": "exec-output taint",
+          "symbol": "runTaint",
+          "loc": "internal/cmd/taint_engine_test.go:212",
+          "what": "policy-driven SSA taint engine: identity-matched exec sources, forward+reverse flow, terminal/transform/escape classes, int/bool clearance"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/execconsent_audit_test.go",
+        "internal/cmd/testdata/exec_consent/dispatch.go.txt",
+        "internal/cmd/testdata/exec_consent/unresolved.go.txt"
+      ],
+      "commit": "3d9fc67",
+      "completed_at": "2026-09-24T13:41:22.920398Z",
+      "landmarks": [
+        {
+          "feature": "exec-consent audit",
+          "symbol": "buildExecGraph",
+          "loc": "internal/cmd/execconsent_audit_test.go:759",
+          "what": "reach edges from the VTA call graph (flow-resolved interface dispatch); unresolved dispatch next to a spawn reported, never unioned"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/pathfence_enum_test.go",
+        "internal/cmd/security_test.go",
+        "internal/cmd/testdata/pathfence_scan/unwrap_os.go.txt",
+        "internal/cmd/testdata/pathfence_scan/unwrap_renamed.go.txt"
+      ],
+      "commit": "e4c6202",
+      "completed_at": "2026-09-24T13:46:47.692621Z",
+      "landmarks": [
+        {
+          "feature": "path containment",
+          "symbol": "findUnwrapCalls",
+          "loc": "internal/cmd/pathfence_enum_test.go:93",
+          "what": "Contained String()/Rel() inside an os.* argument banned by receiver type, over the derived package set with site floors"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/pathfence_fields_test.go",
+        "internal/pathfence/fields.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/cmd/testdata/pathfence_scan/task_experiment.go.txt",
+        "internal/cmd/pathfence_carrier_test.go",
+        "internal/survivor/stale.go",
+        "internal/survivor/stale_test.go",
+        "internal/pathfence/fields_test.go"
+      ],
+      "commit": "6096453",
+      "completed_at": "2026-09-24T13:58:33.28972Z",
+      "landmarks": [
+        {
+          "feature": "path containment",
+          "symbol": "serializedStringFields",
+          "loc": "internal/cmd/pathfence_fields_test.go:100",
+          "what": "every tagged string-valued field filed once — pathfence registry (paths) or not_paths.txt ledger — checked both ways; survivor acceptance files contained"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/taint_flow_test.go",
+        "internal/cmd/taint_engine_test.go",
+        "internal/cmd/testdata/taint/channels_return.go.txt",
+        "internal/cmd/testdata/taint/channels_field.go.txt",
+        "internal/cmd/testdata/taint/channels_writer.go.txt"
+      ],
+      "commit": "075f12c",
+      "completed_at": "2026-09-24T14:10:11.832511Z",
+      "notes": "live exec-taint after t-9: 328 findings, origins (owner): ship_recover.go:267 gitTrim 202 (t-19); ship_recover.go:278 gitCombined 38 (t-15); survivor_drain.go 52, test.go 4, techdebt.go 4 (t-18); phase.go 30, init.go 27, worktree_files.go 6, pause.go 2, cleantree.go 1 (t-22); remote/remote.go 25, remote/hold.go 3, compilefence 2 (t-17); security/run.go 14, quality/run.go 14, techdebt/run.go 3, codex/ast_grep.go 1 (t-16); ship merged 3, basepr 3, headpr 2, open 1, comment 1 (t-14). Unowned: none.",
+      "landmarks": [
+        {
+          "feature": "exec-output taint",
+          "symbol": "applyCall",
+          "loc": "internal/cmd/taint_engine_test.go:1200",
+          "what": "context-sensitive per-function summaries applied per call site to a program-wide fixpoint; field-keyed, writer-param and captured-var flows"
+        }
+      ]
+    }
+  }
+}

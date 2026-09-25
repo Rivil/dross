@@ -212,13 +212,15 @@ func TestPostGitLabCommentBearerScheme(t *testing.T) {
 // own output — swallowing it leaves the user with "it failed" and no idea that,
 // say, the PR was already closed.
 func TestPostGitHubCommentSurfacesFailures(t *testing.T) {
-	t.Run("a gh failure carries gh's own output", func(t *testing.T) {
-		prev := ghCommand
+	t.Run("a gh failure surfaces gh's own output on stderr", func(t *testing.T) {
+		prev, prevErr := ghCommand, ghStderr
 		ghCommand = func(args ...string) *exec.Cmd {
 			// `false` exits non-zero; the message comes from the printed line.
 			return exec.Command("sh", "-c", "echo 'pull request is closed' >&2; exit 1")
 		}
-		defer func() { ghCommand = prev }()
+		var stderr strings.Builder
+		ghStderr = &stderr
+		defer func() { ghCommand, ghStderr = prev, prevErr }()
 
 		err := postGitHubComment(CommentOpts{Provider: "github", PRNumber: 7, Body: "hi"})
 		if err == nil {
@@ -227,8 +229,13 @@ func TestPostGitHubCommentSurfacesFailures(t *testing.T) {
 		if !strings.Contains(err.Error(), "gh pr comment") {
 			t.Errorf("err = %q, want the command context", err)
 		}
-		if !strings.Contains(err.Error(), "pull request is closed") {
-			t.Errorf("err = %q, want gh's own output included", err)
+		// gh's own output is surfaced where the user is looking — stderr —
+		// and kept out of the error, which can outlive the run.
+		if !strings.Contains(stderr.String(), "pull request is closed") {
+			t.Errorf("stderr = %q, want gh's own output included", stderr.String())
+		}
+		if strings.Contains(err.Error(), "pull request is closed") {
+			t.Errorf("err = %q carries gh's output", err)
 		}
 	})
 

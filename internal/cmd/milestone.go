@@ -139,13 +139,13 @@ func milestonePrune() *cobra.Command {
 			}
 
 			for _, b := range stale {
-				if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, b.Name)...); err != nil {
-					return fmt.Errorf("delete local %s: %w\n%s", b.Name, err, out)
+				if err := gitRun(repoDir, gitRefArgs("branch", []string{"-D"}, b.Name)...); err != nil {
+					return fmt.Errorf("delete local %s: %w", b.Name, err)
 				}
 				where := "local"
 				if b.HasRemote {
-					if out, err := gitCombined(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", b.Name)...); err != nil {
-						return fmt.Errorf("delete origin/%s: %w\n%s", b.Name, err, out)
+					if err := gitRun(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", b.Name)...); err != nil {
+						return fmt.Errorf("delete origin/%s: %w", b.Name, err)
 					}
 					where = "local + origin"
 				}
@@ -364,7 +364,8 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 		return reportAlreadyFinalized(repoDir, msBranch, cls.Message)
 	}
 
-	status, err := gitTrim(repoDir, "status", "--porcelain")
+	//dross:taint-cleared status --porcelain prints two status letters and a repo path per line, never file content
+	status, err := gitRead(repoDir, "status", "--porcelain")
 	if err != nil {
 		return fmt.Errorf("git status: %w", err)
 	}
@@ -372,8 +373,8 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 		return dirtyTreeError("finalizing the milestone", status)
 	}
 
-	if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
-		return fmt.Errorf("git fetch: %w\n%s", err, out)
+	if err := gitRun(repoDir, "fetch", "origin"); err != nil {
+		return fmt.Errorf("git fetch: %w", err)
 	}
 
 	// Classify again now that origin's refs are current. The first pass ran
@@ -416,8 +417,8 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 		}
 	}
 	if mergedIntoMain {
-		if out, err := guardedFF(repoDir, "origin/"+mainBranch); err != nil {
-			return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged:\n%s", mainBranch, mainBranch, out)
+		if err := guardedFF(repoDir, "origin/"+mainBranch); err != nil {
+			return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged (git's abort is printed above)", mainBranch, mainBranch)
 		}
 	}
 
@@ -438,8 +439,8 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 
 	// Delete the local milestone branch (only if it exists).
 	if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+msBranch)...); err == nil {
-		if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, msBranch)...); err != nil {
-			return fmt.Errorf("git branch -D %s: %w\n%s", msBranch, err, out)
+		if err := gitRun(repoDir, gitRefArgs("branch", []string{"-D"}, msBranch)...); err != nil {
+			return fmt.Errorf("git branch -D %s: %w", msBranch, err)
 		}
 	}
 	// Delete the remote milestone branch (idempotent — only if origin has it).
@@ -448,8 +449,8 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 		return fmt.Errorf("git ls-remote origin %s: %w", msBranch, err)
 	}
 	if remoteRef != "" {
-		if out, err := gitCombined(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", msBranch)...); err != nil {
-			return fmt.Errorf("git push origin --delete %s: %w\n%s", msBranch, err, out)
+		if err := gitRun(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", msBranch)...); err != nil {
+			return fmt.Errorf("git push origin --delete %s: %w", msBranch, err)
 		}
 	}
 
@@ -661,15 +662,15 @@ func ensureMilestoneBranch(repoDir, baseBranch, version string) (branch string, 
 	}
 	// Idempotent create: only when the local ref is absent.
 	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
-		if out, e := gitCombined(repoDir, gitRefArgs("branch", nil, branch, baseBranch)...); e != nil {
-			return branch, false, false, fmt.Errorf("git branch %s %s: %w\n%s", branch, baseBranch, e, out)
+		if e := gitRun(repoDir, gitRefArgs("branch", nil, branch, baseBranch)...); e != nil {
+			return branch, false, false, fmt.Errorf("git branch %s %s: %w", branch, baseBranch, e)
 		}
 		created = true
 	}
 	// Push only when an origin remote exists.
 	if gitNoOut(repoDir, "remote", "get-url", "origin") == nil {
-		if out, e := gitCombined(repoDir, gitRefArgs("push", nil, "origin", branch)...); e != nil {
-			return branch, created, false, fmt.Errorf("git push origin %s: %w\n%s", branch, e, out)
+		if e := gitRun(repoDir, gitRefArgs("push", nil, "origin", branch)...); e != nil {
+			return branch, created, false, fmt.Errorf("git push origin %s: %w", branch, e)
 		}
 		pushed = true
 	}
@@ -1023,12 +1024,12 @@ func pushMilestoneHeadIfAhead(repoDir, msBranch string) (pushed bool, commits in
 	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+msBranch)...) != nil {
 		return false, 0, nil
 	}
-	if out, ferr := gitCombined(repoDir, "fetch", "origin"); ferr != nil {
-		return false, 0, fmt.Errorf("git fetch: %w\n%s", ferr, out)
+	if ferr := gitRun(repoDir, "fetch", "origin"); ferr != nil {
+		return false, 0, fmt.Errorf("git fetch: %w", ferr)
 	}
 	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/remotes/origin/"+msBranch)...) != nil {
-		if out, perr := gitCombined(repoDir, gitRefArgs("push", []string{"-u"}, "origin", msBranch)...); perr != nil {
-			return false, 0, fmt.Errorf("push %s to origin: %w\n%s", msBranch, perr, out)
+		if perr := gitRun(repoDir, gitRefArgs("push", []string{"-u"}, "origin", msBranch)...); perr != nil {
+			return false, 0, fmt.Errorf("push %s to origin: %w", msBranch, perr)
 		}
 		return true, 0, nil
 	}
@@ -1050,10 +1051,10 @@ func pushMilestoneHeadIfAhead(repoDir, msBranch string) (pushed bool, commits in
 			"Reconcile %s with origin before closing the milestone; refusing to force-push it for you",
 			msBranch, msBranch, n, len(strings.Fields(behind)), msBranch)
 	}
-	if out, perr := gitCombined(repoDir, gitRefArgs("push", nil, "origin", msBranch)...); perr != nil {
-		return false, 0, fmt.Errorf("push of %d local commit(s) on %s failed: %w\n%s\n"+
+	if perr := gitRun(repoDir, gitRefArgs("push", nil, "origin", msBranch)...); perr != nil {
+		return false, 0, fmt.Errorf("push of %d local commit(s) on %s failed: %w\n"+
 			"Refusing to open the PR — it would carry stale content and the unpushed commits would be lost at --finalize.",
-			n, msBranch, perr, out)
+			n, msBranch, perr)
 	}
 	return true, n, nil
 }

@@ -1,0 +1,74 @@
+// Marker corpus for //dross:taint-cleared (TestTaintMarkerCorpus). A marker
+// binds the line directly below it and clears only the tainted values defined
+// there. Two lines up, it binds the wrong line and is an orphan; the
+// exec-exempt directive in the same slot clears nothing; the raw stream beside
+// a cleared conversion still trips; and a marker sitting on the stream itself —
+// the spawn's output, the writer plugged into Cmd.Stdout, a pipe — is a
+// "marker on source" finding that clears nothing.
+package markers
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"os/exec"
+	"strings"
+)
+
+func twoLinesAbove(c *exec.Cmd) error {
+	out, _ := c.Output()
+	//dross:taint-cleared a trimmed SHA is forty hex digits, never prose
+	_ = len(out) // WANT marker
+	sha := strings.TrimSpace(string(out))
+	return errors.New(sha) // WANT taint
+}
+
+func directlyAbove(c *exec.Cmd) error {
+	out, _ := c.Output()
+	//dross:taint-cleared a trimmed SHA is forty hex digits, never prose
+	sha := strings.TrimSpace(string(out))
+	fmt.Println("resolved")
+	return errors.New("bad sha: " + sha)
+}
+
+func wrongDirective(c *exec.Cmd) error {
+	out, _ := c.Output()
+	//dross:exec-exempt a trimmed SHA is forty hex digits, never prose
+	sha := strings.TrimSpace(string(out))
+	return errors.New(sha) // WANT taint
+}
+
+func sideways(c *exec.Cmd) error {
+	out, _ := c.Output()
+	//dross:taint-cleared a trimmed SHA is forty hex digits, never prose
+	sha := strings.TrimSpace(string(out))
+	return fmt.Errorf("sha %s from %s", sha, out) // WANT taint
+}
+
+func orphan() error {
+	//dross:taint-cleared blanket-marking a file must not pass unnoticed
+	msg := "fixed prose" // WANT marker
+	return errors.New(msg)
+}
+
+func onOutput(c *exec.Cmd) error {
+	//dross:taint-cleared marking the stream itself would launder all of it
+	out, _ := c.Output() // WANT marker
+	return errors.New(string(out)) // WANT taint
+}
+
+func onStdout(c *exec.Cmd) error {
+	var buf bytes.Buffer
+	//dross:taint-cleared marking the plug-in point would launder the stream
+	c.Stdout = &buf // WANT marker
+	_ = c.Run()
+	return errors.New(buf.String()) // WANT taint
+}
+
+func onPipe(c *exec.Cmd) error {
+	//dross:taint-cleared marking the pipe would launder every line read from it
+	r, _ := c.StdoutPipe() // WANT marker
+	b, _ := io.ReadAll(r)
+	return errors.New(string(b)) // WANT taint
+}

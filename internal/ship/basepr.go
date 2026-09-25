@@ -67,11 +67,13 @@ func gitHubOpenPRsTargeting(base string) ([]BasePR, error) {
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("gh pr list --base %s: %w\n%s", base, err, string(out))
+		return nil, ghFailed("gh pr list --base "+base, err, out)
 	}
 	var prs []BasePR
 	if err := json.Unmarshal(out, &prs); err != nil {
-		return nil, fmt.Errorf("parse gh pr list --base %s: %w", base, err)
+		return nil, ghUnparseable("parse gh pr list --base "+base, out)
 	}
-	return prs, nil
+	//dross:taint-cleared BasePR is gh's decoded --json number,title,url,headRefName record: forge metadata about each PR, not gh's prose
+	decoded := prs
+	return decoded, nil
 }

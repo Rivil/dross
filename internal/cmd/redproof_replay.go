@@ -27,6 +27,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -87,16 +88,16 @@ func runRedProofReplay(root, repoDir, sha, line string) (replayResult, error) {
 	wt := filepath.Join(base, "wt")
 	defer func() { _ = os.RemoveAll(base) }()
 
-	if out, err := gitCombined(repoDir, gitRefArgs("worktree", []string{"add", "--detach"}, wt, sha)...); err != nil {
-		return replayResult{}, fmt.Errorf("replay could not be run: could not check out %s in a worktree: %v: %s", short(sha), err, strings.TrimSpace(out))
+	if err := gitRun(repoDir, gitRefArgs("worktree", []string{"add", "--detach"}, wt, sha)...); err != nil {
+		return replayResult{}, fmt.Errorf("replay could not be run: could not check out %s in a worktree: %v", short(sha), err)
 	}
 	// Registered AFTER the add succeeded and so it runs BEFORE the RemoveAll
 	// above (defers unwind last-first): removing the directory first would
 	// leave git's worktree admin data behind, and the next run inherits a
 	// prunable stale entry.
 	defer func() {
-		_, _ = gitCombined(repoDir, gitRefArgs("worktree", []string{"remove", "--force"}, wt)...)
-		_, _ = gitCombined(repoDir, "worktree", "prune")
+		_ = gitRun(repoDir, gitRefArgs("worktree", []string{"remove", "--force"}, wt)...)
+		_ = gitRun(repoDir, "worktree", "prune")
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), redProofReplayTimeout)
@@ -110,7 +111,8 @@ func runRedProofReplay(root, repoDir, sha, line string) (replayResult, error) {
 	// non-zero, and reporting a timeout as a red proof would be the tool
 	// manufacturing the evidence it was asked to check for.
 	if ctx.Err() != nil || errors.Is(runErr, context.DeadlineExceeded) {
-		return replayResult{}, fmt.Errorf("replay could not be run: timed out after %s — a hung replay is not evidence the proof went red:\n%s", redProofReplayTimeout, tail)
+		printReplayTail(tail)
+		return replayResult{}, fmt.Errorf("replay could not be run: timed out after %s — a hung replay is not evidence the proof went red (its last lines are printed above)", redProofReplayTimeout)
 	}
 	var exitErr *exec.ExitError
 	if errors.As(runErr, &exitErr) {
@@ -120,6 +122,19 @@ func runRedProofReplay(root, repoDir, sha, line string) (replayResult, error) {
 		return replayResult{}, fmt.Errorf("replay could not be run: %w", runErr)
 	}
 	return replayResult{Red: false, ExitCode: 0, Tail: tail}, nil
+}
+
+// replayStderr is where a replay's own output goes when it is the evidence for
+// a refusal: this process's stderr. Tests swap it to capture what a user sees.
+var replayStderr io.Writer = os.Stderr
+
+// printReplayTail puts the replay's last lines where the user is looking. They
+// are the suite's own output — the terminal is where they end, never an error
+// that can outlive the run.
+func printReplayTail(tail string) {
+	if tail != "" {
+		fmt.Fprintf(replayStderr, "the replay's last lines:\n%s\n", tail)
+	}
 }
 
 // lastLines returns the final n lines of s, so a refusal carries the part of a

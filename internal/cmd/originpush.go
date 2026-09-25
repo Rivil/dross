@@ -26,8 +26,8 @@ type originDelta struct {
 // push of every branch.
 func compareWithOrigin(repoDir, branch string) (originDelta, error) {
 	var d originDelta
-	if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
-		return d, fmt.Errorf("git fetch: %w\n%s", err, out)
+	if err := gitRun(repoDir, "fetch", "origin"); err != nil {
+		return d, fmt.Errorf("git fetch: %w", err)
 	}
 	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/remotes/origin/"+branch)...) != nil {
 		d.Missing = true
@@ -87,8 +87,8 @@ func pushPhaseBranch(repoDir, branch string, force bool) (pushed bool, err error
 		// after the fetch above, without asking the user for the remote SHA.
 		opts = append(opts, "--force-with-lease")
 	}
-	if out, err := gitCombined(repoDir, gitRefArgs("push", opts, "origin", branch)...); err != nil {
-		return false, fmt.Errorf("git push origin %s: %w\n%s", branch, err, out)
+	if err := gitRun(repoDir, gitRefArgs("push", opts, "origin", branch)...); err != nil {
+		return false, fmt.Errorf("git push origin %s: %w", branch, err)
 	}
 	return true, nil
 }

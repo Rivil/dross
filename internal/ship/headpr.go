@@ -56,14 +56,14 @@ func gitHubOpenPRByHead(head string) (*OpenResult, error) {
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("gh pr list --head %s: %w\n%s", head, err, string(out))
+		return nil, ghFailed("gh pr list --head "+head, err, out)
 	}
 	var prs []struct {
 		Number int    `json:"number"`
 		URL    string `json:"url"`
 	}
 	if err := json.Unmarshal(out, &prs); err != nil {
-		return nil, fmt.Errorf("parse gh pr list --head %s: %w", head, err)
+		return nil, ghUnparseable("parse gh pr list --head "+head, out)
 	}
 	if len(prs) == 0 {
 		return nil, nil
