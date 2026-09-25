@@ -2167,9 +2167,10 @@ func TestExecConsentCalibrationIsUnchanged(t *testing.T) {
 // writing down that the line is safe, which is exactly the judgement the
 // consent gate exists to hand to a human instead.
 //
-// update.go is the single carve-out and the reason is specific: the binary it
-// self-execs is the one the updater just downloaded and minisign-verified, so
-// the signature — not a grant — is what makes the argv trusted.
+// internal/update/apply.go is the single carve-out and the reason is specific:
+// the binary it self-execs is the one the updater just downloaded and
+// minisign-verified, so the signature — not a grant — is what makes the argv
+// trusted.
 
 // execConsentGatedFiles are the files whose every site must be gated by reach.
 //
@@ -2289,20 +2290,20 @@ func TestToolchainSpawnsResolveAsGated(t *testing.T) {
 // binary", so the reason must name the thing that makes it true.
 func TestUpdateSelfExecIsTheOnlyMarkerHere(t *testing.T) {
 	g := repoExecGraph(t)
-	sites := g.sitesIn("internal/cmd/update.go")
+	sites := g.sitesIn("internal/update/apply.go")
 	if len(sites) != 1 {
-		t.Fatalf("update.go has %d spawn sites, want 1 — the carve-out is no longer about one call", len(sites))
+		t.Fatalf("internal/update/apply.go has %d spawn sites, want 1 — the carve-out is no longer about one call", len(sites))
 	}
 	s := sites[0]
 	if !s.marked {
-		t.Fatal("update.go's self-exec carries no exemption marker")
+		t.Fatal("internal/update/apply.go's self-exec carries no exemption marker")
 	}
 	if !strings.Contains(strings.ToLower(s.marker.Reason), "verif") {
 		t.Errorf("the reason does not name signature verification, which is the only thing that makes it safe: %q", s.marker.Reason)
 	}
 	for _, f := range g.findings() {
-		if execFindingIsIn(f, "internal/cmd/update.go") {
-			t.Errorf("update.go's marked self-exec is still a finding: %s", f.String())
+		if execFindingIsIn(f, "internal/update/apply.go") {
+			t.Errorf("internal/update/apply.go's marked self-exec is still a finding: %s", f.String())
 		}
 	}
 }

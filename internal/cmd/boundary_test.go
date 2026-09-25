@@ -63,14 +63,11 @@ var cmdForbiddenBaseline = map[string][]string{
 		"survivor_drain.go",
 		"techdebt.go",
 		"test.go",
-		"update.go",
 		"verify.go",
 		"worktree_files.go",
 	},
-	"net/http": {
-		"update.go",
-	},
-	"go/ast": {},
+	"net/http": {},
+	"go/ast":   {},
 	"encoding/json": {
 		"changes.go",
 		"deferred.go",

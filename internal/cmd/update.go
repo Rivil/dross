@@ -1,253 +1,31 @@
 package cmd
 
 import (
-	"archive/tar"
-	"archive/zip"
-	"bytes"
-	"compress/gzip"
-	"context"
-	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"strings"
-
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/update"
 )
 
-// Update registers `dross update` — a thin cobra wrapper over internal/update. It
-// fetches the latest GitHub release, verifies the platform tarball's SHA-256 against
-// checksums.txt (refusing on mismatch), atomically replaces the running binary when
-// the release is strictly newer (or always, with --force), then re-syncs the embedded
-// assets by exec'ing the FRESHLY-SWAPPED binary — never the in-process install engine,
-// which would re-materialize the OLD binary's embedded assets.
+// Update registers `dross update` — a thin cobra wrapper over update.Apply,
+// which fetches the latest GitHub release, verifies it (minisign signature over
+// checksums.txt, then the archive's SHA-256), swaps the running binary and
+// re-syncs the embedded assets from the freshly-swapped one. This only maps the
+// flags and the running build's version onto update.Options.
 func Update() *cobra.Command {
-	var o updateOpts
-	var apiBase string
+	var o update.Options
 	c := &cobra.Command{
 		Use:   "update",
 		Short: "Update dross to the latest GitHub release",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			o.out = cmd.OutOrStdout()
-			o.apiBase = apiBase
-			return runUpdate(cmd.Context(), o)
+			o.Out = cmd.OutOrStdout()
+			o.Version = Version
+			o.Commit = Commit
+			return update.Apply(cmd.Context(), o)
 		},
 	}
-	c.Flags().BoolVar(&o.check, "check", false, "report the available version without updating")
-	c.Flags().BoolVar(&o.force, "force", false, "reinstall the latest release even if it is not newer")
-	c.Flags().StringVar(&apiBase, "api-base", "", "override the GitHub API base URL (testing)")
+	c.Flags().BoolVar(&o.Check, "check", false, "report the available version without updating")
+	c.Flags().BoolVar(&o.Force, "force", false, "reinstall the latest release even if it is not newer")
+	c.Flags().StringVar(&o.APIBase, "api-base", "", "override the GitHub API base URL (testing)")
 	_ = c.Flags().MarkHidden("api-base")
 	return c
-}
-
-// updateOpts carries the command flags plus injectable seams for tests. Zero-valued
-// seams fall back to production defaults (running build version, os.Executable, an
-// exec of the new binary).
-type updateOpts struct {
-	out     io.Writer
-	apiBase string
-	check   bool
-	force   bool
-
-	httpClient *http.Client
-	version    string                       // running version; defaults to cmd.Version
-	commit     string                       // running commit; defaults to cmd.Commit
-	goos       string                       // target OS; defaults to runtime.GOOS
-	goarch     string                       // target arch; defaults to runtime.GOARCH
-	targetPath string                       // binary to replace; defaults to os.Executable()
-	resync     func(newBinary string) error // asset re-sync; defaults to `<newBinary> install`
-}
-
-func runUpdate(ctx context.Context, o updateOpts) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	version := o.version
-	if version == "" {
-		version = Version
-	}
-	commit := o.commit
-	if commit == "" {
-		commit = Commit
-	}
-	goos := o.goos
-	if goos == "" {
-		goos = runtime.GOOS
-	}
-	goarch := o.goarch
-	if goarch == "" {
-		goarch = runtime.GOARCH
-	}
-
-	client := update.NewClient()
-	if o.apiBase != "" {
-		client.APIBase = o.apiBase
-	}
-	if o.httpClient != nil {
-		client.HTTP = o.httpClient
-	}
-
-	rel, err := client.LatestRelease(ctx)
-	if err != nil {
-		return err
-	}
-	decision := update.Decide(rel.TagName, version, commit)
-	fmt.Fprintf(o.out, "current: %s\nlatest:  %s\n", version, rel.TagName)
-
-	if o.check {
-		switch decision {
-		case update.UpdateAvailable:
-			fmt.Fprintln(o.out, "update available — run `dross update` to apply")
-		case update.NeedsConfirm:
-			fmt.Fprintln(o.out, "running a dev/unknown build — use `dross update --force` to install the latest")
-		default:
-			fmt.Fprintln(o.out, "up to date")
-		}
-		return nil
-	}
-
-	if !(o.force || decision == update.UpdateAvailable) {
-		switch decision {
-		case update.NeedsConfirm:
-			fmt.Fprintf(o.out, "running a dev/unknown build; not updating. Use --force to install %s.\n", rel.TagName)
-		default:
-			fmt.Fprintln(o.out, "already up to date.")
-		}
-		return nil
-	}
-
-	assetName, err := update.AssetName(rel.TagName, goos, goarch)
-	if err != nil {
-		return err
-	}
-	tbURL := rel.AssetURL(assetName)
-	if tbURL == "" {
-		return fmt.Errorf("release %s has no asset %s", rel.TagName, assetName)
-	}
-	sumsURL := rel.AssetURL("checksums.txt")
-	if sumsURL == "" {
-		return fmt.Errorf("release %s has no checksums.txt", rel.TagName)
-	}
-
-	tarball, err := client.Download(ctx, tbURL)
-	if err != nil {
-		return err
-	}
-	sums, err := client.Download(ctx, sumsURL)
-	if err != nil {
-		return err
-	}
-	// Outer trust gate: verify the minisign signature over checksums.txt against the
-	// embedded public key BEFORE trusting any of its hashes and BEFORE touching any
-	// binary. A missing .minisig is fail-closed (every release from this version on is
-	// signed), so an absent signature is treated as tampering, not an unsigned release.
-	sigURL := rel.AssetURL("checksums.txt.minisig")
-	if sigURL == "" {
-		return fmt.Errorf("refusing update: %w", update.ErrNoSignature)
-	}
-	sig, err := client.Download(ctx, sigURL)
-	if err != nil {
-		return err
-	}
-	if err := update.VerifySignature(sums, sig, update.TrustedMinisignKey); err != nil {
-		return fmt.Errorf("refusing update: %w", err)
-	}
-	if err := update.VerifyChecksum(tarball, update.ParseChecksums(sums), assetName); err != nil {
-		return fmt.Errorf("refusing update: %w", err)
-	}
-
-	// Dispatch on the archive format goreleaser published for this OS: windows
-	// ships a .zip containing dross.exe; every other platform a .tar.gz with dross.
-	// Extraction happens only AFTER the signature+checksum trust gate above.
-	binName := update.BinaryName(goos)
-	var binBytes []byte
-	if strings.HasSuffix(assetName, ".zip") {
-		binBytes, err = extractBinaryZip(tarball, binName)
-	} else {
-		binBytes, err = extractBinary(tarball, binName)
-	}
-	if err != nil {
-		return err
-	}
-
-	targetPath := o.targetPath
-	if targetPath == "" {
-		exe, err := os.Executable()
-		if err != nil {
-			return fmt.Errorf("resolve executable: %w", err)
-		}
-		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
-			exe = resolved
-		}
-		targetPath = exe
-	}
-	if err := update.AtomicReplace(targetPath, bytes.NewReader(binBytes)); err != nil {
-		return err
-	}
-	fmt.Fprintf(o.out, "updated %s → %s\n", targetPath, rel.TagName)
-
-	resync := o.resync
-	if resync == nil {
-		resync = func(newBinary string) error {
-			//dross:exec-exempt self-exec of the binary just downloaded and minisign-verified above; signature verification is what makes this argv trusted, and "install" is a literal
-			cmd := exec.Command(newBinary, "install")
-			cmd.Stdout = o.out
-			cmd.Stderr = o.out
-			return cmd.Run()
-		}
-	}
-	if err := resync(targetPath); err != nil {
-		return fmt.Errorf("binary updated but asset re-sync failed: %w", err)
-	}
-	fmt.Fprintln(o.out, "re-synced assets from the updated binary.")
-	return nil
-}
-
-// extractBinary pulls the regular file whose base name is `name` out of a gzipped tar.
-func extractBinary(targz []byte, name string) ([]byte, error) {
-	gz, err := gzip.NewReader(bytes.NewReader(targz))
-	if err != nil {
-		return nil, fmt.Errorf("gunzip release archive: %w", err)
-	}
-	defer gz.Close()
-	tr := tar.NewReader(gz)
-	for {
-		h, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("read release archive: %w", err)
-		}
-		if h.Typeflag == tar.TypeReg && filepath.Base(h.Name) == name {
-			return io.ReadAll(tr)
-		}
-	}
-	return nil, fmt.Errorf("binary %q not found in release archive", name)
-}
-
-// extractBinaryZip pulls the file whose base name is `name` out of a zip archive
-// (the windows release format). It mirrors extractBinary but for archive/zip.
-func extractBinaryZip(zipBytes []byte, name string) ([]byte, error) {
-	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
-	if err != nil {
-		return nil, fmt.Errorf("open zip release archive: %w", err)
-	}
-	for _, f := range zr.File {
-		if f.FileInfo().IsDir() || filepath.Base(f.Name) != name {
-			continue
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return nil, fmt.Errorf("open %q in zip release archive: %w", name, err)
-		}
-		defer rc.Close()
-		return io.ReadAll(rc)
-	}
-	return nil, fmt.Errorf("binary %q not found in zip release archive", name)
 }

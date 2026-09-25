@@ -128,7 +128,7 @@ var separatorTokens = map[string]bool{"--": true, "--end-of-options": true}
 // Anything not listed is a finding under the fail-closed rule; a key whose site
 // is gone is a finding too (TestAcceptedBinariesAreLive).
 var acceptedNonLiteralBinaries = map[string]string{
-	"internal/cmd/update.go:newBinary": "self-exec of the just-downloaded, signature-verified binary; argv is the single literal \"install\"",
+	"internal/update/apply.go:newBinary": "self-exec of the just-downloaded, signature-verified binary; argv is the single literal \"install\"",
 	"internal/cmd/test.go:argv[…]": "dross test's remote spawn seam. argv is built by internal/remote's SSHArgs or SyncArgs, which return an error INSTEAD of an argv unless the target passes remote's host/workdir allowlist, so argv[0] is always the literal \"ssh\" or \"rsync\" and every operand is validated before the argv exists. " +
 		"Written as Command(argv[0]) + an Args assignment rather than the spread form for the same reason remote.go is: a spread is skipped by this walk, so the spread form would be accommodated by accident.",
 	"internal/remote/remote.go:argv[…]": "internal/remote's single exec seam. argv[0] is always the literal \"ssh\" or \"rsync\" chosen by SSHArgs/SyncArgs/FetchArgs, and every operand is validated against remote's host/workdir allowlist before the argv exists. " +
