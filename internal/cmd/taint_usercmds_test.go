@@ -21,8 +21,10 @@ import (
 var streamSiteFiles = []string{"internal/cmd/test.go", "internal/cmd/run.go", "internal/cmd/verify.go"}
 
 // TestStreamSitesCarryNoMarker: the suite, slot and verify streams end at the
-// terminal; none of their files may carry a taint-cleared marker.
+// terminal; none of their files may carry a taint-cleared marker. A pin whose
+// spawn moved away would pass this vacuously, so each must still hold one.
 func TestStreamSitesCarryNoMarker(t *testing.T) {
+	assertPinsHoldSites(t, repoExecGraph(t), "streamSiteFiles", streamSiteFiles)
 	root := sourceProgram(t).Root
 	for _, m := range taintMarkersIn(t, "internal/cmd") {
 		rel, _ := filepath.Rel(root, m.file)

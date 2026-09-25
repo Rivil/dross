@@ -2199,6 +2199,48 @@ func (g *execGraph) sitesIn(rels ...string) []*execSite {
 	return out
 }
 
+// pinsWithoutSites returns, in order, every repo-relative pin that holds no
+// spawn site in g. A pin whose spawn moved away satisfies its per-site
+// assertions vacuously — there is nothing left to be wrong — so an empty pin
+// is itself a finding, and the pin must follow its site or be dropped.
+func (g *execGraph) pinsWithoutSites(rels []string) []string {
+	var stale []string
+	for _, rel := range rels {
+		if len(g.sitesIn(rel)) == 0 {
+			stale = append(stale, rel)
+		}
+	}
+	return stale
+}
+
+// assertPinsHoldSites fails naming every pin in rels that holds no site.
+func assertPinsHoldSites(t *testing.T, g *execGraph, table string, rels []string) {
+	t.Helper()
+	for _, rel := range g.pinsWithoutSites(rels) {
+		t.Errorf("%s names %s, which holds no spawn site — re-point the pin to where the spawn went, or drop it", table, rel)
+	}
+}
+
+// TestSpawnPinsCannotGoStale: pointing a pin at a file with no spawn — issue.go
+// — is named, and nothing else in the live tables is.
+func TestSpawnPinsCannotGoStale(t *testing.T) {
+	g := repoExecGraph(t)
+	for _, table := range []struct {
+		name string
+		rels []string
+	}{
+		{"execConsentGatedFiles", execConsentGatedFiles},
+		{"execConsentMarkedFiles", execConsentMarkedFiles},
+		{"streamSiteFiles", streamSiteFiles},
+	} {
+		probe := append(append([]string(nil), table.rels...), "internal/cmd/issue.go")
+		got := g.pinsWithoutSites(probe)
+		if len(got) != 1 || got[0] != "internal/cmd/issue.go" {
+			t.Errorf("%s plus issue.go: stale pins = %v, want exactly [internal/cmd/issue.go]", table.name, got)
+		}
+	}
+}
+
 // execSiteIsIn reports whether a site sits in the named repo-relative file.
 func execSiteIsIn(s *execSite, rel string) bool {
 	return strings.HasSuffix(s.pos.Filename, string(filepath.Separator)+filepath.FromSlash(rel))
@@ -2221,6 +2263,7 @@ func TestToolchainSpawnsResolveAsGated(t *testing.T) {
 	if len(sites) == 0 {
 		t.Fatal("found no spawn sites in the toolchain files — the walk stopped covering them")
 	}
+	assertPinsHoldSites(t, g, "execConsentGatedFiles", execConsentGatedFiles)
 	for _, s := range sites {
 		where := filepath.Base(s.pos.Filename)
 		if s.class != execReachGated {
@@ -2333,6 +2376,7 @@ func TestHelperPackageSpawnsAreMarked(t *testing.T) {
 	if len(sites) == 0 {
 		t.Fatal("found no spawn sites in the helper packages — the walk stopped covering them")
 	}
+	assertPinsHoldSites(t, g, "execConsentMarkedFiles", execConsentMarkedFiles)
 	for _, f := range g.findings() {
 		for _, rel := range execConsentMarkedFiles {
 			if execFindingIsIn(f, rel) {

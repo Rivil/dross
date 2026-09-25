@@ -121,14 +121,50 @@ var valueTakingFlags = map[string]map[string]bool{
 var separatorTokens = map[string]bool{"--": true, "--end-of-options": true}
 
 // acceptedNonLiteralBinaries names the spawn sites whose binary is a variable,
-// with the reason each is safe. Keyed by "<file>:<expr>" so it survives the line
-// moving. Anything not listed is a finding under the fail-closed rule.
+// with the reason each is safe. Keyed by "<repo-relative file>:<expr>" so it
+// survives the line moving — and never by base name: remote.go, run.go and
+// test.go each exist more than once in this tree, and a base-name key would
+// accept the same expression in a file the reason was never written about.
+// Anything not listed is a finding under the fail-closed rule; a key whose site
+// is gone is a finding too (TestAcceptedBinariesAreLive).
 var acceptedNonLiteralBinaries = map[string]string{
-	"update.go:newBinary": "self-exec of the just-downloaded, signature-verified binary; argv is the single literal \"install\"",
-	"test.go:argv[…]": "dross test's remote spawn seam. argv is built by internal/remote's SSHArgs or SyncArgs, which return an error INSTEAD of an argv unless the target passes remote's host/workdir allowlist, so argv[0] is always the literal \"ssh\" or \"rsync\" and every operand is validated before the argv exists. " +
+	"internal/cmd/update.go:newBinary": "self-exec of the just-downloaded, signature-verified binary; argv is the single literal \"install\"",
+	"internal/cmd/test.go:argv[…]": "dross test's remote spawn seam. argv is built by internal/remote's SSHArgs or SyncArgs, which return an error INSTEAD of an argv unless the target passes remote's host/workdir allowlist, so argv[0] is always the literal \"ssh\" or \"rsync\" and every operand is validated before the argv exists. " +
 		"Written as Command(argv[0]) + an Args assignment rather than the spread form for the same reason remote.go is: a spread is skipped by this walk, so the spread form would be accommodated by accident.",
-	"remote.go:argv[…]": "internal/remote's single exec seam. argv[0] is always the literal \"ssh\" or \"rsync\" chosen by SSHArgs/SyncArgs/FetchArgs, and every operand is validated against remote's host/workdir allowlist before the argv exists. " +
+	"internal/remote/remote.go:argv[…]": "internal/remote's single exec seam. argv[0] is always the literal \"ssh\" or \"rsync\" chosen by SSHArgs/SyncArgs/FetchArgs, and every operand is validated against remote's host/workdir allowlist before the argv exists. " +
 		"It is written as Command(argv[0]) + an Args assignment rather than the usual Command(argv[0], argv[1:]...) spread ON PURPOSE: a spread is skipped by this walk, so the spread form would be accommodated by accident. This form is accommodated on the record.",
+}
+
+// acceptedBinaryKey returns the acceptedNonLiteralBinaries key a spawn site in
+// filename with binary expression expr matches, or "" when none does. The
+// key's file must match filename as a whole repo-relative path suffix, so
+// internal/remote/remote.go does not match internal/testlane/remote.go.
+func acceptedBinaryKey(filename, expr string) string {
+	path := "/" + filepath.ToSlash(filename)
+	for key := range acceptedNonLiteralBinaries {
+		i := strings.LastIndex(key, ".go:")
+		if i < 0 {
+			continue
+		}
+		rel, keyExpr := key[:i+len(".go")], key[i+len(".go:"):]
+		if keyExpr == expr && strings.HasSuffix(path, "/"+rel) {
+			return key
+		}
+	}
+	return ""
+}
+
+// staleAcceptedBinaries returns, sorted, every key of table that no scanned
+// site matched.
+func staleAcceptedBinaries(table map[string]string, hits map[string]bool) []string {
+	var stale []string
+	for key := range table {
+		if !hits[key] {
+			stale = append(stale, key)
+		}
+	}
+	sort.Strings(stale)
+	return stale
 }
 
 // gitCallFuncs are the helpers whose variadic tail IS a git argv.
@@ -236,6 +272,12 @@ type auditFinding struct {
 
 // auditFile walks one parsed file and returns the positionals it flags.
 func auditFile(fset *token.FileSet, f *ast.File) []auditFinding {
+	return auditFileHits(fset, f, nil)
+}
+
+// auditFileHits is auditFile recording, into hits when non-nil, every
+// acceptedNonLiteralBinaries key a site in the file consumed.
+func auditFileHits(fset *token.FileSet, f *ast.File, hits map[string]bool) []auditFinding {
 	var out []auditFinding
 
 	ast.Inspect(f, func(n ast.Node) bool {
@@ -253,10 +295,12 @@ func auditFile(fset *token.FileSet, f *ast.File) []auditFinding {
 			return true
 		}
 		pos := fset.Position(call.Pos())
-		file := filepath.Base(pos.Filename)
 
 		if bin == "" {
-			if _, ok := acceptedNonLiteralBinaries[file+":"+binExpr]; ok {
+			if key := acceptedBinaryKey(pos.Filename, binExpr); key != "" {
+				if hits != nil {
+					hits[key] = true
+				}
 				return true
 			}
 			out = append(out, auditFinding{
@@ -423,10 +467,19 @@ var auditRoots = []string{"internal", "cmd"}
 // runAudit walks the audit roots and returns every finding plus the file count.
 func runAudit(t *testing.T) ([]auditFinding, int) {
 	t.Helper()
+	findings, scanned, _ := runAuditHits(t)
+	return findings, scanned
+}
+
+// runAuditHits is runAudit also returning the acceptedNonLiteralBinaries keys
+// the live tree consumed.
+func runAuditHits(t *testing.T) ([]auditFinding, int, map[string]bool) {
+	t.Helper()
 	root := repoRootForDocs(t)
 	fset := token.NewFileSet()
 	var findings []auditFinding
 	scanned := 0
+	hits := map[string]bool{}
 
 	for _, r := range auditRoots {
 		err := filepath.WalkDir(filepath.Join(root, r), func(path string, d os.DirEntry, err error) error {
@@ -441,14 +494,66 @@ func runAudit(t *testing.T) ([]auditFinding, int) {
 				return perr
 			}
 			scanned++
-			findings = append(findings, auditFile(fset, f)...)
+			findings = append(findings, auditFileHits(fset, f, hits)...)
 			return nil
 		})
 		if err != nil {
 			t.Fatalf("walk %s: %v", r, err)
 		}
 	}
-	return findings, scanned
+	return findings, scanned, hits
+}
+
+// TestAcceptedBinariesAreLive: every accepted non-literal binary still names a
+// site in the tree. A key left behind when its spawn moved would sit ready to
+// accept whatever next appears under that name — and a stale key is refused.
+func TestAcceptedBinariesAreLive(t *testing.T) {
+	_, _, hits := runAuditHits(t)
+	for _, key := range staleAcceptedBinaries(acceptedNonLiteralBinaries, hits) {
+		t.Errorf("acceptedNonLiteralBinaries[%q] matches no spawn site — its site moved or went; re-key or drop it", key)
+	}
+	table := map[string]string{"internal/cmd/gone.go:vanished": "a site that no longer exists"}
+	for k, v := range acceptedNonLiteralBinaries {
+		table[k] = v
+	}
+	if got := staleAcceptedBinaries(table, hits); len(got) != 1 || got[0] != "internal/cmd/gone.go:vanished" {
+		t.Errorf("stale keys = %v, want exactly the vanished one", got)
+	}
+}
+
+// TestAcceptedBinaryKeyIsRepoRelative: the remote.go key accepts its seam at
+// internal/remote/remote.go and nowhere else — the same expression in a file
+// that merely shares the base name is a finding.
+func TestAcceptedBinaryKeyIsRepoRelative(t *testing.T) {
+	const src = "package x\n\nimport \"os/exec\"\n\nfunc f(argv []string) *exec.Cmd {\n\tcmd := exec.Command(argv[0])\n\tcmd.Args = argv\n\treturn cmd\n}\n"
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		rel      string
+		accepted bool
+	}{
+		{"internal/remote/remote.go", true},
+		{"internal/testlane/remote.go", false},
+		{"remote.go", false},
+	} {
+		t.Run(tc.rel, func(t *testing.T) {
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, filepath.Join(dir, filepath.FromSlash(tc.rel)), src, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hits := map[string]bool{}
+			findings := auditFileHits(fset, f, hits)
+			if tc.accepted {
+				if len(findings) != 0 || !hits["internal/remote/remote.go:argv[…]"] {
+					t.Errorf("findings = %v, hits = %v — the seam was not accepted by its own key", findings, hits)
+				}
+				return
+			}
+			if len(findings) != 1 || len(hits) != 0 {
+				t.Errorf("findings = %v, hits = %v — a base-name match was accepted", findings, hits)
+			}
+		})
+	}
 }
 
 // TestNoUnseparatedPositional is the gate, across every binary.

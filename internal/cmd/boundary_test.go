@@ -24,37 +24,77 @@ import (
 //  3. internal/cmd imports each of the four extracted packages — the
 //     decomposition is wired in, not sitting beside the old code.
 //  4. The forbidden-import RATCHET (locked ratchet_baseline): a non-test
-//     internal/cmd file importing os/exec, net/http or go/ast must be named in
-//     cmdForbiddenBaseline, and every baseline entry must still import the
-//     package it is listed for. Adding a file fails; a stale entry fails asking
-//     for its removal. That is what makes the list shrink-only: new domain
-//     logic landing in cmd is a red test, and the debt is visible.
+//     internal/cmd file importing os/exec, net/http, go/ast, encoding/json or
+//     BurntSushi/toml must be named in cmdForbiddenBaseline, and every baseline
+//     entry must still import the package it is listed for. Adding a file
+//     fails; a stale entry fails asking for its removal. That is what makes the
+//     list shrink-only: new domain logic landing in cmd is a red test, and the
+//     debt is visible.
 //
 // The checker is a pure function over {package -> imports} so the same rules
 // run over the live tree AND over synthetic maps that prove each rule fires.
 // A vacuity floor mirrors execConsentFloor: a walk that saw too few packages,
 // or missed internal/cmd, is an error rather than a pass.
 
-// forbiddenInCmd are the imports the ratchet gates in internal/cmd.
-var forbiddenInCmd = []string{"os/exec", "net/http", "go/ast"}
+// forbiddenInCmd are the imports the ratchet gates in internal/cmd. The two
+// codecs joined in cmd-exec-baseline-drain (c-8): decode/persist logic belongs
+// in its domain package and CLI --json/TOML output in one rendering package,
+// so a cmd file reaching for either is domain logic landing in the wrong place.
+var forbiddenInCmd = []string{"os/exec", "net/http", "go/ast", "encoding/json", "github.com/BurntSushi/toml"}
 
 // cmdForbiddenBaseline is the shrink-only allowlist: the internal/cmd files
-// still importing a forbidden package after this phase, per package. Derived
-// by grep when the phase landed; doctor.go is deliberately absent (t-7 drained
-// its os/exec), and the four load-bearing spawn sites — phase.go,
-// survivor_drain.go, test.go, verify.go — are here because they are the
-// gated surface itself, not domain logic. Draining the rest is the
-// cmd-exec-baseline-drain phase's job; remove an entry here the moment its
-// import goes, or the test asks you to.
+// still importing a forbidden package, per package. Derived by grep when each
+// package joined forbiddenInCmd. Draining it is the cmd-exec-baseline-drain
+// phase's job; remove an entry the moment its import goes, or the test asks
+// you to. One entry per line, so each drain is a one-line diff.
 var cmdForbiddenBaseline = map[string][]string{
 	"os/exec": {
-		"cleantree.go", "init.go", "lane_install.go", "milestone_stale.go", "pause.go",
-		"phase.go", "redproof_replay.go", "run.go", "ship_recover.go", "stack.go",
-		"statusline.go", "survivor_drain.go", "techdebt.go", "test.go", "update.go",
-		"verify.go", "worktree_files.go",
+		"cleantree.go",
+		"init.go",
+		"lane_install.go",
+		"milestone_stale.go",
+		"pause.go",
+		"phase.go",
+		"redproof_replay.go",
+		"run.go",
+		"ship_recover.go",
+		"stack.go",
+		"statusline.go",
+		"survivor_drain.go",
+		"techdebt.go",
+		"test.go",
+		"update.go",
+		"verify.go",
+		"worktree_files.go",
 	},
-	"net/http": {"update.go"},
-	"go/ast":   {},
+	"net/http": {
+		"update.go",
+	},
+	"go/ast": {},
+	"encoding/json": {
+		"changes.go",
+		"deferred.go",
+		"dotget.go",
+		"env.go",
+		"jsonout.go",
+		"phase.go",
+		"reentry.go",
+		"ship.go",
+		"state.go",
+		"statusline.go",
+		"survivor_drain.go",
+		"task.go",
+		"verifyscope.go",
+		"watch.go",
+	},
+	"github.com/BurntSushi/toml": {
+		"defaults.go",
+		"local.go",
+		"milestone.go",
+		"profile.go",
+		"project.go",
+		"stack.go",
+	},
 }
 
 // extractedPackages are the four the phase pulled out of cmd, which cmd must
@@ -212,60 +252,119 @@ func TestCmdBoundaryByImportDirection(t *testing.T) {
 	t.Logf("boundary walk saw %d packages", len(pkgs))
 }
 
-// TestCmdForbiddenImportRatchet proves the ratchet bites in both directions
-// over a copy of the live tree: adding "os/exec" to a copy of issue.go is a
-// finding naming the file and the import, a baseline entry that no longer
-// imports is a finding asking for its removal, and the real baseline plus one
-// extra existing cmd file fails.
+// TestCmdForbiddenImportRatchet proves the ratchet bites in both directions,
+// for every forbidden import, over two bases: the live tree with the live
+// baseline, and a clone of it with every forbidden import stripped from cmd and
+// an EMPTY baseline. Each self-test builds its scenario from synthetic entries
+// on top of the base, so none depends on which files the live baseline still
+// lists — the stripped base is the tree as it will be once the phase drains
+// it, and every subtest must pass there too.
 func TestCmdForbiddenImportRatchet(t *testing.T) {
 	root := repoRootFromTest(t)
 	live, err := walkImports(filepath.Join(root, "internal"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := checkBoundary(live, cmdForbiddenBaseline); len(got) != 0 {
-		t.Fatalf("precondition: the live tree is not clean:\n%s", strings.Join(got, "\n"))
+	for _, base := range []struct {
+		name     string
+		pkgs     map[string]pkgImports
+		baseline map[string][]string
+	}{
+		{"live", live, cmdForbiddenBaseline},
+		{"drained", stripForbiddenFromCmd(live), map[string][]string{}},
+	} {
+		t.Run(base.name, func(t *testing.T) {
+			ratchetSelfTests(t, base.pkgs, base.baseline)
+		})
 	}
+}
 
-	t.Run("a new importer fails naming file and import", func(t *testing.T) {
-		pkgs := clonePkgs(live)
-		cmd := pkgs[cmdPkgPath]
-		cmd.Files["issue.go"] = append(append([]string(nil), cmd.Files["issue.go"]...), "os/exec")
-		pkgs[cmdPkgPath] = cmd
-		got := checkBoundary(pkgs, cmdForbiddenBaseline)
-		if len(got) != 1 || !strings.Contains(got[0], "internal/cmd/issue.go imports os/exec") {
-			t.Errorf("findings = %v, want one naming issue.go and os/exec", got)
-		}
-	})
-	t.Run("a stale entry fails asking for removal", func(t *testing.T) {
-		baseline := cloneBaseline(cmdForbiddenBaseline)
-		baseline["os/exec"] = append(baseline["os/exec"], "issue.go") // issue.go does not import os/exec
-		got := checkBoundary(live, baseline)
-		if len(got) != 1 || !strings.Contains(got[0], "baseline lists internal/cmd/issue.go for os/exec") || !strings.Contains(got[0], "remove it") {
-			t.Errorf("findings = %v, want one asking to remove issue.go", got)
-		}
-	})
-	t.Run("a file that dropped its import fails as stale", func(t *testing.T) {
-		pkgs := clonePkgs(live)
-		cmd := pkgs[cmdPkgPath]
+// stripForbiddenFromCmd clones pkgs with every forbiddenInCmd import removed
+// from every internal/cmd file.
+func stripForbiddenFromCmd(pkgs map[string]pkgImports) map[string]pkgImports {
+	out := clonePkgs(pkgs)
+	forbidden := map[string]bool{}
+	for _, f := range forbiddenInCmd {
+		forbidden[f] = true
+	}
+	for file, imps := range out[cmdPkgPath].Files {
 		var kept []string
-		for _, i := range cmd.Files["cleantree.go"] {
-			if i != "os/exec" {
+		for _, i := range imps {
+			if !forbidden[i] {
 				kept = append(kept, i)
 			}
 		}
-		cmd.Files["cleantree.go"] = kept
-		pkgs[cmdPkgPath] = cmd
-		got := checkBoundary(pkgs, cmdForbiddenBaseline)
-		if len(got) != 1 || !strings.Contains(got[0], "internal/cmd/cleantree.go for os/exec") {
-			t.Errorf("findings = %v, want one stale entry for cleantree.go", got)
+		out[cmdPkgPath].Files[file] = kept
+	}
+	return out
+}
+
+// withCmdFile returns a clone of pkgs whose internal/cmd holds file with
+// exactly imps.
+func withCmdFile(pkgs map[string]pkgImports, file string, imps ...string) map[string]pkgImports {
+	out := clonePkgs(pkgs)
+	out[cmdPkgPath].Files[file] = append([]string(nil), imps...)
+	return out
+}
+
+// ratchetSelfTests drives the ratchet over one clean base. issue.go is the
+// probe for new-importer and stale-entry cases because it imports none of the
+// forbidden packages; ratchet_probe.go is a file the base does not have.
+func ratchetSelfTests(t *testing.T, base map[string]pkgImports, baseline map[string][]string) {
+	if got := checkBoundary(base, baseline); len(got) != 0 {
+		t.Fatalf("precondition: the base is not clean:\n%s", strings.Join(got, "\n"))
+	}
+	issue, ok := base[cmdPkgPath].Files["issue.go"]
+	if !ok {
+		t.Fatal("precondition: internal/cmd/issue.go is gone — pick another probe file")
+	}
+	for _, forbidden := range forbiddenInCmd {
+		t.Run("a new "+forbidden+" importer fails naming file and import", func(t *testing.T) {
+			pkgs := withCmdFile(base, "issue.go", append(append([]string(nil), issue...), forbidden)...)
+			got := checkBoundary(pkgs, baseline)
+			if len(got) != 1 || !strings.Contains(got[0], "internal/cmd/issue.go imports "+forbidden) {
+				t.Errorf("findings = %v, want one naming issue.go and %s", got, forbidden)
+			}
+		})
+		t.Run("a stale "+forbidden+" entry fails asking for removal", func(t *testing.T) {
+			b := cloneBaseline(baseline)
+			b[forbidden] = append(b[forbidden], "issue.go")
+			got := checkBoundary(base, b)
+			if len(got) != 1 || !strings.Contains(got[0], "baseline lists internal/cmd/issue.go for "+forbidden) || !strings.Contains(got[0], "remove it") {
+				t.Errorf("findings = %v, want one asking to remove issue.go", got)
+			}
+		})
+		t.Run("a file that dropped its "+forbidden+" import fails as stale", func(t *testing.T) {
+			b := cloneBaseline(baseline)
+			b[forbidden] = append(b[forbidden], "ratchet_probe.go")
+			if got := checkBoundary(withCmdFile(base, "ratchet_probe.go", forbidden), b); len(got) != 0 {
+				t.Fatalf("a baselined importer is not clean: %v", got)
+			}
+			got := checkBoundary(withCmdFile(base, "ratchet_probe.go"), b)
+			if len(got) != 1 || !strings.Contains(got[0], "internal/cmd/ratchet_probe.go for "+forbidden) {
+				t.Errorf("findings = %v, want one stale entry for ratchet_probe.go", got)
+			}
+		})
+	}
+	t.Run("ship.go baselined for toml, which it does not import, is stale", func(t *testing.T) {
+		const toml = "github.com/BurntSushi/toml"
+		for _, i := range base[cmdPkgPath].Files["ship.go"] {
+			if i == toml {
+				t.Fatal("precondition: ship.go imports toml")
+			}
+		}
+		b := cloneBaseline(baseline)
+		b[toml] = append(b[toml], "ship.go")
+		got := checkBoundary(base, b)
+		if len(got) != 1 || !strings.Contains(got[0], "baseline lists internal/cmd/ship.go for "+toml) {
+			t.Errorf("findings = %v, want one stale entry for ship.go", got)
 		}
 	})
 	t.Run("go/ast has no importer and an empty baseline", func(t *testing.T) {
-		if len(cmdForbiddenBaseline["go/ast"]) != 0 {
+		if len(baseline["go/ast"]) != 0 {
 			t.Error("the go/ast baseline is not empty")
 		}
-		for file, imps := range live[cmdPkgPath].Files {
+		for file, imps := range base[cmdPkgPath].Files {
 			for _, i := range imps {
 				if i == "go/ast" {
 					t.Errorf("internal/cmd/%s imports go/ast", file)
