@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -32,8 +33,9 @@ func gitHelperSpawnLines(t *testing.T, helpers ...string) map[token.Position]boo
 	return out
 }
 
-// spawnLinesIn returns the file and line of each exec.Command call inside the
-// named top-level functions of a view's package pkg ("" for every package).
+// spawnLinesIn returns the file and line of each exec.Command or
+// exec.CommandContext call inside the named functions — top-level or methods —
+// of a view's package pkg ("" for every package).
 func spawnLinesIn(v *srcView, pkg string, helpers ...string) map[token.Position]bool {
 	want := map[string]bool{}
 	for _, h := range helpers {
@@ -47,7 +49,7 @@ func spawnLinesIn(v *srcView, pkg string, helpers ...string) map[token.Position]
 		for _, f := range p.Syntax {
 			for _, d := range f.Decls {
 				fd, ok := d.(*ast.FuncDecl)
-				if !ok || fd.Recv != nil || !want[fd.Name.Name] || fd.Body == nil {
+				if !ok || !want[fd.Name.Name] || fd.Body == nil {
 					continue
 				}
 				ast.Inspect(fd.Body, func(n ast.Node) bool {
@@ -56,7 +58,7 @@ func spawnLinesIn(v *srcView, pkg string, helpers ...string) map[token.Position]
 						return true
 					}
 					if obj := execCalleeObject(p.Info, call); obj != nil && obj.Pkg() != nil &&
-						obj.Pkg().Path() == "os/exec" && obj.Name() == "Command" {
+						obj.Pkg().Path() == "os/exec" && (obj.Name() == "Command" || obj.Name() == "CommandContext") {
 						pos := v.Fset.Position(call.Pos())
 						out[token.Position{Filename: pos.Filename, Line: pos.Line}] = true
 					}
@@ -88,7 +90,7 @@ func findingsFromLines(fs []taintFinding, lines map[token.Position]bool) []taint
 // one whose origin is Run's is.
 func TestGitRunGateIsScopedByOrigin(t *testing.T) {
 	runLines := gitHelperSpawnLines(t, "Run")
-	trimLines := gitHelperSpawnLines(t, "Trim")
+	trimLines := gitHelperSpawnLines(t, "Trim", "TrimWith")
 	var run, trim token.Position
 	for p := range runLines {
 		run = p
@@ -98,6 +100,14 @@ func TestGitRunGateIsScopedByOrigin(t *testing.T) {
 	}
 	if filepath.Base(run.Filename) != filepath.Base(trim.Filename) {
 		t.Logf("Run and Trim now live in different files (%s, %s)", run.Filename, trim.Filename)
+	}
+	// One spawn each: Trim and Raw hand off to TrimWith and RawWith, so a
+	// second spawn would be a second, unpinned way to run git.
+	if len(trimLines) != 1 {
+		t.Errorf("internal/gitrun holds %d Trim spawns, want exactly one: %v", len(trimLines), trimLines)
+	}
+	if raw := gitHelperSpawnLines(t, "Raw", "RawWith"); len(raw) != 1 {
+		t.Errorf("internal/gitrun holds %d Raw spawns, want exactly one: %v", len(raw), raw)
 	}
 	fs := []taintFinding{
 		{Escape: token.Position{Filename: "x.go", Line: 1}, What: "is passed to fmt.Errorf", Origins: []token.Position{trim}},
@@ -138,18 +148,64 @@ var forEachRefAtom = regexp.MustCompile(`%\(([^):]*)[^)]*\)`)
 // second the options; everything after them is positional by construction.
 var gitArgBuilders = map[string]bool{"gitRefArgs": true, "gitPathArgs": true, "gitRefPathArgs": true}
 
-// isGitTrimCall reports whether call is a Trim call the pin judges: a
-// gitrun.Trim selector call anywhere, or a bare Trim call inside package gitrun
-// itself — ShortSHA's, which reads through Trim and so leans on its marker.
-func isGitTrimCall(call *ast.CallExpr, inGitrun bool) bool {
+// gitTrimArgv returns the git argv of a Trim call the pin judges — everything
+// after the dir — and whether call is one: gitrun.Trim(dir, ...) and
+// gitrun.TrimWith(opts, dir, ...) anywhere, or a bare Trim/TrimWith call inside
+// package gitrun itself (ShortSHA's, which reads through Trim and so leans on
+// its marker). The options value is not the pin's business; the argv is.
+func gitTrimArgv(call *ast.CallExpr, inGitrun bool) ([]ast.Expr, bool) {
+	var name string
 	switch fn := call.Fun.(type) {
 	case *ast.SelectorExpr:
 		pkg, ok := fn.X.(*ast.Ident)
-		return ok && pkg.Name == "gitrun" && fn.Sel.Name == "Trim"
+		if !ok || pkg.Name != "gitrun" {
+			return nil, false
+		}
+		name = fn.Sel.Name
 	case *ast.Ident:
-		return inGitrun && fn.Name == "Trim"
+		if !inGitrun {
+			return nil, false
+		}
+		name = fn.Name
+	default:
+		return nil, false
 	}
-	return false
+	switch {
+	case name == "Trim" && len(call.Args) >= 2:
+		return call.Args[1:], true
+	case name == "TrimWith" && len(call.Args) >= 3:
+		return call.Args[2:], true
+	}
+	return nil, false
+}
+
+// gitrunTrimForwarder reports the one call the pin skips: inside package
+// gitrun, the package-level Trim handing its own variadic argv to TrimWith.
+// Trim's callers are the sites; the forwarding carries no verb to judge.
+func gitrunTrimForwarder(f *ast.File) map[*ast.CallExpr]bool {
+	out := map[*ast.CallExpr]bool{}
+	if f.Name.Name != "gitrun" {
+		return out
+	}
+	for _, d := range f.Decls {
+		fd, ok := d.(*ast.FuncDecl)
+		if !ok || fd.Recv != nil || fd.Name.Name != "Trim" || fd.Body == nil {
+			continue
+		}
+		ast.Inspect(fd.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || !call.Ellipsis.IsValid() {
+				return true
+			}
+			if args, ok := gitTrimArgv(call, true); ok && len(args) == 1 {
+				if _, ok := args[0].(*ast.Ident); ok {
+					out[call] = true
+				}
+			}
+			return true
+		})
+	}
+	return out
 }
 
 // gitTrimProblems walks files for gitrun.Trim calls and reports every one whose
@@ -159,13 +215,18 @@ func gitTrimProblems(fset *token.FileSet, files []*ast.File) ([]string, int) {
 	sites := 0
 	for _, f := range files {
 		inGitrun := f.Name.Name == "gitrun"
+		skip := gitrunTrimForwarder(f)
 		ast.Inspect(f, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
-			if !ok || !isGitTrimCall(call, inGitrun) || len(call.Args) < 2 {
+			if !ok || skip[call] {
+				return true
+			}
+			args, ok := gitTrimArgv(call, inGitrun)
+			if !ok {
 				return true
 			}
 			sites++
-			if why := gitTrimArgvProblem(call); why != "" {
+			if why := gitTrimArgvProblem(args, call.Ellipsis.IsValid()); why != "" {
 				out = append(out, fmt.Sprintf("%s: gitrun.Trim %s — not in the pinned ref set; a content read goes through gitrun.Read or gitrun.Raw",
 					fset.Position(call.Pos()), why))
 			}
@@ -179,9 +240,8 @@ func gitTrimProblems(fset *token.FileSet, files []*ast.File) ([]string, int) {
 // gitTrimArgvProblem resolves one gitrun.Trim call's verb and options — literal
 // arguments, or a gitRefArgs/gitPathArgs/gitRefPathArgs builder — and says what
 // is wrong with them, or "".
-func gitTrimArgvProblem(call *ast.CallExpr) string {
-	args := call.Args[1:]
-	if b, ok := args[0].(*ast.CallExpr); ok && len(args) == 1 && call.Ellipsis.IsValid() {
+func gitTrimArgvProblem(args []ast.Expr, spread bool) string {
+	if b, ok := args[0].(*ast.CallExpr); ok && len(args) == 1 && spread {
 		id, ok := b.Fun.(*ast.Ident)
 		if !ok || !gitArgBuilders[id.Name] || len(b.Args) < 2 {
 			return "runs an argv this audit cannot resolve"
@@ -290,6 +350,9 @@ func TestGitTrimRunsRefVerbsOnly(t *testing.T) {
 		{`gitrun.Trim(dir, gitRefArgs("rev-list", []string{"--count"}, a+".."+b)...)`, ""},
 		{`gitrun.Trim(dir, "symbolic-ref", "--short", "HEAD")`, ""},
 		{`gitrun.Trim(".", "--version")`, ""},
+		{`gitrun.TrimWith(gitrun.Options{Timeout: time.Second, NoOptionalLocks: true}, dir, gitRefArgs("for-each-ref", []string{"--format=%(contents)"}, "refs/heads/")...)`, "format atom `%(contents)`"},
+		{`gitrun.TrimWith(opts, dir, "log", "--oneline")`, "runs `log`"},
+		{`gitrun.TrimWith(opts, dir, "symbolic-ref", "--short", "HEAD")`, ""},
 	}
 	// Inside package gitrun a bare Trim is the runner's own and is judged.
 	gfset := token.NewFileSet()
@@ -299,6 +362,17 @@ func TestGitTrimRunsRefVerbsOnly(t *testing.T) {
 	}
 	if got, n := gitTrimProblems(gfset, []*ast.File{gf}); n != 1 || len(got) != 1 || !strings.Contains(got[0], "runs `log`") {
 		t.Errorf("a bare Trim inside gitrun: examined %d, problems %v; want the log read reported", n, got)
+	}
+	// gitrun's own Trim forwarding its argv to TrimWith is skipped; the same
+	// spread from any other function is a site it cannot resolve.
+	ff, err := parser.ParseFile(gfset, "internal/gitrun/fwd.go", "package gitrun\n\n"+
+		"func Trim(dir string, args ...string) (string, error) { return TrimWith(Options{}, dir, args...) }\n\n"+
+		"func other(dir string, args ...string) (string, error) { return TrimWith(Options{}, dir, args...) }\n", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, n := gitTrimProblems(gfset, []*ast.File{ff}); n != 1 || len(got) != 1 || !strings.Contains(got[0], "fwd.go:5") {
+		t.Errorf("the forwarder skip: examined %d, problems %v; want only other()'s spread reported", n, got)
 	}
 	// Outside package gitrun a bare Trim is someone else's function.
 	of, err := parser.ParseFile(gfset, "internal/security/extra.go", "package security\n\nfunc f() {\n\t_, _ = Trim(dir, \"log\", \"--oneline\")\n}\n", 0)
@@ -329,7 +403,7 @@ func TestGitTrimRunsRefVerbsOnly(t *testing.T) {
 }
 
 // gitHelperNames are the cmd helpers gitrun replaced.
-var gitHelperNames = map[string]bool{"gitTrim": true, "gitRead": true, "gitRun": true, "gitNoOut": true}
+var gitHelperNames = map[string]bool{"gitTrim": true, "gitRead": true, "gitRun": true, "gitNoOut": true, "gitBranchTrim": true}
 
 // TestGitHelperDelegatesAreGone: no production file under internal/ or cmd/
 // declares a function named after a replaced helper. Test files may — the
@@ -345,6 +419,70 @@ func TestGitHelperDelegatesAreGone(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestIsAncestorOverARealRepo: merge-base answers ancestry with its exit code,
+// read through gitrun.ExitCode — 0 yes, 1 no, anything else an error.
+func TestIsAncestorOverARealRepo(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	commitFile(t, dir, "a.go", "package a\n")
+	mustGit(t, dir, "checkout", "-q", "-b", "side")
+	commitFile(t, dir, "b.go", "package a\n")
+
+	if ok, err := isAncestor(dir, "main", "side"); !ok || err != nil {
+		t.Errorf("isAncestor(main, side) = %v, %v; want true, nil", ok, err)
+	}
+	if ok, err := isAncestor(dir, "side", "main"); ok || err != nil {
+		t.Errorf("isAncestor(side, main) = %v, %v; want false, nil (exit 1)", ok, err)
+	}
+	if _, err := isAncestor(dir, "no-such-ref", "main"); err == nil {
+		t.Error("isAncestor with a missing ref answered instead of failing")
+	}
+}
+
+// TestPatchIDMatchesGitByHand: patchIDOfDiff pipes Raw's diff into patch-id
+// through RawWith's stdin. Its id is the one `git diff | git patch-id
+// --stable` gives by hand, over a two-file diff; an empty diff gives "".
+func TestPatchIDMatchesGitByHand(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	commitFile(t, dir, "a.go", "package a\n")
+	base := mustGit(t, dir, "rev-parse", "HEAD")
+	mustWrite(t, filepath.Join(dir, "a.go"), "package a\n\nvar x = 1\n")
+	mustWrite(t, filepath.Join(dir, "b.go"), "package a\n")
+	mustGit(t, dir, "add", "a.go", "b.go")
+	mustGit(t, dir, "commit", "-q", "-m", "two files")
+	head := mustGit(t, dir, "rev-parse", "HEAD")
+
+	got, err := patchIDOfDiff(dir, base, head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diff := exec.Command("git", "-C", dir, "diff", base, head)
+	pid := exec.Command("git", "-C", dir, "patch-id", "--stable")
+	pipe, err := diff.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid.Stdin = pipe
+	if err := diff.Start(); err != nil {
+		t.Fatal(err)
+	}
+	out, err := pid.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := diff.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Fields(string(out))
+	if len(want) == 0 || got != want[0] {
+		t.Errorf("patchIDOfDiff = %q, want %v by hand", got, want)
+	}
+	if got, err := patchIDOfDiff(dir, head, head); err != nil || got != "" {
+		t.Errorf("an empty diff gave %q, %v; want \"\"", got, err)
 	}
 }
 
@@ -390,10 +528,10 @@ func TestGitrunContentVerbsCarryNoMarker(t *testing.T) {
 	if len(markers) == 0 {
 		t.Fatal("internal/gitrun carries no taint-cleared marker — Trim's is gone, and this check would be vacuous")
 	}
-	for _, f := range markersInside(v, gitrunPath, markers, "Raw", "Read") {
+	for _, f := range markersInside(v, gitrunPath, markers, "Raw", "RawWith", "Read") {
 		t.Error(f)
 	}
-	if got := markersInside(v, gitrunPath, markers, "Trim"); len(got) != 1 {
+	if got := markersInside(v, gitrunPath, markers, "Trim", "TrimWith"); len(got) != 1 {
 		t.Errorf("Trim holds %d taint-cleared markers, want its one: %v", len(got), got)
 	}
 	var rawLine int
@@ -404,7 +542,7 @@ func TestGitrunContentVerbsCarryNoMarker(t *testing.T) {
 		}
 		for _, f := range p.Syntax {
 			for _, d := range f.Decls {
-				if fd, ok := d.(*ast.FuncDecl); ok && fd.Name.Name == "Raw" {
+				if fd, ok := d.(*ast.FuncDecl); ok && fd.Name.Name == "RawWith" {
 					pos := v.Fset.Position(fd.Body.Lbrace)
 					rawLine, file = pos.Line, pos.Filename
 				}
@@ -412,12 +550,12 @@ func TestGitrunContentVerbsCarryNoMarker(t *testing.T) {
 		}
 	}
 	if rawLine == 0 {
-		t.Fatal("found no gitrun.Raw")
+		t.Fatal("found no gitrun.RawWith")
 	}
 	moved := markers[0]
 	moved.file, moved.line, moved.bound = file, rawLine+1, rawLine+2
-	if got := markersInside(v, gitrunPath, []taintMarker{moved}, "Raw", "Read"); len(got) != 1 {
-		t.Errorf("a marker moved into Raw gave %v, want one finding", got)
+	if got := markersInside(v, gitrunPath, []taintMarker{moved}, "Raw", "RawWith", "Read"); len(got) != 1 {
+		t.Errorf("a marker moved into RawWith gave %v, want one finding", got)
 	}
 }
 

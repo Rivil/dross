@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Rivil/dross/internal/gitrun"
 )
 
 var slNow = time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC)
@@ -129,7 +131,7 @@ func TestGitBranch(t *testing.T) {
 	git("add", ".")
 	git("commit", "-q", "-m", "c1")
 	git("checkout", "-q", "--detach")
-	wantSHA, err := gitBranchTrim(repo, "rev-parse", "--short", "HEAD")
+	wantSHA, err := gitrun.Trim(repo, "rev-parse", "--short", "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}

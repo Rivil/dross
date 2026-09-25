@@ -1,10 +1,8 @@
 package cmd
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/Rivil/dross/internal/gitrun"
@@ -233,24 +231,18 @@ func resolveSquashCommit(repoDir, branch, mainBranch string) (string, error) {
 // or "" when the diff is empty. --stable so the id does not shift with the order
 // git happens to emit the files in.
 func patchIDOfDiff(repoDir, from, to string) (string, error) {
-	var diff bytes.Buffer
-	//dross:exec-exempt git diff renders two fenced refs as text; the refs come from gitRefArgs and a diff executes nothing
-	d := exec.Command("git", append([]string{"-C", repoDir}, gitRefArgs("diff", nil, from, to)...)...)
-	d.Stdout = &diff
-	if err := d.Run(); err != nil {
+	diff, err := gitrun.Raw(repoDir, gitRefArgs("diff", nil, from, to)...)
+	if err != nil {
 		return "", fmt.Errorf("diff %s..%s: %w", from, to, err)
 	}
-	if diff.Len() == 0 {
+	if diff == "" {
 		return "", nil
 	}
-	//dross:exec-exempt git patch-id --stable hashes a diff arriving on stdin; the argv is fixed and reads no repo-authored line
-	p := exec.Command("git", "-C", repoDir, "patch-id", "--stable")
-	p.Stdin = &diff
-	out, err := p.Output()
+	out, err := gitrun.RawWith(gitrun.Options{Stdin: strings.NewReader(diff)}, repoDir, "patch-id", "--stable")
 	if err != nil {
 		return "", fmt.Errorf("patch-id %s..%s: %w", from, to, err)
 	}
-	fields := strings.Fields(string(out))
+	fields := strings.Fields(out)
 	if len(fields) == 0 {
 		return "", nil
 	}
@@ -262,11 +254,10 @@ func patchIDOfDiff(repoDir, from, to string) (string, error) {
 // else is a real failure worth propagating.
 func isAncestor(repoDir, ref, other string) (bool, error) {
 	err := gitrun.Quiet(repoDir, gitRefArgs("merge-base", []string{"--is-ancestor"}, ref, other)...)
-	if err == nil {
+	switch gitrun.ExitCode(err) {
+	case 0:
 		return true, nil
-	}
-	var exit *exec.ExitError
-	if errors.As(err, &exit) && exit.ExitCode() == 1 {
+	case 1:
 		return false, nil
 	}
 	return false, fmt.Errorf("ancestry check %s..%s: %w", ref, other, err)

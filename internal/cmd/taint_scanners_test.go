@@ -38,7 +38,7 @@ func TestScannerRevParseMarkerIsLoadBearing(t *testing.T) {
 	if marker == nil {
 		t.Fatal("internal/gitrun/gitrun.go carries no ref-plumbing taint-cleared marker")
 	}
-	spawn := spawnLineIn(t, gitrunPath, "Trim")
+	spawn := spawnLineIn(t, gitrunPath, "TrimWith")
 	taint, _ := execTaintScan(viewWithoutComment(liveView(t), marker.file, marker.line))
 	root := sourceProgram(t).Root
 	escapedIn := map[string]bool{}
@@ -70,8 +70,8 @@ func TestScannerRevParseMarkerIsLoadBearing(t *testing.T) {
 	}
 }
 
-// spawnLineIn is the line of the exec.Command call inside the named top-level
-// function of a live package.
+// spawnLineIn is the line of the exec.Command or exec.CommandContext call
+// inside the named function — top-level or a method — of a live package.
 func spawnLineIn(t *testing.T, pkgPath, fn string) int {
 	t.Helper()
 	v := liveView(t)
@@ -82,14 +82,14 @@ func spawnLineIn(t *testing.T, pkgPath, fn string) int {
 		for _, f := range p.Syntax {
 			for _, d := range f.Decls {
 				fd, ok := d.(*ast.FuncDecl)
-				if !ok || fd.Name.Name != fn || fd.Recv != nil || fd.Body == nil {
+				if !ok || fd.Name.Name != fn || fd.Body == nil {
 					continue
 				}
 				line := 0
 				ast.Inspect(fd.Body, func(n ast.Node) bool {
 					if call, ok := n.(*ast.CallExpr); ok && line == 0 {
 						if obj := execCalleeObject(p.Info, call); obj != nil && obj.Pkg() != nil &&
-							obj.Pkg().Path() == "os/exec" && obj.Name() == "Command" {
+							obj.Pkg().Path() == "os/exec" && (obj.Name() == "Command" || obj.Name() == "CommandContext") {
 							line = v.Fset.Position(call.Pos()).Line
 						}
 					}

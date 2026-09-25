@@ -53,10 +53,7 @@ var forbiddenInCmd = []string{"os/exec", "net/http", "go/ast", "encoding/json", 
 // phase's job; remove an entry the moment its import goes, or the test asks
 // you to. One entry per line, so each drain is a one-line diff.
 var cmdForbiddenBaseline = map[string][]string{
-	"os/exec": {
-		"milestone_stale.go",
-		"statusline.go",
-	},
+	"os/exec":                    {},
 	"net/http":                   {},
 	"go/ast":                     {},
 	"encoding/json":              {},

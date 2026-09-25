@@ -258,7 +258,7 @@ func TestCleantreePorcelainMarkerIsLoadBearing(t *testing.T) {
 	if marker == nil {
 		t.Fatal("cleantree.go carries no porcelain taint-cleared marker")
 	}
-	raw := spawnLineIn(t, gitrunPath, "Raw")
+	raw := spawnLineIn(t, gitrunPath, "RawWith")
 	taint, _ := execTaintScan(viewWithoutComment(liveView(t), marker.file, marker.line))
 	for _, f := range taint {
 		if filepath.Base(f.Escape.Filename) != "phase.go" {

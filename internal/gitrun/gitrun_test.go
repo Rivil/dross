@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // stubGit puts a fake `git` first on PATH. It echoes its whole argv on one
@@ -262,5 +263,54 @@ func TestRawKeepsNULSeparatedNamesWithSpaces(t *testing.T) {
 	}
 	if len(names) != 1 || names[0] != "with space/" {
 		t.Errorf("ignored names = %q, want exactly [\"with space/\"]", names)
+	}
+}
+
+// TestOptionsTimeoutAndLocks: the status line's form — a 2s deadline under
+// --no-optional-locks — gives up on a git that hangs, and hands git the lock
+// flag ahead of everything else.
+func TestOptionsTimeoutAndLocks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stub git is a shell script")
+	}
+	dir := t.TempDir()
+	trace := filepath.Join(dir, "argv")
+	script := "#!/bin/sh\necho \"$@\" > " + trace + "\nsleep 5\n"
+	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	start := time.Now()
+	_, err := TrimWith(Options{Timeout: 2 * time.Second, NoOptionalLocks: true}, t.TempDir(), "symbolic-ref", "--short", "HEAD")
+	if took := time.Since(start); took > 3*time.Second {
+		t.Errorf("a hanging git held the call for %s, want it bounded by the 2s deadline", took)
+	}
+	if err == nil {
+		t.Error("a git killed at its deadline reported success")
+	}
+	argv, rerr := os.ReadFile(trace)
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	if !strings.HasPrefix(string(argv), "--no-optional-locks -C ") {
+		t.Errorf("git's argv = %q, want it to lead with --no-optional-locks", argv)
+	}
+}
+
+// TestOptionsStdinFeedsGit: the options form's Stdin reaches git — patch-id
+// reads its diff there.
+func TestOptionsStdinFeedsGit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stub git is a shell script")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "git"), []byte("#!/bin/sh\ncat\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	out, err := RawWith(Options{Stdin: strings.NewReader("the diff\n")}, t.TempDir(), "patch-id", "--stable")
+	if err != nil || out != "the diff\n" {
+		t.Errorf("Raw with Stdin = %q, %v; want the stdin echoed back", out, err)
 	}
 }

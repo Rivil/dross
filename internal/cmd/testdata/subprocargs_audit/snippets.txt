@@ -48,6 +48,12 @@ FLAG gitrun-read-bare-var
 PASS gitrun-trim-literals
 	gitrun.Trim(repoDir, "rev-parse", "HEAD")
 
+FLAG gitrun-options-bare-var
+	_, _ = gitrun.RawWith(gitrun.Options{NoOptionalLocks: true}, repoDir, "log", branch)
+
+PASS gitrun-options-literals
+	_, _ = gitrun.TrimWith(gitrun.Options{NoOptionalLocks: true}, repoDir, "symbolic-ref", "--short", "HEAD")
+
 PASS const-prefix-concat
 	gitrun.Quiet(repoDir, "rev-parse", "--verify", "refs/heads/"+branch)
 

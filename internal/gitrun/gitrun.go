@@ -25,12 +25,14 @@ package gitrun
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // Stderr is where a failed Run's own output goes: this process's stderr.
@@ -55,11 +57,66 @@ func argv(dir string, args []string) []string {
 	return append([]string{"-C", dir}, args...)
 }
 
+// Options tunes one TrimWith or RawWith call. The zero value is what Trim and
+// Raw use: no deadline, git's own locking, no stdin.
+type Options struct {
+	// Timeout bounds the call; git is killed when it expires. Zero means none.
+	Timeout time.Duration
+	// NoOptionalLocks runs `git --no-optional-locks`, for a read that must
+	// never contend with the user's own git on the same repo (the status line
+	// renders on every prompt).
+	NoOptionalLocks bool
+	// Stdin is fed to git's standard input — a diff for patch-id.
+	Stdin io.Reader
+}
+
+// context is the call's deadline under o, and the cancel that releases it.
+func (o Options) context() (context.Context, context.CancelFunc) {
+	if o.Timeout > 0 {
+		return context.WithTimeout(context.Background(), o.Timeout)
+	}
+	return context.Background(), func() {}
+}
+
+// fullArgv is git's argument list under o.
+func (o Options) fullArgv(dir string, args []string) []string {
+	if o.NoOptionalLocks {
+		return append([]string{"--no-optional-locks"}, argv(dir, args)...)
+	}
+	return argv(dir, args)
+}
+
+// prepared applies o's stdin and kill delay to c and returns it, so the spawn
+// and its Output stay one expression — one line for the audits to key on.
+//
+// WaitDelay is what makes a timeout actually return. Killing git can leave a
+// child holding the output pipe, and Output would block until it closed; the
+// delay closes the descriptors and returns instead.
+func (o Options) prepared(c *exec.Cmd) *exec.Cmd {
+	if o.Stdin != nil {
+		c.Stdin = o.Stdin
+	}
+	if o.Timeout > 0 {
+		c.WaitDelay = 250 * time.Millisecond
+	}
+	return c
+}
+
 // Trim runs a REF-plumbing git command in dir and returns its output trimmed.
 func Trim(dir string, args ...string) (string, error) {
+	return TrimWith(Options{}, dir, args...)
+}
+
+// TrimWith is Trim under o — the one Trim spawn. Plain functions rather than
+// methods on Options: the taint scan follows a function's return back to its
+// callers, and the pointer wrapper SSA synthesises for a value method has
+// none, so a method would read as output returned out of the program.
+func TrimWith(o Options, dir string, args ...string) (string, error) {
 	tap(args)
+	ctx, cancel := o.context()
+	defer cancel()
 	//dross:exec-exempt the argv is dross's own git plumbing, fenced by the caller's argv builders before it gets here; none of it runs a repo-authored line
-	out, err := exec.Command("git", argv(dir, args)...).Output()
+	out, err := o.prepared(exec.CommandContext(ctx, "git", o.fullArgv(dir, args)...)).Output()
 	if err != nil {
 		return "", err
 	}
@@ -71,9 +128,16 @@ func Trim(dir string, args ...string) (string, error) {
 // a porcelain status's leading status column and a NUL-separated listing's
 // last entry both survive.
 func Raw(dir string, args ...string) (string, error) {
+	return RawWith(Options{}, dir, args...)
+}
+
+// RawWith is Raw under o — the one Raw spawn.
+func RawWith(o Options, dir string, args ...string) (string, error) {
 	tap(args)
+	ctx, cancel := o.context()
+	defer cancel()
 	//dross:exec-exempt the argv is dross's own git plumbing, fenced by the caller's argv builders before it gets here; none of it runs a repo-authored line
-	out, err := exec.Command("git", argv(dir, args)...).Output()
+	out, err := o.prepared(exec.CommandContext(ctx, "git", o.fullArgv(dir, args)...)).Output()
 	if err != nil {
 		return "", err
 	}

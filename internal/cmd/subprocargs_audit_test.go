@@ -413,6 +413,11 @@ func spawnArgvOf(call *ast.CallExpr) (name, bin, binExpr string, args []ast.Expr
 		if !isIdent {
 			return "", "", "", nil, false
 		}
+		// gitrun.TrimWith(opts, dir, args...) and RawWith — the options form;
+		// the dir is second and the tail is the git argv.
+		if pkg.Name == "gitrun" && (fn.Sel.Name == "TrimWith" || fn.Sel.Name == "RawWith") && len(call.Args) > 2 {
+			return "gitrun." + fn.Sel.Name, "git", "", call.Args[2:], true
+		}
 		// gitrun.Trim(dir, args...) and its siblings — the repo-wide git
 		// runner; first arg is the dir, the tail is the git argv.
 		if pkg.Name == "gitrun" && gitrunVerbs[fn.Sel.Name] && len(call.Args) > 1 {
