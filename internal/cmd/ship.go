@@ -11,6 +11,7 @@ import (
 
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/hostallow"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/render"
@@ -28,7 +29,7 @@ import (
 // local.toml tracked, because a committed local.toml is a repo authorizing its
 // own exfiltration host through the one input the derivation trusts.
 func remotePolicy(root, repoDir string, p *project.Project) (hostallow.Policy, error) {
-	extra, err := readAllowHosts(root, repoDir)
+	extra, err := localstore.ReadAllowHosts(root, repoDir)
 	if err != nil {
 		return hostallow.Policy{}, err
 	}

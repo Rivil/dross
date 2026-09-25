@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 )
@@ -238,7 +239,7 @@ func planLaneStep(root, repoDir string, p *project.Project, laneName, tool strin
 	case resolved.Refusal != "":
 		step.Refusal = resolved.Refusal
 	case resolved.Line != "":
-		if _, cerr := consent.LaneInstallConsented(grantStore(root), repoDir, lane.Name, consent.LaneInstallLine(lane)); cerr != nil {
+		if _, cerr := consent.LaneInstallConsented(localstore.GrantStore(root), repoDir, lane.Name, consent.LaneInstallLine(lane)); cerr != nil {
 			step.Refusal = fmt.Sprintf("lane %s's install line is not trusted on this machine — read it with `dross trust --lane-install %s`", lane.Name, lane.Name)
 			return
 		}

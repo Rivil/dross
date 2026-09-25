@@ -7,6 +7,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/Rivil/dross/internal/localstore"
 )
 
 // drossStateIgnorePath is the path the ignore rule has to cover. It is also
@@ -14,7 +16,7 @@ import (
 const drossStateIgnorePath = ".dross/state.json"
 
 // drossLocalIgnorePath is the second: the machine-local store.
-const drossLocalIgnorePath = ".dross/" + LocalFile
+const drossLocalIgnorePath = ".dross/" + localstore.File
 
 // ignoreEntry is one path the seeded block covers, with the reason it is
 // untracked kept next to it. The comment is not decoration — someone will find
@@ -58,9 +60,9 @@ var drossIgnoreEntries = []ignoreEntry{
 		// derived allowlist exists to avoid.
 		//
 		// The ignore line is the first half of that guarantee and it only helps
-		// repos that run init/onboard from here on. readAllowHosts is the half
-		// that holds for repos already onboarded: it refuses a local.toml git
-		// reports as tracked rather than reading it.
+		// repos that run init/onboard from here on. localstore.ReadAllowHosts is
+		// the half that holds for repos already onboarded: it refuses a local.toml
+		// git reports as tracked rather than reading it.
 		comment: "# dross machine-local config — host allowlist additions and the standalone-quick\n" +
 			"# base branch. MUST stay untracked: a committed copy would let a cloned repo\n" +
 			"# authorize its own API host, which is the loop the derived allowlist avoids.\n" +

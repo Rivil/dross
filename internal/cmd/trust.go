@@ -15,6 +15,7 @@ import (
 
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 )
 
@@ -64,7 +65,7 @@ func trustLaneInstall(root, name string, check bool) error {
 	}
 	repoDir := filepath.Dir(root)
 	if check {
-		state, cerr := consent.LaneInstallConsented(grantStore(root), repoDir, lane.Name, consent.LaneInstallLine(lane))
+		state, cerr := consent.LaneInstallConsented(localstore.GrantStore(root), repoDir, lane.Name, consent.LaneInstallLine(lane))
 		if cerr == nil {
 			return nil
 		}
@@ -84,10 +85,10 @@ func trustLaneInstall(root, name string, check bool) error {
 	// project.toml, so a grant that did not show it would be consenting to
 	// whatever a clone happened to carry — and this one changes a machine.
 	Printf("trusting test lane %q's install line on this machine:\n\n    %s\n\n", lane.Name, lane.Install)
-	if err := consent.GrantLaneInstallConsent(grantStore(root), lane.Name, consent.LaneInstallLine(lane)); err != nil {
+	if err := consent.GrantLaneInstallConsent(localstore.GrantStore(root), lane.Name, consent.LaneInstallLine(lane)); err != nil {
 		return err
 	}
-	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
+	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, localstore.File)
 	Printf("This is separate from `dross trust --lane %s`: it authorizes INSTALLING lane %q's\n", lane.Name, lane.Name)
 	Print("toolchain, not running its suite. Editing or renaming the lane revokes it.")
 	return nil
@@ -173,7 +174,7 @@ func requireExecConsent() error {
 		return err
 	}
 	testCmd := proj.Runtime.TestCommand
-	state, cerr := consent.CheckConsent(grantStore(root), filepath.Dir(root), testCmd)
+	state, cerr := consent.CheckConsent(localstore.GrantStore(root), filepath.Dir(root), testCmd)
 	if cerr == nil {
 		return nil
 	}
@@ -226,7 +227,7 @@ func Trust() *cobra.Command {
 				// The silent form prompts pre-flight with. Success prints
 				// NOTHING — a prompt that had to parse output around it would
 				// find a way not to run it.
-				state, cerr := consent.CheckConsent(grantStore(root), repoDir, testCmd)
+				state, cerr := consent.CheckConsent(localstore.GrantStore(root), repoDir, testCmd)
 				if cerr == nil {
 					return nil
 				}
@@ -247,10 +248,10 @@ func Trust() *cobra.Command {
 			// thing being consented to; a grant that did not show it would be a
 			// rubber stamp on a line nobody read.
 			Printf("trusting this repo's test command on this machine:\n\n    %s\n\n", testCmd)
-			if err := consent.GrantConsent(grantStore(root), testCmd); err != nil {
+			if err := consent.GrantConsent(localstore.GrantStore(root), testCmd); err != nil {
 				return err
 			}
-			Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
+			Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, localstore.File)
 			Print("Editing runtime.test_command revokes this; dross will ask again.")
 			return nil
 		},
@@ -281,7 +282,7 @@ func trustLane(root, name string, check bool) error {
 	}
 	repoDir := filepath.Dir(root)
 	if check {
-		state, cerr := consent.LaneConsented(grantStore(root), repoDir, lane.Name, consent.LaneLine(lane))
+		state, cerr := consent.LaneConsented(localstore.GrantStore(root), repoDir, lane.Name, consent.LaneLine(lane))
 		if cerr == nil {
 			return nil
 		}
@@ -305,10 +306,10 @@ func trustLane(root, name string, check bool) error {
 	} else {
 		Printf("trusting test lane %q on this machine:\n\n    %s\n\n", lane.Name, lane.Command)
 	}
-	if err := consent.GrantLaneConsent(grantStore(root), lane.Name, consent.LaneLine(lane)); err != nil {
+	if err := consent.GrantLaneConsent(localstore.GrantStore(root), lane.Name, consent.LaneLine(lane)); err != nil {
 		return err
 	}
-	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
+	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, localstore.File)
 	Printf("Editing or renaming lane %q — its prepare included — revokes this; every other lane's grant is untouched.\n", lane.Name)
 	return nil
 }
@@ -336,7 +337,7 @@ func trustRun(root, name string, check bool) error {
 			slot.Field, slot.Field)
 	}
 	if check {
-		ok, err := consent.RunConsented(grantStore(root), line)
+		ok, err := consent.RunConsented(localstore.GrantStore(root), line)
 		if err != nil {
 			return err
 		}
@@ -351,10 +352,10 @@ func trustRun(root, name string, check bool) error {
 	// Printed before the write, in full: a grant that did not show the command
 	// would be a rubber stamp on a line nobody read.
 	Printf("trusting `dross run %s` on this machine:\n\n    %s\n\n", slot.Name, line)
-	if err := consent.GrantRunConsent(grantStore(root), line); err != nil {
+	if err := consent.GrantRunConsent(localstore.GrantStore(root), line); err != nil {
 		return err
 	}
-	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
+	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, localstore.File)
 	Printf("Editing %s revokes this; every other slot's grant is untouched.\n", slot.Field)
 	return nil
 }
@@ -375,7 +376,7 @@ func trustReplay(root, phaseID string, check bool) error {
 		return err
 	}
 	if check {
-		ok, cerr := consent.ReplayConsented(grantStore(root), line)
+		ok, cerr := consent.ReplayConsented(localstore.GrantStore(root), line)
 		if cerr != nil {
 			return cerr
 		}
@@ -388,10 +389,10 @@ func trustReplay(root, phaseID string, check bool) error {
 	// file the repo chose; a grant that did not show it would be consenting to
 	// whatever a clone happened to carry.
 	Printf("trusting %s's red-proof replay command on this machine:\n\n    %s\n\n", phaseID, line)
-	if err := consent.GrantReplayConsent(grantStore(root), line); err != nil {
+	if err := consent.GrantReplayConsent(localstore.GrantStore(root), line); err != nil {
 		return err
 	}
-	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
+	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, localstore.File)
 	Print("Editing the recorded replay revokes this; dross will ask again.")
 	return nil
 }

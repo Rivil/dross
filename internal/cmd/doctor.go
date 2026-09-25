@@ -16,6 +16,7 @@ import (
 	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/diag"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/mutationcfg"
 	"github.com/Rivil/dross/internal/phase"
@@ -956,12 +957,12 @@ var gitVersionOutput = func() (string, error) {
 // sections it returns, then the remote-mutation and local-toolchain checks
 // beneath them. It returns the number of issues found.
 func checkConfigTrust(root, repoDir string, p *project.Project) int {
-	extra, hostErr := readAllowHosts(root, repoDir)
+	extra, hostErr := localstore.ReadAllowHosts(root, repoDir)
 	sections, issues := diag.ConfigTrust(root, repoDir, p, diag.TrustInputs{
 		AllowHosts:      extra,
 		AllowHostsErr:   hostErr,
 		GitVersion:      gitVersionOutput,
-		Grants:          grantStore(root),
+		Grants:          localstore.GrantStore(root),
 		IgnoresPath:     ignoresPath,
 		LocalIgnorePath: drossLocalIgnorePath,
 		ValidateRef:     validateGitRef,

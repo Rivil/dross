@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -120,7 +121,7 @@ func pushBaseIfAheadDrossOnly(repoDir, base string) (pushed bool, err error) {
 // source — otherwise the user sees a branch they never mentioned to this
 // command and has no idea where it came from.
 func pushQuickBaseIfRecorded(repoDir, root, phaseBase string) (pushed bool, branch string, err error) {
-	qb := readLocalKey(root, "quick_base")
+	qb := localstore.ReadKey(root, "quick_base")
 	if qb == "" || qb == phaseBase {
 		return false, "", nil
 	}

@@ -1708,7 +1708,7 @@ func execGraphFingerprint(g *execGraph) string {
 // execLiveSurgeries are the four live proofs' surgeries, in one place so the
 // isolation test runs every one of them.
 var execLiveSurgeries = []execSurgery{
-	{file: "internal/cmd/run.go", op: "ungate", anchor: "consented, err := consent.RunConsented(grantStore(root), line)"},
+	{file: "internal/cmd/run.go", op: "ungate", anchor: "consent.RunConsented("},
 	{file: "internal/cmd/verify.go", op: "ungate",
 		anchor: "if err := requireExecConsent(); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t\tphaseID := args[0]"},
 	{file: "internal/ship/open.go", op: "unmark", anchor: "//dross:exec-exempt gh is the forge API client"},
@@ -1742,6 +1742,16 @@ func TestSurgeryAnchorMustMatch(t *testing.T) {
 	_, err = g.surgery(sourceProgram(t).Root, execSurgery{file: "internal/cmd/verify.go", op: "ungate", anchor: "if err := requireExecConsent(); err != nil {"})
 	if err == nil || !strings.Contains(err.Error(), "matched 2 times") {
 		t.Errorf("surgery with an ambiguous anchor = %v, want it refused", err)
+	}
+	// run.go's anchor is the rename-stable call alone. The spelling it had
+	// before the grant store moved to internal/localstore no longer matches —
+	// a surgery still pinned to it would never land.
+	_, err = g.surgery(sourceProgram(t).Root, execSurgery{file: "internal/cmd/run.go", op: "ungate", anchor: "consented, err := consent.RunConsented(grantStore(root), line)"})
+	if err == nil || !strings.Contains(err.Error(), "anchor never matched") {
+		t.Errorf("surgery with the pre-move grantStore(root) anchor = %v, want \"anchor never matched\"", err)
+	}
+	if _, err := g.surgery(sourceProgram(t).Root, execSurgery{file: "internal/cmd/run.go", op: "ungate", anchor: "consent.RunConsented("}); err != nil {
+		t.Errorf("run.go's rename-stable anchor did not match exactly once: %v", err)
 	}
 }
 
@@ -2319,7 +2329,7 @@ func TestReachProofIsLoadBearing(t *testing.T) {
 	// which is what deleting it would leave.
 	g := repoExecGraph(t).withSurgery(t, execSurgery{
 		file: "internal/cmd/run.go", op: "ungate",
-		anchor: "consented, err := consent.RunConsented(grantStore(root), line)",
+		anchor: "consent.RunConsented(",
 	})
 	var found bool
 	for _, f := range g.findings() {

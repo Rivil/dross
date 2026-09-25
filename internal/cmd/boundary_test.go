@@ -471,6 +471,98 @@ func TestCmdDeclaresNoTomlStore(t *testing.T) {
 	}
 }
 
+// commandTreeLeftovers names everything in a file that is not part of a
+// command tree: any type, var or const declaration, and any func that does not
+// return exactly *cobra.Command.
+func commandTreeLeftovers(fset *token.FileSet, f *ast.File) []string {
+	file := filepath.Base(fset.Position(f.Pos()).Filename)
+	var out []string
+	for _, d := range f.Decls {
+		switch d := d.(type) {
+		case *ast.GenDecl:
+			if d.Tok == token.IMPORT {
+				continue
+			}
+			for _, spec := range d.Specs {
+				switch sp := spec.(type) {
+				case *ast.TypeSpec:
+					out = append(out, fmt.Sprintf("%s declares type %s", file, sp.Name.Name))
+				case *ast.ValueSpec:
+					for _, n := range sp.Names {
+						out = append(out, fmt.Sprintf("%s declares %s %s", file, d.Tok, n.Name))
+					}
+				}
+			}
+		case *ast.FuncDecl:
+			if !returnsCobraCommand(d) {
+				out = append(out, fmt.Sprintf("%s declares func %s, which does not return *cobra.Command", file, d.Name.Name))
+			}
+		}
+	}
+	return out
+}
+
+// returnsCobraCommand reports whether fd returns exactly one *cobra.Command.
+func returnsCobraCommand(fd *ast.FuncDecl) bool {
+	if fd.Recv != nil || fd.Type.Results == nil || len(fd.Type.Results.List) != 1 || len(fd.Type.Results.List[0].Names) > 1 {
+		return false
+	}
+	star, ok := fd.Type.Results.List[0].Type.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := star.X.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	return ok && pkg.Name == "cobra" && sel.Sel.Name == "Command"
+}
+
+// TestLocalGoIsOnlyTheCommandTree: with the store in internal/localstore,
+// local.go is `dross local get|set` and nothing else — a type, var, const or
+// helper there is the store growing back beside the command tree.
+func TestLocalGoIsOnlyTheCommandTree(t *testing.T) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, filepath.Join(repoRootFromTest(t), "internal", "cmd", "local.go"), nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range commandTreeLeftovers(fset, f) {
+		t.Error(l)
+	}
+	cmds := 0
+	for _, d := range f.Decls {
+		if fd, ok := d.(*ast.FuncDecl); ok && returnsCobraCommand(fd) {
+			cmds++
+		}
+	}
+	if cmds < 3 {
+		t.Errorf("local.go holds %d command constructors, want Local, localGet and localSet", cmds)
+	}
+
+	synth := token.NewFileSet()
+	src := "package cmd\n\nimport \"github.com/spf13/cobra\"\n\n" +
+		"const LocalFile = \"local.toml\"\n\n" +
+		"type localStore struct{}\n\n" +
+		"var localKeys = map[string]int{}\n\n" +
+		"func Local() *cobra.Command { return nil }\n\n" +
+		"func loadLocal(path string) (*localStore, error) { return nil, nil }\n"
+	sf, err := parser.ParseFile(synth, "local.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(commandTreeLeftovers(synth, sf), "\n")
+	for _, want := range []string{"declares const LocalFile", "declares type localStore", "declares var localKeys", "declares func loadLocal"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("a leftover was not named (%q):\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "func Local,") {
+		t.Errorf("a command constructor was reported:\n%s", got)
+	}
+}
+
 // TestBoundaryDirectionRulesFire drives rules 1-3 over synthetic package maps
 // and a synthetic tree: a fake internal/consent importing internal/cmd, a fake
 // internal/foo importing cobra, and a cmd that dropped internal/consent.

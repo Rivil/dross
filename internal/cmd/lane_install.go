@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/testlane"
@@ -258,7 +259,7 @@ func printInstallOutput(bin string, out []byte) {
 // line, and only the second one belongs to a shared helper.
 func runLaneInstall(root, repoDir string, target *remote.Target, lane project.TestLane, s installStep) error {
 	if s.Line != "" {
-		state, cerr := consent.LaneInstallConsented(grantStore(root), repoDir, lane.Name, consent.LaneInstallLine(lane))
+		state, cerr := consent.LaneInstallConsented(localstore.GrantStore(root), repoDir, lane.Name, consent.LaneInstallLine(lane))
 		if cerr != nil {
 			// Refused BEFORE the argv is even rendered, so an ungranted line
 			// never reaches a seam and never reaches a transport.

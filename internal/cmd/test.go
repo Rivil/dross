@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/testlane"
@@ -388,7 +389,7 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		// `dross test <selector>` against runtime.test_command. Fingerprinting
 		// the derived line instead would go stale on every new file set and
 		// refuse practically every scoped run.
-		state, cerr := consent.LaneConsented(grantStore(root), repoDir, pl.lane.Name, consent.LaneLine(pl.lane))
+		state, cerr := consent.LaneConsented(localstore.GrantStore(root), repoDir, pl.lane.Name, consent.LaneLine(pl.lane))
 		if cerr != nil {
 			// Printed AND folded into the outcome. Returning it alone would
 			// lose it whenever another lane goes red and outranks it, and a
@@ -741,7 +742,7 @@ func testTarget(root, repoDir string, local bool) ([]*remote.Target, error) {
 	if local {
 		return nil, nil
 	}
-	return readRemoteGrants(root, repoDir)
+	return localstore.ReadRemoteGrants(root, repoDir)
 }
 
 // resolveTestTarget picks the machine a run happens on, announcing a fallback.
@@ -905,7 +906,7 @@ var suiteWarn = func(msg string) { fmt.Fprintln(os.Stderr, msg) }
 //
 // The in-flight warning is printed first, before the wait it describes.
 func holdHostForSuite(root, repoDir, projectName string, t remote.Target, wait time.Duration) (*suiteHold, error) {
-	if runs, rerr := readDetachedRuns(root, repoDir); rerr == nil {
+	if runs, rerr := localstore.ReadDetachedRuns(root, repoDir); rerr == nil {
 		if w := inFlightRunWarning(runs, t, wait); w != "" {
 			suiteWarn(w)
 		}
@@ -986,7 +987,7 @@ func syncTreeTo(t remote.Target, repoDir string) error {
 // release the host before sharing its cores — a mutation leg's per-mutant
 // timeouts are sized from an unloaded baseline. Said once, not refused.
 // Under --wait 0 there is no wait to describe, and the old wording stands.
-func inFlightRunWarning(runs []detachedRun, t remote.Target, wait time.Duration) string {
+func inFlightRunWarning(runs []localstore.DetachedRun, t remote.Target, wait time.Duration) string {
 	for _, r := range runs {
 		if r.Host != t.Host || r.Workdir != t.Workdir {
 			continue
@@ -1004,7 +1005,7 @@ func inFlightRunWarning(runs []detachedRun, t remote.Target, wait time.Duration)
 	return ""
 }
 
-func stateWord(r detachedRun) string {
+func stateWord(r localstore.DetachedRun) string {
 	if r.Scheduled() {
 		return "scheduled"
 	}

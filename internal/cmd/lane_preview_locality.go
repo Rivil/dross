@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/testlane"
 )
@@ -94,7 +95,7 @@ type laneLocalityLine struct {
 // malformed grant. An unreachable host comes back as hostUnresolved with a nil
 // error, which is what lets preview honour locked preview_exit_status.
 func previewHost(root, repoDir string, lanes []matchedLane, probe bool) (previewLocality, error) {
-	targets, err := readRemoteGrants(root, repoDir)
+	targets, err := localstore.ReadRemoteGrants(root, repoDir)
 	if err != nil {
 		return previewLocality{}, err
 	}

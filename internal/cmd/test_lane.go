@@ -24,6 +24,7 @@ import (
 
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/testlane"
 )
@@ -660,7 +661,7 @@ func testLaneRemove() *cobra.Command {
 			// re-added a lane under that name, which would then start
 			// GRANTED, authorized by a fingerprint issued for whatever the
 			// deleted lane used to run.
-			if err := consent.RevokeLaneConsent(grantStore(root), name); err != nil {
+			if err := consent.RevokeLaneConsent(localstore.GrantStore(root), name); err != nil {
 				return err
 			}
 			Printf("lane %q removed; its consent grants — command and install — were dropped.\n", name)

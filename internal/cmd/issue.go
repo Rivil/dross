@@ -12,6 +12,7 @@ import (
 	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/forge"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/phase"
 )
 
@@ -103,11 +104,11 @@ func openBoard() (ctx *boardCtx, enabled bool, err error) {
 	if err != nil {
 		return nil, false, err
 	}
-	// The machine-local allowlist additions. readAllowHosts errors — rather
+	// The machine-local allowlist additions. localstore.ReadAllowHosts errors — rather
 	// than returning an empty list — when git reports .dross/local.toml
 	// tracked, so a repo that committed one cannot authorize its own board
 	// host through it.
-	extra, err := readAllowHosts(root, filepath.Dir(root))
+	extra, err := localstore.ReadAllowHosts(root, filepath.Dir(root))
 	if err != nil {
 		return nil, false, err
 	}
