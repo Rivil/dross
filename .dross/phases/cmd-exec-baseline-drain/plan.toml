@@ -1,0 +1,312 @@
+[phase]
+  id = "cmd-exec-baseline-drain"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Pin CLI tree, output bytes, test inventory"
+  files = ["cmd/dross/surface_test.go", "cmd/dross/testdata/cli_tree.txt", "internal/cmd/output_golden_test.go", "internal/cmd/testdata/cli_surface/output/", "internal/cmd/testdata/cli_surface/tests_before.txt"]
+  description = """
+Mint from the pre-phase tree: one golden of newRoot()'s whole command tree (use/short/aliases/hidden, every
+flag's type/default/usage), and exact stdout goldens for every command whose output crosses encoding/json or
+toml, reusing cli_surface_test.go's goldenCheck. Re-mint tests_before.txt by running only TestTestNamesRecorded
+under DROSS_UPDATE_GOLDEN=1 (today's inventory predates exec-taint-enumeration). All new files are NEW.
+"""
+  covers = ["c-7", "c-8"]
+  test_contract = [
+    "if a command or flag drifts, TestCLITreeGolden fails with a diff naming the command: dropping `update --check`, renaming `local get`, or flipping any flag's default/hidden bit each fail it; a missing golden fails, not passes",
+    "if output bytes drift, the per-command output golden fails byte-for-byte: swapping state show's MarshalIndent for Marshal, dropping reentry's trailing newline, or emitting `state get b a` in sorted key order each fail (goldens cover project/milestone/defaults/profile/stack show with and without --json, state show, state get, changes/verify-scope/task/deferred/watch --json, reentry, ship --json); two runs mint identical bytes with temp paths normalised",
+    "if the inventory re-mint drops a name, the old inventory is not a subset of the new (`comm -23 old new` must be empty); after the re-mint, deleting TestGitRunGateIsScopedByOrigin (absent from today's inventory) fails TestNoTestLost naming it",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Arm codec ratchet, exempt ceiling, stale-pin checks"
+  files = ["internal/cmd/boundary_test.go", "internal/cmd/exempt_budget_test.go", "internal/cmd/execconsent_audit_test.go", "internal/cmd/taint_usercmds_test.go", "internal/cmd/subprocargs_audit_test.go"]
+  description = """
+Add encoding/json + BurntSushi/toml to forbiddenInCmd with today's 14 json + 6 toml importers baselined one
+entry per line, and rebuild the ratchet self-tests on synthetic entries. Add TestExecExemptBudget (NEW
+exempt_budget_test.go, ceiling 26 via directiveMarkers). Every gated/marked/stream pin must hold >=1 live site;
+acceptedNonLiteralBinaries is keyed by repo-relative path, not filepath.Base.
+"""
+  covers = ["c-4", "c-6", "c-8"]
+  test_contract = [
+    "if the codec ratchet does not bite, a synthetic issue.go importing encoding/json (or toml) fails to yield exactly one finding naming issue.go and the import; baselining ship.go for toml, which it does not import, must fail as stale",
+    "if a ratchet self-test depends on live baseline contents, it breaks as files drain: on a clone of the live map with every forbidden import stripped and an empty baseline, every TestCmdForbiddenImportRatchet subtest must still pass (today's cleantree.go-keyed subtest would go red at t-13)",
+    "if TestExecExemptBudget counts by grep instead of directiveMarkers, a synthetic tree with 2 directives, one `// //dross:exec-exempt` prose comment and one string-literal mention fails to count exactly 2; a ceiling of 1 must fail with \"2 > 1\"; the live count is 26",
+    "if a pin can go stale silently, pointing execConsentGatedFiles at internal/cmd/issue.go (no spawn) fails to name the entry; an `exec.Command(argv[0])` in a synthetic internal/testlane/remote.go must NOT be accepted by the internal/remote/remote.go key; a key whose site vanished must fail as stale",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Move update flow into internal/update"
+  files = ["internal/update/apply.go", "internal/update/apply_test.go", "internal/cmd/update.go", "internal/cmd/update_test.go", "internal/cmd/boundary_test.go", "internal/cmd/execconsent_audit_test.go", "internal/cmd/subprocargs_audit_test.go"]
+  description = """
+runUpdate (fetch, minisign verify, checksum, extract, swap, self-exec resync) and extractBinary/Zip become
+update.Apply(ctx, Options{Out, APIBase, HTTP, Version, Commit, GOOS, GOARCH, TargetPath, Resync}) in NEW
+apply.go; cmd's Update() only builds Options. The 8 TestUpdate* tests and their fixture helpers move to NEW
+apply_test.go and internal/cmd/update_test.go is deleted.
+"""
+  covers = ["c-2", "c-1", "c-4", "c-7"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = [
+    "if the move reorders the update sequence, the 8 moved tests fail in internal/update with identical assertions: resyncing before the signature gate fails TestUpdateRefusesOnMissingSignature, swapping on a bad checksum fails TestUpdateRefusesOnBadChecksum (target bytes must be unchanged)",
+    "if the self-exec marker is lost or duplicated, TestUpdateSelfExecIsTheOnlyMarkerHere (re-pinned to internal/update/apply.go) fails to find exactly one marked site whose reason contains \"verif\"; the accepted key becomes \"internal/update/apply.go:newBinary\" and the exempt count is unchanged",
+    "if a test is copied instead of moved, TestNoTestLost fails: each TestUpdate* must appear once, in update; update.go must leave the os/exec and net/http baselines (net/http now empty) and TestCLITreeGolden must still show --check, --force and hidden --api-base",
+    "standing: TestEverySpawnSiteGatedOrExempt and TestNoSpawnOutputEscapes stay green (a moved marker that clears nothing is a finding); TestExecExemptBudget holds; TestCmdBoundaryByImportDirection is green with every file this task drains removed from its baseline in the same commit; TestCLITreeGolden and the t-1 output goldens stay byte-identical and TestNoTestLost is green; any census this task's run drops under its floor (execConsentMinSites/MinFiles, execSourceFloor/FileFloor, gitTrimSiteFloor, gitHelperSiteFloor) is reset here to floor(0.75 x logged count) with before->after in its comment, never ahead of the census",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Move suite, slot, install spawns to testlane"
+  files = ["internal/testlane/spawn.go", "internal/testlane/spawn_test.go", "internal/cmd/test.go", "internal/cmd/run.go", "internal/cmd/lane_install.go", "internal/cmd/lane_plan.go", "internal/cmd/redproof_replay.go", "internal/cmd/boundary_test.go", "internal/cmd/execconsent_audit_test.go", "internal/cmd/subprocargs_audit_test.go", "internal/cmd/taint_usercmds_test.go"]
+  description = """
+runLocalCommandCtx, runSlotCommand, runRemoteCommand (keeping the Command(argv[0]) + Args form), the install
+spawn, shArgv/shArgvFor and exec.LookPath move 1:1 to NEW internal/testlane/spawn.go. cmd keeps its seam vars,
+installStderr and every consent call; redproof_replay reads exit codes via an ExitCode() interface.
+"""
+  covers = ["c-1", "c-4", "c-7"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = [
+    "if the gate stops reaching the moved spawns, TestToolchainSpawnsResolveAsGated fails: execConsentGatedFiles names internal/testlane/spawn.go in place of test.go, run.go and lane_install.go, and every testlane site must be gated and unmarked; in TestReachProofIsLoadBearing, ungating run.go's unchanged RunConsented anchor must yield an \"ungated\" finding in internal/testlane/spawn.go",
+    "if the stream-site scan stays cmd-only, a synthetic taint-cleared marker in testlane/spawn.go passes TestStreamSitesCarryNoMarker; its scan must widen beyond taintMarkersIn(t, \"internal/cmd\") so that marker fails it",
+    "if exit codes or stdio wiring drift, TestReplayRedVsGreen fails (`exit 3` must give Red with ExitCode 3), TestLaneInstallOutputGoesToStderr fails (CANARY-LANE must be on stderr and not in the error), and RunSlot with a nil *os.File must leave Stdin unset (`cat` exits 0)",
+    "if the accepted-binary key is not re-pointed, a leftover \"internal/cmd/test.go:argv[…]\" key fails as stale and \"internal/testlane/spawn.go:argv[…]\" must be accepted; test.go, run.go, lane_install.go and redproof_replay.go leave the os/exec baseline",
+    "standing: TestEverySpawnSiteGatedOrExempt and TestNoSpawnOutputEscapes stay green (a moved marker that clears nothing is a finding); TestExecExemptBudget holds; TestCmdBoundaryByImportDirection is green with every file this task drains removed from its baseline in the same commit; TestCLITreeGolden and the t-1 output goldens stay byte-identical and TestNoTestLost is green; any census this task's run drops under its floor (execConsentMinSites/MinFiles, execSourceFloor/FileFloor, gitTrimSiteFloor, gitHelperSiteFloor) is reset here to floor(0.75 x logged count) with before->after in its comment, never ahead of the census",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Move drain and detach spawns to domains"
+  files = ["internal/survivor/drain.go", "internal/survivor/drain_test.go", "internal/verify/detach.go", "internal/cmd/survivor_drain.go", "internal/cmd/survivor_drain_test.go", "internal/cmd/verify.go", "internal/cmd/verify_results_test.go", "internal/cmd/boundary_test.go", "internal/cmd/execconsent_audit_test.go", "internal/cmd/taint_usercmds_test.go"]
+  description = """
+The `go list` spawn (with its taint-cleared marker), runCoverageProfile and readRawReport/notCoveredPositions
+with their JSON decode move to NEW internal/survivor/drain.go; runDetachArgv's body becomes verify.RunDetachArgv
+in NEW internal/verify/detach.go. cmd keeps the seam vars, requireExecConsent and verify.IsTestdataPath;
+classifyFetch reads rsync's exit via ExitCode().
+"""
+  covers = ["c-1", "c-4", "c-7", "c-8"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = [
+    "if the drain gate stops reaching its moved spawns, new TestDeletingDrainsGateFlagsItsSpawns fails: ungating survivor_drain.go's requireExecConsent() must turn both internal/survivor/drain.go sites into findings, and without the surgery both must be gated and unmarked",
+    "if verify's gate stops reaching detach, the new companion to TestDeletingVerifysGateFlagsEveryMutationSpawn fails: ungating verify.go's byte-identical anchor must flag internal/verify/detach.go; TestSurgeryAnchorMustMatch must still report \"matched 2 times\"",
+    "if classifyFetch loses the real exit status, new TestClassifyFetchReadsARealExitStatus fails: a real exit error from `sh -c 'exit 23'` must classify exactly as remote.Classify(\"rsync\", host, 23)",
+    "if the moved decode changes behaviour, the moved notCoveredPositions tests (names kept) fail to return \"read mutant statuses\" on malformed JSON; a coverage run with no `go` on PATH must report \"unknown\", never \"not covered\"; TestDrainHasNoLocalTestdataRule stays green; survivor_drain.go leaves os/exec + encoding/json and verify.go leaves os/exec",
+    "standing: TestEverySpawnSiteGatedOrExempt and TestNoSpawnOutputEscapes stay green (a moved marker that clears nothing is a finding); TestExecExemptBudget holds; TestCmdBoundaryByImportDirection is green with every file this task drains removed from its baseline in the same commit; TestCLITreeGolden and the t-1 output goldens stay byte-identical and TestNoTestLost is green; any census this task's run drops under its floor (execConsentMinSites/MinFiles, execSourceFloor/FileFloor, gitTrimSiteFloor, gitHelperSiteFloor) is reset here to floor(0.75 x logged count) with before->after in its comment, never ahead of the census",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Extract local.toml store into localstore"
+  files = ["internal/localstore/store.go", "internal/localstore/store_test.go", "internal/cmd/local.go", "internal/cmd/remote_pool.go", "internal/cmd/local_test.go", "internal/cmd/local_detached_test.go", "internal/cmd/local_remote_alias_test.go", "internal/pathfence/fields.go", "internal/pathfence/fields_test.go", "internal/cmd/boundary_test.go"]
+  description = """
+The store and its toml codec, the key table, detached runs, allow-hosts/grants/remote-env, mutation tuning,
+readLocalKey and the grant-store adapter move to NEW internal/localstore; local.go keeps Local/localGet/localSet
+plus thin forwarders (t-10 deletes them). resolveRemoteHost's local.toml half moves; its probing half stays beside
+probeRemotePool. pathfence's cmd.localStore / cmd.detachedRun / cmd.remoteCandidate declarations re-point.
+"""
+  covers = ["c-5", "c-8"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = [
+    "if the store tests are copied rather than moved, TestNoTestLost fails: TestDetachedRunRoundTripsEveryField, TestSecondRunForOnePhaseIsRefused, TestNewKeyWinsOverAlias, TestRemoteGrantPairResolvesTogether, TestUnreadableStoreIsNotASilentLocalRun, TestLocalStoreRoundTripsGrants and TestReadRemoteGrantRefusesTrackedLocal must each appear once, in localstore, with identical assertions",
+    "if the extraction is satisfied by deleting the feature, the boundary check fails: extractedPackages gains internal/localstore (dropping the import fails \"wiring: … does not import …/localstore\"); a synthetic cmd `type x struct{ A string `toml:\"a\"` }` must give one finding naming the file and x, and a json-only struct must give none",
+    "if pathfence still declares fields on cmd's old types, pathtaint's resolvePathSources fails with \"unresolved declaration … no such struct field\"; re-declared on localstore it is green and pathfence_carrier_test still resolves every carrier",
+    "if the command tree regresses, TestLocalSetGetRoundTrips, TestLocalRejectsUnknownKey and TestRemoteGrantKeysAreNotSettable fail unchanged; a grant Save must keep quick_base/remote_host/detached_run entries and local.toml bytes must be unchanged; local.go leaves the toml baseline",
+    "standing: TestEverySpawnSiteGatedOrExempt and TestNoSpawnOutputEscapes stay green (a moved marker that clears nothing is a finding); TestExecExemptBudget holds; TestCmdBoundaryByImportDirection is green with every file this task drains removed from its baseline in the same commit; TestCLITreeGolden and the t-1 output goldens stay byte-identical and TestNoTestLost is green; any census this task's run drops under its floor (execConsentMinSites/MinFiles, execSourceFloor/FileFloor, gitTrimSiteFloor, gitHelperSiteFloor) is reset here to floor(0.75 x logged count) with before->after in its comment, never ahead of the census",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-7"
+  wave = 2
+  title = "Move settings.json codecs out of cmd"
+  files = ["internal/hooks/settings.go", "internal/hooks/settings_test.go", "internal/cmd/env.go", "internal/cmd/env_test.go", "internal/statusline/settings.go", "internal/statusline/settings_test.go", "internal/cmd/statusline.go", "internal/cmd/boundary_test.go"]
+  description = """
+env.go's readSettings/mutateSettings (decode, indent, 0700 dir, 0600 tmp+rename, trailing newline) move to
+hooks.ReadSettings/MutateSettings, taking their two TestMutateSettings* tests. statusline.go's
+existingStatusLineCommand becomes statusline.ExistingCommand.
+"""
+  covers = ["c-8", "c-7"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = [
+    "if the settings write regresses, `dross env set K V` on a settings.json holding a foreign key fails to keep that key, or leaves a mode other than 0600, no trailing newline, or a `<path>.tmp` behind; a malformed file must still fail with the \"parse <path>:\" prefix and an empty file must read as {}",
+    "if statusline's settings read regresses, statusline.ExistingCommand fails to return \"x\" for {\"statusLine\":{\"command\":\"x\"}} or \"\" for malformed JSON; the clobber refusal must still name the existing command",
+    "if env's surface changes, TestEnvListMasksValues and TestEnvCover_UnsetPropagatesMutateError fail unchanged; env.go and statusline.go leave the encoding/json baseline",
+    "standing: TestEverySpawnSiteGatedOrExempt and TestNoSpawnOutputEscapes stay green (a moved marker that clears nothing is a finding); TestExecExemptBudget holds; TestCmdBoundaryByImportDirection is green with every file this task drains removed from its baseline in the same commit; TestCLITreeGolden and the t-1 output goldens stay byte-identical and TestNoTestLost is green; any census this task's run drops under its floor (execConsentMinSites/MinFiles, execSourceFloor/FileFloor, gitTrimSiteFloor, gitHelperSiteFloor) is reset here to floor(0.75 x logged count) with before->after in its comment, never ahead of the census",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-8"
+  wave = 2
+  title = "Add render package; route JSON/TOML output"
+  files = ["internal/render/render.go", "internal/render/render_test.go", "internal/stack/runtime.go", "internal/cmd/changes.go", "internal/cmd/deferred.go", "internal/cmd/dotget.go", "internal/cmd/jsonout.go", "internal/cmd/reentry.go", "internal/cmd/ship.go", "internal/cmd/state.go", "internal/cmd/task.go", "internal/cmd/verifyscope.go", "internal/cmd/watch.go", "internal/cmd/defaults.go", "internal/cmd/milestone.go", "internal/cmd/profile.go", "internal/cmd/project.go", "internal/cmd/stack.go", "internal/cmd/boundary_test.go"]
+  description = """
+NEW internal/render exposes today's exact shapes: JSON (indented encoder + newline), MarshalJSON,
+MarshalJSONIndent, TOML. emitJSON stays a one-line delegate; the 10 JSON and 5 TOML emitters switch, keeping
+their writers, dotget's argument order and cmd's `# <path>` headers. stack.go's exec.LookPath becomes stack.LookPath.
+"""
+  covers = ["c-8", "c-1", "c-7"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = [
+    "if a render function drifts from the call it replaces, render_test's differentials on a value with nested tables, omitempty and \"<&>\" fail: JSON == Encoder+SetIndent(\"\",\"  \"), MarshalJSON == json.Marshal (HTML escaping kept), MarshalJSONIndent == json.MarshalIndent, TOML == toml.NewEncoder both by default and with Indent \"  \" (so collapsing stack.go's explicit Indent changes no bytes)",
+    "if a call site picks the wrong shape or writer, its t-1 output golden fails byte-for-byte (e.g. `state get b a` must stay in argument order)",
+    "if stack's tool lookup regresses, the stack loadout renders differently on a PATH with none of the tools; the 15 files leave their json/toml baselines, stack.go also leaves os/exec, and extractedPackages gains internal/render (dropping the import fails wiring)",
+    "standing: TestEverySpawnSiteGatedOrExempt and TestNoSpawnOutputEscapes stay green (a moved marker that clears nothing is a finding); TestExecExemptBudget holds; TestCmdBoundaryByImportDirection is green with every file this task drains removed from its baseline in the same commit; TestCLITreeGolden and the t-1 output goldens stay byte-identical and TestNoTestLost is green; any census this task's run drops under its floor (execConsentMinSites/MinFiles, execSourceFloor/FileFloor, gitTrimSiteFloor, gitHelperSiteFloor) is reset here to floor(0.75 x logged count) with before->after in its comment, never ahead of the census",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-9"
+  wave = 2
+  title = "Add leaf gitrun runner; teach audits selectors"
+  files = ["internal/gitrun/gitrun.go", "internal/gitrun/gitrun_test.go", "internal/cmd/ship_recover.go", "internal/cmd/phase.go", "internal/cmd/boundary_test.go", "internal/cmd/execconsent_audit_test.go", "internal/cmd/taint_gitplumbing_test.go", "internal/cmd/subprocargs_audit_test.go", "internal/cmd/testdata/subprocargs_audit/snippets.txt", "internal/cmd/ship_test.go", "internal/cmd/switchbranch_test.go", "internal/cmd/basebranch_test.go", "internal/cmd/gitseparator_test.go", "internal/cmd/verifyscope_test.go"]
+  description = """
+NEW stdlib-only internal/gitrun with exactly four spawns: Trim (ref verbs; exempt + moved taint marker), Raw
+(untrimmed; Read = TrimSpace(Raw)), Run (failure output to gitrun.Stderr) and Quiet, plus ArgvRecorder and ExitCode.
+The four cmd helpers become delegates; ship_recover's probe uses Quiet; audits learn `gitrun.<Verb>(…)` repo-wide
+(the five *_test.go files change setup lines only).
+"""
+  covers = ["c-3", "c-4", "c-1"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = [
+    "if a verb's output routing is wrong, the stub-git tests fail: a failing Run's error must lack CANARY while Stderr holds \"git <verb>:\" + CANARY; a failing Quiet puts CANARY in neither; Raw keeps a leading \" M\" that Read trims; a non-ancestor merge-base gives ExitCode()==1; every argv starts `-C <dir>` and reaches ArgvRecorder",
+    "if gitrun stops being a leaf, a synthetic gitrun importing internal/consent fails to give exactly one finding; TestGitRunGateIsScopedByOrigin, retargeted to gitrun's Run and Trim spawn lines, must keep only the Run-origin finding; new TestGitrunContentVerbsCarryNoMarker fails if a taint-cleared marker binds inside Raw or Read",
+    "if the verb pin cannot see selector calls, `gitrun.Trim(dir, \"log\", \"--oneline\")` in an internal/security file fails to trip TestGitTrimRunsRefVerbsOnly naming file:line; `gitrun.Trim(dir, \"remote\", \"get-url\", \"origin\")` and `rev-parse --git-path x` must trip while `rev-parse --short HEAD` / `--is-inside-work-tree` pass; `gitrun.Quiet(dir, \"rev-parse\", branch)` must be flagged by TestNoUnseparatedGitPositional while the \"refs/heads/\"+branch form is not; an aliased gitrun import is a finding",
+    "if the delegation changes behaviour, TestShipRecoverFetchFailureOutputGoesToStderr fails with only its setup swapped to gitrun.Stderr; TestLiveTreeHasNoUnresolvedDispatch stays green; exec-exempt count goes 26 -> 25 and ship_recover.go leaves the os/exec baseline",
+    "standing: TestEverySpawnSiteGatedOrExempt and TestNoSpawnOutputEscapes stay green (a moved marker that clears nothing is a finding); TestExecExemptBudget holds; TestCmdBoundaryByImportDirection is green with every file this task drains removed from its baseline in the same commit; TestCLITreeGolden and the t-1 output goldens stay byte-identical and TestNoTestLost is green; any census this task's run drops under its floor (execConsentMinSites/MinFiles, execSourceFloor/FileFloor, gitTrimSiteFloor, gitHelperSiteFloor) is reset here to floor(0.75 x logged count) with before->after in its comment, never ahead of the census",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-10"
+  wave = 3
+  title = "Rewire cmd onto localstore; shrink local.go"
+  files = ["internal/cmd/local.go", "internal/cmd/local_shim_test.go", "internal/cmd/trust.go", "internal/cmd/verify.go", "internal/cmd/remote_grant.go", "internal/cmd/test.go", "internal/cmd/remote_pool.go", "internal/cmd/test_lane_install.go", "internal/cmd/doctor.go", "internal/cmd/remote_bootstrap_cmd.go", "internal/cmd/issue.go", "internal/cmd/gitignore.go", "internal/cmd/ship.go", "internal/cmd/run.go", "internal/cmd/remote_bootstrap.go", "internal/cmd/redproof_replay.go", "internal/cmd/lane_preview_locality.go", "internal/cmd/lane_preview.go", "internal/cmd/lane_locality.go", "internal/cmd/lane_install.go", "internal/cmd/basebranch.go", "internal/cmd/test_lane.go", "internal/cmd/execconsent_audit_test.go", "internal/cmd/boundary_test.go"]
+  description = """
+The 20 cmd callers call localstore directly and local.go's forwarders are deleted. The cmd test identifiers
+(grantStore, detachedRun, recordDetachedRun, loadLocal, localPath …) move into NEW local_shim_test.go, and
+run.go's surgery anchors become the rename-stable `consent.RunConsented(`.
+"""
+  covers = ["c-5", "c-7"]
+  depends_on = ["t-6"]
+  test_contract = [
+    "if local.go keeps anything but the command tree, new TestLocalGoIsOnlyTheCommandTree fails naming the leftover: any type/var/const in internal/cmd/local.go, or any func not returning *cobra.Command",
+    "if the surgery anchor breaks, `consent.RunConsented(` fails to match exactly once in run.go; TestSurgeryLeavesTheSharedGraphAlone and TestUserCommandFixKeepsTheSurgeryAnchors must still land every surgery, and an anchor still spelling grantStore(root) must fail \"anchor never matched\"",
+    "if an e2e assertion is edited, `git diff --stat` shows a cmd *_test.go change besides the shim and the two audit files; `dross local set trusted_test_command x` and `local set remote_host h` must still refuse",
+    "standing: TestEverySpawnSiteGatedOrExempt and TestNoSpawnOutputEscapes stay green (a moved marker that clears nothing is a finding); TestExecExemptBudget holds; TestCmdBoundaryByImportDirection is green with every file this task drains removed from its baseline in the same commit; TestCLITreeGolden and the t-1 output goldens stay byte-identical and TestNoTestLost is green; any census this task's run drops under its floor (execConsentMinSites/MinFiles, execSourceFloor/FileFloor, gitTrimSiteFloor, gitHelperSiteFloor) is reset here to floor(0.75 x logged count) with before->after in its comment, never ahead of the census",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-11"
+  wave = 3
+  title = "Replace git helper calls with gitrun"
+  files = ["internal/cmd/basebranch.go", "internal/cmd/cleantree.go", "internal/cmd/doctor.go", "internal/cmd/forkpoint.go", "internal/cmd/milestone.go", "internal/cmd/milestone_merged.go", "internal/cmd/milestone_stale.go", "internal/cmd/originpush.go", "internal/cmd/phase_backfill.go", "internal/cmd/phase_checkout.go", "internal/cmd/phase.go", "internal/cmd/phase_reconcile.go", "internal/cmd/phase_lifecycle.go", "internal/cmd/redproof.go", "internal/cmd/redproof_lifecycle.go", "internal/cmd/redproof_repoint.go", "internal/cmd/redproof_set.go", "internal/cmd/redproof_replay.go", "internal/cmd/repair_files.go", "internal/cmd/repair_state.go", "internal/cmd/repair.go", "internal/cmd/repair_phasedirs.go", "internal/cmd/ship.go", "internal/cmd/secretscan.go", "internal/cmd/ship_recover.go", "internal/cmd/status.go", "internal/cmd/switchbranch.go", "internal/cmd/topology.go", "internal/cmd/verifyscope.go", "internal/cmd/git_shim_test.go", "internal/cmd/subprocargs_audit_test.go", "internal/cmd/taint_gitplumbing_test.go"]
+  description = """
+The 131 production calls to gitTrim/gitRead/gitRun/gitNoOut become gitrun.Trim/Read/Run/Quiet and the four
+delegates are deleted. NEW git_shim_test.go keeps the 12 setup-calling test files unchanged; gitCallFuncs and
+gitHelperSiteFloor are keyed per gitrun verb and the bare-ident form is dropped.
+"""
+  covers = ["c-3", "c-7"]
+  depends_on = ["t-9"]
+  test_contract = [
+    "if a call site falls out of the audit during the rename, TestGitHelperCallSiteFloor's per-verb totals drop below the pre-rewrite counts (Run 39, Trim 40, Read 11, Quiet 41) and fail; floors are 29/30/8/30",
+    "if a rewritten Trim call escapes the verb pin, TestGitTrimRunsRefVerbsOnly fails: it must examine >= gitTrimSiteFloor (30) gitrun.Trim sites with zero problems; no non-test FuncDecl named gitTrim/gitRead/gitRun/gitNoOut may remain",
+    "if a test body is edited, the 12 setup-calling test files are not byte-identical; `git diff --stat` must show only the 29 production files, the shim and the 2 audits",
+    "standing: TestEverySpawnSiteGatedOrExempt and TestNoSpawnOutputEscapes stay green (a moved marker that clears nothing is a finding); TestExecExemptBudget holds; TestCmdBoundaryByImportDirection is green with every file this task drains removed from its baseline in the same commit; TestCLITreeGolden and the t-1 output goldens stay byte-identical and TestNoTestLost is green; any census this task's run drops under its floor (execConsentMinSites/MinFiles, execSourceFloor/FileFloor, gitTrimSiteFloor, gitHelperSiteFloor) is reset here to floor(0.75 x logged count) with before->after in its comment, never ahead of the census",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-12"
+  wave = 3
+  title = "Route non-cmd git spawns through gitrun"
+  files = ["internal/gitrun/gitrun.go", "internal/gitrun/gitrun_test.go", "internal/techdebt/run.go", "internal/techdebt/run_test.go", "internal/quality/run.go", "internal/quality/run_test.go", "internal/security/run.go", "internal/security/run_test.go", "internal/cmd/techdebt.go", "internal/cmd/quality.go", "internal/cmd/security.go", "internal/codex/git.go", "internal/consent/store.go", "internal/remote/remote.go", "internal/cmd/taint_scanners_test.go", "internal/cmd/taint_gitplumbing_test.go", "internal/cmd/execconsent_audit_test.go", "internal/cmd/subprocargs_audit_test.go"]
+  description = """
+One gitrun.ShortSHA ("nogit" on failure) over Trim replaces the three copies and their markers. codex's log goes
+through Read, consent's tracked probe through Quiet, remote's ignore listing through Raw (consumer marker kept) and
+its work-tree probe through Trim. codex/git.go leaves the spawn pins and gitrun joins execConsentMarkedFiles.
+"""
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-9"]
+  test_contract = [
+    "if the ShortSHA merge drops a same-named test, TestNoTestLost fails without any inventory edit: techdebt's TestShortSHADegradesToNogit and TestNormalizeSHAFallsBackOnEmpty move to gitrun, while quality's and security's same-named TestShortSHAFallback and TestNormalizeSHA stay in place targeting gitrun.ShortSHA; run dirs carry the same short SHA",
+    "if Trim's taint-cleared marker stops being load-bearing, TestScannerRevParseMarkerIsLoadBearing and TestEveryScannerMarkerIsLoadBearing fail (names and files kept per TestScopedGuardsSurvive): deleting it must yield findings that start at gitrun's Trim spawn and escape in each of security, quality and techdebt",
+    "if the codex pins are not moved, TestExecConsentScansTheSpawningPackages and TestAuditScansCodexPackage fail \"holds no spawn site\" on internal/codex/git.go; re-pinned to internal/gitrun/gitrun.go they pass; TestHelperPackageSpawnsAreMarked and TestRemoteMarkerNamesTheCallerCheck stay green",
+    "if a moved probe changes behaviour, a tracked local.toml fails to make consent refuse naming the file (an untracked one must not refuse), remote's rsync exclude drops a path with spaces, or a non-git dir fails to fall back; exec-exempt count goes 25 -> 20",
+    "standing: TestEverySpawnSiteGatedOrExempt and TestNoSpawnOutputEscapes stay green (a moved marker that clears nothing is a finding); TestExecExemptBudget holds; TestCmdBoundaryByImportDirection is green with every file this task drains removed from its baseline in the same commit; TestCLITreeGolden and the t-1 output goldens stay byte-identical and TestNoTestLost is green; any census this task's run drops under its floor (execConsentMinSites/MinFiles, execSourceFloor/FileFloor, gitTrimSiteFloor, gitHelperSiteFloor) is reset here to floor(0.75 x logged count) with before->after in its comment, never ahead of the census",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-13"
+  wave = 4
+  title = "Route direct cmd git reads through gitrun"
+  files = ["internal/cmd/cleantree.go", "internal/cmd/worktree_files.go", "internal/cmd/pause.go", "internal/cmd/techdebt.go", "internal/cmd/init.go", "internal/cmd/phase.go", "internal/changes/changes.go", "internal/changes/changes_test.go", "internal/cmd/taint_gitdirect_test.go", "internal/cmd/boundary_test.go"]
+  description = """
+Porcelain/untracked status and `ls-files -z` go through Raw; pause's symbolic-ref goes through Trim and its
+redundant marker is deleted. phase.go's two `git show` reads go through Read and a new changes.Decode. init reads
+origin in seedRemote through Read (gitRemoteOriginURL deleted) and resolves binaries via stack.LookPath.
+"""
+  covers = ["c-1", "c-3", "c-4", "c-8"]
+  depends_on = ["t-8", "t-11"]
+  test_contract = [
+    "if Raw output gets trimmed, a repo whose first porcelain line is \" M a.go\" fails to yield \"a.go\" (status column lost); techdebt must keep \"with space.go\" and a name containing a newline intact (NUL split, no trim)",
+    "if a marker is kept or dropped wrongly, TestNoSpawnOutputEscapes fails: a pause marker kept after the move is reported \"clears nothing\", and deleting a Raw-consumer marker (cleantree's porcelain line) reports the escape",
+    "if output or credentials leak, TestPhaseGitShowOutputStaysOffTheError (no CANARY-SHOW) or TestRemoteURLUserinfoNeverPersists (no CANARY-TOK) fails unchanged; TestInitRawRemoteURLCarriesNoMarker, retargeted to seedRemote, must find its gitrun.Read call unmarked, and routing `remote get-url` through Trim must trip the verb pin",
+    "if changes.Decode is lossy, it fails to round-trip Base and PR, or garbage fails to return an error (phaseRefRecordedBase must still return \"\"); the 6 cmd files leave os/exec, phase.go also leaves encoding/json, and exec-exempt count goes 20 -> 12",
+    "standing: TestEverySpawnSiteGatedOrExempt and TestNoSpawnOutputEscapes stay green (a moved marker that clears nothing is a finding); TestExecExemptBudget holds; TestCmdBoundaryByImportDirection is green with every file this task drains removed from its baseline in the same commit; TestCLITreeGolden and the t-1 output goldens stay byte-identical and TestNoTestLost is green; any census this task's run drops under its floor (execConsentMinSites/MinFiles, execSourceFloor/FileFloor, gitTrimSiteFloor, gitHelperSiteFloor) is reset here to floor(0.75 x logged count) with before->after in its comment, never ahead of the census",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-14"
+  wave = 4
+  title = "Route timeout and stdin git through gitrun"
+  files = ["internal/gitrun/gitrun.go", "internal/gitrun/gitrun_test.go", "internal/cmd/statusline.go", "internal/cmd/statusline_test.go", "internal/cmd/milestone_stale.go", "internal/cmd/taint_gitplumbing_test.go", "internal/cmd/taint_scanners_test.go", "internal/cmd/boundary_test.go"]
+  description = """
+gitBranchTrim becomes a Trim options form (2s timeout, --no-optional-locks) on Trim's one spawn, now
+CommandContext; gitHelperSpawnLines and spawnLineIn learn CommandContext. milestone_stale's diff->patch-id uses Raw
+plus Raw's new stdin form, and isAncestor reads merge-base's exit via gitrun.ExitCode. statusline_test.go: setup line only.
+"""
+  covers = ["c-1", "c-3", "c-4"]
+  depends_on = ["t-7", "t-11"]
+  test_contract = [
+    "if the timeout form is lost, a stub git that sleeps 5s makes it return after more than 3s, or its recorded argv lacks a leading --no-optional-locks; statusline tests must still give \"main\" on a branch, the short SHA detached and \"\" outside a repo",
+    "if the spawn finder misses CommandContext, TestGitRunGateIsScopedByOrigin fails fatally \"found no exec.Command\"; internal/gitrun must still hold exactly one Trim spawn and one Raw spawn",
+    "if ancestry or patch-id regresses, new TestIsAncestorOverARealRepo fails: ancestor -> (true,nil), non-ancestor -> (false,nil) via exit 1, missing ref -> error; patch-id over a two-file diff must equal `git diff | git patch-id --stable` by hand and an empty diff gives \"\"; TestStale* pass unchanged",
+    "if the options form bypasses the verb pin, a `--format=%(contents)` call through it fails to trip; statusline.go and milestone_stale.go leave os/exec so the os/exec baseline is empty, and exec-exempt count goes 12 -> 9",
+    "standing: TestEverySpawnSiteGatedOrExempt and TestNoSpawnOutputEscapes stay green (a moved marker that clears nothing is a finding); TestExecExemptBudget holds; TestCmdBoundaryByImportDirection is green with every file this task drains removed from its baseline in the same commit; TestCLITreeGolden and the t-1 output goldens stay byte-identical and TestNoTestLost is green; any census this task's run drops under its floor (execConsentMinSites/MinFiles, execSourceFloor/FileFloor, gitTrimSiteFloor, gitHelperSiteFloor) is reset here to floor(0.75 x logged count) with before->after in its comment, never ahead of the census",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-15"
+  wave = 5
+  title = "Flatten ratchet into ban; census git spawns"
+  files = ["internal/cmd/boundary_test.go", "internal/cmd/exempt_budget_test.go"]
+  description = """
+Delete cmdForbiddenBaseline and checkBoundary's baseline parameter. os/exec, net/http, go/ast, encoding/json and
+BurntSushi/toml become a flat ban on non-test internal/cmd, with a table-driven ban self-test. Add
+TestEveryGitSpawnIsInTheRunner and lock TestExecExemptBudget at the final count (9).
+"""
+  covers = ["c-6", "c-1", "c-2", "c-3", "c-4", "c-5", "c-8"]
+  depends_on = ["t-3", "t-4", "t-5", "t-7", "t-8", "t-10", "t-12", "t-13", "t-14"]
+  test_contract = [
+    "if the ban misses a file or import, the exhaustive loop fails: on a clone, injecting each of the 5 imports into each non-test internal/cmd file must yield exactly one finding naming both; the same import in a synthetic x_test.go or internal/foo must yield none; the live tree is green",
+    "if an allowlist creeps back, TestFlatBanHasNoAllowlist fails: reflect.TypeOf(checkBoundary).NumIn() must be 1 and no package-level var in boundary_test.go may match (?i)baseline|allow",
+    "if a git spawn exists outside the runner, TestEveryGitSpawnIsInTheRunner fails: zero exec.Command/CommandContext with a literal \"git\" outside internal/gitrun and >=1 inside (non-vacuous); a synthetic `exec.Command(\"git\",\"status\")` in internal/codex fails, as does a FuncDecl named gitTrim/gitRead/gitRun/gitNoOut/gitBranchTrim/gitStatusRaw/gitRemoteOriginURL/ShortSHA outside gitrun",
+    "if the marker count grows after the phase, one added //dross:exec-exempt directive fails TestExecExemptBudget (locked at 9); TestNoTestLost and TestCLITreeGolden stay green",
+  ]
+  status = "pending"
