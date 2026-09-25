@@ -366,12 +366,16 @@ func protocolToken(field, v string) (string, error) {
 	if v == "" {
 		return "", nil
 	}
-	if len(v) > maxProtocolToken || strings.IndexFunc(v, func(r rune) bool { return !unicode.IsPrint(r) }) >= 0 {
+	if len(v) > maxProtocolToken || strings.IndexFunc(v, notPrintable) >= 0 {
 		return "", unreadableField(field, v)
 	}
 	//dross:taint-cleared a record field that passed the protocol-token shape check is a dross-written name — a project, phase, run id, user or state word — not the transport's own output
 	return strings.Clone(v), nil
 }
+
+// notPrintable is the rune a dross-written name never holds: a control
+// character, or anything else unicode does not class as printable.
+func notPrintable(r rune) bool { return !unicode.IsPrint(r) }
 
 // unreadableField reports a record field that is not what a dross script
 // writes: the raw value goes to stderr, the error names the field only.

@@ -541,6 +541,7 @@ func TestMalformedHolderYieldsNoHolder(t *testing.T) {
 		"holder.run=r1\nholder.project=" + strings.Repeat("x", maxProtocolToken+1),
 		"holder.run=r1\nholder.user=bad\x07bell",
 		"holder.run=bad\x1b[31mred",
+		"holder.run=\x1bred", // the first rune: IndexFunc returns 0
 	} {
 		h, ok, err := ParseHolder(record)
 		if err == nil || ok || !h.IsZero() {
