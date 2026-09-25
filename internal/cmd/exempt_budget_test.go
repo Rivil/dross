@@ -13,17 +13,21 @@ import (
 // exempt_budget_test.go caps the //dross:exec-exempt directives in the tree
 // (cmd-exec-baseline-drain c-4). The phase moves spawn sites between packages;
 // a move that "fixed" an audit by adding a marker at the new home would pass
-// every per-site test while quietly widening the exemption surface. The
-// ceiling is the count when the phase began, so moves may only spend markers
-// down, never up.
+// every per-site test while quietly widening the exemption surface. The phase
+// held the ceiling at its starting count (26) while moves spent markers down,
+// and locked it at the count the phase ended on.
 //
 // Counting goes through directiveMarkers — the parser every audit binds
 // markers with — so what is counted is exactly what clears a site: a prose
 // comment quoting the directive or a string literal mentioning it is not one.
 
 // execExemptCeiling is the most //dross:exec-exempt directives the non-test
-// tree may carry. 26 is the count when cmd-exec-baseline-drain began.
-const execExemptCeiling = 26
+// tree may carry. cmd-exec-baseline-drain began at 26 and ended at 9 — gitrun's
+// four verbs, codex's ast-grep, ship's gh client, remote's transport seam,
+// update's self-exec and compilefence's test-only compile fence — and the ceiling is
+// locked there: a new exemption is a deliberate edit to this number, never a
+// quiet side effect of a move.
+const execExemptCeiling = 9
 
 // countExecExemptDirectives parses every non-test .go file under the roots
 // (testdata skipped) and counts the exec-exempt directives that bind a line.
