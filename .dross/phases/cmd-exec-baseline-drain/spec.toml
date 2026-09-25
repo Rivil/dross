@@ -1,0 +1,54 @@
+[phase]
+  id = "cmd-exec-baseline-drain"
+  title = "cmd-exec-baseline-drain"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "No non-test internal/cmd file imports os/exec — the ratchet's os/exec baseline reaches empty, including the four gated spawn sites (phase.go, survivor_drain.go, test.go, verify.go)."
+
+[[criteria]]
+  id = "c-2"
+  text = "No non-test internal/cmd file imports net/http — update.go's HTTP client and release fetch move into internal/update, so the net/http baseline reaches empty."
+
+[[criteria]]
+  id = "c-3"
+  text = "Every git spawn under internal/ goes through one runner package that keeps exec-taint-enumeration's verb split (trimmed ref verbs, content reads, failure-to-stderr runs) — one implementation replacing the scattered helpers (gitTrim, gitRead, gitRun, gitNoOut, gitBranchTrim, gitStatusRaw, gitRemoteOriginURL, the three ShortSHA copies, …)."
+
+[[criteria]]
+  id = "c-4"
+  text = "Moved spawn sites keep their verdict: the repo-wide spawn-site audit and the taint gate stay green after every move, and the total count of //dross:exec-exempt markers does not grow."
+
+[[criteria]]
+  id = "c-5"
+  text = "local.go persistence (localStore, remote grants and host resolution, detached-run records, mutation tuning keys, the consent grant store) lives in its own package; internal/cmd keeps only the `local get/set` command tree."
+
+[[criteria]]
+  id = "c-6"
+  text = "With the baselines empty, the boundary ratchet becomes a flat ban: any non-test internal/cmd file importing a forbidden package fails, with no allowlist to add to — and the ban's self-tests prove it bites."
+
+[[criteria]]
+  id = "c-7"
+  text = "No user-visible CLI change: command names, flags, output and exit codes are unchanged; existing internal/cmd end-to-end tests pass with no assertion edits, moved unit tests move with their code, and TestNoTestLost stays green."
+
+[[criteria]]
+  id = "c-8"
+  text = "No non-test internal/cmd file imports encoding/json or github.com/BurntSushi/toml: decode/persist logic lives in its domain package, CLI --json/TOML output goes through one small rendering package, and both imports join c-6's flat ban."
+
+[[decisions]]
+  key = "git_runner_scope"
+  choice = "The c-3 runner absorbs all git spawns repo-wide — cmd's 16 sites plus the 7 outside it (techdebt/quality/security ShortSHA, codex/git.go, consent/store.go, remote/remote.go x2). The runner is a leaf package so consent and remote can import it."
+  why = "A cmd-only runner leaves a second way to spawn git in six packages, three of them identical ShortSHA copies; 7 small sites is cheap next to the duplication it retires."
+  locked = true
+
+[[decisions]]
+  key = "gated_spawn_homes"
+  choice = "The gated user-code spawns move to their domain's existing package (testlane, survivor, verify, update) — no new catch-all spawn package. The requireExecConsent call stays in cmd; the spawn sits behind it in the callee."
+  why = "The spawn-site audit is already derived repo-wide with VTA reach, so a single spawn package buys no auditability and would become a grab-bag."
+  locked = true
+
+[[decisions]]
+  key = "local_store_proof"
+  choice = "c-5 is proven by c-8's codec ban (local.toml decode/encode cannot live in cmd) plus a boundary check that internal/cmd imports the new local-store package and declares no local.toml store type."
+  why = "The milestone asks for proof by import direction; the codec ban supplies it once c-8 lands, and the positive import stops the move being satisfied by deleting the feature."
+  locked = true
