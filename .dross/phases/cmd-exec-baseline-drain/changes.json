@@ -214,6 +214,27 @@
         }
       ]
     },
+    "t-16": {
+      "files": [
+        "internal/cmd/local_test.go",
+        "internal/cmd/local_detached_test.go",
+        "internal/cmd/local_shim_test.go",
+        "internal/cmd/survivor_drain_test.go",
+        "internal/localstore/detached_test.go",
+        "internal/localstore/readers_test.go",
+        "internal/survivor/drain_test.go"
+      ],
+      "commit": "522cdf2",
+      "completed_at": "2026-09-25T17:56:29.38072Z",
+      "landmarks": [
+        {
+          "feature": "machine-local store",
+          "symbol": "TestMutationTuningAcceptsOne",
+          "loc": "internal/localstore/readers_test.go:161",
+          "what": "store reader and detached-run unit tests live in internal/localstore (go list test in internal/survivor) so mutation credits the package that owns the code"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/boundary_test.go",

@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 16
 
 [phase]
   id = "cmd-exec-baseline-drain"
@@ -164,4 +164,15 @@ task_seq = 0
   covers = ["c-6", "c-1", "c-2", "c-3", "c-4", "c-5", "c-8"]
   depends_on = ["t-3", "t-4", "t-5", "t-7", "t-8", "t-10", "t-12", "t-13", "t-14"]
   test_contract = ["if the ban misses a file or import, the exhaustive loop fails: on a clone, injecting each of the 5 imports into each non-test internal/cmd file must yield exactly one finding naming both; the same import in a synthetic x_test.go or internal/foo must yield none; the live tree is green", "if an allowlist creeps back, TestFlatBanHasNoAllowlist fails: reflect.TypeOf(checkBoundary).NumIn() must be 1 and no package-level var in boundary_test.go may match (?i)baseline|allow", "if a git spawn exists outside the runner, TestEveryGitSpawnIsInTheRunner fails: zero exec.Command/CommandContext with a literal \"git\" outside internal/gitrun and >=1 inside (non-vacuous); a synthetic `exec.Command(\"git\",\"status\")` in internal/codex fails, as does a FuncDecl named gitTrim/gitRead/gitRun/gitNoOut/gitBranchTrim/gitStatusRaw/gitRemoteOriginURL/ShortSHA outside gitrun", "if the marker count grows after the phase, one added //dross:exec-exempt directive fails TestExecExemptBudget (locked at 9); TestNoTestLost and TestCLITreeGolden stay green", "if the git census scans test code, it outlaws fixtures: TestEveryGitSpawnIsInTheRunner scans only non-test .go files under internal/ and cmd/ (testdata skipped), so a synthetic x_test.go holding exec.Command(\"git\", ...) and a gitTrim FuncDecl yields no finding, and t-11's git_shim_test.go plus the fixture test files stay legal"]
+  status = "done"
+
+[[task]]
+  id = "t-16"
+  wave = 7
+  title = "Move moved-code unit tests to their packages"
+  files = ["internal/cmd/local_test.go", "internal/cmd/local_detached_test.go", "internal/cmd/local_shim_test.go", "internal/cmd/survivor_drain_test.go", "internal/localstore/detached_test.go", "internal/localstore/readers_test.go", "internal/survivor/drain_test.go"]
+  description = "Verify FIX: 22 in-hunk NOT COVERED survivors (localstore/store.go x20, survivor/drain.go:26,32) because unit tests of code moved out of cmd stayed in cmd; gremlins credits only a package's own tests. Move local_detached_test.go wholesale and the store-only tests of local_test.go into internal/localstore, TestRealGoListDirsSurfacesFailures into internal/survivor; add TestMutationTuningAcceptsOne for the n<1 boundary and the test_cpu branch; shrink local_shim_test.go. local-set e2e tests stay in cmd."
+  covers = ["c-7"]
+  depends_on = ["t-15"]
+  test_contract = ["if a moved test is copied instead of moved (left behind in cmd), TestNoTestLost fails", "if parseTuning's n < 1 boundary becomes n <= 1, TestMutationTuningAcceptsOne fails", "if GoListDirs stops erroring outside a module or keeps blank lines, TestRealGoListDirsSurfacesFailures (now in internal/survivor) fails"]
   status = "done"
