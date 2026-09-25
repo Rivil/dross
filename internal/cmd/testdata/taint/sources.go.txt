@@ -1,5 +1,5 @@
 Source corpus for the exec-output taint engine (TestExecTaintSources). Every
-kind of spawn-output source reaches errors.New once, on its WANT line; a value
+kind of spawn-output source reaches an error once, on its WANT line; a value
 that only resembles a source must not trip. Every exec.Cmd is a source — no
 binary is classed safe — so the spawns name "git" and the engine must give the
 same verdict when TestExecTaintVerdictIgnoresBinaryName swaps it for "cargo".
@@ -68,6 +68,17 @@ func stdoutBuffer(c *exec.Cmd) error {
 		return err
 	}
 	return errors.New(buf.String()) // WANT taint
+}
+
+// stderrBuffer: Cmd.Stderr is its own channel. A buffer plugged into it
+// alone, with Stdout left unset, receives the stream.
+func stderrBuffer(c *exec.Cmd) error {
+	var buf bytes.Buffer
+	c.Stderr = &buf
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("git failed: %s", buf.String()) // WANT taint
+	}
+	return nil
 }
 
 // wrapped embeds *exec.Cmd; its promoted Output is exec's own method.
