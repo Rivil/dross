@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/secretscan"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
@@ -535,7 +535,7 @@ func Ship() *cobra.Command {
 					out.URL = res.URL
 					out.Number = res.Number
 				}
-				b, mErr := json.Marshal(out)
+				b, mErr := render.MarshalJSON(out)
 				if mErr != nil {
 					return fmt.Errorf("marshal --json output: %w", mErr)
 				}

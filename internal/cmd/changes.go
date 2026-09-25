@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -9,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/render"
 )
 
 // Changes registers `dross changes {record,show}`.
@@ -135,7 +135,7 @@ func changesShow() *cobra.Command {
 			// not a toml document. --json is accepted for symmetry so a caller
 			// can pass it uniformly across every `show`, exactly as `state
 			// show` already does; the output is identical either way.
-			b, _ := json.MarshalIndent(rec, "", "  ")
+			b, _ := render.MarshalJSONIndent(rec)
 			os.Stdout.Write(b)
 			fmt.Println()
 			return nil

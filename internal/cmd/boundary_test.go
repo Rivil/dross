@@ -57,7 +57,6 @@ var cmdForbiddenBaseline = map[string][]string{
 		"pause.go",
 		"phase.go",
 		"ship_recover.go",
-		"stack.go",
 		"statusline.go",
 		"techdebt.go",
 		"worktree_files.go",
@@ -65,30 +64,14 @@ var cmdForbiddenBaseline = map[string][]string{
 	"net/http": {},
 	"go/ast":   {},
 	"encoding/json": {
-		"changes.go",
-		"deferred.go",
-		"dotget.go",
-		"jsonout.go",
 		"phase.go",
-		"reentry.go",
-		"ship.go",
-		"state.go",
-		"task.go",
-		"verifyscope.go",
-		"watch.go",
 	},
-	"github.com/BurntSushi/toml": {
-		"defaults.go",
-		"milestone.go",
-		"profile.go",
-		"project.go",
-		"stack.go",
-	},
+	"github.com/BurntSushi/toml": {},
 }
 
 // extractedPackages are the packages logic was pulled out of cmd into, which
 // cmd must import — the four cmd-package-decomposition extracted, then
-// cmd-exec-baseline-drain's local.toml store. An import that vanished means
+// cmd-exec-baseline-drain's local.toml store and output rendering. An import that vanished means
 // the extraction was satisfied by deleting the feature, not by moving it.
 var extractedPackages = []string{
 	modulePath + "/internal/consent",
@@ -96,6 +79,7 @@ var extractedPackages = []string{
 	modulePath + "/internal/diag",
 	modulePath + "/internal/mutationcfg",
 	modulePath + "/internal/localstore",
+	modulePath + "/internal/render",
 }
 
 const (

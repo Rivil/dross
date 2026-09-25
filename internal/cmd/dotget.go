@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"encoding/json"
 	"strings"
+
+	"github.com/Rivil/dross/internal/render"
 )
 
 // dotLookup resolves one dotted path to its value. A scalar comes back as a
@@ -69,11 +70,11 @@ func renderMultiGet(paths []string, lookup dotLookup) error {
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		k, err := json.Marshal(p)
+		k, err := render.MarshalJSON(p)
 		if err != nil {
 			return err
 		}
-		v, err := json.Marshal(values[i])
+		v, err := render.MarshalJSON(values[i])
 		if err != nil {
 			return err
 		}

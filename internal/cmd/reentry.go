@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -9,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -51,7 +51,7 @@ func Reentry() *cobra.Command {
 				return err
 			}
 			line := reentryLine(root, proj, st)
-			out, err := json.Marshal(sessionStartOutput{
+			out, err := render.MarshalJSON(sessionStartOutput{
 				SystemMessage: line,
 				HookSpecificOutput: sessionStartHookOutput{
 					HookEventName:     "SessionStart",

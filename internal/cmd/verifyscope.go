@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -9,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/pathfence"
+	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/verify"
 )
 
@@ -231,7 +231,7 @@ func verifyScope() *cobra.Command {
 			}
 			prov := verify.ProvenanceOf(tests)
 			if asJSON {
-				b, err := json.MarshalIndent(prov, "", "  ")
+				b, err := render.MarshalJSONIndent(prov)
 				if err != nil {
 					return err
 				}

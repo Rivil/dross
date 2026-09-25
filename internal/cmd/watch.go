@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"encoding/json"
 	"path/filepath"
 
 	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/forge"
+	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/watch"
 	"github.com/spf13/cobra"
 )
@@ -112,7 +112,7 @@ func Watch() *cobra.Command {
 			}
 
 			if asJSON {
-				out, err := json.Marshal(digest)
+				out, err := render.MarshalJSON(digest)
 				if err != nil {
 					return err
 				}

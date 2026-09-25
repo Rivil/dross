@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -710,7 +710,7 @@ func milestoneShow() *cobra.Command {
 				return emitJSON(m)
 			}
 			Printf("# %s\n", path)
-			return toml.NewEncoder(os.Stdout).Encode(m)
+			return render.TOML(os.Stdout, m)
 		},
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
