@@ -435,6 +435,10 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 
 - [ ] Azure DevOps works as a ship/PR provider alongside GitHub, GitLab, Forgejo/Gitea and Bitbucket
 
+### Milestone v1.9 — workflow depth: ideas ported from superpowers, GSD and gsd-core (planning)
+
+- [ ] Success criteria not yet written — scope with `/dross-milestone v1.9`
+
 ## Telemetry
 
 Dross records local-only usage events at `~/.claude/dross/telemetry.jsonl`. The intent is single-developer self-observation — a dogfood log you can read back later to find where the tool gets in your way.
