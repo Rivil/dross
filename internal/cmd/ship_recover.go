@@ -112,7 +112,7 @@ longer holds the pre-merge .dross/ tree:
 			}
 
 			// Refuse to run on the wrong branch — reset is destructive.
-			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+			cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				return fmt.Errorf("read current branch: %w", err)
 			}
@@ -121,7 +121,7 @@ longer holds the pre-merge .dross/ tree:
 			}
 
 			// Refuse to run on a dirty tree — reset would silently destroy work.
-			status, err := gitRead(repoDir, "status", "--porcelain")
+			status, err := gitrun.Read(repoDir, "status", "--porcelain")
 			if err != nil {
 				return fmt.Errorf("git status: %w", err)
 			}
@@ -163,7 +163,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	sha := preMergeSHA
 	if sha == "" {
 		var err error
-		sha, err = gitTrim(repoDir, "rev-parse", "HEAD")
+		sha, err = gitrun.Trim(repoDir, "rev-parse", "HEAD")
 		if err != nil {
 			return fmt.Errorf("rev-parse HEAD: %w", err)
 		}
@@ -177,7 +177,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 			"--pre-merge-sha=$(git rev-parse HEAD@{1})", short(sha))
 	}
 
-	if err := gitRun(repoDir, "fetch", "origin"); err != nil {
+	if err := gitrun.Run(repoDir, "fetch", "origin"); err != nil {
 		return fmt.Errorf("git fetch: %w", err)
 	}
 	if err := guardedResetHard(repoDir, "origin/"+baseBranch); err != nil {
@@ -187,7 +187,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	// copy, and restoring it would overwrite the live machine-local file with
 	// whatever history that commit happened to hold — the very clobber this
 	// milestone exists to end (locked state_tracking).
-	if err := gitRun(repoDir, gitRefPathArgs("checkout", nil, []string{sha}, ".dross/", ":(exclude).dross/"+state.File)...); err != nil {
+	if err := gitrun.Run(repoDir, gitRefPathArgs("checkout", nil, []string{sha}, ".dross/", ":(exclude).dross/"+state.File)...); err != nil {
 		return fmt.Errorf("git checkout %s -- .dross/: %w", short(sha), err)
 	}
 
@@ -205,10 +205,10 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	// This gate used to be correct only because it ran before state.Touch, which
 	// always manufactured a delta. With state.json out of the tree the no-op is
 	// genuinely reachable, and it must exit 0 having written nothing.
-	if err := gitRun(repoDir, "add", ".dross/"); err != nil {
+	if err := gitrun.Run(repoDir, "add", ".dross/"); err != nil {
 		return fmt.Errorf("git add: %w", err)
 	}
-	staged, err := gitRead(repoDir, "status", "--porcelain")
+	staged, err := gitrun.Read(repoDir, "status", "--porcelain")
 	if err != nil {
 		return fmt.Errorf("git status: %w", err)
 	}
@@ -228,11 +228,11 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	if err := s.Save(filepath.Join(root, state.File)); err != nil {
 		return fmt.Errorf("save state: %w", err)
 	}
-	if err := gitRun(repoDir, "add", ".dross/"); err != nil {
+	if err := gitrun.Run(repoDir, "add", ".dross/"); err != nil {
 		return fmt.Errorf("git add: %w", err)
 	}
 	msg := fmt.Sprintf("chore(dross): restore .dross/ after squash-merge for %s + merge", phaseID)
-	if err := gitRun(repoDir, "commit", "-m", msg); err != nil {
+	if err := gitrun.Run(repoDir, "commit", "-m", msg); err != nil {
 		return fmt.Errorf("git commit: %w", err)
 	}
 
@@ -255,21 +255,6 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	)
 	Printf("Restored .dross/ from %s and recorded merge for %s\n", short(sha), phaseID)
 	return nil
-}
-
-// gitTrim, gitRead and gitRun delegate to gitrun's Trim, Read and Run — see
-// that package for what each does with git's output. cmd-exec-baseline-drain's
-// t-11 rewrites their callers onto gitrun directly and deletes them.
-func gitTrim(repoDir string, args ...string) (string, error) {
-	return gitrun.Trim(repoDir, args...)
-}
-
-func gitRead(repoDir string, args ...string) (string, error) {
-	return gitrun.Read(repoDir, args...)
-}
-
-func gitRun(repoDir string, args ...string) error {
-	return gitrun.Run(repoDir, args...)
 }
 
 func short(sha string) string {

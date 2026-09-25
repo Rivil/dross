@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/pathfence"
 )
 
@@ -72,22 +73,22 @@ func classifyReachability(repoDir, sha string) (reachability, string, error) {
 		return "", "", err
 	}
 
-	if shallow, err := gitTrim(repoDir, "rev-parse", "--is-shallow-repository"); err == nil && shallow == "true" {
+	if shallow, err := gitrun.Trim(repoDir, "rev-parse", "--is-shallow-repository"); err == nil && shallow == "true" {
 		return reachIndeterminate, "shallow clone — history is truncated, so containment cannot be decided here", nil
 	}
-	refs, err := gitTrim(repoDir, gitRefArgs("for-each-ref", []string{"--format=%(refname)", "--count=1"}, originRefGlob)...)
+	refs, err := gitrun.Trim(repoDir, gitRefArgs("for-each-ref", []string{"--format=%(refname)", "--count=1"}, originRefGlob)...)
 	if err != nil || strings.TrimSpace(refs) == "" {
 		return reachIndeterminate, "no " + originRefGlob + "* refs in this repo — nothing to judge containment against (try `git fetch origin`)", nil
 	}
 
-	if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, sha+"^{commit}")...); err != nil {
+	if err := gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, sha+"^{commit}")...); err != nil {
 		return reachUnreachable, "commit is absent from this repo's object database", nil
 	}
 
 	// --contains rides in the opts half because it is a flag's ARGUMENT, not a
 	// positional; validateGitRef above has already refused an option-shaped
 	// value there. The glob after the separator is dross's own literal.
-	got, err := gitTrim(repoDir, gitRefArgs("for-each-ref",
+	got, err := gitrun.Trim(repoDir, gitRefArgs("for-each-ref",
 		[]string{"--format=%(refname)", "--count=1", "--contains", sha}, originRefGlob)...)
 	if err != nil {
 		return "", "", fmt.Errorf("for-each-ref --contains %s: %w", short(sha), err)

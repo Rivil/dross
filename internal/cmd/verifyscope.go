@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/verify"
@@ -68,7 +69,7 @@ func phaseScope(repoDir string, base scopeBase, recorded []string) (*verify.Scop
 	// non-ASCII bytes arrives as itself rather than as an escaped literal that
 	// would match no mutant. --no-renames emits both sides of a rename, which
 	// puts the old and the new path in scope — the wider, fail-open reading.
-	names, err := gitRead(repoDir,
+	names, err := gitrun.Read(repoDir,
 		gitRefArgs("diff", []string{"--name-only", "--no-renames", "-z"}, sha, "HEAD")...)
 	if err != nil {
 		in.Degraded = append(in.Degraded,
@@ -85,7 +86,7 @@ func phaseScope(repoDir string, base scopeBase, recorded []string) (*verify.Scop
 	// Hunks refine the in-hunk vs inherited tag only. Losing them costs
 	// precision, never scope, so a failure here degrades and carries on with
 	// the file set already collected.
-	patch, err := gitRead(repoDir,
+	patch, err := gitrun.Read(repoDir,
 		gitRefArgs("diff", []string{"-U0", "--no-renames", "--no-color"}, sha, "HEAD")...)
 	if err != nil {
 		in.Degraded = append(in.Degraded,
@@ -121,7 +122,7 @@ type scopeBase struct {
 // is named on Degraded rather than left to read as the ordinary path.
 func resolveScopeBase(repoDir string, b scopeBase) (sha string, degraded []string, err error) {
 	if rev := strings.TrimSpace(b.Override); rev != "" {
-		sha, err = gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, rev+"^{commit}")...)
+		sha, err = gitrun.Trim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, rev+"^{commit}")...)
 		if err != nil || sha == "" {
 			return "", nil, fmt.Errorf("--base %q does not resolve to a commit: %s", rev, gitReason(err))
 		}
@@ -133,14 +134,14 @@ func resolveScopeBase(repoDir string, b scopeBase) (sha string, degraded []strin
 		return "", []string{"changes.json records no base branch, so no git diff could be taken"}, nil
 	}
 
-	sha, err = gitTrim(repoDir, gitRefArgs("merge-base", nil, branch, "HEAD")...)
+	sha, err = gitrun.Trim(repoDir, gitRefArgs("merge-base", nil, branch, "HEAD")...)
 	if err != nil || sha == "" {
 		return "", []string{fmt.Sprintf("could not resolve merge-base of %q and HEAD: %v", branch, gitReason(err))}, nil
 	}
 
 	// --verify, because rev-parse only honours --end-of-options in that mode
 	// and otherwise echoes it as output.
-	head, err := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "HEAD^{commit}")...)
+	head, err := gitrun.Trim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "HEAD^{commit}")...)
 	if err != nil || head != sha {
 		// A HEAD that will not resolve is left to the diff steps to report;
 		// the ordinary tier holds.
@@ -152,7 +153,7 @@ func resolveScopeBase(repoDir string, b scopeBase) (sha string, degraded []strin
 		return "", []string{fmt.Sprintf(
 			"phase already merged (merge-base of %q and HEAD is HEAD itself) and changes.json records no base_commit; pass --base <fork-sha> to diff from the fork point", branch)}, nil
 	}
-	forkSHA, err := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, fork+"^{commit}")...)
+	forkSHA, err := gitrun.Trim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, fork+"^{commit}")...)
 	if err != nil || forkSHA == "" {
 		return "", []string{fmt.Sprintf(
 			"phase already merged and the recorded base_commit %s does not resolve: %s; pass --base <fork-sha>", short(fork), gitReason(err))}, nil

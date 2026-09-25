@@ -19,7 +19,11 @@ package cmd
 // excluded. Reusing the plan rather than writing a second reachability rule is
 // what keeps "doomed" and "rotted" from drifting into two different answers.
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/Rivil/dross/internal/gitrun"
+)
 
 // doomedRedProofRef is the ref whose deletion is being anticipated: the phase's
 // own remote-tracking branch.
@@ -92,11 +96,11 @@ func repointDoomedRedProofs(root, repoDir, phaseID string) (bool, error) {
 		files = append(files, plan.Files...)
 	}
 
-	if err := gitRun(repoDir, gitPathArgs("add", nil, files...)...); err != nil {
+	if err := gitrun.Run(repoDir, gitPathArgs("add", nil, files...)...); err != nil {
 		return false, fmt.Errorf("stage the repointed red proof: %w", err)
 	}
 	msg := fmt.Sprintf("chore(dross): repoint red proof for %s", phaseID)
-	if err := gitRun(repoDir, "commit", "-m", msg); err != nil {
+	if err := gitrun.Run(repoDir, "commit", "-m", msg); err != nil {
 		return false, fmt.Errorf("commit the repointed red proof: %w", err)
 	}
 	return true, nil

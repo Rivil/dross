@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/localstore"
 )
 
@@ -88,7 +89,7 @@ func runRedProofReplay(root, repoDir, sha, line string) (replayResult, error) {
 	wt := filepath.Join(base, "wt")
 	defer func() { _ = os.RemoveAll(base) }()
 
-	if err := gitRun(repoDir, gitRefArgs("worktree", []string{"add", "--detach"}, wt, sha)...); err != nil {
+	if err := gitrun.Run(repoDir, gitRefArgs("worktree", []string{"add", "--detach"}, wt, sha)...); err != nil {
 		return replayResult{}, fmt.Errorf("replay could not be run: could not check out %s in a worktree: %v", short(sha), err)
 	}
 	// Registered AFTER the add succeeded and so it runs BEFORE the RemoveAll
@@ -96,8 +97,8 @@ func runRedProofReplay(root, repoDir, sha, line string) (replayResult, error) {
 	// leave git's worktree admin data behind, and the next run inherits a
 	// prunable stale entry.
 	defer func() {
-		_ = gitRun(repoDir, gitRefArgs("worktree", []string{"remove", "--force"}, wt)...)
-		_ = gitRun(repoDir, "worktree", "prune")
+		_ = gitrun.Run(repoDir, gitRefArgs("worktree", []string{"remove", "--force"}, wt)...)
+		_ = gitrun.Run(repoDir, "worktree", "prune")
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), redProofReplayTimeout)

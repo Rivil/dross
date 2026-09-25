@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/secretscan"
 )
 
@@ -48,23 +49,23 @@ func autoCommitDrossDirt(repoDir, action string) (committed bool, err error) {
 	if len(hits) > 0 {
 		return false, fmt.Errorf("refusing to auto-commit .dross: %w", &secretscan.ErrHit{Hits: hits})
 	}
-	if err := gitRun(repoDir, gitPathArgs("add", nil, ".dross")...); err != nil {
+	if err := gitrun.Run(repoDir, gitPathArgs("add", nil, ".dross")...); err != nil {
 		return false, fmt.Errorf("git add .dross: %w", err)
 	}
 	// Empty-commit guard: a status entry can stage to nothing (e.g. a change
 	// already reverted); nil means no staged diff, so there is nothing to commit.
-	if gitNoOut(repoDir, "diff", "--cached", "--quiet") == nil {
+	if gitrun.Quiet(repoDir, "diff", "--cached", "--quiet") == nil {
 		return false, nil
 	}
 	msg := fmt.Sprintf("chore(dross): auto-commit bookkeeping before %s", action)
-	if err := gitRun(repoDir, "commit", "-m", msg); err != nil {
+	if err := gitrun.Run(repoDir, "commit", "-m", msg); err != nil {
 		return false, fmt.Errorf("git commit: %w", err)
 	}
 	return true, nil
 }
 
 // gitStatusRaw returns `git status --porcelain` without trimming leading
-// whitespace — gitTrim would eat the first line's leading status column
+// whitespace — gitrun.Trim would eat the first line's leading status column
 // (" M path") and break positional parsing.
 func gitStatusRaw(repoDir string) (string, error) {
 	//dross:exec-exempt git status --porcelain reads the working tree and runs no repo-authored line; no hook fires for it

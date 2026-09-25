@@ -16,6 +16,7 @@ import (
 	"sort"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/project"
 )
 
@@ -78,7 +79,7 @@ func resolveForkPoint(repoDir, root, phaseID string, c *changes.Changes) (string
 		return "", fmt.Errorf("phase %s: no commit of its own survives (tried %v), so its fork point off %s cannot be resolved",
 			phaseID, tips, c.Base)
 	}
-	sha, err := gitTrim(repoDir, gitRefArgs("merge-base", nil, baseRef, tipRef)...)
+	sha, err := gitrun.Trim(repoDir, gitRefArgs("merge-base", nil, baseRef, tipRef)...)
 	if err != nil {
 		return "", fmt.Errorf("phase %s: merge-base %s %s: %w", phaseID, baseRef, tipRef, err)
 	}
@@ -119,7 +120,7 @@ func resolvableRef(repoDir string, candidates ...string) (string, error) {
 		if validateGitRef("fork point candidate", ref) != nil {
 			continue
 		}
-		if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, ref+"^{commit}")...) == nil {
+		if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, ref+"^{commit}")...) == nil {
 			return ref, nil
 		}
 	}

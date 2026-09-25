@@ -109,8 +109,7 @@ func TestGitRunGateIsScopedByOrigin(t *testing.T) {
 	}
 }
 
-// gitTrimPinned is everything gitrun.Trim (and cmd's gitTrim delegate) may
-// run: per verb, the options allowed ahead of the separator, by name. Trim's
+// gitTrimPinned is everything gitrun.Trim may run: per verb, the options allowed ahead of the separator, by name. Trim's
 // marker says its output is a ref name, an object id, a count, a boolean or
 // git's version; this is what makes that true. for-each-ref's --format is
 // further judged atom by atom, and --contains takes the next element as its
@@ -127,8 +126,9 @@ var gitTrimPinned = map[string]map[string]bool{
 	"--version":    {},
 }
 
-// gitTrimSiteFloor is ~25% under the 40 gitTrim call sites the walk finds
-// (51 before the content reads moved to gitRead).
+// gitTrimSiteFloor is ~25% under the 40 gitrun.Trim call sites the walk finds
+// (51 before the content reads moved to gitRead, since rewritten onto
+// gitrun.Read).
 const gitTrimSiteFloor = 30
 
 // forEachRefAtom matches one %(atom[:modifier]) in a for-each-ref format.
@@ -138,56 +138,30 @@ var forEachRefAtom = regexp.MustCompile(`%\(([^):]*)[^)]*\)`)
 // second the options; everything after them is positional by construction.
 var gitArgBuilders = map[string]bool{"gitRefArgs": true, "gitPathArgs": true, "gitRefPathArgs": true}
 
-// isGitTrimCall reports whether call is a Trim call the pin judges: a
-// gitrun.Trim selector call, or cmd's bare gitTrim delegate.
+// isGitTrimCall reports whether call is a gitrun.Trim selector call.
 func isGitTrimCall(call *ast.CallExpr) bool {
-	switch fn := call.Fun.(type) {
-	case *ast.Ident:
-		return fn.Name == "gitTrim"
-	case *ast.SelectorExpr:
-		pkg, ok := fn.X.(*ast.Ident)
-		return ok && pkg.Name == "gitrun" && fn.Sel.Name == "Trim"
+	fn, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
 	}
-	return false
+	pkg, ok := fn.X.(*ast.Ident)
+	return ok && pkg.Name == "gitrun" && fn.Sel.Name == "Trim"
 }
 
-// trimForwarders are the calls inside a function named gitTrim that forward its
-// own variadic argv — cmd's delegate. Its callers are the Trim sites; the
-// forwarding call itself carries no verb to judge.
-func trimForwarders(f *ast.File) map[*ast.CallExpr]bool {
-	out := map[*ast.CallExpr]bool{}
-	for _, d := range f.Decls {
-		fd, ok := d.(*ast.FuncDecl)
-		if !ok || fd.Name.Name != "gitTrim" || fd.Body == nil {
-			continue
-		}
-		ast.Inspect(fd.Body, func(n ast.Node) bool {
-			if call, ok := n.(*ast.CallExpr); ok && isGitTrimCall(call) && call.Ellipsis.IsValid() && len(call.Args) == 2 {
-				if _, ok := call.Args[1].(*ast.Ident); ok {
-					out[call] = true
-				}
-			}
-			return true
-		})
-	}
-	return out
-}
-
-// gitTrimProblems walks files for Trim calls and reports every one whose verb
-// or options fall outside gitTrimPinned, and how many sites it examined.
+// gitTrimProblems walks files for gitrun.Trim calls and reports every one whose
+// verb or options fall outside gitTrimPinned, and how many sites it examined.
 func gitTrimProblems(fset *token.FileSet, files []*ast.File) ([]string, int) {
 	var out []string
 	sites := 0
 	for _, f := range files {
-		skip := trimForwarders(f)
 		ast.Inspect(f, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
-			if !ok || !isGitTrimCall(call) || skip[call] || len(call.Args) < 2 {
+			if !ok || !isGitTrimCall(call) || len(call.Args) < 2 {
 				return true
 			}
 			sites++
 			if why := gitTrimArgvProblem(call); why != "" {
-				out = append(out, fmt.Sprintf("%s: gitTrim %s — not in the pinned ref set; a content read goes through gitrun.Read or gitrun.Raw",
+				out = append(out, fmt.Sprintf("%s: gitrun.Trim %s — not in the pinned ref set; a content read goes through gitrun.Read or gitrun.Raw",
 					fset.Position(call.Pos()), why))
 			}
 			return true
@@ -197,7 +171,7 @@ func gitTrimProblems(fset *token.FileSet, files []*ast.File) ([]string, int) {
 	return out, sites
 }
 
-// gitTrimArgvProblem resolves one gitTrim call's verb and options — literal
+// gitTrimArgvProblem resolves one gitrun.Trim call's verb and options — literal
 // arguments, or a gitRefArgs/gitPathArgs/gitRefPathArgs builder — and says what
 // is wrong with them, or "".
 func gitTrimArgvProblem(call *ast.CallExpr) string {
@@ -274,10 +248,9 @@ func pinnedOptsProblem(verb string, elts []ast.Expr, bare bool) string {
 	return ""
 }
 
-// TestGitTrimRunsRefVerbsOnly: every live Trim call site — gitrun.Trim in any
-// package, or cmd's gitTrim delegate — runs a pinned ref invocation, the walk
-// sees enough of them to mean it, and a content read, a contents atom or a
-// remote URL query each trip.
+// TestGitTrimRunsRefVerbsOnly: every live gitrun.Trim call site, in any
+// package, runs a pinned ref invocation, the walk sees enough of them to mean
+// it, and a content read, a contents atom or a remote URL query each trip.
 func TestGitTrimRunsRefVerbsOnly(t *testing.T) {
 	v := liveView(t)
 	var files []*ast.File
@@ -291,7 +264,7 @@ func TestGitTrimRunsRefVerbsOnly(t *testing.T) {
 	if err := gitTrimSiteFloorErr(sites); err != nil {
 		t.Error(err)
 	}
-	t.Logf("examined %d gitTrim call sites", sites)
+	t.Logf("examined %d gitrun.Trim call sites", sites)
 	if gitTrimSiteFloorErr(gitTrimSiteFloor) != nil || gitTrimSiteFloorErr(gitTrimSiteFloor-1) == nil {
 		t.Error("the floor must pass at its minimum and fail one under it")
 	}
@@ -299,20 +272,19 @@ func TestGitTrimRunsRefVerbsOnly(t *testing.T) {
 	cases := []struct {
 		src, want string // want "" means clean
 	}{
-		{`gitTrim(dir, "log", "--oneline")`, "runs `log`"},
 		{`gitrun.Trim(dir, "log", "--oneline")`, "runs `log`"},
 		{`gitrun.Trim(dir, "remote", "get-url", "origin")`, "runs `remote`"},
 		{`gitrun.Trim(dir, "rev-parse", "--git-path", "x")`, "option `--git-path`"},
 		{`gitrun.Trim(dir, "rev-parse", "--short", "HEAD")`, ""},
 		{`gitrun.Trim(dir, "rev-parse", "--is-inside-work-tree")`, ""},
-		{`gitTrim(dir, gitRefArgs("for-each-ref", []string{"--format=%(contents)"}, "refs/heads/")...)`, "format atom `%(contents)`"},
-		{`gitTrim(dir, "ls-remote", "--get-url", "origin")`, "option `--get-url`"},
-		{`gitTrim(dir, gitRefArgs("rev-list", []string{"--pretty=%B"}, "HEAD")...)`, "option `--pretty`"},
-		{`gitTrim(".", "--version", "--build-options")`, "`--version` with arguments"},
-		{`gitTrim(dir, gitRefArgs("for-each-ref", []string{"--format=%(refname:short) %(objectname)", "--contains", sha}, "refs/")...)`, ""},
-		{`gitTrim(dir, gitRefArgs("rev-list", []string{"--count"}, a+".."+b)...)`, ""},
-		{`gitTrim(dir, "symbolic-ref", "--short", "HEAD")`, ""},
-		{`gitTrim(".", "--version")`, ""},
+		{`gitrun.Trim(dir, gitRefArgs("for-each-ref", []string{"--format=%(contents)"}, "refs/heads/")...)`, "format atom `%(contents)`"},
+		{`gitrun.Trim(dir, "ls-remote", "--get-url", "origin")`, "option `--get-url`"},
+		{`gitrun.Trim(dir, gitRefArgs("rev-list", []string{"--pretty=%B"}, "HEAD")...)`, "option `--pretty`"},
+		{`gitrun.Trim(".", "--version", "--build-options")`, "`--version` with arguments"},
+		{`gitrun.Trim(dir, gitRefArgs("for-each-ref", []string{"--format=%(refname:short) %(objectname)", "--contains", sha}, "refs/")...)`, ""},
+		{`gitrun.Trim(dir, gitRefArgs("rev-list", []string{"--count"}, a+".."+b)...)`, ""},
+		{`gitrun.Trim(dir, "symbolic-ref", "--short", "HEAD")`, ""},
+		{`gitrun.Trim(".", "--version")`, ""},
 	}
 	for _, c := range cases {
 		fset := token.NewFileSet()
@@ -334,21 +306,23 @@ func TestGitTrimRunsRefVerbsOnly(t *testing.T) {
 	}
 }
 
-// TestGitTrimForwarderIsNarrow: the pin skips exactly cmd's gitTrim delegate
-// forwarding its own argv. The same spread anywhere else is a site it cannot
-// resolve, and is reported.
-func TestGitTrimForwarderIsNarrow(t *testing.T) {
-	src := "package cmd\n\n" +
-		"func gitTrim(dir string, args ...string) (string, error) { return gitrun.Trim(dir, args...) }\n\n" +
-		"func other(dir string, args ...string) (string, error) { return gitrun.Trim(dir, args...) }\n"
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "internal/cmd/fwd.go", src, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, n := gitTrimProblems(fset, []*ast.File{f})
-	if n != 1 || len(got) != 1 || !strings.Contains(got[0], "internal/cmd/fwd.go:5") || !strings.Contains(got[0], "cannot resolve") {
-		t.Errorf("examined %d sites, problems %v; want only other()'s forwarding spread reported", n, got)
+// gitHelperNames are the cmd helpers gitrun replaced.
+var gitHelperNames = map[string]bool{"gitTrim": true, "gitRead": true, "gitRun": true, "gitNoOut": true}
+
+// TestGitHelperDelegatesAreGone: no production file under internal/ or cmd/
+// declares a function named after a replaced helper. Test files may — the
+// fixture shim keeps the old names for setup — but a production one would be
+// a second way to spawn git beside the runner.
+func TestGitHelperDelegatesAreGone(t *testing.T) {
+	v := liveView(t)
+	for _, p := range v.Pkgs {
+		for _, f := range p.Syntax {
+			for _, d := range f.Decls {
+				if fd, ok := d.(*ast.FuncDecl); ok && fd.Recv == nil && gitHelperNames[fd.Name.Name] {
+					t.Errorf("%s declares %s — git goes through internal/gitrun, not a package-local helper", v.Fset.Position(fd.Pos()), fd.Name.Name)
+				}
+			}
+		}
 	}
 }
 

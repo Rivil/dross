@@ -16,6 +16,7 @@ import (
 	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/diag"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/mutationcfg"
@@ -386,7 +387,7 @@ func Doctor() *cobra.Command {
 			// checkout replacing the live copy — the incident this milestone
 			// closed. The fix is one command, so print the command.
 			Print("State file:")
-			if gitNoOut(repoDir, "ls-files", "--error-unmatch", "--", RootDirName+"/"+state.File) == nil {
+			if gitrun.Quiet(repoDir, "ls-files", "--error-unmatch", "--", RootDirName+"/"+state.File) == nil {
 				Printf("  ✗ %s/%s is tracked — a branch carrying a stale copy can replace the live one. Fix: `git rm --cached %s/%s` (it is already gitignored)\n",
 					RootDirName, state.File, RootDirName, state.File)
 				issues++
@@ -850,7 +851,7 @@ func phaseCommitsOnMain(root, repoDir, mainBranch string) ([]leakedPhaseCommit, 
 	}
 
 	// List commits on local main not in origin/main.
-	out, err := gitTrim(repoDir, gitRefArgs("rev-list", nil, "origin/"+mainBranch+".."+mainBranch)...)
+	out, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", nil, "origin/"+mainBranch+".."+mainBranch)...)
 	if err != nil {
 		return nil, err
 	}
@@ -948,7 +949,7 @@ func parseGitForCompare(raw string) (host, path string) {
 // cannot be exercised any other way: CI's git is new enough, so without a seam
 // the check would only ever be observed passing.
 var gitVersionOutput = func() (string, error) {
-	return gitTrim(".", "--version")
+	return gitrun.Trim(".", "--version")
 }
 
 // checkConfigTrust gathers what diag.ConfigTrust needs from this machine —

@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/pathfence"
 )
 
@@ -212,7 +213,7 @@ func classifyReachabilityExcluding(repoDir, sha string, excluded []string) (reac
 		return verdict, why, err
 	}
 
-	out, err := gitTrim(repoDir, gitRefArgs("for-each-ref",
+	out, err := gitrun.Trim(repoDir, gitRefArgs("for-each-ref",
 		[]string{"--format=%(refname)", "--contains", sha}, originRefGlob)...)
 	if err != nil {
 		return "", "", fmt.Errorf("for-each-ref --contains %s: %w", short(sha), err)

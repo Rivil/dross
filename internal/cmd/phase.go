@@ -354,7 +354,7 @@ func phaseCreate() *cobra.Command {
 // forkPhaseBranch asks the same question to refuse, which is the behaviour
 // --adopt is opting out of.
 func localBranchExists(repoDir, branch string) bool {
-	return gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) == nil
+	return gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) == nil
 }
 
 // phaseComplete finalizes a phase after its PR has been squash-merged
@@ -441,7 +441,7 @@ destructive reset of the local base branch; read the abort first.`,
 			case s.CurrentPhase != "":
 				phaseID = s.CurrentPhase
 			default:
-				if cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD"); err == nil {
+				if cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD"); err == nil {
 					if rest, ok := strings.CutPrefix(cur, "phase/"); ok {
 						phaseID = rest
 					}
@@ -510,7 +510,7 @@ destructive reset of the local base branch; read the abort first.`,
 				recordedPR = ch.PR
 			}
 
-			if err := gitRun(repoDir, "fetch", "origin"); err != nil {
+			if err := gitrun.Run(repoDir, "fetch", "origin"); err != nil {
 				return fmt.Errorf("git fetch: %w", err)
 			}
 
@@ -592,9 +592,9 @@ destructive reset of the local base branch; read the abort first.`,
 			// on its own line ahead of the sha and the caller reads the
 			// separator as the answer. --verify makes it resolve-or-fail, which
 			// is what this read wanted anyway.
-			phaseTipSHA, _ := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+phaseBranch)...)
+			phaseTipSHA, _ := gitrun.Trim(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+phaseBranch)...)
 
-			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+			cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
 			}
@@ -725,8 +725,8 @@ destructive reset of the local base branch; read the abort first.`,
 
 			// Delete the local phase branch (best-effort: only if it exists).
 			localDeleted := false
-			if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+phaseBranch)...); err == nil {
-				if err := gitRun(repoDir, gitRefArgs("branch", []string{"-D"}, phaseBranch)...); err != nil {
+			if err := gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+phaseBranch)...); err == nil {
+				if err := gitrun.Run(repoDir, gitRefArgs("branch", []string{"-D"}, phaseBranch)...); err != nil {
 					return fmt.Errorf("git branch -D %s: %w", phaseBranch, err)
 				}
 				localDeleted = true
@@ -738,14 +738,14 @@ destructive reset of the local base branch; read the abort first.`,
 			// never pushed), so we only push --delete when the ref still
 			// exists. ls-remote queries origin directly rather than trusting
 			// possibly-stale remote-tracking refs left by the earlier fetch.
-			remoteRef, err := gitTrim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", phaseBranch)...)
+			remoteRef, err := gitrun.Trim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", phaseBranch)...)
 			if err != nil {
 				return fmt.Errorf("git ls-remote origin %s: %w", phaseBranch, err)
 			}
 			if remoteRef != "" {
 				// --delete moves ahead of the separator so the remote and the branch are
 				// both plain positionals behind it; git accepts either ordering.
-				if err := gitRun(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", phaseBranch)...); err != nil {
+				if err := gitrun.Run(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", phaseBranch)...); err != nil {
 					return fmt.Errorf("git push origin --delete %s: %w", phaseBranch, err)
 				}
 			}
@@ -830,7 +830,7 @@ func resolveCompleteBase(repoDir, root string, p *project.Project, s *state.Stat
 		if err := validateGitRef("--base", baseFlag); err != nil {
 			return "", err
 		}
-		if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+baseFlag)...); err != nil {
+		if err := gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+baseFlag)...); err != nil {
 			return "", fmt.Errorf("--base %s: no such local branch", baseFlag)
 		}
 		return baseFlag, nil
@@ -884,7 +884,7 @@ func completeBaseCandidates(repoDir string, p *project.Project, s *state.State) 
 	cands := []string{p.Repo.GitMainBranch}
 	if s.CurrentMilestone != "" {
 		ms := "milestone/" + s.CurrentMilestone
-		if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+ms)...) == nil {
+		if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+ms)...) == nil {
 			cands = append(cands, ms)
 		}
 	}
@@ -962,7 +962,7 @@ func mergeGate(repoDir string, opts ship.OpenOpts, phaseID, phaseBranch, reconci
 	// Fallback: git ancestry. A missing origin/phase/<id> ref (squash-deleted)
 	// OR a non-ancestor result both mean "can't confirm the merge" — refuse
 	// with guidance rather than trust the breadcrumb or false-complete.
-	if err := gitNoOut(repoDir, gitRefArgs("merge-base", []string{"--is-ancestor"}, "origin/"+phaseBranch, "origin/"+reconcileBranch)...); err != nil {
+	if err := gitrun.Quiet(repoDir, gitRefArgs("merge-base", []string{"--is-ancestor"}, "origin/"+phaseBranch, "origin/"+reconcileBranch)...); err != nil {
 		return fmt.Errorf("cannot confirm %s has merged into %s — no merged-PR status was available and origin/%s is not an ancestor of origin/%s "+
 			"(the phase branch may have been squash-deleted, or the PR isn't merged yet).\n"+
 			"Refusing so the phase branch isn't lost. If the PR really merged, use `dross phase complete --recover` or verify the merge manually.",
@@ -1023,7 +1023,7 @@ func forkPhaseBranch(repoDir, root, phaseID, branchName string) (base string, mi
 	if committed {
 		Printf("auto-committed .dross-only bookkeeping\n")
 	}
-	if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branchName)...); err == nil {
+	if err := gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branchName)...); err == nil {
 		return "", false, fmt.Errorf("branch %s already exists locally; delete it first or pass --no-branch", branchName)
 	}
 	base, milestoneActive, err = resolveNewWorkBase(repoDir, root)
@@ -1043,7 +1043,7 @@ func forkPhaseBranch(repoDir, root, phaseID, branchName string) (base string, mi
 	// to, which is not this phase's fork point. A rev-parse that fails is not
 	// fatal: the branch exists and the base is recorded, and the backfill
 	// resolver covers a missing fork point on demand.
-	tip, tipErr := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, base)...)
+	tip, tipErr := gitrun.Trim(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, base)...)
 	if tipErr != nil {
 		tip = ""
 	}
@@ -1065,12 +1065,6 @@ func dirtyTreeError(action, status string) error {
 	}
 	return fmt.Errorf("working tree is dirty; commit or stash before %s:\n%s",
 		action, strings.Join(lines, "\n"))
-}
-
-// gitNoOut runs git silently, discarding output. Used when only the
-// exit status matters (e.g. ref-exists probes). It delegates to gitrun.Quiet.
-func gitNoOut(repoDir string, args ...string) error {
-	return gitrun.Quiet(repoDir, args...)
 }
 
 // isDir reports whether path exists and is a directory.

@@ -3,6 +3,8 @@ package cmd
 import (
 	"path/filepath"
 	"strings"
+
+	"github.com/Rivil/dross/internal/gitrun"
 )
 
 // detectMissingPhaseDirs reports phase ids that exist as directories on
@@ -20,7 +22,7 @@ func detectMissingPhaseDirs(repoDir, root, mainBranch string) ([]string, error) 
 	if !gitRefExists(repoDir, ref) {
 		return nil, nil
 	}
-	out, err := gitRead(repoDir, gitRefArgs("ls-tree", []string{"--name-only", "-d"}, ref+":.dross/phases")...)
+	out, err := gitrun.Read(repoDir, gitRefArgs("ls-tree", []string{"--name-only", "-d"}, ref+":.dross/phases")...)
 	if err != nil {
 		// The ref exists but carries no .dross/phases tree — nothing known.
 		return nil, nil

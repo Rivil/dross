@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/phase"
 )
 
@@ -115,7 +116,7 @@ func reconcilablePhases(root, repoDir string) ([]string, error) {
 		if changes.Complete(root, id) {
 			continue
 		}
-		if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/phase/"+id)...) != nil {
+		if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/phase/"+id)...) != nil {
 			continue // no branch left: nothing to tear down
 		}
 		out = append(out, id)

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/milestone"
 )
 
@@ -77,7 +78,7 @@ func staleMilestoneBranches(root, repoDir, mainBranch string) ([]staleBranch, er
 		return nil, err
 	}
 
-	listed, err := gitTrim(repoDir, "for-each-ref", "--format=%(refname:short)", "refs/heads/milestone/*")
+	listed, err := gitrun.Trim(repoDir, "for-each-ref", "--format=%(refname:short)", "refs/heads/milestone/*")
 	if err != nil {
 		return nil, fmt.Errorf("list milestone branches: %w", err)
 	}
@@ -94,7 +95,7 @@ func staleMilestoneBranches(root, repoDir, mainBranch string) ([]staleBranch, er
 		entry := staleBranch{
 			Name:      name,
 			Version:   strings.TrimPrefix(name, "milestone/"),
-			HasRemote: gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/remotes/origin/"+name)...) == nil,
+			HasRemote: gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/remotes/origin/"+name)...) == nil,
 		}
 		if !milestoneIsFinished(root, entry.Version) {
 			continue
@@ -175,7 +176,7 @@ func resolveMainCompareRef(repoDir, mainBranch string) (string, error) {
 // branch's whole contribution collapsed into one commit, or "" when there is no
 // such commit. Errors are reserved for a broken repo, never for "no answer".
 func resolveSquashCommit(repoDir, branch, mainBranch string) (string, error) {
-	base, err := gitTrim(repoDir, gitRefArgs("merge-base", nil, mainBranch, branch)...)
+	base, err := gitrun.Trim(repoDir, gitRefArgs("merge-base", nil, mainBranch, branch)...)
 	if err != nil {
 		// Unrelated histories: nothing to compare, so nothing is stale.
 		return "", nil
@@ -193,7 +194,7 @@ func resolveSquashCommit(repoDir, branch, mainBranch string) (string, error) {
 	// "^<branch>" rather than "--not <branch>": --not is an OPTION, so behind
 	// the separator git would read it as a revision. The caret form is exactly
 	// equivalent and survives the fence.
-	listed, err := gitTrim(repoDir, gitRefArgs("rev-list", nil, mainBranch, "^"+branch)...)
+	listed, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", nil, mainBranch, "^"+branch)...)
 	if err != nil {
 		return "", fmt.Errorf("walk %s: %w", mainBranch, err)
 	}
@@ -210,7 +211,7 @@ func resolveSquashCommit(repoDir, branch, mainBranch string) (string, error) {
 		if sha == "" {
 			continue
 		}
-		parent, err := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, sha+"^")...)
+		parent, err := gitrun.Trim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, sha+"^")...)
 		if err != nil {
 			continue // a root commit has no first parent to diff against
 		}
@@ -260,7 +261,7 @@ func patchIDOfDiff(repoDir, from, to string) (string, error) {
 // --is-ancestor` answers with its exit code — 0 yes, 1 no — so only anything
 // else is a real failure worth propagating.
 func isAncestor(repoDir, ref, other string) (bool, error) {
-	err := gitNoOut(repoDir, gitRefArgs("merge-base", []string{"--is-ancestor"}, ref, other)...)
+	err := gitrun.Quiet(repoDir, gitRefArgs("merge-base", []string{"--is-ancestor"}, ref, other)...)
 	if err == nil {
 		return true, nil
 	}

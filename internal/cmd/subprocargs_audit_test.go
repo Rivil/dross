@@ -51,7 +51,7 @@ import (
 //
 //   - A SPREAD (`f(x...)`) hides its elements from the AST and is skipped. The
 //     occurrences are: statusline.go's `exec.CommandContext(ctx, "git", full...)`,
-//     ship_recover.go's and phase.go's `exec.Command("git", full...)`,
+//     internal/gitrun's `exec.Command("git", argv(dir, args)...)` in each verb,
 //     ship/open.go's `ghCommand(args...)`, codex/ast_grep.go's
 //     `exec.Command("ast-grep", argv[1:]...)`, and the three mutation runners'
 //     `exec.Command(args[0], args[1:]...)` / `(full[0], full[1:]...)` in
@@ -176,23 +176,28 @@ var gitrunVerbs = map[string]bool{"Trim": true, "Raw": true, "Read": true, "Run"
 // gitrunImportPath is the runner's import path.
 const gitrunImportPath = "github.com/Rivil/dross/internal/gitrun"
 
-// gitCallFuncs are the helpers whose variadic tail IS a git argv.
+// gitCallFuncs are the calls whose variadic tail IS a git argv, keyed as
+// spawnArgvOf names them: one per gitrun verb. The bare cmd helpers they
+// replaced (gitRun, gitTrim, gitRead, gitNoOut) are gone from production code,
+// so the bare-identifier form is no longer recognised at all.
 var gitCallFuncs = map[string]bool{
-	"gitRun":   true,
-	"gitNoOut": true,
-	"gitTrim":  true,
-	"gitRead":  true,
+	"gitrun.Run":   true,
+	"gitrun.Quiet": true,
+	"gitrun.Trim":  true,
+	"gitrun.Read":  true,
+	"gitrun.Raw":   true,
 }
 
-// gitHelperSiteFloor is ~25% under each git helper's live call-site count
-// (gitRun 39, gitTrim 40, gitRead 11, gitNoOut 41). A helper that fell out of
-// gitCallFuncs would have its every argv skipped by the audit; its count going
-// to zero is how that shows.
+// gitHelperSiteFloor is ~25% under each gitrun verb's live call-site count
+// when the cmd helpers were rewritten onto it (Run 39, Trim 40, Read 11,
+// Quiet 41; floors 29/30/8/30). A verb that fell out of gitCallFuncs would have
+// its every argv skipped by the audit; its count going to zero is how that
+// shows. Raw has no floor: it had no call sites when the floors were set.
 var gitHelperSiteFloor = map[string]int{
-	"gitRun":   29,
-	"gitTrim":  30,
-	"gitRead":  8,
-	"gitNoOut": 30,
+	"gitrun.Run":   29,
+	"gitrun.Trim":  30,
+	"gitrun.Read":  8,
+	"gitrun.Quiet": 30,
 }
 
 // gitHelperSiteFloorErr checks per-helper call-site counts against the floor.
@@ -242,7 +247,7 @@ func gitHelperSites(t *testing.T) map[string]int {
 }
 
 // TestGitHelperCallSiteFloor: every git helper's argv is audited at every one
-// of its call sites. Dropping a helper from gitCallFuncs — gitRun above all,
+// of its call sites. Dropping a verb from gitCallFuncs — gitrun.Run above all,
 // the helper every effect-only git call goes through — takes its count to zero.
 func TestGitHelperCallSiteFloor(t *testing.T) {
 	counts := gitHelperSites(t)
@@ -253,9 +258,9 @@ func TestGitHelperCallSiteFloor(t *testing.T) {
 	for k, v := range counts {
 		without[k] = v
 	}
-	delete(without, "gitRun")
+	delete(without, "gitrun.Run")
 	if gitHelperSiteFloorErr(without) == nil {
-		t.Error("the floor passes with no gitRun call site audited")
+		t.Error("the floor passes with no gitrun.Run call site audited")
 	}
 	atFloor := map[string]int{}
 	for k, v := range gitHelperSiteFloor {
@@ -264,9 +269,9 @@ func TestGitHelperCallSiteFloor(t *testing.T) {
 	if err := gitHelperSiteFloorErr(atFloor); err != nil {
 		t.Errorf("the floor fails at its own minimum: %v", err)
 	}
-	atFloor["gitRun"]--
+	atFloor["gitrun.Run"]--
 	if gitHelperSiteFloorErr(atFloor) == nil {
-		t.Error("the floor passes one gitRun site under its minimum")
+		t.Error("the floor passes one gitrun.Run site under its minimum")
 	}
 }
 
@@ -398,10 +403,6 @@ func quote(s string) string { return "\"" + s + "\"" }
 func spawnArgvOf(call *ast.CallExpr) (name, bin, binExpr string, args []ast.Expr, ok bool) {
 	switch fn := call.Fun.(type) {
 	case *ast.Ident:
-		// gitRun(repoDir, args...) — first arg is the repo dir.
-		if gitCallFuncs[fn.Name] && len(call.Args) > 1 {
-			return fn.Name, "git", "", call.Args[1:], true
-		}
 		// ghCommand(args...) — the whole tail is the argv.
 		if fn.Name == "ghCommand" && len(call.Args) > 0 {
 			return fn.Name, "gh", "", call.Args, true
@@ -731,9 +732,7 @@ func auditSnippet(t *testing.T, lines ...string) []auditFinding {
 		"import \"os/exec\"\n" +
 		"var _ = exec.Command\n" +
 		"var ghCommand func(...string) *exec.Cmd\n" +
-		"func gitRun(dir string, a ...string) error { return nil }\n" +
-		"func gitNoOut(dir string, a ...string) error { return nil }\n" +
-		"func gitTrim(dir string, a ...string) (string, error) { return \"\", nil }\n" +
+
 		"func snippet(repoDir, branch, base, ref, path, msg, pkg, dir, fields, num, file, lang, pattern, mutate, chosen, host string) {\n"
 	f, err := parser.ParseFile(fset, "snippet.go", preamble+strings.Join(lines, "\n")+"\n}\n", 0)
 	if err != nil {
@@ -751,11 +750,11 @@ func TestAuditFlagsBarePrefixlessVar(t *testing.T) {
 		line string
 		want bool
 	}{
-		{"const prefix", `gitNoOut(repoDir, "rev-parse", "refs/heads/"+branch)`, false},
-		{"origin prefix", `gitNoOut(repoDir, "rev-parse", "origin/"+base)`, false},
-		{"bare var", `gitNoOut(repoDir, "rev-parse", branch)`, true},
-		{"const suffix only", `gitNoOut(repoDir, "ls-tree", ref+":.dross")`, true},
-		{"empty prefix", `gitNoOut(repoDir, "rev-parse", ""+branch)`, true},
+		{"const prefix", `gitrun.Quiet(repoDir, "rev-parse", "refs/heads/"+branch)`, false},
+		{"origin prefix", `gitrun.Quiet(repoDir, "rev-parse", "origin/"+base)`, false},
+		{"bare var", `gitrun.Quiet(repoDir, "rev-parse", branch)`, true},
+		{"const suffix only", `gitrun.Quiet(repoDir, "ls-tree", ref+":.dross")`, true},
+		{"empty prefix", `gitrun.Quiet(repoDir, "rev-parse", ""+branch)`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := len(auditSnippet(t, "\t"+tc.line)) > 0

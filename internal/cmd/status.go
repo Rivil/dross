@@ -14,6 +14,7 @@ import (
 
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/findings"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
@@ -622,7 +623,7 @@ func stateShipped(st *state.State, phaseID string) bool {
 func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (shippedPhase, bool) {
 	var none shippedPhase
 	repoDir := filepath.Dir(root)
-	cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+	cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
 		return none, false
 	}
@@ -665,7 +666,7 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 
 	// No origin ref, no answer. Never a claim taken on a missing base.
 	baseRef := "origin/" + sh.base
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, baseRef)...) != nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, baseRef)...) != nil {
 		return none, false
 	}
 	merged, err := isAncestor(repoDir, cur, baseRef)
@@ -679,7 +680,7 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 	// the base's history doesn't descend from, which ancestry cannot see.
 	// "^cur" rather than "--not cur": --not is an option and would be read as
 	// a revision behind the separator. The caret form is equivalent.
-	count, err := gitTrim(repoDir, gitRefArgs("rev-list", []string{"--count"}, baseRef, "^"+cur)...)
+	count, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", []string{"--count"}, baseRef, "^"+cur)...)
 	if err != nil {
 		return none, false
 	}
@@ -754,11 +755,11 @@ func phaseMergeState(root, repoDir, slug, mainBranch string) string {
 	// The local branch is the only thing there is to compare against. `dross
 	// phase complete` deletes it on the way out and a fresh clone never had it,
 	// so its absence is genuinely "no local evidence" — not "unmerged".
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+branch)...) != nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+branch)...) != nil {
 		return mergeUnknown
 	}
 	baseRef := "origin/" + base
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, baseRef)...) != nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, baseRef)...) != nil {
 		return mergeUnknown
 	}
 	merged, err := isAncestor(repoDir, branch, baseRef)
@@ -773,7 +774,7 @@ func phaseMergeState(root, repoDir, slug, mainBranch string) string {
 	// scan is per-commit, so a base that has run far ahead of the fork is
 	// answered with silence rather than a slow status — see
 	// staleSquashScanLimit.
-	count, err := gitTrim(repoDir, gitRefArgs("rev-list", []string{"--count"}, baseRef, "^"+branch)...)
+	count, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", []string{"--count"}, baseRef, "^"+branch)...)
 	if err != nil {
 		return mergeUnknown
 	}
