@@ -98,3 +98,37 @@ func TestCoverageWithoutGoIsUnknown(t *testing.T) {
 		t.Errorf("coverage with no profile = %q, want %q", got, CoverageUnknown)
 	}
 }
+
+// TestRealGoListDirsSurfacesFailures covers the REAL package-discovery closure.
+// Every cmd drain test substitutes goListDirs wholesale, so the function that
+// actually shells out to the toolchain had no coverage: a broken `go list` would
+// have surfaced as an empty package set — a drain that reports nothing
+// outstanding because it looked at nothing. Moved here from internal/cmd with
+// GoListDirs itself.
+func TestRealGoListDirsSurfacesFailures(t *testing.T) {
+	t.Run("a directory with no Go module is an error", func(t *testing.T) {
+		// Not a module: `go list ./...` exits non-zero.
+		_, err := GoListDirs(t.TempDir())
+		if err == nil {
+			t.Fatal("GoListDirs over a non-module directory returned no error")
+		}
+		if !strings.Contains(err.Error(), "go list") {
+			t.Errorf("err = %q, want the go list context", err)
+		}
+	})
+
+	t.Run("this repo lists its packages", func(t *testing.T) {
+		dirs, err := GoListDirs(repoRootFromHere(t))
+		if err != nil {
+			t.Fatalf("GoListDirs over the real repo: %v", err)
+		}
+		if len(dirs) < 20 {
+			t.Fatalf("listed %d package dirs, want the whole repo — the blank-line filter or the split is wrong", len(dirs))
+		}
+		for _, d := range dirs {
+			if strings.TrimSpace(d) == "" {
+				t.Error("a blank line survived into the package list")
+			}
+		}
+	})
+}

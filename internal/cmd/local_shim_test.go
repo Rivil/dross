@@ -35,22 +35,12 @@ func localPath(root string) string { return localstore.Path(root) }
 
 func grantStore(root string) consent.Store { return localstore.GrantStore(root) }
 
-func readLocalKey(root, key string) string { return localstore.ReadKey(root, key) }
-
-func readDetachedRuns(root, repoDir string) ([]detachedRun, error) {
-	return localstore.ReadDetachedRuns(root, repoDir)
-}
-
 func findDetachedRun(root, repoDir, phaseID string) (*detachedRun, error) {
 	return localstore.FindDetachedRun(root, repoDir, phaseID)
 }
 
 func recordDetachedRun(root, repoDir string, rec detachedRun) error {
 	return localstore.RecordDetachedRun(root, repoDir, rec)
-}
-
-func clearDetachedRun(root, repoDir, phaseID string) (bool, error) {
-	return localstore.ClearDetachedRun(root, repoDir, phaseID)
 }
 
 func readAllowHosts(root, repoDir string) ([]string, error) {
