@@ -62,20 +62,41 @@ func TestGhFailureOutputGoesToStderr(t *testing.T) {
 }
 
 // TestGhUnparseableOutputGoesToStderr: output that is not the JSON gh
-// promised is printed, and the error is fixed prose.
+// promised is printed, and the error is fixed prose — for each lookup that
+// parses gh's JSON.
 func TestGhUnparseableOutputGoesToStderr(t *testing.T) {
-	prev, prevErr := ghCommand, ghStderr
-	defer func() { ghCommand, ghStderr = prev, prevErr }()
-	var stderr bytes.Buffer
-	ghStderr = &stderr
-	ghCommand = func(...string) *exec.Cmd { return exec.Command("printf", "%s", "CANARY-JSON{") }
+	for _, tc := range []struct {
+		name string
+		verb string
+		call func() error
+	}{
+		{"pr list --base", "gh pr list --base main", func() error {
+			_, err := gitHubOpenPRsTargeting("main")
+			return err
+		}},
+		{"pr list --head", "gh pr list --head pr/x", func() error {
+			_, err := gitHubOpenPRByHead("pr/x")
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prev, prevErr := ghCommand, ghStderr
+			defer func() { ghCommand, ghStderr = prev, prevErr }()
+			var stderr bytes.Buffer
+			ghStderr = &stderr
+			ghCommand = func(...string) *exec.Cmd { return exec.Command("printf", "%s", "CANARY-JSON{") }
 
-	_, err := gitHubOpenPRsTargeting("main")
-	if err == nil || strings.Contains(err.Error(), "CANARY-JSON") || !strings.Contains(err.Error(), "not the JSON") {
-		t.Errorf("err = %v, want fixed prose without gh's output", err)
-	}
-	if !strings.Contains(stderr.String(), "CANARY-JSON") {
-		t.Errorf("stderr = %q, want the unparseable output there", stderr.String())
+			err := tc.call()
+			if err == nil || strings.Contains(err.Error(), "CANARY-JSON") || !strings.Contains(err.Error(), "not the JSON") {
+				t.Errorf("err = %v, want fixed prose without gh's output", err)
+			}
+			if err != nil && !strings.Contains(err.Error(), tc.verb) {
+				t.Errorf("err = %q, want the subcommand %q", err, tc.verb)
+			}
+			if !strings.Contains(stderr.String(), "CANARY-JSON") {
+				t.Errorf("stderr = %q, want the unparseable output there", stderr.String())
+			}
+		})
 	}
 }
 
