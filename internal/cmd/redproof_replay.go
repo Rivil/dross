@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -114,7 +113,9 @@ func runRedProofReplay(root, repoDir, sha, line string) (replayResult, error) {
 		printReplayTail(tail)
 		return replayResult{}, fmt.Errorf("replay could not be run: timed out after %s — a hung replay is not evidence the proof went red (its last lines are printed above)", redProofReplayTimeout)
 	}
-	var exitErr *exec.ExitError
+	// Any error reporting an exit status — os/exec's ExitError, read through
+	// the one method this needs so the spawn's package stays behind testlane.
+	var exitErr interface{ ExitCode() int }
 	if errors.As(runErr, &exitErr) {
 		return replayResult{Red: true, ExitCode: exitErr.ExitCode(), Tail: tail}, nil
 	}

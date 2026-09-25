@@ -125,13 +125,13 @@ func lanePlan(repoDir string, proj *project.Project, files []string) lanePlanRes
 // go and edit, and blaming runtime.test_command for a lane's command would send
 // them to a line that is perfectly fine.
 func laneFence(lane project.TestLane) error {
-	if _, err := shArgvFor(laneField(lane.Name), lane.Command); err != nil {
+	if _, err := testlane.ShArgvFor(laneField(lane.Name), lane.Command); err != nil {
 		return err
 	}
 	// The prepare goes through the SAME fence. A bootstrap line is a line
 	// reaching a shell exactly as a command is.
 	if lane.Prepare != "" {
-		if _, err := shArgvFor(laneField(lane.Name), lane.Prepare); err != nil {
+		if _, err := testlane.ShArgvFor(laneField(lane.Name), lane.Prepare); err != nil {
 			return err
 		}
 	}

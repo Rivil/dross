@@ -2179,10 +2179,8 @@ func TestExecConsentCalibrationIsUnchanged(t *testing.T) {
 // internal/quality and internal/techdebt — and matching on the base name pulled
 // three of t-8's marked sites into this task's assertion.
 var execConsentGatedFiles = []string{
-	"internal/cmd/run.go",
-	"internal/cmd/test.go",
+	"internal/testlane/spawn.go",
 	"internal/cmd/verify.go",
-	"internal/cmd/lane_install.go",
 	"internal/cmd/survivor_drain.go",
 }
 
@@ -2311,7 +2309,9 @@ func TestUpdateSelfExecIsTheOnlyMarkerHere(t *testing.T) {
 // TestReachProofIsLoadBearing: without this, "gated via reach" could be a
 // verdict the graph hands out to everything and the whole attribution would be
 // decorative. Deleting `dross run`'s consent check — in a copy of the source,
-// not on disk — must turn its spawn into a finding that names it.
+// not on disk — must turn its spawn into a finding that names it. The spawn is
+// in internal/testlane/spawn.go while the check stays in run.go, so this is
+// also the proof that reach crosses the package boundary the move introduced.
 func TestReachProofIsLoadBearing(t *testing.T) {
 	// The CALL stops counting, not just the branch under it: surgery on a copy
 	// of the shared graph re-decides gating with that consent call excluded,
@@ -2322,7 +2322,7 @@ func TestReachProofIsLoadBearing(t *testing.T) {
 	})
 	var found bool
 	for _, f := range g.findings() {
-		if execFindingIsIn(f, "internal/cmd/run.go") && strings.Contains(f.Why, "ungated") {
+		if execFindingIsIn(f, "internal/testlane/spawn.go") && strings.Contains(f.Why, "ungated") {
 			found = true
 		}
 	}

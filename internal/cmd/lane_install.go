@@ -17,12 +17,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/Rivil/dross/internal/consent"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/testlane"
 )
 
 // installStep is what dross intends to do about ONE tool a lane needs.
@@ -191,7 +191,7 @@ func laneInstallable(s installStep) bool {
 // its own flag rather than as a script.
 func installArgv(s installStep) ([]string, error) {
 	if s.Line != "" {
-		rest, err := shArgvFor("test_lane.install", s.Line)
+		rest, err := testlane.ShArgvFor("test_lane.install", s.Line)
 		if err != nil {
 			return nil, err
 		}
@@ -225,7 +225,7 @@ func runInstallLocally(argv []string) error {
 	if len(argv) == 0 {
 		return fmt.Errorf("empty install command")
 	}
-	out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput()
+	out, err := testlane.RunInstall(argv)
 	if err != nil {
 		printInstallOutput(argv[0], out)
 		return fmt.Errorf("%s: %w", argv[0], err)

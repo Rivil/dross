@@ -19,14 +19,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/Rivil/dross/internal/argfence"
 	"github.com/Rivil/dross/internal/consent"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
@@ -175,23 +173,17 @@ func ExitCode(err error) int {
 //
 // A seam for the same reason the spawn seams are: the rule it feeds — a lane
 // whose toolchain is absent here does not spawn — can only be exercised from a
-// test if the answer can be injected. Left as a direct exec.LookPath call, the
-// rule would be reachable only on a machine that happened to be missing the
-// binary, which is a rule nothing checks.
-var laneLookPath = exec.LookPath
+// test if the answer can be injected. Left as a direct lookup call, the rule
+// would be reachable only on a machine that happened to be missing the binary,
+// which is a rule nothing checks.
+var laneLookPath = testlane.LookPath
 
 // spawnLocal is the local-execution seam. Tests replace it to record the argv
 // without running anything; production never reassigns it.
 var spawnLocal = runLocalCommand
 
 // runLocalCommand runs one shell command line in dir, streaming its output to
-// the given writers as it arrives.
-//
-// Streaming rather than capturing is the point. The suite takes minutes; a
-// command that prints nothing until it finishes is indistinguishable from a
-// hang, and the agent driving it reads the tail as it goes. os/exec writes
-// straight through when Stdout is set, so this is buffer-free by construction
-// rather than by a flush discipline someone has to maintain.
+// the given writers as it arrives — testlane.RunLocal with no deadline.
 func runLocalCommand(dir, line string, stdout, stderr io.Writer) error {
 	return runLocalCommandCtx(context.Background(), dir, line, stdout, stderr)
 }
@@ -203,46 +195,9 @@ var spawnLocalCtx = runLocalCommandCtx
 // runLocalCommandCtx is runLocalCommand with a cancellable context, added for
 // the red-proof replay: an unbounded spawn there would turn a hung proof into a
 // hung repoint, and a repoint that never returns is worse than one that refuses.
-//
-// WaitDelay is what makes the kill actually terminate the call. Killing `sh`
-// leaves its children holding the pipe ends, so Wait would block on a copy that
-// never ends — the delay closes the descriptors and returns instead.
+// The spawn itself is testlane.RunLocal, behind every consent check made here.
 func runLocalCommandCtx(ctx context.Context, dir, line string, stdout, stderr io.Writer) error {
-	argv, err := shArgv(line)
-	if err != nil {
-		return err
-	}
-	c := exec.CommandContext(ctx, "sh", argv...)
-	c.Dir = dir
-	c.Stdout = stdout
-	c.Stderr = stderr
-	c.Stdin = nil
-	c.WaitDelay = 5 * time.Second
-	return c.Run()
-}
-
-// shArgv is the fenced builder for an `sh -c` invocation, in the same shape
-// every other spawn site in this repo uses: the fence lives in the builder and
-// the caller spreads the result.
-//
-// sh reads options before -c and honours no end-of-options token, so a command
-// line beginning with a dash would be taken as a shell option (`-i`, `-x`)
-// rather than as the script — which is why argfence's policy for sh is Reject
-// rather than Separator. The line here is the user's own consented
-// runtime.test_command and is not a derived value today; the fence is what
-// keeps that true the first time a caller passes one.
-func shArgv(line string) ([]string, error) {
-	return shArgvFor("runtime.test_command", line)
-}
-
-// shArgvFor is shArgv with the field label the refusal should name. `dross run`
-// spawns a different [runtime] key per slot, and a fence refusal that always
-// blamed test_command would point at the wrong line to edit.
-func shArgvFor(field, line string) ([]string, error) {
-	if err := argfence.RejectLeadingDash("sh", field, line); err != nil {
-		return nil, err
-	}
-	return []string{"-c", line}, nil
+	return testlane.RunLocal(ctx, dir, line, stdout, stderr)
 }
 
 // testCommandLine appends a package/path selector to the consented command.
@@ -769,22 +724,10 @@ func laneNames(proj *project.Project) []string {
 // streaming live here.
 var spawnRemote = runRemoteCommand
 
-// runRemoteCommand spawns a built remote argv, streaming output through.
-//
-// Written as Command(argv[0]) plus an explicit Args assignment rather than a
-// `...` spread, for the same reason internal/remote's buildCommand is: the
-// subprocess argv audit skips spreads, so the spread form would pass that gate
-// by accident. This form is evaluated, and accepted by a named entry with a
-// reason in subprocargs_audit_test.go.
+// runRemoteCommand spawns a built remote argv, streaming output through —
+// testlane.RunRemote, behind every consent check made here.
 func runRemoteCommand(argv []string, stdin string, stdout, stderr io.Writer) error {
-	c := exec.Command(argv[0])
-	c.Args = argv
-	if stdin != "" {
-		c.Stdin = strings.NewReader(stdin)
-	}
-	c.Stdout = stdout
-	c.Stderr = stderr
-	return c.Run()
+	return testlane.RunRemote(argv, stdin, stdout, stderr)
 }
 
 // testTarget resolves which machine this run happens on. A nil target means
