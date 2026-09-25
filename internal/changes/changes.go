@@ -336,6 +336,28 @@ func Load(path string, phaseID string) (*Changes, error) {
 	return &c, nil
 }
 
+// ErrNotARecord is Decode's refusal of bytes that are not a changes.json
+// document.
+var ErrNotARecord = errors.New("not a changes.json record")
+
+// Decode parses a changes.json document read from somewhere other than this
+// checkout's own file — a copy out of a ref's committed tree. A document with
+// no tasks decodes to an empty task map, never nil.
+//
+// Its error carries no byte of the input, unlike Load's: those bytes are
+// whatever the ref held, and a JSON syntax error quotes the character it
+// choked on, so the decoder's message is dropped rather than wrapped.
+func Decode(b []byte) (*Changes, error) {
+	var c Changes
+	if err := json.Unmarshal(b, &c); err != nil {
+		return nil, ErrNotARecord
+	}
+	if c.Tasks == nil {
+		c.Tasks = map[string]TaskRecord{}
+	}
+	return &c, nil
+}
+
 func (c *Changes) Save(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

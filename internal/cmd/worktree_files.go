@@ -10,16 +10,17 @@ package cmd
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
+
+	"github.com/Rivil/dross/internal/gitrun"
 )
 
 // worktreeChangedFiles returns the repo-relative paths of everything
 // uncommitted in the working tree — staged, unstaged and untracked — deduped,
 // in git's own order.
 //
-// It runs its own `git status` rather than reusing gitStatusRaw, for one
-// reason: `--untracked-files=all`. gitStatusRaw takes git's default, which
+// It runs its own `git status` rather than sharing autoCommitDrossDirt's, for
+// one reason: `--untracked-files=all`. That one takes git's default, which
 // COLLAPSES a new directory to a single `dir/` entry, and a directory previews
 // nothing — no lane glob written against files matches it, so a whole new
 // package would silently resolve to no lane at all. autoCommitDrossDirt wants
@@ -30,13 +31,12 @@ import (
 // exits 0, which is the honest answer to "what would the gate run" when there
 // is nothing in hand.
 func worktreeChangedFiles(repoDir string) ([]string, error) {
-	//dross:exec-exempt git status --porcelain reads the working tree and runs no repo-authored line; no hook fires for it
-	out, err := exec.Command("git", "-C", repoDir, "status", "--porcelain", "--untracked-files=all").Output()
+	out, err := gitrun.Raw(repoDir, "status", "--porcelain", "--untracked-files=all")
 	if err != nil {
 		return nil, fmt.Errorf("git status: %w", err)
 	}
 	//dross:taint-cleared status --porcelain prints two status letters and a repo path per line; only the paths are kept
-	return worktreeFilesFromStatus(strings.TrimRight(string(out), "\n")), nil
+	return worktreeFilesFromStatus(strings.TrimRight(out, "\n")), nil
 }
 
 // worktreeFilesFromStatus is the parse, split out from the git call so the

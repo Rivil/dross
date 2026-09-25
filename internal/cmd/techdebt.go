@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"io/fs"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -87,12 +86,11 @@ func Techdebt() *cobra.Command {
 // fails), it falls back to a tree walk that prunes the same set, so the scan
 // still runs — the run id will carry the "nogit" sha.
 func trackedFiles(repoDir string) ([]string, error) {
-	//dross:exec-exempt git ls-files -z lists tracked paths and runs no repo-authored line; the argv is fixed here
-	out, err := exec.Command("git", "-C", repoDir, "ls-files", "-z").Output()
+	out, err := gitrun.Raw(repoDir, "ls-files", "-z")
 	if err == nil {
 		var paths []string
 		//dross:taint-cleared git ls-files -z prints NUL-separated tracked paths; each becomes a file the scan reads, and nothing else of git's output is kept
-		for _, rel := range strings.Split(strings.TrimRight(string(out), "\x00"), "\x00") {
+		for _, rel := range strings.Split(strings.TrimRight(out, "\x00"), "\x00") {
 			if rel == "" || inSkippedDir(rel) {
 				continue
 			}

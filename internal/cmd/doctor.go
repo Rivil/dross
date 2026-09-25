@@ -100,7 +100,7 @@ func Doctor() *cobra.Command {
 			}
 
 			// --- [remote] checks ---
-			gitURL := gitRemoteOriginURL(repoDir)
+			gitURL, _ := gitrun.Read(repoDir, "remote", "get-url", "origin")
 
 			Print("Remote:")
 			switch {

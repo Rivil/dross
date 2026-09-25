@@ -54,20 +54,12 @@ var forbiddenInCmd = []string{"os/exec", "net/http", "go/ast", "encoding/json", 
 // you to. One entry per line, so each drain is a one-line diff.
 var cmdForbiddenBaseline = map[string][]string{
 	"os/exec": {
-		"cleantree.go",
-		"init.go",
 		"milestone_stale.go",
-		"pause.go",
-		"phase.go",
 		"statusline.go",
-		"techdebt.go",
-		"worktree_files.go",
 	},
-	"net/http": {},
-	"go/ast":   {},
-	"encoding/json": {
-		"phase.go",
-	},
+	"net/http":                   {},
+	"go/ast":                     {},
+	"encoding/json":              {},
 	"github.com/BurntSushi/toml": {},
 }
 

@@ -41,8 +41,13 @@ import (
 // quarter of the module — a pattern narrowed from ./... — falls under it.
 const srcScopeFloor = 34
 
-// srcSpawnFileFloor is ~25% under the 28 files that construct a command today.
-const srcSpawnFileFloor = 20
+// srcSpawnFileFloor is ~25% under the files that construct a command.
+//
+// Reset in cmd-exec-baseline-drain t-13 to floor(0.75 x the logged census):
+// 20 -> 11, logged at 15 files (from 28 when the floor was set). git's spawns
+// collapsed into internal/gitrun and cmd constructs no command of its own, so
+// the drop is the consolidation, not a blinder sweep.
+const srcSpawnFileFloor = 11
 
 // srcScope is the package set the source scans walk: every package the shared
 // load matched.

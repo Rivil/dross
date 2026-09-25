@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -863,13 +861,12 @@ func resolveCompleteBase(repoDir, root string, p *project.Project, s *state.Stat
 // Best-effort: any git or parse failure yields "" and the caller refuses.
 func phaseRefRecordedBase(repoDir, phaseID string) string {
 	ref := "refs/heads/phase/" + phaseID + ":.dross/phases/" + phaseID + "/" + changes.File
-	//dross:exec-exempt git show reads one blob out of the object store; the ref is fenced by gitRefArgs and nothing in a blob executes
-	out, err := exec.Command("git", append([]string{"-C", repoDir}, gitRefArgs("show", nil, ref)...)...).Output()
+	out, err := gitrun.Read(repoDir, gitRefArgs("show", nil, ref)...)
 	if err != nil {
 		return ""
 	}
-	var ch changes.Changes
-	if err := json.Unmarshal(out, &ch); err != nil {
+	ch, err := changes.Decode([]byte(out))
+	if err != nil {
 		return ""
 	}
 	//dross:taint-cleared the recorded base branch read out of the phase ref's committed changes.json; nothing else from the blob is kept
@@ -900,13 +897,12 @@ func completeBaseCandidates(repoDir string, p *project.Project, s *state.State) 
 // 0 and the caller's ancestry fallback stands.
 func originRecordedPR(repoDir, base, phaseID string) int {
 	ref := "origin/" + base + ":" + ".dross/phases/" + phaseID + "/changes.json"
-	//dross:exec-exempt git show reads one blob out of the object store; the ref is fenced by gitRefArgs and nothing in a blob executes
-	out, err := exec.Command("git", append([]string{"-C", repoDir}, gitRefArgs("show", nil, ref)...)...).Output()
+	out, err := gitrun.Read(repoDir, gitRefArgs("show", nil, ref)...)
 	if err != nil {
 		return 0
 	}
-	var ch changes.Changes
-	if err := json.Unmarshal(out, &ch); err != nil {
+	ch, err := changes.Decode([]byte(out))
+	if err != nil {
 		return 0
 	}
 	return ch.PR

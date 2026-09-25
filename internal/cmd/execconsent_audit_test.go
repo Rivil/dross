@@ -194,12 +194,16 @@ func liveViewUnder(t *testing.T, root string, roots []string) *srcView {
 
 // The discovery floor. A walk that quietly stopped matching reports zero
 // findings, which is indistinguishable from success, so the gate also has to
-// find ENOUGH — measured today at 41 sites across 24 files, with the floor set
+// find ENOUGH — measured at 41 sites across 24 files, with the floor set
 // roughly a quarter under both so ordinary churn does not trip it and a dropped
 // scan root does.
+//
+// Reset in cmd-exec-baseline-drain t-13 to floor(0.75 x the logged census):
+// 30 -> 19 sites and 20 -> 11 files, logged at 26 across 15. git's spawns
+// collapsed into internal/gitrun's four verbs, and cmd holds none of its own.
 const (
-	execConsentMinSites = 30
-	execConsentMinFiles = 20
+	execConsentMinSites = 19
+	execConsentMinFiles = 11
 )
 
 // execConsentFloor is the coverage check, factored out so it can be exercised

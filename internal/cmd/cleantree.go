@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -21,10 +20,14 @@ import (
 //     commit, then proceed (committed=true)
 //   - any path outside .dross/ → dirtyTreeError, staging nothing
 func autoCommitDrossDirt(repoDir, action string) (committed bool, err error) {
-	status, err := gitStatusRaw(repoDir)
+	// Raw, not Read: trimming would eat the first line's leading status column
+	// (" M path") and break the positional parse below.
+	raw, err := gitrun.Raw(repoDir, "status", "--porcelain")
 	if err != nil {
 		return false, fmt.Errorf("git status: %w", err)
 	}
+	//dross:taint-cleared status --porcelain prints two status letters and a repo path per line, never file content
+	status := strings.TrimRight(raw, "\n")
 	if status == "" {
 		return false, nil
 	}
@@ -62,19 +65,6 @@ func autoCommitDrossDirt(repoDir, action string) (committed bool, err error) {
 		return false, fmt.Errorf("git commit: %w", err)
 	}
 	return true, nil
-}
-
-// gitStatusRaw returns `git status --porcelain` without trimming leading
-// whitespace — gitrun.Trim would eat the first line's leading status column
-// (" M path") and break positional parsing.
-func gitStatusRaw(repoDir string) (string, error) {
-	//dross:exec-exempt git status --porcelain reads the working tree and runs no repo-authored line; no hook fires for it
-	out, err := exec.Command("git", "-C", repoDir, "status", "--porcelain").Output()
-	if err != nil {
-		return "", err
-	}
-	//dross:taint-cleared status --porcelain prints two status letters and a repo path per line, never file content
-	return strings.TrimRight(string(out), "\n"), nil
 }
 
 // porcelainPaths extracts the path(s) named by one `git status --porcelain`

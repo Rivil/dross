@@ -2,6 +2,7 @@ package changes
 
 import (
 	"encoding/json"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -768,5 +769,36 @@ func TestFilePathContainsThePhaseID(t *testing.T) {
 		if !strings.HasPrefix(got, phases+string(filepath.Separator)) || got != filepath.Join(phases, "_refused", File) {
 			t.Errorf("FilePath(%q) = %s, want the refused segment inside phases/", id, got)
 		}
+	}
+}
+
+// TestDecodeRoundTripsBaseAndPR: a record Save wrote decodes back with its base,
+// PR and tasks intact, and bytes that are not a record are refused.
+func TestDecodeRoundTripsBaseAndPR(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "changes.json")
+	c := New("p")
+	c.Base = "milestone/v2"
+	c.PR = 17
+	c.Record("t-1", []string{"a.go"}, "abc1234", "", nil)
+	if err := c.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Decode(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Base != "milestone/v2" || got.PR != 17 || got.Tasks["t-1"].Commit != "abc1234" {
+		t.Errorf("Decode lost fields: %+v", got)
+	}
+	if _, err := Decode([]byte("garbage")); !errors.Is(err, ErrNotARecord) {
+		t.Errorf("Decode(garbage) = %v, want ErrNotARecord", err)
+	}
+	empty, err := Decode([]byte(`{"phase":"p"}`))
+	if err != nil || empty.Tasks == nil {
+		t.Errorf("a record with no tasks decoded to %+v, %v; want an empty task map", empty, err)
 	}
 }
