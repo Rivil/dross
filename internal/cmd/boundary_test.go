@@ -3,10 +3,12 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -79,7 +81,6 @@ var cmdForbiddenBaseline = map[string][]string{
 	},
 	"github.com/BurntSushi/toml": {
 		"defaults.go",
-		"local.go",
 		"milestone.go",
 		"profile.go",
 		"project.go",
@@ -87,13 +88,16 @@ var cmdForbiddenBaseline = map[string][]string{
 	},
 }
 
-// extractedPackages are the four the phase pulled out of cmd, which cmd must
-// import.
+// extractedPackages are the packages logic was pulled out of cmd into, which
+// cmd must import — the four cmd-package-decomposition extracted, then
+// cmd-exec-baseline-drain's local.toml store. An import that vanished means
+// the extraction was satisfied by deleting the feature, not by moving it.
 var extractedPackages = []string{
 	modulePath + "/internal/consent",
 	modulePath + "/internal/boardsync",
 	modulePath + "/internal/diag",
 	modulePath + "/internal/mutationcfg",
+	modulePath + "/internal/localstore",
 }
 
 const (
@@ -362,6 +366,112 @@ func ratchetSelfTests(t *testing.T, base map[string]pkgImports, baseline map[str
 			}
 		}
 	})
+}
+
+// tomlStoreTypes names every struct type in files that carries a toml struct
+// tag — the shape of a TOML document's decode target. internal/cmd must declare
+// none: local.toml's store lives in internal/localstore and every other TOML
+// document in its domain package (locked local_store_proof), so a toml-tagged
+// struct in cmd is a store being rebuilt beside the command tree. An anonymous
+// struct counts too, named by its line.
+func tomlStoreTypes(fset *token.FileSet, files []*ast.File) []string {
+	hasTomlTag := func(st *ast.StructType) bool {
+		for _, fld := range st.Fields.List {
+			if fld.Tag == nil {
+				continue
+			}
+			tag, err := strconv.Unquote(fld.Tag.Value)
+			if err != nil {
+				continue
+			}
+			if _, ok := reflect.StructTag(tag).Lookup("toml"); ok {
+				return true
+			}
+		}
+		return false
+	}
+	var out []string
+	for _, f := range files {
+		file := filepath.Base(fset.Position(f.Pos()).Filename)
+		named := map[*ast.StructType]bool{}
+		ast.Inspect(f, func(n ast.Node) bool {
+			switch n := n.(type) {
+			case *ast.TypeSpec:
+				if st, ok := n.Type.(*ast.StructType); ok {
+					named[st] = true
+					if hasTomlTag(st) {
+						out = append(out, fmt.Sprintf("store type: internal/cmd/%s declares %s with toml tags — decode it in its domain package, not beside the command tree", file, n.Name.Name))
+					}
+				}
+			case *ast.StructType:
+				if !named[n] && hasTomlTag(n) {
+					out = append(out, fmt.Sprintf("store type: internal/cmd/%s declares an anonymous struct with toml tags at line %d — decode it in its domain package, not beside the command tree", file, fset.Position(n.Pos()).Line))
+				}
+			}
+			return true
+		})
+	}
+	sort.Strings(out)
+	return out
+}
+
+// parseNonTestGo parses every non-test .go file directly in dir.
+func parseNonTestGo(t *testing.T, dir string) (*token.FileSet, []*ast.File) {
+	t.Helper()
+	fset := token.NewFileSet()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var files []*ast.File
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, f)
+	}
+	return fset, files
+}
+
+// TestCmdDeclaresNoTomlStore is the positive half of c-5's proof: cmd imports
+// internal/localstore (extractedPackages) and declares no TOML decode target
+// of its own. A synthetic toml-tagged type is named by file and type; a
+// json-only struct is not a store and passes.
+func TestCmdDeclaresNoTomlStore(t *testing.T) {
+	fset, files := parseNonTestGo(t, filepath.Join(repoRootFromTest(t), "internal", "cmd"))
+	if len(files) < 100 {
+		t.Fatalf("parsed %d internal/cmd files — the walk is not pointed at the package", len(files))
+	}
+	for _, f := range tomlStoreTypes(fset, files) {
+		t.Error(f)
+	}
+
+	synth := token.NewFileSet()
+	parse := func(name, src string) *ast.File {
+		f, err := parser.ParseFile(synth, name, src, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	toml := parse("issue.go", "package cmd\n\ntype x struct{ A string `toml:\"a\"` }\n")
+	jsonOnly := parse("watch.go", "package cmd\n\ntype y struct{ A string `json:\"a\"` }\n")
+	anon := parse("task.go", "package cmd\n\nvar z struct{ A string `toml:\"a\"` }\n")
+	got := tomlStoreTypes(synth, []*ast.File{toml, jsonOnly})
+	if len(got) != 1 || !strings.Contains(got[0], "internal/cmd/issue.go declares x ") {
+		t.Errorf("findings = %v, want exactly one naming issue.go and x", got)
+	}
+	if got := tomlStoreTypes(synth, []*ast.File{jsonOnly}); len(got) != 0 {
+		t.Errorf("a json-only struct was reported as a store: %v", got)
+	}
+	if got := tomlStoreTypes(synth, []*ast.File{anon}); len(got) != 1 || !strings.Contains(got[0], "task.go declares an anonymous struct") {
+		t.Errorf("an anonymous toml struct gave %v, want one finding", got)
+	}
 }
 
 // TestBoundaryDirectionRulesFire drives rules 1-3 over synthetic package maps

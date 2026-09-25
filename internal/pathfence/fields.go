@@ -288,12 +288,12 @@ var unguessedFields = []Field{
 	},
 
 	// ---- remote-host locations ------------------------------------------
-	remotePath("cmd.detachedRun", "RunDir", "run_dir", "local.toml", "internal/cmd/verify.go (detached status/collect)"),
-	remotePath("cmd.detachedRun", "Workdir", "workdir", "local.toml", "internal/cmd/test.go", "internal/cmd/verify.go"),
-	remotePath("cmd.localStore", "RemoteWorkdir", "remote_workdir", "local.toml", "internal/cmd/local.go", "internal/cmd/remote_grant.go"),
-	remotePath("cmd.localStore", "MutationRemoteWorkdir", "mutation_remote_workdir", "local.toml", "internal/cmd/local.go", "internal/cmd/remote_grant.go"),
-	remotePath("cmd.localStore", "RemoteScratchBase", "remote_scratch_base", "local.toml", "internal/cmd/local.go"),
-	remotePath("cmd.remoteCandidate", "Workdir", "workdir", "local.toml", "internal/cmd/local.go", "internal/cmd/remote_grant.go"),
+	remotePath("localstore.DetachedRun", "RunDir", "run_dir", "local.toml", "internal/cmd/verify.go (detached status/collect)"),
+	remotePath("localstore.DetachedRun", "Workdir", "workdir", "local.toml", "internal/cmd/test.go", "internal/cmd/verify.go"),
+	remotePath("localstore.Store", "RemoteWorkdir", "remote_workdir", "local.toml", "internal/localstore/store.go", "internal/cmd/remote_grant.go"),
+	remotePath("localstore.Store", "MutationRemoteWorkdir", "mutation_remote_workdir", "local.toml", "internal/localstore/store.go", "internal/cmd/remote_grant.go"),
+	remotePath("localstore.Store", "RemoteScratchBase", "remote_scratch_base", "local.toml", "internal/localstore/store.go"),
+	remotePath("localstore.RemoteCandidate", "Workdir", "workdir", "local.toml", "internal/localstore/store.go", "internal/cmd/remote_grant.go"),
 	remotePath("project.Mutation", "RemoteWorkdir", "remote_workdir", "project.toml", "internal/project/project.go"),
 
 	// ---- repo-layout settings recorded, not opened -----------------------

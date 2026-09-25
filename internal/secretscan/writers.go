@@ -196,7 +196,7 @@ var writers = []Writer{
 		Path: "state.json", IgnoreSeed: ignoreSeed,
 		Why: "machine-local position and history; tracking it let a checkout replay a stale copy (locked state_tracking)",
 	}},
-	{File: "internal/cmd/local.go", MachineLocal: &MachineLocal{
+	{File: "internal/localstore/store.go", MachineLocal: &MachineLocal{
 		Path: "local.toml", IgnoreSeed: ignoreSeed,
 		Why: "host allowlist additions and quick_base; a committed copy would let a repo authorize its own API host",
 	}},

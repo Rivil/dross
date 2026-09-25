@@ -5,11 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/Rivil/dross/internal/consent"
 )
 
 // TestLocalSetGetRoundTrips is the store's basic contract: what `local set`
@@ -365,58 +362,6 @@ func TestMutationTuningRefusesAValueThatDidNotTake(t *testing.T) {
 	}
 }
 
-// TestReadRemoteGrantRefusesTrackedLocal is c-2's machine-local half.
-//
-// A committed local.toml naming a remote host is a repo shipping the machine it
-// wants your working tree rsync'd to and your test suite run on. The refusal
-// fires UNREAD — the same provenance check allow_hosts and the exec consent gate
-// go through, not a second one that could drift.
-func TestReadRemoteGrantRefusesTrackedLocal(t *testing.T) {
-	dir := t.TempDir()
-	gitInit(t, dir, "")
-	root := filepath.Join(dir, ".dross")
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeCompleteRoot(t, root)
-
-	// A VALID grant, so the test proves provenance is what refuses it rather
-	// than the value happening to be malformed.
-	body := "mutation_remote_host = \"attacker.example\"\nmutation_remote_workdir = \"/srv/dross\"\n"
-	local := filepath.Join(root, LocalFile)
-	if err := os.WriteFile(local, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	mustGit(t, dir, "add", "-f", ".dross/"+LocalFile)
-
-	got, err := firstRemoteGrant(root, dir)
-	if err == nil {
-		t.Fatal("a tracked local.toml was read rather than refused")
-	}
-	if got != nil {
-		t.Errorf("grant must be nil on refusal, got %+v", got)
-	}
-	if strings.Contains(err.Error(), "attacker.example") {
-		t.Errorf("the refusal echoed the file's contents — it must not be parsed: %v", err)
-	}
-	for _, want := range []string{"refusing to read", ".dross/" + LocalFile, "tracked"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("refusal does not mention %q: %v", want, err)
-		}
-	}
-
-	// Untracked, the same file grants: the refusal is about provenance, not
-	// about the value.
-	mustGit(t, dir, "rm", "--cached", "-q", ".dross/"+LocalFile)
-	got, err = firstRemoteGrant(root, dir)
-	if err != nil {
-		t.Fatalf("an untracked local.toml must be readable: %v", err)
-	}
-	if got == nil || got.Host != "attacker.example" || got.Workdir != "/srv/dross" {
-		t.Errorf("grant did not parse: %+v", got)
-	}
-}
-
 // TestReadRemoteGrantWorkdirAloneIsNoGrant: the HOST is the authorization. A
 // leftover workdir with no host is not half a grant — it is nothing, and
 // treating it as authorization would be reading intent into a stale value.
@@ -648,100 +593,5 @@ func TestRemoteGrantCarriesTheResolvedEnv(t *testing.T) {
 	}
 	if _, err := firstRemoteGrant(root, filepath.Dir(root)); err == nil {
 		t.Fatal("a grant naming an unset variable resolved anyway")
-	}
-}
-
-// TestLocalStoreRoundTripsGrants pins the persistence seam behind
-// internal/consent: cmd's localStore embeds consent.Grants, and grantStore is
-// the ONE writer of local.toml. A local.toml seeded with foreign keys
-// (quick_base, mutation_remote_host, a [[detached_run]]) and every trusted_*
-// key must, after GrantConsent through grantStore(root), still decode every
-// foreign key byte-identical and read every grant back. A second writer, or
-// a toml tag drifting on either side of the embed, drops a key here.
-func TestLocalStoreRoundTripsGrants(t *testing.T) {
-	root := filepath.Join(t.TempDir(), ".dross")
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	seeded := `quick_base = "main"
-mutation_remote_host = "helicon"
-mutation_remote_workdir = "/srv/dross"
-mutation_workers = "6"
-trusted_test_command = "aaaa"
-trusted_replay_commands = "bbbb,cccc"
-trusted_run_commands = "dddd"
-
-[trusted_lane_commands]
-  go = "eeee"
-  web = "ffff"
-
-[trusted_lane_installs]
-  web = "gggg"
-
-[[detached_run]]
-  phase = "p"
-  run_id = "r1"
-  host = "helicon"
-  workdir = "/srv/dross"
-  run_dir = "/srv/dross/.dross-runs/r1"
-  dispatched_at = 2026-09-20T10:00:00Z
-  state = "running"
-`
-	mustWrite(t, localPath(root), seeded)
-
-	before, err := loadLocal(localPath(root))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Every grant reads back through the embed.
-	if before.TrustedTestCommand != "aaaa" || before.TrustedReplayCommands != "bbbb,cccc" || before.TrustedRunCommands != "dddd" ||
-		before.TrustedLaneCommands["go"] != "eeee" || before.TrustedLaneCommands["web"] != "ffff" || before.TrustedLaneInstalls["web"] != "gggg" {
-		t.Fatalf("seeded grants did not decode through the embedded consent.Grants: %+v", before.Grants)
-	}
-
-	const cmd = "go test ./..."
-	if err := consent.GrantConsent(grantStore(root), cmd); err != nil {
-		t.Fatalf("GrantConsent through grantStore: %v", err)
-	}
-	// The lane grants ride the same writer (t-5): each one lands beside the
-	// others without disturbing a foreign key either.
-	if err := consent.GrantLaneConsent(grantStore(root), "docs", "markdownlint docs"); err != nil {
-		t.Fatalf("GrantLaneConsent through grantStore: %v", err)
-	}
-	if err := consent.GrantLaneInstallConsent(grantStore(root), "go", "go install x@latest"); err != nil {
-		t.Fatalf("GrantLaneInstallConsent through grantStore: %v", err)
-	}
-
-	after, err := loadLocal(localPath(root))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if after.TrustedTestCommand != consent.Fingerprint(cmd) {
-		t.Errorf("trusted_test_command = %q, want the new fingerprint", after.TrustedTestCommand)
-	}
-	// Every OTHER grant survives the writes, and the lane grants landed.
-	if after.TrustedReplayCommands != "bbbb,cccc" || after.TrustedRunCommands != "dddd" ||
-		after.TrustedLaneCommands["go"] != "eeee" || after.TrustedLaneCommands["web"] != "ffff" || after.TrustedLaneInstalls["web"] != "gggg" {
-		t.Errorf("a sibling grant was dropped by a grant: %+v", after.Grants)
-	}
-	if after.TrustedLaneCommands["docs"] != consent.Fingerprint("markdownlint docs") || after.TrustedLaneInstalls["go"] != consent.Fingerprint("go install x@latest") {
-		t.Errorf("the lane grants did not land through the single writer: %+v", after.Grants)
-	}
-	// And every foreign key is byte-identical to what was seeded.
-	after.Grants = before.Grants
-	if !reflect.DeepEqual(after, before) {
-		t.Errorf("a non-consent key changed under a grant:\n before: %+v\n after:  %+v", before, after)
-	}
-	body := mustRead(t, localPath(root))
-	for _, want := range []string{`quick_base = "main"`, `mutation_remote_host = "helicon"`, `mutation_workers = "6"`, `run_id = "r1"`, `[trusted_lane_installs]`, `web = "gggg"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("local.toml lost %q after a grant:\n%s", want, body)
-		}
-	}
-	// grantStore is consent.Store: Load sees the file's grants, Save writes
-	// only them.
-	g, err := grantStore(root).Load()
-	if err != nil || g.TrustedTestCommand != consent.Fingerprint(cmd) {
-		t.Errorf("grantStore.Load = %+v, %v", g, err)
 	}
 }

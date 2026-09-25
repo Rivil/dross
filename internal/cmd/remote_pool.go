@@ -1,8 +1,55 @@
 package cmd
 
 import (
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/remote"
 )
+
+// resolveRemoteHost answers "which machine is the remote" for every surface
+// that is not itself a run — doctor, `dross remote status`, `dross remote
+// bootstrap`, `dross test lane install`.
+//
+// It is the ONLY answer (locked resolution_has_one_implementation). The
+// scalar-only reader those four used to call is gone: four callers each doing
+// their own resolution is how the divergence arose, and the failure is silent —
+// the surfaces simply disagree, so doctor blesses a host the next run does not
+// use. A second correct implementation is one refactor away from being a second
+// wrong one.
+//
+// The scalar grant stays candidate zero inside localstore.ReadRemoteGrants, so
+// a repo with only the old pair resolves exactly as it always did.
+//
+// It PROBES, which the scalar reader did not. That is the point: with a pool
+// declared and the first host down, the machine the next run uses is not the
+// one config names, and a surface that reported the config value would name a
+// machine nothing is going to touch. tools is what the caller needs on the far
+// side, asked as part of this same probe — nil when the caller only wants the
+// host.
+//
+// The whole pool comes back beside the chosen target, because "the host" is no
+// longer the whole answer for a caller that acts per lane: an install decides
+// against the candidate that would actually run the lane, not against the first
+// one that answered.
+//
+// A chosen target of nil means one of two different things, and callers must
+// keep them apart: pool.Fallback reports a grant that exists and could not be
+// reached, while a nil target with no fallback is simply no grant at all.
+func resolveRemoteHost(root, repoDir string, tools []string) (*remote.Target, remotePool, error) {
+	targets, err := localstore.ReadRemoteGrants(root, repoDir)
+	if err != nil {
+		return nil, remotePool{}, err
+	}
+	pool, err := probeRemotePool(targets, tools)
+	if err != nil {
+		// The failing candidate comes back so the caller can name the machine;
+		// the walk bailed there rather than at the end.
+		return pool.Failed, pool, err
+	}
+	if len(pool.Candidates) == 0 {
+		return nil, pool, nil
+	}
+	return pool.Candidates[0].Target, pool, nil
+}
 
 // poolCandidate is one authorized host that ANSWERED a probe, and what it said.
 //

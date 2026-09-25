@@ -245,7 +245,7 @@ func TestWalkerFindsANonEmptySet(t *testing.T) {
 	}
 	// The field the 2026-09-07 experiment was about, and one outside the
 	// four schema directories the old walker was limited to.
-	for _, name := range []string{"phase.Task.Files", "cmd.detachedRun.RunDir", "survivor.Acceptance.File"} {
+	for _, name := range []string{"phase.Task.Files", "localstore.DetachedRun.RunDir", "survivor.Acceptance.File"} {
 		if _, ok := found[name]; !ok {
 			t.Errorf("the walk does not enumerate %s", name)
 		}

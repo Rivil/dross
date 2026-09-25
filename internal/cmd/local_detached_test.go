@@ -25,58 +25,6 @@ func sampleDetachedRun() detachedRun {
 	}
 }
 
-// TestDetachedRunRoundTripsEveryField is the record's basic contract: what the
-// dispatch writes, a later process reads back.
-//
-// It matters more here than for an ordinary config key because the reader is a
-// DIFFERENT session — that is the whole point of the phase. A field silently
-// dropped on the way in is not discovered until a fetch hours later cannot find
-// the run, by which time the leg has already been paid for.
-//
-// Compared field-for-field rather than with a single struct equality, so a
-// failure names which field was lost.
-func TestDetachedRunRoundTripsEveryField(t *testing.T) {
-	root := chdirDross(t)
-	repoDir := filepath.Dir(root)
-	want := sampleDetachedRun()
-
-	if err := recordDetachedRun(root, repoDir, want); err != nil {
-		t.Fatalf("record: %v", err)
-	}
-
-	got, err := findDetachedRun(root, repoDir, want.Phase)
-	if err != nil {
-		t.Fatalf("find: %v", err)
-	}
-	if got == nil {
-		t.Fatal("the recorded run was not found")
-	}
-	for _, f := range []struct {
-		name      string
-		got, want any
-	}{
-		{"Phase", got.Phase, want.Phase},
-		{"RunID", got.RunID, want.RunID},
-		{"Host", got.Host, want.Host},
-		{"Workdir", got.Workdir, want.Workdir},
-		{"RunDir", got.RunDir, want.RunDir},
-		{"State", got.State, want.State},
-	} {
-		if f.got != f.want {
-			t.Errorf("%s did not round-trip: got %v want %v", f.name, f.got, f.want)
-		}
-	}
-	// Times compared with Equal rather than ==: a TOML decode may return a
-	// different *location carrying the same instant, and == on time.Time
-	// compares the monotonic/location fields too.
-	if !got.DispatchedAt.Equal(want.DispatchedAt) {
-		t.Errorf("DispatchedAt did not round-trip: got %v want %v", got.DispatchedAt, want.DispatchedAt)
-	}
-	if !got.ScheduledFor.Equal(want.ScheduledFor) {
-		t.Errorf("ScheduledFor did not round-trip: got %v want %v", got.ScheduledFor, want.ScheduledFor)
-	}
-}
-
 // TestImmediateRunRoundTripsAsUnscheduled pins the zero ScheduledFor, which is
 // what distinguishes an immediate dispatch from an off-hours one.
 //
@@ -108,46 +56,6 @@ func TestImmediateRunRoundTripsAsUnscheduled(t *testing.T) {
 	// would pass for a Scheduled() that always returned false.
 	if !sampleDetachedRun().Scheduled() {
 		t.Error("a run carrying a start time does not report as scheduled")
-	}
-}
-
-// TestSecondRunForOnePhaseIsRefused is the one_run_per_phase decision made
-// mechanical.
-//
-// Two live runs both write the phase's tests.json when collected, and the loser
-// wins silently: whichever fetch lands second overwrites the first with numbers
-// from a different dispatch, at a different time, possibly on a different host.
-// The refusal must NAME the run already in flight — a bare "already exists"
-// leaves the user with no way to find what to cancel.
-func TestSecondRunForOnePhaseIsRefused(t *testing.T) {
-	root := chdirDross(t)
-	repoDir := filepath.Dir(root)
-	first := sampleDetachedRun()
-	if err := recordDetachedRun(root, repoDir, first); err != nil {
-		t.Fatalf("record: %v", err)
-	}
-
-	second := first
-	second.RunID = "r-20260830-2359"
-	second.Host = "anachryon"
-	err := recordDetachedRun(root, repoDir, second)
-	if err == nil {
-		t.Fatal("a second detached run for one phase was accepted")
-	}
-	for _, want := range []string{first.RunID, first.Host, first.Phase} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("the refusal does not name %q: %v", want, err)
-		}
-	}
-
-	// The refusal must not have half-written: the stored run is still the
-	// first one, not the second and not both.
-	runs, err := readDetachedRuns(root, repoDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(runs) != 1 || runs[0].RunID != first.RunID {
-		t.Errorf("the refused record mutated the store: %+v", runs)
 	}
 }
 
