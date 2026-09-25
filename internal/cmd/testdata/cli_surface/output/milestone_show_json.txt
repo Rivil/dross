@@ -1,0 +1,18 @@
+{
+  "milestone": {
+    "version": "v1.1",
+    "title": "Friction pass",
+    "status": "active"
+  },
+  "scope": {
+    "success_criteria": [
+      "the logs stop repeating themselves"
+    ],
+    "non_goals": [
+      "a rewrite"
+    ]
+  },
+  "phases": [
+    "p1"
+  ]
+}

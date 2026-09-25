@@ -1,0 +1,1 @@
+{"systemMessage":"you are here: p1 (planned) · v1.2.3.0 — next: /dross-execute — run the next task","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"you are here: p1 (planned) · v1.2.3.0 — next: /dross-execute — run the next task"}}

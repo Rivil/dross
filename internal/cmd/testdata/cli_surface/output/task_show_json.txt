@@ -1,0 +1,15 @@
+{
+  "id": "t-2",
+  "wave": 2,
+  "title": "Do the second thing",
+  "files": [
+    "b.go"
+  ],
+  "covers": [
+    "c-1"
+  ],
+  "depends_on": [
+    "t-1"
+  ],
+  "status": "pending"
+}
