@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
@@ -1067,29 +1068,9 @@ func dirtyTreeError(action, status string) error {
 }
 
 // gitNoOut runs git silently, discarding output. Used when only the
-// exit status matters (e.g. ref-exists probes).
+// exit status matters (e.g. ref-exists probes). It delegates to gitrun.Quiet.
 func gitNoOut(repoDir string, args ...string) error {
-	gitArgvTap(args)
-	full := append([]string{"-C", repoDir}, args...)
-	//dross:exec-exempt the argv is dross's own git plumbing, fenced by gitRefArgs/gitPathArgs before it gets here; none of it runs a repo-authored line
-	return exec.Command("git", full...).Run()
-}
-
-// gitArgvTap records every argv dross hands to git. It is nil in production and
-// costs one nil check; tests install a recorder and assert on ORDERING —
-// specifically that a config-derived positional never precedes its separator.
-//
-// This is the only way to test the property that matters. Asserting on the
-// builders in gitargs.go proves the builders work; it says nothing about a call
-// site that quietly went back to a bare literal list, which is the regression
-// this phase exists to prevent. All three exec helpers feed it, so a new call
-// site is visible whichever one it picks.
-var gitArgvRecorder func([]string)
-
-func gitArgvTap(args []string) {
-	if gitArgvRecorder != nil {
-		gitArgvRecorder(args)
-	}
+	return gitrun.Quiet(repoDir, args...)
 }
 
 // isDir reports whether path exists and is a directory.

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/Rivil/dross/internal/gitrun"
 )
 
 // recordGitArgv installs a recorder on the exec seam for the duration of a test
@@ -18,14 +20,14 @@ func recordGitArgv(t *testing.T) func() [][]string {
 	t.Helper()
 	var mu sync.Mutex
 	var seen [][]string
-	prev := gitArgvRecorder
-	gitArgvRecorder = func(args []string) {
+	prev := gitrun.ArgvRecorder
+	gitrun.ArgvRecorder = func(args []string) {
 		mu.Lock()
 		defer mu.Unlock()
 		cp := append([]string(nil), args...)
 		seen = append(seen, cp)
 	}
-	t.Cleanup(func() { gitArgvRecorder = prev })
+	t.Cleanup(func() { gitrun.ArgvRecorder = prev })
 	return func() [][]string {
 		mu.Lock()
 		defer mu.Unlock()

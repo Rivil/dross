@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -167,6 +168,14 @@ func staleAcceptedBinaries(table map[string]string, hits map[string]bool) []stri
 	return stale
 }
 
+// gitrunVerbs are internal/gitrun's verbs, whose variadic tail IS a git argv.
+// Recognised by the gitrun selector anywhere in the tree, which is why an
+// aliased import of the package is itself a finding (auditFileHits).
+var gitrunVerbs = map[string]bool{"Trim": true, "Raw": true, "Read": true, "Run": true, "Quiet": true}
+
+// gitrunImportPath is the runner's import path.
+const gitrunImportPath = "github.com/Rivil/dross/internal/gitrun"
+
 // gitCallFuncs are the helpers whose variadic tail IS a git argv.
 var gitCallFuncs = map[string]bool{
 	"gitRun":   true,
@@ -280,6 +289,15 @@ func auditFile(fset *token.FileSet, f *ast.File) []auditFinding {
 func auditFileHits(fset *token.FileSet, f *ast.File, hits map[string]bool) []auditFinding {
 	var out []auditFinding
 
+	for _, imp := range f.Imports {
+		if path, err := strconv.Unquote(imp.Path.Value); err == nil && path == gitrunImportPath && imp.Name != nil && imp.Name.Name != "gitrun" {
+			out = append(out, auditFinding{
+				Pos: fset.Position(imp.Pos()).String(), Arg: imp.Name.Name, Call: "import", Bin: "git",
+				Why: "internal/gitrun imported as " + quote(imp.Name.Name) + " — every argv audit recognises the runner's calls by the gitrun selector, so an alias hides them all",
+			})
+		}
+	}
+
 	ast.Inspect(f, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
 		if !ok {
@@ -390,7 +408,15 @@ func spawnArgvOf(call *ast.CallExpr) (name, bin, binExpr string, args []ast.Expr
 		}
 	case *ast.SelectorExpr:
 		pkg, isIdent := fn.X.(*ast.Ident)
-		if !isIdent || pkg.Name != "exec" {
+		if !isIdent {
+			return "", "", "", nil, false
+		}
+		// gitrun.Trim(dir, args...) and its siblings — the repo-wide git
+		// runner; first arg is the dir, the tail is the git argv.
+		if pkg.Name == "gitrun" && gitrunVerbs[fn.Sel.Name] && len(call.Args) > 1 {
+			return "gitrun." + fn.Sel.Name, "git", "", call.Args[1:], true
+		}
+		if pkg.Name != "exec" {
 			return "", "", "", nil, false
 		}
 		if fn.Sel.Name != "Command" && fn.Sel.Name != "CommandContext" {
@@ -518,6 +544,36 @@ func TestAcceptedBinariesAreLive(t *testing.T) {
 	}
 	if got := staleAcceptedBinaries(table, hits); len(got) != 1 || got[0] != "internal/cmd/gone.go:vanished" {
 		t.Errorf("stale keys = %v, want exactly the vanished one", got)
+	}
+}
+
+// TestAliasedGitrunImportIsAFinding: the audits see a git argv through the
+// gitrun selector, so importing the runner under another name — or dotted in —
+// would hide every call. The import itself is reported; the plain import is
+// not.
+func TestAliasedGitrunImportIsAFinding(t *testing.T) {
+	for _, tc := range []struct {
+		name, imp string
+		want      int
+	}{
+		{"plain", `"` + gitrunImportPath + `"`, 0},
+		{"aliased", `g "` + gitrunImportPath + `"`, 1},
+		{"dotted", `. "` + gitrunImportPath + `"`, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, "x.go", "package x\n\nimport "+tc.imp+"\n", 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := auditFile(fset, f)
+			if len(got) != tc.want {
+				t.Fatalf("findings = %+v, want %d", got, tc.want)
+			}
+			if tc.want == 1 && !strings.Contains(got[0].Why, "gitrun selector") {
+				t.Errorf("the finding does not say why an alias matters: %s", got[0].Why)
+			}
+		})
 	}
 }
 

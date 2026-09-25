@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/verify"
@@ -287,10 +288,10 @@ func TestPhaseScopeFencesBaseRef(t *testing.T) {
 	payload := "--output=" + pwned
 
 	var argvs [][]string
-	gitArgvRecorder = func(args []string) {
+	gitrun.ArgvRecorder = func(args []string) {
 		argvs = append(argvs, append([]string(nil), args...))
 	}
-	t.Cleanup(func() { gitArgvRecorder = nil })
+	t.Cleanup(func() { gitrun.ArgvRecorder = nil })
 
 	s := mustPhaseScope(t, dir, payload, []string{"a.go"})
 

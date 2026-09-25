@@ -36,6 +36,27 @@ FLAG path-without-separator
 PASS all-literals
 	gitRun(repoDir, "fetch", "origin")
 
+FLAG gitrun-quiet-bare-var
+	gitrun.Quiet(repoDir, "rev-parse", branch)
+
+PASS gitrun-quiet-const-prefix
+	gitrun.Quiet(repoDir, "rev-parse", "--verify", "refs/heads/"+branch)
+
+FLAG gitrun-run-path-without-separator
+	gitrun.Run(repoDir, "add", path)
+
+PASS gitrun-run-path-separator
+	gitrun.Run(repoDir, "add", "--", path)
+
+FLAG gitrun-raw-bare-var
+	gitrun.Raw(repoDir, "log", branch)
+
+FLAG gitrun-read-bare-var
+	gitrun.Read(repoDir, "show", ref)
+
+PASS gitrun-trim-literals
+	gitrun.Trim(repoDir, "rev-parse", "HEAD")
+
 PASS const-prefix-concat
 	gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch)
 

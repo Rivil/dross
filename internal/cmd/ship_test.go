@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
@@ -2144,9 +2145,9 @@ func TestShipRecoverFetchFailureOutputGoesToStderr(t *testing.T) {
 	}
 	t.Setenv("PATH", stub+string(os.PathListSeparator)+os.Getenv("PATH"))
 	var stderr strings.Builder
-	prev := gitStderr
-	gitStderr = &stderr
-	defer func() { gitStderr = prev }()
+	prev := gitrun.Stderr
+	gitrun.Stderr = &stderr
+	defer func() { gitrun.Stderr = prev }()
 
 	err = runDrossRecovery(dir, filepath.Join(dir, ".dross"), &state.State{}, "p", "", "main")
 	if err == nil {

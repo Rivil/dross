@@ -32,6 +32,9 @@ import (
 //     fails; a stale entry fails asking for its removal. That is what makes the
 //     list shrink-only: new domain logic landing in cmd is a red test, and the
 //     debt is visible.
+//  5. internal/gitrun is a LEAF: it imports only the standard library, so
+//     consent and remote — which cmd imports — can spawn git through it
+//     without an import cycle.
 //
 // The checker is a pure function over {package -> imports} so the same rules
 // run over the live tree AND over synthetic maps that prove each rule fires.
@@ -56,7 +59,6 @@ var cmdForbiddenBaseline = map[string][]string{
 		"milestone_stale.go",
 		"pause.go",
 		"phase.go",
-		"ship_recover.go",
 		"statusline.go",
 		"techdebt.go",
 		"worktree_files.go",
@@ -86,6 +88,7 @@ const (
 	modulePath  = "github.com/Rivil/dross"
 	cmdPkgPath  = modulePath + "/internal/cmd"
 	cobraPath   = "github.com/spf13/cobra"
+	gitrunPath  = modulePath + "/internal/gitrun"
 	boundaryMin = 30 // packages the walk must see before its verdict counts
 )
 
@@ -175,6 +178,18 @@ func checkBoundary(pkgs map[string]pkgImports, baseline map[string][]string) []s
 		}
 		if imps[cmdPkgPath] {
 			findings = append(findings, fmt.Sprintf("reverse import: %s imports %s — the boundary is one-way", p.Path, cmdPkgPath))
+		}
+	}
+
+	// 5: the git runner is a leaf. Absent, the rule has nothing to judge, which
+	// is its own finding rather than a pass.
+	if gr, ok := pkgs[gitrunPath]; !ok {
+		findings = append(findings, "vacuity: the walk did not see internal/gitrun, so the leaf rule cannot fire")
+	} else {
+		for imp := range gr.imports() {
+			if first, _, _ := strings.Cut(imp, "/"); strings.Contains(first, ".") {
+				findings = append(findings, fmt.Sprintf("leaf: internal/gitrun imports %s — the runner imports only the standard library, so every package can spawn git through it", imp))
+			}
 		}
 	}
 
@@ -482,6 +497,18 @@ func TestBoundaryDirectionRulesFire(t *testing.T) {
 		got := checkBoundary(pkgs, cmdForbiddenBaseline)
 		if len(got) != 1 || !strings.Contains(got[0], "cobra exclusivity: "+modulePath+"/internal/foo") {
 			t.Errorf("findings = %v", got)
+		}
+	})
+	t.Run("gitrun importing a module package fails the leaf rule", func(t *testing.T) {
+		pkgs := clonePkgs(live)
+		gr, ok := pkgs[gitrunPath]
+		if !ok {
+			t.Fatal("the live walk has no internal/gitrun")
+		}
+		gr.Files["gitrun.go"] = append(append([]string(nil), gr.Files["gitrun.go"]...), modulePath+"/internal/consent")
+		got := checkBoundary(pkgs, cmdForbiddenBaseline)
+		if len(got) != 1 || !strings.Contains(got[0], "leaf: internal/gitrun imports "+modulePath+"/internal/consent") {
+			t.Errorf("findings = %v, want exactly one leaf finding naming internal/consent", got)
 		}
 	})
 	t.Run("cmd dropping an extracted package fails wiring", func(t *testing.T) {

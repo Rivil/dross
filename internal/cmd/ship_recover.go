@@ -1,18 +1,14 @@
 package cmd
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -175,9 +171,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 
 	// Pre-check: SHA must actually contain a .dross/ tree, or the checkout
 	// step would fail with an unhelpful pathspec error.
-	//dross:exec-exempt git rev-parse --verify resolves an object name and prints nothing else; the ref is fenced and no repo-authored line runs
-	if err := exec.Command("git", append([]string{"-C", repoDir},
-		gitRefArgs("rev-parse", []string{"--verify"}, sha+":.dross")...)...).Run(); err != nil {
+	if err := gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, sha+":.dross")...); err != nil {
 		return fmt.Errorf("commit %s has no .dross/ tree — nothing to restore. "+
 			"If you've already reset main, pass "+
 			"--pre-merge-sha=$(git rev-parse HEAD@{1})", short(sha))
@@ -263,69 +257,19 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	return nil
 }
 
-// gitTrim runs a REF-plumbing git command and returns its output trimmed:
-// rev-parse, symbolic-ref, merge-base, rev-list, for-each-ref over
-// refname/objectname atoms, ls-remote without --get-url, and bare --version —
-// verb and options pinned by TestGitTrimRunsRefVerbsOnly. What those print is a
-// ref name git validated, an object id, a count or git's version, so the one
-// marker below is true for every caller. Anything that prints content — a log,
-// a diff, a listing, a status — goes through gitRead instead.
+// gitTrim, gitRead and gitRun delegate to gitrun's Trim, Read and Run — see
+// that package for what each does with git's output. cmd-exec-baseline-drain's
+// t-11 rewrites their callers onto gitrun directly and deletes them.
 func gitTrim(repoDir string, args ...string) (string, error) {
-	gitArgvTap(args)
-	full := append([]string{"-C", repoDir}, args...)
-	//dross:exec-exempt the argv is dross's own git plumbing, fenced by gitRefArgs/gitPathArgs before it gets here; none of it runs a repo-authored line
-	out, err := exec.Command("git", full...).Output()
-	if err != nil {
-		return "", err
-	}
-	//dross:taint-cleared gitTrim runs only pinned ref invocations (TestGitTrimRunsRefVerbsOnly): it prints ref names, object ids, counts or git's version, never content
-	return strings.TrimSpace(string(out)), nil
+	return gitrun.Trim(repoDir, args...)
 }
 
-// gitRead runs a git command whose output is CONTENT — a log, a diff, a file
-// listing, a status — and returns it trimmed. It carries no marker: a commit
-// subject or a patch line is the repo's text, so each caller marks the line
-// where it slices a SHA, a branch or a path out, and nothing else it keeps
-// may escape.
 func gitRead(repoDir string, args ...string) (string, error) {
-	gitArgvTap(args)
-	full := append([]string{"-C", repoDir}, args...)
-	//dross:exec-exempt the argv is dross's own git plumbing, fenced by gitRefArgs/gitPathArgs before it gets here; none of it runs a repo-authored line
-	out, err := exec.Command("git", full...).Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
+	return gitrun.Read(repoDir, args...)
 }
 
-// gitStderr is where a failed git invocation's own output goes: this process's
-// stderr. Tests swap it to capture what a user would see.
-var gitStderr io.Writer = os.Stderr
-
-// gitRun runs a git command for its effect. On failure git's own output —
-// which can quote file contents, remote responses and hook output — goes to
-// stderr, where the user is already looking, and the caller gets git's exit
-// status only: an error is never the terminal, it can reach telemetry or a
-// persisted record.
 func gitRun(repoDir string, args ...string) error {
-	gitArgvTap(args)
-	full := append([]string{"-C", repoDir}, args...)
-	//dross:exec-exempt the argv is dross's own git plumbing, fenced by gitRefArgs/gitPathArgs before it gets here; none of it runs a repo-authored line
-	out, err := exec.Command("git", full...).CombinedOutput()
-	if err != nil && len(out) > 0 {
-		fmt.Fprintf(gitStderr, "git %s:\n%s\n", gitVerb(args), bytes.TrimRight(out, "\n"))
-	}
-	return err
-}
-
-// gitVerb is the subcommand of a git argv, for labelling its output.
-func gitVerb(args []string) string {
-	for _, a := range args {
-		if !strings.HasPrefix(a, "-") {
-			return a
-		}
-	}
-	return "command"
+	return gitrun.Run(repoDir, args...)
 }
 
 func short(sha string) string {
