@@ -387,6 +387,9 @@ The sweep is guarded against becoming vacuous — the failure mode where a check
 - `buildExecGraph` (the call-reach graph over typed syntax plus VTA edges; attributes every site to the commands that reach it and splits them by whether those commands gate) — `internal/cmd/execconsent_audit_test.go:751`
 - `TestUnresolvedDispatchIsReported` (a dispatch the call graph resolves to no callee, while a candidate implementer spawns, is a finding naming the method and call site — never a union, never silence) — `internal/cmd/execconsent_audit_test.go:2095`
 - `sourceProgram` (the module loaded once — go/packages, SSA, CHA and VTA — and shared by every source scan, loaded exactly once per test binary) — `internal/cmd/srcprog_test.go:94`
+- `sweepOutsideLoad` (the scanned set is every loaded module package; a build-constraint-blind parse sweep fails on any spawning or field-reading file the load never type-checked) — `internal/cmd/srcscope_test.go:136`
+- `typecheckFixture` (a fixture type-checked against the live load's types into an isolated SSA program, read by the two-way `// WANT` corpus harness) — `internal/cmd/ssafixture_test.go:184`
+- `withSurgery` (live proofs run as anchored surgery on a copy of the shared VTA graph — no re-parse, and the shared graph provably untouched) — `internal/cmd/execconsent_audit_test.go:1588`
 - `TestExecConsentFindingNamesFileLineAndRemedy` (a failing sweep names the file, the line and "gate it or mark it exempt", proven on a fixture whose line is looked up rather than written down) — `internal/cmd/execconsent_audit_test.go:363`
 - `TestExecReachDoesNotDegenerate` (the precision half: doctor must not reach gremlins, or every site becomes markable) — `internal/cmd/execconsent_audit_test.go:1786`
 - `TestDeletingVerifysGateFlagsEveryMutationSpawn` (deleting the gate must flag all of them — otherwise "gated via reach" is a verdict handed out regardless) — `internal/cmd/execconsent_audit_test.go:2500`
@@ -446,6 +449,16 @@ The only clearance is a `//dross:taint-cleared <reason>` marker on the line abov
 - `TestExecTaintVerdictIgnoresBinaryName` (the same corpus spawning cargo instead of git yields byte-identical findings) — `internal/cmd/taint_engine_test.go:1936`
 - `TestScopedGuardsSurvive` (the retired per-burn-down gates' behaviour guards, each pinned by name in its file) — `internal/cmd/taint_audit_test.go:223`
 - `withoutUserinfo` (a remote's userinfo is cut off before anything parses it, so a token in `remote get-url` never reaches `project.toml`) — `internal/project/remote.go:88`
+- `applyCall` (a callee's summary applied per call site — field-keyed, writer-parameter and captured-variable flows included — so a helper cannot launder taint) — `internal/cmd/taint_engine_test.go:1423`
+- `indexDependents` (the worklist's reverse index: a function is re-analysed only when a summary it reads has grown) — `internal/cmd/taint_engine_test.go:624`
+- `directiveMarkers` (one `//dross:` directive parser — position-bound, a prose floor of 20 — shared by `exec-exempt` and `taint-cleared`) — `internal/cmd/directive_test.go:45`
+- `gitRun` (effect-only git: failure output to stderr, exit status to the caller; replaced `gitCombined` at 39 sites) — `internal/cmd/ship_recover.go:310`
+- `ghFailed` (a gh failure prints gh's output to stderr and returns only the subcommand and exit status) — `internal/ship/open.go:93`
+- `TestGhUnparseableOutputGoesToStderr` (both gh JSON lookups, base PR and head PR, keep unparseable output on stderr and name their subcommand in the error) — `internal/ship/gh_failure_test.go:67`
+- `protocolToken` (a lock or status record field is admitted only as a printable, bounded protocol token — the shape check `internal/remote`'s one `taint-cleared` marker rests on) — `internal/remote/lock.go:365`
+- `TestStrykerPrePhaseBranchTrips` (6f27eaa^'s tee/headBuffer/quote branch pinned verbatim as a must-trip fixture; its three escapes name the Stdout origin) — `internal/cmd/taint_stryker_test.go:81`
+- `TestExecTaintSources` (the source corpus: every spawn-output channel on its own WANT line — the `Cmd.Stderr` buffer independent of `Cmd.Stdout` — so dropping any one seed misses a WANT) — `internal/cmd/taint_engine_test.go:1921`
+- `assertFacts` (escape, origins and remedy each cut out of the message in turn, proving every fact is asserted on its own, for both tracing scans) — `internal/cmd/srcfinding_test.go:76`
 
 _introduced exec-taint-enumeration · 19cd34b_
 
@@ -866,6 +879,7 @@ Two shapes hold it. A **detached** run composes the prelude inside the `setsid` 
 
 - `remote.LockPrelude` (the one text that opens, creates, chmods or writes the lock path; the `lock=` line protocol; never exits the shell) — `internal/remote/lock.go:170`
 - `remote.LockStatusScript` / `ParseLockStatus` / `ParseHolder` (probe with `flock -n`, never trust the record; absent file is free) — `internal/remote/lock.go:265`
+- `notPrintable` (a holder-record field holding any non-printable rune — the first included — is unreadable, so `ParseHolder` yields no holder rather than echoing the transport's bytes) — `internal/remote/lock.go:378`
 - `remote.Acquire` / `Hold` (the attached session over ssh stdin; keepalive + lease; `Held`, `Alongside`, `ErrHostBusy`, `ErrLockTool`, `Lost`) — `internal/remote/hold.go:139`
 - `remote.DetachScript` (the prelude inside the detached job, after the sleep, before `running`; noflock records 127 and finishes) — `internal/remote/remote.go:389`
 - `mutation.Launcher.ensureHeld` / `checkHeld` (one hold per run before the push; released in `Close`; a lost hold refuses to record) — `internal/mutation/launcher.go:375`
@@ -876,7 +890,7 @@ Two shapes hold it. A **detached** run composes the prelude inside the `setsid` 
 - `TestRealFlockSerializesAndReleasesOnKill` / `TestAKilledHolderReleasesWithNoCleanup` (the kernel's word, on a temp lock path; skipped where flock is absent) — `internal/remote/lock_test.go`, `internal/remote/hold_test.go`
 - `TestReadmeDocumentsTheHostLock` / `TestArchitectureDocumentsTheHostLock` (README, this entry and verify.md pinned to the lock's path, wait and `--no-wait`, `--wait` cap, doctor's flock probe and crash-safe release) — `internal/cmd/options_docs_test.go:542`
 
-_introduced remote-host-mutex_
+_introduced remote-host-mutex · extended exec-taint-enumeration · 319e797_
 
 ### Repo onboarding
 
@@ -1361,6 +1375,10 @@ A path read out of a tracked `.dross/` artifact is untrusted input to the filesy
 - `TestEveryPathShapedFieldIsDeclared` (every tagged string field in every loaded package filed exactly once, registry or ledger; fails on an unfiled field with the row to paste, and on a filing whose field is gone) — `internal/cmd/pathfence_fields_test.go:224`
 - `pathTaintScan` (declared-field reads traced to `os` path parameters and the seam; `Contain` clears only a Consumed field, per call site through helpers) — `internal/cmd/pathtaint_audit_test.go:341`
 - `TestNoDeclaredPathFieldReachesOS` (the live gate: every filing resolves to a field, reads stay above a floor, zero findings) — `internal/cmd/pathtaint_audit_test.go:474`
+- `serializedStringFields` (the both-ways filing walk behind `TestEveryPathShapedFieldIsDeclared`: pathfence registry or `not_paths.txt` ledger, each field once) — `internal/cmd/pathfence_fields_test.go:100`
+- `findUnwrapCalls` (a `Contained`'s `String()`/`Rel()` inside an `os.*` argument banned by receiver type, over the derived package set with site floors) — `internal/cmd/pathfence_enum_test.go:93`
+- `phase.ContainID` (phase ids and milestone versions contained under `.dross/phases` / `.dross/milestones` before any open; an escaping id resolves to a fixed `_refused` segment) — `internal/phase/phase.go:42`
+- `survivor.ContainReported` (tool-reported files and the Stryker workdir contained under the repo root before any read, clear or fetch) — `internal/survivor/identity.go:113`
 - `carrierType` (declared carriers asserted really typed `Contained`, plus the two fixture-driven AST scans banning `.String()`-into-`os.*` and any second dot-dot test) — `internal/cmd/pathfence_carrier_test.go:31`
 - `AssertDoesNotCompile` / `AssertCompiles` (real `go build` over a throwaway module; the fixture must fail for the stated reason) — `internal/compilefence/compilefence.go:58`
 - `recorder` (recording `testing.TB` that drives both assertions inside compilefence's own package, killing the survivors routed from tracked-path-containment) — `internal/compilefence/compilefence_test.go:182`
