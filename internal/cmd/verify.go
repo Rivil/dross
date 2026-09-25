@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
@@ -246,11 +245,9 @@ var detachSync = func(t remote.Target, localRoot string) error {
 	return runDetachArgv(argv)
 }
 
-var runDetachArgv = func(argv []string) error {
-	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
-	return cmd.Run()
-}
+// runDetachArgv is the transport seam a detached push and collect run their
+// built argv through — verify.RunDetachArgv, behind this file's consent checks.
+var runDetachArgv = verify.RunDetachArgv
 
 // detachRequiresAHost refuses a detached run that has nowhere to detach to.
 //
@@ -575,9 +572,10 @@ var detachFetchReports = func(t remote.Target, localRoot string, steps []mutatio
 // before measuring, arriving through a different door.
 //
 // An error that is already classified passes through, so a test can hand this
-// an rsync verdict without constructing an *exec.ExitError. An error that is
-// neither classified nor an exit status means rsync did not run at all, which
-// is not an absent report either.
+// an rsync verdict without spawning rsync. An error that is neither classified
+// nor an exit status means rsync did not run at all, which is not an absent
+// report either. The exit status is read through ExitCode() alone — os/exec's
+// ExitError carries it — so this file needs no process API of its own.
 func classifyFetch(host string, err error) error {
 	if err == nil {
 		return nil
@@ -586,7 +584,7 @@ func classifyFetch(host string, err error) error {
 		errors.Is(err, remote.ErrRemoteCommand) {
 		return err
 	}
-	var ee *exec.ExitError
+	var ee interface{ ExitCode() int }
 	if errors.As(err, &ee) {
 		return remote.Classify("rsync", host, ee.ExitCode())
 	}

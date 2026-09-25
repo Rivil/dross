@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -2180,8 +2181,8 @@ func TestExecConsentCalibrationIsUnchanged(t *testing.T) {
 // three of t-8's marked sites into this task's assertion.
 var execConsentGatedFiles = []string{
 	"internal/testlane/spawn.go",
-	"internal/cmd/verify.go",
-	"internal/cmd/survivor_drain.go",
+	"internal/verify/detach.go",
+	"internal/survivor/drain.go",
 }
 
 // sitesIn returns every site in the given repo-relative files.
@@ -2564,6 +2565,69 @@ func TestDeletingVerifysGateFlagsEveryMutationSpawn(t *testing.T) {
 	if got != want {
 		t.Errorf("deleting verify's consent check flagged %d of %d mutation spawns — the gate half of the verdict is partly decorative", got, want)
 	}
+}
+
+// TestDeletingVerifysGateFlagsItsDetachSpawn is the same proof for verify's
+// transport spawn, which moved to internal/verify/detach.go behind the check
+// that stays in verify.go: ungating that byte-identical anchor must turn the
+// detach site into a finding, so its gated verdict is not decorative.
+func TestDeletingVerifysGateFlagsItsDetachSpawn(t *testing.T) {
+	g := repoExecGraph(t)
+	if len(g.sitesIn("internal/verify/detach.go")) == 0 {
+		t.Fatal("internal/verify/detach.go holds no spawn site")
+	}
+	g = g.withSurgery(t, execLiveSurgeries[1])
+	var found bool
+	for _, f := range g.findings() {
+		if execFindingIsIn(f, "internal/verify/detach.go") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("deleting verify's consent check left internal/verify/detach.go clean — the gate half of its verdict is decorative:\n%v", g.findings())
+	}
+}
+
+// TestDeletingDrainsGateFlagsItsSpawns: the drain's two toolchain spawns —
+// package discovery and the coverage pass — live in internal/survivor/drain.go
+// behind survivor_drain.go's single requireExecConsent. As they stand both are
+// gated and unmarked; deleting that one check must flag both.
+func TestDeletingDrainsGateFlagsItsSpawns(t *testing.T) {
+	g := repoExecGraph(t)
+	sites := g.sitesIn("internal/survivor/drain.go")
+	if len(sites) != 2 {
+		t.Fatalf("internal/survivor/drain.go holds %d spawn sites, want the drain's 2", len(sites))
+	}
+	for _, s := range sites {
+		if s.class != execReachGated || s.marked {
+			t.Errorf("drain.go:%d is %s (marked=%v), want gated and unmarked", s.pos.Line, s.Verdict(), s.marked)
+		}
+	}
+	ungated := g.withSurgery(t, execSurgery{
+		file: "internal/cmd/survivor_drain.go", op: "ungate",
+		anchor: "if err := requireExecConsent(); err != nil {",
+	})
+	flagged := map[int]bool{}
+	for _, f := range ungated.findings() {
+		if execFindingIsIn(f, "internal/survivor/drain.go") {
+			flagged[execFindingLine(f)] = true
+		}
+	}
+	for _, s := range sites {
+		if !flagged[s.pos.Line] {
+			t.Errorf("deleting the drain's consent check left drain.go:%d unflagged:\n%v", s.pos.Line, ungated.findings())
+		}
+	}
+}
+
+// execFindingLine is the line a rendered finding's Pos names, or 0.
+func execFindingLine(f execFinding) int {
+	parts := strings.Split(f.Pos, ":")
+	if len(parts) < 2 {
+		return 0
+	}
+	n, _ := strconv.Atoi(parts[1])
+	return n
 }
 
 // TestSeveringTheGatedEdgeFailsClosed: an edge this walk cannot resolve looks

@@ -18,10 +18,10 @@ import (
 // terminal through an OutOrStdout-derived writer and carry no marker: a marker
 // on a stream site would clear the stream itself.
 
-// streamSiteFiles carry the user's own suite and slot streams. The suite and
-// slot spawns live in internal/testlane since cmd-exec-baseline-drain moved
-// them behind cmd's consent checks.
-var streamSiteFiles = []string{"internal/testlane/spawn.go", "internal/cmd/verify.go"}
+// streamSiteFiles carry the user's own suite, slot and verify-transport
+// streams. The spawns live in internal/testlane and internal/verify since
+// cmd-exec-baseline-drain moved them behind cmd's consent checks.
+var streamSiteFiles = []string{"internal/testlane/spawn.go", "internal/verify/detach.go"}
 
 // streamMarkerFindings names every marker that sits in a stream pin.
 func streamMarkerFindings(root string, markers []taintMarker, pins []string) []string {
