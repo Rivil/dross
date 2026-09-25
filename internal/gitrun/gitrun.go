@@ -112,6 +112,29 @@ func Quiet(dir string, args ...string) error {
 	return exec.Command("git", argv(dir, args)...).Run()
 }
 
+// ShortSHA returns the short HEAD sha for the repo at dir, or "nogit" if it
+// can't be read (not a git repo, no commits). Best-effort — never errors, so a
+// missing repo degrades to a stable "nogit" rather than failing a run. The
+// security, quality and techdebt scans name their run directories with it.
+func ShortSHA(dir string) string {
+	out, err := Trim(dir, "rev-parse", "--short", "HEAD")
+	if err != nil {
+		return "nogit"
+	}
+	return NormalizeSHA(out)
+}
+
+// NormalizeSHA trims git's output and falls back to "nogit" when it is empty —
+// git can exit 0 and print nothing, and an empty run-id component would let
+// two runs share a directory name.
+func NormalizeSHA(out string) string {
+	sha := strings.TrimSpace(out)
+	if sha == "" {
+		return "nogit"
+	}
+	return sha
+}
+
 // ExitCode is the exit status an error from one of these verbs carries: 0 for
 // nil, git's status when git ran and exited non-zero, and -1 when git did not
 // run at all — so a caller reading "exit 1 means no" cannot mistake a missing

@@ -138,14 +138,18 @@ var forEachRefAtom = regexp.MustCompile(`%\(([^):]*)[^)]*\)`)
 // second the options; everything after them is positional by construction.
 var gitArgBuilders = map[string]bool{"gitRefArgs": true, "gitPathArgs": true, "gitRefPathArgs": true}
 
-// isGitTrimCall reports whether call is a gitrun.Trim selector call.
-func isGitTrimCall(call *ast.CallExpr) bool {
-	fn, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok {
-		return false
+// isGitTrimCall reports whether call is a Trim call the pin judges: a
+// gitrun.Trim selector call anywhere, or a bare Trim call inside package gitrun
+// itself — ShortSHA's, which reads through Trim and so leans on its marker.
+func isGitTrimCall(call *ast.CallExpr, inGitrun bool) bool {
+	switch fn := call.Fun.(type) {
+	case *ast.SelectorExpr:
+		pkg, ok := fn.X.(*ast.Ident)
+		return ok && pkg.Name == "gitrun" && fn.Sel.Name == "Trim"
+	case *ast.Ident:
+		return inGitrun && fn.Name == "Trim"
 	}
-	pkg, ok := fn.X.(*ast.Ident)
-	return ok && pkg.Name == "gitrun" && fn.Sel.Name == "Trim"
+	return false
 }
 
 // gitTrimProblems walks files for gitrun.Trim calls and reports every one whose
@@ -154,9 +158,10 @@ func gitTrimProblems(fset *token.FileSet, files []*ast.File) ([]string, int) {
 	var out []string
 	sites := 0
 	for _, f := range files {
+		inGitrun := f.Name.Name == "gitrun"
 		ast.Inspect(f, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
-			if !ok || !isGitTrimCall(call) || len(call.Args) < 2 {
+			if !ok || !isGitTrimCall(call, inGitrun) || len(call.Args) < 2 {
 				return true
 			}
 			sites++
@@ -285,6 +290,23 @@ func TestGitTrimRunsRefVerbsOnly(t *testing.T) {
 		{`gitrun.Trim(dir, gitRefArgs("rev-list", []string{"--count"}, a+".."+b)...)`, ""},
 		{`gitrun.Trim(dir, "symbolic-ref", "--short", "HEAD")`, ""},
 		{`gitrun.Trim(".", "--version")`, ""},
+	}
+	// Inside package gitrun a bare Trim is the runner's own and is judged.
+	gfset := token.NewFileSet()
+	gf, err := parser.ParseFile(gfset, "internal/gitrun/extra.go", "package gitrun\n\nfunc f() {\n\t_, _ = Trim(dir, \"log\", \"--oneline\")\n}\n", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, n := gitTrimProblems(gfset, []*ast.File{gf}); n != 1 || len(got) != 1 || !strings.Contains(got[0], "runs `log`") {
+		t.Errorf("a bare Trim inside gitrun: examined %d, problems %v; want the log read reported", n, got)
+	}
+	// Outside package gitrun a bare Trim is someone else's function.
+	of, err := parser.ParseFile(gfset, "internal/security/extra.go", "package security\n\nfunc f() {\n\t_, _ = Trim(dir, \"log\", \"--oneline\")\n}\n", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, n := gitTrimProblems(gfset, []*ast.File{of}); n != 0 {
+		t.Errorf("a bare Trim outside gitrun was examined (%d sites)", n)
 	}
 	for _, c := range cases {
 		fset := token.NewFileSet()

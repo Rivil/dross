@@ -290,13 +290,14 @@ func assertExecConsentCovers(t *testing.T, rel string) {
 }
 
 // TestExecConsentScansTheSpawningPackages: the four packages outside
-// internal/cmd where dross actually shells out. Asserted by path rather than
-// assumed, because the failure mode is silent.
+// internal/cmd where dross actually shells out — git now through
+// internal/gitrun. Asserted by path rather than assumed, because the failure
+// mode is silent.
 func TestExecConsentScansTheSpawningPackages(t *testing.T) {
 	for _, rel := range []string{
 		"internal/mutation/gremlins.go",
 		"internal/remote/remote.go",
-		"internal/codex/git.go",
+		"internal/gitrun/gitrun.go",
 		"internal/ship/open.go",
 	} {
 		assertExecConsentCovers(t, rel)
@@ -2361,22 +2362,20 @@ func TestRunSlotStillRefusesAtRuntime(t *testing.T) {
 
 // --- the helper packages, marked with their reasons ---
 //
-// These are the scan, report and transport spawns: codex's git log and
-// ast-grep, the three scanners' rev-parse, ship's gh client, and internal/
-// remote's single ssh/rsync seam. None of them is reachable only from gating
-// commands, and none of them can be — `dross architecture check` and `dross
-// techdebt` legitimately shell git without ever running the repo's suite. So
-// each carries a marker, and the marker has to earn its place.
+// These are the scan, report and transport spawns: internal/gitrun's four git
+// verbs (every git call dross makes, the scanners' short SHA and codex's log
+// among them), codex's ast-grep, ship's gh client, and internal/remote's single
+// ssh/rsync seam. None of them is reachable only from gating commands, and none
+// of them can be — `dross architecture check` and `dross techdebt` legitimately
+// shell git without ever running the repo's suite. So each carries a marker,
+// and the marker has to earn its place.
 
 // execConsentMarkedFiles are the helper-package files whose sites are exempt by
 // marker rather than gated by reach. Repo-relative for the reason
 // execConsentGatedFiles is: `run.go` is four different files in this tree.
 var execConsentMarkedFiles = []string{
-	"internal/codex/git.go",
+	"internal/gitrun/gitrun.go",
 	"internal/codex/ast_grep.go",
-	"internal/quality/run.go",
-	"internal/security/run.go",
-	"internal/techdebt/run.go",
 	"internal/ship/open.go",
 	"internal/remote/remote.go",
 }

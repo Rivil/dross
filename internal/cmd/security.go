@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/findings"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/security"
 )
@@ -108,7 +109,7 @@ func securityRun() *cobra.Command {
 				return err
 			}
 			repoDir := filepath.Dir(root)
-			runDir, err := security.NewRun(root, time.Now().UTC(), security.ShortSHA(repoDir))
+			runDir, err := security.NewRun(root, time.Now().UTC(), gitrun.ShortSHA(repoDir))
 			if err != nil {
 				return err
 			}

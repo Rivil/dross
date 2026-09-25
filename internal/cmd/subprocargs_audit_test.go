@@ -67,7 +67,8 @@ import (
 //     default. acceptedNonLiteralBinaries below is the one exception list, keyed
 //     by file and expression text rather than by line.
 //
-// The audit scans internal/ and cmd/. internal/codex/git.go is in scope, which
+// The audit scans internal/ and cmd/. internal/gitrun — where every git spawn
+// now lives, codex's log among them — is in scope, which
 // TestAuditScansCodexPackage pins, because the first sweep of the git-only
 // version nearly stopped at internal/cmd; internal/mutation and internal/ship
 // are pinned the same way by TestAuditScansMutationAndShip.
@@ -766,10 +767,38 @@ func TestAuditFlagsBarePrefixlessVar(t *testing.T) {
 }
 
 // TestAuditScansCodexPackage: the first sweep of the git-only version nearly
-// stopped at internal/cmd, and internal/codex/git.go shells git too. A narrowed
-// scan root is a silent loss of coverage, so it is asserted rather than assumed.
+// stopped at internal/cmd, and git is spawned outside it — codex's log first
+// among them, which now runs through internal/gitrun with every other git call.
+// A narrowed scan root is a silent loss of coverage, so it is asserted rather
+// than assumed, and the pin names the file that actually holds the spawn:
+// codex/git.go holds none any more, and gitrun.go does.
 func TestAuditScansCodexPackage(t *testing.T) {
-	assertAuditCovers(t, filepath.Join("internal", "codex", "git.go"))
+	assertAuditCovers(t, filepath.Join("internal", "gitrun", "gitrun.go"))
+	root := repoRootForDocs(t)
+	if n, err := execSpawnCalls(filepath.Join(root, "internal", "gitrun", "gitrun.go")); err != nil || n == 0 {
+		t.Errorf("internal/gitrun/gitrun.go holds %d spawn sites (%v) — the pin names a file with no spawn", n, err)
+	}
+	if n, err := execSpawnCalls(filepath.Join(root, "internal", "codex", "git.go")); err != nil || n != 0 {
+		t.Errorf("internal/codex/git.go holds %d spawn sites (%v), want 0 — its log goes through gitrun", n, err)
+	}
+}
+
+// execSpawnCalls counts the exec.Command/CommandContext calls in one file.
+func execSpawnCalls(path string) (int, error) {
+	f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	ast.Inspect(f, func(node ast.Node) bool {
+		if call, ok := node.(*ast.CallExpr); ok {
+			if name, _, _, _, ok := spawnArgvOf(call); ok && strings.HasPrefix(name, "exec.") {
+				n++
+			}
+		}
+		return true
+	})
+	return n, nil
 }
 
 // TestAuditScansMutationAndShip is the same assertion for the two packages this

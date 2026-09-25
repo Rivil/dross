@@ -190,3 +190,77 @@ func TestExitCodeReadsAncestry(t *testing.T) {
 		t.Errorf("with no git on PATH ExitCode = %d, want -1", got)
 	}
 }
+
+// TestShortSHADegradesToNogit covers ShortSHA's failure arm. It is documented
+// as best-effort — a run must not fail because the tree is not a git repo — so
+// the fallback is the whole contract. Inverted, a real repo would be labelled
+// "nogit" and every run id would collide with every other.
+func TestShortSHADegradesToNogit(t *testing.T) {
+	// A bare temp dir is not a git repo, so rev-parse fails.
+	if got := ShortSHA(t.TempDir()); got != "nogit" {
+		t.Errorf("ShortSHA(non-repo) = %q, want %q", got, "nogit")
+	}
+
+	// And in a real repo it returns something that is NOT the fallback, so the
+	// guard is genuinely conditional. This test file lives inside this repo.
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := ShortSHA(cwd)
+	if got == "nogit" {
+		t.Errorf("ShortSHA(%q) = nogit inside a real git repo", cwd)
+	}
+	if strings.ContainsAny(got, " \n\t") {
+		t.Errorf("ShortSHA = %q, want git's output trimmed", got)
+	}
+}
+
+// TestNormalizeSHAFallsBackOnEmpty is the other half: git can exit 0 and print
+// nothing. An empty run-id component would make two runs share a directory name
+// and silently clobber each other, which NewRun's suffixing then papers over.
+func TestNormalizeSHAFallsBackOnEmpty(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"", "nogit"},
+		{"   ", "nogit"},
+		{"\n\t ", "nogit"},
+		{"abc1234\n", "abc1234"},
+		{"  abc1234  ", "abc1234"},
+	}
+	for _, tc := range cases {
+		if got := NormalizeSHA(tc.in); got != tc.want {
+			t.Errorf("NormalizeSHA(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestRawKeepsNULSeparatedNamesWithSpaces: remote's rsync exclude list reads
+// `ls-files -z` through Raw and splits on NUL. A name with a space must come
+// back whole — the exclude would otherwise name a path that does not exist and
+// ship the ignored one.
+func TestRawKeepsNULSeparatedNamesWithSpaces(t *testing.T) {
+	dir := realRepo(t)
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("with space/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "with space"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "with space", "x.o"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := Raw(dir, "ls-files", "--others", "--ignored", "--exclude-standard",
+		"--directory", "--no-empty-directory", "-z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, p := range strings.Split(out, "\x00") {
+		if p != "" {
+			names = append(names, p)
+		}
+	}
+	if len(names) != 1 || names[0] != "with space/" {
+		t.Errorf("ignored names = %q, want exactly [\"with space/\"]", names)
+	}
+}

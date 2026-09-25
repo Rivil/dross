@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/findings"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/stack"
 	"github.com/Rivil/dross/internal/techdebt"
 )
@@ -32,7 +33,7 @@ func Techdebt() *cobra.Command {
 			}
 			repoDir := filepath.Dir(root)
 			now := time.Now().UTC()
-			sha := techdebt.ShortSHA(repoDir)
+			sha := gitrun.ShortSHA(repoDir)
 
 			paths, err := trackedFiles(repoDir)
 			if err != nil {
