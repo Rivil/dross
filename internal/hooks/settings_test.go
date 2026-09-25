@@ -3,6 +3,9 @@ package hooks
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -160,4 +163,119 @@ func decodeOrderedKeys(t *testing.T, data []byte) []string {
 		}
 	}
 	return keys
+}
+
+func TestMutateSettingsCreatesFile(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, ".claude", "settings.json")
+
+	err := MutateSettings(path, func(doc map[string]any) {
+		envMap := map[string]any{"FOO": "bar"}
+		doc["env"] = envMap
+	})
+	if err != nil {
+		t.Fatalf("mutate: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("expected 0o600 perms (token storage), got %v", info.Mode().Perm())
+	}
+
+	doc, err := ReadSettings(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	envMap := doc["env"].(map[string]any)
+	if !reflect.DeepEqual(envMap, map[string]any{"FOO": "bar"}) {
+		t.Errorf("env mismatch: %+v", envMap)
+	}
+}
+
+func TestMutateSettingsPreservesUnrelatedKeys(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	original := `{"env":{"A":"1"},"model":"m","theme":"dark"}`
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := MutateSettings(path, func(doc map[string]any) {
+		envMap := doc["env"].(map[string]any)
+		envMap["B"] = "2"
+	}); err != nil {
+		t.Fatalf("mutate: %v", err)
+	}
+
+	doc, _ := ReadSettings(path)
+	if doc["model"] != "m" || doc["theme"] != "dark" {
+		t.Errorf("non-env keys lost: %+v", doc)
+	}
+	envMap := doc["env"].(map[string]any)
+	if envMap["A"] != "1" || envMap["B"] != "2" {
+		t.Errorf("env keys lost: %+v", envMap)
+	}
+}
+
+// TestMutateSettingsWriteShape pins the env write's shape: a foreign key
+// survives, the file is 0600 (it holds tokens), it ends in a newline, and the
+// temp file it was staged through is gone.
+func TestMutateSettingsWriteShape(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"theme":"dark"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := MutateSettings(path, func(doc map[string]any) { doc["env"] = map[string]any{"K": "V"} }); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"theme": "dark"`) || !strings.Contains(string(b), `"K": "V"`) {
+		t.Errorf("settings lost a key:\n%s", b)
+	}
+	if !strings.HasSuffix(string(b), "}\n") {
+		t.Errorf("settings.json does not end in a newline: %q", b)
+	}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("mode = %v (%v), want 0600", info.Mode().Perm(), err)
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Errorf("the staging file %s.tmp was left behind: %v", path, err)
+	}
+}
+
+// TestReadSettingsParseErrorAndEmpty: a malformed file fails naming it with
+// the "parse <path>:" prefix, and an empty or missing one reads as {}.
+func TestReadSettingsParseErrorAndEmpty(t *testing.T) {
+	dir := t.TempDir()
+	bad := filepath.Join(dir, "bad.json")
+	if err := os.WriteFile(bad, []byte("{not valid json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadSettings(bad); err == nil || !strings.HasPrefix(err.Error(), "parse "+bad+":") {
+		t.Errorf("malformed settings gave %v, want an error prefixed \"parse %s:\"", err, bad)
+	}
+	if err := MutateSettings(bad, func(map[string]any) {}); err == nil {
+		t.Error("a mutate over malformed settings wrote anyway")
+	}
+	empty := filepath.Join(dir, "empty.json")
+	if err := os.WriteFile(empty, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{empty, filepath.Join(dir, "absent.json")} {
+		doc, err := ReadSettings(path)
+		if err != nil || doc == nil || len(doc) != 0 {
+			t.Errorf("ReadSettings(%s) = %v, %v; want {}", filepath.Base(path), doc, err)
+		}
+	}
 }

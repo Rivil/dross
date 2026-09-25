@@ -206,7 +206,7 @@ var writers = []Writer{
 	{File: "internal/cmd/init.go", OutsideDross: &OutsideDross{Paths: []string{"ARCHITECTURE.md"}, Why: "seeds the repo-root ARCHITECTURE.md skeleton"}},
 	{File: "internal/cmd/gitattributes.go", OutsideDross: &OutsideDross{Paths: []string{".gitattributes"}, Why: "repo-root git config line"}},
 	{File: "internal/cmd/gitignore.go", OutsideDross: &OutsideDross{Paths: []string{".gitignore"}, Why: "repo-root ignore seed"}},
-	{File: "internal/cmd/env.go", OutsideDross: &OutsideDross{Paths: []string{userSettings}, Why: "env var block in the user-level Claude settings"}},
+	{File: "internal/hooks/settings.go", OutsideDross: &OutsideDross{Paths: []string{userSettings}, Why: "env var block in the user-level Claude settings"}},
 	{File: "internal/cmd/hooks.go", OutsideDross: &OutsideDross{Paths: []string{userSettings}, Why: "hook wiring in the user-level Claude settings"}},
 	{File: "internal/cmd/statusline.go", OutsideDross: &OutsideDross{Paths: []string{userSettings}, Why: "statusline block in the user-level Claude settings"}},
 	{File: "internal/cmd/install.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/skills/<name>/SKILL.md", "~/.claude/dross/prompts/<name>.md"}, Why: "embedded skills and prompts re-linked into ~/.claude"}},

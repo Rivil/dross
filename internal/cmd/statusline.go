@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -124,7 +123,7 @@ func enableStatuslineIn(path, binPath string, confirm func(existing string) bool
 	command := statuslineCommand(binPath)
 	merged, err := statusline.MergeStatusline(data, command, false)
 	if errors.Is(err, statusline.ErrStatusLineClobber) {
-		existing := existingStatusLineCommand(data)
+		existing := statusline.ExistingCommand(data)
 		if confirm == nil || !confirm(existing) {
 			return fmt.Errorf("settings.json already has a different statusLine.command (%s); not overwriting", existing)
 		}
@@ -161,17 +160,6 @@ func disableStatuslineIn(path, binPath string, out io.Writer) error {
 	}
 	fmt.Fprintln(out, "statusLine unwired")
 	return nil
-}
-
-// existingStatusLineCommand extracts statusLine.command from raw settings (or "").
-func existingStatusLineCommand(data []byte) string {
-	var v struct {
-		StatusLine struct {
-			Command string `json:"command"`
-		} `json:"statusLine"`
-	}
-	_ = json.Unmarshal(data, &v)
-	return v.StatusLine.Command
 }
 
 // interactiveConfirm returns a consent callback that prompts on a TTY and refuses
