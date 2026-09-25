@@ -381,6 +381,52 @@
         }
       ]
     },
+    "t-27": {
+      "files": [
+        "internal/cmd/testdata/taint/sources.go.txt"
+      ],
+      "commit": "93130af",
+      "completed_at": "2026-09-25T06:30:47.741435Z",
+      "landmarks": [
+        {
+          "feature": "exec-output taint",
+          "symbol": "stderrBuffer",
+          "loc": "internal/cmd/testdata/taint/sources.go.txt:75",
+          "what": "source corpus pins the Cmd.Stderr buffer channel on its own WANT line, independent of Stdout"
+        }
+      ]
+    },
+    "t-28": {
+      "files": [
+        "internal/remote/lock.go",
+        "internal/remote/hold_test.go"
+      ],
+      "commit": "319e797",
+      "completed_at": "2026-09-25T06:30:47.754021Z",
+      "landmarks": [
+        {
+          "feature": "Host lock",
+          "symbol": "notPrintable",
+          "loc": "internal/remote/lock.go:378",
+          "what": "protocolToken refuses a record field holding any non-printable rune, first rune included"
+        }
+      ]
+    },
+    "t-29": {
+      "files": [
+        "internal/ship/gh_failure_test.go"
+      ],
+      "commit": "4ea715b",
+      "completed_at": "2026-09-25T06:48:57.248562Z",
+      "landmarks": [
+        {
+          "feature": "exec-output taint",
+          "symbol": "TestGhUnparseableOutputGoesToStderr",
+          "loc": "internal/ship/gh_failure_test.go:67",
+          "what": "both gh JSON lookups (base and head PR) keep unparseable gh output on stderr and out of the error"
+        }
+      ]
+    },
     "t-3": {
       "files": [
         "internal/cmd/ssafixture_test.go",

@@ -1,4 +1,4 @@
-task_seq = 26
+task_seq = 29
 
 [phase]
   id = "exec-taint-enumeration"
@@ -274,4 +274,34 @@ task_seq = 26
   covers = ["c-8"]
   depends_on = ["t-21"]
   test_contract = ["if the worklist stops before the fixpoint (a missed dependency), re-analysing every function once more on the live exec scan with every marker ignored grows a summary, shared state or a finding, and TestWorklistReachesTheFixpoint fails; dropping the field-reader or closure-site dependency must trip it", "if the scheduler regresses to whole-program rounds, the live exec scan's analysis count exceeds its budget, which admits fewer than three whole-program passes; the budget passes at its value and fails one over", "[verify evidence, c-8] the internal/cmd total on PR #134's CI run after this task is at most 45s over the #132/#133 baseline"]
+  status = "done"
+
+[[task]]
+  id = "t-27"
+  wave = 9
+  title = "Pin the Stderr-buffer source with its own fixture"
+  files = ["internal/cmd/testdata/taint/sources.go.txt"]
+  description = "Verify r-20260924-183715 left c-1 weak: cmd.Stderr is seeded at taint_engine_test.go (Store to Cmd.Stderr) but its only fixture (stryker_prephase.go.txt) shares a MultiWriter sink with cmd.Stdout, so dropping the Stderr seed passes every fixture and the live gate. Add a stderrBuffer case to the source corpus: Cmd.Stderr = &buf alone, Stdout untouched, buf.String() escaping through fmt.Errorf on a WANT line."
+  covers = ["c-1"]
+  test_contract = ["if the engine stops seeding a buffer stored into Cmd.Stderr, stderrBuffer's WANT line goes unmatched and TestExecTaintSources fails"]
+  status = "done"
+
+[[task]]
+  id = "t-28"
+  wave = 9
+  title = "Test protocolToken's printable check at index 0"
+  files = ["internal/remote/lock.go", "internal/remote/hold_test.go"]
+  description = "Verify r-20260924-183715 left a survivor at remote/lock.go:369: the protocolToken shape check that justifies lock.go's //dross:taint-cleared marker is never tested with a non-printable rune at index 0, so IndexFunc(...) >= 0 → > 0 lives. Replace the IndexFunc func literal with a named func (notPrintable) so go cover attributes the trailing comparison, and add a control-char-at-index-0 record to TestMalformedHolderYieldsNoHolder."
+  covers = ["c-1"]
+  test_contract = ["if protocolToken's non-printable check misses a control character at index 0 (>= 0 mutated to > 0), ParseHolder accepts holder.run=\\x1bred and TestMalformedHolderYieldsNoHolder fails"]
+  status = "done"
+
+[[task]]
+  id = "t-29"
+  wave = 9
+  title = "Cover the head-PR lookup's unparseable-output branch"
+  files = ["internal/ship/gh_failure_test.go"]
+  description = "Verify r-20260924-183715 left a survivor at ship/headpr.go:66 (ARITHMETIC_BASE on a string concatenation). Per mutation-score-truth's locked decision, a string-concat survivor means the line is uncovered, not that the mutant is non-viable: gitHubOpenPRByHead's malformed-JSON branch has no test. TestGhUnparseableOutputGoesToStderr drives only gitHubOpenPRsTargeting through the CANARY-JSON{ stub; drive gitHubOpenPRByHead through it too."
+  covers = ["c-1"]
+  test_contract = ["if gitHubOpenPRByHead's unparseable-output branch puts gh's output in the error or leaves it off stderr, TestGhUnparseableOutputGoesToStderr fails for the head lookup"]
   status = "done"

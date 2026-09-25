@@ -1310,14 +1310,6 @@
   accepted_in = "lane-selector-preview"
 
 [[accepted]]
-  key = "6efb661ce18f93d2"
-  file = "internal/cmd/milestone.go"
-  op = "ARITHMETIC_BASE"
-  text = "return false, 0, fmt.Errorf(\"push of %d local commit(s) on %s failed: %w\\n%s\\n\"+"
-  line = 1054
-  reason = "ARITHMETIC_BASE mutates + to - on a string concatenation joining the two halves of the ahead-push failure message; the mutant does not compile and is never viable, so no test a caller could write can kill it. The branch it sits in is covered by TestMilestonePushHeadRefusedAheadPushNamesCommitCount, which asserts the message names the exact commit count that would be lost at --finalize. Same class as the accepted string-concat entry on the remote-restore table; the standing fix is the deferred item that teaches the gremlins adapter to drop these before they reach the survivor list at all."
-
-[[accepted]]
   key = "00055a8a8fa719fd"
   file = "internal/pathfence/fields.go"
   op = "CONDITIONALS_NEGATION"
@@ -2784,3 +2776,12 @@
   line = 101
   category = "const-initializer-arithmetic"
   accepted_in = "cmd-test-duration"
+
+[[accepted]]
+  key = "2d460282d0d7ce46"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"where the telemetry log lives, printed for the reader — the log itself is opened elsewhere, \"+"
+  line = 324
+  category = "const-initializer-arithmetic"
+  accepted_in = "exec-taint-enumeration"

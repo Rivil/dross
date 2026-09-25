@@ -829,6 +829,21 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "exec-taint-enumeration/t-27": {
+      "issue": "DRO-705",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-28": {
+      "issue": "DRO-706",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "exec-taint-enumeration/t-29": {
+      "issue": "DRO-707",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "exec-taint-enumeration/t-3": {
       "issue": "DRO-651",
       "plan_status": "done",
