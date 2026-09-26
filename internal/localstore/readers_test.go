@@ -257,6 +257,41 @@ func TestReadRemoteGrantRefusesAnUnusableHost(t *testing.T) {
 	}
 }
 
+// TestReadRemoteGrantsReadsThePoolInOrder: the pool only ever ADDS to the
+// scalar grant, so a store holding both resolves to the scalar host first and
+// each pool entry after it, in file order. A pool entry is the same
+// authorization as the scalar pair, so one that cannot be honoured is refused by
+// name like the scalar one — never skipped in favour of the hosts around it.
+func TestReadRemoteGrantsReadsThePoolInOrder(t *testing.T) {
+	root := storeRoot(t)
+	scalar := "remote_host = \"alpha\"\nremote_workdir = \"/srv/a\"\n"
+
+	writeLocalStore(t, root, scalar+"\n[[remote_pool]]\nhost = \"beta\"\nworkdir = \"/srv/b\"\n")
+	got, err := ReadRemoteGrants(root, filepath.Dir(root))
+	if err != nil {
+		t.Fatalf("a scalar grant plus one pool entry failed to read: %v", err)
+	}
+	var pairs []string
+	for _, tgt := range got {
+		pairs = append(pairs, tgt.Host+":"+tgt.Workdir)
+	}
+	if got, want := strings.Join(pairs, " "), "alpha:/srv/a beta:/srv/b"; got != want {
+		t.Errorf("grants = %q, want %q — the scalar grant first, then the pool in order", got, want)
+	}
+
+	writeLocalStore(t, root, scalar+"\n[[remote_pool]]\nhost = \"beta\"\n")
+	got, err = ReadRemoteGrants(root, filepath.Dir(root))
+	if err == nil {
+		t.Fatalf("a pool host with no workdir was accepted (%d grants) — it must be refused, not skipped", len(got))
+	}
+	if got != nil {
+		t.Errorf("grants must be nil alongside an error, got %d", len(got))
+	}
+	if !strings.Contains(err.Error(), "beta") {
+		t.Errorf("the refusal does not name the pool host: %v", err)
+	}
+}
+
 // TestRemoteEnvRefusesAnUnsetName: an empty export is not an absent one. A
 // DATABASE_URL that is absent and one that is empty select different code paths
 // — different suites load — so an empty export would silently change WHAT gets
