@@ -85,6 +85,67 @@ func TestFloorBoundary(t *testing.T) {
 	}
 }
 
+// TestPassingSummaryNamesTheLowestFile: the passing line names the true
+// lowest of several files. The ratios are picked so integer division gives a
+// different pick from multiplication: either `*` of the cross-multiply turned
+// into `/` picks c or keeps a, and the negated comparison keeps a.
+func TestPassingSummaryNamesTheLowestFile(t *testing.T) {
+	body := "mode: set\n" +
+		fileOf("internal/a/a.go", 3, 4) +
+		fileOf("internal/b/b.go", 3, 5) +
+		fileOf("internal/c/c.go", 2, 3)
+	code, out, errb := checkProfile(t, body)
+	if code != 0 || !strings.Contains(out, "3 files measured, lowest internal/b/b.go 60.0%") {
+		t.Errorf("exit %d, stdout %q, stderr %q; want b at 60.0%% as the lowest", code, out, errb)
+	}
+}
+
+// TestPassingSummaryTieKeepsFirstByPath: two files at the same ratio in
+// different terms both read 50%; the first by path is the one named, so a `<`
+// widened to `<=` — which takes the later one — is caught.
+func TestPassingSummaryTieKeepsFirstByPath(t *testing.T) {
+	body := "mode: set\n" +
+		fileOf("internal/a/a.go", 1, 2) +
+		fileOf("internal/b/b.go", 2, 4) +
+		fileOf("internal/c/c.go", 3, 3)
+	code, out, errb := checkProfile(t, body)
+	if code != 0 || !strings.Contains(out, "3 files measured, lowest internal/a/a.go 50.0%") {
+		t.Errorf("exit %d, stdout %q, stderr %q; want the tie to keep a", code, out, errb)
+	}
+}
+
+// TestParseErrorsNameTheProfileLine: a parse error points at the profile's
+// own line number — the mode line is 1, so the second block is line 3.
+func TestParseErrorsNameTheProfileLine(t *testing.T) {
+	span := testModule + "/internal/a/a.go:1.1,1.20 "
+	for _, tc := range []struct {
+		name, body string
+		wants      []string
+	}{
+		{
+			"statement count overflows an int",
+			"mode: set\n" + block("internal/a/a.go", 1, 1, true) + testModule + "/internal/a/a.go:2.1,2.20 99999999999999999999 1\n",
+			[]string{"cover.out:3:", "statement count"},
+		},
+		{
+			"one span listed with two statement counts",
+			"mode: set\n" + span + "3 1\n" + span + "2 1\n",
+			[]string{"cover.out:3:", "lists 2 statements, earlier 3"},
+		},
+	} {
+		code, out, errb := checkProfile(t, tc.body)
+		if code != 2 {
+			t.Errorf("%s: exit %d, want 2 (stdout %q, stderr %q)", tc.name, code, out, errb)
+			continue
+		}
+		for _, w := range tc.wants {
+			if !strings.Contains(errb, w) {
+				t.Errorf("%s: stderr %q does not contain %q", tc.name, errb, w)
+			}
+		}
+	}
+}
+
 // TestScopeExcludesOnlyInternalCmd: internal/cmd/ is the one exclusion, by
 // directory — not every path that merely starts with "internal/cmd" — and
 // nothing outside internal/ is measured at all.
