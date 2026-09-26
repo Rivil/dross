@@ -53,3 +53,8 @@
   id = "070539a4434a8ff3"
   text = "boardsync reap Undo leaves dross/status:<terminal> on a card that had no labels before the reap: reap_undo.go:61 skips the label restore when PriorLabels is empty, so the card still reads terminal to anything trusting the label"
   why = "Found by the extracted-package-test-parity plan review (t-8 round-trip contract); that phase is test-only (c-3, t-12 forbid production edits), so the fix is parked."
+
+[[deferred]]
+  id = "3d7fab45c3b0a674"
+  text = "survivor evidence mislabels switch-case conditions: a `case X:` line whose arm body starts on the next line sits in no go-cover block, so survivor.Derive reports 'no coverage block: a const initializer or declaration' (evidence.go CoverageNoBlock arm) — the drain then points the operator at const-initializer-arithmetic although the mechanism is the switch-case attribution ceiling (the arm bodies run, count>=1). Derive should recognise a case-clause line and say so"
+  why = "Found by the extracted-package-test-parity drain (t-11): all 11 outstanding survivors (writers.go 88/90/92/116/118x2/120/129/139, diag/redproof.go 91/94) were switch-case conditions labelled as declarations; accepted under gremlins-attribution-ceiling per the sinks.go precedent. This phase is test-only (c-3), so the deriver fix is parked."
