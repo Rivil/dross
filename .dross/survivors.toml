@@ -2610,3 +2610,102 @@
   line = 156
   category = "self-replacing-binary-path"
   accepted_in = "cmd-exec-baseline-drain"
+
+[[accepted]]
+  key = "8fae2750a8c2f2f3"
+  file = "internal/diag/redproof.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case pin.DocErr != nil:"
+  line = 91
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "98e44f4743cd2a2e"
+  file = "internal/diag/redproof.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case pin.DocSHA == \"\":"
+  line = 94
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "7bba35982355e11b"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.UnderDross != nil:"
+  line = 88
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "2c0a7db8fbe6a218"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.MachineLocal != nil:"
+  line = 90
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "1f12c32ce7150371"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.OutsideDross != nil:"
+  line = 92
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "2e34f2e6c7f6e32b"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set == 0:"
+  line = 116
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "75a19da200419cbc"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.UnderDross != nil:"
+  line = 120
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "acd159f1b6fcc5d5"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.MachineLocal != nil:"
+  line = 129
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "21ad5b02cbd71e9d"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.OutsideDross != nil:"
+  line = 139
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "2fe69242a047572f"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set > 1:"
+  line = 118
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "9b0da82a3806bf2a"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case set > 1:"
+  line = 118
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
