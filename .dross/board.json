@@ -987,6 +987,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "extracted-package-test-parity/t-13": {
+      "issue": "DRO-741",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "extracted-package-test-parity/t-2": {
       "issue": "DRO-729",
       "plan_status": "done",

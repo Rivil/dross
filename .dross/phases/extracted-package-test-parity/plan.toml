@@ -140,7 +140,7 @@ task_seq = 14
   description = "Verify (2026-09-26) left 6 in-hunk NOT COVERED survivors in cmd/coverfloor/floor.go, each on a count-0 cover block (reachable, never run):\n:79 x4 (the lowest-file pick in the passing summary — no passing test has >=2 files), :122 (Atoi overflow error's i+2 line number),\n:134 (mismatched-duplicate-span error's i+2 line number). Add tests in floor_test.go only; floor.go is not edited. New Test names\nmust be absent from internal/cmd/testdata/cli_surface/tests_before.txt."
   covers = ["c-4"]
   test_contract = ["if the lowest-file pick breaks, a passing-run test fails: >=3 in-scope files all >=50% at distinct ratios chosen so integer division differs from multiplication (mutating either * at floor.go:79 changes the pick) report the true lowest in 'lowest <file> <pct>%', and a tie keeps the first by path (kills the <= boundary mutant)", "if the Atoi-overflow error loses its line, a parse-error test fails: a statement count of 99999999999999999999 on profile line 3 exits 2 with stderr containing 'cover.out:3:' and 'statement count'", "if the mismatched-duplicate error loses its line, the same test fails: one span listed with 3 statements on line 2 then 2 on line 3 exits 2 with stderr containing ':3:' and 'lists 2 statements, earlier 3'", "re-run /dross-verify: gremlins reports floor.go:79 (x4), :122 and :134 KILLED and verify.toml's unclassified_in_scope for cmd/coverfloor is 0"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-14"
