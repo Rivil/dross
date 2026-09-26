@@ -50,3 +50,31 @@ backlog lifecycle when this phase ships.
 
 Deferred: `3d7fab45c3b0a674` (DRO-739) — `survivor.Derive` labels a switch-case condition "no
 coverage block: a const initializer or declaration", pointing the operator at the wrong category.
+
+## t-12 — no behaviour change (c-3), final c-2 measurement
+
+Scope (018d325 = merge-base with milestone/v1.7):
+
+- `git diff --name-only 018d325...HEAD -- internal/cmd` → empty.
+- `git diff --name-only 018d325...HEAD -- '*.go' ':!*_test.go'` → `cmd/coverfloor/floor.go`,
+  `cmd/coverfloor/main.go` only.
+- 60 Test functions added this phase; 0 appear in `internal/cmd/testdata/cli_surface/tests_before.txt`.
+
+Behaviour gate: remote `dross test` (full suite, helicon, never --local) → exit 0, 50 packages ok,
+0 FAIL lines, internal/cmd 120.6 s. TestNoTestLost, TestNoTestLostDetectsDropsAndCopies and
+TestCLISurfacePinned (boundary_test.go, cli_surface_test.go) and the 21 issue*/doctor* test files
+carry no t.Skip, so the green internal/cmd package is those pins passing — with no assertion edits.
+
+c-2: `go test -count=1 -coverprofile ./internal/boardsync/ ./internal/secretscan/`, per-file
+statement-weighted:
+
+| file                              | covered/total | own-package |
+|-----------------------------------|--------------:|------------:|
+| internal/boardsync/backlog.go     |       192/194 |       99.0% |
+| internal/boardsync/reap_apply.go  |       121/130 |       93.1% |
+| internal/boardsync/reap_undo.go   |         37/37 |      100.0% |
+| internal/boardsync/inbound.go     |         25/26 |       96.2% |
+| internal/boardsync/milestone.go   |         31/31 |      100.0% |
+| internal/secretscan/writers.go    |         40/40 |      100.0% |
+
+All six ≥ 80.0% (were 2.1 / 2.3 / 0.0 / 0.0 / 22.6 / 0.0% at 018d325).
