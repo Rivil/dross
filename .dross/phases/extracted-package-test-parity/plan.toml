@@ -1,0 +1,274 @@
+task_seq = 12
+
+[phase]
+  id = "extracted-package-test-parity"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Build boardsync test doubles and strict tracker"
+  files = ["internal/boardsync/doubles_test.go"]
+  description = '''
+faultBoard wraps sync_test.go's fakeBoard with per-key failGet/nilGet/failUpdate/failClose/failCreate, listErr, refuseClose
+(close returns nil, issue still reads open) and a scripted EnsureMilestone id/error that records title+body; stateBoard adds
+forge.StateWriter (SetStateRaw + refuse set); linkBoard adds forge.IssueLinker. captureStderr(t, fn) swaps os.Stderr for a pipe
+and restores it in t.Cleanup. A STRICT scripted httptest tracker records method/path/body, fails chosen routes with 500, and
+fails the test on an unscripted request or a scripted route never hit. Ctx builders: ytRepoMode(t, h, boardJSON, mode) and a
+Jira builder via Config(); every helper roots Ctx.Root in t.TempDir(). New Test names must be absent from tests_before.txt.
+'''
+  covers = ["c-1", "c-2"]
+  test_contract = [
+    '''if per-key fault injection leaks across keys, TestFaultBoardInjectsPerKey fails: failUpdate["K"] must make UpdateIssue("K") return that error and leave K's labels untouched while UpdateIssue("L") succeeds; under refuseClose CloseIssue returns nil and GetIssue still reads State "open"''',
+    '''if a double gains or loses a capability, TestDoubleCapabilitiesAreExact fails: faultBoard satisfies neither forge.StateWriter nor forge.IssueLinker, stateBoard and linkBoard do (so t-8's refusal test cannot pass vacuously)''',
+    '''if captureStderr leaks the swapped stream, TestCaptureStderrRestoresTheStream fails: the returned text is exactly what fn wrote and os.Stderr is the original *os.File afterwards, including after a recovered panic inside fn''',
+    '''if the tracker stops being strict, TestScriptedTrackerReportsUnscriptedAndUnusedRoutes fails: an unscripted GET and a scripted-but-never-called route are both reported (removing the unused-route check fails it); POST /api/issues bodies are recorded and a configured 500 surfaces as a client error''',
+    '''if a helper writes into the real repo, `git status --porcelain .dross` differs before vs after `go test -count=1 ./internal/boardsync/` (reap-log.json, deferred.toml, board.json must never land outside TempDir)''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Test writers.go in-package; retire 18 acceptances"
+  files = ["internal/secretscan/writers_test.go", ".dross/survivors.toml"]
+  description = '''
+Port the intent of cmd's TestWriterRegistryValidate under NEW names (absent from tests_before.txt), adding the arms cmd never
+fed: blank File, 3 dispositions, "/"-absolute artifact, machine-local with no Path, machine-local with no Why. Also pin the
+live registry validating clean, ArtifactNames ordering and Writers() returning a copy. internal/cmd untouched. Then
+`make install` (r-01) and `dross survivor retire` the 18 writers.go cross-package-only-coverage keys (retire prunes the
+orphaned category). Nothing is re-accepted here — acceptance happens only on drain evidence in t-11.
+'''
+  covers = ["c-1", "c-2"]
+  test_contract = [
+    '''if any ValidateWriters guard is dropped, TestWriterValidationNamesEveryMalformedShape fails: each malformed entry yields exactly one error containing its needle — "empty File", "no disposition", "2 dispositions", "3 dispositions", "no Artifacts", "must be .dross-relative" (for both ".dross/a" and "/a"), "machine-local with no Path", "no IgnoreSeed", "machine-local with no Why", "outside-dross with no Why", "under .dross by definition", "declared twice"; mutating set++ to set-- drops the "2 dispositions" error''',
+    '''if a guard is negated, TestLiveWriterRegistryValidatesInPackage fails: ValidateWriters(Writers()) must be empty, and negating any guard at writers.go 106/110/121/130/133/136/140/144 makes a good entry error''',
+    '''if ArtifactNames drops or reorders a disposition, TestArtifactNamesSpansEveryDisposition fails: [UnderDross{a,b}, MachineLocal{p}, OutsideDross{x,y}, {}] must return exactly [a b p x y]''',
+    '''if Writers() returns the backing slice, TestWritersReturnsACopy fails: overwriting Writers()[0] must leave a second call's [0] unchanged''',
+    '''writers.go reaches >=80% own-package under `go test -coverprofile ./internal/secretscan/` (expect ~100%)''',
+    '''after retire, `grep -c cross-package-only-coverage .dross/survivors.toml` is 0 and `go test -count=1 -run TestRepoAcceptanceReasonsCiteRealTests ./internal/survivor/` passes''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Build coverfloor checker, self-test, detach test"
+  files = ["cmd/coverfloor/main.go", "cmd/coverfloor/floor.go", "cmd/coverfloor/floor_test.go", "cmd/coverfloor/fixture_test.go", "internal/verify/detach_test.go"]
+  description = '''
+`go run ./cmd/coverfloor <profile>`: parse with golang.org/x/tools/cover.ParseProfiles (already a direct require), read the
+module path from go.mod, sum statements per file under <module>/internal/ excluding internal/cmd/ (a duplicated block counts
+once), fail any file where 2*covered < total. Exit 1 names offenders; exit 2 on bad usage, missing/malformed profile or zero
+in-scope files; a pass prints "N files measured, lowest <file> <pct>". 50% is a const — no flags, env or allowlist.
+Plus an os.Args[0] helper-process test for verify.RunDetachArgv.
+'''
+  covers = ["c-4"]
+  test_contract = [
+    '''if the floor comparison drifts, TestFloorBoundary fails: 1/2 and 2/4 pass; 99/200, 1/3 and 0/5 fail (a < to <= mutant, float rounding or a moved const each fail a row)''',
+    '''if the scope prefix loses its trailing slash or widens, TestScopeExcludesOnlyInternalCmd fails: internal/cmd/x.go at 0% passes; internal/cmdx/a.go and internal/cmdline/x.go at 0% fail; cmd/dross/main.go and cmd/testsummary/main.go at 0% are ignored''',
+    '''if a duplicated block is double-counted, TestDuplicateBlocksCountOnce fails: one block listed twice (count 0, then count 3) counts its statements once, as covered''',
+    '''if vacuous input passes, TestVacuousInputIsExitTwo fails: a missing profile, a mode-line-only profile, a profile with only internal/cmd or only unprefixed paths, a malformed line (non-numeric count, missing span), a stray flag and an extra argument each exit 2, never 0''',
+    '''c-4 self-test — if the real toolchain path stops catching below-floor files, TestFixtureBelowFloorFailsTheCheck fails: an inline fixture module in TempDir, run through the real `go test <fixtureCoverFlags> ./...` then run(), must exit 1 naming exactly internal/low/low.go (25%), internal/untested/u.go (0%, no test files), internal/lib/lib.go (0% although internal/user's tests call it) and internal/cmdline/x.go — and not internal/edge/edge.go (exactly 50%) or internal/cmd/c.go''',
+    '''calibration (evidence in the commit): the checker over an own-package non-cmd profile of the base tree lists exactly backlog.go, reap_apply.go, reap_undo.go, inbound.go, milestone.go, writers.go and verify/detach.go before detach_test.go lands, and the same six without detach.go after''',
+    '''if RunDetachArgv's stdio wiring drifts, TestDetachArgvRoutesChildStdoutToStderr fails: the helper process's stdout sentinel must appear on captured os.Stderr and not os.Stdout; a helper exiting 3 must give *exec.ExitError with ExitCode()==3; a nonexistent argv[0] must error; detach.go reaches 100%''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Test the backlog push half"
+  files = ["internal/boardsync/backlog_push_test.go"]
+  description = '''
+PushBacklogItems, resolveBacklogIssue, adoptLegacyBacklogKey, lookupPhaseIssue and DeferredBacklogItem on faultBoard/linkBoard;
+YouTrack paths on t-1's strict tracker. New Test names; stderr-capturing tests never call t.Parallel.
+'''
+  covers = ["c-1", "c-2"]
+  depends_on = ["t-1"]
+  test_contract = [
+    '''if create/update-by-id-key drifts, TestPushBacklogCreatesThenUpdatesByIDKey fails: first push of [plain, routed->x] gives (2,0) carrying dross/deferred:<id> and dross/target:x on the routed item; second push gives (0,2) with no creates; re-routing to y leaves dross/target:y as the ONLY target label; an update with empty Labels keeps the issue's labels; a label-less create carries [dross]; non-YouTrack milestone "7" gives IssueInput.Milestone==7 (kills 399, 402, 405x2, 412, 419, 423, 447, 452)''',
+    '''if identity adoption drifts, TestResolveBacklogAdoptsMarkerBearingIdentityMatch fails: with empty board.json the lowest-keyed marker-bearing identity match is adopted (0 created, 1 updated), a same-label issue without the marker is skipped, and a ListIssues error returns a "board:" error with nothing created (kills 317, 319, 330x2)''',
+    '''if legacy-key adoption drifts, TestLegacyBacklogKeyAdoptedOnlyOnTitleMatch fails: on title match the id key is set, legacy key deleted, nothing created; on title mismatch or GetIssue failure the legacy link is untouched and a fresh issue is created (kills 49, 57x3)''',
+    '''if YouTrack milestone modes drift, TestPushBacklogYouTrackVersionAndEpicModes fails: modes "version" and "" send the cached fixVersion and no subtask command; "epic" sends CreateBacklogItem, then LinkSubtask(epic,key), then the tag patch, in that order; a failed create or LinkSubtask 500 returns an error and records no link (kills 362x2, 429x3, 433)''',
+    '''if routed-link warnings drift, TestLinkRoutedWarnsOncePerRunWithoutLinker fails: on faultBoard two routed items give exactly one "cannot link issues" line; on linkBoard a target without a phase issue warns naming the phase with no LinkIssues call, a target with one records LinkIssues(item, target), and a LinkIssues error only warns while the item still counts (kills 375, 388, 392)''',
+    '''if lookupPhaseIssue ever creates or mis-picks, TestLookupPhaseIssueNeverCreates fails: cache hit returns the key; label query filters on the marker and takes the lowest key; list error or no match returns "" with zero creates (kills 288, 297)''',
+    '''if DeferredBacklogItem shape drifts, its test fails: an id-less entry gets no Identity label; a routed entry is titled "[routed] " and its body names the target (kills 259, 263, 267, 270)''',
+    '''if failure paths drift: a scripted EnsureMilestone error aborts before any create (350); an unwritable BoardPath returns the Save error (454); (created, updated) is asserted exactly everywhere; each of the five functions is >=85% in `go tool cover -func`''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Test the backlog sync and reconcile half"
+  files = ["internal/boardsync/backlog_reconcile_test.go"]
+  description = '''
+SyncBacklog, ReconcileBacklog, BacklogVerdictFor and IssueIsDone over a TempDir .dross root built with writeMilestoneToml,
+writeSpec and phase dirs. New Test names; stderr-capturing tests never call t.Parallel.
+'''
+  covers = ["c-1", "c-2"]
+  depends_on = ["t-1"]
+  test_contract = [
+    '''if backlog mirroring drifts, TestSyncBacklogMirrorsUnscaffoldedSlugsAndLiveDeferred fails: milestone v1 with phases [shipped (has dir), todo] and deferred [plain, routed, dismissed] creates exactly "[backlog] todo", "[someday] ..." and "[routed] ..."; Ctx.Out reads "backlog v1 -> 3 created, 0 updated, 0 closed"; board.json holds the 3 keys; a second run prints "0 created, 3 updated" (kills 78, 82, 83, 92, 106, 110, 113)''',
+    '''if a missing milestone is swallowed, TestSyncBacklogMissingMilestoneNamesIt fails: an absent v9.toml returns an error containing `load milestone "v9"` with zero board calls (kills 71)''',
+    '''if reconcile closes the wrong mirrors, TestReconcileBacklogClosesOnlyProvablyResolvedMirrors fails: scaffolded slug closed and key deleted; slug with no phase dir left open with a stderr warning naming issue and key; dismissed deferred (by id key and legacy key) closed; live routed with done target closed with key KEPT; live routed with open target untouched; already-resolved mirror gets zero CloseIssue calls; empty issue id skipped; returned count exact (kills 150, 159, 187, 204, 208, 211, 221)''',
+    '''if a failed close drops the link, TestReconcileBacklogKeepsLinkWhenCloseFails fails: with failClose stderr says "link is kept", the key stays and the mirror is not counted; with failGet a "could not read" warning prints and the mirror stays open (kills 177, 183)''',
+    '''if a verdict branch drifts, TestBacklogVerdictTable fails: one row per BacklogVerdictFor branch (live unrouted; routed without target issue; target done; target open; target GetIssue error; slug with dir; slug without dir; deferred dismissed; deferred live; legacy positional key; unknown key) each asserting its exact verdict; IssueIsDone: Resolved->true, State "closed"->true, open->false, nil issue->(false, nil), error prefixed "board:"''',
+    '''each of the four functions is >=85%; backlog.go is >=80% once t-4 and t-5 have both landed''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Test inbound feed and milestone linking"
+  files = ["internal/boardsync/inbound_test.go", "internal/boardsync/milestone_test.go"]
+  description = '''
+CollectInbound, EmitPullEnvelope, ReportBoardFailure, EnsureMilestoneLink (faultBoard + strict tracker in epic and Jira modes),
+CheckMilestoneClosable and MilestoneBody. New Test names; stderr-capturing tests never call t.Parallel.
+'''
+  covers = ["c-1", "c-2"]
+  depends_on = ["t-1"]
+  test_contract = [
+    '''if dross-authored issues leak into the inbound feed, TestCollectInboundDropsDrossAuthoredIssues fails: input of 2 human issues plus one linked in any board.json namespace, one dismissed and one marker-labelled returns exactly the 2 human issues (each exclusion row fails if its check is removed); a ListIssues error returns a "board:" error and a nil feed (kills 20)''',
+    '''if the pull envelope shape drifts, TestPullEnvelopeShape fails: EmitPullEnvelope(nil,nil) prints exactly {"issues":[],"error":null} plus newline; with an error it carries "error":"<msg>"; one issue appears as issues[0] (kills 53, 56, 61)''',
+    '''if board-failure reporting drifts, TestReportBoardFailureByMode fails: JSON mode emits the envelope and returns nil; human fatal returns the error and prints nothing; human non-fatal prints "board unreachable: <err>" and returns nil''',
+    '''if milestone linking drifts, TestEnsureMilestoneLinkRecordsBoardID fails: cached returns the id with zero EnsureMilestone calls; missing toml gives ("", nil) with zero calls (46); titled calls EnsureMilestone(title, "title\n\nSuccess criteria:\nc1\nc2") and records the id; untitled uses the version as title (50); board error returns "board:" with nothing recorded (68); backend "" gives ("", nil) with nothing recorded (71); YouTrack epic mode records the epic idReadable; the Jira version path hits its scripted route''',
+    '''if the closable check drifts, TestCheckMilestoneClosableOnlyForYouTrackEpic fails: faultBoard refused naming the provider; YouTrack mode "" refused quoting "version"; "agile" and "version" refused naming the mode; " Epic " returns nil; MilestoneBody("t","") == "t"''',
+    '''inbound.go and milestone.go each reach >=80% own-package''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-7"
+  wave = 2
+  title = "Test reap apply isolation and journal"
+  files = ["internal/boardsync/reap_apply_test.go"]
+  description = '''
+Apply, relabelReapedCard, dropBacklogLink, appendReapRun, BoardNamespaceNames, ValidateReapNamespaces, Inventory and
+reapFailure. Apply on faultBoard; Inventory reuses discoverYT/discoverRepo and readOnlyYT. New Test names; stderr-capturing
+tests never call t.Parallel.
+'''
+  covers = ["c-1", "c-2"]
+  depends_on = ["t-1"]
+  test_contract = [
+    '''if the journal records post-close state, TestApplyJournalsPriorStateBeforeClosing fails: 3 cards (Phases, Tasks, Backlog lanes) each prior "open" with [dross, dross/phase:p, dross/status:uat] all close; the last run records PriorState "open" (not "closed") and the prior labels; each card ends with its identity labels plus dross/status:<terminal>; only the Backlog key is dropped and journalled as DroppedLink; Ctx.Out reads "reaped 3 card(s)" (kills 144, 164, 171, 174, 177, 182, 241)''',
+    '''if one card's failure aborts the run, TestApplyIsolatesPerCardFailures fails: failGet on A, nilGet on B, refuseClose on C, D healthy — D closes, A/B/C journalled Failed, B reads "read prior state: issue not found", the error reads "3 of 4 card(s) could not be closed" and stderr names A, B, C; a failUpdate relabel on D only warns and D still counts (kills 125x2, 126, 215)''',
+    '''if relabelling drops identity labels or writes no-ops, TestRelabelKeepsIdentityLabelsAndSkipsNoOps fails: no prior labels gives [dross/status:T] without panic (200); only status label already T gives zero UpdateIssue calls (211x3); right label plus a stale one leaves exactly one status label (204)''',
+    '''if an empty apply writes a journal, TestApplyWithNothingClosedWritesNoJournal fails: an empty plan leaves no reap-log.json (253); a no-op apply after a real one leaves Last() unchanged; a corrupt existing log returns the load error (258)''',
+    '''if the namespace list drifts, TestBoardNamespaceNamesAreTheMapFields fails: result is exactly [Backlog Milestones Phases Quicks Tasks] (kills 279x3, 280); TestValidateReapNamespacesNamesUnknowns fails unless nil/empty returns nil, " BACKLOG " and " Phases " return nil, and ["phases","bogus","nope"] errors naming "bogus, nope" and listing all 5 (kills 291, 304x2)''',
+    '''if Inventory double-plans or swallows errors, TestInventoryDedupesLinkedAndOrphanCards fails: a card both linked and discovered is planned once and unclassifiable cards are returned — this happy-path plan assertion also kills the negated err checks at 44, 48, 56 (each would return a nil plan); an unknown namespace is refused before any HTTP request (40); a discovery 500 returns an error, not a partial plan (52); reapLogPathFor(root)==reaplog.FilePath(root); reapFailure.Error() is "K: msg" and errors.Unwrap returns the inner error''',
+    '''reap_apply.go reaches >=80% own-package''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-8"
+  wave = 2
+  title = "Test reap undo and apply-undo round trip"
+  files = ["internal/boardsync/reap_undo_test.go"]
+  description = '''
+Extend the existing file with Undo and restoreDroppedLink tests on stateBoard and faultBoard, plus one Apply-then-Undo round
+trip. New Test names; stderr-capturing tests never call t.Parallel.
+'''
+  covers = ["c-1", "c-2"]
+  depends_on = ["t-1"]
+  test_contract = [
+    '''if undo writes on a backend without StateWriter, TestUndoRefusesClientWithoutStateWriter fails: on faultBoard it errors naming the provider and "nothing was written", with zero SetStateRaw/UpdateIssue calls even under a corrupt ledger and board.json bytes unchanged''',
+    '''if the empty-ledger path drifts, TestUndoWithEmptyLedgerSaysNothingToUndo fails: no ledger prints "nothing to undo" and returns nil (43); a corrupt ledger returns an error (38)''',
+    '''if undo restores the wrong state, TestUndoWritesPriorStateThroughStateWriter fails: last run of closed A (labels), closed B (no labels, DroppedLink Backlog), failed C, closed D (class Tasks, DroppedLink) — SetStateRaw runs for A, B, D only; A's labels restored; B gets no label patch (61); B's backlog key is back in board.json; D's key is NOT put into Backlog (93); Ctx.Out reads "restored 3 card(s)" (kills 51, 61x2, 63, 67, 70, 73, 78)''',
+    '''if one restore failure aborts the rest, TestUndoContinuesPastSetStateFailure fails: SetStateRaw failing on A still restores the others, the error reads "1 of 3 card(s) could not be restored" and stderr names A; a failed label restore warns "could not put its labels back" with the count unchanged''',
+    '''if undo reaches past the last run, TestUndoOnlyReversesTheLastRun fails: with two runs journalled only the last run's cards are written''',
+    '''if apply and undo are not inverses, TestApplyThenUndoRoundTrip fails: Apply then Undo on stateBoard leaves every card's State, label set and the board.json backlog map reflect.DeepEqual to the pre-Apply snapshot''',
+    '''reap_undo.go reaches >=80% own-package (expect 100%)''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-9"
+  wave = 2
+  title = "Kill routed survivors in phase/task/pull/reap"
+  files = ["internal/boardsync/sync_paths_test.go"]
+  description = '''
+Target the 16 survivors routed to this phase outside c-2's six files: phase.go 65/94/138/147/198, task.go 78/217x2/257/261,
+task_pull.go 49/53/66-68, reap.go 472. YouTrack and Jira paths use t-1's strict tracker. New Test names; stderr-capturing
+tests never call t.Parallel.
+'''
+  covers = ["c-1"]
+  depends_on = ["t-1"]
+  test_contract = [
+    '''if legacy-title adoption ignores the marker, TestPhaseSyncAdoptsLegacyTitleOnlyWithMarker fails: a same-title issue with the marker is adopted (0 creates), without it a new issue is created (kills phase.go:65)''',
+    '''if the declared milestone is dropped, TestPhaseSyncAssignsDeclaredMilestone fails: a spec declaring v1 creates the issue with Milestone 7 and records v1->7; no milestone gives Milestone 0 and EnsureMilestone is never called (kills phase.go:94)''',
+    '''if tracker state-write failures are swallowed, TestPhaseSyncSurfacesTrackerStateWriteFailure fails: a YouTrack state POST 500 or Jira transition 500 makes SyncPhase, CloseIssue and SyncTasks each return a "board:" error; a Jira SetState 500 in CloseIssue errors with no read-back GET; status "" sends no state request (the strict tracker's unused-route check fails otherwise); a successful write saves the phase link (kills phase.go:138/147/198, task.go:257/261)''',
+    '''if the link-failure warning repeats, TestTaskSyncLinkFailureWarnsOnce fails: with LinkIssues failing, a two-task phase writes exactly one stderr warning and both issues are created (kills task.go:78)''',
+    '''if duplicate task issues go unreported, TestTaskIssueResolutionWarnsOnDuplicates fails: two marker issues on one task label update the lowest key and stderr names both keys; a single match gives no warning (kills task.go:217x2)''',
+    '''if task pull runs on a flat board, TestTaskPullRefusesFlatBoards fails: provider github errors naming "github", "has no workflow state" and "youtrack or jira" with no board call and plan.toml bytes unchanged (49; covering 66-68 makes those concat mutants non-viable); TestTaskPullSurfacesListFailure fails unless youtrack with listErr returns the error and plan.toml is byte-identical (53)''',
+    '''if empty quick mirrors are classified, TestQuickMirrorWithEmptyIssueIsSkipped fails: Quicks {q1:"", q2:"P-9"} yields only P-9 from classifyQuickMirrors, with Why naming the ref (kills reap.go:472)''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-10"
+  wave = 3
+  title = "Wire the coverage floor into CI"
+  files = [".github/workflows/ci.yml", "cmd/coverfloor/ci_wiring_test.go"]
+  description = '''
+Add -coverprofile="$RUNNER_TEMP/cover.out" to the test job's ONE existing go test line and a following step
+`go run ./cmd/coverfloor "$RUNNER_TEMP/cover.out"`. No new job, no second go test, no -coverpkg, no upload-artifact, no ${{ }}
+inside run. First read both ~/.claude/memory CI references; audit ci.yml against the supply-chain checklist, surface findings
+and offer fixes in the same edit. Runs in parallel with t-11.
+'''
+  covers = ["c-4"]
+  depends_on = ["t-2", "t-3", "t-4", "t-5", "t-6", "t-7", "t-8"]
+  test_contract = [
+    '''if the wiring drifts, TestCoverFloorIsWiredIntoCI fails when: the test job's go test lacks -coverprofile=<p>; it carries -coverpkg; its flags differ from t-3's fixtureCoverFlags; no later step in job `test` runs `go run ./cmd/coverfloor <p>` with the same <p>; or that step carries continue-on-error or `|| true`''',
+    '''existing CI pins pass unedited, run targeted: `go test -count=1 -run 'TestCIGoTestStepsLive|TestGoTestStepScanner|TestCIConcurrencyLive|TestToolchainSingleSource|TestWorkflowActionsArePinned|TestWorkflowsHaveNoExpressionsInRun|TestCIShellcheckCoversScripts|TestGovulncheckPinAgrees' ./internal/cmd/` — TestCIGoTestStepsLive still finds exactly one go test in `test` and one in `mutation-ts`''',
+    '''pre-flight under a runner-like PATH (gitleaks, ast-grep, gremlins, npx, node, dotnet stripped): `go test -count=1 -coverprofile=$T/c.out $(go list ./... | grep -v '/internal/cmd$')` then `go run ./cmd/coverfloor $T/c.out` exits 0; a file failing only here is STOP-and-ask (defer or add a test), never an allowlist''',
+    '''ship-time evidence (ci.yml runs only on pull_request and push to main): the PR run shows the floor step green with its file count and testsummary shows no new >300s warning for internal/cmd''',
+    '''supply-chain audit recorded in the commit: actions SHA-pinned, permissions contents: read, GOFLAGS/GOPROXY/GOSUMDB set, govulncheck pinned; the new step adds no action or install''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-11"
+  wave = 3
+  title = "Drain three packages to zero outstanding"
+  files = [".dross/survivors.toml", ".dross/phases/extracted-package-test-parity/notes.md", "internal/diag/trust_test.go", "internal/diag/diag_test.go", "internal/secretscan/secretscan_test.go", "internal/boardsync/sync_test.go", "internal/boardsync/reap_classify_test.go", "internal/boardsync/reap_discover_test.go"]
+  description = '''
+`make install` (r-01); estimate runtime from a go/ast mutant-site count; launch detached via nohup on the mutation host with a
+2h budget: `dross survivor drain --packages ./internal/boardsync,./internal/diag,./internal/secretscan --phase
+extracted-package-test-parity`. Per outstanding survivor, by evidence line: "attribution ceiling" -> accept under
+gremlins-attribution-ceiling; "no coverage block" -> accept under const-initializer-arithmetic; "killable" or "line never
+executes" -> STOP and ask, then add the killing test in the owning test file (the wave-2 file, else a listed fallback).
+Accept-only residuals are re-classified with `--report`; gremlins re-runs only when a test was added. Summary into notes.md.
+'''
+  covers = ["c-1"]
+  depends_on = ["t-2", "t-4", "t-5", "t-6", "t-7", "t-8", "t-9"]
+  test_contract = [
+    '''if any survivor lacks a disposition, the final drain summary does not read "... 0 outstanding" and the command exits non-zero (survivor_drain.go errors on any survivor with no disposition)''',
+    '''if a disallowed category is used, `dross survivor list --json` shows it: no acceptance is in cross-package-only-coverage, and every acceptance on internal/{boardsync,diag,secretscan} is in gremlins-attribution-ceiling or const-initializer-arithmetic (all 14 pre-existing secretscan entries already are)''',
+    '''if a killable survivor is accepted, the pasted drain evidence in the commit shows it: every accepted key's evidence line read "attribution ceiling" or "no coverage block"; nothing marked killable or not covered is accepted''',
+    '''if t-2's kills regress, the drain shows it: no acceptance exists for writers.go 106/110/112/121/130/133/136/140/144 and none of the 18 retired keys returns as outstanding''',
+    '''predicted ceilings (writers.go 88, 90, 92, 116, 118x2, 120, 129, 139; diag/redproof.go 91, 94) are accepted only if the drain's evidence confirms them; no category is invented for an equivalent mutant — STOP and ask instead''',
+    '''TestRepoAcceptanceReasonsCiteRealTests passes after the accepts''',
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-12"
+  wave = 4
+  title = "Prove no behaviour change; measure c-2"
+  files = [".dross/phases/extracted-package-test-parity/notes.md"]
+  description = '''
+Behaviour-preservation gate over the full internal/cmd suite, remote only, after the drain so the two remote jobs never contend
+for the helicon host lock; plus the final per-file c-2 measurement.
+'''
+  covers = ["c-2", "c-3"]
+  depends_on = ["t-10", "t-11"]
+  test_contract = [
+    '''if internal/cmd was touched, `git diff --name-only 018d325...HEAD -- internal/cmd` is non-empty (018d325 = merge-base with milestone/v1.7)''',
+    '''if production code changed, `git diff --name-only 018d325...HEAD -- '*.go' ':!*_test.go'` lists anything beyond cmd/coverfloor/*.go; a defect found while testing becomes `dross deferred add`, not an edit''',
+    '''if a new Test name collides, it appears in internal/cmd/testdata/cli_surface/tests_before.txt — checked for every Test added this phase before the remote run''',
+    '''if behaviour changed, remote `dross test` (full suite, never --local) goes red: TestNoTestLost, TestNoTestLostDetectsDropsAndCopies, issue*_test.go, doctor*_test.go and TestCLISurfacePinned must pass with no assertion edits''',
+    '''c-2: the per-file statement-weighted measure over `go test -count=1 -coverprofile ./internal/boardsync/ ./internal/secretscan/` shows backlog.go, reap_apply.go, reap_undo.go, inbound.go, milestone.go and writers.go each >=80.0%''',
+  ]
+  status = "pending"

@@ -23,6 +23,7 @@
     "exec-consent-completeness": "DRO-332",
     "exec-taint-enumeration": "DRO-648",
     "exec-trust-followups": "DRO-2",
+    "extracted-package-test-parity": "DRO-726",
     "guard-remedy-ordering": "DRO-27",
     "lane-host-affinity": "DRO-317",
     "lane-prepare-step": "DRO-223",
