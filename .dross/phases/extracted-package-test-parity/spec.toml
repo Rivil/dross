@@ -48,3 +48,8 @@
   choice = "secretscan/writers.go joins c-1 and c-2 rather than getting a separate criterion."
   why = "Same blind spot, accepted away in secret-detection (18 survivors, 0% own coverage); keeps one drain outcome and one coverage outcome."
   locked = true
+
+[[deferred]]
+  id = "070539a4434a8ff3"
+  text = "boardsync reap Undo leaves dross/status:<terminal> on a card that had no labels before the reap: reap_undo.go:61 skips the label restore when PriorLabels is empty, so the card still reads terminal to anything trusting the label"
+  why = "Found by the extracted-package-test-parity plan review (t-8 round-trip contract); that phase is test-only (c-3, t-12 forbid production edits), so the fix is parked."
