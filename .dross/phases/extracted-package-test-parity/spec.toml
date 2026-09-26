@@ -1,0 +1,50 @@
+[phase]
+  id = "extracted-package-test-parity"
+  title = "extracted-package-test-parity"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross survivor drain --packages ./internal/boardsync,./internal/diag,./internal/secretscan` reports zero survivors without a disposition: each is killed by a same-package test or accepted under a named gremlins-ceiling category with its reason, and none is accepted as `cross-package-only-coverage` (the 18 existing writers.go acceptances in that category are retired)."
+
+[[criteria]]
+  id = "c-2"
+  text = "internal/boardsync backlog.go, reap_apply.go, reap_undo.go, inbound.go, milestone.go and internal/secretscan writers.go each reach >=80% statement coverage from their own package's tests alone (`go test -cover ./internal/<pkg>/`)."
+
+[[criteria]]
+  id = "c-3"
+  text = "No behaviour change: the internal/cmd `issue` and `doctor` end-to-end tests and the CLI surface/output pins (incl. TestNoTestLost) pass with no assertion edits."
+
+[[criteria]]
+  id = "c-4"
+  text = "CI fails when any non-test .go file under internal/ outside internal/cmd has <50% statement coverage from its own package's tests — a flat floor with no allowlist — and a self-test proves the check fails on a below-floor file."
+
+[[decisions]]
+  key = "test_home"
+  choice = "Close the blind spot with package-local tests, not cross-package coverage attribution (-coverpkg)."
+  why = "gremlins runs per package; attributing cmd's e2e coverage would run the ~600s cmd suite once per boardsync mutant."
+  locked = true
+
+[[decisions]]
+  key = "cmd_e2e_tests_stay"
+  choice = "New boardsync/secretscan tests are additions; the internal/cmd `issue` cobra e2e tests stay as the command-level proof."
+  why = "Inherited test_policy from cmd-package-decomposition: cmd keeps cobra e2e tests, only unit tests move with code."
+  locked = true
+
+[[decisions]]
+  key = "c1_evidence"
+  choice = "c-1 is proven by a whole-package `dross survivor drain` run over the three packages, not by verify's diff-scoped mutation."
+  why = "This phase's diff is test files; diff-scoped verify generates no mutants in the production files the survivors live in."
+  locked = true
+
+[[decisions]]
+  key = "guard_shape"
+  choice = "c-4 is a CI per-file floor of 50% own-package statement coverage, flat, no allowlist; verify/detach.go gets a test rather than an exemption."
+  why = "Measured 2026-09-26: only this phase's 6 files and verify/detach.go sit below 60%; a zero-only ban misses backlog.go/reap_apply.go at 2%; an accept-category refusal is bypassed by renaming the category."
+  locked = true
+
+[[decisions]]
+  key = "secretscan_fold"
+  choice = "secretscan/writers.go joins c-1 and c-2 rather than getting a separate criterion."
+  why = "Same blind spot, accepted away in secret-detection (18 survivors, 0% own coverage); keeps one drain outcome and one coverage outcome."
+  locked = true
