@@ -62,3 +62,8 @@
   id = "3d7fab45c3b0a674"
   text = "survivor evidence mislabels switch-case conditions: a `case X:` line whose arm body starts on the next line sits in no go-cover block, so survivor.Derive reports 'no coverage block: a const initializer or declaration' (evidence.go CoverageNoBlock arm) — the drain then points the operator at const-initializer-arithmetic although the mechanism is the switch-case attribution ceiling (the arm bodies run, count>=1). Derive should recognise a case-clause line and say so"
   why = "Found by the extracted-package-test-parity drain (t-11): all 11 outstanding survivors (writers.go 88/90/92/116/118x2/120/129/139, diag/redproof.go 91/94) were switch-case conditions labelled as declarations; accepted under gremlins-attribution-ceiling per the sinks.go precedent. This phase is test-only (c-3), so the deriver fix is parked."
+
+[[deferred]]
+  id = "fa3d17955ecdf1cb"
+  text = "dross phase insert run mid-verify hijacks the session: it auto-commits the stale untracked tests.json/verify.toml as 'bookkeeping before starting a phase', checks out the new phase/<slug> branch and repoints current_phase to it — so a following survivor route (which writes to the current phase's spec) fails with 'no such spec.toml'. It should refuse, or not check out, when current_phase_status is verifying/complete"
+  why = "Hit 2026-09-22 verifying cmd-package-decomposition; reverted by hand (reset --mixed HEAD~1, cherry-pick the roadmap insert, dross state set current_phase). Carried unfiled in the handoff since then."
