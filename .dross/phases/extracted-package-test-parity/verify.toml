@@ -1,0 +1,112 @@
+[verify]
+  phase = "extracted-package-test-parity"
+  generated_at = 2026-09-26T17:24:57.697981Z
+  verdict = "fail"
+  finalized = true
+  finalized_at = 2026-09-26T17:39:11.311992Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.8125
+  mutants_killed = 26
+  mutants_survived = 6
+  mutants_not_covered = 6
+  mutants_in_scope = 32
+  unclassified_in_scope = 6
+  criteria_total = 5
+  criteria_covered = 3
+  criteria_uncovered = 2
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 26
+    survived = 6
+    timeout = 0
+    in_scope = 32
+    score = 0.8125
+    file_count = 15
+    measured_on = "helicon"
+    whole_file = ["cmd/coverfloor/ci_wiring_test.go — adapter-lacks-range-runner", "cmd/coverfloor/fixture_test.go — adapter-lacks-range-runner", "cmd/coverfloor/floor.go — adapter-lacks-range-runner", "cmd/coverfloor/floor_test.go — adapter-lacks-range-runner", "cmd/coverfloor/main.go — adapter-lacks-range-runner", "internal/boardsync/backlog_push_test.go — adapter-lacks-range-runner", "internal/boardsync/backlog_reconcile_test.go — adapter-lacks-range-runner", "internal/boardsync/doubles_test.go — adapter-lacks-range-runner", "internal/boardsync/inbound_test.go — adapter-lacks-range-runner", "internal/boardsync/milestone_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_apply_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_undo_test.go — adapter-lacks-range-runner", "internal/boardsync/sync_paths_test.go — adapter-lacks-range-runner", "internal/secretscan/writers_test.go — adapter-lacks-range-runner", "internal/verify/detach_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/boardsync/*_test.go (8 new files): gremlins 265/265 KILLED, 0 lived, 0 not covered", "internal/secretscan/writers_test.go:TestWriterValidationNamesEveryMalformedShape + TestLiveWriterRegistryValidatesInPackage (kill writers.go 106/110/112/121/130/133/136/140/144 — no acceptance on those lines)", "internal/survivor/reasons_repo_test.go:TestRepoAcceptanceReasonsCiteRealTests"]
+  notes = "Observed this run: `dross survivor drain --phase extracted-package-test-parity --report internal_{boardsync,diag,secretscan}.json` -> 25 classified, 25 accepted, 0 routed, 0 outstanding, 0 unclassified, exit 0. Store: 22 gremlins-attribution-ceiling + 3 const-initializer-arithmetic on the three packages; 0 cross-package-only-coverage anywhere (295 rows). The 112 deferred items routed to this phase have no surviving mutant; they close on ship."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/boardsync/{backlog_push,backlog_reconcile,reap_apply,reap_undo,inbound,milestone,sync_paths}_test.go", "internal/secretscan/writers_test.go"]
+  notes = "Measured this session: `go test -count=1 -coverprofile ./internal/boardsync/ ./internal/secretscan/`, per-file statement-weighted: backlog.go 99.0% (192/194), reap_apply.go 93.1% (121/130), reap_undo.go 100% (37/37), inbound.go 96.2% (25/26), milestone.go 100% (31/31), writers.go 100% (40/40). Ongoing regression guard is the c-4 floor at 50%, not 80%."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/boundary_test.go:TestNoTestLost", "internal/cmd/boundary_test.go:TestNoTestLostDetectsDropsAndCopies", "internal/cmd/cli_surface_test.go:TestCLISurfacePinned", "internal/cmd/issue*_test.go, doctor*_test.go", "internal/cmd/ci_go_test_step_test.go:TestCIGoTestStepsLive"]
+  notes = "Observed this session: remote `dross test` on helicon -> exit 0, 50 packages ok, 0 FAIL, internal/cmd 55.9s. `git diff 018d325...HEAD -- internal/cmd` is empty, so no assertion edits. Production .go diff = cmd/coverfloor only. Holds for the current tree; t-14 edits internal/cmd/verify.go, so c-3 must be re-proven after it."
+
+[[criterion]]
+  id = "c-4"
+  status = "weak"
+  tests = ["cmd/coverfloor/fixture_test.go:TestFixtureBelowFloorFailsTheCheck (self-test: real toolchain, CI flags, below-floor files exit 1)", "cmd/coverfloor/floor_test.go:TestFloorBoundary", "cmd/coverfloor/floor_test.go:TestScopeExcludesOnlyInternalCmd", "cmd/coverfloor/floor_test.go:TestVacuousInputIsExitTwo", "cmd/coverfloor/ci_wiring_test.go:TestCoverFloorIsWiredIntoCI + TestCIWiringCheckerCatchesEachBreak"]
+  notes = "Fail path fully killed (26/26 reachable-and-run mutants), wiring pinned against the live ci.yml. Downgraded for 6 in-hunk NOT COVERED survivors in the phase's own new floor.go, each on a count-0 cover block (reachable, never run): :79 x4 lowest-file pick in the passing summary (no passing test has >=2 files), :122 and :134 i+2 line numbers in the Atoi-overflow and mismatched-duplicate-span errors. -> t-13."
+
+[[criterion]]
+  id = "c-5"
+  status = "uncovered"
+  notes = "Added to the spec during this verify (user decision): the verify summary at internal/cmd/verify.go:1456 calls every gremlins NOT COVERED mutant 'uncoverable by construction'; this run printed 'efficacy over the 26 reachable = 1.00' though all 6 were on count-0 blocks. Not implemented yet -> t-14."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: cmd/coverfloor/floor.go:79 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: cmd/coverfloor/floor.go:79 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: cmd/coverfloor/floor.go:79 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: cmd/coverfloor/floor.go:79 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: cmd/coverfloor/floor.go:122 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: cmd/coverfloor/floor.go:134 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .github/workflows/ci.yml: no mutation adapter for .yml"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "c-5 uncovered: verify's NOT COVERED summary still labels count-0 blocks 'uncoverable by construction' — t-14 pending"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-4 weak: floor.go's passing-path lowest-file pick (:79) and two parse-error line numbers (:122, :134) are never run by any test — t-13 pending"
+
+[[finding]]
+  severity = "NOTE"
+  text = "this run's 'of which 6 uncoverable by construction ... efficacy over the 26 reachable = 1.00' line is wrong: go-cover shows count-0 blocks at floor.go 79.3-79.54, 122.4-123.1, 134.5-135.1 — reachable; true efficacy is 26/32 (c-5, t-14)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "re-verify after t-14 mutates the whole internal/cmd package (last run 5786 s on helicon): dispatch detached with a 2h budget, and disposition verify.go's inherited NOT COVERED survivors (6 at last run) in that run"
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-4's CI step has not yet run on GitHub (ci.yml triggers on pull_request/push to main): ship-time evidence is the PR run showing the coverage floor step green"
+
+[[finding]]
+  severity = "NOTE"
+  text = "38 out-of-scope survivors filtered; 0 out-of-diff unclassified (all accepted or routed)"
