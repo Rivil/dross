@@ -1,7 +1,9 @@
 [verify]
   phase = "cmd-exec-baseline-drain"
   generated_at = 2026-09-25T19:45:16.312997Z
-  verdict = "pending"
+  verdict = "fail"
+  finalized = true
+  finalized_at = 2026-09-26T07:45:25.159309Z
 
 [summary]
   mutation_status = "measured"
@@ -13,8 +15,8 @@
   mutants_in_scope = 2838
   unclassified_in_scope = 1
   criteria_total = 8
-  criteria_covered = 0
-  criteria_uncovered = 0
+  criteria_covered = 7
+  criteria_uncovered = 1
 
   [[summary.leg]]
     language = "go"
@@ -30,40 +32,80 @@
 
 [[criterion]]
   id = "c-1"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection", "internal/cmd/boundary_test.go:TestCmdForbiddenImportRatchet"]
+  notes = "live ban over non-test internal/cmd files includes os/exec; self-test injects os/exec into every cmd file and demands exactly one finding naming both; live tree has 0 os/exec importers"
 
 [[criterion]]
   id = "c-2"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection", "internal/cmd/boundary_test.go:TestCmdForbiddenImportRatchet", "internal/update/update_test.go", "internal/update/apply_test.go"]
+  notes = "net/http is in forbiddenInCmd and exhaustively injected; HTTP client + release fetch now tested in internal/update"
 
 [[criterion]]
   id = "c-3"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/boundary_test.go:TestEveryGitSpawnIsInTheRunner", "internal/gitrun/gitrun_test.go:TestRunFailureOutputGoesToStderr", "internal/gitrun/gitrun_test.go:TestRawKeepsWhatReadTrims", "internal/cmd/taint_gitplumbing_test.go:TestGitTrimRunsRefVerbsOnly"]
+  notes = "census fails any exec.Command(\"git\") or retired helper FuncDecl outside internal/gitrun (non-vacuous: >=1 inside); gitrun tests pin the Trim/Read/Raw/Run/Quiet verb split"
 
 [[criterion]]
   id = "c-4"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/execconsent_audit_test.go:TestEverySpawnSiteGatedOrExempt", "internal/cmd/taint_audit_test.go:TestNoSpawnOutputEscapes", "internal/cmd/exempt_budget_test.go:TestExecExemptBudget"]
+  notes = "spawn-site audit and taint gate green on helicon full suite; exempt-marker ceiling locked at 9 (was 26), counted via directive parser"
 
 [[criterion]]
   id = "c-5"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/boundary_test.go:TestLocalGoIsOnlyTheCommandTree", "internal/cmd/boundary_test.go:TestCmdDeclaresNoTomlStore", "internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection"]
+  notes = "local.go may hold only *cobra.Command constructors; cmd may declare no toml-tagged struct; wiring rule requires cmd to import internal/localstore; toml import banned in cmd"
 
 [[criterion]]
   id = "c-6"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/boundary_test.go:TestCmdForbiddenImportRatchet", "internal/cmd/boundary_test.go:TestFlatBanHasNoAllowlist"]
+  notes = "exhaustive every-import x every-file injection on a live clone; checkBoundary takes one parameter and boundary_test.go declares no baseline/allow var"
 
 [[criterion]]
   id = "c-7"
-  status = "unknown"
+  status = "weak"
+  tests = ["cmd/dross/surface_test.go:TestCLITreeGolden", "internal/cmd/output_golden_test.go:TestOutputGoldens", "internal/cmd/boundary_test.go:TestNoTestLost", "internal/localstore/readers_test.go", "internal/localstore/detached_test.go", "internal/survivor/drain_test.go"]
+  notes = "CLI tree, output bytes and test inventory are pinned; pre-existing cmd e2e edits are seam renames only. t-16 moved the moved code's unit tests into internal/localstore and internal/survivor and cleared all 22 prior survivors. One moved branch is still covered only from cmd: ReadRemoteGrants' [[remote_pool]] walk (store.go:466) is read only by internal/cmd tests (remote_pool_test.go:TestGrantAddKeepsTheExistingHost, local_resolution_test.go), which rightly stay in cmd because they drive cmd's grant writers. localstore has no pool-reading test of its own, so gremlins reads the loop's error check NOT COVERED."
 
 [[criterion]]
   id = "c-8"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection", "internal/cmd/boundary_test.go:TestCmdForbiddenImportRatchet", "internal/render/render_test.go", "internal/cmd/output_golden_test.go:TestOutputGoldens"]
+  notes = "encoding/json and BurntSushi/toml in the flat ban (0 importers live); render tests pin byte-equality with the encoders; t-1 output goldens held byte-identical across the move"
 
 [[finding]]
   severity = "BLOCKING"
   text = "gremlins mutant survived: internal/localstore/store.go:466 (CONDITIONALS_NEGATION)"
 
 [[finding]]
+  severity = "BLOCKING"
+  text = "store.go:466 is the `err != nil` check in ReadRemoteGrants' RemotePool loop; no internal/localstore test reads a [[remote_pool]] entry (pool reads are tested only from internal/cmd). Killable, so not an accept. User decided FIX: /dross-execute amend t-17 adds a localstore test reading a scalar grant plus one pool entry through ReadRemoteGrants, asserting both targets in order; then re-verify."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-7 weak: 'moved unit tests move with their code' holds for every moved reader except the RemotePool walk in ReadRemoteGrants, which is still exercised only by internal/cmd tests."
+
+[[finding]]
   severity = "NOTE"
   text = "skipped internal/cmd/local_detached_test.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "internal/render produced no gremlins report (rsync exit 23 on internal_render.json): the package has 0 mutable operators by go/ast count, so there is nothing to measure — not a failed leg."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-3's census is syntactic: it matches exec.Command/CommandContext on the identifier `exec` with a literal \"git\" — an aliased os/exec import or a git binary held in a variable would slip past it."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-4's 'after every move' is per-task history (each task's gate kept the audits green); the end-state audits are green on the helicon full suite (exit 0, 49 packages)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "TestNoTestLostDetectsDropsAndCopies re-implements the drop/copy comparison inline rather than exercising TestNoTestLost's own logic, so it proves the idea, not the live check."
