@@ -580,6 +580,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "cmd-exec-baseline-drain/t-17": {
+      "issue": "DRO-725",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "cmd-exec-baseline-drain/t-2": {
       "issue": "DRO-710",
       "plan_status": "done",

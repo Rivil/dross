@@ -1,4 +1,4 @@
-task_seq = 16
+task_seq = 17
 
 [phase]
   id = "cmd-exec-baseline-drain"
@@ -175,4 +175,15 @@ task_seq = 16
   covers = ["c-7"]
   depends_on = ["t-15"]
   test_contract = ["if a moved test is copied instead of moved (left behind in cmd), TestNoTestLost fails", "if parseTuning's n < 1 boundary becomes n <= 1, TestMutationTuningAcceptsOne fails", "if GoListDirs stops erroring outside a module or keeps blank lines, TestRealGoListDirsSurfacesFailures (now in internal/survivor) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-17"
+  wave = 8
+  title = "Test the pool read in localstore"
+  files = ["internal/localstore/readers_test.go"]
+  description = "Verify FIX: store.go:466 CONDITIONALS_NEGATION (err != nil in ReadRemoteGrants' RemotePool loop) survives NOT COVERED because pool reads are only tested from internal/cmd, which gremlins does not credit to localstore. Add a localstore test: scalar grant + one [[remote_pool]] entry read through ReadRemoteGrants yields both targets in order; a pool entry with a host and no workdir is refused by name."
+  covers = ["c-7"]
+  depends_on = ["t-16"]
+  test_contract = ["if the pool loop's error check is negated, a valid [[remote_pool]] entry after a scalar grant yields 0 targets instead of 2 in order, and TestReadRemoteGrantsReadsThePoolInOrder fails", "if an unusable pool entry (host, no workdir) is dropped instead of refused, ReadRemoteGrants returns no error and TestReadRemoteGrantsReadsThePoolInOrder fails"]
   status = "done"

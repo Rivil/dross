@@ -235,6 +235,21 @@
         }
       ]
     },
+    "t-17": {
+      "files": [
+        "internal/localstore/readers_test.go"
+      ],
+      "commit": "92d82ad",
+      "completed_at": "2026-09-26T08:01:24.540277Z",
+      "landmarks": [
+        {
+          "feature": "machine-local store",
+          "symbol": "TestReadRemoteGrantsReadsThePoolInOrder",
+          "loc": "internal/localstore/readers_test.go:265",
+          "what": "pins ReadRemoteGrants pool order (scalar first, pool after) and by-name refusal of an unusable pool host inside localstore"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/boundary_test.go",
