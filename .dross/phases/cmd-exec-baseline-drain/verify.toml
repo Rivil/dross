@@ -1,207 +1,69 @@
 [verify]
   phase = "cmd-exec-baseline-drain"
-  generated_at = 2026-09-25T17:19:35.452814Z
-  verdict = "fail"
-  finalized = true
-  finalized_at = 2026-09-25T17:40:17.318009Z
+  generated_at = 2026-09-25T19:45:16.312997Z
+  verdict = "pending"
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9400986610288936
-  mutants_killed = 2668
-  mutants_survived = 170
-  mutants_not_covered = 170
+  mutation_score = 0.9474982381959126
+  mutants_killed = 2689
+  mutants_survived = 149
+  mutants_not_covered = 149
   mutants_in_scope = 2838
-  unclassified_in_scope = 22
+  unclassified_in_scope = 1
   criteria_total = 8
-  criteria_covered = 7
-  criteria_uncovered = 1
+  criteria_covered = 0
+  criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 2668
-    survived = 170
+    killed = 2689
+    survived = 149
     timeout = 0
     in_scope = 2838
-    score = 0.9400986610288936
-    file_count = 129
+    score = 0.9474982381959126
+    file_count = 130
     measured_on = "helicon"
-    whole_file = ["cmd/dross/surface_test.go — adapter-lacks-range-runner", "internal/changes/changes.go — adapter-lacks-range-runner", "internal/changes/changes_test.go — adapter-lacks-range-runner", "internal/cmd/basebranch.go — adapter-lacks-range-runner", "internal/cmd/basebranch_test.go — adapter-lacks-range-runner", "internal/cmd/boundary_test.go — adapter-lacks-range-runner", "internal/cmd/changes.go — adapter-lacks-range-runner", "internal/cmd/cleantree.go — adapter-lacks-range-runner", "internal/cmd/defaults.go — adapter-lacks-range-runner", "internal/cmd/deferred.go — adapter-lacks-range-runner", "internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/dotget.go — adapter-lacks-range-runner", "internal/cmd/env.go — adapter-lacks-range-runner", "internal/cmd/env_test.go — adapter-lacks-range-runner", "internal/cmd/execconsent_audit_test.go — adapter-lacks-range-runner", "internal/cmd/exempt_budget_test.go — adapter-lacks-range-runner", "internal/cmd/forkpoint.go — adapter-lacks-range-runner", "internal/cmd/git_shim_test.go — adapter-lacks-range-runner", "internal/cmd/gitignore.go — adapter-lacks-range-runner", "internal/cmd/gitseparator_test.go — adapter-lacks-range-runner", "internal/cmd/init.go — adapter-lacks-range-runner", "internal/cmd/issue.go — adapter-lacks-range-runner", "internal/cmd/jsonout.go — adapter-lacks-range-runner", "internal/cmd/lane_install.go — adapter-lacks-range-runner", "internal/cmd/lane_locality.go — adapter-lacks-range-runner", "internal/cmd/lane_plan.go — adapter-lacks-range-runner", "internal/cmd/lane_preview.go — adapter-lacks-range-runner", "internal/cmd/lane_preview_locality.go — adapter-lacks-range-runner", "internal/cmd/local.go — adapter-lacks-range-runner", "internal/cmd/local_detached_test.go — adapter-lacks-range-runner", "internal/cmd/local_remote_alias_test.go — adapter-lacks-range-runner", "internal/cmd/local_shim_test.go — adapter-lacks-range-runner", "internal/cmd/local_test.go — adapter-lacks-range-runner", "internal/cmd/milestone.go — adapter-lacks-range-runner", "internal/cmd/milestone_merged.go — adapter-lacks-range-runner", "internal/cmd/milestone_stale.go — adapter-lacks-range-runner", "internal/cmd/originpush.go — adapter-lacks-range-runner", "internal/cmd/output_golden_test.go — adapter-lacks-range-runner", "internal/cmd/pathfence_fields_test.go — adapter-lacks-range-runner", "internal/cmd/pause.go — adapter-lacks-range-runner", "internal/cmd/phase.go — adapter-lacks-range-runner", "internal/cmd/phase_backfill.go — adapter-lacks-range-runner", "internal/cmd/phase_checkout.go — adapter-lacks-range-runner", "internal/cmd/phase_lifecycle.go — adapter-lacks-range-runner", "internal/cmd/phase_reconcile.go — adapter-lacks-range-runner", "internal/cmd/profile.go — adapter-lacks-range-runner", "internal/cmd/project.go — adapter-lacks-range-runner", "internal/cmd/quality.go — adapter-lacks-range-runner", "internal/cmd/redproof.go — adapter-lacks-range-runner", "internal/cmd/redproof_lifecycle.go — adapter-lacks-range-runner", "internal/cmd/redproof_replay.go — adapter-lacks-range-runner", "internal/cmd/redproof_repoint.go — adapter-lacks-range-runner", "internal/cmd/redproof_set.go — adapter-lacks-range-runner", "internal/cmd/reentry.go — adapter-lacks-range-runner", "internal/cmd/remote_bootstrap.go — adapter-lacks-range-runner", "internal/cmd/remote_bootstrap_cmd.go — adapter-lacks-range-runner", "internal/cmd/remote_grant.go — adapter-lacks-range-runner", "internal/cmd/remote_pool.go — adapter-lacks-range-runner", "internal/cmd/repair.go — adapter-lacks-range-runner", "internal/cmd/repair_files.go — adapter-lacks-range-runner", "internal/cmd/repair_phasedirs.go — adapter-lacks-range-runner", "internal/cmd/repair_state.go — adapter-lacks-range-runner", "internal/cmd/run.go — adapter-lacks-range-runner", "internal/cmd/secretscan.go — adapter-lacks-range-runner", "internal/cmd/security.go — adapter-lacks-range-runner", "internal/cmd/ship.go — adapter-lacks-range-runner", "internal/cmd/ship_recover.go — adapter-lacks-range-runner", "internal/cmd/ship_test.go — adapter-lacks-range-runner", "internal/cmd/srcscope_test.go — adapter-lacks-range-runner", "internal/cmd/stack.go — adapter-lacks-range-runner", "internal/cmd/state.go — adapter-lacks-range-runner", "internal/cmd/status.go — adapter-lacks-range-runner", "internal/cmd/statusline.go — adapter-lacks-range-runner", "internal/cmd/statusline_test.go — adapter-lacks-range-runner", "internal/cmd/subprocargs_audit_test.go — adapter-lacks-range-runner", "internal/cmd/survivor_drain.go — adapter-lacks-range-runner", "internal/cmd/survivor_drain_test.go — adapter-lacks-range-runner", "internal/cmd/switchbranch.go — adapter-lacks-range-runner", "internal/cmd/switchbranch_test.go — adapter-lacks-range-runner", "internal/cmd/taint_audit_test.go — adapter-lacks-range-runner", "internal/cmd/taint_gitdirect_test.go — adapter-lacks-range-runner", "internal/cmd/taint_gitplumbing_test.go — adapter-lacks-range-runner", "internal/cmd/taint_scanners_test.go — adapter-lacks-range-runner", "internal/cmd/taint_usercmds_test.go — adapter-lacks-range-runner", "internal/cmd/task.go — adapter-lacks-range-runner", "internal/cmd/techdebt.go — adapter-lacks-range-runner", "internal/cmd/test.go — adapter-lacks-range-runner", "internal/cmd/test_lane.go — adapter-lacks-range-runner", "internal/cmd/test_lane_install.go — adapter-lacks-range-runner", "internal/cmd/topology.go — adapter-lacks-range-runner", "internal/cmd/trust.go — adapter-lacks-range-runner", "internal/cmd/update.go — adapter-lacks-range-runner", "internal/cmd/update_test.go — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_results_test.go — adapter-lacks-range-runner", "internal/cmd/verifyscope.go — adapter-lacks-range-runner", "internal/cmd/verifyscope_test.go — adapter-lacks-range-runner", "internal/cmd/watch.go — adapter-lacks-range-runner", "internal/cmd/worktree_files.go — adapter-lacks-range-runner", "internal/codex/git.go — adapter-lacks-range-runner", "internal/consent/store.go — adapter-lacks-range-runner", "internal/gitrun/gitrun.go — adapter-lacks-range-runner", "internal/gitrun/gitrun_test.go — adapter-lacks-range-runner", "internal/hooks/settings.go — adapter-lacks-range-runner", "internal/hooks/settings_test.go — adapter-lacks-range-runner", "internal/localstore/store.go — adapter-lacks-range-runner", "internal/localstore/store_test.go — adapter-lacks-range-runner", "internal/pathfence/fields.go — adapter-lacks-range-runner", "internal/pathfence/fields_test.go — adapter-lacks-range-runner", "internal/quality/run.go — adapter-lacks-range-runner", "internal/quality/run_test.go — adapter-lacks-range-runner", "internal/remote/remote.go — adapter-lacks-range-runner", "internal/render/render.go — adapter-lacks-range-runner", "internal/render/render_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/security/run.go — adapter-lacks-range-runner", "internal/security/run_test.go — adapter-lacks-range-runner", "internal/stack/runtime.go — adapter-lacks-range-runner", "internal/statusline/settings.go — adapter-lacks-range-runner", "internal/statusline/settings_test.go — adapter-lacks-range-runner", "internal/survivor/drain.go — adapter-lacks-range-runner", "internal/survivor/drain_test.go — adapter-lacks-range-runner", "internal/techdebt/run.go — adapter-lacks-range-runner", "internal/techdebt/run_test.go — adapter-lacks-range-runner", "internal/testlane/spawn.go — adapter-lacks-range-runner", "internal/testlane/spawn_test.go — adapter-lacks-range-runner", "internal/update/apply.go — adapter-lacks-range-runner", "internal/update/apply_test.go — adapter-lacks-range-runner", "internal/verify/detach.go — adapter-lacks-range-runner"]
+    whole_file = ["cmd/dross/surface_test.go — adapter-lacks-range-runner", "internal/changes/changes.go — adapter-lacks-range-runner", "internal/changes/changes_test.go — adapter-lacks-range-runner", "internal/cmd/basebranch.go — adapter-lacks-range-runner", "internal/cmd/basebranch_test.go — adapter-lacks-range-runner", "internal/cmd/boundary_test.go — adapter-lacks-range-runner", "internal/cmd/changes.go — adapter-lacks-range-runner", "internal/cmd/cleantree.go — adapter-lacks-range-runner", "internal/cmd/defaults.go — adapter-lacks-range-runner", "internal/cmd/deferred.go — adapter-lacks-range-runner", "internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/dotget.go — adapter-lacks-range-runner", "internal/cmd/env.go — adapter-lacks-range-runner", "internal/cmd/env_test.go — adapter-lacks-range-runner", "internal/cmd/execconsent_audit_test.go — adapter-lacks-range-runner", "internal/cmd/exempt_budget_test.go — adapter-lacks-range-runner", "internal/cmd/forkpoint.go — adapter-lacks-range-runner", "internal/cmd/git_shim_test.go — adapter-lacks-range-runner", "internal/cmd/gitignore.go — adapter-lacks-range-runner", "internal/cmd/gitseparator_test.go — adapter-lacks-range-runner", "internal/cmd/init.go — adapter-lacks-range-runner", "internal/cmd/issue.go — adapter-lacks-range-runner", "internal/cmd/jsonout.go — adapter-lacks-range-runner", "internal/cmd/lane_install.go — adapter-lacks-range-runner", "internal/cmd/lane_locality.go — adapter-lacks-range-runner", "internal/cmd/lane_plan.go — adapter-lacks-range-runner", "internal/cmd/lane_preview.go — adapter-lacks-range-runner", "internal/cmd/lane_preview_locality.go — adapter-lacks-range-runner", "internal/cmd/local.go — adapter-lacks-range-runner", "internal/cmd/local_remote_alias_test.go — adapter-lacks-range-runner", "internal/cmd/local_shim_test.go — adapter-lacks-range-runner", "internal/cmd/local_test.go — adapter-lacks-range-runner", "internal/cmd/milestone.go — adapter-lacks-range-runner", "internal/cmd/milestone_merged.go — adapter-lacks-range-runner", "internal/cmd/milestone_stale.go — adapter-lacks-range-runner", "internal/cmd/originpush.go — adapter-lacks-range-runner", "internal/cmd/output_golden_test.go — adapter-lacks-range-runner", "internal/cmd/pathfence_fields_test.go — adapter-lacks-range-runner", "internal/cmd/pause.go — adapter-lacks-range-runner", "internal/cmd/phase.go — adapter-lacks-range-runner", "internal/cmd/phase_backfill.go — adapter-lacks-range-runner", "internal/cmd/phase_checkout.go — adapter-lacks-range-runner", "internal/cmd/phase_lifecycle.go — adapter-lacks-range-runner", "internal/cmd/phase_reconcile.go — adapter-lacks-range-runner", "internal/cmd/profile.go — adapter-lacks-range-runner", "internal/cmd/project.go — adapter-lacks-range-runner", "internal/cmd/quality.go — adapter-lacks-range-runner", "internal/cmd/redproof.go — adapter-lacks-range-runner", "internal/cmd/redproof_lifecycle.go — adapter-lacks-range-runner", "internal/cmd/redproof_replay.go — adapter-lacks-range-runner", "internal/cmd/redproof_repoint.go — adapter-lacks-range-runner", "internal/cmd/redproof_set.go — adapter-lacks-range-runner", "internal/cmd/reentry.go — adapter-lacks-range-runner", "internal/cmd/remote_bootstrap.go — adapter-lacks-range-runner", "internal/cmd/remote_bootstrap_cmd.go — adapter-lacks-range-runner", "internal/cmd/remote_grant.go — adapter-lacks-range-runner", "internal/cmd/remote_pool.go — adapter-lacks-range-runner", "internal/cmd/repair.go — adapter-lacks-range-runner", "internal/cmd/repair_files.go — adapter-lacks-range-runner", "internal/cmd/repair_phasedirs.go — adapter-lacks-range-runner", "internal/cmd/repair_state.go — adapter-lacks-range-runner", "internal/cmd/run.go — adapter-lacks-range-runner", "internal/cmd/secretscan.go — adapter-lacks-range-runner", "internal/cmd/security.go — adapter-lacks-range-runner", "internal/cmd/ship.go — adapter-lacks-range-runner", "internal/cmd/ship_recover.go — adapter-lacks-range-runner", "internal/cmd/ship_test.go — adapter-lacks-range-runner", "internal/cmd/srcscope_test.go — adapter-lacks-range-runner", "internal/cmd/stack.go — adapter-lacks-range-runner", "internal/cmd/state.go — adapter-lacks-range-runner", "internal/cmd/status.go — adapter-lacks-range-runner", "internal/cmd/statusline.go — adapter-lacks-range-runner", "internal/cmd/statusline_test.go — adapter-lacks-range-runner", "internal/cmd/subprocargs_audit_test.go — adapter-lacks-range-runner", "internal/cmd/survivor_drain.go — adapter-lacks-range-runner", "internal/cmd/survivor_drain_test.go — adapter-lacks-range-runner", "internal/cmd/switchbranch.go — adapter-lacks-range-runner", "internal/cmd/switchbranch_test.go — adapter-lacks-range-runner", "internal/cmd/taint_audit_test.go — adapter-lacks-range-runner", "internal/cmd/taint_gitdirect_test.go — adapter-lacks-range-runner", "internal/cmd/taint_gitplumbing_test.go — adapter-lacks-range-runner", "internal/cmd/taint_scanners_test.go — adapter-lacks-range-runner", "internal/cmd/taint_usercmds_test.go — adapter-lacks-range-runner", "internal/cmd/task.go — adapter-lacks-range-runner", "internal/cmd/techdebt.go — adapter-lacks-range-runner", "internal/cmd/test.go — adapter-lacks-range-runner", "internal/cmd/test_lane.go — adapter-lacks-range-runner", "internal/cmd/test_lane_install.go — adapter-lacks-range-runner", "internal/cmd/topology.go — adapter-lacks-range-runner", "internal/cmd/trust.go — adapter-lacks-range-runner", "internal/cmd/update.go — adapter-lacks-range-runner", "internal/cmd/update_test.go — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_results_test.go — adapter-lacks-range-runner", "internal/cmd/verifyscope.go — adapter-lacks-range-runner", "internal/cmd/verifyscope_test.go — adapter-lacks-range-runner", "internal/cmd/watch.go — adapter-lacks-range-runner", "internal/cmd/worktree_files.go — adapter-lacks-range-runner", "internal/codex/git.go — adapter-lacks-range-runner", "internal/consent/store.go — adapter-lacks-range-runner", "internal/gitrun/gitrun.go — adapter-lacks-range-runner", "internal/gitrun/gitrun_test.go — adapter-lacks-range-runner", "internal/hooks/settings.go — adapter-lacks-range-runner", "internal/hooks/settings_test.go — adapter-lacks-range-runner", "internal/localstore/detached_test.go — adapter-lacks-range-runner", "internal/localstore/readers_test.go — adapter-lacks-range-runner", "internal/localstore/store.go — adapter-lacks-range-runner", "internal/localstore/store_test.go — adapter-lacks-range-runner", "internal/pathfence/fields.go — adapter-lacks-range-runner", "internal/pathfence/fields_test.go — adapter-lacks-range-runner", "internal/quality/run.go — adapter-lacks-range-runner", "internal/quality/run_test.go — adapter-lacks-range-runner", "internal/remote/remote.go — adapter-lacks-range-runner", "internal/render/render.go — adapter-lacks-range-runner", "internal/render/render_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/security/run.go — adapter-lacks-range-runner", "internal/security/run_test.go — adapter-lacks-range-runner", "internal/stack/runtime.go — adapter-lacks-range-runner", "internal/statusline/settings.go — adapter-lacks-range-runner", "internal/statusline/settings_test.go — adapter-lacks-range-runner", "internal/survivor/drain.go — adapter-lacks-range-runner", "internal/survivor/drain_test.go — adapter-lacks-range-runner", "internal/techdebt/run.go — adapter-lacks-range-runner", "internal/techdebt/run_test.go — adapter-lacks-range-runner", "internal/testlane/spawn.go — adapter-lacks-range-runner", "internal/testlane/spawn_test.go — adapter-lacks-range-runner", "internal/update/apply.go — adapter-lacks-range-runner", "internal/update/apply_test.go — adapter-lacks-range-runner", "internal/verify/detach.go — adapter-lacks-range-runner"]
 
 [[criterion]]
   id = "c-1"
-  status = "covered"
-  tests = ["internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection", "internal/cmd/boundary_test.go:TestCmdForbiddenImportRatchet"]
-  notes = "live ban over non-test internal/cmd files includes os/exec; self-test injects os/exec into every cmd file and demands exactly one finding naming both; live tree has 0 os/exec importers"
+  status = "unknown"
 
 [[criterion]]
   id = "c-2"
-  status = "covered"
-  tests = ["internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection", "internal/cmd/boundary_test.go:TestCmdForbiddenImportRatchet", "internal/update/update_test.go", "internal/update/apply_test.go"]
-  notes = "net/http is in forbiddenInCmd and exhaustively injected; HTTP client + release fetch now tested in internal/update"
+  status = "unknown"
 
 [[criterion]]
   id = "c-3"
-  status = "covered"
-  tests = ["internal/cmd/boundary_test.go:TestEveryGitSpawnIsInTheRunner", "internal/gitrun/gitrun_test.go:TestRunFailureOutputGoesToStderr", "internal/gitrun/gitrun_test.go:TestRawKeepsWhatReadTrims", "internal/cmd/taint_gitplumbing_test.go:TestGitTrimRunsRefVerbsOnly"]
-  notes = "census fails any exec.Command(\"git\") or retired helper FuncDecl outside internal/gitrun (non-vacuous: >=1 inside); gitrun tests pin the Trim/Read/Raw/Run/Quiet verb split"
+  status = "unknown"
 
 [[criterion]]
   id = "c-4"
-  status = "covered"
-  tests = ["internal/cmd/execconsent_audit_test.go:TestEverySpawnSiteGatedOrExempt", "internal/cmd/taint_audit_test.go:TestNoSpawnOutputEscapes", "internal/cmd/exempt_budget_test.go:TestExecExemptBudget"]
-  notes = "spawn-site audit and taint gate green on helicon full suite; exempt-marker ceiling locked at 9 (was 26), counted via directive parser"
+  status = "unknown"
 
 [[criterion]]
   id = "c-5"
-  status = "covered"
-  tests = ["internal/cmd/boundary_test.go:TestLocalGoIsOnlyTheCommandTree", "internal/cmd/boundary_test.go:TestCmdDeclaresNoTomlStore", "internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection"]
-  notes = "local.go may hold only *cobra.Command constructors; cmd may declare no toml-tagged struct; wiring rule requires cmd to import internal/localstore; toml import banned in cmd"
+  status = "unknown"
 
 [[criterion]]
   id = "c-6"
-  status = "covered"
-  tests = ["internal/cmd/boundary_test.go:TestCmdForbiddenImportRatchet", "internal/cmd/boundary_test.go:TestFlatBanHasNoAllowlist"]
-  notes = "exhaustive every-import x every-file injection on a live clone; checkBoundary takes one parameter and boundary_test.go declares no baseline/allow var"
+  status = "unknown"
 
 [[criterion]]
   id = "c-7"
-  status = "weak"
-  tests = ["cmd/dross/surface_test.go:TestCLITreeGolden", "internal/cmd/output_golden_test.go:TestOutputGoldens", "internal/cmd/boundary_test.go:TestNoTestLost"]
-  notes = "CLI tree, output bytes and test inventory are pinned, and edits to pre-existing cmd e2e tests are seam renames only (gitStderr->gitrun.Stderr, gitArgvRecorder->gitrun.ArgvRecorder). But 'moved unit tests move with their code' is not met: unit tests of code moved to internal/localstore (ClearDetachedRun, ReadAllowHosts, ResolveRemoteEnv, ReadMutationTuning, ReadKey) stayed in internal/cmd behind local_shim_test.go, and TestRealGoListDirsSurfacesFailures stayed in cmd while GoListDirs moved to internal/survivor. Gremlins credits only a package's own tests, so 22 in-hunk lines of moved code read NOT COVERED."
+  status = "unknown"
 
 [[criterion]]
   id = "c-8"
-  status = "covered"
-  tests = ["internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection", "internal/cmd/boundary_test.go:TestCmdForbiddenImportRatchet", "internal/render/render_test.go", "internal/cmd/output_golden_test.go:TestOutputGoldens"]
-  notes = "encoding/json and BurntSushi/toml in the flat ban (0 importers live); render tests pin byte-equality with the encoders; t-1 output goldens held byte-identical across the move"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:294 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:299 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:305 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:315 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:393 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:397 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:402 (CONDITIONALS_NEGATION)"
+  status = "unknown"
 
 [[finding]]
   severity = "BLOCKING"
   text = "gremlins mutant survived: internal/localstore/store.go:466 (CONDITIONALS_NEGATION)"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:505 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:504 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:503 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:502 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:523 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:526 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:529 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:537 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:541 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:544 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:544 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/localstore/store.go:628 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/survivor/drain.go:32 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/survivor/drain.go:26 (CONDITIONALS_NEGATION)"
-
-[[finding]]
   severity = "NOTE"
-  text = "gremlins mutant survived: internal/update/apply.go:153 (CONDITIONALS_NEGATION) — accepted at verify under category self-replacing-binary-path (same branch accepted as internal/cmd/update.go before the move)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: internal/update/apply.go:156 (CONDITIONALS_NEGATION) — accepted at verify under category self-replacing-binary-path (same branch accepted as internal/cmd/update.go before the move)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "stale acceptance: internal/cmd/gitignore.go (28ece17d11f1de42) — mutant no longer produced — retire it from .dross/survivors.toml — RETIRED at verify"
-
-[[finding]]
-  severity = "NOTE"
-  text = "stale acceptance: internal/cmd/update.go (2f4b2750232fddbd) — mutant no longer produced — retire it from .dross/survivors.toml — RETIRED at verify"
-
-[[finding]]
-  severity = "NOTE"
-  text = "stale acceptance: internal/cmd/update.go (67bbc496d8103359) — mutant no longer produced — retire it from .dross/survivors.toml — RETIRED at verify"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "22 in-hunk NOT COVERED survivors (internal/localstore/store.go x20, internal/survivor/drain.go:26,32) share one cause: the unit tests of the moved functions stayed in internal/cmd (local_test.go, local_detached_test.go via local_shim_test.go; survivor_drain_test.go:TestRealGoListDirsSurfacesFailures). User decided FIX: move them into internal/localstore and internal/survivor via /dross-execute amend, then re-verify."
-
-[[finding]]
-  severity = "NOTE"
-  text = "internal/render produced no gremlins report (rsync exit 23 on internal_render.json): the package has 0 mutable operators by go/ast count, so there is nothing to measure — not a failed leg."
-
-[[finding]]
-  severity = "NOTE"
-  text = "c-3's census is syntactic: it matches exec.Command/CommandContext on the identifier `exec` with a literal \"git\" — an aliased os/exec import or a git binary held in a variable would slip past it."
-
-[[finding]]
-  severity = "NOTE"
-  text = "c-4's 'after every move' is per-task history (each task's gate kept the audits green); the end-state audits are green on the helicon full suite (exit 0, 49 packages)."
-
-[[finding]]
-  severity = "NOTE"
-  text = "TestNoTestLostDetectsDropsAndCopies re-implements the drop/copy comparison inline rather than exercising TestNoTestLost's own logic, so it proves the idea, not the live check."
+  text = "skipped internal/cmd/local_detached_test.go: file no longer exists in the working tree"
