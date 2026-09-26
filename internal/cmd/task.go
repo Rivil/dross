@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -11,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -58,7 +58,7 @@ func taskList() *cobra.Command {
 			}
 
 			if asJSON {
-				out, err := json.Marshal(rows)
+				out, err := render.MarshalJSON(rows)
 				if err != nil {
 					return err
 				}

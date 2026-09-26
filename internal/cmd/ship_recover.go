@@ -1,18 +1,14 @@
 package cmd
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -116,7 +112,7 @@ longer holds the pre-merge .dross/ tree:
 			}
 
 			// Refuse to run on the wrong branch — reset is destructive.
-			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+			cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				return fmt.Errorf("read current branch: %w", err)
 			}
@@ -125,7 +121,7 @@ longer holds the pre-merge .dross/ tree:
 			}
 
 			// Refuse to run on a dirty tree — reset would silently destroy work.
-			status, err := gitRead(repoDir, "status", "--porcelain")
+			status, err := gitrun.Read(repoDir, "status", "--porcelain")
 			if err != nil {
 				return fmt.Errorf("git status: %w", err)
 			}
@@ -167,7 +163,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	sha := preMergeSHA
 	if sha == "" {
 		var err error
-		sha, err = gitTrim(repoDir, "rev-parse", "HEAD")
+		sha, err = gitrun.Trim(repoDir, "rev-parse", "HEAD")
 		if err != nil {
 			return fmt.Errorf("rev-parse HEAD: %w", err)
 		}
@@ -175,15 +171,13 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 
 	// Pre-check: SHA must actually contain a .dross/ tree, or the checkout
 	// step would fail with an unhelpful pathspec error.
-	//dross:exec-exempt git rev-parse --verify resolves an object name and prints nothing else; the ref is fenced and no repo-authored line runs
-	if err := exec.Command("git", append([]string{"-C", repoDir},
-		gitRefArgs("rev-parse", []string{"--verify"}, sha+":.dross")...)...).Run(); err != nil {
+	if err := gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, sha+":.dross")...); err != nil {
 		return fmt.Errorf("commit %s has no .dross/ tree — nothing to restore. "+
 			"If you've already reset main, pass "+
 			"--pre-merge-sha=$(git rev-parse HEAD@{1})", short(sha))
 	}
 
-	if err := gitRun(repoDir, "fetch", "origin"); err != nil {
+	if err := gitrun.Run(repoDir, "fetch", "origin"); err != nil {
 		return fmt.Errorf("git fetch: %w", err)
 	}
 	if err := guardedResetHard(repoDir, "origin/"+baseBranch); err != nil {
@@ -193,7 +187,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	// copy, and restoring it would overwrite the live machine-local file with
 	// whatever history that commit happened to hold — the very clobber this
 	// milestone exists to end (locked state_tracking).
-	if err := gitRun(repoDir, gitRefPathArgs("checkout", nil, []string{sha}, ".dross/", ":(exclude).dross/"+state.File)...); err != nil {
+	if err := gitrun.Run(repoDir, gitRefPathArgs("checkout", nil, []string{sha}, ".dross/", ":(exclude).dross/"+state.File)...); err != nil {
 		return fmt.Errorf("git checkout %s -- .dross/: %w", short(sha), err)
 	}
 
@@ -211,10 +205,10 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	// This gate used to be correct only because it ran before state.Touch, which
 	// always manufactured a delta. With state.json out of the tree the no-op is
 	// genuinely reachable, and it must exit 0 having written nothing.
-	if err := gitRun(repoDir, "add", ".dross/"); err != nil {
+	if err := gitrun.Run(repoDir, "add", ".dross/"); err != nil {
 		return fmt.Errorf("git add: %w", err)
 	}
-	staged, err := gitRead(repoDir, "status", "--porcelain")
+	staged, err := gitrun.Read(repoDir, "status", "--porcelain")
 	if err != nil {
 		return fmt.Errorf("git status: %w", err)
 	}
@@ -234,11 +228,11 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	if err := s.Save(filepath.Join(root, state.File)); err != nil {
 		return fmt.Errorf("save state: %w", err)
 	}
-	if err := gitRun(repoDir, "add", ".dross/"); err != nil {
+	if err := gitrun.Run(repoDir, "add", ".dross/"); err != nil {
 		return fmt.Errorf("git add: %w", err)
 	}
 	msg := fmt.Sprintf("chore(dross): restore .dross/ after squash-merge for %s + merge", phaseID)
-	if err := gitRun(repoDir, "commit", "-m", msg); err != nil {
+	if err := gitrun.Run(repoDir, "commit", "-m", msg); err != nil {
 		return fmt.Errorf("git commit: %w", err)
 	}
 
@@ -261,71 +255,6 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	)
 	Printf("Restored .dross/ from %s and recorded merge for %s\n", short(sha), phaseID)
 	return nil
-}
-
-// gitTrim runs a REF-plumbing git command and returns its output trimmed:
-// rev-parse, symbolic-ref, merge-base, rev-list, for-each-ref over
-// refname/objectname atoms, ls-remote without --get-url, and bare --version —
-// verb and options pinned by TestGitTrimRunsRefVerbsOnly. What those print is a
-// ref name git validated, an object id, a count or git's version, so the one
-// marker below is true for every caller. Anything that prints content — a log,
-// a diff, a listing, a status — goes through gitRead instead.
-func gitTrim(repoDir string, args ...string) (string, error) {
-	gitArgvTap(args)
-	full := append([]string{"-C", repoDir}, args...)
-	//dross:exec-exempt the argv is dross's own git plumbing, fenced by gitRefArgs/gitPathArgs before it gets here; none of it runs a repo-authored line
-	out, err := exec.Command("git", full...).Output()
-	if err != nil {
-		return "", err
-	}
-	//dross:taint-cleared gitTrim runs only pinned ref invocations (TestGitTrimRunsRefVerbsOnly): it prints ref names, object ids, counts or git's version, never content
-	return strings.TrimSpace(string(out)), nil
-}
-
-// gitRead runs a git command whose output is CONTENT — a log, a diff, a file
-// listing, a status — and returns it trimmed. It carries no marker: a commit
-// subject or a patch line is the repo's text, so each caller marks the line
-// where it slices a SHA, a branch or a path out, and nothing else it keeps
-// may escape.
-func gitRead(repoDir string, args ...string) (string, error) {
-	gitArgvTap(args)
-	full := append([]string{"-C", repoDir}, args...)
-	//dross:exec-exempt the argv is dross's own git plumbing, fenced by gitRefArgs/gitPathArgs before it gets here; none of it runs a repo-authored line
-	out, err := exec.Command("git", full...).Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
-// gitStderr is where a failed git invocation's own output goes: this process's
-// stderr. Tests swap it to capture what a user would see.
-var gitStderr io.Writer = os.Stderr
-
-// gitRun runs a git command for its effect. On failure git's own output —
-// which can quote file contents, remote responses and hook output — goes to
-// stderr, where the user is already looking, and the caller gets git's exit
-// status only: an error is never the terminal, it can reach telemetry or a
-// persisted record.
-func gitRun(repoDir string, args ...string) error {
-	gitArgvTap(args)
-	full := append([]string{"-C", repoDir}, args...)
-	//dross:exec-exempt the argv is dross's own git plumbing, fenced by gitRefArgs/gitPathArgs before it gets here; none of it runs a repo-authored line
-	out, err := exec.Command("git", full...).CombinedOutput()
-	if err != nil && len(out) > 0 {
-		fmt.Fprintf(gitStderr, "git %s:\n%s\n", gitVerb(args), bytes.TrimRight(out, "\n"))
-	}
-	return err
-}
-
-// gitVerb is the subcommand of a git argv, for labelling its output.
-func gitVerb(args []string) string {
-	for _, a := range args {
-		if !strings.HasPrefix(a, "-") {
-			return a
-		}
-	}
-	return "command"
 }
 
 func short(sha string) string {

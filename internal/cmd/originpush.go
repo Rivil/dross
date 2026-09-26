@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"strings"
+
+	"github.com/Rivil/dross/internal/gitrun"
 )
 
 // originDelta is how a local branch stands against its origin copy after a
@@ -26,19 +28,19 @@ type originDelta struct {
 // push of every branch.
 func compareWithOrigin(repoDir, branch string) (originDelta, error) {
 	var d originDelta
-	if err := gitRun(repoDir, "fetch", "origin"); err != nil {
+	if err := gitrun.Run(repoDir, "fetch", "origin"); err != nil {
 		return d, fmt.Errorf("git fetch: %w", err)
 	}
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/remotes/origin/"+branch)...) != nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/remotes/origin/"+branch)...) != nil {
 		d.Missing = true
 		return d, nil
 	}
-	ahead, err := gitTrim(repoDir, gitRefArgs("rev-list", nil, "origin/"+branch+".."+branch)...)
+	ahead, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", nil, "origin/"+branch+".."+branch)...)
 	if err != nil {
 		return d, fmt.Errorf("git rev-list origin/%s..%s: %w", branch, branch, err)
 	}
 	d.Ahead = strings.Fields(ahead)
-	behind, err := gitTrim(repoDir, gitRefArgs("rev-list", nil, branch+"..origin/"+branch)...)
+	behind, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", nil, branch+"..origin/"+branch)...)
 	if err != nil {
 		return d, fmt.Errorf("git rev-list %s..origin/%s: %w", branch, branch, err)
 	}
@@ -87,7 +89,7 @@ func pushPhaseBranch(repoDir, branch string, force bool) (pushed bool, err error
 		// after the fetch above, without asking the user for the remote SHA.
 		opts = append(opts, "--force-with-lease")
 	}
-	if err := gitRun(repoDir, gitRefArgs("push", opts, "origin", branch)...); err != nil {
+	if err := gitrun.Run(repoDir, gitRefArgs("push", opts, "origin", branch)...); err != nil {
 		return false, fmt.Errorf("git push origin %s: %w", branch, err)
 	}
 	return true, nil

@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/render"
 )
 
 func Project() *cobra.Command {
@@ -37,7 +37,7 @@ func projectShow() *cobra.Command {
 				return emitJSON(p)
 			}
 			Printf("# %s\n", path)
-			return toml.NewEncoder(os.Stdout).Encode(p)
+			return render.TOML(os.Stdout, p)
 		},
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)

@@ -1,0 +1,1 @@
+{"runtime.test_command":"go test ./...","project.name":"golden"}

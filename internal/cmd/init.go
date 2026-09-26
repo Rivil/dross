@@ -5,16 +5,15 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/architecture"
 	"github.com/Rivil/dross/internal/defaults"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/profile"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/rules"
@@ -152,7 +151,9 @@ fill it in conversationally. For adopting an existing repo, use ` + "`dross onbo
 // remote was found. Empty Remote is a valid result — the slash command will
 // prompt the user.
 func seedRemote(cwd string) (project.Remote, bool) {
-	url := gitRemoteOriginURL(cwd)
+	// Read, unmarked: an origin URL can carry userinfo, so it is content, and
+	// what persists from it is decided by DetectRemote.
+	url, _ := gitrun.Read(cwd, "remote", "get-url", "origin")
 	r := project.DetectRemote(url)
 	gotRemote := url != ""
 
@@ -164,17 +165,6 @@ func seedRemote(cwd string) (project.Remote, bool) {
 		}
 	}
 	return r, gotRemote
-}
-
-// gitRemoteOriginURL returns the origin URL or "" if no remote / no git.
-func gitRemoteOriginURL(cwd string) string {
-	//dross:exec-exempt git remote get-url reads a value out of .git/config and prints it; reading config is not running it
-	cmd := exec.Command("git", "-C", cwd, "remote", "get-url", "origin")
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
 }
 
 func providerOrUnknown(p string) string {
@@ -199,7 +189,7 @@ func seedRuntimeFromProfile(root string, p *project.Project) string {
 	if prof == nil {
 		return stack.Unsupported
 	}
-	rt := stack.ResolveRuntime(prof, runtime.GOOS, exec.LookPath)
+	rt := stack.ResolveRuntime(prof, runtime.GOOS, stack.LookPath)
 	p.Stack.Profile = id
 	p.Runtime.TestCommand = rt.Test
 	p.Runtime.TypecheckCommand = rt.Typecheck

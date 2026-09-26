@@ -1,14 +1,11 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -36,22 +33,7 @@ import (
 
 // goListDirs is the package-discovery seam, overridable so a test can pin the
 // default package set without shelling out to the toolchain.
-var goListDirs = func(repoRoot string) ([]string, error) {
-	cmd := exec.Command("go", "list", "-f", "{{.Dir}}", "./...")
-	cmd.Dir = repoRoot
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("go list ./...: %w", err)
-	}
-	var dirs []string
-	//dross:taint-cleared go list -f {{.Dir}} prints one package directory per line; each becomes a gremlins package path, and nothing else of go's output is kept
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line != "" {
-			dirs = append(dirs, line)
-		}
-	}
-	return dirs, nil
-}
+var goListDirs = survivor.GoListDirs
 
 // drainRunner is the mutation seam: it runs the adapter over pkgs and returns
 // the packages it could not measure. Overridable so the classify path is
@@ -184,106 +166,26 @@ type drainSurvivor struct {
 // the drained packages. Overridable so the classify path is testable without a
 // live test run, and so a caller with no working toolchain degrades to
 // "unknown" rather than to a wrong answer.
-var coverageProfileFn = runCoverageProfile
+var coverageProfileFn = survivor.RunCoverageProfile
 
-// runCoverageProfile runs `go test -coverprofile` over pkgs and parses the
-// result. A failure is not fatal: coverage is EVIDENCE, and a drain that
-// refused to run without it would be less useful than one that reports
-// unknown — as long as unknown never reads as "not covered", which is
-// Profile's contract.
-func runCoverageProfile(repoRoot string, pkgs []string) *survivor.Profile {
-	out := filepath.Join(os.TempDir(), "dross-drain-cover.out")
-	args := append([]string{"test", "-count=1", "-coverprofile=" + out}, pkgs...)
-	cmd := exec.Command("go", args...)
-	cmd.Dir = repoRoot
-	// Output is discarded: a failing suite still produces a usable profile for
-	// the packages that did run, and the drain is not a test runner.
-	_ = cmd.Run()
-	prof, err := survivor.ParseProfile(out)
-	if err != nil {
-		return nil
-	}
-	return prof
-}
-
-// readRawReport parses one gremlins report and returns its survivors with
-// repo-relative paths. pkg may be empty, in which case paths are left as the
-// tool wrote them.
+// readRawReport reads one gremlins report's survivors — decoded, with each
+// mutant's own NOT COVERED status, by survivor.ReadRawReport — and keeps the
+// ones that are anybody's debt under the shared testdata scope rule.
 func readRawReport(path, pkg string) ([]drainSurvivor, error) {
-	b, err := os.ReadFile(path)
+	raws, err := survivor.ReadRawReport(path, pkg)
 	if err != nil {
 		return nil, err
 	}
-	rep, err := mutation.ParseGremlinsJSON(b)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	if pkg != "" {
-		mutation.RePrefixGremlinsFiles(rep, pkg)
-	}
-	// Ceiling eligibility turns on whether the TOOL called this exact mutant
-	// NOT COVERED, so the status is read per mutant from the raw payload.
-	// mutation.Report folds LIVED and NOT COVERED into one Surviving list, and
-	// a file-granular approximation would let one uncovered mutant grant the
-	// ceiling to every other survivor in its file — accepting killable code.
-	notCovered, err := notCoveredPositions(b, pkg)
-	if err != nil {
-		return nil, err
-	}
-
-	out := make([]drainSurvivor, 0, len(rep.Surviving))
-	for _, m := range rep.Surviving {
+	out := make([]drainSurvivor, 0, len(raws))
+	for _, m := range raws {
 		if verify.IsTestdataPath(m.File) {
 			continue
 		}
 		out = append(out, drainSurvivor{
 			Survivor:           verify.Survivor{File: m.File, Line: m.Line, Op: m.Op, Language: "go"},
 			Package:            pkg,
-			ReportedNotCovered: notCovered[mutantPos(m.File, m.Line, m.Op)],
+			ReportedNotCovered: m.NotCovered,
 		})
-	}
-	return out, nil
-}
-
-// mutantPos keys a mutant by the triple that identifies it within a report.
-func mutantPos(file string, line int, op string) string {
-	return file + ":" + strconv.Itoa(line) + ":" + op
-}
-
-// rawGremlinsPayload is the minimal view of the report needed to recover each
-// mutant's STATUS, which mutation.Report deliberately does not carry (it folds
-// LIVED and NOT COVERED into one Surviving list, because for scoring they are
-// the same thing). For deciding accept-vs-kill they are opposites.
-type rawGremlinsPayload struct {
-	Files []struct {
-		Filename  string `json:"file_name"`
-		Mutations []struct {
-			Type   string `json:"type"`
-			Status string `json:"status"`
-			Line   int    `json:"line"`
-		} `json:"mutations"`
-	} `json:"files"`
-}
-
-// notCoveredPositions returns the set of mutants the tool reported NOT COVERED,
-// keyed the same way the survivor list is, with pkg applied so the paths match.
-func notCoveredPositions(payload []byte, pkg string) (map[string]bool, error) {
-	var raw rawGremlinsPayload
-	if err := json.Unmarshal(payload, &raw); err != nil {
-		return nil, fmt.Errorf("read mutant statuses: %w", err)
-	}
-	prefix := strings.TrimPrefix(filepath.ToSlash(pkg), "./")
-	out := map[string]bool{}
-	for _, f := range raw.Files {
-		name := filepath.ToSlash(f.Filename)
-		if prefix != "" && prefix != "." && !strings.HasPrefix(name, prefix+"/") {
-			name = prefix + "/" + name
-		}
-		for _, m := range f.Mutations {
-			if m.Status == "NOT COVERED" {
-				out[mutantPos(name, m.Line, m.Type)] = true
-			}
-		}
 	}
 	return out, nil
 }

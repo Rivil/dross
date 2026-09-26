@@ -3,10 +3,12 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -23,53 +25,48 @@ import (
 //     one-way, so nothing extracted can quietly reach back for a helper.
 //  3. internal/cmd imports each of the four extracted packages — the
 //     decomposition is wired in, not sitting beside the old code.
-//  4. The forbidden-import RATCHET (locked ratchet_baseline): a non-test
-//     internal/cmd file importing os/exec, net/http or go/ast must be named in
-//     cmdForbiddenBaseline, and every baseline entry must still import the
-//     package it is listed for. Adding a file fails; a stale entry fails asking
-//     for its removal. That is what makes the list shrink-only: new domain
-//     logic landing in cmd is a red test, and the debt is visible.
+//  4. The forbidden-import BAN: no non-test internal/cmd file imports os/exec,
+//     net/http, go/ast, encoding/json or BurntSushi/toml. It began as a
+//     shrink-only ratchet with a baseline of the files still importing each;
+//     cmd-exec-baseline-drain drained every entry and deleted the baseline, so
+//     there is no list to add a file to — spawning, HTTP, source parsing and
+//     codecs live in their domain packages, and a cmd file reaching for one is
+//     a red test with no escape hatch.
+//  5. internal/gitrun is a LEAF: it imports only the standard library, so
+//     consent and remote — which cmd imports — can spawn git through it
+//     without an import cycle.
 //
 // The checker is a pure function over {package -> imports} so the same rules
 // run over the live tree AND over synthetic maps that prove each rule fires.
 // A vacuity floor mirrors execConsentFloor: a walk that saw too few packages,
 // or missed internal/cmd, is an error rather than a pass.
 
-// forbiddenInCmd are the imports the ratchet gates in internal/cmd.
-var forbiddenInCmd = []string{"os/exec", "net/http", "go/ast"}
+// forbiddenInCmd are the imports banned from non-test internal/cmd files. The
+// two codecs joined in cmd-exec-baseline-drain (c-8): decode/persist logic
+// belongs in its domain package and CLI --json/TOML output in one rendering
+// package, so a cmd file reaching for either is domain logic landing in the
+// wrong place.
+var forbiddenInCmd = []string{"os/exec", "net/http", "go/ast", "encoding/json", "github.com/BurntSushi/toml"}
 
-// cmdForbiddenBaseline is the shrink-only allowlist: the internal/cmd files
-// still importing a forbidden package after this phase, per package. Derived
-// by grep when the phase landed; doctor.go is deliberately absent (t-7 drained
-// its os/exec), and the four load-bearing spawn sites — phase.go,
-// survivor_drain.go, test.go, verify.go — are here because they are the
-// gated surface itself, not domain logic. Draining the rest is the
-// cmd-exec-baseline-drain phase's job; remove an entry here the moment its
-// import goes, or the test asks you to.
-var cmdForbiddenBaseline = map[string][]string{
-	"os/exec": {
-		"cleantree.go", "init.go", "lane_install.go", "milestone_stale.go", "pause.go",
-		"phase.go", "redproof_replay.go", "run.go", "ship_recover.go", "stack.go",
-		"statusline.go", "survivor_drain.go", "techdebt.go", "test.go", "update.go",
-		"verify.go", "worktree_files.go",
-	},
-	"net/http": {"update.go"},
-	"go/ast":   {},
-}
-
-// extractedPackages are the four the phase pulled out of cmd, which cmd must
-// import.
+// extractedPackages are the packages logic was pulled out of cmd into, which
+// cmd must import — the four cmd-package-decomposition extracted, then
+// cmd-exec-baseline-drain's local.toml store and output rendering. An import
+// that vanished means the extraction was satisfied by deleting the feature,
+// not by moving it.
 var extractedPackages = []string{
 	modulePath + "/internal/consent",
 	modulePath + "/internal/boardsync",
 	modulePath + "/internal/diag",
 	modulePath + "/internal/mutationcfg",
+	modulePath + "/internal/localstore",
+	modulePath + "/internal/render",
 }
 
 const (
 	modulePath  = "github.com/Rivil/dross"
 	cmdPkgPath  = modulePath + "/internal/cmd"
 	cobraPath   = "github.com/spf13/cobra"
+	gitrunPath  = modulePath + "/internal/gitrun"
 	boundaryMin = 30 // packages the walk must see before its verdict counts
 )
 
@@ -137,9 +134,11 @@ func walkImports(internalDir string) (map[string]pkgImports, error) {
 	return pkgs, err
 }
 
-// checkBoundary applies the four rules plus the vacuity floor and returns
-// every finding, one line each, sorted. An empty result is a pass.
-func checkBoundary(pkgs map[string]pkgImports, baseline map[string][]string) []string {
+// checkBoundary applies the five rules plus the vacuity floor and returns
+// every finding, one line each, sorted. An empty result is a pass. It takes the
+// package map and nothing else — there is no allowlist to hand it
+// (TestFlatBanHasNoAllowlist).
+func checkBoundary(pkgs map[string]pkgImports) []string {
 	var findings []string
 	if len(pkgs) < boundaryMin {
 		findings = append(findings, fmt.Sprintf("vacuity: the walk saw %d packages under internal/, want at least %d — is it pointed at the tree?", len(pkgs), boundaryMin))
@@ -162,6 +161,18 @@ func checkBoundary(pkgs map[string]pkgImports, baseline map[string][]string) []s
 		}
 	}
 
+	// 5: the git runner is a leaf. Absent, the rule has nothing to judge, which
+	// is its own finding rather than a pass.
+	if gr, ok := pkgs[gitrunPath]; !ok {
+		findings = append(findings, "vacuity: the walk did not see internal/gitrun, so the leaf rule cannot fire")
+	} else {
+		for imp := range gr.imports() {
+			if first, _, _ := strings.Cut(imp, "/"); strings.Contains(first, ".") {
+				findings = append(findings, fmt.Sprintf("leaf: internal/gitrun imports %s — the runner imports only the standard library, so every package can spawn git through it", imp))
+			}
+		}
+	}
+
 	// 3: cmd wires in each extracted package.
 	cmdImps := cmd.imports()
 	for _, want := range extractedPackages {
@@ -170,28 +181,20 @@ func checkBoundary(pkgs map[string]pkgImports, baseline map[string][]string) []s
 		}
 	}
 
-	// 4: the ratchet, per forbidden package.
-	for _, forbidden := range forbiddenInCmd {
-		allowed := map[string]bool{}
-		for _, f := range baseline[forbidden] {
-			allowed[f] = true
+	// 4: the flat ban. Test files may import anything — they are not the
+	// command tree — and walkImports never hands them over, but a map built
+	// by hand might.
+	banned := map[string]bool{}
+	for _, f := range forbiddenInCmd {
+		banned[f] = true
+	}
+	for file, imps := range cmd.Files {
+		if strings.HasSuffix(file, "_test.go") {
+			continue
 		}
-		importing := map[string]bool{}
-		for file, imps := range cmd.Files {
-			for _, i := range imps {
-				if i == forbidden {
-					importing[file] = true
-				}
-			}
-		}
-		for file := range importing {
-			if !allowed[file] {
-				findings = append(findings, fmt.Sprintf("ratchet: internal/cmd/%s imports %s and is not in the baseline — move the logic out of cmd rather than widening the list", file, forbidden))
-			}
-		}
-		for file := range allowed {
-			if !importing[file] {
-				findings = append(findings, fmt.Sprintf("ratchet: baseline lists internal/cmd/%s for %s but it no longer imports it — remove it (the list only shrinks)", file, forbidden))
+		for _, i := range imps {
+			if banned[i] {
+				findings = append(findings, fmt.Sprintf("ban: internal/cmd/%s imports %s — the command tree maps flags onto domain packages; move the logic there", file, i))
 			}
 		}
 	}
@@ -199,80 +202,407 @@ func checkBoundary(pkgs map[string]pkgImports, baseline map[string][]string) []s
 	return findings
 }
 
-// TestCmdBoundaryByImportDirection is the live-tree run: green exactly when
-// the baseline lists the observed importers and every direction rule holds.
+// TestCmdBoundaryByImportDirection is the live-tree run: green exactly when no
+// cmd file imports a banned package and every direction rule holds.
 func TestCmdBoundaryByImportDirection(t *testing.T) {
 	pkgs, err := walkImports(filepath.Join(repoRootFromTest(t), "internal"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range checkBoundary(pkgs, cmdForbiddenBaseline) {
+	for _, f := range checkBoundary(pkgs) {
 		t.Error(f)
 	}
 	t.Logf("boundary walk saw %d packages", len(pkgs))
 }
 
-// TestCmdForbiddenImportRatchet proves the ratchet bites in both directions
-// over a copy of the live tree: adding "os/exec" to a copy of issue.go is a
-// finding naming the file and the import, a baseline entry that no longer
-// imports is a finding asking for its removal, and the real baseline plus one
-// extra existing cmd file fails.
+// TestCmdForbiddenImportRatchet is the ban's table-driven self-test, kept
+// under the ratchet's name. Exhaustively, on a clone of the live tree: every
+// banned import injected into every non-test internal/cmd file yields exactly
+// one finding naming both. The same import in a synthetic cmd x_test.go, or in
+// a package outside cmd, yields none.
 func TestCmdForbiddenImportRatchet(t *testing.T) {
-	root := repoRootFromTest(t)
-	live, err := walkImports(filepath.Join(root, "internal"))
+	live, err := walkImports(filepath.Join(repoRootFromTest(t), "internal"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := checkBoundary(live, cmdForbiddenBaseline); len(got) != 0 {
+	if got := checkBoundary(live); len(got) != 0 {
 		t.Fatalf("precondition: the live tree is not clean:\n%s", strings.Join(got, "\n"))
 	}
-
-	t.Run("a new importer fails naming file and import", func(t *testing.T) {
-		pkgs := clonePkgs(live)
-		cmd := pkgs[cmdPkgPath]
-		cmd.Files["issue.go"] = append(append([]string(nil), cmd.Files["issue.go"]...), "os/exec")
-		pkgs[cmdPkgPath] = cmd
-		got := checkBoundary(pkgs, cmdForbiddenBaseline)
-		if len(got) != 1 || !strings.Contains(got[0], "internal/cmd/issue.go imports os/exec") {
-			t.Errorf("findings = %v, want one naming issue.go and os/exec", got)
-		}
-	})
-	t.Run("a stale entry fails asking for removal", func(t *testing.T) {
-		baseline := cloneBaseline(cmdForbiddenBaseline)
-		baseline["os/exec"] = append(baseline["os/exec"], "issue.go") // issue.go does not import os/exec
-		got := checkBoundary(live, baseline)
-		if len(got) != 1 || !strings.Contains(got[0], "baseline lists internal/cmd/issue.go for os/exec") || !strings.Contains(got[0], "remove it") {
-			t.Errorf("findings = %v, want one asking to remove issue.go", got)
-		}
-	})
-	t.Run("a file that dropped its import fails as stale", func(t *testing.T) {
-		pkgs := clonePkgs(live)
-		cmd := pkgs[cmdPkgPath]
-		var kept []string
-		for _, i := range cmd.Files["cleantree.go"] {
-			if i != "os/exec" {
-				kept = append(kept, i)
+	pkgs := clonePkgs(live)
+	cmd := pkgs[cmdPkgPath]
+	var files []string
+	for f := range cmd.Files {
+		files = append(files, f)
+	}
+	sort.Strings(files)
+	if len(files) < 100 {
+		t.Fatalf("the clone holds %d internal/cmd files — not the live tree", len(files))
+	}
+	for _, forbidden := range forbiddenInCmd {
+		for _, file := range files {
+			orig := cmd.Files[file]
+			cmd.Files[file] = append(append([]string(nil), orig...), forbidden)
+			got := checkBoundary(pkgs)
+			cmd.Files[file] = orig
+			if len(got) != 1 || !strings.Contains(got[0], "internal/cmd/"+file+" imports "+forbidden) {
+				t.Errorf("%s importing %s: findings = %v, want exactly one naming both", file, forbidden, got)
 			}
 		}
-		cmd.Files["cleantree.go"] = kept
-		pkgs[cmdPkgPath] = cmd
-		got := checkBoundary(pkgs, cmdForbiddenBaseline)
-		if len(got) != 1 || !strings.Contains(got[0], "internal/cmd/cleantree.go for os/exec") {
-			t.Errorf("findings = %v, want one stale entry for cleantree.go", got)
+		cmd.Files["x_test.go"] = []string{forbidden}
+		if got := checkBoundary(pkgs); len(got) != 0 {
+			t.Errorf("a cmd test file importing %s was banned: %v", forbidden, got)
 		}
-	})
-	t.Run("go/ast has no importer and an empty baseline", func(t *testing.T) {
-		if len(cmdForbiddenBaseline["go/ast"]) != 0 {
-			t.Error("the go/ast baseline is not empty")
+		delete(cmd.Files, "x_test.go")
+		pkgs[modulePath+"/internal/foo"] = pkgImports{Path: modulePath + "/internal/foo", Files: map[string][]string{"foo.go": {forbidden}}}
+		if got := checkBoundary(pkgs); len(got) != 0 {
+			t.Errorf("a package outside cmd importing %s was banned: %v", forbidden, got)
 		}
-		for file, imps := range live[cmdPkgPath].Files {
-			for _, i := range imps {
-				if i == "go/ast" {
-					t.Errorf("internal/cmd/%s imports go/ast", file)
+		delete(pkgs, modulePath+"/internal/foo")
+	}
+}
+
+// TestFlatBanHasNoAllowlist: the ban has no allowlist to creep back into —
+// checkBoundary takes the package map alone, and no package-level var in this
+// file is named for a baseline or an allowance.
+func TestFlatBanHasNoAllowlist(t *testing.T) {
+	if n := reflect.TypeOf(checkBoundary).NumIn(); n != 1 {
+		t.Errorf("checkBoundary takes %d parameters, want only the package map — an allowlist parameter is back", n)
+	}
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, filepath.Join(repoRootFromTest(t), "internal", "cmd", "boundary_test.go"), nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowish := regexp.MustCompile(`(?i)baseline|allow`)
+	for _, d := range f.Decls {
+		gen, ok := d.(*ast.GenDecl)
+		if !ok || gen.Tok != token.VAR {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			for _, n := range spec.(*ast.ValueSpec).Names {
+				if allowish.MatchString(n.Name) {
+					t.Errorf("boundary_test.go declares var %s — the ban has no allowlist", n.Name)
 				}
 			}
 		}
-	})
+	}
+}
+
+// gitSpawnNames are the functions that used to spawn git outside the runner.
+var gitSpawnNames = map[string]bool{
+	"gitTrim": true, "gitRead": true, "gitRun": true, "gitNoOut": true, "gitBranchTrim": true,
+	"gitStatusRaw": true, "gitRemoteOriginURL": true, "ShortSHA": true,
+}
+
+// gitSpawnFindings scans the non-test .go files under roots (testdata
+// skipped): every exec.Command/CommandContext with a literal "git" binary, and
+// every function named after a retired git helper, outside internal/gitrun is a
+// finding. It returns the findings and how many git spawns it saw inside.
+func gitSpawnFindings(repo string, roots ...string) ([]string, int, error) {
+	fset := token.NewFileSet()
+	var out []string
+	inside := 0
+	for _, r := range roots {
+		err := filepath.WalkDir(filepath.Join(repo, r), func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				if d.Name() == "testdata" {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			rel, _ := filepath.Rel(repo, path)
+			rel = filepath.ToSlash(rel)
+			inRunner := strings.HasPrefix(rel, "internal/gitrun/")
+			f, err := parser.ParseFile(fset, path, nil, 0)
+			if err != nil {
+				return err
+			}
+			for _, decl := range f.Decls {
+				if fd, ok := decl.(*ast.FuncDecl); ok && fd.Recv == nil && gitSpawnNames[fd.Name.Name] && !inRunner {
+					out = append(out, fmt.Sprintf("%s: func %s — git goes through internal/gitrun, not a package-local helper", fset.Position(fd.Pos()), fd.Name.Name))
+				}
+			}
+			ast.Inspect(f, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				sel, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || (sel.Sel.Name != "Command" && sel.Sel.Name != "CommandContext") {
+					return true
+				}
+				if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != "exec" {
+					return true
+				}
+				bin := 0
+				if sel.Sel.Name == "CommandContext" {
+					bin = 1
+				}
+				if len(call.Args) <= bin {
+					return true
+				}
+				if lit, ok := stringLit(call.Args[bin]); !ok || lit != "git" {
+					return true
+				}
+				if inRunner {
+					inside++
+				} else {
+					out = append(out, fmt.Sprintf("%s: spawns git directly — go through internal/gitrun", fset.Position(call.Pos())))
+				}
+				return true
+			})
+			return nil
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+	sort.Strings(out)
+	return out, inside, nil
+}
+
+// TestEveryGitSpawnIsInTheRunner is c-3's census: across internal/ and cmd/,
+// the only git spawns are internal/gitrun's, and there is at least one of them
+// — a census that saw none would pass by seeing nothing. Test files are not
+// scanned: fixtures and the setup shims spawn git freely.
+func TestEveryGitSpawnIsInTheRunner(t *testing.T) {
+	repo := repoRootFromTest(t)
+	found, inside, err := gitSpawnFindings(repo, "internal", "cmd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range found {
+		t.Error(f)
+	}
+	if inside == 0 {
+		t.Fatal("found no git spawn inside internal/gitrun — the census is blind")
+	}
+
+	dir := t.TempDir()
+	write := func(rel, body string) {
+		mustWrite(t, filepath.Join(dir, filepath.FromSlash(rel)), body)
+	}
+	write("internal/gitrun/gitrun.go", "package gitrun\n\nimport \"os/exec\"\n\nfunc run() error { return exec.Command(\"git\", \"status\").Run() }\n")
+	write("internal/codex/git.go", "package codex\n\nimport \"os/exec\"\n\nfunc log() error { return exec.Command(\"git\", \"status\").Run() }\n")
+	write("internal/quality/run.go", "package quality\n\nfunc ShortSHA(dir string) string { return \"\" }\n")
+	write("internal/cmd/x_test.go", "package cmd\n\nimport \"os/exec\"\n\nfunc gitTrim() error { return exec.Command(\"git\", \"status\").Run() }\n")
+	write("internal/cmd/testdata/fixture.go", "package fixture\n\nimport \"os/exec\"\n\nfunc f() error { return exec.Command(\"git\", \"log\").Run() }\n")
+	got, in, err := gitSpawnFindings(dir, "internal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(got, "\n")
+	if len(got) != 2 || !strings.Contains(joined, "codex/git.go") || !strings.Contains(joined, "func ShortSHA") {
+		t.Errorf("synthetic census = %v, want exactly the codex spawn and quality's ShortSHA", got)
+	}
+	if in != 1 {
+		t.Errorf("synthetic census saw %d spawns inside gitrun, want 1", in)
+	}
+}
+
+// tomlStoreTypes names every struct type in files that carries a toml struct
+// tag — the shape of a TOML document's decode target. internal/cmd must declare
+// none: local.toml's store lives in internal/localstore and every other TOML
+// document in its domain package (locked local_store_proof), so a toml-tagged
+// struct in cmd is a store being rebuilt beside the command tree. An anonymous
+// struct counts too, named by its line.
+func tomlStoreTypes(fset *token.FileSet, files []*ast.File) []string {
+	hasTomlTag := func(st *ast.StructType) bool {
+		for _, fld := range st.Fields.List {
+			if fld.Tag == nil {
+				continue
+			}
+			tag, err := strconv.Unquote(fld.Tag.Value)
+			if err != nil {
+				continue
+			}
+			if _, ok := reflect.StructTag(tag).Lookup("toml"); ok {
+				return true
+			}
+		}
+		return false
+	}
+	var out []string
+	for _, f := range files {
+		file := filepath.Base(fset.Position(f.Pos()).Filename)
+		named := map[*ast.StructType]bool{}
+		ast.Inspect(f, func(n ast.Node) bool {
+			switch n := n.(type) {
+			case *ast.TypeSpec:
+				if st, ok := n.Type.(*ast.StructType); ok {
+					named[st] = true
+					if hasTomlTag(st) {
+						out = append(out, fmt.Sprintf("store type: internal/cmd/%s declares %s with toml tags — decode it in its domain package, not beside the command tree", file, n.Name.Name))
+					}
+				}
+			case *ast.StructType:
+				if !named[n] && hasTomlTag(n) {
+					out = append(out, fmt.Sprintf("store type: internal/cmd/%s declares an anonymous struct with toml tags at line %d — decode it in its domain package, not beside the command tree", file, fset.Position(n.Pos()).Line))
+				}
+			}
+			return true
+		})
+	}
+	sort.Strings(out)
+	return out
+}
+
+// parseNonTestGo parses every non-test .go file directly in dir.
+func parseNonTestGo(t *testing.T, dir string) (*token.FileSet, []*ast.File) {
+	t.Helper()
+	fset := token.NewFileSet()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var files []*ast.File
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, f)
+	}
+	return fset, files
+}
+
+// TestCmdDeclaresNoTomlStore is the positive half of c-5's proof: cmd imports
+// internal/localstore (extractedPackages) and declares no TOML decode target
+// of its own. A synthetic toml-tagged type is named by file and type; a
+// json-only struct is not a store and passes.
+func TestCmdDeclaresNoTomlStore(t *testing.T) {
+	fset, files := parseNonTestGo(t, filepath.Join(repoRootFromTest(t), "internal", "cmd"))
+	if len(files) < 100 {
+		t.Fatalf("parsed %d internal/cmd files — the walk is not pointed at the package", len(files))
+	}
+	for _, f := range tomlStoreTypes(fset, files) {
+		t.Error(f)
+	}
+
+	synth := token.NewFileSet()
+	parse := func(name, src string) *ast.File {
+		f, err := parser.ParseFile(synth, name, src, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	toml := parse("issue.go", "package cmd\n\ntype x struct{ A string `toml:\"a\"` }\n")
+	jsonOnly := parse("watch.go", "package cmd\n\ntype y struct{ A string `json:\"a\"` }\n")
+	anon := parse("task.go", "package cmd\n\nvar z struct{ A string `toml:\"a\"` }\n")
+	got := tomlStoreTypes(synth, []*ast.File{toml, jsonOnly})
+	if len(got) != 1 || !strings.Contains(got[0], "internal/cmd/issue.go declares x ") {
+		t.Errorf("findings = %v, want exactly one naming issue.go and x", got)
+	}
+	if got := tomlStoreTypes(synth, []*ast.File{jsonOnly}); len(got) != 0 {
+		t.Errorf("a json-only struct was reported as a store: %v", got)
+	}
+	if got := tomlStoreTypes(synth, []*ast.File{anon}); len(got) != 1 || !strings.Contains(got[0], "task.go declares an anonymous struct") {
+		t.Errorf("an anonymous toml struct gave %v, want one finding", got)
+	}
+}
+
+// commandTreeLeftovers names everything in a file that is not part of a
+// command tree: any type, var or const declaration, and any func that does not
+// return exactly *cobra.Command.
+func commandTreeLeftovers(fset *token.FileSet, f *ast.File) []string {
+	file := filepath.Base(fset.Position(f.Pos()).Filename)
+	var out []string
+	for _, d := range f.Decls {
+		switch d := d.(type) {
+		case *ast.GenDecl:
+			if d.Tok == token.IMPORT {
+				continue
+			}
+			for _, spec := range d.Specs {
+				switch sp := spec.(type) {
+				case *ast.TypeSpec:
+					out = append(out, fmt.Sprintf("%s declares type %s", file, sp.Name.Name))
+				case *ast.ValueSpec:
+					for _, n := range sp.Names {
+						out = append(out, fmt.Sprintf("%s declares %s %s", file, d.Tok, n.Name))
+					}
+				}
+			}
+		case *ast.FuncDecl:
+			if !returnsCobraCommand(d) {
+				out = append(out, fmt.Sprintf("%s declares func %s, which does not return *cobra.Command", file, d.Name.Name))
+			}
+		}
+	}
+	return out
+}
+
+// returnsCobraCommand reports whether fd returns exactly one *cobra.Command.
+func returnsCobraCommand(fd *ast.FuncDecl) bool {
+	if fd.Recv != nil || fd.Type.Results == nil || len(fd.Type.Results.List) != 1 || len(fd.Type.Results.List[0].Names) > 1 {
+		return false
+	}
+	star, ok := fd.Type.Results.List[0].Type.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := star.X.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	return ok && pkg.Name == "cobra" && sel.Sel.Name == "Command"
+}
+
+// TestLocalGoIsOnlyTheCommandTree: with the store in internal/localstore,
+// local.go is `dross local get|set` and nothing else — a type, var, const or
+// helper there is the store growing back beside the command tree.
+func TestLocalGoIsOnlyTheCommandTree(t *testing.T) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, filepath.Join(repoRootFromTest(t), "internal", "cmd", "local.go"), nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range commandTreeLeftovers(fset, f) {
+		t.Error(l)
+	}
+	cmds := 0
+	for _, d := range f.Decls {
+		if fd, ok := d.(*ast.FuncDecl); ok && returnsCobraCommand(fd) {
+			cmds++
+		}
+	}
+	if cmds < 3 {
+		t.Errorf("local.go holds %d command constructors, want Local, localGet and localSet", cmds)
+	}
+
+	synth := token.NewFileSet()
+	src := "package cmd\n\nimport \"github.com/spf13/cobra\"\n\n" +
+		"const LocalFile = \"local.toml\"\n\n" +
+		"type localStore struct{}\n\n" +
+		"var localKeys = map[string]int{}\n\n" +
+		"func Local() *cobra.Command { return nil }\n\n" +
+		"func loadLocal(path string) (*localStore, error) { return nil, nil }\n"
+	sf, err := parser.ParseFile(synth, "local.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(commandTreeLeftovers(synth, sf), "\n")
+	for _, want := range []string{"declares const LocalFile", "declares type localStore", "declares var localKeys", "declares func loadLocal"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("a leftover was not named (%q):\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "func Local,") {
+		t.Errorf("a command constructor was reported:\n%s", got)
+	}
 }
 
 // TestBoundaryDirectionRulesFire drives rules 1-3 over synthetic package maps
@@ -290,7 +620,7 @@ func TestBoundaryDirectionRulesFire(t *testing.T) {
 		consent := pkgs[modulePath+"/internal/consent"]
 		consent.Files["x.go"] = []string{cmdPkgPath}
 		pkgs[modulePath+"/internal/consent"] = consent
-		got := checkBoundary(pkgs, cmdForbiddenBaseline)
+		got := checkBoundary(pkgs)
 		if len(got) != 1 || !strings.Contains(got[0], "internal/consent imports "+cmdPkgPath) {
 			t.Errorf("findings = %v", got)
 		}
@@ -298,9 +628,21 @@ func TestBoundaryDirectionRulesFire(t *testing.T) {
 	t.Run("cobra outside cmd fails exclusivity", func(t *testing.T) {
 		pkgs := clonePkgs(live)
 		pkgs[modulePath+"/internal/foo"] = pkgImports{Path: modulePath + "/internal/foo", Files: map[string][]string{"foo.go": {cobraPath}}}
-		got := checkBoundary(pkgs, cmdForbiddenBaseline)
+		got := checkBoundary(pkgs)
 		if len(got) != 1 || !strings.Contains(got[0], "cobra exclusivity: "+modulePath+"/internal/foo") {
 			t.Errorf("findings = %v", got)
+		}
+	})
+	t.Run("gitrun importing a module package fails the leaf rule", func(t *testing.T) {
+		pkgs := clonePkgs(live)
+		gr, ok := pkgs[gitrunPath]
+		if !ok {
+			t.Fatal("the live walk has no internal/gitrun")
+		}
+		gr.Files["gitrun.go"] = append(append([]string(nil), gr.Files["gitrun.go"]...), modulePath+"/internal/consent")
+		got := checkBoundary(pkgs)
+		if len(got) != 1 || !strings.Contains(got[0], "leaf: internal/gitrun imports "+modulePath+"/internal/consent") {
+			t.Errorf("findings = %v, want exactly one leaf finding naming internal/consent", got)
 		}
 	})
 	t.Run("cmd dropping an extracted package fails wiring", func(t *testing.T) {
@@ -316,7 +658,7 @@ func TestBoundaryDirectionRulesFire(t *testing.T) {
 			cmd.Files[file] = kept
 		}
 		pkgs[cmdPkgPath] = cmd
-		got := checkBoundary(pkgs, cmdForbiddenBaseline)
+		got := checkBoundary(pkgs)
 		if len(got) != 1 || !strings.Contains(got[0], "does not import "+modulePath+"/internal/consent") {
 			t.Errorf("findings = %v", got)
 		}
@@ -356,7 +698,7 @@ func TestBoundaryVacuityFloor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := checkBoundary(empty, cmdForbiddenBaseline)
+	got := checkBoundary(empty)
 	if len(got) == 0 || !strings.Contains(strings.Join(got, "\n"), "vacuity") {
 		t.Errorf("an empty tree passed: %v", got)
 	}
@@ -365,7 +707,7 @@ func TestBoundaryVacuityFloor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got = checkBoundary(only, cmdForbiddenBaseline)
+	got = checkBoundary(only)
 	if len(got) == 0 || !strings.Contains(got[0], "vacuity") {
 		t.Errorf("a walk over cmd alone passed: %v", got)
 	}
@@ -504,14 +846,6 @@ func clonePkgs(in map[string]pkgImports) map[string]pkgImports {
 			files[f] = append([]string(nil), imps...)
 		}
 		out[k] = pkgImports{Path: p.Path, Files: files}
-	}
-	return out
-}
-
-func cloneBaseline(in map[string][]string) map[string][]string {
-	out := make(map[string][]string, len(in))
-	for k, v := range in {
-		out[k] = append([]string(nil), v...)
 	}
 	return out
 }

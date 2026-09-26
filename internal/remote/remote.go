@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/pathfence"
 )
 
@@ -727,9 +728,11 @@ func ignoreRule(root string) (string, func(), error) {
 	}
 	// -z because git C-style-quotes paths with unusual characters otherwise,
 	// and a quoted path is not the path rsync needs to match.
-	out, err := exec.Command("git", "-C", root, "ls-files",
+	// Raw, not Read: trimming would eat nothing today, but a NUL listing is
+	// content, and the one place it is sliced is the marked loop below.
+	out, err := gitrun.Raw(root, "ls-files",
 		"--others", "--ignored", "--exclude-standard",
-		"--directory", "--no-empty-directory", "-z").Output()
+		"--directory", "--no-empty-directory", "-z")
 	if err != nil {
 		return "", noop, fmt.Errorf("listing ignored paths in %s: %w", root, err)
 	}
@@ -740,7 +743,7 @@ func ignoreRule(root string) (string, func(), error) {
 	cleanup := func() { os.Remove(f.Name()) }
 	var b strings.Builder
 	//dross:taint-cleared git ls-files -z --others --ignored prints NUL-separated paths the repo ignores; each entry becomes one anchored rsync exclude pattern, and nothing else of git's output is kept
-	for _, p := range strings.Split(string(out), "\x00") {
+	for _, p := range strings.Split(out, "\x00") {
 		if p == "" {
 			continue
 		}
@@ -773,8 +776,8 @@ const gitignoreMergeRule = "--filter=:- .gitignore"
 // isGitWorkTree reports whether root is inside a git work tree. Used to choose
 // between asking git and falling back, so a plain directory is not an error.
 func isGitWorkTree(root string) bool {
-	out, err := exec.Command("git", "-C", root, "rev-parse", "--is-inside-work-tree").Output()
-	return err == nil && strings.TrimSpace(string(out)) == "true"
+	out, err := gitrun.Trim(root, "rev-parse", "--is-inside-work-tree")
+	return err == nil && out == "true"
 }
 
 // FetchArgs returns the argv that copies remoteRel — a path relative to the

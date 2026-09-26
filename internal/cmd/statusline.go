@@ -1,13 +1,10 @@
 package cmd
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -15,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/statusline"
 )
 
@@ -124,7 +122,7 @@ func enableStatuslineIn(path, binPath string, confirm func(existing string) bool
 	command := statuslineCommand(binPath)
 	merged, err := statusline.MergeStatusline(data, command, false)
 	if errors.Is(err, statusline.ErrStatusLineClobber) {
-		existing := existingStatusLineCommand(data)
+		existing := statusline.ExistingCommand(data)
 		if confirm == nil || !confirm(existing) {
 			return fmt.Errorf("settings.json already has a different statusLine.command (%s); not overwriting", existing)
 		}
@@ -161,17 +159,6 @@ func disableStatuslineIn(path, binPath string, out io.Writer) error {
 	}
 	fmt.Fprintln(out, "statusLine unwired")
 	return nil
-}
-
-// existingStatusLineCommand extracts statusLine.command from raw settings (or "").
-func existingStatusLineCommand(data []byte) string {
-	var v struct {
-		StatusLine struct {
-			Command string `json:"command"`
-		} `json:"statusLine"`
-	}
-	_ = json.Unmarshal(data, &v)
-	return v.StatusLine.Command
 }
 
 // interactiveConfirm returns a consent callback that prompts on a TTY and refuses
@@ -259,23 +246,12 @@ func readBounded(r io.Reader, timeout time.Duration) ([]byte, bool) {
 // a repo or on any error), using --no-optional-locks and a short timeout so it never
 // stalls or mutates the repo from the prompt subprocess.
 func statuslineGitBranch(dir string) string {
-	if b, err := gitBranchTrim(dir, "symbolic-ref", "--short", "HEAD"); err == nil && b != "" {
+	opts := gitrun.Options{Timeout: 2 * time.Second, NoOptionalLocks: true}
+	if b, err := gitrun.TrimWith(opts, dir, "symbolic-ref", "--short", "HEAD"); err == nil && b != "" {
 		return b
 	}
-	if b, err := gitBranchTrim(dir, "rev-parse", "--short", "HEAD"); err == nil {
+	if b, err := gitrun.TrimWith(opts, dir, "rev-parse", "--short", "HEAD"); err == nil {
 		return b
 	}
 	return ""
-}
-
-func gitBranchTrim(dir string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	full := append([]string{"--no-optional-locks", "-C", dir}, args...)
-	//dross:exec-exempt git branch plumbing under --no-optional-locks; the argv is dross's own and reads refs without running a repo-authored line
-	out, err := exec.CommandContext(ctx, "git", full...).Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
 }

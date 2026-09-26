@@ -16,40 +16,58 @@
 # --- git (Separator, --end-of-options for refs / -- for paths) ---
 
 FLAG bare-var-positional
-	gitRun(repoDir, "branch", "-D", branch)
+	gitrun.Run(repoDir, "branch", "-D", branch)
 
 FLAG bare-var-after-subcommand
-	gitNoOut(repoDir, "rev-parse", branch)
+	gitrun.Quiet(repoDir, "rev-parse", branch)
 
 FLAG const-suffix-is-not-a-prefix
-	gitTrim(repoDir, "ls-tree", ref+":.dross/phases")
+	gitrun.Trim(repoDir, "ls-tree", ref+":.dross/phases")
 
 FLAG exec-command-direct
 	exec.Command("git", "-C", repoDir, "log", branch)
 
 FLAG separator-after-the-value
-	gitNoOut(repoDir, "rev-parse", branch, "--end-of-options")
+	gitrun.Quiet(repoDir, "rev-parse", branch, "--end-of-options")
 
 FLAG path-without-separator
-	gitRun(repoDir, "add", path)
+	gitrun.Run(repoDir, "add", path)
 
 PASS all-literals
-	gitRun(repoDir, "fetch", "origin")
+	gitrun.Run(repoDir, "fetch", "origin")
+
+PASS gitrun-run-path-separator
+	gitrun.Run(repoDir, "add", "--", path)
+
+FLAG gitrun-raw-bare-var
+	gitrun.Raw(repoDir, "log", branch)
+
+FLAG gitrun-read-bare-var
+	gitrun.Read(repoDir, "show", ref)
+
+PASS gitrun-trim-literals
+	gitrun.Trim(repoDir, "rev-parse", "HEAD")
+
+FLAG gitrun-options-bare-var
+	_, _ = gitrun.RawWith(gitrun.Options{NoOptionalLocks: true}, repoDir, "log", branch)
+
+PASS gitrun-options-literals
+	_, _ = gitrun.TrimWith(gitrun.Options{NoOptionalLocks: true}, repoDir, "symbolic-ref", "--short", "HEAD")
 
 PASS const-prefix-concat
-	gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch)
+	gitrun.Quiet(repoDir, "rev-parse", "--verify", "refs/heads/"+branch)
 
 PASS ref-separator-then-value
-	gitRun(repoDir, "checkout", "--end-of-options", branch)
+	gitrun.Run(repoDir, "checkout", "--end-of-options", branch)
 
 PASS path-separator-then-value
-	gitNoOut(repoDir, "ls-files", "--error-unmatch", "--", path)
+	gitrun.Quiet(repoDir, "ls-files", "--error-unmatch", "--", path)
 
 PASS option-argument-not-positional
-	gitRun(repoDir, "commit", "-m", msg)
+	gitrun.Run(repoDir, "commit", "-m", msg)
 
 PASS mixed-ref-and-path-separators
-	gitRun(repoDir, "checkout", "--end-of-options", ref, "--", path)
+	gitrun.Run(repoDir, "checkout", "--end-of-options", ref, "--", path)
 
 # --- gh (Separator, --; cobra ENDS flag parsing there) ---
 #

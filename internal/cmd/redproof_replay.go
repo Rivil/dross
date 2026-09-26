@@ -29,12 +29,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/gitrun"
+	"github.com/Rivil/dross/internal/localstore"
 )
 
 // redProofReplayTimeout bounds one replay. A red proof's replay is a test run,
@@ -69,7 +70,7 @@ func runRedProofReplay(root, repoDir, sha, line string) (replayResult, error) {
 	}
 	// FIRST, before any worktree exists and before anything is spawned: an
 	// ungranted line must cost zero side effects.
-	ok, err := consent.ReplayConsented(grantStore(root), line)
+	ok, err := consent.ReplayConsented(localstore.GrantStore(root), line)
 	if err != nil {
 		return replayResult{}, err
 	}
@@ -88,7 +89,7 @@ func runRedProofReplay(root, repoDir, sha, line string) (replayResult, error) {
 	wt := filepath.Join(base, "wt")
 	defer func() { _ = os.RemoveAll(base) }()
 
-	if err := gitRun(repoDir, gitRefArgs("worktree", []string{"add", "--detach"}, wt, sha)...); err != nil {
+	if err := gitrun.Run(repoDir, gitRefArgs("worktree", []string{"add", "--detach"}, wt, sha)...); err != nil {
 		return replayResult{}, fmt.Errorf("replay could not be run: could not check out %s in a worktree: %v", short(sha), err)
 	}
 	// Registered AFTER the add succeeded and so it runs BEFORE the RemoveAll
@@ -96,8 +97,8 @@ func runRedProofReplay(root, repoDir, sha, line string) (replayResult, error) {
 	// leave git's worktree admin data behind, and the next run inherits a
 	// prunable stale entry.
 	defer func() {
-		_ = gitRun(repoDir, gitRefArgs("worktree", []string{"remove", "--force"}, wt)...)
-		_ = gitRun(repoDir, "worktree", "prune")
+		_ = gitrun.Run(repoDir, gitRefArgs("worktree", []string{"remove", "--force"}, wt)...)
+		_ = gitrun.Run(repoDir, "worktree", "prune")
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), redProofReplayTimeout)
@@ -114,7 +115,9 @@ func runRedProofReplay(root, repoDir, sha, line string) (replayResult, error) {
 		printReplayTail(tail)
 		return replayResult{}, fmt.Errorf("replay could not be run: timed out after %s — a hung replay is not evidence the proof went red (its last lines are printed above)", redProofReplayTimeout)
 	}
-	var exitErr *exec.ExitError
+	// Any error reporting an exit status — os/exec's ExitError, read through
+	// the one method this needs so the spawn's package stays behind testlane.
+	var exitErr interface{ ExitCode() int }
 	if errors.As(runErr, &exitErr) {
 		return replayResult{Red: true, ExitCode: exitErr.ExitCode(), Tail: tail}, nil
 	}

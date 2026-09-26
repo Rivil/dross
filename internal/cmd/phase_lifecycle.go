@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/deferred"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
@@ -62,7 +63,7 @@ func refuseIfShipped(repoDir, slug string) error {
 		return nil
 	}
 	branch := "phase/" + slug
-	out, err := gitTrim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", branch)...)
+	out, err := gitrun.Trim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", branch)...)
 	if err != nil {
 		return nil // no origin / unreachable — can't prove it's shipped, don't block
 	}
@@ -288,8 +289,8 @@ func phaseRename() *cobra.Command {
 			// Rename the local branch when it exists; never touch remotes.
 			branchOld, branchNew := "phase/"+oldSlug, "phase/"+newSlug
 			if isDir(filepath.Join(repoDir, ".git")) {
-				if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branchOld); err == nil {
-					if err := gitRun(repoDir, gitRefArgs("branch", []string{"-m"}, branchOld, branchNew)...); err != nil {
+				if err := gitrun.Quiet(repoDir, "rev-parse", "--verify", "refs/heads/"+branchOld); err == nil {
+					if err := gitrun.Run(repoDir, gitRefArgs("branch", []string{"-m"}, branchOld, branchNew)...); err != nil {
 						return fmt.Errorf("git branch -m %s %s: %w", branchOld, branchNew, err)
 					}
 				}

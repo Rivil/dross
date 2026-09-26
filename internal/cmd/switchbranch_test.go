@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -128,9 +129,9 @@ func TestCheckoutRefusalPassesThroughOtherErrors(t *testing.T) {
 	mustWrite(t, filepath.Join(dir, "NOTES.md"), "local copy\n")
 
 	var stderr strings.Builder
-	prev := gitStderr
-	gitStderr = &stderr
-	defer func() { gitStderr = prev }()
+	prev := gitrun.Stderr
+	gitrun.Stderr = &stderr
+	defer func() { gitrun.Stderr = prev }()
 
 	err := checkoutBranch(dir, "other")
 	if err == nil {

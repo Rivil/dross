@@ -5,10 +5,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/profile"
+	"github.com/Rivil/dross/internal/render"
 )
 
 func Profile() *cobra.Command {
@@ -52,7 +52,7 @@ func profileShow() *cobra.Command {
 			if asJSON {
 				return emitJSON(out)
 			}
-			return toml.NewEncoder(os.Stdout).Encode(out)
+			return render.TOML(os.Stdout, out)
 		},
 	}
 	c.Flags().StringVar(&scope, "scope", "merged", "global | project | merged")

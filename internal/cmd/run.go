@@ -5,17 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/testlane"
 )
@@ -171,7 +170,7 @@ func runSlotNamed(root string, proj *project.Project, name string, extra []strin
 	}
 
 	line := runCommandLine(base, extra)
-	consented, err := consent.RunConsented(grantStore(root), line)
+	consented, err := consent.RunConsented(localstore.GrantStore(root), line)
 	if err != nil {
 		return err
 	}
@@ -251,26 +250,8 @@ func runSlotOutcome(slot runSlot, runErr, ctxErr error) error {
 	return nil
 }
 
-// runSlotCommand is the spawn. It mirrors runLocalCommandCtx (test.go) with two
-// deliberate differences: stdin is wired for an interactive slot, and the
-// fence is labelled with the slot's own field so a refusal names the key the
-// user would edit.
+// runSlotCommand is the spawn: testlane.RunSlot, which streams to this
+// process's terminal and wires stdin only for an interactive slot.
 func runSlotCommand(ctx context.Context, dir, line string, stdin *os.File) error {
-	argv, err := shArgvFor("runtime command", line)
-	if err != nil {
-		return err
-	}
-	c := exec.CommandContext(ctx, "sh", argv...)
-	c.Dir = dir
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	if stdin != nil {
-		c.Stdin = stdin
-	}
-	// Killing `sh` leaves its children holding the pipe ends, so Wait would
-	// block on a copy that never ends. The delay closes the descriptors and
-	// returns — without it, Ctrl-C on a dev server hangs the terminal it was
-	// meant to give back.
-	c.WaitDelay = 5 * time.Second
-	return c.Run()
+	return testlane.RunSlot(ctx, dir, line, stdin)
 }

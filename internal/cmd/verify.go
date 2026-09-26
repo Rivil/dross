@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/deferred"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/mutationcfg"
 	"github.com/Rivil/dross/internal/pathfence"
@@ -246,11 +246,9 @@ var detachSync = func(t remote.Target, localRoot string) error {
 	return runDetachArgv(argv)
 }
 
-var runDetachArgv = func(argv []string) error {
-	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
-	return cmd.Run()
-}
+// runDetachArgv is the transport seam a detached push and collect run their
+// built argv through — verify.RunDetachArgv, behind this file's consent checks.
+var runDetachArgv = verify.RunDetachArgv
 
 // detachRequiresAHost refuses a detached run that has nowhere to detach to.
 //
@@ -341,7 +339,7 @@ func dispatchDetached(root, projectName, phaseID string, steps []mutation.Packag
 
 	// Checked before the push, which is the expensive part: a phase that
 	// already has a run in flight must not rsync a tree to a host first.
-	existing, err := findDetachedRun(root, repoDir, phaseID)
+	existing, err := localstore.FindDetachedRun(root, repoDir, phaseID)
 	if err != nil {
 		return err
 	}
@@ -398,7 +396,7 @@ func dispatchDetached(root, projectName, phaseID string, steps []mutation.Packag
 	// whether or not there is an --at. The host's state file says when it
 	// actually started.
 	state := "scheduled"
-	rec := detachedRun{
+	rec := localstore.DetachedRun{
 		Phase:        phaseID,
 		RunID:        runID,
 		Host:         target.Host,
@@ -408,7 +406,7 @@ func dispatchDetached(root, projectName, phaseID string, steps []mutation.Packag
 		ScheduledFor: notBefore,
 		State:        state,
 	}
-	if err := recordDetachedRun(root, repoDir, rec); err != nil {
+	if err := localstore.RecordDetachedRun(root, repoDir, rec); err != nil {
 		return err
 	}
 
@@ -575,9 +573,10 @@ var detachFetchReports = func(t remote.Target, localRoot string, steps []mutatio
 // before measuring, arriving through a different door.
 //
 // An error that is already classified passes through, so a test can hand this
-// an rsync verdict without constructing an *exec.ExitError. An error that is
-// neither classified nor an exit status means rsync did not run at all, which
-// is not an absent report either.
+// an rsync verdict without spawning rsync. An error that is neither classified
+// nor an exit status means rsync did not run at all, which is not an absent
+// report either. The exit status is read through ExitCode() alone — os/exec's
+// ExitError carries it — so this file needs no process API of its own.
 func classifyFetch(host string, err error) error {
 	if err == nil {
 		return nil
@@ -586,7 +585,7 @@ func classifyFetch(host string, err error) error {
 		errors.Is(err, remote.ErrRemoteCommand) {
 		return err
 	}
-	var ee *exec.ExitError
+	var ee interface{ ExitCode() int }
 	if errors.As(err, &ee) {
 		return remote.Classify("rsync", host, ee.ExitCode())
 	}
@@ -641,7 +640,7 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 	}
 	repoDir := filepath.Dir(root)
 
-	rec, err := findDetachedRun(root, repoDir, phaseID)
+	rec, err := localstore.FindDetachedRun(root, repoDir, phaseID)
 	if err != nil {
 		return err
 	}
@@ -789,7 +788,7 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 	if err := finishVerify(root, phaseID, spec, t, verify.MeasuredOnHost(rec.Host), gone); err != nil {
 		return err
 	}
-	if _, err := clearDetachedRun(root, repoDir, phaseID); err != nil {
+	if _, err := localstore.ClearDetachedRun(root, repoDir, phaseID); err != nil {
 		return err
 	}
 	Printf("collected run %s from %s\n", rec.RunID, rec.Host)
@@ -851,7 +850,7 @@ func printDetachedStatus() error {
 	if err != nil {
 		return err
 	}
-	runs, err := readDetachedRuns(root, filepath.Dir(root))
+	runs, err := localstore.ReadDetachedRuns(root, filepath.Dir(root))
 	if err != nil {
 		return err
 	}
@@ -898,7 +897,7 @@ func printDetachedStatus() error {
 // LockStatusScript), so naming the holder costs no second probe. The holder
 // is only named when it is someone else: a lock held by this record's own run
 // id is the job racing its own state write, not a wait.
-func scheduledWaitLine(rec detachedRun, st remote.RunStatus, now time.Time) string {
+func scheduledWaitLine(rec localstore.DetachedRun, st remote.RunStatus, now time.Time) string {
 	if rec.Scheduled() && rec.ScheduledFor.After(now) {
 		return ""
 	}
@@ -907,7 +906,7 @@ func scheduledWaitLine(rec detachedRun, st remote.RunStatus, now time.Time) stri
 
 // scheduledReason renders why a scheduled run has not started, for the
 // results verb's one-line refusal and the status listing alike.
-func scheduledReason(rec detachedRun, st remote.RunStatus, now time.Time) string {
+func scheduledReason(rec localstore.DetachedRun, st remote.RunStatus, now time.Time) string {
 	switch {
 	case rec.Scheduled() && rec.ScheduledFor.After(now):
 		return fmt.Sprintf("scheduled for %s (host clock)", rec.ScheduledFor.Format(time.RFC3339))
@@ -938,7 +937,7 @@ func cancelDetached(phaseID string) error {
 		return err
 	}
 	repoDir := filepath.Dir(root)
-	rec, err := findDetachedRun(root, repoDir, phaseID)
+	rec, err := localstore.FindDetachedRun(root, repoDir, phaseID)
 	if err != nil {
 		return err
 	}
@@ -952,7 +951,7 @@ func cancelDetached(phaseID string) error {
 	target := remote.Target{Host: rec.Host, Workdir: rec.Workdir}
 	cerr := detachCancel(target, rec.RunDir, path.Join(rec.RunDir, "pid"))
 
-	removed, err := clearDetachedRun(root, repoDir, phaseID)
+	removed, err := localstore.ClearDetachedRun(root, repoDir, phaseID)
 	if err != nil {
 		return err
 	}
@@ -1154,8 +1153,8 @@ func localSource(root string, lock remote.LockSpec) mutationcfg.Source {
 	repoDir := filepath.Dir(root)
 	return mutationcfg.Source{
 		Lock:   lock,
-		Grants: func() ([]*remote.Target, error) { return readRemoteGrants(root, repoDir) },
-		Tuning: func() (int, int, error) { return readMutationTuning(root) },
+		Grants: func() ([]*remote.Target, error) { return localstore.ReadRemoteGrants(root, repoDir) },
+		Tuning: func() (int, int, error) { return localstore.ReadMutationTuning(root) },
 		Select: func(targets []*remote.Target) (*remote.Target, mutationcfg.Selection, error) {
 			target, pool, err := selectRemoteTarget(targets, nil)
 			if err != nil {

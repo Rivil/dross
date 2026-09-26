@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -11,9 +10,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/hostallow"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/secretscan"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
@@ -28,7 +30,7 @@ import (
 // local.toml tracked, because a committed local.toml is a repo authorizing its
 // own exfiltration host through the one input the derivation trusts.
 func remotePolicy(root, repoDir string, p *project.Project) (hostallow.Policy, error) {
-	extra, err := readAllowHosts(root, repoDir)
+	extra, err := localstore.ReadAllowHosts(root, repoDir)
 	if err != nil {
 		return hostallow.Policy{}, err
 	}
@@ -212,7 +214,7 @@ func Ship() *cobra.Command {
 			// what destroyed a live history on the state-json-branch-safety
 			// ship. A refusal that hands the user the unguarded form reopens
 			// that hole by hand, one obedient copy-paste at a time.
-			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+			cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				return fmt.Errorf("read current branch: %w", err)
 			}
@@ -283,7 +285,7 @@ func Ship() *cobra.Command {
 			// incomplete — refuse rather than open a PR against a base the
 			// provider can't see. main is the always-present default.
 			if milestoneActive {
-				if err := gitNoOut(repoDir, gitRefArgs("ls-remote", []string{"--exit-code", "--heads"}, "origin", baseBranch)...); err != nil {
+				if err := gitrun.Quiet(repoDir, gitRefArgs("ls-remote", []string{"--exit-code", "--heads"}, "origin", baseBranch)...); err != nil {
 					return fmt.Errorf("base branch %q is not on origin — it is pushed when the milestone is scoped; re-scope or push it before shipping", baseBranch)
 				}
 			}
@@ -535,7 +537,7 @@ func Ship() *cobra.Command {
 					out.URL = res.URL
 					out.Number = res.Number
 				}
-				b, mErr := json.Marshal(out)
+				b, mErr := render.MarshalJSON(out)
 				if mErr != nil {
 					return fmt.Errorf("marshal --json output: %w", mErr)
 				}
@@ -643,13 +645,13 @@ func shipResultTag(res *ship.OpenResult, err error, existing bool) string {
 // the add actually staged a change, so a re-run that re-writes the same
 // content neither errors on "nothing to commit" nor grows the log.
 func commitIfStaged(repoDir, rel, msg string) error {
-	if err := gitRun(repoDir, gitPathArgs("add", nil, rel)...); err != nil {
+	if err := gitrun.Run(repoDir, gitPathArgs("add", nil, rel)...); err != nil {
 		return fmt.Errorf("git add %s: %w", rel, err)
 	}
-	if gitNoOut(repoDir, "diff", "--cached", "--quiet") == nil {
+	if gitrun.Quiet(repoDir, "diff", "--cached", "--quiet") == nil {
 		return nil // nothing staged
 	}
-	if err := gitRun(repoDir, "commit", "-m", msg); err != nil {
+	if err := gitrun.Run(repoDir, "commit", "-m", msg); err != nil {
 		return fmt.Errorf("git commit: %w", err)
 	}
 	return nil

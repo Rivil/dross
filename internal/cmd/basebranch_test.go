@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/gitrun"
 )
 
 // captureOutErr runs fn with os.Stdout and os.Stderr each redirected to a pipe,
@@ -313,9 +315,9 @@ func TestPushBaseRejectedPushSurfacesGitOutput(t *testing.T) {
 	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): pause snapshot")
 
 	var stderr strings.Builder
-	prev := gitStderr
-	gitStderr = &stderr
-	defer func() { gitStderr = prev }()
+	prev := gitrun.Stderr
+	gitrun.Stderr = &stderr
+	defer func() { gitrun.Stderr = prev }()
 
 	pushed, err := pushBaseIfAheadDrossOnly(dir, "main")
 	if err == nil {

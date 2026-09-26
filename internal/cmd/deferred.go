@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -9,6 +8,7 @@ import (
 
 	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/render"
 )
 
 // deferredEntry and projectStoreSlug are the in-package names for the ledger
@@ -80,7 +80,7 @@ func deferredList() *cobra.Command {
 			}
 
 			if asJSON {
-				out, err := json.Marshal(entries)
+				out, err := render.MarshalJSON(entries)
 				if err != nil {
 					return err
 				}

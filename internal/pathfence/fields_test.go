@@ -125,12 +125,12 @@ func TestRegistryCoversEveryKnownFieldByName(t *testing.T) {
 		// routed through Contain since the enumeration found it opened raw
 		"survivor.Acceptance.File",
 		// found once the enumeration stopped guessing by directory and tag word
-		"cmd.detachedRun.RunDir",
-		"cmd.detachedRun.Workdir",
-		"cmd.localStore.RemoteWorkdir",
-		"cmd.localStore.MutationRemoteWorkdir",
-		"cmd.localStore.RemoteScratchBase",
-		"cmd.remoteCandidate.Workdir",
+		"localstore.DetachedRun.RunDir",
+		"localstore.DetachedRun.Workdir",
+		"localstore.Store.RemoteWorkdir",
+		"localstore.Store.MutationRemoteWorkdir",
+		"localstore.Store.RemoteScratchBase",
+		"localstore.RemoteCandidate.Workdir",
 		"project.Mutation.RemoteWorkdir",
 		"project.MutationStryker.Workdir",
 		"project.Repo.RootRunDir",

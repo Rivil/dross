@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/findings"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/quality"
 )
@@ -85,7 +86,7 @@ func qualityRun() *cobra.Command {
 				return err
 			}
 			repoDir := filepath.Dir(root)
-			runDir, err := quality.NewRun(root, time.Now().UTC(), quality.ShortSHA(repoDir))
+			runDir, err := quality.NewRun(root, time.Now().UTC(), gitrun.ShortSHA(repoDir))
 			if err != nil {
 				return err
 			}

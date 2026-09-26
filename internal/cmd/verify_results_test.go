@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -932,6 +933,24 @@ func TestClassifyFetchReadsRsyncsVerdict(t *testing.T) {
 		t.Error("a failure to spawn rsync was read as a successful fetch")
 	} else if errors.Is(err, remote.ErrPartial) {
 		t.Errorf("a failure to spawn rsync was read as an absent report: %v", err)
+	}
+}
+
+// TestClassifyFetchReadsARealExitStatus: the exit status reaches classifyFetch
+// from a real process, through the spawn that moved to internal/verify — not a
+// hand-built verdict. `sh -c 'exit 23'` must classify exactly as rsync's 23.
+func TestClassifyFetchReadsARealExitStatus(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sh-driven exit status is unix-only")
+	}
+	raw := verify.RunDetachArgv([]string{"sh", "-c", "exit 23"})
+	if raw == nil {
+		t.Fatal("`exit 23` reported success")
+	}
+	got := classifyFetch("helicon", raw)
+	want := remote.Classify("rsync", "helicon", 23)
+	if !errors.Is(got, remote.ErrPartial) || got.Error() != want.Error() {
+		t.Errorf("classifyFetch(real exit 23) = %v, want %v", got, want)
 	}
 }
 

@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -94,7 +95,7 @@ func milestonePrune() *cobra.Command {
 			// branch being left is stale by definition, so it is exactly the
 			// vintage that may still track .dross/state.json, and a raw switch
 			// off it replays that copy over the live machine-local one.
-			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+			cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				cur = ""
 			}
@@ -139,12 +140,12 @@ func milestonePrune() *cobra.Command {
 			}
 
 			for _, b := range stale {
-				if err := gitRun(repoDir, gitRefArgs("branch", []string{"-D"}, b.Name)...); err != nil {
+				if err := gitrun.Run(repoDir, gitRefArgs("branch", []string{"-D"}, b.Name)...); err != nil {
 					return fmt.Errorf("delete local %s: %w", b.Name, err)
 				}
 				where := "local"
 				if b.HasRemote {
-					if err := gitRun(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", b.Name)...); err != nil {
+					if err := gitrun.Run(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", b.Name)...); err != nil {
 						return fmt.Errorf("delete origin/%s: %w", b.Name, err)
 					}
 					where = "local + origin"
@@ -365,7 +366,7 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 	}
 
 	//dross:taint-cleared status --porcelain prints two status letters and a repo path per line, never file content
-	status, err := gitRead(repoDir, "status", "--porcelain")
+	status, err := gitrun.Read(repoDir, "status", "--porcelain")
 	if err != nil {
 		return fmt.Errorf("git status: %w", err)
 	}
@@ -373,7 +374,7 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 		return dirtyTreeError("finalizing the milestone", status)
 	}
 
-	if err := gitRun(repoDir, "fetch", "origin"); err != nil {
+	if err := gitrun.Run(repoDir, "fetch", "origin"); err != nil {
 		return fmt.Errorf("git fetch: %w", err)
 	}
 
@@ -407,7 +408,7 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 	if !mergedIntoMain && gitRefExists(repoDir, "refs/heads/"+target) {
 		landing = target
 	}
-	cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+	cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
 		return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
 	}
@@ -438,18 +439,18 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 	}
 
 	// Delete the local milestone branch (only if it exists).
-	if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+msBranch)...); err == nil {
-		if err := gitRun(repoDir, gitRefArgs("branch", []string{"-D"}, msBranch)...); err != nil {
+	if err := gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+msBranch)...); err == nil {
+		if err := gitrun.Run(repoDir, gitRefArgs("branch", []string{"-D"}, msBranch)...); err != nil {
 			return fmt.Errorf("git branch -D %s: %w", msBranch, err)
 		}
 	}
 	// Delete the remote milestone branch (idempotent — only if origin has it).
-	remoteRef, err := gitTrim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", msBranch)...)
+	remoteRef, err := gitrun.Trim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", msBranch)...)
 	if err != nil {
 		return fmt.Errorf("git ls-remote origin %s: %w", msBranch, err)
 	}
 	if remoteRef != "" {
-		if err := gitRun(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", msBranch)...); err != nil {
+		if err := gitrun.Run(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", msBranch)...); err != nil {
 			return fmt.Errorf("git push origin --delete %s: %w", msBranch, err)
 		}
 	}
@@ -657,19 +658,19 @@ func ensureMilestoneBranch(repoDir, baseBranch, version string) (branch string, 
 		return branch, false, false, err
 	}
 	// Need a base ref to cut from; a repo with no commits has none.
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+baseBranch)...) != nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+baseBranch)...) != nil {
 		return branch, false, false, nil
 	}
 	// Idempotent create: only when the local ref is absent.
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
-		if e := gitRun(repoDir, gitRefArgs("branch", nil, branch, baseBranch)...); e != nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
+		if e := gitrun.Run(repoDir, gitRefArgs("branch", nil, branch, baseBranch)...); e != nil {
 			return branch, false, false, fmt.Errorf("git branch %s %s: %w", branch, baseBranch, e)
 		}
 		created = true
 	}
 	// Push only when an origin remote exists.
-	if gitNoOut(repoDir, "remote", "get-url", "origin") == nil {
-		if e := gitRun(repoDir, gitRefArgs("push", nil, "origin", branch)...); e != nil {
+	if gitrun.Quiet(repoDir, "remote", "get-url", "origin") == nil {
+		if e := gitrun.Run(repoDir, gitRefArgs("push", nil, "origin", branch)...); e != nil {
 			return branch, created, false, fmt.Errorf("git push origin %s: %w", branch, e)
 		}
 		pushed = true
@@ -710,7 +711,7 @@ func milestoneShow() *cobra.Command {
 				return emitJSON(m)
 			}
 			Printf("# %s\n", path)
-			return toml.NewEncoder(os.Stdout).Encode(m)
+			return render.TOML(os.Stdout, m)
 		},
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
@@ -1021,26 +1022,26 @@ func appendUnique(list []string, value string) []string {
 // push_failure posture: continuing past it opens the PR against stale content,
 // which is the exact bug this exists to prevent.
 func pushMilestoneHeadIfAhead(repoDir, msBranch string) (pushed bool, commits int, err error) {
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+msBranch)...) != nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+msBranch)...) != nil {
 		return false, 0, nil
 	}
-	if ferr := gitRun(repoDir, "fetch", "origin"); ferr != nil {
+	if ferr := gitrun.Run(repoDir, "fetch", "origin"); ferr != nil {
 		return false, 0, fmt.Errorf("git fetch: %w", ferr)
 	}
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/remotes/origin/"+msBranch)...) != nil {
-		if perr := gitRun(repoDir, gitRefArgs("push", []string{"-u"}, "origin", msBranch)...); perr != nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/remotes/origin/"+msBranch)...) != nil {
+		if perr := gitrun.Run(repoDir, gitRefArgs("push", []string{"-u"}, "origin", msBranch)...); perr != nil {
 			return false, 0, fmt.Errorf("push %s to origin: %w", msBranch, perr)
 		}
 		return true, 0, nil
 	}
-	ahead, err := gitTrim(repoDir, gitRefArgs("rev-list", nil, "origin/"+msBranch+".."+msBranch)...)
+	ahead, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", nil, "origin/"+msBranch+".."+msBranch)...)
 	if err != nil {
 		return false, 0, fmt.Errorf("git rev-list origin/%s..%s: %w", msBranch, msBranch, err)
 	}
 	if ahead == "" {
 		return false, 0, nil
 	}
-	behind, err := gitTrim(repoDir, gitRefArgs("rev-list", nil, msBranch+"..origin/"+msBranch)...)
+	behind, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", nil, msBranch+"..origin/"+msBranch)...)
 	if err != nil {
 		return false, 0, fmt.Errorf("git rev-list %s..origin/%s: %w", msBranch, msBranch, err)
 	}
@@ -1051,7 +1052,7 @@ func pushMilestoneHeadIfAhead(repoDir, msBranch string) (pushed bool, commits in
 			"Reconcile %s with origin before closing the milestone; refusing to force-push it for you",
 			msBranch, msBranch, n, len(strings.Fields(behind)), msBranch)
 	}
-	if perr := gitRun(repoDir, gitRefArgs("push", nil, "origin", msBranch)...); perr != nil {
+	if perr := gitrun.Run(repoDir, gitRefArgs("push", nil, "origin", msBranch)...); perr != nil {
 		return false, 0, fmt.Errorf("push of %d local commit(s) on %s failed: %w\n"+
 			"Refusing to open the PR — it would carry stale content and the unpushed commits would be lost at --finalize.",
 			n, msBranch, perr)

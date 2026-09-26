@@ -25,9 +25,14 @@ import (
 // execSourceFloor and execSourceFileFloor are ~25% under the exec sources
 // the live tree seeds today and the files they sit in. A scan whose sources
 // silently stopped matching would pass the gate by finding nothing.
+//
+// Reset in cmd-exec-baseline-drain t-13 to floor(0.75 x the logged census):
+// 37 -> 27 sources and 24 -> 15 files, logged at 36 across 20. The drop is the
+// phase's own doing — git's spawns collapsed into internal/gitrun's four
+// verbs, so one site now stands where a dozen per-file copies stood.
 const (
-	execSourceFloor     = 37
-	execSourceFileFloor = 24
+	execSourceFloor     = 27
+	execSourceFileFloor = 15
 )
 
 // execSourceCensus is where the exec policy seeds: distinct origins, and the

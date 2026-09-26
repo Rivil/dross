@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 )
@@ -83,7 +84,7 @@ type backfillVerdict struct {
 // same phase dir): git log is newest-first and the first sighting is kept, so
 // the recorded evidence is the most recent delivery rather than the first.
 func backfillShipCommits(repoDir, base string) (map[string]string, error) {
-	if err := gitRun(repoDir, "fetch", "origin"); err != nil {
+	if err := gitrun.Run(repoDir, "fetch", "origin"); err != nil {
 		return nil, fmt.Errorf("git fetch origin: %w\n"+
 			"backfill reads origin/%s, not the local ref — refusing to scan a possibly stale base", err, base)
 	}
@@ -98,7 +99,7 @@ func backfillShipCommits(repoDir, base string) (map[string]string, error) {
 // already has, because doctor is an offline diagnostic and must not open a
 // network connection to print an advisory line.
 func backfillShipCommitsAtRef(repoDir, ref string) (map[string]string, error) {
-	log, err := gitRead(repoDir, gitRefArgs("log", []string{"--format=%H %s"}, ref)...)
+	log, err := gitrun.Read(repoDir, gitRefArgs("log", []string{"--format=%H %s"}, ref)...)
 	if err != nil {
 		return nil, fmt.Errorf("git log %s: %w", ref, err)
 	}
@@ -137,10 +138,10 @@ func backfillShipCommitsAtRef(repoDir, ref string) (map[string]string, error) {
 // unbackfillable and nothing is written for it.
 func resolveBackfill(repoDir, slug string, ships map[string]string) backfillVerdict {
 	branch := "phase/" + slug
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+branch)...) == nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+branch)...) == nil {
 		return backfillVerdict{Slug: slug, Reason: "live local branch " + branch}
 	}
-	remote, err := gitTrim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", branch)...)
+	remote, err := gitrun.Trim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", branch)...)
 	if err != nil {
 		return backfillVerdict{Slug: slug, Reason: fmt.Sprintf("could not query origin for %s: %v — absence unproven", branch, err)}
 	}

@@ -36,18 +36,7 @@ changes.RedProof.SHA sha
 changes.TaskRecord.Commit commit
 changes.TaskRecord.Notes notes
 
-# ---- cmd — command-local records: ids, hosts, states, prose, report labels, hook payloads, machine-local settings (hosts, env-var names, worker counts)
-cmd.detachedRun.Host host
-cmd.detachedRun.Phase phase
-cmd.detachedRun.RunID run_id
-cmd.detachedRun.State state
-cmd.localStore.AllowHosts allow_hosts
-cmd.localStore.MutationRemoteEnv mutation_remote_env
-cmd.localStore.MutationRemoteHost mutation_remote_host
-cmd.localStore.MutationTestCPU mutation_test_cpu
-cmd.localStore.MutationWorkers mutation_workers
-cmd.localStore.QuickBase quick_base
-cmd.localStore.RemoteHost remote_host
+# ---- cmd — command-local records: ids, hosts, states, prose, report labels, hook payloads
 cmd.milestoneProgressReport.Remaining remaining
 cmd.milestoneProgressReport.Status status
 cmd.milestoneProgressReport.Unscaffolded unscaffolded
@@ -60,7 +49,6 @@ cmd.previewLaneReport.Locality locality
 cmd.previewLaneReport.Name name
 cmd.previewReport.Host host
 cmd.previewReport.HostState host_state
-cmd.remoteCandidate.Host host
 cmd.sessionStartHookOutput.AdditionalContext additionalcontext
 cmd.sessionStartHookOutput.HookEventName hookeventname
 cmd.sessionStartOutput.SystemMessage systemmessage
@@ -125,6 +113,20 @@ forge.ytStateBundle.ID id
 # ---- hooks — Claude Code hook entries: command lines and types
 hooks.hookCommand.Command command
 hooks.hookCommand.Type type
+
+# ---- localstore — local.toml's machine-local settings and detached-run records: hosts, env-var names, worker counts, ids, states
+localstore.DetachedRun.Host host
+localstore.DetachedRun.Phase phase
+localstore.DetachedRun.RunID run_id
+localstore.DetachedRun.State state
+localstore.RemoteCandidate.Host host
+localstore.Store.AllowHosts allow_hosts
+localstore.Store.MutationRemoteEnv mutation_remote_env
+localstore.Store.MutationRemoteHost mutation_remote_host
+localstore.Store.MutationTestCPU mutation_test_cpu
+localstore.Store.MutationWorkers mutation_workers
+localstore.Store.QuickBase quick_base
+localstore.Store.RemoteHost remote_host
 
 # ---- milestone — milestone metadata: titles, versions, statuses, dates, phase ids, prose
 milestone.Meta.Base base

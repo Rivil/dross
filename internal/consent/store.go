@@ -2,7 +2,8 @@ package consent
 
 import (
 	"fmt"
-	"os/exec"
+
+	"github.com/Rivil/dross/internal/gitrun"
 )
 
 // File is the machine-local store's basename under .dross/, and RelPath its
@@ -71,8 +72,7 @@ type Store interface {
 // authorizing itself through the one input dross trusts precisely because it is
 // never cloned.
 func RefuseTrackedLocal(repoDir string) error {
-	//dross:exec-exempt fixed argv asking git whether dross's own local.toml is tracked; the only derived value is the -C work tree and no repo-authored line is run
-	if exec.Command("git", "-C", repoDir, "ls-files", "--error-unmatch", "--", RelPath).Run() != nil {
+	if gitrun.Quiet(repoDir, "ls-files", "--error-unmatch", "--", RelPath) != nil {
 		return nil
 	}
 	return fmt.Errorf(

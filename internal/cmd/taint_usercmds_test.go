@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,18 +18,37 @@ import (
 // terminal through an OutOrStdout-derived writer and carry no marker: a marker
 // on a stream site would clear the stream itself.
 
-// streamSiteFiles carry the user's own suite and slot streams.
-var streamSiteFiles = []string{"internal/cmd/test.go", "internal/cmd/run.go", "internal/cmd/verify.go"}
+// streamSiteFiles carry the user's own suite, slot and verify-transport
+// streams. The spawns live in internal/testlane and internal/verify since
+// cmd-exec-baseline-drain moved them behind cmd's consent checks.
+var streamSiteFiles = []string{"internal/testlane/spawn.go", "internal/verify/detach.go"}
+
+// streamMarkerFindings names every marker that sits in a stream pin.
+func streamMarkerFindings(root string, markers []taintMarker, pins []string) []string {
+	var out []string
+	for _, m := range markers {
+		rel, _ := filepath.Rel(root, m.file)
+		if containsString(pins, filepath.ToSlash(rel)) {
+			out = append(out, fmt.Sprintf("%s:%d carries a taint-cleared marker — the stream must end at the terminal, not at a marker", rel, m.line))
+		}
+	}
+	return out
+}
 
 // TestStreamSitesCarryNoMarker: the suite, slot and verify streams end at the
-// terminal; none of their files may carry a taint-cleared marker.
+// terminal; none of their files may carry a taint-cleared marker. A pin whose
+// spawn moved away would pass this vacuously, so each must still hold one. The
+// marker scan covers all of internal/, not just cmd — the pins do — and a
+// synthetic marker in testlane/spawn.go proves it reaches there.
 func TestStreamSitesCarryNoMarker(t *testing.T) {
+	assertPinsHoldSites(t, repoExecGraph(t), "streamSiteFiles", streamSiteFiles)
 	root := sourceProgram(t).Root
-	for _, m := range taintMarkersIn(t, "internal/cmd") {
-		rel, _ := filepath.Rel(root, m.file)
-		if containsString(streamSiteFiles, filepath.ToSlash(rel)) {
-			t.Errorf("%s:%d carries a taint-cleared marker — the stream must end at the terminal, not at a marker", rel, m.line)
-		}
+	for _, f := range streamMarkerFindings(root, taintMarkersIn(t, "internal"), streamSiteFiles) {
+		t.Error(f)
+	}
+	synthetic := taintMarker{file: filepath.Join(root, "internal", "testlane", "spawn.go"), line: 1}
+	if got := streamMarkerFindings(root, []taintMarker{synthetic}, streamSiteFiles); len(got) != 1 {
+		t.Errorf("a taint-cleared marker in internal/testlane/spawn.go gave %v, want one finding", got)
 	}
 }
 

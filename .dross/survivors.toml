@@ -635,15 +635,6 @@
   accepted_in = "survivor-drain"
 
 [[accepted]]
-  key = "28ece17d11f1de42"
-  file = "internal/cmd/gitignore.go"
-  op = "ARITHMETIC_BASE"
-  text = "const drossLocalIgnorePath = \".dross/\" + LocalFile"
-  line = 17
-  category = "const-initializer-arithmetic"
-  accepted_in = "survivor-drain"
-
-[[accepted]]
   key = "48cac81a1a5e0bc7"
   file = "internal/cmd/gitignore.go"
   op = "ARITHMETIC_BASE"
@@ -932,15 +923,6 @@
   accepted_in = "survivor-drain"
 
 [[accepted]]
-  key = "2f4b2750232fddbd"
-  file = "internal/cmd/update.go"
-  op = "CONDITIONALS_NEGATION"
-  text = "if resolved, err := filepath.EvalSymlinks(exe); err == nil {"
-  line = 184
-  category = "self-replacing-binary-path"
-  accepted_in = "survivor-drain"
-
-[[accepted]]
   key = "e1dbef123483111f"
   file = "internal/cmd/env.go"
   op = "CONDITIONALS_NEGATION"
@@ -974,15 +956,6 @@
   text = "}); err != nil {"
   line = 148
   category = "gremlins-attribution-ceiling"
-  accepted_in = "survivor-drain"
-
-[[accepted]]
-  key = "67bbc496d8103359"
-  file = "internal/cmd/update.go"
-  op = "CONDITIONALS_NEGATION"
-  text = "if err != nil {"
-  line = 181
-  category = "self-replacing-binary-path"
   accepted_in = "survivor-drain"
 
 [[accepted]]
@@ -2785,3 +2758,21 @@
   line = 324
   category = "const-initializer-arithmetic"
   accepted_in = "exec-taint-enumeration"
+
+[[accepted]]
+  key = "4567adb9bfd0396b"
+  file = "internal/update/apply.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 153
+  category = "self-replacing-binary-path"
+  accepted_in = "cmd-exec-baseline-drain"
+
+[[accepted]]
+  key = "d8fd3b13613cf94a"
+  file = "internal/update/apply.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if resolved, err := filepath.EvalSymlinks(exe); err == nil {"
+  line = 156
+  category = "self-replacing-binary-path"
+  accepted_in = "cmd-exec-baseline-drain"

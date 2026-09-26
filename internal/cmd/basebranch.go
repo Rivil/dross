@@ -8,6 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/gitrun"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -77,7 +79,7 @@ func pushBaseIfAheadDrossOnly(repoDir, base string) (pushed bool, err error) {
 		return false, nil
 	}
 	for _, sha := range d.Ahead {
-		files, err := gitRead(repoDir, gitRefArgs("diff-tree", []string{"--no-commit-id", "--name-only", "-r", "--root"}, sha)...)
+		files, err := gitrun.Read(repoDir, gitRefArgs("diff-tree", []string{"--no-commit-id", "--name-only", "-r", "--root"}, sha)...)
 		if err != nil {
 			return false, fmt.Errorf("git diff-tree %s: %w", sha, err)
 		}
@@ -93,7 +95,7 @@ func pushBaseIfAheadDrossOnly(repoDir, base string) (pushed bool, err error) {
 			}
 		}
 	}
-	if err := gitRun(repoDir, gitRefArgs("push", nil, "origin", base)...); err != nil {
+	if err := gitrun.Run(repoDir, gitRefArgs("push", nil, "origin", base)...); err != nil {
 		return false, fmt.Errorf("safety-net push of .dross chores on %s failed: %w\n"+
 			"Refusing to continue — proceeding would leave %s diverged from origin again.",
 			base, err, base)
@@ -120,11 +122,11 @@ func pushBaseIfAheadDrossOnly(repoDir, base string) (pushed bool, err error) {
 // source — otherwise the user sees a branch they never mentioned to this
 // command and has no idea where it came from.
 func pushQuickBaseIfRecorded(repoDir, root, phaseBase string) (pushed bool, branch string, err error) {
-	qb := readLocalKey(root, "quick_base")
+	qb := localstore.ReadKey(root, "quick_base")
 	if qb == "" || qb == phaseBase {
 		return false, "", nil
 	}
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+qb)...) != nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+qb)...) != nil {
 		return false, "", nil
 	}
 	pushed, err = pushBaseIfAheadDrossOnly(repoDir, qb)
@@ -170,7 +172,7 @@ func resolveNewWorkBase(repoDir, root string) (base string, milestoneActive bool
 	branch := "milestone/" + s.CurrentMilestone
 	// The ref-existence probe is the cutover mechanism: a pre-cutover
 	// milestone (or a non-git dir) has no such ref, so we fall back to main.
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
 		return main, false, nil
 	}
 	return branch, true, nil

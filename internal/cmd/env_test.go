@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -112,35 +111,6 @@ func TestEnvUnsetRemovesKey(t *testing.T) {
 	}
 }
 
-func TestMutateSettingsCreatesFile(t *testing.T) {
-	home := t.TempDir()
-	path := filepath.Join(home, ".claude", "settings.json")
-
-	err := mutateSettings(path, func(doc map[string]any) {
-		envMap := map[string]any{"FOO": "bar"}
-		doc["env"] = envMap
-	})
-	if err != nil {
-		t.Fatalf("mutate: %v", err)
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("stat: %v", err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Errorf("expected 0o600 perms (token storage), got %v", info.Mode().Perm())
-	}
-
-	doc, err := readSettings(path)
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	envMap := doc["env"].(map[string]any)
-	if !reflect.DeepEqual(envMap, map[string]any{"FOO": "bar"}) {
-		t.Errorf("env mismatch: %+v", envMap)
-	}
-}
-
 // TestEnvCover_SetEmptyKeyErrors drives env.go:96 (if key == ""). A
 // whitespace-only KEY trims to empty and must return the "KEY must be
 // non-empty" error before any password read. Under CONDITIONALS_NEGATION
@@ -212,33 +182,5 @@ func TestEnvCover_UnsetPropagatesMutateError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "parse") {
 		t.Errorf("expected parse error, got: %v", err)
-	}
-}
-
-func TestMutateSettingsPreservesUnrelatedKeys(t *testing.T) {
-	home := t.TempDir()
-	path := filepath.Join(home, ".claude", "settings.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	original := `{"env":{"A":"1"},"model":"m","theme":"dark"}`
-	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := mutateSettings(path, func(doc map[string]any) {
-		envMap := doc["env"].(map[string]any)
-		envMap["B"] = "2"
-	}); err != nil {
-		t.Fatalf("mutate: %v", err)
-	}
-
-	doc, _ := readSettings(path)
-	if doc["model"] != "m" || doc["theme"] != "dark" {
-		t.Errorf("non-env keys lost: %+v", doc)
-	}
-	envMap := doc["env"].(map[string]any)
-	if envMap["A"] != "1" || envMap["B"] != "2" {
-		t.Errorf("env keys lost: %+v", envMap)
 	}
 }

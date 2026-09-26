@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -193,12 +194,16 @@ func liveViewUnder(t *testing.T, root string, roots []string) *srcView {
 
 // The discovery floor. A walk that quietly stopped matching reports zero
 // findings, which is indistinguishable from success, so the gate also has to
-// find ENOUGH — measured today at 41 sites across 24 files, with the floor set
+// find ENOUGH — measured at 41 sites across 24 files, with the floor set
 // roughly a quarter under both so ordinary churn does not trip it and a dropped
 // scan root does.
+//
+// Reset in cmd-exec-baseline-drain t-13 to floor(0.75 x the logged census):
+// 30 -> 19 sites and 20 -> 11 files, logged at 26 across 15. git's spawns
+// collapsed into internal/gitrun's four verbs, and cmd holds none of its own.
 const (
-	execConsentMinSites = 30
-	execConsentMinFiles = 20
+	execConsentMinSites = 19
+	execConsentMinFiles = 11
 )
 
 // execConsentFloor is the coverage check, factored out so it can be exercised
@@ -289,13 +294,14 @@ func assertExecConsentCovers(t *testing.T, rel string) {
 }
 
 // TestExecConsentScansTheSpawningPackages: the four packages outside
-// internal/cmd where dross actually shells out. Asserted by path rather than
-// assumed, because the failure mode is silent.
+// internal/cmd where dross actually shells out — git now through
+// internal/gitrun. Asserted by path rather than assumed, because the failure
+// mode is silent.
 func TestExecConsentScansTheSpawningPackages(t *testing.T) {
 	for _, rel := range []string{
 		"internal/mutation/gremlins.go",
 		"internal/remote/remote.go",
-		"internal/codex/git.go",
+		"internal/gitrun/gitrun.go",
 		"internal/ship/open.go",
 	} {
 		assertExecConsentCovers(t, rel)
@@ -1707,7 +1713,7 @@ func execGraphFingerprint(g *execGraph) string {
 // execLiveSurgeries are the four live proofs' surgeries, in one place so the
 // isolation test runs every one of them.
 var execLiveSurgeries = []execSurgery{
-	{file: "internal/cmd/run.go", op: "ungate", anchor: "consented, err := consent.RunConsented(grantStore(root), line)"},
+	{file: "internal/cmd/run.go", op: "ungate", anchor: "consent.RunConsented("},
 	{file: "internal/cmd/verify.go", op: "ungate",
 		anchor: "if err := requireExecConsent(); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t\tphaseID := args[0]"},
 	{file: "internal/ship/open.go", op: "unmark", anchor: "//dross:exec-exempt gh is the forge API client"},
@@ -1741,6 +1747,16 @@ func TestSurgeryAnchorMustMatch(t *testing.T) {
 	_, err = g.surgery(sourceProgram(t).Root, execSurgery{file: "internal/cmd/verify.go", op: "ungate", anchor: "if err := requireExecConsent(); err != nil {"})
 	if err == nil || !strings.Contains(err.Error(), "matched 2 times") {
 		t.Errorf("surgery with an ambiguous anchor = %v, want it refused", err)
+	}
+	// run.go's anchor is the rename-stable call alone. The spelling it had
+	// before the grant store moved to internal/localstore no longer matches —
+	// a surgery still pinned to it would never land.
+	_, err = g.surgery(sourceProgram(t).Root, execSurgery{file: "internal/cmd/run.go", op: "ungate", anchor: "consented, err := consent.RunConsented(grantStore(root), line)"})
+	if err == nil || !strings.Contains(err.Error(), "anchor never matched") {
+		t.Errorf("surgery with the pre-move grantStore(root) anchor = %v, want \"anchor never matched\"", err)
+	}
+	if _, err := g.surgery(sourceProgram(t).Root, execSurgery{file: "internal/cmd/run.go", op: "ungate", anchor: "consent.RunConsented("}); err != nil {
+		t.Errorf("run.go's rename-stable anchor did not match exactly once: %v", err)
 	}
 }
 
@@ -2167,9 +2183,10 @@ func TestExecConsentCalibrationIsUnchanged(t *testing.T) {
 // writing down that the line is safe, which is exactly the judgement the
 // consent gate exists to hand to a human instead.
 //
-// update.go is the single carve-out and the reason is specific: the binary it
-// self-execs is the one the updater just downloaded and minisign-verified, so
-// the signature — not a grant — is what makes the argv trusted.
+// internal/update/apply.go is the single carve-out and the reason is specific:
+// the binary it self-execs is the one the updater just downloaded and
+// minisign-verified, so the signature — not a grant — is what makes the argv
+// trusted.
 
 // execConsentGatedFiles are the files whose every site must be gated by reach.
 //
@@ -2178,11 +2195,9 @@ func TestExecConsentCalibrationIsUnchanged(t *testing.T) {
 // internal/quality and internal/techdebt — and matching on the base name pulled
 // three of t-8's marked sites into this task's assertion.
 var execConsentGatedFiles = []string{
-	"internal/cmd/run.go",
-	"internal/cmd/test.go",
-	"internal/cmd/verify.go",
-	"internal/cmd/lane_install.go",
-	"internal/cmd/survivor_drain.go",
+	"internal/testlane/spawn.go",
+	"internal/verify/detach.go",
+	"internal/survivor/drain.go",
 }
 
 // sitesIn returns every site in the given repo-relative files.
@@ -2197,6 +2212,48 @@ func (g *execGraph) sitesIn(rels ...string) []*execSite {
 		}
 	}
 	return out
+}
+
+// pinsWithoutSites returns, in order, every repo-relative pin that holds no
+// spawn site in g. A pin whose spawn moved away satisfies its per-site
+// assertions vacuously — there is nothing left to be wrong — so an empty pin
+// is itself a finding, and the pin must follow its site or be dropped.
+func (g *execGraph) pinsWithoutSites(rels []string) []string {
+	var stale []string
+	for _, rel := range rels {
+		if len(g.sitesIn(rel)) == 0 {
+			stale = append(stale, rel)
+		}
+	}
+	return stale
+}
+
+// assertPinsHoldSites fails naming every pin in rels that holds no site.
+func assertPinsHoldSites(t *testing.T, g *execGraph, table string, rels []string) {
+	t.Helper()
+	for _, rel := range g.pinsWithoutSites(rels) {
+		t.Errorf("%s names %s, which holds no spawn site — re-point the pin to where the spawn went, or drop it", table, rel)
+	}
+}
+
+// TestSpawnPinsCannotGoStale: pointing a pin at a file with no spawn — issue.go
+// — is named, and nothing else in the live tables is.
+func TestSpawnPinsCannotGoStale(t *testing.T) {
+	g := repoExecGraph(t)
+	for _, table := range []struct {
+		name string
+		rels []string
+	}{
+		{"execConsentGatedFiles", execConsentGatedFiles},
+		{"execConsentMarkedFiles", execConsentMarkedFiles},
+		{"streamSiteFiles", streamSiteFiles},
+	} {
+		probe := append(append([]string(nil), table.rels...), "internal/cmd/issue.go")
+		got := g.pinsWithoutSites(probe)
+		if len(got) != 1 || got[0] != "internal/cmd/issue.go" {
+			t.Errorf("%s plus issue.go: stale pins = %v, want exactly [internal/cmd/issue.go]", table.name, got)
+		}
+	}
 }
 
 // execSiteIsIn reports whether a site sits in the named repo-relative file.
@@ -2221,6 +2278,7 @@ func TestToolchainSpawnsResolveAsGated(t *testing.T) {
 	if len(sites) == 0 {
 		t.Fatal("found no spawn sites in the toolchain files — the walk stopped covering them")
 	}
+	assertPinsHoldSites(t, g, "execConsentGatedFiles", execConsentGatedFiles)
 	for _, s := range sites {
 		where := filepath.Base(s.pos.Filename)
 		if s.class != execReachGated {
@@ -2246,20 +2304,20 @@ func TestToolchainSpawnsResolveAsGated(t *testing.T) {
 // binary", so the reason must name the thing that makes it true.
 func TestUpdateSelfExecIsTheOnlyMarkerHere(t *testing.T) {
 	g := repoExecGraph(t)
-	sites := g.sitesIn("internal/cmd/update.go")
+	sites := g.sitesIn("internal/update/apply.go")
 	if len(sites) != 1 {
-		t.Fatalf("update.go has %d spawn sites, want 1 — the carve-out is no longer about one call", len(sites))
+		t.Fatalf("internal/update/apply.go has %d spawn sites, want 1 — the carve-out is no longer about one call", len(sites))
 	}
 	s := sites[0]
 	if !s.marked {
-		t.Fatal("update.go's self-exec carries no exemption marker")
+		t.Fatal("internal/update/apply.go's self-exec carries no exemption marker")
 	}
 	if !strings.Contains(strings.ToLower(s.marker.Reason), "verif") {
 		t.Errorf("the reason does not name signature verification, which is the only thing that makes it safe: %q", s.marker.Reason)
 	}
 	for _, f := range g.findings() {
-		if execFindingIsIn(f, "internal/cmd/update.go") {
-			t.Errorf("update.go's marked self-exec is still a finding: %s", f.String())
+		if execFindingIsIn(f, "internal/update/apply.go") {
+			t.Errorf("internal/update/apply.go's marked self-exec is still a finding: %s", f.String())
 		}
 	}
 }
@@ -2267,18 +2325,20 @@ func TestUpdateSelfExecIsTheOnlyMarkerHere(t *testing.T) {
 // TestReachProofIsLoadBearing: without this, "gated via reach" could be a
 // verdict the graph hands out to everything and the whole attribution would be
 // decorative. Deleting `dross run`'s consent check — in a copy of the source,
-// not on disk — must turn its spawn into a finding that names it.
+// not on disk — must turn its spawn into a finding that names it. The spawn is
+// in internal/testlane/spawn.go while the check stays in run.go, so this is
+// also the proof that reach crosses the package boundary the move introduced.
 func TestReachProofIsLoadBearing(t *testing.T) {
 	// The CALL stops counting, not just the branch under it: surgery on a copy
 	// of the shared graph re-decides gating with that consent call excluded,
 	// which is what deleting it would leave.
 	g := repoExecGraph(t).withSurgery(t, execSurgery{
 		file: "internal/cmd/run.go", op: "ungate",
-		anchor: "consented, err := consent.RunConsented(grantStore(root), line)",
+		anchor: "consent.RunConsented(",
 	})
 	var found bool
 	for _, f := range g.findings() {
-		if execFindingIsIn(f, "internal/cmd/run.go") && strings.Contains(f.Why, "ungated") {
+		if execFindingIsIn(f, "internal/testlane/spawn.go") && strings.Contains(f.Why, "ungated") {
 			found = true
 		}
 	}
@@ -2306,22 +2366,20 @@ func TestRunSlotStillRefusesAtRuntime(t *testing.T) {
 
 // --- the helper packages, marked with their reasons ---
 //
-// These are the scan, report and transport spawns: codex's git log and
-// ast-grep, the three scanners' rev-parse, ship's gh client, and internal/
-// remote's single ssh/rsync seam. None of them is reachable only from gating
-// commands, and none of them can be — `dross architecture check` and `dross
-// techdebt` legitimately shell git without ever running the repo's suite. So
-// each carries a marker, and the marker has to earn its place.
+// These are the scan, report and transport spawns: internal/gitrun's four git
+// verbs (every git call dross makes, the scanners' short SHA and codex's log
+// among them), codex's ast-grep, ship's gh client, and internal/remote's single
+// ssh/rsync seam. None of them is reachable only from gating commands, and none
+// of them can be — `dross architecture check` and `dross techdebt` legitimately
+// shell git without ever running the repo's suite. So each carries a marker,
+// and the marker has to earn its place.
 
 // execConsentMarkedFiles are the helper-package files whose sites are exempt by
 // marker rather than gated by reach. Repo-relative for the reason
 // execConsentGatedFiles is: `run.go` is four different files in this tree.
 var execConsentMarkedFiles = []string{
-	"internal/codex/git.go",
+	"internal/gitrun/gitrun.go",
 	"internal/codex/ast_grep.go",
-	"internal/quality/run.go",
-	"internal/security/run.go",
-	"internal/techdebt/run.go",
 	"internal/ship/open.go",
 	"internal/remote/remote.go",
 }
@@ -2333,6 +2391,7 @@ func TestHelperPackageSpawnsAreMarked(t *testing.T) {
 	if len(sites) == 0 {
 		t.Fatal("found no spawn sites in the helper packages — the walk stopped covering them")
 	}
+	assertPinsHoldSites(t, g, "execConsentMarkedFiles", execConsentMarkedFiles)
 	for _, f := range g.findings() {
 		for _, rel := range execConsentMarkedFiles {
 			if execFindingIsIn(f, rel) {
@@ -2519,6 +2578,69 @@ func TestDeletingVerifysGateFlagsEveryMutationSpawn(t *testing.T) {
 	if got != want {
 		t.Errorf("deleting verify's consent check flagged %d of %d mutation spawns — the gate half of the verdict is partly decorative", got, want)
 	}
+}
+
+// TestDeletingVerifysGateFlagsItsDetachSpawn is the same proof for verify's
+// transport spawn, which moved to internal/verify/detach.go behind the check
+// that stays in verify.go: ungating that byte-identical anchor must turn the
+// detach site into a finding, so its gated verdict is not decorative.
+func TestDeletingVerifysGateFlagsItsDetachSpawn(t *testing.T) {
+	g := repoExecGraph(t)
+	if len(g.sitesIn("internal/verify/detach.go")) == 0 {
+		t.Fatal("internal/verify/detach.go holds no spawn site")
+	}
+	g = g.withSurgery(t, execLiveSurgeries[1])
+	var found bool
+	for _, f := range g.findings() {
+		if execFindingIsIn(f, "internal/verify/detach.go") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("deleting verify's consent check left internal/verify/detach.go clean — the gate half of its verdict is decorative:\n%v", g.findings())
+	}
+}
+
+// TestDeletingDrainsGateFlagsItsSpawns: the drain's two toolchain spawns —
+// package discovery and the coverage pass — live in internal/survivor/drain.go
+// behind survivor_drain.go's single requireExecConsent. As they stand both are
+// gated and unmarked; deleting that one check must flag both.
+func TestDeletingDrainsGateFlagsItsSpawns(t *testing.T) {
+	g := repoExecGraph(t)
+	sites := g.sitesIn("internal/survivor/drain.go")
+	if len(sites) != 2 {
+		t.Fatalf("internal/survivor/drain.go holds %d spawn sites, want the drain's 2", len(sites))
+	}
+	for _, s := range sites {
+		if s.class != execReachGated || s.marked {
+			t.Errorf("drain.go:%d is %s (marked=%v), want gated and unmarked", s.pos.Line, s.Verdict(), s.marked)
+		}
+	}
+	ungated := g.withSurgery(t, execSurgery{
+		file: "internal/cmd/survivor_drain.go", op: "ungate",
+		anchor: "if err := requireExecConsent(); err != nil {",
+	})
+	flagged := map[int]bool{}
+	for _, f := range ungated.findings() {
+		if execFindingIsIn(f, "internal/survivor/drain.go") {
+			flagged[execFindingLine(f)] = true
+		}
+	}
+	for _, s := range sites {
+		if !flagged[s.pos.Line] {
+			t.Errorf("deleting the drain's consent check left drain.go:%d unflagged:\n%v", s.pos.Line, ungated.findings())
+		}
+	}
+}
+
+// execFindingLine is the line a rendered finding's Pos names, or 0.
+func execFindingLine(f execFinding) int {
+	parts := strings.Split(f.Pos, ":")
+	if len(parts) < 2 {
+		return 0
+	}
+	n, _ := strconv.Atoi(parts[1])
+	return n
 }
 
 // TestSeveringTheGatedEdgeFailsClosed: an edge this walk cannot resolve looks

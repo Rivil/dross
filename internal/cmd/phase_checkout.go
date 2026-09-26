@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Rivil/dross/internal/gitrun"
 )
 
 // phaseCheckout is the guarded replacement for a raw `git checkout phase/<id>`
@@ -46,7 +48,7 @@ Refuses when phase/<id> does not exist locally; it never creates the branch.`,
 			}
 			branch := "phase/" + args[0]
 
-			if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
+			if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
 				return fmt.Errorf("no local branch %s — `dross phase checkout` never creates one.\n"+
 					"Check the phase id (`dross phase list`), or run `dross phase create` if the phase is new", branch)
 			}
@@ -95,7 +97,7 @@ Refuses when the branch does not exist locally; it never creates one. Use
 				return err
 			}
 
-			if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
+			if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
 				return fmt.Errorf("no local branch %s — `dross checkout` never creates one.\n"+
 					"Check the name (`git branch --list`), or create it with git first", branch)
 			}

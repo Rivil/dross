@@ -16,6 +16,7 @@ import (
 
 	"github.com/Rivil/dross/internal/argfence"
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/phase"
 )
@@ -111,7 +112,7 @@ func resolvePinnedCommit(repoDir, sha string) (string, error) {
 	if err := validateGitRef("red-proof commit", sha); err != nil {
 		return "", err
 	}
-	full, err := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, sha+"^{commit}")...)
+	full, err := gitrun.Trim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, sha+"^{commit}")...)
 	if err != nil || full == "" {
 		return "", fmt.Errorf("%s does not resolve to a commit in this repo — pin the commit the proof was actually captured at", sha)
 	}

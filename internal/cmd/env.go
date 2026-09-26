@@ -1,10 +1,8 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,6 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
+
+	"github.com/Rivil/dross/internal/hooks"
 )
 
 // Env manages dross-relevant environment variables stored in
@@ -109,7 +109,7 @@ own shell — never paste tokens into Claude Code chat.`,
 			if err != nil {
 				return err
 			}
-			if err := mutateSettings(path, func(doc map[string]any) {
+			if err := hooks.MutateSettings(path, func(doc map[string]any) {
 				envMap, _ := doc["env"].(map[string]any)
 				if envMap == nil {
 					envMap = map[string]any{}
@@ -136,7 +136,7 @@ func envUnset() *cobra.Command {
 				return err
 			}
 			removed := false
-			if err := mutateSettings(path, func(doc map[string]any) {
+			if err := hooks.MutateSettings(path, func(doc map[string]any) {
 				envMap, _ := doc["env"].(map[string]any)
 				if envMap == nil {
 					return
@@ -159,7 +159,7 @@ func envUnset() *cobra.Command {
 }
 
 func readEnvMap(path string) (map[string]any, error) {
-	doc, err := readSettings(path)
+	doc, err := hooks.ReadSettings(path)
 	if err != nil {
 		return nil, err
 	}
@@ -168,46 +168,4 @@ func readEnvMap(path string) (map[string]any, error) {
 		return map[string]any{}, nil
 	}
 	return envMap, nil
-}
-
-func readSettings(path string) (map[string]any, error) {
-	b, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return map[string]any{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if len(b) == 0 {
-		return map[string]any{}, nil
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(b, &doc); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
-	}
-	return doc, nil
-}
-
-// mutateSettings reads, applies fn, writes back atomically with mode
-// 0o600 since the file holds tokens. JSON map order is alphabetical
-// after marshal — acceptable since JSON has no ordering semantics.
-func mutateSettings(path string, fn func(map[string]any)) error {
-	doc, err := readSettings(path)
-	if err != nil {
-		return err
-	}
-	fn(doc)
-	out, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		return err
-	}
-	out = append(out, '\n')
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, out, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
 }

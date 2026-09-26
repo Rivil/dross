@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -50,7 +51,7 @@ import (
 //
 //   - A SPREAD (`f(x...)`) hides its elements from the AST and is skipped. The
 //     occurrences are: statusline.go's `exec.CommandContext(ctx, "git", full...)`,
-//     ship_recover.go's and phase.go's `exec.Command("git", full...)`,
+//     internal/gitrun's `exec.Command("git", argv(dir, args)...)` in each verb,
 //     ship/open.go's `ghCommand(args...)`, codex/ast_grep.go's
 //     `exec.Command("ast-grep", argv[1:]...)`, and the three mutation runners'
 //     `exec.Command(args[0], args[1:]...)` / `(full[0], full[1:]...)` in
@@ -66,7 +67,8 @@ import (
 //     default. acceptedNonLiteralBinaries below is the one exception list, keyed
 //     by file and expression text rather than by line.
 //
-// The audit scans internal/ and cmd/. internal/codex/git.go is in scope, which
+// The audit scans internal/ and cmd/. internal/gitrun — where every git spawn
+// now lives, codex's log among them — is in scope, which
 // TestAuditScansCodexPackage pins, because the first sweep of the git-only
 // version nearly stopped at internal/cmd; internal/mutation and internal/ship
 // are pinned the same way by TestAuditScansMutationAndShip.
@@ -121,33 +123,82 @@ var valueTakingFlags = map[string]map[string]bool{
 var separatorTokens = map[string]bool{"--": true, "--end-of-options": true}
 
 // acceptedNonLiteralBinaries names the spawn sites whose binary is a variable,
-// with the reason each is safe. Keyed by "<file>:<expr>" so it survives the line
-// moving. Anything not listed is a finding under the fail-closed rule.
+// with the reason each is safe. Keyed by "<repo-relative file>:<expr>" so it
+// survives the line moving — and never by base name: remote.go, run.go and
+// test.go each exist more than once in this tree, and a base-name key would
+// accept the same expression in a file the reason was never written about.
+// Anything not listed is a finding under the fail-closed rule; a key whose site
+// is gone is a finding too (TestAcceptedBinariesAreLive).
 var acceptedNonLiteralBinaries = map[string]string{
-	"update.go:newBinary": "self-exec of the just-downloaded, signature-verified binary; argv is the single literal \"install\"",
-	"test.go:argv[…]": "dross test's remote spawn seam. argv is built by internal/remote's SSHArgs or SyncArgs, which return an error INSTEAD of an argv unless the target passes remote's host/workdir allowlist, so argv[0] is always the literal \"ssh\" or \"rsync\" and every operand is validated before the argv exists. " +
+	"internal/update/apply.go:newBinary": "self-exec of the just-downloaded, signature-verified binary; argv is the single literal \"install\"",
+	"internal/testlane/spawn.go:argv[…]": "dross test's remote spawn seam. argv is built by internal/remote's SSHArgs or SyncArgs, which return an error INSTEAD of an argv unless the target passes remote's host/workdir allowlist, so argv[0] is always the literal \"ssh\" or \"rsync\" and every operand is validated before the argv exists. " +
 		"Written as Command(argv[0]) + an Args assignment rather than the spread form for the same reason remote.go is: a spread is skipped by this walk, so the spread form would be accommodated by accident.",
-	"remote.go:argv[…]": "internal/remote's single exec seam. argv[0] is always the literal \"ssh\" or \"rsync\" chosen by SSHArgs/SyncArgs/FetchArgs, and every operand is validated against remote's host/workdir allowlist before the argv exists. " +
+	"internal/remote/remote.go:argv[…]": "internal/remote's single exec seam. argv[0] is always the literal \"ssh\" or \"rsync\" chosen by SSHArgs/SyncArgs/FetchArgs, and every operand is validated against remote's host/workdir allowlist before the argv exists. " +
 		"It is written as Command(argv[0]) + an Args assignment rather than the usual Command(argv[0], argv[1:]...) spread ON PURPOSE: a spread is skipped by this walk, so the spread form would be accommodated by accident. This form is accommodated on the record.",
 }
 
-// gitCallFuncs are the helpers whose variadic tail IS a git argv.
-var gitCallFuncs = map[string]bool{
-	"gitRun":   true,
-	"gitNoOut": true,
-	"gitTrim":  true,
-	"gitRead":  true,
+// acceptedBinaryKey returns the acceptedNonLiteralBinaries key a spawn site in
+// filename with binary expression expr matches, or "" when none does. The
+// key's file must match filename as a whole repo-relative path suffix, so
+// internal/remote/remote.go does not match internal/testlane/remote.go.
+func acceptedBinaryKey(filename, expr string) string {
+	path := "/" + filepath.ToSlash(filename)
+	for key := range acceptedNonLiteralBinaries {
+		i := strings.LastIndex(key, ".go:")
+		if i < 0 {
+			continue
+		}
+		rel, keyExpr := key[:i+len(".go")], key[i+len(".go:"):]
+		if keyExpr == expr && strings.HasSuffix(path, "/"+rel) {
+			return key
+		}
+	}
+	return ""
 }
 
-// gitHelperSiteFloor is ~25% under each git helper's live call-site count
-// (gitRun 39, gitTrim 40, gitRead 11, gitNoOut 41). A helper that fell out of
-// gitCallFuncs would have its every argv skipped by the audit; its count going
-// to zero is how that shows.
+// staleAcceptedBinaries returns, sorted, every key of table that no scanned
+// site matched.
+func staleAcceptedBinaries(table map[string]string, hits map[string]bool) []string {
+	var stale []string
+	for key := range table {
+		if !hits[key] {
+			stale = append(stale, key)
+		}
+	}
+	sort.Strings(stale)
+	return stale
+}
+
+// gitrunVerbs are internal/gitrun's verbs, whose variadic tail IS a git argv.
+// Recognised by the gitrun selector anywhere in the tree, which is why an
+// aliased import of the package is itself a finding (auditFileHits).
+var gitrunVerbs = map[string]bool{"Trim": true, "Raw": true, "Read": true, "Run": true, "Quiet": true}
+
+// gitrunImportPath is the runner's import path.
+const gitrunImportPath = "github.com/Rivil/dross/internal/gitrun"
+
+// gitCallFuncs are the calls whose variadic tail IS a git argv, keyed as
+// spawnArgvOf names them: one per gitrun verb. The bare cmd helpers they
+// replaced (gitRun, gitTrim, gitRead, gitNoOut) are gone from production code,
+// so the bare-identifier form is no longer recognised at all.
+var gitCallFuncs = map[string]bool{
+	"gitrun.Run":   true,
+	"gitrun.Quiet": true,
+	"gitrun.Trim":  true,
+	"gitrun.Read":  true,
+	"gitrun.Raw":   true,
+}
+
+// gitHelperSiteFloor is ~25% under each gitrun verb's live call-site count
+// when the cmd helpers were rewritten onto it (Run 39, Trim 40, Read 11,
+// Quiet 41; floors 29/30/8/30). A verb that fell out of gitCallFuncs would have
+// its every argv skipped by the audit; its count going to zero is how that
+// shows. Raw has no floor: it had no call sites when the floors were set.
 var gitHelperSiteFloor = map[string]int{
-	"gitRun":   29,
-	"gitTrim":  30,
-	"gitRead":  8,
-	"gitNoOut": 30,
+	"gitrun.Run":   29,
+	"gitrun.Trim":  30,
+	"gitrun.Read":  8,
+	"gitrun.Quiet": 30,
 }
 
 // gitHelperSiteFloorErr checks per-helper call-site counts against the floor.
@@ -197,7 +248,7 @@ func gitHelperSites(t *testing.T) map[string]int {
 }
 
 // TestGitHelperCallSiteFloor: every git helper's argv is audited at every one
-// of its call sites. Dropping a helper from gitCallFuncs — gitRun above all,
+// of its call sites. Dropping a verb from gitCallFuncs — gitrun.Run above all,
 // the helper every effect-only git call goes through — takes its count to zero.
 func TestGitHelperCallSiteFloor(t *testing.T) {
 	counts := gitHelperSites(t)
@@ -208,9 +259,9 @@ func TestGitHelperCallSiteFloor(t *testing.T) {
 	for k, v := range counts {
 		without[k] = v
 	}
-	delete(without, "gitRun")
+	delete(without, "gitrun.Run")
 	if gitHelperSiteFloorErr(without) == nil {
-		t.Error("the floor passes with no gitRun call site audited")
+		t.Error("the floor passes with no gitrun.Run call site audited")
 	}
 	atFloor := map[string]int{}
 	for k, v := range gitHelperSiteFloor {
@@ -219,9 +270,9 @@ func TestGitHelperCallSiteFloor(t *testing.T) {
 	if err := gitHelperSiteFloorErr(atFloor); err != nil {
 		t.Errorf("the floor fails at its own minimum: %v", err)
 	}
-	atFloor["gitRun"]--
+	atFloor["gitrun.Run"]--
 	if gitHelperSiteFloorErr(atFloor) == nil {
-		t.Error("the floor passes one gitRun site under its minimum")
+		t.Error("the floor passes one gitrun.Run site under its minimum")
 	}
 }
 
@@ -236,7 +287,22 @@ type auditFinding struct {
 
 // auditFile walks one parsed file and returns the positionals it flags.
 func auditFile(fset *token.FileSet, f *ast.File) []auditFinding {
+	return auditFileHits(fset, f, nil)
+}
+
+// auditFileHits is auditFile recording, into hits when non-nil, every
+// acceptedNonLiteralBinaries key a site in the file consumed.
+func auditFileHits(fset *token.FileSet, f *ast.File, hits map[string]bool) []auditFinding {
 	var out []auditFinding
+
+	for _, imp := range f.Imports {
+		if path, err := strconv.Unquote(imp.Path.Value); err == nil && path == gitrunImportPath && imp.Name != nil && imp.Name.Name != "gitrun" {
+			out = append(out, auditFinding{
+				Pos: fset.Position(imp.Pos()).String(), Arg: imp.Name.Name, Call: "import", Bin: "git",
+				Why: "internal/gitrun imported as " + quote(imp.Name.Name) + " — every argv audit recognises the runner's calls by the gitrun selector, so an alias hides them all",
+			})
+		}
+	}
 
 	ast.Inspect(f, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
@@ -253,10 +319,12 @@ func auditFile(fset *token.FileSet, f *ast.File) []auditFinding {
 			return true
 		}
 		pos := fset.Position(call.Pos())
-		file := filepath.Base(pos.Filename)
 
 		if bin == "" {
-			if _, ok := acceptedNonLiteralBinaries[file+":"+binExpr]; ok {
+			if key := acceptedBinaryKey(pos.Filename, binExpr); key != "" {
+				if hits != nil {
+					hits[key] = true
+				}
 				return true
 			}
 			out = append(out, auditFinding{
@@ -336,17 +404,26 @@ func quote(s string) string { return "\"" + s + "\"" }
 func spawnArgvOf(call *ast.CallExpr) (name, bin, binExpr string, args []ast.Expr, ok bool) {
 	switch fn := call.Fun.(type) {
 	case *ast.Ident:
-		// gitRun(repoDir, args...) — first arg is the repo dir.
-		if gitCallFuncs[fn.Name] && len(call.Args) > 1 {
-			return fn.Name, "git", "", call.Args[1:], true
-		}
 		// ghCommand(args...) — the whole tail is the argv.
 		if fn.Name == "ghCommand" && len(call.Args) > 0 {
 			return fn.Name, "gh", "", call.Args, true
 		}
 	case *ast.SelectorExpr:
 		pkg, isIdent := fn.X.(*ast.Ident)
-		if !isIdent || pkg.Name != "exec" {
+		if !isIdent {
+			return "", "", "", nil, false
+		}
+		// gitrun.TrimWith(opts, dir, args...) and RawWith — the options form;
+		// the dir is second and the tail is the git argv.
+		if pkg.Name == "gitrun" && (fn.Sel.Name == "TrimWith" || fn.Sel.Name == "RawWith") && len(call.Args) > 2 {
+			return "gitrun." + fn.Sel.Name, "git", "", call.Args[2:], true
+		}
+		// gitrun.Trim(dir, args...) and its siblings — the repo-wide git
+		// runner; first arg is the dir, the tail is the git argv.
+		if pkg.Name == "gitrun" && gitrunVerbs[fn.Sel.Name] && len(call.Args) > 1 {
+			return "gitrun." + fn.Sel.Name, "git", "", call.Args[1:], true
+		}
+		if pkg.Name != "exec" {
 			return "", "", "", nil, false
 		}
 		if fn.Sel.Name != "Command" && fn.Sel.Name != "CommandContext" {
@@ -423,10 +500,19 @@ var auditRoots = []string{"internal", "cmd"}
 // runAudit walks the audit roots and returns every finding plus the file count.
 func runAudit(t *testing.T) ([]auditFinding, int) {
 	t.Helper()
+	findings, scanned, _ := runAuditHits(t)
+	return findings, scanned
+}
+
+// runAuditHits is runAudit also returning the acceptedNonLiteralBinaries keys
+// the live tree consumed.
+func runAuditHits(t *testing.T) ([]auditFinding, int, map[string]bool) {
+	t.Helper()
 	root := repoRootForDocs(t)
 	fset := token.NewFileSet()
 	var findings []auditFinding
 	scanned := 0
+	hits := map[string]bool{}
 
 	for _, r := range auditRoots {
 		err := filepath.WalkDir(filepath.Join(root, r), func(path string, d os.DirEntry, err error) error {
@@ -441,14 +527,96 @@ func runAudit(t *testing.T) ([]auditFinding, int) {
 				return perr
 			}
 			scanned++
-			findings = append(findings, auditFile(fset, f)...)
+			findings = append(findings, auditFileHits(fset, f, hits)...)
 			return nil
 		})
 		if err != nil {
 			t.Fatalf("walk %s: %v", r, err)
 		}
 	}
-	return findings, scanned
+	return findings, scanned, hits
+}
+
+// TestAcceptedBinariesAreLive: every accepted non-literal binary still names a
+// site in the tree. A key left behind when its spawn moved would sit ready to
+// accept whatever next appears under that name — and a stale key is refused.
+func TestAcceptedBinariesAreLive(t *testing.T) {
+	_, _, hits := runAuditHits(t)
+	for _, key := range staleAcceptedBinaries(acceptedNonLiteralBinaries, hits) {
+		t.Errorf("acceptedNonLiteralBinaries[%q] matches no spawn site — its site moved or went; re-key or drop it", key)
+	}
+	table := map[string]string{"internal/cmd/gone.go:vanished": "a site that no longer exists"}
+	for k, v := range acceptedNonLiteralBinaries {
+		table[k] = v
+	}
+	if got := staleAcceptedBinaries(table, hits); len(got) != 1 || got[0] != "internal/cmd/gone.go:vanished" {
+		t.Errorf("stale keys = %v, want exactly the vanished one", got)
+	}
+}
+
+// TestAliasedGitrunImportIsAFinding: the audits see a git argv through the
+// gitrun selector, so importing the runner under another name — or dotted in —
+// would hide every call. The import itself is reported; the plain import is
+// not.
+func TestAliasedGitrunImportIsAFinding(t *testing.T) {
+	for _, tc := range []struct {
+		name, imp string
+		want      int
+	}{
+		{"plain", `"` + gitrunImportPath + `"`, 0},
+		{"aliased", `g "` + gitrunImportPath + `"`, 1},
+		{"dotted", `. "` + gitrunImportPath + `"`, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, "x.go", "package x\n\nimport "+tc.imp+"\n", 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := auditFile(fset, f)
+			if len(got) != tc.want {
+				t.Fatalf("findings = %+v, want %d", got, tc.want)
+			}
+			if tc.want == 1 && !strings.Contains(got[0].Why, "gitrun selector") {
+				t.Errorf("the finding does not say why an alias matters: %s", got[0].Why)
+			}
+		})
+	}
+}
+
+// TestAcceptedBinaryKeyIsRepoRelative: the remote.go key accepts its seam at
+// internal/remote/remote.go and nowhere else — the same expression in a file
+// that merely shares the base name is a finding.
+func TestAcceptedBinaryKeyIsRepoRelative(t *testing.T) {
+	const src = "package x\n\nimport \"os/exec\"\n\nfunc f(argv []string) *exec.Cmd {\n\tcmd := exec.Command(argv[0])\n\tcmd.Args = argv\n\treturn cmd\n}\n"
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		rel      string
+		accepted bool
+	}{
+		{"internal/remote/remote.go", true},
+		{"internal/testlane/remote.go", false},
+		{"remote.go", false},
+	} {
+		t.Run(tc.rel, func(t *testing.T) {
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, filepath.Join(dir, filepath.FromSlash(tc.rel)), src, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hits := map[string]bool{}
+			findings := auditFileHits(fset, f, hits)
+			if tc.accepted {
+				if len(findings) != 0 || !hits["internal/remote/remote.go:argv[…]"] {
+					t.Errorf("findings = %v, hits = %v — the seam was not accepted by its own key", findings, hits)
+				}
+				return
+			}
+			if len(findings) != 1 || len(hits) != 0 {
+				t.Errorf("findings = %v, hits = %v — a base-name match was accepted", findings, hits)
+			}
+		})
+	}
 }
 
 // TestNoUnseparatedPositional is the gate, across every binary.
@@ -570,9 +738,7 @@ func auditSnippet(t *testing.T, lines ...string) []auditFinding {
 		"import \"os/exec\"\n" +
 		"var _ = exec.Command\n" +
 		"var ghCommand func(...string) *exec.Cmd\n" +
-		"func gitRun(dir string, a ...string) error { return nil }\n" +
-		"func gitNoOut(dir string, a ...string) error { return nil }\n" +
-		"func gitTrim(dir string, a ...string) (string, error) { return \"\", nil }\n" +
+
 		"func snippet(repoDir, branch, base, ref, path, msg, pkg, dir, fields, num, file, lang, pattern, mutate, chosen, host string) {\n"
 	f, err := parser.ParseFile(fset, "snippet.go", preamble+strings.Join(lines, "\n")+"\n}\n", 0)
 	if err != nil {
@@ -590,11 +756,11 @@ func TestAuditFlagsBarePrefixlessVar(t *testing.T) {
 		line string
 		want bool
 	}{
-		{"const prefix", `gitNoOut(repoDir, "rev-parse", "refs/heads/"+branch)`, false},
-		{"origin prefix", `gitNoOut(repoDir, "rev-parse", "origin/"+base)`, false},
-		{"bare var", `gitNoOut(repoDir, "rev-parse", branch)`, true},
-		{"const suffix only", `gitNoOut(repoDir, "ls-tree", ref+":.dross")`, true},
-		{"empty prefix", `gitNoOut(repoDir, "rev-parse", ""+branch)`, true},
+		{"const prefix", `gitrun.Quiet(repoDir, "rev-parse", "refs/heads/"+branch)`, false},
+		{"origin prefix", `gitrun.Quiet(repoDir, "rev-parse", "origin/"+base)`, false},
+		{"bare var", `gitrun.Quiet(repoDir, "rev-parse", branch)`, true},
+		{"const suffix only", `gitrun.Quiet(repoDir, "ls-tree", ref+":.dross")`, true},
+		{"empty prefix", `gitrun.Quiet(repoDir, "rev-parse", ""+branch)`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := len(auditSnippet(t, "\t"+tc.line)) > 0
@@ -606,10 +772,38 @@ func TestAuditFlagsBarePrefixlessVar(t *testing.T) {
 }
 
 // TestAuditScansCodexPackage: the first sweep of the git-only version nearly
-// stopped at internal/cmd, and internal/codex/git.go shells git too. A narrowed
-// scan root is a silent loss of coverage, so it is asserted rather than assumed.
+// stopped at internal/cmd, and git is spawned outside it — codex's log first
+// among them, which now runs through internal/gitrun with every other git call.
+// A narrowed scan root is a silent loss of coverage, so it is asserted rather
+// than assumed, and the pin names the file that actually holds the spawn:
+// codex/git.go holds none any more, and gitrun.go does.
 func TestAuditScansCodexPackage(t *testing.T) {
-	assertAuditCovers(t, filepath.Join("internal", "codex", "git.go"))
+	assertAuditCovers(t, filepath.Join("internal", "gitrun", "gitrun.go"))
+	root := repoRootForDocs(t)
+	if n, err := execSpawnCalls(filepath.Join(root, "internal", "gitrun", "gitrun.go")); err != nil || n == 0 {
+		t.Errorf("internal/gitrun/gitrun.go holds %d spawn sites (%v) — the pin names a file with no spawn", n, err)
+	}
+	if n, err := execSpawnCalls(filepath.Join(root, "internal", "codex", "git.go")); err != nil || n != 0 {
+		t.Errorf("internal/codex/git.go holds %d spawn sites (%v), want 0 — its log goes through gitrun", n, err)
+	}
+}
+
+// execSpawnCalls counts the exec.Command/CommandContext calls in one file.
+func execSpawnCalls(path string) (int, error) {
+	f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	ast.Inspect(f, func(node ast.Node) bool {
+		if call, ok := node.(*ast.CallExpr); ok {
+			if name, _, _, _, ok := spawnArgvOf(call); ok && strings.HasPrefix(name, "exec.") {
+				n++
+			}
+		}
+		return true
+	})
+	return n, nil
 }
 
 // TestAuditScansMutationAndShip is the same assertion for the two packages this

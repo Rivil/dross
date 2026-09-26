@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/secretscan"
 )
@@ -67,14 +68,14 @@ func scanDrossArtifacts(repoDir string) ([]secretscan.Hit, error) {
 // history. Outside git — a fresh `dross init` in a bare directory — there is
 // no staging boundary to read, so every regular file under .dross counts.
 func listDrossArtifacts(repoDir string) ([]string, error) {
-	if gitNoOut(repoDir, "rev-parse", "--is-inside-work-tree") == nil {
+	if gitrun.Quiet(repoDir, "rev-parse", "--is-inside-work-tree") == nil {
 		return listDrossArtifactsGit(repoDir)
 	}
 	return listDrossArtifactsWalk(repoDir)
 }
 
 func listDrossArtifactsGit(repoDir string) ([]string, error) {
-	out, err := gitRead(repoDir, gitPathArgs("ls-files",
+	out, err := gitrun.Read(repoDir, gitPathArgs("ls-files",
 		[]string{"-z", "--cached", "--others", "--exclude-standard"}, RootDirName)...)
 	if err != nil {
 		return nil, fmt.Errorf("git ls-files %s: %w", RootDirName, err)

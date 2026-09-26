@@ -13,6 +13,7 @@
     "board-sync-truth": "DRO-19",
     "board-task-mirror": "DRO-32",
     "cache-budget-prune": "DRO-132",
+    "cmd-exec-baseline-drain": "DRO-708",
     "cmd-package-decomposition": "DRO-477",
     "cmd-test-duration": "DRO-634",
     "completion-record-truth": "DRO-135",
@@ -538,6 +539,91 @@
     },
     "board-task-mirror/t-7": {
       "issue": "DRO-123"
+    },
+    "cmd-exec-baseline-drain/t-1": {
+      "issue": "DRO-709",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-10": {
+      "issue": "DRO-718",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-11": {
+      "issue": "DRO-719",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-12": {
+      "issue": "DRO-720",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-13": {
+      "issue": "DRO-721",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-14": {
+      "issue": "DRO-722",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-15": {
+      "issue": "DRO-723",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-16": {
+      "issue": "DRO-724",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-17": {
+      "issue": "DRO-725",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-2": {
+      "issue": "DRO-710",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-3": {
+      "issue": "DRO-711",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-4": {
+      "issue": "DRO-712",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-5": {
+      "issue": "DRO-713",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-6": {
+      "issue": "DRO-714",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-7": {
+      "issue": "DRO-715",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-8": {
+      "issue": "DRO-716",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "cmd-exec-baseline-drain/t-9": {
+      "issue": "DRO-717",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "cmd-package-decomposition/t-1": {
       "issue": "DRO-478",
