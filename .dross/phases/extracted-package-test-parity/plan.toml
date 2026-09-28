@@ -1,4 +1,4 @@
-task_seq = 14
+task_seq = 15
 
 [phase]
   id = "extracted-package-test-parity"
@@ -151,3 +151,14 @@ task_seq = 14
   covers = ["c-5", "c-3"]
   test_contract = ["if count-0 NOT COVERED mutants are called uncoverable, a new summary test fails: 32 in-scope, 26 killed, 6 NOT COVERED all on count-0 blocks prints no 'uncoverable by construction' count and names 6 as a test gap; with 2 on no-block lines and 4 on count-0 lines it prints 2 uncoverable and efficacy over 30 reachable = 26/30", "if the classifier drifts from the drain's, the same test fails: the no-block vs count-0 split for a fixture profile agrees with survivor.Derive's CoverageNoBlock / CoverageNotCovered for every fixture line", "if behaviour changed elsewhere, remote dross test (full suite, never --local) goes red: TestNoTestLost, TestNoTestLostDetectsDropsAndCopies, issue*_test.go, doctor*_test.go and TestCLISurfacePinned pass with no assertion edits", "if the only production edits are not verify's NOT COVERED summary and cmd/coverfloor, git diff --name-only 018d325...HEAD -- '*.go' ':!*_test.go' lists more than cmd/coverfloor/*.go, internal/cmd/verify.go and internal/verify/verify.go"]
   status = "done"
+
+[[task]]
+  id = "t-15"
+  wave = 6
+  title = "Stop the per-leg note dropping test gaps from efficacy"
+  files = ["internal/cmd/verify.go", "internal/cmd/verify_test.go"]
+  description = "Found by the 2026-09-28 re-verify: printVerifySummary's per-leg note (internal/cmd/verify.go:1409) still prints 'N/M mutants NOT COVERED — tests never ran them; efficacy excluding them = X', dropping every NOT COVERED mutant from its efficacy figure. The same run printed 'efficacy excluding them = 1.00' beside t-14's correct 'efficacy over the 300 reachable = 0.99' (3 no-block case lines 869/878/919, 3 count-0 test gaps 242/486/490). 'tests never ran them' is also false for no-block switch-case mutants, whose arms do run. Make the leg line agree with t-14's split: drop the per-leg efficacy figure (the pooled summary line already carries the split), or split it per leg — executor's call, keep the edit minimal. TestVerifyCover_SummaryEfficacyNote / _SummaryNoNoteWhenCovered / _SummaryDenomZeroSkipsEfficacy are in internal/cmd/testdata/cli_surface/tests_before.txt, so TestNoTestLost forbids deleting or renaming them: keep the names, change their assertions (inside c-3's carve-out for verify's NOT COVERED summary). COST: edits internal/cmd/verify.go again, so re-verify mutates all of internal/cmd (~1h46m on helicon, 2026-09-28) — dispatch detached. make install (r-01) before re-verifying."
+  covers = ["c-5", "c-3"]
+  depends_on = ["t-14"]
+  test_contract = ["if the per-leg note excludes count-0 test gaps from an efficacy figure, TestVerifyCover_SummaryEfficacyNote fails: a gremlins leg with NOT COVERED survivors prints no 'efficacy excluding them' figure that drops them (or one that keeps test gaps in its denominator)", "if the leg line calls no-block mutants never run, the same test fails: no 'tests never ran them' wording for NOT COVERED as a whole", "if behaviour changed elsewhere, remote dross test (full suite, never --local) goes red: TestNoTestLost, TestCLISurfacePinned, issue*_test.go and doctor*_test.go pass with no assertion edits"]
+  status = "pending"

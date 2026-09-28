@@ -21,7 +21,7 @@
 
 [[criteria]]
   id = "c-5"
-  text = "`dross verify` counts a gremlins NOT COVERED mutant as uncoverable only when no coverage block holds its line; a count-0 block is reported as a test gap and counts as reachable (in the denominator of the 'efficacy over reachable' figure) — proven by a new test."
+  text = "`dross verify` counts a gremlins NOT COVERED mutant as uncoverable only when no coverage block holds its line; a count-0 block is reported as a test gap and counts as reachable in every efficacy figure verify prints (the summary's 'efficacy over reachable' and the per-leg note) — proven by a new test."
 
 [[decisions]]
   key = "test_home"
