@@ -1029,6 +1029,11 @@ func finishVerify(root, phaseID string, spec *phase.Spec, t *verify.Tests, measu
 		ids = append(ids, c.ID)
 	}
 	v := verify.Skeleton(t, ids)
+	var prof *survivor.Profile
+	if pkgs := verify.NotCoveredPackages(t); len(pkgs) > 0 {
+		prof = notCoveredProfileFn(repoRoot, pkgs)
+	}
+	verify.SplitNotCovered(v, t, profileClassifier{repoRoot: repoRoot, prof: prof})
 	appendStalenessNotes(v, repoRoot, store)
 	if err := v.Save(verifyPath); err != nil {
 		return err
@@ -1450,14 +1455,50 @@ func printOverallScore(v *verify.Verify) {
 		v.Summary.MutationScore, v.Summary.MutantsInScope,
 		v.Summary.MutantsKilled, v.Summary.MutantsSurvived)
 	// Only when there are any. A line that is always present stops being read,
-	// and "0 uncoverable" is not news.
-	if v.Summary.MutantsNotCovered > 0 {
-		reachable := v.Summary.MutantsInScope - v.Summary.MutantsNotCovered
-		Printf("    of which %d uncoverable by construction (gremlins attributes no coverage block to them) — "+
+	// and "0 uncoverable" is not news. Only a no-block survivor leaves the
+	// reachable denominator; the rest of NOT COVERED is named and stays in it.
+	s := v.Summary
+	if s.MutantsNoBlock > 0 {
+		Printf("    of which %d uncoverable by construction (no go-cover block holds their line) — "+
 			"efficacy over the %d reachable = %.2f\n",
-			v.Summary.MutantsNotCovered, reachable,
-			mutation.PooledScore(v.Summary.MutantsKilled, v.Summary.MutantsSurvived-v.Summary.MutantsNotCovered, 0))
+			s.MutantsNoBlock, s.MutantsInScope-s.MutantsNoBlock,
+			mutation.PooledScore(s.MutantsKilled, s.MutantsSurvived-s.MutantsNoBlock, 0))
 	}
+	if s.MutantsTestGap > 0 {
+		Printf("    of which %d NOT COVERED in a coverage block no test ran — a test gap, counted as reachable\n",
+			s.MutantsTestGap)
+	}
+	if rest := s.MutantsNotCovered - s.MutantsNoBlock - s.MutantsTestGap; rest > 0 {
+		Printf("    of which %d NOT COVERED unplaced (no coverage profile, or it shows the line running) — "+
+			"counted as reachable\n", rest)
+	}
+}
+
+// notCoveredProfileFn builds the profile verify splits NOT COVERED survivors
+// against. It compiles the packages' tests with coverage and runs none of them
+// (-run=^$): the split needs only WHERE the blocks are, since gremlins already
+// measured that the line never ran — and running the suites here would repeat
+// the internal/cmd leg on whichever machine collects the run.
+var notCoveredProfileFn = func(repoRoot string, pkgs []string) *survivor.Profile {
+	return survivor.RunCoverageProfile(repoRoot, append([]string{"-run=^$"}, pkgs...))
+}
+
+// profileClassifier places a NOT COVERED survivor with the drain's own
+// classifier, survivor.Derive, so verify and `dross survivor drain` cannot
+// disagree about which lines are uncoverable.
+type profileClassifier struct {
+	repoRoot string
+	prof     *survivor.Profile
+}
+
+func (c profileClassifier) ClassifyNotCovered(file string, line int, op string) verify.NotCoveredKind {
+	switch survivor.Derive(c.repoRoot, file, line, op, c.prof, true).Coverage {
+	case survivor.CoverageNoBlock:
+		return verify.NotCoveredNoBlock
+	case survivor.CoverageNotCovered:
+		return verify.NotCoveredTestGap
+	}
+	return verify.NotCoveredUnplaced
 }
 
 // scopeFileListCap bounds how many scoped files are named before the line
