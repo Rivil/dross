@@ -1398,18 +1398,9 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 		m := lr.Mutation
 		Printf("  %s (%s): %d files — killed=%d survived=%d (not_covered=%d) timeout=%d errors=%d score=%.2f\n",
 			lr.Name, lr.Tool, len(lr.Files), m.Killed, m.Survived, m.NotCovered, m.Timeout, m.Errors, m.Score)
-		if m.NotCovered > 0 {
-			// Show the gremlins-style efficacy (ignores NOT COVERED) when it
-			// diverges meaningfully from dross's score. Often signals a
-			// coverage blind spot — e.g. Go's package-init code in top-level
-			// var arrays — rather than weak tests.
-			efficacyDenom := m.Killed + (m.Survived - m.NotCovered)
-			if efficacyDenom > 0 {
-				efficacy := float64(m.Killed) / float64(efficacyDenom)
-				Printf("    note: %d/%d mutants NOT COVERED — tests never ran them; efficacy excluding them = %.2f\n",
-					m.NotCovered, m.Killed+m.Survived+m.Timeout, efficacy)
-			}
-		}
+		// No per-leg efficacy. It used to drop every NOT COVERED mutant from its
+		// denominator, count-0 test gaps included, and printed 1.00 beside
+		// printOverallScore's split. That split is the only efficacy figure.
 	}
 	for _, s := range t.Skipped {
 		Printf("  skipped %s — %s\n", s.File, s.Reason)
