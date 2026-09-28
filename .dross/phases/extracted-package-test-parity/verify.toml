@@ -1,70 +1,66 @@
 [verify]
   phase = "extracted-package-test-parity"
-  generated_at = 2026-09-28T17:25:21.130572Z
-  verdict = "partial"
+  generated_at = 2026-09-28T19:31:35.043976Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-09-28T17:45:36.568551Z
+  finalized_at = 2026-09-28T19:32:13.035582Z
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9801980198019802
-  mutants_killed = 297
+  mutation_score = 0.9795221843003413
+  mutants_killed = 287
   mutants_survived = 6
   mutants_not_covered = 6
   mutants_no_block = 3
   mutants_test_gap = 3
-  mutants_in_scope = 303
+  mutants_in_scope = 293
   unclassified_in_scope = 0
   criteria_total = 5
-  criteria_covered = 4
-  criteria_uncovered = 1
+  criteria_covered = 5
+  criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 297
+    killed = 287
     survived = 6
     timeout = 0
-    in_scope = 303
-    score = 0.9801980198019802
-    file_count = 20
+    in_scope = 293
+    score = 0.9795221843003413
+    file_count = 21
     measured_on = "helicon"
-    whole_file = ["cmd/coverfloor/ci_wiring_test.go — adapter-lacks-range-runner", "cmd/coverfloor/fixture_test.go — adapter-lacks-range-runner", "cmd/coverfloor/floor.go — adapter-lacks-range-runner", "cmd/coverfloor/floor_test.go — adapter-lacks-range-runner", "cmd/coverfloor/main.go — adapter-lacks-range-runner", "internal/boardsync/backlog_push_test.go — adapter-lacks-range-runner", "internal/boardsync/backlog_reconcile_test.go — adapter-lacks-range-runner", "internal/boardsync/doubles_test.go — adapter-lacks-range-runner", "internal/boardsync/inbound_test.go — adapter-lacks-range-runner", "internal/boardsync/milestone_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_apply_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_undo_test.go — adapter-lacks-range-runner", "internal/boardsync/sync_paths_test.go — adapter-lacks-range-runner", "internal/cmd/score_surface_test.go — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_notcovered_test.go — adapter-lacks-range-runner", "internal/secretscan/writers_test.go — adapter-lacks-range-runner", "internal/verify/detach_test.go — adapter-lacks-range-runner", "internal/verify/notcovered_test.go — adapter-lacks-range-runner", "internal/verify/verify.go — adapter-lacks-range-runner"]
+    whole_file = ["cmd/coverfloor/ci_wiring_test.go — adapter-lacks-range-runner", "cmd/coverfloor/fixture_test.go — adapter-lacks-range-runner", "cmd/coverfloor/floor.go — adapter-lacks-range-runner", "cmd/coverfloor/floor_test.go — adapter-lacks-range-runner", "cmd/coverfloor/main.go — adapter-lacks-range-runner", "internal/boardsync/backlog_push_test.go — adapter-lacks-range-runner", "internal/boardsync/backlog_reconcile_test.go — adapter-lacks-range-runner", "internal/boardsync/doubles_test.go — adapter-lacks-range-runner", "internal/boardsync/inbound_test.go — adapter-lacks-range-runner", "internal/boardsync/milestone_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_apply_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_undo_test.go — adapter-lacks-range-runner", "internal/boardsync/sync_paths_test.go — adapter-lacks-range-runner", "internal/cmd/score_surface_test.go — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_notcovered_test.go — adapter-lacks-range-runner", "internal/cmd/verify_test.go — adapter-lacks-range-runner", "internal/secretscan/writers_test.go — adapter-lacks-range-runner", "internal/verify/detach_test.go — adapter-lacks-range-runner", "internal/verify/notcovered_test.go — adapter-lacks-range-runner", "internal/verify/verify.go — adapter-lacks-range-runner"]
 
 [[criterion]]
   id = "c-1"
   status = "covered"
   tests = ["internal/boardsync/*_test.go (8 new files): gremlins 265/265 KILLED on 2026-09-26, 0 lived, 0 not covered", "internal/secretscan/writers_test.go:TestWriterValidationNamesEveryMalformedShape + TestLiveWriterRegistryValidatesInPackage", "internal/survivor/reasons_repo_test.go:TestRepoAcceptanceReasonsCiteRealTests"]
-  notes = "Evidence carried from the 2026-09-26 drain (25 classified, 25 accepted, 0 outstanding, 0 cross-package-only-coverage). Still current: git diff a332d7a..HEAD over internal/boardsync, internal/secretscan, internal/diag and .dross/survivors.toml is empty."
+  notes = "Evidence from the 2026-09-26 drain (25 classified, 25 accepted, 0 outstanding, 0 cross-package-only-coverage). Still current: git diff a332d7a..HEAD over internal/boardsync, internal/secretscan, internal/diag and .dross/survivors.toml is empty."
 
 [[criterion]]
   id = "c-2"
   status = "covered"
   tests = ["internal/boardsync/{backlog_push,backlog_reconcile,reap_apply,reap_undo,inbound,milestone,sync_paths}_test.go", "internal/secretscan/writers_test.go"]
-  notes = "Re-measured 2026-09-28 (go test -count=1 -coverprofile ./internal/boardsync/ ./internal/secretscan/, statement-weighted per file): backlog.go 99.0% (192/194), reap_apply.go 93.1% (121/130), reap_undo.go 100% (37/37), inbound.go 96.2% (25/26), milestone.go 100% (31/31), writers.go 100% (40/40)."
+  notes = "Measured 2026-09-28 (go test -count=1 -coverprofile ./internal/boardsync/ ./internal/secretscan/, statement-weighted per file): backlog.go 99.0% (192/194), reap_apply.go 93.1% (121/130), reap_undo.go 100% (37/37), inbound.go 96.2% (25/26), milestone.go 100% (31/31), writers.go 100% (40/40). Packages unchanged since."
 
 [[criterion]]
   id = "c-3"
   status = "covered"
   tests = ["internal/cmd/boundary_test.go:TestNoTestLost", "internal/cmd/boundary_test.go:TestNoTestLostDetectsDropsAndCopies", "internal/cmd/cli_surface_test.go:TestCLISurfacePinned", "internal/cmd/issue*_test.go, doctor*_test.go"]
-  notes = "Re-proven after t-14: dross test (full suite) exit 0, 50 packages ok, 0 FAIL, internal/cmd 121.5s. internal/cmd diff since 018d325 = verify.go (NOT COVERED summary, c-5's carve-out), new verify_notcovered_test.go, and score_surface_test.go (new tests + one fixture field in TestUncoverableCountIsSurfaced; no existing assertion edited). t-15 edits verify.go again, so this must be re-proven after it."
+  notes = "t-15 gate at 58d9adc: dross test (full suite) exit 0, 50 packages ok, internal/cmd 120.9s; no .go change since. internal/cmd diff since 018d325 is verify.go's NOT COVERED summary (c-5 carve-out) plus its tests: new verify_notcovered_test.go, new tests in score_surface_test.go, and TestVerifyCover_SummaryEfficacyNote's assertions (the per-leg note it pinned was the defect). No issue/doctor/CLI-surface assertion edited."
 
 [[criterion]]
   id = "c-4"
   status = "covered"
   tests = ["cmd/coverfloor/fixture_test.go:TestFixtureBelowFloorFailsTheCheck", "cmd/coverfloor/floor_test.go:TestPassingSummaryNamesTheLowestFile", "cmd/coverfloor/floor_test.go:TestFloorBoundary", "cmd/coverfloor/floor_test.go:TestScopeExcludesOnlyInternalCmd", "cmd/coverfloor/ci_wiring_test.go:TestCoverFloorIsWiredIntoCI + TestCIWiringCheckerCatchesEachBreak"]
-  notes = "t-13 confirmed by gremlins: no survivor in cmd/coverfloor this run (floor.go :79 x4, :122, :134 all killed). Self-test proves the check fails on a below-floor file; wiring pinned against the live ci.yml."
+  notes = "No survivor in cmd/coverfloor (floor.go in the leg, all mutants killed). Self-test proves the check fails on a below-floor file; wiring pinned against the live ci.yml."
 
 [[criterion]]
   id = "c-5"
-  status = "weak"
-  tests = ["internal/cmd/verify_notcovered_test.go:TestFinishVerifySplitsNotCoveredAgainstTheProfile", "internal/cmd/verify_notcovered_test.go:TestNotCoveredSplitAgreesWithDrainDerive", "internal/cmd/score_surface_test.go:TestCountZeroNotCoveredIsATestGap + TestNoBlockSplitSetsTheReachableDenominator + TestUnplacedNotCoveredStaysReachable", "internal/verify/notcovered_test.go:TestSplitNotCoveredCountsOnlyNotCoveredSurvivors"]
-  notes = "Summary split works on live data: verify.go 869/878/919 (case lines, no block) -> 3 uncoverable; 242/486/490 (count-0 seam bodies) -> 3 test gaps; 'efficacy over the 300 reachable = 0.99'. Weak against the reworded c-5: the per-leg note (internal/cmd/verify.go:1409) printed 'efficacy excluding them = 1.00' in the same run, dropping the 3 test gaps, and TestVerifyCover_SummaryEfficacyNote pins it. -> t-15."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-5 weak: printVerifySummary's per-leg note (internal/cmd/verify.go:1409) still drops every NOT COVERED mutant, test gaps included, from 'efficacy excluding them' (printed 1.00 beside the summary's 0.99 over 300 reachable) and says 'tests never ran them' of no-block case lines whose arms run — t-15"
+  status = "covered"
+  tests = ["internal/cmd/verify_notcovered_test.go:TestFinishVerifySplitsNotCoveredAgainstTheProfile", "internal/cmd/verify_notcovered_test.go:TestNotCoveredSplitAgreesWithDrainDerive", "internal/cmd/score_surface_test.go:TestCountZeroNotCoveredIsATestGap + TestNoBlockSplitSetsTheReachableDenominator + TestUnplacedNotCoveredStaysReachable", "internal/cmd/verify_test.go:TestVerifyCover_SummaryEfficacyNote", "internal/verify/notcovered_test.go:TestSplitNotCoveredCountsOnlyNotCoveredSurvivors"]
+  notes = "This run printed one efficacy figure: 'efficacy over the 290 reachable = 0.99' with 3 no-block (verify.go 869/878/919, case lines) and 3 count-0 test gaps (242/486/490) kept in. The per-leg 'efficacy excluding them' note is gone; TestVerifyCover_SummaryEfficacyNote fails with it restored (go test -overlay, 2026-09-28)."
 
 [[finding]]
   severity = "NOTE"
@@ -81,7 +77,3 @@
 [[finding]]
   severity = "NOTE"
   text = "c-4's CI step has not yet run on GitHub (ci.yml triggers on pull_request/push to main): ship-time evidence is the PR run showing the coverage floor step green"
-
-[[finding]]
-  severity = "NOTE"
-  text = "re-verify after t-15 mutates all of internal/cmd again (this run: dispatched 15:39Z, finished 17:25Z on helicon) — dispatch detached"
