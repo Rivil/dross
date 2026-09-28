@@ -161,4 +161,4 @@ task_seq = 15
   covers = ["c-5", "c-3"]
   depends_on = ["t-14"]
   test_contract = ["if the per-leg note excludes count-0 test gaps from an efficacy figure, TestVerifyCover_SummaryEfficacyNote fails: a gremlins leg with NOT COVERED survivors prints no 'efficacy excluding them' figure that drops them (or one that keeps test gaps in its denominator)", "if the leg line calls no-block mutants never run, the same test fails: no 'tests never ran them' wording for NOT COVERED as a whole", "if behaviour changed elsewhere, remote dross test (full suite, never --local) goes red: TestNoTestLost, TestCLISurfacePinned, issue*_test.go and doctor*_test.go pass with no assertion edits"]
-  status = "pending"
+  status = "done"

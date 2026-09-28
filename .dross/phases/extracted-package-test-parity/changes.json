@@ -99,6 +99,22 @@
         }
       ]
     },
+    "t-15": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_test.go"
+      ],
+      "commit": "58d9adc",
+      "completed_at": "2026-09-28T17:50:17.872054Z",
+      "landmarks": [
+        {
+          "feature": "mutation score reporting",
+          "symbol": "printVerifySummary",
+          "loc": "internal/cmd/verify.go:1383",
+          "what": "per-leg line reports raw NOT COVERED count only; the summary's no-block/test-gap split is the sole efficacy figure"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/secretscan/writers_test.go",
