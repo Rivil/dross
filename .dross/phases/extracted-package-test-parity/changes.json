@@ -80,6 +80,25 @@
         }
       ]
     },
+    "t-14": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/verify/verify.go",
+        "internal/cmd/score_surface_test.go",
+        "internal/cmd/verify_notcovered_test.go",
+        "internal/verify/notcovered_test.go"
+      ],
+      "commit": "80c3ecc",
+      "completed_at": "2026-09-28T15:24:45.885862Z",
+      "landmarks": [
+        {
+          "feature": "Verification",
+          "symbol": "verify.SplitNotCovered",
+          "loc": "internal/verify/verify.go:1073",
+          "what": "splits NOT COVERED with the drain's survivor.Derive over a -run=^$ block profile: only no-block lines are uncoverable, count-0 lines are a test gap kept in the reachable denominator"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/secretscan/writers_test.go",
