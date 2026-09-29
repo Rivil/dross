@@ -92,6 +92,7 @@
   locked = true
 
 [[deferred]]
+  id = "9512f3c6d1f02f2d"
   text = "/dross-watch surfaces the pin-bump bot's open PRs alongside Dependabot's (count, age), so a bump PR cannot sit unmerged unseen."
   why = "Bot-PR surfacing is watch-bot-prs's job — the next phase on the roadmap."
   target = "watch-bot-prs"

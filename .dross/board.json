@@ -91,7 +91,6 @@
     "slug:prompt-behaviour-evals": "DRO-704",
     "slug:review-comment-ingest": "DRO-693",
     "slug:review-edge-lenses": "DRO-696",
-    "slug:run-block-pin-currency": "DRO-626",
     "slug:solo-task-review": "DRO-690",
     "slug:spec-edge-probe": "DRO-695",
     "slug:spec-fact-drift": "DRO-698",
@@ -276,6 +275,7 @@
     "someday:id:93982a21433b0e5b": "DRO-619",
     "someday:id:93b12bb9e251a4ca": "DRO-522",
     "someday:id:93ce98de1002acab": "DRO-50",
+    "someday:id:9512f3c6d1f02f2d": "DRO-760",
     "someday:id:95f1b84c6d96b480": "DRO-593",
     "someday:id:967609cbf63aac95": "DRO-100",
     "someday:id:969a6d87203fdf51": "DRO-57",
@@ -1683,67 +1683,67 @@
     "run-block-pin-currency/t-1": {
       "issue": "DRO-747",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "run-block-pin-currency/t-10": {
       "issue": "DRO-755",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "run-block-pin-currency/t-11": {
       "issue": "DRO-757",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "run-block-pin-currency/t-12": {
       "issue": "DRO-758",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "run-block-pin-currency/t-13": {
       "issue": "DRO-759",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "run-block-pin-currency/t-2": {
       "issue": "DRO-748",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "run-block-pin-currency/t-3": {
       "issue": "DRO-749",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "run-block-pin-currency/t-4": {
       "issue": "DRO-751",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "run-block-pin-currency/t-5": {
       "issue": "DRO-752",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "run-block-pin-currency/t-6": {
       "issue": "DRO-750",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "run-block-pin-currency/t-7": {
       "issue": "DRO-753",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "run-block-pin-currency/t-8": {
       "issue": "DRO-754",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "run-block-pin-currency/t-9": {
       "issue": "DRO-756",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "scanner-self-exclusion/t-1": {
       "issue": "DRO-405",
