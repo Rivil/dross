@@ -1,0 +1,6 @@
+{
+  "phase": "run-block-pin-currency",
+  "base": "milestone/v1.7",
+  "base_commit": "0b2d15dbc3d985be1c299e07a8e21526a8ff1a06",
+  "tasks": {}
+}

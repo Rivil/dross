@@ -1,0 +1,91 @@
+[phase]
+  id = "run-block-pin-currency"
+  title = "run-block-pin-currency"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "A test enumerates every pin site Dependabot cannot reach — `go install …@v` in any `run:` block, setup-node `node-version:`, go.mod `toolchain`, goreleaser-action `version:`, and the Go-source tool pins (gremlinsPin, strykerPin) — and fails on a site the currency check does not cover."
+
+[[criteria]]
+  id = "c-2"
+  text = "The currency check classifies each pin as current, stale or unknown against upstream; stale = a newer release on the pin's line that is more than 7 days old (Dependabot's cooldown); the check exits non-zero when any pin is stale."
+
+[[criteria]]
+  id = "c-3"
+  text = "In the scheduled run, an upstream that cannot be reached (offline, 5xx, timeout) classifies the pin as unknown and fails the run — it never passes as current."
+
+[[criteria]]
+  id = "c-4"
+  text = "A stale pin surfaces without anyone running the check by hand: a weekly scheduled workflow runs it with read-only permissions, and a stale or unknown pin turns the run red."
+
+[[criteria]]
+  id = "c-5"
+  text = "govulncheck's version is declared in one place, so ci.yml and release.yml cannot scan with different versions; a test fails if they would."
+
+[[criteria]]
+  id = "c-6"
+  text = "`strykerPin` cannot silently diverge from the fixture's `@stryker-mutator/core` version — a test fails when they differ."
+
+[[criteria]]
+  id = "c-7"
+  text = "release.yml pins goreleaser to an exact version instead of `~> v2`, and the currency check covers that pin."
+
+[[criteria]]
+  id = "c-8"
+  text = "The committed tree passes its own check at phase end: every covered pin is current on its line (node-version moves off 24.19.0)."
+
+[[criteria]]
+  id = "c-9"
+  text = "`dross doctor` in any dross-managed repo reports a pin-currency section over that repo's run-block `go install …@v` pins, setup-node `node-version`, go.mod `toolchain` and goreleaser `version`, using the same checker and staleness rules as the dross-repo cron — a test proves both paths classify a fixture pin identically."
+
+[[criteria]]
+  id = "c-10"
+  text = "When the weekly run finds stale pins it opens one PR bumping each to its latest on-line release — or updates that PR in place if still open, so a second run never opens a second PR. Write permissions are granted to that job alone; the check job stays read-only."
+
+[[decisions]]
+  key = "check_surface"
+  choice = "One shared checker, two callers: the dross repo's weekly cron checks every pin (Go-source consts included); `dross doctor` runs the generic subset in any dross-managed repo."
+  why = "User pulled the generic doctor section into scope (c-9); one checker means cron and doctor cannot classify a pin differently. PR CI never goes red because upstream shipped something."
+  locked = true
+
+[[decisions]]
+  key = "stale_line"
+  choice = "Stale only on the pin's own line: Go patch on the pinned minor, Node on the pinned major, tools within their major. A new major/minor is reported as info, never fails. Upstream latest = highest stable version in the registry's version list, not its @latest endpoint."
+  why = "Matches toolchain_line's deliberate-minor choice; majors are migrations, not cron chores. The proxy's @latest for gremlins returns v0.5.1 below the pinned v0.6.0 — trusting it would call a current pin stale."
+  locked = true
+
+[[decisions]]
+  key = "govuln_route"
+  choice = "govulncheck stays a run-block `go install …@vX`, declared once and covered by the currency check — not a go.mod `tool` directive."
+  why = "Dependabot skips tool directives unless dependabot.yml adds an `allow` list, which then restricts every other update; it would also grow go.mod's graph (x/tools, x/telemetry). Fewest moving parts."
+  locked = true
+
+[[decisions]]
+  key = "doctor_net"
+  choice = "Doctor's pin section is always on with a short per-host timeout; a stale pin counts as a doctor issue; unknown (offline) prints a line but is not an issue."
+  why = "Doctor must stay usable offline; the scheduled cron is the fail-closed path (c-3)."
+  locked = true
+
+[[decisions]]
+  key = "bump_ci"
+  choice = "The bump job uses its job-scoped GITHUB_TOKEN to push the branch and open the PR, then dispatches ci.yml on that ref (ci.yml gains a workflow_dispatch trigger)."
+  why = "PRs opened by GITHUB_TOKEN trigger no pull_request workflows; workflow_dispatch is the documented exception, checks land on the PR head SHA, and no long-lived write credential is stored."
+  locked = true
+
+[[decisions]]
+  key = "bot_bump_scope"
+  choice = "The bump job never touches strykerPin; its currency rides Dependabot's fixture bump, and c-6 forces the const along."
+  why = "Two bots bumping the two halves would each open a PR that stays red until the other merges; regenerating the npm lockfile inside a write-permission job is the install vector the CI hardening rules exist to avoid."
+  locked = true
+
+[[decisions]]
+  key = "live_proof"
+  choice = "c-4 and c-10 are proven in-phase by workflow-content tests plus a local dry-run of the checker and bump planner (stubbed upstream, real file rewrites); the first live cron and bump PR are observed when v1.7 merges to main."
+  why = "Scheduled workflows and workflow_dispatch only run from the default branch, and the cron runs this phase's Go code — a live run needs the phase on main. Same reason .github/dependabot.yml is not yet active: it is not on main."
+  locked = true
+
+[[deferred]]
+  text = "/dross-watch surfaces the pin-bump bot's open PRs alongside Dependabot's (count, age), so a bump PR cannot sit unmerged unseen."
+  why = "Bot-PR surfacing is watch-bot-prs's job — the next phase on the roadmap."
+  target = "watch-bot-prs"
