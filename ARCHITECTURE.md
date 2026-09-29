@@ -830,7 +830,7 @@ Find every version pin Dependabot cannot reach, judge each against its upstream'
 - `PinCurrencySection` (doctor's always-on, never-blocking section) — `internal/cmd/doctor.go:601`
 - `pinResolver` (doctor's resolver seam; the test binary's default counts and never dials) — `internal/cmd/doctor.go:584`
 
-_introduced run-block-pin-currency_
+_introduced run-block-pin-currency · a46cf1b_
 
 ### Plan persistence
 
