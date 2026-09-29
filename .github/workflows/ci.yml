@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The weekly pin-currency bump PR is opened with a GITHUB_TOKEN, which
+  # triggers no pull_request run; its job dispatches this workflow on the bump
+  # branch instead (locked decision bump_ci). TestPinCurrencyDispatchesCI.
+  workflow_dispatch:
 
 # Least privilege: this workflow only reads the repo. No job pushes anywhere.
 permissions:
