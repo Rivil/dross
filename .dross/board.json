@@ -971,77 +971,77 @@
     "extracted-package-test-parity/t-1": {
       "issue": "DRO-728",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-10": {
       "issue": "DRO-737",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-11": {
       "issue": "DRO-738",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-12": {
       "issue": "DRO-740",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-13": {
       "issue": "DRO-741",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-14": {
       "issue": "DRO-743",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-15": {
       "issue": "DRO-744",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-2": {
       "issue": "DRO-729",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-3": {
       "issue": "DRO-730",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-4": {
       "issue": "DRO-731",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-5": {
       "issue": "DRO-732",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-6": {
       "issue": "DRO-733",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-7": {
       "issue": "DRO-734",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-8": {
       "issue": "DRO-735",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "extracted-package-test-parity/t-9": {
       "issue": "DRO-736",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-host-affinity/t-1": {
       "issue": "DRO-318",
