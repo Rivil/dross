@@ -1700,6 +1700,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "run-block-pin-currency/t-13": {
+      "issue": "DRO-759",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "run-block-pin-currency/t-2": {
       "issue": "DRO-748",
       "plan_status": "done",

@@ -1,4 +1,4 @@
-task_seq = 12
+task_seq = 13
 
 [phase]
   id = "run-block-pin-currency"
@@ -130,4 +130,15 @@ task_seq = 12
   covers = ["c-8"]
   depends_on = ["t-3", "t-4", "t-5", "t-8", "t-9", "t-10", "t-11"]
   test_contract = ["if any covered pin is stale at phase end, a live `go run ./cmd/pincheck` on the committed tree exits non-zero naming it — it must exit 0 (output recorded for verify)", "if the Node bump breaks the fixture, CI's mutation-ts job (DROSS_REQUIRE_E2E=1) fails on the ship PR — recorded as pending at verify, observed at ship; .node-version must no longer read 24.19.0", "if a toolchain bump breaks the build, remote `dross test` fails — it must pass", "if gremlinsPin is bumped, `dross remote bootstrap` plus one gremlins run on the remote host must succeed; if it is not bumped (current on 2026-09-29) this gate is recorded as n/a", "if a goreleaser bump breaks the config, `go run github.com/goreleaser/goreleaser/v2@<pin> check` exits non-zero — it must exit 0; the live release build stays unobserved until the first release from main"]
+  status = "done"
+
+[[task]]
+  id = "t-13"
+  wave = 8
+  title = "Kill verify's six coverage gaps"
+  files = ["internal/pincheck/sites_test.go", "internal/pincheck/bump_test.go", "internal/pincheck/upstream_test.go", "internal/cmd/doctor_pins_test.go"]
+  description = "Verify r-20260929-131859 failed on 6 in-hunk count-0 blocks: doctor.go:502, bump.go:32-33, sites.go:141 x2, upstream.go:139. Tests only (user decision 2026-09-29): dedupe stays as written; if sites.go:141's CONDITIONALS_BOUNDARY mutant lives once covered (it is equivalent under the != guard — hand-applying <= at :135 passes the suite), accept it at verify with that reason."
+  covers = ["c-1", "c-9", "c-10"]
+  depends_on = ["t-12"]
+  test_contract = ["if doctor stops counting a pin scan error as a warning (or decrements it), TestDoctorPinScanErrorWarns fails — doctor's telemetry outcome must record warnings = baseline + 1", "if BumpOutcome.String drops or misplaces a skip/refuse reason, TestBumpOutcomeString fails — exact strings with and without a reason", "if dedupe stops breaking a same-file, same-line tie by kind, TestDedupeOrdersByKind fails — dedupe called directly with kinds out of order", "if goreleaserModule mishandles a v-less version, TestGoreleaserModule fails — 2.18.2 must map to …/v2 and 1.26.0 to the base module, same as their v-prefixed forms"]
   status = "done"
