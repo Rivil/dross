@@ -92,9 +92,11 @@ jobs:
 
       # Supply-chain gate: pinned, never @latest — a compromised release must
       # not be able to walk in on the next CI run. No allowlist and no
-      # `|| true`: a finding fails the build and the dep gets upgraded.
+      # `|| true`: a finding fails the build and the dep gets upgraded. The
+      # version is declared once, in the local action, which release.yml uses
+      # too (TestGovulncheckDeclaredOnce).
       - name: install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+        uses: ./.github/actions/govulncheck
 
       - name: govulncheck
         run: govulncheck ./...

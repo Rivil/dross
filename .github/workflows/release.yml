@@ -101,10 +101,12 @@ jobs:
       # scanning here — on the readonly graph the binaries are about to be built
       # from — is the only run that proves the shipped graph is clean. Pinned,
       # never @latest; no allowlist and no `|| true`: a finding fails the
-      # release (TestReleaseJobRunsGovulncheck pins all three properties).
+      # release (TestReleaseJobRunsGovulncheck pins all three properties). The
+      # install is the same local action ci.yml uses, so the release is scanned
+      # by the scanner that gated the PR (TestGovulncheckDeclaredOnce).
       - name: install govulncheck
         if: steps.tag.outputs.new_tag != ''
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+        uses: ./.github/actions/govulncheck
 
       - name: govulncheck
         if: steps.tag.outputs.new_tag != ''

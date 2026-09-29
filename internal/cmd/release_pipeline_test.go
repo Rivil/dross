@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -74,34 +75,115 @@ func TestReleaseJobRunsGovulncheck(t *testing.T) {
 	}
 }
 
-// govulncheckPins returns every pinned govulncheck install version in a
-// workflow, so an unpinned (`@latest`) or version-drifted install is visible.
-func govulncheckPins(workflow string) []string {
-	re := regexp.MustCompile(`golang\.org/x/vuln/cmd/govulncheck@(\S+)`)
-	var pins []string
-	for _, m := range re.FindAllStringSubmatch(workflow, -1) {
-		pins = append(pins, m[1])
+// govulncheckInstall is a govulncheck version declaration.
+var govulncheckInstall = regexp.MustCompile(`golang\.org/x/vuln/cmd/govulncheck@(\S+)`)
+
+// govulncheckDeclarationProblems sweeps every workflow and composite action
+// under root and reports anything but exactly one govulncheck declaration at an
+// exact vX.Y.Z. Comments are not declarations.
+func govulncheckDeclarationProblems(t *testing.T, root string) []string {
+	t.Helper()
+	var where, versions []string
+	for _, rel := range githubYAMLFiles(t, root) {
+		for i, raw := range strings.Split(readTreeFile(t, root, rel), "\n") {
+			line, _ := splitYAMLComment(raw)
+			for _, m := range govulncheckInstall.FindAllStringSubmatch(line, -1) {
+				where = append(where, fmt.Sprintf("%s:%d", rel, i+1))
+				versions = append(versions, m[1])
+			}
+		}
 	}
-	return pins
+	if len(where) != 1 {
+		return []string{fmt.Sprintf("govulncheck is declared %d times (%v), want exactly once — two declarations let the release be scanned by a different scanner than the one that gated the PR", len(where), where)}
+	}
+	if !regexp.MustCompile(`^v\d+\.\d+\.\d+$`).MatchString(versions[0]) {
+		return []string{fmt.Sprintf("%s: govulncheck pin %q is not an exact version — @latest or a branch lets a compromised release walk in on the next run", where[0], versions[0])}
+	}
+	return nil
 }
 
-// TestGovulncheckPinAgrees pins that ci.yml and release.yml install the same
-// govulncheck version, and that it is a version, not a floating tag: two pins
-// would mean the release could be scanned by a different scanner than the one
-// that gated the PR.
-func TestGovulncheckPinAgrees(t *testing.T) {
-	ci := govulncheckPins(readRepoFile(t, ".github/workflows/ci.yml"))
-	rel := govulncheckPins(readRepoFile(t, ".github/workflows/release.yml"))
-	if len(ci) == 0 || len(rel) == 0 {
-		t.Fatalf("govulncheck install missing: ci.yml pins %v, release.yml pins %v", ci, rel)
-	}
-	all := append(append([]string{}, ci...), rel...)
-	for _, pin := range all {
-		if !regexp.MustCompile(`^v\d+\.\d+\.\d+$`).MatchString(pin) {
-			t.Errorf("govulncheck pin %q is not an exact version — @latest or a branch lets a compromised release walk in on the next run", pin)
+// jobLines returns the lines of one job under a workflow's top-level `jobs:`
+// map, and the 0-based index of the job's key line. ok is false when the job
+// is absent.
+func jobLines(workflow, job string) (lines []string, at int, ok bool) {
+	all := strings.Split(workflow, "\n")
+	inJobs := false
+	for i, raw := range all {
+		if raw == "jobs:" {
+			inJobs = true
+			continue
 		}
-		if pin != ci[0] {
-			t.Errorf("govulncheck pins disagree: ci.yml %v vs release.yml %v — the release must be scanned by the scanner that gated the PR", ci, rel)
+		if !inJobs || raw != "  "+job+":" {
+			continue
+		}
+		end := i + 1
+		for ; end < len(all); end++ {
+			trimmed := strings.TrimSpace(all[end])
+			indent := len(all[end]) - len(strings.TrimLeft(all[end], " "))
+			if trimmed != "" && !strings.HasPrefix(trimmed, "#") && indent <= 2 {
+				break
+			}
+		}
+		return all[i:end], i, true
+	}
+	return nil, 0, false
+}
+
+// TestGovulncheckDeclaredOnce pins govulncheck's version to one declaration —
+// the local composite action — and both scanning jobs to it: ci.yml's test job
+// and release.yml's release job each use the action before they run the scan.
+// Replaces TestGovulncheckPinAgrees, which compared two copies that no longer
+// exist. Phase run-block-pin-currency, criterion c-5.
+func TestGovulncheckDeclaredOnce(t *testing.T) {
+	for _, p := range govulncheckDeclarationProblems(t, repoRootFromTest(t)) {
+		t.Error(p)
+	}
+
+	for _, tc := range []struct{ file, job string }{
+		{".github/workflows/ci.yml", "test"},
+		{".github/workflows/release.yml", "release"},
+	} {
+		lines, at, ok := jobLines(readRepoFile(t, tc.file), tc.job)
+		if !ok {
+			t.Errorf("%s has no %s job", tc.file, tc.job)
+			continue
+		}
+		uses, scan := -1, -1
+		for i, raw := range lines {
+			v, _ := splitYAMLComment(raw)
+			trimmed := strings.TrimPrefix(strings.TrimSpace(v), "- ")
+			if trimmed == "uses: ./.github/actions/govulncheck" && uses < 0 {
+				uses = i
+			}
+			if strings.HasPrefix(trimmed, "run: govulncheck ./...") && scan < 0 {
+				scan = i
+			}
+		}
+		switch {
+		case uses < 0:
+			t.Errorf("%s %s job never uses ./.github/actions/govulncheck — it would scan with an undeclared govulncheck", tc.file, tc.job)
+		case scan < 0:
+			t.Errorf("%s %s job never runs `govulncheck ./...`", tc.file, tc.job)
+		case scan < uses:
+			t.Errorf("%s:%d runs govulncheck before the install at line %d", tc.file, at+scan+1, at+uses+1)
 		}
 	}
+
+	t.Run("a second declaration fails", func(t *testing.T) {
+		root := writeTreeFiles(t, map[string]string{
+			".github/actions/govulncheck/action.yml": "runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0\n",
+			".github/workflows/ci.yml":               "jobs:\n  test:\n    steps:\n      # go install golang.org/x/vuln/cmd/govulncheck@v0.0.1 (a comment, not a declaration)\n      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0\n",
+		})
+		if p := govulncheckDeclarationProblems(t, root); len(p) != 1 || !strings.Contains(p[0], "declared 2 times") {
+			t.Fatalf("two declarations: got %q, want one problem naming 2 declarations", p)
+		}
+	})
+	t.Run("a floating version fails", func(t *testing.T) {
+		root := writeTreeFiles(t, map[string]string{
+			".github/actions/govulncheck/action.yml": "runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: go install golang.org/x/vuln/cmd/govulncheck@latest\n",
+		})
+		if p := govulncheckDeclarationProblems(t, root); len(p) != 1 || !strings.Contains(p[0], "not an exact version") {
+			t.Fatalf("@latest: got %q, want one not-exact problem", p)
+		}
+	})
 }

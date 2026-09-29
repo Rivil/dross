@@ -1266,7 +1266,7 @@ TestGoreleaserBuildsWindows	cmd
 TestGoreleaserHasNoBeforeHooks	cmd
 TestGoreleaserSignsChecksumsWithMinisign	cmd
 TestGoreleaserWindowsZipOverride	cmd
-TestGovulncheckPinAgrees	cmd
+TestGovulncheckDeclaredOnce	cmd
 TestGraduatedBucketsKeepTheirIdentifier	telemetry
 TestGrantAddIsIdempotent	cmd
 TestGrantAddKeepsTheExistingHost	cmd
