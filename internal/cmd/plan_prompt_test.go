@@ -22,20 +22,26 @@ func planPromptContent(t *testing.T) string {
 	return strings.NewReplacer("`", "", "*", "", "_", "").Replace(s)
 }
 
-// TestPlanPromptBorderlineTaskDeferFirst proves c-2: a borderline/optional task
-// proposed during §3 steering is surfaced through the playbook's defer-first
-// either/or (lead "defer it", offer "add as a task"), not slipped in silently.
-// Drop the framing and these needles disappear.
-func TestPlanPromptBorderlineTaskDeferFirst(t *testing.T) {
+// TestPlanPromptBorderlineTaskIncludeFirst proves c-2 as revised on 2026-09-29:
+// a borderline/optional task proposed during §3 steering is surfaced through
+// the playbook's include-first either/or (lead "add as a task", offer "defer
+// it"), not slipped in silently — and a task that serves a criterion is not
+// asked about at all. Drop the framing and these needles disappear; restore the
+// defer-first lead and the absence check fails.
+func TestPlanPromptBorderlineTaskIncludeFirst(t *testing.T) {
 	content := planPromptContent(t)
 	for _, needle := range []string{
-		"borderline",    // the trigger
-		"defer-first",   // defer leads
-		"add as a task", // the alternative
+		"borderline",                 // the trigger
+		"include-first",              // the rule's name
+		`leads with "add as a task"`, // add leads
+		"defer it",                   // the alternative
 	} {
 		if !strings.Contains(content, needle) {
-			t.Errorf("plan.md §3 missing borderline-task defer-first framing %q", needle)
+			t.Errorf("plan.md §3 missing borderline-task include-first framing %q", needle)
 		}
+	}
+	if strings.Contains(content, "defer-first") {
+		t.Error("plan.md still carries the retired defer-first lead")
 	}
 }
 

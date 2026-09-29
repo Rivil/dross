@@ -352,7 +352,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 
 - [x] `dross ship --auto` — a non-interactive fast-path (skips body preview / reviewers / merge gate) suitable for scripts and loops; `--json` emits `{url, number, result}`
 - [x] Milestone-branch model — phase PRs squash-merge into `milestone/<version>` when a milestone is active; the milestone itself lands in `main` as a merge commit (not a squash) so `main` keeps per-phase history, finalized by `dross milestone complete`
-- [x] Interaction defer-or-add framing — borderline candidates are surfaced as a single either/or that leads with "defer it" and offers "add to current phase", standardized across spec/plan
+- [x] Interaction include-first framing — an in-scope candidate is simply included; a borderline one is an either/or that leads with "add to current phase"; only one with a clear home elsewhere leads with "defer it". Standardized across spec/plan (replaced the original defer-first lead)
 
 ### Milestone v0.8 — Claude Code surface integration (complete)
 
