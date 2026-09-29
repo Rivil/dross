@@ -28,8 +28,8 @@ import (
 // instead of silently never being checked. Phase run-block-pin-currency,
 // criterion c-1.
 
-// versionToken is an `@` followed by an X.Y.Z version, with an optional v.
-var versionToken = regexp.MustCompile(`@v?\d+\.\d+\.\d+`)
+// versionAt is an `@` followed by an X.Y.Z version, with an optional v.
+var versionAt = regexp.MustCompile(`@v?\d+\.\d+\.\d+`)
 
 // sweepHit is one place a pin was found. A zero line matches any site in the
 // file — how a node-version-file reference is expressed: the pin is whatever
@@ -142,8 +142,8 @@ func sweepYAML(t *testing.T, rel, path string, action bool) []sweepHit {
 				}
 			}
 		}
-		if (inBlock || action || strings.HasPrefix(key, "run:")) && versionToken.MatchString(code) {
-			hits = append(hits, sweepHit{rel, i + 1, versionToken.FindString(code)})
+		if (inBlock || action || strings.HasPrefix(key, "run:")) && versionAt.MatchString(code) {
+			hits = append(hits, sweepHit{rel, i + 1, versionAt.FindString(code)})
 		}
 	}
 	return hits
@@ -169,7 +169,7 @@ func sweepGoConsts(t *testing.T, rel, path string) []sweepHit {
 				if !ok || lit.Kind != token.STRING {
 					continue
 				}
-				if s, err := strconv.Unquote(lit.Value); err == nil && versionToken.MatchString(s) {
+				if s, err := strconv.Unquote(lit.Value); err == nil && versionAt.MatchString(s) {
 					hits = append(hits, sweepHit{rel, fset.Position(lit.Pos()).Line, "const " + spec.(*ast.ValueSpec).Names[i].Name})
 				}
 			}
@@ -436,4 +436,48 @@ func treeListing(t *testing.T, root string) string {
 		t.Fatal(err)
 	}
 	return strings.Join(paths, "\n")
+}
+
+// TestPincheckBumpCommand drives `pincheck bump` through run: a stale pin is
+// rewritten on disk and printed, an npm pin is reported skipped and left alone,
+// a current tree prints no outcome, and the exit code is 0 whenever the
+// rewrite completed. Phase run-block-pin-currency, criterion c-10.
+func TestPincheckBumpCommand(t *testing.T) {
+	stale := currentUpstream()
+	stale["go"] = []pincheck.Release{old("go1.27.1"), old("go1.27.2")}
+	stale["@stryker-mutator/core"] = []pincheck.Release{old("9.6.1"), old("9.6.2")}
+
+	root := runFixture(t, nil)
+	var out, errb bytes.Buffer
+	code := run(root, []string{"bump"}, &out, &errb, deps{resolver: stale, now: runNow, getenv: func(string) string { return "" }})
+	if code != 0 {
+		t.Fatalf("bump: exit %d, want 0\n%s%s", code, out.String(), errb.String())
+	}
+	for _, want := range []string{"bumped", "go.mod:5 go go1.27.1 → go1.27.2", "skipped", "@stryker-mutator/core", "1 pin(s) bumped, 1 left"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("bump output lacks %q:\n%s", want, out.String())
+		}
+	}
+	if gomod, _ := os.ReadFile(filepath.Join(root, "go.mod")); !strings.Contains(string(gomod), "toolchain go1.27.2\n") {
+		t.Errorf("go.mod not rewritten:\n%s", gomod)
+	}
+	if src, _ := os.ReadFile(filepath.Join(root, "internal/mutation/stryker.go")); !strings.Contains(string(src), "@9.6.1\"") {
+		t.Errorf("strykerPin was touched:\n%s", src)
+	}
+	if strings.Contains(out.String(), "stale=") {
+		t.Error("bump wrote the check's stale= signal")
+	}
+
+	// A current tree: no outcome lines, still exit 0.
+	out.Reset()
+	if code := run(runFixture(t, nil), []string{"bump"}, &out, &errb, deps{resolver: currentUpstream(), now: runNow, getenv: func(string) string { return "" }}); code != 0 {
+		t.Errorf("bump over a current tree: exit %d, want 0", code)
+	}
+	if strings.Contains(out.String(), "bumped ") || !strings.Contains(out.String(), "0 pin(s) bumped, 0 left") {
+		t.Errorf("bump over a current tree printed:\n%s", out.String())
+	}
+
+	if code := run(root, []string{"bump", "extra"}, &out, &errb, deps{resolver: stale, now: runNow, getenv: func(string) string { return "" }}); code != 2 {
+		t.Errorf("bump with an extra argument: exit %d, want 2", code)
+	}
 }

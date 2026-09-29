@@ -17,6 +17,14 @@
 //
 // Exit 0 when every pin is current, 1 on a strict failure, 2 when the tree
 // could not be scanned or the output could not be written.
+//
+//	go run ./cmd/pincheck bump
+//
+// rewrites each stale pin in place to its bump target — the newest release on
+// its line past the cooldown — and prints what changed. It never touches an npm
+// pin (strykerPin moves with Dependabot's fixture bump) and never writes under
+// .github/workflows/; both are reported as not bumped. The weekly workflow's
+// bump job runs it, then scripts/pin-bump-pr.sh opens or updates the PR.
 package main
 
 import (
@@ -61,8 +69,9 @@ func main() {
 }
 
 func run(root string, args []string, stdout, stderr io.Writer, d deps) int {
-	if len(args) != 0 {
-		fmt.Fprintln(stderr, "usage: go run ./cmd/pincheck")
+	bump := len(args) == 1 && args[0] == "bump"
+	if len(args) != 0 && !bump {
+		fmt.Fprintln(stderr, "usage: go run ./cmd/pincheck [bump]")
 		return 2
 	}
 	sites, err := allSites(root)
@@ -71,6 +80,9 @@ func run(root string, args []string, stdout, stderr io.Writer, d deps) int {
 		return 2
 	}
 	rep := pincheck.Check(context.Background(), sites, d.resolver, pincheck.Strict, d.now)
+	if bump {
+		return runBump(root, rep, stdout, stderr)
+	}
 	for _, res := range rep.Results {
 		fmt.Fprintln(stdout, res)
 	}
@@ -85,6 +97,30 @@ func run(root string, args []string, stdout, stderr io.Writer, d deps) int {
 		return 1
 	}
 	fmt.Fprintf(stdout, "pincheck: %d pin(s) checked — all current\n", len(rep.Results))
+	return 0
+}
+
+// runBump rewrites every stale pin in place to its bump target and prints one
+// line per stale pin: bumped, or skipped/refused with the reason. It exits 0
+// whenever the rewrite completed — nothing stale is a clean run with nothing
+// printed but the summary — so the workflow's PR script, not this exit code,
+// decides whether there is anything to push.
+func runBump(root string, rep pincheck.Report, stdout, stderr io.Writer) int {
+	outcomes, err := pincheck.Bump(root, rep.Results)
+	for _, o := range outcomes {
+		fmt.Fprintln(stdout, o)
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	bumped := 0
+	for _, o := range outcomes {
+		if o.Status == pincheck.Bumped {
+			bumped++
+		}
+	}
+	fmt.Fprintf(stdout, "pincheck bump: %d pin(s) bumped, %d left for another route\n", bumped, len(outcomes)-bumped)
 	return 0
 }
 
