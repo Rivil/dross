@@ -1,0 +1,202 @@
+task_seq = 10
+
+[phase]
+  id = "run-block-pin-currency"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Scan the pin sites Dependabot cannot reach"
+  files = ["internal/pincheck/sites.go", "internal/pincheck/sites_test.go"]
+  description = """
+New package internal/pincheck. A Site type (file, line, kind, name, version) and a repo scanner over the generic subset:
+run-block `go install <pkg>@v…` in .github/workflows/*.yml and .github/actions/*/action.yml, setup-node `node-version:`,
+go.mod `toolchain`, and goreleaser-action `version:`. Line-based like action_pins_test.go (no YAML dependency). Plus a
+Go-const site reader (go/parser) that returns a named string const's value and line, for the dross-only sites in t-6.
+"""
+  covers = ["c-1", "c-9"]
+  test_contract = [
+    "if a site kind stops being recognised, TestScanFindsEverySiteKind fails: an inline fixture repo holding one of each kind (workflow run-block go install, composite-action run-block go install, setup-node node-version, go.mod toolchain, goreleaser-action version) returns exactly those five sites with the right file, line, kind, name and version",
+    "if the run-block scope leaks, TestScanIgnoresNonRunInstalls fails: a `go install x@v1.2.3` inside a YAML comment, an `env:` value or a `name:` key is not returned as a site",
+    "if a range is taken for a pin, TestScanReportsGoreleaserRangeUnpinned fails: goreleaser `version: '~> v2'` is reported as an unpinned site, never as a site at version v2",
+    "if the Go-const reader misreads, TestGoConstSite fails: it returns the value and 1-based line of a named const in a fixture .go file, and an error for a missing const or a non-string one",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Classify a pin as current, stale or info"
+  files = ["internal/pincheck/classify.go", "internal/pincheck/classify_test.go"]
+  description = """
+Pure function: pinned version + its line rule (Go toolchain: patch on the pinned minor; Node: on the pinned major; tools:
+within their major) + upstream release list with publish times + now → current / stale / info. Latest = highest stable
+version in the list (pre-releases dropped), never an @latest endpoint. Stale only when a newer on-line release is more
+than 7 days old (Dependabot's cooldown). A newer major/minor off the line is info, never stale. No network here.
+"""
+  covers = ["c-2"]
+  test_contract = [
+    "if the cooldown drifts, TestClassifyCooldownBoundary fails: a newer on-line patch published 8 days before now → stale; 6 days → current; exactly at the 7-day boundary pins the chosen side",
+    "if the line rule widens, TestClassifyOffLineIsInfo fails: for each kind (Go minor line, Node major line, tool major line) a newer release only on the next minor/major → info, not stale",
+    "if list-max is replaced by an @latest-style pick, TestClassifyUsesListMaximum fails: a gremlins-shaped list whose most recent publication is v0.5.1 while v0.6.0 is pinned → current",
+    "if pre-releases leak in, TestClassifyIgnoresPrereleases fails: v1.9.0-rc.1 and 24.20.0-beta above the pin do not make it stale or info",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Declare govulncheck once; pin goreleaser exactly"
+  files = [".github/actions/govulncheck/action.yml", ".github/workflows/ci.yml", ".github/workflows/release.yml", "internal/cmd/release_pipeline_test.go", "internal/cmd/action_pins_test.go"]
+  description = """
+A local composite action holds the one run-block `go install golang.org/x/vuln/cmd/govulncheck@vX` (locked govuln_route);
+ci.yml and release.yml `uses: ./.github/actions/govulncheck` and keep their own `run: govulncheck ./...` step.
+action_pins_test.go admits local `./` refs only. release.yml goreleaser `version:` moves from `~> v2` to an exact vX.Y.Z.
+Audit both workflows against the CI supply-chain hardening checklist while editing them.
+"""
+  covers = ["c-5", "c-7"]
+  test_contract = [
+    "if a second declaration appears, TestGovulncheckDeclaredOnce fails: exactly one `govulncheck@` install across .github/** (workflows and actions), and it is an exact vX.Y.Z; a fixture with two declarations fails (replaces TestGovulncheckPinAgrees)",
+    "if a workflow stops installing through the action, TestGovulncheckDeclaredOnce fails: ci.yml's test job and release.yml's release job each `uses: ./.github/actions/govulncheck` before their `run: govulncheck ./...` step",
+    "if the local-ref exemption widens, TestActionPinScanner fails: `./.github/actions/x` passes the sweep while a remote `actions/x@v4` or short ref still fails",
+    "if goreleaser loses its exact pin, TestGoreleaserVersionIsExact fails: `version:` on the goreleaser-action step must match ^v\\d+\\.\\d+\\.\\d+$ — `~> v2`, `latest` and `v2` each fail",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Tie strykerPin to the fixture's core version"
+  files = ["internal/mutation/ts_fixture_test.go"]
+  description = """
+In-package test comparing strykerPin's version with the ts-project fixture's @stryker-mutator/core devDependency. This is
+what carries strykerPin along with Dependabot's fixture bump (locked bot_bump_scope: the bump job never touches it).
+"""
+  covers = ["c-6"]
+  test_contract = [
+    "if strykerPin and the fixture diverge, TestStrykerPinMatchesFixture fails naming both versions: fixture @stryker-mutator/core 9.6.2 against strykerPin @9.6.1 (or the reverse) fails; equal versions pass",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Fetch upstream release lists"
+  files = ["internal/pincheck/upstream.go", "internal/pincheck/upstream_test.go"]
+  description = """
+Per site kind, fetch versions + publish times: Go module proxy `@v/list` + `@v/<v>.info` (govulncheck, gremlins,
+goreleaser/v2), golang.org/toolchain on the proxy for go.mod `toolchain`, nodejs.org/dist/index.json, registry.npmjs.org
+for @stryker-mutator/core. Base URLs and per-host timeout are injectable. Unauthenticated GETs only. Any unreachable host,
+5xx, timeout or malformed body → unknown with a reason, never a verdict.
+"""
+  covers = ["c-2", "c-3"]
+  depends_on = ["t-1"]
+  test_contract = [
+    "if a failure maps to a verdict, TestFetchFailuresAreUnknown fails: httptest 503, a handler sleeping past the timeout, a closed listener and malformed JSON each yield unknown with a reason — never current",
+    "if the resolver trusts @latest, TestFetchReadsTheListNotLatest fails: a proxy stub whose @latest returns v0.5.1 while @v/list contains v0.6.0 yields v0.6.0 as the list maximum",
+    "if a format parse drifts, TestFetchParsesEachUpstream fails: canned proxy list+info, golang.org/toolchain list, nodejs index.json and npm packument bodies each yield the expected versions and times",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  title = "Shared Check and the cmd/pincheck cron entrypoint"
+  files = ["internal/pincheck/check.go", "internal/pincheck/check_test.go", "cmd/pincheck/main.go", "cmd/pincheck/coverage_test.go"]
+  description = """
+pincheck.Check(sites, resolver, mode) → per-site verdicts; strict mode (cron) fails on stale or unknown, lenient mode
+(doctor) fails on stale only. `go run ./cmd/pincheck` scans the generic subset plus the dross-only Go-source sites
+(gremlinsPin, strykerPin), prints one line per pin, exits non-zero on any stale or unknown. The coverage test enumerates
+pin-shaped sites independently of the scanner (broad pattern sweep over .github/**, go.mod and non-test Go consts) and
+fails on any the checker does not return.
+"""
+  covers = ["c-1", "c-2", "c-3"]
+  depends_on = ["t-1", "t-2", "t-5"]
+  test_contract = [
+    "if the exit gate drifts, TestPincheckExitCodes fails: stub upstream with one stale pin → non-zero naming it; every pin current → 0; one upstream returning 503 → non-zero with that pin shown unknown (strict mode never passes an unknown)",
+    "if modes collapse, TestCheckModes fails: the same unknown verdict fails strict mode and passes lenient mode; a stale verdict fails both",
+    "if a pin site escapes the checker, TestEveryPinSiteIsChecked fails: the live repo's independently-enumerated sites (incl. gremlinsPin and strykerPin) all appear in cmd/pincheck's site list; a fixture adding an unscanned `go install x@v1.2.3` run-block or a new `const fooPin = \"...@v1.2.3\"` makes it fail",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-7"
+  wave = 4
+  title = "Bump planner rewrites stale pins"
+  files = ["internal/pincheck/bump.go", "internal/pincheck/bump_test.go", "cmd/pincheck/main.go"]
+  description = """
+`go run ./cmd/pincheck bump` rewrites each stale site in place to the highest release on its line, prints what changed,
+and never touches strykerPin (locked bot_bump_scope) — it is reported as skipped. Dry-run proof (locked live_proof): a
+temp copy of the real workflow/go.mod/Go files, stubbed upstream, real file rewrites.
+"""
+  covers = ["c-10"]
+  depends_on = ["t-6"]
+  test_contract = [
+    "if a rewrite over- or under-reaches, TestBumpRewritesOnlyStaleSites fails: on a temp copy of the real files, each stale site (govulncheck, node-version, toolchain, goreleaser, gremlinsPin) becomes its on-line latest and a byte diff shows no other change",
+    "if strykerPin gets bumped, TestBumpSkipsStrykerPin fails: a stale strykerPin is left byte-identical and reported as skipped",
+    "if an off-line release gets pulled in, TestBumpIgnoresOffLine fails: a site whose only newer release is a new major/minor is not rewritten",
+    "if bump is not idempotent, TestBumpIsIdempotent fails: a second bump over the rewritten tree with the same stub changes nothing and reports nothing",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-8"
+  wave = 4
+  title = "Doctor pin-currency section"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_pins_test.go"]
+  description = """
+An always-on "Pin currency" section over the generic subset (no Go-source consts) via pincheck.Check in lenient mode,
+with a short per-host timeout (locked doctor_net): stale counts as a doctor issue, unknown prints a line but is not one.
+The resolver goes through a package-level seam so the rest of the doctor suite stays offline.
+"""
+  covers = ["c-9"]
+  depends_on = ["t-6"]
+  test_contract = [
+    "if stale stops counting, TestDoctorPinSectionStaleIsIssue fails: a fixture repo with a stale setup-node pin under a stub upstream moves doctor's issue count and names the pin",
+    "if offline starts failing doctor, TestDoctorPinSectionUnknownIsNotIssue fails: an unreachable stub prints an unknown line and leaves the exit code unchanged",
+    "if the two callers diverge, TestPinVerdictParity fails: the same fixture pin and stub classify identically through cmd/pincheck's path and doctor's section",
+    "if the seam is bypassed, TestDoctorPinSectionUsesSeam fails: with the seam set to a transport that fails the test on any real dial, the doctor suite completes without a network call",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-9"
+  wave = 5
+  title = "Weekly pin-currency workflow and bump PR"
+  files = [".github/workflows/pin-currency.yml", ".github/workflows/ci.yml", "scripts/pin-bump-pr.sh", "internal/cmd/pin_currency_workflow_test.go"]
+  description = """
+New workflow: weekly schedule + workflow_dispatch, top-level `permissions: contents: read`, SHA-pinned actions,
+GOFLAGS/GOPROXY/GOSUMDB env, no `${{` in run blocks. Check job (read-only) runs `go run ./cmd/pincheck`. Bump job alone
+gets contents/pull-requests/actions write, runs `pincheck bump`, then scripts/pin-bump-pr.sh pushes a fixed branch and
+opens a PR or updates the open one, then dispatches ci.yml on that ref (locked bump_ci). ci.yml gains workflow_dispatch.
+Audit against the CI supply-chain hardening checklist.
+"""
+  covers = ["c-4", "c-10"]
+  depends_on = ["t-6", "t-7"]
+  test_contract = [
+    "if the check job gains write, TestPinCurrencyPermissions fails: top-level permissions must be exactly contents: read, the check job has no write scope, and only the bump job carries contents/pull-requests/actions write",
+    "if the schedule or strict gate is lost, TestPinCurrencyRunsWeekly fails: an `on.schedule` cron exists and the check job runs `go run ./cmd/pincheck` without `|| true` or continue-on-error",
+    "if the bump job stops dispatching CI, TestPinCurrencyDispatchesCI fails: the bump job runs scripts/pin-bump-pr.sh then `gh workflow run ci.yml --ref` on the bump branch, and ci.yml's `on:` carries workflow_dispatch",
+    "if a second run opens a second PR, TestPinBumpPRUpdatesOpenPR fails: with a fake gh on a narrowed PATH reporting an open PR for the branch, the script force-pushes and never calls `gh pr create`; with none open it calls `gh pr create` exactly once",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-10"
+  wave = 5
+  title = "Bring the tree current; document"
+  files = [".github/workflows/ci.yml", "go.mod", ".github/actions/govulncheck/action.yml", ".github/workflows/release.yml", "internal/cmd/remote_bootstrap.go", "ARCHITECTURE.md", "README.md"]
+  description = """
+Run last, so a release cannot age past the 7-day cooldown between this task and verify. Run `go run ./cmd/pincheck`
+against live upstream, then `pincheck bump` (node-version moves off 24.19.0 at minimum; the other files are rewritten only
+if stale), and re-run until it exits 0. `make install` (r-01) and confirm the live `dross doctor` Pin currency section.
+Add the Pin currency entry to ARCHITECTURE.md and the doctor note to README.md.
+"""
+  covers = ["c-8"]
+  depends_on = ["t-3", "t-7"]
+  test_contract = [
+    "if any covered pin is stale at phase end, a live `go run ./cmd/pincheck` on the committed tree exits non-zero naming it — it must exit 0",
+    "if node-version was not moved, ci.yml's setup-node `node-version:` still reads 24.19.0 — it must not",
+    "if a bump broke the build, `dross test` (remote) fails — the full suite must pass on the bumped tree",
+  ]
+  status = "pending"
