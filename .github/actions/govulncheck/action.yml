@@ -1,0 +1,24 @@
+# The one place govulncheck's version is declared. ci.yml's test job and
+# release.yml's release job both `uses: ./.github/actions/govulncheck` and then
+# run `govulncheck ./...` themselves, so the release is scanned by exactly the
+# scanner that gated the PR — two pins could drift, one cannot.
+# TestGovulncheckDeclaredOnce fails on a second declaration anywhere under
+# .github/.
+#
+# A run-block `go install …@vX.Y.Z`, not a go.mod `tool` directive (locked
+# decision govuln_route): Dependabot skips tool directives unless
+# dependabot.yml grows an `allow` list, which would then restrict every other
+# update. Dependabot cannot see this pin either, so the weekly pin-currency
+# workflow (cmd/pincheck) is what flags it stale and bumps it. Pinned, never
+# @latest — a compromised release must not walk in on the next run.
+#
+# Composite steps inherit the calling job's env, so GOFLAGS/GOPROXY/GOSUMDB
+# hardening set on the job applies to this install too.
+name: install govulncheck
+description: Install the pinned govulncheck that CI and the release scan with.
+runs:
+  using: composite
+  steps:
+    - name: install govulncheck
+      shell: bash
+      run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0

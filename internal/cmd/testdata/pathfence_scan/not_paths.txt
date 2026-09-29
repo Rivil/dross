@@ -173,6 +173,10 @@ phase.Task.Status status
 phase.Task.TestContract test_contract
 phase.Task.Title title
 
+# ---- pincheck — upstream release documents: version strings and publish dates
+pincheck.nodeRelease.Date date
+pincheck.nodeRelease.Version version
+
 # ---- profile — the developer profile: ratings, directives, the seed label
 profile.Dimension.Confidence confidence
 profile.Dimension.Directive directive

@@ -201,7 +201,7 @@ Then, as a single propose-and-react turn, ask via `AskUserQuestion`: **"Steer or
 
 Iterate until the user says proceed. Do not be sycophantic — if the user accepts a poor decomposition, flag the risk once before writing.
 
-**Borderline tasks — defer or add.** If the decomposition includes a task you're unsure belongs — an optional/nice-to-have, or one that could be its own phase — don't slip it in silently. Surface it on its own turn with the playbook's defer-or-add either/or: **lead with "defer it"** and offer **"add as a task"**. Defer-first keeps the task graph tight by default; if the user adds it, fold it into the plan as a regular task. (This is the plan-side mirror of spec's borderline-candidate framing; clearly in-scope tasks just ride along in the §3 proposal.)
+**Borderline tasks — include-first.** A task that serves a spec criterion just rides along in the §3 proposal — don't ask a defer question about it. If the decomposition includes a task you're genuinely unsure belongs — an optional/nice-to-have — don't slip it in silently: surface it on its own turn as an either/or that **leads with "add as a task"** and offers **"defer it"**. Only a task that is clearly its own phase leads with "defer it", with the reason in the option. Deferral is not the safe default; if the user adds it, fold it into the plan as a regular task. (This is the plan-side mirror of the playbook's include-first rule.)
 
 ## 4. Coverage check (before writing)
 

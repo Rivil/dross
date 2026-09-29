@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The weekly pin-currency bump PR is opened with a GITHUB_TOKEN, which
+  # triggers no pull_request run; its job dispatches this workflow on the bump
+  # branch instead (locked decision bump_ci). TestPinCurrencyDispatchesCI.
+  workflow_dispatch:
 
 # Least privilege: this workflow only reads the repo. No job pushes anywhere.
 permissions:
@@ -92,9 +96,11 @@ jobs:
 
       # Supply-chain gate: pinned, never @latest — a compromised release must
       # not be able to walk in on the next CI run. No allowlist and no
-      # `|| true`: a finding fails the build and the dep gets upgraded.
+      # `|| true`: a finding fails the build and the dep gets upgraded. The
+      # version is declared once, in the local action, which release.yml uses
+      # too (TestGovulncheckDeclaredOnce).
       - name: install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+        uses: ./.github/actions/govulncheck
 
       - name: govulncheck
         run: govulncheck ./...
@@ -129,8 +135,12 @@ jobs:
         with:
           # Exact patch, not '24' or '24.x' — same reasoning as the Go pin
           # above. A floating version means the largest dependency in this job
-          # is the one thing it did not pin.
-          node-version: '24.19.0'
+          # is the one thing it did not pin. Read from the fixture's
+          # .node-version rather than written here (locked decision
+          # bump_reach): the weekly pin-currency bot bumps that file with a
+          # GITHUB_TOKEN, which GitHub will not let push a workflow change.
+          # TestNodeVersionSingleSource fails on an inline node-version.
+          node-version-file: internal/mutation/testdata/ts-project/.node-version
           cache: 'npm'
           cache-dependency-path: internal/mutation/testdata/ts-project/package-lock.json
 
@@ -162,6 +172,33 @@ jobs:
       - name: stryker end-to-end mutation run
         shell: bash
         run: set -o pipefail; go test -count=1 -json -run 'TestStrykerRunsEndToEnd|TestConstructRangeRecoversTheDeepMutant|TestBabelParsesGenericsAndJSX|TestRealParserSpansMatchTheExpansion|TestUnresolvableParserIsUnavailable' ./internal/mutation/ | go run ./cmd/testsummary
+
+  # The release's goreleaser, validated before main. The version lives in
+  # .github/actions/goreleaser at an exact pin; every PR — the weekly
+  # pin-currency bot's bumps included — installs that pin and checks
+  # .goreleaser.yaml with it, so a bump the config does not survive goes red
+  # here instead of on the release run after merge. Parallel to the test job:
+  # it gates nothing else and costs one install. No `|| true`
+  # (TestGoreleaserCheckedOnPRs).
+  goreleaser-check:
+    runs-on: ubuntu-latest
+    env:
+      GOFLAGS: -mod=readonly
+      GOPROXY: https://proxy.golang.org,direct
+      GOSUMDB: sum.golang.org
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: go.mod  # single source: go.mod's toolchain directive
+          cache: true
+
+      - name: install goreleaser
+        uses: ./.github/actions/goreleaser
+
+      - name: goreleaser check
+        run: goreleaser check
 
   shellcheck:
     runs-on: ubuntu-latest

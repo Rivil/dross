@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -143,21 +142,51 @@ func TestRunBlockScanner(t *testing.T) {
 	}
 }
 
-// TestWorkflowsHaveNoExpressionsInRun sweeps every workflow file. Values reach
-// a run: script via env: — never inline.
-func TestWorkflowsHaveNoExpressionsInRun(t *testing.T) {
-	root := repoRootFromTest(t)
-	workflows, err := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.yml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(workflows) == 0 {
-		t.Fatal("no .github/workflows/*.yml found — nothing swept")
-	}
-	for _, wf := range workflows {
-		rel, _ := filepath.Rel(root, wf)
-		for _, hit := range runBlockExpressions(readRepoFile(t, rel)) {
-			t.Errorf("%s:%d `${{ }}` inside a run: block — pass it through env: instead: %s", rel, hit.line, hit.text)
+// runExpressionViolations sweeps every workflow and composite action under
+// root and returns one message per `${{` inside a run: block, plus how many
+// files it read. A composite action's `${{ inputs.x }}` is substituted into its
+// script exactly as a workflow's is, so actions are swept too.
+func runExpressionViolations(t *testing.T, root string) (violations []string, files int) {
+	t.Helper()
+	for _, rel := range githubYAMLFiles(t, root) {
+		files++
+		for _, hit := range runBlockExpressions(readTreeFile(t, root, rel)) {
+			violations = append(violations, fmt.Sprintf("%s:%d `${{ }}` inside a run: block — pass it through env: instead: %s", rel, hit.line, hit.text))
 		}
 	}
+	return violations, files
+}
+
+// TestWorkflowsHaveNoExpressionsInRun sweeps every workflow and composite
+// action. Values reach a run: script via env: — never inline.
+func TestWorkflowsHaveNoExpressionsInRun(t *testing.T) {
+	violations, files := runExpressionViolations(t, repoRootFromTest(t))
+	if files == 0 {
+		t.Fatal("no workflow or composite action found — nothing swept")
+	}
+	for _, v := range violations {
+		t.Error(v)
+	}
+
+	t.Run("composite action fixture", func(t *testing.T) {
+		root := writeTreeFiles(t, map[string]string{
+			".github/actions/x/action.yml": `inputs:
+  x:
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        X: ${{ inputs.x }}
+      run: echo "$X"
+    - shell: bash
+      run: echo ${{ inputs.x }}
+`,
+		})
+		violations, _ := runExpressionViolations(t, root)
+		if len(violations) != 1 || !strings.Contains(violations[0], "action.yml:12") {
+			t.Fatalf("want exactly one violation at action.yml:12, got %q", violations)
+		}
+	})
 }

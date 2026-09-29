@@ -50,22 +50,26 @@ drop**:
 When the choice is open-ended (not a small fixed set), go freeform instead of
 manufacturing options — but still lead with your recommendation.
 
-## Surfacing a borderline candidate — defer or add
+## Surfacing a candidate — include-first
 
 When you surface a candidate that *might* belong to the current phase — a
 gray-area-adjacent proposal, a parked idea, an optional sub-feature — don't ask
-open-endedly and don't silently record it. Present it as a single either/or that
-**leads with "defer it"** and offers "add to current phase":
+open-endedly and don't silently record it. Decide which of three cases it is:
 
-- **defer it** (the lead) — it's not this phase; park it (routed to a destination,
-  or someday). Keeps the phase boundary tight by default.
-- **add to current phase** — it's actually in scope; pull it in as a criterion or
-  task.
+- **Belongs here** — it serves the phase's goal. Include it: it joins the phase
+  through the plain accept / reword / drop gate above, with accept as the lead.
+  No defer question.
+- **Genuinely borderline** — present a single either/or that
+  **leads with "add to current phase"** and offers "defer it" (routed to a
+  destination, or someday).
+- **Clearly has a home elsewhere** — a named phase already on the roadmap, or a
+  genuinely separate capability. Lead with "defer it", put the reason and the
+  destination in the option, and still offer "add to current phase".
 
-The defer-first lead keeps scope tight while making inclusion a one-click choice,
-and the either/or guarantees the candidate never evaporates — it is either pulled
-in or parked, never lost. Use this **only for genuinely borderline items**: a
-clearly in-scope proposal still uses the plain accept / reword / drop gate above.
+Include-first: deferral is not the safe default. In-scope work parked in the
+backlog is scope that leaked, not scope kept tight — a phase finishes its job
+rather than handing pieces of it on. Either way the candidate never evaporates:
+it is included or parked, never lost.
 
 ## Anti-patterns
 

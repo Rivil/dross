@@ -38,20 +38,27 @@ func TestSpecPromptRoutesFourDestinations(t *testing.T) {
 	}
 }
 
-// TestSpecPromptDeferFirstEitherOr proves c-1's framing half: a surfaced
-// borderline candidate is routed through the defer-first either/or from the
-// playbook — lead "defer it", offer "add to current phase". Drop the framing and
-// the needles disappear.
-func TestSpecPromptDeferFirstEitherOr(t *testing.T) {
+// TestSpecPromptIncludeFirstEitherOr proves c-1's framing half as revised on
+// 2026-09-29: a surfaced candidate is sorted include-first — an in-scope one is
+// pulled in with no defer question, a borderline one leads with "add to current
+// phase", and only one with a clear home elsewhere leads with "defer it". Drop
+// the framing and the needles disappear; restore the defer-first lead and the
+// absence check fails.
+func TestSpecPromptIncludeFirstEitherOr(t *testing.T) {
 	content := specPromptContent(t)
 	for _, needle := range []string{
-		"defer-first",          // defer leads
-		"add to current phase", // the alternative
-		"defer it",             // the lead option, spelled out
+		"include-first",                  // the rule's name
+		"belongs in this phase",          // case 1: pulled in, no defer question
+		"lead with add to current phase", // case 2: borderline leads with add
+		"clearly has a home elsewhere",   // case 3: the only defer lead
+		"defer it",                       // the alternative, spelled out
 	} {
 		if !strings.Contains(content, needle) {
-			t.Errorf("spec.md §4a missing defer-first framing %q", needle)
+			t.Errorf("spec.md §4a missing include-first framing %q", needle)
 		}
+	}
+	if strings.Contains(content, "defer-first") {
+		t.Error("spec.md still carries the retired defer-first lead")
 	}
 }
 

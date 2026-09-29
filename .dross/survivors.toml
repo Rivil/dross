@@ -2709,3 +2709,84 @@
   line = 118
   category = "gremlins-attribution-ceiling"
   accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "d7da56e5551ee67b"
+  file = "internal/pincheck/bump.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.Kind == KindNPM:"
+  line = 64
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "5bac0359f6263922"
+  file = "internal/pincheck/classify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case target != \"\":"
+  line = 104
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "9eb28f66882f1533"
+  file = "internal/pincheck/classify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case offLine != \"\":"
+  line = 106
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "21b41e8edca9a9fd"
+  file = "internal/pincheck/sites.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 121
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "2598e13c19eb4260"
+  file = "internal/pincheck/sites.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case l.inBlock && l.blockKey == \"run\":"
+  line = 265
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "1c1471299e3064bd"
+  file = "internal/pincheck/sites.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case l.key == \"run\" && !isBlockScalarIndicator(l.value):"
+  line = 268
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "9274ef8541a0cbe9"
+  file = "internal/pincheck/sites.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case l.key == \"uses\":"
+  line = 270
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "6269f2f8ad79ab61"
+  file = "internal/pincheck/upstream.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone:"
+  line = 94
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "d3e681112a0f53dc"
+  file = "internal/pincheck/upstream.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case resp.StatusCode != http.StatusOK:"
+  line = 96
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
