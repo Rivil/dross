@@ -42,7 +42,7 @@ func TestGoreleaserHasNoBeforeHooks(t *testing.T) {
 }
 
 // TestReleaseJobRunsGovulncheck pins the release-job scan: a `govulncheck ./...`
-// run step exists, it precedes the goreleaser step, and nothing softens its
+// run step exists, it precedes the `goreleaser release` run step, and nothing softens its
 // exit status. A finding at release time fails the release — no allowlist,
 // no `|| true` (locked decision release_govulncheck_failure).
 func TestReleaseJobRunsGovulncheck(t *testing.T) {
@@ -60,7 +60,7 @@ func TestReleaseJobRunsGovulncheck(t *testing.T) {
 				t.Errorf("release.yml:%d govulncheck step is softened with `|| true` — a finding must fail the release", i+1)
 			}
 		}
-		if strings.HasPrefix(trimmed, "- uses: goreleaser/goreleaser-action@") && goreleaser < 0 {
+		if strings.HasPrefix(strings.TrimPrefix(trimmed, "- "), "run: goreleaser release") && goreleaser < 0 {
 			goreleaser = i
 		}
 	}
@@ -68,7 +68,7 @@ func TestReleaseJobRunsGovulncheck(t *testing.T) {
 		t.Fatal("release.yml has no `run: govulncheck ./...` step — the shipped graph is never scanned in the release job")
 	}
 	if goreleaser < 0 {
-		t.Fatal("release.yml has no goreleaser step")
+		t.Fatal("release.yml has no `run: goreleaser release` step")
 	}
 	if scan > goreleaser {
 		t.Fatalf("release.yml runs govulncheck (line %d) after goreleaser (line %d) — the scan must precede the build it vouches for", scan+1, goreleaser+1)
@@ -186,4 +186,146 @@ func TestGovulncheckDeclaredOnce(t *testing.T) {
 			t.Fatalf("@latest: got %q, want one not-exact problem", p)
 		}
 	})
+}
+
+// goreleaserInstall is a goreleaser version declaration.
+var goreleaserInstall = regexp.MustCompile(`github\.com/goreleaser/goreleaser(?:/v\d+)?@(\S+)`)
+
+// goreleaserPinProblems reports anything but one exact goreleaser pin, held in
+// the local goreleaser action: a loose or missing pin there, a second
+// declaration, or any goreleaser-action step or goreleaser install inside a
+// workflow. Comments are not declarations.
+func goreleaserPinProblems(t *testing.T, root string) []string {
+	t.Helper()
+	var problems, pins []string
+	for _, rel := range githubYAMLFiles(t, root) {
+		inAction := strings.HasPrefix(rel, ".github/actions/goreleaser/")
+		for i, raw := range strings.Split(readTreeFile(t, root, rel), "\n") {
+			line, _ := splitYAMLComment(raw)
+			if !inAction && strings.Contains(line, "goreleaser/goreleaser-action@") {
+				problems = append(problems, fmt.Sprintf("%s:%d uses goreleaser-action — its version: input lives in a workflow file the pin-currency bot cannot push (bump_reach)", rel, i+1))
+			}
+			for _, m := range goreleaserInstall.FindAllStringSubmatch(line, -1) {
+				if !inAction {
+					problems = append(problems, fmt.Sprintf("%s:%d installs goreleaser inside a workflow — the pin belongs in .github/actions/goreleaser", rel, i+1))
+					continue
+				}
+				pins = append(pins, fmt.Sprintf("%s:%d", rel, i+1))
+				if !regexp.MustCompile(`^v\d+\.\d+\.\d+$`).MatchString(m[1]) {
+					problems = append(problems, fmt.Sprintf("%s:%d goreleaser pin %q is not an exact vX.Y.Z", rel, i+1, m[1]))
+				}
+			}
+		}
+	}
+	if len(pins) != 1 {
+		problems = append(problems, fmt.Sprintf("the goreleaser action declares %d goreleaser installs (%v), want exactly one", len(pins), pins))
+	}
+	return problems
+}
+
+// TestGoreleaserPinnedOutsideWorkflows pins the release's goreleaser to one
+// exact version, declared in .github/actions/goreleaser rather than in a
+// workflow (locked decision bump_reach: GitHub rejects a GITHUB_TOKEN push that
+// changes a workflow file, so a pin there is one the bump bot can never move).
+// Phase run-block-pin-currency, criterion c-7.
+func TestGoreleaserPinnedOutsideWorkflows(t *testing.T) {
+	for _, p := range goreleaserPinProblems(t, repoRootFromTest(t)) {
+		t.Error(p)
+	}
+
+	action := func(version string) string {
+		return "runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: go install github.com/goreleaser/goreleaser/v2@" + version + "\n"
+	}
+	for _, tc := range []struct {
+		name  string
+		files map[string]string
+		want  string
+	}{
+		{"latest", map[string]string{".github/actions/goreleaser/action.yml": action("latest")}, "not an exact"},
+		{"major only", map[string]string{".github/actions/goreleaser/action.yml": action("v2")}, "not an exact"},
+		{"goreleaser-action ~> v2 back in a workflow", map[string]string{
+			".github/actions/goreleaser/action.yml": action("v2.18.2"),
+			".github/workflows/release.yml":         "jobs:\n  release:\n    steps:\n      - uses: goreleaser/goreleaser-action@9ed2f89a662bf1735a48bc8557fd212fa902bebf  # v6.1.0\n        with:\n          version: '~> v2'\n",
+		}, "goreleaser-action"},
+		{"install in a workflow", map[string]string{
+			".github/actions/goreleaser/action.yml": action("v2.18.2"),
+			".github/workflows/release.yml":         "jobs:\n  release:\n    steps:\n      - run: go install github.com/goreleaser/goreleaser/v2@v2.18.2\n",
+		}, "inside a workflow"},
+		{"no action", map[string]string{".github/workflows/ci.yml": "jobs: {}\n"}, "declares 0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := goreleaserPinProblems(t, writeTreeFiles(t, tc.files))
+			if len(p) == 0 || !strings.Contains(strings.Join(p, "\n"), tc.want) {
+				t.Fatalf("got problems %q, want one containing %q", p, tc.want)
+			}
+		})
+	}
+	t.Run("exact pin in the action passes", func(t *testing.T) {
+		if p := goreleaserPinProblems(t, writeTreeFiles(t, map[string]string{".github/actions/goreleaser/action.yml": action("v2.18.2")})); len(p) != 0 {
+			t.Fatalf("got problems %q, want none", p)
+		}
+	})
+}
+
+// goreleaserCheckJobs returns the ci.yml jobs that install the pinned
+// goreleaser and then run an unsoftened `goreleaser check`.
+func goreleaserCheckJobs(workflow string) []string {
+	var jobs []string
+	lines := strings.Split(workflow, "\n")
+	for _, raw := range lines {
+		if len(raw) < 3 || !strings.HasPrefix(raw, "  ") || raw[2] == ' ' || !strings.HasSuffix(raw, ":") {
+			continue
+		}
+		job := strings.TrimSuffix(strings.TrimSpace(raw), ":")
+		block, _, ok := jobLines(workflow, job)
+		if !ok {
+			continue
+		}
+		uses, check := -1, -1
+		for i, b := range block {
+			v, _ := splitYAMLComment(b)
+			trimmed := strings.TrimPrefix(strings.TrimSpace(v), "- ")
+			if trimmed == "uses: ./.github/actions/goreleaser" && uses < 0 {
+				uses = i
+			}
+			if strings.HasPrefix(trimmed, "run: goreleaser check") && !strings.Contains(trimmed, "||") && check < 0 {
+				check = i
+			}
+		}
+		if uses >= 0 && check > uses {
+			jobs = append(jobs, job)
+		}
+	}
+	return jobs
+}
+
+// TestGoreleaserCheckedOnPRs pins a ci.yml job that installs the pinned
+// goreleaser and runs `goreleaser check` with nothing softening it. ci.yml runs
+// on every pull request, so a goreleaser bump — the pin-currency bot's
+// included — is proved against .goreleaser.yaml before it reaches main, where
+// the first thing to run it would otherwise be the release. Criterion c-7.
+func TestGoreleaserCheckedOnPRs(t *testing.T) {
+	ci := readRepoFile(t, ".github/workflows/ci.yml")
+	if !regexp.MustCompile(`(?m)^  pull_request:`).MatchString(ci) {
+		t.Fatal("ci.yml no longer runs on pull_request — nothing validates a goreleaser bump before main")
+	}
+	if jobs := goreleaserCheckJobs(ci); len(jobs) == 0 {
+		t.Fatal("no ci.yml job uses ./.github/actions/goreleaser and then runs `goreleaser check` unsoftened")
+	}
+
+	for _, tc := range []struct {
+		name, job string
+		want      int
+	}{
+		{"installs then checks", "      - uses: ./.github/actions/goreleaser\n      - run: goreleaser check\n", 1},
+		{"softened", "      - uses: ./.github/actions/goreleaser\n      - run: goreleaser check || true\n", 0},
+		{"checks with some other goreleaser", "      - run: go install github.com/goreleaser/goreleaser/v2@latest\n      - run: goreleaser check\n", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wf := "on:\n  pull_request:\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n" + tc.job
+			if got := goreleaserCheckJobs(wf); len(got) != tc.want {
+				t.Fatalf("goreleaserCheckJobs = %v, want %d job(s)", got, tc.want)
+			}
+		})
+	}
 }

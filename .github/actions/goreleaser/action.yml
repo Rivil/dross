@@ -1,0 +1,23 @@
+# The one place goreleaser's version is declared: an exact release, installed
+# from the Go module proxy (checksum-verified through GOSUMDB), never `~> v2`
+# or latest — the tool that builds and signs the binaries users download is the
+# last place a floating version belongs. release.yml installs it here before
+# `goreleaser release`; ci.yml's goreleaser-check job installs it on every PR
+# and runs `goreleaser check`, so a bump the config does not survive goes red
+# before main, not at release time. TestGoreleaserPinnedOutsideWorkflows fails
+# if the pin loosens or moves back into a workflow.
+#
+# Outside .github/workflows/ on purpose (locked decision bump_reach): the
+# weekly pin-currency job bumps this line with a GITHUB_TOKEN, and GitHub
+# rejects a GITHUB_TOKEN push that changes a workflow file.
+#
+# Composite steps inherit the calling job's env, so GOFLAGS/GOPROXY/GOSUMDB
+# hardening set on the job applies to this install too.
+name: install goreleaser
+description: Install the pinned goreleaser the release builds with and CI validates.
+runs:
+  using: composite
+  steps:
+    - name: install goreleaser
+      shell: bash
+      run: go install github.com/goreleaser/goreleaser/v2@v2.18.2

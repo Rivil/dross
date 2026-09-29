@@ -165,6 +165,33 @@ jobs:
         shell: bash
         run: set -o pipefail; go test -count=1 -json -run 'TestStrykerRunsEndToEnd|TestConstructRangeRecoversTheDeepMutant|TestBabelParsesGenericsAndJSX|TestRealParserSpansMatchTheExpansion|TestUnresolvableParserIsUnavailable' ./internal/mutation/ | go run ./cmd/testsummary
 
+  # The release's goreleaser, validated before main. The version lives in
+  # .github/actions/goreleaser at an exact pin; every PR — the weekly
+  # pin-currency bot's bumps included — installs that pin and checks
+  # .goreleaser.yaml with it, so a bump the config does not survive goes red
+  # here instead of on the release run after merge. Parallel to the test job:
+  # it gates nothing else and costs one install. No `|| true`
+  # (TestGoreleaserCheckedOnPRs).
+  goreleaser-check:
+    runs-on: ubuntu-latest
+    env:
+      GOFLAGS: -mod=readonly
+      GOPROXY: https://proxy.golang.org,direct
+      GOSUMDB: sum.golang.org
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: go.mod  # single source: go.mod's toolchain directive
+          cache: true
+
+      - name: install goreleaser
+        uses: ./.github/actions/goreleaser
+
+      - name: goreleaser check
+        run: goreleaser check
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:
