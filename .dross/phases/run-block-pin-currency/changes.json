@@ -2,5 +2,22 @@
   "phase": "run-block-pin-currency",
   "base": "milestone/v1.7",
   "base_commit": "0b2d15dbc3d985be1c299e07a8e21526a8ff1a06",
-  "tasks": {}
+  "tasks": {
+    "quick-1": {
+      "files": [
+        "ARCHITECTURE.md",
+        "README.md",
+        "assets/prompts/_interaction.md",
+        "assets/prompts/plan.md",
+        "assets/prompts/spec.md",
+        "internal/cmd/interaction_snippet_test.go",
+        "internal/cmd/plan_prompt_test.go",
+        "internal/cmd/spec_prompt_test.go",
+        "internal/cmd/testdata/cli_surface/tests_before.txt"
+      ],
+      "commit": "d1bb26d",
+      "completed_at": "2026-09-29T08:29:18.345693Z",
+      "notes": "quick: make candidate surfacing include-first instead of defer-first"
+    }
+  }
 }
