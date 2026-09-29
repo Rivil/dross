@@ -72,10 +72,20 @@ jobs:
       # keeps go test's own exit status in the verdict. No -timeout: go test's
       # 10m default is the wall, and the 300s warning shows regrowth long
       # before it (decision timeout_ceiling). TestCIGoTestStepsLive pins this
-      # line.
+      # line. -coverprofile is plain per-package (no -coverpkg) and feeds the
+      # coverage floor step below.
       - name: go test
         shell: bash
-        run: set -o pipefail; go test -race -count=1 -json ./... | go run ./cmd/testsummary
+        run: set -o pipefail; go test -race -count=1 -json -coverprofile="$RUNNER_TEMP/cover.out" ./... | go run ./cmd/testsummary
+
+      # Own-package coverage floor: no non-test file under internal/ outside
+      # internal/cmd may sit below 50% statement coverage from its OWN package's
+      # tests. gremlins mutates and measures one package at a time, so a file
+      # covered only from another package is invisible to it. Flat, no
+      # allowlist (decision guard_shape). Reads the profile the step above
+      # wrote; TestCoverFloorIsWiredIntoCI pins the pairing.
+      - name: coverage floor
+        run: go run ./cmd/coverfloor "$RUNNER_TEMP/cover.out"
 
       - name: go build
         run: go build ./cmd/dross

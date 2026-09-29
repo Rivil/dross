@@ -500,6 +500,16 @@ type VerifySummary struct {
 	// coverage blind spots ("test never ran the line"). Omitted when
 	// zero — only gremlins currently reports this status.
 	MutantsNotCovered int `toml:"mutants_not_covered,omitempty"`
+	// MutantsNoBlock and MutantsTestGap split MutantsNotCovered by where a
+	// go-cover profile puts each survivor's line (SplitNotCovered). Only a
+	// no-block line is uncoverable by construction: go-cover instruments no
+	// statement there, so the mutant is never built and no test can kill it.
+	// A line inside a block is reachable code no test ran — a test gap, which
+	// stays in the reachable denominator. NOT COVERED survivors in neither
+	// count had no profile to place them and are reachable too: "not looked
+	// at" must never read as uncoverable. Omitted when zero.
+	MutantsNoBlock int `toml:"mutants_no_block,omitempty"`
+	MutantsTestGap int `toml:"mutants_test_gap,omitempty"`
 	// MutantsInScope is the denominator the score was computed over:
 	// killed + survived + timeout, counting only mutants in files this phase
 	// touched. Always written, including as 0, because it is the sample size
@@ -1027,6 +1037,86 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 		})
 	}
 	return v
+}
+
+// NotCoveredKind is where a go-cover profile puts a NOT COVERED survivor's line.
+type NotCoveredKind int
+
+const (
+	// NotCoveredUnplaced — no profile placed the line, or the profile shows
+	// it running. Counted as reachable: an unexamined line proves nothing.
+	NotCoveredUnplaced NotCoveredKind = iota
+	// NotCoveredNoBlock — no coverage block holds the line. Uncoverable by
+	// construction: the mutant is never built.
+	NotCoveredNoBlock
+	// NotCoveredTestGap — a coverage block holds the line and no test ran
+	// it. Reachable code a test could run.
+	NotCoveredTestGap
+)
+
+// CoverageClassifier places a NOT COVERED survivor's line against a go-cover
+// profile. An interface for the same reason Identifier is one: the real
+// classifier is the survivor drain's, over a profile the caller had to build,
+// and the split itself stays pure and fakeable.
+type CoverageClassifier interface {
+	ClassifyNotCovered(file string, line int, op string) NotCoveredKind
+}
+
+// SplitNotCovered sorts the run's in-scope NOT COVERED survivors into
+// MutantsNoBlock and MutantsTestGap.
+//
+// NOT COVERED used to be printed whole as "uncoverable by construction" and
+// dropped from the reachable denominator. It also holds lines in a count-0
+// block — code a test could run and none did — so a real test gap read as
+// efficacy 1.00 over everything reachable. Only the no-block half is
+// uncoverable; the split is what lets the summary say so.
+func SplitNotCovered(v *Verify, t *Tests, c CoverageClassifier) {
+	v.Summary.MutantsNoBlock, v.Summary.MutantsTestGap = 0, 0
+	for _, lr := range t.Languages {
+		if lr.Mutation == nil {
+			continue
+		}
+		for _, m := range lr.Mutation.Surviving {
+			if !m.NotCovered {
+				continue
+			}
+			switch c.ClassifyNotCovered(m.File, m.Line, m.Op) {
+			case NotCoveredNoBlock:
+				v.Summary.MutantsNoBlock++
+			case NotCoveredTestGap:
+				v.Summary.MutantsTestGap++
+			}
+		}
+	}
+}
+
+// NotCoveredPackages lists the Go packages holding the run's in-scope NOT
+// COVERED survivors, sorted and deduped, for the profile SplitNotCovered is
+// classified against.
+//
+// Each is "./"-rooted so `go test` reads it as a directory and never as a
+// flag, and a survivor path that is not local to the repo — absolute, or
+// climbing out with ".." — is left out rather than handed to the toolchain.
+func NotCoveredPackages(t *Tests) []string {
+	seen := map[string]bool{}
+	var pkgs []string
+	for _, lr := range t.Languages {
+		if lr.Mutation == nil {
+			continue
+		}
+		for _, m := range lr.Mutation.Surviving {
+			if !m.NotCovered || filepath.Ext(m.File) != ".go" || !filepath.IsLocal(m.File) {
+				continue
+			}
+			pkg := "./" + filepath.ToSlash(filepath.Dir(m.File))
+			if !seen[pkg] {
+				seen[pkg] = true
+				pkgs = append(pkgs, pkg)
+			}
+		}
+	}
+	sort.Strings(pkgs)
+	return pkgs
 }
 
 // FilesFromChanges flattens changes.json's per-task file lists into

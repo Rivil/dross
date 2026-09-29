@@ -303,35 +303,38 @@ func verifyCovVerify(status string) *verify.Verify {
 	return v
 }
 
-// TestVerifyCover_SummaryEfficacyNote exercises the non-nil-mutation
-// branch (253), the NotCovered>0 branch (260), efficacyDenom math (265),
-// the denom>0 branch (266), and the efficacy + printed sum (267,269).
-// Killed=6, Survived=4, NotCovered=2, Timeout=1:
-//
-//	efficacyDenom = 6 + (4 - 2) = 8
-//	efficacy      = 6 / 8       = 0.75
-//	printed total = 6 + 4 + 1   = 11
+// TestVerifyCover_SummaryEfficacyNote is c-5 for the leg line: a leg with NOT
+// COVERED survivors prints its raw count and no efficacy of its own. The old
+// per-leg note dropped every NOT COVERED mutant, count-0 test gaps included,
+// and called them all never run — on the 2026-09-28 run it printed 1.00 beside
+// the summary's 0.99 over the reachable. The one efficacy figure left is the
+// summary's, and the test gap stays in its denominator: 11 in scope, 1 no-block,
+// 10 reachable.
 func TestVerifyCover_SummaryEfficacyNote(t *testing.T) {
 	m := &mutation.Report{
 		Tool: "gremlins", Killed: 6, Survived: 4, NotCovered: 2, Timeout: 1, Errors: 0, Score: 0.60,
 	}
+	v := verifyCovVerify(verify.MutationMeasured)
+	v.Summary.MutantsKilled, v.Summary.MutantsSurvived, v.Summary.MutantsInScope = 6, 4, 11
+	v.Summary.MutantsNotCovered, v.Summary.MutantsNoBlock, v.Summary.MutantsTestGap = 2, 1, 1
 	out := captureStdout(t, func() {
-		printVerifySummary(verifyCovTests(m), verifyCovVerify(verify.MutationMeasured))
+		printVerifySummary(verifyCovTests(m), v)
 	})
-	for _, want := range []string{
-		"killed=6 survived=4 (not_covered=2) timeout=1 errors=0 score=0.60",
-		"note: 2/11 mutants NOT COVERED",
-		"efficacy excluding them = 0.75",
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("summary missing %q\n--- out ---\n%s", want, out)
+	if !strings.Contains(out, "killed=6 survived=4 (not_covered=2) timeout=1 errors=0 score=0.60") {
+		t.Errorf("the leg line lost its counts:\n%s", out)
+	}
+	for _, never := range []string{"efficacy excluding", "tests never ran them"} {
+		if strings.Contains(out, never) {
+			t.Errorf("the leg still prints %q, which drops count-0 test gaps:\n%s", never, out)
 		}
+	}
+	if n := strings.Count(out, "efficacy"); n != 1 || !strings.Contains(out, "efficacy over the 10 reachable") {
+		t.Errorf("want one efficacy figure, over the 10 reachable (the test gap kept in), got %d:\n%s", n, out)
 	}
 }
 
-// TestVerifyCover_SummaryNoNoteWhenCovered pins the NotCovered==0 side of
-// branch 260: no efficacy note is printed. Kills the boundary (>=0 would
-// print) and negation mutants on line 260.
+// TestVerifyCover_SummaryNoNoteWhenCovered: a leg with no NOT COVERED survivor
+// prints no NOT COVERED line and no efficacy note.
 func TestVerifyCover_SummaryNoNoteWhenCovered(t *testing.T) {
 	m := &mutation.Report{
 		Tool: "gremlins", Killed: 6, Survived: 4, NotCovered: 0, Timeout: 1, Score: 0.60,
@@ -347,10 +350,9 @@ func TestVerifyCover_SummaryNoNoteWhenCovered(t *testing.T) {
 	}
 }
 
-// TestVerifyCover_SummaryDenomZeroSkipsEfficacy drives NotCovered>0 (enters
-// block 260) but efficacyDenom==0 (branch 266 false), so the inner efficacy
-// line is skipped. Killed=0, Survived=2, NotCovered=2 → denom = 0+(2-2)=0.
-// Kills the boundary (>=0 would divide 0/0 and print) and negation on 266.
+// TestVerifyCover_SummaryDenomZeroSkipsEfficacy: a leg that is all NOT COVERED
+// (Killed=0, Survived=2, NotCovered=2) still prints its count and no per-leg
+// efficacy. The old note's zero-denominator guard is gone with the note.
 func TestVerifyCover_SummaryDenomZeroSkipsEfficacy(t *testing.T) {
 	m := &mutation.Report{
 		Tool: "gremlins", Killed: 0, Survived: 2, NotCovered: 2, Timeout: 0, Score: 0.0,
