@@ -63,8 +63,8 @@
 
 [[decisions]]
   key = "doctor_net"
-  choice = "Doctor's pin section is always on with a short per-host timeout; a stale pin counts as a doctor issue; unknown (offline) prints a line but is not an issue."
-  why = "Doctor must stay usable offline; the scheduled cron is the fail-closed path (c-3)."
+  choice = "Doctor's pin section is always on with a short per-host timeout; a stale pin is a warning naming its bump target, never an issue; unknown (offline) prints a line and is not an issue either."
+  why = "Doctor must stay usable offline; the scheduled cron is the fail-closed path (c-3). Reopened at plan review: /dross-ship and /dross-review require doctor to exit 0, so a stale-pin issue would block shipping in every managed repo on upstream's release calendar — the same reason PR CI never goes red on an upstream release (check_surface)."
   locked = true
 
 [[decisions]]
