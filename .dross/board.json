@@ -1680,6 +1680,66 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "run-block-pin-currency/t-1": {
+      "issue": "DRO-747",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "run-block-pin-currency/t-10": {
+      "issue": "DRO-755",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "run-block-pin-currency/t-11": {
+      "issue": "DRO-757",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "run-block-pin-currency/t-12": {
+      "issue": "DRO-758",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "run-block-pin-currency/t-2": {
+      "issue": "DRO-748",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "run-block-pin-currency/t-3": {
+      "issue": "DRO-749",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "run-block-pin-currency/t-4": {
+      "issue": "DRO-751",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "run-block-pin-currency/t-5": {
+      "issue": "DRO-752",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "run-block-pin-currency/t-6": {
+      "issue": "DRO-750",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "run-block-pin-currency/t-7": {
+      "issue": "DRO-753",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "run-block-pin-currency/t-8": {
+      "issue": "DRO-754",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "run-block-pin-currency/t-9": {
+      "issue": "DRO-756",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "scanner-self-exclusion/t-1": {
       "issue": "DRO-405",
       "plan_status": "done",
