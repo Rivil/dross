@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -21,6 +22,7 @@ import (
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/mutationcfg"
 	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/pincheck"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/state"
@@ -64,6 +66,7 @@ func Doctor() *cobra.Command {
 			redProofWarnings := 0
 			duplicateSlugWarnings := 0
 			backfillResidueWarnings := 0
+			pinWarnings := 0
 
 			// --- Foundational files ---
 			//
@@ -480,6 +483,35 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
+			// --- Pin currency ---
+			//
+			// The pins Dependabot cannot reach — run-block `go install` pins,
+			// setup-node's version, goreleaser-action's version, go.mod's
+			// toolchain — checked against their upstreams by the same checker
+			// and staleness rules as the dross repo's weekly cron (locked
+			// decision check_surface), in lenient mode (doctor_net): a stale or
+			// unpinned pin is a warning naming what to do, an unreachable
+			// upstream or a newer major is a line. None of it moves the exit
+			// code — /dross-ship and /dross-review gate on doctor, and upstream's
+			// release calendar must not block them. Silent when the repo holds
+			// no such pin.
+			if sec, _, err := PinCurrencySection(context.Background(), repoDir, pinResolver, time.Now()); err != nil {
+				Print("Pin currency:")
+				Printf("  ⚠ could not scan the repo's pins: %v\n", err)
+				Print("")
+				pinWarnings++
+			} else if len(sec.Lines) > 0 {
+				Print(sec.Heading)
+				printLines(sec.Lines)
+				Print("    Advisory only — bump a stale pin to the version named; this never changes doctor's exit code.")
+				Print("")
+				for _, l := range sec.Lines {
+					if l.Level == doctorWarn {
+						pinWarnings++
+					}
+				}
+			}
+
 			// --- Duplicate roadmap slugs ---
 			//
 			// Carrying a phase forward onto a later milestone's roadmap is a
@@ -539,9 +571,72 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
-			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings+backfillResidueWarnings)
+			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings+backfillResidueWarnings+pinWarnings)
 		},
 	}
+}
+
+// pinResolver is the seam doctor's Pin currency section reads upstream
+// through. Typed as pincheck's Resolver so internal/cmd never imports net/http
+// itself (boundary_test.go). The test binary's TestMain swaps in a counting
+// resolver that never dials and fails the binary if anything reached it, so a
+// doctor test can only touch upstream through a stub it installs on purpose.
+var pinResolver pincheck.Resolver = pincheck.NewResolver(pincheck.DefaultEndpoints(), pinHostTimeout)
+
+// pinHostTimeout bounds each upstream request doctor makes. Short on purpose:
+// doctor runs in every dross-managed repo and must stay usable offline, where
+// an unreachable host is a line, not a wait (locked decision doctor_net).
+const pinHostTimeout = 3 * time.Second
+
+// PinCurrencySection builds doctor's "Pin currency" block over the generic
+// pin sites under repoDir — the subset every dross-managed repo can carry; the
+// Go-source pins only the dross repo holds are the weekly cron's alone. It runs
+// pincheck.Check in lenient mode, so the lines' levels come from the one
+// checker the cron uses: stale and unpinned warn, unknown and info are notes,
+// and nothing is ever an Issue. The Section is empty when the repo holds no
+// such pin. The results the lines were rendered from come back beside it.
+//
+// Exported so cmd/pincheck's parity test can drive this path beside the cron's
+// and prove both classify a pin the same way.
+func PinCurrencySection(ctx context.Context, repoDir string, r pincheck.Resolver, now time.Time) (diag.Section, []pincheck.Result, error) {
+	sites, err := pincheck.Scan(repoDir)
+	if err != nil {
+		return diag.Section{}, nil, err
+	}
+	sec := diag.Section{Heading: "Pin currency:"}
+	results := pincheck.Check(ctx, sites, r, pincheck.Lenient, now).Results
+	for _, res := range results {
+		sec.Lines = append(sec.Lines, pinCurrencyLine(res))
+	}
+	return sec, results, nil
+}
+
+// pinCurrencyLine renders one lenient result. The level follows the checker's
+// severity; the text names the pin and what its verdict points at.
+func pinCurrencyLine(res pincheck.Result) doctorLine {
+	where := fmt.Sprintf("%s:%d %s", res.File, res.Line, res.Name)
+	var text string
+	switch res.Verdict {
+	case pincheck.Current:
+		text = fmt.Sprintf("%s %s is current", where, res.Version)
+	case pincheck.Stale:
+		text = fmt.Sprintf("%s %s is stale — bump to %s (a newer release on its line has been out more than 7 days)", where, res.Version, res.Target)
+	case pincheck.Unpinned:
+		text = fmt.Sprintf("%s is not pinned to an exact release: %s", where, res.Classification.Reason)
+	case pincheck.Info:
+		text = fmt.Sprintf("    · %s %s — a newer release exists off its line (%s): a migration, not a bump", where, res.Version, res.Latest)
+	default:
+		text = fmt.Sprintf("    · %s %s — could not check upstream: %s", where, res.Version, res.Classification.Reason)
+	}
+	switch res.Severity {
+	case pincheck.SeverityWarn:
+		return doctorLine{Level: doctorWarn, Text: text}
+	case pincheck.SeverityFail:
+		return doctorLine{Level: doctorIssue, Text: text}
+	case pincheck.SeverityLine:
+		return doctorLine{Level: diag.Note, Text: text}
+	}
+	return doctorLine{Level: doctorOK, Text: text}
 }
 
 // doctorLine and the three levels are the in-package names for diag.Line:
