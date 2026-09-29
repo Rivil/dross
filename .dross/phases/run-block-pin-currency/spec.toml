@@ -5,7 +5,7 @@
 
 [[criteria]]
   id = "c-1"
-  text = "A test enumerates every pin site Dependabot cannot reach — `go install …@v` in any `run:` block, setup-node `node-version:`, go.mod `toolchain`, goreleaser-action `version:`, and the Go-source tool pins (gremlinsPin, strykerPin) — and fails on a site the currency check does not cover."
+  text = "A test enumerates every pin site Dependabot cannot reach — `go install …@v` in any `run:` block, setup-node's node version (inline `node-version:` or the file `node-version-file:` names), go.mod `toolchain`, goreleaser-action `version:`, and the Go-source tool pins (gremlinsPin, strykerPin) — and fails on a site the currency check does not cover."
 
 [[criteria]]
   id = "c-2"
@@ -29,7 +29,7 @@
 
 [[criteria]]
   id = "c-7"
-  text = "release.yml pins goreleaser to an exact version instead of `~> v2`, and the currency check covers that pin."
+  text = "The release job's goreleaser is pinned to an exact version instead of `~> v2`, declared outside `.github/workflows/` (locked bump_reach), and the currency check covers that pin."
 
 [[criteria]]
   id = "c-8"
@@ -37,7 +37,7 @@
 
 [[criteria]]
   id = "c-9"
-  text = "`dross doctor` in any dross-managed repo reports a pin-currency section over that repo's run-block `go install …@v` pins, setup-node `node-version`, go.mod `toolchain` and goreleaser `version`, using the same checker and staleness rules as the dross-repo cron — a test proves both paths classify a fixture pin identically."
+  text = "`dross doctor` in any dross-managed repo reports a pin-currency section over that repo's run-block `go install …@v` pins, setup-node's node version (inline or via `node-version-file:`), go.mod `toolchain` and goreleaser `version`, using the same checker and staleness rules as the dross-repo cron — a test proves both paths classify a fixture pin identically."
 
 [[criteria]]
   id = "c-10"
@@ -71,6 +71,12 @@
   key = "bump_ci"
   choice = "The bump job uses its job-scoped GITHUB_TOKEN to push the branch and open the PR, then dispatches ci.yml on that ref (ci.yml gains a workflow_dispatch trigger)."
   why = "PRs opened by GITHUB_TOKEN trigger no pull_request workflows; workflow_dispatch is the documented exception, checks land on the PR head SHA, and no long-lived write credential is stored."
+  locked = true
+
+[[decisions]]
+  key = "bump_reach"
+  choice = "Every pin the bump job rewrites lives outside `.github/workflows/`: Node's version in a file read via setup-node `node-version-file:`, goreleaser's exact pin in a local composite action. The bump planner refuses to rewrite any file under `.github/workflows/`."
+  why = "GitHub rejects a GITHUB_TOKEN push that changes a workflow file, and the `workflows` permission cannot be granted from a `permissions:` block. Moving the pins keeps bump_ci's no-stored-write-credential property true; found by the plan review (REVIEW.md BLOCKING)."
   locked = true
 
 [[decisions]]
