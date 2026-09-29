@@ -131,8 +131,12 @@ jobs:
         with:
           # Exact patch, not '24' or '24.x' — same reasoning as the Go pin
           # above. A floating version means the largest dependency in this job
-          # is the one thing it did not pin.
-          node-version: '24.19.0'
+          # is the one thing it did not pin. Read from the fixture's
+          # .node-version rather than written here (locked decision
+          # bump_reach): the weekly pin-currency bot bumps that file with a
+          # GITHUB_TOKEN, which GitHub will not let push a workflow change.
+          # TestNodeVersionSingleSource fails on an inline node-version.
+          node-version-file: internal/mutation/testdata/ts-project/.node-version
           cache: 'npm'
           cache-dependency-path: internal/mutation/testdata/ts-project/package-lock.json
 
