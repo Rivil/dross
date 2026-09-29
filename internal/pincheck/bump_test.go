@@ -254,3 +254,33 @@ func TestBumpRefusesAMovedLine(t *testing.T) {
 		t.Errorf("versionOccurrences = %v, want only the bounded match at 17", got)
 	}
 }
+
+// TestBumpOutcomeString pins the line cmd/pincheck prints per stale site: a
+// skipped or refused site carries its reason after a dash, a bumped one ends
+// at its target.
+func TestBumpOutcomeString(t *testing.T) {
+	for _, tc := range []struct {
+		o    BumpOutcome
+		want string
+	}{
+		{
+			BumpOutcome{
+				Site:   Site{File: "internal/mutation/stryker.go", Line: 21, Kind: KindNPM, Name: "@stryker-mutator/core", Version: "9.1.0", Pinned: true},
+				Target: "9.2.0", Status: Skipped,
+				Reason: "npm pins move with Dependabot's lockfile bump, never the pin-currency bot",
+			},
+			"skipped  internal/mutation/stryker.go:21 @stryker-mutator/core 9.1.0 → 9.2.0 — npm pins move with Dependabot's lockfile bump, never the pin-currency bot",
+		},
+		{
+			BumpOutcome{
+				Site:   Site{File: ".node-version", Line: 1, Kind: KindNode, Name: "node", Version: "24.19.0", Pinned: true},
+				Target: "24.21.0", Status: Bumped,
+			},
+			"bumped   .node-version:1 node 24.19.0 → 24.21.0",
+		},
+	} {
+		if got := tc.o.String(); got != tc.want {
+			t.Errorf("String() = %q\nwant       %q", got, tc.want)
+		}
+	}
+}

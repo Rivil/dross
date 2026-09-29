@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/pincheck"
+	"github.com/Rivil/dross/internal/telemetry"
 )
 
 // Doctor's Pin currency section (criterion c-9) runs the cron's checker in
@@ -150,6 +152,53 @@ func TestDoctorPinSectionSilentWithoutPins(t *testing.T) {
 	if calls != 0 {
 		t.Errorf("doctor made %d upstream lookup(s) in a repo with no pins", calls)
 	}
+}
+
+// TestDoctorPinScanErrorWarns: a pin scan that fails outright — here a
+// node-version-file naming a directory — prints what failed and counts as one
+// warning in doctor's outcome, never an issue.
+func TestDoctorPinScanErrorWarns(t *testing.T) {
+	run := func(extra map[string]string, stub pinStub) (out, errText string, warnings int) {
+		pinDoctorRepo(t, "node-version-file: .nvmrc", extra)
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("DROSS_NO_TELEMETRY", "") // re-enable (chdir pins it to "1")
+		out, errText = doctorWith(t, stub)
+		return out, errText, doctorOutcomeWarnings(t, filepath.Join(home, ".claude", "dross", telemetry.File))
+	}
+	_, baseline, baseWarnings := run(map[string]string{".nvmrc": "24.19.0\n"}, currentNode())
+	out, errText, warnings := run(map[string]string{".nvmrc/keep": ""}, pinStub{})
+
+	if !strings.Contains(out, "⚠ could not scan the repo's pins:") {
+		t.Errorf("want a warning naming the failed scan:\n%s", out)
+	}
+	if warnings != baseWarnings+1 {
+		t.Errorf("doctor recorded %d warning(s) with a failed pin scan, %d without — the scan error must count as exactly one", warnings, baseWarnings)
+	}
+	if errText != baseline {
+		t.Errorf("a failed pin scan moved doctor's verdict: %q failed, %q scanned", errText, baseline)
+	}
+}
+
+// doctorOutcomeWarnings is the warnings count on the last doctor outcome event
+// in the telemetry file at path.
+func doctorOutcomeWarnings(t *testing.T, path string) int {
+	t.Helper()
+	body := mustRead(t, path)
+	warnings, found := 0, false
+	for _, line := range strings.Split(body, "\n") {
+		var ev telemetry.Event
+		if json.Unmarshal([]byte(line), &ev) != nil || ev.Kind != "outcome" || ev.Command != "doctor" {
+			continue
+		}
+		if w, ok := ev.Counts["warnings"]; ok {
+			warnings, found = w, true
+		}
+	}
+	if !found {
+		t.Fatalf("no doctor outcome event carrying warnings in %s:\n%s", path, body)
+	}
+	return warnings
 }
 
 // resolverFunc counts lookups and fails them.

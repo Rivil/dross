@@ -306,3 +306,14 @@ const concat = "a" + "b"
 		}
 	}
 }
+
+// TestDedupeOrdersByKind: two sites on one line sort by kind, and a repeat of
+// either is dropped.
+func TestDedupeOrdersByKind(t *testing.T) {
+	node := Site{File: "a.yml", Line: 3, Kind: KindNode, Name: "node", Version: "24.19.0", Pinned: true}
+	install := Site{File: "a.yml", Line: 3, Kind: KindGoInstall, Name: "golang.org/x/vuln/cmd/govulncheck", Version: "v1.1.4", Pinned: true}
+	got := dedupe([]Site{node, install, node})
+	if len(got) != 2 || got[0] != install || got[1] != node {
+		t.Errorf("dedupe = %+v, want [%s %s]: one line's sites ordered by kind, the repeat dropped", got, install.Kind, node.Kind)
+	}
+}

@@ -258,3 +258,23 @@ func TestResolverReadsEachURLOnce(t *testing.T) {
 		t.Errorf("two node sites fetched index.json %d times, want 1", calls)
 	}
 }
+
+// TestGoreleaserModule: goreleaser-action's version input may be written with
+// or without its v — both forms name the same module, and a version that is
+// not semver has none.
+func TestGoreleaserModule(t *testing.T) {
+	for _, tc := range []struct{ version, want string }{
+		{"v2.18.2", "github.com/goreleaser/goreleaser/v2"},
+		{"2.18.2", "github.com/goreleaser/goreleaser/v2"},
+		{"v1.26.2", "github.com/goreleaser/goreleaser"},
+		{"1.26.2", "github.com/goreleaser/goreleaser"},
+	} {
+		got, err := goreleaserModule("goreleaser", tc.version)
+		if err != nil || got != tc.want {
+			t.Errorf("goreleaserModule(%q) = %q, %v; want %q", tc.version, got, err, tc.want)
+		}
+	}
+	if got, err := goreleaserModule("goreleaser", "2.x"); err == nil {
+		t.Errorf("goreleaserModule(\"2.x\") = %q, want an error: not semver", got)
+	}
+}
