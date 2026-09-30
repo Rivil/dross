@@ -2005,6 +2005,26 @@
       "issue": "DRO-370",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "watch-bot-prs/t-1": {
+      "issue": "DRO-762",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "watch-bot-prs/t-2": {
+      "issue": "DRO-763",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "watch-bot-prs/t-3": {
+      "issue": "DRO-764",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "watch-bot-prs/t-4": {
+      "issue": "DRO-765",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     }
   },
   "dismissed": [
