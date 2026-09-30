@@ -287,10 +287,17 @@ security.Finding.Refutation refutation
 security.Finding.Severity severity
 security.Finding.Title title
 
-# ---- ship — forge PR payloads: branch names, titles, URLs
+# ---- ship — forge PR payloads: branch names, titles, URLs, author logins, check states
 ship.BasePR.HeadRefName headrefname
 ship.BasePR.Title title
 ship.BasePR.URL url
+ship.OpenPRRecord.HeadRefName headrefname
+ship.OpenPRRecord.Title title
+ship.OpenPRRecord.URL url
+ship.PRAuthor.Login login
+ship.PRCheck.Conclusion conclusion
+ship.PRCheck.State state
+ship.PRCheck.Status status
 ship.forgejoPR.HTMLURL html_url
 ship.forgejoPR.Title title
 

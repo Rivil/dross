@@ -11,13 +11,18 @@ import (
 
 // gh's own output can carry an API response body, so a failed invocation
 // prints it to stderr and returns only the subcommand and exit status. Each
-// of the five gh entry points is driven against a stub gh that prints a canary
+// of the gh entry points is driven against a stub gh that prints a canary
 // and exits 1: the canary must be on stderr and nowhere in the error.
+//
+// ListOpenPRs is the one deliberate QUIET exception: its caller is a read-only
+// digest that prints nothing when the forge cannot be asked, so a failing gh
+// writes zero bytes to stderr — and its canary still never reaches the error.
 func TestGhFailureOutputGoesToStderr(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		verb string
-		call func() error
+		name  string
+		verb  string
+		call  func() error
+		quiet bool
 	}{
 		{"pr create", "gh pr create", func() error {
 			// openGitHubPR looks gh up on PATH before it spawns anything;
@@ -25,22 +30,26 @@ func TestGhFailureOutputGoesToStderr(t *testing.T) {
 			stubGHOnPath(t)
 			_, err := openGitHubPR(OpenOpts{Provider: "github", HeadBranch: "pr/x", BaseBranch: "main", Title: "t", Body: "b"})
 			return err
-		}},
+		}, false},
 		{"pr list --head", "gh pr list --head pr/x", func() error {
 			_, err := gitHubOpenPRByHead("pr/x")
 			return err
-		}},
+		}, false},
 		{"pr list --base", "gh pr list --base main", func() error {
 			_, err := gitHubOpenPRsTargeting("main")
 			return err
-		}},
+		}, false},
 		{"pr view", "gh pr view #7", func() error {
 			_, err := gitHubPRStatus(OpenOpts{Provider: "github", PRNumber: 7})
 			return err
-		}},
+		}, false},
 		{"pr comment", "gh pr comment", func() error {
 			return postGitHubComment(CommentOpts{Provider: "github", PRNumber: 7, Body: "hi"})
-		}},
+		}, false},
+		{"pr list (open PRs, quiet exception)", "gh pr list", func() error {
+			_, err := ListOpenPRs(OpenOpts{Provider: "github"})
+			return err
+		}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			stderr := stubFailingGH(t, "CANARY-GH")
@@ -53,6 +62,12 @@ func TestGhFailureOutputGoesToStderr(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tc.verb) || !strings.Contains(err.Error(), "exit status 1") {
 				t.Errorf("err = %q, want the subcommand %q and exit status 1", err, tc.verb)
+			}
+			if tc.quiet {
+				if stderr.Len() != 0 {
+					t.Errorf("stderr = %q, want zero bytes from the quiet lister", stderr.String())
+				}
+				return
 			}
 			if !strings.Contains(stderr.String(), "CANARY-GH") {
 				t.Errorf("stderr = %q, want gh's own output there", stderr.String())
