@@ -1,0 +1,6 @@
+{
+  "phase": "watch-bot-prs",
+  "base": "milestone/v1.7",
+  "base_commit": "8c99783b041a324bee7e563d08c854b81dbc8412",
+  "tasks": {}
+}

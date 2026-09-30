@@ -1,0 +1,42 @@
+[phase]
+  id = "watch-bot-prs"
+  title = "watch-bot-prs"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross watch --json` returns `bot_prs`: every open PR whose author the forge marks as a bot (Dependabot and the pin-bump workflow's github-actions[bot] included), each with number, title, author, URL and age in days since it was opened; human-authored PRs are excluded."
+
+[[criteria]]
+  id = "c-2"
+  text = "When at least one bot PR is open, the human digest and the /dross-watch render print one summary line — `bot PRs: N open, oldest Nd` — and nothing when none are open."
+
+[[criteria]]
+  id = "c-3"
+  text = "When the forge cannot be queried (gh missing, unauthenticated, offline, provider unsupported), `bot_prs` is absent from the JSON rather than empty, watch still exits 0, and the rest of the digest is unchanged."
+
+[[criteria]]
+  id = "c-4"
+  text = "Each bot PR carries its check rollup (passing / failing / pending / none), and the summary line counts failing ones — `bot PRs: 2 open (1 failing), oldest 12d`."
+
+[[criteria]]
+  id = "c-5"
+  text = "`dross watch --json` returns `ship_prs`: each open PR whose head is a dross phase or milestone branch, with number, head branch, URL and c-4's check rollup; the digest prints one line per ship PR (`pr: #138 phase/x — failing`), and c-3's absent-when-unreachable rule applies."
+
+[[decisions]]
+  key = "forge_scope"
+  choice = "GitHub only, via gh's `author.is_bot`. On GitLab, Forgejo/Gitea and Bitbucket, `bot_prs` and `ship_prs` are absent (c-3)."
+  why = "GitLab and Forgejo PR authors carry no bot flag, so they would need a bot-username list in project.toml — new config and a second bot-identity path. Dependabot is GitHub-only anyway."
+  locked = true
+
+[[decisions]]
+  key = "pr_suggestion"
+  choice = "Bot and ship PRs are information only: they never change `suggested_command`."
+  why = "dross-watch's locked suggestion_precedence (verify → ship → reconcile → inbox → status) is not reopened here, and no dross verb merges a bot PR."
+  locked = true
+
+[[decisions]]
+  key = "pr_age"
+  choice = "Age is raw days since the PR was opened; no stale threshold or marker."
+  why = "dross-watch's locked drift_signals invents no thresholds. Created-at, not updated-at: both bots rebase or force-push in place, which would reset an updated-at age."
+  locked = true
