@@ -128,7 +128,7 @@ func gitHubOpenPRs() ([]OpenPRRecord, error) {
 	if err := json.Unmarshal(stdout.Bytes(), &raw); err != nil {
 		return nil, errors.New("gh pr list: gh's output is not the JSON it promises")
 	}
-	//dross:taint-cleared OpenPRRecord is gh's decoded --json record of each open PR: forge metadata, not gh's prose
+	//dross:taint-cleared OpenPRRecord is gh's decoded --json record of each open PR: forge metadata, not gh's prose; its CreatedAt feeds the (time.Time).Sub age computation in internal/watch
 	prs := raw
 	if len(prs) >= prListLimit {
 		return nil, fmt.Errorf("gh pr list: the page is full at the --limit of %d open PRs, so the list may be truncated", prListLimit)
