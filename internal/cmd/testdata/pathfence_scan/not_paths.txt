@@ -389,9 +389,16 @@ verify.VerifyMeta.Verdict verdict
 verify.VerifySummary.MeasuredOn measured_on
 verify.VerifySummary.MutationStatus mutation_status
 
-# ---- watch — watch digest items: ids, titles, states, drift kinds
+# ---- watch — watch digest items: ids, titles, states, drift kinds, PR authors, URLs, heads, check verdicts
+watch.BotPR.Author author
+watch.BotPR.Checks checks
+watch.BotPR.Title title
+watch.BotPR.URL url
 watch.Item.ID id
 watch.Item.State state
 watch.Item.Title title
 watch.PhaseDrift.Kind kind
 watch.PhaseDrift.Phase phase
+watch.ShipPR.Checks checks
+watch.ShipPR.Head head
+watch.ShipPR.URL url
