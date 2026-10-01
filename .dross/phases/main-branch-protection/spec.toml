@@ -45,8 +45,8 @@
 
 [[decisions]]
   key = "chore_push"
-  choice = "When a protected branch is dross's base, `.dross` bookkeeping commits reach origin as a `.dross`-only PR set to auto-merge, never as a direct push. New bookkeeping commits join the chore PR already open, if any. If auto-merge is unavailable, the PR is still opened and its URL reported. Turns on the repo's allow_auto_merge setting (off as of 2026-10-01)."
-  why = "On origin straight away, so nothing is stranded on one machine. A .dross-only merge leaves [project].version unchanged, so release.yml cuts no tag. Costs one CI run per batch. Chosen 2026-10-01 over riding the next phase PR (local-only until then) and requiring a milestone."
+  choice = "When a protected branch is dross's base, `.dross` bookkeeping commits reach origin as a `.dross`-only PR set to auto-merge, never as a direct push. New bookkeeping commits join the chore PR already open, if any. If auto-merge is unavailable, the PR is still opened and its URL reported. If protection can't be determined (unknown), nothing is pushed and the error names the reason. A batch into main that would change the release tag projected from [project].version is refused, not published. Turns on the repo's allow_auto_merge setting (off as of 2026-10-01)."
+  why = "On origin straight away, so nothing is stranded on one machine. [project].version lives in .dross/project.toml and release.yml tags any new projected version, so a .dross-only merge into main can cut a release; the refusal keeps auto-merge from making that hands-free (the v1.0.0 shape). Costs one CI run per batch. Chosen 2026-10-01 over riding the next phase PR (local-only until then) and requiring a milestone; amended 2026-10-01 at plan review."
   locked = true
 
 [[decisions]]

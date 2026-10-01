@@ -8,7 +8,7 @@ task_seq = 16
   wave = 1
   title = "Scan pull_request workflow jobs"
   files = ["internal/protect/workflows.go", "internal/protect/workflows_test.go"]
-  description = "Pure, stdlib-only line scanner over a {path: content} map, so the verb can feed it origin/<main>'s tree (D7). Keeps workflows whose\n`on:` carries pull_request (never pull_request_target); each job yields its check context — `name:` when set, else the job id. A job whose\ncheck name can't be known statically (matrix, job-level `uses:`, `name: ${{ … }}`) or a pull_request trigger with paths/branches filters\nis refused with an error naming the workflow and job."
+  description = "Pure, stdlib-only line scanner over a {path: content} map, so the verb can feed it origin/<main>'s tree rather than the working tree. Keeps workflows whose\n`on:` carries pull_request (never pull_request_target); each job yields its check context — `name:` when set, else the job id. A job whose\ncheck name can't be known statically (matrix, job-level `uses:`, `name: ${{ … }}`) or a pull_request trigger with paths/branches filters\nis refused with an error naming the workflow and job."
   covers = ["c-2", "c-9"]
   test_contract = [
     "if pull_request_target prefix-matches pull_request, TestPullRequestTargetExcluded fails: `on: [push, pull_request_target]` and the dependabot-automerge.yml shape both yield 0 jobs",
@@ -24,7 +24,7 @@ task_seq = 16
   wave = 1
   title = "Build main and milestone rulesets"
   files = ["internal/protect/ruleset.go", "internal/protect/ruleset_test.go"]
-  description = "MainRuleset(branch, contexts) builds \"dross: main\": deletion, non_fast_forward, pull_request (0 approvals, allowed_merge_methods\n[merge, squash]), required_status_checks (strict=false, no integration_id — D10). MilestoneRuleset() builds \"dross: milestones\" on\nrefs/heads/milestone/* with pull_request only (D6). Both target=branch, enforcement=active, bypass_actors=[]."
+  description = "MainRuleset(branch, contexts) builds \"dross: main\": deletion, non_fast_forward, pull_request (0 approvals, allowed_merge_methods\n[merge, squash]), required_status_checks (strict=false, no integration_id pin). MilestoneRuleset() builds \"dross: milestones\" on\nrefs/heads/milestone/* with pull_request only (no required checks, so branch creation and finalize's delete still work). Both target=branch, enforcement=active, bypass_actors=[]."
   covers = ["c-1", "c-4", "c-6", "c-7", "c-9", "c-10"]
   test_contract = [
     "if bypass_actors marshals as null or is omitted, TestBypassActorsExplicitlyEmpty fails for both rulesets (an omitted key lets a PUT keep a stale admin bypass)",
@@ -58,7 +58,7 @@ task_seq = 16
   wave = 1
   title = "Project release tag from project.toml bytes"
   files = ["internal/project/release.go", "internal/project/release_test.go"]
-  description = "ReleaseTag(src) returns \"vX.Y.Z\" from [project].version — the same projection release.yml makes through\nscripts/release-version.sh. t-9 uses it to refuse a main chore batch that would cut a tag (D3)."
+  description = "ReleaseTag(src) returns \"vX.Y.Z\" from [project].version — the same projection release.yml makes through\nscripts/release-version.sh. t-9 uses it to refuse a main chore batch that would cut a tag."
   covers = ["c-4", "c-5"]
   test_contract = [
     "if ReleaseTag disagrees with `sh scripts/release-version.sh` on any of 5 fixtures (4-part, 3-part, a `version` under [stack] before [project], a missing key, a trailing comment), the parity test fails",
@@ -71,7 +71,7 @@ task_seq = 16
   wave = 1
   title = "Add Dependabot minor/patch auto-merge workflow"
   files = [".github/workflows/dependabot-automerge.yml", ".github/dependabot.yml", "internal/cmd/dependabot_automerge_test.go"]
-  description = "Trigger pull_request_target only (D2); workflow permissions contents: read, job contents: write + pull-requests: write; guarded on the\nPR author being dependabot[bot]; fetch-metadata pinned by SHA; `gh pr merge --auto --squash` for minor/patch only; no checkout. Rewrite\ndependabot.yml's \"No auto-merge\" paragraph. Audit against ~/.claude/memory/reference_ci_supply_chain_hardening.md first."
+  description = "Trigger pull_request_target only, so the job is never a required check; workflow permissions contents: read, job contents: write + pull-requests: write; guarded on the\nPR author being dependabot[bot]; fetch-metadata pinned by SHA; `gh pr merge --auto --squash` for minor/patch only; no checkout. Rewrite\ndependabot.yml's \"No auto-merge\" paragraph. Audit against ~/.claude/memory/reference_ci_supply_chain_hardening.md first."
   covers = ["c-8", "c-6"]
   test_contract = [
     "if the trigger becomes pull_request, TestAutoMergeIsNotARequiredCheck fails",
@@ -89,7 +89,7 @@ task_seq = 16
   wave = 1
   title = "Add auto-merge and PR-open gh seams"
   files = ["internal/ship/automerge.go", "internal/ship/automerge_test.go", "internal/ship/open.go"]
-  description = "AutoMergePR(opts, n, method) runs `gh pr merge --auto --<method> -- <n>` through screenedGH. When gh refuses because the PR is already\nmergeable (clean status), it merges directly with `gh pr merge --<method> -- <n>` — the server still enforces the ruleset (D6). Adds the\nAutoMergePRFunc and OpenPRFunc seams (OpenPRFunc = OpenPR) so internal/cmd tests can open and arm PRs without gh."
+  description = "AutoMergePR(opts, n, method) runs `gh pr merge --auto --<method> -- <n>` through screenedGH. When gh refuses because the PR is already\nmergeable (clean status), it merges directly with `gh pr merge --<method> -- <n>` — the server still enforces the ruleset. Adds the\nAutoMergePRFunc and OpenPRFunc seams (OpenPRFunc = OpenPR) so internal/cmd tests can open and arm PRs without gh."
   covers = ["c-5", "c-8"]
   test_contract = [
     "if argv isn't `pr merge --auto --merge -- <n>` with every flag ahead of `--` (argfence's gh Separator policy, internal/argfence/policy.go:72), or ever carries --admin, the argv test fails",
@@ -104,16 +104,16 @@ task_seq = 16
   wave = 2
   title = "Read live rules and write rulesets via gh"
   files = ["internal/ship/rulesets.go", "internal/ship/rulesets_test.go", "internal/cmd/hermetic_env_test.go"]
-  description = "Through screenedGH `gh api`: BranchRules returns protect.LiveRule* or Unknown{reason}; UpsertRuleset PUTs when the name matches and\nPOSTs otherwise, body on stdin; RepoMergeSettings reads allow_auto_merge + allow_merge_commit (D11); SetAllowAutoMerge PATCHes. TestMain\nstubs BranchRulesFunc, the write seams, RepoMergeSettings and AutoMergePRFunc with non-dialing stubs; OpenPRFunc keeps its OpenPR default."
+  description = "Through screenedGH `gh api`: BranchRules returns protect.LiveRule* or Unknown{reason}; UpsertRuleset PUTs when the name matches and\nPOSTs otherwise, body on stdin; RepoMergeSettings reads allow_auto_merge + allow_merge_commit; SetAllowAutoMerge PATCHes. TestMain\nstubs BranchRulesFunc, the write seams, RepoMergeSettings and AutoMergePRFunc with non-dialing stubs; OpenPRFunc keeps its OpenPR default."
   covers = ["c-1", "c-3", "c-5", "c-8", "c-9"]
-  depends_on = ["t-2", "t-3"]
+  depends_on = ["t-2", "t-3", "t-6"]
   test_contract = [
     "if a gh exit of 401/403/404, \"gh missing\", or unparseable JSON returns (nil, nil) or Known with zero rules instead of Unknown with the reason, the unknown table fails",
     "if a gh stub that never exits isn't cut off within the (test-shortened) bound, the timeout test fails",
     "if milestone/v1.7 reaches the API path unescaped, or an owner/repo starting with `-` or containing `..` reaches gh, the argv-fence test fails",
     "if an existing \"dross: main\" gets anything but exactly one PUT and zero POSTs, or a 403 on the list call falls through to a blind POST instead of erroring with the admin permission named, the upsert test fails",
     "if ruleset JSON appears in argv, a body skips secretscan.ScanPayload, or exec.LookPath is called, the transport test fails",
-    "if the PATCH body is anything but {\"allow_auto_merge\":true}, TestRepoPatchTouchesOnlyAutoMerge fails (D11)",
+    "if the PATCH body is anything but {\"allow_auto_merge\":true}, TestRepoPatchTouchesOnlyAutoMerge fails (the verb never changes a merge setting the user chose)",
     "if a failed repo-settings read reports allow_merge_commit=true instead of unknown, the settings-read test fails",
     "if TestMain stops installing the stubs, TestHermeticBranchProtection_NeverDials fails",
   ]
@@ -133,6 +133,7 @@ task_seq = 16
     "if ci.yml's pull_request trigger gains paths/branches filters (or their -ignore forms) or types, TestCIPullRequestTriggerUnfiltered fails",
     "if ci.yml references any secret other than GITHUB_TOKEN, TestCIReadsNoSecrets fails (Dependabot PRs get no secrets)",
     "if a workflow that contributes required contexts lacks workflow_dispatch, TestRequiredChecksAreDispatchable fails (the pin-currency bump PR is dispatched, c-6)",
+    "if the set of workflows contributing required contexts differs from the set pin-currency.yml dispatches (`gh workflow run <file>`), TestPinCurrencyDispatchesEveryRequiredWorkflow fails — a second pull_request workflow with workflow_dispatch but no dispatch line must fail it",
     "if release.yml stops triggering on push to [main], or pushes anything but \"$tag\", TestReleaseTagsFromMainOnly fails (c-4)",
   ]
   status = "pending"
@@ -142,7 +143,7 @@ task_seq = 16
   wave = 2
   title = "Publish .dross chores as an auto-merge PR"
   files = ["internal/cmd/chorepr.go", "internal/cmd/chorepr_test.go"]
-  description = "Pushes the local base tip (exact SHAs, fast-forward only) to dross-chores/<base, \"/\"→\"-\"> (D13); joins the open PR on that branch\nor opens one, then arms auto-merge with \"merge\" (D1). If auto-merge is unavailable it still succeeds and reports the URL. On main it\nrefuses up front a batch that would change ReleaseTag (D3)."
+  description = "Pushes the local base tip (exact SHAs) to dross-chores/<base with \"/\"→\"-\"> — fast-forward while that branch's PR is open; a stale\nchore branch with no open PR is recreated via --force-with-lease. Joins the open PR on that branch or opens one, then arms auto-merge with\nthe merge-commit method so local base can fast-forward to it. If auto-merge is unavailable it still succeeds and reports the URL. On main it\nrefuses up front a batch that would change ReleaseTag (amended chore_push), moving no ref and naming the next step."
   covers = ["c-5", "c-10"]
   depends_on = ["t-2", "t-4", "t-6"]
   test_contract = [
@@ -150,7 +151,7 @@ task_seq = 16
     "if a diverged chore branch with an open PR doesn't error naming the URL and push nothing, or with no open PR isn't recreated via --force-with-lease with a new PR, the divergence table fails",
     "if AutoMergePRFunc is called with \"squash\", TestChorePRMergesAsMergeCommit fails",
     "if ErrAutoMergeUnavailable surfaces as an error instead of nil plus the URL plus \"merge it by hand\", the degraded-path test fails",
-    "if a 1.7.19.1 → 1.8.0.0 batch on main moves any origin ref, the release-guard test fails",
+    "if a 1.7.19.1 → 1.8.0.0 batch on main moves any origin or local ref, or its refusal doesn't name the next step (put the bump on the milestone branch, then reset main to origin/main), the release-guard test fails",
     "if the chore branch name for main or milestone/v1.7 matches either ruleset include (path.Match), the pattern test fails",
     "if origin/<chore> != the local base tip afterwards, or an ahead-and-behind base leaves `rev-list <base> --not origin/<base> origin/<chore>` non-empty, the publish test fails",
   ]
@@ -161,7 +162,7 @@ task_seq = 16
   wave = 3
   title = "Add dross protect verb"
   files = ["internal/cmd/protect.go", "internal/cmd/protect_test.go", "cmd/dross/main.go", "cmd/dross/testdata/cli_tree.txt", "README.md"]
-  description = "Previews by default; `--apply` upserts both rulesets, sets allow_auto_merge, then reads main back through Assess. `--check <branch>`\nprints protected / unprotected / unknown / not checked. Jobs come from origin/<main>'s tree (D7). Warns (preview and apply) when\nallow_merge_commit is off, naming chore PRs and milestone PRs (D11). Exports ProtectFixHint."
+  description = "Previews by default; `--apply` upserts both rulesets, sets allow_auto_merge, then reads main back through Assess. Required jobs come\nfrom origin/<main>'s workflows, not the working tree. `--check <branch>` prints exactly one of protected / unprotected / unknown /\nnot checked (<provider>) and exits 0: whether direct pushes to <branch> are refused (RequiresPR), with no required-check comparison.\nWarns (preview and apply) when allow_merge_commit is off, naming chore PRs and milestone PRs. Exports ProtectFixHint."
   covers = ["c-9", "c-1", "c-7", "c-8", "c-10"]
   depends_on = ["t-1", "t-2", "t-3", "t-7"]
   test_contract = [
@@ -172,8 +173,11 @@ task_seq = 16
     "if the milestone upsert fails after main succeeds and the run exits 0 or doesn't name which ruleset applied, the partial-apply test fails",
     "if a job present in the working tree but not on origin/<main> is required instead of named \"not on main yet\", the source test fails",
     "if allow_merge_commit reads false and preview or --apply prints no warning naming chore PRs and milestone PRs, or the PATCH body gains allow_merge_commit, TestProtectWarnsWhenMergeCommitsDisabled fails",
-    "if provider=forgejo makes any gh call, the provider test fails",
-    "if the flag is renamed, Lookup(\"apply\") fails; if the verb is renamed, TestNarratedCommandsResolveAgainstTheTree fails; TestCLITreeGolden and TestReadmeAdvertisesOnlyRealCommands pin registration and the README row",
+    "if any non-github value in configenum.ShipProviders (gitlab, forgejo, gitea, bitbucket, \"\") makes a gh call in preview, --apply or --check, the provider table fails; --check prints `not checked (<provider>)` for each",
+    "if `--check milestone/v1.7` against a pull_request-only ruleset prints anything but `protected` (a required-check comparison would make it MissingCheck), TestCheckIsPushRefusalOnly fails",
+    "if `--check` maps zero rules or only [non_fast_forward] to anything but `unprotected`, a BranchRules Unknown to anything but `unknown`, or exits non-zero on any of the four outcomes, the check-output table fails; stdout must be exactly the one word/phrase so prompts can match it",
+    "if the flags are renamed, Lookup(\"apply\") or Lookup(\"check\") fails; if the verb is renamed, TestNarratedCommandsResolveAgainstTheTree fails; TestCLITreeGolden pins registration",
+    "if README.md has no `dross protect` row, TestReadmeHasProtectRow (protect_test.go) fails — TestReadmeAdvertisesOnlyRealCommands is one-directional and can't catch a missing row",
   ]
   status = "pending"
 
@@ -182,13 +186,13 @@ task_seq = 16
   wave = 3
   title = "Route base chore push by live protection"
   files = ["internal/cmd/basebranch.go", "internal/cmd/basebranch_chores_test.go"]
-  description = "pushBaseIfAheadDrossOnly probes protection only for github and only when .dross-only commits are ahead (ahead-and-behind included).\nRequiresPR routes to t-9 and returns a result the callers narrate; unprotected or non-GitHub keeps today's push; Unknown also keeps it,\nand a refusal names the probe reason (D5). pushQuickBaseIfRecorded inherits this.\nTest fixture: a bare origin whose pre-receive hook logs and rejects updates to refs/heads/main and refs/heads/milestone/*."
+  description = "pushBaseIfAheadDrossOnly probes protection only for github and only when .dross-only commits are ahead (ahead-and-behind included).\nRequiresPR routes to t-9 and returns a result the callers narrate; unprotected or non-GitHub keeps today's push; Unknown pushes nothing\nand errors with the probe reason plus the fix (`gh auth login`, or check [remote]) — amended chore_push. pushQuickBaseIfRecorded inherits this.\nTest fixture: a bare origin whose pre-receive hook logs and rejects updates to refs/heads/main and refs/heads/milestone/*."
   covers = ["c-5", "c-10", "c-1"]
   depends_on = ["t-3", "t-7", "t-9"]
   test_contract = [
     "if a protected, purely-ahead base logs any base update, or t-9's publisher didn't run, the protected-route test fails",
-    "if an Unknown probe plus a hook refusal reports pushed=true or fails to name both reasons, the unknown test fails",
-    "if forgejo makes any BranchRulesFunc call, or any existing TestPushBase* case changes, the legacy test fails",
+    "if an Unknown probe logs any base update in the hook (even against a hook that would ACCEPT it, simulating a bypass holder), reports pushed=true, or errors without naming the probe reason and the fix, TestUnknownProbeNeverPushes fails",
+    "if any non-github value in configenum.ShipProviders (gitlab, forgejo, gitea, bitbucket, \"\") makes a BranchRulesFunc call, or any existing TestPushBase* case changes, the legacy table fails",
     "if a protected base with code ahead pushes anything, or its message says \"push … manually\" instead of naming quick/ plus a PR into the base, the code-ahead test fails",
     "if quick_base=main with phase base milestone/v1.7, both protected, doesn't give two chore branches and two PRs, the two-base test fails",
   ]
@@ -204,8 +208,10 @@ task_seq = 16
   depends_on = ["t-1", "t-3", "t-7", "t-10"]
   test_contract = [
     "if each gap doesn't print its own line — zero rules → \"unprotected\" plus the `dross protect` fix; missing shellcheck → a line naming it; bypass \"always\" → \"admin bypass allowed\"; all three at once → three lines — the gap-render table fails",
+    "if ForcePushAllowed, DeletionAllowed or StaleCheck renders no line of its own (each naming the gap and ending in the fix hint), the remaining-gaps table fails",
     "if a BranchRules error renders ✓ or \"protected\", TestProtectionUnknownNeverReadsProtected fails; BypassUnknown must render \"unknown\", never \"none\"",
-    "if gitlab or forgejo makes any seam call, the provider test fails",
+    "if a t-1 scanner refusal (matrix job, job-level `uses:`, dynamic `name:`, filtered pull_request trigger) is swallowed into an empty want-list instead of rendering `unknown (<workflow>/<job>: <reason>)` with no ✓, TestScannerRefusalReadsUnknown fails",
+    "if any non-github value in configenum.ShipProviders (gitlab, forgejo, gitea, bitbucket, \"\") makes any seam call or prints anything but `not checked (<provider>)`, the provider table fails",
     "if doctor's exit code differs with and without gaps, the exit test fails (/dross-ship gates on doctor)",
     "if doctor's output changes with no [remote] configured, TestDoctorRunGolden fails; with no origin/<main>, the section must name its workflow source",
   ]
@@ -216,11 +222,12 @@ task_seq = 16
   wave = 4
   title = "Wire chore routing into ship and complete"
   files = ["internal/cmd/ship.go", "internal/cmd/phase.go", "internal/cmd/ship_recover.go", "internal/cmd/protected_base_test.go"]
-  description = "The three safety-net callers narrate the chore PR; `ship --json` gains chore_pr (omitempty); the phase-PR open goes through OpenPRFunc.\nWhen complete's fast-forward fails because the ahead commits sit on an open chore PR, it refuses with the PR URL and \"re-run once it\nmerges\" instead of offering --recover.\nTest setup: main-based phase, github provider, hook rejecting refs/heads/main, seams stubbed, protection reads as protected."
+  description = "The four safety-net callers (ship.go:304, phase.go:520, phase.go:720 — the completion-record publish, whose result is discarded\ntoday — and ship_recover.go:245) narrate the chore PR; `ship --json` gains chore_pr (omitempty); the phase-PR open goes through OpenPRFunc.\nWhen complete's fast-forward fails because the ahead commits sit on an open chore PR, it refuses with the PR URL and \"re-run once it\nmerges\" instead of offering --recover.\nTest setup: main-based phase, github provider, hook rejecting refs/heads/main, seams stubbed, protection reads as protected."
   covers = ["c-5"]
   depends_on = ["t-11"]
   test_contract = [
-    "if ship → origin squash-merge → origin chore merge commit → complete logs any main update in the hook, exits non-zero, or leaves origin/main..main non-empty after fetch, the end-to-end test fails",
+    "if ship → origin squash-merge → origin merge of the ship chore PR → complete → origin merge of the completion-record chore PR logs any main update in the hook, exits non-zero, or leaves origin/main..main non-empty after the final fetch, the end-to-end test fails",
+    "if complete's completion-record publish (phase.go:720) opens or joins a chore PR without narrating its URL, TestCompletionRecordChorePRNarrated fails",
     "if, with the chore PR still open and origin/main moved, complete doesn't refuse, mentions --recover, or moves any local ref, the pending-chore test fails",
     "if the unprotected-stub flow stops pushing main directly, the regression test fails",
     "if TestShipJSONGolden changes with no chore PR, or stdout with one isn't a single JSON document carrying chore_pr.url, the JSON test fails",
@@ -232,7 +239,7 @@ task_seq = 16
   wave = 4
   title = "Keep milestone pushes off protected branches"
   files = ["internal/cmd/milestone.go", "internal/cmd/milestone_protected_test.go"]
-  description = "pushMilestoneHeadIfAhead sends a .dross-only ahead set to the chore router and refuses code-ahead. `milestone complete` refuses to open\nthe integration PR while a chore PR into the milestone is open, naming it (D9). Create, finalize and prune are unchanged; the OpenPR call\ngoes through OpenPRFunc.\nTest hook: rejects updates to existing refs/heads/milestone/*, allows create and delete."
+  description = "pushMilestoneHeadIfAhead sends a .dross-only ahead set to the chore router and refuses code-ahead. `milestone complete` refuses to open\nthe integration PR while a chore PR into the milestone is open, naming it. Create, finalize and prune are unchanged; the OpenPR call\ngoes through OpenPRFunc.\nTest hook: rejects updates to existing refs/heads/milestone/*, allows create and delete."
   covers = ["c-10"]
   depends_on = ["t-11"]
   test_contract = [
@@ -248,15 +255,16 @@ task_seq = 16
   wave = 4
   title = "Route protected-base work in prompts"
   files = ["assets/prompts/quick.md", "assets/prompts/ship.md", "assets/prompts/milestone.md", "internal/cmd/protected_prompts_test.go", "README.md"]
-  description = "quick.md: when `dross protect --check <base>` says protected, a standalone quick commits on quick/<NEW_VERSION> and opens a PR into the\nbase. ship.md narrates the chore PR and the re-run step. milestone.md: the chore PR merges before the milestone PR; finalize still deletes.\nREADME prompt rows kept in sync (D8). Run `make install` afterwards (r-01)."
+  description = "quick.md: when `dross protect --check <base>` prints protected or unknown, a standalone quick commits on quick/<NEW_VERSION> and\nopens a PR into the base, recording no quick_base (the PR carries everything); unprotected / not checked keep today's route. ship.md\nnarrates the chore PR and the re-run step. milestone.md: the chore PR merges before the milestone PR; finalize still deletes. README\nprompt rows kept in sync. Run `make install` afterwards (r-01)."
   covers = ["c-1", "c-5", "c-10"]
   depends_on = ["t-10", "t-11"]
   test_contract = [
     "if quick.md loses the --check → quick/ + PR route, or still says unconditionally \"go to that base directly\", the quick-route test fails",
     "if any prompt says `git push origin main` or `git push origin <base>`, the push-ban test fails",
     "if ship.md stops naming the chore PR and the re-run step, or milestone.md stops saying the chore PR merges first and --finalize still deletes, the narration test fails",
-    "if `dross protect --check` is misspelled in a prompt, TestShipPromptCommandsExist fails",
-    "if README.md's rows for the edited prompts drift from the prompts' behaviour, the README sync test fails",
+    "if quick.md on the PR route records quick/<ver> (or anything) as quick_base, the quick-route test fails — pushQuickBaseIfRecorded would treat a feature branch as a base",
+    "if `dross protect --check` in quick.md, ship.md or milestone.md doesn't resolve against the cobra tree including the `check` flag (Find + Flags().Lookup), TestProtectedPromptCommandsResolve fails — TestShipPromptCommandsExist reads only ship.md and never flags",
+    "if README.md loses `dross protect --check` or the phrase \"chore PR\" from the quick/ship/milestone rows, TestReadmeProtectedBaseRows fails",
   ]
   status = "pending"
 
@@ -265,7 +273,7 @@ task_seq = 16
   wave = 5
   title = "Apply and prove protection on Rivil/dross"
   files = [".dross/phases/main-branch-protection/protection-proof.md"]
-  description = "make install; reconcile any unpushed commits on main and milestone/v1.7 with the user while both are unprotected. Show the user the\n`dross protect` preview (pair gate), then --apply and read back. Probe c-10 on a throwaway milestone/zz-protect-probe. No push to main\n(D4). Record whether the first milestone chore PR merged hands-free (D6). Evidence goes in protection-proof.md (D14)."
+  description = "make install; reconcile any unpushed commits on main and milestone/v1.7 with the user while both are unprotected. Show the user the\n`dross protect` preview (pair gate), then --apply and read back. Probe c-10 on a throwaway milestone/zz-protect-probe. Never push to\nmain — main's admin refusal is proven by readback plus the probe. Record whether the first milestone chore PR merged hands-free (the\ndirect-merge fallback). Evidence goes in protection-proof.md, including the follow-ups: re-run `dross protect --apply` after v1.7 merges\n(goreleaser-check), and whether a GITHUB_TOKEN-armed auto-merge lands an actions-ecosystem Dependabot PR that edits workflows."
   covers = ["c-1", "c-2", "c-3", "c-4", "c-6", "c-7", "c-8", "c-9", "c-10"]
   depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5", "t-6", "t-7", "t-8", "t-9", "t-10", "t-11", "t-12", "t-13", "t-14", "t-15"]
   test_contract = [
@@ -274,8 +282,8 @@ task_seq = 16
     "if rules/branches/main doesn't list deletion, non_fast_forward and pull_request plus required_status_checks whose contexts equal origin/main's ci.yml jobs, c-2/c-7 are recorded red",
     "if allow_auto_merge or allow_merge_commit reads false, c-8/c-4 are recorded red",
     "if the probe's branch create is refused, STOP (ensureMilestoneBranch would break — blocking); an accepted direct commit records c-10 red; a refused delete means finalize is broken",
-    "if re-running --apply leaves anything other than exactly 2 rulesets, idempotence is recorded red",
-    "if the first chore PR into milestone/v1.7 needs a manual merge, D6's direct-merge fallback is recorded red",
-    "if an open Dependabot or pin-currency PR has any unreported required context, c-6 is recorded red; with none open, c-6/c-8 live are recorded as unobserved",
+    "if re-running --apply leaves anything other than exactly 2 rulesets named `dross: *`, idempotence is recorded red",
+    "if the first chore PR into milestone/v1.7 needs a manual merge, t-6's direct-merge fallback is recorded red",
+    "if an open Dependabot PR has any unreported required context, c-6 is recorded red; c-8 and the pin-currency half of c-6 are recorded as \"unobservable until v1.7 is on main\" (pull_request_target and schedule run main's copy of a workflow, and main has neither new workflow) — never as pass",
   ]
   status = "pending"
