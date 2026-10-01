@@ -99,7 +99,6 @@
     "slug:tool-gate-hooks": "DRO-689",
     "slug:verify-eta": "DRO-702",
     "slug:verify-staleness": "DRO-691",
-    "slug:watch-bot-prs": "DRO-627",
     "someday:id:00240da43142c2d1": "DRO-678",
     "someday:id:010e057c10c922c6": "DRO-286",
     "someday:id:014be4c1f424f656": "DRO-45",
@@ -2009,22 +2008,27 @@
     "watch-bot-prs/t-1": {
       "issue": "DRO-762",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "watch-bot-prs/t-2": {
       "issue": "DRO-763",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "watch-bot-prs/t-3": {
       "issue": "DRO-764",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "watch-bot-prs/t-4": {
       "issue": "DRO-765",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
+    },
+    "watch-bot-prs/t-5": {
+      "issue": "DRO-766",
+      "plan_status": "done",
+      "board_state": "task-complete"
     }
   },
   "dismissed": [
