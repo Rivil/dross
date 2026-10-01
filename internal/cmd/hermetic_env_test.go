@@ -7,12 +7,15 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/Rivil/dross/internal/defaults"
 	"github.com/Rivil/dross/internal/pincheck"
+	"github.com/Rivil/dross/internal/protect"
+	"github.com/Rivil/dross/internal/ship"
 )
 
 // ambientHome is the HOME this test binary inherited, captured before TestMain
@@ -50,6 +53,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	pinResolver = countingPinResolver{}
+	stubBranchProtection()
 	code := m.Run()
 	if err := pinDialErr(pinDials.Load()); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -101,6 +105,72 @@ func pinGitConfig(home string) error {
 		return fmt.Errorf("setenv GIT_CONFIG_GLOBAL: %w", err)
 	}
 	return nil
+}
+
+// errHermeticGH is what every branch-protection write seam answers under
+// TestMain: a test that wants a write to succeed installs its own stub.
+var errHermeticGH = errors.New("hermetic test stub: no gh, no network")
+
+// stubBranchProtection swaps every ship seam that would run `gh api` or
+// `gh pr merge` for one that never dials. Reads answer "known, no rules" —
+// an unprotected base — so every flow written before branch protection
+// existed keeps its direct push; writes and auto-merge fail loudly. A test
+// that needs a protected base, a successful write or an armed PR installs its
+// own stub and restores this one. OpenPRFunc is left on OpenPR: the ship
+// tests here already drive it through a stub gh on PATH.
+func stubBranchProtection() {
+	ship.BranchRulesFunc = func(ship.OpenOpts, string) ship.BranchRulesResult {
+		return ship.BranchRulesResult{Known: true}
+	}
+	ship.RepoMergeSettingsFunc = func(ship.OpenOpts) ship.MergeSettings {
+		return ship.MergeSettings{Reason: errHermeticGH.Error()}
+	}
+	ship.ListRulesetsFunc = func(ship.OpenOpts) ([]ship.RulesetSummary, error) { return nil, errHermeticGH }
+	ship.CreateRulesetFunc = func(ship.OpenOpts, protect.Ruleset) (int64, error) { return 0, errHermeticGH }
+	ship.UpdateRulesetFunc = func(ship.OpenOpts, int64, protect.Ruleset) error { return errHermeticGH }
+	ship.SetAllowAutoMergeFunc = func(ship.OpenOpts, bool) error { return errHermeticGH }
+	ship.AutoMergePRFunc = func(ship.OpenOpts, int, string) (ship.AutoMergeResult, error) {
+		return ship.AutoMergeResult{}, fmt.Errorf("%w: %v", ship.ErrAutoMergeUnavailable, errHermeticGH)
+	}
+}
+
+// TestHermeticBranchProtection_NeverDials pins stubBranchProtection, so
+// dropping it from TestMain fails here by name rather than as a test that
+// shells out to the real gh and reads the developer's live repo settings.
+func TestHermeticBranchProtection_NeverDials(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		seam, real any
+	}{
+		{"BranchRulesFunc", ship.BranchRulesFunc, ship.BranchRules},
+		{"RepoMergeSettingsFunc", ship.RepoMergeSettingsFunc, ship.RepoMergeSettings},
+		{"ListRulesetsFunc", ship.ListRulesetsFunc, ship.ListRulesets},
+		{"CreateRulesetFunc", ship.CreateRulesetFunc, ship.CreateRuleset},
+		{"UpdateRulesetFunc", ship.UpdateRulesetFunc, ship.UpdateRuleset},
+		{"SetAllowAutoMergeFunc", ship.SetAllowAutoMergeFunc, ship.SetAllowAutoMerge},
+		{"AutoMergePRFunc", ship.AutoMergePRFunc, ship.AutoMergePR},
+	} {
+		if reflect.ValueOf(tc.seam).Pointer() == reflect.ValueOf(tc.real).Pointer() {
+			t.Errorf("%s is still its gh implementation — TestMain must stub it", tc.name)
+		}
+	}
+	if reflect.ValueOf(ship.OpenPRFunc).Pointer() != reflect.ValueOf(ship.OpenPR).Pointer() {
+		t.Error("OpenPRFunc must keep its OpenPR default under TestMain")
+	}
+
+	opts := ship.OpenOpts{Provider: "github", URL: "https://github.com/Rivil/dross"}
+	if got := ship.BranchRulesFunc(opts, "main"); !got.Known || len(got.Rules) != 0 {
+		t.Errorf("stubbed BranchRules = %+v, want known with no rules (unprotected)", got)
+	}
+	if got := ship.RepoMergeSettingsFunc(opts); got.Known {
+		t.Errorf("stubbed RepoMergeSettings = %+v, want unknown", got)
+	}
+	if _, err := ship.AutoMergePRFunc(opts, 1, "merge"); !errors.Is(err, ship.ErrAutoMergeUnavailable) {
+		t.Errorf("stubbed AutoMergePR err = %v, want ErrAutoMergeUnavailable", err)
+	}
+	if err := ship.SetAllowAutoMergeFunc(opts, true); err == nil {
+		t.Error("stubbed SetAllowAutoMerge succeeded")
+	}
 }
 
 // TestHermeticGitConfig_DisablesBackgroundMaintenance pins the TestMain git

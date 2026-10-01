@@ -314,6 +314,7 @@ ship.PRAuthor.Login login
 ship.PRCheck.Conclusion conclusion
 ship.PRCheck.State state
 ship.PRCheck.Status status
+ship.RulesetSummary.Name name
 ship.forgejoPR.HTMLURL html_url
 ship.forgejoPR.Title title
 
