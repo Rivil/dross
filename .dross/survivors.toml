@@ -2790,3 +2790,12 @@
   line = 96
   category = "gremlins-attribution-ceiling"
   accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "87043d80e1fa9e84"
+  file = "internal/ship/openprs.go"
+  op = "ARITHMETIC_BASE"
+  text = "var prListTimeout = 20 * time.Second"
+  line = 70
+  category = "const-initializer-arithmetic"
+  accepted_in = "watch-bot-prs"

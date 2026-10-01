@@ -1,6 +1,6 @@
 ---
 name: dross-watch
-description: "Read-only heartbeat — digest of new board issues + phase drift, ending with one suggested next command"
+description: "Read-only digest of board inbound, phase drift and open bot/ship PRs since the last tick"
 allowed-tools:
   - Read
   - Bash

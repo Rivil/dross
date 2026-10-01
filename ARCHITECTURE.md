@@ -463,7 +463,7 @@ The only clearance is a `//dross:taint-cleared <reason>` marker on the line abov
 - `gitrun.ShortSHA` (the scanners' short SHA, codex log, consent's tracked probe and remote's ignore/work-tree probes spawn git through the runner too — one implementation repo-wide) — `internal/gitrun/gitrun.go:183`
 - `TestGitHelperDelegatesAreGone` (cmd's package-local git helpers are deleted and the audits key on gitrun verbs only) — `internal/cmd/taint_gitplumbing_test.go:412`
 - `ghFailed` (a gh failure prints gh's output to stderr and returns only the subcommand and exit status) — `internal/ship/open.go:93`
-- `TestGhUnparseableOutputGoesToStderr` (both gh JSON lookups, base PR and head PR, keep unparseable output on stderr and name their subcommand in the error) — `internal/ship/gh_failure_test.go:67`
+- `TestGhUnparseableOutputGoesToStderr` (both gh JSON lookups, base PR and head PR, keep unparseable output on stderr and name their subcommand in the error) — `internal/ship/gh_failure_test.go:82`
 - `protocolToken` (a lock or status record field is admitted only as a printable, bounded protocol token — the shape check `internal/remote`'s one `taint-cleared` marker rests on) — `internal/remote/lock.go:365`
 - `TestStrykerPrePhaseBranchTrips` (6f27eaa^'s tee/headBuffer/quote branch pinned verbatim as a must-trip fixture; its three escapes name the Stdout origin) — `internal/cmd/taint_stryker_test.go:81`
 - `TestExecTaintSources` (the source corpus: every spawn-output channel on its own WANT line — the `Cmd.Stderr` buffer independent of `Cmd.Stdout` — so dropping any one seed misses a WANT) — `internal/cmd/taint_engine_test.go:1921`
@@ -1460,14 +1460,17 @@ _e31bdbd · extended context-hygiene · extended verify-auto-finalize · extende
 
 ### Watch heartbeat (dross-watch)
 
-Read-only `/loop` heartbeat: `dross watch --json` surfaces board issues new-since-last-tick vs carried (an atomically-persisted seen-set diff keyed on id + open/closed state) plus the current milestone's drifting phases, and ends with exactly one ranked suggested command. A board that is off or unreachable degrades to a drift-only digest; the only thing a run ever writes is `.dross/watch.state.json`. The digest also carries the **stranded-mirror count** — cards whose artefact finished but whose lane never closed them — read from the reap sweep's own classifier rather than a second opinion, and omitted entirely when it is zero or the board was unreachable, so a quiet board stays quiet. The prompt names `dross issue reap` in prose as the remedy but emits no sweep command (locked `prompt_edge`): the heartbeat is a detector, and a 90-call whole-board walk is not something a `/loop` tick should trigger on its own. Drift itself is classified off the completion record via [Phase doneness](#phase-doneness), so a finished phase leaves the digest permanently instead of reappearing as verified-unshipped drift once its state-history breadcrumb ages out.
+Read-only `/loop` heartbeat: `dross watch --json` surfaces board issues new-since-last-tick vs carried (an atomically-persisted seen-set diff keyed on id + open/closed state) plus the current milestone's drifting phases, and ends with exactly one ranked suggested command. A board that is off or unreachable degrades to a drift-only digest; the only thing a run ever writes is `.dross/watch.state.json`. The digest also carries the **stranded-mirror count** — cards whose artefact finished but whose lane never closed them — read from the reap sweep's own classifier rather than a second opinion, and omitted entirely when it is zero or the board was unreachable, so a quiet board stays quiet. The prompt names `dross issue reap` in prose as the remedy but emits no sweep command (locked `prompt_edge`): the heartbeat is a detector, and a 90-call whole-board walk is not something a `/loop` tick should trigger on its own. Drift itself is classified off the completion record via [Phase doneness](#phase-doneness), so a finished phase leaves the digest permanently instead of reappearing as verified-unshipped drift once its state-history breadcrumb ages out. The digest also carries the forge's **open PRs** (GitHub only, keyed on `gh`'s `author.is_bot`): `bot_prs` — Dependabot and pin-bump PRs, each with its age in raw days since opened (created-at, since both bots force-push in place) and a failing > pending > passing check rollup, rendered as one `bot PRs: N open (F failing), oldest Nd` line — and `ship_prs`, one `pr: #N phase/x — <checks>` line per open same-repo `phase/`/`milestone/` head. Both come from one bounded `gh pr list` spawn that fails quiet, and are **absent rather than empty** when the forge cannot be queried, so "unknown" never reads as "none"; neither ever steers the suggested command.
 
-- `Watch` (`dross watch --json`) — `internal/cmd/watch.go:38`
-- `watchDigest.Stranded` (stranded-mirror count, omitted when zero or the board is unreachable) — `internal/cmd/watch.go:31`
-- `suggestedCommand` (ranked verify→ship→inbox→status) — `internal/cmd/watch.go:135`
+- `Watch` (`dross watch --json`) — `internal/cmd/watch.go:49`
+- `watchDigest.Stranded` (stranded-mirror count, omitted when zero or the board is unreachable) — `internal/cmd/watch.go:34`
+- `openPRDigest` (`bot_prs`/`ship_prs` from the forge: absent when unknown, `[]` when none) — `internal/cmd/watch.go:148`
+- `suggestedCommand` (ranked verify→ship→reconcile→inbox→status) — `internal/cmd/watch.go:166`
 - `watch.State.Diff` (new/carried seen-set delta) — `internal/watch/watch.go:85`
 - `watch.ClassifyDrift` (milestone-scoped phase drift) — `internal/watch/drift.go:42`
+- `watch.SplitPRs` (bot PRs by forge flag + `age_days`; same-repo phase/milestone ship PRs) — `internal/watch/prs.go:38`
+- `ship.ListOpenPRs` (one bounded `gh pr list` spawn with bot flag and check rollup; quiet `nil, err` on any failure) — `internal/ship/openprs.go:86`
 - `boardsync.CollectInbound` (mark-free inbound filter, shared with `issue pull`) — `internal/boardsync/inbound.go:18`
-- `/dross-watch` prompt (non-interactive broadcast) — `assets/prompts/watch.md:1`
+- `/dross-watch` prompt (non-interactive broadcast; bot-PR summary and per-ship-PR lines) — `assets/prompts/watch.md:1`
 
-_introduced dross-watch · 5694cf5 · extended board-mirror-reaper · 757a576 · extended reentry-signal-truth · f19cc07_
+_introduced dross-watch · 5694cf5 · extended board-mirror-reaper · 757a576 · extended reentry-signal-truth · f19cc07 · extended watch-bot-prs · bd79cf1_

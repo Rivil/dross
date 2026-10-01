@@ -358,5 +358,5 @@ dross verify scope flag --json (bool) default="false" noopt="true" usage="emit t
 dross verify status | use="status" short="List detached mutation runs this machine dispatched"
 dross verify status flag --cancel (string) default="" usage="cancel the named phase's detached run: kill it on the host and drop the record"
 dross version | use="version" short="Print version, commit, and build date"
-dross watch | use="watch" short="Read-only digest of board inbound + phase drift since the last tick"
+dross watch | use="watch" short="Read-only digest of board inbound, phase drift and open bot/ship PRs since the last tick"
 dross watch flag --json (bool) default="false" noopt="true" usage="emit the digest as JSON (for /dross-watch)"

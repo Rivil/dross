@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"path/filepath"
+	"time"
 
 	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/render"
+	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/watch"
 	"github.com/spf13/cobra"
 )
@@ -30,6 +32,15 @@ type watchDigest struct {
 	// when the board was not reached, where a zero would read as "clean"
 	// rather than "unknown".
 	Stranded int `json:"stranded,omitempty"`
+	// BotPRs and ShipPRs are the forge's open PRs: bot-authored ones, and ones
+	// whose head is a dross phase or milestone branch. Information only — they
+	// never reach suggestedCommand (pr_suggestion) and are never persisted.
+	//
+	// Pointers, so the digest can say three things rather than two: nil is
+	// omitted (the forge could not be asked — unknown), and a pointer to an
+	// empty list prints [] (asked, and none is open).
+	BotPRs  *[]watch.BotPR  `json:"bot_prs,omitempty"`
+	ShipPRs *[]watch.ShipPR `json:"ship_prs,omitempty"`
 }
 
 // Watch is the read-only `dross watch` command: it surfaces what changed on the
@@ -39,7 +50,7 @@ func Watch() *cobra.Command {
 	var asJSON bool
 	c := &cobra.Command{
 		Use:   "watch",
-		Short: "Read-only digest of board inbound + phase drift since the last tick",
+		Short: "Read-only digest of board inbound, phase drift and open bot/ship PRs since the last tick",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			dstate, statePath, err := loadState()
 			if err != nil {
@@ -100,6 +111,7 @@ func Watch() *cobra.Command {
 				BoardOK:   boardReached,
 				Stranded:  stranded,
 			}
+			digest.BotPRs, digest.ShipPRs = openPRDigest()
 
 			// Persist the seen-set ONLY when the board was actually reached, so an
 			// off/unreachable tick preserves the prior baseline instead of
@@ -125,6 +137,25 @@ func Watch() *cobra.Command {
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, "emit the digest as JSON (for /dross-watch)")
 	return c
+}
+
+// openPRDigest asks the forge for its open PRs and splits them for the digest.
+// Any reason the answer is unknown — no [remote] provider or url, a project
+// that will not load, an unsupported provider, gh missing, unauthenticated or
+// offline, a page too full to trust — returns (nil, nil), so both fields are
+// omitted rather than printed empty. watch runs on a timer; the forge is one
+// more thing that must never fail the tick.
+func openPRDigest() (*[]watch.BotPR, *[]watch.ShipPR) {
+	p, _, err := loadProject()
+	if err != nil || p.Remote.Provider == "" || p.Remote.URL == "" {
+		return nil, nil
+	}
+	prs, err := ship.ListOpenPRsFunc(ship.OpenOpts{Provider: p.Remote.Provider, URL: p.Remote.URL})
+	if err != nil {
+		return nil, nil
+	}
+	bots, ships := watch.SplitPRs(prs, time.Now())
+	return &bots, &ships
 }
 
 // suggestedCommand ranks the single next command per the locked
@@ -172,6 +203,18 @@ func renderWatchHuman(d watchDigest) {
 	}
 	for _, dr := range d.Drift {
 		Printf("  drift: %s (%s)\n", dr.Phase, dr.Kind)
+	}
+	// PR titles and authors are never printed: the bot line is a count, and a
+	// ship line names only number, head and checks.
+	if d.BotPRs != nil {
+		if line := watch.BotSummary(*d.BotPRs); line != "" {
+			Printf("  %s\n", line)
+		}
+	}
+	if d.ShipPRs != nil {
+		for _, pr := range *d.ShipPRs {
+			Printf("  %s\n", watch.ShipPRLine(pr))
+		}
 	}
 	Printf("  next:  %s\n", d.Suggested)
 }
