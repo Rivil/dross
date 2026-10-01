@@ -2,5 +2,294 @@
   "phase": "main-branch-protection",
   "base": "milestone/v1.7",
   "base_commit": "404cb4cf05e82d7187e62673eb296c045594c002",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/protect/workflows.go",
+        "internal/protect/workflows_test.go"
+      ],
+      "commit": "0feaa55",
+      "completed_at": "2026-10-01T15:30:57.925232Z",
+      "landmarks": [
+        {
+          "feature": "branch protection",
+          "symbol": "PullRequestJobs",
+          "loc": "internal/protect/workflows.go:56",
+          "what": "reads pull_request workflow jobs into required-check contexts; refuses any job whose check name isn't static"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/protect.go",
+        "internal/cmd/protect_test.go",
+        "cmd/dross/main.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "README.md",
+        "internal/ship/rulesets.go"
+      ],
+      "commit": "8808910",
+      "completed_at": "2026-10-01T16:32:07.215187Z",
+      "landmarks": [
+        {
+          "feature": "branch protection",
+          "symbol": "Protect",
+          "loc": "internal/cmd/protect.go:33",
+          "what": "dross protect previews/applies the main and milestone rulesets from origin/main's PR jobs and reads main back; --check answers protected/unprotected/unknown"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/basebranch.go",
+        "internal/cmd/basebranch_chores_test.go"
+      ],
+      "commit": "60fc2a2",
+      "completed_at": "2026-10-01T16:35:44.996806Z",
+      "landmarks": [
+        {
+          "feature": "chore PR publishing",
+          "symbol": "routeBaseChores",
+          "loc": "internal/cmd/basebranch.go:98",
+          "what": "routes .dross chores ahead on a base by GitHub's live protection: chore PR when protected, refuse on unknown, direct push otherwise"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/doctor_protection.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_protection_test.go"
+      ],
+      "commit": "825f5cf",
+      "completed_at": "2026-10-01T16:42:18.920939Z",
+      "landmarks": [
+        {
+          "feature": "branch protection",
+          "symbol": "protectionSection",
+          "loc": "internal/cmd/doctor_protection.go:24",
+          "what": "doctor's Branch protection section: main's live rules vs origin/main's PR jobs, one warning per gap naming dross protect; unknown never reads protected"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/ship_recover.go",
+        "internal/cmd/protected_base_test.go",
+        "internal/cmd/secretscan_gate_test.go"
+      ],
+      "commit": "fcca1b4",
+      "completed_at": "2026-10-01T16:55:38.785302Z",
+      "landmarks": [
+        {
+          "feature": "chore PR publishing",
+          "symbol": "narrateBaseChores",
+          "loc": "internal/cmd/ship.go:678",
+          "what": "ship, complete and recover route .dross chores by protection and narrate the chore PR; complete waits for a pending one instead of offering --recover"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_protected_test.go"
+      ],
+      "commit": "d6698ce",
+      "completed_at": "2026-10-01T17:01:24.093059Z",
+      "landmarks": [
+        {
+          "feature": "chore PR publishing",
+          "symbol": "routeMilestoneHead",
+          "loc": "internal/cmd/milestone.go:1053",
+          "what": "routes milestone-branch commits by GitHub protection: chore PR for .dross chores, refusal for code, and holds the integration PR until open chore PRs merge"
+        }
+      ]
+    },
+    "t-15": {
+      "files": [
+        "assets/prompts/quick.md",
+        "assets/prompts/ship.md",
+        "assets/prompts/milestone.md",
+        "internal/cmd/protected_prompts_test.go",
+        "README.md"
+      ],
+      "commit": "c4358f6",
+      "completed_at": "2026-10-01T17:05:26.086137Z",
+      "landmarks": [
+        {
+          "feature": "chore PR publishing",
+          "symbol": "quick PR route",
+          "loc": "assets/prompts/quick.md:23",
+          "what": "quick/ship/milestone prompts route protected bases: quick takes a quick/\u003cver\u003e PR, ship and milestone narrate chore PRs and wait for them"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        ".dross/phases/main-branch-protection/protection-proof.md"
+      ],
+      "commit": "9105550",
+      "completed_at": "2026-10-01T18:19:48.165519Z",
+      "landmarks": [
+        {
+          "feature": "branch protection",
+          "symbol": "protection-proof",
+          "loc": ".dross/phases/main-branch-protection/protection-proof.md:103",
+          "what": "live evidence: Rivil/dross main and milestone/* rulesets applied with no bypass, read back, probed, idempotent"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "internal/protect/ruleset.go",
+        "internal/protect/ruleset_test.go"
+      ],
+      "commit": "c439294",
+      "completed_at": "2026-10-01T18:05:46.715375Z",
+      "landmarks": [
+        {
+          "feature": "branch protection",
+          "symbol": "PullRequestParams",
+          "loc": "internal/protect/ruleset.go:72",
+          "what": "sends require_extra_approval_for_unattributed_changes=false so GitHub's server-side default can't require an approval a solo author can't give"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/protect/ruleset.go",
+        "internal/protect/ruleset_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "2b7d2b4",
+      "completed_at": "2026-10-01T15:35:00.143693Z",
+      "landmarks": [
+        {
+          "feature": "branch protection",
+          "symbol": "MainRuleset",
+          "loc": "internal/protect/ruleset.go:104",
+          "what": "builds the no-bypass main and milestone/* rulesets dross applies (PR required, checks required on main, merge commits kept)"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/protect/assess.go",
+        "internal/protect/assess_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "a84c65a",
+      "completed_at": "2026-10-01T15:37:42.700164Z",
+      "landmarks": [
+        {
+          "feature": "branch protection",
+          "symbol": "Assess",
+          "loc": "internal/protect/assess.go:124",
+          "what": "diffs a branch's live ruleset rules against dross's main ruleset and names each gap; unreadable bypass reads unknown"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/project/release.go",
+        "internal/project/release_test.go"
+      ],
+      "commit": "0db1296",
+      "completed_at": "2026-10-01T15:40:17.800351Z",
+      "landmarks": [
+        {
+          "feature": "release tagging",
+          "symbol": "ReleaseTag",
+          "loc": "internal/project/release.go:24",
+          "what": "projects the release tag release.yml would cut from project.toml bytes, in parity with scripts/release-version.sh"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        ".github/workflows/dependabot-automerge.yml",
+        ".github/dependabot.yml",
+        "internal/cmd/dependabot_automerge_test.go"
+      ],
+      "commit": "1a1727b",
+      "completed_at": "2026-10-01T15:42:49.11354Z",
+      "landmarks": [
+        {
+          "feature": "dependency update automation",
+          "symbol": "automerge",
+          "loc": ".github/workflows/dependabot-automerge.yml:49",
+          "what": "arms auto-merge on Dependabot minor/patch PRs via pull_request_target with no checkout; majors stay manual"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/ship/automerge.go",
+        "internal/ship/automerge_test.go",
+        "internal/ship/open.go"
+      ],
+      "commit": "79bfac5",
+      "completed_at": "2026-10-01T15:49:32.477413Z",
+      "landmarks": [
+        {
+          "feature": "chore PR publishing",
+          "symbol": "AutoMergePR",
+          "loc": "internal/ship/automerge.go:43",
+          "what": "arms gh auto-merge on a PR, merging directly only when GitHub says it is already mergeable; never --admin"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/ship/rulesets.go",
+        "internal/ship/rulesets_test.go",
+        "internal/cmd/hermetic_env_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "1157193",
+      "completed_at": "2026-10-01T15:54:05.137509Z",
+      "landmarks": [
+        {
+          "feature": "branch protection",
+          "symbol": "BranchRules",
+          "loc": "internal/ship/rulesets.go:73",
+          "what": "reads a branch's live ruleset rules via bounded gh api (unknown on any failure) and upserts rulesets by name with bodies on stdin"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/ci_required_checks_test.go",
+        "internal/cmd/release_pipeline_test.go"
+      ],
+      "commit": "1c3963f",
+      "completed_at": "2026-10-01T15:57:04.862833Z",
+      "landmarks": [
+        {
+          "feature": "branch protection",
+          "symbol": "TestEveryCIJobIsRequired",
+          "loc": "internal/cmd/ci_required_checks_test.go:108",
+          "what": "pins ci.yml as main's complete merge gate: every job required, none skippable, filterable, secret-reading or undispatchable"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/chorepr.go",
+        "internal/cmd/chorepr_test.go"
+      ],
+      "commit": "5690495",
+      "completed_at": "2026-10-01T16:02:07.69651Z",
+      "landmarks": [
+        {
+          "feature": "chore PR publishing",
+          "symbol": "publishChorePR",
+          "loc": "internal/cmd/chorepr.go:77",
+          "what": "sends .dross-only base commits to origin as a dross-chores/\u003cbase\u003e PR armed for merge-commit auto-merge; refuses a main batch that would cut a release"
+        }
+      ]
+    }
+  }
 }
