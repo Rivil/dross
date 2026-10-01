@@ -10,8 +10,11 @@
 # `main`. A per-milestone target would be config churn that silently no-ops the
 # moment the milestone branch is merged away.
 #
-# No auto-merge (locked decision auto_merge): `main` carries no branch
-# protection, so nothing would gate one. Every bot PR is merged by hand.
+# Minor and patch PRs merge themselves (phase main-branch-protection, c-8):
+# .github/workflows/dependabot-automerge.yml arms GitHub auto-merge on them, and
+# main's ruleset holds the merge until every required check has passed. A major
+# update arrives as its own PR — every group below is minor+patch only
+# (TestDependabotGroupsExcludeMajor) — and is merged by hand.
 #
 # Release procedure for a merged bump (locked decision security_bump_release):
 # release.yml tags only when project.toml's version changes, so a bot merge cuts
