@@ -30,7 +30,8 @@ task_seq = 16
     "if bypass_actors marshals as null or is omitted, TestBypassActorsExplicitlyEmpty fails for both rulesets (an omitted key lets a PUT keep a stale admin bypass)",
     "if main gains required_linear_history or merge_queue, or allowed_merge_methods stops being exactly [\"merge\",\"squash\"], TestMainRulesetKeepsMergeCommits fails (c-4)",
     "if deletion or non_fast_forward is dropped from main, TestMainRulesetBlocksForcePushAndDelete fails (c-7)",
-    "if required_approving_review_count != 0, strict is true, or any required check carries integration_id, the params test fails",
+    "if either ruleset's required_approving_review_count != 0 (locked approvals), main's strict is true, or any required check carries integration_id, the params test fails — the approvals assertion runs over BOTH rulesets",
+    "if the milestone ruleset's allowed_merge_methods doesn't include both \"squash\" (phase PRs) and \"merge\" (chore PRs), TestMilestoneRulesetAllowsPhaseAndChoreMerges fails",
     "if MainRuleset(\"main\", nil) returns a ruleset instead of an error, or branch \"trunk\" doesn't yield include refs/heads/trunk, the builder test fails",
     "if the milestone ruleset gains a deletion rule (finalize must still delete) or a required_status_checks rule, TestMilestoneRulesetAllowsFinalizeDelete fails",
     "if either ruleset includes refs/tags/*, ~ALL, dependabot/** or pin-currency/bump, the include test fails (release.yml pushes tags; bot branches stay pushable)",
@@ -143,7 +144,7 @@ task_seq = 16
   wave = 2
   title = "Publish .dross chores as an auto-merge PR"
   files = ["internal/cmd/chorepr.go", "internal/cmd/chorepr_test.go"]
-  description = "Pushes the local base tip (exact SHAs) to dross-chores/<base with \"/\"→\"-\"> — fast-forward while that branch's PR is open; a stale\nchore branch with no open PR is recreated via --force-with-lease. Joins the open PR on that branch or opens one, then arms auto-merge with\nthe merge-commit method so local base can fast-forward to it. If auto-merge is unavailable it still succeeds and reports the URL. On main it\nrefuses up front a batch that would change ReleaseTag (amended chore_push), moving no ref and naming the next step."
+  description = "Pushes the local base tip (exact SHAs) to dross-chores/<base with \"/\"→\"-\"> — fast-forward while that branch's PR is open; a stale\nchore branch with no open PR is recreated via --force-with-lease. Joins the open PR on that branch or opens one, then arms auto-merge with\nthe merge-commit method so local base can fast-forward to it. If auto-merge is unavailable it still succeeds and reports the URL. On main it\nrefuses up front a batch that would change ReleaseTag (amended chore_push), moving no ref and naming the next step. The basis is the batch's\nown change: ReleaseTag at merge-base(local base, origin/<base>) vs ReleaseTag at the local tip — never local tip vs origin/<base>, which a\nphase squash on origin has already bumped."
   covers = ["c-5", "c-10"]
   depends_on = ["t-2", "t-4", "t-6"]
   test_contract = [
@@ -151,6 +152,7 @@ task_seq = 16
     "if a diverged chore branch with an open PR doesn't error naming the URL and push nothing, or with no open PR isn't recreated via --force-with-lease with a new PR, the divergence table fails",
     "if AutoMergePRFunc is called with \"squash\", TestChorePRMergesAsMergeCommit fails",
     "if ErrAutoMergeUnavailable surfaces as an error instead of nil plus the URL plus \"merge it by hand\", the degraded-path test fails",
+    "if an ahead-and-behind batch that leaves the version untouched while origin/main moved 1.7.19.0 → 1.7.20.0 (a phase squash) is refused instead of published, TestReleaseGuardIgnoresOriginBump fails",
     "if a 1.7.19.1 → 1.8.0.0 batch on main moves any origin or local ref, or its refusal doesn't name the next step (put the bump on the milestone branch, then reset main to origin/main), the release-guard test fails",
     "if the chore branch name for main or milestone/v1.7 matches either ruleset include (path.Match), the pattern test fails",
     "if origin/<chore> != the local base tip afterwards, or an ahead-and-behind base leaves `rev-list <base> --not origin/<base> origin/<chore>` non-empty, the publish test fails",
@@ -173,7 +175,7 @@ task_seq = 16
     "if the milestone upsert fails after main succeeds and the run exits 0 or doesn't name which ruleset applied, the partial-apply test fails",
     "if a job present in the working tree but not on origin/<main> is required instead of named \"not on main yet\", the source test fails",
     "if allow_merge_commit reads false and preview or --apply prints no warning naming chore PRs and milestone PRs, or the PATCH body gains allow_merge_commit, TestProtectWarnsWhenMergeCommitsDisabled fails",
-    "if any non-github value in configenum.ShipProviders (gitlab, forgejo, gitea, bitbucket, \"\") makes a gh call in preview, --apply or --check, the provider table fails; --check prints `not checked (<provider>)` for each",
+    "if any non-github provider (gitlab, forgejo, gitea, bitbucket) or no [remote] (\"\") makes a gh call in preview, --apply or --check, the provider table fails; --check prints `not checked (<provider>)` for each, and `not checked (no remote)` for \"\"",
     "if `--check milestone/v1.7` against a pull_request-only ruleset prints anything but `protected` (a required-check comparison would make it MissingCheck), TestCheckIsPushRefusalOnly fails",
     "if `--check` maps zero rules or only [non_fast_forward] to anything but `unprotected`, a BranchRules Unknown to anything but `unknown`, or exits non-zero on any of the four outcomes, the check-output table fails; stdout must be exactly the one word/phrase so prompts can match it",
     "if the flags are renamed, Lookup(\"apply\") or Lookup(\"check\") fails; if the verb is renamed, TestNarratedCommandsResolveAgainstTheTree fails; TestCLITreeGolden pins registration",
@@ -211,9 +213,10 @@ task_seq = 16
     "if ForcePushAllowed, DeletionAllowed or StaleCheck renders no line of its own (each naming the gap and ending in the fix hint), the remaining-gaps table fails",
     "if a BranchRules error renders ✓ or \"protected\", TestProtectionUnknownNeverReadsProtected fails; BypassUnknown must render \"unknown\", never \"none\"",
     "if a t-1 scanner refusal (matrix job, job-level `uses:`, dynamic `name:`, filtered pull_request trigger) is swallowed into an empty want-list instead of rendering `unknown (<workflow>/<job>: <reason>)` with no ✓, TestScannerRefusalReadsUnknown fails",
-    "if any non-github value in configenum.ShipProviders (gitlab, forgejo, gitea, bitbucket, \"\") makes any seam call or prints anything but `not checked (<provider>)`, the provider table fails",
+    "if gitlab, forgejo, gitea or bitbucket makes any seam call or prints anything but `not checked (<provider>)`, the provider table fails; its \"\" row (no [remote]) must make no seam call and print no protection section at all",
     "if doctor's exit code differs with and without gaps, the exit test fails (/dross-ship gates on doctor)",
-    "if doctor's output changes with no [remote] configured, TestDoctorRunGolden fails; with no origin/<main>, the section must name its workflow source",
+    "if doctor's output changes with no [remote] configured, TestDoctorRunGolden fails (the section is omitted, as other remote-only sections are)",
+    "if a github remote with no origin/<main> renders anything but `unknown (no origin/<main> to read workflows from — run git fetch)`, or any ✓, TestNoOriginMainReadsUnknown fails",
   ]
   status = "pending"
 
@@ -239,7 +242,7 @@ task_seq = 16
   wave = 4
   title = "Keep milestone pushes off protected branches"
   files = ["internal/cmd/milestone.go", "internal/cmd/milestone_protected_test.go"]
-  description = "pushMilestoneHeadIfAhead sends a .dross-only ahead set to the chore router and refuses code-ahead. `milestone complete` refuses to open\nthe integration PR while a chore PR into the milestone is open, naming it. Create, finalize and prune are unchanged; the OpenPR call\ngoes through OpenPRFunc.\nTest hook: rejects updates to existing refs/heads/milestone/*, allows create and delete."
+  description = "pushMilestoneHeadIfAhead probes protection like t-11: protected sends a .dross-only ahead set to the chore router and refuses\ncode-ahead; unprotected and non-GitHub keep today's push (code included); Unknown pushes nothing and names the reason. `milestone complete` refuses to open\nthe integration PR while a chore PR into the milestone is open, naming it. Create, finalize and prune are unchanged; the OpenPR call\ngoes through OpenPRFunc.\nTest hook: rejects updates to existing refs/heads/milestone/*, allows create and delete."
   covers = ["c-10"]
   depends_on = ["t-11"]
   test_contract = [
@@ -247,6 +250,8 @@ task_seq = 16
     "if a .dross-only commit ahead on milestone/v1 doesn't open a chore PR (dross-chores/milestone-v1 → milestone/v1) with an empty hook log, the chore-route test fails",
     "if code ahead pushes anything, opens a milestone PR, or fails to name the phase-PR route, the code-ahead test fails",
     "if an open chore PR into milestone/v1 lets `milestone complete` open the integration PR, the pending-chore test fails",
+    "if TestMilestoneCompletePushesLocalCommitsBeforeOpeningPR or TestMilestonePushHeadCleanAheadPushesAndCounts (milestone_push_head_test.go) changes or fails with protection reading unprotected, or any non-github value in configenum.ShipProviders (gitlab, forgejo, gitea, bitbucket, \"\") makes a BranchRulesFunc call, the legacy table fails",
+    "if an Unknown probe on a milestone base logs any ref update in the hook (even against a hook that would accept it) or errors without naming the probe reason, TestMilestoneUnknownProbeNeverPushes fails",
   ]
   status = "pending"
 
@@ -255,11 +260,12 @@ task_seq = 16
   wave = 4
   title = "Route protected-base work in prompts"
   files = ["assets/prompts/quick.md", "assets/prompts/ship.md", "assets/prompts/milestone.md", "internal/cmd/protected_prompts_test.go", "README.md"]
-  description = "quick.md: when `dross protect --check <base>` prints protected or unknown, a standalone quick commits on quick/<NEW_VERSION> and\nopens a PR into the base, recording no quick_base (the PR carries everything); unprotected / not checked keep today's route. ship.md\nnarrates the chore PR and the re-run step. milestone.md: the chore PR merges before the milestone PR; finalize still deletes. README\nprompt rows kept in sync. Run `make install` afterwards (r-01)."
+  description = "quick.md: when `dross protect --check <base>` prints protected or unknown, a standalone quick commits on quick/<NEW_VERSION> and\nopens a PR into the base — `git push -u origin quick/<ver>`, then `gh pr create --base <base> --head quick/<ver> --fill`, no auto-merge (the\nuser merges after CI), then `git switch <base> && git pull --ff-only` — recording no quick_base (the PR carries everything); unprotected / not checked keep today's route. ship.md\nnarrates the chore PR and the re-run step. milestone.md: the chore PR merges before the milestone PR; finalize still deletes. README\nprompt rows kept in sync. Run `make install` afterwards (r-01)."
   covers = ["c-1", "c-5", "c-10"]
   depends_on = ["t-10", "t-11"]
   test_contract = [
     "if quick.md loses the --check → quick/ + PR route, or still says unconditionally \"go to that base directly\", the quick-route test fails",
+    "if quick.md's PR route drops `git push -u origin quick/`, `gh pr create --base`, or `git pull --ff-only`, or gains `gh pr merge` / `--auto` / `--admin`, TestQuickPRRouteCommands fails",
     "if any prompt says `git push origin main` or `git push origin <base>`, the push-ban test fails",
     "if ship.md stops naming the chore PR and the re-run step, or milestone.md stops saying the chore PR merges first and --finalize still deletes, the narration test fails",
     "if quick.md on the PR route records quick/<ver> (or anything) as quick_base, the quick-route test fails — pushQuickBaseIfRecorded would treat a feature branch as a base",
