@@ -413,8 +413,8 @@ func TestWatchPRDigestJSON(t *testing.T) {
 	if len(bots) != 2 || bots[0].Number != 141 || bots[1].Number != 142 {
 		t.Fatalf("bot_prs = %+v, want [141 142]", bots)
 	}
-	if b := bots[0]; b.Author != "app/dependabot" || b.URL != "https://github.com/o/r/pull/141" || b.AgeDays != 12 || b.Checks != ship.ChecksFailing {
-		t.Errorf("bot #141 = %+v, want dependabot, its url, 12d, failing", b)
+	if b := bots[0]; b.Title != "PR title" || b.Author != "app/dependabot" || b.URL != "https://github.com/o/r/pull/141" || b.AgeDays != 12 || b.Checks != ship.ChecksFailing {
+		t.Errorf("bot #141 = %+v, want its title, dependabot, its url, 12d, failing", b)
 	}
 	if b := bots[1]; b.Author != "app/github-actions" || b.AgeDays != 3 || b.Checks != ship.ChecksPassing {
 		t.Errorf("bot #142 = %+v, want github-actions, 3d, passing", b)
@@ -549,7 +549,7 @@ func TestWatchHumanPRLines(t *testing.T) {
 	prWatchRepo(t)
 	stubListOpenPRs(t, fivePRs(), nil)
 	lines := nonEmptyLines(watchStdout(t))
-	botAt, shipAt := -1, -1
+	botAt, ship138At, ship139At := -1, -1, -1
 	for i, l := range lines {
 		switch strings.TrimSpace(l) {
 		case "bot PRs: 2 open (1 failing), oldest 12d":
@@ -558,14 +558,16 @@ func TestWatchHumanPRLines(t *testing.T) {
 			}
 			botAt = i
 		case "pr: #138 phase/x \u2014 pending":
-			shipAt = i
+			ship138At = i
+		case "pr: #139 milestone/v1.7 \u2014 none":
+			ship139At = i
 		}
 	}
 	last := len(lines) - 1
-	if botAt < 0 || shipAt < 0 {
-		t.Fatalf("missing the bot summary or the #138 ship line:\n%s", strings.Join(lines, "\n"))
+	if botAt < 0 || ship138At < 0 || ship139At < 0 {
+		t.Fatalf("missing the bot summary or a ship line (#138, #139):\n%s", strings.Join(lines, "\n"))
 	}
-	if !strings.HasPrefix(strings.TrimSpace(lines[last]), "next:") || botAt >= last || shipAt >= last {
+	if !strings.HasPrefix(strings.TrimSpace(lines[last]), "next:") || botAt >= last || ship138At >= last || ship139At >= last {
 		t.Errorf("next: must stay the last line, below the PR lines:\n%s", strings.Join(lines, "\n"))
 	}
 
