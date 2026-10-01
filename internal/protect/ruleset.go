@@ -64,6 +64,12 @@ type PullRequestParams struct {
 	RequiredApprovingReviewCount   int      `json:"required_approving_review_count"`
 	RequiredReviewThreadResolution bool     `json:"required_review_thread_resolution"`
 	AllowedMergeMethods            []string `json:"allowed_merge_methods"`
+	// RequireExtraApprovalForUnattributedChanges is sent, and sent false,
+	// because GitHub defaults it to true server-side: a PR holding any commit
+	// not attributed to a GitHub account would then need one human approval,
+	// which a solo author can't give (locked decision approvals). Omitting it
+	// leaves GitHub's default in force, so a re-apply would never converge.
+	RequireExtraApprovalForUnattributedChanges bool `json:"require_extra_approval_for_unattributed_changes"`
 }
 
 // StatusCheckParams are a required_status_checks rule's parameters.

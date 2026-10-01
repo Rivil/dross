@@ -126,7 +126,11 @@ func TestRulesetParams(t *testing.T) {
 		if n, ok := pr["required_approving_review_count"].(float64); !ok || n != 0 {
 			t.Errorf("%s: required_approving_review_count = %#v, want 0", name, pr["required_approving_review_count"])
 		}
-		for _, key := range []string{"dismiss_stale_reviews_on_push", "require_code_owner_review", "require_last_push_approval", "required_review_thread_resolution"} {
+		for _, key := range []string{"dismiss_stale_reviews_on_push", "require_code_owner_review", "require_last_push_approval", "required_review_thread_resolution",
+			// GitHub defaults this one to true when it is omitted; an
+			// unattributed commit would then need an approval a solo
+			// author can't give.
+			"require_extra_approval_for_unattributed_changes"} {
 			if v, ok := pr[key].(bool); !ok || v {
 				t.Errorf("%s: %s = %#v, want present and false (the API requires it)", name, key, pr[key])
 			}
