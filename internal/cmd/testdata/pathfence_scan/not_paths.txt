@@ -263,6 +263,10 @@ project.TestLane.Toolchain toolchain
 # ---- protect — GitHub ruleset payloads: names, enums, rule types, git REF patterns, check contexts, merge methods
 protect.BypassActor.ActorType actor_type
 protect.BypassActor.BypassMode bypass_mode
+protect.LiveRule.Type type
+protect.LiveRuleset.CurrentUserCanBypass current_user_can_bypass
+protect.LiveRuleset.Enforcement enforcement
+protect.LiveRuleset.Name name
 protect.PullRequestParams.AllowedMergeMethods allowed_merge_methods
 protect.RefName.Exclude exclude
 protect.RefName.Include include
