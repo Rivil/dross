@@ -32,6 +32,7 @@
     "lane-selector-preview": "DRO-304",
     "lane-selector-translation": "DRO-210",
     "legacy-phase-backfill": "DRO-142",
+    "main-branch-protection": "DRO-767",
     "milestone-lifecycle-close": "DRO-13",
     "milestone-push-failure-tests": "DRO-263",
     "mirror-terminal-state": "DRO-149",
