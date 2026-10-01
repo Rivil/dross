@@ -66,6 +66,11 @@ type HoldEvents struct {
 // Swapped in tests for a stand-in that speaks the lock protocol.
 var holdCommandFn = func(argv []string) *exec.Cmd { return buildCommand(argv, "") }
 
+// beforeScriptFn runs between starting the session and writing its script.
+// A no-op in production; tests hold the write until the session has ended,
+// the ordering a fast ssh refusal produces.
+var beforeScriptFn = func(*Hold) {}
+
 // holdKeepalive is how often the local side writes a newline into the hold
 // session's stdin. The host-side loop reads with a timeout (see HoldScript)
 // of a few of these, so a laptop that vanishes — lid closed, network gone —
@@ -182,8 +187,15 @@ func Acquire(t Target, ev HoldEvents) (*Hold, error) {
 		close(h.done)
 	}()
 	go assembleLockEvents(raw, h.events)
+	beforeScriptFn(h)
 	if _, err := io.WriteString(stdin, script); err != nil {
 		h.teardown()
+		// A session that ended before reading its script — ssh refusing the
+		// connection outright — breaks the pipe. How it ended is the answer,
+		// with ssh's own words on stderr; the broken pipe is only the symptom.
+		if h.waitErr != nil {
+			return nil, h.endedEarly()
+		}
 		return nil, fmt.Errorf("hold session on %s: %w: %v", t.Host, ErrTransport, err)
 	}
 	go h.keepalive(holdKeepalive)

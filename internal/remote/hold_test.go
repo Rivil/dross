@@ -511,6 +511,39 @@ func TestHoldTransportOutputGoesToStderr(t *testing.T) {
 	}
 }
 
+// TestHoldTransportOutputSurvivesBrokenPipe: an ssh that refuses before
+// reading its script fails the write of that script — a broken pipe, or a
+// closed one once the session is reaped, which is the ordering forced here.
+// ssh's own output still reaches stderr and the error is still an
+// ErrTransport, naming how the session ended rather than the failed write.
+func TestHoldTransportOutputSurvivesBrokenPipe(t *testing.T) {
+	useStandIn(t, "echo CANARY-SSH >&2; exit 255")
+	prevHook := beforeScriptFn
+	beforeScriptFn = func(h *Hold) { <-h.done }
+	defer func() { beforeScriptFn = prevHook }()
+	var stderr strings.Builder
+	prev := diagStderr
+	diagStderr = &stderr
+	defer func() { diagStderr = prev }()
+
+	_, err := Acquire(lockedTarget(), HoldEvents{})
+	if err == nil {
+		t.Fatal("a failed hold session returned no error")
+	}
+	if strings.Contains(err.Error(), "write |") {
+		t.Errorf("the error named the failed write, not how the session ended: %v", err)
+	}
+	if strings.Contains(err.Error(), "CANARY-SSH") {
+		t.Errorf("ssh's output reached the error: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "CANARY-SSH") {
+		t.Errorf("stderr = %q, want ssh's output there", stderr.String())
+	}
+	if !errors.Is(err, ErrTransport) {
+		t.Errorf("err = %v, want it to stay an ErrTransport", err)
+	}
+}
+
 // TestUnreadableHolderFieldIsFixedProse: a holder record's pid that is not a
 // number names the field in the error; the raw value goes to stderr.
 func TestUnreadableHolderFieldIsFixedProse(t *testing.T) {
