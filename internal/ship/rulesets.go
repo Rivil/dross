@@ -82,10 +82,12 @@ func BranchRules(opts OpenOpts, branch string) BranchRulesResult {
 	if err != nil {
 		return BranchRulesResult{Reason: err.Error()}
 	}
-	var rules []protect.LiveRule
-	if json.Unmarshal(out, &rules) != nil || rules == nil {
+	var raw []protect.LiveRule
+	if json.Unmarshal(out, &raw) != nil || raw == nil {
 		return BranchRulesResult{Reason: "GitHub's rules answer is not the JSON list it promises"}
 	}
+	//dross:taint-cleared LiveRule is gh's decoded --json rule record: a rule type, a ruleset id and typed parameters (check contexts, counts, flags) — forge metadata, not gh's prose
+	rules := raw
 	res := BranchRulesResult{Known: true, Rules: rules}
 	seen := map[int64]bool{}
 	for _, r := range rules {
@@ -97,10 +99,13 @@ func BranchRules(opts OpenOpts, branch string) BranchRulesResult {
 		if err != nil {
 			continue
 		}
-		var rs protect.LiveRuleset
-		if json.Unmarshal(body, &rs) == nil && rs.ID == r.RulesetID {
-			res.Rulesets = append(res.Rulesets, rs)
+		var raw protect.LiveRuleset
+		if json.Unmarshal(body, &raw) != nil || raw.ID != r.RulesetID {
+			continue
 		}
+		//dross:taint-cleared LiveRuleset is gh's decoded --json ruleset record: an id, a name, an enforcement state and bypass entries — forge metadata, not gh's prose
+		rs := raw
+		res.Rulesets = append(res.Rulesets, rs)
 	}
 	return res
 }
