@@ -63,6 +63,12 @@ func OpenPR(opts OpenOpts) (*OpenResult, error) {
 	}
 }
 
+// OpenPRFunc is the overridable seam cmd-package callers use, and cmd-package
+// tests stub, to open a PR without gh or a network — the unexported
+// ghCommand seam is unreachable from package cmd. Production code calls
+// OpenPRFunc, not OpenPR directly.
+var OpenPRFunc = OpenPR
+
 // --- GitHub via gh ---
 
 // ghCommand is overridable from tests.
