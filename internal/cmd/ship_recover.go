@@ -242,10 +242,15 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	// pusher's guards are all satisfied here — we just reset to origin and
 	// committed one .dross-only chore, a purely-ahead base — and its
 	// push-failure policy (hard error) applies unchanged.
-	if pushed, err := pushBaseIfAheadDrossOnly(repoDir, baseBranch); err != nil {
+	r, err := routeBaseChores(repoDir, baseBranch)
+	if err != nil {
 		return fmt.Errorf("push restored .dross/ on %s: %w", baseBranch, err)
-	} else if pushed {
+	}
+	switch {
+	case r.Pushed:
 		Printf("pushed restored .dross/ on %s to origin\n", baseBranch)
+	case r.ChorePR != nil:
+		Printf("restored .dross/: %s\n", r.ChorePR.narrate())
 	}
 
 	RecordOutcomeEvent("ship_recover",
