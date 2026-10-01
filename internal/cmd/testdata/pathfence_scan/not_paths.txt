@@ -260,6 +260,18 @@ project.TestLane.SelectorJoin selector_join
 project.TestLane.SelectorTemplate selector_template
 project.TestLane.Toolchain toolchain
 
+# ---- protect — GitHub ruleset payloads: names, enums, rule types, git REF patterns, check contexts, merge methods
+protect.BypassActor.ActorType actor_type
+protect.BypassActor.BypassMode bypass_mode
+protect.PullRequestParams.AllowedMergeMethods allowed_merge_methods
+protect.RefName.Exclude exclude
+protect.RefName.Include include
+protect.Rule.Type type
+protect.Ruleset.Enforcement enforcement
+protect.Ruleset.Name name
+protect.Ruleset.Target target
+protect.StatusCheck.Context context
+
 # ---- quality — quality-finding identity and prose
 quality.Finding.Dimension dimension
 quality.Finding.Evidence evidence
