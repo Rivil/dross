@@ -145,6 +145,8 @@ dross milestone complete <version>
 
 It targets the milestone's recorded base — main, or the parent it was stacked on while that parent is still unmerged. Surface the PR URL it prints.
 
+On a protected milestone branch (`dross protect --check milestone/<version>` reads `protected`), `.dross` chores sitting on it can't be pushed: they go through a **chore PR** into the branch, and the command refuses to open the integration PR while any chore PR into it is still open, naming that PR. The chore PR merges first — on a milestone branch, which requires no checks, it usually merges at once — then re-run `dross milestone complete <version>`. Code commits sitting on the branch are refused outright: code reaches a milestone branch through phase PRs.
+
 3. **Merge it as a MERGE COMMIT, not a squash.** Say this out loud to the user, in these words, and keep saying it if they ask about the merge. `repo.squash_merge` is set for *phase* PRs; the milestone PR is the one exception. Squashing it collapses every phase into a single commit and `main` loses the per-phase history the whole branch model exists to preserve. dross does not drive the merge, so this gate is narration or it is nothing.
 
 4. Once the PR has merged, finalize:
@@ -161,9 +163,10 @@ dross issue milestone sync <version> --close
 
 A no-op when board sync is off. It refuses — without writing anything — on a board whose milestone is not itself an issue (a YouTrack version bundle or agile board, a forge/GitHub milestone id): there is no card to close there, and on the forges a milestone id and an issue number are the same string, so closing blind would resolve someone else's issue.
 
-`dross milestone complete --finalize` records `[milestone].status = complete` **before** it fast-forwards main and deletes `milestone/<version>` local + remote. Two consequences worth stating rather than discovering:
+`dross milestone complete --finalize` records `[milestone].status = complete` **before** it fast-forwards main and deletes `milestone/<version>` local + remote. Three consequences worth stating rather than discovering:
 
 - **Re-running `--finalize` is safe.** A second run reports the milestone already finalized and exits 0 — it is not an error state, and it is the right thing to do if the first run failed partway (a protected branch, an offline origin). If it names a leftover branch, `dross milestone prune` removes it.
+- **Branch protection doesn't change it: `--finalize` still deletes the branch.** The milestone ruleset requires a PR to *update* `milestone/*`, never to create or delete one, so the delete goes through.
 - **A branch that is simply gone is reported as gone**, not as unmerged. If that happens without a finalize having run, record the milestone with `dross milestone set <version> status complete`.
 
 5. Then scope what is next, or stop. Re-running `/dross-milestone` after a successful finalize takes the `status` = `complete` arm and offers the next version.

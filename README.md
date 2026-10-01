@@ -257,20 +257,20 @@ export PATH="$HOME/.local/bin:$PATH"
 | `/dross-init` | ✅ |
 | `/dross-onboard` | ✅ |
 | `/dross-rule` | ✅ |
-| `/dross-milestone` | ✅ |
+| `/dross-milestone` | ✅ (on a protected `milestone/*` — `dross protect --check` reads `protected` — `.dross` chores reach the branch through a chore PR, which merges before the integration PR opens; `--finalize` still deletes the branch) |
 | `/dross-spec` | ✅ |
 | `/dross-plan` | ✅ (`--panel` for 3-lens planner panel + cold judge; auto-runs plan review unless `--no-review`) |
 | `/dross-plan-review` | ✅ (own context — cold subagent; also auto-run by `/dross-plan`) |
 | `/dross-execute` | ✅ |
 | `/dross-verify` | ✅ |
-| `/dross-quick` | ✅ (one-shot task with atomic commit + test gate; bumps internal version) |
+| `/dross-quick` | ✅ (one-shot task with atomic commit + test gate; bumps internal version. Standalone on a protected base — `dross protect --check` reads `protected` or `unknown` — it works on `quick/<version>` and opens a PR into the base that carries its `.dross` bookkeeping too, so no chore PR is needed) |
 | `/dross-status` | ✅ |
 | `/dross-pause` | ✅ (capture a handoff before stopping — thread + next action + open loops) |
 | `/dross-resume` | ✅ (replay the handoff, prune what's done) |
 | `/dross-inbox` | ✅ (triage inbound board issues → phase / milestone / quick / dismiss) |
 | `/dross-watch` | ✅ (read-only heartbeat — board inbound + phase-drift digest, ends with one suggested next command) |
 | `/dross-options` | ✅ |
-| `/dross-ship` | ✅ (CI watch + merge gate + branch cleanup) |
+| `/dross-ship` | ✅ (CI watch + merge gate + branch cleanup; on a protected base — `dross protect --check` reads `protected` — `.dross` chores go through an auto-merging chore PR, and `dross phase complete` waits for it rather than offering `--recover`) |
 | `/dross-review` | ✅ (4-lens subagent panel: security / quality / tests / spec-fidelity) |
 | `/dross-secure` | ✅ (context-free multi-pass security audit: real scanners + adversarial refute-panel; scaffolds a remediation phase) |
 | `/dross-quality` | ✅ (multi-pass code-quality audit: real analyzers + refute-panel over substantive maintainability dimensions; scaffolds a remediation phase) |
