@@ -1,0 +1,80 @@
+[phase]
+  id = "main-branch-protection"
+  title = "main-branch-protection"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "Nobody can push directly to `main` on origin, admin included; changes land only through a PR."
+
+[[criteria]]
+  id = "c-2"
+  text = "A PR into `main` can't merge until every `ci.yml` job has passed on its head commit. A test fails if `ci.yml` gains a job that isn't required, and it reads the job list from `ci.yml` rather than from a hand-kept list."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross doctor` reports `main`'s live protection and names each gap: unprotected, a required check missing, admin bypass allowed."
+
+[[criteria]]
+  id = "c-4"
+  text = "Milestone PRs still merge into `main` as merge commits, and the release workflow still tags from `main`."
+
+[[criteria]]
+  id = "c-5"
+  text = "With `main` protected, `dross ship` and `dross phase complete` on a phase based on `main` finish without pushing directly to `main`, and leave no `.dross` commits stuck on local `main`."
+
+[[criteria]]
+  id = "c-6"
+  text = "Dependabot PRs and the pin-currency bump PR can pass the required checks without anyone pushing to their branches by hand."
+
+[[criteria]]
+  id = "c-7"
+  text = "`main` on origin can't be force-pushed or deleted, admin included."
+
+[[criteria]]
+  id = "c-8"
+  text = "Dependabot minor/patch PRs merge themselves once the required checks pass; major updates still need a manual merge."
+
+[[criteria]]
+  id = "c-9"
+  text = "A dross verb applies a ruleset built from the repo's pull_request jobs to the configured main branch, and doctor's gap message names that verb as the fix."
+
+[[criteria]]
+  id = "c-10"
+  text = "`milestone/*` branches on origin refuse direct pushes too, dross's `.dross` bookkeeping commits for them go through the chore-PR path, and `dross milestone complete --finalize` can still delete the branch."
+
+[[decisions]]
+  key = "chore_push"
+  choice = "When a protected branch is dross's base, `.dross` bookkeeping commits reach origin as a `.dross`-only PR set to auto-merge, never as a direct push. New bookkeeping commits join the chore PR already open, if any. If auto-merge is unavailable, the PR is still opened and its URL reported. Turns on the repo's allow_auto_merge setting (off as of 2026-10-01)."
+  why = "On origin straight away, so nothing is stranded on one machine. A .dross-only merge leaves [project].version unchanged, so release.yml cuts no tag. Costs one CI run per batch. Chosen 2026-10-01 over riding the next phase PR (local-only until then) and requiring a milestone."
+  locked = true
+
+[[decisions]]
+  key = "doctor_reach"
+  choice = "GitHub only, any repo: required checks are compared against the jobs of workflows triggered on pull_request. Forgejo and GitLab print `not checked (<provider>)`. An unreachable or unauthenticated GitHub reports `unknown`, never protected."
+  why = "One API and one CI format; Forgejo and GitLab rules and CI configs differ. Unknown must never read as a pass: that is the false-green shape v1.7 exists to close."
+  locked = true
+
+[[decisions]]
+  key = "protection_mechanism"
+  choice = "A GitHub repository ruleset with an empty bypass list, not classic branch protection."
+  why = "Rulesets carry an explicit bypass list (empty = admin included, c-1 and c-7) and target name patterns such as milestone/* (c-10). Free on public repos."
+  locked = true
+
+[[decisions]]
+  key = "approvals"
+  choice = "Zero required approving reviews; a PR is still required."
+  why = "Solo repo: GitHub refuses an author's approval of their own PR, so any required approval would block every merge."
+  locked = true
+
+[[decisions]]
+  key = "merge_history"
+  choice = "No linear-history rule; merge commits stay allowed on main."
+  why = "Milestone PRs must land as merge commits (milestone.md), which c-4 keeps working."
+  locked = true
+
+[[decisions]]
+  key = "apply_verb"
+  choice = "The c-9 verb previews the ruleset by default and writes it only with an explicit flag. This repo is protected by the same verb, not by a separate script."
+  why = "It changes settings on a repo, and v1.7's theme is that a dangerous operation goes through a gate. Dogfooding the verb on this repo proves c-9 against a live ruleset."
+  locked = true
