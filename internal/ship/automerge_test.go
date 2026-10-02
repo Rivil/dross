@@ -55,21 +55,33 @@ const (
 	mergedOut   = "✓ Merged pull request #12 (chore(dross): bookkeeping)\n"
 	cleanOut    = "GraphQL: Pull request Pull request is in clean status (enablePullRequestAutoMerge)\n"
 	disabledOut = "GraphQL: Auto merge is not allowed for this repository (enablePullRequestAutoMerge)\n"
+
+	// What `gh pr view --json state,autoMergeRequest` answers after a
+	// successful `gh pr merge --auto`.
+	viewArmed   = `{"autoMergeRequest":{"enabledAt":"2026-10-02T13:10:38Z","mergeMethod":"MERGE"},"state":"OPEN"}`
+	viewMerged  = `{"autoMergeRequest":null,"state":"MERGED"}`
+	viewNeither = `{"autoMergeRequest":null,"state":"OPEN"}`
 )
 
 // Flags ahead of `--`, the PR number behind it (argfence's gh Separator
-// policy), and never --admin.
+// policy), and never --admin — for the merge and for the view that confirms
+// what it did.
 func TestAutoMergeArgv(t *testing.T) {
 	for _, method := range []string{"merge", "squash"} {
-		calls := scriptGh(t, ghReply{out: armedOut})
+		calls := scriptGh(t, ghReply{}, ghReply{out: viewArmed})
 		if _, err := AutoMergePR(autoMergeOpts, 12, method); err != nil {
 			t.Fatalf("%s: %v", method, err)
 		}
-		want := []string{"pr", "merge", "--auto", "--" + method, "--", "12"}
-		if len(*calls) != 1 || !reflect.DeepEqual((*calls)[0], want) {
+		want := [][]string{
+			{"pr", "merge", "--auto", "--" + method, "--", "12"},
+			{"pr", "view", "--json", "state,autoMergeRequest", "--", "12"},
+		}
+		if !reflect.DeepEqual(*calls, want) {
 			t.Errorf("argv = %v, want %v", *calls, want)
 		}
-		assertFenced(t, (*calls)[0])
+		for _, argv := range *calls {
+			assertFenced(t, argv)
+		}
 	}
 }
 
@@ -100,23 +112,32 @@ func assertFenced(t *testing.T, argv []string) {
 	}
 }
 
+// gh prints its success line only on a terminal. Under dross its stdout is a
+// pipe, so a successful arm exits 0 having printed nothing (seen live on
+// chore PR #140): what the merge did is read back from the PR, never from
+// gh's prose.
 func TestAutoMergeOutcomes(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
-		reply       ghReply
+		replies     []ghReply
 		want        AutoMergeResult
 		unavailable bool
 		err         bool
 	}{
-		{"armed", ghReply{out: armedOut}, AutoMergeResult{AutoEnabled: true}, false, false},
-		{"merged outright", ghReply{out: mergedOut}, AutoMergeResult{Merged: true}, false, false},
-		{"already merged", ghReply{out: "! Pull request #12 was already merged\n"}, AutoMergeResult{Merged: true}, false, false},
-		{"auto-merge disabled for the repo", ghReply{out: disabledOut, exit: 1}, AutoMergeResult{}, true, true},
-		{"unrecognised success", ghReply{out: "something new\n"}, AutoMergeResult{}, false, true},
-		{"other refusal", ghReply{out: "GraphQL: Pull request is not mergeable\n", exit: 1}, AutoMergeResult{}, false, true},
+		{"armed, silent", []ghReply{{}, {out: viewArmed}}, AutoMergeResult{AutoEnabled: true}, false, false},
+		{"merged outright, silent", []ghReply{{}, {out: viewMerged}}, AutoMergeResult{Merged: true}, false, false},
+		{"armed, terminal text", []ghReply{{out: armedOut}, {out: viewArmed}}, AutoMergeResult{AutoEnabled: true}, false, false},
+		{"merged, terminal text", []ghReply{{out: mergedOut}, {out: viewMerged}}, AutoMergeResult{Merged: true}, false, false},
+		{"already merged", []ghReply{{out: "! Pull request #12 was already merged\n"}, {out: viewMerged}}, AutoMergeResult{Merged: true}, false, false},
+		{"exit 0, neither merged nor armed", []ghReply{{}, {out: viewNeither}}, AutoMergeResult{}, false, true},
+		{"exit 0, text says armed but the PR is not", []ghReply{{out: armedOut}, {out: viewNeither}}, AutoMergeResult{}, false, true},
+		{"view is not JSON", []ghReply{{}, {out: "something new\n"}}, AutoMergeResult{}, false, true},
+		{"view fails", []ghReply{{}, {out: "HTTP 502\n", exit: 1}}, AutoMergeResult{}, false, true},
+		{"auto-merge disabled for the repo", []ghReply{{out: disabledOut, exit: 1}}, AutoMergeResult{}, true, true},
+		{"other refusal", []ghReply{{out: "GraphQL: Pull request is not mergeable\n", exit: 1}}, AutoMergeResult{}, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			calls, stderr := scriptGhStderr(t, tc.reply)
+			calls, stderr := scriptGhStderr(t, tc.replies...)
 			got, err := AutoMergePR(autoMergeOpts, 12, "merge")
 			if (err != nil) != tc.err {
 				t.Fatalf("err = %v, want error %v", err, tc.err)
@@ -135,8 +156,8 @@ func TestAutoMergeOutcomes(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("result = %+v, want %+v", got, tc.want)
 			}
-			if len(*calls) != 1 {
-				t.Errorf("gh called %d times, want 1 (no direct-merge attempt): %v", len(*calls), *calls)
+			if len(*calls) != len(tc.replies) {
+				t.Errorf("gh called %d times, want %d (no direct-merge attempt): %v", len(*calls), len(tc.replies), *calls)
 			}
 		})
 	}
