@@ -237,6 +237,7 @@ export PATH="$HOME/.local/bin:$PATH"
 | `dross ship <phase-id>` | Push `phase/<id>` to the provider, open PR, request reviewers. Provider's squash-merge collapses per-task commits | ✅ |
 | `dross ship comment` | Post a markdown comment to a PR via provider (used by /dross-review) | ✅ |
 | `dross ship recover` | One-shot migration tool for legacy repos with phase commits on main or `.dross/` stripped from prior PRs — fetch + reset + restore `.dross/` + commit, atomically | ✅ |
+| `dross protect [--apply\|--check <branch>]` | Branch protection on GitHub: a `dross: main` ruleset (no deletion, no force push, PR required, every `pull_request` job of origin/main's workflows a required check) and a `dross: milestones` ruleset (PR required into `milestone/*`), both with an empty bypass list — admin included. Previews by default; `--apply` writes both, turns on `allow_auto_merge` and reads main back, exiting non-zero on any gap. Warns when `allow_merge_commit` is off (chore and milestone PRs need it). `--check <branch>` prints exactly `protected`, `unprotected`, `unknown` or `not checked (<provider>)` and always exits 0 — what the quick/ship/milestone prompts route on | ✅ |
 | `dross issue {enable,disable,phase sync,task sync,task pull,milestone sync,backlog sync,quick,pull,dismiss,link,list,reap}` | Opt-in issue-board sync (Forgejo/Gitea/GitLab/YouTrack/Jira/GitHub). Mirrors milestones/phases/quicks → board issues (idempotent), pulls inbound issues for triage. Off by default; configured under `[board]` (`provider` + `base_url` + `auth_env`, plus `auth_user` for Jira). `[board.fields]` overrides the tracker-native field names sync writes to (`state`, `type`, `fix_versions`) so a renamed field — or a non-English tracker UI — syncs without a code change; unset keys keep today's literals. **Proven end-to-end against Jira Cloud (2026-07-25)** — full issue milestone sync → issue phase sync → issue pull round-trip; other backends wired but not yet dogfooded. `dross issue reap` sweeps mirrors the forward lifecycle left stranded: it classifies every dross-authored card from the on-disk record (never the card's own state), discovers cards no board.json namespace links via the `dross` marker label, prints the plan by default and writes only under `--apply`, isolates per-card failures, and reverses the last run with `--undo`. `dross doctor` and `/dross-watch` report the stranded count. | ✅ |
 | `dross stats {show,path,opt-in,opt-out}` | Aggregates over the local telemetry log; toggle the recorder; `show` also accepts `--json` (bare document, no `#` header) | ✅ |
 | `dross architecture check` | Inspect/repair `ARCHITECTURE.md` symbol links — reports drift, `--fix` re-resolves `file:line` targets | ✅ |
@@ -256,20 +257,20 @@ export PATH="$HOME/.local/bin:$PATH"
 | `/dross-init` | ✅ |
 | `/dross-onboard` | ✅ |
 | `/dross-rule` | ✅ |
-| `/dross-milestone` | ✅ |
+| `/dross-milestone` | ✅ (on a protected `milestone/*` — `dross protect --check` reads `protected` — `.dross` chores reach the branch through a chore PR, which merges before the integration PR opens; `--finalize` still deletes the branch) |
 | `/dross-spec` | ✅ |
 | `/dross-plan` | ✅ (`--panel` for 3-lens planner panel + cold judge; auto-runs plan review unless `--no-review`) |
 | `/dross-plan-review` | ✅ (own context — cold subagent; also auto-run by `/dross-plan`) |
 | `/dross-execute` | ✅ |
 | `/dross-verify` | ✅ |
-| `/dross-quick` | ✅ (one-shot task with atomic commit + test gate; bumps internal version) |
+| `/dross-quick` | ✅ (one-shot task with atomic commit + test gate; bumps internal version. Standalone on a protected base — `dross protect --check` reads `protected` or `unknown` — it works on `quick/<version>` and opens a PR into the base that carries its `.dross` bookkeeping too, so no chore PR is needed) |
 | `/dross-status` | ✅ |
 | `/dross-pause` | ✅ (capture a handoff before stopping — thread + next action + open loops) |
 | `/dross-resume` | ✅ (replay the handoff, prune what's done) |
 | `/dross-inbox` | ✅ (triage inbound board issues → phase / milestone / quick / dismiss) |
 | `/dross-watch` | ✅ (read-only heartbeat — board inbound + phase-drift digest, ends with one suggested next command) |
 | `/dross-options` | ✅ |
-| `/dross-ship` | ✅ (CI watch + merge gate + branch cleanup) |
+| `/dross-ship` | ✅ (CI watch + merge gate + branch cleanup; on a protected base — `dross protect --check` reads `protected` — `.dross` chores go through an auto-merging chore PR, and `dross phase complete` waits for it rather than offering `--recover`) |
 | `/dross-review` | ✅ (4-lens subagent panel: security / quality / tests / spec-fidelity) |
 | `/dross-secure` | ✅ (context-free multi-pass security audit: real scanners + adversarial refute-panel; scaffolds a remediation phase) |
 | `/dross-quality` | ✅ (multi-pass code-quality audit: real analyzers + refute-panel over substantive maintainability dimensions; scaffolds a remediation phase) |

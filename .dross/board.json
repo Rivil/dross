@@ -32,6 +32,7 @@
     "lane-selector-preview": "DRO-304",
     "lane-selector-translation": "DRO-210",
     "legacy-phase-backfill": "DRO-142",
+    "main-branch-protection": "DRO-767",
     "milestone-lifecycle-close": "DRO-13",
     "milestone-push-failure-tests": "DRO-263",
     "mirror-terminal-state": "DRO-149",
@@ -1292,6 +1293,96 @@
     },
     "legacy-phase-backfill/t-6": {
       "issue": "DRO-148",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-1": {
+      "issue": "DRO-768",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-10": {
+      "issue": "DRO-777",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-11": {
+      "issue": "DRO-778",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-12": {
+      "issue": "DRO-779",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-13": {
+      "issue": "DRO-780",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-14": {
+      "issue": "DRO-781",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-15": {
+      "issue": "DRO-782",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-16": {
+      "issue": "DRO-783",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-17": {
+      "issue": "DRO-784",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-18": {
+      "issue": "DRO-785",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-2": {
+      "issue": "DRO-769",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-3": {
+      "issue": "DRO-770",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-4": {
+      "issue": "DRO-771",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-5": {
+      "issue": "DRO-772",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-6": {
+      "issue": "DRO-773",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-7": {
+      "issue": "DRO-774",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-8": {
+      "issue": "DRO-775",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "main-branch-protection/t-9": {
+      "issue": "DRO-776",
       "plan_status": "done",
       "board_state": "task-in-review"
     },

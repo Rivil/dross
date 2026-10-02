@@ -67,6 +67,7 @@ func Doctor() *cobra.Command {
 			duplicateSlugWarnings := 0
 			backfillResidueWarnings := 0
 			pinWarnings := 0
+			protectionWarnings := 0
 
 			// --- Foundational files ---
 			//
@@ -512,6 +513,24 @@ func Doctor() *cobra.Command {
 				}
 			}
 
+			// --- Branch protection ---
+			//
+			// main's live rules on GitHub against origin/<main>'s pull_request
+			// jobs (protectionSection). Gaps are warnings naming `dross
+			// protect`; none moves the exit code — /dross-ship gates on doctor.
+			// Omitted with no [remote], like the other remote-only sections.
+			if sec, present := protectionSection(root, repoDir, p); present {
+				Print(sec.Heading)
+				printLines(sec.Lines)
+				Print("    Advisory only — this never changes doctor's exit code.")
+				Print("")
+				for _, l := range sec.Lines {
+					if l.Level == doctorWarn {
+						protectionWarnings++
+					}
+				}
+			}
+
 			// --- Duplicate roadmap slugs ---
 			//
 			// Carrying a phase forward onto a later milestone's roadmap is a
@@ -571,7 +590,7 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
-			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings+backfillResidueWarnings+pinWarnings)
+			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings+backfillResidueWarnings+pinWarnings+protectionWarnings)
 		},
 	}
 }

@@ -109,11 +109,12 @@ Run `dross ship <phase-id>`, optionally with `--draft` and/or `--body-file`.
 
 The CLI:
 1. Re-checks the verify gate and that HEAD is on `phase/<id>`
-2. Gates `phase/<id>` on origin — fetches and compares; a branch that is ahead or new is pushed (`-u`), a level one is left alone, a behind-only one refuses naming `git pull --rebase origin phase/<id>`, a diverged one refuses naming the pull or `dross ship --force`
-3. Opens the PR via the provider API — skipped when the phase's record (or the provider, when the record carries no number) already has an open PR for `phase/<id>`
-4. Requests reviewers
-5. Commits the PR record (`chore(dross): record PR #N for <id>`) and pushes it through the same origin gate
-6. **Only then** marks the phase shipped — `state.json` and the record's status flip together, and the marker commit is pushed. Until that push lands the phase still reads verified, and `dross status` names the retry.
+2. Sends `.dross` chores left on the base (a pause snapshot, a gate auto-commit) to origin: pushed straight to it when origin takes direct pushes, or — when the base is protected (`dross protect --check <base>` reads `protected`) — through a **chore PR** from `dross-chores/<base>`, armed to auto-merge as a merge commit. It prints the chore PR's URL; if auto-merge is unavailable on the repo it says so, and that PR is merged by hand. An `unknown` answer pushes nothing and names the fix.
+3. Gates `phase/<id>` on origin — fetches and compares; a branch that is ahead or new is pushed (`-u`), a level one is left alone, a behind-only one refuses naming `git pull --rebase origin phase/<id>`, a diverged one refuses naming the pull or `dross ship --force`
+4. Opens the PR via the provider API — skipped when the phase's record (or the provider, when the record carries no number) already has an open PR for `phase/<id>`
+5. Requests reviewers
+6. Commits the PR record (`chore(dross): record PR #N for <id>`) and pushes it through the same origin gate
+7. **Only then** marks the phase shipped — `state.json` and the record's status flip together, and the marker commit is pushed. Until that push lands the phase still reads verified, and `dross status` names the retry.
 
 ## 5. CI gate
 
@@ -192,7 +193,7 @@ If the PR opened but reviewer-request failed, surface that — it's non-fatal bu
 
 ## Recovery
 
-Most ships finish clean: §6's squash-merge plus `dross phase complete` fast-forwards the phase's recorded base from origin and tears down the branch. When the merge step goes sideways, recover with a dross command — **never hand-edit `.dross/` or re-commit it by hand.** That manual surgery is exactly what drifted in the past; a dross command owns the restore and the commit. The four mid-flight failure states and their one-command fixes:
+Most ships finish clean: §6's squash-merge plus `dross phase complete` fast-forwards the phase's recorded base from origin and tears down the branch. When the merge step goes sideways, recover with a dross command — **never hand-edit `.dross/` or re-commit it by hand.** That manual surgery is exactly what drifted in the past; a dross command owns the restore and the commit. The five mid-flight failure states and their one-command fixes:
 
 1. **Fast-forward abort.** `dross phase complete` stops with a "fast-forward … failed" error — local main has diverged from origin/main (a stray commit on main, or a legacy completion chore). Fix: **`dross phase complete --recover`** — it resets main to origin and restores the cumulative `.dross/` tree in one shot, then finishes the completion. Pass `--recover` only after reading the abort: it is a destructive reset of local main.
 
@@ -202,7 +203,9 @@ Most ships finish clean: §6's squash-merge plus `dross phase complete` fast-for
 
 4. **Record push failed.** `dross ship` opened the PR but the push carrying its record was refused — the error names the retry. `dross status` reads the phase as verified, not shipped, and prints `pending: … re-run dross ship <id>`. Fix: run **`dross ship <phase-id>`** again — it recognises the open PR, pushes the record, then flips the phase to shipped. A refusal naming `git pull --rebase` or `--force` means origin's `phase/<id>` moved under you; do that first. (The mirror case — the record landed but the shipped-marker push failed — reports the phase *as* shipped and names the same re-run.)
 
-If you find yourself reaching for git plumbing against `.dross/`, stop — one of the four commands above already covers it.
+5. **Chore PR pending** (protected base). `dross phase complete` refuses, naming a chore PR and saying to re-run once it merges: the base's `.dross` chores are still waiting in that PR while origin has moved on, so the base can't fast-forward yet. This is a wait, not a divergence — never `--recover` here. Once the chore PR merges (auto-merge lands it when the required checks pass; merge it by hand if ship said auto-merge is unavailable), re-run **`dross phase complete <phase-id>`**. On a protected base complete's own completion record goes out through a chore PR as well; it prints that URL, and nothing more is needed once it merges.
+
+If you find yourself reaching for git plumbing against `.dross/`, stop — one of the five commands above already covers it.
 
 ## Subagent review panel — DEFERRED
 

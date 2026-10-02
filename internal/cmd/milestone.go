@@ -14,6 +14,8 @@ import (
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/protect"
 	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
@@ -259,16 +261,17 @@ func milestoneComplete() *cobra.Command {
 			// The PR's head is resolved by the provider, so unpushed local
 			// commits are silently absent from it — and --finalize then
 			// deletes the branch that held them. Publish before opening.
-			headPushed, headCommits, err := pushMilestoneHeadIfAhead(repoDir, msBranch)
+			head, err := routeMilestoneHead(repoDir, msBranch)
 			if err != nil {
 				return err
 			}
-			if headPushed {
-				if headCommits > 0 {
-					Printf("pushed %d local commit(s) on %s to origin\n", headCommits, msBranch)
-				} else {
-					Printf("pushed %s to origin\n", msBranch)
-				}
+			switch {
+			case head.Pushed && head.Commits > 0:
+				Printf("pushed %d local commit(s) on %s to origin\n", head.Commits, msBranch)
+			case head.Pushed:
+				Printf("pushed %s to origin\n", msBranch)
+			case head.ChorePR != nil:
+				Printf("%s\n", head.ChorePR.narrate())
 			}
 
 			hosts, herr := remotePolicy(root, repoDir, p)
@@ -276,6 +279,12 @@ func milestoneComplete() *cobra.Command {
 				return herr
 			}
 			opts := buildOpenOpts(p, hosts)
+			// The integration PR's head is origin's milestone branch, which
+			// lacks the .dross chores until their chore PR merges: opening it
+			// now would land the milestone without them.
+			if err := waitForMilestoneChores(p, opts, msBranch, version, head); err != nil {
+				return err
+			}
 			opts.HeadBranch = msBranch
 			opts.BaseBranch = target
 			opts.Title = fmt.Sprintf("milestone %s", version)
@@ -283,7 +292,7 @@ func milestoneComplete() *cobra.Command {
 				"Merge as a **merge commit** (not squash) to preserve per-phase history on %s.",
 				version, target)
 
-			res, err := ship.OpenPR(opts)
+			res, err := ship.OpenPRFunc(opts)
 			if err != nil {
 				// Idempotent: a duplicate PR (provider rejects a second open
 				// for the same head->base) is a no-op, not a failure.
@@ -994,8 +1003,8 @@ func appendUnique(list []string, value string) []string {
 	return append(list, value)
 }
 
-// pushMilestoneHeadIfAhead publishes local commits on milestone/<version>
-// before the integration PR is opened against them.
+// routeMilestoneHead publishes local commits on milestone/<version> before
+// the integration PR is opened against them.
 //
 // The PR's head is a branch name the provider resolves on ITS side, so
 // anything committed locally but not pushed is simply absent from the PR —
@@ -1005,6 +1014,12 @@ func appendUnique(list []string, value string) []string {
 // and unreachable by any ref. `dross ship` has always pushed phase/<id> before
 // opening a phase PR (ship.go step 7); this is the same guarantee for the
 // milestone head, which never got it.
+//
+// With commits ahead on a GitHub remote it first asks whether origin's
+// milestone branch refuses direct pushes, routing as routeBaseChores does:
+// protected sends a .dross-only ahead set through a chore PR and refuses a
+// code commit, naming the phase-PR route; unknown pushes nothing and names
+// the reason. Unprotected, and every other forge, keep the policy below.
 //
 // Three no-ops, one refusal, one push:
 //   - no local refs/heads/<msBranch> — this machine only has origin's copy,
@@ -1021,41 +1036,135 @@ func appendUnique(list []string, value string) []string {
 // A failed push is a hard error, mirroring pushBaseIfAheadDrossOnly's
 // push_failure posture: continuing past it opens the PR against stale content,
 // which is the exact bug this exists to prevent.
+// milestoneHead is what routeMilestoneHead did with milestone/<version>.
+type milestoneHead struct {
+	Pushed  bool
+	Commits int // commits pushed onto an existing origin branch
+	ChorePR *chorePR
+}
+
+// pushMilestoneHeadIfAhead is routeMilestoneHead for a caller that reports
+// only a direct push.
 func pushMilestoneHeadIfAhead(repoDir, msBranch string) (pushed bool, commits int, err error) {
+	h, err := routeMilestoneHead(repoDir, msBranch)
+	return h.Pushed, h.Commits, err
+}
+
+func routeMilestoneHead(repoDir, msBranch string) (milestoneHead, error) {
 	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+msBranch)...) != nil {
-		return false, 0, nil
+		return milestoneHead{}, nil
 	}
 	if ferr := gitrun.Run(repoDir, "fetch", "origin"); ferr != nil {
-		return false, 0, fmt.Errorf("git fetch: %w", ferr)
+		return milestoneHead{}, fmt.Errorf("git fetch: %w", ferr)
 	}
 	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/remotes/origin/"+msBranch)...) != nil {
 		if perr := gitrun.Run(repoDir, gitRefArgs("push", []string{"-u"}, "origin", msBranch)...); perr != nil {
-			return false, 0, fmt.Errorf("push %s to origin: %w", msBranch, perr)
+			return milestoneHead{}, fmt.Errorf("push %s to origin: %w", msBranch, perr)
 		}
-		return true, 0, nil
+		return milestoneHead{Pushed: true}, nil
 	}
 	ahead, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", nil, "origin/"+msBranch+".."+msBranch)...)
 	if err != nil {
-		return false, 0, fmt.Errorf("git rev-list origin/%s..%s: %w", msBranch, msBranch, err)
+		return milestoneHead{}, fmt.Errorf("git rev-list origin/%s..%s: %w", msBranch, msBranch, err)
 	}
 	if ahead == "" {
-		return false, 0, nil
-	}
-	behind, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", nil, msBranch+"..origin/"+msBranch)...)
-	if err != nil {
-		return false, 0, fmt.Errorf("git rev-list %s..origin/%s: %w", msBranch, msBranch, err)
+		return milestoneHead{}, nil
 	}
 	n := len(strings.Fields(ahead))
+
+	if c, routed, err := routeProtectedMilestone(repoDir, msBranch, strings.Fields(ahead)); err != nil || routed {
+		return milestoneHead{ChorePR: c}, err
+	}
+
+	behind, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", nil, msBranch+"..origin/"+msBranch)...)
+	if err != nil {
+		return milestoneHead{}, fmt.Errorf("git rev-list %s..origin/%s: %w", msBranch, msBranch, err)
+	}
 	if behind != "" {
-		return false, 0, fmt.Errorf("local %s is ahead of origin/%s by %d commit(s) AND behind it by %d — "+
+		return milestoneHead{}, fmt.Errorf("local %s is ahead of origin/%s by %d commit(s) AND behind it by %d — "+
 			"the integration PR would be opened against content that is neither. "+
 			"Reconcile %s with origin before closing the milestone; refusing to force-push it for you",
 			msBranch, msBranch, n, len(strings.Fields(behind)), msBranch)
 	}
 	if perr := gitrun.Run(repoDir, gitRefArgs("push", nil, "origin", msBranch)...); perr != nil {
-		return false, 0, fmt.Errorf("push of %d local commit(s) on %s failed: %w\n"+
+		return milestoneHead{}, fmt.Errorf("push of %d local commit(s) on %s failed: %w\n"+
 			"Refusing to open the PR — it would carry stale content and the unpushed commits would be lost at --finalize.",
 			n, msBranch, perr)
 	}
-	return true, n, nil
+	return milestoneHead{Pushed: true, Commits: n}, nil
+}
+
+// routeProtectedMilestone handles commits ahead on a milestone branch that
+// origin refuses direct pushes to. routed is false — and nothing happened —
+// off GitHub or when the branch is unprotected, leaving the caller's own
+// policy to run.
+func routeProtectedMilestone(repoDir, msBranch string, ahead []string) (c *chorePR, routed bool, err error) {
+	root := filepath.Join(repoDir, RootDirName)
+	p, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		return nil, true, err
+	}
+	if configenum.Normalize(p.Remote.Provider) != "github" {
+		return nil, false, nil
+	}
+	hosts, err := remotePolicy(root, repoDir, p)
+	if err != nil {
+		return nil, true, err
+	}
+	opts := buildOpenOpts(p, hosts)
+	res := ship.BranchRulesFunc(opts, msBranch)
+	switch {
+	case !res.Known:
+		return nil, true, fmt.Errorf("can't tell whether origin's %s refuses direct pushes (%s), so its %d local commit(s) were not pushed — "+
+			"fix: run `gh auth login`, or check [remote] in .dross/project.toml; then re-run", msBranch, res.Reason, len(ahead))
+	case !protect.RequiresPR(res.Rules):
+		return nil, false, nil
+	}
+	if f, sha, err := firstNonDross(repoDir, ahead); err != nil {
+		return nil, true, err
+	} else if f != "" {
+		return nil, true, fmt.Errorf("local %s is ahead of origin/%s with commits touching non-.dross paths (e.g. %s in %.7s), and origin's %s refuses direct pushes — "+
+			"code reaches a milestone branch through phase PRs: move the commits onto a phase branch and `dross ship` it, "+
+			"then reset %s to origin/%s; refusing to push them for you",
+			msBranch, msBranch, f, sha, msBranch, msBranch, msBranch)
+	}
+	main := p.Repo.GitMainBranch
+	if main == "" {
+		main = "main"
+	}
+	pr, err := publishChorePR(repoDir, opts, msBranch, main)
+	if err != nil {
+		return nil, true, err
+	}
+	return &pr, true, nil
+}
+
+// waitForMilestoneChores refuses to open the integration PR while a chore PR
+// into the milestone branch is still open: this run's, or one an earlier run
+// left. Only a protected GitHub milestone branch can have one.
+func waitForMilestoneChores(p *project.Project, opts ship.OpenOpts, msBranch, version string, head milestoneHead) error {
+	if configenum.Normalize(p.Remote.Provider) != "github" {
+		return nil
+	}
+	waiting := 0
+	if c := head.ChorePR; c != nil && !c.Merged {
+		waiting = c.Number
+	} else if c == nil {
+		if !protect.RequiresPR(ship.BranchRulesFunc(opts, msBranch).Rules) {
+			return nil
+		}
+		open, err := ship.FindOpenPRByHeadFunc(opts, choreBranch(msBranch))
+		if err != nil {
+			return fmt.Errorf("look up an open chore PR into %s: %w", msBranch, err)
+		}
+		if open != nil {
+			waiting = open.Number
+		}
+	}
+	if waiting == 0 {
+		return nil
+	}
+	return fmt.Errorf("chore PR %s into %s is still open, and the milestone PR would land without its .dross commits — "+
+		"merge it (it merges itself once allowed), then re-run `dross milestone complete %s`",
+		pullURL(p.Remote.URL, waiting), msBranch, version)
 }

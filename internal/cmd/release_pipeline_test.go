@@ -329,3 +329,65 @@ func TestGoreleaserCheckedOnPRs(t *testing.T) {
 		})
 	}
 }
+
+// releaseTriggerProblems checks release.yml's two c-4 properties: it runs on
+// push to main and nowhere else, and the only thing it pushes is the tag.
+func releaseTriggerProblems(workflow string) []string {
+	var problems []string
+	inOn, inPush, branches := false, false, ""
+	var pushes []string
+	for _, raw := range strings.Split(workflow, "\n") {
+		line := stripYAMLComment(raw)
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		indent := len(line) - len(strings.TrimLeft(line, " "))
+		switch {
+		case indent == 0:
+			inOn, inPush = trimmed == "on:", false
+		case inOn && indent == 2:
+			inPush = trimmed == "push:"
+		case inPush && indent == 4 && strings.HasPrefix(trimmed, "branches:"):
+			branches = strings.TrimSpace(strings.TrimPrefix(trimmed, "branches:"))
+		}
+		if strings.Contains(trimmed, "git push") {
+			pushes = append(pushes, trimmed)
+		}
+	}
+	if branches != "[main]" {
+		problems = append(problems, fmt.Sprintf("release.yml's push trigger branches = %q, want [main]", branches))
+	}
+	if len(pushes) == 0 {
+		problems = append(problems, "release.yml pushes no tag")
+	}
+	for _, p := range pushes {
+		if p != `git push origin "$tag"` {
+			problems = append(problems, fmt.Sprintf("release.yml runs %q — the release job may push only the tag", p))
+		}
+	}
+	return problems
+}
+
+// TestReleaseTagsFromMainOnly: with main protected, milestone PRs still land
+// as merge commits and the release workflow still tags them from main — and
+// it pushes the tag, never a branch the ruleset would refuse. Phase
+// main-branch-protection, c-4.
+func TestReleaseTagsFromMainOnly(t *testing.T) {
+	for _, p := range releaseTriggerProblems(readRepoFile(t, ".github/workflows/release.yml")) {
+		t.Error(p)
+	}
+	const good = "on:\n  push:\n    branches: [main]\njobs:\n  release:\n    steps:\n      - run: |\n          git push origin \"$tag\"\n"
+	if got := releaseTriggerProblems(good); len(got) != 0 {
+		t.Errorf("the checker rejects the good fixture: %v", got)
+	}
+	for _, bad := range []string{
+		strings.Replace(good, "[main]", "[main, milestone/*]", 1),
+		strings.Replace(good, `git push origin "$tag"`, "git push origin HEAD:main", 1),
+		strings.Replace(good, `git push origin "$tag"`, "echo no push", 1),
+	} {
+		if got := releaseTriggerProblems(bad); len(got) == 0 {
+			t.Errorf("the checker accepts:\n%s", bad)
+		}
+	}
+}

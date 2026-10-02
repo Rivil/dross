@@ -264,6 +264,10 @@ func TestShipGateOrderingIsBeforeAutoCommit(t *testing.T) {
 			scan = append(scan, s.pos)
 		case "autoCommitDrossDirt", "pushPhaseBranch", "ship.OpenPR":
 			gated = append(gated, s)
+		case "ship.OpenPRFunc":
+			// The PR-open seam (phase main-branch-protection): the same
+			// call, stubbable from tests, so the same ordering binds it.
+			gated = append(gated, callSite{name: "ship.OpenPR", pos: s.pos})
 		}
 	}
 	if len(scan) != 1 {

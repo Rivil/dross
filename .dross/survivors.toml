@@ -2799,3 +2799,300 @@
   line = 70
   category = "const-initializer-arithmetic"
   accepted_in = "watch-bot-prs"
+
+[[accepted]]
+  key = "c16d21d9afc719ee"
+  file = "internal/cmd/milestone.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case head.Pushed && head.Commits > 0:"
+  line = 269
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "2a9d366caecc7f0a"
+  file = "internal/cmd/milestone.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case head.Pushed && head.Commits > 0:"
+  line = 269
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "52ad447923637d5a"
+  file = "internal/cmd/milestone.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case head.ChorePR != nil:"
+  line = 273
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "38b22fba834ec792"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.ChorePR != nil:"
+  line = 682
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "936c543a39815dc7"
+  file = "internal/cmd/chorepr.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 122
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "b7486b25ad888b20"
+  file = "internal/cmd/ship_recover.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.ChorePR != nil:"
+  line = 252
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "213fe25020058a1f"
+  file = "internal/protect/assess.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case rs.CurrentUserCanBypass == \"always\", rs.CurrentUserCanBypass == \"pull_requests_only\", rs.CurrentUserCanBypass == \"exempt\","
+  line = 199
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "306083a6fb45ba41"
+  file = "internal/protect/assess.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "rs.BypassActors != nil && len(*rs.BypassActors) > 0:"
+  line = 200
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "8cf8ab55b7c22515"
+  file = "internal/protect/assess.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "rs.BypassActors != nil && len(*rs.BypassActors) > 0:"
+  line = 200
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "a7a8854e2564bb9b"
+  file = "internal/protect/assess.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case rs.BypassActors == nil:"
+  line = 202
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "0c9934062d97e1aa"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v == \"\":"
+  line = 151
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "a0873dffaadf1518"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case q == '\"' && text[i] == '\\\\':"
+  line = 432
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "be273fbeda9aed41"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case text[i] == q && q == '\\'' && i+1 < len(text) && text[i+1] == '\\'':"
+  line = 434
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "56849975856f5390"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case text[i] == q && q == '\\'' && i+1 < len(text) && text[i+1] == '\\'':"
+  line = 434
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "9b88b7ab6875747a"
+  file = "internal/protect/workflows.go"
+  op = "ARITHMETIC_BASE"
+  text = "case text[i] == q && q == '\\'' && i+1 < len(text) && text[i+1] == '\\'':"
+  line = 434
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "55be653ad0b945cb"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case text[i] == q:"
+  line = 436
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "ffdd807abe937064"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s[0] == '\"' && s[len(s)-1] == '\"':"
+  line = 450
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "84ad195a901ad214"
+  file = "internal/protect/workflows.go"
+  op = "INVERT_NEGATIVES"
+  text = "case s[0] == '\"' && s[len(s)-1] == '\"':"
+  line = 450
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "b007fdebbbcf9e6c"
+  file = "internal/protect/workflows.go"
+  op = "ARITHMETIC_BASE"
+  text = "case s[0] == '\"' && s[len(s)-1] == '\"':"
+  line = 450
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "cda5912144f0698e"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s[0] == '\\'' && s[len(s)-1] == '\\'':"
+  line = 455
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "f29a27d4057b780c"
+  file = "internal/protect/workflows.go"
+  op = "INVERT_NEGATIVES"
+  text = "case s[0] == '\\'' && s[len(s)-1] == '\\'':"
+  line = 455
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "e57256a0292e21cc"
+  file = "internal/protect/workflows.go"
+  op = "ARITHMETIC_BASE"
+  text = "case s[0] == '\\'' && s[len(s)-1] == '\\'':"
+  line = 455
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "d0444b882bd4b6ac"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case quote == '\"' && c == '\\\\':"
+  line = 472
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "18728c8db1eddd00"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == quote:"
+  line = 474
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "be39abc2666355f7"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == '#' && (i == 0 || s[i-1] == ' ' || s[i-1] == '\\t'):"
+  line = 480
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "c18bed95a7fe9540"
+  file = "internal/protect/workflows.go"
+  op = "INVERT_NEGATIVES"
+  text = "case c == '#' && (i == 0 || s[i-1] == ' ' || s[i-1] == '\\t'):"
+  line = 480
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "6c9d73e73af52b84"
+  file = "internal/protect/workflows.go"
+  op = "ARITHMETIC_BASE"
+  text = "case c == '#' && (i == 0 || s[i-1] == ' ' || s[i-1] == '\\t'):"
+  line = 480
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "aca6ec3e34d0dbc2"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case (c == '\"' || c == '\\'') && strings.IndexByte(\" :-[{,\", prev) >= 0:"
+  line = 482
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "77798607d52ed308"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case (c == '\"' || c == '\\'') && strings.IndexByte(\" :-[{,\", prev) >= 0:"
+  line = 482
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "a872e6b2cc6bb614"
+  file = "internal/ship/rulesets.go"
+  op = "ARITHMETIC_BASE"
+  text = "var ghAPITimeout = 20 * time.Second"
+  line = 49
+  category = "gremlins-var-initializer"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "a66f2de661c0223a"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == quote && quote == '\\'' && i+1 < len(s) && s[i+1] == '\\'':"
+  line = 474
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "b83c488d120fdb20"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case c == quote && quote == '\\'' && i+1 < len(s) && s[i+1] == '\\'':"
+  line = 474
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "0dc22af9987902eb"
+  file = "internal/protect/workflows.go"
+  op = "ARITHMETIC_BASE"
+  text = "case c == quote && quote == '\\'' && i+1 < len(s) && s[i+1] == '\\'':"
+  line = 474
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"

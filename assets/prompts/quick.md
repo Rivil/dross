@@ -18,7 +18,9 @@ Use when:
 4. **Verify the current branch matches the mode** with `git symbolic-ref --short HEAD`:
    - **In-phase** (`current_phase` set, `current_phase_status` NOT `shipped`): branch must be `phase/<current_phase>`. If not, switch to it with `dross phase checkout <current_phase>` (or stop if it doesn't exist locally). Quick changes inside a phase belong on the phase branch — they ship together with the phase.
    - **Shipped phase** (`current_phase` set, `current_phase_status` = `shipped`): the phase's PR is already open and may already be merged; `dross phase complete` is about to delete `phase/<current_phase>` locally and on origin, so work committed there would be lost or need re-shipping. Treat this as **standalone** and follow the rule below. `dross ship` leaves `current_phase` set until a confirmed merge, which is what makes this window reachable — surface it to the user in one line rather than silently routing.
-   - **Standalone** (no `current_phase`, or a shipped one per the case above): run `dross base-branch` and branch must be **that** — the active milestone's integration branch (`milestone/<version>`) when one exists, else the configured main branch. Don't hardcode `repo.git_main_branch`; `dross base-branch` resolves the milestone-vs-main cutover for you (and nudges on stderr when no milestone is active). Standalone quick changes go to that base directly via a small commit. Once the branch is confirmed, record it: `dross local set quick_base <branch>` — `dross ship` and `dross phase complete` reconcile that recorded branch rather than re-deriving one, so an unpushed `.dross` chore left here can't re-seed divergence later. The store is `.dross/local.toml`, gitignored so the value never rides cumulative history.
+   - **Standalone** (no `current_phase`, or a shipped one per the case above): run `dross base-branch` to get the base — the active milestone's integration branch (`milestone/<version>`) when one exists, else the configured main branch. Don't hardcode `repo.git_main_branch`; `dross base-branch` resolves the milestone-vs-main cutover for you (and nudges on stderr when no milestone is active). Then ask whether origin takes direct pushes to it: `dross protect --check <base>` prints exactly one answer, and that picks the route below. Only the direct route records its base with `dross local set quick_base <base>`; the PR route records none.
+     - `unprotected` or `not checked (<provider>)` → **direct route**: the branch must be the base itself, and the quick lands on it as a small commit. Once the branch is confirmed, record it: `dross local set quick_base <base>` — `dross ship` and `dross phase complete` reconcile that recorded branch rather than re-deriving one, so an unpushed `.dross` chore left here can't re-seed divergence later. The store is `.dross/local.toml`, gitignored so the value never rides cumulative history.
+     - `protected` or `unknown` → **PR route**: origin refuses direct pushes to the base, or can't say whether it does, so the quick reaches the base through a PR. From the base, up to date with origin, create `quick/<preview-version>` — the version the orientation block previews, which §6's bump makes `<NEW_VERSION>` — with `git branch quick/<preview-version>`, move onto it with `dross checkout quick/<preview-version>`, and work there. Record **no** quick_base: the PR carries the work and its `.dross` bookkeeping both, and a feature branch recorded as a base would have ship and complete reconcile it. §7 opens the PR.
 5. Check `git status --porcelain`. If working tree is dirty:
    - Surface the diff to the user.
    - Ask via `AskUserQuestion`: "commit existing work first / stash / abort". Atomic commit semantics require a clean baseline.
@@ -181,12 +183,21 @@ Match the repo's trailer convention, as in §5.
 
 ## 7. Wrap-up
 
+**PR route only** (§0.4): the work commit and §6's bookkeeping commit both sit on `quick/<NEW_VERSION>`. Publish the branch and open its PR into the base, then go back to the base:
+```
+git push -u origin quick/<NEW_VERSION>
+gh pr create --base <base> --head quick/<NEW_VERSION> --fill
+dross checkout <base> && git pull --ff-only
+```
+No auto-merge and no admin merge: the user merges it once CI is green, like any PR. Surface the PR URL `gh` prints, and never push the base itself.
+
 Print:
 ```
 Quick task complete.
   Commit:   <SHA> "<commit subject>"
   Version:  <prev> → <new>
   Phase:    <phase-id> (recorded as quick-N in changes.json) | standalone
+  Route:    direct to <base> | PR <url> into <base>   ← standalone only
   Files:    <touched-files>
 
 Next: continue working, or /dross-quick "<another task>" — another small change.

@@ -515,21 +515,37 @@ destructive reset of the local base branch; read the abort first.`,
 			// Safety net (c-2): .dross-only chores sitting unpushed on the
 			// local base (pause auto-snapshot, gate auto-commits) re-seed
 			// divergence at the next squash-merge. Complete already requires
-			// network, so it absorbs the push; a code-ahead base or a failed
-			// push is a hard refusal.
-			basePushed, err := pushBaseIfAheadDrossOnly(repoDir, reconcileBranch)
+			// network, so it absorbs them — pushed straight to an
+			// unprotected base, or through a chore PR when the base refuses
+			// direct pushes; a code-ahead base, an unreadable protection
+			// answer or a failed push is a hard refusal.
+			baseRoute, err := routeBaseChores(repoDir, reconcileBranch)
 			if err != nil {
 				return err
 			}
-			if basePushed {
-				Printf("pushed unpushed .dross chores on %s to origin\n", reconcileBranch)
-			}
-			quickPushed, quickBase, err := pushQuickBaseIfRecorded(repoDir, root, reconcileBranch)
+			narrateBaseChores(Printf, reconcileBranch, "", baseRoute)
+			quickRoute, quickBase, err := routeQuickBaseChores(repoDir, root, reconcileBranch)
 			if err != nil {
 				return err
 			}
-			if quickPushed {
-				Printf("pushed unpushed .dross chores on %s (recorded quick_base) to origin\n", quickBase)
+			narrateBaseChores(Printf, quickBase, " (recorded quick_base)", quickRoute)
+			if c := baseRoute.ChorePR; c != nil {
+				if c.Merged {
+					// It merged at once, so origin/<base> moved after the
+					// fetch above; the fast-forward below needs to see it.
+					if err := gitrun.Run(repoDir, "fetch", "origin"); err != nil {
+						return fmt.Errorf("git fetch: %w", err)
+					}
+				} else if gitrun.Quiet(repoDir, gitRefArgs("merge-base", []string{"--is-ancestor"}, "refs/remotes/origin/"+reconcileBranch, "refs/heads/"+reconcileBranch)...) != nil {
+					// Local base holds chores origin hasn't merged yet AND
+					// origin has moved on: the fast-forward below can't
+					// succeed until the chore PR lands. Not a divergence to
+					// --recover from — just a wait. Refused here, before any
+					// checkout, so nothing local has moved.
+					return fmt.Errorf("local %s holds .dross chores still waiting in chore PR %s, and origin/%s has moved on, so %s can't fast-forward yet — "+
+						"re-run `dross phase complete %s` once it merges",
+						reconcileBranch, pullURL(p.Remote.URL, c.Number), reconcileBranch, reconcileBranch, phaseID)
+				}
 			}
 
 			// Origin-side fallback for the recorded PR (c-3): post-squash-merge
@@ -717,8 +733,12 @@ destructive reset of the local base branch; read the abort first.`,
 			// that the base ends level with origin; a local-only record commit
 			// would leave it one ahead, which is the divergence the whole
 			// reconcile path exists to prevent.
-			if _, err := pushBaseIfAheadDrossOnly(repoDir, reconcileBranch); err != nil {
+			recordRoute, err := routeBaseChores(repoDir, reconcileBranch)
+			if err != nil {
 				return fmt.Errorf("publish completion record: %w", err)
+			}
+			if c := recordRoute.ChorePR; c != nil {
+				Printf("completion record: %s\n", c.narrate())
 			}
 
 			// Delete the local phase branch (best-effort: only if it exists).

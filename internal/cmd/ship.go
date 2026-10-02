@@ -299,21 +299,23 @@ func Ship() *cobra.Command {
 
 			// Safety net (c-2): .dross-only chores sitting unpushed on the
 			// local base re-seed divergence at the next squash-merge. Ship
-			// already requires network, so it absorbs the push; a code-ahead
-			// base or a failed push is a hard refusal.
-			basePushed, err := pushBaseIfAheadDrossOnly(repoDir, baseBranch)
+			// already requires network, so it absorbs them — pushed straight
+			// to an unprotected base, or through a chore PR when the base
+			// refuses direct pushes; a code-ahead base, an unreadable
+			// protection answer or a failed push is a hard refusal.
+			baseRoute, err := routeBaseChores(repoDir, baseBranch)
 			if err != nil {
 				return err
 			}
-			if basePushed {
-				narrate("pushed unpushed .dross chores on %s to origin\n", baseBranch)
-			}
-			quickPushed, quickBase, err := pushQuickBaseIfRecorded(repoDir, root, baseBranch)
+			narrateBaseChores(narrate, baseBranch, "", baseRoute)
+			quickRoute, quickBase, err := routeQuickBaseChores(repoDir, root, baseBranch)
 			if err != nil {
 				return err
 			}
-			if quickPushed {
-				narrate("pushed unpushed .dross chores on %s (recorded quick_base) to origin\n", quickBase)
+			narrateBaseChores(narrate, quickBase, " (recorded quick_base)", quickRoute)
+			shipChore := baseRoute.ChorePR
+			if shipChore == nil {
+				shipChore = quickRoute.ChorePR
 			}
 
 			// Everything past the base safety net is an ordered ladder of
@@ -408,7 +410,7 @@ func Ship() *cobra.Command {
 				res = &ship.OpenResult{Number: existingPR, URL: existingURL}
 				narrate("PR #%d already open — pushing the pending record\n", existingPR)
 			} else {
-				res, err = ship.OpenPR(opts)
+				res, err = ship.OpenPRFunc(opts)
 				if err != nil && res == nil {
 					return fmt.Errorf("open PR: %w", err)
 				}
@@ -532,10 +534,24 @@ func Ship() *cobra.Command {
 					URL    string `json:"url"`
 					Number int    `json:"number"`
 					Result string `json:"result"`
+					// ChorePR is the PR the base's .dross chores went through
+					// when the base refuses direct pushes; absent otherwise.
+					ChorePR *struct {
+						URL    string `json:"url"`
+						Number int    `json:"number"`
+						State  string `json:"state"`
+					} `json:"chore_pr,omitempty"`
 				}{Result: shipResultTag(res, err, existing)}
 				if res != nil {
 					out.URL = res.URL
 					out.Number = res.Number
+				}
+				if c := shipChore; c != nil {
+					out.ChorePR = &struct {
+						URL    string `json:"url"`
+						Number int    `json:"number"`
+						State  string `json:"state"`
+					}{URL: c.URL, Number: c.Number, State: choreState(c)}
 				}
 				b, mErr := render.MarshalJSON(out)
 				if mErr != nil {
@@ -655,4 +671,27 @@ func commitIfStaged(repoDir, rel, msg string) error {
 		return fmt.Errorf("git commit: %w", err)
 	}
 	return nil
+}
+
+// narrateBaseChores reports what the base safety net did with base's .dross
+// chores. note qualifies the branch, e.g. " (recorded quick_base)".
+func narrateBaseChores(narrate func(string, ...any), base, note string, r baseChores) {
+	switch {
+	case r.Pushed:
+		narrate("pushed unpushed .dross chores on %s%s to origin\n", base, note)
+	case r.ChorePR != nil:
+		narrate("%s\n", r.ChorePR.narrate())
+	}
+}
+
+// choreState is a chore PR's state for `ship --json`: "merged", "manual"
+// (auto-merge unavailable — a human merges it) or "auto-merge".
+func choreState(c *chorePR) string {
+	switch {
+	case c.Merged:
+		return "merged"
+	case c.Manual:
+		return "manual"
+	}
+	return "auto-merge"
 }
