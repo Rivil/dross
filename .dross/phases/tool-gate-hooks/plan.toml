@@ -1,4 +1,4 @@
-task_seq = 18
+task_seq = 19
 
 [phase]
   id = "tool-gate-hooks"
@@ -47,17 +47,22 @@ Handles an unborn HEAD and linked worktrees (`rev-parse --git-path index`); ever
   id = "t-3"
   wave = 1
   title = "Build gate engine, payload, registry, lists"
-  files = ["internal/gate/engine.go", "internal/gate/payload.go", "internal/gate/lists.go", "internal/gate/engine_test.go"]
+  files = ["internal/gate/engine.go", "internal/gate/payload.go", "internal/gate/lists.go", "internal/gate/engine_test.go", "internal/gate/testdata/askuserquestion_post.json"]
   description = """
-Decode the hook payload (tool_name, tool_input, tool_response, cwd, session_id). Gates {Name, Scope always-on|workflow, Liftable, Claims, Judge}
-and Recorders register at init; Check runs every non-lifted gate with per-gate panic recovery and joins refusals. A Refusal needs Rule + Remedy and
-carries the human-escape hint. Read-only root locator (requires .dross/project.toml, never writes). Default lists unioned with an additive
-~/.claude/dross/gates.toml; a malformed gates.toml makes the list-extensible gates refuse in-domain calls naming the file."""
+FIRST capture a real PostToolUse AskUserQuestion payload as the fixture (captured data, not authored): a temporary stdin-dump PostToolUse hook in a
+scratch repo's .claude/settings.local.json, wired only with the human's go-ahead and removed after; the human answers one AskUserQuestion there. If it
+carries no answers in tool_response, STOP and re-decide pair_approval_signal before t-11. Then: decode the hook payload (tool_name, tool_input,
+tool_response, cwd, session_id). Gates {Name, Scope always-on|workflow, Liftable, Claims, Judge} and Recorders register at init; Check runs every
+non-lifted gate with per-gate panic recovery and joins refusals. A Refusal needs Rule + Remedy; the human-escape hint appears only for Liftable gates.
+Read-only root locator (requires .dross/project.toml, never writes). Default lists unioned with an additive ~/.claude/dross/gates.toml; a malformed
+gates.toml makes the list-extensible gates refuse in-domain calls naming the file."""
   covers = ["c-2"]
   test_contract = [
+    "if the captured fixture stops decoding to a payload whose tool_response carries the human's answer, TestCapturedAskUserQuestionFixture fails — this is the go/no-go for t-11",
     "if an unparseable payload (`{`, empty stdin, missing tool_name) blocks or reaches a Judge, the posture test fails: it must Allow with one warning and zero Judge calls",
     "if a Judge error passes, or a claiming gate whose Judge panics escapes recovery, the closed-posture test fails: both must refuse naming the gate (and \"internal error\" for the panic) — an uncaught panic would exit 2 and block every call",
-    "if NewRefusal accepts an empty Rule or Remedy, or a refusal omits the gate name, \"Use: <remedy>\" or \"a human can run `dross gate off <name>` in their own terminal\", the refusal-shape test fails",
+    "if NewRefusal accepts an empty Rule or Remedy, or a refusal omits the gate name or \"Use: <remedy>\", the refusal-shape test fails",
+    "if a Liftable gate's refusal omits \"a human can run `dross gate off <name>` in their own terminal\", or a Liftable=false gate's refusal includes it (pointing at a command that refuses), the escape-hint test fails",
     "if guard_scope breaks, the scope test fails: a workflow fake gate must NOT run when the target has no root (a .dross/ without project.toml counts as no root), an always-on fake gate MUST; the locator must leave no state.json in a fixture root that lacked one",
     "if an unclaimed tool (Glob) produces output, a Judge call or any git argv (gitrun.ArgvRecorder), the unclaimed test fails",
     "if a lifted gate still runs, a Liftable=false gate honours an override, or two refusing gates yield only one rule, the dispatch test fails",
@@ -116,6 +121,25 @@ an existing one. Without this, c-8's curated-shrink gate refuses both routine fl
   status = "pending"
 
 [[task]]
+  id = "t-19"
+  wave = 1
+  title = "Run every declared lane on bare dross test"
+  files = ["internal/cmd/test.go", "internal/cmd/lane_plan.go", "internal/cmd/test_full_lanes_test.go", "README.md"]
+  description = """
+When [[runtime.test_lane]] blocks are declared, a bare selector-free `dross test` runs runtime.test_command (when set) plus every declared lane's
+command unscoped (no derived selector), each lane through its own grant, prepare, toolchain and locality path; outcomes combine worst-wins. A
+lanes-only repo no longer hits requireExecConsent's empty-command refusal. Selector runs, `--files` and lane-less repos are unchanged. README row updated."""
+  covers = ["c-4"]
+  test_contract = [
+    "if a bare `dross test` in a repo with test_command + 2 lanes (one with a go-package selector) doesn't spawn test_command and both lane commands with NO derived selector (spawn-seam argv recorder), TestBareRunCoversEveryLane fails",
+    "if a bare `dross test` in a lanes-only repo (no test_command) refuses at requireExecConsent instead of running every lane, the lanes-only test fails; an untrusted lane must exit 6 with that lane not spawned",
+    "if `dross test ./internal/x` in a laned repo spawns any lane or anything but test_command + the selector, the selector-run test fails",
+    "if worst-wins breaks across test_command and lanes, the outcome table fails: green test_command + red lane → exit 1; a failed lane prepare → exit 7",
+    "if a lane-less repo's bare `dross test` spawn line changes by a byte (locked bare_test_run), or `--files` resolution changes, the existing lane_plan_test / test_lane_selector_test tables fail",
+  ]
+  status = "pending"
+
+[[task]]
   id = "t-7"
   wave = 2
   depends_on = ["t-1", "t-3"]
@@ -123,13 +147,16 @@ an existing one. Without this, c-8's curated-shrink gate refuses both routine fl
   files = ["internal/gate/secrets.go", "internal/gate/secrets_test.go", "internal/gate/selfguard.go", "internal/gate/selfguard_test.go"]
   description = """
 secret-stream (c-6) refuses a command whose argv0 is in SecretTools when stderr merges into stdout. secret-read (c-7) refuses a Read, or
-cat/head/tail/less/sed with an operand or `<` input, of a SecretPaths match (*.env, .env*, *.pem, *.key, id_* not *.pub, *.agekey,
-sops/age/keys.txt); `source`/`.` never claimed. gate-off-guard (Liftable=false) refuses Bash `dross gate off`. All three fire in every repo."""
+cat/head/tail/less/sed with an operand or `<` input, of a SecretPaths match (*.env, .env*, *.pem, *.key, private-key names id_rsa/id_dsa/
+id_ecdsa/id_ed25519 and their _sk variants, *.agekey, sops/age/keys.txt); env templates (.env.example/.sample/.template/.dist) exempt; `source`/`.`
+never claimed. A Partial scan holding a claimed token refuses naming the parse problem. gate-off-guard (Liftable=false) refuses Bash `dross gate off`.
+All three fire in every repo."""
   covers = ["c-6", "c-7", "c-2"]
   test_contract = [
     "if c-6 misses a merge, the secret-stream refuse table fails: `pass-cli item view x 2>&1 | head`, `… |& head`, `… &>out`, `FOO=1 pass-cli … 2>&1`, `cd d && pass-cli … 2>&1`, `/opt/bin/pass-cli … 2>&1` must refuse, naming secret-stream and `>file 2>/dev/null`",
     "if c-6 over-fires, the allow table fails: `make build 2>&1`, `go test ./... 2>&1 | tail`, `pass-cli item view x >f 2>/dev/null`, `echo hi 2>&1; pass-cli item view x >f 2>/dev/null`, `echo \"pass-cli x 2>&1\"` must pass silently",
-    "if c-7 Read matching drifts, the Read table fails: .env, prod.env, .env.local, server.pem, tls.key, ~/.ssh/id_ed25519, ~/.config/sops/age/keys.txt, ops.agekey refuse; id_ed25519.pub, envoy.yaml, main.go and a keys.txt outside sops/age pass",
+    "if c-7 Read matching drifts, the Read table fails: .env, prod.env, .env.local, .envrc, server.pem, tls.key, ~/.ssh/id_ed25519, ~/.ssh/id_ecdsa_sk, ~/.config/sops/age/keys.txt, ops.agekey refuse; id_ed25519.pub, internal/auth/id_token.go, id_generator.ts, .env.example, .env.sample, .env.template, .env.dist, envoy.yaml, main.go and a keys.txt outside sops/age pass",
+    "if a Partial scan (unbalanced quote) holding a secret-tool merge or a secret-path reader passes, or a Partial scan with no claimed token refuses, the partial-posture test fails; a refusal must name the parse problem",
     "if c-7 Bash matching drifts, the Bash table fails: `cat .env`, `head -n 3 config/prod.env`, `tail -f .env.local`, `less id_rsa`, `sed -n 1p ~/.ssh/id_ed25519`, `cat < .env`, `cd x && cat .env` refuse; `source .env && make`, `. ./.env`, `wc -c .env`, `shasum -a 256 .env`, `grep -q KEY .env`, `cat ~/.ssh/id_ed25519.pub` pass",
     "if either secret gate goes quiet from a cwd with no .dross ancestor (guard_scope) or spawns any git argv, the scope test fails",
     "if adding `op` to secret_tools in gates.toml doesn't make `op read x 2>&1` refuse, the extension test fails",
@@ -161,17 +188,19 @@ curated-shrink (c-8): a Write replacing an existing curated file with under half
 [[task]]
   id = "t-9"
   wave = 2
-  depends_on = ["t-2", "t-4"]
+  depends_on = ["t-2", "t-4", "t-19"]
   title = "Record full green runs from dross test"
   files = ["internal/cmd/test.go", "internal/cmd/test_green_test.go"]
   description = """
-Write green.json from treefp.WorkingTree only for a full run: a selector-free test_command run (incl. `--files` in a lane-less repo, per
-bare_test_run) or a lane run where every declared lane ran unscoped and green. Fingerprint before and after; mismatch records nothing. A red
-full run on the recorded tree clears it; never-ran exits (3–8) leave it. A recorder failure warns and never changes the exit status."""
+Write green.json from treefp.WorkingTree only for a full run: a bare selector-free `dross test` (which t-19 makes cover test_command plus every
+declared lane unscoped) or, in a lane-less repo, `--files` (equivalent per bare_test_run). `--files` in a laned repo never records. Fingerprint before
+and after; mismatch records nothing. A red full run on the recorded tree clears it; never-ran exits (3–8) leave it. A recorder failure warns and never
+changes the exit status."""
   covers = ["c-4"]
   test_contract = [
     "if the recorder and the commit side fingerprint differently, TestGreenMatchesCandidate fails: a green bare `dross test` must write a tree equal to treefp.Candidate() after `git add -A`",
-    "if a partial run records, the partial table fails: `dross test ./internal/x`, a red run, a lane run matching 1 of 2 declared lanes, and a lane line carrying a derived selector must each record nothing (green_run_definition)",
+    "if a green bare `dross test` in a laned repo (test_command + every lane green) or a lanes-only repo records nothing, TestAllLanesGreenRecords fails — it must record a tree equal to treefp.Candidate()",
+    "if a partial run records, the partial table fails: `dross test ./internal/x`, a red run, a bare run where one lane is red or refused (exit 6), and any `--files` run in a laned repo must each record nothing (green_run_definition)",
     "if a green `dross test --files a.go` in a lane-less repo (execute.md's form) records nothing, the lane-less test fails",
     "if a file edited mid-run through the spawn seam still records, the before/after fingerprint test fails",
     "if green-then-red on the same tree leaves the record, or exit 3 / exit 4 with an existing record clears it, the lifecycle test fails",
@@ -189,7 +218,8 @@ full run on the recorded tree clears it; never-ran exits (3–8) leave it. A rec
   description = """
 commit-green claims Bash `git [-C d] [-c k=v] commit` in a .dross repo (env-prefixed, chained, cd-tracked). Candidate = real index + replayed
 earlier `git add` segments (+ -a); .dross-only or empty candidate passes, otherwise it must equal green.json's tree. Refuses pathspec/--only/
---include/-p commits, `git add -p`, and chains where anything but `git add`/`cd` precedes the commit. Silent with neither test_command nor lanes."""
+--include/-p commits, `git add -p`, and chains where anything but `git add`/`cd` precedes the commit. A green that exists but differs from the
+candidate names the diverging paths (stage or clean them). A Partial scan holding `git commit` refuses. Silent with neither test_command nor lanes."""
   covers = ["c-4"]
   test_contract = [
     "if a matching green stops admitting the commit, or a one-byte change after the green still passes, the green-match test fails: with green for tree T, `git commit -m x` on candidate T passes; after a change it refuses naming a full `dross test` and stating a raw `go test` does not count",
@@ -199,7 +229,9 @@ earlier `git add` segments (+ -a); .dross-only or empty candidate passes, otherw
     "if `git -C ../other commit` or `cd ../other && git commit` judges the cwd repo instead of ../other, the dir test fails; ../other with no .dross must pass without spawning git",
     "if `git commit a.go -m x`, `git commit -p` or `git add -p && git commit` passes instead of refusing with \"stage with git add, then run a plain git commit\", the unjudgeable-form test fails",
     "if `git commit-tree`, `echo git commit` or `git log --grep commit` is claimed, or `ls -la` spawns any git argv, the claim test fails",
-    "if a repo with neither runtime.test_command nor a test lane refuses a commit, the no-tests carve-out test fails",
+    "if a green exists but the candidate differs because other paths are unstaged or untracked, and the refusal tells the agent to re-run `dross test` (which cannot converge) instead of naming the diverging paths with \"stage or clean them\", TestDivergedCandidateNamesPaths fails",
+    "if a Partial scan (unbalanced quote) containing `git commit` passes instead of refusing naming the parse problem, or a Partial scan with no git token is claimed, the partial-posture test fails",
+    "if a repo with neither runtime.test_command nor a test lane refuses a commit, the no-tests carve-out test fails; a lanes-only repo (no test_command) must still be gated",
     "if a git failure building the candidate, a corrupt index, or an unreadable green.json passes, the closed-posture test fails: each must refuse naming the error",
   ]
   status = "pending"
@@ -209,10 +241,9 @@ earlier `git add` segments (+ -a); .dross-only or empty candidate passes, otherw
   wave = 2
   depends_on = ["t-1", "t-3", "t-4"]
   title = "Record pair approvals and gate edits"
-  files = ["internal/gate/pair.go", "internal/gate/pair_test.go", "internal/gate/testdata/askuserquestion_post.json"]
+  files = ["internal/gate/pair.go", "internal/gate/pair_test.go"]
   description = """
-First capture a real PostToolUse AskUserQuestion payload as the fixture; if it carries no answers in tool_response, stop and re-decide. Recorder:
-record {phase, task, HEAD} only when a tool_response answer exactly equals ApproveLabel(in_progress task). Gate: armed when current_phase's plan
+Builds on t-3's captured AskUserQuestion fixture (internal/gate/testdata/askuserquestion_post.json). Recorder: record {phase, task, HEAD} only when a tool_response answer exactly equals ApproveLabel(in_progress task). Gate: armed when current_phase's plan
 has an in_progress task, recorded mode isn't solo (absent = pair) and HEAD is on phase/<id>; refuses in-repo Edit/Write/MultiEdit/NotebookEdit
 outside .dross/ unless approval == (phase, task, current HEAD). Also refuses Bash `dross execute begin … --solo` while armed."""
   covers = ["c-5"]
@@ -269,18 +300,21 @@ mode; a same-mode re-run leaves the record untouched. t-11's gate refuses a mid-
 [[task]]
   id = "t-14"
   wave = 2
-  depends_on = ["t-3", "t-4"]
+  depends_on = ["t-1", "t-3", "t-4"]
   title = "Add override store and record tamper guard"
   files = ["internal/gate/override.go", "internal/gate/override_test.go"]
   description = """
-Override store at ~/.claude/dross/gate-overrides.json holding {name, until}, written atomically and plugged into the engine's Overrides; expired
-entries ignored, a corrupt file lifts nothing. tamper-guard (always-on, Liftable=false) refuses Edit/Write/MultiEdit of <repo>/.dross/gate/** and
-of the overrides file."""
+Override store at ~/.claude/dross/gate-overrides.json holding {name, repo, until}: workflow-gate overrides are keyed by repo root, secret-gate
+overrides are machine-wide (empty repo). Written atomically, plugged into the engine's Overrides; expired entries ignored, a corrupt file lifts
+nothing. tamper-guard (always-on, Liftable=false) refuses Edit/Write/MultiEdit of <repo>/.dross/gate/** and of the overrides file, and Bash writes
+to them via t-1's scan (redirect targets, tee, cp/mv destinations)."""
   covers = ["c-2"]
   test_contract = [
     "if an override for commit-green until T stops skipping that gate before T or still skips it at T+1s (injected clock), or lifts secret-read too, the expiry test fails",
+    "if a commit-green override recorded for repo A also lifts commit-green in repo B, or a secret-read override fails to apply in every repo, the override-scope test fails",
     "if a corrupt overrides file lifts any gate, or its error isn't surfaced for `status`, the corrupt-store test fails",
     "if a Write to <repo>/.dross/gate/green.json, approval.json or the overrides file passes (forged green, approval or override) — even with every liftable gate lifted — the tamper test fails; reads of them must pass",
+    "if Bash `echo x > .dross/gate/green.json`, `printf x | tee .dross/gate/approval.json`, `cp /tmp/g .dross/gate/green.json` or `cd .dross/gate && echo x > green.json` passes, the Bash-tamper table fails; `cat .dross/gate/green.json` and `echo x > /tmp/g` pass",
     "if a malformed gates.toml makes the overrides store unreadable, the separation test fails",
   ]
   status = "pending"
@@ -292,11 +326,13 @@ of the overrides file."""
   title = "Add human gate off/on/status verbs"
   files = ["internal/cmd/gate.go", "internal/cmd/gate_override_test.go", "cmd/dross/gate_remedy_test.go", "README.md", "cmd/dross/testdata/cli_tree.txt"]
   description = """
-`dross gate off <name> [--for 1h]` (24h cap), `gate on <name>`, and `gate status` (every registered gate, on/off, expiry, overrides-file parse
-error), plus a README row. t-7's guard refuses Bash `gate off`, so only the human's own terminal reaches it. (cli_tree.txt is a regenerated golden.)"""
+`dross gate off <name> [--for 1h]` (24h cap), `gate on <name>`, and `gate status` (every registered gate, on/off, expiry, scope, overrides-file
+parse error), plus a README row. A workflow gate is lifted for the current repo root only (error outside a repo); a secret gate is lifted
+machine-wide and the output says so. t-7's guard refuses Bash `gate off`, so only the human's own terminal reaches it. (cli_tree.txt is a regenerated golden.)"""
   covers = ["c-2"]
   test_contract = [
     "if a direct `gate off secret-read --for 30m` doesn't make `gate check` on a Read-.env payload exit 0, or the clock at +31m doesn't bring back exit 2, the lift-expiry test fails",
+    "if `gate off commit-green` run in repo A lifts it in repo B, succeeds outside any repo, or its output doesn't name the repo it applies to (and `gate off secret-read` doesn't say machine-wide), the lift-scope test fails",
     "if `gate on secret-read` doesn't make the next check refuse, or `--for 0`, a negative value or `--for 25h` changes the store instead of erroring naming the cap, the bounds test fails",
     "if an unknown name doesn't error listing valid names, or `gate off gate-off-guard` / `gate off tamper-guard` succeeds (Liftable=false), the name test fails",
     "if `gate status` omits a registered gate or hides a corrupt overrides file's parse error, the status test fails",
@@ -341,7 +377,7 @@ names all four. Last in wave 3 by id so execution arms nothing on this repo befo
     "if a foreign PreToolUse group {\"matcher\":\"Bash\", …/usr/local/bin/lint.sh…} or unrelated keys don't survive verbatim and in order with dross's group appended after, the foreign-survival test fails",
     "if a pre-existing 2-hook install gains anything but exactly the two gate groups, or hooks.PreToolUse as an object doesn't error with the file bytes unchanged, the upgrade test fails",
     "if a 0600 settings.json loses its mode, or a failed write leaves anything but the original bytes, the atomic-write test fails",
-    "if two inits leave more than one entry per event for any of the four, TestInitEnsuresHooksIdempotent fails; dropping the gate pair also fails TestOnboardEnsuresSameHooks's byte-parity",
+    "if two inits leave anything but exactly one `dross gate check` PreToolUse entry and one `dross gate record` PostToolUse entry (plus one each for PreCompact and SessionStart), TestInitEnsuresHooksIdempotent fails — dropping the gate pair from ensureUserHooks must fail it (onboard's byte-parity test cannot, since both share ensureUserHooks)",
   ]
   status = "pending"
 
@@ -359,7 +395,7 @@ matcher-restricted group, disableAllHooks true, unparseable file. Missing PreCom
   test_contract = [
     "if an empty CLAUDE_CONFIG_DIR doesn't exit non-zero with ✗ PreToolUse naming `dross gate check` and `dross hooks ensure` and ✗ PostToolUse naming `dross gate record`, or after `dross hooks ensure` it isn't exit 0 with ✓ for all four, the gate-hook test fails",
     "if only PreCompact (or only SessionStart) missing changes the exit code instead of showing ⚠, the warn-only test fails",
-    "if a gate command only under matcher \"Bash\", or `\"disableAllHooks\": true`, isn't reported as an issue, the hidden-hook test fails",
+    "if a gate command only under matcher \"Bash\", or `\"disableAllHooks\": true`, isn't reported as an issue, the hidden-hook test fails; the matcher issue must tell the user to remove the matcher or move the command into a matcher-less group, never `dross hooks ensure` (MergeHook no-ops on that file)",
     "if a malformed settings.json crashes or passes instead of an issue naming the parse error, the parse test fails",
     "if doctor reads $HOME/.claude/settings.json while CLAUDE_CONFIG_DIR points at an empty dir, the effective-file test fails",
     "if doctor_run.txt stops pinning the section, the golden fails; if chdir() stops seeding the four hooks, the ~105 existing Doctor() invocations across 15 test files (including the four that never run Init()) go red",

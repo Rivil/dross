@@ -29,7 +29,7 @@
 
 [[criteria]]
   id = "c-7"
-  text = "A Read, or a Bash `cat`/`head`/`tail`/`less`/`sed`, of a path matching a declared secret pattern (defaults: `*.env`, `.env*`, `*.pem`, `*.key`, `id_*` private keys, age key files) is refused; `source`-ing an env file stays allowed."
+  text = "A Read, or a Bash `cat`/`head`/`tail`/`less`/`sed`, of a path matching a declared secret pattern (defaults: `*.env`, `.env*`, `*.pem`, `*.key`, `id_*` private keys, age key files) is refused; env templates (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`) are exempt; `source`-ing an env file stays allowed."
 
 [[criteria]]
   id = "c-8"
