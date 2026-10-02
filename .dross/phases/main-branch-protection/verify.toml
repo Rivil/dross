@@ -1,33 +1,33 @@
 [verify]
   phase = "main-branch-protection"
-  generated_at = 2026-10-02T08:21:43.162084Z
-  verdict = "fail"
+  generated_at = 2026-10-02T11:17:34.039246Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-10-02T08:23:22.691777Z
+  finalized_at = 2026-10-02T11:18:48.793803Z
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9144434222631095
-  mutants_killed = 994
-  mutants_survived = 93
-  mutants_not_covered = 93
-  mutants_no_block = 80
-  mutants_test_gap = 13
-  mutants_in_scope = 1087
-  unclassified_in_scope = 12
+  mutation_score = 0.919634703196347
+  mutants_killed = 1007
+  mutants_survived = 88
+  mutants_not_covered = 88
+  mutants_no_block = 87
+  mutants_test_gap = 1
+  mutants_in_scope = 1095
+  unclassified_in_scope = 0
   criteria_total = 10
-  criteria_covered = 7
-  criteria_uncovered = 3
+  criteria_covered = 10
+  criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 994
-    survived = 93
+    killed = 1007
+    survived = 88
     timeout = 0
-    in_scope = 1087
-    score = 0.9144434222631095
+    in_scope = 1095
+    score = 0.919634703196347
     file_count = 35
     measured_on = "helicon"
     whole_file = ["cmd/dross/main.go — adapter-lacks-range-runner", "internal/cmd/basebranch.go — adapter-lacks-range-runner", "internal/cmd/basebranch_chores_test.go — adapter-lacks-range-runner", "internal/cmd/chorepr.go — adapter-lacks-range-runner", "internal/cmd/chorepr_test.go — adapter-lacks-range-runner", "internal/cmd/ci_required_checks_test.go — adapter-lacks-range-runner", "internal/cmd/dependabot_automerge_test.go — adapter-lacks-range-runner", "internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/doctor_protection.go — adapter-lacks-range-runner", "internal/cmd/doctor_protection_test.go — adapter-lacks-range-runner", "internal/cmd/hermetic_env_test.go — adapter-lacks-range-runner", "internal/cmd/milestone.go — adapter-lacks-range-runner", "internal/cmd/milestone_protected_test.go — adapter-lacks-range-runner", "internal/cmd/phase.go — adapter-lacks-range-runner", "internal/cmd/protect.go — adapter-lacks-range-runner", "internal/cmd/protect_test.go — adapter-lacks-range-runner", "internal/cmd/protected_base_test.go — adapter-lacks-range-runner", "internal/cmd/protected_prompts_test.go — adapter-lacks-range-runner", "internal/cmd/release_pipeline_test.go — adapter-lacks-range-runner", "internal/cmd/secretscan_gate_test.go — adapter-lacks-range-runner", "internal/cmd/ship.go — adapter-lacks-range-runner", "internal/cmd/ship_recover.go — adapter-lacks-range-runner", "internal/project/release.go — adapter-lacks-range-runner", "internal/project/release_test.go — adapter-lacks-range-runner", "internal/protect/assess.go — adapter-lacks-range-runner", "internal/protect/assess_test.go — adapter-lacks-range-runner", "internal/protect/ruleset.go — adapter-lacks-range-runner", "internal/protect/ruleset_test.go — adapter-lacks-range-runner", "internal/protect/workflows.go — adapter-lacks-range-runner", "internal/protect/workflows_test.go — adapter-lacks-range-runner", "internal/ship/automerge.go — adapter-lacks-range-runner", "internal/ship/automerge_test.go — adapter-lacks-range-runner", "internal/ship/open.go — adapter-lacks-range-runner", "internal/ship/rulesets.go — adapter-lacks-range-runner", "internal/ship/rulesets_test.go — adapter-lacks-range-runner"]
@@ -41,14 +41,14 @@
 [[criterion]]
   id = "c-2"
   status = "covered"
-  tests = ["internal/cmd/ci_required_checks_test.go:TestEveryCIJobIsRequired", "internal/cmd/ci_required_checks_test.go:TestCIJobsHaveNoJobLevelIf", "internal/cmd/ci_required_checks_test.go:TestCIPullRequestTriggerUnfiltered", "internal/cmd/protect_test.go:TestProtectSourceIsOriginMain", "internal/protect/ruleset_test.go:TestRulesetParams"]
-  notes = "TestEveryCIJobIsRequired scans the live ci.yml with its own line scanner (not protect's parser) and requires every job id among MainRuleset's required contexts; appending a job proves both sides pick it up — no hand-kept list. Job-level if: and filtered pull_request triggers (which would let a check pass without running) are refused with failing fixtures."
+  tests = ["internal/cmd/ci_required_checks_test.go:TestEveryCIJobIsRequired", "internal/cmd/ci_required_checks_test.go:TestCIJobsHaveNoJobLevelIf", "internal/cmd/ci_required_checks_test.go:TestCIPullRequestTriggerUnfiltered", "internal/cmd/protect_test.go:TestProtectSourceIsOriginMain", "internal/protect/ruleset_test.go:TestRulesetParams", "internal/protect/workflows_test.go:TestEscapedJobNameIsTheContext", "internal/protect/workflows_test.go:TestJobNameIsTheContext"]
+  notes = "TestEveryCIJobIsRequired scans the live ci.yml with its own line scanner (not protect's parser) and requires every job id among MainRuleset's required contexts; appending a job proves both sides pick it up — no hand-kept list. Job-level if: and filtered pull_request triggers are refused with failing fixtures. t-18 pinned quoted/escaped job names end to end (and fixed stripComment's '' bug, which would have required a context that never reports); workflows.go 433–473 survivors are now killed."
 
 [[criterion]]
   id = "c-3"
   status = "covered"
-  tests = ["internal/cmd/doctor_protection_test.go:TestDoctorProtectionGapRender", "internal/cmd/doctor_protection_test.go:TestDoctorProtectionRemainingGaps", "internal/cmd/doctor_protection_test.go:TestProtectionUnknownNeverReadsProtected", "internal/cmd/doctor_protection_test.go:TestDoctorProtectionProviderTable", "internal/protect/assess_test.go:TestEnforcementTable", "internal/protect/assess_test.go:TestCheckDiff", "internal/protect/assess_test.go:TestBypassGaps", "internal/protect/assess_test.go:TestMultipleGapsAllReported", "internal/ship/rulesets_test.go:TestBranchRulesUnknownTable"]
-  notes = "Each gap (unprotected / required check missing: <name> / admin bypass allowed) renders as its own ⚠ line ending in the fix hint, all reported together; unknown (401, missing bypass list, scanner refusal) never reads protected; non-GitHub providers print `not checked (<provider>)` with zero API calls."
+  tests = ["internal/cmd/doctor_protection_test.go:TestDoctorProtectionGapRender", "internal/cmd/doctor_protection_test.go:TestDoctorProtectionRemainingGaps", "internal/cmd/doctor_protection_test.go:TestProtectionUnknownNeverReadsProtected", "internal/cmd/doctor_protection_test.go:TestDoctorProtectionProviderTable", "internal/protect/assess_test.go:TestEnforcementTable", "internal/protect/assess_test.go:TestCheckDiff", "internal/protect/assess_test.go:TestBypassGaps", "internal/protect/assess_test.go:TestBypassGapsOrderedAcrossRulesets", "internal/protect/assess_test.go:TestMultipleGapsAllReported", "internal/ship/rulesets_test.go:TestBranchRulesUnknownTable"]
+  notes = "Each gap (unprotected / required check missing: <name> / admin bypass allowed) renders as its own ⚠ line ending in the fix hint, all reported together; unknown (401, missing bypass list, scanner refusal) never reads protected; non-GitHub providers print `not checked (<provider>)` with zero API calls. Bypass gaps across several rulesets now pinned in id order (assess.go:189 killed)."
 
 [[criterion]]
   id = "c-4"
@@ -58,9 +58,9 @@
 
 [[criterion]]
   id = "c-5"
-  status = "weak"
-  tests = ["internal/cmd/protected_base_test.go:TestProtectedBaseShipThenComplete", "internal/cmd/protected_base_test.go:TestCompletionRecordChorePRNarrated", "internal/cmd/protected_base_test.go:TestCompleteWaitsForPendingChorePR", "internal/cmd/chorepr_test.go:TestChorePRJoinsOpenPR", "internal/cmd/chorepr_test.go:TestReleaseGuardRefusesTagChange", "internal/cmd/basebranch_chores_test.go:TestUnknownProbeNeverPushes"]
-  notes = "Ship then complete against an origin whose pre-receive hook rejects and logs refs/heads/main: the log stays empty and rev-list origin/main..main is empty. Downgraded: in-hunk survivor phase.go:536 is NOT COVERED — complete's branch for a chore PR that merges at once (fetch before the fast-forward) never runs in any test, and it is the path the first live completion will take."
+  status = "covered"
+  tests = ["internal/cmd/protected_base_test.go:TestProtectedBaseShipThenComplete", "internal/cmd/protected_base_test.go:TestCompleteFetchesAfterChorePRMergesAtOnce", "internal/cmd/protected_base_test.go:TestCompletionRecordChorePRNarrated", "internal/cmd/protected_base_test.go:TestCompleteWaitsForPendingChorePR", "internal/cmd/chorepr_test.go:TestChorePRJoinsOpenPR", "internal/cmd/chorepr_test.go:TestReleaseGuardRefusesTagChange", "internal/cmd/basebranch_chores_test.go:TestUnknownProbeNeverPushes"]
+  notes = "Ship then complete against an origin whose pre-receive hook rejects and logs refs/heads/main: the log stays empty and rev-list origin/main..main is empty. Upgraded from weak: TestCompleteFetchesAfterChorePRMergesAtOnce drives complete's merged-at-once chore-PR branch (fetch before the fast-forward) — the phase.go:536 survivor is now killed."
 
 [[criterion]]
   id = "c-6"
@@ -76,93 +76,29 @@
 
 [[criterion]]
   id = "c-8"
-  status = "weak"
-  tests = ["internal/cmd/dependabot_automerge_test.go:TestAutoMergeSkipsMajor", "internal/cmd/dependabot_automerge_test.go:TestAutoMergeWaitsForChecks", "internal/cmd/dependabot_automerge_test.go:TestDependabotGroupsExcludeMajor", "internal/cmd/protect_test.go:TestProtectUpsert", "internal/ship/rulesets_test.go:TestRepoPatchTouchesOnlyAutoMerge"]
-  notes = "Major exclusion is strongly pinned (only named minor/patch disjuncts, --auto without --admin, no major in dependabot.yml groups). The minor/patch-merge-themselves half is not: renaming the fetch-metadata step's `id: meta` leaves the if: always false, and a minor-only condition (patch dropped) still passes TestAutoMergeSkipsMajor — either silently stops auto-merge with every test green. Live auto-merge unobservable until v1.7 is on main."
+  status = "covered"
+  tests = ["internal/cmd/dependabot_automerge_test.go:TestAutoMergeSkipsMajor", "internal/cmd/dependabot_automerge_test.go:TestAutoMergeReadsFetchMetadata", "internal/cmd/dependabot_automerge_test.go:TestAutoMergeWaitsForChecks", "internal/cmd/dependabot_automerge_test.go:TestDependabotGroupsExcludeMajor", "internal/cmd/protect_test.go:TestProtectUpsert", "internal/ship/rulesets_test.go:TestRepoPatchTouchesOnlyAutoMerge"]
+  notes = "Upgraded from weak. Major exclusion: only named minor/patch disjuncts, --auto without --admin, no major in dependabot.yml groups. Merge-themselves half now pinned: the real merge-step if: must name both semver-minor and semver-patch (minor-only and patch-only fixtures fail), and TestAutoMergeReadsFetchMetadata requires the step id the if: reads to exist, to be dependabot/fetch-metadata, and to run before the merge. Live auto-merge unobservable until v1.7 is on main (NOTE)."
 
 [[criterion]]
   id = "c-9"
   status = "covered"
-  tests = ["internal/cmd/protect_test.go:TestProtectPreviewWritesNothing", "internal/cmd/protect_test.go:TestProtectFlags", "internal/cmd/protect_test.go:TestProtectBuildInputs", "internal/cmd/protect_test.go:TestProtectSourceIsOriginMain", "internal/cmd/protect_test.go:TestProtectUpsert", "internal/cmd/doctor_protection_test.go:TestDoctorProtectionGapRender", "internal/protect/workflows_test.go:TestPullRequestTargetExcluded", "internal/protect/workflows_test.go:TestOtherTriggersYieldNothing"]
-  notes = "Preview writes nothing without --apply; required contexts come from origin/main's pull_request jobs only (release/automerge and working-tree-only jobs excluded); every doctor gap line ends in ProtectFixHint, which must name `dross protect --apply`. Live: preview, --apply created both rulesets, re-apply updated in place (protection-proof.md)."
+  tests = ["internal/cmd/protect_test.go:TestProtectPreviewWritesNothing", "internal/cmd/protect_test.go:TestProtectPreviewUnreadableRulesets", "internal/cmd/protect_test.go:TestProtectFlags", "internal/cmd/protect_test.go:TestProtectBuildInputs", "internal/cmd/protect_test.go:TestProtectSourceIsOriginMain", "internal/cmd/protect_test.go:TestProtectUpsert", "internal/cmd/doctor_protection_test.go:TestDoctorProtectionGapRender", "internal/protect/workflows_test.go:TestPullRequestTargetExcluded", "internal/protect/workflows_test.go:TestOtherTriggersYieldNothing"]
+  notes = "Preview writes nothing without --apply (now also with an unreadable ruleset list — protect.go:261 killed); required contexts come from origin/main's pull_request jobs only; every doctor gap line ends in ProtectFixHint, which must name `dross protect --apply`. Live: preview, --apply created both rulesets, re-apply updated in place (protection-proof.md)."
 
 [[criterion]]
   id = "c-10"
-  status = "weak"
-  tests = ["internal/protect/ruleset_test.go:TestMilestoneRulesetAllowsFinalizeDelete", "internal/protect/ruleset_test.go:TestMilestoneRulesetAllowsPhaseAndChoreMerges", "internal/cmd/protect_test.go:TestCheckIsPushRefusalOnly", "internal/cmd/milestone_protected_test.go:TestMilestoneChoresRouteThroughChorePR", "internal/cmd/milestone_protected_test.go:TestMilestoneRefLifecycleUnderProtection", "internal/cmd/milestone_protected_test.go:TestMilestoneCompleteWaitsForOpenChorePR", "internal/cmd/chorepr_test.go:TestChoreBranchMatchesNoRuleset"]
-  notes = "Chore-PR routing and the pull_request-only / no-deletion rule set are pinned. Not pinned: the milestone ruleset's target. Nothing asserts MilestoneRuleset()'s include equals refs/heads/milestone/* — retargeting ruleset.go:151 (e.g. refs/heads/release/*) passes every test, because TestRulesetIncludesStayOffTagsAndBotBranches matches the constant MilestoneRef, not the built ruleset, and the finalize-delete lifecycle test runs against a hand-written hook. Live probe 2026-10-01 refused a milestone push (GH013) and accepted the delete."
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/protect.go:261 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/protect.go:261 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/phase.go:536 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/protect/assess.go:189 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/protect/assess.go:189 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/protect/workflows.go:433 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/protect/workflows.go:435 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/protect/workflows.go:440 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/protect/workflows.go:440 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/protect/workflows.go:454 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/protect/workflows.go:454 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/protect/workflows.go:473 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-10: no test pins the milestone ruleset's include to refs/heads/milestone/* — internal/protect/ruleset.go:151 can be retargeted with every test green (TestRulesetIncludesStayOffTagsAndBotBranches checks the MilestoneRef constant, not MilestoneRuleset())."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-8: .github/workflows/dependabot-automerge.yml — no test asserts the fetch-metadata step keeps `id: meta` (a rename makes the merge step's if: always false), and TestAutoMergeSkipsMajor accepts a condition naming minor only (patch PRs would stop auto-merging)."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-5: complete's merged-at-once chore-PR branch (internal/cmd/phase.go:536, fetch before the fast-forward) is untested — in-hunk NOT COVERED survivor; TestProtectedBaseShipThenComplete's stub never reports Merged at once."
-
-[[finding]]
-  severity = "FLAG"
-  text = "chore_push decision: TestChorePRDegradesWhenAutoMergeUnavailable checks strings.Contains(narrate, c.URL), which passes when c.URL is empty, and never asserts c.Opened or the URL value."
+  status = "covered"
+  tests = ["internal/protect/ruleset_test.go:TestMilestoneRulesetTargetsMilestoneBranches", "internal/protect/ruleset_test.go:TestMilestoneRulesetAllowsFinalizeDelete", "internal/protect/ruleset_test.go:TestMilestoneRulesetAllowsPhaseAndChoreMerges", "internal/cmd/protect_test.go:TestCheckIsPushRefusalOnly", "internal/cmd/milestone_protected_test.go:TestMilestoneChoresRouteThroughChorePR", "internal/cmd/milestone_protected_test.go:TestMilestoneRefLifecycleUnderProtection", "internal/cmd/milestone_protected_test.go:TestMilestoneCompleteWaitsForOpenChorePR", "internal/cmd/chorepr_test.go:TestChoreBranchMatchesNoRuleset"]
+  notes = "Upgraded from weak: TestMilestoneRulesetTargetsMilestoneBranches pins MilestoneRuleset()'s include to the literal [refs/heads/milestone/*], so retargeting ruleset.go:151 or the MilestoneRef constant fails. Chore-PR routing and the pull_request-only / no-deletion rule set were already pinned. Live probe 2026-10-01 refused a milestone push (GH013) and accepted the delete."
 
 [[finding]]
   severity = "NOTE"
-  text = "Mutation measured on helicon, run r-20261002-060520 (06:05→07:58Z): 0.91 over 1087 in-scope mutants (killed 994, survived 93, all NOT COVERED, zero LIVED); 80 no-block (uncoverable by construction), efficacy 0.99 over the 1007 reachable."
+  text = "Mutation measured on helicon, run r-20261002-085023 (08:50→~11:15Z): 0.92 over 1095 in-scope mutants (killed 1007, survived 88, all NOT COVERED, zero LIVED); 87 no-block (uncoverable by construction), efficacy 1.00 over the 1008 reachable. The one test-gap survivor is the already-accepted ghAPITimeout initializer (internal/ship/rulesets.go:49, gremlins-var-initializer). All 12 BLOCKING survivors from r-20261002-060520 are killed."
 
 [[finding]]
   severity = "NOTE"
-  text = "48 in-hunk no-block survivors accepted this run as 30 entries (29 gremlins-attribution-ceiling: switch-case conditions in workflows.go, assess.go, chorepr.go, milestone.go, ship.go, ship_recover.go; 1 gremlins-var-initializer: internal/ship/rulesets.go:49), then the run was re-collected from helicon's reports. The 12 remaining BLOCKING survivors are real test gaps in this phase's own code."
+  text = "7 in-hunk survivors on internal/protect/workflows.go:474 (t-18's '' escape case: 4× CONDITIONALS_NEGATION, 1× CONDITIONALS_BOUNDARY, 2× ARITHMETIC_BASE) accepted as gremlins-attribution-ceiling — go-cover holds no block for a switch case expression. Each was traced: the negations restore the old bug (TestQuotedScalarEdges's `'it''s # x' # c` row), the boundary/±1 mutants panic or restore it (TestJobNameIsTheContext's `'Bob''s tests'`). Run re-collected from helicon's reports; gate clear."
 
 [[finding]]
   severity = "NOTE"
@@ -174,7 +110,7 @@
 
 [[finding]]
   severity = "NOTE"
-  text = "c-5: auto-merge-unavailable and unknown-protection are tested below ship/complete (publishChorePR, routeBaseChores), not through the verbs; ship.go:306 and phase.go:522 return the error unchanged."
+  text = "c-5: auto-merge-unavailable and unknown-protection are tested below ship/complete (publishChorePR, routeBaseChores), not through the verbs; ship.go:306 and phase.go:522 return the error unchanged. The chore_push auto-merge-unavailable result is now pinned by value (TestChorePRDegradesWhenAutoMergeUnavailable)."
 
 [[finding]]
   severity = "NOTE"

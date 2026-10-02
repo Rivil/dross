@@ -3069,3 +3069,30 @@
   line = 49
   category = "gremlins-var-initializer"
   accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "a66f2de661c0223a"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == quote && quote == '\\'' && i+1 < len(s) && s[i+1] == '\\'':"
+  line = 474
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "b83c488d120fdb20"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case c == quote && quote == '\\'' && i+1 < len(s) && s[i+1] == '\\'':"
+  line = 474
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "0dc22af9987902eb"
+  file = "internal/protect/workflows.go"
+  op = "ARITHMETIC_BASE"
+  text = "case c == quote && quote == '\\'' && i+1 < len(s) && s[i+1] == '\\'':"
+  line = 474
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
