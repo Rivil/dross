@@ -544,6 +544,26 @@ func TestHoldTransportOutputSurvivesBrokenPipe(t *testing.T) {
 	}
 }
 
+// TestSilentExitBeforeScriptIsNotATransportFailure: a session that exits 0
+// before reading its script breaks the pipe too. It said nothing, so it locked
+// nothing — the same ErrRemoteCommand as a silent exit after the script, never
+// the failed write dressed as a transport failure. The ordering is forced here;
+// TestEmptyAnswerIsNotAnAcquisition only hits it when the exit wins the race.
+func TestSilentExitBeforeScriptIsNotATransportFailure(t *testing.T) {
+	useStandIn(t, "exit 0")
+	prevHook := beforeScriptFn
+	beforeScriptFn = func(h *Hold) { <-h.done }
+	defer func() { beforeScriptFn = prevHook }()
+
+	_, err := Acquire(lockedTarget(), HoldEvents{})
+	if !errors.Is(err, ErrRemoteCommand) || errors.Is(err, ErrTransport) {
+		t.Errorf("Acquire = %v, want ErrRemoteCommand and never ErrTransport", err)
+	}
+	if err != nil && strings.Contains(err.Error(), "write |") {
+		t.Errorf("the error named the failed write, not how the session ended: %v", err)
+	}
+}
+
 // TestUnreadableHolderFieldIsFixedProse: a holder record's pid that is not a
 // number names the field in the error; the raw value goes to stderr.
 func TestUnreadableHolderFieldIsFixedProse(t *testing.T) {

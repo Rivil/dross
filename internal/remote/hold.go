@@ -191,12 +191,11 @@ func Acquire(t Target, ev HoldEvents) (*Hold, error) {
 	if _, err := io.WriteString(stdin, script); err != nil {
 		h.teardown()
 		// A session that ended before reading its script — ssh refusing the
-		// connection outright — breaks the pipe. How it ended is the answer,
-		// with ssh's own words on stderr; the broken pipe is only the symptom.
-		if h.waitErr != nil {
-			return nil, h.endedEarly()
-		}
-		return nil, fmt.Errorf("hold session on %s: %w: %v", t.Host, ErrTransport, err)
+		// connection outright, or a shell that exited 0 having said nothing —
+		// breaks the pipe. teardown has reaped it, so how it ended is the
+		// answer, with ssh's own words on stderr; the broken pipe is only the
+		// symptom.
+		return nil, h.endedEarly()
 	}
 	go h.keepalive(holdKeepalive)
 
