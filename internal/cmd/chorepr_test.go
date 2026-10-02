@@ -258,9 +258,13 @@ func TestChorePRDegradesWhenAutoMergeUnavailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unavailable auto-merge surfaced as an error: %v", err)
 	}
-	n := c.narrate()
-	if !c.Manual || !strings.Contains(n, c.URL) || !strings.Contains(n, "merge it by hand") {
-		t.Errorf("result %+v narrates %q; want the URL and \"merge it by hand\"", c, n)
+	const url = "https://github.com/o/r/pull/41"
+	want := chorePR{Base: "main", Branch: "dross-chores/main", Number: 41, URL: url, Opened: true, Manual: true}
+	if c != want {
+		t.Errorf("result %+v, want %+v", c, want)
+	}
+	if n := c.narrate(); !strings.Contains(n, "opened chore PR #41 "+url) || !strings.Contains(n, "merge it by hand") {
+		t.Errorf("narrates %q; want the opened PR's URL and \"merge it by hand\"", n)
 	}
 
 	t.Run("any other auto-merge failure is an error", func(t *testing.T) {

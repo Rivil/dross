@@ -184,6 +184,15 @@ func TestMilestoneRulesetAllowsFinalizeDelete(t *testing.T) {
 	}
 }
 
+// The milestone ruleset reaches every milestone/* branch and nothing else.
+// The literal, not MilestoneRef: retargeting the constant must fail here too.
+func TestMilestoneRulesetTargetsMilestoneBranches(t *testing.T) {
+	ref := wire(t, MilestoneRuleset())["conditions"].(map[string]any)["ref_name"].(map[string]any)
+	if inc := strs(ref["include"]); !reflect.DeepEqual(inc, []string{"refs/heads/milestone/*"}) {
+		t.Errorf("milestone ruleset include = %v, want exactly [refs/heads/milestone/*] (c-10)", inc)
+	}
+}
+
 func TestMainRulesetBuilder(t *testing.T) {
 	if _, err := MainRuleset("main", nil); err == nil {
 		t.Error("MainRuleset with no contexts must be an error, not a ruleset gating nothing")

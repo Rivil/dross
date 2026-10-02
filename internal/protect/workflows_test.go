@@ -328,3 +328,65 @@ func TestRefusalErrorNamesWorkflowAndJob(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// Quoted scalars keep YAML's escapes: a `\"` or a doubled single quote never closes
+// the scalar early, an unterminated quote is no key at all, and a `#` inside
+// a quote is never a comment. A scalar misread here becomes a wrong check
+// context, which blocks every merge on a check that never reports.
+func TestQuotedScalarEdges(t *testing.T) {
+	for _, tc := range []struct {
+		line, key, value string
+		ok               bool
+	}{
+		{`"a\"b": x`, `a"b`, "x", true},
+		{`"a\\": x`, `a\`, "x", true},
+		{`'it''s': x`, "it's", "x", true},
+		{`"a: b`, "", "", false},
+		{`'a: b`, "", "", false},
+	} {
+		key, value, ok := keyValue(tc.line)
+		if key != tc.key || value != tc.value || ok != tc.ok {
+			t.Errorf("keyValue(%s) = %q, %q, %v; want %q, %q, %v", tc.line, key, value, ok, tc.key, tc.value, tc.ok)
+		}
+	}
+
+	for _, tc := range []struct{ in, want string }{
+		{`"a\tb"`, "a\tb"},
+		{`"\q"`, `\q`}, // no valid unquoting: the inside, as written
+		{`'it''s'`, "it's"},
+		{`"x`, `"x`},
+		{`'`, `'`},
+	} {
+		if got := unquote(tc.in); got != tc.want {
+			t.Errorf("unquote(%s) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+
+	for _, tc := range []struct{ in, want string }{
+		{`name: "a\" # b" # c`, `name: "a\" # b"`},
+		{`name: "a\\" # c`, `name: "a\\"`},
+		{`name: 'it''s # x' # c`, `name: 'it''s # x'`},
+		{`name: "a # b`, `name: "a # b`},
+	} {
+		if got := stripComment(tc.in); got != tc.want {
+			t.Errorf("stripComment(%s) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// End to end: an escaped job name is the context GitHub reports.
+func TestEscapedJobNameIsTheContext(t *testing.T) {
+	got, err := scanOne(t, "on: pull_request\njobs:\n"+
+		"  a:\n    name: \"Unit \\\"fast\\\" # tests\" # comment\n    runs-on: x\n"+
+		"  b:\n    name: 'Bob''s # tests' # comment\n    runs-on: x\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Job{
+		{Workflow: "ci.yml", ID: "a", Context: `Unit "fast" # tests`},
+		{Workflow: "ci.yml", ID: "b", Context: "Bob's # tests"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}

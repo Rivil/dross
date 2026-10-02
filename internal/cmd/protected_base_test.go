@@ -26,6 +26,10 @@ type ghPlay struct {
 	merged  bool // the phase PR's merged state, for complete's gate
 	armed   []string
 	protect bool
+	// mergeOnArm, when set, makes the next arming find its PR mergeable at
+	// once: it merges that PR's head on origin and answers Merged, as
+	// AutoMergePR does when base has nothing left to wait for. One-shot.
+	mergeOnArm func(head string)
 }
 
 func stubForge(t *testing.T, f *ghPlay) {
@@ -52,6 +56,16 @@ func stubForge(t *testing.T, f *ghPlay) {
 	}
 	ship.AutoMergePRFunc = func(_ ship.OpenOpts, n int, method string) (ship.AutoMergeResult, error) {
 		f.armed = append(f.armed, method)
+		if merge := f.mergeOnArm; merge != nil {
+			for head, pr := range f.open {
+				if pr.Number == n {
+					f.mergeOnArm = nil
+					merge(head)
+					delete(f.open, head)
+					return ship.AutoMergeResult{Merged: true}, nil
+				}
+			}
+		}
 		return ship.AutoMergeResult{AutoEnabled: true}, nil
 	}
 	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
@@ -261,6 +275,50 @@ func TestCompleteWaitsForPendingChorePR(t *testing.T) {
 	}
 	if head := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); head != "phase/x" {
 		t.Errorf("HEAD moved to %s", head)
+	}
+	if got := baseUpdates(t, log); len(got) != 0 {
+		t.Errorf("dross offered the hook %v", got)
+	}
+}
+
+// The ship chore PR is still open when complete runs, and re-arming it merges
+// it at once. origin/main moved after complete's fetch, so complete must fetch
+// again before the fast-forward — otherwise it sees origin/main without the
+// merge and refuses as if the PR were still pending.
+func TestCompleteFetchesAfterChorePRMergesAtOnce(t *testing.T) {
+	dir, origin := protectedFlowRepo(t)
+	log := protectedOrigin(t, origin, false)
+	f := &ghPlay{protect: true}
+	stubForge(t, f)
+	gh := newGithubSim(t, origin)
+	if _, err := runCapture(t, nil, func() error { return runCmd(t, Ship()) }); err != nil {
+		t.Fatal(err)
+	}
+	gh.squash()
+	f.merged = true
+	f.mergeOnArm = gh.mergeCommit
+
+	out, err := runCapture(t, nil, func() error { return runCmd(t, Phase(), "complete", "x") })
+	if err != nil {
+		t.Fatalf("complete refused a chore PR that merged at once: %v\n%s", err, out)
+	}
+	if f.mergeOnArm != nil {
+		t.Fatal("complete never re-armed the ship chore PR")
+	}
+	if !strings.Contains(out, "joined chore PR #41 https://github.com/o/r/pull/41 — merged") {
+		t.Errorf("complete did not narrate the chore PR merging at once:\n%s", out)
+	}
+
+	// main fast-forwarded over origin's main as it stood: the phase squash
+	// and the chore PR's merge are both under it.
+	if _, err := gitOut(dir, "merge-base", "--is-ancestor", originRef(t, origin, "refs/heads/main"), "main"); err != nil {
+		t.Error("local main never fast-forwarded over the squash and the chore PR's merge")
+	}
+
+	gh.mergeCommit("dross-chores/main") // the completion record's chore PR
+	mustGit(t, dir, "fetch", "-q", "origin")
+	if ahead := mustGit(t, dir, "rev-list", "origin/main..main"); ahead != "" {
+		t.Errorf("local main is ahead of origin after the chore PRs merged: %s", ahead)
 	}
 	if got := baseUpdates(t, log); len(got) != 0 {
 		t.Errorf("dross offered the hook %v", got)

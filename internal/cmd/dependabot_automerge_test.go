@@ -3,6 +3,7 @@ package cmd
 import (
 	"maps"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -83,6 +84,8 @@ func TestAutoMergeSkipsMajor(t *testing.T) {
 		"steps.meta.outputs.update-type != 'version-update:semver-major'",
 		"steps.meta.outputs.update-type == 'version-update:semver-minor' || steps.meta.outputs.update-type == 'version-update:semver-major'",
 		"github.event.pull_request.user.login == 'dependabot[bot]'",
+		"steps.meta.outputs.update-type == 'version-update:semver-minor'",
+		"steps.meta.outputs.update-type == 'version-update:semver-patch'",
 		"",
 	} {
 		if len(updateTypeConditionProblems(bad)) == 0 {
@@ -91,17 +94,69 @@ func TestAutoMergeSkipsMajor(t *testing.T) {
 	}
 }
 
+// updateTypeConditionProblems says what is wrong with a merge-step if: — a
+// disjunct that isn't a minor/patch test, or minor or patch left unnamed (that
+// update type would silently stop merging itself).
 func updateTypeConditionProblems(cond string) []string {
 	var problems []string
 	if strings.TrimSpace(cond) == "" {
 		return []string{"empty condition"}
 	}
+	named := map[string]bool{}
 	for _, d := range strings.Split(cond, "||") {
-		if !minorOrPatch.MatchString(strings.TrimSpace(d)) {
+		m := minorOrPatch.FindStringSubmatch(strings.TrimSpace(d))
+		if m == nil {
 			problems = append(problems, "disjunct "+strings.TrimSpace(d)+" is not an update-type == semver-minor/patch test")
+			continue
+		}
+		named[m[1]] = true
+	}
+	for _, typ := range []string{"minor", "patch"} {
+		if !named[typ] {
+			problems = append(problems, "semver-"+typ+" is not named, so those PRs never merge themselves")
 		}
 	}
 	return problems
+}
+
+// stepOutput finds the step id an if: reads update-type from.
+var stepOutput = regexp.MustCompile(`steps\.([A-Za-z0-9_-]+)\.outputs\.update-type`)
+
+// The merge step's if: reads the fetch-metadata step's output by its id. A
+// renamed or missing id leaves the condition always false: no minor or patch
+// PR would merge itself, with nothing failing to say so.
+func TestAutoMergeReadsFetchMetadata(t *testing.T) {
+	cond, _ := keyValue(mergeStep(t), "if")
+	var ids []string
+	for _, m := range stepOutput.FindAllStringSubmatch(cond, -1) {
+		if !slices.Contains(ids, m[1]) {
+			ids = append(ids, m[1])
+		}
+	}
+	if len(ids) != 1 {
+		t.Fatalf("merge step if: %q reads update-type from steps %v; want exactly one", cond, ids)
+	}
+	id := ids[0]
+
+	job, _, _ := jobLines(readRepoFile(t, autoMergeWorkflow), "automerge")
+	metaAt, mergeAt := -1, -1
+	for i, step := range stepBlocks(job) {
+		if v, ok := keyValue(step, "id"); ok && v == id {
+			metaAt = i
+			if uses, _ := keyValue(step, "uses"); !strings.HasPrefix(uses, "dependabot/fetch-metadata@") {
+				t.Errorf("step id: %s uses %q, want dependabot/fetch-metadata", id, uses)
+			}
+		}
+		if run, ok := keyValue(step, "run"); ok && strings.Contains(run, "gh pr merge") {
+			mergeAt = i
+		}
+	}
+	if metaAt < 0 {
+		t.Fatalf("the merge step reads steps.%s, but no step has id: %s — its if: is always false", id, id)
+	}
+	if metaAt > mergeAt {
+		t.Errorf("step id: %s runs after the merge step, so its output is empty when the if: reads it", id)
+	}
 }
 
 // --auto arms the merge and leaves it to the ruleset; without it gh merges

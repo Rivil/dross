@@ -18,6 +18,7 @@ import (
 // back, unless readback overrides it.
 type protectSeams struct {
 	existing  []ship.RulesetSummary
+	listErr   error // what listing the existing rulesets fails with
 	settings  ship.MergeSettings
 	createErr map[string]error
 	readback  *ship.BranchRulesResult
@@ -64,7 +65,7 @@ func stubProtectSeams(t *testing.T, s *protectSeams) {
 	}
 	ship.ListRulesetsFunc = func(ship.OpenOpts) ([]ship.RulesetSummary, error) {
 		s.calls++
-		return s.existing, nil
+		return s.existing, s.listErr
 	}
 	ship.CreateRulesetFunc = func(_ ship.OpenOpts, rs protect.Ruleset) (int64, error) {
 		s.calls++
@@ -186,6 +187,38 @@ func TestProtectPreviewWritesNothing(t *testing.T) {
 	}
 	if !strings.Contains(out, "preview") || !strings.Contains(out, "- Lint") || !strings.Contains(out, "- test") {
 		t.Errorf("preview output:\n%s", out)
+	}
+}
+
+// A ruleset list the token can't read still previews: each ruleset's line
+// says the list was unreadable and why, rather than claiming --apply would
+// create it.
+func TestProtectPreviewUnreadableRulesets(t *testing.T) {
+	protectRepo(t, "github")
+	s := &protectSeams{
+		settings: ship.MergeSettings{Known: true, AllowMergeCommit: true},
+		listErr:  errors.New("HTTP 403: Must have admin rights to Repository"),
+	}
+	stubProtectSeams(t, s)
+
+	out, err := runProtect(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fate := "  (existing rulesets unreadable — HTTP 403: Must have admin rights to Repository)\n"
+	for _, line := range []string{
+		protect.MainRulesetName + " → refs/heads/main" + fate,
+		protect.MilestoneRulesetName + " → refs/heads/milestone/*" + fate,
+	} {
+		if !strings.Contains(out, line) {
+			t.Errorf("preview lacks %q:\n%s", line, out)
+		}
+	}
+	if strings.Contains(out, "(creates it)") {
+		t.Errorf("an unreadable list must not read as a ruleset to create:\n%s", out)
+	}
+	if len(s.created)+len(s.updated)+len(s.autoMerge) != 0 {
+		t.Errorf("preview wrote: created %d, updated %d, auto-merge %v", len(s.created), len(s.updated), s.autoMerge)
 	}
 }
 

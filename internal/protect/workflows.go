@@ -471,6 +471,8 @@ func stripComment(s string) string {
 			switch {
 			case quote == '"' && c == '\\':
 				i++
+			case c == quote && quote == '\'' && i+1 < len(s) && s[i+1] == '\'':
+				i++
 			case c == quote:
 				quote = 0
 			}

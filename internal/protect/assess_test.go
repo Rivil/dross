@@ -209,3 +209,30 @@ func TestGapStrings(t *testing.T) {
 		}
 	}
 }
+
+// Bypass gaps from several rulesets come out in ruleset-id order, AdminBypass
+// before BypassUnknown, whatever order the branch's rules arrive in: doctor's
+// gap list must read the same on every run.
+func TestBypassGapsOrderedAcrossRulesets(t *testing.T) {
+	rules := liveRules(t, `[
+		{"type": "pull_request", "ruleset_id": 9},
+		{"type": "non_fast_forward", "ruleset_id": 7},
+		{"type": "deletion", "ruleset_id": 3},
+		{"type": "deletion", "ruleset_id": 9},
+		{"type": "non_fast_forward", "ruleset_id": 2}
+	]`)
+	rulesets := []LiveRuleset{
+		liveRuleset(t, `{"id": 9, "name": "org: main", "enforcement": "active", "bypass_actors": [{"actor_id": 5, "actor_type": "RepositoryRole"}], "current_user_can_bypass": "never"}`),
+		liveRuleset(t, `{"id": 3, "name": "repo: main", "enforcement": "active", "bypass_actors": [], "current_user_can_bypass": "always"}`),
+	}
+	got := Assess(rules, rulesets, nil)
+	want := []Gap{
+		{Kind: AdminBypass, Ruleset: "repo: main"},
+		{Kind: AdminBypass, Ruleset: "org: main"},
+		{Kind: BypassUnknown, Ruleset: "ruleset 2"},
+		{Kind: BypassUnknown, Ruleset: "ruleset 7"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("gaps = %v\nwant %v", got, want)
+	}
+}
