@@ -1341,6 +1341,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "main-branch-protection/t-18": {
+      "issue": "DRO-785",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "main-branch-protection/t-2": {
       "issue": "DRO-769",
       "plan_status": "done",

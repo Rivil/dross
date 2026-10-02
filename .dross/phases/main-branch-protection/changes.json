@@ -157,6 +157,28 @@
         }
       ]
     },
+    "t-18": {
+      "files": [
+        "internal/protect/workflows_test.go",
+        "internal/protect/assess_test.go",
+        "internal/protect/ruleset_test.go",
+        "internal/cmd/protect_test.go",
+        "internal/cmd/protected_base_test.go",
+        "internal/cmd/chorepr_test.go",
+        "internal/cmd/dependabot_automerge_test.go",
+        "internal/protect/workflows.go"
+      ],
+      "commit": "5a574b4",
+      "completed_at": "2026-10-02T08:46:30.931276Z",
+      "landmarks": [
+        {
+          "feature": "branch protection",
+          "symbol": "stripComment",
+          "loc": "internal/protect/workflows.go:465",
+          "what": "a doubled '' inside a single-quoted job name no longer ends the scalar, so a # after it stays in the check context; verify's 12 test-gap survivors and c-5/c-8/c-10 pinned"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/protect/ruleset.go",
