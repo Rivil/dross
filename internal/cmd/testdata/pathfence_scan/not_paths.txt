@@ -110,6 +110,11 @@ forge.youtrackIssue.Description description
 forge.youtrackIssue.Summary summary
 forge.ytStateBundle.ID id
 
+# ---- gate — gates.toml extension lists: program NAMES and glob PATTERNS, matched against tool calls, never opened
+gate.listFile.CuratedFiles curated_files
+gate.listFile.SecretPaths secret_paths
+gate.listFile.SecretTools secret_tools
+
 # ---- hooks — Claude Code hook entries: command lines and types
 hooks.hookCommand.Command command
 hooks.hookCommand.Type type
