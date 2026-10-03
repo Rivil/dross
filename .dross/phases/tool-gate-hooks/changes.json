@@ -2,5 +2,292 @@
   "phase": "tool-gate-hooks",
   "base": "milestone/v1.7",
   "base_commit": "92bee9d6d664999e6bbbe5a52b733ab217a61d05",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/shellscan/scan.go",
+        "internal/shellscan/scan_test.go"
+      ],
+      "commit": "93b427d",
+      "completed_at": "2026-10-03T08:19:30.617976Z",
+      "landmarks": [
+        {
+          "feature": "tool gate shell scanning",
+          "symbol": "shellscan.Scan",
+          "loc": "internal/shellscan/scan.go:234",
+          "what": "lenient Bash-line scanner: chained commands, prefix stripping, cd/git -C dirs, heredoc-safe substitutions, final fd1/fd2 destinations, Partial on unreadable input"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/gate/commit.go",
+        "internal/gate/commit_test.go"
+      ],
+      "commit": "f0a4173",
+      "completed_at": "2026-10-03T09:23:15.539073Z",
+      "landmarks": [
+        {
+          "feature": "commit green gate",
+          "symbol": "judgeCandidate",
+          "loc": "internal/gate/commit.go:179",
+          "what": "commit-green admits a git commit (cd/-C tracked, chained git adds replayed, -a honoured) only when its candidate tree equals the recorded full green; .dross-only commits and repos with no tests pass; unjudgeable forms and unpredictable predecessors refuse; a diverged candidate names the paths to stage or clean"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/gate.go",
+        "internal/cmd/gate_test.go",
+        "internal/cmd/telemetry.go",
+        "cmd/dross/main.go",
+        "cmd/dross/main_test.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "a7013f1",
+      "completed_at": "2026-10-03T09:26:29.730646Z",
+      "landmarks": [
+        {
+          "feature": "tool-call gates",
+          "symbol": "gateCheck",
+          "loc": "internal/cmd/gate.go:51",
+          "what": "dross gate check (PreToolUse: exit 2 with the refusal printed once, silent exit 0 on allow, any non-verdict failure incl. panics is exit 0 + one warning) and dross gate record (PostToolUse, never blocks); both skip telemetry"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/cmd/execute.go",
+        "internal/cmd/execute_test.go",
+        "cmd/dross/main.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "5107b7b",
+      "completed_at": "2026-10-03T09:29:46.699603Z",
+      "landmarks": [
+        {
+          "feature": "pair approval gate",
+          "symbol": "executeBegin",
+          "loc": "internal/cmd/execute.go:30",
+          "what": "dross execute begin \u003cphase\u003e [--solo] records the run's mode in .dross/gate/execute.json (only after the phase has a plan.toml); a same-mode re-run leaves it byte-identical and state.json is never touched"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/gate/override.go",
+        "internal/gate/override_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/secretscan/writers.go"
+      ],
+      "commit": "328f674",
+      "completed_at": "2026-10-03T09:32:35.172592Z",
+      "landmarks": [
+        {
+          "feature": "gate overrides",
+          "symbol": "LiftedBy",
+          "loc": "internal/gate/override.go:145",
+          "what": "~/.claude/dross/gate-overrides.json holds human lifts (workflow gates per repo key, secret gates machine-wide) with expiry, written atomically, corrupt lifts nothing; tamper-guard (unliftable, always-on) refuses tool writes to .dross/gate records and the store via file tools, redirects, tee, cp, mv"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "internal/hooks/settings.go",
+        "internal/cmd/hooks.go",
+        "internal/cmd/hooks_test.go",
+        "internal/cmd/init_test.go"
+      ],
+      "commit": "7c75b22",
+      "completed_at": "2026-10-03T09:35:55.179576Z",
+      "landmarks": [
+        {
+          "feature": "tool-call gates",
+          "symbol": "ensureUserHooks",
+          "loc": "internal/cmd/hooks.go:68",
+          "what": "dross hooks ensure / init / onboard idempotently wire matcher-less PreToolUse (dross gate check) and PostToolUse (dross gate record) beside PreCompact/SessionStart via MergeHook, writing settings.json atomically with its mode kept (0600 when new)"
+        }
+      ]
+    },
+    "t-18": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_hooks_test.go",
+        "internal/cmd/cmd_test.go",
+        "internal/cmd/testdata/cli_surface/doctor_run.txt"
+      ],
+      "commit": "62ba669",
+      "completed_at": "2026-10-03T09:39:15.954378Z",
+      "landmarks": [
+        {
+          "feature": "doctor health checks",
+          "symbol": "hooksSection",
+          "loc": "internal/cmd/doctor.go:1124",
+          "what": "doctor Hooks section over the effective user settings.json: a missing gate hook, a gate command only under a matcher, disableAllHooks or an unreadable file is an issue (non-zero exit); missing PreCompact/SessionStart only warns"
+        }
+      ]
+    },
+    "t-19": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/lane_plan.go",
+        "internal/cmd/test_full_lanes_test.go",
+        "README.md"
+      ],
+      "commit": "ab5930c",
+      "completed_at": "2026-10-03T09:05:16.470212Z",
+      "landmarks": [
+        {
+          "feature": "test lanes",
+          "symbol": "fullLanePlan",
+          "loc": "internal/cmd/lane_plan.go:230",
+          "what": "a bare dross test in a lanes-only repo (no runtime.test_command) runs every declared lane unscoped through runPlannedLanes — per-lane grant, prepare, toolchain, locality, worst-wins — instead of refusing at the whole-suite consent gate"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/gitrun/gitrun.go",
+        "internal/gitrun/gitrun_test.go",
+        "internal/treefp/treefp.go",
+        "internal/treefp/treefp_test.go",
+        "internal/secretscan/writers.go"
+      ],
+      "commit": "798fa56",
+      "completed_at": "2026-10-03T08:34:47.047039Z",
+      "landmarks": [
+        {
+          "feature": "commit tree fingerprinting",
+          "symbol": "treefp.Candidate",
+          "loc": "internal/treefp/treefp.go:72",
+          "what": "tree-object fingerprints from a scratch byte copy of the git index (GIT_INDEX_FILE): WorkingTree as git add -A would stage, Candidate with earlier git adds and -a replayed, .dross/ excluded; real index never touched"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/gate/engine.go",
+        "internal/gate/payload.go",
+        "internal/gate/lists.go",
+        "internal/gate/engine_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "387e245",
+      "completed_at": "2026-10-03T08:46:02.386543Z",
+      "landmarks": [
+        {
+          "feature": "tool-call gates",
+          "symbol": "gate.Check",
+          "loc": "internal/gate/engine.go:359",
+          "what": "hook-payload gate engine: registered gates (always-on vs workflow scope, liftable, list-extensible) judged with per-gate panic recovery, closed in-domain, unparseable payload allowed with a warning; read-only dross root locator; defaults unioned with additive gates.toml"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/gatestate/store.go",
+        "internal/gatestate/store_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/secretscan/writers.go",
+        "internal/secretscan/writers_test.go",
+        "internal/cmd/secretscan_writer_enum_test.go"
+      ],
+      "commit": "d0a01bc",
+      "completed_at": "2026-10-03T08:52:43.799167Z",
+      "landmarks": [
+        {
+          "feature": "tool-call gates",
+          "symbol": "gatestate.save",
+          "loc": "internal/gatestate/store.go:174",
+          "what": "machine-local .dross/gate/ records (green tree, execute mode, task approval) behind a self-ignoring .gitignore; atomic temp+rename writes; corrupt = error naming the path; a git-tracked record refused unread"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "assets/prompts/ship.md",
+        "assets/prompts/init.md",
+        "internal/cmd/ship_prompt_test.go",
+        "internal/cmd/prompt_test_command_test.go"
+      ],
+      "commit": "1b62219",
+      "completed_at": "2026-10-03T08:58:28.058947Z",
+      "landmarks": [
+        {
+          "feature": "commit green gate",
+          "symbol": "ship.md §3.5",
+          "loc": "assets/prompts/ship.md:102",
+          "what": "ship's ARCHITECTURE.md commit and init's initial commit run a bare dross test first so the commit gate sees a recorded green; no prompt tells the agent to lift a gate (TestNoPromptTellsAgentToLiftGate)"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "assets/prompts/resume.md",
+        "assets/prompts/pause.md",
+        "internal/cmd/resume_prompt_test.go",
+        "internal/cmd/pause_prompt_test.go"
+      ],
+      "commit": "0160e37",
+      "completed_at": "2026-10-03T09:01:22.911459Z",
+      "landmarks": [
+        {
+          "feature": "handoff lifecycle",
+          "symbol": "resume.md §2 Prune",
+          "loc": "assets/prompts/resume.md:44",
+          "what": "resume prunes handoff.md in place with Edit and pause creates it with Write but updates an existing one with Edit, so neither routine flow trips the curated-shrink gate"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/gate/secrets.go",
+        "internal/gate/secrets_test.go",
+        "internal/gate/selfguard.go",
+        "internal/gate/selfguard_test.go"
+      ],
+      "commit": "5ad4995",
+      "completed_at": "2026-10-03T09:12:41.633647Z",
+      "landmarks": [
+        {
+          "feature": "secret guards",
+          "symbol": "judgeSecretStream",
+          "loc": "internal/gate/secrets.go:73",
+          "what": "always-on secret-stream refuses a secret-emitting tool unless stdout and stderr both leave the transcript; secret-read refuses Read or cat/head/tail/less/sed of secret path patterns (env templates exempt); gate-off-guard (unliftable) refuses dross gate off/check/record through the agent's Bash"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/gate/drossfiles.go",
+        "internal/gate/drossfiles_test.go"
+      ],
+      "commit": "0818043",
+      "completed_at": "2026-10-03T09:15:20.834941Z",
+      "landmarks": [
+        {
+          "feature": "dross file gates",
+          "symbol": "judgePlanEdit",
+          "loc": "internal/gate/drossfiles.go:100",
+          "what": "workflow gates: plan-edit refuses Edit/MultiEdit of an existing plan.toml (dross task add/edit/move/remove) and a Write over one once any task left pending; curated-shrink refuses a Write cutting a curated .dross file below half its size (use Edit)"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_green_test.go"
+      ],
+      "commit": "46d1220",
+      "completed_at": "2026-10-03T09:19:31.998519Z",
+      "landmarks": [
+        {
+          "feature": "commit green gate",
+          "symbol": "greenRecorder.finish",
+          "loc": "internal/cmd/test.go:1172",
+          "what": "a full dross test (bare test_command, lanes-only every-lane, or lane-less --files) fingerprints the tree before and after and records .dross/gate/green.json only for an unchanged green tree; red on that tree clears it, never-ran exits leave it, recorder failures only warn"
+        }
+      ]
+    }
+  }
 }

@@ -110,3 +110,9 @@
   text = "dross doctor's Hooks section reads only user-level settings.json; a project-level .claude/settings.json or settings.local.json with \"disableAllHooks\": true still shows ✓ for every gate hook"
   why = "plan review round 1 (REVIEW.md spec-level note): the gates can be silently disabled per-repo while doctor reports them wired"
   target = "tool-gate-hooks"
+
+[[deferred]]
+  id = "3a9ffbbca3428cab"
+  text = "Stale hook wording after t-17: `dross hooks ensure` Short still says 'PreCompact + SessionStart', and init/onboard print 'Ensured user-level Claude hooks (PreCompact …, SessionStart …)' though both now also wire the PreToolUse/PostToolUse gate pair"
+  why = "found during t-17; the fix touches cmd/dross/testdata/cli_tree.txt, init.go and onboard.go, none in t-17's file list, so it was left out rather than widen the task"
+  target = "tool-gate-hooks"

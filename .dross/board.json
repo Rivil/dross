@@ -167,6 +167,7 @@
     "someday:id:34aff0971055b27c": "DRO-518",
     "someday:id:3701d0add3074097": "DRO-91",
     "someday:id:3a0d7d3147d7b585": "DRO-115",
+    "someday:id:3a9ffbbca3428cab": "DRO-806",
     "someday:id:3d561e984ebf0d4e": "DRO-686",
     "someday:id:3d7fab45c3b0a674": "DRO-739",
     "someday:id:3d97976a9b813c12": "DRO-69",
@@ -1992,6 +1993,91 @@
       "issue": "DRO-200",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "tool-gate-hooks/t-1": {
+      "issue": "DRO-789",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-10": {
+      "issue": "DRO-800",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-12": {
+      "issue": "DRO-801",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-13": {
+      "issue": "DRO-802",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-14": {
+      "issue": "DRO-803",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-17": {
+      "issue": "DRO-804",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-18": {
+      "issue": "DRO-805",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-19": {
+      "issue": "DRO-795",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-2": {
+      "issue": "DRO-790",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-20": {
+      "issue": "DRO-796",
+      "plan_status": "failed",
+      "board_state": "task-in-progress"
+    },
+    "tool-gate-hooks/t-3": {
+      "issue": "DRO-791",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-4": {
+      "issue": "DRO-792",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-5": {
+      "issue": "DRO-793",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-6": {
+      "issue": "DRO-794",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-7": {
+      "issue": "DRO-797",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-8": {
+      "issue": "DRO-798",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-9": {
+      "issue": "DRO-799",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "tool-output-not-persisted/t-1": {
       "issue": "DRO-379",
