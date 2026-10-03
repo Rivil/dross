@@ -20,16 +20,20 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/gatestate"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/testlane"
+	"github.com/Rivil/dross/internal/treefp"
 )
 
 // Exit codes. They are a contract, not an implementation detail: a caller
@@ -289,15 +293,24 @@ func Test() *cobra.Command {
 			// tree. Where test_command is set the bare run below is untouched
 			// (locked bare_test_run): it already is the whole suite.
 			if len(files) == 0 && len(args) == 0 && strings.TrimSpace(proj.Runtime.TestCommand) == "" && len(proj.Runtime.TestLane) > 0 {
-				return runPlannedLanes(root, repoDir, proj, fullLanePlan(proj), local, wait)
+				green := startGreen(repoDir, true)
+				err := runPlannedLanes(root, repoDir, proj, fullLanePlan(proj), local, wait, green.sites)
+				green.finish(err)
+				return err
 			}
 			// Before any spawn: a refusal that had already run the suite would
 			// have done the thing it was refusing to authorize.
 			if err := requireExecConsent(); err != nil {
 				return err
 			}
+			// Selector-free, this is the whole suite (bare_test_run) — and in
+			// a lane-less repo --files changes nothing about the line, so it
+			// is the whole suite too. Only those runs vouch for a tree.
+			green := startGreen(repoDir, len(args) == 0)
 			line := testCommandLine(proj.Runtime.TestCommand, args)
-			return runTest(root, repoDir, proj.Project.Name, line, local, wait)
+			err = runTest(root, repoDir, proj.Project.Name, line, local, wait, green.sites)
+			green.finish(err)
+			return err
 		},
 	}
 	c.Flags().BoolVar(&local, "local", false, "run on this machine even when a remote is granted")
@@ -374,13 +387,13 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	if len(plan.Unmatched) > 0 {
 		Printf("no lane matches: %s\n", strings.Join(plan.Unmatched, " "))
 	}
-	return runPlannedLanes(root, repoDir, proj, plan.Lanes, local, wait)
+	return runPlannedLanes(root, repoDir, proj, plan.Lanes, local, wait, nil)
 }
 
 // runPlannedLanes runs a set of planned lanes — the ones a --files set hit, or
 // every lane unscoped for a lanes-only repo's bare run — each through its own
 // grant, prepare, toolchain and locality path, and reports the worst outcome.
-func runPlannedLanes(root, repoDir string, proj *project.Project, lanes []plannedLane, local bool, wait time.Duration) error {
+func runPlannedLanes(root, repoDir string, proj *project.Project, lanes []plannedLane, local bool, wait time.Duration, sites ranOn) error {
 	// The fence ran inside the planner, over every lane, before any line was
 	// derived. Its verdicts are read here in declaration order and the first
 	// one refuses the whole run — which is exactly the property an in-loop
@@ -589,6 +602,7 @@ func runPlannedLanes(root, repoDir string, proj *project.Project, lanes []planne
 			}
 		}
 		Printf("lane %s: %s\n", pl.lane.Name, pl.Line)
+		sites.add(laneTarget)
 		err := runOneLane(laneTarget, repoDir, pl.lane, pl.Line)
 		if code, miss := selectorMissCode(err, pl.lane.EmptyExit); miss {
 			Printf("selector miss: lane %q collected no tests for %s (exit %d)\n",
@@ -819,7 +833,7 @@ func resolveTestTarget(root, repoDir string, local bool, tools []string) (*remot
 }
 
 // runTest executes one test run, here or on the granted host.
-func runTest(root, repoDir, projectName, line string, local bool, wait time.Duration) error {
+func runTest(root, repoDir, projectName, line string, local bool, wait time.Duration, sites ranOn) error {
 	// nil tools: a whole-suite run has no lanes to derive a toolchain from, so
 	// the probe asks exactly what it asked before this feature existed and the
 	// lane-less transcript is unchanged.
@@ -827,6 +841,7 @@ func runTest(root, repoDir, projectName, line string, local bool, wait time.Dura
 	if err != nil {
 		return err
 	}
+	sites.add(target)
 	if target == nil {
 		if err := spawnLocal(repoDir, line, os.Stdout, os.Stderr); err != nil {
 			return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test suite failed: %w", err)}
@@ -1083,4 +1098,112 @@ func remoteFailure(bin, host string, err error) error {
 	// The local binary is missing or could not start: nothing ran on the
 	// remote, which is a transport failure by any useful definition.
 	return &ExitCodeError{Code: exitTransport, Err: fmt.Errorf("could not reach %s: remote %s did not start: %w: %v", host, bin, remote.ErrTransport, err)}
+}
+
+// ranOn collects the machines a run spawned its suite on, for the green
+// record: "local", or a granted host's name. A nil set collects nothing.
+type ranOn map[string]bool
+
+func (r ranOn) add(t *remote.Target) {
+	if r == nil {
+		return
+	}
+	if t == nil {
+		r["local"] = true
+		return
+	}
+	r[t.Host] = true
+}
+
+func (r ranOn) String() string {
+	names := make([]string, 0, len(r))
+	for n := range r {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ",")
+}
+
+// greenStderr is where the green recorder's notes go; a test swaps it.
+var greenStderr io.Writer = os.Stderr
+
+// greenRecorder writes .dross/gate/green.json for a full run — the record the
+// commit gate admits a commit against (green_run_definition). It fingerprints
+// the tree before the suite spawns and again after a green: a tree that moved
+// during the run was not the tree that went green, so nothing is recorded and
+// one line names what moved — a suite that writes an untracked file would
+// otherwise send the agent back to `dross test` forever. A red full run on the
+// recorded tree clears the record; a run that never happened (exit 3–8, a
+// refusal) leaves it, since it measured nothing either way.
+//
+// It never changes the run's outcome: a recorder failure is one warning.
+type greenRecorder struct {
+	repoDir string
+	before  string
+	sites   ranOn
+	active  bool
+}
+
+// startGreen fingerprints the tree when the run about to start is a full one.
+// Outside a git work tree there is nothing a commit could be judged against,
+// so it records nothing and says nothing.
+func startGreen(repoDir string, full bool) *greenRecorder {
+	r := &greenRecorder{repoDir: repoDir}
+	if !full {
+		return r
+	}
+	if out, err := gitrun.Trim(repoDir, "rev-parse", "--is-inside-work-tree"); err != nil || out != "true" {
+		return r
+	}
+	tree, err := treefp.WorkingTree(repoDir)
+	if err != nil {
+		r.warn(err)
+		return r
+	}
+	r.before, r.sites, r.active = tree, ranOn{}, true
+	return r
+}
+
+func (r *greenRecorder) warn(err error) {
+	fmt.Fprintf(greenStderr, "warning: dross test could not record this run for the commit gate: %v\n", err)
+}
+
+// finish records the run's verdict against the tree it measured.
+func (r *greenRecorder) finish(runErr error) {
+	if !r.active {
+		return
+	}
+	var ec *ExitCodeError
+	switch {
+	case runErr == nil:
+		after, err := treefp.WorkingTree(r.repoDir)
+		if err != nil {
+			r.warn(err)
+			return
+		}
+		if after != r.before {
+			paths, err := treefp.Diff(r.repoDir, r.before, after)
+			if err != nil {
+				r.warn(err)
+				return
+			}
+			fmt.Fprintf(greenStderr, "dross test: green, but not recorded for the commit gate — these paths changed while the suite ran: %s\n",
+				strings.Join(paths, " "))
+			return
+		}
+		if err := gatestate.SaveGreen(r.repoDir, gatestate.Green{Tree: after, At: time.Now().UTC(), Runner: r.sites.String()}); err != nil {
+			r.warn(err)
+		}
+	case errors.As(runErr, &ec) && ec.Code == exitSuiteFailed:
+		g, err := gatestate.LoadGreen(r.repoDir)
+		if err != nil {
+			r.warn(err)
+			return
+		}
+		if g != nil && g.Tree == r.before {
+			if err := gatestate.ClearGreen(r.repoDir); err != nil {
+				r.warn(err)
+			}
+		}
+	}
 }
