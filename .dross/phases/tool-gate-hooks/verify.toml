@@ -1,371 +1,107 @@
 [verify]
   phase = "tool-gate-hooks"
-  generated_at = 2026-10-03T13:13:17.714112Z
-  verdict = "fail"
+  generated_at = 2026-10-03T18:55:39.296307Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-10-03T13:14:37.44365Z
+  finalized_at = 2026-10-03T18:57:30.083033Z
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.8586601307189542
-  mutants_killed = 1051
-  mutants_survived = 173
-  mutants_not_covered = 173
+  mutation_score = 0.9006259780907668
+  mutants_killed = 1151
+  mutants_survived = 127
+  mutants_not_covered = 127
   mutants_no_block = 116
-  mutants_test_gap = 57
-  mutants_in_scope = 1224
-  unclassified_in_scope = 62
+  mutants_test_gap = 11
+  mutants_in_scope = 1278
+  unclassified_in_scope = 0
   criteria_total = 9
-  criteria_covered = 7
-  criteria_uncovered = 2
+  criteria_covered = 9
+  criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 1051
-    survived = 173
+    killed = 1151
+    survived = 127
     timeout = 0
-    in_scope = 1224
-    score = 0.8586601307189542
-    file_count = 55
+    in_scope = 1278
+    score = 0.9006259780907668
+    file_count = 57
     measured_on = "helicon"
-    whole_file = ["cmd/dross/gate_remedy_test.go — adapter-lacks-range-runner", "cmd/dross/main.go — adapter-lacks-range-runner", "cmd/dross/main_test.go — adapter-lacks-range-runner", "internal/cmd/cmd_test.go — adapter-lacks-range-runner", "internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/doctor_hooks_test.go — adapter-lacks-range-runner", "internal/cmd/execute.go — adapter-lacks-range-runner", "internal/cmd/execute_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/execute_test.go — adapter-lacks-range-runner", "internal/cmd/gate.go — adapter-lacks-range-runner", "internal/cmd/gate_override_test.go — adapter-lacks-range-runner", "internal/cmd/gate_test.go — adapter-lacks-range-runner", "internal/cmd/hooks.go — adapter-lacks-range-runner", "internal/cmd/hooks_test.go — adapter-lacks-range-runner", "internal/cmd/incompleteroot_test.go — adapter-lacks-range-runner", "internal/cmd/init_test.go — adapter-lacks-range-runner", "internal/cmd/lane_plan.go — adapter-lacks-range-runner", "internal/cmd/pause_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/prompt_commit_gate_test.go — adapter-lacks-range-runner", "internal/cmd/prompt_test_command_test.go — adapter-lacks-range-runner", "internal/cmd/resume_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/secretscan_writer_enum_test.go — adapter-lacks-range-runner", "internal/cmd/ship_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/telemetry.go — adapter-lacks-range-runner", "internal/cmd/test.go — adapter-lacks-range-runner", "internal/cmd/test_full_lanes_test.go — adapter-lacks-range-runner", "internal/cmd/test_green_test.go — adapter-lacks-range-runner", "internal/gate/commit.go — adapter-lacks-range-runner", "internal/gate/commit_test.go — adapter-lacks-range-runner", "internal/gate/drossfiles.go — adapter-lacks-range-runner", "internal/gate/drossfiles_test.go — adapter-lacks-range-runner", "internal/gate/engine.go — adapter-lacks-range-runner", "internal/gate/engine_test.go — adapter-lacks-range-runner", "internal/gate/fixture_test.go — adapter-lacks-range-runner", "internal/gate/lists.go — adapter-lacks-range-runner", "internal/gate/override.go — adapter-lacks-range-runner", "internal/gate/override_test.go — adapter-lacks-range-runner", "internal/gate/pair.go — adapter-lacks-range-runner", "internal/gate/pair_test.go — adapter-lacks-range-runner", "internal/gate/payload.go — adapter-lacks-range-runner", "internal/gate/secrets.go — adapter-lacks-range-runner", "internal/gate/secrets_test.go — adapter-lacks-range-runner", "internal/gate/selfguard.go — adapter-lacks-range-runner", "internal/gate/selfguard_test.go — adapter-lacks-range-runner", "internal/gatestate/store.go — adapter-lacks-range-runner", "internal/gatestate/store_test.go — adapter-lacks-range-runner", "internal/gitrun/gitrun.go — adapter-lacks-range-runner", "internal/gitrun/gitrun_test.go — adapter-lacks-range-runner", "internal/hooks/settings.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/secretscan/writers_test.go — adapter-lacks-range-runner", "internal/shellscan/scan.go — adapter-lacks-range-runner", "internal/shellscan/scan_test.go — adapter-lacks-range-runner", "internal/treefp/treefp.go — adapter-lacks-range-runner", "internal/treefp/treefp_test.go — adapter-lacks-range-runner"]
+    whole_file = ["cmd/dross/gate_remedy_test.go — adapter-lacks-range-runner", "cmd/dross/main.go — adapter-lacks-range-runner", "cmd/dross/main_test.go — adapter-lacks-range-runner", "internal/cmd/cmd_test.go — adapter-lacks-range-runner", "internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/doctor_hooks_test.go — adapter-lacks-range-runner", "internal/cmd/execute.go — adapter-lacks-range-runner", "internal/cmd/execute_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/execute_test.go — adapter-lacks-range-runner", "internal/cmd/gate.go — adapter-lacks-range-runner", "internal/cmd/gate_override_test.go — adapter-lacks-range-runner", "internal/cmd/gate_test.go — adapter-lacks-range-runner", "internal/cmd/hooks.go — adapter-lacks-range-runner", "internal/cmd/hooks_test.go — adapter-lacks-range-runner", "internal/cmd/incompleteroot_test.go — adapter-lacks-range-runner", "internal/cmd/init.go — adapter-lacks-range-runner", "internal/cmd/init_test.go — adapter-lacks-range-runner", "internal/cmd/lane_plan.go — adapter-lacks-range-runner", "internal/cmd/onboard.go — adapter-lacks-range-runner", "internal/cmd/pause_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/prompt_commit_gate_test.go — adapter-lacks-range-runner", "internal/cmd/prompt_test_command_test.go — adapter-lacks-range-runner", "internal/cmd/resume_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/secretscan_writer_enum_test.go — adapter-lacks-range-runner", "internal/cmd/ship_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/telemetry.go — adapter-lacks-range-runner", "internal/cmd/test.go — adapter-lacks-range-runner", "internal/cmd/test_full_lanes_test.go — adapter-lacks-range-runner", "internal/cmd/test_green_test.go — adapter-lacks-range-runner", "internal/gate/commit.go — adapter-lacks-range-runner", "internal/gate/commit_test.go — adapter-lacks-range-runner", "internal/gate/drossfiles.go — adapter-lacks-range-runner", "internal/gate/drossfiles_test.go — adapter-lacks-range-runner", "internal/gate/engine.go — adapter-lacks-range-runner", "internal/gate/engine_test.go — adapter-lacks-range-runner", "internal/gate/fixture_test.go — adapter-lacks-range-runner", "internal/gate/lists.go — adapter-lacks-range-runner", "internal/gate/override.go — adapter-lacks-range-runner", "internal/gate/override_test.go — adapter-lacks-range-runner", "internal/gate/pair.go — adapter-lacks-range-runner", "internal/gate/pair_test.go — adapter-lacks-range-runner", "internal/gate/payload.go — adapter-lacks-range-runner", "internal/gate/secrets.go — adapter-lacks-range-runner", "internal/gate/secrets_test.go — adapter-lacks-range-runner", "internal/gate/selfguard.go — adapter-lacks-range-runner", "internal/gate/selfguard_test.go — adapter-lacks-range-runner", "internal/gatestate/store.go — adapter-lacks-range-runner", "internal/gatestate/store_test.go — adapter-lacks-range-runner", "internal/gitrun/gitrun.go — adapter-lacks-range-runner", "internal/gitrun/gitrun_test.go — adapter-lacks-range-runner", "internal/hooks/settings.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/secretscan/writers_test.go — adapter-lacks-range-runner", "internal/shellscan/scan.go — adapter-lacks-range-runner", "internal/shellscan/scan_test.go — adapter-lacks-range-runner", "internal/treefp/treefp.go — adapter-lacks-range-runner", "internal/treefp/treefp_test.go — adapter-lacks-range-runner"]
 
 [[criterion]]
   id = "c-1"
   status = "covered"
-  tests = ["internal/cmd/hooks_test.go:TestEnsureUserHooksWiresGates", "internal/cmd/hooks_test.go:TestEnsureUserHooksUpgradesTwoHookInstall", "internal/cmd/hooks_test.go:TestEnsureUserHooksKeepsForeignGateHooks", "internal/cmd/init_test.go:TestInitEnsuresHooksIdempotent", "internal/cmd/onboard_test.go:TestOnboardEnsuresSameHooks", "internal/hooks/settings_test.go:TestMergeHookPreservesForeign"]
-  notes = "All four events asserted with exact commands; re-run compared as full bytes + unchanged mtime; init pins the gate pair, onboard byte-identical to init. Foreign survival is asserted field-wise (matcher/command/position), not byte-verbatim — MergeHook does keep foreign groups as raw bytes."
+  tests = ["internal/cmd/hooks_test.go:TestEnsureUserHooksWiresGates", "internal/cmd/hooks_test.go:TestEnsureUserHooksUpgradesTwoHookInstall", "internal/cmd/hooks_test.go:TestEnsureUserHooksKeepsForeignGateHooks", "internal/cmd/hooks_test.go:TestHookWordingNamesAllFour", "internal/cmd/init_test.go:TestInitEnsuresHooksIdempotent", "internal/cmd/onboard_test.go:TestOnboardEnsuresSameHooks", "internal/hooks/settings_test.go:TestMergeHookPreservesForeign"]
+  notes = "All four events asserted with exact commands; re-run compared as full bytes + unchanged mtime; onboard byte-identical to init. Amendment t-23: TestHookWordingNamesAllFour pins userHooks order and that `hooks ensure` Short and init/onboard's ensured-hooks line name every event → command (closes deferred 3a9ffbbca3428cab). Foreign survival asserted field-wise, not byte-verbatim."
 
 [[criterion]]
   id = "c-2"
   status = "covered"
   tests = ["internal/cmd/gate_test.go:TestGateCheckRefusalExitsTwo", "internal/cmd/gate_test.go:TestGateCheckSilentAllow", "internal/cmd/gate_test.go:TestGateCheckUnparseablePayload", "cmd/dross/main_test.go:TestMainEntryPoint('a gate refusal exits 2 with the refusal printed once')", "internal/gate/engine_test.go:TestRefusalShape", "internal/gate/engine_test.go:TestClosedPosture", "internal/gate/engine_test.go:TestUnparseablePayloadAllows"]
-  notes = "Real-process exit 2 + rule name + exactly one 'Use:' remedy; allow asserted silent (empty stdout+stderr, nil err); closed in-domain and unparseable-passes both pinned. Process test reads CombinedOutput, so stderr-vs-stdout routing is not separately pinned (main.go:110 is the shared error path)."
+  notes = "Real-process exit 2 + rule name + exactly one 'Use:' remedy; allow asserted silent. Amendment t-21: the process test now splits streams (stderrOnly) — stdout must be empty and the refusal must be on stderr, closing the prior CombinedOutput NOTE."
 
 [[criterion]]
   id = "c-3"
   status = "covered"
   tests = ["internal/gate/drossfiles_test.go:TestPlanEdit", "internal/gate/drossfiles_test.go:TestPlanOverwrite", "internal/gate/drossfiles_test.go:TestPlanPathNormalisation", "internal/gate/drossfiles_test.go:TestDrossFilesScope"]
-  notes = "Edit/MultiEdit refused naming plan-edit + `dross task edit`; fresh Write allowed; plan_overwrite pending/non-pending both directions; outside-repo allowed. Remedy asserted only for `edit` though the message names all four verbs."
+  notes = "Edit/MultiEdit refused naming plan-edit + `dross task edit`; fresh Write allowed; plan_overwrite pending/non-pending both directions; outside-repo allowed. Unchanged since last verify; no surviving mutant in drossfiles.go."
 
 [[criterion]]
   id = "c-4"
-  status = "weak"
-  tests = ["internal/gate/commit_test.go:TestCommitUngated", "internal/gate/commit_test.go:TestCommitGreenMatch", "internal/gate/commit_test.go:TestCommitNoTestsCarveOut", "internal/gate/commit_test.go:TestCommitDir", "internal/gate/commit_test.go:TestCommitClosedPosture", "internal/cmd/test_green_test.go:TestPartialRunsRecordNothing", "internal/cmd/test_green_test.go:TestFullRunSourceRecords", "internal/cmd/test_green_test.go:TestGreenMatchesCandidate", "internal/cmd/test_full_lanes_test.go:TestBareLanesOnlyRunsEveryLane"]
-  notes = "Core refuse/admit/stale-green/no-test carve-out pinned. Weak: no test stages a .dross/ file together with a code file, so onlyDross 'all paths' → 'any path' survives every test; the `--all` arm (commit.go:86) never runs in any test; `;`/`|` chains and env-var prefixes are exercised only in the scanner/claims check, never through the admit/refuse decision."
+  status = "covered"
+  tests = ["internal/gate/commit_test.go:TestCommitGreenMatch", "internal/gate/commit_test.go:TestCommitUngated", "internal/gate/commit_test.go:TestCommitMixedDrossAndCode", "internal/gate/commit_test.go:TestCommitLongAll", "internal/gate/commit_test.go:TestCommitNoTestsCarveOut", "internal/gate/commit_test.go:TestCommitDir", "internal/gate/commit_test.go:TestCommitClaims", "internal/gate/commit_test.go:TestCommitClosedPosture", "internal/cmd/test_green_test.go:TestPartialRunsRecordNothing", "internal/cmd/test_green_test.go:TestFullRunSourceRecords", "internal/cmd/test_green_test.go:TestGreenMatchesCandidate", "internal/cmd/test_full_lanes_test.go:TestBareLanesOnlyRunsEveryLane"]
+  notes = "Previously weak — both gaps closed by t-21: TestCommitMixedDrossAndCode stages a .dross file beside a code file with no green and requires a refusal (kills onlyDross all→any); TestCommitLongAll drives the `--all` arm both ways. Stale green refusal names raw `go test` as not counting. `;` chains and env-var prefixes reach the decision only via TestCommitClaims + shellscan's list split (see NOTE)."
 
 [[criterion]]
   id = "c-5"
-  status = "weak"
-  tests = ["internal/gate/pair_test.go:TestPairGateArmed", "internal/gate/pair_test.go:TestPairApprovalLife", "internal/gate/pair_test.go:TestPairApprovalSignal", "internal/gate/pair_test.go:TestPairGateSilent", "internal/gate/pair_test.go:TestPairGateSoloDowngrade", "internal/gate/fixture_test.go:TestCapturedAskUserQuestionFixture", "internal/cmd/execute_test.go:TestExecuteBeginRecordsMode", "internal/cmd/execute_prompt_test.go:TestExecutePromptOffersApproveLabel"]
-  notes = "Armed refusal, approval unlock, commit-spends-approval, exact-label-only, solo silence and the real captured payload all pinned. Weak: in-hunk survivors pair.go:87-88 (partial-scan fallback detecting `dross execute begin --solo`) and pair.go:248 (unborn-HEAD branch of headOf) — neither block runs in any test."
+  status = "covered"
+  tests = ["internal/gate/pair_test.go:TestPairGateArmed", "internal/gate/pair_test.go:TestPairApprovalLife", "internal/gate/pair_test.go:TestPairApprovalSignal", "internal/gate/pair_test.go:TestPairGateSilent", "internal/gate/pair_test.go:TestPairGateSoloDowngrade", "internal/gate/pair_test.go:TestPairSoloDowngradePartial", "internal/gate/pair_test.go:TestPairUnbornHead", "internal/gate/fixture_test.go:TestCapturedAskUserQuestionFixture", "internal/cmd/execute_test.go:TestExecuteBeginRecordsMode", "internal/cmd/execute_prompt_test.go:TestExecutePromptOffersApproveLabel"]
+  notes = "Previously weak — closed by t-21: TestPairSoloDowngradePartial drives the raw-token `--solo` fallback (pair.go:87-88) incl. lines ending mid-match; TestPairUnbornHead drives headOf's unborn-HEAD branch (pair.go:248) through refuse → record → allow. Those survivors are now killed; remaining pair.go survivors (72, 132, 133) are accepted switch-case attribution ceiling."
 
 [[criterion]]
   id = "c-6"
   status = "covered"
-  tests = ["internal/gate/secrets_test.go:TestSecretStreamRefuses", "internal/gate/secrets_test.go:TestSecretStreamAllows", "internal/gate/secrets_test.go:TestSecretGuardsFireEverywhere", "internal/gate/secrets_test.go:TestSecretToolsExtension", "internal/gate/engine_test.go:TestListsAreAdditive"]
-  notes = "Every listed shape (pipe, open stdout, open stderr, 2>&1 into open stdout, |&) refuses; >f 2>/dev/null, >f 2>f2, &>f allow; non-secret tools pass; fires outside a dross repo. shellscan survivors on OffTranscript (scan.go:63) and /dev/fd/N (scan.go:409) survive only because gremlins runs package-local tests — the gate-level allow/refuse tables would flip on an OffTranscript negation."
+  tests = ["internal/gate/secrets_test.go:TestSecretStreamRefuses", "internal/gate/secrets_test.go:TestSecretStreamAllows", "internal/gate/secrets_test.go:TestSecretGuardsFireEverywhere", "internal/gate/secrets_test.go:TestSecretToolsExtension", "internal/gate/engine_test.go:TestListsAreAdditive", "internal/shellscan/scan_test.go"]
+  notes = "Every listed shape (pipe, open stdout, open stderr, 2>&1 into open stdout, |&) refuses; >f 2>/dev/null, >f 2>f2, &>f allow; non-secret tools pass; fires outside a dross repo. t-22 added package-local shellscan tests so the OffTranscript (scan.go:63) and /dev/fd/N (scan.go:409) survivors are now killed."
 
 [[criterion]]
   id = "c-7"
   status = "covered"
   tests = ["internal/gate/secrets_test.go:TestSecretReadRead", "internal/gate/secrets_test.go:TestSecretReadBash", "internal/gate/secrets_test.go:TestSecretPattern", "internal/gate/secrets_test.go:TestSecretGuardsFireEverywhere", "internal/gate/secrets_test.go:TestSecretPartialPosture"]
-  notes = "Read and each of cat/head/tail/less/sed refused; every pattern kind; .pub and all four templates exempt; source and `.` allowed; fires outside a dross repo. id_* default list is sampled (3 of 8 entries)."
+  notes = "Read and each of cat/head/tail/less/sed refused; every pattern kind; .pub and all four templates exempt; source and `.` allowed. t-21: TestSecretReadRead now walks all eight default id_* names (+ each .pub allowed), closing the sampled-list NOTE."
 
 [[criterion]]
   id = "c-8"
   status = "covered"
   tests = ["internal/gate/drossfiles_test.go:TestCuratedShrinkBoundary", "internal/gate/drossfiles_test.go:TestDrossFilesScope", "internal/gate/drossfiles_test.go:TestDrossFilesClosedPosture"]
-  notes = "Exact boundary (499 refused / 500 allowed of 1000) across all five curated kinds; Edit, growth, new-file Write and non-curated files pass."
+  notes = "Exact boundary (499 refused / 500 allowed of 1000) across all five curated kinds; Edit, growth, new-file Write and non-curated files pass. Unchanged since last verify."
 
 [[criterion]]
   id = "c-9"
   status = "covered"
-  tests = ["internal/cmd/doctor_hooks_test.go:TestDoctorGateHooks", "internal/cmd/doctor_hooks_test.go:TestDoctorMissingConvenienceHooksWarnOnly", "internal/cmd/doctor_hooks_test.go:TestDoctorReadsEffectiveSettings", "internal/cmd/cli_surface_test.go:TestDoctorRunGolden"]
-  notes = "✗ for missing gate hooks with Doctor() returning an error (→ exit 1), ✓ after ensure, ⚠ only for PreCompact/SessionStart, CLAUDE_CONFIG_DIR honoured. 'Effective' is user-level only — project-level settings are not read (deferred 40377fedfaf41cb3, still open)."
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/gate.go:265 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/gate.go:267 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/pair.go:87 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/pair.go:87 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/pair.go:87 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/pair.go:87 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/pair.go:88 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/pair.go:88 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/pair.go:88 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/pair.go:88 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/pair.go:88 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/pair.go:88 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/pair.go:248 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/selfguard.go:50 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/selfguard.go:50 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/selfguard.go:50 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/selfguard.go:50 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/selfguard.go:51 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/selfguard.go:51 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/selfguard.go:51 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/selfguard.go:51 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/selfguard.go:52 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/commit.go:86 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/engine.go:49 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:63 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:57 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:57 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:63 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:165 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:409 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:409 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:409 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:409 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:409 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:460 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:460 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:632 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:633 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:722 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:723 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:725 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:738 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:740 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:741 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:741 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:744 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:746 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:747 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:747 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:750 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:902 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:916 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:917 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:1093 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:1104 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:1166 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:1225 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:1225 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:1225 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:1225 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:1376 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/shellscan/scan.go:1411 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-4: no test stages a .dross/ file alongside a code file — onlyDross (commit.go:246) narrowing 'all' to 'any' would admit code ungated and pass every test; `git commit --all` arm (commit.go:86) never runs"
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-5: pair.go:87-88 partial-scan fallback for `dross execute begin --solo` and pair.go:248 unborn-HEAD branch never run in any test (in-hunk)"
-
-[[finding]]
-  severity = "FLAG"
-  text = "gate_override: selfguard.go:50-52 partial-scan fallback of the gate-off guard never runs — `dross gate off|check|record` hidden in syntax the scanner only partly parses is judged by untested code"
-
-[[finding]]
-  severity = "FLAG"
-  text = "deferred 3a9ffbbca3428cab still open: `dross hooks ensure` Short (internal/cmd/hooks.go:25) and init/onboard success lines (init.go:139, onboard.go:136) still name only PreCompact + SessionStart"
-
-[[finding]]
-  severity = "FLAG"
-  text = "deferred 40377fedfaf41cb3 still open: doctor's Hooks section reads only user-level settings.json; a project-level .claude/settings.json or settings.local.json with disableAllHooks still shows ✓ for every gate hook"
+  tests = ["internal/cmd/doctor_hooks_test.go:TestDoctorGateHooks", "internal/cmd/doctor_hooks_test.go:TestDoctorMissingConvenienceHooksWarnOnly", "internal/cmd/doctor_hooks_test.go:TestDoctorReadsEffectiveSettings", "internal/cmd/doctor_hooks_test.go:TestDoctorProjectHooksDisabled", "internal/cmd/doctor_hooks_test.go:TestDoctorProjectSettingsUnparseable", "internal/cmd/cli_surface_test.go:TestDoctorRunGolden"]
+  notes = "✗ + error (→ exit 1) for a missing gate hook, ✓ after ensure, ⚠ only for PreCompact/SessionStart, CLAUDE_CONFIG_DIR honoured. t-24: project .claude/settings.json and settings.local.json with disableAllHooks are issues naming the file, an unparseable one is an issue, a hooks-on project file leaves the section byte-identical (closes deferred 40377fedfaf41cb3). No survivor in hooksSection (1120-1177)."
 
 [[finding]]
   severity = "NOTE"
-  text = "c-2: the real-process refusal test reads CombinedOutput, so a refusal printed to stdout (invisible to Claude Code on exit 2) would not fail it"
+  text = "c-4: a `;`-chained or env-prefixed `git commit` is judged through TestCommitClaims (FOO=1 git -C x commit, git -c … commit) and shellscan's list split (TestSplit `a && b; c | d || e`); no test drives one of those shapes through the admit/refuse decision itself — `&&` chains do (TestAddThenCommitUsesReplay, TestCommitDir)."
 
 [[finding]]
   severity = "NOTE"
-  text = "c-7: id_* default list sampled — id_ed25519, id_ecdsa_sk, id_rsa tested; id_dsa, id_ecdsa, id_rsa_sk, id_dsa_sk, id_ed25519_sk unpinned"
+  text = "c-9: settings precedence is not modelled — a project-level \"disableAllHooks\": false overriding a user-level true is not read as hooks-on (t-24 states this)."
 
 [[finding]]
   severity = "NOTE"
-  text = "81 in-hunk survivors accepted this run: 80 gremlins-attribution-ceiling (switch-case conditions; each arm confirmed executed in a real `go test -coverprofile` pass, incl. 3 empty-arm zero-width blocks) + 1 const-initializer-arithmetic (treefp.go:34). 10 case lines whose arm never runs were NOT accepted and remain open"
+  text = "deferred 3a9ffbbca3428cab (stale hook wording) closed by t-23 and 40377fedfaf41cb3 (project-level hook disables in doctor) closed by t-24 — both previously FLAGs."
 
 [[finding]]
   severity = "NOTE"
-  text = "mutation measured on helicon (r-20261003-110434): 0.86 over 1224 in-scope; 116 no-block; 0.95 over the 1108 reachable; 62 open survivors = 51 in blocks no test runs + 11 on case arms no test drives (scan.go 38, pair.go 11, selfguard.go 9, gate.go 2, commit.go 1, engine.go 1)"
+  text = "mutation measured on helicon (r-20261003-165416): 0.90 over 1278 in-scope; 116 no-block, 0.99 over the 1162 reachable; 127 survivors, every one accepted with a reason (113 gremlins NOT-COVERED attribution ceiling, 5 switch-case ceiling, 5 shellscan no-progress guards, 2 process-seam bodies, 1 dead-by-construction, 1 package-level initializer); unclassified_in_scope = 0. Of the previous run's 62 open survivors, 47 were killed by t-21/t-22 and 15 accepted (10 case arms now executed, 5 no-progress guards)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "the 5 accepted shellscan no-progress guards (scan.go 632-633, 902, 916-917) are defensive: unreachable by reading, and t-22's 53.6M fuzz execs with each guard swapped for a panic never fired one. Accepted as unkillable, not as tested."
