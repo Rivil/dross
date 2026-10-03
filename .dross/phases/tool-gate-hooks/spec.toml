@@ -104,3 +104,9 @@
   choice = "Secret-emitting tools, secret path patterns and curated .dross/ files ship as built-in defaults; the extension mechanism is the planner's call."
   why = "Secret guards fire outside dross repos (guard_scope), where no project.toml exists to hold the lists."
   locked = true
+
+[[deferred]]
+  id = "40377fedfaf41cb3"
+  text = "dross doctor's Hooks section reads only user-level settings.json; a project-level .claude/settings.json or settings.local.json with \"disableAllHooks\": true still shows ✓ for every gate hook"
+  why = "plan review round 1 (REVIEW.md spec-level note): the gates can be silently disabled per-repo while doctor reports them wired"
+  target = "tool-gate-hooks"
