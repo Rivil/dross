@@ -233,6 +233,8 @@ func Test() *cobra.Command {
 			"--files <path> (repeatable) resolves the given repo-relative paths against\n" +
 			"the declared [[runtime.test_lane]] blocks and runs only the lanes they hit.\n" +
 			"A repo with no lanes ignores it and runs the whole suite, unchanged.\n\n" +
+			"In a repo with lanes but no runtime.test_command, a bare `dross test` runs\n" +
+			"every lane's own command, unscoped — that repo's whole suite.\n\n" +
 			"Output streams as it arrives and the exit status reports the suite, not\n" +
 			"the runner.",
 		SilenceUsage: true,
@@ -280,6 +282,14 @@ func Test() *cobra.Command {
 			}
 			if len(files) > 0 && len(proj.Runtime.TestLane) > 0 {
 				return runTestLanes(root, repoDir, proj, files, local, wait)
+			}
+			// A lanes-only repo has no runtime.test_command for a bare run to
+			// run, so its bare run is every declared lane, unscoped (locked
+			// full_run_source) — the one way such a repo measures its whole
+			// tree. Where test_command is set the bare run below is untouched
+			// (locked bare_test_run): it already is the whole suite.
+			if len(files) == 0 && len(args) == 0 && strings.TrimSpace(proj.Runtime.TestCommand) == "" && len(proj.Runtime.TestLane) > 0 {
+				return runPlannedLanes(root, repoDir, proj, fullLanePlan(proj), local, wait)
 			}
 			// Before any spawn: a refusal that had already run the suite would
 			// have done the thing it was refusing to authorize.
@@ -364,13 +374,19 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	if len(plan.Unmatched) > 0 {
 		Printf("no lane matches: %s\n", strings.Join(plan.Unmatched, " "))
 	}
+	return runPlannedLanes(root, repoDir, proj, plan.Lanes, local, wait)
+}
 
-	// The fence ran inside lanePlan, over every matched lane, before any line
-	// was derived. Its verdicts are read here in declaration order and the
-	// first one refuses the whole run — which is exactly the property an
-	// in-loop fence could not have, since it would discover a malformed lane
-	// with earlier lanes already spawned.
-	for _, pl := range plan.Lanes {
+// runPlannedLanes runs a set of planned lanes — the ones a --files set hit, or
+// every lane unscoped for a lanes-only repo's bare run — each through its own
+// grant, prepare, toolchain and locality path, and reports the worst outcome.
+func runPlannedLanes(root, repoDir string, proj *project.Project, lanes []plannedLane, local bool, wait time.Duration) error {
+	// The fence ran inside the planner, over every lane, before any line was
+	// derived. Its verdicts are read here in declaration order and the first
+	// one refuses the whole run — which is exactly the property an in-loop
+	// fence could not have, since it would discover a malformed lane with
+	// earlier lanes already spawned.
+	for _, pl := range lanes {
 		if pl.FenceErr != nil {
 			return pl.FenceErr
 		}
@@ -380,8 +396,8 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	// the transcript names every refusal up front rather than interleaving them
 	// with test output, where a refusal scrolls past under a passing suite.
 	var worst error
-	runnable := make([]plannedLane, 0, len(plan.Lanes))
-	for _, pl := range plan.Lanes {
+	runnable := make([]plannedLane, 0, len(lanes))
+	for _, pl := range lanes {
 		// Resolved against lane.Command, never against the derived line
 		// (locked selector_consent). The grant covers the line the user was
 		// shown and approved; the selector is machine-derived repo-relative
