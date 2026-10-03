@@ -3096,3 +3096,480 @@
   line = 474
   category = "gremlins-attribution-ceiling"
   accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "ccef9c5a7a86bb72"
+  file = "internal/treefp/treefp.go"
+  op = "ARITHMETIC_BASE"
+  text = "var Timeout = 30 * time.Second"
+  line = 34
+  category = "const-initializer-arithmetic"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "87673b15136de29a"
+  file = "internal/cmd/gate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case o != nil:"
+  line = 277
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "bb3d96dda1769149"
+  file = "internal/cmd/test.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case runErr == nil:"
+  line = 1178
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "c10285dfc822967b"
+  file = "internal/cmd/test.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case errors.As(runErr, &ec) && ec.Code == exitSuiteFailed:"
+  line = 1197
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "3e916f43438fa396"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--\":"
+  line = 84
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "33d150aae75a6114"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case strings.HasPrefix(a, \"-\") && len(a) > 1:"
+  line = 93
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "3b9909c68d31762c"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case strings.HasPrefix(a, \"-\") && len(a) > 1:"
+  line = 93
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "ad0516db7a24edc0"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == 'a':"
+  line = 96
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "a23c17a8e4de1642"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == 'p' || ch == 'o' || ch == 'i':"
+  line = 98
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "04e65b98bcdb4b69"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case strings.IndexByte(commitShortValue, ch) >= 0:"
+  line = 100
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "1782c87e754f1681"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case strings.IndexByte(commitShortValue, ch) >= 0:"
+  line = 100
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "c07503aac9ae29ad"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case isGit && pg.Sub == \"add\":"
+  line = 163
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "927231b73434cefa"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case cmd.Name() == \"cd\" || cmd.Name() == \"pushd\":"
+  line = 168
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "bf9380b0a632c91a"
+  file = "internal/gate/engine.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case g.Name == \"\":"
+  line = 119
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "f3569eb6fb23eb1e"
+  file = "internal/gate/engine.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 279
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "112fd1f087f31246"
+  file = "internal/gate/engine.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 299
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "3ea4b92b56a8017e"
+  file = "internal/gate/pair.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--solo\":"
+  line = 72
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "48ab8c336df39b0d"
+  file = "internal/gate/pair.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case appr == nil:"
+  line = 132
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "c399cce3418e746b"
+  file = "internal/gate/pair.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case appr.Phase != run.Phase || appr.Task != run.Task:"
+  line = 133
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "741ffd200c866fd7"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"-C\":"
+  line = 199
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "68d610eb665ed591"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == ' ' || c == '\\t' || c == '\\r':"
+  line = 458
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "077e4a55ebaee40c"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"{\":"
+  line = 589
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "6e7118ee0f2d6dac"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"}\" || w == \"done\" || w == \"fi\" || w == \"esac\":"
+  line = 592
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "6740c8c66a705677"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"if\":"
+  line = 601
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "57219279e898465e"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"while\" || w == \"until\":"
+  line = 604
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "74045b0f2ad3842c"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"for\" || w == \"select\":"
+  line = 607
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "bbdcc5f7d11e3d14"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"case\":"
+  line = 611
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "d0245213ec0b338c"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"function\":"
+  line = 614
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "afc3d9a30e2d06d6"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case op == \"&>\" || op == \"&>>\":"
+  line = 846
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "4ba3365a1bf92cf1"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case op[0] == '<':"
+  line = 848
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "5d8360b3ecf5f40c"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '\\n' || ch == ';' || ch == '|' || ch == ')':"
+  line = 886
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "58877a0648df9a76"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '&' && p.peekAt(1) != '>':"
+  line = 888
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "3073b0ef86806581"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '#':"
+  line = 890
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "e9c13e4189b492d9"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case (ch == '<' || ch == '>') && p.peekAt(1) == '(':"
+  line = 893
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "91ecb73636d495d2"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '(':"
+  line = 905
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "b93f5f5f7f783880"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '\"' && !heredocMode:"
+  line = 1087
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "40c4bf38e5d59113"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '\\\\':"
+  line = 1090
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "e0072adb5cd8d029"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case next == '$' || next == '`' || next == '\\\\' || (next == '\"' && !heredocMode):"
+  line = 1095
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "08b862c411beae99"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '$':"
+  line = 1102
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "92700e7083a4acb0"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case next == '(' && p.peekAt(2) == '(':"
+  line = 1152
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "41f5fbdb62b9ac69"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case next == '(':"
+  line = 1155
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "3681baa80927ed89"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case next == '{':"
+  line = 1160
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "8693453f41cca032"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"HOME\" && p.st.home != \"\":"
+  line = 1191
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "9778f7e55209bc0d"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name != \"\":"
+  line = 1194
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "efe80a63af8f6fb5"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !p.eof() && !isMeta(p.src[p.pos]) && p.src[p.pos] != '\"':"
+  line = 1197
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "c479dac88b05eef9"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"-S\" || strings.HasPrefix(a, \"-S\") || strings.HasPrefix(a, \"--split-string\"):"
+  line = 1379
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "e7188f42cedb7fae"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"-u\" || a == \"--unset\" || a == \"-C\" || a == \"--chdir\":"
+  line = 1382
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "1731d8bd0c8deb75"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(a) > 0 && a[0] == '-':"
+  line = 1384
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "24a1be4f996d34de"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(a) > 0 && a[0] == '-':"
+  line = 1384
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "4c8dc847f8aee310"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(a) > 1 && a[0] == '-':"
+  line = 1416
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "6b8910647c9b75d3"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(a) > 1 && a[0] == '-':"
+  line = 1416
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "564d3534dd1db609"
+  file = "internal/treefp/treefp.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 148
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "2ac15548a766e3f7"
+  file = "internal/treefp/treefp.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case gitrun.ExitCode(err) == 1:"
+  line = 149
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
