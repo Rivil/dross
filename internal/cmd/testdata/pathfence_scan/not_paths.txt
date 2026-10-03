@@ -110,10 +110,12 @@ forge.youtrackIssue.Description description
 forge.youtrackIssue.Summary summary
 forge.ytStateBundle.ID id
 
-# ---- gate — gates.toml extension lists: program NAMES and glob PATTERNS, matched against tool calls, never opened
+# ---- gate — gates.toml extension lists (program NAMES, glob PATTERNS) and gate-overrides.json entries (gate names, sha256 repo KEYS) — matched, never opened
 gate.listFile.CuratedFiles curated_files
 gate.listFile.SecretPaths secret_paths
 gate.listFile.SecretTools secret_tools
+gate.Override.Name name
+gate.Override.Repo repo
 
 # ---- gatestate — machine-local gate records: tree object ids, phase/task ids, HEAD SHAs, modes, runner labels
 gatestate.Approval.Head head
