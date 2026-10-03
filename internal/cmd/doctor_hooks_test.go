@@ -154,3 +154,42 @@ func TestDoctorReadsEffectiveSettings(t *testing.T) {
 		t.Errorf("doctor wrote settings.json (err=%v); it only reads", statErr)
 	}
 }
+
+// TestDoctorProjectHooksDisabled: a repo's own .claude/settings.json or
+// settings.local.json setting "disableAllHooks": true turns the gates off in
+// that repo however well the user-level file wires them.
+func TestDoctorProjectHooksDisabled(t *testing.T) {
+	repo := doctorRepo(t)
+	withConfig(t, settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair))
+	baseline, err := runDoctorHooks(t)
+	if err != nil {
+		t.Fatalf("doctor with every hook wired and no .claude/: %v\n%s", err, baseline)
+	}
+	for _, name := range []string{"settings.json", "settings.local.json"} {
+		t.Run(name, func(t *testing.T) {
+			p := filepath.Join(repo, ".claude", name)
+			t.Cleanup(func() { _ = os.Remove(p) })
+			mustWrite(t, p, `{"disableAllHooks": true}`)
+			sec, err := runDoctorHooks(t)
+			if err == nil || !strings.Contains(sec, "✗ .claude/"+name+` sets "disableAllHooks": true`) {
+				t.Errorf("a repo-level disableAllHooks in %s passed: %v\n%s", name, err, sec)
+			}
+
+			mustWrite(t, p, `{"disableAllHooks": false, "permissions": {}}`)
+			sec, err = runDoctorHooks(t)
+			if err != nil || sec != baseline {
+				t.Errorf("repo-level %s that leaves hooks on changed the Hooks section (%v):\n--- got ---\n%s\n--- want ---\n%s", name, err, sec, baseline)
+			}
+		})
+	}
+}
+
+func TestDoctorProjectSettingsUnparseable(t *testing.T) {
+	repo := doctorRepo(t)
+	withConfig(t, settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair))
+	mustWrite(t, filepath.Join(repo, ".claude", "settings.local.json"), `{"hooks": `)
+	sec, err := runDoctorHooks(t)
+	if err == nil || !strings.Contains(sec, "✗ .claude/settings.local.json cannot be read") || !strings.Contains(sec, "unexpected end of JSON input") {
+		t.Fatalf("a malformed repo-level settings.local.json: %v\n%s", err, sec)
+	}
+}

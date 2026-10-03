@@ -269,7 +269,7 @@ func Doctor() *cobra.Command {
 			issues += checkConfigTrust(root, repoDir, p)
 
 			// --- Hooks ---
-			hookSec := hooksSection()
+			hookSec := hooksSection(repoDir)
 			printSections([]diag.Section{hookSec})
 			issues += diag.Issues([]diag.Section{hookSec})
 			for _, l := range hookSec.Lines {
@@ -1103,25 +1103,21 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 	return issues
 }
 
-// doctorHooks are the hooks the Hooks section checks, in the order it prints
-// them. The gate pair is the tool-call gates: without it every gate is off.
-var doctorHooks = []struct {
-	event, command string
-	gate           bool
-}{
-	{hooks.EventPreCompact, preCompactHookCommand, false},
-	{hooks.EventSessionStart, sessionStartHookCommand, false},
-	{hooks.EventPreToolUse, GateCheckHook, true},
-	{hooks.EventPostToolUse, GateRecordHook, true},
-}
+// projectSettingsFiles are the repo-level settings files Claude Code layers
+// over the user-level one, relative to the repo root.
+var projectSettingsFiles = []string{".claude/settings.json", ".claude/settings.local.json"}
 
 // hooksSection reports the dross hooks in the user-level settings.json Claude
-// Code reads (CLAUDE_CONFIG_DIR honoured). A missing gate hook is an issue —
-// the gates are off — and so is a gate command wired only under a matcher
-// (it fires for some tools and not others), "disableAllHooks": true, or a file
-// that cannot be read. A missing PreCompact or SessionStart hook is a warning:
-// dross works without them, it only loses pause and re-entry.
-func hooksSection() diag.Section {
+// Code reads (CLAUDE_CONFIG_DIR honoured) — every hook ensureUserHooks wires,
+// in its order. A missing gate hook is an issue — the gates are off — and so
+// is a gate command wired only under a matcher (it fires for some tools and
+// not others), "disableAllHooks": true, or a file that cannot be read. The
+// same key in repoDir's own .claude/settings.json or settings.local.json
+// turns every hook off in this repo however the user-level file is wired, so
+// it is an issue too, as is either file failing to parse. A missing
+// PreCompact or SessionStart hook is a warning: dross works without them, it
+// only loses pause and re-entry.
+func hooksSection(repoDir string) diag.Section {
 	sec := diag.Section{Heading: "Hooks:"}
 	add := func(level diag.Level, format string, a ...any) {
 		sec.Lines = append(sec.Lines, diag.Line{Level: level, Text: fmt.Sprintf(format, a...)})
@@ -1144,7 +1140,9 @@ func hooksSection() diag.Section {
 	if off, _ := doc["disableAllHooks"].(bool); off {
 		add(diag.Issue, "settings.json sets \"disableAllHooks\": true — Claude Code runs no hooks, so every dross gate is off. Fix: remove the key")
 	}
-	for _, h := range doctorHooks {
+	for _, h := range userHooks {
+		// The gate pair is the tool-call gates: without it every gate is off.
+		gate := h.command == GateCheckHook || h.command == GateRecordHook
 		merged, err := hooks.MergeHook(b, h.event, h.command)
 		if err != nil {
 			add(diag.Issue, "%s → %s cannot be checked: %v", h.event, h.command, err)
@@ -1152,14 +1150,24 @@ func hooksSection() diag.Section {
 		}
 		present := len(b) > 0 && bytes.Equal(merged, b)
 		switch {
-		case !present && h.gate:
+		case !present && gate:
 			add(diag.Issue, "%s → `%s` is not wired, so the tool-call gates are off. Fix: `dross hooks ensure`", h.event, h.command)
 		case !present:
 			add(diag.Warn, "%s → `%s` is not wired. Fix: `dross hooks ensure`", h.event, h.command)
-		case h.gate && !matcherless(doc, h.event, h.command):
+		case gate && !matcherless(doc, h.event, h.command):
 			add(diag.Issue, "%s → `%s` is wired only under a matcher, so it fires for some tools and not others. Fix: remove the matcher, or move the command into a matcher-less group (`dross hooks ensure` leaves a file that already names it alone)", h.event, h.command)
 		default:
 			add(diag.OK, "%s → %s", h.event, h.command)
+		}
+	}
+	for _, rel := range projectSettingsFiles {
+		pdoc, err := hooks.ReadSettings(filepath.Join(repoDir, filepath.FromSlash(rel)))
+		if err != nil {
+			add(diag.Issue, "%s cannot be read (%v), so whether it turns this repo's hooks off cannot be told. Fix: repair or remove it", rel, err)
+			continue
+		}
+		if off, _ := pdoc["disableAllHooks"].(bool); off {
+			add(diag.Issue, "%s sets \"disableAllHooks\": true — Claude Code runs no hooks in this repo, so every dross gate is off here though the user-level file wires them. Fix: remove the key", rel)
 		}
 	}
 	return sec
