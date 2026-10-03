@@ -2004,6 +2004,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "tool-gate-hooks/t-11": {
+      "issue": "DRO-807",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "tool-gate-hooks/t-12": {
       "issue": "DRO-801",
       "plan_status": "done",
@@ -2016,6 +2021,16 @@
     },
     "tool-gate-hooks/t-14": {
       "issue": "DRO-803",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-15": {
+      "issue": "DRO-808",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-16": {
+      "issue": "DRO-809",
       "plan_status": "done",
       "board_state": "task-in-review"
     },
@@ -2041,8 +2056,8 @@
     },
     "tool-gate-hooks/t-20": {
       "issue": "DRO-796",
-      "plan_status": "failed",
-      "board_state": "task-in-progress"
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "tool-gate-hooks/t-3": {
       "issue": "DRO-791",
