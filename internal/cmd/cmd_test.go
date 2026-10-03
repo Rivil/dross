@@ -27,6 +27,13 @@ func chdir(t *testing.T, dir string) {
 	t.Helper()
 	t.Setenv("DROSS_NO_TELEMETRY", "1")
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	// Every fixture starts with the four dross hooks wired, as a real install
+	// has them: doctor counts a missing gate hook as an issue, and the suite's
+	// doctor runs are about everything else. A test about their absence
+	// clears them itself.
+	if err := ensureUserHooks(); err != nil {
+		t.Fatalf("seed the dross hooks: %v", err)
+	}
 	prev, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)

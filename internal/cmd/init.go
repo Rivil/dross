@@ -136,7 +136,7 @@ fill it in conversationally. For adopting an existing repo, use ` + "`dross onbo
 			if err := ensureUserHooks(); err != nil {
 				Printf("• Could not wire user-level Claude hooks (non-fatal): %v\n", err)
 			} else {
-				Print("• Ensured user-level Claude hooks (PreCompact → dross pause --auto, SessionStart → dross reentry)")
+				Print("• Ensured user-level Claude hooks (" + userHooksSummary() + ")")
 			}
 			Print("Next: run /dross-init to fill in project.toml conversationally")
 			return nil

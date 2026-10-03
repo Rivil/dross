@@ -66,6 +66,10 @@ func MutateSettings(path string, fn func(map[string]any)) error {
 const (
 	EventPreCompact   = "PreCompact"
 	EventSessionStart = "SessionStart"
+	// The tool-call gates: PreToolUse can refuse a call, PostToolUse records
+	// what a finished one established.
+	EventPreToolUse  = "PreToolUse"
+	EventPostToolUse = "PostToolUse"
 )
 
 // hookCommand is one command entry inside a hook group.

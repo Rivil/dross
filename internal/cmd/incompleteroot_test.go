@@ -182,8 +182,10 @@ func TestRootHelperCallersAreAllowlisted(t *testing.T) {
 	}
 
 	// Equality here: LocateRoot deliberately tolerates an incomplete root, so
-	// every caller is a considered exception and the set is closed.
-	wantLocate := []string{"doctor.go", "repair.go", "root.go", "ship_recover.go", "telemetry.go", "verify.go"}
+	// every caller is a considered exception and the set is closed. gate.go
+	// calls gate.LocateRoot — the gate engine's own, stricter locator — so a
+	// `gate off` lift is keyed to exactly the root the gate's judge locates.
+	wantLocate := []string{"doctor.go", "gate.go", "repair.go", "root.go", "ship_recover.go", "telemetry.go", "verify.go"}
 	if strings.Join(locateRootUsers, ",") != strings.Join(wantLocate, ",") {
 		t.Errorf("LocateRoot callers = %v, want %v", locateRootUsers, wantLocate)
 	}

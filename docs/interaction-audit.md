@@ -107,7 +107,7 @@ retrofitted under Setup & config in phase 12.)
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Per-task approach | proceed/steer/show/skip, leads with `proceed` | ✅ | pair-mode; next task never bundled behind current |
+| Per-task approach | `approve <task-id>`/steer/show/skip, leads with `approve <task-id>` | ✅ | pair-mode; the exact label is the only answer the pair-approval gate records as approval (`pair_approval_signal`), so edits stay refused until it is picked; next task never bundled behind current |
 | Red test outcome | fix/mark-failed/abort | ✅ | own turn |
 | Dirty-tree pre-flight | commit/stash/abort | ✅ | |
 

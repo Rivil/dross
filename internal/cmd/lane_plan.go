@@ -220,3 +220,23 @@ func laneRunLine(repoDir string, lane project.TestLane, paths []string) (string,
 	}
 	return strings.TrimSpace(lane.Command) + " " + strings.Join(frags, " "), args, dropped, true
 }
+
+// fullLanePlan is every declared lane, unscoped: each runs its own command with
+// no derived selector. It is a lanes-only repo's bare `dross test` (locked
+// full_run_source), the run that measures the whole tree when there is no
+// runtime.test_command to run instead. The fence runs over every lane exactly
+// as lanePlan's does, so a malformed lane refuses the run before anything
+// spawns.
+func fullLanePlan(proj *project.Project) []plannedLane {
+	out := make([]plannedLane, 0, len(proj.Runtime.TestLane))
+	for i, lane := range proj.Runtime.TestLane {
+		pl := plannedLane{matchedLane: matchedLane{index: i, lane: lane}}
+		if err := laneFence(lane); err != nil {
+			pl.FenceErr = err
+		} else {
+			pl.Line = lane.Command
+		}
+		out = append(out, pl)
+	}
+	return out
+}

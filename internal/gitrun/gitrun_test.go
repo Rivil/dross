@@ -314,3 +314,29 @@ func TestOptionsStdinFeedsGit(t *testing.T) {
 		t.Errorf("Raw with Stdin = %q, %v; want the stdin echoed back", out, err)
 	}
 }
+
+// TestOptionsIndexFileIsolatesTheIndex: a run under IndexFile stages into and
+// lists the scratch index, and the repository's own index never sees it.
+func TestOptionsIndexFileIsolatesTheIndex(t *testing.T) {
+	dir := realRepo(t)
+	if err := os.WriteFile(filepath.Join(dir, "b.go"), []byte("package b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tmp := filepath.Join(t.TempDir(), "index")
+	o := Options{IndexFile: tmp}
+	if _, err := RawWith(o, dir, "add", "--", "b.go"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := RawWith(o, dir, "ls-files"); err != nil || got != "b.go\n" {
+		t.Errorf("ls-files on the scratch index = %q, %v; want only b.go", got, err)
+	}
+	if got, err := Raw(dir, "ls-files", "--others", "--exclude-standard"); err != nil || got != "b.go\n" {
+		t.Errorf("b.go on the real index = %q, %v; want it still untracked", got, err)
+	}
+	if got, err := Raw(dir, "ls-files"); err != nil || got != "a.go\n" {
+		t.Errorf("ls-files on the real index = %q, %v; want only a.go", got, err)
+	}
+	if _, err := os.Stat(tmp); err != nil {
+		t.Errorf("the scratch index was not written where IndexFile points: %v", err)
+	}
+}

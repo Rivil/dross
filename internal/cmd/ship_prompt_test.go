@@ -433,3 +433,23 @@ func TestShipPromptReRunIsTheRetry(t *testing.T) {
 		last = at
 	}
 }
+
+// TestShipPromptTestsBeforeDocsCommit: the ARCHITECTURE.md commit changes the
+// tree verify measured, so §3.5 must run a full `dross test` before it — the
+// commit gate refuses a code commit without a recorded green for that tree.
+func TestShipPromptTestsBeforeDocsCommit(t *testing.T) {
+	sec := sectionOf(promptBody(t, "ship.md"), "## 3.5", "## 4.")
+	commit := strings.Index(sec, `git commit -m "docs(`)
+	if commit < 0 {
+		t.Fatal("ship.md §3.5 no longer commits ARCHITECTURE.md with `git commit -m \"docs(` — re-point this test")
+	}
+	before := false
+	for _, loc := range bareDrossTestRE.FindAllStringIndex(sec, -1) {
+		if loc[0] < commit {
+			before = true
+		}
+	}
+	if !before {
+		t.Error("ship.md §3.5 has no bare `dross test` line before the docs commit")
+	}
+}
