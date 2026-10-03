@@ -2059,6 +2059,26 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "tool-gate-hooks/t-21": {
+      "issue": "DRO-810",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-22": {
+      "issue": "DRO-811",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-23": {
+      "issue": "DRO-812",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "tool-gate-hooks/t-24": {
+      "issue": "DRO-813",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "tool-gate-hooks/t-3": {
       "issue": "DRO-791",
       "plan_status": "done",

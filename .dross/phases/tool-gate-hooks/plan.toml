@@ -1,4 +1,4 @@
-task_seq = 20
+task_seq = 24
 
 [phase]
   id = "tool-gate-hooks"
@@ -213,4 +213,44 @@ task_seq = 20
   covers = ["c-9"]
   depends_on = ["t-17"]
   test_contract = ["if an empty CLAUDE_CONFIG_DIR doesn't exit non-zero with ✗ PreToolUse naming `dross gate check` and `dross hooks ensure` and ✗ PostToolUse naming `dross gate record`, or after `dross hooks ensure` it isn't exit 0 with ✓ for all four, the gate-hook test fails", "if only PreCompact (or only SessionStart) missing changes the exit code instead of showing ⚠, the warn-only test fails", "if a gate command only under matcher \"Bash\", or `\"disableAllHooks\": true`, isn't reported as an issue, the hidden-hook test fails; the matcher issue must tell the user to remove the matcher or move the command into a matcher-less group, never `dross hooks ensure` (MergeHook no-ops on that file)", "if a malformed settings.json crashes or passes instead of an issue naming the parse error, the parse test fails", "if doctor reads $HOME/.claude/settings.json while CLAUDE_CONFIG_DIR points at an empty dir, the effective-file test fails", "if doctor_run.txt stops pinning the section, the golden fails; if chdir() stops seeding the four hooks, the ~105 existing Doctor() invocations across 15 test files (including the four that never run Init()) go red"]
+  status = "done"
+
+[[task]]
+  id = "t-21"
+  wave = 5
+  title = "Kill gate-package survivors and pin c-4/c-5 weak spots"
+  files = ["internal/gate/pair_test.go", "internal/gate/selfguard_test.go", "internal/gate/commit_test.go", "internal/gate/engine_test.go", "internal/gate/secrets_test.go", "internal/cmd/gate_override_test.go", "cmd/dross/main_test.go"]
+  description = "Verify amendment (verify.toml 2026-10-03, fail). Tests only, no production change: kill the 24 open in-hunk survivors outside shellscan — pair.go:87-88 Partial-scan --solo fallback and pair.go:248 unborn-HEAD headOf, selfguard.go:50-52 Partial-scan gate-verb fallback, commit.go:86 --all arm, engine.go:49 Scope.String, cmd/gate.go:265/267 gate status repo line — and close the c-4/c-5 weak FLAGs plus the c-2 (stdout vs stderr) and c-7 (id_* sampled) NOTEs. A mutant proven equivalent is accepted with `dross survivor accept --reason`, never left open."
+  covers = ["c-2", "c-4", "c-5", "c-7"]
+  test_contract = ["if the pair.go Partial-scan fallback (pair.go:85-91) is deleted or its loop bound drifts, TestPairSoloDowngradePartial fails: while armed, a Partial line whose `dross execute begin p --solo` only the raw-token fallback can see refuses; a Partial line ending in `dross execute begin` passes without an internal-error refusal", "if headOf stops treating an unborn HEAD as empty (pair.go:248), TestPairUnbornHead fails: on an orphan phase/p branch with no commits and t-1 in_progress, an approval recorded there admits an Edit of a code file and no approval refuses", "if the selfguard.go Partial-scan fallback (selfguard.go:48-55) is deleted or its loop bound drifts, TestGateOffGuardPartial fails: `dross gate off secret-read` visible only to the raw-token fallback refuses naming gate-off-guard; a Partial line ending in `dross gate` passes", "if the `--all` arm (commit.go:86) is dropped, TestCommitLongAll fails: `git commit --all -m x` with an unstaged tracked code edit refuses with no green and passes with a green equal to the -a candidate", "if onlyDross loosens from every path to any path, TestCommitMixedDrossAndCode fails: a.go staged together with .dross/phases/p/plan.toml and no green.json refuses", "if Scope.String flips (engine.go:49) or `gate status` mislabels where it runs (cmd/gate.go:265/267), TestGateStatusScopesAndRepo fails: commit-green shows workflow and secret-read always-on; outside any dross repo it prints `repo: none here`; an unreadable cwd prints `repo: cannot tell` naming the error", "if a refusal is printed to stdout, the refusal case in TestMainEntryPoint fails: it reads stdout and stderr separately and needs stdout empty and the refusal on stderr exactly once", "if any of the eight default id_* private-key names stops refusing on Read, or its .pub sibling starts refusing, the id_* table in TestSecretReadRead fails"]
+  status = "done"
+
+[[task]]
+  id = "t-22"
+  wave = 5
+  title = "Kill shellscan survivors"
+  files = ["internal/shellscan/scan_test.go"]
+  description = "Verify amendment. Package-local scanner tests for the 38 open in-hunk survivors in scan.go (gremlins runs only shellscan tests against it, so gate-level tables do not count): Dest.String/OffTranscript (57, 63), Outputs <> fd (165), /dev/fd/N (409), line continuations (460, 1093), unreadable-character recovery (632-633, 916-917), skipLines newline/comment (722-725), case-pattern quoting (738-750), redirect no-progress (902), backtick in double quotes (1104), ${...} escapes (1166), backtick escapes (1225), env/sudo -- (1376, 1411). A mutant proven equivalent or unreachable is accepted with `dross survivor accept --reason`; scan.go is not edited without asking."
+  covers = ["c-4", "c-6", "c-7"]
+  test_contract = ["if OffTranscript widens or narrows (scan.go:63), TestDestOffTranscript fails: File and Null are off, Transcript, Pipe and Capture are on, and an out-of-range Dest prints as dest(N)", "if /dev/fd/N resolution drifts (scan.go:409), the StreamDestinations table fails: `x >f 2>/dev/fd/1` puts fd2 in the file, `x 2>/dev/fd/2` keeps it on the transcript, and /dev/fd/-1, /dev/fd/3 and /dev/fd/x resolve to File", "if `<>` attribution drifts (scan.go:165), TestOutputs fails: `x 3<>f` lists f as an output and `x <>f` does not", "if a backslash-newline continuation, comment or newline is mis-skipped (scan.go:460, 722-725, 1093), the split table fails: a continued line stays one command keeping its next word, a trailing comment hides its `;`, a continuation inside double quotes joins the halves, and a bare newline splits two commands", "if case-pattern quoting drifts (scan.go:738-750), TestCasePatterns fails: a pattern holding a quoted or escaped `)` still yields the arm body as its command, and an unterminated quote in a pattern sets Partial", "if unreadable-character or no-progress recovery stops advancing or stops failing (scan.go:632-633, 902, 916-917), TestUnreadableRecovery fails: each such line sets Partial with its reason, terminates, and keeps the commands either side", "if backtick or ${...} escapes drift (scan.go:1104, 1166, 1225), the substitution table fails: a backtick inside double quotes is descended, an escaped brace inside ${...} keeps one word, and escaped backtick/dollar/backslash inside backticks are unescaped before the body is parsed", "if env or sudo stop honouring `--` (scan.go:1376, 1411), the prefix table fails: `env -- pass-cli v` and `sudo -- pass-cli v` yield argv0 pass-cli"]
+  status = "done"
+
+[[task]]
+  id = "t-23"
+  wave = 5
+  title = "Name the gate hooks in hook wording"
+  files = ["internal/cmd/hooks.go", "internal/cmd/init.go", "internal/cmd/onboard.go", "internal/cmd/hooks_test.go", "cmd/dross/testdata/cli_tree.txt", "assets/prompts/options.md"]
+  description = "Closes deferred 3a9ffbbca3428cab. `dross hooks ensure` Short and the init/onboard ensured-hooks lines name all four hooks (PreCompact, SessionStart, PreToolUse -> dross gate check, PostToolUse -> dross gate record) instead of only PreCompact + SessionStart. (cli_tree.txt is a regenerated golden.)"
+  covers = ["c-1"]
+  test_contract = ["if `hooks ensure` Short or the init/onboard ensured-hooks line omits PreToolUse/`dross gate check` or PostToolUse/`dross gate record`, TestHookWordingNamesAllFour fails", "if cli_tree.txt stops matching the new Short, TestCLITreeGolden fails"]
+  status = "done"
+
+[[task]]
+  id = "t-24"
+  wave = 5
+  title = "Report project-level hook disables in doctor"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_hooks_test.go"]
+  description = "Closes deferred 40377fedfaf41cb3. doctor Hooks section also reads the repo .claude/settings.json and .claude/settings.local.json when present and reports \"disableAllHooks\": true in either as an issue naming that file — the gates are off in this repo though the user-level file wires them. An unparseable project file is an issue naming its parse error; absence is silent."
+  covers = ["c-9"]
+  test_contract = ["if \"disableAllHooks\": true in <repo>/.claude/settings.json or settings.local.json leaves doctor at exit 0 with every gate passing, TestDoctorProjectHooksDisabled fails: each must be an issue naming that file", "if a malformed project-level settings file passes silently or crashes doctor, TestDoctorProjectSettingsUnparseable fails: it must be an issue naming the file and its parse error", "if a repo with no .claude/ dir, or with project settings that do not disable hooks, changes doctor output, TestDoctorGateHooks and the doctor_run golden fail"]
   status = "done"

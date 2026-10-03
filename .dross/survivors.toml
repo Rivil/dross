@@ -54,6 +54,10 @@
   name = "host-lock-seam-body"
   reason = "The body of a `var x = func(...)` process-construction seam — testHold (internal/cmd/test.go), remoteLockStatusFn (internal/cmd/doctor.go), launcherHold (internal/mutation/launcher.go). Each wraps remote.Acquire / remote.ExecScript, which spawn a real ssh hold session; every test replaces the whole var (installHoldRecorder, fakeLockStatus, recordHold) so the body never executes and the err != nil guard reports NOT_COVERED. Same class as the accepted detach-seam-body entries in verify.go: the effect is asserted instead of the line — TestSuiteFailureStillReleases, TestMissingFlockWarnsAndRuns, TestDoctorSkipsLockStatusWithoutFlock, TestBusyRefusalSpawnsNothing and TestUnlockableHostIsNeverMeasuredOn pin what each caller does with the error the real body would propagate. Move the seam boundary below remote.Exec and these become reachable and owe tests rather than this reason."
 
+[[category]]
+  name = "scanner-no-progress-guard"
+  reason = "A no-progress guard in internal/shellscan's parser loops — parseList's `if p.pos == start`, and parseCommand's `if p.pos == before` after parseRedirect and after readWord: when an iteration consumed nothing it fails the scan and steps one byte, so a future grammar gap degrades to Partial instead of looping forever. No input reaches one today: parseList hands every byte to a branch that consumes it, atRedirect only returns true where parseRedirect will consume an operator from redirOps, and readWord only stalls on a metacharacter parseCommand has already dispatched. Checked 2026-10-03 by fuzzing (FuzzScan, 53.6M executions, ~1,100 new interesting inputs) a copy of the package with each guard replaced by a panic: none fired. The mutants here only change what an unreachable branch does (the string-concatenation ARITHMETIC_BASE is not even viable). Keep the guards; if one is ever reached, TestFuzzSeedsNeverPanic and the fuzz harness's Partial/Problem invariant are where it shows."
+
 [[accepted]]
   key = "742de35850fac7e6"
   file = "internal/cmd/survivor.go"
@@ -3572,4 +3576,139 @@
   text = "case gitrun.ExitCode(err) == 1:"
   line = 149
   category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "812be7f96f2a43dc"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == '\\\\' && p.peekAt(1) == '\\n':"
+  line = 460
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "bc81f3fab92c21e1"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case p.peekAt(0) == '\\n':"
+  line = 722
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "0f847df00f860020"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case p.peekAt(0) == '#':"
+  line = 725
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "0d32cf26bc1b709d"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case next == '\\n':"
+  line = 1093
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "1114ec60051a3aac"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '`':"
+  line = 1104
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "3d024847baeb247c"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--\":"
+  line = 1376
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "0b21f03928909161"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--\":"
+  line = 1411
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "7e82618f8101b7b0"
+  file = "internal/cmd/gate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 265
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "de7101ca4bab9e41"
+  file = "internal/cmd/gate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case root == \"\":"
+  line = 267
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "788ebabc114ee418"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--all\":"
+  line = 86
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "7cfa842188019cbe"
+  file = "internal/shellscan/scan.go"
+  op = "ARITHMETIC_BASE"
+  text = "p.st.fail(\"unreadable character \" + strconv.QuoteRune(rune(p.src[p.pos])))"
+  line = 632
+  category = "scanner-no-progress-guard"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "ffb32a4fafeff0a8"
+  file = "internal/shellscan/scan.go"
+  op = "INCREMENT_DECREMENT"
+  text = "p.pos++"
+  line = 633
+  category = "scanner-no-progress-guard"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "bd73aa3428faca76"
+  file = "internal/shellscan/scan.go"
+  op = "INCREMENT_DECREMENT"
+  text = "p.pos++"
+  line = 902
+  category = "scanner-no-progress-guard"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "872137d969967685"
+  file = "internal/shellscan/scan.go"
+  op = "ARITHMETIC_BASE"
+  text = "p.st.fail(\"unreadable character \" + strconv.QuoteRune(rune(p.src[p.pos])))"
+  line = 916
+  category = "scanner-no-progress-guard"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "a4c0b9b04516a260"
+  file = "internal/shellscan/scan.go"
+  op = "INCREMENT_DECREMENT"
+  text = "p.pos++"
+  line = 917
+  category = "scanner-no-progress-guard"
   accepted_in = "tool-gate-hooks"

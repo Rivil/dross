@@ -235,6 +235,78 @@
         }
       ]
     },
+    "t-21": {
+      "files": [
+        "internal/gate/pair_test.go",
+        "internal/gate/selfguard_test.go",
+        "internal/gate/commit_test.go",
+        "internal/gate/engine_test.go",
+        "internal/gate/secrets_test.go",
+        "internal/cmd/gate_override_test.go",
+        "cmd/dross/main_test.go"
+      ],
+      "commit": "bec5b83",
+      "completed_at": "2026-10-03T14:26:20.487514Z",
+      "landmarks": [
+        {
+          "feature": "pair approval gate",
+          "symbol": "TestPairSoloDowngradePartial",
+          "loc": "internal/gate/pair_test.go:289",
+          "what": "raw-token fallbacks, unborn HEAD, --all, mixed .dross staging and gate status repo line pinned by tests that kill verify's 24 gate-package survivors"
+        }
+      ]
+    },
+    "t-22": {
+      "files": [
+        "internal/shellscan/scan_test.go"
+      ],
+      "commit": "3acaf13",
+      "completed_at": "2026-10-03T15:24:12.273785Z",
+      "landmarks": [
+        {
+          "feature": "tool gate shell scanning",
+          "symbol": "TestCasePatterns",
+          "loc": "internal/shellscan/scan_test.go:413",
+          "what": "scanner tests reach every block verify found unrun (fd dup, \u003c\u003e, case patterns, backtick/brace escapes, continuations); case-line and no-progress-guard survivors accepted with evidence"
+        }
+      ]
+    },
+    "t-23": {
+      "files": [
+        "internal/cmd/hooks.go",
+        "internal/cmd/init.go",
+        "internal/cmd/onboard.go",
+        "internal/cmd/hooks_test.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "assets/prompts/options.md"
+      ],
+      "commit": "c854daf",
+      "completed_at": "2026-10-03T16:14:54.636802Z",
+      "landmarks": [
+        {
+          "feature": "tool-call gates",
+          "symbol": "userHooks",
+          "loc": "internal/cmd/hooks.go:65",
+          "what": "one list of the four wired hooks drives ensureUserHooks and the init/onboard ensured-hooks line; hooks ensure Short and options.md name the gate pair"
+        }
+      ]
+    },
+    "t-24": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_hooks_test.go"
+      ],
+      "commit": "1d0ff11",
+      "completed_at": "2026-10-03T16:32:07.978097Z",
+      "landmarks": [
+        {
+          "feature": "doctor health checks",
+          "symbol": "hooksSection",
+          "loc": "internal/cmd/doctor.go:1120",
+          "what": "Hooks section also flags disableAllHooks or an unparseable file in the repo's .claude/settings.json and settings.local.json, and walks userHooks instead of its own list"
+        }
+      ]
+    },
     "t-3": {
       "files": [
         "internal/gate/engine.go",
