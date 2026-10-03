@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -22,7 +23,7 @@ func Hooks() *cobra.Command {
 	}
 	root.AddCommand(&cobra.Command{
 		Use:   "ensure",
-		Short: "Idempotently wire the dross PreCompact + SessionStart hooks into user-level settings.json",
+		Short: "Idempotently wire the dross hooks (PreCompact, SessionStart, and the PreToolUse/PostToolUse tool-call gates) into user-level settings.json",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			path, err := userSettingsPath()
 			if err != nil {
@@ -59,6 +60,25 @@ const (
 	sessionStartHookCommand = "dross reentry"
 )
 
+// userHooks is every hook ensureUserHooks wires, in order: the event and the
+// command it runs.
+var userHooks = []struct{ event, command string }{
+	{hooks.EventPreCompact, preCompactHookCommand},
+	{hooks.EventSessionStart, sessionStartHookCommand},
+	{hooks.EventPreToolUse, GateCheckHook},
+	{hooks.EventPostToolUse, GateRecordHook},
+}
+
+// userHooksSummary names each wired hook as "event → command", for the line
+// init and onboard print after ensuring them.
+func userHooksSummary() string {
+	parts := make([]string, len(userHooks))
+	for i, h := range userHooks {
+		parts[i] = h.event + " → " + h.command
+	}
+	return strings.Join(parts, ", ")
+}
+
 // ensureUserHooks idempotently wires the dross hooks into the user-level
 // Claude settings.json via hooks.MergeHook: PreCompact and SessionStart, and
 // the tool-call gates' PreToolUse check and PostToolUse record — matcher-less,
@@ -76,12 +96,7 @@ func ensureUserHooks() error {
 	}
 
 	merged := existing
-	for _, h := range []struct{ event, command string }{
-		{hooks.EventPreCompact, preCompactHookCommand},
-		{hooks.EventSessionStart, sessionStartHookCommand},
-		{hooks.EventPreToolUse, GateCheckHook},
-		{hooks.EventPostToolUse, GateRecordHook},
-	} {
+	for _, h := range userHooks {
 		if merged, err = hooks.MergeHook(merged, h.event, h.command); err != nil {
 			return err
 		}

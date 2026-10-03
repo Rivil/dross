@@ -209,7 +209,7 @@ Per lane, not per repo, is the point: a one-character edit to a docs lane's comm
 
 ## 15. Claude Code hooks
 
-`dross hooks ensure` idempotently wires the dross-owned `PreCompact` + `SessionStart` hooks into user-level `settings.json`. The `SessionStart` hook is what prints the "you are here / next command" re-entry line at the top of a fresh session.
+`dross hooks ensure` idempotently wires the four dross-owned hooks into user-level `settings.json`: `PreCompact` + `SessionStart`, and the tool-call gate pair — `PreToolUse` (`dross gate check`) and `PostToolUse` (`dross gate record`). The `SessionStart` hook is what prints the "you are here / next command" re-entry line at the top of a fresh session; without the gate pair the tool-call gates are off and `dross doctor` fails.
 
 Offer to run it. It is safe to re-run — that is what idempotent means here — so the honest default when the user is unsure is to run it rather than to inspect `settings.json` by hand. If the re-entry line has stopped appearing at session start, this is the fix.
 

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 // readHookCommands returns the flat command list under hooks.<event> in a
@@ -340,5 +342,50 @@ func TestEnsureUserHooksWritesAtomically(t *testing.T) {
 	}
 	if got := mustRead(t, filepath.Join(locked, "settings.json")); got != original {
 		t.Errorf("a failed write left %q, want the original bytes", got)
+	}
+}
+
+// TestHookWordingNamesAllFour: what `hooks ensure`, init and onboard say they
+// wire is what ensureUserHooks wires — the tool-call gate pair included.
+func TestHookWordingNamesAllFour(t *testing.T) {
+	want := []struct{ event, command string }{
+		{"PreCompact", "dross pause --auto"},
+		{"SessionStart", "dross reentry"},
+		{"PreToolUse", "dross gate check"},
+		{"PostToolUse", "dross gate record"},
+	}
+	if len(userHooks) != len(want) {
+		t.Fatalf("userHooks = %v, want the four dross hooks", userHooks)
+	}
+	for i, h := range userHooks {
+		if h.event != want[i].event || h.command != want[i].command {
+			t.Errorf("userHooks[%d] = %s → %s, want %s → %s", i, h.event, h.command, want[i].event, want[i].command)
+		}
+	}
+
+	var short string
+	for _, c := range Hooks().Commands() {
+		if c.Name() == "ensure" {
+			short = c.Short
+		}
+	}
+	for _, h := range want {
+		if !strings.Contains(short, h.event) {
+			t.Errorf("`hooks ensure` Short %q does not name %s", short, h.event)
+		}
+	}
+
+	for name, run := range map[string]func() *cobra.Command{"init": Init, "onboard": Onboard} {
+		chdir(t, t.TempDir())
+		out := captureStdout(t, func() {
+			if err := runCmd(t, run()); err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+		})
+		for _, h := range want {
+			if pair := h.event + " → " + h.command; !strings.Contains(out, pair) {
+				t.Errorf("%s's ensured-hooks line does not name %q:\n%s", name, pair, out)
+			}
+		}
 	}
 }
