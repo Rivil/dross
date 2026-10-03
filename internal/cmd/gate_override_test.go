@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -197,5 +198,39 @@ func TestGateRegistryNames(t *testing.T) {
 	sort.Strings(got)
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("registered gates = %v, want %v", got, want)
+	}
+}
+
+// TestGateStatusScopesAndRepo pins what `gate status` says about where it
+// runs — a dross repo, none, or a directory it cannot read — and the scope it
+// prints beside each gate.
+func TestGateStatusScopesAndRepo(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	chdir(t, t.TempDir())
+	out, _, err := runGate(t, "", "status")
+	if err != nil || !strings.Contains(out, "repo: none here") {
+		t.Errorf("gate status outside any dross repo: %q (%v), want `repo: none here`", out, err)
+	}
+	for name, scope := range map[string]string{"commit-green": "workflow", "secret-read": "always-on"} {
+		if !regexp.MustCompile(`(?m)^` + name + ` +` + scope + ` `).MatchString(out) {
+			t.Errorf("gate status does not list %s as %s:\n%s", name, scope, out)
+		}
+	}
+
+	// A .dross/ the locator can see but not search: whether project.toml is
+	// inside cannot be told, which is neither "a repo" nor "none".
+	if os.Geteuid() == 0 {
+		t.Skip("root searches a mode-000 directory, so the locator cannot be made to fail")
+	}
+	dir := drossRepoAt(t)
+	chdir(t, dir)
+	sealed := filepath.Join(dir, ".dross")
+	if err := os.Chmod(sealed, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(sealed, 0o755) })
+	out, _, err = runGate(t, "", "status")
+	if err != nil || !strings.Contains(out, "repo: cannot tell (") || !strings.Contains(out, "permission denied") {
+		t.Errorf("gate status over an unsearchable .dross/: %q (%v), want `repo: cannot tell` naming the error", out, err)
 	}
 }

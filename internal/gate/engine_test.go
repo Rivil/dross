@@ -411,3 +411,12 @@ func TestValidate(t *testing.T) {
 		t.Errorf("the registry is malformed: %v", errs)
 	}
 }
+
+// TestScopeString pins the labels `dross gate status` prints for each scope.
+func TestScopeString(t *testing.T) {
+	for s, want := range map[Scope]string{AlwaysOn: "always-on", Workflow: "workflow"} {
+		if got := s.String(); got != want {
+			t.Errorf("Scope(%d).String() = %q, want %q", s, got, want)
+		}
+	}
+}

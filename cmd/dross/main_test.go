@@ -649,6 +649,9 @@ func TestMainEntryPoint(t *testing.T) {
 		wantExit int
 		wantErr  string // substring of combined output; empty means "no dross: line"
 		wantOnce string // must appear exactly once in the combined output
+		// stderrOnly: stdout must stay empty and wantErr/wantOnce must be on
+		// stderr. Claude Code reads a blocking hook's reason from stderr only.
+		stderrOnly bool
 	}{
 		{
 			name:     "a resolved command exits 0",
@@ -670,12 +673,13 @@ func TestMainEntryPoint(t *testing.T) {
 		{
 			// Exit 1 is non-blocking to Claude Code: a refusal that exited 1
 			// would let the call run with the refusal shown as a mere error.
-			name:     "a gate refusal exits 2 with the refusal printed once",
-			args:     "gate check",
-			stdin:    refused,
-			wantExit: 2,
-			wantErr:  "secret-stream",
-			wantOnce: "Use:",
+			name:       "a gate refusal exits 2 with the refusal printed once",
+			args:       "gate check",
+			stdin:      refused,
+			wantExit:   2,
+			wantErr:    "secret-stream",
+			wantOnce:   "Use:",
+			stderrOnly: true,
 		},
 		{
 			name:     "a panic outside any gate exits 0 with one warning",
@@ -698,7 +702,10 @@ func TestMainEntryPoint(t *testing.T) {
 			)
 			sub.Env = append(sub.Env, c.env...)
 			sub.Stdin = strings.NewReader(c.stdin)
-			out, err := sub.CombinedOutput()
+			var stdout, stderr strings.Builder
+			sub.Stdout, sub.Stderr = &stdout, &stderr
+			err := sub.Run()
+			out := stdout.String() + stderr.String()
 
 			exit := 0
 			if err != nil {
@@ -710,6 +717,14 @@ func TestMainEntryPoint(t *testing.T) {
 			}
 			if exit != c.wantExit {
 				t.Errorf("`dross %s` exited %d, want %d:\n%s", c.args, exit, c.wantExit, out)
+			}
+			if c.stderrOnly {
+				if stdout.Len() != 0 {
+					t.Errorf("`dross %s` wrote to stdout, which a blocking hook's reader never sees:\n%s", c.args, stdout.String())
+				}
+				if strings.Count(stderr.String(), c.wantOnce) != 1 || !strings.Contains(stderr.String(), c.wantErr) {
+					t.Errorf("`dross %s` stderr = %q, want %q once and %q", c.args, stderr.String(), c.wantOnce, c.wantErr)
+				}
 			}
 			if c.wantOnce != "" && strings.Count(string(out), c.wantOnce) != 1 {
 				t.Errorf("`dross %s` printed %q %d times, want once:\n%s", c.args, c.wantOnce, strings.Count(string(out), c.wantOnce), out)

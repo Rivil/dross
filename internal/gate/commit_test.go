@@ -277,3 +277,30 @@ func TestCommitClosedPosture(t *testing.T) {
 		t.Errorf("an unreadable green.json: %q, want a refusal naming it", res.Text())
 	}
 }
+
+// TestCommitLongAll: `--all` is `-a` spelled out, so the candidate includes
+// the unstaged tracked edit. Read as a plain commit it would be the index
+// alone — and differ from a green taken over the edited tree.
+func TestCommitLongAll(t *testing.T) {
+	dir := commitRepo(t, t.TempDir(), testsToml)
+	put(t, dir, "a.go", "package a // unstaged\n")
+	if res := commitCheck(t, "git commit --all -m x", dir); res.Allowed() {
+		t.Error("git commit --all with an unstaged code edit and no green was admitted")
+	}
+	recordGreen(t, dir)
+	if res := commitCheck(t, "git commit --all -m x", dir); !res.Allowed() {
+		t.Errorf("git commit --all of the green tree was refused: %q", res.Text())
+	}
+}
+
+// TestCommitMixedDrossAndCode: the .dross carve-out needs every staged path
+// under .dross/ — one code file among them puts the commit back under the gate.
+func TestCommitMixedDrossAndCode(t *testing.T) {
+	dir := commitRepo(t, t.TempDir(), testsToml)
+	put(t, dir, ".dross/phases/p/plan.toml", "x = 1\n")
+	put(t, dir, "a.go", "package a // code\n")
+	gitIn(t, dir, "add", ".dross/phases/p/plan.toml", "a.go")
+	if res := commitCheck(t, "git commit -m x", dir); res.Allowed() {
+		t.Error("a commit staging a code file beside a .dross file, with no green, was admitted")
+	}
+}

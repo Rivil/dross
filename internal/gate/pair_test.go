@@ -279,3 +279,52 @@ func TestPairGateSoloDowngrade(t *testing.T) {
 		t.Errorf("a solo begin with nothing in_progress was refused: %q", res.Text())
 	}
 }
+
+// TestPairSoloDowngradePartial drives the raw-token fallback: past an
+// unterminated quote the scanner reads one `echo` word, so only the fallback
+// sees the solo begin behind it. A fallback that indexed past its window
+// panics, and the engine turns that into an internal-error refusal — so a
+// line ending mid-match must pass outright, and the refusal must be the
+// downgrade's own.
+func TestPairSoloDowngradePartial(t *testing.T) {
+	dir := pairRepo(t, "in_progress")
+	res := pairCheck(t, bash(t, `echo "oops; dross execute begin p --solo`, dir))
+	if res.Allowed() || !strings.Contains(res.Text(), "switching to --solo mid-task") || strings.Contains(res.Text(), "internal error") {
+		t.Errorf("a solo begin only the fallback sees: %q, want the downgrade refusal", res.Text())
+	}
+	for _, line := range []string{
+		`echo "oops; dross execute`,
+		`echo "oops; dross execute begin`,
+		`echo "oops; dross execute begin p`,
+		`echo "oops; --solo dross execute begin p`,
+	} {
+		if res := pairCheck(t, bash(t, line, dir)); !res.Allowed() {
+			t.Errorf("%q (no solo begin) refused: %q", line, res.Text())
+		}
+	}
+}
+
+// TestPairUnbornHead: on a phase branch with no commits yet HEAD reads as "",
+// and an approval recorded there is an approval at that HEAD — not an error.
+func TestPairUnbornHead(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	dir := t.TempDir()
+	gitIn(t, dir, "init", "-q", "-b", "phase/p")
+	put(t, dir, ".dross/project.toml", testsToml)
+	put(t, dir, ".dross/state.json", `{"current_phase": "p"}`+"\n")
+	put(t, dir, ".dross/phases/p/plan.toml", planWith("in_progress"))
+	code := filepath.Join(dir, "a.go")
+
+	res := pairCheck(t, edit(t, code))
+	if res.Allowed() || !strings.Contains(res.Text(), `"approve t-1"`) || strings.Contains(res.Text(), "read HEAD") {
+		t.Fatalf("an unapproved Edit on an unborn phase branch: %q, want the approval refusal", res.Text())
+	}
+	if warn := pairRecord(t, askPost(t, dir, "approve t-1")); len(warn) != 0 {
+		t.Fatalf("recording an approval on an unborn HEAD warned: %v", warn)
+	}
+	if res := pairCheck(t, edit(t, code)); !res.Allowed() {
+		t.Errorf("an approved Edit on an unborn phase branch was refused: %q", res.Text())
+	}
+}

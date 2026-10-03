@@ -102,6 +102,16 @@ func TestSecretReadRead(t *testing.T) {
 			t.Errorf("Read %s refused: %q", p, res.Text())
 		}
 	}
+	// Every default private-key name, not a sample: a name dropped from the
+	// list would otherwise go unnoticed. Each .pub sibling is public.
+	for _, name := range []string{"id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "id_rsa_sk", "id_dsa_sk", "id_ecdsa_sk", "id_ed25519_sk"} {
+		if res := read("/home/u/.ssh/" + name); res.Allowed() || !strings.Contains(res.Text(), "secret-read") {
+			t.Errorf("Read ~/.ssh/%s: %q, want a secret-read refusal", name, res.Text())
+		}
+		if res := read("/home/u/.ssh/" + name + ".pub"); !res.Allowed() {
+			t.Errorf("Read ~/.ssh/%s.pub refused: %q", name, res.Text())
+		}
+	}
 }
 
 func TestSecretReadBash(t *testing.T) {
