@@ -135,6 +135,15 @@ func TestStreamDestinations(t *testing.T) {
 		{"x >/dev/null 2>&-", map[string]dests{"x": {Null, Null}}},
 		{"x 3>&1 1>f 2>&3", map[string]dests{"x": {File, Transcript}}},
 		{"x >f 2>/dev/stdout", map[string]dests{"x": {File, File}}},
+		// /dev/fd/N is descriptor N as it stands; outside 0-9, or not a
+		// number, it is just a path.
+		{"x 2>/dev/fd/1", map[string]dests{"x": {Transcript, Transcript}}},
+		{"x >/dev/null 2>/dev/fd/1", map[string]dests{"x": {Null, Null}}},
+		{"x >f 2>/dev/fd/0", map[string]dests{"x": {File, Transcript}}},
+		{"x 2>/dev/fd/9", map[string]dests{"x": {Transcript, Null}}},
+		{"x 2>/dev/fd/10", map[string]dests{"x": {Transcript, File}}},
+		{"x 2>/dev/fd/-1", map[string]dests{"x": {Transcript, File}}},
+		{"x 2>/dev/fd/x", map[string]dests{"x": {Transcript, File}}},
 		{"( pass-cli view ) 2>&1", map[string]dests{"pass-cli": {Transcript, Transcript}}},
 		{"( pass-cli view ) >f 2>/dev/null", map[string]dests{"pass-cli": {File, Null}}},
 		{"( pass-cli view >f 2>/dev/null ) 2>&1", map[string]dests{"pass-cli": {File, Null}}},
@@ -196,6 +205,8 @@ func TestPrefixStripping(t *testing.T) {
 	}{
 		{"FOO=1 env BAR=2 /usr/bin/pass-cli item view x", []string{"pass-cli", "item", "view", "x"}, "/usr/bin/pass-cli", []string{"FOO=1", "BAR=2"}},
 		{"env -i -u HOME pass-cli a", []string{"pass-cli", "a"}, "pass-cli", nil},
+		{"env -- pass-cli a", []string{"pass-cli", "a"}, "pass-cli", nil},
+		{"sudo -- pass-cli a", []string{"pass-cli", "a"}, "pass-cli", nil},
 		{"sudo -u root -E nohup time -p command pass-cli a", []string{"pass-cli", "a"}, "pass-cli", nil},
 		{"sudo FOO=1 pass-cli a", []string{"pass-cli", "a"}, "pass-cli", []string{"FOO=1"}},
 		{`\pass-cli a`, []string{"pass-cli", "a"}, "pass-cli", nil},
@@ -363,5 +374,120 @@ func TestFuzzSeedsNeverPanic(t *testing.T) {
 				Scan(strings.Repeat(seed[:i], 2), Options{})
 			}()
 		}
+	}
+}
+
+func TestDestOffTranscript(t *testing.T) {
+	for d, off := range map[Dest]bool{Transcript: false, Pipe: false, Capture: false, File: true, Null: true} {
+		if got := d.OffTranscript(); got != off {
+			t.Errorf("%v.OffTranscript() = %v, want %v", d, got, off)
+		}
+	}
+	if got := Dest(42).String(); got != "dest(42)" {
+		t.Errorf("Dest(42).String() = %q, want dest(42)", got)
+	}
+}
+
+// TestOutputs: `<>` opens its target for writing too, but on stdin — the
+// default descriptor — it is read, not written.
+func TestOutputs(t *testing.T) {
+	cases := []struct {
+		line string
+		want []string
+	}{
+		{"x 3<>f", []string{"f"}},
+		{"x <>f", nil},
+		{"x 0<>f", nil},
+	}
+	for _, c := range cases {
+		t.Run(c.line, func(t *testing.T) {
+			if got := scan(c.line).Commands[0].Outputs(); !reflect.DeepEqual(got, c.want) {
+				t.Errorf("Outputs() = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// TestCasePatterns: a pattern ends at its first unquoted, unescaped `)`, and
+// each clause's list is scanned as commands.
+func TestCasePatterns(t *testing.T) {
+	for _, line := range []string{
+		`case $x in a\)) b;; esac`,
+		`case $x in 'a)') b;; esac`,
+		`case $x in '') b;; esac`,
+		`case $x in "a)") b;; esac`,
+		`case $x in "") b;; esac`,
+		"case $x\nin a) b;; esac",
+		"case $x in # a comment\n a) b;; esac",
+	} {
+		t.Run(line, func(t *testing.T) {
+			s := scan(line)
+			if s.Partial {
+				t.Fatalf("Partial = true (%s)", s.Problem)
+			}
+			if got := names(s); !reflect.DeepEqual(got, []string{"b"}) {
+				t.Errorf("commands = %q, want [b]", got)
+			}
+		})
+	}
+	for _, line := range []string{`case $x in 'a) b;; esac`, `case $x in "a) b;; esac`} {
+		if s := scan(line); !s.Partial || s.Problem != "unterminated case pattern" {
+			t.Errorf("%q: Partial=%v Problem=%q, want an unterminated case pattern", line, s.Partial, s.Problem)
+		}
+	}
+}
+
+// TestContinuations: a backslash-newline joins lines, between words and
+// inside double quotes alike.
+func TestContinuations(t *testing.T) {
+	cases := []struct {
+		line string
+		argv []string
+	}{
+		{"a \\\n b", []string{"a", "b"}},
+		{"echo \"a\\\nb\"", []string{"echo", "ab"}},
+	}
+	for _, c := range cases {
+		t.Run(c.line, func(t *testing.T) {
+			s := scan(c.line)
+			if s.Partial || len(s.Commands) != 1 || !reflect.DeepEqual(s.Commands[0].Argv, c.argv) {
+				t.Errorf("Partial=%v commands=%q argv=%q, want one command %q", s.Partial, names(s), s.Commands[0].Argv, c.argv)
+			}
+		})
+	}
+}
+
+// TestSubstitutionEscapes: inside backticks, \` \$ and \\ are unescaped before
+// the body is scanned; a backtick inside double quotes still runs; an escaped
+// brace does not close ${…}.
+func TestSubstitutionEscapes(t *testing.T) {
+	cases := []struct {
+		line  string
+		names []string
+		argv  map[string][]string // by program name
+	}{
+		{"echo ${x:-\\}} y", []string{"echo"}, map[string][]string{"echo": {"echo", "${x:-\\}}", "y"}}},
+		{"echo `echo \\`pass-cli x\\``", []string{"echo", "echo", "pass-cli"}, map[string][]string{"pass-cli": {"pass-cli", "x"}}},
+		{"x `echo \\$HOME`", []string{"x", "echo"}, map[string][]string{"echo": {"echo", "/home/u"}}},
+		{"x `printf \\\\ y`", []string{"x", "printf"}, map[string][]string{"printf": {"printf", " y"}}},
+		// \\ is one backslash, so the backtick after it closes the body.
+		{"x `printf \\\\` y", []string{"x", "printf"}, map[string][]string{"x": {"x", "`printf \\\\`", "y"}}},
+		{"echo \"a `pass-cli x` b\"", []string{"echo", "pass-cli"}, map[string][]string{"pass-cli": {"pass-cli", "x"}}},
+	}
+	for _, c := range cases {
+		t.Run(c.line, func(t *testing.T) {
+			s := scan(c.line)
+			if s.Partial {
+				t.Fatalf("Partial = true (%s)", s.Problem)
+			}
+			if got := names(s); !reflect.DeepEqual(got, c.names) {
+				t.Fatalf("commands = %q, want %q", got, c.names)
+			}
+			for _, cmd := range s.Commands {
+				if want, ok := c.argv[cmd.Name()]; ok && !reflect.DeepEqual(cmd.Argv, want) {
+					t.Errorf("%s argv = %q, want %q", cmd.Name(), cmd.Argv, want)
+				}
+			}
+		})
 	}
 }
