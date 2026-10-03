@@ -25,7 +25,7 @@
 
 [[criteria]]
   id = "c-6"
-  text = "A Bash command that merges stderr into stdout (`2>&1`, `|&`, `&>`) on a tool declared as secret-emitting (default list includes `pass-cli`) is refused; the same merge on any other tool passes."
+  text = "A Bash invocation of a tool declared as secret-emitting (default list includes `pass-cli`) is refused unless both its stdout and its stderr are redirected away from the transcript (stdout to a file, stderr to a file or /dev/null) — piping, an open stream, or a merge into an open stdout (`2>&1`, `|&`) all refuse; the same shapes on any other tool pass."
 
 [[criteria]]
   id = "c-7"
@@ -85,6 +85,18 @@
   key = "green_run_definition"
   choice = "A green that satisfies c-4 is a full `dross test` run over every declared lane, local or remote; a single-lane run records nothing."
   why = "A partial run proves less than the tree being committed."
+  locked = true
+
+[[decisions]]
+  key = "full_run_source"
+  choice = "Where runtime.test_command is set, a bare selector-free `dross test` running it is the full run (it is the whole suite per test-lane-config's locked bare_test_run, and is not changed). In a lanes-only repo (no test_command) a bare `dross test` runs every declared lane unscoped, and that is the full run. `--files` in a laned repo never counts."
+  why = "Honours bare_test_run instead of overturning it — feastahead's test_command already runs both lanes, so adding lanes to the bare run would double them. Only lanes-only repos had no way to produce a full green."
+  locked = true
+
+[[decisions]]
+  key = "no_test_repo"
+  choice = "In a dross repo with neither runtime.test_command nor a test lane, the commit gate (c-4) stays silent."
+  why = "No green can ever be recorded there, so gating would refuse every agent commit indefinitely; the gate arms once a test command or lane is declared."
   locked = true
 
 [[decisions]]
