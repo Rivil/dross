@@ -214,6 +214,7 @@ var writers = []Writer{
 	{File: "internal/telemetry/telemetry.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/dross/telemetry.jsonl"}, Why: "append-only user-level telemetry log; never under a repo"}},
 	{File: "internal/update/update.go", OutsideDross: &OutsideDross{Paths: []string{"<bin>/dross"}, Why: "the verified release binary, swapped in beside the running one"}},
 	{File: "internal/remote/remote.go", OutsideDross: &OutsideDross{Paths: []string{"<tmp>/dross-rsync-exclude-*"}, Why: "an rsync exclude list in the OS temp dir, removed after the transfer"}},
+	{File: "internal/treefp/treefp.go", OutsideDross: &OutsideDross{Paths: []string{"<tmp>/dross-treefp-*/index"}, Why: "a scratch byte copy of the git index in the OS temp dir, staged into for a tree fingerprint and removed after the call"}},
 	{File: "internal/compilefence/compilefence.go", OutsideDross: &OutsideDross{Paths: []string{"<tmp>/module/*.go"}, Why: "a throwaway build module in t.TempDir for must-not-compile fixtures"}},
 	{File: "internal/pincheck/bump.go", OutsideDross: &OutsideDross{Paths: []string{"go.mod", ".node-version", ".github/actions/<name>/action.yml"}, Why: "rewrites a stale pin's version in place in the repo's own pin files"}},
 	{File: "internal/cmd/root.go", OutsideDross: &OutsideDross{Why: "MustWriteFile is a generic parent-creating helper with no callers outside tests; it names no artifact of its own"}},

@@ -68,6 +68,12 @@ type Options struct {
 	NoOptionalLocks bool
 	// Stdin is fed to git's standard input — a diff for patch-id.
 	Stdin io.Reader
+	// IndexFile runs git against this index instead of the repository's own
+	// (GIT_INDEX_FILE): a scratch copy a caller can stage into and write a
+	// tree from without touching what the user has staged. Empty means the
+	// real index, so a caller that means a scratch one must check its path
+	// is set before relying on the separation.
+	IndexFile string
 }
 
 // context is the call's deadline under o, and the cancel that releases it.
@@ -86,8 +92,8 @@ func (o Options) fullArgv(dir string, args []string) []string {
 	return argv(dir, args)
 }
 
-// prepared applies o's stdin and kill delay to c and returns it, so the spawn
-// and its Output stay one expression — one line for the audits to key on.
+// prepared applies o's stdin, index and kill delay to c and returns it, so the
+// spawn and its Output stay one expression — one line for the audits to key on.
 //
 // WaitDelay is what makes a timeout actually return. Killing git can leave a
 // child holding the output pipe, and Output would block until it closed; the
@@ -95,6 +101,9 @@ func (o Options) fullArgv(dir string, args []string) []string {
 func (o Options) prepared(c *exec.Cmd) *exec.Cmd {
 	if o.Stdin != nil {
 		c.Stdin = o.Stdin
+	}
+	if o.IndexFile != "" {
+		c.Env = append(os.Environ(), "GIT_INDEX_FILE="+o.IndexFile)
 	}
 	if o.Timeout > 0 {
 		c.WaitDelay = 250 * time.Millisecond
