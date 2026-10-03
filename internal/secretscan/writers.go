@@ -55,7 +55,10 @@ type (
 	// MachineLocal marks a writer whose artifact lands under .dross/ but is
 	// kept out of git by a seeded ignore line.
 	MachineLocal struct {
-		Path       string
+		Path string
+		// Also are further paths the same writer keeps beside Path, kept out
+		// of git by the same seed — one store, several records.
+		Also       []string
 		IgnoreSeed string
 		Why        string
 	}
@@ -89,6 +92,7 @@ func ArtifactNames(in []Writer) []string {
 			out = append(out, w.UnderDross.Artifacts...)
 		case w.MachineLocal != nil:
 			out = append(out, w.MachineLocal.Path)
+			out = append(out, w.MachineLocal.Also...)
 		case w.OutsideDross != nil:
 			out = append(out, w.OutsideDross.Paths...)
 		}
@@ -130,6 +134,11 @@ func ValidateWriters(in []Writer) []error {
 			if strings.TrimSpace(w.MachineLocal.Path) == "" {
 				errs = append(errs, fmt.Errorf("entry %q: machine-local with no Path", name))
 			}
+			for _, a := range w.MachineLocal.Also {
+				if strings.TrimSpace(a) == "" {
+					errs = append(errs, fmt.Errorf("entry %q: machine-local with a blank Also path", name))
+				}
+			}
 			if strings.TrimSpace(w.MachineLocal.IgnoreSeed) == "" {
 				errs = append(errs, fmt.Errorf("entry %q: machine-local with no IgnoreSeed — the claim is only as good as the seed that keeps it out of git", name))
 			}
@@ -152,9 +161,13 @@ func ValidateWriters(in []Writer) []error {
 	return errs
 }
 
-// ignoreSeed is the one seed dross itself scaffolds: drossIgnoreEntries,
-// written by ensureDrossGitignore at init and onboard.
+// ignoreSeed is the seed dross scaffolds at init and onboard:
+// drossIgnoreEntries, written by ensureDrossGitignore.
 const ignoreSeed = "cmd.ensureDrossGitignore (drossIgnoreEntries)"
+
+// GateIgnoreSeed is the self-ignoring .dross/gate/.gitignore the gate record
+// store writes beside its first record, so the directory needs no root line.
+const GateIgnoreSeed = "gatestate.ensureDir (.dross/gate/.gitignore)"
 
 // userSettings is the Claude user-level settings file several writers merge
 // into.
@@ -199,6 +212,10 @@ var writers = []Writer{
 	{File: "internal/localstore/store.go", MachineLocal: &MachineLocal{
 		Path: "local.toml", IgnoreSeed: ignoreSeed,
 		Why: "host allowlist additions and quick_base; a committed copy would let a repo authorize its own API host",
+	}},
+	{File: "internal/gatestate/store.go", MachineLocal: &MachineLocal{
+		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json"}, IgnoreSeed: GateIgnoreSeed,
+		Why: "tool-gate records (green tree, execute mode, task approval); a committed copy would let a clone arrive pre-approved",
 	}},
 
 	// ---- OutsideDross: not a .dross artifact ------------------------------

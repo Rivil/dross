@@ -33,6 +33,7 @@ func TestWriterValidationNamesEveryMalformedShape(t *testing.T) {
 		{"artifact with .dross/ prefix", []Writer{{File: f, UnderDross: &UnderDross{Artifacts: []string{".dross/a"}}}}, "must be .dross-relative"},
 		{"slash-absolute artifact", []Writer{{File: f, UnderDross: &UnderDross{Artifacts: []string{"/a"}}}}, "must be .dross-relative"},
 		{"machine-local, no Path", []Writer{{File: f, MachineLocal: &MachineLocal{Path: " ", IgnoreSeed: "s", Why: "w"}}}, "machine-local with no Path"},
+		{"machine-local, blank Also", []Writer{{File: f, MachineLocal: &MachineLocal{Path: "p", Also: []string{" "}, IgnoreSeed: "s", Why: "w"}}}, "blank Also path"},
 		{"machine-local, no seed", []Writer{{File: f, MachineLocal: &MachineLocal{Path: "p", Why: "w"}}}, "no IgnoreSeed"},
 		{"machine-local, no Why", []Writer{{File: f, MachineLocal: &MachineLocal{Path: "p", IgnoreSeed: "s"}}}, "machine-local with no Why"},
 		{"outside-dross, no Why", []Writer{{File: f, OutsideDross: &OutsideDross{Paths: []string{"x"}}}}, "outside-dross with no Why"},

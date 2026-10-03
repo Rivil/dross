@@ -115,6 +115,15 @@ gate.listFile.CuratedFiles curated_files
 gate.listFile.SecretPaths secret_paths
 gate.listFile.SecretTools secret_tools
 
+# ---- gatestate — machine-local gate records: tree object ids, phase/task ids, HEAD SHAs, modes, runner labels
+gatestate.Approval.Head head
+gatestate.Approval.Phase phase
+gatestate.Approval.Task task
+gatestate.Execute.Mode mode
+gatestate.Execute.Phase phase
+gatestate.Green.Runner runner
+gatestate.Green.Tree tree
+
 # ---- hooks — Claude Code hook entries: command lines and types
 hooks.hookCommand.Command command
 hooks.hookCommand.Type type
