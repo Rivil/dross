@@ -204,3 +204,141 @@ func TestUserSettingsPathFallsBackToHome(t *testing.T) {
 		}
 	})
 }
+
+// TestEnsureUserHooksWiresGates: an empty config gains the four dross groups
+// — PreCompact, SessionStart, and the gate pair — and a second ensure writes
+// nothing at all: neither the bytes nor the mtime move.
+func TestEnsureUserHooksWiresGates(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	settings := filepath.Join(cfg, "settings.json")
+	if err := ensureUserHooks(); err != nil {
+		t.Fatal(err)
+	}
+	for event, want := range map[string]string{
+		"PreCompact": preCompactHookCommand, "SessionStart": sessionStartHookCommand,
+		"PreToolUse": GateCheckHook, "PostToolUse": GateRecordHook,
+	} {
+		if got := readHookCommands(t, settings, event); len(got) != 1 || got[0] != want {
+			t.Errorf("hooks.%s = %q, want exactly [%q]", event, got, want)
+		}
+	}
+	before, err := os.Stat(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := mustRead(t, settings)
+	if err := ensureUserHooks(); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mustRead(t, settings) != first || !after.ModTime().Equal(before.ModTime()) {
+		t.Error("a second ensure rewrote settings.json")
+	}
+}
+
+// TestEnsureUserHooksKeepsForeignGateHooks: a foreign matcher group under
+// PreToolUse and unrelated keys survive, in order, with dross's group after.
+func TestEnsureUserHooksKeepsForeignGateHooks(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	settings := filepath.Join(cfg, "settings.json")
+	mustWrite(t, settings, `{
+  "model": "opus",
+  "hooks": {
+    "PreToolUse": [
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "/usr/local/bin/lint.sh"}]}
+    ]
+  },
+  "theme": "dark"
+}`)
+	if err := ensureUserHooks(); err != nil {
+		t.Fatal(err)
+	}
+	if got := readHookCommands(t, settings, "PreToolUse"); len(got) != 2 || got[0] != "/usr/local/bin/lint.sh" || got[1] != GateCheckHook {
+		t.Errorf("hooks.PreToolUse = %q, want the foreign hook then %q", got, GateCheckHook)
+	}
+	body := mustRead(t, settings)
+	if !strings.Contains(body, `"matcher": "Bash"`) && !strings.Contains(body, `"matcher":"Bash"`) {
+		t.Errorf("the foreign group lost its matcher:\n%s", body)
+	}
+	if m, h, th := strings.Index(body, `"model"`), strings.Index(body, `"hooks"`), strings.Index(body, `"theme"`); m < 0 || !(m < h && h < th) {
+		t.Errorf("top-level keys reordered or lost:\n%s", body)
+	}
+}
+
+// TestEnsureUserHooksUpgradesTwoHookInstall: an install from before the gates
+// gains exactly the gate pair, and a PreToolUse that is not an array is
+// refused with the file untouched.
+func TestEnsureUserHooksUpgradesTwoHookInstall(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	settings := filepath.Join(cfg, "settings.json")
+	old := `{"hooks":{"PreCompact":[{"hooks":[{"type":"command","command":"dross pause --auto"}]}],"SessionStart":[{"hooks":[{"type":"command","command":"dross reentry"}]}]}}`
+	mustWrite(t, settings, old)
+	if err := ensureUserHooks(); err != nil {
+		t.Fatal(err)
+	}
+	for event, n := range map[string]int{"PreCompact": 1, "SessionStart": 1, "PreToolUse": 1, "PostToolUse": 1} {
+		if got := readHookCommands(t, settings, event); len(got) != n {
+			t.Errorf("hooks.%s = %q after the upgrade, want %d entry", event, got, n)
+		}
+	}
+
+	bad := `{"hooks":{"PreToolUse":{"matcher":"Bash"}}}`
+	mustWrite(t, settings, bad)
+	if err := ensureUserHooks(); err == nil {
+		t.Error("hooks.PreToolUse as an object was accepted")
+	}
+	if got := mustRead(t, settings); got != bad {
+		t.Errorf("a refused ensure changed the file:\n%s", got)
+	}
+}
+
+// TestEnsureUserHooksWritesAtomically: the file keeps its mode, and a write
+// that cannot complete leaves the original bytes.
+func TestEnsureUserHooksWritesAtomically(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	settings := filepath.Join(cfg, "settings.json")
+	mustWrite(t, settings, `{"model":"opus"}`)
+	if err := os.Chmod(settings, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureUserHooks(); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(settings); err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("mode after ensure = %v (%v), want 0600 kept", info.Mode().Perm(), err)
+	}
+
+	fresh := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", fresh)
+	if err := ensureUserHooks(); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(filepath.Join(fresh, "settings.json")); err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("a new settings.json has mode %v (%v), want 0600", info.Mode().Perm(), err)
+	}
+
+	if os.Geteuid() == 0 {
+		return
+	}
+	locked := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", locked)
+	original := `{"model":"opus"}`
+	mustWrite(t, filepath.Join(locked, "settings.json"), original)
+	if err := os.Chmod(locked, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(locked, 0o755) })
+	if err := ensureUserHooks(); err == nil {
+		t.Error("an ensure that could not write reported success")
+	}
+	if got := mustRead(t, filepath.Join(locked, "settings.json")); got != original {
+		t.Errorf("a failed write left %q, want the original bytes", got)
+	}
+}
