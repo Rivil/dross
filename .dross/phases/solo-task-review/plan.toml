@@ -1,4 +1,4 @@
-task_seq = 23
+task_seq = 24
 
 [phase]
   id = "solo-task-review"
@@ -249,4 +249,15 @@ task_seq = 23
   covers = ["c-1", "c-7"]
   depends_on = ["t-22"]
   test_contract = ["if `dross hooks ensure` on an empty settings.json does not wire SubagentStop -> `dross gate record` matcher-less, or a second run changes the file, TestEnsureWiresSubagentStop fails", "if doctor reports a settings.json without the SubagentStop record hook as anything but an issue naming `dross hooks ensure`, TestDoctorSubagentStopHook fails", "if `dross gate record` fed t-21's SubagentStop fixture exits non-zero or prints to stdout, TestGateRecordSubagentStopNeverBlocks fails"]
+  status = "done"
+
+[[task]]
+  id = "t-24"
+  wave = 8
+  title = "Drop the foreground hint from review status"
+  files = ["internal/cmd/review.go", "internal/cmd/review_test.go"]
+  description = "dross review status's none-state hint still says to spawn the reviewer in the foreground, which review_pass_signal's amendment made unnecessary (and interactive sessions cannot do). Say: spawn it with the printed prompt and wait for its verdict."
+  covers = ["c-1"]
+  depends_on = ["t-13", "t-22"]
+  test_contract = ["if `dross review status` with no ledger tells the agent to spawn in the foreground, or stops naming `dross review context` and waiting for the verdict, TestReviewStatusNoneHint fails"]
   status = "done"

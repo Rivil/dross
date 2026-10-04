@@ -2008,6 +2008,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "solo-task-review/t-24": {
+      "issue": "DRO-849",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "solo-task-review/t-3": {
       "issue": "DRO-817",
       "plan_status": "done",

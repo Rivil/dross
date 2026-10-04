@@ -296,6 +296,22 @@
         }
       ]
     },
+    "t-24": {
+      "files": [
+        "internal/cmd/review.go",
+        "internal/cmd/review_test.go"
+      ],
+      "commit": "300837f",
+      "completed_at": "2026-10-04T12:35:21.788251Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "reviewStatus",
+          "loc": "internal/cmd/review.go:138",
+          "what": "review status tells the agent to spawn the reviewer and wait for its verdict (any spawn mode)"
+        }
+      ]
+    },
     "t-3": {
       "files": [
         "internal/treefp/treefp.go",
@@ -424,6 +440,22 @@
           "symbol": "Solo review block",
           "loc": "assets/prompts/verify.md:226",
           "what": "/dross-verify reports each solo task's review outcome, findings, resolutions and failed-task reasons"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-24": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "TestReviewStatusNoneHint does not assert 'status: none' itself; it relies on the fixture having no ledger, which TestReviewStatusAgreesWithLedger already shows comes out as none, and an unarmed run would still fail the 'wait for its verdict' check",
+          "resolution": "non-blocking, left"
         }
       ]
     }
