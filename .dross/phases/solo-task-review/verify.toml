@@ -1,163 +1,93 @@
 [verify]
   phase = "solo-task-review"
-  generated_at = 2026-10-04T14:39:44.260676Z
-  verdict = "pending"
+  generated_at = 2026-10-04T16:51:12.879586Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-10-04T16:54:49.635731Z
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9277297721916732
-  mutants_killed = 1181
-  mutants_survived = 92
-  mutants_not_covered = 92
+  mutation_score = 0.9347996857816182
+  mutants_killed = 1190
+  mutants_survived = 83
+  mutants_not_covered = 83
   mutants_no_block = 79
-  mutants_test_gap = 13
+  mutants_test_gap = 4
   mutants_in_scope = 1273
-  unclassified_in_scope = 25
+  unclassified_in_scope = 0
   criteria_total = 8
-  criteria_covered = 0
+  criteria_covered = 8
   criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 1181
-    survived = 92
+    killed = 1190
+    survived = 83
     timeout = 0
     in_scope = 1273
-    score = 0.9277297721916732
-    file_count = 73
+    score = 0.9347996857816182
+    file_count = 74
     measured_on = "helicon"
-    whole_file = ["assets/embed.go — adapter-lacks-range-runner", "assets/embed_test.go — adapter-lacks-range-runner", "cmd/dross/main.go — adapter-lacks-range-runner", "internal/boardsync/backlog.go — adapter-lacks-range-runner", "internal/boardsync/backlog_reconcile_test.go — adapter-lacks-range-runner", "internal/boardsync/reap.go — adapter-lacks-range-runner", "internal/boardsync/reap_classify_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_discover.go — adapter-lacks-range-runner", "internal/boardsync/reap_discover_test.go — adapter-lacks-range-runner", "internal/boardsync/toolfence_composer_test.go — adapter-lacks-range-runner", "internal/changes/changes.go — adapter-lacks-range-runner", "internal/changes/changes_test.go — adapter-lacks-range-runner", "internal/cmd/changes.go — adapter-lacks-range-runner", "internal/cmd/cmd_test.go — adapter-lacks-range-runner", "internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/doctor_hooks_test.go — adapter-lacks-range-runner", "internal/cmd/doctor_reviewer_test.go — adapter-lacks-range-runner", "internal/cmd/execute.go — adapter-lacks-range-runner", "internal/cmd/execute_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/gate.go — adapter-lacks-range-runner", "internal/cmd/gate_override_test.go — adapter-lacks-range-runner", "internal/cmd/gate_test.go — adapter-lacks-range-runner", "internal/cmd/hermetic_env_test.go — adapter-lacks-range-runner", "internal/cmd/hooks.go — adapter-lacks-range-runner", "internal/cmd/hooks_test.go — adapter-lacks-range-runner", "internal/cmd/install.go — adapter-lacks-range-runner", "internal/cmd/install_agent_test.go — adapter-lacks-range-runner", "internal/cmd/issue_backlog_close_test.go — adapter-lacks-range-runner", "internal/cmd/quick.go — adapter-lacks-range-runner", "internal/cmd/quick_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/review.go — adapter-lacks-range-runner", "internal/cmd/review_attach.go — adapter-lacks-range-runner", "internal/cmd/review_attach_test.go — adapter-lacks-range-runner", "internal/cmd/review_test.go — adapter-lacks-range-runner", "internal/cmd/reviewer_agent.go — adapter-lacks-range-runner", "internal/cmd/ship.go — adapter-lacks-range-runner", "internal/cmd/ship_test.go — adapter-lacks-range-runner", "internal/cmd/solo_begin_test.go — adapter-lacks-range-runner", "internal/cmd/taint_schedule_test.go — adapter-lacks-range-runner", "internal/cmd/task.go — adapter-lacks-range-runner", "internal/cmd/task_reason_test.go — adapter-lacks-range-runner", "internal/cmd/verify_prompt_test.go — adapter-lacks-range-runner", "internal/gate/commit.go — adapter-lacks-range-runner", "internal/gate/downgrade_test.go — adapter-lacks-range-runner", "internal/gate/fixture_test.go — adapter-lacks-range-runner", "internal/gate/override.go — adapter-lacks-range-runner", "internal/gate/override_test.go — adapter-lacks-range-runner", "internal/gate/payload.go — adapter-lacks-range-runner", "internal/gate/review.go — adapter-lacks-range-runner", "internal/gate/review_test.go — adapter-lacks-range-runner", "internal/gate/scope.go — adapter-lacks-range-runner", "internal/gate/scope_test.go — adapter-lacks-range-runner", "internal/gate/secrets.go — adapter-lacks-range-runner", "internal/gate/soloreview.go — adapter-lacks-range-runner", "internal/gate/soloreview_test.go — adapter-lacks-range-runner", "internal/gatestate/store.go — adapter-lacks-range-runner", "internal/gatestate/store_test.go — adapter-lacks-range-runner", "internal/hooks/settings.go — adapter-lacks-range-runner", "internal/phase/phase.go — adapter-lacks-range-runner", "internal/review/agentdef_test.go — adapter-lacks-range-runner", "internal/review/context.go — adapter-lacks-range-runner", "internal/review/context_test.go — adapter-lacks-range-runner", "internal/review/ledger.go — adapter-lacks-range-runner", "internal/review/ledger_test.go — adapter-lacks-range-runner", "internal/review/verdict.go — adapter-lacks-range-runner", "internal/review/verdict_test.go — adapter-lacks-range-runner", "internal/secretpath/secretpath.go — adapter-lacks-range-runner", "internal/secretpath/secretpath_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/ship/body.go — adapter-lacks-range-runner", "internal/ship/body_test.go — adapter-lacks-range-runner", "internal/treefp/treefp.go — adapter-lacks-range-runner", "internal/treefp/treefp_test.go — adapter-lacks-range-runner"]
+    whole_file = ["assets/embed.go — adapter-lacks-range-runner", "assets/embed_test.go — adapter-lacks-range-runner", "cmd/dross/main.go — adapter-lacks-range-runner", "internal/boardsync/backlog.go — adapter-lacks-range-runner", "internal/boardsync/backlog_reconcile_test.go — adapter-lacks-range-runner", "internal/boardsync/reap.go — adapter-lacks-range-runner", "internal/boardsync/reap_classify_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_discover.go — adapter-lacks-range-runner", "internal/boardsync/reap_discover_test.go — adapter-lacks-range-runner", "internal/boardsync/toolfence_composer_test.go — adapter-lacks-range-runner", "internal/changes/changes.go — adapter-lacks-range-runner", "internal/changes/changes_test.go — adapter-lacks-range-runner", "internal/cmd/changes.go — adapter-lacks-range-runner", "internal/cmd/cmd_test.go — adapter-lacks-range-runner", "internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/doctor_hooks_test.go — adapter-lacks-range-runner", "internal/cmd/doctor_reviewer_test.go — adapter-lacks-range-runner", "internal/cmd/execute.go — adapter-lacks-range-runner", "internal/cmd/execute_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/gate.go — adapter-lacks-range-runner", "internal/cmd/gate_override_test.go — adapter-lacks-range-runner", "internal/cmd/gate_test.go — adapter-lacks-range-runner", "internal/cmd/hermetic_env_test.go — adapter-lacks-range-runner", "internal/cmd/hooks.go — adapter-lacks-range-runner", "internal/cmd/hooks_test.go — adapter-lacks-range-runner", "internal/cmd/install.go — adapter-lacks-range-runner", "internal/cmd/install_agent_test.go — adapter-lacks-range-runner", "internal/cmd/issue_backlog_close_test.go — adapter-lacks-range-runner", "internal/cmd/quick.go — adapter-lacks-range-runner", "internal/cmd/quick_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/review.go — adapter-lacks-range-runner", "internal/cmd/review_attach.go — adapter-lacks-range-runner", "internal/cmd/review_attach_test.go — adapter-lacks-range-runner", "internal/cmd/review_test.go — adapter-lacks-range-runner", "internal/cmd/reviewer_agent.go — adapter-lacks-range-runner", "internal/cmd/ship.go — adapter-lacks-range-runner", "internal/cmd/ship_test.go — adapter-lacks-range-runner", "internal/cmd/solo_begin_test.go — adapter-lacks-range-runner", "internal/cmd/taint_schedule_test.go — adapter-lacks-range-runner", "internal/cmd/task.go — adapter-lacks-range-runner", "internal/cmd/task_reason_test.go — adapter-lacks-range-runner", "internal/cmd/verify_prompt_test.go — adapter-lacks-range-runner", "internal/gate/commit.go — adapter-lacks-range-runner", "internal/gate/commit_test.go — adapter-lacks-range-runner", "internal/gate/downgrade_test.go — adapter-lacks-range-runner", "internal/gate/fixture_test.go — adapter-lacks-range-runner", "internal/gate/override.go — adapter-lacks-range-runner", "internal/gate/override_test.go — adapter-lacks-range-runner", "internal/gate/payload.go — adapter-lacks-range-runner", "internal/gate/review.go — adapter-lacks-range-runner", "internal/gate/review_test.go — adapter-lacks-range-runner", "internal/gate/scope.go — adapter-lacks-range-runner", "internal/gate/scope_test.go — adapter-lacks-range-runner", "internal/gate/secrets.go — adapter-lacks-range-runner", "internal/gate/soloreview.go — adapter-lacks-range-runner", "internal/gate/soloreview_test.go — adapter-lacks-range-runner", "internal/gatestate/store.go — adapter-lacks-range-runner", "internal/gatestate/store_test.go — adapter-lacks-range-runner", "internal/hooks/settings.go — adapter-lacks-range-runner", "internal/phase/phase.go — adapter-lacks-range-runner", "internal/review/agentdef_test.go — adapter-lacks-range-runner", "internal/review/context.go — adapter-lacks-range-runner", "internal/review/context_test.go — adapter-lacks-range-runner", "internal/review/ledger.go — adapter-lacks-range-runner", "internal/review/ledger_test.go — adapter-lacks-range-runner", "internal/review/verdict.go — adapter-lacks-range-runner", "internal/review/verdict_test.go — adapter-lacks-range-runner", "internal/secretpath/secretpath.go — adapter-lacks-range-runner", "internal/secretpath/secretpath_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/ship/body.go — adapter-lacks-range-runner", "internal/ship/body_test.go — adapter-lacks-range-runner", "internal/treefp/treefp.go — adapter-lacks-range-runner", "internal/treefp/treefp_test.go — adapter-lacks-range-runner"]
 
 [[criterion]]
   id = "c-1"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/execute_prompt_test.go:TestExecuteSoloReviewPlacement", "internal/gate/review_test.go:TestRecorderPairSilent", "internal/gate/scope_test.go:TestArmedScopePairSilent", "internal/gate/review_test.go:TestRecorderBackgroundRoundTrip", "internal/gate/soloreview_test.go:TestSoloReviewGate"]
+  notes = "Placement pins the reviewer step after the green test gate and before the commit; pair mode records nothing (recorder and armed scope both silent). The amended review_pass_signal is pinned end to end: a background launch is recorded pending on PostToolUse and the verdict lands on SubagentStop. Proven live on t-24/t-25."
 
 [[criterion]]
   id = "c-2"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/review/verdict_test.go:TestSpecFindingsAlwaysBlock", "internal/review/verdict_test.go:TestFindingsKeepKind", "internal/gate/review_test.go:TestRecorderSpecBlocks", "internal/review/agentdef_test.go:TestReviewerBodyScopesSpecFindings"]
+  notes = "A spec finding is forced BLOCKING at every input severity and the verdict cannot pass with one; kind survives the round trip; the recorder blocks on it; the reviewer definition scopes spec findings to the task's own record. In-hunk switch-case survivors in verdict.go:101-105 are the accepted attribution ceiling, reached by TestQuickSpecFindingCitesDescription."
 
 [[criterion]]
   id = "c-3"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/review/ledger_test.go:TestLedgerState", "internal/cmd/review_attach_test.go:TestFailedReasonFromReview", "internal/cmd/review_attach_test.go:TestSoloFailedRequiresStash", "internal/cmd/execute_prompt_test.go:TestExecuteReviewFailurePath"]
+  notes = "Fix round capped at one, test gate re-run before re-review, failure order stash -> failed -> next task; marking failed refuses a dirty tree (modified or untracked) and writes no status; the failed reason comes from the blocking finding."
 
 [[criterion]]
   id = "c-4"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/gate/soloreview_test.go:TestSoloReviewGate", "internal/gate/soloreview_test.go:TestSoloReviewSilent", "internal/gate/soloreview_test.go:TestSharedCandidate", "internal/gate/downgrade_test.go:TestSoloDowngradeGuard"]
+  notes = "Refuses with no review recorded and with a pass for an older tree, allows a pass for the candidate tree; a .dross/-only commit and an unarmed commit pass without spawning treefp git; the downgrade guard stops dropping out of solo to dodge the gate."
 
 [[criterion]]
   id = "c-5"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/review/agentdef_test.go:TestReviewerDefinitionIsolation", "internal/gate/fixture_test.go:TestCapturedReviewerIsolation", "internal/gate/fixture_test.go:TestCapturedStopIsolation", "internal/gate/review_test.go:TestRecorderRejectsWidenedPrompt", "internal/review/context_test.go:TestContextScope"]
+  notes = "Context carries exactly the task record, criteria, locked decisions, hard rules and diff, excludes the rest, and its digest is stable across status flips; captured real reviewer replies (PostToolUse and SubagentStop) show no CLAUDE.md canary and no memory; a spawn prompt widened past the one context line is rejected."
 
 [[criterion]]
   id = "c-6"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/review_attach_test.go:TestChangesRecordAttachesReview", "internal/ship/body_test.go:TestReviewSectionRenders", "internal/cmd/ship_test.go:TestShipPrintBodyShowsReviews", "internal/cmd/verify_prompt_test.go:TestVerifyShowsReviews"]
+  notes = "The change record carries outcome, rounds and every finding with its resolution; the PR body renders a Reviewer section and ship's printed body shows it; the verify prompt surfaces the reviews."
 
 [[criterion]]
   id = "c-7"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/install_agent_test.go:TestInstallReviewer", "internal/cmd/install_agent_test.go:TestReviewerDirAgreement", "internal/cmd/doctor_reviewer_test.go:TestDoctorReviewer", "internal/cmd/install_agent_test.go:TestReviewerStatus"]
+  notes = "Install links the reviewer into the agents dir install and doctor agree on; doctor exits 0 on a fresh install and non-zero for each broken case (missing, linked source edited past the binary, repo copy shadowing it), naming path and fix."
 
 [[criterion]]
   id = "c-8"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/quick_prompt_test.go:TestQuickSoloReview", "internal/gate/soloreview_test.go:TestSoloReviewQuick", "internal/review/verdict_test.go:TestQuickSpecFindingCitesDescription", "internal/cmd/solo_begin_test.go:TestQuickBegin"]
+  notes = "The quick prompt runs the reviewer before the commit; a solo quick with no recorded review is refused; a quick's spec finding must cite the quick's description; quick begin arms the solo scope (pair-mode quick stays unarmed)."
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/override.go:272 (CONDITIONALS_NEGATION)"
+  severity = "NOTE"
+  text = "Mutation: 0.93 over 1273 in-scope (killed 1190, survived 83 — 9 more kills than round 1, from t-25). All 83 survivors are dispositioned (16 in-hunk + 67 inherited, all accepted); unclassified_in_scope = 0."
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/override.go:274 (CONDITIONALS_NEGATION)"
+  severity = "NOTE"
+  text = "mutants_test_gap = 4 overstates the reachable gap: 3 of the 4 (internal/gate/commit.go:186 ×2, internal/treefp/treefp.go:253) are empty `case X:` arms. go-cover emits a 0-statement block at the colon on the same line (186.52,186.52 0 0; 253.18,253.18 0 0), so survivor.Derive's line-granular placement counts the condition line as in-block. Both arms are exercised (commit_test.go:154,167; treefp_test.go:224), so they are the switch-case attribution ceiling. The one real reachable gap is internal/cmd/doctor.go:1471, the body of the remoteLockStatusFn ssh seam that tests replace (accepted as a process-construction seam). Classifier fix deferred."
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/override.go:276 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/override.go:276 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/override.go:278 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/review.go:94 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/review.go:96 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/review.go:98 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/review.go:138 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/review.go:146 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/scope.go:173 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/soloreview.go:133 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/soloreview.go:135 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/commit.go:159 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/gate/commit.go:159 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/review/context.go:198 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/review/verdict.go:101 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/review/verdict.go:103 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/review/verdict.go:103 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/review/verdict.go:105 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/review/verdict.go:105 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/review/verdict.go:109 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/ship/body.go:147 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/ship/body.go:147 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/ship/body.go:193 (INCREMENT_DECREMENT)"
+  severity = "NOTE"
+  text = "Solo review: the gate went live at t-24; t-24 pass after 1 round, t-25 pass after 2 rounds. Every finding is FLAG/NOTE quality and was left as non-blocking; no unresolved finding and no failed task. t-1..t-23 predate the gate and carry no review."

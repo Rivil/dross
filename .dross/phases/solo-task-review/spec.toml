@@ -123,3 +123,8 @@
   id = "573fa22f74becc03"
   text = "A remote `dross test` from a git worktree must refuse (or sync real git metadata): the worktree's `.git` is a gitfile pointing at the main checkout's .git/worktrees/<name>, so rsyncing it to the remote workdir leaves a .git that resolves nowhere — every git call in the remote suite fails (exit 128), and the shared workdir's git state stays broken for anything else reading it until the next run from a real checkout."
   why = "2026-10-04: the routed-backlog hotfix ran `dross test` from worktree /Users/rivil/Development/dross-hotfix; three git-dependent tests failed remotely, and feastahead's mutation leg (which reads /var/lib/buildcache/src/dross on helicon) saw a failed git merge-base during that window and aborted. Workaround used: `dross test --local` in the worktree."
+
+[[deferred]]
+  id = "366fb4244e1b525a"
+  text = "survivor.Derive places a NOT COVERED survivor by line only, so an empty `case X:` arm — which go-cover gives a 0-statement block starting at the colon on the same line — reads as in-block and is counted as a reachable test gap (mutants_test_gap) instead of the switch-case attribution ceiling (mutants_no_block). Ignore 0-statement blocks (or compare columns) when placing a line."
+  why = "solo-task-review verify round 2 (2026-10-04): mutants_test_gap = 4 but 3 were empty case arms (gate/commit.go:186 x2, treefp/treefp.go:253) whose tests do run them; the overcount misreports the efficacy line and would push an operator to chase unkillable mutants"
