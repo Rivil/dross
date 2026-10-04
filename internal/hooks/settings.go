@@ -70,6 +70,9 @@ const (
 	// what a finished one established.
 	EventPreToolUse  = "PreToolUse"
 	EventPostToolUse = "PostToolUse"
+	// EventSubagentStop fires when a subagent finishes: it carries a
+	// background solo reviewer's verdict to the recorder.
+	EventSubagentStop = "SubagentStop"
 )
 
 // hookCommand is one command entry inside a hook group.

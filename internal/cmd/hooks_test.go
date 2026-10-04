@@ -346,16 +346,18 @@ func TestEnsureUserHooksWritesAtomically(t *testing.T) {
 }
 
 // TestHookWordingNamesAllFour: what `hooks ensure`, init and onboard say they
-// wire is what ensureUserHooks wires — the tool-call gate pair included.
+// wire is what ensureUserHooks wires — the tool-call gate pair included, and
+// the SubagentStop record a background solo reviewer reports through.
 func TestHookWordingNamesAllFour(t *testing.T) {
 	want := []struct{ event, command string }{
 		{"PreCompact", "dross pause --auto"},
 		{"SessionStart", "dross reentry"},
 		{"PreToolUse", "dross gate check"},
 		{"PostToolUse", "dross gate record"},
+		{"SubagentStop", "dross gate record"},
 	}
 	if len(userHooks) != len(want) {
-		t.Fatalf("userHooks = %v, want the four dross hooks", userHooks)
+		t.Fatalf("userHooks = %v, want the five dross hooks", userHooks)
 	}
 	for i, h := range userHooks {
 		if h.event != want[i].event || h.command != want[i].command {
@@ -387,5 +389,30 @@ func TestHookWordingNamesAllFour(t *testing.T) {
 				t.Errorf("%s's ensured-hooks line does not name %q:\n%s", name, pair, out)
 			}
 		}
+	}
+}
+
+// TestEnsureWiresSubagentStop: ensure wires SubagentStop → dross gate record
+// matcher-less, and a second run leaves the file byte for byte.
+func TestEnsureWiresSubagentStop(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	if err := ensureUserHooks(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(cfg, "settings.json")
+	first := mustRead(t, path)
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(first), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if !matcherless(doc, "SubagentStop", GateRecordHook) {
+		t.Fatalf("SubagentStop → %s is not wired matcher-less:\n%s", GateRecordHook, first)
+	}
+	if err := ensureUserHooks(); err != nil {
+		t.Fatal(err)
+	}
+	if again := mustRead(t, path); again != first {
+		t.Fatal("a second ensure changed settings.json")
 	}
 }

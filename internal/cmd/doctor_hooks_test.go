@@ -32,6 +32,7 @@ var (
 	sessionStartPair = [2]string{"SessionStart", sessionStartHookCommand}
 	gateCheckPair    = [2]string{"PreToolUse", GateCheckHook}
 	gateRecordPair   = [2]string{"PostToolUse", GateRecordHook}
+	subagentStopPair = [2]string{"SubagentStop", GateRecordHook}
 )
 
 // withConfig points CLAUDE_CONFIG_DIR at a fresh dir holding settings (none
@@ -78,7 +79,7 @@ func TestDoctorGateHooks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("doctor failed after `dross hooks ensure`: %v\n%s", err, sec)
 	}
-	for _, want := range []string{"✓ PreCompact", "✓ SessionStart", "✓ PreToolUse → dross gate check", "✓ PostToolUse → dross gate record"} {
+	for _, want := range []string{"✓ PreCompact", "✓ SessionStart", "✓ PreToolUse → dross gate check", "✓ PostToolUse → dross gate record", "✓ SubagentStop → dross gate record"} {
 		if !strings.Contains(sec, want) {
 			t.Errorf("Hooks section lacks %q after ensure:\n%s", want, sec)
 		}
@@ -92,8 +93,8 @@ func TestDoctorMissingConvenienceHooksWarnOnly(t *testing.T) {
 		pairs [][2]string
 		warn  string
 	}{
-		{"no PreCompact", [][2]string{sessionStartPair, gateCheckPair, gateRecordPair}, "⚠ PreCompact"},
-		{"no SessionStart", [][2]string{preCompactPair, gateCheckPair, gateRecordPair}, "⚠ SessionStart"},
+		{"no PreCompact", [][2]string{sessionStartPair, gateCheckPair, gateRecordPair, subagentStopPair}, "⚠ PreCompact"},
+		{"no SessionStart", [][2]string{preCompactPair, gateCheckPair, gateRecordPair, subagentStopPair}, "⚠ SessionStart"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			withConfig(t, settingsWith(t, "", c.pairs...))
@@ -111,7 +112,7 @@ func TestDoctorMissingConvenienceHooksWarnOnly(t *testing.T) {
 func TestDoctorHiddenGateHooks(t *testing.T) {
 	doctorRepo(t)
 	t.Run("gate commands only under a matcher", func(t *testing.T) {
-		withConfig(t, settingsWith(t, "Bash", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair))
+		withConfig(t, settingsWith(t, "Bash", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, subagentStopPair))
 		sec, err := runDoctorHooks(t)
 		if err == nil || !strings.Contains(sec, "✗ PreToolUse → `dross gate check` is wired only under a matcher") {
 			t.Fatalf("a matcher-restricted gate hook passed: %v\n%s", err, sec)
@@ -123,7 +124,7 @@ func TestDoctorHiddenGateHooks(t *testing.T) {
 		}
 	})
 	t.Run("disableAllHooks", func(t *testing.T) {
-		all := settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair)
+		all := settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, subagentStopPair)
 		withConfig(t, strings.Replace(all, "{", `{"disableAllHooks":true,`, 1))
 		sec, err := runDoctorHooks(t)
 		if err == nil || !strings.Contains(sec, "disableAllHooks") {
@@ -149,7 +150,7 @@ func TestDoctorReadsEffectiveSettings(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	mustWrite(t, filepath.Join(home, ".claude", "settings.json"),
-		settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair))
+		settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, subagentStopPair))
 	cfg := withConfig(t, "")
 	sec, err := runDoctorHooks(t)
 	if err == nil || !strings.Contains(sec, "✗ PreToolUse") {
@@ -165,7 +166,7 @@ func TestDoctorReadsEffectiveSettings(t *testing.T) {
 // that repo however well the user-level file wires them.
 func TestDoctorProjectHooksDisabled(t *testing.T) {
 	repo := doctorRepo(t)
-	withConfig(t, settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair))
+	withConfig(t, settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, subagentStopPair))
 	baseline, err := runDoctorHooks(t)
 	if err != nil {
 		t.Fatalf("doctor with every hook wired and no .claude/: %v\n%s", err, baseline)
@@ -191,10 +192,22 @@ func TestDoctorProjectHooksDisabled(t *testing.T) {
 
 func TestDoctorProjectSettingsUnparseable(t *testing.T) {
 	repo := doctorRepo(t)
-	withConfig(t, settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair))
+	withConfig(t, settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, subagentStopPair))
 	mustWrite(t, filepath.Join(repo, ".claude", "settings.local.json"), `{"hooks": `)
 	sec, err := runDoctorHooks(t)
 	if err == nil || !strings.Contains(sec, "✗ .claude/settings.local.json cannot be read") || !strings.Contains(sec, "unexpected end of JSON input") {
 		t.Fatalf("a malformed repo-level settings.local.json: %v\n%s", err, sec)
+	}
+}
+
+// TestDoctorSubagentStopHook: without SubagentStop → dross gate record a
+// background solo reviewer's verdict never reaches the recorder, so solo
+// reviews in an interactive session can never pass — an issue, not a warning.
+func TestDoctorSubagentStopHook(t *testing.T) {
+	doctorRepo(t)
+	withConfig(t, settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair))
+	sec, err := runDoctorHooks(t)
+	if err == nil || !strings.Contains(sec, "✗ SubagentStop → `dross gate record` is not wired") || !strings.Contains(sec, "dross hooks ensure") {
+		t.Fatalf("a missing SubagentStop record hook: %v\n%s", err, sec)
 	}
 }

@@ -43,6 +43,7 @@ Hooks:
   ✓ SessionStart → dross reentry
   ✓ PreToolUse → dross gate check
   ✓ PostToolUse → dross gate record
+  ✓ SubagentStop → dross gate record
 
 Reviewer:
   ✓ solo reviewer dross-task-reviewer is installed and current

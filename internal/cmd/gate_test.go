@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -147,5 +148,19 @@ func TestGateHookConstants(t *testing.T) {
 		if err != nil || c.CommandPath() != want {
 			t.Errorf("%v resolves to %q (%v), want the hook constant %q", args, c.CommandPath(), err, want)
 		}
+	}
+}
+
+// TestGateRecordSubagentStopNeverBlocks: the SubagentStop hook runs the same
+// verb, and a finished subagent's payload — which names no tool — must never
+// fail the hook or print to stdout.
+func TestGateRecordSubagentStopNeverBlocks(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "internal", "gate", "testdata", "reviewer_subagent_stop.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, errOut, err := runGateVerb(t, "record", string(b))
+	if err != nil || out != "" {
+		t.Fatalf("err=%v stdout=%q, want exit 0 and nothing on stdout (stderr %q)", err, out, errOut)
 	}
 }
