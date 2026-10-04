@@ -95,7 +95,6 @@
     "slug:prompt-behaviour-evals": "DRO-704",
     "slug:review-comment-ingest": "DRO-693",
     "slug:review-edge-lenses": "DRO-696",
-    "slug:solo-task-review": "DRO-690",
     "slug:spec-edge-probe": "DRO-695",
     "slug:spec-fact-drift": "DRO-698",
     "slug:task-preconditions": "DRO-699",
