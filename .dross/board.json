@@ -121,6 +121,7 @@
     "someday:id:0824d227a6d8bebe": "DRO-604",
     "someday:id:08c4b7d2d98b673e": "DRO-401",
     "someday:id:09c1286a13989981": "DRO-562",
+    "someday:id:0a2f86a4677cc151": "DRO-830",
     "someday:id:0ad901405561a187": "DRO-116",
     "someday:id:0b1634dcc8c4954f": "DRO-582",
     "someday:id:0cc616a86217cf25": "DRO-565",
@@ -144,6 +145,7 @@
     "someday:id:20d239bfa5341306": "DRO-62",
     "someday:id:211fd3040434016d": "DRO-645",
     "someday:id:215d2ae2e7799d69": "DRO-102",
+    "someday:id:21841dbf893e97db": "DRO-834",
     "someday:id:2385fc70268180d1": "DRO-83",
     "someday:id:23cd8142a6ba122b": "DRO-687",
     "someday:id:245f4ad61d9e038a": "DRO-372",
@@ -201,6 +203,7 @@
     "someday:id:5433add0623c64ef": "DRO-572",
     "someday:id:559177675cd27ce3": "DRO-601",
     "someday:id:5610b45525282bf4": "DRO-219",
+    "someday:id:573fa22f74becc03": "DRO-836",
     "someday:id:5802ad3fe8f08d87": "DRO-34",
     "someday:id:585ea4027cea6bf1": "DRO-530",
     "someday:id:58e9bf6438fdb25b": "DRO-548",
@@ -372,6 +375,7 @@
     "someday:id:ddf9c9e63e17d0fc": "DRO-679",
     "someday:id:de730bc44c29443c": "DRO-543",
     "someday:id:deada906586f73f1": "DRO-590",
+    "someday:id:e1489451481fee30": "DRO-831",
     "someday:id:e5ef2935a451c594": "DRO-119",
     "someday:id:e7207129f4d8a7fc": "DRO-48",
     "someday:id:e8f3c04c60c82aa7": "DRO-676",
@@ -397,9 +401,11 @@
     "someday:id:f1b1b4359fc352ac": "DRO-360",
     "someday:id:f2704a9445152ac0": "DRO-528",
     "someday:id:f551232700a801da": "DRO-674",
+    "someday:id:f655ef5fce125f23": "DRO-833",
     "someday:id:f74fa3c9230a9c3b": "DRO-291",
     "someday:id:f93277521f881095": "DRO-89",
     "someday:id:f95098e0fc3de054": "DRO-597",
+    "someday:id:f998e138ba3b71a9": "DRO-832",
     "someday:id:fa1314822c9ca2e1": "DRO-596",
     "someday:id:fa33806da7ae4d92": "DRO-542",
     "someday:id:fa3d17955ecdf1cb": "DRO-742",
@@ -1929,8 +1935,23 @@
     },
     "solo-task-review/t-11": {
       "issue": "DRO-824",
-      "plan_status": "in_progress",
-      "board_state": "task-in-progress"
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-12": {
+      "issue": "DRO-828",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-13": {
+      "issue": "DRO-835",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-19": {
+      "issue": "DRO-829",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "solo-task-review/t-2": {
       "issue": "DRO-816",

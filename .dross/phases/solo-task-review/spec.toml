@@ -88,3 +88,38 @@
   text = "plan.toml writes are lossy: `dross task status/add/edit` re-encode the whole plan and strip every comment (feastahead lost 123 header comment lines per write and restores them by hand). Give plan.toml the lossless-write treatment project.toml got in project-toml-lossless-writes."
   why = "Reported by feastahead 2026-10-04 with the board issues; spec decides whether it stays in this phase or splits out."
   target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "0a2f86a4677cc151"
+  text = "survivors.toml writes drop the load-bearing `# dross:allow-secret` trailing comments: survivor.Save re-encodes the whole store (toml.NewEncoder), so any `dross survivor accept/route` strips every marker and the next `dross validate` (and /dross-ship) fails the secret self-scan on the accepted entries' source-text values. Fix with the same lossless-write approach as plan.toml (or carry the marker as data the scanner honours), and pin it with a test: accept one survivor into a store holding a marked entry and assert validate stays green."
+  why = "Reported by feastahead 2026-10-04 on 7b33f38: 130 survivor accepts took survivors.toml from 2 allow-secret markers to 0, and validate went red until re-appended by hand. Same root cause as the plan.toml comment stripping, but it breaks ship, not just cosmetics."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "e1489451481fee30"
+  text = "Routed backlog items must resolve only on a disposition record, never on target-phase completion: reapBacklogVerdict (reap.go) strands a routed item when its target's changes.json is complete, and BacklogVerdictFor (backlog.go) resolves it when the target's issue is done. A route that lands on an already-finished phase, or a target rescoped away from the item, closes work nobody did. Close a routed item only on evidence it was disposed (survivor accepted/killed/covered, deferred item absorbed by the target's spec, dismissed)."
+  why = "feastahead 2026-10-04: reap closed 545 backlog cards, 527 without evidence (268 routed after the target shipped, 246 to a rescoped phase, 13 contradicted by the tree) — reverted from reap-log.json. backlog sync runs the same rule on every ship (ship.md §6 step 6). URGENT: data-corrupting."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "f998e138ba3b71a9"
+  text = "Refuse (or flag) `dross deferred route` / `dross survivor route` whose target phase is already complete — the item can no longer be in that phase's scope."
+  why = "feastahead 2026-10-04: 261 uat-session-15 survivors were routed on 2026-09-09 to mutation-run-cost-reduction, whose MR merged 2026-09-04."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "f655ef5fce125f23"
+  text = "Survivor routing must be idempotent per survivor key: re-routing the same survivor mints a new [[deferred]] entry (new id) and a new board card each time."
+  why = "feastahead 2026-10-04: 34 survivor keys carry 2-4 identical-text deferred entries each, 88 cards (e.g. FEA-520..523 = survivor bf499ceced23613e in ingredient-density-prod-seed/spec.toml)."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "21841dbf893e97db"
+  text = "A failed board call must not read as a no-op: the prompts say board sync is a 'no-op unless [remote].board_sync is on — safe to always run' (the key is actually [board].enabled), so an agent treats `$YOUTRACK_TOKEN is not set` (non-zero exit) as the no-op and the phase never gets its card. Fix the prompt wording (non-zero = surface it) and give a missed phase/task card a catch-up path."
+  why = "feastahead 2026-10-04: 18 merged phases never got a phase issue (tracker-hygiene, ci-supply-chain-hardening, test-env-hermeticity, uat-session-10/11-fixes/12, all 8 v2.1 phases)."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "573fa22f74becc03"
+  text = "A remote `dross test` from a git worktree must refuse (or sync real git metadata): the worktree's `.git` is a gitfile pointing at the main checkout's .git/worktrees/<name>, so rsyncing it to the remote workdir leaves a .git that resolves nowhere — every git call in the remote suite fails (exit 128), and the shared workdir's git state stays broken for anything else reading it until the next run from a real checkout."
+  why = "2026-10-04: the routed-backlog hotfix ran `dross test` from worktree /Users/rivil/Development/dross-hotfix; three git-dependent tests failed remotely, and feastahead's mutation leg (which reads /var/lib/buildcache/src/dross on helicon) saw a failed git merge-base during that window and aborted. Workaround used: `dross test --local` in the worktree."

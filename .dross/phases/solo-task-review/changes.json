@@ -2,5 +2,248 @@
   "phase": "solo-task-review",
   "base": "milestone/v1.7",
   "base_commit": "7cbf7d63bd3dc063cd85511eb1b19fa8d1082d2f",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/gate/testdata/agent_reviewer_post.json",
+        "internal/gate/testdata/agent_background_post.json",
+        "internal/gate/testdata/agent_default_async_post.json",
+        "internal/gate/fixture_test.go"
+      ],
+      "commit": "244ea49",
+      "completed_at": "2026-10-04T08:58:40.846084Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "TestCapturedAgentReviewerFixture",
+          "loc": "internal/gate/fixture_test.go:146",
+          "what": "captured Agent PostToolUse fixtures prove a foreground reviewer's verdict reaches the hook and omitClaudeMd isolates it"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/install.go",
+        "internal/cmd/reviewer_agent.go",
+        "internal/cmd/install_agent_test.go",
+        "internal/cmd/cmd_test.go",
+        "internal/cmd/hermetic_env_test.go",
+        "internal/secretscan/writers.go"
+      ],
+      "commit": "b3d6c44",
+      "completed_at": "2026-10-04T09:58:06.352516Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "reviewerStatusIn",
+          "loc": "internal/cmd/reviewer_agent.go:126",
+          "what": "dross install puts the reviewer where Claude Code reads agents; readiness reports ok/missing/stale/shadowed with a remedy"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/changes.go",
+        "internal/cmd/task.go",
+        "internal/cmd/review_attach.go",
+        "internal/cmd/review_attach_test.go"
+      ],
+      "commit": "7c57302",
+      "completed_at": "2026-10-04T10:02:52.831688Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "taskReviewFor",
+          "loc": "internal/cmd/review_attach.go:31",
+          "what": "a solo task's resolved review rides into changes.json from the recorder's ledger; failed solo tasks must be stashed first"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/cmd/review.go",
+        "internal/cmd/review_test.go",
+        "cmd/dross/main.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "internal/review/context.go",
+        "internal/review/context_test.go"
+      ],
+      "commit": "f77261c",
+      "completed_at": "2026-10-04T10:40:53.492765Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "reviewContext",
+          "loc": "internal/cmd/review.go:54",
+          "what": "dross review context writes the scoped context and prints the reviewer's exact prompt line; review status reads the ledger"
+        }
+      ]
+    },
+    "t-19": {
+      "files": [
+        "internal/gate/scope.go",
+        "internal/gate/scope_test.go"
+      ],
+      "commit": "0cbe3bd",
+      "completed_at": "2026-10-04T10:15:59.362273Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "ArmedScope",
+          "loc": "internal/gate/scope.go:53",
+          "what": "resolves which solo task or quick a review covers and its ledger key; one context loader for verb and recorder"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/review/verdict.go",
+        "internal/review/verdict_test.go",
+        "internal/review/ledger.go",
+        "internal/review/ledger_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "eb61691",
+      "completed_at": "2026-10-04T09:02:17.820189Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "ParseVerdict",
+          "loc": "internal/review/verdict.go:80",
+          "what": "parses the reviewer's dross-verdict fence (spec findings always block, quality graded) and StateOf enforces the one-fix-round cap"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/treefp/treefp.go",
+        "internal/treefp/treefp_test.go",
+        "internal/review/context.go",
+        "internal/review/context_test.go",
+        "internal/secretpath/secretpath.go",
+        "internal/secretpath/secretpath_test.go",
+        "internal/gate/secrets.go"
+      ],
+      "commit": "8c70513",
+      "completed_at": "2026-10-04T09:09:53.913843Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "BuildContext",
+          "loc": "internal/review/context.go:71",
+          "what": "renders the scoped, secret-withholding review context over a config-independent whole-tree diff and digests it"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/cmd/task.go",
+        "internal/cmd/task_reason_test.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "0943fc2",
+      "completed_at": "2026-10-04T09:12:33.536104Z",
+      "landmarks": [
+        {
+          "feature": "task lifecycle",
+          "symbol": "taskStatus",
+          "loc": "internal/cmd/task.go:188",
+          "what": "task status failed --reason records why a task failed; any other status clears it"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/changes/changes.go",
+        "internal/changes/changes_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "cb29983",
+      "completed_at": "2026-10-04T09:14:51.193182Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "SetReview",
+          "loc": "internal/changes/changes.go:422",
+          "what": "changes.json carries each solo task's review outcome and resolved findings beside (never inside) its task record"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/gatestate/store.go",
+        "internal/gatestate/store_test.go",
+        "internal/gate/override.go",
+        "internal/gate/override_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/secretscan/writers.go",
+        "internal/cmd/taint_schedule_test.go"
+      ],
+      "commit": "a955623",
+      "completed_at": "2026-10-04T09:22:22.474975Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "SaveReview",
+          "loc": "internal/gatestate/store.go:166",
+          "what": "machine-local review ledger, quick marker and review context records; tamper-guard refuses their deletion as well as writes"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "assets/agents/dross-task-reviewer.md",
+        "assets/embed.go",
+        "assets/embed_test.go",
+        "internal/review/agentdef_test.go"
+      ],
+      "commit": "537cfc4",
+      "completed_at": "2026-10-04T09:25:01.695016Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "dross-task-reviewer",
+          "loc": "assets/agents/dross-task-reviewer.md:1",
+          "what": "isolated reviewer agent definition (omitClaudeMd, read-only tools, inherited model) that ends with one dross-verdict block"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/ship/body.go",
+        "internal/ship/body_test.go",
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go",
+        "internal/boardsync/toolfence_composer_test.go"
+      ],
+      "commit": "6442c6d",
+      "completed_at": "2026-10-04T09:29:14.535203Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "writeReviews",
+          "loc": "internal/ship/body.go:135",
+          "what": "PR body lists each solo task's review outcome and resolved findings, escaped and budget-capped"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "assets/prompts/verify.md",
+        "internal/cmd/verify_prompt_test.go"
+      ],
+      "commit": "95a4c39",
+      "completed_at": "2026-10-04T09:41:13.514735Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "Solo review block",
+          "loc": "assets/prompts/verify.md:226",
+          "what": "/dross-verify reports each solo task's review outcome, findings, resolutions and failed-task reasons"
+        }
+      ]
+    }
+  }
 }
