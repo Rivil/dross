@@ -288,17 +288,20 @@ func TestBacklogClosesScaffoldedSlugOnly(t *testing.T) {
 	}
 }
 
-// TestRoutedBacklogClosesOnlyWhenTargetResolved is c-6's other half. A routed
-// item's work lands in its TARGET phase, so the target's own issue is the only
-// honest signal that the idea is done. The two cases differ in nothing but that
-// read-back.
+// TestRoutedBacklogClosesOnlyWhenTargetResolved pins that a routed item's
+// mirror NEVER closes on its target phase's issue resolving. The target
+// finishing was once read as the idea being done, but a route can land on a
+// phase that already shipped (the item was never in its scope) or one later
+// rescoped away from it — feastahead, 2026-10-04: 527 of 545 backlog closures
+// had no evidence behind them. The two cases differ in nothing but the
+// target's read-back, and both must leave the mirror open.
 func TestRoutedBacklogClosesOnlyWhenTargetResolved(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
 		targetResolved bool
 		wantCloses     int
 	}{
-		{"target shipped", true, 1},
+		{"target shipped", true, 0},
 		{"target still open", false, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

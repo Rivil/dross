@@ -170,9 +170,9 @@ func orphanVerdict(ctx *Ctx, kind orphanKind, artefact string) (ReapVerdict, str
 		}
 		return phaseRecordVerdict(ctx.Root, slug)
 	case orphanTarget:
-		// A routed item resolves when its destination phase completed — and a
-		// destination still on a roadmap but unscaffolded is live work, not a
-		// lost mirror.
+		// A routed item never resolves on its destination completing (see
+		// routedVerdict) — and a destination still on a roadmap but
+		// unscaffolded is live work, not a lost mirror.
 		if !phase.DirExists(ctx.Root, artefact) {
 			roadmap, err := roadmapSlugs(ctx.Root)
 			if err != nil {
@@ -181,11 +181,7 @@ func orphanVerdict(ctx *Ctx, kind orphanKind, artefact string) (ReapVerdict, str
 			v, why := slugVerdict(ctx.Root, artefact, roadmap)
 			return v, fmt.Sprintf("routed to %s: %s", artefact, why)
 		}
-		v, why := phaseRecordVerdict(ctx.Root, artefact)
-		if v == ReapStranded {
-			return v, fmt.Sprintf("routed to %s; %s", artefact, why)
-		}
-		return v, why
+		return routedVerdict(ctx.Root, artefact)
 	case orphanDeferred:
 		return reapBacklogVerdictByID(ctx, artefact)
 	case orphanQuick:

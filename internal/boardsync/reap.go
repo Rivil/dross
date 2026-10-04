@@ -428,13 +428,28 @@ func reapBacklogVerdict(ctx *Ctx, key string, deferred map[string]deferred.Entry
 			}
 			return v, fmt.Sprintf("routed to %s: %s", d.Target, why)
 		}
-		v, why := phaseRecordVerdict(ctx.Root, d.Target)
-		switch v {
-		case ReapStranded:
-			return ReapStranded, fmt.Sprintf("routed to %s; %s", d.Target, why)
-		case ReapUnattributable:
-			return ReapUnattributable, fmt.Sprintf("routed to %s but %s", d.Target, why)
-		}
+		return routedVerdict(ctx.Root, d.Target)
+	}
+	return ReapStillOpen, ""
+}
+
+// routedVerdict decides a routed item whose destination phase is scaffolded.
+//
+// The destination finishing is NOT evidence the item was done, so it never
+// strands the card. A route can land on a phase that already shipped (the
+// item was never in its scope), and a destination can be rescoped away from
+// the item; both read as "destination complete". Closing on that resolved
+// hundreds of live items on a real board (feastahead, 2026-10-04: 527 of 545
+// closures lacked evidence). A routed item under a finished destination is
+// named as unattributable — left open for a human to judge — and one under a
+// live destination is still open.
+func routedVerdict(root, target string) (ReapVerdict, string) {
+	v, why := phaseRecordVerdict(root, target)
+	switch v {
+	case ReapStranded:
+		return ReapUnattributable, fmt.Sprintf("routed to %s, which is complete — a finished destination does not show this item was done (it may have been routed after the phase shipped, or rescoped out); close it by hand once it is disposed", target)
+	case ReapUnattributable:
+		return ReapUnattributable, fmt.Sprintf("routed to %s but %s", target, why)
 	}
 	return ReapStillOpen, ""
 }

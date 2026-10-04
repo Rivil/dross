@@ -360,10 +360,17 @@ func TestOrphanTargetFollowsItsDestinationRecord(t *testing.T) {
 		return found
 	}
 
-	t.Run("destination complete strands the card", func(t *testing.T) {
+	t.Run("destination complete names the card, never strands it", func(t *testing.T) {
 		c := orphanFor(t, seed(t, "complete"), "DRO-33")
-		if c.verdict != ReapStranded {
-			t.Errorf("verdict = %v, want stranded", c.verdict)
+		// A finished destination does not show the routed item was done: the
+		// route may post-date the ship, or the phase may have been rescoped
+		// away from it (feastahead, 2026-10-04: 527 wrong closures). The card
+		// is named for a human, never closed.
+		if c.verdict != ReapUnattributable {
+			t.Errorf("verdict = %v, want unattributable", c.verdict)
+		}
+		if !strings.Contains(c.card.Why, "which is complete") || !strings.Contains(c.card.Why, "close it by hand") {
+			t.Errorf("Why = %q, want it to say the destination is complete and the card needs a human", c.card.Why)
 		}
 		if c.card.Lane != "Backlog" {
 			t.Errorf("lane = %q, want Backlog — a dross/target: card is a backlog mirror, not a phase one", c.card.Lane)
