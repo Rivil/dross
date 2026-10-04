@@ -3829,3 +3829,12 @@
   line = 105
   category = "gremlins-attribution-ceiling"
   accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "bad38ed3a2572e36"
+  file = "internal/ship/body.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "return ids[i] < ids[j]"
+  line = 147
+  reason = "Equivalent mutant: writeReviews sorts the task ids of a map, so two ids are never equal and ids[i] < ids[j] and ids[i] <= ids[j] order every pair identically. The negation (>=) is the killable one, pinned by TestReviewSectionSameLengthOrder (same-length t-2/t-3 must render t-2 first)."
+  accepted_in = "solo-task-review"

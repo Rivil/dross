@@ -312,6 +312,26 @@
         }
       ]
     },
+    "t-25": {
+      "files": [
+        "internal/gate/review_test.go",
+        "internal/gate/scope_test.go",
+        "internal/gate/commit_test.go",
+        "internal/review/context_test.go",
+        "internal/review/verdict_test.go",
+        "internal/ship/body_test.go"
+      ],
+      "commit": "6719096",
+      "completed_at": "2026-10-04T14:49:19.487937Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "TestRecorderContextRebuildFailures",
+          "loc": "internal/gate/review_test.go:1",
+          "what": "tests closing verify round 1's NOT-COVERED survivors"
+        }
+      ]
+    },
     "t-3": {
       "files": [
         "internal/treefp/treefp.go",
@@ -455,6 +475,51 @@
           "severity": "NOTE",
           "criterion": "c-1",
           "text": "TestReviewStatusNoneHint does not assert 'status: none' itself; it relies on the fixture having no ledger, which TestReviewStatusAgreesWithLedger already shows comes out as none, and an unarmed run would still fail the 'wait for its verdict' check",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-25": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "TestReviewSectionSameLengthOrder compares strings.Index results without checking either id is present: if `t-2` were missing from the body (Index -1) the test would still pass. Asserting both indexes are \u003e= 0 would make it a real check.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-6",
+          "text": "If the tie-break were removed outright rather than reversed, the order of two same-length ids would follow Go's random map iteration, so TestReviewSectionSameLengthOrder would catch that mutant only about half the time. A reversed comparison is caught every time.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "TestReviewSectionClipsAtRuneStart's failure message slices body[strings.Index(body, \"## Reviewer\"):], which panics if the heading is absent. That only happens on the failure path, and the test still fails, but the panic hides the real diagnostic.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "TestRecorderContextRebuildFailures reaches both 'could not be rebuilt' arms: the missing spec through ContextScope and the malformed gates.toml through the BuildContext secrets error.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestReviewSectionSameLengthOrder relies on map iteration for its input order, so a mutant that drops the same-length tie-break comparator entirely may survive intermittently; reversing it (the contract's case) is caught deterministically",
           "resolution": "non-blocking, left"
         }
       ]
