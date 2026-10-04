@@ -99,13 +99,23 @@ func classify(path []string, v any) (nodeKind, error) {
 type differ struct {
 	old, new *tree
 	ops      []op
+	// keys names the identity field of each keyed array-of-tables, by dotted
+	// path (task → id). A keyed array matches elements by that field; every
+	// other array keeps the positional / deep-equal matching.
+	idFields map[string]string
 }
 
 // diff returns the ops that take old to new, or an error naming the first
 // path whose shape it cannot express. Zero ops means the documents agree.
 // old and new are values of the same TOML-tagged struct type.
 func diff(old, new any) ([]op, error) {
-	d := &differ{}
+	return diffKeyed(old, new, nil)
+}
+
+// diffKeyed is diff with keyed arrays-of-tables: keys maps an array's dotted
+// path to the field that identifies its elements.
+func diffKeyed(old, new any, keys map[string]string) ([]op, error) {
+	d := &differ{idFields: keys}
 	var err error
 	if d.old, err = toTree(old); err != nil {
 		return nil, fmt.Errorf("diff old: %w", err)
@@ -269,6 +279,9 @@ func (d *differ) change(path []string, elem int, k string, child []string, ov, n
 // — because guessing which elements shifted would rewrite blocks that did
 // not change.
 func (d *differ) arrayOfTables(path []string, old, new []map[string]any) error {
+	if field, ok := d.idFields[strings.Join(path, ".")]; ok {
+		return d.keyedArray(path, field, old, new)
+	}
 	if len(old) == len(new) {
 		for i := range old {
 			if err := d.table(path, i, old[i], new[i]); err != nil {
@@ -305,6 +318,95 @@ func (d *differ) arrayOfTables(path []string, old, new []map[string]any) error {
 		d.ops = append(d.ops, op{kind: opAppendElem, table: path, elem: -1, value: b})
 	}
 	return nil
+}
+
+// keyedArray diffs an array-of-tables whose elements carry an identity field.
+// Elements are matched by that field, never by position, so a reorder, an
+// insertion or a removal touches only the elements involved:
+//
+//  1. elements whose key is gone are deleted, highest index first;
+//  2. the survivors are brought into the new order by block moves — the
+//     block's bytes, comments included, travel verbatim;
+//  3. new elements are inserted at their final index;
+//  4. each surviving element is diffed field by field at its final index.
+//
+// A duplicate or missing identity on either side is an error: matching by a
+// key that does not identify would quietly edit the wrong element.
+func (d *differ) keyedArray(path []string, field string, old, new []map[string]any) error {
+	oldIdx, err := identities(path, field, old)
+	if err != nil {
+		return fmt.Errorf("old: %w", err)
+	}
+	newIdx, err := identities(path, field, new)
+	if err != nil {
+		return fmt.Errorf("new: %w", err)
+	}
+	cur := make([]string, len(old))
+	for i, e := range old {
+		cur[i] = e[field].(string)
+	}
+	for i := len(cur) - 1; i >= 0; i-- {
+		if _, keep := newIdx[cur[i]]; !keep {
+			d.ops = append(d.ops, op{kind: opDeleteElem, table: path, elem: i})
+			cur = slices.Delete(cur, i, i+1)
+		}
+	}
+	var order []string // the survivors, in the new order
+	for _, e := range new {
+		if id := e[field].(string); hasKey(oldIdx, id) {
+			order = append(order, id)
+		}
+	}
+	for i, id := range order {
+		if cur[i] == id {
+			continue
+		}
+		j := slices.Index(cur, id)
+		d.ops = append(d.ops, op{kind: opMoveElem, table: path, elem: j, to: i})
+		cur = slices.Insert(slices.Delete(cur, j, j+1), i, id)
+	}
+	for i, e := range new {
+		id := e[field].(string)
+		if _, ok := oldIdx[id]; ok {
+			continue
+		}
+		b, err := d.block(path, e)
+		if err != nil {
+			return err
+		}
+		d.ops = append(d.ops, op{kind: opInsertElem, table: path, elem: i, value: b})
+		cur = slices.Insert(cur, i, id)
+	}
+	for i, e := range new {
+		if oi, ok := oldIdx[e[field].(string)]; ok {
+			if err := d.table(path, i, old[oi], e); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func hasKey(m map[string]int, k string) bool {
+	_, ok := m[k]
+	return ok
+}
+
+// identities maps each element's identity value to its index, refusing a
+// missing, non-string or repeated one.
+func identities(path []string, field string, elems []map[string]any) (map[string]int, error) {
+	out := make(map[string]int, len(elems))
+	for i, e := range elems {
+		id, ok := e[field].(string)
+		if !ok || id == "" {
+			return nil, fmt.Errorf("[[%s]] element %d has no string %s to match it by", strings.Join(path, "."), i, field)
+		}
+		if _, dup := out[id]; dup {
+			return nil, fmt.Errorf("[[%s]] has two elements with %s = %q; elements matched by %s must be unique", strings.Join(path, "."), field, id, field)
+		}
+		out[id] = i
+	}
+	return out, nil
 }
 
 // block renders one element as an ordered block for opAppendElem. Every
