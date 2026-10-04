@@ -134,6 +134,9 @@ func deferredRoute() *cobra.Command {
 			if err := validDeferredTarget(root, target); err != nil {
 				return err
 			}
+			if err := refuseCompleteTarget(root, target); err != nil {
+				return err
+			}
 			phaseID := args[0]
 			idx, err := strconv.Atoi(args[1])
 			if err != nil {

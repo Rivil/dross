@@ -172,6 +172,9 @@ func survivorRoute() *cobra.Command {
 			if err := validDeferredTarget(root, target); err != nil {
 				return err
 			}
+			if err := refuseCompleteTarget(root, target); err != nil {
+				return err
+			}
 			specPath := filepath.Join(phase.Dir(root, s.CurrentPhase), "spec.toml")
 			spec, err := phase.LoadSpec(specPath)
 			if err != nil {
