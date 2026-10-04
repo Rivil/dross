@@ -1,0 +1,6 @@
+{
+  "phase": "solo-task-review",
+  "base": "milestone/v1.7",
+  "base_commit": "7cbf7d63bd3dc063cd85511eb1b19fa8d1082d2f",
+  "tasks": {}
+}

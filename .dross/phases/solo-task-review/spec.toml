@@ -1,0 +1,72 @@
+[phase]
+  id = "solo-task-review"
+  title = "solo-task-review"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "In /dross-execute --solo, after a task's test gate goes green and before its commit, a fresh reviewer subagent reviews that task's diff against its task record and covered criteria; pair mode spawns no reviewer (the human stays the gate)."
+
+[[criteria]]
+  id = "c-2"
+  text = "The reviewer's verdict reports spec-compliance findings (a covered criterion's named sub-surface with no code or test in the diff) separately from code-quality findings, and every spec-compliance finding is blocking."
+
+[[criteria]]
+  id = "c-3"
+  text = "A blocking finding opens one fix round (edit, re-run the test gate, re-review); a task still blocked after it is marked failed with the finding as its reason and is not committed, and the loop moves to the next independent task."
+
+[[criteria]]
+  id = "c-4"
+  text = "While /dross-execute runs --solo, the commit gate refuses a code commit unless a passing review was recorded for exactly the tree being committed; a .dross/-only commit and pair mode stay ungated by it."
+
+[[criteria]]
+  id = "c-5"
+  text = "The reviewer's context excludes user and project CLAUDE.md, auto-memory, and the executing session's conversation — it sees only the task record, covered criteria text and the task's diff; a test fails if the shipped reviewer definition stops excluding them."
+
+[[criteria]]
+  id = "c-6"
+  text = "Each solo task's review verdict, its findings and how each was resolved (fixed in the fix round / non-blocking, left) are persisted with the task's change record, so /dross-verify and the PR body can show what the reviewer flagged."
+
+[[criteria]]
+  id = "c-7"
+  text = "`dross install` installs the reviewer definition and `dross doctor` fails (non-zero) when it is missing or stale."
+
+[[criteria]]
+  id = "c-8"
+  text = "In /dross-quick --solo, the same reviewer runs before the commit, checking spec compliance against the quick task's stated description, and the commit gate refuses a code commit without a recorded pass for that tree; pair-mode quick stays ungated by it."
+
+[[decisions]]
+  key = "quality_blocking"
+  choice = "The reviewer grades code-quality findings BLOCKING / FLAG / NOTE. BLOCKING (correctness bug, unmet test_contract, locked-decision or rule violation) blocks the commit; FLAG and NOTE are recorded only."
+  why = "Spec gaps always block (c-2); grading quality keeps real bugs blocking without failing solo tasks over style. Reuses plan-review's vocabulary."
+  locked = true
+
+[[decisions]]
+  key = "reviewer_model"
+  choice = "The reviewer definition inherits the executing session's model; it pins none."
+  why = "A reviewer weaker than the author misses what the author missed; cost follows the user's session choice."
+  locked = true
+
+[[decisions]]
+  key = "review_pass_signal"
+  choice = "A pass is recorded only by a PostToolUse recorder reading the reviewer agent's own verdict, bound to the tree fingerprint at review time; no CLI verb lets the executing agent record a pass."
+  why = "A pass the executing agent can record itself makes the gate advisory; same shape as tool-gate-hooks' pair_approval_signal."
+  locked = true
+
+[[decisions]]
+  key = "reviewer_isolation"
+  choice = "The reviewer is a dross-installed custom agent definition with `omitClaudeMd: true` and no `memory` field, spawned through the Agent tool; not `claude -p --bare`."
+  why = "omitClaudeMd (Claude Code 2.1.271+) drops user/project CLAUDE.md and subagents never inherit parent auto-memory; --bare requires an API key and does not work with subscription OAuth."
+  locked = true
+
+[[decisions]]
+  key = "review_input"
+  choice = "The reviewer gets the whole uncommitted diff against HEAD (staged, unstaged and untracked), not only the task.files paths."
+  why = "Filtering to task.files would hide an undeclared edit, the plan deviation a reviewer should flag."
+  locked = true
+
+[[decisions]]
+  key = "review_unavailable"
+  choice = "When the reviewer cannot run or its verdict does not parse, no pass is recorded, the commit is refused, and the task is marked failed naming the cause."
+  why = "Carries tool-gate-hooks' gate_error_posture (closed in-domain); a missing review must not read as a passing one."
+  locked = true
