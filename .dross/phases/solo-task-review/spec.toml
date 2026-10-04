@@ -9,7 +9,7 @@
 
 [[criteria]]
   id = "c-2"
-  text = "The reviewer's verdict reports spec-compliance findings (a covered criterion's named sub-surface with no code or test in the diff) separately from code-quality findings, and every spec-compliance finding is blocking."
+  text = "The reviewer's verdict reports spec-compliance findings (a sub-surface of a covered criterion that the task's own record claims — in its description or test_contract — with no code or test in the diff; a criterion split across tasks is judged only on this task's slice) separately from code-quality findings, and every spec-compliance finding is blocking."
 
 [[criteria]]
   id = "c-3"
