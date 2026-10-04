@@ -33,7 +33,14 @@ changes.Landmark.Symbol symbol
 changes.Landmark.What what
 changes.RedProof.Replay replay
 changes.RedProof.SHA sha
+changes.ReviewFinding.Criterion criterion
+changes.ReviewFinding.Kind kind
+changes.ReviewFinding.Resolution resolution
+changes.ReviewFinding.Severity severity
+changes.ReviewFinding.Text text
 changes.TaskRecord.Commit commit
+changes.TaskReview.Cause cause
+changes.TaskReview.Outcome outcome
 changes.TaskRecord.Notes notes
 
 # ---- cmd — command-local records: ids, hosts, states, prose, report labels, hook payloads
