@@ -260,7 +260,7 @@ func TestDeferredAddedItemIsIndistinguishable(t *testing.T) {
 // TestReadmeListsDeferredAdd: the command table is the surface a user reads to
 // learn the verb exists. A shipped command absent from it is undiscoverable.
 func TestReadmeListsDeferredAdd(t *testing.T) {
-	if !strings.Contains(docText(t, "README.md"), "dross deferred {list,route,unroute,dismiss,add}") {
+	if !hasVerb(readmeDeferredVerbs(t), "add") {
 		t.Error("README's deferred row does not list the `add` verb")
 	}
 }

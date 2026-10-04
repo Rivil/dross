@@ -25,7 +25,7 @@ func issueReap() *cobra.Command {
 	var apply, undo bool
 	c := &cobra.Command{
 		Use:   "reap",
-		Short: "Close board mirrors the forward lifecycle left stranded",
+		Short: "Close stranded board mirrors and create the cards completed phases are missing",
 		Long: `Classify every dross-authored board card against the record on disk and
 close the ones whose artefact provably finished.
 
@@ -34,7 +34,11 @@ record that justifies closing it — and writes nothing.
 
 Every close decision comes from the on-disk record, never from the card's own
 state. A card whose artefact is not complete is never closed; a card no record
-explains is named as unattributable and left open.`,
+explains is named as unattributable and left open.
+
+A completed phase whose own card or task cards no tracker lookup finds is listed
+as missing; --apply creates those cards at their terminal state, closed,
+through the same finalizer ` + "`dross phase complete`" + ` runs.`,
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			ctx, enabled, err := openBoard()
