@@ -203,3 +203,30 @@ func longestRun(s string, c byte) int {
 	}
 	return best
 }
+
+// ContextPath is the context file's repo-relative path, as the reviewer reads
+// it and its prompt names it.
+const ContextPath = ".dross/gate/review-context.md"
+
+const promptPrefix = "Review the solo task context in " + ContextPath + " ("
+
+// PromptLine is the whole prompt a reviewer spawn carries: the context file
+// and its digest, nothing else — c-5's isolation holds only while the
+// executing agent adds no text of its own.
+func PromptLine(digest string) string { return promptPrefix + digest + ")" }
+
+// ParsePromptLine reads the digest out of a spawn prompt. ok is false unless
+// the prompt is exactly one PromptLine, give or take surrounding whitespace:
+// any other text is a widened prompt.
+func ParsePromptLine(prompt string) (digest string, ok bool) {
+	p := strings.TrimSpace(prompt)
+	rest, found := strings.CutPrefix(p, promptPrefix)
+	if !found || !strings.HasSuffix(rest, ")") {
+		return "", false
+	}
+	digest = strings.TrimSuffix(rest, ")")
+	if !strings.HasPrefix(digest, "sha256:") || strings.ContainsAny(digest, " \t\r\n()") || len(digest) != len("sha256:")+64 {
+		return "", false
+	}
+	return digest, true
+}

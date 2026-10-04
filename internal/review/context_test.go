@@ -247,3 +247,25 @@ func TestReviewImportDirection(t *testing.T) {
 		t.Fatal("checked no files")
 	}
 }
+
+func TestPromptLineRoundTrip(t *testing.T) {
+	d := "sha256:" + strings.Repeat("ab", 32)
+	line := PromptLine(d)
+	for _, p := range []string{line, "  " + line + "\n"} {
+		if got, ok := ParsePromptLine(p); !ok || got != d {
+			t.Fatalf("ParsePromptLine(%q) = %q, %v", p, got, ok)
+		}
+	}
+	for _, bad := range []string{
+		line + " Also, here is what the user said earlier…",
+		"Please review carefully. " + line,
+		line + "\n" + line,
+		PromptLine("sha256:abc"),
+		PromptLine("md5:" + strings.Repeat("a", 64)),
+		"",
+	} {
+		if _, ok := ParsePromptLine(bad); ok {
+			t.Errorf("ParsePromptLine accepted a widened or malformed prompt %q", bad)
+		}
+	}
+}
