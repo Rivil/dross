@@ -179,6 +179,19 @@ func Filter(in []Entry, keep func(Entry) bool) []Entry {
 	return out
 }
 
+// FindBySurvivor returns every live entry — not dismissed — that carries the
+// survivor identity key, across every phase spec and the project store. A
+// survivor is routed once: re-routing it moves that one entry rather than
+// filing another, so more than one live match is a duplicate to refuse, not a
+// choice to make.
+func FindBySurvivor(root, key string) ([]Entry, error) {
+	entries, err := Collect(root)
+	if err != nil {
+		return nil, err
+	}
+	return Filter(entries, func(e Entry) bool { return e.Survivor == key && !e.Dismissed }), nil
+}
+
 // RepointTarget rewrites every [[deferred]] entry across all phase specs AND
 // the project store whose Target is oldSlug to newSlug, so a `dross phase
 // rename` doesn't leave a dangling routing target. Entries pointing at any

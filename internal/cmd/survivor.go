@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
 	"github.com/Rivil/dross/internal/survivor"
@@ -138,9 +139,12 @@ func survivorRoute() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "route <file>:<line>",
 		Short: "Route a survivor to a destination phase as a deferred item",
-		Long: "Append a [[deferred]] entry carrying this survivor's identity key and a target " +
-			"to the CURRENT phase's spec.toml — deferred items live in the spec that deferred " +
-			"them. Routed debt stays visible; only an acceptance earns silence.",
+		Long: "Route a surviving mutant to a destination phase. The first route appends a " +
+			"[[deferred]] entry carrying its identity key and the target to the CURRENT phase's " +
+			"spec.toml — deferred items live in the spec that deferred them. Routing it again " +
+			"moves that same entry, wherever it lives, so a survivor keeps one entry and one " +
+			"board card; routing it to where it already goes writes nothing. Routed debt stays " +
+			"visible; only an acceptance earns silence.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			if op == "" {
@@ -189,17 +193,55 @@ func survivorRoute() *cobra.Command {
 				return fmt.Errorf("resolve %s:%d: %w", loc.rel, loc.line, err)
 			}
 
-			spec.Deferred = append(spec.Deferred, phase.Deferred{
-				Text:     fmt.Sprintf("survivor %s:%d (%s)", loc.rel, loc.line, op),
-				Why:      "surviving mutant routed out of a verify run",
-				Target:   target,
-				Survivor: res.Key,
-			})
-			if err := spec.Save(specPath); err != nil {
+			// A survivor is routed once. Routing it again moves the entry that
+			// already carries its key — same id, same board card — in whatever
+			// spec it lives; a second entry would mint a second card for the
+			// same mutant (feastahead carried 34 keys on 2-4 entries each).
+			existing, err := deferred.FindBySurvivor(root, res.Key)
+			if err != nil {
 				return err
 			}
-			Printf("routed %s:%d (%s) → %s [%s]\n", loc.rel, loc.line, op, target, res.Key)
-			return nil
+			switch len(existing) {
+			case 0:
+				id, err := mintDeferredID(root)
+				if err != nil {
+					return err
+				}
+				spec.Deferred = append(spec.Deferred, phase.Deferred{
+					ID:       id,
+					Text:     fmt.Sprintf("survivor %s:%d (%s)", loc.rel, loc.line, op),
+					Why:      "surviving mutant routed out of a verify run",
+					Target:   target,
+					Survivor: res.Key,
+				})
+				if err := spec.Save(specPath); err != nil {
+					return err
+				}
+				Printf("routed %s:%d (%s) → %s [%s]\n", loc.rel, loc.line, op, target, res.Key)
+				return nil
+			case 1:
+				e := existing[0]
+				if e.Target == target {
+					Printf("%s:%d (%s) is already routed to %s [%s]\n", loc.rel, loc.line, op, target, res.Key)
+					return nil
+				}
+				src, srcPath, err := deferred.ResolveSource(root, e.Source)
+				if err != nil {
+					return err
+				}
+				src.Deferred[e.Index].Target = target
+				if err := src.Save(srcPath); err != nil {
+					return err
+				}
+				Printf("re-routed %s:%d (%s) %s deferred[%d] → %s [%s]\n", loc.rel, loc.line, op, e.Source, e.Index, target, res.Key)
+				return nil
+			default:
+				handles := make([]string, len(existing))
+				for i, e := range existing {
+					handles[i] = fmt.Sprintf("%s %d", e.Source, e.Index)
+				}
+				return fmt.Errorf("survivor %s is already routed by %d entries (%s) — dismiss the duplicates before routing it again", res.Key, len(existing), strings.Join(handles, ", "))
+			}
 		},
 	}
 	c.Flags().StringVar(&op, "op", "", "mutation operator, e.g. CONDITIONALS_NEGATION (required)")
