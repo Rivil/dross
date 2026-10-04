@@ -42,7 +42,12 @@ func ResolvePhaseIssue(ctx *Ctx, phaseID, title string) (string, error) {
 	}
 	var matches []string
 	for _, iss := range byLabel {
-		if HasMarker(iss) {
+		// A task card carries its phase's label too, so it answers the same
+		// query. It is never the phase card: taking it would put the phase's
+		// status on a task, leave the real phase card unmatched, and — since
+		// keys sort as strings, PROJ-100 before PROJ-98 — happen as soon as a
+		// board passes its hundredth issue.
+		if HasMarker(iss) && !hasTaskLabel(iss.Labels) {
 			matches = append(matches, iss.Key)
 		}
 	}
@@ -67,6 +72,16 @@ func ResolvePhaseIssue(ctx *Ctx, phaseID, title string) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+// hasTaskLabel reports whether a card carries any dross/task: identity label.
+func hasTaskLabel(labels []string) bool {
+	for _, l := range labels {
+		if strings.HasPrefix(l, forge.IdentityTaskPrefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func SyncPhase(ctx *Ctx, phaseID, status string, doClose bool) error {

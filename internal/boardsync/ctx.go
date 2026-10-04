@@ -40,6 +40,11 @@ const (
 	// dross/status label and convert to a plan status — see task_lifecycle.go.
 	StatusTaskInProgress = "task-in-progress"
 	StatusTaskInReview   = "task-in-review"
+
+	// The phase lane's terminal state, written by FinalizePhase. The task
+	// lane's own terminal, StatusTaskComplete, lives in lifecycle.go — two
+	// lanes, two dross/status: labels.
+	StatusComplete = "complete"
 )
 
 func StatusLabel(s string) string { return "dross/status:" + s }
