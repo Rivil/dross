@@ -64,6 +64,9 @@ type ReapPlan struct {
 	// store explains. Surfaced rather than swallowed, per the survivor-drain
 	// habit: an unexplained mirror is a real loose end.
 	Unattributable []ReapCard
+	// Missing are completed phases the board has no card for — the catch-up
+	// half of the sweep. --apply creates them at their terminal state.
+	Missing []MissingPhase
 }
 
 // ReapLane is one mirror class: the board.Board map field that records it and

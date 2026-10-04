@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Rivil/dross/internal/boardsync"
 
@@ -59,6 +60,11 @@ explains is named as unattributable and left open.`,
 			}
 			plan, unclassifiable, err := boardsync.Inventory(ctx, namespaces)
 			if err != nil {
+				return err
+			}
+			// Catch-up is reap's own: watch and doctor share Inventory and
+			// must not pay a tracker lookup per completed phase on every tick.
+			if plan.Missing, err = boardsync.FindMissing(ctx, namespaces); err != nil {
 				return err
 			}
 			printReapPlan(plan, unclassifiable)
@@ -119,10 +125,35 @@ func printReapPlan(plan *boardsync.ReapPlan, unclassifiable []boardsync.ReapCard
 		}
 	}
 
-	if len(plan.Cards) == 0 && len(plan.Unattributable) == 0 && len(unclassifiable) == 0 {
+	printMissing(plan.Missing)
+	if len(plan.Cards) == 0 && len(plan.Unattributable) == 0 && len(unclassifiable) == 0 && len(plan.Missing) == 0 {
 		Print("no stranded mirrors — every card matches its record")
 		return
 	}
 	Printf("\n%d stranded across %d %s, %d unattributable (named, never closed)\n",
 		len(plan.Cards), lanes, plural(lanes, "lane", "lanes"), len(plan.Unattributable))
+}
+
+// printMissing lists the completed phases the board has no cards for — the
+// catch-up half of the plan.
+func printMissing(missing []boardsync.MissingPhase) {
+	if len(missing) == 0 {
+		return
+	}
+	Printf("Missing (%d completed %s) -> created at their terminal state, closed\n",
+		len(missing), plural(len(missing), "phase", "phases"))
+	for _, m := range missing {
+		if m.CannotCreate != "" {
+			Printf("  %-24s [cannot create] %s\n", m.Phase, m.CannotCreate)
+			continue
+		}
+		var parts []string
+		if m.PhaseCard {
+			parts = append(parts, "phase card")
+		}
+		if n := len(m.Tasks); n > 0 {
+			parts = append(parts, fmt.Sprintf("%d task %s: %s", n, plural(n, "card", "cards"), strings.Join(m.Tasks, ", ")))
+		}
+		Printf("  %-24s %s\n", m.Phase, strings.Join(parts, " + "))
+	}
 }
