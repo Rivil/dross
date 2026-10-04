@@ -171,7 +171,7 @@ func reconcileFixture(t *testing.T) (*Ctx, *faultBoard, []BacklogItem, []deferre
 		"slug:ghost":    "PROJ-2", // left the set with no dir: unattributable
 		"someday:id:dz": "PROJ-3", // dismissed, by id key
 		"someday:ph#5":  "PROJ-4", // dismissed, by legacy positional key
-		"someday:id:r1": "PROJ-5", // live, routed to a done target: closed, key KEPT
+		"someday:id:r1": "PROJ-5", // live, routed to a done target: STILL OPEN — a finished destination is not evidence
 		"someday:id:r2": "PROJ-6", // live, routed to an open target: untouched
 		"slug:built2":   "PROJ-7", // resolved but already closed: no second close
 		"slug:empty":    "",       // no issue id: skipped
@@ -197,13 +197,13 @@ func TestReconcileBacklogClosesOnlyProvablyResolvedMirrors(t *testing.T) {
 	var n int
 	var err error
 	stderr := captureStderr(t, func() { n, err = ReconcileBacklog(ctx, live, items) })
-	if err != nil || n != 4 {
-		t.Fatalf("ReconcileBacklog = (%d, %v), want (4, nil)", n, err)
+	if err != nil || n != 3 {
+		t.Fatalf("ReconcileBacklog = (%d, %v), want (3, nil)", n, err)
 	}
 	closed := append([]string(nil), f.closed...)
 	sort.Strings(closed)
-	if want := []string{"PROJ-1", "PROJ-3", "PROJ-4", "PROJ-5"}; !reflect.DeepEqual(closed, want) {
-		t.Errorf("closed %v, want %v", closed, want)
+	if want := []string{"PROJ-1", "PROJ-3", "PROJ-4"}; !reflect.DeepEqual(closed, want) {
+		t.Errorf("closed %v, want %v — PROJ-5 is routed to a finished phase, which does not show the item was done", closed, want)
 	}
 	if got, want := ctx.Board.BacklogKeys(), []string{"slug:built2", "slug:empty", "slug:ghost", "someday:id:r1", "someday:id:r2"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("remaining keys = %v, want %v (a live routed mirror keeps its link)", got, want)
@@ -232,8 +232,8 @@ func TestReconcileBacklogKeepsLinkWhenCloseFails(t *testing.T) {
 	f.failClose["PROJ-1"] = errors.New("refused")
 	var n int
 	stderr := captureStderr(t, func() { n, _ = ReconcileBacklog(ctx, live, items) })
-	if n != 3 {
-		t.Errorf("closed %d, want 3 (the failed close is not counted)", n)
+	if n != 2 {
+		t.Errorf("closed %d, want 2 (the failed close is not counted)", n)
 	}
 	if id, ok := ctx.Board.BacklogID("slug:built"); !ok || id != "PROJ-1" {
 		t.Error("a failed close dropped the link")
@@ -245,8 +245,8 @@ func TestReconcileBacklogKeepsLinkWhenCloseFails(t *testing.T) {
 	ctx, f, live, items = reconcileFixture(t)
 	f.failGet["PROJ-1"] = errors.New("unreachable")
 	stderr = captureStderr(t, func() { n, _ = ReconcileBacklog(ctx, live, items) })
-	if n != 3 || !strings.Contains(stderr, "could not read PROJ-1 back") {
-		t.Errorf("closed %d, stderr %q; want 3 and a read-back warning", n, stderr)
+	if n != 2 || !strings.Contains(stderr, "could not read PROJ-1 back") {
+		t.Errorf("closed %d, stderr %q; want 2 and a read-back warning", n, stderr)
 	}
 	for _, c := range f.calls {
 		if c == "CloseIssue PROJ-1" {
@@ -290,7 +290,7 @@ func TestBacklogVerdictTable(t *testing.T) {
 	}{
 		{"k-unrouted", BacklogStillOpen},
 		{"k-notarget", BacklogStillOpen},
-		{"k-done", BacklogResolved},
+		{"k-done", BacklogStillOpen}, // a done destination is not evidence the routed item was done
 		{"k-open", BacklogStillOpen},
 		{"k-err", BacklogStillOpen},
 		{"slug:has-dir", BacklogResolved},

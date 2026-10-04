@@ -304,9 +304,12 @@ func TestSlugBacklogNeedsItsPhaseDir(t *testing.T) {
 	}
 }
 
-// TestRoutedBacklogFollowsItsTargetRecord: a routed item resolves only once the
-// phase it was routed INTO has completed — read from that phase's changes.json,
-// never from its card.
+// TestRoutedBacklogFollowsItsTargetRecord: a routed item never closes on the
+// phase it was routed INTO completing. A finished destination is not evidence
+// the item was done — the route may post-date the ship, or the destination
+// may have been rescoped away from it (feastahead, 2026-10-04: 527 of 545
+// backlog closures were wrong) — so the card is named as unattributable for a
+// human, and stays silent while the destination is live.
 func TestRoutedBacklogFollowsItsTargetRecord(t *testing.T) {
 	seed := func(t *testing.T, targetStatus string) *ReapPlan {
 		t.Helper()
@@ -323,11 +326,15 @@ func TestRoutedBacklogFollowsItsTargetRecord(t *testing.T) {
 		return plan
 	}
 
-	if plan := seed(t, "complete"); !hasKey(plan.Cards, "PROJ-30") {
-		t.Errorf("a routed item whose target completed is not in the plan; got %v", cardKeys(plan.Cards))
+	plan := seed(t, "complete")
+	if hasKey(plan.Cards, "PROJ-30") {
+		t.Error("a routed item was stranded because its target phase completed — a finished destination is not evidence")
 	}
-	if plan := seed(t, ""); hasKey(plan.Cards, "PROJ-30") {
-		t.Error("a routed item was closed while its target phase's record shows no completion")
+	if !hasKey(plan.Unattributable, "PROJ-30") {
+		t.Errorf("a routed item under a finished destination was not named for a human; unattributable = %v", cardKeys(plan.Unattributable))
+	}
+	if plan := seed(t, ""); hasKey(plan.Cards, "PROJ-30") || hasKey(plan.Unattributable, "PROJ-30") {
+		t.Error("a routed item under a live destination reached the plan")
 	}
 }
 
