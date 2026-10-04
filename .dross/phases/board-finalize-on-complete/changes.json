@@ -1,0 +1,6 @@
+{
+  "phase": "board-finalize-on-complete",
+  "base": "milestone/v1.7",
+  "base_commit": "1d7ecd2c4947e47bcca9d4a515b2418b132e0769",
+  "tasks": {}
+}
