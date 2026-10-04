@@ -21,6 +21,15 @@ Run a phase plan to completion. **Pair-mode by default**: propose, pause, steer,
    - `--solo` → autonomous mode
    - `--from <task-id>` → start at this task (skip earlier-wave done tasks; resume mid-phase)
 8. Detect resume state: if any task has `status = "in_progress"`, ask user "continue task X / reset to pending and pick fresh".
+9. Record the run's mode for the tool gates, once, before the per-task loop:
+   ```
+   dross execute begin <id>
+   ```
+   or, only when `--solo` was passed:
+   ```
+   dross execute begin <id> --solo
+   ```
+   In pair mode the pair-approval gate then refuses `Edit`/`Write` outside `.dross/` until the user approves the task in progress (§1c). The mode is chosen here and nowhere else: while a task is in progress the gate refuses a switch to `--solo`.
 
 Print one orientation block:
 ```
@@ -131,7 +140,7 @@ In one block, write 3-7 lines covering:
 - Anything you're uncertain about
 
 Then in **pair mode** (the default), use `AskUserQuestion` with options:
-- `proceed` — write the code as proposed
+- `approve <task-id>` — the literal label with this task's id (e.g. `approve t-3`): write the code as proposed. The user picking exactly this label is what records the approval the pair-approval gate unlocks edits on; it lasts until this task's commit. Any other answer records nothing.
 - `steer` — user gives free-form direction; revise approach
 - `show me <X>` — user requests more context (treat as steer with `<X>` as the ask)
 - `skip` — mark task as `failed` with reason "skipped by user", advance to next
@@ -140,7 +149,7 @@ In **solo mode** (`--solo`): skip the pause, proceed directly. Note in the resul
 
 ### 1d. Implement
 
-Write code via `Edit`/`Write`. Constraints:
+Write code via `Edit`/`Write`. In pair mode the pair-approval gate refuses either one outside `.dross/` until the user's `approve <task-id>` is recorded; that refusal means go back to §1c and ask, never work around it. Constraints:
 - Touch only files in `task.files`. If you need to touch others, **pause and ask** before doing so — this is a plan deviation worth surfacing.
 - Honor every `locked = true` decision in `spec.toml`. If a decision conflicts with what you'd write, stop and ask the user to either revise the task or unlock the decision in spec.
 - Respect rules.toml — especially "always run X via docker compose exec" patterns. If the rule says route through docker and you'd type `pnpm install` directly, you've violated the rule.
@@ -236,6 +245,12 @@ Three outcomes:
 **No test command configured** → warn once at the start of the phase: "no `runtime.test_command` set, skipping per-task test gate. /dross-verify will catch unverified work later." Don't repeat the warning per task.
 
 ### 1f. Commit + record
+
+The commit gate admits a code commit only when a **full** green `dross test` was recorded for exactly the tree being committed. In a repo with no lanes, §1e's run already was the full suite and recorded it. When `[[runtime.test_lane]]` is declared, §1e's `--files` run measured only the matched lanes and recorded nothing, so run the full suite bare first: no selector, no `--files`:
+```
+dross test
+```
+Read its exit status the same way as in §1e; only **0** lets you commit. If anything outside `.dross/` changed since a green run, run it again. A refused `git commit` is a hard stop, never something to route around.
 
 Atomic commit, one task per commit. Use specific files, never `git add -A`:
 ```
@@ -360,7 +375,8 @@ and update state status to `partial` instead.
 ## Hard rules
 
 - **Follow the interaction playbook (`_interaction.md`).** Drive each pair-mode turn as a single-decision `AskUserQuestion` that leads with the default — the §1c approval, §1e red-path, and §1g post-commit gate are separate turns, never bundled, and the next task's approval never rides along behind the current one.
-- **Pair mode is the default.** Never write code without an explicit user `proceed` in pair mode. The whole point is the user is part of the loop.
+- **Pair mode is the default.** Never write code without the user picking `approve <task-id>` for that task in pair mode. The whole point is the user is part of the loop.
+- **A gate refusal is a hard stop.** When a dross gate refuses a tool call, read its rule and follow its remedy — never route around it with another tool, path or command. If the gate itself is wrong here, stop and tell the user: only they can lift it, with `dross gate off <name>` in their own terminal.
 - **Phase work commits to `phase/<id>`, never the main branch.** If `git symbolic-ref --short HEAD` returns the main branch, stop and fix before continuing.
 - **Atomic commits.** Exactly one commit per completed task. No batched multi-task commits.
 - **Touch only `task.files`.** Plan deviation requires explicit user OK.

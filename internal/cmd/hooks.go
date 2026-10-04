@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -22,7 +23,7 @@ func Hooks() *cobra.Command {
 	}
 	root.AddCommand(&cobra.Command{
 		Use:   "ensure",
-		Short: "Idempotently wire the dross PreCompact + SessionStart hooks into user-level settings.json",
+		Short: "Idempotently wire the dross hooks (PreCompact, SessionStart, and the PreToolUse/PostToolUse tool-call gates) into user-level settings.json",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			path, err := userSettingsPath()
 			if err != nil {
@@ -43,7 +44,8 @@ func Hooks() *cobra.Command {
 				Printf("hooks already wired → %s\n", path)
 				return nil
 			}
-			Printf("hooks ensured: PreCompact (%s) + SessionStart (%s) → %s\n", preCompactHookCommand, sessionStartHookCommand, path)
+			Printf("hooks ensured: PreCompact (%s) + SessionStart (%s) + PreToolUse (%s) + PostToolUse (%s) → %s\n",
+				preCompactHookCommand, sessionStartHookCommand, GateCheckHook, GateRecordHook, path)
 			return nil
 		},
 	})
@@ -58,10 +60,31 @@ const (
 	sessionStartHookCommand = "dross reentry"
 )
 
-// ensureUserHooks idempotently wires the dross PreCompact and SessionStart
-// hooks into the user-level Claude settings.json via hooks.MergeHook. Already
-// wired → no write at all (byte-stable). init and onboard both call this, so
-// whichever runs first does the wiring and the other confirms it.
+// userHooks is every hook ensureUserHooks wires, in order: the event and the
+// command it runs.
+var userHooks = []struct{ event, command string }{
+	{hooks.EventPreCompact, preCompactHookCommand},
+	{hooks.EventSessionStart, sessionStartHookCommand},
+	{hooks.EventPreToolUse, GateCheckHook},
+	{hooks.EventPostToolUse, GateRecordHook},
+}
+
+// userHooksSummary names each wired hook as "event → command", for the line
+// init and onboard print after ensuring them.
+func userHooksSummary() string {
+	parts := make([]string, len(userHooks))
+	for i, h := range userHooks {
+		parts[i] = h.event + " → " + h.command
+	}
+	return strings.Join(parts, ", ")
+}
+
+// ensureUserHooks idempotently wires the dross hooks into the user-level
+// Claude settings.json via hooks.MergeHook: PreCompact and SessionStart, and
+// the tool-call gates' PreToolUse check and PostToolUse record — matcher-less,
+// so they see every tool call. Already wired → no write at all (byte-stable).
+// init and onboard both call this, so whichever runs first does the wiring and
+// the other confirms it.
 func ensureUserHooks() error {
 	path, err := userSettingsPath()
 	if err != nil {
@@ -73,10 +96,7 @@ func ensureUserHooks() error {
 	}
 
 	merged := existing
-	for _, h := range []struct{ event, command string }{
-		{hooks.EventPreCompact, preCompactHookCommand},
-		{hooks.EventSessionStart, sessionStartHookCommand},
-	} {
+	for _, h := range userHooks {
 		if merged, err = hooks.MergeHook(merged, h.event, h.command); err != nil {
 			return err
 		}
@@ -84,10 +104,39 @@ func ensureUserHooks() error {
 	if bytes.Equal(merged, existing) {
 		return nil
 	}
+	return writeSettingsAtomic(path, merged)
+}
+
+// writeSettingsAtomic replaces settings.json through a temp file renamed over
+// it, keeping the file's mode (0600 when it is new): settings.json can hold
+// tokens in its env block, and a write that failed halfway must leave the
+// original bytes, not a truncated file every Claude Code session then reads.
+func writeSettingsAtomic(path string, data []byte) error {
+	mode := os.FileMode(0o600)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, merged, 0o644)
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".settings.json.*.tmp")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name()) // a no-op once the rename has moved it
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), mode); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 // userSettingsPath resolves the user-level Claude settings.json, honouring

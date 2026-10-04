@@ -155,4 +155,12 @@ func TestInitEnsuresHooksIdempotent(t *testing.T) {
 	if n := countIn(readHookCommands(t, settings, "SessionStart"), sessionStartHookCommand); n != 1 {
 		t.Errorf("want exactly 1 dross SessionStart entry after two inits, got %d", n)
 	}
+	// The gate pair rides the same ensure. onboard's byte-parity test cannot
+	// catch it going missing — both share ensureUserHooks — so this one must.
+	if n := countIn(readHookCommands(t, settings, "PreToolUse"), GateCheckHook); n != 1 {
+		t.Errorf("want exactly 1 dross PreToolUse %q entry after two inits, got %d", GateCheckHook, n)
+	}
+	if n := countIn(readHookCommands(t, settings, "PostToolUse"), GateRecordHook); n != 1 {
+		t.Errorf("want exactly 1 dross PostToolUse %q entry after two inits, got %d", GateRecordHook, n)
+	}
 }

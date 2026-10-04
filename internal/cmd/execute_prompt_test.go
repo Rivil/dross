@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/gate"
 )
 
 // executePromptContent loads assets/prompts/execute.md and normalises it
@@ -184,5 +186,69 @@ func TestExecutePromptPullsBoardTaskMoves(t *testing.T) {
 		if !strings.Contains(content, needle) {
 			t.Errorf("execute.md must wire the inbound board task pull: missing %q", needle)
 		}
+	}
+}
+
+// TestExecutePromptOffersApproveLabel: the pair-approval gate records an
+// approval only when the answer is exactly gate.ApproveLabel(task), so §1c
+// must offer that label — built from the same function, so a format drift on
+// either side fails here — in place of the old bare `proceed`, alongside the
+// steer / show me / skip reactions. The hard rule must name it too.
+func TestExecutePromptOffersApproveLabel(t *testing.T) {
+	body := promptBody(t, "execute.md")
+	label := "`" + gate.ApproveLabel("<task-id>") + "`"
+	c := sectionOf(body, "### 1c.", "### ")
+	if c == "" {
+		t.Fatal("execute.md has no §1c section")
+	}
+	if !strings.Contains(c, "- "+label) {
+		t.Errorf("§1c does not offer the option %s", label)
+	}
+	for _, opt := range []string{"`steer`", "`show me <X>`", "`skip`"} {
+		if !strings.Contains(c, "- "+opt) {
+			t.Errorf("§1c lost the %s option", opt)
+		}
+	}
+	if strings.Contains(c, "`proceed`") {
+		t.Error("§1c still offers a bare `proceed` — the gate records only the approve label")
+	}
+	rules := sectionOf(body, "## Hard rules", "## ")
+	if !strings.Contains(rules, label) || strings.Contains(rules, "`proceed`") {
+		t.Errorf("the pair-mode hard rule must name %s, not `proceed`", label)
+	}
+}
+
+// TestExecutePromptBeginsBeforeLoop: the pair-approval gate reads the mode
+// `dross execute begin` records, so the prompt must record it — both
+// branches — before the per-task loop writes anything.
+func TestExecutePromptBeginsBeforeLoop(t *testing.T) {
+	body := promptBody(t, "execute.md")
+	loop := strings.Index(body, "## 1. Per-task loop")
+	if loop < 0 {
+		t.Fatal("execute.md has no \"## 1. Per-task loop\" heading")
+	}
+	for _, line := range []string{"dross execute begin <id>\n", "dross execute begin <id> --solo\n"} {
+		if i := strings.Index(body, line); i < 0 || i > loop {
+			t.Errorf("%q must appear before the per-task loop (at %d, loop at %d)", strings.TrimSpace(line), i, loop)
+		}
+	}
+}
+
+// TestExecutePromptLaneCommitRunsFullSuite: in a laned repo §1e's --files run
+// records no green, so a commit straight after it would be refused. §1f must
+// run a bare `dross test` — the full run the commit gate counts — before the
+// task's files are staged.
+func TestExecutePromptLaneCommitRunsFullSuite(t *testing.T) {
+	f := sectionOf(promptBody(t, "execute.md"), "### 1f.", "### ")
+	if f == "" {
+		t.Fatal("execute.md has no §1f section")
+	}
+	if !strings.Contains(f, "[[runtime.test_lane]]") {
+		t.Error("§1f must say when the extra full run is needed: when [[runtime.test_lane]] is declared")
+	}
+	add := strings.Index(f, "git add <task.files>")
+	test := bareDrossTestRE.FindStringIndex(f)
+	if add < 0 || test == nil || test[0] > add {
+		t.Errorf("§1f must run a bare `dross test` before `git add <task.files>` (test at %v, add at %d)", test, add)
 	}
 }

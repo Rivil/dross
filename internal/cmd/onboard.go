@@ -133,7 +133,7 @@ func Onboard() *cobra.Command {
 			if err := ensureUserHooks(); err != nil {
 				Printf("  • Could not wire user-level Claude hooks (non-fatal): %v\n", err)
 			} else {
-				Print("  • Ensured user-level Claude hooks (PreCompact → dross pause --auto, SessionStart → dross reentry)")
+				Print("  • Ensured user-level Claude hooks (" + userHooksSummary() + ")")
 			}
 			Print("\nNext: /dross-onboard to confirm captured runtime + rules")
 			return nil

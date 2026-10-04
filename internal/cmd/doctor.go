@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/diag"
 	"github.com/Rivil/dross/internal/gitrun"
+	"github.com/Rivil/dross/internal/hooks"
 	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/mutationcfg"
@@ -68,6 +70,7 @@ func Doctor() *cobra.Command {
 			backfillResidueWarnings := 0
 			pinWarnings := 0
 			protectionWarnings := 0
+			hookWarnings := 0
 
 			// --- Foundational files ---
 			//
@@ -264,6 +267,16 @@ func Doctor() *cobra.Command {
 			Print("")
 
 			issues += checkConfigTrust(root, repoDir, p)
+
+			// --- Hooks ---
+			hookSec := hooksSection(repoDir)
+			printSections([]diag.Section{hookSec})
+			issues += diag.Issues([]diag.Section{hookSec})
+			for _, l := range hookSec.Lines {
+				if l.Level == diag.Warn {
+					hookWarnings++
+				}
+			}
 
 			// --- Phase work on main ---
 			//
@@ -590,7 +603,7 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
-			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings+backfillResidueWarnings+pinWarnings+protectionWarnings)
+			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings+backfillResidueWarnings+pinWarnings+protectionWarnings+hookWarnings)
 		},
 	}
 }
@@ -1088,6 +1101,96 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 	issues += checkRemoteMutation(root, repoDir, p)
 	checkMutationToolchain(p)
 	return issues
+}
+
+// projectSettingsFiles are the repo-level settings files Claude Code layers
+// over the user-level one, relative to the repo root.
+var projectSettingsFiles = []string{".claude/settings.json", ".claude/settings.local.json"}
+
+// hooksSection reports the dross hooks in the user-level settings.json Claude
+// Code reads (CLAUDE_CONFIG_DIR honoured) — every hook ensureUserHooks wires,
+// in its order. A missing gate hook is an issue — the gates are off — and so
+// is a gate command wired only under a matcher (it fires for some tools and
+// not others), "disableAllHooks": true, or a file that cannot be read. The
+// same key in repoDir's own .claude/settings.json or settings.local.json
+// turns every hook off in this repo however the user-level file is wired, so
+// it is an issue too, as is either file failing to parse. A missing
+// PreCompact or SessionStart hook is a warning: dross works without them, it
+// only loses pause and re-entry.
+func hooksSection(repoDir string) diag.Section {
+	sec := diag.Section{Heading: "Hooks:"}
+	add := func(level diag.Level, format string, a ...any) {
+		sec.Lines = append(sec.Lines, diag.Line{Level: level, Text: fmt.Sprintf(format, a...)})
+	}
+	path, err := userSettingsPath()
+	if err != nil {
+		add(diag.Issue, "cannot locate the user-level settings.json: %v", err)
+		return sec
+	}
+	doc, err := hooks.ReadSettings(path)
+	if err != nil {
+		add(diag.Issue, "the user-level settings.json cannot be read (%v) — Claude Code runs none of its hooks until it is fixed", err)
+		return sec
+	}
+	b, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		add(diag.Issue, "the user-level settings.json cannot be read: %v", err)
+		return sec
+	}
+	if off, _ := doc["disableAllHooks"].(bool); off {
+		add(diag.Issue, "settings.json sets \"disableAllHooks\": true — Claude Code runs no hooks, so every dross gate is off. Fix: remove the key")
+	}
+	for _, h := range userHooks {
+		// The gate pair is the tool-call gates: without it every gate is off.
+		gate := h.command == GateCheckHook || h.command == GateRecordHook
+		merged, err := hooks.MergeHook(b, h.event, h.command)
+		if err != nil {
+			add(diag.Issue, "%s → %s cannot be checked: %v", h.event, h.command, err)
+			continue
+		}
+		present := len(b) > 0 && bytes.Equal(merged, b)
+		switch {
+		case !present && gate:
+			add(diag.Issue, "%s → `%s` is not wired, so the tool-call gates are off. Fix: `dross hooks ensure`", h.event, h.command)
+		case !present:
+			add(diag.Warn, "%s → `%s` is not wired. Fix: `dross hooks ensure`", h.event, h.command)
+		case gate && !matcherless(doc, h.event, h.command):
+			add(diag.Issue, "%s → `%s` is wired only under a matcher, so it fires for some tools and not others. Fix: remove the matcher, or move the command into a matcher-less group (`dross hooks ensure` leaves a file that already names it alone)", h.event, h.command)
+		default:
+			add(diag.OK, "%s → %s", h.event, h.command)
+		}
+	}
+	for _, rel := range projectSettingsFiles {
+		pdoc, err := hooks.ReadSettings(filepath.Join(repoDir, filepath.FromSlash(rel)))
+		if err != nil {
+			add(diag.Issue, "%s cannot be read (%v), so whether it turns this repo's hooks off cannot be told. Fix: repair or remove it", rel, err)
+			continue
+		}
+		if off, _ := pdoc["disableAllHooks"].(bool); off {
+			add(diag.Issue, "%s sets \"disableAllHooks\": true — Claude Code runs no hooks in this repo, so every dross gate is off here though the user-level file wires them. Fix: remove the key", rel)
+		}
+	}
+	return sec
+}
+
+// matcherless reports whether command runs from a group under hooks.<event>
+// that matches every tool: no matcher, an empty one, or "*".
+func matcherless(doc map[string]any, event, command string) bool {
+	hk, _ := doc["hooks"].(map[string]any)
+	groups, _ := hk[event].([]any)
+	for _, g := range groups {
+		group, _ := g.(map[string]any)
+		if m, ok := group["matcher"].(string); ok && m != "" && m != "*" {
+			continue
+		}
+		entries, _ := group["hooks"].([]any)
+		for _, e := range entries {
+			if entry, _ := e.(map[string]any); entry["command"] == command {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // checkMutationToolchain prints the local toolchain gaps diag reports, as a

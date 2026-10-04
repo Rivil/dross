@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/cmd"
+	"github.com/Rivil/dross/internal/gate"
 )
 
 // readmeCmdRef matches a `dross <word>` reference inside a backtick code
@@ -627,16 +628,30 @@ func writeFixture(t *testing.T, path, body string) {
 // under test is exact rather than whatever `go test` was passed.
 func TestMainEntryPoint(t *testing.T) {
 	if args, ok := os.LookupEnv("DROSS_MAIN_TEST_ARGS"); ok {
+		// A panic injected OUTSIDE any gate — where the per-gate recovery
+		// cannot reach — must still exit 0: left to the runtime, a Go panic
+		// exits 2, which PreToolUse reads as "block every call".
+		if os.Getenv("DROSS_MAIN_TEST_GATE_PANIC") == "1" {
+			cmd.GateEngine.Check = func([]byte, gate.Env) gate.Result { panic("injected outside any gate") }
+		}
 		os.Args = append([]string{"dross"}, strings.Fields(args)...)
 		main()
 		return
 	}
 
+	refused := `{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"pass-cli item view x | head"},"cwd":"/"}`
+
 	cases := []struct {
 		name     string
 		args     string
+		stdin    string
+		env      []string
 		wantExit int
 		wantErr  string // substring of combined output; empty means "no dross: line"
+		wantOnce string // must appear exactly once in the combined output
+		// stderrOnly: stdout must stay empty and wantErr/wantOnce must be on
+		// stderr. Claude Code reads a blocking hook's reason from stderr only.
+		stderrOnly bool
 	}{
 		{
 			name:     "a resolved command exits 0",
@@ -655,6 +670,25 @@ func TestMainEntryPoint(t *testing.T) {
 			wantExit: 1,
 			wantErr:  "dross:",
 		},
+		{
+			// Exit 1 is non-blocking to Claude Code: a refusal that exited 1
+			// would let the call run with the refusal shown as a mere error.
+			name:       "a gate refusal exits 2 with the refusal printed once",
+			args:       "gate check",
+			stdin:      refused,
+			wantExit:   2,
+			wantErr:    "secret-stream",
+			wantOnce:   "Use:",
+			stderrOnly: true,
+		},
+		{
+			name:     "a panic outside any gate exits 0 with one warning",
+			args:     "gate check",
+			stdin:    refused,
+			env:      []string{"DROSS_MAIN_TEST_GATE_PANIC=1"},
+			wantExit: 0,
+			wantOnce: "warning: dross gate check failed internally",
+		},
 	}
 
 	for _, c := range cases {
@@ -666,7 +700,12 @@ func TestMainEntryPoint(t *testing.T) {
 				"HOME="+t.TempDir(),
 				"CLAUDE_CONFIG_DIR="+t.TempDir(),
 			)
-			out, err := sub.CombinedOutput()
+			sub.Env = append(sub.Env, c.env...)
+			sub.Stdin = strings.NewReader(c.stdin)
+			var stdout, stderr strings.Builder
+			sub.Stdout, sub.Stderr = &stdout, &stderr
+			err := sub.Run()
+			out := stdout.String() + stderr.String()
 
 			exit := 0
 			if err != nil {
@@ -678,6 +717,17 @@ func TestMainEntryPoint(t *testing.T) {
 			}
 			if exit != c.wantExit {
 				t.Errorf("`dross %s` exited %d, want %d:\n%s", c.args, exit, c.wantExit, out)
+			}
+			if c.stderrOnly {
+				if stdout.Len() != 0 {
+					t.Errorf("`dross %s` wrote to stdout, which a blocking hook's reader never sees:\n%s", c.args, stdout.String())
+				}
+				if strings.Count(stderr.String(), c.wantOnce) != 1 || !strings.Contains(stderr.String(), c.wantErr) {
+					t.Errorf("`dross %s` stderr = %q, want %q once and %q", c.args, stderr.String(), c.wantOnce, c.wantErr)
+				}
+			}
+			if c.wantOnce != "" && strings.Count(string(out), c.wantOnce) != 1 {
+				t.Errorf("`dross %s` printed %q %d times, want once:\n%s", c.args, c.wantOnce, strings.Count(string(out), c.wantOnce), out)
 			}
 			if c.wantErr == "" {
 				if strings.Contains(string(out), "dross: ") {

@@ -107,3 +107,22 @@ func TestPausePromptFilesFindingsInsteadOfParking(t *testing.T) {
 		}
 	}
 }
+
+// TestPausePromptUpdatesExistingHandoffWithEdit: §3 creates the handoff with
+// Write and updates an existing one with Edit. A re-pause that closed loops is
+// smaller than the file it replaces, so overwriting it with Write trips the
+// curated-shrink gate (c-8) — and silently drops anything not carried over.
+func TestPausePromptUpdatesExistingHandoffWithEdit(t *testing.T) {
+	sec := sectionOf(promptBody(t, "pause.md"), "## 3. Write + ignore", "## ")
+	if sec == "" {
+		t.Fatal("pause.md has no \"## 3. Write + ignore\" section")
+	}
+	if !strings.Contains(sec, "update it in place with `Edit`") {
+		t.Error("pause.md §3 no longer updates an existing handoff in place with `Edit`")
+	}
+	for _, line := range strings.Split(sec, "\n") {
+		if rewritesWholesale(line) {
+			t.Errorf("pause.md §3 overwrites an existing handoff: %q", strings.TrimSpace(line))
+		}
+	}
+}

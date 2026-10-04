@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/gatestate"
 	"github.com/Rivil/dross/internal/secretscan"
 )
 
@@ -201,12 +202,31 @@ func TestEveryDrossWriterIsDeclared(t *testing.T) {
 // repo's own .gitignore covers it), so a synthetic MachineLocal entry for it
 // must be rejected.
 func TestMachineLocalWritersAreReallyIgnored(t *testing.T) {
-	dir := t.TempDir()
-	gitInit(t, dir, "")
-	if err := ensureDrossGitignore(dir); err != nil {
-		t.Fatal(err)
+	// Each claim is proved in a fresh repo prepared by exactly the seed it
+	// names — no other seed's lines can make it pass.
+	const drossSeed = "cmd.ensureDrossGitignore (drossIgnoreEntries)"
+	seeds := map[string]func(dir string) error{
+		drossSeed: ensureDrossGitignore,
+		// The gate store's seed is the .gitignore it writes beside its first
+		// record, whichever record that is.
+		secretscan.GateIgnoreSeed: func(dir string) error {
+			return gatestate.SaveExecute(dir, gatestate.Execute{Phase: "p", Mode: "pair"})
+		},
 	}
-	ignored := func(p string) bool {
+	seeded := func(seed string) string {
+		t.Helper()
+		prep, ok := seeds[seed]
+		if !ok {
+			t.Fatalf("no preparer for ignore seed %q — add one here, or the claim goes unproved", seed)
+		}
+		dir := t.TempDir()
+		gitInit(t, dir, "")
+		if err := prep(dir); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+	ignored := func(dir, p string) bool {
 		return gitNoOut(dir, "check-ignore", "-q", "--", ".dross/"+p) == nil
 	}
 
@@ -216,14 +236,17 @@ func TestMachineLocalWritersAreReallyIgnored(t *testing.T) {
 			continue
 		}
 		checked++
-		if !ignored(w.MachineLocal.Path) {
-			t.Errorf("%s: declares .dross/%s machine-local via %q, but the seed does not ignore it", w.File, w.MachineLocal.Path, w.MachineLocal.IgnoreSeed)
+		dir := seeded(w.MachineLocal.IgnoreSeed)
+		for _, p := range append([]string{w.MachineLocal.Path}, w.MachineLocal.Also...) {
+			if !ignored(dir, p) {
+				t.Errorf("%s: declares .dross/%s machine-local via %q, but the seed does not ignore it", w.File, p, w.MachineLocal.IgnoreSeed)
+			}
 		}
 	}
 	if checked == 0 {
 		t.Fatal("no MachineLocal entry — the arm asserts nothing")
 	}
-	if ignored("handoff.md") {
+	if ignored(seeded(drossSeed), "handoff.md") {
 		t.Fatal("handoff.md is ignored by the seed — the non-vacuity probe below no longer probes anything; pick another unseeded path")
 	}
 }

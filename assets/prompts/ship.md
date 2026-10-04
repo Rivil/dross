@@ -93,15 +93,23 @@ carries an up-to-date `ARCHITECTURE.md` (c-6).
      per-phase heading or a "Phase NN" section — the doc is organized by feature,
      never by phase. A duplicate per-phase heading appearing means the merge
      regressed.
-4. Show the `git diff` of `ARCHITECTURE.md`. On the user's OK, commit it onto
-   `phase/<id>` (it lives at repo root, so the provider squash-merge carries it
-   into the PR):
+4. Show the `git diff` of `ARCHITECTURE.md`. On the user's OK, run the full
+   suite on the edited tree — a bare `dross test`, no selector and no `--files`
+   — before committing. The commit gate admits a commit only when a full green
+   was recorded for exactly the tree being committed, and the doc edit changed
+   that tree since verify ran:
+   ```
+   dross test
+   ```
+   On green, commit it onto `phase/<id>` (it lives at repo root, so the provider
+   squash-merge carries it into the PR):
    ```
    git add ARCHITECTURE.md
    git commit -m "docs(<phase-slug>): merge phase landmarks into ARCHITECTURE.md"
    ```
    Match the repo's existing trailer convention. The tree is clean again
-   afterwards, so §4's clean-tree re-check passes.
+   afterwards, so §4's clean-tree re-check passes. A gate refusal is a stop:
+   read its rule and remedy, and never route around one.
 
 ## 4. Ship
 

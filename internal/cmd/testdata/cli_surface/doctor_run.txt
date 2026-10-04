@@ -38,6 +38,12 @@ Mutation toolchain:
   ⚠ dotnet is not installed — the stryker-net adapter needs it to measure C# files here.
     Without it a verify run reports nothing measured rather than a bad score. Fix: install the .NET SDK (https://dotnet.microsoft.com/download)
 
+Hooks:
+  ✓ PreCompact → dross pause --auto
+  ✓ SessionStart → dross reentry
+  ✓ PreToolUse → dross gate check
+  ✓ PostToolUse → dross gate record
+
 Phase branch hygiene:
   ✓ no recorded phase commits on local main
 

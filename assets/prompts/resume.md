@@ -41,10 +41,13 @@ If the handoff is older than a few days, say so — memory may have moved on.
 The handoff is a checklist. Walk the items and close out what's done. Via `AskUserQuestion` (or just confirm in prose if it's obvious):
 - For each `## Next` / `## Open loops` item: **done** (remove it) / **keep** (still open) / **edit** (reword).
 
-Then rewrite `.dross/handoff.md` with only what's left:
-- Items still open stay.
-- Refresh the `phase:` / `branch:` header line and the `## Dirty` list from current reality.
+Then prune `.dross/handoff.md` in place with `Edit`, one change at a time:
+- A **done** item: `Edit` its line out. Items still open stay exactly as written.
+- An **edit** item: `Edit` that line to the new wording.
+- Refresh the `phase:` / `branch:` header line and the `## Dirty` list from current reality, each with its own `Edit`.
 - If **everything** is resolved → delete the file (`rm .dross/handoff.md`). The `dross status` nudge disappears; you're fully resumed onto a clean slate.
+
+Never replace the whole file with `Write`. A pruned handoff is usually far smaller than the one you read, and the curated-file gate refuses a `Write` that cuts `handoff.md` below half its size. An `Edit` per change also leaves every line you didn't touch byte-for-byte intact.
 
 Never silently drop an item the user didn't mark done. Pruning is the user's call, item by item.
 
