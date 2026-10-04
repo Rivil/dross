@@ -11,14 +11,19 @@ import (
 )
 
 // The solo-review recorder (review_pass_signal). A pass is recorded only here,
-// from the PostToolUse payload of the reviewer agent's own spawn: the verdict
-// is the reply in that call's tool_response, which the executing agent did
-// not write. No CLI verb records a review, and tamper-guard keeps the ledger
-// out of every tool call's reach — so the commit gate's pass cannot be forged
-// by the agent it gates.
+// from Claude Code's own hook events for the reviewer agent's spawn: the
+// verdict is the agent's final reply, which the executing agent did not
+// write. No CLI verb records a review, and tamper-guard keeps the ledger out
+// of every tool call's reach — so the commit gate's pass cannot be forged by
+// the agent it gates.
 //
-// Each claimed spawn appends one round to the armed scope's ledger, bound to
-// the tree its context was built from:
+// A foreground spawn completes inside the Agent call, so its PostToolUse
+// carries the reply and yields a round at once. A background spawn — the only
+// kind an interactive session makes — reports just a launch: its PostToolUse
+// records a pending launch (the agent's id, the digest its prompt named, the
+// tree that context was built from), and the same agent's SubagentStop
+// delivers the reply that turns it into a round. Either way the round is bound
+// to the tree its context was built from:
 //
 //   - pass / block — the reviewer's parsed verdict over the context whose
 //     digest the prompt names, regenerated here and found equal;
@@ -27,9 +32,6 @@ import (
 //   - unavailable — the reviewer ran but its verdict cannot be trusted: it
 //     does not parse or contradicts itself, or its prompt carried text beyond
 //     the context line (c-5 — the reviewer sees only the context). Sticky.
-//
-// A background spawn's PostToolUse is only a launch acknowledgement (the
-// captured fixtures pin this), so it records nothing and warns.
 func init() {
 	RegisterRecorder(Recorder{
 		Name: "solo-review", Scope: Workflow,
@@ -39,8 +41,11 @@ func init() {
 }
 
 // claimsReviewer claims the reviewer's spawns, under either name Claude Code
-// has given the subagent tool.
+// has given the subagent tool, and the reviewer agent's SubagentStop.
 func claimsReviewer(c *Call) bool {
+	if c.Event == EventSubagentStop {
+		return c.AgentType == review.ReviewerAgent
+	}
 	return (c.ToolName == "Agent" || c.ToolName == "Task") && c.Field("subagent_type") == review.ReviewerAgent
 }
 
@@ -55,15 +60,6 @@ func recordReview(c *Call) error {
 		// the gate and nothing is recorded.
 		return err
 	}
-	var resp map[string]json.RawMessage
-	_ = json.Unmarshal(c.Response, &resp)
-	var status string
-	_ = json.Unmarshal(resp["status"], &status)
-	if status != "completed" {
-		return fmt.Errorf("the %s spawn did not complete inside the tool call (status %q) — a background launch never carries the verdict, so nothing was recorded; spawn it in the foreground with run_in_background: false",
-			review.ReviewerAgent, status)
-	}
-
 	rec, err := gatestate.LoadReview(root)
 	if err != nil {
 		return err
@@ -71,48 +67,98 @@ func recordReview(c *Call) error {
 	if !scope.Matches(rec) {
 		rec = &gatestate.Review{Kind: scope.Kind, Phase: scope.Phase, Task: scope.Task, Attempt: scope.Attempt}
 	}
-	round, warn := judgeRound(c, root, scope, resp)
-	rec.Rounds = append(rec.Rounds, round)
+
+	var warn error
+	if c.Event == EventSubagentStop {
+		i := pendingIndex(rec.Pending, c.AgentID)
+		if i < 0 {
+			// Not a launch this scope is waiting on — an earlier attempt's
+			// reviewer, or one spawned while nothing was armed.
+			return nil
+		}
+		l := rec.Pending[i]
+		rec.Pending = append(rec.Pending[:i:i], rec.Pending[i+1:]...)
+		rec.Rounds = append(rec.Rounds, verdictRound(c.LastMessage, scope, l.Digest, l.Tree))
+	} else {
+		var resp map[string]json.RawMessage
+		_ = json.Unmarshal(c.Response, &resp)
+		var status, agentID string
+		_ = json.Unmarshal(resp["status"], &status)
+		_ = json.Unmarshal(resp["agentId"], &agentID)
+		if status != "completed" && status != "async_launched" {
+			return fmt.Errorf("the %s spawn reported status %q — neither a completed review nor a launch, so nothing was recorded", review.ReviewerAgent, status)
+		}
+		digest, tree, bad, w := judgeLaunch(c, root, scope)
+		warn = w
+		switch {
+		case bad != nil:
+			rec.Rounds = append(rec.Rounds, *bad)
+		case status == "completed":
+			rec.Rounds = append(rec.Rounds, verdictRound(reviewerReply(resp), scope, digest, tree))
+		case agentID == "":
+			rec.Rounds = append(rec.Rounds, review.Round{Outcome: review.OutcomeUnavailable, Digest: digest,
+				Cause: "the background reviewer's launch reported no agent id, so its verdict cannot be joined to it"})
+		default:
+			rec.Pending = append(rec.Pending, gatestate.Launch{AgentID: agentID, Digest: digest, Tree: tree})
+		}
+	}
 	if err := gatestate.SaveReview(root, *rec); err != nil {
 		return err
 	}
 	return warn
 }
 
-// judgeRound turns one completed spawn into a round, and a warning when the
-// round is stale.
-func judgeRound(c *Call, root string, scope *ReviewScope, resp map[string]json.RawMessage) (review.Round, error) {
+func pendingIndex(pending []gatestate.Launch, agentID string) int {
+	for i, l := range pending {
+		if agentID != "" && l.AgentID == agentID {
+			return i
+		}
+	}
+	return -1
+}
+
+// judgeLaunch checks a spawn's prompt against the context it must name. It
+// returns the digest and tree a verdict will be bound to, or the terminal
+// round the spawn already earned — unavailable for a widened prompt or a
+// context that cannot be rebuilt, stale (with a warning) for a prompt naming
+// no context or one the tree has moved past.
+func judgeLaunch(c *Call, root string, scope *ReviewScope) (string, string, *review.Round, error) {
 	prompt := c.Field("prompt")
 	digest, ok := review.ParsePromptLine(prompt)
 	if !ok {
 		if strings.Contains(prompt, review.ContextPath) {
-			return review.Round{Outcome: review.OutcomeUnavailable,
+			return "", "", &review.Round{Outcome: review.OutcomeUnavailable,
 				Cause: "the reviewer's prompt carried text beyond the context line — it must see only the context (c-5), so its verdict cannot be trusted"}, nil
 		}
-		return review.Round{Outcome: review.OutcomeStale, Cause: "the reviewer's prompt names no review context"},
+		return "", "", &review.Round{Outcome: review.OutcomeStale, Cause: "the reviewer's prompt names no review context"},
 			errors.New("the reviewer was spawned without a review context: run `dross review context` and spawn it with the printed prompt — nothing counted")
 	}
 	cs, err := ContextScope(root, c.Home, scope)
 	if err != nil {
-		return review.Round{Outcome: review.OutcomeUnavailable, Cause: "the review context could not be rebuilt: " + err.Error()}, nil
+		return "", "", &review.Round{Outcome: review.OutcomeUnavailable, Cause: "the review context could not be rebuilt: " + err.Error()}, nil
 	}
 	ctx, err := review.BuildContext(root, cs, ReviewSecrets(c.Home))
 	if errors.Is(err, review.ErrNoCode) || (err == nil && ctx.Digest != digest) {
-		return review.Round{Outcome: review.OutcomeStale, Digest: digest, Cause: "the tree changed after `dross review context`"},
+		return "", "", &review.Round{Outcome: review.OutcomeStale, Digest: digest, Cause: "the tree changed after `dross review context`"},
 			errors.New("the tree changed after `dross review context`, so the reviewer judged a context that no longer matches it — re-run `dross review context` and the reviewer; nothing counted")
 	}
 	if err != nil {
-		return review.Round{Outcome: review.OutcomeUnavailable, Cause: "the review context could not be rebuilt: " + err.Error()}, nil
+		return "", "", &review.Round{Outcome: review.OutcomeUnavailable, Cause: "the review context could not be rebuilt: " + err.Error()}, nil
 	}
-	v, err := review.ParseVerdict(reviewerReply(resp), scope.Kind)
+	return digest, ctx.Tree, nil, nil
+}
+
+// verdictRound turns the reviewer's reply into a round bound to tree.
+func verdictRound(reply string, scope *ReviewScope, digest, tree string) review.Round {
+	v, err := review.ParseVerdict(reply, scope.Kind)
 	if err != nil {
-		return review.Round{Outcome: review.OutcomeUnavailable, Tree: ctx.Tree, Digest: digest, Cause: "the reviewer's verdict did not parse: " + err.Error()}, nil
+		return review.Round{Outcome: review.OutcomeUnavailable, Tree: tree, Digest: digest, Cause: "the reviewer's verdict did not parse: " + err.Error()}
 	}
 	outcome := review.OutcomeBlock
 	if v.Pass {
 		outcome = review.OutcomePass
 	}
-	return review.Round{Outcome: outcome, Tree: ctx.Tree, Digest: digest, Spec: v.Spec, Quality: v.Quality}, nil
+	return review.Round{Outcome: outcome, Tree: tree, Digest: digest, Spec: v.Spec, Quality: v.Quality}
 }
 
 // reviewerReply joins the text blocks of a completed Agent call's tool_response.

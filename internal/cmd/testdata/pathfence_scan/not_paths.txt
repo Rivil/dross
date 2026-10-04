@@ -132,6 +132,9 @@ gatestate.Execute.Mode mode
 gatestate.Execute.Phase phase
 gatestate.Green.Runner runner
 gatestate.Green.Tree tree
+gatestate.Launch.AgentID agent_id
+gatestate.Launch.Digest digest
+gatestate.Launch.Tree tree
 gatestate.Quick.Description description
 gatestate.Quick.Head head
 gatestate.Quick.Mode mode

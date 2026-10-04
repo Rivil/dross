@@ -77,6 +77,19 @@ type Review struct {
 	Task    string         `json:"task,omitempty"`
 	Attempt string         `json:"attempt"`
 	Rounds  []review.Round `json:"rounds"`
+	// Pending are background reviewer spawns whose verdict has not arrived:
+	// the PostToolUse launch records one, the same agent's SubagentStop turns
+	// it into a round.
+	Pending []Launch `json:"pending,omitempty"`
+}
+
+// Launch is one background reviewer spawn awaiting its SubagentStop: the
+// agent's id, the digest of the context its prompt named, and the tree that
+// context was built from — the tree its verdict is bound to.
+type Launch struct {
+	AgentID string `json:"agent_id"`
+	Digest  string `json:"digest"`
+	Tree    string `json:"tree"`
 }
 
 // Quick is the mode a /dross-quick run recorded: "pair" or "solo", the
@@ -183,6 +196,11 @@ func (r Review) check() error {
 	for i, rd := range r.Rounds {
 		if rd.Outcome == review.OutcomePass && strings.TrimSpace(rd.Tree) == "" {
 			return fmt.Errorf("%s: round %d is a pass with no tree", rel(ReviewFile), i+1)
+		}
+	}
+	for i, l := range r.Pending {
+		if strings.TrimSpace(l.AgentID) == "" || strings.TrimSpace(l.Digest) == "" || strings.TrimSpace(l.Tree) == "" {
+			return fmt.Errorf("%s: pending launch %d lacks its agent id, digest or tree", rel(ReviewFile), i+1)
 		}
 	}
 	return nil

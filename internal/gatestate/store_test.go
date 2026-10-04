@@ -359,3 +359,22 @@ func TestSaveContext(t *testing.T) {
 		t.Fatalf("the context file shows in git status:\n%s", st)
 	}
 }
+
+func TestReviewPendingRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	r := sampleReview()
+	r.Pending = []Launch{{AgentID: "a1", Digest: "sha256:d", Tree: "t1"}}
+	if err := SaveReview(dir, r); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadReview(dir)
+	if err != nil || len(got.Pending) != 1 || got.Pending[0] != r.Pending[0] {
+		t.Fatalf("pending launches did not round-trip: %+v, %v", got, err)
+	}
+	for _, bad := range []Launch{{Digest: "d", Tree: "t"}, {AgentID: "a", Tree: "t"}, {AgentID: "a", Digest: "d"}} {
+		r.Pending = []Launch{bad}
+		if err := SaveReview(dir, r); err == nil {
+			t.Errorf("a pending launch %+v was accepted", bad)
+		}
+	}
+}

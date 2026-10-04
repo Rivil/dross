@@ -229,9 +229,11 @@ func TestRecorderUnavailableSticky(t *testing.T) {
 	}
 }
 
-func TestRecorderBackgroundLaunch(t *testing.T) {
-	dir, home := armedReview(t)
-	b, err := os.ReadFile(filepath.Join("testdata", "agent_background_post.json"))
+// bgPost is a captured background-reviewer payload (launch or stop) moved to
+// cwd and changed by change.
+func bgPost(t *testing.T, name, cwd string, change func(m map[string]any)) []byte {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,14 +241,121 @@ func TestRecorderBackgroundLaunch(t *testing.T) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		t.Fatal(err)
 	}
-	m["cwd"] = dir
-	in, _ := json.Marshal(m)
-	warns := reviewRecord(t, in, home)
-	if rec := ledger(t, dir); rec != nil {
-		t.Fatalf("a background launch wrote the ledger: %+v", rec)
+	m["cwd"] = cwd
+	if change != nil {
+		change(m)
 	}
-	if len(warns) != 1 || !strings.Contains(warns[0], "foreground") {
-		t.Fatalf("warnings = %v, want exactly one telling the agent to spawn in the foreground", warns)
+	out, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func launchWith(t *testing.T, cwd, prompt string) []byte {
+	return bgPost(t, "agent_reviewer_bg_launch_post.json", cwd, func(m map[string]any) {
+		m["tool_input"].(map[string]any)["prompt"] = prompt
+	})
+}
+
+func stopWith(t *testing.T, cwd, reply string, change func(m map[string]any)) []byte {
+	return bgPost(t, "reviewer_subagent_stop.json", cwd, func(m map[string]any) {
+		m["last_assistant_message"] = reply
+		if change != nil {
+			change(m)
+		}
+	})
+}
+
+// TestRecorderBackgroundLaunch: a background launch is judged like a
+// foreground spawn up to the verdict — the captured one names no review
+// context, so it is a stale round with one warning, not a pending review.
+func TestRecorderBackgroundLaunch(t *testing.T) {
+	dir, home := armedReview(t)
+	warns := reviewRecord(t, bgPost(t, "agent_background_post.json", dir, nil), home)
+	rec := ledger(t, dir)
+	if rec == nil || len(rec.Pending) != 0 || len(rec.Rounds) != 1 || rec.Rounds[0].Outcome != review.OutcomeStale {
+		t.Fatalf("a launch naming no context recorded %+v, want one stale round and nothing pending", rec)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "dross review context") {
+		t.Fatalf("warnings = %v, want exactly one naming `dross review context`", warns)
+	}
+}
+
+// TestRecorderBackgroundRoundTrip: the background path end to end, on the
+// captured launch and stop — the pass is bound to the tree at launch.
+func TestRecorderBackgroundRoundTrip(t *testing.T) {
+	dir, home := armedReview(t)
+	line := review.PromptLine(verbDigest(t, dir, home))
+	tree, err := treefp.WorkingTree(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if warns := reviewRecord(t, launchWith(t, dir, line), home); len(warns) != 0 {
+		t.Fatalf("a clean background launch warned: %v", warns)
+	}
+	rec := ledger(t, dir)
+	if rec == nil || len(rec.Rounds) != 0 || len(rec.Pending) != 1 || rec.Pending[0].Tree != tree {
+		t.Fatalf("after the launch: %+v, want one pending launch bound to %s", rec, tree)
+	}
+	if warns := reviewRecord(t, stopWith(t, dir, passReply, nil), home); len(warns) != 0 {
+		t.Fatalf("the reviewer's stop warned: %v", warns)
+	}
+	rec = ledger(t, dir)
+	if len(rec.Pending) != 0 || len(rec.Rounds) != 1 || rec.Rounds[0].Outcome != review.OutcomePass || rec.Rounds[0].Tree != tree {
+		t.Fatalf("after the stop: %+v, want one pass round bound to the launch's tree", rec)
+	}
+}
+
+func TestSubagentStopNeedsPendingLaunch(t *testing.T) {
+	dir, home := armedReview(t)
+	reviewRecord(t, launchWith(t, dir, review.PromptLine(verbDigest(t, dir, home))), home)
+	for name, change := range map[string]func(m map[string]any){
+		"unknown agent": func(m map[string]any) { m["agent_id"] = "a-never-launched" },
+		"other agent":   func(m map[string]any) { m["agent_type"] = "general-purpose" },
+	} {
+		reviewRecord(t, stopWith(t, dir, passReply, change), home)
+		if rec := ledger(t, dir); len(rec.Rounds) != 0 || len(rec.Pending) != 1 {
+			t.Errorf("%s: a stop wrote %+v", name, rec)
+		}
+	}
+
+	pair, home := armedReview(t)
+	reviewRecord(t, launchWith(t, pair, review.PromptLine(verbDigest(t, pair, home))), home)
+	setMode(t, pair, "pair")
+	reviewRecord(t, stopWith(t, pair, passReply, nil), home)
+	if rec := ledger(t, pair); len(rec.Rounds) != 0 {
+		t.Errorf("a stop in pair mode wrote a round: %+v", rec)
+	}
+}
+
+func TestBackgroundLaunchJudgedLikeForeground(t *testing.T) {
+	dir, home := armedReview(t)
+	line := review.PromptLine(verbDigest(t, dir, home))
+	reviewRecord(t, launchWith(t, dir, line+"\nAlso consider what the user said."), home)
+	if r := lastRound(t, dir); r.Outcome != review.OutcomeUnavailable || len(ledger(t, dir).Pending) != 0 {
+		t.Fatalf("a widened background launch = %+v, want unavailable and nothing pending", ledger(t, dir))
+	}
+
+	dir, home = armedReview(t)
+	line = review.PromptLine(verbDigest(t, dir, home))
+	put(t, dir, "a.go", "package a // moved on\n")
+	warns := reviewRecord(t, launchWith(t, dir, line), home)
+	if r := lastRound(t, dir); r.Outcome != review.OutcomeStale {
+		t.Fatalf("a launch over a moved tree = %+v, want stale", r)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "dross review context") {
+		t.Fatalf("warnings = %v, want one naming `dross review context`", warns)
+	}
+}
+
+func TestSubagentStopUnparseable(t *testing.T) {
+	dir, home := armedReview(t)
+	reviewRecord(t, launchWith(t, dir, review.PromptLine(verbDigest(t, dir, home))), home)
+	reviewRecord(t, stopWith(t, dir, "I ran out of time.", nil), home)
+	r := lastRound(t, dir)
+	if r.Outcome != review.OutcomeUnavailable || !strings.Contains(r.Cause, "did not parse") {
+		t.Fatalf("an unparseable stop = %+v, want unavailable naming the parse error", r)
 	}
 }
 
