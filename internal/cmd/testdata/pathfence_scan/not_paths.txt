@@ -305,6 +305,16 @@ reaplog.Card.Class class
 reaplog.Card.Outcome outcome
 reaplog.Card.PriorState prior_state
 
+# ---- review — solo reviewer verdicts and rounds: criterion ids, severities, finding prose, outcomes, tree object ids, context digests, causes
+review.Finding.Criterion criterion
+review.Finding.Severity severity
+review.Finding.Text text
+review.Round.Cause cause
+review.Round.Digest digest
+review.Round.Outcome outcome
+review.Round.Tree tree
+review.wireVerdict.Verdict verdict
+
 # ---- rules — rule ids, text, dates
 rules.Rule.Created created
 rules.Rule.ID id
