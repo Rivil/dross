@@ -88,7 +88,7 @@ sooner.
 
 **Read both files before continuing.** They're the inputs for the LLM judgement step.
 
-Move the board issue to the UAT state (no-op unless `[remote].board_sync` is on — safe to always run). A phase awaiting a verdict is neither being worked nor delivered, so it gets its own state rather than sharing in-progress or shipped:
+Move the board issue to the UAT state (it exits 0 and does nothing when `[board].enabled` is false; a non-zero exit is a board failure — surface it, never read it as the disabled no-op). A phase awaiting a verdict is neither being worked nor delivered, so it gets its own state rather than sharing in-progress or shipped:
 ```
 dross issue phase sync <phase> --status uat
 ```

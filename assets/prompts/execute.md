@@ -54,13 +54,12 @@ Skip this when the phase has no milestone (`PATCH` is `0` — there's no ordinal
 assign). `dross phase number` recomputes from the milestone's `phases` array, so
 it stays correct even after a phase is inserted or reordered.
 
-Mark the board issue in-progress (no-op unless `[remote].board_sync` is on — safe to always run):
+Mark the board issue in-progress (it exits 0 and does nothing when `[board].enabled` is false; a non-zero exit is a board failure — surface it, never read it as the disabled no-op):
 ```
 dross issue phase sync <id> --status in-progress
 ```
 
-**Pull any board-side task moves back into the plan** (same no-op rule — safe to
-always run). The outbound direction is wired throughout this prompt (`dross issue
+**Pull any board-side task moves back into the plan** (same board rule: silent only when `[board].enabled` is false, a non-zero exit is a failure to surface). The outbound direction is wired throughout this prompt (`dross issue
 task sync`, below); this is the inbound half, and without it a card someone moved
 on the board never reaches `plan.toml`, so `dross task next` picks from a stale
 plan:
@@ -112,9 +111,9 @@ If empty: jump to step 2. Otherwise mark in progress:
 dross task status <phase> $TASK_ID in_progress
 dross issue task sync <phase> $TASK_ID --status task-in-progress
 ```
-The second line mirrors this task onto the board and moves its card. It is a
-no-op when board sync is off, so call it unconditionally — the same way the
-phase-sync above is called.
+The second line mirrors this task onto the board and moves its card. It exits 0
+silently when `[board].enabled` is false, so call it unconditionally — the same
+way the phase-sync above is called — and surface a non-zero exit as a board failure.
 
 Read the task with `dross task show <phase> $TASK_ID`. Display its full record to the user.
 
@@ -342,7 +341,8 @@ dross issue task sync <phase> <task-id> --status task-in-review
 ```
 The task's card moves to a review state as the commit lands — the work is
 done and is now waiting on the phase's verdict, which is a different thing
-from still being worked. No-op when board sync is off.
+from still being worked. Silent when `[board].enabled` is false; a non-zero exit
+is a board failure to surface.
 
 Continue to the 1g post-commit gate.
 
@@ -393,7 +393,7 @@ git add .dross/
 git commit -m "chore(dross): execute <id> bookkeeping"
 ```
 
-Re-sync the board issue so its checklist reflects the completed tasks (no-op unless board sync is on):
+Re-sync the board issue so its checklist reflects the completed tasks (same board rule: silent only when `[board].enabled` is false, a non-zero exit is a failure to surface):
 ```
 dross issue phase sync <id>
 ```

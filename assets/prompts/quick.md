@@ -200,7 +200,7 @@ Always touch state:
 dross state touch "quick: <one-line summary of the task>"
 ```
 
-Mirror the quick task onto the issue board, keyed by the new version (no-op unless `[remote].board_sync` is on — safe to always run):
+Mirror the quick task onto the issue board, keyed by the new version (it exits 0 and does nothing when `[board].enabled` is false; a non-zero exit is a board failure — surface it, never read it as the disabled no-op):
 ```
 dross issue quick $NEW_VERSION "quick: <one-line summary>"
 ```
@@ -237,7 +237,7 @@ Next: continue working, or /dross-quick "<another task>" — another small chang
 state is on disk — safe to /clear · fresh session: /dross-status
 ```
 
-The quick task is committed and done, so close its board issue (no-op unless board sync is on):
+The quick task is committed and done, so close its board issue (same board rule: silent only when `[board].enabled` is false, a non-zero exit is a failure to surface):
 ```
 dross issue quick $NEW_VERSION --close
 ```

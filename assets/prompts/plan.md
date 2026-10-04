@@ -249,7 +249,7 @@ dross state set current_phase_status "planned"
 dross state touch "plan locked: <id> (<task-count> tasks across <wave-count> waves)"
 ```
 
-Mirror the plan onto the issue board (no-op unless `[remote].board_sync` is on — safe to always run):
+Mirror the plan onto the issue board (it exits 0 and does nothing when `[board].enabled` is false; a non-zero exit is a board failure — surface it, never read it as the disabled no-op):
 ```
 dross issue phase sync <id>
 ```
