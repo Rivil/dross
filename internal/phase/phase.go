@@ -329,6 +329,11 @@ type SpecPhase struct {
 type Criterion struct {
 	ID   string `toml:"id" json:"id"`
 	Text string `toml:"text" json:"text"`
+	// Deferred lists the ids (Deferred.ID) of the parked items this criterion
+	// absorbs: the locked absorption_record decision makes this list the only
+	// evidence a routed item was taken into the phase it was routed to.
+	// omitempty so a criterion that absorbs nothing writes no key.
+	Deferred []string `toml:"deferred,omitempty" json:"deferred,omitempty"`
 }
 
 type Decision struct {
