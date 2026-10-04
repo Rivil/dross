@@ -70,3 +70,21 @@
   choice = "When the reviewer cannot run or its verdict does not parse, no pass is recorded, the commit is refused, and the task is marked failed naming the cause."
   why = "Carries tool-gate-hooks' gate_error_posture (closed in-domain); a missing review must not read as a passing one."
   locked = true
+
+[[deferred]]
+  id = "5426fd8d7059547e"
+  text = "Board finalization belongs to phase completion: `dross phase complete` itself moves every task card of the phase to task-complete (closed) and the phase card to complete (closed), idempotently, so a phase merged outside /dross-ship's §6 merge branch (hold then forge-UI merge, a later `dross phase complete`, a recovered ship) never leaves task cards in task-in-review. ship.md §6 steps 4-5 shrink to whatever the CLI no longer does."
+  why = "feastahead (FEA board) reported shipped phases whose task cards still sit in Review; the only task-complete edge is a prompt step on one /dross-ship branch (2026-10-04). Historical drift is already handled by `dross issue reap`."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "488b08fefff076c8"
+  text = "Silence the 'youtrack does not know the label(s) …' warning on identity-label lookups (dross/task:, dross/phase:, dross/deferred: — resolveTaskIssue, resolvePhaseIssue and the backlog mirror lookup): an unknown identity label means no card exists yet, not a stale filter, so every first sync of a new task, phase or deferred item prints it as if something were wrong. Keep the warning for genuine filter queries."
+  why = "feastahead read it as a lookup failure on every task sync; reproduced on 7b33f38 only on first sync, and it also fires for dross/deferred: and dross/phase: when filing a routed deferred item (2026-10-04)."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "15ce26e96bf0a5da"
+  text = "plan.toml writes are lossy: `dross task status/add/edit` re-encode the whole plan and strip every comment (feastahead lost 123 header comment lines per write and restores them by hand). Give plan.toml the lossless-write treatment project.toml got in project-toml-lossless-writes."
+  why = "Reported by feastahead 2026-10-04 with the board issues; spec decides whether it stays in this phase or splits out."
+  target = "board-finalize-on-complete"

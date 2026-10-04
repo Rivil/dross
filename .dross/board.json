@@ -130,6 +130,7 @@
     "someday:id:121f867fd1bffb0c": "DRO-287",
     "someday:id:12d7c0ffc1d5958c": "DRO-559",
     "someday:id:130a1cf4bc7049f2": "DRO-92",
+    "someday:id:15ce26e96bf0a5da": "DRO-827",
     "someday:id:1708546d27dd3939": "DRO-81",
     "someday:id:17e1ad6227bc1386": "DRO-605",
     "someday:id:189f66578878a28a": "DRO-683",
@@ -185,6 +186,7 @@
     "someday:id:46c15a85de624472": "DRO-233",
     "someday:id:4841efdde12bd371": "DRO-354",
     "someday:id:4872b79b07f21c0a": "DRO-329",
+    "someday:id:488b08fefff076c8": "DRO-826",
     "someday:id:48b5edeb0556cd3a": "DRO-105",
     "someday:id:48f9a44d4baeba06": "DRO-586",
     "someday:id:49e1846c35c70607": "DRO-314",
@@ -195,6 +197,7 @@
     "someday:id:500ae4ef27e1788c": "DRO-390",
     "someday:id:533deb3742a699da": "DRO-573",
     "someday:id:5424d79f2f8d3bc5": "DRO-327",
+    "someday:id:5426fd8d7059547e": "DRO-825",
     "someday:id:5433add0623c64ef": "DRO-572",
     "someday:id:559177675cd27ce3": "DRO-601",
     "someday:id:5610b45525282bf4": "DRO-219",
@@ -1918,6 +1921,56 @@
       "issue": "DRO-468",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "solo-task-review/t-1": {
+      "issue": "DRO-815",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-11": {
+      "issue": "DRO-824",
+      "plan_status": "in_progress",
+      "board_state": "task-in-progress"
+    },
+    "solo-task-review/t-2": {
+      "issue": "DRO-816",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-3": {
+      "issue": "DRO-817",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-4": {
+      "issue": "DRO-818",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-5": {
+      "issue": "DRO-819",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-6": {
+      "issue": "DRO-820",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-7": {
+      "issue": "DRO-821",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-8": {
+      "issue": "DRO-822",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-9": {
+      "issue": "DRO-823",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "supply-chain-currency/t-1": {
       "issue": "DRO-424",
