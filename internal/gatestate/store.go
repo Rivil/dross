@@ -1,6 +1,7 @@
 // Package gatestate is the machine-local record the tool gates judge against:
 // the tree the last full green `dross test` ran on, the mode /dross-execute
-// is running in, and the approval a human gave the current task.
+// is running in, the approval a human gave the current task, the solo review
+// ledger, the mode a /dross-quick run is in, and the review context file.
 //
 // Records live in .dross/gate/, which carries its own `*` .gitignore: a green
 // or an approval is a fact about THIS machine, and a copy committed to the repo
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/gitrun"
+	"github.com/Rivil/dross/internal/review"
 )
 
 // Dir is the record directory, relative to a repo root.
@@ -35,6 +37,12 @@ const (
 	GreenFile    = "green.json"
 	ExecuteFile  = "execute.json"
 	ApprovalFile = "approval.json"
+	ReviewFile   = "review.json"
+	QuickFile    = "quick.json"
+	// ContextFile is the rendered review context the reviewer reads. It is
+	// written by `dross review context` and never read back by a gate: the
+	// recorder regenerates the context and compares digests.
+	ContextFile = "review-context.md"
 )
 
 // Green is the tree fingerprint (internal/treefp) of the last full green
@@ -58,6 +66,27 @@ type Approval struct {
 	Task  string    `json:"task"`
 	Head  string    `json:"head"`
 	At    time.Time `json:"at"`
+}
+
+// Review is the solo review ledger for one armed scope: a plan task (Phase,
+// Task) or a solo quick, at one Attempt — the key a fresh attempt changes.
+// Rounds keep spec and quality findings apart on disk too.
+type Review struct {
+	Kind    review.Kind    `json:"kind"`
+	Phase   string         `json:"phase,omitempty"`
+	Task    string         `json:"task,omitempty"`
+	Attempt string         `json:"attempt"`
+	Rounds  []review.Round `json:"rounds"`
+}
+
+// Quick is the mode a /dross-quick run recorded: "pair" or "solo", the
+// quick's stated description (its only spec source), the HEAD it began at,
+// and when — a fresh `dross quick begin` is a fresh attempt.
+type Quick struct {
+	Mode        string    `json:"mode"`
+	Description string    `json:"description"`
+	Head        string    `json:"head"`
+	At          time.Time `json:"at"`
 }
 
 // Path is the absolute path of a record under root.
@@ -118,6 +147,69 @@ func LoadApproval(root string) (*Approval, error) {
 // SaveApproval records an approval.
 func SaveApproval(root string, a Approval) error { return save(root, ApprovalFile, a) }
 
+// LoadReview returns the review ledger, or nil when there is none.
+func LoadReview(root string) (*Review, error) {
+	var r Review
+	ok, err := load(root, ReviewFile, &r)
+	if err != nil || !ok {
+		return nil, err
+	}
+	if err := r.check(); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+// SaveReview records the review ledger. Its one writer is the PostToolUse
+// recorder in internal/gate — no CLI verb lets the executing agent record a
+// pass (review_pass_signal).
+func SaveReview(root string, r Review) error {
+	if err := r.check(); err != nil {
+		return fmt.Errorf("refusing to record it: %w", err)
+	}
+	return save(root, ReviewFile, r)
+}
+
+// check refuses a ledger a gate could misread: an unknown kind, no attempt
+// key, or a pass bound to no tree — an empty fingerprint could only ever
+// match another empty one.
+func (r Review) check() error {
+	if r.Kind != review.KindTask && r.Kind != review.KindQuick {
+		return fmt.Errorf("%s: unknown review kind %q", rel(ReviewFile), r.Kind)
+	}
+	if strings.TrimSpace(r.Attempt) == "" {
+		return fmt.Errorf("%s: review record has no attempt key", rel(ReviewFile))
+	}
+	for i, rd := range r.Rounds {
+		if rd.Outcome == review.OutcomePass && strings.TrimSpace(rd.Tree) == "" {
+			return fmt.Errorf("%s: round %d is a pass with no tree", rel(ReviewFile), i+1)
+		}
+	}
+	return nil
+}
+
+// LoadQuick returns the quick-mode record, or nil when there is none.
+func LoadQuick(root string) (*Quick, error) {
+	var q Quick
+	ok, err := load(root, QuickFile, &q)
+	if err != nil || !ok {
+		return nil, err
+	}
+	if q.Mode != "pair" && q.Mode != "solo" {
+		return nil, fmt.Errorf("%s: unknown quick mode %q", rel(QuickFile), q.Mode)
+	}
+	return &q, nil
+}
+
+// SaveQuick records the quick mode.
+func SaveQuick(root string, q Quick) error { return save(root, QuickFile, q) }
+
+// RemoveQuick removes the quick-mode record; none is not an error.
+func RemoveQuick(root string) error { return remove(root, QuickFile) }
+
+// SaveContext writes the review context file the reviewer reads.
+func SaveContext(root string, b []byte) error { return saveBytes(root, ContextFile, b) }
+
 // RefuseTracked errors when git reports the record tracked: a cloned repo must
 // not ship its own green or approval.
 func RefuseTracked(root, name string) error {
@@ -172,11 +264,16 @@ func ensureDir(root string) error {
 
 // save writes the record to a unique temp file and renames it into place.
 func save(root, name string, v any) error {
-	if err := ensureDir(root); err != nil {
-		return err
-	}
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
+		return err
+	}
+	return saveBytes(root, name, append(b, '\n'))
+}
+
+// saveBytes writes b to a unique temp file and renames it over name.
+func saveBytes(root, name string, b []byte) error {
+	if err := ensureDir(root); err != nil {
 		return err
 	}
 	dst := Path(root, name)
@@ -185,7 +282,7 @@ func save(root, name string, v any) error {
 		return fmt.Errorf("write %s: %w", rel(name), err)
 	}
 	defer os.Remove(tmp.Name()) // a no-op once the rename has moved it
-	if _, err := tmp.Write(append(b, '\n')); err != nil {
+	if _, err := tmp.Write(b); err != nil {
 		tmp.Close()
 		return fmt.Errorf("write %s: %w", rel(name), err)
 	}

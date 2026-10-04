@@ -143,3 +143,69 @@ func TestTamperGuardBash(t *testing.T) {
 		}
 	}
 }
+
+// TestTamperGuardReviewRecords: the review ledger, the quick marker and the
+// review context are gate records like green.json — no tool call writes them.
+func TestTamperGuardReviewRecords(t *testing.T) {
+	home := t.TempDir()
+	repo := droot(t)
+	e := Env{Home: home, Gates: []Gate{mustGate(t, "tamper-guard")}, Lifted: func(Gate, string) bool { return true }}
+	for _, name := range []string{"review.json", "quick.json", "review-context.md"} {
+		p := filepath.Join(repo, ".dross", "gate", name)
+		for _, tool := range []string{"Write", "Edit"} {
+			res := Check(payload(t, tool, map[string]any{"file_path": p, "content": "{}", "old_string": "a", "new_string": "b"}, repo), e)
+			if res.Allowed() || !strings.Contains(res.Text(), "tamper-guard") {
+				t.Errorf("%s %s: %q, want a tamper-guard refusal", tool, name, res.Text())
+			}
+		}
+	}
+	for _, line := range []string{
+		"echo x > .dross/gate/review.json",
+		"cp /tmp/r .dross/gate/review-context.md",
+		"printf '{}' | tee .dross/gate/quick.json",
+	} {
+		if res := Check(bash(t, line, repo), e); res.Allowed() {
+			t.Errorf("%q passed", line)
+		}
+	}
+}
+
+// TestReviewRecordDeleteRefused: deleting review.json resets the fix-round
+// cap and an unavailable verdict — the first gate record whose absence is more
+// lenient — so every Bash path that deletes it is refused.
+func TestReviewRecordDeleteRefused(t *testing.T) {
+	home := t.TempDir()
+	repo := droot(t)
+	e := Env{Home: home, Gates: []Gate{mustGate(t, "tamper-guard")}}
+	for _, line := range []string{
+		"rm .dross/gate/review.json",
+		"rm -f .dross/gate/quick.json",
+		"unlink .dross/gate/review.json",
+		"mv .dross/gate/review.json /tmp/x",
+		"rm -rf .dross",
+		"git clean -fX .dross",
+		"git clean -xdf",
+		"git -C . clean -fdX",
+		"git stash push -a",
+		"git stash --all",
+		"cd .dross && rm gate/review.json",
+	} {
+		if res := Check(bash(t, line, repo), e); res.Allowed() {
+			t.Errorf("%q passed", line)
+		}
+	}
+	for _, line := range []string{
+		"cp .dross/gate/review.json /tmp/r",
+		"cat .dross/gate/review.json",
+		"git clean -fd",
+		"git clean -fX src",
+		"git stash push -u -- . ':(exclude).dross'",
+		"git stash push -a -- . ':(exclude).dross'",
+		"rm -rf /tmp/elsewhere",
+		"rm a.go",
+	} {
+		if res := Check(bash(t, line, repo), e); !res.Allowed() {
+			t.Errorf("%q was refused: %q", line, res.Text())
+		}
+	}
+}

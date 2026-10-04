@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/shellscan"
 )
 
 // The override store: the gates a human has lifted, until when, and where
@@ -167,16 +169,20 @@ func LiftedBy(home string, now time.Time) func(Gate, string) bool {
 // forged green.json admits any commit, a forged approval.json any edit, and a
 // forged override lifts any gate. It refuses file-tool writes to a
 // .dross/gate/ record or the override store, and the Bash writes that reach
-// them — a redirect, tee, cp or mv. Reads pass. Like gate-off-guard it cannot
-// be lifted, and it fires everywhere: a .dross/gate/ is the same record
-// whichever repo it sits in.
+// them — a redirect, tee, cp or mv. Deletion is refused too: review.json is
+// the first record whose absence is MORE lenient (a deleted ledger resets the
+// one-fix-round cap and an unavailable verdict), so rm, unlink, mv with a
+// record as its source, and the ignored-file sweeps (`git clean -x/-X`,
+// `git stash -a`) over .dross/gate/ are refused alongside the writes. Reads
+// pass. Like gate-off-guard it cannot be lifted, and it fires everywhere: a
+// .dross/gate/ is the same record whichever repo it sits in.
 func init() {
 	Register(Gate{
 		Name: "tamper-guard", Scope: AlwaysOn, Liftable: false,
 		Claims: func(c *Call) bool { return tamperTarget(c) != "" },
 		Judge: func(c *Call) (*Refusal, error) {
 			return NewRefusal(
-				fmt.Sprintf("%s is a record the tool gates trust; writing it from a tool call would forge a green, an approval or an override", tamperTarget(c)),
+				fmt.Sprintf("%s is a record the tool gates trust; writing or deleting it from a tool call would forge a green, an approval, a review or an override", tamperTarget(c)),
 				"let dross write it — `dross test` records a green, an AskUserQuestion approval records an approval, and only a human lifts a gate, from their own terminal")
 		},
 	})
@@ -208,28 +214,96 @@ func tamperTarget(c *Call) string {
 		var targets []string
 		targets = append(targets, cmd.Outputs()...)
 		args := cmd.Args()
+		var operands []string
+		for _, a := range args {
+			if !strings.HasPrefix(a, "-") {
+				operands = append(operands, a)
+			}
+		}
+		removes := false
 		switch cmd.Name() {
 		case "tee":
-			for _, a := range args {
-				if !strings.HasPrefix(a, "-") {
-					targets = append(targets, a)
-				}
-			}
-		case "cp", "mv":
-			var operands []string
-			for _, a := range args {
-				if !strings.HasPrefix(a, "-") {
-					operands = append(operands, a)
-				}
-			}
+			targets = append(targets, operands...)
+		case "cp":
 			if len(operands) > 1 {
 				targets = append(targets, operands[len(operands)-1])
 			}
+		case "mv":
+			// Every operand: the target is written, each source is deleted.
+			targets = append(targets, operands...)
+			removes = true
+		case "rm", "unlink":
+			targets = append(targets, operands...)
+			removes = true
+		case "git":
+			if g, ok := cmd.Git(); ok {
+				if p := ignoredSweep(c, g); p != "" {
+					return p
+				}
+			}
 		}
 		for _, t := range targets {
-			if p := cmd.Resolve(t); isGateRecord(p, c.Home) {
+			p := cmd.Resolve(t)
+			if isGateRecord(p, c.Home) {
 				return p
 			}
+			// Removing .dross/ itself takes .dross/gate/ with it.
+			if removes && filepath.Base(p) == ".dross" {
+				return filepath.Join(p, "gate")
+			}
+		}
+	}
+	return ""
+}
+
+// ignoredSweep names the .dross/gate/ a git command would delete as ignored
+// files — `git clean` with -x or -X, `git stash` with -a/--all — when one of
+// its pathspecs (none means the working directory) reaches the repo's gate
+// directory. A pathspec excluding .dross/ keeps the sweep clear of it.
+func ignoredSweep(c *Call, g shellscan.GitCall) string {
+	sweeps := false
+	var specs []string
+	afterDD := false
+	for _, a := range g.Args {
+		short := strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--")
+		switch {
+		case afterDD:
+			specs = append(specs, a)
+		case a == "--":
+			afterDD = true
+		case g.Sub == "clean" && short && strings.ContainsAny(a[1:], "xX"):
+			sweeps = true
+		case g.Sub == "stash" && (a == "--all" || (short && strings.Contains(a[1:], "a"))):
+			sweeps = true
+		case g.Sub == "clean" && !strings.HasPrefix(a, "-"):
+			specs = append(specs, a)
+		}
+	}
+	if !sweeps {
+		return ""
+	}
+	root, err := c.Root()
+	if err != nil || root == "" {
+		return ""
+	}
+	gateDir := filepath.Join(root, ".dross", "gate")
+	if len(specs) == 0 {
+		specs = []string{"."}
+	}
+	for _, s := range specs {
+		if strings.HasPrefix(s, ":") && strings.Contains(s, "exclude") && strings.Contains(s, ".dross") {
+			return ""
+		}
+	}
+	at := shellscan.Command{Dir: g.Dir}
+	for _, s := range specs {
+		if strings.HasPrefix(s, ":") {
+			continue
+		}
+		p := at.Resolve(s)
+		if p == gateDir || strings.HasPrefix(p+string(filepath.Separator), gateDir+string(filepath.Separator)) ||
+			strings.HasPrefix(gateDir, p+string(filepath.Separator)) {
+			return gateDir
 		}
 	}
 	return ""
