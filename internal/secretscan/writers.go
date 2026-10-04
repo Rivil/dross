@@ -227,6 +227,7 @@ var writers = []Writer{
 	{File: "internal/cmd/hooks.go", OutsideDross: &OutsideDross{Paths: []string{userSettings}, Why: "hook wiring in the user-level Claude settings"}},
 	{File: "internal/cmd/statusline.go", OutsideDross: &OutsideDross{Paths: []string{userSettings}, Why: "statusline block in the user-level Claude settings"}},
 	{File: "internal/cmd/install.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/skills/<name>/SKILL.md", "~/.claude/dross/prompts/<name>.md"}, Why: "embedded skills and prompts re-linked into ~/.claude"}},
+	{File: "internal/cmd/reviewer_agent.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/agents/dross-<name>.md"}, Why: "embedded agent definitions (the solo task reviewer) installed where Claude Code reads user agents — $CLAUDE_CONFIG_DIR/agents when set"}},
 	{File: "internal/defaults/defaults.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/dross/defaults.toml"}, Why: "user-level defaults under ~/.claude/dross"}},
 	{File: "internal/telemetry/telemetry.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/dross/telemetry.jsonl"}, Why: "append-only user-level telemetry log; never under a repo"}},
 	{File: "internal/update/update.go", OutsideDross: &OutsideDross{Paths: []string{"<bin>/dross"}, Why: "the verified release binary, swapped in beside the running one"}},
