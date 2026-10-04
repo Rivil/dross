@@ -135,7 +135,7 @@ func reviewStatus() *cobra.Command {
 					note = "the tree changed after the review passed — re-run `dross test`, then `dross review context` and the reviewer"
 				}
 			case review.StatusNone:
-				note = "no review recorded yet — run `dross review context`, then spawn " + review.ReviewerAgent + " in the foreground with the printed prompt"
+				note = "no review recorded yet — run `dross review context`, then spawn " + review.ReviewerAgent + " with the printed prompt and wait for its verdict"
 			case review.StatusBlocked:
 				note = "blocked — one fix round: address every blocking finding, re-run `dross test`, then `dross review context` and the reviewer"
 			case review.StatusExhausted, review.StatusUnavailable:

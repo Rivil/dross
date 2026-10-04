@@ -294,3 +294,21 @@ func TestReviewStatusAgreesWithLedger(t *testing.T) {
 		t.Errorf("blocked status does not show the finding to fix:\n%s", out)
 	}
 }
+
+// TestReviewStatusNoneHint: the hint for an unreviewed scope matches the
+// amended review_pass_signal — any spawn works, the verdict arrives when the
+// reviewer finishes.
+func TestReviewStatusNoneHint(t *testing.T) {
+	dir, _ := reviewFixture(t, "solo")
+	mustWrite(t, filepath.Join(dir, "a.go"), "package a // edited\n")
+	out, err := runReview(t, "status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "foreground") {
+		t.Errorf("review status still asks for a foreground spawn:\n%s", out)
+	}
+	if !strings.Contains(out, "dross review context") || !strings.Contains(out, "wait for its verdict") {
+		t.Errorf("review status lost its next steps:\n%s", out)
+	}
+}
