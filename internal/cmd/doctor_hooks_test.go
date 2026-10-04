@@ -43,6 +43,11 @@ func withConfig(t *testing.T, settings string) string {
 	if settings != "" {
 		mustWrite(t, filepath.Join(cfg, "settings.json"), settings)
 	}
+	// The swapped config dir starts with a current solo reviewer, as chdir's
+	// does: these tests are about the hooks, and doctor fails without one.
+	if err := syncAgents(filepath.Join(cfg, "agents"), false, "", func(string, ...any) {}); err != nil {
+		t.Fatalf("seed the reviewer definition: %v", err)
+	}
 	return cfg
 }
 

@@ -69,9 +69,9 @@ func TestQuickBegin(t *testing.T) {
 
 func TestSoloBeginNeedsReviewer(t *testing.T) {
 	cases := []struct {
-		name  string
+		name   string
 		break_ func(t *testing.T, dir string)
-		want  string
+		want   string
 	}{
 		{"missing", func(t *testing.T, dir string) {
 			if err := os.Remove(filepath.Join(userAgentsDir(""), reviewerFile)); err != nil {
