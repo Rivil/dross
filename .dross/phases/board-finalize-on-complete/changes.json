@@ -2,5 +2,1365 @@
   "phase": "board-finalize-on-complete",
   "base": "milestone/v1.7",
   "base_commit": "1d7ecd2c4947e47bcca9d4a515b2418b132e0769",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/forge/forge.go",
+        "internal/forge/identity_label_test.go",
+        "internal/forge/forge_test.go",
+        "internal/forge/youtrack_test.go",
+        "internal/boardsync/reap_discover.go",
+        "internal/boardsync/identity_label_test.go"
+      ],
+      "commit": "8dee7b2",
+      "completed_at": "2026-10-04T18:19:02.63216Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "IsIdentityLabel",
+          "loc": "internal/forge/forge.go:367",
+          "what": "an unknown dross identity label (task/phase/deferred/target) resolves to no card silently; shared filter labels still warn"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/survivor.go",
+        "internal/deferred/deferred.go",
+        "internal/cmd/survivor_route_test.go"
+      ],
+      "commit": "64d91dd",
+      "completed_at": "2026-10-04T20:34:27.373841Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "FindBySurvivor",
+          "loc": "internal/deferred/deferred.go:187",
+          "what": "routing a survivor again moves its one existing entry (same id, same board card) instead of filing a duplicate; same target writes nothing; duplicates are refused by handle"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/boardsync/disposition.go",
+        "internal/boardsync/disposition_test.go"
+      ],
+      "commit": "5d1a45d",
+      "completed_at": "2026-10-04T20:44:59.063974Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "Disposed",
+          "loc": "internal/boardsync/disposition.go:36",
+          "what": "disk-only disposition record for a routed item: accepted or measured-gone survivor, or an absorbing criterion in a completed target; anything unprovable is not disposed"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_finalize.go",
+        "internal/cmd/issue.go",
+        "internal/cmd/phase_complete_board_test.go",
+        "internal/cmd/testdata/cli_surface/issue.txt",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "9eefd06",
+      "completed_at": "2026-10-04T21:12:40.377407Z",
+      "landmarks": [
+        {
+          "feature": "phase lifecycle",
+          "symbol": "finalizeBoard",
+          "loc": "internal/cmd/phase_finalize.go:25",
+          "what": "dross phase complete finalizes the board last (completion stands on a board failure, which names dross issue phase finalize \u003cid\u003e); board.json is committed and routed like any base chore"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/boardsync/reap_catchup.go",
+        "internal/boardsync/reap_catchup_test.go",
+        "internal/boardsync/reap.go",
+        "internal/boardsync/reap_apply.go",
+        "internal/cmd/issue_reap_cmd.go",
+        "internal/cmd/issue_reap_cmd_test.go"
+      ],
+      "commit": "a191b06",
+      "completed_at": "2026-10-04T21:28:50.410683Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "FindMissing",
+          "loc": "internal/boardsync/reap_catchup.go:42",
+          "what": "dross issue reap lists completed phases the board has no cards for (one per-phase identity lookup) and --apply creates them closed via FinalizePhase"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/plan_lossless_test.go",
+        "internal/phase/phase_test.go",
+        "internal/cmd/task_lossless_test.go",
+        "internal/secretscan/writers.go",
+        "internal/project/export_test.go",
+        "internal/project/plan_verify_test.go"
+      ],
+      "commit": "dc37595",
+      "completed_at": "2026-10-04T22:04:00.891206Z",
+      "landmarks": [
+        {
+          "feature": "task lifecycle",
+          "symbol": "Plan.Save",
+          "loc": "internal/phase/phase.go:512",
+          "what": "plan.toml is patched in place through the keyed lossless door (task→id): every dross task write keeps comments and hand formatting outside the tasks it changed"
+        }
+      ]
+    },
+    "t-15": {
+      "files": [
+        "internal/boardsync/backlog.go",
+        "internal/boardsync/reap.go",
+        "internal/boardsync/reap_discover.go",
+        "internal/boardsync/backlog_reconcile_test.go",
+        "internal/boardsync/reap_classify_test.go"
+      ],
+      "commit": "0967fa6",
+      "completed_at": "2026-10-04T22:12:59.286444Z",
+      "landmarks": [
+        {
+          "feature": "Routed mirrors close on disposition",
+          "symbol": "liveDeferred",
+          "loc": "internal/boardsync/backlog.go",
+          "what": "backlog sync drops disposed items from the live set; BacklogVerdictFor and reapBacklogVerdict resolve/strand on Disposed"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        "assets/prompts/ship.md",
+        "internal/cmd/ship_prompt_test.go",
+        "internal/boardsync/board_lifecycle_divergence_test.go"
+      ],
+      "commit": "d142aac",
+      "completed_at": "2026-10-04T22:23:06.492225Z",
+      "landmarks": [
+        {
+          "feature": "Finalizer as lifecycle emission source",
+          "symbol": "finalizerCloses",
+          "loc": "internal/boardsync/board_lifecycle_divergence_test.go",
+          "what": "Phases/Tasks terminal emissions read from FinalizePhase close calls; ship.md §6 no longer closes cards"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "README.md",
+        "ARCHITECTURE.md",
+        "internal/cmd/readme_board_finalize_test.go",
+        "internal/cmd/deferred_add_test.go",
+        "internal/cmd/issue_reap_cmd.go",
+        "internal/cmd/issue_task.go",
+        "internal/cmd/issue.go",
+        "internal/cmd/testdata/cli_surface/issue.txt",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "58b6870",
+      "completed_at": "2026-10-04T22:30:07.435187Z"
+    },
+    "t-2": {
+      "files": [
+        "internal/project/patch_diff.go",
+        "internal/project/patch_save.go",
+        "internal/project/project.go",
+        "internal/project/patch_save_test.go",
+        "internal/cmd/project_writer_pin_test.go",
+        "ARCHITECTURE.md",
+        "internal/secretscan/writers.go"
+      ],
+      "commit": "7f80043",
+      "completed_at": "2026-10-04T18:34:24.847745Z",
+      "landmarks": [
+        {
+          "feature": "configuration",
+          "symbol": "saveLossless",
+          "loc": "internal/project/project.go:516",
+          "what": "the lossless TOML write door Project.Save and the exported SaveTOML share: decode into the value's type, diff, patch, verify, atomic write"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_absorb_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "907f957",
+      "completed_at": "2026-10-04T18:46:40.966629Z",
+      "landmarks": [
+        {
+          "feature": "deferred-item routing",
+          "symbol": "absorbedProblems",
+          "loc": "internal/cmd/validate.go:476",
+          "what": "a criterion's deferred ids must name items routed to its phase; validate refuses unknown/dismissed/unrouted/misrouted ids while the phase is open"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/deferred_target.go",
+        "internal/cmd/deferred.go",
+        "internal/cmd/deferred_add.go",
+        "internal/cmd/survivor.go",
+        "internal/cmd/route_complete_test.go"
+      ],
+      "commit": "f266c95",
+      "completed_at": "2026-10-04T18:56:41.992135Z",
+      "landmarks": [
+        {
+          "feature": "deferred-item routing",
+          "symbol": "refuseCompleteTarget",
+          "loc": "internal/cmd/deferred_target.go:70",
+          "what": "deferred route, survivor route and deferred add --target refuse a destination phase that is already complete, before any write"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/boardsync/finalize.go",
+        "internal/boardsync/finalize_test.go",
+        "internal/boardsync/task.go",
+        "internal/boardsync/phase.go",
+        "internal/boardsync/ctx.go",
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "49291a6",
+      "completed_at": "2026-10-04T19:19:21.109525Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "FinalizePhase",
+          "loc": "internal/boardsync/finalize.go:30",
+          "what": "idempotent completion-gated finalizer: every task card to task-complete and the phase card to complete, closed; missing cards created; cached milestone only"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "assets/prompts/execute.md",
+        "assets/prompts/plan.md",
+        "assets/prompts/quick.md",
+        "assets/prompts/milestone.md",
+        "assets/prompts/verify.md",
+        "assets/prompts/ship.md",
+        "internal/cmd/board_switch_prompt_test.go"
+      ],
+      "commit": "4da4150",
+      "completed_at": "2026-10-04T19:30:35.272521Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "TestBoardCallingPromptsSurfaceFailure",
+          "loc": "internal/cmd/board_switch_prompt_test.go:61",
+          "what": "every board-calling prompt names [board].enabled and treats a non-zero board-sync exit as a failure to surface, never the disabled no-op"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/project/patch.go",
+        "internal/project/patch_diff.go",
+        "internal/project/patch_save.go",
+        "internal/project/patch_keyed_test.go",
+        "ARCHITECTURE.md"
+      ],
+      "commit": "90885fc",
+      "completed_at": "2026-10-04T19:52:17.079065Z",
+      "landmarks": [
+        {
+          "feature": "configuration",
+          "symbol": "keyedArray",
+          "loc": "internal/project/patch_diff.go:335",
+          "what": "keyed arrays-of-tables match by identity: reorders move blocks verbatim with their comments, inserts land at their index, deletes take only their own block"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/survivor/store.go",
+        "internal/survivor/store_lossless_test.go",
+        "internal/cmd/survivor_lossless_test.go",
+        "internal/secretscan/writers.go"
+      ],
+      "commit": "8629e76",
+      "completed_at": "2026-10-04T20:01:04.751394Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "Save",
+          "loc": "internal/survivor/store.go:276",
+          "what": "survivors.toml is patched in place through project.SaveTOML, so unchanged entries and their # dross:allow-secret markers stay byte-identical"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/deferred_absorb.go",
+        "internal/cmd/deferred.go",
+        "internal/cmd/deferred_absorb_test.go",
+        "assets/prompts/spec.md",
+        "internal/cmd/spec_prompt_test.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "328f2f2",
+      "completed_at": "2026-10-04T20:24:58.061255Z",
+      "landmarks": [
+        {
+          "feature": "deferred-item routing",
+          "symbol": "deferredAbsorb",
+          "loc": "internal/cmd/deferred_absorb.go:27",
+          "what": "dross deferred absorb records a parked item's stable id on the criterion that takes it in; /dross-spec runs it for every criterion seeded from a parked item"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "TestSharedDrossLabelsStillWarn drives WarnDroppedLabels directly rather than each provider's ListIssues; adequate since all four share that sink, but it would not catch a provider bypassing it",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "stampedLabelPrefixes only sees exact \"dross/\u003ckind\u003e:\" string literals (a Sprintf-built prefix escapes it), and it treats every non-status dross/\u003ckind\u003e: literal as identity, so a future shared dross/\u003ckind\u003e: label will need an exclusion alongside dross/status:",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "survivorRoute's Long help still says it appends a [[deferred]] entry to the CURRENT phase's spec.toml; a re-route now rewrites the existing entry in whatever source holds it, and a same-target route writes nothing, so the user-facing help is now wrong for those paths",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "survivor route now calls deferred.Collect (via FindBySurvivor and mintDeferredID), so one unloadable spec anywhere in the project makes routing fail where before only the current phase's spec mattered; this matches deferred add's mintDeferredID behaviour",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSurvivorRerouteAfterAbsorbingPhaseCompletes models 'P's verify still lists it' as a premise without running verify; the route path does not depend on verify output, so the test still covers what the record claims",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "TestSurvivorRerouteToCompleteRefusedFirst does not test the 'before the lookup' ordering: moving refuseCompleteTarget after FindBySurvivor (but before the write) would still pass. A fixture with two entries carrying the key, which the lookup would refuse, routed to a complete target and expecting the complete-target error would pin the order.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A re-route changes only Target, so the entry's Text 'survivor \u003cfile\u003e:\u003cline\u003e (\u003cop\u003e)' (and the board card summary built from it) keeps the line from the first route even if the survivor's line has since moved.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Re-routing still requires the current phase's spec to load even when it writes to another source, and FindBySurvivor (via Collect) now makes an unparseable spec in any phase block every survivor route, where before only the current spec was read.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-11": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "When the source phase has no tests.json, survivorDisposed skips the newer-than-source check entirely (found == nil). That covers a source of _project, which phase.Dir resolves to the non-existent phases/_project, and a pruned source run. In those cases a destination run that predates the route can dispose the survivor, although the record says 'newer than the source phase's run' and 'anything unreadable -\u003e not disposed'. No test covers a missing source run.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "The 'key absent' check matches on Mutant.Key. ApplyLifecycle only stamps Key when identity resolution succeeds, so a mutant that still survives in the target run with an unresolved (empty) key reads as gone, and the routed survivor is reported disposed. A survivor at the same file and op whose key did not resolve should probably count as not disposed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "verify.toml's Finalized flag is not tied to the tests.json run it judges, because generated_at is never compared. finishVerify rewrites both files together, so they can only drift in a crash window between the two saves.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "The unkeyed-survivor guard compares s.File == file. s.File is the mutation tool's own spelling, which FilterReport keeps rather than normalising; file is the repo-relative path from the route text. If the tool spells the path differently (absolute, or with a ./ prefix), an unkeyed survivor still in the file will not match and the predicate fails open. Comparing through verify.NormalizePath, as Scope.Contains does, would close this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The scope and leg checks use slices.Contains on Scope.Files and LanguageRun.Files rather than Scope.Contains. A path-spelling mismatch there fails closed, so it is safe, but it could leave a disposed survivor reading as not disposed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "An unreadable survivors.toml is skipped and the run-evidence path still runs, rather than short-circuiting to not disposed. This is defensible because the two records are independent evidence, but it is a reading of 'anything unreadable -\u003e not disposed'.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "If the source phase re-runs verify after the target's run, the order check makes a truly disposed survivor read as not disposed. That fails closed and needs no change.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-12": {
+      "outcome": "pass",
+      "rounds": 3,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "test_contract calls for a board fake 'returning 500 on close', but TestCompleteBoardFailureKeepsCompletion injects the failure with taskCloseFake.refuse (the close is accepted but the read-back stays open), so the HTTP-error path through UpdateIssue/CloseIssue is never driven through complete; the assertions would still catch a regression in the shared finalizeErr handling",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "issue phase finalize resolves its base via resolveCompleteBase(..., \"\") with no --base flag: a phase completed with --base (no recorded base in changes.json, and phase/\u003cid\u003e deleted by teardown) gets a retry verb that always refuses, and the refusal text points at `dross phase complete --base` rather than the finalize verb that complete's error named",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the board commit message comes out as 'chore(dross): auto-commit bookkeeping before finalizing the board', but the commit is the finalizer's own output, not dirt cleared before it",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "test_contract lines 2 and 7 name the board-500 path, but TestCompleteBoardHTTPErrorKeepsCompletion (PATCH -\u003e 500) asserts only the error text and state.json; the changes.json status, local/origin branch teardown, completed/branch narration, phase_complete outcome event and the follow-up finalize are asserted only on the refuse (close accepted, reads back open) failure mode in TestCompleteBoardFailureKeepsCompletion. Same error branch in phaseComplete, so ordering is still guarded, but the 500 path itself is lightly covered.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "issue phase finalize --base is documented as 'when it records none', but resolveCompleteBase takes an explicit --base ahead of the recorded base, so the flag silently overrides a recorded base and lets the verb run from any existing local branch, bypassing the refusal-unless-on-recorded-base guard.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestCompleteBoardFailureKeepsCompletion enables telemetry but does not t.Setenv(\"HOME\", t.TempDir()); it reads the package-shared TestMain HOME, so a phase_complete outcome event left by an earlier run (-count\u003e1) or another test would satisfy the assertion vacuously.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestCompleteRerunIsReadOnly asserts zero non-GET requests but not that any board request happened at all, so a re-run that skipped finalizeBoard entirely would also pass; reading phaseComplete confirms the re-run does reach finalizeBoard.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "The only test that actually sends a 500 (TestCompleteBoardHTTPErrorKeepsCompletion) checks just the error text and state.json. The checks that changes.json reads complete, phase/x is gone locally and on origin, and the finalize retry closes every card are only in TestCompleteBoardFailureKeepsCompletion, which fakes an accepted close that never takes effect rather than a 500. The behaviour is the same because the board step runs last, but the 500 test itself is thin.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "issue phase finalize does not check that the working tree is committable before touching the board. With code dirt present, FinalizePhase changes the tracker and rewrites board.json, then autoCommitDrossDirt refuses and leaves board.json uncommitted. The joined error does report this, so it only matters on a rare path.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "finalizeBoard commits and routes all .dross dirt, not just board.json, under 'finalizing the board'. It does this even when FinalizePhase failed before writing anything, e.g. when the phase is not complete. This matches the shared autocommit approach used elsewhere.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-13": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "BLOCKING",
+          "criterion": "c-11",
+          "text": "catchUpInScope matches --namespace with slices.Contains (exact, case-sensitive, untrimmed), while ValidateReapNamespaces and resolveReapLanes trim and lowercase. `--namespace phases` / `--namespace tasks` passes validation and sweeps that lane but silently skips catch-up: no lookup, no Missing section, nothing created under --apply. That breaks the record's 'Honors --namespace (Phases/Tasks)'. Compare with strings.EqualFold after TrimSpace.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-11",
+          "text": "Catch-up applies through FinalizePhase for the whole phase. A --namespace Tasks sweep still lists and creates the phase card (and vice versa for Phases), and FinalizePhase also relabels/closes existing cards of that phase the dry run never showed (e.g. hand-closed cards lacking the dross/status label, or open cards outside the scoped lane). Those writes are not journaled, so --undo cannot reverse them.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "Inventory is shared with `dross watch` (timer loop, watch.go:80) and doctor's reportStrandedMirrors, neither of which reads plan.Missing. Both now make one State-all tracker query per completed phase on every call. A single failed catch-up lookup makes Inventory return an error, so watch's stranded count silently drops to 0 and doctor prints 'could not classify'.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "Legacy phase cards that carry only the marker and the '\u003cid\u003e — \u003ctitle\u003e' summary (from before phase labels) are reported missing by FindMissing, but --apply adopts them via ResolvePhaseIssue's marker-listing fallback rather than creating. The dry run overstates what will be created for exactly the historical phases catch-up targets.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-11",
+          "text": "TestReapDryRunListsMissingPhase asserts only that stderr does not contain 'dross/phase:p', narrower than the contract's 'no does-not-know-the-label line'. WarnDroppedLabels already never warns on identity labels, so the assertion almost cannot fail.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-11",
+          "text": "TestUndoLeavesCatchUpCards applies a plan with no Cards, so no run is journaled and Undo short-circuits on 'nothing to undo'; the post-undo write check is vacuous. A plan mixing one stranded close with one catch-up phase would exercise the claim.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The detection test pins the lookup's label but not State \"all\". fakeBoard treats an empty State as all, so a regression to State \"\" would pass on the double; the closed-card case only catches State \"open\".",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-11",
+          "text": "Catch-up scope is coarse: --namespace Tasks (or Phases alone) still runs the whole FinalizePhase, which creates the other lane's missing cards and can relabel/close existing non-terminal cards outside the requested scope. Those closes are not journaled, so reap --undo cannot reverse them. The same applies when a sweep close failed and FinalizePhase then retries that card.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-11",
+          "text": "The contract's 'State all' lookup is not asserted on the request log: faultBoard records only the labels. TestFindMissingSkipsWhatExists would catch State \"open\" but not an empty State, which GitHubClient.ListIssues treats as open.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-11",
+          "text": "TestReapDryRunListsMissingPhase checks stderr only for 'dross/phase:p', not for the absence of any 'does not know the label' line as the contract says. The fixture's empty tag list makes the sibling marker listing warn on the bare 'dross' label; a fixture that knows the 'dross' tag would let the test assert the literal contract.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Missing-card detection is in FindMissing, called from the reap command, not inside Inventory as the description words it. The stated reason is that watch and doctor share Inventory and should not pay a per-phase lookup on every tick.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "When only Missing is non-empty, printReapPlan still prints the '0 stranded across 0 lanes, 0 unattributable' footer.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The dry run may list a phase card as missing that --apply then adopts through ResolvePhaseIssue's legacy title-match marker listing instead of creating a new one. The result is correct, but the plan wording ('created') is slightly off for that case.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-14": {
+      "outcome": "pass",
+      "rounds": 4,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "test_contract asks for 'a forced verify mismatch', but TestTaskStatusRefusesUnprovablePatch triggers a duplicate-id refusal in diffKeyed, before verifyPatched ever runs. A regression in the verify step would not fail this test. The command-level outcome (file byte-identical, error naming plan.toml) is checked; the verify path is only covered by the pre-existing project-level TestKeyedRefusesUnverifiedPatch.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "TestTaskMoveRelocatesTheBlock moves t-4 earlier (wave 2 -\u003e 1), so MoveTask never reflows a dependent. 'Rewrites only the wave lines of reflowed pending dependents' holds with zero changed lines, and no test covers a lossless rewrite of a reflowed dependent's wave line. The moved block is also only checked up to its id line, not its full body.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "TestPlanCorpusOneLineStatusFlip, case 1 (one inserted line): it only checks that 'status = \"\u003cflipped\u003e\"' appears somewhere in the file. With many existing done/pending lines in the corpus that check is nearly vacuous, and it never verifies that the other lines are unchanged.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestSaveTOMLAtomicFailurePreservesFile only asserts err != nil, not that the error comes from failing to create the temp file. A refusal at any earlier stage would also pass. Its doc comment still says the test works by 'occupying \u003cpath\u003e.tmp with a directory', which is no longer true.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "'LoadPlan matches' in the corpus test is checked only by the first task's status and the task count. Save's own verify step already proves the patched text loads as the saved value.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestTaskNoopStatusWritesNothing ignores the os.Stat error (st, _ := ...), so a missing file would panic with a nil dereference instead of failing cleanly.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "test_contract asks for a forced verify mismatch, but TestTaskStatusRefusesUnprovablePatch uses duplicate task ids, which diffKeyed refuses at diff time ('two elements') before verifyPatched runs. The outcome is proved (plan.toml byte-identical, error names plan.toml), but no test in the diff reaches the verify-mismatch path through Plan.Save or task status.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "TestTaskMoveRelocatesTheBlock: the fixture causes no reflow (t-4 moves to wave 1 and t-5 stays at wave 3), so the rewrite of reflowed pending dependents' wave lines is never exercised. The check also allows any changed 'wave =' line instead of requiring an empty or exact change set. The moved block's own body is cut out and never compared beyond its comment and id header.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestSaveTOMLAtomicFailurePreservesFile now exercises Plan.Save, which leaves phase.saveTOML (still used by Spec.Save for spec.toml and deferred.toml) with no test of its \u003cpath\u003e.tmp failure path or atomic-failure guarantee.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPlanCorpusOneLineStatusFlip checks 'LoadPlan matches' only through the first task's status and the task count. The strict one-line diff plus the door's own verify step make this sufficient in practice. Its \u003e=50 plan floor ties the test to the repo's current .dross corpus size.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Plan.Save now refuses to save a plan.toml whose on-disk tasks share an id or lack one, where the old whole-file re-encode would have overwritten it. That is a behaviour change for hand-damaged plans, and it is intended.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "spec",
+          "severity": "BLOCKING",
+          "criterion": "c-4",
+          "text": "test_contract requires 'a forced verify mismatch -\u003e plan.toml byte-identical and task status errors naming plan.toml', but TestTaskStatusRefusesUnprovablePatch forces a duplicate-id refusal that fails in diffKeyed/identities() before verifyPatched runs; no test in the diff drives a verify mismatch on a Plan/plan.toml, so a broken verify refusal for plan.toml would go undetected",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "TestPlanCorpusOneLineStatusFlip reads the repo's own ../../.dross/phases and hard-fails below 50 plans; its outcome depends on mutable bookkeeping (archived/removed phases, checkouts without .dross) rather than on the code under test",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "TestTaskMoveRelocatesTheBlock accepts any changed '  wave = ' line outside t-2/t-3/t-4, including the done non-dependent t-1; the contract says only reflowed pending dependents' wave lines may change",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the corpus test's 'LoadPlan matches' check compares only the first task's status and the task count, not full plan equality; Save's own verifyPatched and the one-line diff assertion make this sufficient in practice",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 4,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "TestTaskMoveRelocatesTheBlock: moving t-4 before t-2 gives t-4 wave 1, and t-5 (wave 3) is already above it, so no pending dependent is reflowed. The 'only wave lines of reflowed pending dependents change' check is therefore vacuous for dependents. A fixture where a pending dependent's wave must bump would exercise the patcher on a reflowed block.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 4,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "The forced verify mismatch is driven only at the Plan.Save level (project_test via CorruptKeyedOpsForTest). The task-status-level refusal test (TestTaskStatusRefusesUnprovablePatch) uses a duplicate-id diff refusal, not a verify mismatch. 'task status errors naming plan.toml' on a verify mismatch is covered only indirectly, because task status returns Plan.Save's error unwrapped.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 4,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestPlanCorpusOneLineStatusFlip hard-codes len(plans) \u003c 50 as a failure. That ties a unit test to how many phases currently sit under .dross/phases, so pruning or archiving phases, or a partial checkout, fails it with no code change.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 4,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The corpus test's 'LoadPlan matches' check compares only the first task's status and the task count. Full equality is already enforced by verifyPatched inside Save, so this is adequate but narrower than the contract wording.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 4,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Plan.Save now refuses to write over an existing plan.toml that fails to decode or has duplicate or missing task ids, where the old whole-file encoder silently overwrote it. This is the intended lossless behaviour, but it changes behaviour for every caller, including phase migrate and issue task pull --apply.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-15": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-6",
+          "text": "liveDeferred applies Disposed to every deferred item, not only routed ones: survivorDisposed consults survivors.toml before checking Target, so an unrouted deferred survivor that is later accepted also drops out of the live set and has its mirror closed. Defensible (only an accepted survivor earns silence), but broader than c-6's routed scope.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-6",
+          "text": "Backlog sync only closes a disposed item's card when board.json still links it. A disposed item whose link was lost is no longer pushed (so no identity-label re-link) and is not reconciled; only reap's label discovery will strand it. This matches the existing dismissed-item behaviour.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Disposed runs twice for each non-live deferred key during one SyncBacklog (once in liveDeferred, again in BacklogVerdictFor), and each call re-reads survivors.toml, spec.toml and the verify runs from disk. Harmless at current scale.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-16": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestEveryMirrorLaneHasATerminalEmission's closedBy branch checks only that some finalizer close carries the lane's terminal status, not that the close is on that lane's card; a FinalizePhase that swapped the phase and task statuses would still pass this guard (the lane-distinct terminal values make a pure drop detectable).",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The doc comment on DerivePhaseStatus in internal/boardsync/phase.go still says the emit-set's other half is only the prompts' --status literals; since this change, finalizer closes are a third source. Outside this task's files, so stale prose only.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestEveryMirrorLaneHasATerminalEmission checks the finalizer's closes as a flat set of statuses, not per lane. A phase-lane close is recognised only because 'complete' differs from 'task-complete'; a task card wrongly closed at 'complete' would still satisfy the Phases lane.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "ship.md step 4 (backlog reconcile) also gains wording about routed items with a disposition record. That goes beyond this task's description, which only drops steps 4/5 and adds a Recovery entry. It is in a declared file and matches sibling work, but no test here pins it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The record's r-01 step (make install after the prompt edit) is a process step and cannot be verified from the diff.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-17": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestArchitectureDocumentsBoardFinalize's stale checks match exact phrases (e.g. 'status task-complete --close', 'complete --close at finalize'), so a reworded version of the old ship-attribution claim would slip through; the positive checks on the new wording carry most of the guard",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "issue phase sync's --close help text also changed ('use on ship' -\u003e 'dross phase complete closes it at finalize'), which the description does not mention; issue.go is a listed file and both golden files were re-minted to match",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestReadmeListsDeferredAdd now asks whether the verb is in the parsed brace list instead of pinning the whole list, so adding absorb (or a later verb) no longer breaks it",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "TestSaveTOMLRefusesUnverifiedPatch forces an int64 into a string field, so it only reaches verifyPatched's 'does not load' branch. Nothing sends the door through the canonical-mismatch branch (a same-type wrong value), which is the one that names the differing key.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestEncodeFreshIsTheOnlyEncoder only injects a toml.Marshal fallback and a stray encodeFresh caller. It never injects a second NewEncoder or a stray writeAtomic caller, so those halves of the contract line rest on the live-package scan rather than on a synthetic test that proves the check can fail.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "SaveTOML on a path that doesn't exist yet skips the pointer-to-struct check: a struct value (not a pointer) is encoded and written, and the next save to that file then fails. The doc comment says v must be a non-nil pointer.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSaveTOMLChangesOneLine checks that exactly one line changed and that it contains status = \"done\", but not that it is item 2's line. Only the verify step would catch a patch landing on item 1.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "TestEncodeFreshIsTheOnlyEncoder injects only a toml.Marshal fallback and a stray encodeFresh caller; it adds neither a second toml.NewEncoder nor a stray writeAtomic caller. The 'only saveLossless may call writeAtomic' check and the 'name the door and nothing else' property are covered only by the live-package scan, which would still pass if the check were loosened.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "The record describes a 'caller-supplied decode', but saveLossless decodes by reflection into v's type, and the only hook is loadChecker, whose method checkLoaded is unexported. Types outside internal/project (survivor.Store and its validate, phase.Plan) cannot implement it, so the door cannot run their load refusals on the file it reads or on the patched text. The verify step's comparison against v limits the impact, and today's plan.toml and survivors.toml loaders are plain decodes.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "SaveTOML is exported and accepts any path, so a caller outside internal/project could write project.toml through it instead of Project.Save without projectWriterViolations noticing. The write would still be lossless and *Project's checkLoaded would still run, but the pin file's header ('ONE write path: project.(*Project).Save') now overstates the guarantee.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-7",
+          "text": "The frozen-history exception in absorbedProblems only covers an item re-routed to another phase. If an item a completed phase absorbed is later dismissed, unrouted or deleted from its source, validate fails on that completed phase's spec again, and the only fix is editing history. The test_contract asks only for the re-routed case, so this does not block.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "absorbedProblems loads changes.json and checks Complete() inline, which repeats the existing changes.Complete(root, phaseID) helper.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "deferredByID keeps the last entry when two sources share a deferred id, so the absorbed check would judge against whichever source is read last.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-7",
+          "text": "validate.go discards deferredByID's error (`absorbable, _ :=`), so one spec that fails to decode turns off the absorbed-id check for every phase in that run. Validate still fails on the broken file, but bad absorbed ids in other, valid specs only show up after it is fixed. The comment explains the choice, but the silent skip is easy to miss.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-7",
+          "text": "deferredByID keys items by ID and keeps the last one when two sources share an id. Items with no id can never be absorbed and are reported as naming no deferred item.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "TestDeferredAddRefusesCompleteTarget never sets current_milestone, so mirrorDeferredAdd would return before any board call even on a successful add; the httptest 'zero board requests' assertion cannot catch a refusal placed after the mirror. The spec-unchanged and deferred.toml-absent checks are what actually guard ordering. Setting current_milestone in the fixture would make the board assertion meaningful.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "refuseCompleteTarget's doc comment says validate reads the validDeferredTarget gate; validate.go actually calls deferredTargetSet directly. TestValidateKeepsRoutesToCompletedPhases therefore guards against folding the refusal into deferredTargetSet, not into validDeferredTarget.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "changes.Complete returns false on an unreadable changes.json, so a corrupt record on the target lets a route through (fail-open); acceptable given the slug is already gated by validDeferredTarget.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "refuseCompleteTarget relies on changes.Complete, which returns false when changes.json is unreadable or corrupt, so a complete phase with a damaged record would still accept a new route; fails open in a rare path",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "TestDeferredAddBoardFixtureIsLive proves the fake board receives calls from an accepted add, so the refusal test's zero-request assertion is not vacuous",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "FinalizePhase finds the phase card through ResolvePhaseIssue. When board.json has no phase link, its label query also matches task cards (they carry dross/phase:\u003cid\u003e) and takes the first key in alphabetical order. A task card (PROJ-100) can win over the phase card (PROJ-98), and a phase card that is missing is never created. The finalizer then puts the complete label on a task card, leaves the real phase card open, and swaps that card's label on every rerun, so it is never idempotent. The helper's flaw predates this task, but this path now depends on it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "phaseState starts as \"already complete\" and changes only when the phase card succeeds. If the phase card's closeNew or finalizeCard fails, the narration still prints '(already complete)' for a card that is not finished, the false-claim pattern CloseIssue's comments warn against.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "A ResolvePhaseIssue error or a failed phase-card CreateIssue returns before any task card is finalized. The record says per-card failures are recorded and the rest continue; the task cards need only the parent key for their body text.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "Only one half of 'the skip needs both' is tested: no test has a card carrying its terminal label while still open, so cutting the skip check to hasLabel(...) alone (dropping the done check) would pass every test.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "StatusTaskComplete was already defined in lifecycle.go, so only StatusComplete was added to ctx.go (a second definition would not compile). The membership test now checks both constants.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "Record says FinalizePhase 'Adds StatusComplete and StatusTaskComplete constants to ctx.go'; only StatusComplete was added to ctx.go — StatusTaskComplete remains the pre-existing constant in lifecycle.go. Behaviour is the same and the issue_test membership check covers both, but the constant location deviates from the record's wording.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "labelledTaskCards collapses cards to one per task id and the plan path skips seen ids, so a duplicate card carrying the same dross/task:\u003cphase\u003e/\u003cid\u003e label is never finalized and stays open; the duplicate tie-break also uses string key comparison (PROJ-100 \u003c PROJ-98), the ordering hazard phase.go's new comment calls out.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "ResolvePhaseIssue now excludes cards carrying any dross/task: label, so a task card can no longer be taken for the phase card; TestFinalizeNeverTakesATaskCardForThePhase pins it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestFinalizeClosesExistingCards uses stateBoard, but setBoardState switches on concrete YouTrack/Jira types, so stateBoard behaves exactly like faultBoard here; the test is still meaningful through the terminal-state assertions.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-10",
+          "text": "TestBoardCallingPromptsSurfaceFailure checks each file, not each call: a prompt with one compliant board call can carry other calls with stale wording (ship.md steps 4-5 'same no-op rule' pass today). This matches the test_contract's per-prompt wording, but the test cannot catch a single unreworded call site.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-10",
+          "text": "ship.md §6 steps 4-5 still say 'same no-op rule', but step 2 no longer uses the phrase 'no-op', so it is unclear what rule they refer back to. The record leaves this to t-16.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 3,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "test_contract says a duplicate identity on either side is refused, but TestKeyedRefusesDuplicateIdentity only adds a duplicate to the new value; no test seeds a file with duplicate ids (old side), so dropping the identities(old) check would go unnoticed and old[oi] would silently diff against the wrong element",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "deleteElem now uses elemSpan for unkeyed arrays too (project.toml stack.locked, runtime.test_lane, competition): a comment run directly above an element's header is deleted with it. For the first element this can be a section or file-header comment. No unkeyed test pins the new behaviour",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "elemSpan for the last element still runs to EOF (end = len(lines)), so moving the last element earlier carries trailing comments at EOF with it even when a blank line separates them, which contradicts the rule that a comment separated by a blank line stays put",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "deleting t-2 in the keyedSrc fixture also removes '# a loose note, kept apart by a blank line', because it falls inside t-2's span; the test asserts neither way",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestKeyedCallersUnchanged is near-vacuous: the unkeyed path cannot emit opMoveElem by construction. The real compatibility evidence is the unmodified patch_save_test.go and patch_diff_test.go callers still compiling",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the missing or non-string identity error path in identities() has no test",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "removeBlock's new `from == h` branch is shared with deleteKey's empty-header cascade, not just array elements. In a hand-written file where a nested header sits directly under its parent with no blank line, the cascade now also eats the blank line before the next header: `a = 1\\n\\n[runtime]\\n[runtime.services]\\n[runtime.services.x]\\ncmd = \"c\"\\n\\n[other]` with cmd deleted becomes `a = 1\\n[other]` (before: `a = 1\\n\\n[other]`). An orphaned comment over an emptied header is now also glued to the next header. No test covers this path.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "elemSpan never lets a comment directly above element 0 travel (it is treated as a section heading), while the description says a comment run directly above a [[header]] travels with its element. Moving another element to the front lands it beneath that comment, so a per-task comment on the first task gets attached to whichever task becomes first. Round-tripping [A,B]→[B,A]→[A,B] does not restore the bytes when B carried a leading comment.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The duplicate/missing-identity refusal only runs when both sides hold the array. When the array is absent on one side, differ.add and differ.remove append or delete whole elements and never reach keyedArray, so a brand-new array with duplicate ids is written without refusal.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestKeyedCallersUnchanged only checks that an unkeyed diff emits no opMoveElem. The real proof that existing callers are unaffected is the untouched patch_diff_test.go, save_lossless_test.go and patch_save_test.go suites.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The optional identity map is a variadic `...ArrayKey` on SaveTOML rather than the options struct the description names. It still meets the intent that existing callers compile unchanged.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "elemSpan exempts the FIRST element: a comment directly above element 0's header is treated as a section heading and never travels with it. The description says a directly-above comment run travels with its element. On a keyed reorder where t-1 carries '# about t-1', that comment stays at the top and ends up over whichever task becomes first. The choice is deliberate and tested, but it departs from the stated rule.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "The duplicate/missing identity check runs only in keyedArray, which is reached through change(). When the keyed array is absent on one side, add() and remove() append or delete every element without calling identities(). New-side duplicates going from no [[task]] to N tasks are written without the 'duplicate on either side' refusal.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "deleteElem now uses elemSpan for unkeyed arrays too, so project.toml writers change behaviour. A comment run directly above element i\u003e0 is deleted with it. Loose comments after an element are no longer swallowed (the old lastContent span took them). When the line above is non-blank, the trailing blank lines go instead of the leading ones. The existing fixtures have no such layouts, so their expectations still hold.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The greedy move pass only moves elements earlier. Sending one element to the end, e.g. [a,b,c,d]→[b,c,d,a], becomes three moves of b, c and d rather than one of a. Bytes still travel verbatim and verify still guards the result, but more blocks change position than needed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestKeyedCallersUnchanged only asserts that an unkeyed diff emits no move op. The real proof for the 'existing callers unchanged' contract line is the existing suites compiling and passing unmodified.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "test_contract asks for a COMMITTED survivors.toml, but TestSurvivorAcceptKeepsAllowSecretMarkers runs in a non-git fixture (realTempDir, no git init), so validate uses the on-disk walk. The negative control proves the walk sees the fixture, but the git ls-files path that real repos use is not exercised.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "A survivors.toml written by the pre-door encoder after a prune or retire-all holds `category = []` / `accepted = []`. Save's nil normalization only affects the new side. The old side decodes and re-encodes to a leaf []any, so the next accept that adds the first element hits differ.change's kind-mismatch error and fails (the file is left intact). No test seeds a store that already has an empty-list line.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Save now mutates the caller's *Store (empty slices set to nil). This is harmless for the only callers, Accept and Retire, which own a freshly loaded store.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestRepoStoreSurvivesAnAcceptance reads the live ../../.dross/survivors.toml, so its input changes as the repo's store evolves.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 3,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-7",
+          "text": "spec.md tells /dross-spec to run absorb for every criterion 'you accepted from a §1 parked item', but §2 offers accept / reword / drop as separate options; a parked item that was reworded may be read as not 'accepted' and never absorbed, leaving its board card open. Wording like 'seeded from' (accept or reword) would close that gap.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "For an id-less item stored in another spec, the source spec is saved with the new id before the target spec is saved; if the second Save fails, the source carries a stamped id with no criterion recording it. A re-run reuses the id, so this heals itself.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSpecPromptRecordsAbsorbedItems only checks that 'dross deferred absorb' appears (after §5, with --phase \u003cphase-id\u003e), not that the instruction is tied to criteria seeded from parked items; acceptable as a proxy.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-7",
+          "text": "deferred_absorb.go refuses unrouted and routed-elsewhere items but not dismissed ones. validate.go absorbedProblems rejects an absorbed id whose item is Dismissed, and deferredRoute never clears Dismissed, so a dismissed-then-routed item can be absorbed and then fail dross validate. Mirroring validate's dismissed check would close the gap.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-7",
+          "text": "The refusal table only uses items that already have ids. The code checks the criterion before minting an id for a legacy item, which is correct, but no test pins that order: a legacy item with an unknown criterion would catch a stamp-before-check regression.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In TestSpecPromptRecordsAbsorbedItems the absorb \u003c section5 check uses t.Error rather than t.Fatal, so the later content[section5:absorb] slice panics in that case. The test still fails, but through a panic instead of a clean message.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-7",
+          "text": "absorb does not refuse a phase that is already complete: it will rewrite a finished spec's criteria, while validate's absorbedProblems skips complete phases and so would never flag the result",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "stamping a legacy id saves the source spec before the target spec; if the second save fails, the stamped id stays without an absorption record. That is harmless, and a re-run converges",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSpecPromptRecordsAbsorbedItems pins absorb after the §5 heading but not before §6, so moving it after validate would still pass. The contract only asks for the §5 check",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
 }
