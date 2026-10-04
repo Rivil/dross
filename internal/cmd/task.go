@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/state"
@@ -214,14 +215,41 @@ func taskStatus() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if !plan.SetTaskStatus(args[1], status) {
+			if plan.FindTask(args[1]) == nil {
 				return fmt.Errorf("task not found: %s", args[1])
 			}
+			// A failed solo task carries its review: the refusal comes before
+			// any write, and the review — read only from the recorder's
+			// ledger — explains the failure when no --reason does.
+			var tr *changes.TaskReview
+			var root string
+			if status == phase.StatusFailed {
+				if root, err = FindRoot(); err != nil {
+					return err
+				}
+				repoDir := filepath.Dir(root)
+				if err := refuseDirtySoloFailure(repoDir, args[0], args[1]); err != nil {
+					return err
+				}
+				if tr, err = taskReviewFor(repoDir, args[0], args[1]); err != nil {
+					warnAttach(args[0], args[1], err)
+					tr = nil
+				}
+				if reason == "" {
+					reason = reviewFailureReason(tr)
+				}
+			}
+			plan.SetTaskStatus(args[1], status)
 			if reason != "" {
 				plan.FindTask(args[1]).Reason = reason
 			}
 			if err := plan.Save(planPath); err != nil {
 				return err
+			}
+			if tr != nil {
+				if err := changes.SetReview(root, args[0], args[1], *tr); err != nil {
+					warnAttach(args[0], args[1], err)
+				}
 			}
 			Printf("%s/%s -> %s\n", args[0], args[1], status)
 			return nil

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -57,6 +58,11 @@ func changesRecord() *cobra.Command {
 				return err
 			}
 			c.Record(args[1], files, commit, notes, landmarks)
+			if tr, err := taskReviewFor(filepath.Dir(root), args[0], args[1]); err != nil {
+				warnAttach(args[0], args[1], err)
+			} else if tr != nil {
+				c.SetReview(args[1], *tr)
+			}
 			if err := c.Save(path); err != nil {
 				return err
 			}
