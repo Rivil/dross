@@ -266,7 +266,7 @@ Read its exit status the same way as in §1e; only **0** lets you commit. If any
    dross review context
    ```
    It prints the reviewer's `subagent_type` and a `prompt:` line. It never prints the diff — don't paste it either.
-2. Spawn the reviewer with the Agent tool **in the foreground**: `subagent_type: "dross-task-reviewer"`, `run_in_background: false` set explicitly (Claude Code launches a subagent in the background when the flag is left out, and a background spawn's verdict never reaches the recorder), and the printed prompt line **verbatim** as the whole prompt. Add nothing to it — the reviewer sees only the context, and a widened prompt makes the review unavailable.
+2. Spawn the reviewer with the Agent tool: `subagent_type: "dross-task-reviewer"`, and the printed prompt line **verbatim** as the whole prompt. Add nothing to it — the reviewer sees only the context, and a widened prompt makes the review unavailable. It may run in the background (an interactive session runs every subagent there): **wait for its completion notice** before reading the status — its verdict reaches dross only when it finishes.
 3. Read where it stands:
    ```
    dross review status

@@ -299,9 +299,10 @@ func TestExecuteSoloReviewPlacement(t *testing.T) {
 	}
 }
 
-// TestExecuteReviewerSpawnForeground: the spawn reaches the recorder only in
-// the foreground, under the reviewer's exact name, with the printed line as
-// the whole prompt.
+// TestExecuteReviewerSpawnForeground: the spawn carries the reviewer's exact
+// name and the printed line as the whole prompt. Since review_pass_signal's
+// amendment a background spawn records through its SubagentStop, so the step
+// no longer demands a foreground spawn — it waits for the reviewer to finish.
 func TestExecuteReviewerSpawnForeground(t *testing.T) {
 	_, block := soloReview(t)
 	var spawn string
@@ -310,13 +311,10 @@ func TestExecuteReviewerSpawnForeground(t *testing.T) {
 			spawn = para
 		}
 	}
-	for _, want := range []string{`subagent_type: "` + review.ReviewerAgent + `"`, "`run_in_background: false` set explicitly", "**verbatim** as the whole prompt", "Add nothing to it"} {
+	for _, want := range []string{`subagent_type: "` + review.ReviewerAgent + `"`, "**verbatim** as the whole prompt", "Add nothing to it", "**wait for its completion notice**"} {
 		if !strings.Contains(spawn, want) {
 			t.Errorf("the spawn step lost %q:\n%s", want, spawn)
 		}
-	}
-	if strings.Contains(block, "run_in_background: true") {
-		t.Error("the solo review block permits a background spawn")
 	}
 }
 
