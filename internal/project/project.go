@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -423,21 +424,59 @@ func Load(path string) (*Project, error) {
 // decode is Load on bytes already in hand — the same decoder and the same
 // refusals, so a patched document is judged exactly as the file would be.
 func decode(src []byte, path string) (*Project, error) {
-	var p Project
-	if _, err := toml.Decode(string(src), &p); err != nil {
-		return nil, fmt.Errorf("decode %s: %w", path, err)
-	}
-	// A nil Project alongside the error, not a partly-usable one: no caller
-	// can safely proceed on a config dross has just said it refuses to honour.
-	if err := p.Mutation.refuseRemote(path); err != nil {
+	v, err := decodeLike(&Project{}, src, path)
+	if err != nil {
 		return nil, err
 	}
-	return &p, nil
+	return v.(*Project), nil
+}
+
+// checkLoaded is the refusal a Project applies to every document it loads.
+// A nil Project goes back alongside the error, not a partly-usable one: no
+// caller can safely proceed on a config dross has just said it refuses to
+// honour.
+func (p *Project) checkLoaded(path string) error {
+	return p.Mutation.refuseRemote(path)
+}
+
+// loadChecker is a document type that refuses some decodable contents. The
+// door runs it on the file it reads and on the text it is about to write, so a
+// patched document is refused exactly as Load would refuse the file.
+type loadChecker interface {
+	checkLoaded(path string) error
+}
+
+// checkDocPtr refuses anything but a non-nil pointer to a struct — the only
+// shape the door can decode a file back into.
+func checkDocPtr(v any, path string) error {
+	rt := reflect.TypeOf(v)
+	if rt == nil || rt.Kind() != reflect.Pointer || rt.Elem().Kind() != reflect.Struct || reflect.ValueOf(v).IsNil() {
+		return fmt.Errorf("save %s: want a non-nil pointer to a struct, got %T", path, v)
+	}
+	return nil
+}
+
+// decodeLike decodes src into a fresh value of v's type (v must be a non-nil
+// pointer to a struct), then runs the type's loadChecker if it has one.
+func decodeLike(v any, src []byte, path string) (any, error) {
+	if err := checkDocPtr(v, path); err != nil {
+		return nil, err
+	}
+	out := reflect.New(reflect.TypeOf(v).Elem()).Interface()
+	if _, err := toml.Decode(string(src), out); err != nil {
+		return nil, fmt.Errorf("decode %s: %w", path, err)
+	}
+	if c, ok := out.(loadChecker); ok {
+		if err := c.checkLoaded(path); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // planOps is the diff step Save runs, as a variable so a test can hand Save
 // an op the patcher renders wrongly and prove the verify step refuses it.
-var planOps = diff
+var planOps = func(old, new *Project) ([]op, error) { return diff(old, new) }
 
 // Save writes p to path. It is the ONLY project.toml writer in dross.
 //
@@ -456,24 +495,48 @@ var planOps = diff
 // The bytes land via a temp file in the same directory, fsynced and renamed
 // over the original with its mode preserved, so a crash mid-write leaves
 // either the old document or the new one, never a truncated one.
+//
+// All of that is saveLossless, the door every lossless TOML writer shares;
+// Save supplies only its own diff seam, planOps.
 func (p *Project) Save(path string) error {
+	return saveLossless(path, p, func(old, new any) ([]op, error) {
+		return planOps(old.(*Project), new.(*Project))
+	})
+}
+
+// saveLossless is the lossless write door: Project.Save and SaveTOML both
+// write through it, and nothing else in the package writes a file. v is a
+// non-nil pointer to a TOML-tagged struct; plan diffs the document on disk
+// (decoded into v's type) against v.
+//
+// An absent path gets the encoder's fresh document. An existing one is read,
+// decoded (with v's type's loadChecker), diffed, patched, verified to load as
+// v, and only then written — atomically, with its mode kept. No differing
+// field means no write at all.
+func saveLossless(path string, v any, plan func(old, new any) ([]op, error)) error {
+	// Checked before the fresh-encode branch too: a struct value would encode
+	// fine on first write and then make every later save fail to decode.
+	if err := checkDocPtr(v, path); err != nil {
+		return err
+	}
+	name := filepath.Base(path)
 	existing, err := os.ReadFile(path)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("read %s: %w", path, err)
 		}
-		fresh, err := encodeFresh(p)
+		fresh, err := encodeFresh(v)
 		if err != nil {
-			return fmt.Errorf("encode project.toml: %w", err)
+			return fmt.Errorf("encode %s: %w", name, err)
 		}
 		return writeAtomic(path, fresh, 0o644)
 	}
 
-	old, err := decode(existing, path)
+	old, err := decodeLike(v, existing, path)
 	if err != nil {
 		return err
 	}
-	ops, err := planOps(old, p)
+	ops, err := plan(old, v)
 	if err != nil {
 		return fmt.Errorf("diff %s: %w", path, err)
 	}
@@ -484,7 +547,7 @@ func (p *Project) Save(path string) error {
 	if err != nil {
 		return fmt.Errorf("patch %s: %w", path, err)
 	}
-	if err := verifyPatched(patched, p, path); err != nil {
+	if err := verifyPatched(patched, v, path); err != nil {
 		return err
 	}
 
@@ -504,21 +567,22 @@ func (p *Project) Save(path string) error {
 	return writeAtomic(path, patched, mode)
 }
 
-// verifyPatched proves the patched text loads as p: both are re-encoded
+// verifyPatched proves the patched text loads as v: both are re-encoded
 // canonically, so nil-vs-empty slices and map order cannot false-positive,
 // and the first differing line is named so the failing key is in the error.
-func verifyPatched(patched []byte, p *Project, path string) error {
-	got, err := decode(patched, path)
+func verifyPatched(patched []byte, v any, path string) error {
+	name := filepath.Base(path)
+	got, err := decodeLike(v, patched, path)
 	if err != nil {
 		return fmt.Errorf("patched %s does not load; the file was left untouched: %w", path, err)
 	}
-	want, err := encodeFresh(p)
+	want, err := encodeFresh(v)
 	if err != nil {
-		return fmt.Errorf("encode project.toml: %w", err)
+		return fmt.Errorf("encode %s: %w", name, err)
 	}
 	have, err := encodeFresh(got)
 	if err != nil {
-		return fmt.Errorf("encode patched project.toml: %w", err)
+		return fmt.Errorf("encode patched %s: %w", name, err)
 	}
 	if bytes.Equal(have, want) {
 		return nil

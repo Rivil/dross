@@ -308,10 +308,11 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `enumKeys` (the one table both enum gates read: five dotted keys → their `configenum` Sets) — `internal/cmd/project.go:325`
 - `checkEnumValue` (set-time refusal, run before the write so a rejected value leaves project.toml byte-unchanged) — `internal/cmd/project.go:339`
 - `enumProblems` (validate re-checks the same table, catching the hand-edited or cloned file the setter never saw) — `internal/cmd/validate.go:198`
-- `project.Project.Save` (the sole project.toml writer: load → diff → patch → canonical verify → atomic temp+fsync+rename; fresh encode only for an absent path) — `internal/project/project.go:459`
+- `project.Project.Save` (the sole project.toml writer: load → diff → patch → canonical verify → atomic temp+fsync+rename; fresh encode only for an absent path) — `internal/project/project.go:501`
+- `saveLossless` / `SaveTOML` (the lossless write door Save and every other hand-annotated TOML store share: decode into the value's own type, diff, patch, verify, atomic write; `SaveTOML` exports it with its own `doorOps` seam) — `internal/project/project.go:516`
 - `apply` / `indexDoc` (raw-byte patcher: line-indexed value spans, header blocks, per-op re-index, inline tables refused by line) — `internal/project/patch.go:607`
-- `diff` (two Projects → per-leaf set/delete and per-element array-of-tables ops, over the encoder's canonical trees) — `internal/project/patch_diff.go:105`
-- `encodeFresh` (the package's single BurntSushi encoder call site; Save, verify, the differ and value rendering all route through it) — `internal/project/patch_value.go:16`
+- `diff` (two values of one TOML-tagged struct type → per-leaf set/delete and per-element array-of-tables ops, over the encoder's canonical trees) — `internal/project/patch_diff.go:107`
+- `encodeFresh` (the package's single BurntSushi encoder call site; the door, verify, the differ and value rendering all route through it) — `internal/project/patch_value.go:16`
 - `projectWriterViolations` (go/ast guard: no writer or file-bound encoder for project.toml outside `internal/project`; one encoder and one file writer inside it) — `internal/cmd/project_writer_pin_test.go:60`
 - `TestLosslessUnmodeledKeysSurviveEveryWriter` (the in-process writer matrix: exact changed-line sets, comments and unmodeled keys after every command) — `internal/cmd/project_lossless_test.go:218`
 - `TestIndexLiteralStrings` (hand-edited shapes the encoder never writes — literal/multi-line strings, escaped quoted keys, dotted-key sub-tables, root keys — and every patcher refusal, pinned) — `internal/project/patch_test.go:587`

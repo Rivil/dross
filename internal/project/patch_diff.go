@@ -1,7 +1,8 @@
 package project
 
-// patch_diff.go turns two Projects into the smallest list of patcher ops
-// that carries the on-disk document from one to the other. Both sides are
+// patch_diff.go turns two documents — two Projects, or two values of any
+// other TOML-tagged struct type — into the smallest list of patcher ops that
+// carries the on-disk document from one to the other. Both sides are
 // first rendered by the encoder and decoded back into generic trees, so
 // omitempty, `toml:"-"` and every other tag semantic come from the one
 // encoder the package has — the differ never interprets a struct tag itself.
@@ -15,14 +16,14 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// encodeCanonical is the typed door the differ walks through to the
-// package's single encoder: the canonical text of p, from which the generic
-// tree — and the key order the encoder chose — is read back.
-func encodeCanonical(p *Project) ([]byte, error) {
+// encodeCanonical is the door the differ walks through to the package's
+// single encoder: the canonical text of p, from which the generic tree — and
+// the key order the encoder chose — is read back.
+func encodeCanonical(p any) ([]byte, error) {
 	return encodeFresh(p)
 }
 
-// tree is a Project as the decoder sees the encoder's output: tables are
+// tree is a document as the decoder sees the encoder's output: tables are
 // map[string]any, arrays-of-tables are []map[string]any, everything else is
 // a leaf. order records each table's child keys in document order so ops
 // for a table come out in the order the encoder would have written them.
@@ -31,8 +32,8 @@ type tree struct {
 	order map[string][]string
 }
 
-func toTree(p *Project) (*tree, error) {
-	src, err := encodeCanonical(p)
+func toTree(v any) (*tree, error) {
+	src, err := encodeCanonical(v)
 	if err != nil {
 		return nil, fmt.Errorf("encode: %w", err)
 	}
@@ -102,7 +103,8 @@ type differ struct {
 
 // diff returns the ops that take old to new, or an error naming the first
 // path whose shape it cannot express. Zero ops means the documents agree.
-func diff(old, new *Project) ([]op, error) {
+// old and new are values of the same TOML-tagged struct type.
+func diff(old, new any) ([]op, error) {
 	d := &differ{}
 	var err error
 	if d.old, err = toTree(old); err != nil {
