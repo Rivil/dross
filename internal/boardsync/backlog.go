@@ -198,19 +198,12 @@ func ReconcileBacklog(ctx *Ctx, live []BacklogItem, items []deferred.Entry) (int
 // backlogVerdictFor decides one recorded mirror's fate. Every branch answers
 // the same question: can this mirror's artefact be SHOWN to have resolved?
 func BacklogVerdictFor(ctx *Ctx, key string, live map[string]BacklogItem, deferred map[string]deferred.Entry) BacklogVerdict {
-	if it, ok := live[key]; ok {
-		// Still backlog — unless it is routed and its destination has landed,
-		// which is the one way a live item's work can already be done.
-		if it.Target == "" {
-			return BacklogStillOpen
-		}
-		target := lookupPhaseIssue(ctx, it.Target)
-		if target == "" {
-			return BacklogStillOpen
-		}
-		if done, err := IssueIsDone(ctx, target); err == nil && done {
-			return BacklogResolved
-		}
+	if _, ok := live[key]; ok {
+		// Still backlog — routed or not. A routed item's destination landing
+		// does not show the item was done: the route may have been made after
+		// the destination shipped, or the destination rescoped away from it
+		// (see routedVerdict). Its mirror closes when the item itself leaves
+		// the live set on evidence, never on the destination's state.
 		return BacklogStillOpen
 	}
 	if slug, ok := strings.CutPrefix(key, "slug:"); ok {
