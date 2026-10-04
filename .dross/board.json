@@ -78,6 +78,7 @@
     "1.7.11.2": "DRO-422",
     "1.7.17.1": "DRO-745",
     "1.7.2.1": "DRO-359",
+    "1.7.20.1": "DRO-786",
     "1.7.7.1": "DRO-442",
     "1.7.7.2": "DRO-444",
     "1.7.7.3": "DRO-445",
@@ -88,7 +89,6 @@
     "slug:ci-timing-trend": "DRO-701",
     "slug:debug-sessions": "DRO-692",
     "slug:handoff-staleness": "DRO-703",
-    "slug:main-branch-protection": "DRO-628",
     "slug:milestone-closeout-check": "DRO-697",
     "slug:one-way-door-decisions": "DRO-700",
     "slug:prompt-behaviour-evals": "DRO-704",
@@ -1302,92 +1302,92 @@
     "main-branch-protection/t-1": {
       "issue": "DRO-768",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-10": {
       "issue": "DRO-777",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-11": {
       "issue": "DRO-778",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-12": {
       "issue": "DRO-779",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-13": {
       "issue": "DRO-780",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-14": {
       "issue": "DRO-781",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-15": {
       "issue": "DRO-782",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-16": {
       "issue": "DRO-783",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-17": {
       "issue": "DRO-784",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-18": {
       "issue": "DRO-785",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-2": {
       "issue": "DRO-769",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-3": {
       "issue": "DRO-770",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-4": {
       "issue": "DRO-771",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-5": {
       "issue": "DRO-772",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-6": {
       "issue": "DRO-773",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-7": {
       "issue": "DRO-774",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-8": {
       "issue": "DRO-775",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "main-branch-protection/t-9": {
       "issue": "DRO-776",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "milestone-push-failure-tests/t-1": {
       "issue": "DRO-264",

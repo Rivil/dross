@@ -2,6 +2,7 @@ package ship
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -33,6 +34,8 @@ var mergeMethods = map[string]bool{"merge": true, "squash": true, "rebase": true
 // AutoMergePR arms GitHub auto-merge on PR n with method ("merge" or
 // "squash"): `gh pr merge --auto --<method> -- <n>`. It never passes --admin,
 // so the base branch's ruleset still decides when, and whether, the PR lands.
+// When gh succeeds, what it achieved is read back from the PR (see
+// autoMergeOutcome), never from gh's prose.
 //
 // GitHub refuses to arm auto-merge on a PR that is already mergeable ("clean
 // status") — on a branch with no required checks, every PR is. Then it merges
@@ -60,17 +63,11 @@ func AutoMergePR(opts OpenOpts, n int, method string) (AutoMergeResult, error) {
 		return AutoMergeResult{}, err
 	}
 	out, err := cmd.CombinedOutput()
-	text := string(out)
 	if err == nil {
-		switch {
-		case strings.Contains(text, "will be automatically merged"):
-			return AutoMergeResult{AutoEnabled: true}, nil
-		case strings.Contains(text, "Merged"), strings.Contains(text, "already merged"):
-			return AutoMergeResult{Merged: true}, nil
-		}
-		return AutoMergeResult{}, ghUnparseable(what, out)
+		return autoMergeOutcome(n, what)
 	}
 
+	text := string(out)
 	if mentions(text, "clean status") {
 		return mergeDirectly(n, method)
 	}
@@ -78,6 +75,39 @@ func AutoMergePR(opts OpenOpts, n int, method string) (AutoMergeResult, error) {
 		return AutoMergeResult{}, ghUnavailable(what, out, "auto-merge is not allowed for this repository — turn on its allow_auto_merge setting (`dross protect --apply` does)")
 	}
 	return AutoMergeResult{}, ghFailed(what, err, out)
+}
+
+// autoMergeOutcome reads what a successful `gh pr merge --auto` did from the
+// PR itself. gh prints its "will be automatically merged" line only on a
+// terminal; under dross its stdout is a pipe, so a successful arm exits 0
+// having printed nothing (seen live on chore PR #140). The exit status says gh
+// succeeded; the PR says at what.
+func autoMergeOutcome(n int, what string) (AutoMergeResult, error) {
+	view := fmt.Sprintf("gh pr view #%d", n)
+	// Flags ahead of the separator, the PR number behind it, as in
+	// gitHubPRStatus.
+	cmd, err := screenedGH("pr", "view", "--json", "state,autoMergeRequest", "--", strconv.Itoa(n))
+	if err != nil {
+		return AutoMergeResult{}, err
+	}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return AutoMergeResult{}, ghFailed(view, err, out)
+	}
+	var pr struct {
+		State            string    `json:"state"`
+		AutoMergeRequest *struct{} `json:"autoMergeRequest"`
+	}
+	if err := json.Unmarshal(out, &pr); err != nil {
+		return AutoMergeResult{}, ghUnparseable("parse "+view, out)
+	}
+	switch {
+	case strings.EqualFold(pr.State, "MERGED"):
+		return AutoMergeResult{Merged: true}, nil
+	case pr.AutoMergeRequest != nil:
+		return AutoMergeResult{AutoEnabled: true}, nil
+	}
+	return AutoMergeResult{}, fmt.Errorf("%s exited 0, but PR #%d is neither merged nor armed for auto-merge", what, n)
 }
 
 // mergeDirectly merges PR n now. Only reached when GitHub said the PR is
