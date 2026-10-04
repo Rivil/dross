@@ -3,10 +3,10 @@ package gate
 import (
 	"fmt"
 	"path"
-	"path/filepath"
 	"strings"
 	"unicode"
 
+	"github.com/Rivil/dross/internal/secretpath"
 	"github.com/Rivil/dross/internal/shellscan"
 )
 
@@ -94,34 +94,12 @@ func judgeSecretStream(c *Call) (*Refusal, error) {
 
 // ---- secret-read --------------------------------------------------------
 
-// envTemplateSuffixes mark an env file that holds placeholders, not values.
-var envTemplateSuffixes = []string{".example", ".sample", ".template", ".dist"}
-
 // SecretPattern returns the first pattern p matches, or "" — an env template
 // (.env.example and kin) never matches. A pattern with a slash matches p's
-// trailing path segments; one without matches its base name.
+// trailing path segments; one without matches its base name. The one
+// implementation lives in secretpath, shared with the solo review context.
 func SecretPattern(p string, patterns []string) string {
-	clean := path.Clean(filepath.ToSlash(p))
-	base := path.Base(clean)
-	if strings.Contains(base, ".env") {
-		for _, sfx := range envTemplateSuffixes {
-			if strings.HasSuffix(base, sfx) {
-				return ""
-			}
-		}
-	}
-	for _, pat := range patterns {
-		if strings.Contains(pat, "/") {
-			if clean == pat || strings.HasSuffix(clean, "/"+pat) {
-				return pat
-			}
-			continue
-		}
-		if ok, _ := path.Match(pat, base); ok {
-			return pat
-		}
-	}
-	return ""
+	return secretpath.Pattern(p, patterns)
 }
 
 // readerOperands are the paths a reader command opens: its non-option

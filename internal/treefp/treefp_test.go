@@ -318,3 +318,167 @@ func TestEveryGitCallIsBounded(t *testing.T) {
 		t.Errorf("two hanging calls took %s, want each bounded by Timeout", took)
 	}
 }
+
+// TestPatchWholeDiff: the review patch is everything `git add -A` would stage
+// against HEAD — staged, unstaged, untracked, and edits no task declared —
+// with ignored files and .dross/ left out.
+func TestPatchWholeDiff(t *testing.T) {
+	dir := repo(t)
+	write(t, dir, "a.go", "package a // staged\n")
+	git(t, dir, "add", "a.go")
+	write(t, dir, "b.go", "package b // unstaged\n")
+	write(t, dir, "c.go", "package c // untracked\n")
+	write(t, dir, "undeclared/d.go", "package d // nobody planned this\n")
+	write(t, dir, "x.log", "ignored\n")
+	write(t, dir, ".dross/state.json", `{"x":1}`+"\n")
+
+	c, err := Changes(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"a.go", "b.go", "c.go", "undeclared/d.go"}; !reflect.DeepEqual(c.Paths, want) {
+		t.Fatalf("Paths = %v, want %v", c.Paths, want)
+	}
+	p, err := Patch(dir, c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"+package a // staged", "+package b // unstaged", "+package c // untracked", "+package d // nobody planned this"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("patch lacks %q:\n%s", want, p)
+		}
+	}
+	for _, bad := range []string{"x.log", ".dross"} {
+		if strings.Contains(p, bad) {
+			t.Errorf("patch carries %q:\n%s", bad, p)
+		}
+	}
+
+	ex, err := Patch(dir, c, []string{"b.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(ex, "b.go") || !strings.Contains(ex, "a.go") {
+		t.Errorf("Patch excluding b.go:\n%s", ex)
+	}
+}
+
+// TestPatchConfigIndependent: nothing in the repository's config changes the
+// patch bytes, colours it, or runs a configured diff driver.
+func TestPatchConfigIndependent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the marker driver is a shell script")
+	}
+	dir := repo(t)
+	write(t, dir, "a.go", "package a\n\nfunc A() {}\n")
+	git(t, dir, "mv", "b.go", "renamed.go")
+	write(t, dir, "ünï.go", "package u\n")
+	c, err := Changes(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := Patch(dir, c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	marker := filepath.Join(t.TempDir(), "ran")
+	driver := filepath.Join(t.TempDir(), "driver.sh")
+	if err := os.WriteFile(driver, []byte("#!/bin/sh\ntouch "+marker+"\ncat \"$1\" 2>/dev/null\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, kv := range [][2]string{
+		{"color.ui", "always"}, {"color.diff", "always"},
+		{"diff.external", driver},
+		{"diff.fake.textconv", driver},
+		{"diff.noprefix", "true"}, {"diff.mnemonicPrefix", "true"},
+		{"diff.renames", "copies"},
+		{"core.quotePath", "false"},
+	} {
+		git(t, dir, "config", kv[0], kv[1])
+	}
+	write(t, dir, ".git/info/attributes", "*.go diff=fake\n")
+
+	got, err := Patch(dir, c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Errorf("repo config changed the patch:\n--- before\n%s\n--- after\n%s", want, got)
+	}
+	if strings.Contains(got, "\x1b[") {
+		t.Error("the patch carries ANSI colour escapes")
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a configured diff driver or textconv filter ran")
+	}
+}
+
+// TestPatchUnbornHead: before the first commit every file is added against
+// the empty tree.
+func TestPatchUnbornHead(t *testing.T) {
+	dir := initRepo(t)
+	write(t, dir, "a.go", "package a\n")
+	write(t, dir, "sub/b.go", "package b\n")
+	write(t, dir, ".dross/state.json", "{}\n")
+	c, err := Changes(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	empty := strings.TrimSpace(git(t, dir, "hash-object", "-t", "tree", "/dev/null"))
+	if c.Base != empty {
+		t.Fatalf("Base on an unborn HEAD = %q, want the empty tree %q", c.Base, empty)
+	}
+	if want := []string{"a.go", "sub/b.go"}; !reflect.DeepEqual(c.Paths, want) {
+		t.Fatalf("Paths = %v, want %v", c.Paths, want)
+	}
+	p, err := Patch(dir, c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(p, "new file mode"); n != 2 {
+		t.Fatalf("patch shows %d new files, want 2:\n%s", n, p)
+	}
+	if b, err := Base(dir); err != nil || b != empty {
+		t.Fatalf("Base = %q, %v", b, err)
+	}
+}
+
+// TestDirtyIgnoresDross: only code a commit would record counts.
+func TestDirtyIgnoresDross(t *testing.T) {
+	dir := repo(t)
+	dirty := func() bool {
+		t.Helper()
+		d, err := Dirty(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	if dirty() {
+		t.Fatal("a clean tree reads dirty")
+	}
+	write(t, dir, ".dross/state.json", `{"changed":true}`+"\n")
+	write(t, dir, ".dross/gate/review.json", "{}\n")
+	write(t, dir, "x.log", "ignored\n")
+	if dirty() {
+		t.Fatal("a .dross/-only (plus ignored) change reads dirty")
+	}
+	write(t, dir, "c.go", "package c\n")
+	if !dirty() {
+		t.Fatal("an untracked unignored file does not read dirty")
+	}
+
+	// Base moves only when code is committed: a .dross/-only commit keeps it.
+	git(t, dir, "rm", "-q", "--cached", "--ignore-unmatch", "c.go")
+	before, err := Base(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", ".dross/state.json")
+	git(t, dir, "commit", "-q", "-m", "bookkeeping")
+	git(t, dir, "commit", "-q", "--allow-empty", "-m", "empty")
+	if after, err := Base(dir); err != nil || after != before {
+		t.Fatalf("Base moved across .dross/-only and empty commits: %q -> %q (%v)", before, after, err)
+	}
+}
