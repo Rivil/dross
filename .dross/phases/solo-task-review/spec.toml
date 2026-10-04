@@ -21,7 +21,7 @@
 
 [[criteria]]
   id = "c-5"
-  text = "The reviewer's context excludes user and project CLAUDE.md, auto-memory, and the executing session's conversation — it sees only the task record, covered criteria text and the task's diff; a test fails if the shipped reviewer definition stops excluding them."
+  text = "The reviewer's context excludes user and project CLAUDE.md, auto-memory, and the executing session's conversation — it sees only the task record, covered criteria text, the phase's locked decisions and hard rules, and the task's diff; a test fails if the shipped reviewer definition stops excluding them."
 
 [[criteria]]
   id = "c-6"
@@ -61,8 +61,8 @@
 
 [[decisions]]
   key = "review_input"
-  choice = "The reviewer gets the whole uncommitted diff against HEAD (staged, unstaged and untracked), not only the task.files paths."
-  why = "Filtering to task.files would hide an undeclared edit, the plan deviation a reviewer should flag."
+  choice = "The reviewer gets the whole uncommitted diff against HEAD (staged, unstaged and untracked), not only the task.files paths — excluding .dross/ bookkeeping, the same domain as the gate's tree fingerprint."
+  why = "Filtering to task.files would hide an undeclared edit, the plan deviation a reviewer should flag. .dross/ is excluded because the pass binds to treefp's fingerprint (which omits it), .dross/-only commits are ungated (c-4), and the review context file itself lives under .dross/gate/ (plan-time clarification, 2026-10-04, panel D5)."
   locked = true
 
 [[decisions]]

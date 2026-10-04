@@ -56,6 +56,7 @@
     "run-block-pin-currency": "DRO-746",
     "scanner-self-exclusion": "DRO-404",
     "secret-detection": "DRO-459",
+    "solo-task-review": "DRO-814",
     "supply-chain-currency": "DRO-423",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10",
