@@ -1,6 +1,8 @@
 package gate
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -163,5 +165,19 @@ func TestContextScopeLoads(t *testing.T) {
 	q, err := ContextScope(dir, "", &ReviewScope{Kind: review.KindQuick, Description: "D"})
 	if err != nil || q.Description != "D" || q.Task.ID != "" || len(q.Rules) != 1 {
 		t.Fatalf("quick context scope = %+v, %v", q, err)
+	}
+}
+
+// TestContextScopeRulesReadError: a rules.toml that exists but cannot be read
+// is an error naming it, never a context with the rules silently missing.
+func TestContextScopeRulesReadError(t *testing.T) {
+	dir := soloRepo(t, "in_progress")
+	put(t, dir, ".dross/phases/p/spec.toml", "[phase]\n  id = \"p\"\n")
+	if err := os.MkdirAll(filepath.Join(dir, ".dross", "rules.toml"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := mustScope(t, dir)
+	if _, err := ContextScope(dir, "", s); err == nil || !strings.Contains(err.Error(), ".dross/rules.toml") {
+		t.Fatalf("an unreadable rules.toml = %v, want an error naming .dross/rules.toml", err)
 	}
 }

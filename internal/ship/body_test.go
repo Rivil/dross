@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/phase"
@@ -217,5 +218,32 @@ func TestReviewSectionStable(t *testing.T) {
 	}
 	if regexp.MustCompile(`\d{4}-\d{2}-\d{2}T`).MatchString(a) {
 		t.Fatal("the body carries a timestamp")
+	}
+}
+
+func TestReviewSectionSameLengthOrder(t *testing.T) {
+	r := map[string]changes.TaskReview{
+		"t-3": {Outcome: "pass", Rounds: 1},
+		"t-2": {Outcome: "pass", Rounds: 1},
+	}
+	body := BuildPRBody(nil, nil, r)
+	i2, i3 := strings.Index(body, "`t-2`"), strings.Index(body, "`t-3`")
+	if i2 < 0 || i3 < 0 || i2 > i3 {
+		t.Fatalf("want both tasks, t-2 before t-3 (t-2 at %d, t-3 at %d):\n%s", i2, i3, body)
+	}
+}
+
+// TestReviewSectionClipsAtRuneStart: a finding cut at the cap never splits a
+// UTF-8 rune — the cut backs off to the rune's start.
+func TestReviewSectionClipsAtRuneStart(t *testing.T) {
+	text := strings.Repeat("a", reviewTextCap-1) + "é and more"
+	body := BuildPRBody(nil, nil, map[string]changes.TaskReview{"t-1": {Outcome: "pass", Rounds: 1, Findings: []changes.ReviewFinding{
+		{Round: 1, Kind: "quality", Severity: "NOTE", Text: text, Resolution: "non-blocking, left"},
+	}}})
+	if !strings.Contains(body, strings.Repeat("a", reviewTextCap-1)+"…") || strings.Contains(body, "é") {
+		t.Fatalf("the clip did not back off to the start of the split rune:\n%s", body)
+	}
+	if !utf8.ValidString(body) {
+		t.Fatal("the clipped body is not valid UTF-8")
 	}
 }

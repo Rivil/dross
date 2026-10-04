@@ -20,6 +20,7 @@ func TestParseVerdict(t *testing.T) {
 		{"malformed JSON", reply(`{"verdict":"pass",`), "not the verdict JSON"},
 		{"unknown key", reply(`{"verdict":"pass","spec":[],"quality":[],"extra":1}`), "not the verdict JSON"},
 		{"unknown severity", reply(`{"verdict":"block","spec":[],"quality":[{"severity":"MAJOR","text":"x"}]}`), `unknown severity "MAJOR"`},
+		{"unknown spec severity", reply(`{"verdict":"block","spec":[{"criterion":"c-1","severity":"MAJOR","text":"x"}],"quality":[]}`), `spec finding 1 has unknown severity "MAJOR"`},
 		{"missing quality severity", reply(`{"verdict":"pass","spec":[],"quality":[{"text":"x"}]}`), `unknown severity ""`},
 		{"spec finding with no criterion", reply(`{"verdict":"block","spec":[{"text":"c-2 split is untested"}],"quality":[]}`), "cites no criterion"},
 		{"empty spec finding text", reply(`{"verdict":"block","spec":[{"criterion":"c-1","text":"  "}],"quality":[]}`), "spec finding 1 has no text"},

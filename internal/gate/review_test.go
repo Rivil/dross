@@ -448,3 +448,41 @@ func TestReviewRecordSingleWriter(t *testing.T) {
 		t.Fatal("a hand-run `dross gate record` with a forged reviewer payload was allowed")
 	}
 }
+
+// TestRecorderContextRebuildFailures: a launch the recorder cannot rebuild a
+// context for — a missing spec, a malformed gates.toml — or a background
+// launch reporting no agent id cannot be trusted, so each is an unavailable
+// round naming why.
+func TestRecorderContextRebuildFailures(t *testing.T) {
+	dir, home := armedReview(t)
+	line := review.PromptLine(verbDigest(t, dir, home))
+	if err := os.Remove(filepath.Join(dir, ".dross", "phases", "p", "spec.toml")); err != nil {
+		t.Fatal(err)
+	}
+	reviewRecord(t, reviewerPost(t, dir, line, passReply), home)
+	if r := lastRound(t, dir); r.Outcome != review.OutcomeUnavailable || !strings.Contains(r.Cause, "could not be rebuilt") {
+		t.Errorf("missing spec.toml: %+v, want unavailable naming the rebuild", r)
+	}
+
+	dir, home = armedReview(t)
+	line = review.PromptLine(verbDigest(t, dir, home))
+	put(t, home, ".claude/dross/gates.toml", "secret_paths = [\n")
+	reviewRecord(t, reviewerPost(t, dir, line, passReply), home)
+	if r := lastRound(t, dir); r.Outcome != review.OutcomeUnavailable || !strings.Contains(r.Cause, "could not be rebuilt") || !strings.Contains(r.Cause, "gates.toml") {
+		t.Errorf("malformed gates.toml: %+v, want unavailable naming the rebuild and the file", r)
+	}
+
+	dir, home = armedReview(t)
+	line = review.PromptLine(verbDigest(t, dir, home))
+	reviewRecord(t, bgPost(t, "agent_reviewer_bg_launch_post.json", dir, func(m map[string]any) {
+		m["tool_input"].(map[string]any)["prompt"] = line
+		delete(m["tool_response"].(map[string]any), "agentId")
+	}), home)
+	rec := ledger(t, dir)
+	if len(rec.Pending) != 0 {
+		t.Errorf("a launch with no agent id was left pending: %+v", rec.Pending)
+	}
+	if r := lastRound(t, dir); r.Outcome != review.OutcomeUnavailable || !strings.Contains(r.Cause, "agent id") {
+		t.Errorf("a launch with no agent id: %+v, want unavailable naming the agent id", r)
+	}
+}

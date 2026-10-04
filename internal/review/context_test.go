@@ -269,3 +269,14 @@ func TestPromptLineRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// TestContextFenceOutrunsPatch: a patch carrying a ``` run (a markdown file)
+// must not close the diff's own fence early.
+func TestContextFenceOutrunsPatch(t *testing.T) {
+	dir := repo(t)
+	write(t, dir, "notes.md", "```go\nx := 1\n```\n")
+	c := build(t, dir, taskScope(), Secrets{})
+	if !strings.Contains(c.Body, "\n````diff\n") {
+		t.Fatalf("a patch with a ``` run was fenced with fewer than four backticks:\n%s", c.Body)
+	}
+}
