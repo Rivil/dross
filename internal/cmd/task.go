@@ -156,6 +156,9 @@ func taskShow() *cobra.Command {
 			Printf("title:        %s\n", t.Title)
 			Printf("wave:         %d\n", t.Wave)
 			Printf("status:       %s\n", orPending(t.Status))
+			if t.Reason != "" {
+				Printf("reason:       %s\n", t.Reason)
+			}
 			Printf("files:        %s\n", strings.Join(t.Files, ", "))
 			if len(t.Covers) > 0 {
 				Printf("covers:       %s\n", strings.Join(t.Covers, ", "))
@@ -183,7 +186,8 @@ func taskShow() *cobra.Command {
 }
 
 func taskStatus() *cobra.Command {
-	return &cobra.Command{
+	var reason string
+	c := &cobra.Command{
 		Use:   "status <phase-id> <task-id> <pending|in_progress|done|failed>",
 		Short: "Set a task's status in plan.toml",
 		Args:  cobra.ExactArgs(3),
@@ -193,6 +197,9 @@ func taskStatus() *cobra.Command {
 			case phase.StatusPending, phase.StatusInProgress, phase.StatusDone, phase.StatusFailed:
 			default:
 				return fmt.Errorf("invalid status: %s (want pending|in_progress|done|failed)", status)
+			}
+			if reason != "" && status != phase.StatusFailed {
+				return fmt.Errorf("--reason records why a task failed; it does not apply to %s", status)
 			}
 			// Only in_progress. `done` and `failed` are post-hoc records of work
 			// that already happened — gating them would leave a half-run phase
@@ -210,6 +217,9 @@ func taskStatus() *cobra.Command {
 			if !plan.SetTaskStatus(args[1], status) {
 				return fmt.Errorf("task not found: %s", args[1])
 			}
+			if reason != "" {
+				plan.FindTask(args[1]).Reason = reason
+			}
 			if err := plan.Save(planPath); err != nil {
 				return err
 			}
@@ -217,6 +227,8 @@ func taskStatus() *cobra.Command {
 			return nil
 		},
 	}
+	c.Flags().StringVar(&reason, "reason", "", "why the task failed (only with failed; any other status clears a recorded reason)")
+	return c
 }
 
 // taskAdd wires `dross task add`: build a task from flags and splice it into

@@ -185,6 +185,7 @@ phase.SpecPhase.Title title
 phase.Task.Covers covers
 phase.Task.DependsOn depends_on
 phase.Task.Description description
+phase.Task.Reason reason
 phase.Task.Status status
 phase.Task.TestContract test_contract
 phase.Task.Title title

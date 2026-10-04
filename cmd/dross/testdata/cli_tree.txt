@@ -309,6 +309,7 @@ dross task remove flag --force (bool) default="false" noopt="true" usage="strip 
 dross task show | use="show <phase-id> <task-id>" short="Print one task's record from plan.toml"
 dross task show flag --json (bool) default="false" noopt="true" usage="emit the bare JSON document instead of toml (no `# <path>` header)"
 dross task status | use="status <phase-id> <task-id> <pending|in_progress|done|failed>" short="Set a task's status in plan.toml"
+dross task status flag --reason (string) default="" usage="why the task failed (only with failed; any other status clears a recorded reason)"
 dross techdebt | use="techdebt" short="Scan tracked files for tech-debt markers + size heuristics (.dross/techdebt/<id>)"
 dross test | use="test [selector...]" short="Run this repo's test suite"
 dross test flag --files (stringArray) default="[]" usage="repo-relative path to resolve against the declared test lanes (repeatable)"
