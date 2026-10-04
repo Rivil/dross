@@ -1,13 +1,14 @@
 package survivor
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/Rivil/dross/internal/project"
 )
 
 // StoreFile is the store's name under .dross/. The locked acceptance_store
@@ -262,24 +263,36 @@ func (s *Store) validate() error {
 	return nil
 }
 
-// Save writes the store atomically: encode to a temp file in the same directory,
-// then rename over path. A failed encode or write leaves the prior file
-// untouched rather than truncated, so an interrupted save cannot lose
-// acceptances that took real judgement to record.
+// Save writes the store through the lossless TOML door (project.SaveTOML). An
+// existing survivors.toml is patched in place: every entry the caller did not
+// change stays byte-identical, and with it the `# dross:allow-secret` markers
+// trailing an accepted entry's source text — a whole-file re-encode dropped
+// them, and the next `dross validate` failed the secret scan on its own store.
+// An absent file gets a fresh encode.
+//
+// The door writes through a temp file and a rename, and verifies the patched
+// text loads as s before writing, so a failed or interrupted save leaves the
+// prior file untouched: acceptances that took real judgement are never lost.
 func Save(path string, s *Store) error {
 	if err := s.validate(); err != nil {
 		return err
 	}
-	var buf bytes.Buffer
-	enc := toml.NewEncoder(&buf)
-	enc.Indent = "  "
-	if err := enc.Encode(s); err != nil {
-		return fmt.Errorf("encode survivors: %w", err)
+	// An emptied list encodes as `category = []` — a plain array the patcher
+	// cannot turn back into [[category]] tables when the next entry arrives.
+	// nil omits the key, so an emptied list leaves no line behind.
+	if len(s.Categories) == 0 {
+		s.Categories = nil
+	}
+	if len(s.Accepted) == 0 {
+		s.Accepted = nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
 	}
-	return saveAtomic(path, buf.Bytes())
+	if err := project.SaveTOML(path, s); err != nil {
+		return fmt.Errorf("save survivors: %w", err)
+	}
+	return nil
 }
 
 // Accept is the read-modify-write the CLI uses: load the store at path, add the
@@ -321,27 +334,4 @@ func Retire(path string, keys ...string) error {
 		s.Remove(k)
 	}
 	return Save(path, s)
-}
-
-// saveAtomic writes data to path via a same-directory temp file + rename, so a
-// reader never observes a partial write. The temp file is removed on any early
-// return; after a successful rename the deferred remove is a harmless no-op.
-func saveAtomic(path string, data []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".survivors-*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temp for %s: %w", path, err)
-	}
-	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write temp for %s: %w", path, err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp for %s: %w", path, err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return fmt.Errorf("rename temp into %s: %w", path, err)
-	}
-	return nil
 }
