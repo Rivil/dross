@@ -21,6 +21,22 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/gate/review.go",
+        "internal/gate/review_test.go"
+      ],
+      "commit": "7aeff9d",
+      "completed_at": "2026-10-04T11:17:03.835988Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "recordReview",
+          "loc": "internal/gate/review.go:47",
+          "what": "PostToolUse recorder writes the reviewer's own verdict as a pass/block/stale/unavailable round bound to the reviewed tree"
+        }
+      ]
+    },
     "t-11": {
       "files": [
         "internal/cmd/install.go",
@@ -79,6 +95,97 @@
         }
       ]
     },
+    "t-14": {
+      "files": [
+        "internal/cmd/quick.go",
+        "internal/cmd/execute.go",
+        "internal/cmd/solo_begin_test.go",
+        "cmd/dross/main.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "534ea88",
+      "completed_at": "2026-10-04T10:54:01.941757Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "quickBegin",
+          "loc": "internal/cmd/quick.go:47",
+          "what": "dross quick begin/end record a quick's mode and description; solo begins refuse without the shipped reviewer"
+        }
+      ]
+    },
+    "t-15": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_reviewer_test.go",
+        "internal/cmd/doctor_hooks_test.go",
+        "internal/cmd/testdata/cli_surface/doctor_run.txt",
+        "internal/cmd/solo_begin_test.go"
+      ],
+      "commit": "72b9f0c",
+      "completed_at": "2026-10-04T11:02:17.451237Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "reviewerSection",
+          "loc": "internal/cmd/doctor.go:1187",
+          "what": "dross doctor fails when the solo reviewer is missing, stale or shadowed, naming path and fix"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        "assets/prompts/execute.md",
+        "internal/cmd/execute_prompt_test.go"
+      ],
+      "commit": "f58f476",
+      "completed_at": "2026-10-04T11:30:00.936198Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "Solo review loop",
+          "loc": "assets/prompts/execute.md:262",
+          "what": "/dross-execute --solo reviews every task before its commit with one fix round; failed reviews stash and move on"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "assets/prompts/quick.md",
+        "internal/cmd/quick_prompt_test.go",
+        "assets/prompts/execute.md",
+        "internal/cmd/execute_prompt_test.go"
+      ],
+      "commit": "47f427c",
+      "completed_at": "2026-10-04T12:13:28.545674Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "quick solo review",
+          "loc": "assets/prompts/quick.md:128",
+          "what": "/dross-quick --solo is reviewed against its description before the commit; reviewers may run in the background"
+        }
+      ]
+    },
+    "t-18": {
+      "files": [
+        "internal/gate/commit.go",
+        "internal/gate/soloreview.go",
+        "internal/gate/soloreview_test.go",
+        "internal/cmd/gate_override_test.go",
+        "README.md"
+      ],
+      "commit": "9001669",
+      "completed_at": "2026-10-04T12:24:51.361547Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "judgeSoloReview",
+          "loc": "internal/gate/soloreview.go:27",
+          "what": "solo-review gate refuses a solo code commit without a recorded pass for exactly the committed tree"
+        }
+      ]
+    },
     "t-19": {
       "files": [
         "internal/gate/scope.go",
@@ -111,6 +218,81 @@
           "symbol": "ParseVerdict",
           "loc": "internal/review/verdict.go:80",
           "what": "parses the reviewer's dross-verdict fence (spec findings always block, quality graded) and StateOf enforces the one-fix-round cap"
+        }
+      ]
+    },
+    "t-20": {
+      "files": [
+        "internal/gate/soloreview.go",
+        "internal/gate/downgrade_test.go"
+      ],
+      "commit": "a687f4c",
+      "completed_at": "2026-10-04T12:28:45.84684Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "judgeDowngrade",
+          "loc": "internal/gate/soloreview.go:156",
+          "what": "while a solo scope is armed with uncommitted code, dross calls that would shed its review are refused"
+        }
+      ]
+    },
+    "t-21": {
+      "files": [
+        "internal/gate/payload.go",
+        "internal/gate/fixture_test.go",
+        "internal/gate/testdata/agent_reviewer_bg_launch_post.json",
+        "internal/gate/testdata/reviewer_subagent_stop.json"
+      ],
+      "commit": "5fadaae",
+      "completed_at": "2026-10-04T11:42:21.876228Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "Decode",
+          "loc": "internal/gate/payload.go:45",
+          "what": "gate payloads include SubagentStop (agent id, type, final message); captured background launch+stop fixtures"
+        }
+      ]
+    },
+    "t-22": {
+      "files": [
+        "internal/gate/review.go",
+        "internal/gate/review_test.go",
+        "internal/gatestate/store.go",
+        "internal/gatestate/store_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "a337bba",
+      "completed_at": "2026-10-04T11:46:23.606286Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "recordReview",
+          "loc": "internal/gate/review.go:52",
+          "what": "background reviewer launches wait as pending and the agent's SubagentStop delivers the verdict round"
+        }
+      ]
+    },
+    "t-23": {
+      "files": [
+        "internal/cmd/hooks.go",
+        "internal/cmd/hooks_test.go",
+        "internal/cmd/gate.go",
+        "internal/cmd/gate_test.go",
+        "internal/cmd/doctor_hooks_test.go",
+        "internal/hooks/settings.go",
+        "internal/cmd/testdata/cli_surface/doctor_run.txt",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "955c923",
+      "completed_at": "2026-10-04T12:01:23.983882Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "userHooks",
+          "loc": "internal/cmd/hooks.go:72",
+          "what": "SubagentStop runs dross gate record so a background reviewer's verdict is recorded; doctor flags it missing"
         }
       ]
     },

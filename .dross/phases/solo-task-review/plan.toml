@@ -1,4 +1,4 @@
-task_seq = 20
+task_seq = 23
 
 [phase]
   id = "solo-task-review"
@@ -106,7 +106,7 @@ task_seq = 20
   covers = ["c-1", "c-2", "c-3", "c-4", "c-5", "c-8"]
   depends_on = ["t-1", "t-2", "t-3", "t-6", "t-13", "t-19"]
   test_contract = ["from t-1's captured envelope carrying a pass verdict and a matching context line, in a solo-armed fixture repo, the recorder appends a pass round whose tree equals treefp.WorkingTree; subagent_type general-purpose, fork or absent, or tool_name Bash, writes nothing — TestRecorderClaims", "if a verdict declaring \"pass\" with one spec finding records a pass round, TestRecorderSpecBlocks fails (c-2)", "if a prompt carrying the context line plus any other text (e.g. pasted conversation) records anything but an unavailable round naming the prompt, TestRecorderRejectsWidenedPrompt fails (c-5)", "if a file edited after `dross review context` and before the verdict, or a prompt with no context line, yields anything but a stale round plus a warning naming `dross review context`, TestRecorderStaleContext fails", "if an unparseable reply records anything but an unavailable round naming the parse error, or a later pass for the same attempt reads as pass, TestRecorderUnavailableSticky fails (review_unavailable)", "if t-1's background fixture writes review.json or emits other than one warning, TestRecorderBackgroundLaunch fails", "if a reviewer run with execute.json pair or absent, no task in_progress, or HEAD off phase/<id> writes review.json, TestRecorderPairSilent fails (c-1)", "if any non-test file outside internal/gate calls gatestate.SaveReview, TestReviewRecordSingleWriter fails; the same test asserts Bash `dross gate record` fed a forged reviewer payload stays refused by gate-off-guard (review_pass_signal)", "if either tool name \"Agent\" or \"Task\" stops being claimed, TestRecorderToolRename fails", "if the digest the recorder regenerates differs from the one `dross review context` printed for the same armed scope (including with a secret path added via gates.toml), TestContextDigestParity fails", "if a prompt equal to the context line apart from leading/trailing whitespace is treated as widened, or any interior addition is not, TestRecorderPromptExactness fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-11"
@@ -150,7 +150,7 @@ task_seq = 20
   covers = ["c-1", "c-8"]
   depends_on = ["t-6", "t-11"]
   test_contract = ["if `quick begin --solo \"fix x\"` records other than mode solo, the description verbatim and the current HEAD, or `quick begin \"x\"` records other than mode pair, or an empty or whitespace-only description is accepted, TestQuickBegin fails", "if `execute begin p --solo` or `quick begin --solo x` succeeds with the reviewer missing, stale or shadowed, or the error omits `dross install` (shadowed: the repo file), TestSoloBeginNeedsReviewer fails; pair begins succeed regardless", "if `execute begin p` leaves an earlier quick.json in place, or `quick end` with none errors, TestQuickMarkerLifetime fails", "if `quick begin` or `quick end` changes the sha256 of state.json or any plan.toml, TestQuickNoClobber fails", "the existing TestExecuteBeginRecordsMode / TestExecuteBeginLeavesStateAlone pass unedited; if cli_tree.txt stops listing `quick begin --solo` and `quick end`, TestCLITreeGolden fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-15"
@@ -161,7 +161,7 @@ task_seq = 20
   covers = ["c-7"]
   depends_on = ["t-11"]
   test_contract = ["if doctor exits 0 with the definition deleted, one byte changed, a dangling symlink, a link to a source file edited past the binary, or a repo .claude/agents/dross-task-reviewer.md, TestDoctorReviewer fails; each line names the path and the fix", "if doctor reads $HOME/.claude/agents while CLAUDE_CONFIG_DIR points elsewhere, TestDoctorReviewerDir fails", "if a fresh install is not exit 0 with ✓, or doctor_run.txt stops pinning the section, the golden fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-16"
@@ -172,29 +172,29 @@ task_seq = 20
   covers = ["c-1", "c-2", "c-3", "c-6"]
   depends_on = ["t-10", "t-12", "t-13", "t-14"]
   test_contract = ["if `dross review context`, the dross-task-reviewer spawn and the `dross review status` read stop appearing after §1f's bare `dross test` and before `git commit` in the solo branch, or appear in the pair branch or §1c, TestExecuteSoloReviewPlacement fails (c-1)", "if the spawn's subagent_type differs from review.ReviewerAgent, the prompt is not the printed line verbatim, or the spawn paragraph permits run_in_background, TestExecuteReviewerSpawnForeground fails", "if the fix round may run more than once, skips re-running `dross test` before the re-review, the failed path marks failed before stashing, the stash pathspec does not exclude .dross, or the loop stops instead of `dross task next`, TestExecuteReviewFailurePath fails (c-3)", "if the solo red-test path marks failed without stashing first, TestExecuteSoloRedStashes fails", "TestPromptCommitsSatisfyGreenGate must still match §1f; TestNoPromptTellsAgentToLiftGate stays green", "if a reviewer spawn that errors (unknown agent, API failure, interrupt — PostToolUse never fires, so `review status` reads none) does not lead to stash → `dross task status … failed --reason <the spawn error>` → `dross task next`, TestExecuteReviewSpawnError fails (review_unavailable)", "if a solo task whose diff is .dross/-only (no code) still runs `dross review context` instead of committing ungated, TestExecuteNoCodeSkipsReview fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-17"
-  wave = 6
-  title = "Review solo quicks"
-  files = ["assets/prompts/quick.md", "internal/cmd/quick_prompt_test.go"]
-  description = "§0 runs `dross quick begin \"<description>\"` (+ --solo in solo mode) before §3. Solo §4→§5: after green `dross test`, review context → foreground\nreviewer → review status, one fix round; still blocked/unavailable → discard, `dross quick end`, report findings, no bump. Every abort path runs\n`dross quick end`. Pair mode spawns none."
+  wave = 9
+  title = "Review solo quicks; wait for background reviewers"
+  files = ["assets/prompts/quick.md", "internal/cmd/quick_prompt_test.go", "assets/prompts/execute.md", "internal/cmd/execute_prompt_test.go"]
+  description = "quick.md §0 runs `dross quick begin \"<description>\"` (+ --solo in solo mode) before §3. Solo §4→§5: after green `dross test`, review context → spawn the reviewer\n→ wait for its verdict → review status, one fix round; still blocked/unavailable/spawn error → discard, `dross quick end`, report findings, no bump. Every abort path\nruns `dross quick end`. Pair mode spawns none. Revise both prompts' spawn step: the reviewer may run in the background (interactive sessions only have that), so\nwait for its completion notice before `dross review status`; no run_in_background requirement."
   covers = ["c-8"]
-  depends_on = ["t-10", "t-13", "t-14"]
-  test_contract = ["if quick.md's solo branch loses `dross review context` and the foreground dross-task-reviewer spawn between `dross test` and `git commit`, or the pair branch gains a spawn, TestQuickSoloReview fails (c-8)", "if `dross quick begin` (with --solo only on the solo branch) stops preceding §3 Implement, or an abort path (solo red, blocked review, user abort) omits `dross quick end`, TestQuickMarkerClosed fails", "if the blocked path allows a second fix round, or omits discard, `dross quick end` or no-version-bump, TestQuickSoloReviewBlocked fails", "if any solo abort path (red, blocked review, unavailable, spawn error) runs `dross quick end` before discarding the code — which t-20's downgrade guard refuses while code is dirty — TestQuickDiscardBeforeEnd fails"]
-  status = "pending"
+  depends_on = ["t-10", "t-13", "t-14", "t-16", "t-23"]
+  test_contract = ["if quick.md's solo branch loses `dross review context` and the foreground dross-task-reviewer spawn between `dross test` and `git commit`, or the pair branch gains a spawn, TestQuickSoloReview fails (c-8)", "if `dross quick begin` (with --solo only on the solo branch) stops preceding §3 Implement, or an abort path (solo red, blocked review, user abort) omits `dross quick end`, TestQuickMarkerClosed fails", "if the blocked path allows a second fix round, or omits discard, `dross quick end` or no-version-bump, TestQuickSoloReviewBlocked fails", "if any solo abort path (red, blocked review, unavailable, spawn error) runs `dross quick end` before discarding the code — which t-20's downgrade guard refuses while code is dirty — TestQuickDiscardBeforeEnd fails", "if execute.md's or quick.md's spawn step requires `run_in_background: false`, or stops telling the agent to wait for the reviewer's completion notice before running `dross review status`, TestReviewerSpawnWaitsForVerdict fails (review_pass_signal as amended)"]
+  status = "done"
 
 [[task]]
   id = "t-18"
-  wave = 7
+  wave = 10
   title = "Gate solo commits on a recorded review"
   files = ["internal/gate/commit.go", "internal/gate/soloreview.go", "internal/gate/soloreview_test.go", "internal/cmd/gate_override_test.go", "README.md"]
   description = "Extract commit-green's candidate builder so both gates share it. solo-review (Workflow, Liftable): while t-19's ArmedScope is set, a code commit needs a\npass in that scope's ledger with tree == candidate; a .dross/-only commit passes. README gets a gate row. Depends on t-16/t-17 so `make install`\narms it only after the prompts teach the loop."
   covers = ["c-3", "c-4", "c-8"]
   depends_on = ["t-10", "t-13", "t-14", "t-16", "t-17"]
   test_contract = ["with t-3 solo in progress: a pass for candidate T passes; no record refuses naming `dross review context` and dross-task-reviewer; a pass for T then a one-byte edit refuses \"tree changed since the review\"; blocked names the fix round; exhausted or unavailable names `dross task status <p> t-3 failed` and repeats the recorded cause; a pass for t-2 refuses — TestSoloReviewGate (c-4, c-3)", "if a .dross/-only commit while armed refuses, or pair mode, no task in_progress or HEAD off phase/<id> refuses or spawns any treefp git argv (gitrun.ArgvRecorder), TestSoloReviewSilent fails (c-4)", "quick table: solo quick at HEAD gated against its quick record; a pass from another quick attempt refuses; pair quick silent; silent once the quick's commit moves HEAD — TestSoloReviewQuick (c-8)", "if solo-review and commit-green judge `git add a.go && git commit -m x` against different candidates, TestSharedCandidate fails; the existing commit_test.go suite stays green across the extraction", "if a corrupt review.json or quick.json, an unreadable plan.toml, or a failing candidate build while armed passes instead of refusing with the error named, TestSoloReviewClosedPosture fails", "TestGateRegistryNames gains solo-review; a README gate row missing a registered workflow gate fails TestReadmeNamesEveryGate (new); TestGateRemediesResolve fails if a remedy names a verb missing from newRoot()"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-19"
@@ -209,11 +209,44 @@ task_seq = 20
 
 [[task]]
   id = "t-20"
-  wave = 8
+  wave = 11
   title = "Refuse mid-run downgrade while armed"
   files = ["internal/gate/soloreview.go", "internal/gate/downgrade_test.go"]
   description = "Extend the solo-review gate's Judge: while ArmedScope is set and treefp.Dirty reports code changes, refuse a non-solo `dross execute begin`, `dross quick begin` and `dross quick end`, and refuse `dross execute begin --solo` while a solo quick is armed with dirty code (it would delete quick.json and un-arm the quick). Split from t-18 per plan review."
   covers = ["c-4", "c-8"]
   depends_on = ["t-18"]
   test_contract = ["downgrade table: armed + a.go dirty → `dross execute begin p`, `dross quick begin \"x\"`, `dross quick end` refuse; armed + only .dross/ dirty → pass; solo execute armed + `dross execute begin p --solo` → pass; solo quick armed + a.go dirty + `dross execute begin p --solo` → refuse naming the quick — TestSoloDowngradeGuard", "if the guard fires when nothing is armed, or spawns any treefp git argv for a non-dross Bash command (gitrun.ArgvRecorder), TestDowngradeGuardSilent fails", "while armed with dirty code: `dross task status p t-3 pending` and `dross task status p t-3 done` refuse (they would leave no task in_progress and silence the gate), and `dross quick begin --solo \"x\"` during a solo execute task refuses (a fresh quick scope would shed the task's review history) — TestSoloDisarmGuard"]
-  status = "pending"
+  status = "done"
+
+[[task]]
+  id = "t-21"
+  wave = 6
+  title = "Decode SubagentStop payloads and pin captures"
+  files = ["internal/gate/payload.go", "internal/gate/fixture_test.go", "internal/gate/testdata/agent_reviewer_bg_launch_post.json", "internal/gate/testdata/reviewer_subagent_stop.json"]
+  description = "Decode accepts a SubagentStop payload (no tool_name): Event, AgentID (agent_id), AgentType (agent_type), LastMessage (last_assistant_message). Pin the 2026-10-04 headless captures of a background reviewer spawn: its PostToolUse (async_launched, tool_response.agentId, tool_input.prompt) and the same agent's SubagentStop (agent_type dross-task-reviewer, last_assistant_message carrying the dross-verdict fence), structurally checked for leaks."
+  covers = ["c-1", "c-5"]
+  depends_on = ["t-10"]
+  test_contract = ["if Decode rejects a SubagentStop payload for lacking tool_name, or drops agent_id, agent_type or last_assistant_message, TestDecodeSubagentStop fails; a payload with neither tool_name nor a SubagentStop event still errors", "if the background launch fixture stops carrying tool_response.status async_launched with an agentId equal to the stop fixture's agent_id, or the stop fixture stops carrying agent_type dross-task-reviewer and exactly one dross-verdict fence in last_assistant_message, TestCapturedReviewerSubagentStop fails", "if either new fixture carries the scratch CLAUDE.md canary or answers yes to an isolation probe, TestCapturedReviewerIsolation (extended to the stop fixture) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-22"
+  wave = 7
+  title = "Record pending launches and SubagentStop verdicts"
+  files = ["internal/gate/review.go", "internal/gate/review_test.go", "internal/gatestate/store.go", "internal/gatestate/store_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
+  description = "A background reviewer launch (PostToolUse async_launched) is judged like a foreground spawn up to the verdict: widened prompt -> unavailable round, no context line or a moved tree -> stale round + warning; otherwise it records a pending launch {agent_id, digest, tree} on the scope's ledger. The reviewer agent's SubagentStop (agent_type dross-task-reviewer) for a pending agent_id turns it into a pass/block/unavailable round bound to the launch's tree; an unknown agent_id or an unarmed scope records nothing."
+  covers = ["c-1", "c-2", "c-3", "c-4", "c-5", "c-8"]
+  depends_on = ["t-21"]
+  test_contract = ["from t-21's captured launch then stop (moved into a solo-armed fixture repo, prompt set to the verb's context line), the ledger ends with one pass round bound to the launch's tree and no pending launch — TestRecorderBackgroundRoundTrip", "if a SubagentStop whose agent_id was never launched, whose agent_type is not dross-task-reviewer, or that arrives in pair mode writes a round, TestSubagentStopNeedsPendingLaunch fails", "if a background launch with a widened prompt records anything but an unavailable round, or one over a moved tree anything but a stale round plus a warning naming `dross review context`, TestBackgroundLaunchJudgedLikeForeground fails", "if a stop whose last_assistant_message does not parse records anything but an unavailable round naming the parse error, TestSubagentStopUnparseable fails", "if a pending launch with an empty agent_id or digest is accepted, or a ledger with pending launches does not round-trip, TestReviewPendingRoundTrip fails; unfiled tagged fields fail TestEveryPathShapedFieldIsDeclared"]
+  status = "done"
+
+[[task]]
+  id = "t-23"
+  wave = 8
+  title = "Wire SubagentStop into the gate hooks"
+  files = ["internal/cmd/hooks.go", "internal/cmd/hooks_test.go", "internal/cmd/gate.go", "internal/cmd/doctor_hooks_test.go"]
+  description = "userHooks gains SubagentStop -> `dross gate record` (matcher-less), so `dross hooks ensure`/install/init wire it and doctor's Hooks section reports it as a gate hook (missing = issue: solo reviews in interactive sessions cannot record a pass). `dross gate record` documents both events."
+  covers = ["c-1", "c-7"]
+  depends_on = ["t-22"]
+  test_contract = ["if `dross hooks ensure` on an empty settings.json does not wire SubagentStop -> `dross gate record` matcher-less, or a second run changes the file, TestEnsureWiresSubagentStop fails", "if doctor reports a settings.json without the SubagentStop record hook as anything but an issue naming `dross hooks ensure`, TestDoctorSubagentStopHook fails", "if `dross gate record` fed t-21's SubagentStop fixture exits non-zero or prints to stdout, TestGateRecordSubagentStopNeverBlocks fails"]
+  status = "done"

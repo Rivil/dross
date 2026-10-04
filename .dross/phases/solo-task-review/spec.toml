@@ -49,8 +49,8 @@
 
 [[decisions]]
   key = "review_pass_signal"
-  choice = "A pass is recorded only by a PostToolUse recorder reading the reviewer agent's own verdict, bound to the tree fingerprint at review time; no CLI verb lets the executing agent record a pass."
-  why = "A pass the executing agent can record itself makes the gate advisory; same shape as tool-gate-hooks' pair_approval_signal."
+  choice = "A pass is recorded only by dross's hook recorders reading the reviewer agent's own verdict, bound to the tree fingerprint at review time: the Agent call's PostToolUse for a foreground spawn, or — for a background spawn — the SubagentStop event of the agent id its PostToolUse launch recorded. No CLI verb lets the executing agent record a pass."
+  why = "A pass the executing agent can record itself makes the gate advisory; same shape as tool-gate-hooks' pair_approval_signal. Amended 2026-10-04 by the user mid-execute: interactive sessions spawn every subagent in the background, whose PostToolUse carries only a launch acknowledgement (captured fixtures), so a PostToolUse-only recorder could never record a pass there; SubagentStop carries the same agent's final message."
   locked = true
 
 [[decisions]]
