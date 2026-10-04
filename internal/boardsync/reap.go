@@ -339,19 +339,6 @@ func classifyMilestoneMirrors(ctx *Ctx, lane ReapLane) []candidate {
 	return out
 }
 
-// classifyBacklogMirrors decides each recorded backlog mirror from disk alone.
-//
-// It answers the same three-way question BacklogVerdictFor does and returns the
-// same shape, but it cannot reuse that function: BacklogVerdictFor resolves a
-// routed item by reading its TARGET PHASE'S CARD, and c-3 forbids a close
-// decision derived from any card's state. Here the routed branch reads the
-// target phase's changes.json instead — the record the card was supposed to be
-// mirroring in the first place.
-//
-// It is also whole-board rather than per-milestone: the sweep has no single
-// version in hand, so a key is explained by whatever record owns it (a phase
-// directory for `slug:`, a deferred store entry for `someday:`) rather than by
-// membership in one milestone's live set.
 // roadmapSlugs is every phase slug named on any milestone's roadmap, whether or
 // not it has been scaffolded.
 //
@@ -375,6 +362,15 @@ func roadmapSlugs(root string) (map[string]string, error) {
 	return out, nil
 }
 
+// classifyBacklogMirrors decides each recorded backlog mirror from disk alone.
+//
+// It answers the same three-way question BacklogVerdictFor does, and closes a
+// routed item on the same record — Disposed — so the two cannot disagree about
+// which mirrors are done. It cannot reuse that function whole: it is
+// whole-board rather than per-milestone, since the sweep has no single version
+// in hand, so a key is explained by whatever record owns it (a phase directory
+// for `slug:`, a deferred store entry for `someday:`) rather than by membership
+// in one milestone's live set.
 func classifyBacklogMirrors(ctx *Ctx, lane ReapLane) ([]candidate, error) {
 	// deferred.Collect, not deferred.EnsureIDs: the latter stamps missing ids
 	// back into spec.toml, and a dry run must not write to disk either. An
@@ -419,6 +415,11 @@ func reapBacklogVerdict(ctx *Ctx, key string, deferred map[string]deferred.Entry
 		// A dismissed idea is a decision, not a loose end.
 		return ReapStranded, fmt.Sprintf("deferred item %s %d is dismissed", d.Source, d.Index)
 	}
+	// The one rule a routed item closes on, shared with backlog sync: its
+	// disposition record, never its destination finishing.
+	if disposed, why := Disposed(ctx.Root, d); disposed {
+		return ReapStranded, fmt.Sprintf("deferred item %s %d is disposed: %s", d.Source, d.Index, why)
+	}
 	if d.Target != "" {
 		if !phase.DirExists(ctx.Root, d.Target) {
 			// The destination has not been built yet. A routed item whose
@@ -436,7 +437,8 @@ func reapBacklogVerdict(ctx *Ctx, key string, deferred map[string]deferred.Entry
 	return ReapStillOpen, ""
 }
 
-// routedVerdict decides a routed item whose destination phase is scaffolded.
+// routedVerdict decides a routed item whose destination phase is scaffolded
+// and that no disposition record shows done (see Disposed).
 //
 // The destination finishing is NOT evidence the item was done, so it never
 // strands the card. A route can land on a phase that already shipped (the

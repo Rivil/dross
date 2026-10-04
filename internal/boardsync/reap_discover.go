@@ -173,7 +173,9 @@ func orphanVerdict(ctx *Ctx, kind orphanKind, artefact string) (ReapVerdict, str
 	case orphanTarget:
 		// A routed item never resolves on its destination completing (see
 		// routedVerdict) — and a destination still on a roadmap but
-		// unscaffolded is live work, not a lost mirror.
+		// unscaffolded is live work, not a lost mirror. A target label alone
+		// names no item, so there is no disposition record to read; a card
+		// that also carries its item id is classified by that id instead.
 		if !phase.DirExists(ctx.Root, artefact) {
 			roadmap, err := roadmapSlugs(ctx.Root)
 			if err != nil {

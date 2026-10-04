@@ -13,6 +13,7 @@ import (
 	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/survivor"
 )
 
 // The inbound half of backlog sync: SyncBacklog end to end over a TempDir
@@ -271,6 +272,10 @@ func TestBacklogVerdictTable(t *testing.T) {
 	ctx.Board.SetPhase("open-phase", "PROJ-21")
 	ctx.Board.SetPhase("err-phase", "PROJ-22")
 	mkPhaseDir(t, ctx.Root, "has-dir")
+	if err := survivor.Save(survivor.Path(ctx.Root), &survivor.Store{Accepted: []survivor.Acceptance{{Key: "K", File: survivorFile, Op: "OP", Text: "x", Reason: "fine"}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeAbsorbed(t, ctx.Root, "finished", "complete")
 
 	live := map[string]BacklogItem{
 		"k-unrouted": {Key: "k-unrouted"},
@@ -283,6 +288,10 @@ func TestBacklogVerdictTable(t *testing.T) {
 		"someday:id:dd": {ID: "dd", Dismissed: true},
 		"someday:id:dl": {ID: "dl"},
 		"someday:ph#0":  {Source: "ph", Index: 0},
+		// Disposed items have left the live set, so the verdict comes from
+		// their record.
+		"someday:id:sa": {ID: "sa", Source: "ph", Index: 1, Target: "finished", Survivor: "K", Text: "survivor " + survivorFile + ":4 (OP)"},
+		"someday:id:rc": {ID: "rc", Source: "ph", Index: 2, Target: "finished"},
 	}
 	for _, tc := range []struct {
 		key  string
@@ -298,6 +307,8 @@ func TestBacklogVerdictTable(t *testing.T) {
 		{"someday:id:dd", BacklogResolved},
 		{"someday:id:dl", BacklogStillOpen},
 		{"someday:ph#0", BacklogStillOpen},
+		{"someday:id:sa", BacklogResolved},  // a routed survivor survivors.toml accepts
+		{"someday:id:rc", BacklogStillOpen}, // target complete, but no criterion absorbed it
 		{"mystery", BacklogUnattributable},
 	} {
 		if got := BacklogVerdictFor(ctx, tc.key, live, def); got != tc.want {
@@ -322,5 +333,106 @@ func TestBacklogVerdictTable(t *testing.T) {
 	}
 	if done, err := IssueIsDone(gctx, "PROJ-34"); done || err == nil || !strings.HasPrefix(err.Error(), "board:") {
 		t.Errorf("IssueIsDone on a read error = (%v, %v), want (false, board: error)", done, err)
+	}
+}
+
+// TestBacklogAndReapAgreeOnDisposition: backlog sync and reap close a routed
+// mirror on the same record, so over one fixture the mirror backlog sync
+// resolves is exactly the one reap strands. A disagreement would have one path
+// close a card the other then names, or reopens, on every run.
+func TestBacklogAndReapAgreeOnDisposition(t *testing.T) {
+	ctx, _ := boardCtx(t, newFaultBoard())
+	root := ctx.Root
+	if err := survivor.Save(survivor.Path(root), &survivor.Store{Accepted: []survivor.Acceptance{{Key: "K", File: survivorFile, Op: "OP", Text: "x", Reason: "fine"}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeAbsorbed(t, root, "absorbs", "complete", "ab")
+	writeAbsorbed(t, root, "finished", "complete")
+	writeAbsorbed(t, root, "only-shipped", "shipped", "sh")
+	mkPhaseDir(t, root, "live")
+	writeRun(t, root, "src", runSpec{at: foundAt, finalized: true, scope: []string{survivorFile}, legFiles: []string{survivorFile}, surviving: []string{"M", "S"}})
+	writeRun(t, root, "measured", goodRun())
+	stillThere := goodRun()
+	stillThere.surviving = []string{"S"}
+	writeRun(t, root, "measured-again", stillThere)
+	writeMilestonePhases(t, root, "v1", "unbuilt")
+	roadmap, err := roadmapSlugs(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	surv := func(id, target, key string) deferred.Entry {
+		return deferred.Entry{ID: id, Source: "src", Target: target, Survivor: key, Text: "survivor " + survivorFile + ":4 (OP)"}
+	}
+	for _, tc := range []struct {
+		e        deferred.Entry
+		resolved bool
+	}{
+		{deferred.Entry{ID: "dz", Source: "src", Dismissed: true}, true},
+		{deferred.Entry{ID: "pl", Source: "src"}, false},
+		{deferred.Entry{ID: "ab", Source: "src", Target: "absorbs"}, true},
+		{deferred.Entry{ID: "fn", Source: "src", Target: "finished"}, false},
+		{deferred.Entry{ID: "sh", Source: "src", Target: "only-shipped"}, false},
+		{deferred.Entry{ID: "lv", Source: "src", Target: "live"}, false},
+		{deferred.Entry{ID: "ub", Source: "src", Target: "unbuilt"}, false},
+		{surv("sa", "finished", "K"), true},
+		{surv("sm", "measured", "M"), true},
+		{surv("ss", "measured-again", "S"), false},
+	} {
+		key := DeferredBacklogKey(tc.e.ID)
+		live := map[string]BacklogItem{}
+		if liveDeferred(root, tc.e) {
+			live[key] = DeferredBacklogItem(tc.e)
+		}
+		def := map[string]deferred.Entry{key: tc.e}
+		resolved := BacklogVerdictFor(ctx, key, live, def) == BacklogResolved
+		v, why := reapBacklogVerdict(ctx, key, def, roadmap)
+		if resolved != tc.resolved {
+			t.Errorf("%s: backlog resolved = %v, want %v", tc.e.ID, resolved, tc.resolved)
+		}
+		if stranded := v == ReapStranded; stranded != resolved {
+			t.Errorf("%s: backlog resolved = %v but reap verdict = %v (%s) — the two paths disagree", tc.e.ID, resolved, v, why)
+		}
+	}
+}
+
+// TestSyncBacklogClosesAnAbsorbedItemOnce: a routed item whose complete target
+// absorbed it into a criterion is closed by backlog sync exactly once, and the
+// next sync leaves its card alone — no update re-describing it as routed, no
+// second close.
+func TestSyncBacklogClosesAnAbsorbedItemOnce(t *testing.T) {
+	f := newFaultBoard()
+	f.seed(forge.Issue{Key: "PROJ-40"})
+	ctx, out := boardCtx(t, f)
+	writeMilestonePhases(t, ctx.Root, "v1")
+	writeSpec(t, filepath.Dir(ctx.Root), "src", "[phase]\nid = \"src\"\ntitle = \"Src\"\n\n[[deferred]]\nid = \"ab\"\ntext = \"an idea\"\ntarget = \"tgt\"\n")
+	writeAbsorbed(t, ctx.Root, "tgt", "complete", "ab")
+	ctx.Board.SetBacklog(DeferredBacklogKey("ab"), "PROJ-40")
+
+	var err error
+	captureStderr(t, func() { err = SyncBacklog(ctx, "v1") })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := f.callsOf("CloseIssue"); !reflect.DeepEqual(got, []string{"CloseIssue PROJ-40"}) {
+		t.Errorf("closes = %v, want PROJ-40 closed once", got)
+	}
+	if got := out.String(); got != "backlog v1 -> 0 created, 0 updated, 1 closed\n" {
+		t.Errorf("narration = %q", got)
+	}
+
+	f.calls = nil
+	out.Reset()
+	captureStderr(t, func() { err = SyncBacklog(ctx, "v1") })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range f.calls {
+		if c == "UpdateIssue PROJ-40" || c == "CloseIssue PROJ-40" {
+			t.Errorf("the second sync touched the closed card: %s", c)
+		}
+	}
+	if got := out.String(); got != "backlog v1 -> 0 created, 0 updated, 0 closed\n" {
+		t.Errorf("second narration = %q", got)
 	}
 }

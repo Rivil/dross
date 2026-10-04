@@ -93,10 +93,9 @@ func SyncBacklog(ctx *Ctx, version string) error {
 		return err
 	}
 	// Routed items are included: c-6 is precisely that a routed item gets a
-	// board issue and stays current. Only a dismissed item has nothing to
-	// mirror.
+	// board issue and stays current — until liveDeferred says it is done.
 	for _, d := range deferredItems {
-		if d.Dismissed {
+		if !liveDeferred(ctx.Root, d) {
 			continue
 		}
 		items = append(items, DeferredBacklogItem(d))
@@ -115,6 +114,18 @@ func SyncBacklog(ctx *Ctx, version string) error {
 	}
 	fmt.Fprintf(ctx.out(), "backlog %s -> %d created, %d updated, %d closed\n", version, created, updated, closed)
 	return nil
+}
+
+// liveDeferred reports whether a deferred item still belongs in the backlog's
+// live set. A dismissed item has nothing to mirror, and neither has a disposed
+// one: leaving the live set on its disposition record is what lets reconcile
+// close its mirror — never its destination finishing alone.
+func liveDeferred(root string, d deferred.Entry) bool {
+	if d.Dismissed {
+		return false
+	}
+	disposed, _ := Disposed(root, d)
+	return !disposed
 }
 
 // BacklogVerdict is what the reconcile pass concluded about one recorded
@@ -170,10 +181,9 @@ func ReconcileBacklog(ctx *Ctx, live []BacklogItem, items []deferred.Entry) (int
 			fmt.Fprintf(os.Stderr, "warning: backlog mirror %s (%s) is not in this milestone's live set and cannot be shown resolved — leaving it open\n", issue, key)
 			continue
 		}
-		// Idempotence: a mirror the tracker already holds resolved is skipped
-		// rather than closed again. A routed item stays in the live set after
-		// its target ships, so without this the next run would close it a
-		// second time on every sync.
+		// Idempotence: a mirror the tracker already holds resolved — closed by
+		// hand, or by a run that failed before saving board.json — is skipped
+		// rather than closed again.
 		if done, err := IssueIsDone(ctx, issue); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not read %s back (%v) — leaving it open\n", issue, err)
 			continue
@@ -203,7 +213,8 @@ func BacklogVerdictFor(ctx *Ctx, key string, live map[string]BacklogItem, deferr
 		// does not show the item was done: the route may have been made after
 		// the destination shipped, or the destination rescoped away from it
 		// (see routedVerdict). Its mirror closes when the item itself leaves
-		// the live set on evidence, never on the destination's state.
+		// the live set on its disposition record, never on the destination's
+		// state.
 		return BacklogStillOpen
 	}
 	if slug, ok := strings.CutPrefix(key, "slug:"); ok {
@@ -220,6 +231,12 @@ func BacklogVerdictFor(ctx *Ctx, key string, live map[string]BacklogItem, deferr
 		// A dismissed idea is a decision, not a loose end: it left the live set
 		// because someone closed it out, so the mirror follows.
 		if d.Dismissed {
+			return BacklogResolved
+		}
+		// A disposed item left the live set on a record that shows it done:
+		// an accepted or measured-away survivor, or a complete destination's
+		// criterion that absorbed it.
+		if disposed, _ := Disposed(ctx.Root, d); disposed {
 			return BacklogResolved
 		}
 		return BacklogStillOpen
