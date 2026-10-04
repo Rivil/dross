@@ -190,7 +190,7 @@ func TestGateStatusListsEveryGate(t *testing.T) {
 // TestGateRegistryNames pins the registered set: a gate added or renamed must
 // change this list, and the README row and remedies along with it.
 func TestGateRegistryNames(t *testing.T) {
-	want := []string{"commit-green", "curated-shrink", "gate-off-guard", "pair-approval", "plan-edit", "secret-read", "secret-stream", "tamper-guard"}
+	want := []string{"commit-green", "curated-shrink", "gate-off-guard", "pair-approval", "plan-edit", "secret-read", "secret-stream", "solo-review", "tamper-guard"}
 	var got []string
 	for _, g := range gate.All() {
 		got = append(got, g.Name)
@@ -232,5 +232,29 @@ func TestGateStatusScopesAndRepo(t *testing.T) {
 	out, _, err = runGate(t, "", "status")
 	if err != nil || !strings.Contains(out, "repo: cannot tell (") || !strings.Contains(out, "permission denied") {
 		t.Errorf("gate status over an unsearchable .dross/: %q (%v), want `repo: cannot tell` naming the error", out, err)
+	}
+}
+
+// TestReadmeNamesEveryGate: the README's `dross gate` row names the gates a
+// human can lift by name — every registered gate must appear there, or a
+// refusal points at a gate the docs never mention.
+func TestReadmeNamesEveryGate(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row string
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(line, "| `dross gate {") {
+			row = line
+		}
+	}
+	if row == "" {
+		t.Fatal("README has no `dross gate` row")
+	}
+	for _, g := range gate.All() {
+		if !strings.Contains(row, "`"+g.Name+"`") {
+			t.Errorf("README's `dross gate` row does not name the %s gate", g.Name)
+		}
 	}
 }

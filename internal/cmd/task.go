@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/state"
@@ -156,6 +157,9 @@ func taskShow() *cobra.Command {
 			Printf("title:        %s\n", t.Title)
 			Printf("wave:         %d\n", t.Wave)
 			Printf("status:       %s\n", orPending(t.Status))
+			if t.Reason != "" {
+				Printf("reason:       %s\n", t.Reason)
+			}
 			Printf("files:        %s\n", strings.Join(t.Files, ", "))
 			if len(t.Covers) > 0 {
 				Printf("covers:       %s\n", strings.Join(t.Covers, ", "))
@@ -183,7 +187,8 @@ func taskShow() *cobra.Command {
 }
 
 func taskStatus() *cobra.Command {
-	return &cobra.Command{
+	var reason string
+	c := &cobra.Command{
 		Use:   "status <phase-id> <task-id> <pending|in_progress|done|failed>",
 		Short: "Set a task's status in plan.toml",
 		Args:  cobra.ExactArgs(3),
@@ -193,6 +198,9 @@ func taskStatus() *cobra.Command {
 			case phase.StatusPending, phase.StatusInProgress, phase.StatusDone, phase.StatusFailed:
 			default:
 				return fmt.Errorf("invalid status: %s (want pending|in_progress|done|failed)", status)
+			}
+			if reason != "" && status != phase.StatusFailed {
+				return fmt.Errorf("--reason records why a task failed; it does not apply to %s", status)
 			}
 			// Only in_progress. `done` and `failed` are post-hoc records of work
 			// that already happened — gating them would leave a half-run phase
@@ -207,16 +215,48 @@ func taskStatus() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if !plan.SetTaskStatus(args[1], status) {
+			if plan.FindTask(args[1]) == nil {
 				return fmt.Errorf("task not found: %s", args[1])
+			}
+			// A failed solo task carries its review: the refusal comes before
+			// any write, and the review — read only from the recorder's
+			// ledger — explains the failure when no --reason does.
+			var tr *changes.TaskReview
+			var root string
+			if status == phase.StatusFailed {
+				if root, err = FindRoot(); err != nil {
+					return err
+				}
+				repoDir := filepath.Dir(root)
+				if err := refuseDirtySoloFailure(repoDir, args[0], args[1]); err != nil {
+					return err
+				}
+				if tr, err = taskReviewFor(repoDir, args[0], args[1]); err != nil {
+					warnAttach(args[0], args[1], err)
+					tr = nil
+				}
+				if reason == "" {
+					reason = reviewFailureReason(tr)
+				}
+			}
+			plan.SetTaskStatus(args[1], status)
+			if reason != "" {
+				plan.FindTask(args[1]).Reason = reason
 			}
 			if err := plan.Save(planPath); err != nil {
 				return err
+			}
+			if tr != nil {
+				if err := changes.SetReview(root, args[0], args[1], *tr); err != nil {
+					warnAttach(args[0], args[1], err)
+				}
 			}
 			Printf("%s/%s -> %s\n", args[0], args[1], status)
 			return nil
 		},
 	}
+	c.Flags().StringVar(&reason, "reason", "", "why the task failed (only with failed; any other status clears a recorded reason)")
+	return c
 }
 
 // taskAdd wires `dross task add`: build a task from flags and splice it into

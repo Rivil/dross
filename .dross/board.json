@@ -56,6 +56,7 @@
     "run-block-pin-currency": "DRO-746",
     "scanner-self-exclusion": "DRO-404",
     "secret-detection": "DRO-459",
+    "solo-task-review": "DRO-814",
     "supply-chain-currency": "DRO-423",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10",
@@ -94,7 +95,6 @@
     "slug:prompt-behaviour-evals": "DRO-704",
     "slug:review-comment-ingest": "DRO-693",
     "slug:review-edge-lenses": "DRO-696",
-    "slug:solo-task-review": "DRO-690",
     "slug:spec-edge-probe": "DRO-695",
     "slug:spec-fact-drift": "DRO-698",
     "slug:task-preconditions": "DRO-699",
@@ -120,6 +120,7 @@
     "someday:id:0824d227a6d8bebe": "DRO-604",
     "someday:id:08c4b7d2d98b673e": "DRO-401",
     "someday:id:09c1286a13989981": "DRO-562",
+    "someday:id:0a2f86a4677cc151": "DRO-830",
     "someday:id:0ad901405561a187": "DRO-116",
     "someday:id:0b1634dcc8c4954f": "DRO-582",
     "someday:id:0cc616a86217cf25": "DRO-565",
@@ -129,6 +130,7 @@
     "someday:id:121f867fd1bffb0c": "DRO-287",
     "someday:id:12d7c0ffc1d5958c": "DRO-559",
     "someday:id:130a1cf4bc7049f2": "DRO-92",
+    "someday:id:15ce26e96bf0a5da": "DRO-827",
     "someday:id:1708546d27dd3939": "DRO-81",
     "someday:id:17e1ad6227bc1386": "DRO-605",
     "someday:id:189f66578878a28a": "DRO-683",
@@ -142,6 +144,7 @@
     "someday:id:20d239bfa5341306": "DRO-62",
     "someday:id:211fd3040434016d": "DRO-645",
     "someday:id:215d2ae2e7799d69": "DRO-102",
+    "someday:id:21841dbf893e97db": "DRO-834",
     "someday:id:2385fc70268180d1": "DRO-83",
     "someday:id:23cd8142a6ba122b": "DRO-687",
     "someday:id:245f4ad61d9e038a": "DRO-372",
@@ -164,6 +167,7 @@
     "someday:id:3251fb1afb189c30": "DRO-588",
     "someday:id:344061534674f2d3": "DRO-539",
     "someday:id:34aff0971055b27c": "DRO-518",
+    "someday:id:366fb4244e1b525a": "DRO-851",
     "someday:id:3701d0add3074097": "DRO-91",
     "someday:id:3a0d7d3147d7b585": "DRO-115",
     "someday:id:3a9ffbbca3428cab": "DRO-806",
@@ -184,6 +188,7 @@
     "someday:id:46c15a85de624472": "DRO-233",
     "someday:id:4841efdde12bd371": "DRO-354",
     "someday:id:4872b79b07f21c0a": "DRO-329",
+    "someday:id:488b08fefff076c8": "DRO-826",
     "someday:id:48b5edeb0556cd3a": "DRO-105",
     "someday:id:48f9a44d4baeba06": "DRO-586",
     "someday:id:49e1846c35c70607": "DRO-314",
@@ -194,9 +199,11 @@
     "someday:id:500ae4ef27e1788c": "DRO-390",
     "someday:id:533deb3742a699da": "DRO-573",
     "someday:id:5424d79f2f8d3bc5": "DRO-327",
+    "someday:id:5426fd8d7059547e": "DRO-825",
     "someday:id:5433add0623c64ef": "DRO-572",
     "someday:id:559177675cd27ce3": "DRO-601",
     "someday:id:5610b45525282bf4": "DRO-219",
+    "someday:id:573fa22f74becc03": "DRO-836",
     "someday:id:5802ad3fe8f08d87": "DRO-34",
     "someday:id:585ea4027cea6bf1": "DRO-530",
     "someday:id:58e9bf6438fdb25b": "DRO-548",
@@ -368,6 +375,7 @@
     "someday:id:ddf9c9e63e17d0fc": "DRO-679",
     "someday:id:de730bc44c29443c": "DRO-543",
     "someday:id:deada906586f73f1": "DRO-590",
+    "someday:id:e1489451481fee30": "DRO-831",
     "someday:id:e5ef2935a451c594": "DRO-119",
     "someday:id:e7207129f4d8a7fc": "DRO-48",
     "someday:id:e8f3c04c60c82aa7": "DRO-676",
@@ -393,9 +401,11 @@
     "someday:id:f1b1b4359fc352ac": "DRO-360",
     "someday:id:f2704a9445152ac0": "DRO-528",
     "someday:id:f551232700a801da": "DRO-674",
+    "someday:id:f655ef5fce125f23": "DRO-833",
     "someday:id:f74fa3c9230a9c3b": "DRO-291",
     "someday:id:f93277521f881095": "DRO-89",
     "someday:id:f95098e0fc3de054": "DRO-597",
+    "someday:id:f998e138ba3b71a9": "DRO-832",
     "someday:id:fa1314822c9ca2e1": "DRO-596",
     "someday:id:fa33806da7ae4d92": "DRO-542",
     "someday:id:fa3d17955ecdf1cb": "DRO-742",
@@ -1917,6 +1927,131 @@
       "issue": "DRO-468",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "solo-task-review/t-1": {
+      "issue": "DRO-815",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-10": {
+      "issue": "DRO-839",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-11": {
+      "issue": "DRO-824",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-12": {
+      "issue": "DRO-828",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-13": {
+      "issue": "DRO-835",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-14": {
+      "issue": "DRO-837",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-15": {
+      "issue": "DRO-838",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-16": {
+      "issue": "DRO-842",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-17": {
+      "issue": "DRO-846",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-18": {
+      "issue": "DRO-847",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-19": {
+      "issue": "DRO-829",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-2": {
+      "issue": "DRO-816",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-20": {
+      "issue": "DRO-848",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-21": {
+      "issue": "DRO-843",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-22": {
+      "issue": "DRO-844",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-23": {
+      "issue": "DRO-845",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-24": {
+      "issue": "DRO-849",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-25": {
+      "issue": "DRO-850",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-3": {
+      "issue": "DRO-817",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-4": {
+      "issue": "DRO-818",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-5": {
+      "issue": "DRO-819",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-6": {
+      "issue": "DRO-820",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-7": {
+      "issue": "DRO-821",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-8": {
+      "issue": "DRO-822",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-review/t-9": {
+      "issue": "DRO-823",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "supply-chain-currency/t-1": {
       "issue": "DRO-424",

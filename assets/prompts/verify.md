@@ -11,7 +11,7 @@ Three checks, in order: mutation efficacy (mechanical), criterion-to-test mappin
 1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for this command.
 2. Resolve target phase from `$ARGUMENTS` or `state.json`'s `current_phase`. Fail if neither resolves.
 3. Read `.dross/phases/<id>/spec.toml` and `plan.toml`. If either is missing, route to `/dross-spec` or `/dross-plan` first.
-4. Read `.dross/phases/<id>/changes.json`. If missing or empty: `/dross-execute` hasn't touched anything for this phase yet — stop and route there.
+4. Read `.dross/phases/<id>/changes.json`. If missing or empty: `/dross-execute` hasn't touched anything for this phase yet — stop and route there. Keep its `reviews` key for §4: in a `--solo` run, each task's reviewer outcome (`outcome`, `rounds`, `cause`) and every finding with its `resolution`. Note any task `plan.toml` marks `failed` too, with the reason `dross task show <id> <task-id>` prints.
 5. Parse `--skip-mutation` flag. Default OFF (run mutation testing). Skip if user explicitly asked.
 6. Check exec consent before §1 — `dross verify` shells out to mutation tools that run this repo's test suite, and it refuses without it:
    ```
@@ -223,8 +223,18 @@ verify <phase-id> — <verdict>
       - <one-line per flag>
     NOTE (<count> — see verify.toml)
 
+  Solo review:  <only when changes.json has `reviews` or a task failed>
+    t-3  pass after 2 rounds
+      - BLOCKING spec c-1: <finding> — fixed in the fix round
+      - FLAG quality: <finding> — non-blocking, left
+    t-5  exhausted after 2 rounds — UNRESOLVED
+      - BLOCKING spec c-3: <finding> — unresolved — task failed
+    failed: t-5 — <reason from `dross task show`>
+
   Verdict: <pass | partial | fail>
 ```
+
+The **Solo review** block shows what the per-task reviewer flagged in a `--solo` run, one line per finding with its resolution. Mark every unresolved finding and every failed task: a task the reviewer failed was never committed, so no criterion's coverage may lean on it.
 
 Keep the map to one line per criterion; if the user wants the surviving-mutant detail behind a `weak`/`uncovered` row, point them at `verify.toml` rather than dumping it.
 

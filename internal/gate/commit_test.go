@@ -9,6 +9,7 @@ import (
 
 	"github.com/Rivil/dross/internal/gatestate"
 	"github.com/Rivil/dross/internal/gitrun"
+	"github.com/Rivil/dross/internal/shellscan"
 	"github.com/Rivil/dross/internal/treefp"
 )
 
@@ -302,5 +303,17 @@ func TestCommitMixedDrossAndCode(t *testing.T) {
 	gitIn(t, dir, "add", ".dross/phases/p/plan.toml", "a.go")
 	if res := commitCheck(t, "git commit -m x", dir); res.Allowed() {
 		t.Error("a commit staging a code file beside a .dross file, with no green, was admitted")
+	}
+}
+
+// TestCommitAt: the shared reading of where a line's commit is — -1 when it
+// has none, else its index among the line's commands.
+func TestCommitAt(t *testing.T) {
+	if at, _ := commitAt(shellscan.Scan("ls -la && echo git commit", shellscan.Options{Dir: "/w"})); at != -1 {
+		t.Errorf("a line with no commit: commitAt = %d, want -1", at)
+	}
+	at, g := commitAt(shellscan.Scan("git add a.go && git commit -m x", shellscan.Options{Dir: "/w"}))
+	if at != 1 || g.Sub != "commit" {
+		t.Errorf("git add && git commit: commitAt = %d (%q), want 1 (commit)", at, g.Sub)
 	}
 }

@@ -394,6 +394,10 @@ type Task struct {
 	DependsOn    []string `toml:"depends_on,omitempty" json:"depends_on,omitempty"` // task ids
 	TestContract []string `toml:"test_contract,omitempty" json:"test_contract,omitempty"`
 	Status       string   `toml:"status,omitempty" json:"status,omitempty"` // pending | in_progress | done | failed
+	// Reason says why a failed task failed — a reviewer's unresolved finding,
+	// an unavailable review's cause, or a red suite. Only a failed task keeps
+	// one: any other status clears it.
+	Reason string `toml:"reason,omitempty" json:"reason,omitempty"`
 }
 
 // Task statuses.
@@ -445,6 +449,9 @@ func (p *Plan) SetTaskStatus(id, status string) bool {
 	for i := range p.Task {
 		if p.Task[i].ID == id {
 			p.Task[i].Status = status
+			if status != StatusFailed {
+				p.Task[i].Reason = ""
+			}
 			return true
 		}
 	}

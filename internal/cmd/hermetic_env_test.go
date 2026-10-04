@@ -23,6 +23,10 @@ import (
 // actually happened rather than trust it.
 var ambientHome = os.Getenv("HOME")
 
+// ambientClaudeConfigDir is the CLAUDE_CONFIG_DIR this test binary inherited,
+// captured before TestMain clears it.
+var ambientClaudeConfigDir = os.Getenv("CLAUDE_CONFIG_DIR")
+
 // TestMain pins HOME to an empty throwaway directory for the whole package.
 //
 // Without it, every test that runs `dross init` in a temp repo silently
@@ -46,6 +50,15 @@ func TestMain(m *testing.M) {
 	}
 	if err := os.Setenv("HOME", home); err != nil {
 		fmt.Fprintf(os.Stderr, "hermetic HOME: setenv: %v\n", err)
+		os.Exit(1)
+	}
+	// CLAUDE_CONFIG_DIR outranks HOME for everything Claude Code reads —
+	// settings.json and the agents directory install writes the solo reviewer
+	// into. Cleared, it resolves under the throwaway HOME above, so a machine
+	// that exports it never gets test agents or hooks written into its real
+	// config. chdir() still pins a per-test one.
+	if err := os.Unsetenv("CLAUDE_CONFIG_DIR"); err != nil {
+		fmt.Fprintf(os.Stderr, "hermetic CLAUDE_CONFIG_DIR: unsetenv: %v\n", err)
 		os.Exit(1)
 	}
 	if err := pinGitConfig(home); err != nil {

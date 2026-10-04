@@ -33,7 +33,14 @@ changes.Landmark.Symbol symbol
 changes.Landmark.What what
 changes.RedProof.Replay replay
 changes.RedProof.SHA sha
+changes.ReviewFinding.Criterion criterion
+changes.ReviewFinding.Kind kind
+changes.ReviewFinding.Resolution resolution
+changes.ReviewFinding.Severity severity
+changes.ReviewFinding.Text text
 changes.TaskRecord.Commit commit
+changes.TaskReview.Cause cause
+changes.TaskReview.Outcome outcome
 changes.TaskRecord.Notes notes
 
 # ---- cmd — command-local records: ids, hosts, states, prose, report labels, hook payloads
@@ -117,7 +124,7 @@ gate.listFile.SecretTools secret_tools
 gate.Override.Name name
 gate.Override.Repo repo
 
-# ---- gatestate — machine-local gate records: tree object ids, phase/task ids, HEAD SHAs, modes, runner labels
+# ---- gatestate — machine-local gate records: tree object ids, phase/task ids, HEAD SHAs, modes, runner labels, review kinds and attempt keys, quick descriptions
 gatestate.Approval.Head head
 gatestate.Approval.Phase phase
 gatestate.Approval.Task task
@@ -125,6 +132,16 @@ gatestate.Execute.Mode mode
 gatestate.Execute.Phase phase
 gatestate.Green.Runner runner
 gatestate.Green.Tree tree
+gatestate.Launch.AgentID agent_id
+gatestate.Launch.Digest digest
+gatestate.Launch.Tree tree
+gatestate.Quick.Description description
+gatestate.Quick.Head head
+gatestate.Quick.Mode mode
+gatestate.Review.Attempt attempt
+gatestate.Review.Kind kind
+gatestate.Review.Phase phase
+gatestate.Review.Task task
 
 # ---- hooks — Claude Code hook entries: command lines and types
 hooks.hookCommand.Command command
@@ -185,6 +202,7 @@ phase.SpecPhase.Title title
 phase.Task.Covers covers
 phase.Task.DependsOn depends_on
 phase.Task.Description description
+phase.Task.Reason reason
 phase.Task.Status status
 phase.Task.TestContract test_contract
 phase.Task.Title title
@@ -304,6 +322,16 @@ quality.Finding.Title title
 reaplog.Card.Class class
 reaplog.Card.Outcome outcome
 reaplog.Card.PriorState prior_state
+
+# ---- review — solo reviewer verdicts and rounds: criterion ids, severities, finding prose, outcomes, tree object ids, context digests, causes
+review.Finding.Criterion criterion
+review.Finding.Severity severity
+review.Finding.Text text
+review.Round.Cause cause
+review.Round.Digest digest
+review.Round.Outcome outcome
+review.Round.Tree tree
+review.wireVerdict.Verdict verdict
 
 # ---- rules — rule ids, text, dates
 rules.Rule.Created created

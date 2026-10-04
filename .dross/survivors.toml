@@ -3712,3 +3712,129 @@
   line = 917
   category = "scanner-no-progress-guard"
   accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "68aa487540e40c67"
+  file = "internal/gate/override.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--\":"
+  line = 272
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "a2b802301039cf6b"
+  file = "internal/gate/override.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case g.Sub == \"clean\" && short && strings.ContainsAny(a[1:], \"xX\"):"
+  line = 274
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "b1e7d16eb406cf27"
+  file = "internal/gate/override.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case g.Sub == \"stash\" && (a == \"--all\" || (short && strings.Contains(a[1:], \"a\"))):"
+  line = 276
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "fd1d4dd65021fb85"
+  file = "internal/gate/override.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case g.Sub == \"clean\" && !strings.HasPrefix(a, \"-\"):"
+  line = 278
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "8ae0cc18a7773247"
+  file = "internal/gate/review.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case bad != nil:"
+  line = 94
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "d8a970ca43ba0fe6"
+  file = "internal/gate/review.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case status == \"completed\":"
+  line = 96
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "d1ee8214ac12cb3a"
+  file = "internal/gate/review.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case agentID == \"\":"
+  line = 98
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "d1ba4acf0ba78dc4"
+  file = "internal/gate/scope.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 173
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "9ba3ef130947537a"
+  file = "internal/gate/soloreview.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--solo\":"
+  line = 133
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "d77b8c9b0452e70f"
+  file = "internal/gate/soloreview.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--reason\":"
+  line = 135
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "b44ab8bb9805cddc"
+  file = "internal/review/verdict.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == \"\":"
+  line = 101
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "902081db07651317"
+  file = "internal/review/verdict.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case kind == KindQuick && c != QuickCriterion:"
+  line = 103
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "2d152dedd555a123"
+  file = "internal/review/verdict.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case kind != KindQuick && c == QuickCriterion:"
+  line = 105
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "bad38ed3a2572e36"
+  file = "internal/ship/body.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "return ids[i] < ids[j]"
+  line = 147
+  reason = "Equivalent mutant: writeReviews sorts the task ids of a map, so two ids are never equal and ids[i] < ids[j] and ids[i] <= ids[j] order every pair identically. The negation (>=) is the killable one, pinned by TestReviewSectionSameLengthOrder (same-length t-2/t-3 must render t-2 first)."
+  accepted_in = "solo-task-review"

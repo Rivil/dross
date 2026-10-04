@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Rivil/dross/internal/review"
 )
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -187,5 +189,192 @@ func TestTrackedRecordRefused(t *testing.T) {
 	}
 	if e, err := LoadExecute(dir); err != nil || e != nil {
 		t.Errorf("untracked, absent execute = %+v, %v", e, err)
+	}
+}
+
+func sampleReview() Review {
+	return Review{Kind: review.KindTask, Phase: "p", Task: "t-3", Attempt: "base-abc", Rounds: []review.Round{
+		{Outcome: review.OutcomeBlock, Spec: []review.Finding{{Criterion: "c-1", Severity: review.Blocking, Text: "S1"}},
+			Quality: []review.Finding{{Severity: review.Flag, Text: "Q1"}}},
+		{Outcome: review.OutcomePass, Tree: "tree-2", Digest: "sha256:d2"},
+	}}
+}
+
+// TestReviewRecordDecode: missing is none, damaged is an error naming the
+// file — never a zero record a gate could read as "no rounds yet".
+func TestReviewRecordDecode(t *testing.T) {
+	dir := t.TempDir()
+	if r, err := LoadReview(dir); r != nil || err != nil {
+		t.Errorf("missing review = %+v, %v; want nil, nil", r, err)
+	}
+	if q, err := LoadQuick(dir); q != nil || err != nil {
+		t.Errorf("missing quick = %+v, %v; want nil, nil", q, err)
+	}
+	if err := SaveReview(dir, sampleReview()); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveQuick(dir, Quick{Mode: "solo", Description: "fix x", Head: "h", At: at}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{ReviewFile, QuickFile} {
+		if err := os.WriteFile(Path(dir, name), []byte(`{"kind":"task","rou`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if r, err := LoadReview(dir); err == nil || r != nil || !strings.Contains(err.Error(), ".dross/gate/review.json") {
+		t.Errorf("a truncated review = %+v, %v; want an error naming .dross/gate/review.json", r, err)
+	}
+	if q, err := LoadQuick(dir); err == nil || q != nil || !strings.Contains(err.Error(), ".dross/gate/quick.json") {
+		t.Errorf("a truncated quick = %+v, %v; want an error naming .dross/gate/quick.json", q, err)
+	}
+	if err := os.WriteFile(Path(dir, QuickFile), []byte(`{"mode":"turbo"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if q, err := LoadQuick(dir); err == nil || q != nil {
+		t.Errorf("a quick with an unknown mode = %+v, %v; want an error", q, err)
+	}
+	if err := RemoveQuick(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveQuick(dir); err != nil {
+		t.Errorf("removing an absent quick: %v", err)
+	}
+}
+
+func TestReviewEmptyTreeRejected(t *testing.T) {
+	dir := t.TempDir()
+	r := sampleReview()
+	r.Rounds[1].Tree = " "
+	if err := SaveReview(dir, r); err == nil {
+		t.Fatal("a pass round with no tree was saved")
+	}
+	if err := os.MkdirAll(filepath.Dir(Path(dir, ReviewFile)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(Path(dir, ReviewFile), []byte(`{"kind":"task","attempt":"a","rounds":[{"outcome":"pass"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := LoadReview(dir); err == nil || got != nil {
+		t.Fatalf("a pass with no tree on disk = %+v, %v; want an error", got, err)
+	}
+	for _, bad := range []Review{{Kind: "x", Attempt: "a"}, {Kind: review.KindQuick}} {
+		if err := SaveReview(dir, bad); err == nil {
+			t.Errorf("SaveReview(%+v) succeeded", bad)
+		}
+	}
+}
+
+func TestReviewRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	want := sampleReview()
+	if err := SaveReview(dir, want); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(Path(dir, ReviewFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"spec"`) || !strings.Contains(string(b), `"quality"`) {
+		t.Fatalf("spec and quality findings are not kept apart on disk:\n%s", b)
+	}
+	got, err := LoadReview(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Rounds) != 2 || got.Rounds[0].Spec[0].Text != "S1" || got.Rounds[0].Quality[0].Text != "Q1" ||
+		got.Rounds[1].Tree != "tree-2" || got.Attempt != "base-abc" || got.Task != "t-3" {
+		t.Fatalf("review round trip = %+v", got)
+	}
+}
+
+// TestReviewConcurrentWrites: the ledger is written while hooks read it.
+func TestReviewConcurrentWrites(t *testing.T) {
+	dir := t.TempDir()
+	var wg sync.WaitGroup
+	errs := make(chan error, 1000)
+	for w := 0; w < 6; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := 0; i < 30; i++ {
+				r := sampleReview()
+				r.Attempt = strings.Repeat(string(rune('a'+w)), 100+i)
+				if err := SaveReview(dir, r); err != nil {
+					errs <- err
+				}
+			}
+		}(w)
+	}
+	for k := 0; k < 4; k++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 30; i++ {
+				r, err := LoadReview(dir)
+				if err != nil {
+					errs <- err
+					continue
+				}
+				if r != nil && (len(r.Attempt) < 100 || len(r.Rounds) != 2) {
+					errs <- os.ErrInvalid
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("a reader saw a partial review record: %v", err)
+	}
+}
+
+func TestTrackedReviewRecordsRefused(t *testing.T) {
+	dir := repo(t)
+	if err := SaveReview(dir, sampleReview()); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveQuick(dir, Quick{Mode: "solo", Description: "x", Head: "h", At: at}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", "-f", ".dross/gate/review.json", ".dross/gate/quick.json")
+	if r, err := LoadReview(dir); err == nil || r != nil || !strings.Contains(err.Error(), "tracked") {
+		t.Errorf("tracked review = %+v, %v; want a refusal", r, err)
+	}
+	if q, err := LoadQuick(dir); err == nil || q != nil || !strings.Contains(err.Error(), "tracked") {
+		t.Errorf("tracked quick = %+v, %v; want a refusal", q, err)
+	}
+}
+
+func TestSaveContext(t *testing.T) {
+	dir := repo(t)
+	body := []byte("dross-review-context sha256:abc\n\nbody\n")
+	if err := SaveContext(dir, body); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(Path(dir, ContextFile))
+	if err != nil || string(b) != string(body) {
+		t.Fatalf("context file = %q, %v", b, err)
+	}
+	if st := git(t, dir, "status", "--porcelain"); strings.Contains(st, "review-context") {
+		t.Fatalf("the context file shows in git status:\n%s", st)
+	}
+}
+
+func TestReviewPendingRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	r := sampleReview()
+	r.Pending = []Launch{{AgentID: "a1", Digest: "sha256:d", Tree: "t1"}}
+	if err := SaveReview(dir, r); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadReview(dir)
+	if err != nil || len(got.Pending) != 1 || got.Pending[0] != r.Pending[0] {
+		t.Fatalf("pending launches did not round-trip: %+v, %v", got, err)
+	}
+	for _, bad := range []Launch{{Digest: "d", Tree: "t"}, {AgentID: "a", Tree: "t"}, {AgentID: "a", Digest: "d"}} {
+		r.Pending = []Launch{bad}
+		if err := SaveReview(dir, r); err == nil {
+			t.Errorf("a pending launch %+v was accepted", bad)
+		}
 	}
 }

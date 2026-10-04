@@ -235,7 +235,11 @@ func Ship() *cobra.Command {
 				body = string(b)
 			}
 			if body == "" {
-				body = ship.BuildPRBody(spec, vrf)
+				rec, err := changes.Load(changes.FilePath(root, phaseID), phaseID)
+				if err != nil {
+					return fmt.Errorf("load changes.json: %w", err)
+				}
+				body = ship.BuildPRBody(spec, vrf, rec.Reviews)
 			}
 
 			if printBody {

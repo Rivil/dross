@@ -27,6 +27,7 @@ import (
 	"github.com/Rivil/dross/internal/pincheck"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/review"
 	"github.com/Rivil/dross/internal/state"
 	"github.com/Rivil/dross/internal/testlane"
 )
@@ -277,6 +278,11 @@ func Doctor() *cobra.Command {
 					hookWarnings++
 				}
 			}
+
+			// --- Reviewer ---
+			revSec := reviewerSection(repoDir)
+			printSections([]diag.Section{revSec})
+			issues += diag.Issues([]diag.Section{revSec})
 
 			// --- Phase work on main ---
 			//
@@ -1170,6 +1176,27 @@ func hooksSection(repoDir string) diag.Section {
 			add(diag.Issue, "%s sets \"disableAllHooks\": true — Claude Code runs no hooks in this repo, so every dross gate is off here though the user-level file wires them. Fix: remove the key", rel)
 		}
 	}
+	return sec
+}
+
+// reviewerSection reports the solo task reviewer definition: installed where
+// Claude Code reads user agents and byte-identical to the one this dross
+// ships. Missing, stale (a linked source edited past the binary included) or
+// shadowed by a repo-level definition is an issue — every solo begin refuses
+// in that state — naming the path and the fix.
+func reviewerSection(repoDir string) diag.Section {
+	sec := diag.Section{Heading: "Reviewer:"}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		sec.Lines = append(sec.Lines, diag.Line{Level: diag.Issue, Text: fmt.Sprintf("cannot resolve home to find the solo reviewer: %v", err)})
+		return sec
+	}
+	r := reviewerStatusIn(userAgentsDir(home), repoDir)
+	if r.State == reviewerOK {
+		sec.Lines = append(sec.Lines, diag.Line{Level: diag.OK, Text: fmt.Sprintf("solo reviewer %s is installed and current", review.ReviewerAgent)})
+		return sec
+	}
+	sec.Lines = append(sec.Lines, diag.Line{Level: diag.Issue, Text: fmt.Sprintf("%s — solo runs refuse to begin. Fix: %s", r.Problem(), r.Remedy())})
 	return sec
 }
 

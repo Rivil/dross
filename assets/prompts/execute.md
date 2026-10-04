@@ -31,6 +31,8 @@ Run a phase plan to completion. **Pair-mode by default**: propose, pause, steer,
    ```
    In pair mode the pair-approval gate then refuses `Edit`/`Write` outside `.dross/` until the user approves the task in progress (§1c). The mode is chosen here and nowhere else: while a task is in progress the gate refuses a switch to `--solo`.
 
+   A `--solo` begin refuses unless the solo task reviewer (§1f) is installed and current — it names the problem and the fix. **Stop and ask the user to run `dross install`** (or remove the repo-level definition it names); never start a solo run without the reviewer, since every task would fail its review.
+
 Print one orientation block:
 ```
 Executing phase <id> (<title>)
@@ -240,7 +242,12 @@ Three outcomes:
 - `mark failed` — set status to `failed`, advance (later tasks that don't depend on this one keep going)
 - `abort phase` — stop the loop entirely; current state is preserved
 
-**Red, solo mode** → try one bounded fix (max one Edit pass). If still red, mark `failed` and continue.
+**Red, solo mode** → try one bounded fix (max one Edit pass). If still red, set the task's code aside **first**, then mark it failed and continue — a failed task is never committed, and `failed` refuses in a solo run while code is uncommitted:
+```
+git stash push -u -- . ':(exclude).dross'
+dross task status <phase> <task-id> failed --reason "<the failing test, one line>"
+dross task next <phase>
+```
 
 **No test command configured** → warn once at the start of the phase: "no `runtime.test_command` set, skipping per-task test gate. /dross-verify will catch unverified work later." Don't repeat the warning per task.
 
@@ -251,6 +258,31 @@ The commit gate admits a code commit only when a **full** green `dross test` was
 dross test
 ```
 Read its exit status the same way as in §1e; only **0** lets you commit. If anything outside `.dross/` changed since a green run, run it again. A refused `git commit` is a hard stop, never something to route around.
+
+**Solo review (`--solo` only).** In solo mode no human approves the task, so a cold reviewer does — after the full green run, before the commit. In **pair mode skip this entirely**: the human is the gate. A task that changed only `.dross/` (no code) also skips it: a `.dross/`-only commit is ungated.
+
+1. Build the review context:
+   ```
+   dross review context
+   ```
+   It prints the reviewer's `subagent_type` and a `prompt:` line. It never prints the diff — don't paste it either.
+2. Spawn the reviewer with the Agent tool: `subagent_type: "dross-task-reviewer"`, and the printed prompt line **verbatim** as the whole prompt. Add nothing to it — the reviewer sees only the context, and a widened prompt makes the review unavailable. It may run in the background (an interactive session runs every subagent there): **wait for its completion notice** before reading the status — its verdict reaches dross only when it finishes.
+3. Read where it stands:
+   ```
+   dross review status
+   ```
+   - `pass` → commit (below).
+   - `blocked` → **one fix round**, never more: address every blocking finding it lists, re-run `dross test` (bare), then `dross review context` and the reviewer again, and re-read `dross review status`. A second block exhausts the review.
+   - `pass-stale` → the tree moved after the review: re-run `dross test`, `dross review context` and the reviewer.
+   - `exhausted` or `unavailable`, **or the spawn itself errored** (unknown agent, API failure, interrupt — the recorder never sees an errored call, so status still reads `none`) → the task fails. Set its code aside first, then mark it:
+     ```
+     git stash push -u -- . ':(exclude).dross'
+     dross task status <phase> <task-id> failed
+     dross task next <phase>
+     ```
+     For a spawn error add `--reason "<the error>"` to the `failed` line; otherwise the reason comes from the review record. The loop moves on to the next independent task.
+
+The commit gate checks this too: in a solo run it refuses a code commit unless a passing review was recorded for exactly the tree being committed.
 
 Atomic commit, one task per commit. Use specific files, never `git add -A`:
 ```

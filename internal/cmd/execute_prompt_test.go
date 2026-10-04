@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/gate"
+	"github.com/Rivil/dross/internal/review"
 )
 
 // executePromptContent loads assets/prompts/execute.md and normalises it
@@ -250,5 +251,124 @@ func TestExecutePromptLaneCommitRunsFullSuite(t *testing.T) {
 	test := bareDrossTestRE.FindStringIndex(f)
 	if add < 0 || test == nil || test[0] > add {
 		t.Errorf("§1f must run a bare `dross test` before `git add <task.files>` (test at %v, add at %d)", test, add)
+	}
+}
+
+// soloReview is execute.md §1f, and the solo review block inside it.
+func soloReview(t *testing.T) (string, string) {
+	t.Helper()
+	f := sectionOf(promptBody(t, "execute.md"), "### 1f.", "### ")
+	if f == "" {
+		t.Fatal("execute.md has no §1f section")
+	}
+	i := strings.Index(f, "**Solo review (`--solo` only).**")
+	j := strings.Index(f, "The commit gate checks this too")
+	if i < 0 || j < i {
+		t.Fatal("§1f has no solo review block")
+	}
+	return f, f[i:j]
+}
+
+func mustIdx(t *testing.T, s, sub string) int {
+	t.Helper()
+	i := strings.Index(s, sub)
+	if i < 0 {
+		t.Fatalf("missing %q", sub)
+	}
+	return i
+}
+
+// TestExecuteSoloReviewPlacement (c-1): in a solo run the reviewer runs after
+// the full green `dross test` and before the commit; pair mode spawns none.
+func TestExecuteSoloReviewPlacement(t *testing.T) {
+	f, block := soloReview(t)
+	test := bareDrossTestRE.FindStringIndex(f)
+	if test == nil {
+		t.Fatal("§1f lost its bare `dross test`")
+	}
+	ctx, spawn, status, add := mustIdx(t, f, "dross review context"), mustIdx(t, f, `subagent_type: "`+review.ReviewerAgent+`"`), mustIdx(t, f, "dross review status"), mustIdx(t, f, "git add <task.files>")
+	if !(test[0] < ctx && ctx < spawn && spawn < status && status < add) {
+		t.Errorf("solo review order: dross test %d, review context %d, spawn %d, review status %d, git add %d — want that order", test[0], ctx, spawn, status, add)
+	}
+	if !strings.Contains(block, "In **pair mode skip this entirely**: the human is the gate.") {
+		t.Error("the solo review block no longer says pair mode skips it")
+	}
+	c := sectionOf(promptBody(t, "execute.md"), "### 1c.", "### ")
+	if strings.Contains(c, "dross review") || strings.Contains(c, review.ReviewerAgent) {
+		t.Error("§1c (the pair approval step) spawns or prepares the reviewer")
+	}
+}
+
+// TestExecuteReviewerSpawnForeground: the spawn carries the reviewer's exact
+// name and the printed line as the whole prompt. Since review_pass_signal's
+// amendment a background spawn records through its SubagentStop, so the step
+// no longer demands a foreground spawn — it waits for the reviewer to finish.
+func TestExecuteReviewerSpawnForeground(t *testing.T) {
+	_, block := soloReview(t)
+	var spawn string
+	for _, para := range strings.Split(block, "\n") {
+		if strings.Contains(para, "subagent_type:") {
+			spawn = para
+		}
+	}
+	for _, want := range []string{`subagent_type: "` + review.ReviewerAgent + `"`, "**verbatim** as the whole prompt", "Add nothing to it", "**wait for its completion notice**"} {
+		if !strings.Contains(spawn, want) {
+			t.Errorf("the spawn step lost %q:\n%s", want, spawn)
+		}
+	}
+}
+
+// TestExecuteReviewFailurePath (c-3): one fix round, re-tested before the
+// re-review; a still-failing review sets the code aside before marking the
+// task failed, and the loop moves on.
+func TestExecuteReviewFailurePath(t *testing.T) {
+	_, block := soloReview(t)
+	blocked := block[mustIdx(t, block, "- `blocked`"):mustIdx(t, block, "- `pass-stale`")]
+	if !strings.Contains(blocked, "**one fix round**, never more") {
+		t.Error("the blocked branch no longer caps the fix round at one")
+	}
+	if mustIdx(t, blocked, "re-run `dross test`") > mustIdx(t, blocked, "dross review context") {
+		t.Error("the fix round re-reviews before re-running `dross test`")
+	}
+	fail := block[mustIdx(t, block, "- `exhausted` or `unavailable`"):]
+	stash, failed, next := mustIdx(t, fail, "git stash push -u -- . ':(exclude).dross'"), mustIdx(t, fail, "dross task status <phase> <task-id> failed"), mustIdx(t, fail, "dross task next <phase>")
+	if !(stash < failed && failed < next) {
+		t.Errorf("failure path order: stash %d, failed %d, task next %d — want stash, then failed, then next", stash, failed, next)
+	}
+}
+
+// TestExecuteReviewSpawnError (review_unavailable): an errored spawn records
+// nothing, so the prompt itself must route it to a failed task.
+func TestExecuteReviewSpawnError(t *testing.T) {
+	_, block := soloReview(t)
+	fail := block[mustIdx(t, block, "- `exhausted` or `unavailable`"):]
+	for _, want := range []string{"**or the spawn itself errored**", `--reason "<the error>"`} {
+		if !strings.Contains(fail, want) {
+			t.Errorf("the failure path lost %q", want)
+		}
+	}
+}
+
+func TestExecuteNoCodeSkipsReview(t *testing.T) {
+	_, block := soloReview(t)
+	if !strings.Contains(block, "A task that changed only `.dross/` (no code) also skips it") {
+		t.Error("the solo review block no longer skips .dross/-only tasks")
+	}
+}
+
+// TestExecuteSoloRedStashes: the red-test solo path must stash before
+// marking failed — `failed` refuses while a solo task's code is uncommitted.
+func TestExecuteSoloRedStashes(t *testing.T) {
+	e := sectionOf(promptBody(t, "execute.md"), "### 1e.", "### ")
+	red := e[mustIdx(t, e, "**Red, solo mode**"):]
+	if mustIdx(t, red, "git stash push -u -- . ':(exclude).dross'") > mustIdx(t, red, "dross task status <phase> <task-id> failed") {
+		t.Error("§1e's solo red path marks failed before stashing")
+	}
+}
+
+func TestExecutePromptSoloBeginNeedsReviewer(t *testing.T) {
+	pre := sectionOf(promptBody(t, "execute.md"), "## 0. Pre-flight", "## 1.")
+	if !strings.Contains(pre, "A `--solo` begin refuses unless the solo task reviewer") || !strings.Contains(pre, "`dross install`") {
+		t.Error("§0 no longer routes a refused solo begin to `dross install`")
 	}
 }

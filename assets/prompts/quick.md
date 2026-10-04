@@ -27,6 +27,15 @@ Use when:
 6. Parse `$ARGUMENTS`:
    - Strip a leading/trailing `--solo` flag → **solo mode** (autonomous, no approval gate). Default without it is **pair mode**.
    - The remainder is the freeform task description. If it's empty, ask for one and stop until the user provides it — quick can't operate without intent. (In solo mode an empty description is a hard stop, not a prompt — there's no one to answer.)
+7. Record the quick for the tool gates — its mode and its description, which is the solo reviewer's only spec source:
+   ```
+   dross quick begin "<description>"
+   ```
+   or, only in solo mode:
+   ```
+   dross quick begin --solo "<description>"
+   ```
+   A solo begin refuses unless the solo task reviewer is installed and current — **stop and ask the user to run `dross install`**. From here on, every way this run ends runs `dross quick end`: after the commit (§5), and on every abort path below, always **after** discarding the working changes.
 
 Print one orientation block:
 ```
@@ -62,7 +71,7 @@ In one block, 3-6 lines covering:
 - `proceed` — write the code as proposed
 - `steer` — user gives free-form direction; revise the proposal
 - `show me <X>` — user requests more context; treat as steer
-- `abort` — stop without writing anything
+- `abort` — stop without writing anything, then `dross quick end`
 
 Never write code without an explicit `proceed` in pair mode — that's the contract. These gates mirror `/dross-execute`'s shape — the §1c approval (proceed/steer/show/abort) and the §4 red-test gate below the §1e fix/abort — adapted to a single task with no task-loop `skip`/`mark failed`.
 
@@ -110,11 +119,28 @@ Three outcomes:
 
 **Red, pair mode** → surface the failure tail (last 30-40 lines). Ask via `AskUserQuestion`:
 - `fix here` — address inline, re-run
-- `abort` — discard the working changes (`git checkout -- <files>` for tracked, `rm` for newly-written files), state stays untouched
+- `abort` — discard the working changes (`git checkout -- <files>` for tracked, `rm` for newly-written files), then `dross quick end`; state stays untouched
 
-**Red, solo mode** → try **one** bounded fix (a single Edit pass), then re-run. If still red, abort: discard the working changes (`git checkout -- <files>`, `rm` newly-written files), leave state untouched, and report the failure. No version bump on a failed solo quick. Never loop on red.
+**Red, solo mode** → try **one** bounded fix (a single Edit pass), then re-run. If still red, abort: discard the working changes (`git checkout -- <files>`, `rm` newly-written files), then `dross quick end`, leave state untouched, and report the failure. No version bump on a failed solo quick. Never loop on red.
 
 **No test command configured** → warn once. In pair mode, ask via `AskUserQuestion` (`proceed without tests` / `abort`). In solo mode, proceed without a gate and note `no test gate` in the commit body.
+
+**Solo review (`--solo` only).** In solo mode no human approves the change, so a cold reviewer checks it against the quick's stated description — after the green `dross test`, before the commit. In **pair mode skip this entirely**: the user is the checker.
+
+1. Build the review context:
+   ```
+   dross review context
+   ```
+   It prints the reviewer's `subagent_type` and a `prompt:` line, never the diff.
+2. Spawn the reviewer with the Agent tool: `subagent_type: "dross-task-reviewer"`, and the printed prompt line **verbatim** as the whole prompt — add nothing to it; the reviewer sees only the context, and a widened prompt makes the review unavailable. It may run in the background (an interactive session runs every subagent there): **wait for its completion notice** before reading the status — its verdict reaches dross only when it finishes.
+3. Read where it stands:
+   ```
+   dross review status
+   ```
+   - `pass` → commit (§5).
+   - `blocked` → **one fix round**, never more: address every blocking finding it lists, re-run `dross test`, then `dross review context` and the reviewer again, and re-read `dross review status`. A second block exhausts the review.
+   - `pass-stale` → the tree moved after the review: re-run `dross test`, `dross review context` and the reviewer.
+   - `exhausted` or `unavailable`, **or the spawn itself errored** → abort: discard the working changes (`git checkout -- <files>`, `rm` newly-written files) **first**, then `dross quick end`. Report the reviewer's findings (`dross review status` lists them). No version bump.
 
 ## 5. Commit
 
@@ -145,6 +171,11 @@ Quick: <internal-version-after-bump>
 In **solo mode**, add a `solo: yes` line to the body (below `Quick:`) so autonomous runs are auditable in history.
 
 **Match the repository's existing trailer convention.** Check recent history (`git log -1 --format=%B`): if commits carry a `Co-Authored-By` trailer, include one; if they don't, omit it. Don't introduce the trailer into a repo that doesn't already use it, and don't strip it from one that does. Do not skip hooks (`--no-verify`). If a pre-commit hook fails, treat it as a red test (step 4) — fix inline, commit fresh, never amend.
+
+In solo mode the commit gate refuses a code commit unless a passing review was recorded for exactly the tree being committed. Once the commit lands, clear the quick marker:
+```
+dross quick end
+```
 
 ## 6. Record + bump version
 

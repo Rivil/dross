@@ -214,8 +214,8 @@ var writers = []Writer{
 		Why: "host allowlist additions and quick_base; a committed copy would let a repo authorize its own API host",
 	}},
 	{File: "internal/gatestate/store.go", MachineLocal: &MachineLocal{
-		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json"}, IgnoreSeed: GateIgnoreSeed,
-		Why: "tool-gate records (green tree, execute mode, task approval); a committed copy would let a clone arrive pre-approved",
+		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json", "gate/review.json", "gate/quick.json", "gate/review-context.md"}, IgnoreSeed: GateIgnoreSeed,
+		Why: "tool-gate records (green tree, execute mode, task approval, solo review ledger, quick mode) and the review context the reviewer reads; a committed copy would let a clone arrive pre-approved or pre-reviewed",
 	}},
 
 	// ---- OutsideDross: not a .dross artifact ------------------------------
@@ -227,6 +227,7 @@ var writers = []Writer{
 	{File: "internal/cmd/hooks.go", OutsideDross: &OutsideDross{Paths: []string{userSettings}, Why: "hook wiring in the user-level Claude settings"}},
 	{File: "internal/cmd/statusline.go", OutsideDross: &OutsideDross{Paths: []string{userSettings}, Why: "statusline block in the user-level Claude settings"}},
 	{File: "internal/cmd/install.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/skills/<name>/SKILL.md", "~/.claude/dross/prompts/<name>.md"}, Why: "embedded skills and prompts re-linked into ~/.claude"}},
+	{File: "internal/cmd/reviewer_agent.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/agents/dross-<name>.md"}, Why: "embedded agent definitions (the solo task reviewer) installed where Claude Code reads user agents — $CLAUDE_CONFIG_DIR/agents when set"}},
 	{File: "internal/defaults/defaults.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/dross/defaults.toml"}, Why: "user-level defaults under ~/.claude/dross"}},
 	{File: "internal/telemetry/telemetry.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/dross/telemetry.jsonl"}, Why: "append-only user-level telemetry log; never under a repo"}},
 	{File: "internal/update/update.go", OutsideDross: &OutsideDross{Paths: []string{"<bin>/dross"}, Why: "the verified release binary, swapped in beside the running one"}},

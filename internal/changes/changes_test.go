@@ -802,3 +802,109 @@ func TestDecodeRoundTripsBaseAndPR(t *testing.T) {
 		t.Errorf("a record with no tasks decoded to %+v, %v; want an empty task map", empty, err)
 	}
 }
+
+// reviewFixture is a changes.json with every field a phase record carries
+// except reviews — the shape every record written before reviews existed has.
+const reviewFixture = `{
+  "phase": "p",
+  "pr": 7,
+  "base": "milestone/v1.7",
+  "base_commit": "abc123",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "a.go"
+      ],
+      "commit": "def456",
+      "completed_at": "2026-10-04T08:00:00Z"
+    }
+  }
+}`
+
+func TestReviewsOmitEmpty(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "changes.json")
+	if err := os.WriteFile(path, []byte(reviewFixture), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(path)
+	if string(b) != reviewFixture {
+		t.Fatalf("a record without reviews changed across Load→Save:\n%s", b)
+	}
+}
+
+func sampleReview() TaskReview {
+	return TaskReview{Outcome: "pass", Rounds: 2, Findings: []ReviewFinding{
+		{Round: 1, Kind: "spec", Severity: "BLOCKING", Criterion: "c-1", Text: "pair skip untested", Resolution: "fixed in the fix round"},
+		{Round: 1, Kind: "quality", Severity: "FLAG", Text: "long func", Resolution: "non-blocking, left"},
+	}}
+}
+
+func TestReviewsSeparateFromTasks(t *testing.T) {
+	c := New("p")
+	c.SetReview("t-3", sampleReview())
+	if _, ok := c.Tasks["t-3"]; ok {
+		t.Fatal("SetReview created a TaskRecord: a failed task's files would reach verify's mutation scope")
+	}
+	c.Record("t-3", []string{"a.go"}, "abc", "", nil)
+	if got, ok := c.Reviews["t-3"]; !ok || !reflect.DeepEqual(got, sampleReview()) {
+		t.Fatalf("Record dropped or changed the review: %+v", c.Reviews)
+	}
+}
+
+func TestSetReviewPreservesRecord(t *testing.T) {
+	root := t.TempDir()
+	if err := SetReview(root, "p", "t-2", sampleReview()); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := Load(FilePath(root, "p"), "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh.Phase != "p" || len(fresh.Tasks) != 0 || len(fresh.Reviews) != 1 ||
+		fresh.PR != 0 || fresh.Base != "" || fresh.BaseCommit != "" || fresh.Status != "" {
+		t.Fatalf("SetReview on a missing record wrote more than phase + reviews: %+v", fresh)
+	}
+
+	path := FilePath(root, "q")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(strings.Replace(reviewFixture, `"phase": "p"`, `"phase": "q"`, 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetReview(root, "q", "t-2", sampleReview()); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path, "q")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.PR != 7 || c.Base != "milestone/v1.7" || c.BaseCommit != "abc123" || c.Status != "shipped" || c.Tasks["t-1"].Commit != "def456" {
+		t.Fatalf("SetReview clobbered the record: %+v", c)
+	}
+}
+
+func TestReviewsRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "changes.json")
+	c := New("p")
+	c.SetReview("t-4", sampleReview())
+	c.SetReview("t-5", TaskReview{Outcome: "unavailable", Rounds: 1, Cause: "verdict did not parse"})
+	if err := c.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Reviews, c.Reviews) {
+		t.Fatalf("reviews did not round-trip:\n got %+v\nwant %+v", got.Reviews, c.Reviews)
+	}
+}

@@ -101,12 +101,13 @@ func gateCheck() *cobra.Command {
 	}
 }
 
-// gateRecord is the PostToolUse hook. It never blocks: whatever happens, it
-// exits 0, and a recorder that could not record is a warning.
+// gateRecord is the PostToolUse and SubagentStop hook. It never blocks:
+// whatever happens, it exits 0, and a recorder that could not record is a
+// warning. SubagentStop carries a background solo reviewer's verdict.
 func gateRecord() *cobra.Command {
 	return &cobra.Command{
 		Use:           "record",
-		Short:         "PostToolUse hook: record what the finished tool call on stdin established",
+		Short:         "PostToolUse/SubagentStop hook: record what the finished tool call or subagent on stdin established",
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,

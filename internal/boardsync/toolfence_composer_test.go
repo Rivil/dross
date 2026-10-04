@@ -92,7 +92,7 @@ func TestNoComposerRendersARecordedField(t *testing.T) {
 	// canary is declared so the assertion below fails if one ever takes Tests.
 
 	bodies := map[string]string{
-		"BuildPRBody":     ship.BuildPRBody(spec, v),
+		"BuildPRBody":     ship.BuildPRBody(spec, v, nil),
 		"renderPhaseBody": RenderPhaseBody("p", spec, plan),
 		"milestoneBody":   MilestoneBody("v1.7", "- something holds\n"),
 		"RenderTaskBody":  RenderTaskBody("p", "DRO-1", plan.Task[0]),

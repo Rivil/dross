@@ -2163,3 +2163,24 @@ func TestShipRecoverFetchFailureOutputGoesToStderr(t *testing.T) {
 		t.Errorf("stderr = %q, want git's own output there", stderr.String())
 	}
 }
+
+// TestShipPrintBodyShowsReviews (solo-task-review c-6): the body ship opens
+// the PR with carries what the solo reviewer flagged, read from changes.json.
+func TestShipPrintBodyShowsReviews(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	if err := changes.SetReview(filepath.Join(dir, ".dross"), "x", "t-1", changes.TaskReview{
+		Outcome: "pass", Rounds: 2, Findings: []changes.ReviewFinding{
+			{Round: 1, Kind: "spec", Severity: "BLOCKING", Criterion: "c-1", Text: "REVIEWER-SAW-THIS", Resolution: "fixed in the fix round"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship(), "--print-body"); err != nil {
+			t.Errorf("ship --print-body: %v", err)
+		}
+	})
+	if !strings.Contains(out, "## Reviewer findings") || !strings.Contains(out, "REVIEWER-SAW-THIS") {
+		t.Fatalf("--print-body omits the reviewer findings:\n%s", out)
+	}
+}

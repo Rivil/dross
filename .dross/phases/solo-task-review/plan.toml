@@ -1,0 +1,274 @@
+task_seq = 25
+
+[phase]
+  id = "solo-task-review"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Capture real Agent PostToolUse payloads"
+  files = ["internal/gate/testdata/agent_reviewer_post.json", "internal/gate/testdata/agent_background_post.json", "internal/gate/fixture_test.go"]
+  description = "Go/no-go capture in a scratch repo via headless `claude -p` (subscription OAuth, never --bare): a scratch reviewer agent (omitClaudeMd, tools Read),\na project CLAUDE.md canary token and a temporary stdin-dump PostToolUse hook in the scratch repo's .claude/settings.local.json (never ~/.claude). The\nreviewer answers yes/no probes (project canary token; a distinctive phrase from ~/.claude/CLAUDE.md; one from auto-memory) — it never quotes its\ninstructions. Before committing, grep the fixtures for every non-trivial line of ~/.claude/CLAUDE.md (count must be 0). Capture one foreground and one\nbackground spawn. STOP before t-7 and t-10 if no final text, no subagent_type, or any probe answers yes."
+  covers = ["c-1", "c-5"]
+  test_contract = ["if the reviewer fixture stops being a real capture (session_id, transcript_path, toolu_ id) with tool_name Agent or Task, tool_input.subagent_type dross-task-reviewer, and exactly one dross-verdict fence readable from tool_response alone, TestCapturedAgentReviewerFixture fails", "if the captured reviewer reply answers yes to the project-canary, user-CLAUDE.md or auto-memory probe, or quotes the canary token, TestCapturedReviewerIsolation fails (omitClaudeMd not honoured; re-decide reviewer_isolation)", "if the background fixture's tool_response carries a dross-verdict fence, TestCapturedBackgroundAgentFixture fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Parse reviewer verdicts and track fix rounds"
+  files = ["internal/review/verdict.go", "internal/review/verdict_test.go", "internal/review/ledger.go", "internal/review/ledger_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
+  description = "ReviewerAgent = \"dross-task-reviewer\". ParseVerdict reads one ```dross-verdict JSON fence {verdict, spec[], quality[] (severity BLOCKING|FLAG|NOTE)};\nspec findings always block; pass is derived and cross-checked against the stated verdict. Ledger Round{tree, digest, outcome pass|block|unavailable|stale,\nfindings, cause}; State(); Resolve() labels every finding."
+  covers = ["c-2", "c-3", "c-6"]
+  test_contract = ["parse table: zero fences, two fences, malformed JSON, unknown severity, a spec finding with no criterion, an empty finding text → each errors; \"pass\" carrying a quality BLOCKING, or \"block\" carrying only FLAG/NOTE → an error naming the inconsistency, never a pass — TestParseVerdict", "if a spec finding tagged FLAG or NOTE stays non-blocking, or a \"pass\" carrying it parses as a pass, TestSpecFindingsAlwaysBlock fails (c-2)", "if ParseVerdict returns spec and quality findings in one list instead of separate Spec and Quality fields, TestFindingsKeepKind fails (c-2 \"reports … separately\")", "if quality FLAG/NOTE start blocking, TestQualityGrades fails: \"pass\" with one FLAG and one NOTE is a pass that keeps both (quality_blocking)", "ledger table: [] none; [pass T1] pass(T1); [block] blocked; [block, pass T2] pass(T2); [block, block] exhausted; [pass T1, block, block] exhausted; [block, stale, block] exhausted; [block, block, pass] exhausted; [unavailable, pass] unavailable — any drift fails TestLedgerState (c-3)", "if Resolve mislabels, TestResolve fails: [block{B1,F1}, pass{N1}] → B1 \"fixed in the fix round\", F1 and N1 \"non-blocking, left\"; [block{B1}, block{B2}] → B2 \"unresolved — task failed\"", "an unfiled json-tagged string field in internal/review fails TestEveryPathShapedFieldIsDeclared", "if a spec finding citing criterion \"description\" (a solo quick's only spec source) is rejected as criterion-less, or one citing \"description\" is accepted in a task-scope parse, TestQuickSpecFindingCitesDescription fails"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Build the review context from the whole diff"
+  files = ["internal/treefp/treefp.go", "internal/treefp/treefp_test.go", "internal/review/context.go", "internal/review/context_test.go"]
+  description = "treefp gains Base (HEAD minus .dross/; empty tree if unborn), a config-independent Patch (`git diff-tree -p --no-color --no-ext-diff --no-textconv\n--no-renames`) and Dirty. review.BuildContext renders the task record (no status), covered criteria only, the phase's locked decisions + hard rules\n(or a quick's description), then the patch; secret paths named, content withheld."
+  covers = ["c-1", "c-5", "c-8"]
+  test_contract = ["if a staged, unstaged or untracked-unignored file, or an edit to a file no task declares, is missing from the patch, or an ignored file or any .dross/ path appears, TestPatchWholeDiff fails (review_input)", "if BuildContext's tree differs from treefp.WorkingTree() on the same repo, TestContextTreeMatchesWorkingTree fails (the pass would vouch for a tree the gate never compares)", "if color.ui=always, diff.external=<marker script>, a .gitattributes textconv driver, diff.noprefix=true or diff.renames=copies changes the context bytes, adds ANSI escapes or creates the marker, TestPatchConfigIndependent fails", "if an unborn HEAD does not show every file as added against the empty tree, TestPatchUnbornHead fails", "if the real index's sha256 or `git diff --cached --name-only` differs across BuildContext and Dirty in a partially staged repo, TestContextLeavesIndexAlone fails", "if a withheld path's content appears (its path must appear), TestContextWithholdsSecretPaths fails", "if an uncovered criterion's text, the task's status or an unlocked decision appears, a locked decision or hard rule is missing, or flipping the task pending→in_progress changes the digest, TestContextScope fails; a quick scope carries the description and no plan content", "if two builds on an unchanged tree differ in digest, or a one-byte edit leaves it equal, TestContextDigest fails", "if Dirty reports a .dross/-only change or misses an untracked unignored file, TestDirtyIgnoresDross fails", "if BuildContext is handed a secret-list load error (a malformed gates.toml) and renders anyway instead of erroring naming the file, TestContextMalformedGatesRefuses fails", "if internal/review imports internal/gate or internal/gatestate (gatestate stores []review.Round, so either import cycles), TestReviewImportDirection fails; secret paths reach BuildContext as a parameter", "if a quick scope's context omits the hard rules (quality_blocking grades rule violations on quicks too), TestContextScope fails"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Record a failure reason on tasks"
+  files = ["internal/phase/phase.go", "internal/cmd/task.go", "internal/cmd/task_reason_test.go", "cmd/dross/testdata/cli_tree.txt", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
+  description = "Task.Reason (toml reason,omitempty). `dross task status <p> <t> failed --reason <text>` stores it, any other status clears it, --reason with a\nnon-failed status errors, and `task show` prints it."
+  covers = ["c-3"]
+  test_contract = ["if `task status p t-2 failed --reason \"x\"` does not survive a plan.toml round-trip (newline, quotes and `]]` included), or `task show` omits it, TestTaskFailedReason fails", "if setting t-2 back to pending or in_progress keeps the reason, TestReasonClearedOnRetry fails", "if --reason with done or pending is accepted instead of erroring, TestReasonOnlyWithFailed fails", "if a status write leaves a reason-less plan with a new `reason` key, TestReasonOmitEmpty fails", "an unfiled phase.Task.Reason fails TestEveryPathShapedFieldIsDeclared; a missing `--reason` row fails TestCLITreeGolden"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 1
+  title = "Add a reviews map to the change record"
+  files = ["internal/changes/changes.go", "internal/changes/changes_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
+  description = "Changes.Reviews map[taskID]TaskReview{outcome, rounds, findings[{round, kind, severity, criterion, text, resolution}]} (json reviews,omitempty), on\nchanges' own types (importing internal/review would cycle via phase/done.go). SetReview writes only that entry; Record() never touches Reviews."
+  covers = ["c-6"]
+  test_contract = ["if a changes.json fixture without reviews changes a byte across Load→Save, TestReviewsOmitEmpty fails", "if Record(t-3, …) after SetReview(t-3) drops the review, or SetReview creates a Tasks entry (a failed task has no TaskRecord, so its files stay out of verify's mutation scope), TestReviewsSeparateFromTasks fails", "if SetReview on a missing changes.json does not create one holding only phase + reviews, or clobbers pr, base, base_commit or status on an existing one, TestSetReviewPreservesRecord fails", "if a TaskReview does not round-trip through Save/Load with kind, severity and resolution intact, TestReviewsRoundTrip fails", "an unfiled new tagged field fails TestEveryPathShapedFieldIsDeclared"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Store review, quick and context records"
+  files = ["internal/gatestate/store.go", "internal/gatestate/store_test.go", "internal/gate/override_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/gate/override.go"]
+  description = "New .dross/gate/ records: review.json {kind task|quick, phase, task, attempt, rounds []review.Round}, quick.json {mode, description, head, at} and\nreview-context.md, on the store's atomic temp+rename: missing = none, corrupt = error naming the path, git-tracked = refused unread. RemoveQuick treats\nnone as success."
+  covers = ["c-4", "c-8"]
+  depends_on = ["t-2"]
+  test_contract = ["if a truncated review.json or quick.json decodes to a zero record instead of an error naming .dross/gate/<file>, or a missing one returns anything but (nil, nil), TestReviewRecordDecode fails", "if a pass round with an empty tree is accepted, TestReviewEmptyTreeRejected fails (an empty tree matches only another empty fingerprint)", "if spec and quality findings collapse into one list on disk, TestReviewRoundTrip fails", "if N concurrent SaveReview writers and LoadReview readers ever observe a partial record, the concurrency test fails", "if a force-added review.json or quick.json is read instead of refused, TestTrackedRecordRefused fails", "if Write/Edit of .dross/gate/review.json, quick.json or review-context.md, or Bash `echo x > .dross/gate/review.json` / `cp /tmp/r .dross/gate/review-context.md`, gets past tamper-guard, the tamper table fails", "unfiled tagged fields fail TestEveryPathShapedFieldIsDeclared", "if Bash `rm .dross/gate/review.json`, `rm -f .dross/gate/quick.json`, `mv .dross/gate/review.json /tmp/x` (the record as SOURCE) or `git clean -fX .dross` gets past tamper-guard, TestReviewRecordDeleteRefused fails — review.json is the first gate record whose deletion is more lenient (it would reset the fix-round cap)"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 2
+  title = "Ship the isolated reviewer definition"
+  files = ["assets/agents/dross-task-reviewer.md", "assets/embed.go", "assets/embed_test.go", "internal/review/agentdef_test.go"]
+  description = "Frontmatter: name dross-task-reviewer, omitClaudeMd: true, tools Read/Grep/Glob, no memory, no model. Body: Read the named context file (no verdict\nif its digest differs); a covered criterion's sub-surface with no code or test is a spec finding (always blocks); grade quality BLOCKING/FLAG/NOTE;\nend with one dross-verdict fence. embed.go gains `all:agents`."
+  covers = ["c-2", "c-5", "c-7"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["if omitClaudeMd is removed or false, a `memory` key appears, a `model` other than inherit appears, `tools` is dropped (inherit-all) or gains Bash, Edit, Write, MultiEdit, NotebookEdit, Agent, Task, WebFetch or WebSearch, TestReviewerDefinitionIsolation fails (c-5)", "if the frontmatter name drifts from review.ReviewerAgent, TestReviewerNameMatchesRecorder fails", "if the body's worked example stops parsing with review.ParseVerdict into at least one spec and one quality finding, or the body stops saying spec findings always block and naming the three quality grades, TestReviewerBodyMatchesParser fails", "if the embedded assets/agents set differs from disk (a narrowed embed pattern), TestEmbedDrift fails", "if the body stops saying spec findings are judged only on the sub-surfaces the task record's description and test_contract claim for each covered criterion (a sub-surface the record does not claim — owned by a sibling task — is not a finding), TestReviewerBodyScopesSpecFindings fails (c-2 as amended)", "if the body stops limiting reads to the named context file plus repo source files — nothing else under .dross/, no CLAUDE.md, nothing under ~/.claude — TestReviewerBodyLimitsReads fails (c-5)", "if the body stops defining quality BLOCKING as exactly quality_blocking's list (correctness bug, unmet test_contract, locked-decision or rule violation) with FLAG/NOTE recorded only, or stops telling a quick review to cite criterion \"description\", TestReviewerBodyDefinesGrades fails"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 2
+  title = "Render reviewer findings in the PR body"
+  files = ["internal/ship/body.go", "internal/ship/body_test.go", "internal/cmd/ship.go", "internal/boardsync/toolfence_composer_test.go"]
+  description = "BuildPRBody(spec, v, reviews) adds \"## Reviewer findings\" before the footer: per sorted task id, its outcome and each finding's severity, kind,\ncriterion, text, resolution (one line, pipe-escaped, capped \"… N more in changes.json\"); none when empty. ship.go passes changes.Reviews; the\ncomposer canary test moves to the new signature."
+  covers = ["c-6"]
+  depends_on = ["t-5"]
+  test_contract = ["if nil or empty reviews change today's body by a byte, the existing TestBuildPRBody* tests fail", "if finding text \"x\\n## Fake\" or \"a|b\" yields a new heading line or an unescaped pipe, TestReviewSectionEscapes fails", "if 500 findings of 2 KB each produce a body over 60,000 chars, or the tail miscounts the dropped findings, TestReviewSectionCapped fails", "if two calls on the same reviews map differ, or a timestamp appears, TestReviewSectionStable fails", "if `dross ship --print-body` on a phase whose changes.json has reviews omits the section, TestShipPrintBodyShowsReviews fails"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 2
+  title = "Surface reviewer findings in verify.md"
+  files = ["assets/prompts/verify.md", "internal/cmd/verify_prompt_test.go"]
+  description = "§0 reads changes.json `reviews`. §4's report gains a \"Solo review:\" block giving each reviewed task's outcome, its findings and their resolutions\nwith unresolved ones flagged, and each failed task with its `task show` reason."
+  covers = ["c-6"]
+  depends_on = ["t-4", "t-5"]
+  test_contract = ["if verify.md stops reading the `reviews` key, or §4's template loses the \"Solo review:\" block, a finding's resolution or a failed task's reason, TestVerifyShowsReviews fails (c-6)"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 5
+  title = "Record reviewer verdicts from PostToolUse"
+  files = ["internal/gate/review.go", "internal/gate/review_test.go"]
+  description = "Recorder claims Agent/Task calls for review.ReviewerAgent under t-19's ArmedScope, regenerates the context, compares digests: pass/block bound to its\ntree, stale (digest mismatch, no context line), unavailable (parse failure, widened prompt). Background or unarmed: records nothing."
+  covers = ["c-1", "c-2", "c-3", "c-4", "c-5", "c-8"]
+  depends_on = ["t-1", "t-2", "t-3", "t-6", "t-13", "t-19"]
+  test_contract = ["from t-1's captured envelope carrying a pass verdict and a matching context line, in a solo-armed fixture repo, the recorder appends a pass round whose tree equals treefp.WorkingTree; subagent_type general-purpose, fork or absent, or tool_name Bash, writes nothing — TestRecorderClaims", "if a verdict declaring \"pass\" with one spec finding records a pass round, TestRecorderSpecBlocks fails (c-2)", "if a prompt carrying the context line plus any other text (e.g. pasted conversation) records anything but an unavailable round naming the prompt, TestRecorderRejectsWidenedPrompt fails (c-5)", "if a file edited after `dross review context` and before the verdict, or a prompt with no context line, yields anything but a stale round plus a warning naming `dross review context`, TestRecorderStaleContext fails", "if an unparseable reply records anything but an unavailable round naming the parse error, or a later pass for the same attempt reads as pass, TestRecorderUnavailableSticky fails (review_unavailable)", "if t-1's background fixture writes review.json or emits other than one warning, TestRecorderBackgroundLaunch fails", "if a reviewer run with execute.json pair or absent, no task in_progress, or HEAD off phase/<id> writes review.json, TestRecorderPairSilent fails (c-1)", "if any non-test file outside internal/gate calls gatestate.SaveReview, TestReviewRecordSingleWriter fails; the same test asserts Bash `dross gate record` fed a forged reviewer payload stays refused by gate-off-guard (review_pass_signal)", "if either tool name \"Agent\" or \"Task\" stops being claimed, TestRecorderToolRename fails", "if the digest the recorder regenerates differs from the one `dross review context` printed for the same armed scope (including with a secret path added via gates.toml), TestContextDigestParity fails", "if a prompt equal to the context line apart from leading/trailing whitespace is treated as widened, or any interior addition is not, TestRecorderPromptExactness fails"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 3
+  title = "Install the reviewer and check readiness"
+  files = ["internal/cmd/install.go", "internal/cmd/reviewer_agent.go", "internal/cmd/install_agent_test.go", "internal/cmd/cmd_test.go"]
+  description = "agentsDir() = $CLAUDE_CONFIG_DIR/agents else ~/.claude/agents: copy or symlink there, prune dropped dross-*.md, never touch others; chdir() seeds a\ncurrent reviewer. ReviewerStatus (shared by doctor and solo begin) → ok / missing (incl. dangling link) / stale (bytes through any link ≠ embedded) /\nshadowed (repo .claude/agents copy)."
+  covers = ["c-7"]
+  depends_on = ["t-7"]
+  test_contract = ["if copy mode leaves other than the embedded bytes, link mode other than a symlink to <src>/agents/dross-task-reviewer.md, or a mode switch leaves the old form, TestInstallReviewer fails", "if a second install changes the definition's bytes, TestInstallReviewerIdempotent fails", "if install with CLAUDE_CONFIG_DIR=X writes under $HOME/.claude/agents, or ReviewerStatus reads a different dir than install wrote, TestReviewerDirAgreement fails", "if a foreign agents/my-agent.md changes bytes or mtime, or a stale agents/dross-old.md survives, TestInstallAgentPrune fails", "status table: absent → missing; dangling symlink → missing; one byte changed → stale; repo .claude/agents/dross-task-reviewer.md → shadowed naming that file; fresh install → ok — TestReviewerStatus", "if the cmd test helper chdir() stops seeding a current reviewer, TestChdirSeedsReviewer fails: after chdir(), ReviewerStatus == ok", "if the internal/cmd TestMain stops pinning CLAUDE_CONFIG_DIR to a temp dir, TestInstallNeverTouchesRealAgentsDir fails (a machine that sets it would get test agents installed)"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 3
+  title = "Attach reviews and guard failed-task marking"
+  files = ["internal/cmd/changes.go", "internal/cmd/task.go", "internal/cmd/review_attach.go", "internal/cmd/review_attach_test.go"]
+  description = "`changes record <p> <t>` and `task status <p> <t> failed` copy review.json's rounds for (p, t), resolved by review.Resolve, into changes.Reviews;\nnever review content from a flag. Without --reason, `failed` derives the reason from an exhausted or unavailable record. In a solo run, `failed`\nrefuses while treefp.Dirty reports code changes, naming the stash command."
+  covers = ["c-3", "c-6"]
+  depends_on = ["t-2", "t-3", "t-4", "t-5", "t-6"]
+  test_contract = ["with review.json [block, pass] for (p, t-3), `changes record p t-3 --files a.go --commit abc` writes reviews.t-3 outcome pass, rounds 2, B1 \"fixed in the fix round\", FLAGs \"non-blocking, left\"; a record for t-2, another phase, or a quick record attaches nothing — TestChangesRecordAttachesReview", "if a pair-mode task's changes.json gains a \"reviews\" key, TestPairRecordHasNoReview fails", "if `task status p t-3 failed` (no --reason) over an exhausted record does not set the derived reason and attach \"unresolved — task failed\", over an unavailable record does not name the cause, or with --reason \"x\" does not keep \"x\", TestFailedReasonFromReview fails", "if `failed` succeeds in a solo run while a.go is modified or an untracked b.go exists, or refuses when only .dross/ is dirty or the run is pair, TestSoloFailedRequiresStash fails", "if a corrupt review.json makes `changes record` exit non-zero or skip the task record, TestAttachErrorWarns fails", "if `changes record` or `task status` gains a flag carrying review content, TestNoReviewFlags fails"]
+  status = "done"
+
+[[task]]
+  id = "t-13"
+  wave = 4
+  title = "Add the dross review context and status verbs"
+  files = ["internal/cmd/review.go", "internal/cmd/review_test.go", "cmd/dross/main.go", "cmd/dross/testdata/cli_tree.txt"]
+  description = "`dross review context` writes .dross/gate/review-context.md for the ArmedScope (secret paths withheld) and prints only the path, digest, subagent_type\nand exact prompt line — never the diff; refuses when unarmed or with an empty code diff. `dross review status` is read-only: the scope's ledger State()\nand whether a pass stands for the current WorkingTree."
+  covers = ["c-1", "c-3", "c-5", "c-8"]
+  depends_on = ["t-2", "t-3", "t-6", "t-19"]
+  test_contract = ["if the printed digest differs from review.BuildContext's digest for t-19's ArmedScope on the same tree (including with a secret path added via gates.toml), TestContextVerbDigest fails", "if stdout carries any line of the diff, TestContextVerbPrintsNoDiff fails", "if pair mode, no task in_progress, or a .dross/-only diff writes a context file instead of erroring (pair naming \"the human is the gate\"), TestContextVerbRefuses fails", "if `review context` changes the index, state.json or plan.toml bytes, or `review status` changes any byte under .dross/, TestReviewVerbsNoSideEffects fails (no verb records a pass: review_pass_signal)", "if `review status` reports passing for an exhausted ledger ([block, block, pass]) or for a pass whose tree has since changed, TestReviewStatusAgreesWithLedger fails", "if cli_tree.txt stops listing `review context` and `review status`, TestCLITreeGolden fails", "if `review context` with a malformed gates.toml writes a context file instead of refusing naming the file, TestContextVerbRefuses fails"]
+  status = "done"
+
+[[task]]
+  id = "t-14"
+  wave = 4
+  title = "Add quick begin/end and solo readiness"
+  files = ["internal/cmd/quick.go", "internal/cmd/execute.go", "internal/cmd/solo_begin_test.go", "cmd/dross/main.go", "cmd/dross/testdata/cli_tree.txt"]
+  description = "`dross quick begin [--solo] <description>` writes quick.json {mode, description, head, at}; `dross quick end` removes it. `quick begin --solo` and\n`execute begin --solo` refuse unless ReviewerStatus is ok, naming the status and `dross install`. `execute begin` (either mode) removes quick.json."
+  covers = ["c-1", "c-8"]
+  depends_on = ["t-6", "t-11"]
+  test_contract = ["if `quick begin --solo \"fix x\"` records other than mode solo, the description verbatim and the current HEAD, or `quick begin \"x\"` records other than mode pair, or an empty or whitespace-only description is accepted, TestQuickBegin fails", "if `execute begin p --solo` or `quick begin --solo x` succeeds with the reviewer missing, stale or shadowed, or the error omits `dross install` (shadowed: the repo file), TestSoloBeginNeedsReviewer fails; pair begins succeed regardless", "if `execute begin p` leaves an earlier quick.json in place, or `quick end` with none errors, TestQuickMarkerLifetime fails", "if `quick begin` or `quick end` changes the sha256 of state.json or any plan.toml, TestQuickNoClobber fails", "the existing TestExecuteBeginRecordsMode / TestExecuteBeginLeavesStateAlone pass unedited; if cli_tree.txt stops listing `quick begin --solo` and `quick end`, TestCLITreeGolden fails"]
+  status = "done"
+
+[[task]]
+  id = "t-15"
+  wave = 4
+  title = "Report the reviewer in dross doctor"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_reviewer_test.go", "internal/cmd/testdata/cli_surface/doctor_run.txt", "internal/cmd/doctor_hooks_test.go"]
+  description = "A Reviewer section renders ReviewerStatus: ✓ for ok, or a ✗ issue (non-zero exit) for missing, stale or shadowed, each naming the path and the fix:\n`dross install`, `make install` for a link-mode dev checkout (r-01), or the repo file to remove when shadowed."
+  covers = ["c-7"]
+  depends_on = ["t-11"]
+  test_contract = ["if doctor exits 0 with the definition deleted, one byte changed, a dangling symlink, a link to a source file edited past the binary, or a repo .claude/agents/dross-task-reviewer.md, TestDoctorReviewer fails; each line names the path and the fix", "if doctor reads $HOME/.claude/agents while CLAUDE_CONFIG_DIR points elsewhere, TestDoctorReviewerDir fails", "if a fresh install is not exit 0 with ✓, or doctor_run.txt stops pinning the section, the golden fails"]
+  status = "done"
+
+[[task]]
+  id = "t-16"
+  wave = 6
+  title = "Run the reviewer in solo execute"
+  files = ["assets/prompts/execute.md", "internal/cmd/execute_prompt_test.go"]
+  description = "§0: refused `execute begin --solo` → ask for `dross install`. §1f solo, after green `dross test`: `dross review context`, FOREGROUND spawn with the\nprinted line, branch on `dross review status`: pass → commit; blocked → one fix round; still blocked/unavailable, or the spawn errored → `git stash push -u -- . ':(exclude).dross'`,\n`task status … failed` (--reason only for a spawn error), `task next`. Pair: none."
+  covers = ["c-1", "c-2", "c-3", "c-6"]
+  depends_on = ["t-10", "t-12", "t-13", "t-14"]
+  test_contract = ["if `dross review context`, the dross-task-reviewer spawn and the `dross review status` read stop appearing after §1f's bare `dross test` and before `git commit` in the solo branch, or appear in the pair branch or §1c, TestExecuteSoloReviewPlacement fails (c-1)", "if the spawn's subagent_type differs from review.ReviewerAgent, the prompt is not the printed line verbatim, or the spawn paragraph permits run_in_background, TestExecuteReviewerSpawnForeground fails", "if the fix round may run more than once, skips re-running `dross test` before the re-review, the failed path marks failed before stashing, the stash pathspec does not exclude .dross, or the loop stops instead of `dross task next`, TestExecuteReviewFailurePath fails (c-3)", "if the solo red-test path marks failed without stashing first, TestExecuteSoloRedStashes fails", "TestPromptCommitsSatisfyGreenGate must still match §1f; TestNoPromptTellsAgentToLiftGate stays green", "if a reviewer spawn that errors (unknown agent, API failure, interrupt — PostToolUse never fires, so `review status` reads none) does not lead to stash → `dross task status … failed --reason <the spawn error>` → `dross task next`, TestExecuteReviewSpawnError fails (review_unavailable)", "if a solo task whose diff is .dross/-only (no code) still runs `dross review context` instead of committing ungated, TestExecuteNoCodeSkipsReview fails"]
+  status = "done"
+
+[[task]]
+  id = "t-17"
+  wave = 9
+  title = "Review solo quicks; wait for background reviewers"
+  files = ["assets/prompts/quick.md", "internal/cmd/quick_prompt_test.go", "assets/prompts/execute.md", "internal/cmd/execute_prompt_test.go"]
+  description = "quick.md §0 runs `dross quick begin \"<description>\"` (+ --solo in solo mode) before §3. Solo §4→§5: after green `dross test`, review context → spawn the reviewer\n→ wait for its verdict → review status, one fix round; still blocked/unavailable/spawn error → discard, `dross quick end`, report findings, no bump. Every abort path\nruns `dross quick end`. Pair mode spawns none. Revise both prompts' spawn step: the reviewer may run in the background (interactive sessions only have that), so\nwait for its completion notice before `dross review status`; no run_in_background requirement."
+  covers = ["c-8"]
+  depends_on = ["t-10", "t-13", "t-14", "t-16", "t-23"]
+  test_contract = ["if quick.md's solo branch loses `dross review context` and the foreground dross-task-reviewer spawn between `dross test` and `git commit`, or the pair branch gains a spawn, TestQuickSoloReview fails (c-8)", "if `dross quick begin` (with --solo only on the solo branch) stops preceding §3 Implement, or an abort path (solo red, blocked review, user abort) omits `dross quick end`, TestQuickMarkerClosed fails", "if the blocked path allows a second fix round, or omits discard, `dross quick end` or no-version-bump, TestQuickSoloReviewBlocked fails", "if any solo abort path (red, blocked review, unavailable, spawn error) runs `dross quick end` before discarding the code — which t-20's downgrade guard refuses while code is dirty — TestQuickDiscardBeforeEnd fails", "if execute.md's or quick.md's spawn step requires `run_in_background: false`, or stops telling the agent to wait for the reviewer's completion notice before running `dross review status`, TestReviewerSpawnWaitsForVerdict fails (review_pass_signal as amended)"]
+  status = "done"
+
+[[task]]
+  id = "t-18"
+  wave = 10
+  title = "Gate solo commits on a recorded review"
+  files = ["internal/gate/commit.go", "internal/gate/soloreview.go", "internal/gate/soloreview_test.go", "internal/cmd/gate_override_test.go", "README.md"]
+  description = "Extract commit-green's candidate builder so both gates share it. solo-review (Workflow, Liftable): while t-19's ArmedScope is set, a code commit needs a\npass in that scope's ledger with tree == candidate; a .dross/-only commit passes. README gets a gate row. Depends on t-16/t-17 so `make install`\narms it only after the prompts teach the loop."
+  covers = ["c-3", "c-4", "c-8"]
+  depends_on = ["t-10", "t-13", "t-14", "t-16", "t-17"]
+  test_contract = ["with t-3 solo in progress: a pass for candidate T passes; no record refuses naming `dross review context` and dross-task-reviewer; a pass for T then a one-byte edit refuses \"tree changed since the review\"; blocked names the fix round; exhausted or unavailable names `dross task status <p> t-3 failed` and repeats the recorded cause; a pass for t-2 refuses — TestSoloReviewGate (c-4, c-3)", "if a .dross/-only commit while armed refuses, or pair mode, no task in_progress or HEAD off phase/<id> refuses or spawns any treefp git argv (gitrun.ArgvRecorder), TestSoloReviewSilent fails (c-4)", "quick table: solo quick at HEAD gated against its quick record; a pass from another quick attempt refuses; pair quick silent; silent once the quick's commit moves HEAD — TestSoloReviewQuick (c-8)", "if solo-review and commit-green judge `git add a.go && git commit -m x` against different candidates, TestSharedCandidate fails; the existing commit_test.go suite stays green across the extraction", "if a corrupt review.json or quick.json, an unreadable plan.toml, or a failing candidate build while armed passes instead of refusing with the error named, TestSoloReviewClosedPosture fails", "TestGateRegistryNames gains solo-review; a README gate row missing a registered workflow gate fails TestReadmeNamesEveryGate (new); TestGateRemediesResolve fails if a remedy names a verb missing from newRoot()"]
+  status = "done"
+
+[[task]]
+  id = "t-19"
+  wave = 3
+  title = "Resolve the armed review scope"
+  files = ["internal/gate/scope.go", "internal/gate/scope_test.go"]
+  description = "ArmedScope(root): solo quick at HEAD (quick.json) wins, else the solo execute task (execute.json solo, exactly one in_progress task, HEAD on phase/<id>), else nil. A scope is keyed on (phase, task) plus treefp.Base — the code base, not the HEAD commit — so a .dross/-only or --allow-empty commit never starts a fresh record. Extends pair.go's armedRun helpers; no recorder or verb yet."
+  covers = ["c-1", "c-4", "c-8"]
+  depends_on = ["t-6"]
+  test_contract = ["scope table: t-3's rounds then t-4 in_progress → fresh record; code base (treefp.Base) moved for the same task → fresh record; a .dross/-only commit or a git commit --allow-empty on the same task → SAME record; solo quick at HEAD → quick scope; quick.json pair while t-3 is solo in_progress → still t-3; two tasks in_progress → ArmedScope errors naming both — TestArmedScope", "if execute.json pair or absent, no task in_progress, or HEAD off phase/<id> yields a non-nil scope, TestArmedScopePairSilent fails (c-1, c-4)", "if a corrupt execute.json or quick.json, or an unreadable plan.toml, yields nil instead of an error naming the file, TestArmedScopeClosedPosture fails", "if two `dross quick begin --solo` calls at the same HEAD share one scope (the attempt is quick.json's `at`, so each begin is a fresh attempt), or one begin's scope changes across reads, TestQuickAttemptKey fails"]
+  status = "done"
+
+[[task]]
+  id = "t-20"
+  wave = 11
+  title = "Refuse mid-run downgrade while armed"
+  files = ["internal/gate/soloreview.go", "internal/gate/downgrade_test.go"]
+  description = "Extend the solo-review gate's Judge: while ArmedScope is set and treefp.Dirty reports code changes, refuse a non-solo `dross execute begin`, `dross quick begin` and `dross quick end`, and refuse `dross execute begin --solo` while a solo quick is armed with dirty code (it would delete quick.json and un-arm the quick). Split from t-18 per plan review."
+  covers = ["c-4", "c-8"]
+  depends_on = ["t-18"]
+  test_contract = ["downgrade table: armed + a.go dirty → `dross execute begin p`, `dross quick begin \"x\"`, `dross quick end` refuse; armed + only .dross/ dirty → pass; solo execute armed + `dross execute begin p --solo` → pass; solo quick armed + a.go dirty + `dross execute begin p --solo` → refuse naming the quick — TestSoloDowngradeGuard", "if the guard fires when nothing is armed, or spawns any treefp git argv for a non-dross Bash command (gitrun.ArgvRecorder), TestDowngradeGuardSilent fails", "while armed with dirty code: `dross task status p t-3 pending` and `dross task status p t-3 done` refuse (they would leave no task in_progress and silence the gate), and `dross quick begin --solo \"x\"` during a solo execute task refuses (a fresh quick scope would shed the task's review history) — TestSoloDisarmGuard"]
+  status = "done"
+
+[[task]]
+  id = "t-21"
+  wave = 6
+  title = "Decode SubagentStop payloads and pin captures"
+  files = ["internal/gate/payload.go", "internal/gate/fixture_test.go", "internal/gate/testdata/agent_reviewer_bg_launch_post.json", "internal/gate/testdata/reviewer_subagent_stop.json"]
+  description = "Decode accepts a SubagentStop payload (no tool_name): Event, AgentID (agent_id), AgentType (agent_type), LastMessage (last_assistant_message). Pin the 2026-10-04 headless captures of a background reviewer spawn: its PostToolUse (async_launched, tool_response.agentId, tool_input.prompt) and the same agent's SubagentStop (agent_type dross-task-reviewer, last_assistant_message carrying the dross-verdict fence), structurally checked for leaks."
+  covers = ["c-1", "c-5"]
+  depends_on = ["t-10"]
+  test_contract = ["if Decode rejects a SubagentStop payload for lacking tool_name, or drops agent_id, agent_type or last_assistant_message, TestDecodeSubagentStop fails; a payload with neither tool_name nor a SubagentStop event still errors", "if the background launch fixture stops carrying tool_response.status async_launched with an agentId equal to the stop fixture's agent_id, or the stop fixture stops carrying agent_type dross-task-reviewer and exactly one dross-verdict fence in last_assistant_message, TestCapturedReviewerSubagentStop fails", "if either new fixture carries the scratch CLAUDE.md canary or answers yes to an isolation probe, TestCapturedReviewerIsolation (extended to the stop fixture) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-22"
+  wave = 7
+  title = "Record pending launches and SubagentStop verdicts"
+  files = ["internal/gate/review.go", "internal/gate/review_test.go", "internal/gatestate/store.go", "internal/gatestate/store_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
+  description = "A background reviewer launch (PostToolUse async_launched) is judged like a foreground spawn up to the verdict: widened prompt -> unavailable round, no context line or a moved tree -> stale round + warning; otherwise it records a pending launch {agent_id, digest, tree} on the scope's ledger. The reviewer agent's SubagentStop (agent_type dross-task-reviewer) for a pending agent_id turns it into a pass/block/unavailable round bound to the launch's tree; an unknown agent_id or an unarmed scope records nothing."
+  covers = ["c-1", "c-2", "c-3", "c-4", "c-5", "c-8"]
+  depends_on = ["t-21"]
+  test_contract = ["from t-21's captured launch then stop (moved into a solo-armed fixture repo, prompt set to the verb's context line), the ledger ends with one pass round bound to the launch's tree and no pending launch — TestRecorderBackgroundRoundTrip", "if a SubagentStop whose agent_id was never launched, whose agent_type is not dross-task-reviewer, or that arrives in pair mode writes a round, TestSubagentStopNeedsPendingLaunch fails", "if a background launch with a widened prompt records anything but an unavailable round, or one over a moved tree anything but a stale round plus a warning naming `dross review context`, TestBackgroundLaunchJudgedLikeForeground fails", "if a stop whose last_assistant_message does not parse records anything but an unavailable round naming the parse error, TestSubagentStopUnparseable fails", "if a pending launch with an empty agent_id or digest is accepted, or a ledger with pending launches does not round-trip, TestReviewPendingRoundTrip fails; unfiled tagged fields fail TestEveryPathShapedFieldIsDeclared"]
+  status = "done"
+
+[[task]]
+  id = "t-23"
+  wave = 8
+  title = "Wire SubagentStop into the gate hooks"
+  files = ["internal/cmd/hooks.go", "internal/cmd/hooks_test.go", "internal/cmd/gate.go", "internal/cmd/doctor_hooks_test.go"]
+  description = "userHooks gains SubagentStop -> `dross gate record` (matcher-less), so `dross hooks ensure`/install/init wire it and doctor's Hooks section reports it as a gate hook (missing = issue: solo reviews in interactive sessions cannot record a pass). `dross gate record` documents both events."
+  covers = ["c-1", "c-7"]
+  depends_on = ["t-22"]
+  test_contract = ["if `dross hooks ensure` on an empty settings.json does not wire SubagentStop -> `dross gate record` matcher-less, or a second run changes the file, TestEnsureWiresSubagentStop fails", "if doctor reports a settings.json without the SubagentStop record hook as anything but an issue naming `dross hooks ensure`, TestDoctorSubagentStopHook fails", "if `dross gate record` fed t-21's SubagentStop fixture exits non-zero or prints to stdout, TestGateRecordSubagentStopNeverBlocks fails"]
+  status = "done"
+
+[[task]]
+  id = "t-24"
+  wave = 8
+  title = "Drop the foreground hint from review status"
+  files = ["internal/cmd/review.go", "internal/cmd/review_test.go"]
+  description = "dross review status's none-state hint still says to spawn the reviewer in the foreground, which review_pass_signal's amendment made unnecessary (and interactive sessions cannot do). Say: spawn it with the printed prompt and wait for its verdict."
+  covers = ["c-1"]
+  depends_on = ["t-13", "t-22"]
+  test_contract = ["if `dross review status` with no ledger tells the agent to spawn in the foreground, or stops naming `dross review context` and waiting for the verdict, TestReviewStatusNoneHint fails"]
+  status = "done"
+
+[[task]]
+  id = "t-25"
+  wave = 9
+  title = "Kill solo-task-review mutation survivors"
+  files = ["internal/gate/review_test.go", "internal/gate/scope_test.go", "internal/gate/commit_test.go", "internal/review/context_test.go", "internal/review/verdict_test.go", "internal/ship/body_test.go"]
+  description = "Verify r-20261004-123540 left 9 real test gaps (NOT COVERED blocks) plus two switch-case arms with no test behind them: the recorder's two context-rebuild failures and a launch with no agent id, commitAt's -1, longestRun's counter, the PR body's same-length tie-break and UTF-8 clip, a spec finding's unknown severity, and a rules.toml read error. Tests only."
+  covers = ["c-1", "c-2", "c-5", "c-6"]
+  depends_on = ["t-24"]
+  test_contract = ["if a review launch whose spec.toml is missing, or whose home carries a malformed gates.toml, records anything but an unavailable round naming 'could not be rebuilt', or a background launch with no agentId anything but an unavailable round naming the agent id, TestRecorderContextRebuildFailures fails", "if commitAt on a line with no `git commit` stops returning -1, or on `git add a.go && git commit -m x` stops returning index 1, TestCommitAt fails", "if a patch containing a ``` run is fenced with fewer than four backticks, TestContextFenceOutrunsPatch fails", "if reviews for t-3 and t-2 (same length) render t-3 first, TestReviewSectionSameLengthOrder fails; if a finding text crossing the clip cap mid-rune is not cut back to the rune start (exactly 599 bytes + …), TestReviewSectionClipsAtRuneStart fails", "if a spec finding with severity MAJOR parses, or its error stops naming 'spec finding 1', TestParseVerdict's spec-severity row fails", "if a .dross/rules.toml that cannot be read (a directory) lets ContextScope succeed or the error stops naming .dross/rules.toml, TestContextScopeRulesReadError fails"]
+  status = "done"

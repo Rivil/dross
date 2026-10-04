@@ -120,6 +120,111 @@ func Diff(dir, a, b string) ([]string, error) {
 	return splitNUL(out), nil
 }
 
+// Base fingerprints HEAD's tree with .dross/ taken out — the empty tree on an
+// unborn HEAD. It is the side a review diff compares the work tree against,
+// and moves only when code (not bookkeeping) is committed.
+func Base(dir string) (string, error) {
+	s, err := open(dir)
+	if err != nil {
+		return "", err
+	}
+	defer s.close()
+	return s.base()
+}
+
+// Change is the work tree's difference from HEAD, .dross/ out on both sides.
+type Change struct {
+	// Base is HEAD's fingerprint (Base).
+	Base string
+	// Tree is the work tree's fingerprint — what WorkingTree returns.
+	Tree string
+	// Paths lists every path whose entry differs between the two.
+	Paths []string
+}
+
+// Changes takes both fingerprints in one scratch index and lists what differs.
+func Changes(dir string) (Change, error) {
+	s, err := open(dir)
+	if err != nil {
+		return Change{}, err
+	}
+	defer s.close()
+	if _, err := s.git(s.dir, "add", "-A"); err != nil {
+		return Change{}, err
+	}
+	tree, err := s.tree()
+	if err != nil {
+		return Change{}, err
+	}
+	base, err := s.base()
+	if err != nil {
+		return Change{}, err
+	}
+	c := Change{Base: base, Tree: tree}
+	if base != tree {
+		if c.Paths, err = Diff(dir, base, tree); err != nil {
+			return Change{}, err
+		}
+	}
+	return c, nil
+}
+
+// Dirty reports whether the work tree differs from HEAD outside .dross/:
+// whether there is code a commit would record.
+func Dirty(dir string) (bool, error) {
+	c, err := Changes(dir)
+	if err != nil {
+		return false, err
+	}
+	return c.Base != c.Tree, nil
+}
+
+// patchArgs pin every knob a repository's config could turn on a patch: no
+// colour, no external diff driver, no textconv filter, no rename pairing,
+// standard a/ b/ prefixes, three lines of context, quoted non-ASCII paths. Two
+// machines — or the review verb and its recorder — render the same bytes.
+var patchArgs = []string{
+	"-c", "core.quotePath=true",
+	"diff-tree", "-p", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames",
+	"--src-prefix=a/", "--dst-prefix=b/", "-U3",
+}
+
+// Patch renders the diff between c.Base and c.Tree, leaving out the content
+// of each path in exclude (matched literally, from the top of the tree).
+func Patch(dir string, c Change, exclude []string) (string, error) {
+	if c.Base == "" || c.Tree == "" {
+		return "", fmt.Errorf("treefp: patch needs two fingerprints, got %q and %q", c.Base, c.Tree)
+	}
+	if c.Base == c.Tree {
+		return "", nil
+	}
+	args := append(append([]string{}, patchArgs...), "--end-of-options", c.Base, c.Tree)
+	if len(exclude) > 0 {
+		args = append(args, "--")
+		for _, p := range exclude {
+			args = append(args, ":(top,exclude,literal)"+p)
+		}
+	}
+	out, err := gitrun.RawWith(gitrun.Options{Timeout: Timeout}, dir, args...)
+	if err != nil {
+		return "", fmt.Errorf("git diff-tree -p: %w", err)
+	}
+	return out, nil
+}
+
+// base loads HEAD (or nothing, on an unborn HEAD) into the scratch index and
+// writes it, .dross/ out.
+func (s *scratch) base() (string, error) {
+	args := []string{"read-tree", "HEAD"}
+	if s.unborn {
+		args = []string{"read-tree", "--empty"}
+	}
+	if _, err := s.git(s.dir, args...); err != nil {
+		return "", err
+	}
+	return s.tree()
+}
+
 // scratch is a copy of one repository's real index.
 type scratch struct {
 	dir    string // where the candidate is taken

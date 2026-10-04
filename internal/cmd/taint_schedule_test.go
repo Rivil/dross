@@ -24,14 +24,22 @@ import (
 // live tree, the live path scan and every corpus: byte-identical findings and
 // exact origins.)
 
-// taintAnalysisBudget is ~25% over the ~5,760 analyses the live exec scan
-// makes with every marker ignored, over 2,537 functions.
-const taintAnalysisBudget = 7200
+// taintAnalysisBudgetPerFunc bounds the analyses the live exec scan may make
+// with every marker ignored, per function in the program. A worklist
+// re-analyses a function only when one of its inputs grew; the live tree
+// measured ~2.27 analyses per function at 2,537 functions and 2.41 at 2,998
+// (2026-10-04), so a fixed count fell behind the tree's growth. Whole-program
+// rounds need at least three passes, so a ratio under 3 tells a worklist from
+// rounds at any size.
+const taintAnalysisBudgetPerFunc = 2.75
 
-func taintAnalysisBudgetErr(n int) error {
-	if n > taintAnalysisBudget {
-		return fmt.Errorf("the live exec scan made %d function analyses, over its budget of %d — "+
-			"the scheduler is re-analysing functions whose inputs did not grow", n, taintAnalysisBudget)
+// taintAnalysisBudget is the analysis budget for a program of funcs functions.
+func taintAnalysisBudget(funcs int) int { return int(taintAnalysisBudgetPerFunc * float64(funcs)) }
+
+func taintAnalysisBudgetErr(n, funcs int) error {
+	if budget := taintAnalysisBudget(funcs); n > budget {
+		return fmt.Errorf("the live exec scan made %d function analyses, over its budget of %d (%.2f per function over %d) — "+
+			"the scheduler is re-analysing functions whose inputs did not grow", n, budget, taintAnalysisBudgetPerFunc, funcs)
 	}
 	return nil
 }
@@ -49,21 +57,22 @@ func TestWorklistReachesTheFixpoint(t *testing.T) {
 		t.Error("re-analysing every function after the worklist emptied grew a summary, shared state or a finding — " +
 			"a dependency is missing from the scheduler, and it stopped before the fixpoint")
 	}
-	if err := taintAnalysisBudgetErr(st.Analyses); err != nil {
+	if err := taintAnalysisBudgetErr(st.Analyses, st.Funcs); err != nil {
 		t.Error(err)
 	}
 	// A scheduler back on whole-program rounds needs at least three passes
 	// here (the live tree took 14); the budget must not admit three.
-	if taintAnalysisBudget >= 3*st.Funcs {
+	if taintAnalysisBudget(st.Funcs) >= 3*st.Funcs {
 		t.Errorf("the budget (%d) admits three whole-program passes over %d functions — it cannot tell a worklist from rounds",
-			taintAnalysisBudget, st.Funcs)
+			taintAnalysisBudget(st.Funcs), st.Funcs)
 	}
 	t.Logf("worklist: %d analyses over %d functions, %d findings", st.Analyses, st.Funcs, len(fs))
 }
 
 // TestTaintAnalysisBudget: the budget passes at its value and fails one over.
 func TestTaintAnalysisBudget(t *testing.T) {
-	if taintAnalysisBudgetErr(taintAnalysisBudget) != nil || taintAnalysisBudgetErr(taintAnalysisBudget+1) == nil {
+	const funcs = 3000
+	if taintAnalysisBudgetErr(taintAnalysisBudget(funcs), funcs) != nil || taintAnalysisBudgetErr(taintAnalysisBudget(funcs)+1, funcs) == nil {
 		t.Error("the budget must pass at its value and fail one over")
 	}
 }
