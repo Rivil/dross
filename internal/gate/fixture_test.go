@@ -217,3 +217,80 @@ func TestCapturedDefaultAgentIsAsync(t *testing.T) {
 		t.Fatal("a default spawn's tool_response carries a verdict: omitting run_in_background may be foreground again — revisit the prompts' explicit false")
 	}
 }
+
+// TestDecodeSubagentStop: a SubagentStop names no tool — it names the finished
+// agent — and Decode must keep it rather than reject it as unreadable.
+func TestDecodeSubagentStop(t *testing.T) {
+	p, err := Decode([]byte(`{"hook_event_name":"SubagentStop","agent_id":"a1","agent_type":"dross-task-reviewer","last_assistant_message":"done"}`))
+	if err != nil {
+		t.Fatalf("Decode(SubagentStop) = %v", err)
+	}
+	if p.Event != EventSubagentStop || p.AgentID != "a1" || p.AgentType != "dross-task-reviewer" || p.LastMessage != "done" {
+		t.Fatalf("decoded %+v", p)
+	}
+	if _, err := Decode([]byte(`{"hook_event_name":"Stop"}`)); err == nil {
+		t.Fatal("a payload with neither tool_name nor a SubagentStop event decoded")
+	}
+}
+
+// TestCapturedReviewerSubagentStop pins the background path the solo-review
+// recorder rests on (review_pass_signal as amended 2026-10-04): a background
+// spawn's PostToolUse is a launch acknowledgement carrying the agent's id and
+// the prompt; the same agent's SubagentStop carries its final reply — the
+// verdict. Both captured byte for byte from a headless `claude -p` run.
+func TestCapturedReviewerSubagentStop(t *testing.T) {
+	launch, resp := loadCapture(t, "agent_reviewer_bg_launch_post.json")
+	if resp["status"] != "async_launched" {
+		t.Fatalf("launch status = %v, want async_launched", resp["status"])
+	}
+	agentID, _ := resp["agentId"].(string)
+	if agentID == "" || launch.Field("prompt") == "" {
+		t.Fatal("the launch acknowledgement lacks the agentId or the prompt the recorder binds a pending review to")
+	}
+
+	b, err := os.ReadFile(filepath.Join("testdata", "reviewer_subagent_stop.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop, err := Decode(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(b, &top); err != nil {
+		t.Fatal(err)
+	}
+	if str(top, "session_id") == "" || str(top, "agent_transcript_path") == "" {
+		t.Error("the stop fixture lacks the envelope a real capture carries")
+	}
+	if stop.Event != EventSubagentStop || stop.AgentType != "dross-task-reviewer" {
+		t.Fatalf("stop fixture is %q/%q", stop.Event, stop.AgentType)
+	}
+	if stop.AgentID != agentID {
+		t.Fatalf("stop agent_id %q != launch agentId %q: the two events cannot be joined", stop.AgentID, agentID)
+	}
+	if n := strings.Count(stop.LastMessage, "```dross-verdict"); n != 1 {
+		t.Fatalf("last_assistant_message carries %d dross-verdict fences, want 1", n)
+	}
+}
+
+// TestCapturedStopIsolation extends the omitClaudeMd canary to the background
+// capture: the reviewer that ran in the background saw no CLAUDE.md either.
+func TestCapturedStopIsolation(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("testdata", "reviewer_subagent_stop.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop, err := Decode(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, probe := range []string{"probe-instructions", "probe-canary", "probe-memory"} {
+		if !strings.Contains(stop.LastMessage, probe+": no") {
+			t.Errorf("background reviewer does not answer %s: no", probe)
+		}
+	}
+	if strings.Contains(string(b), "CANARY-7f3a9c41") {
+		t.Error("the stop capture carries the scratch CLAUDE.md canary")
+	}
+}

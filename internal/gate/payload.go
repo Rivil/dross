@@ -26,12 +26,22 @@ type Payload struct {
 	// Response is tool_response, undecoded: only PostToolUse carries it, and
 	// its shape is the tool's own.
 	Response json.RawMessage
+	// AgentID, AgentType and LastMessage are a SubagentStop's: the finished
+	// subagent's id (the agentId its PostToolUse launch reported), its
+	// subagent_type, and its final reply. A SubagentStop names no tool.
+	AgentID     string
+	AgentType   string
+	LastMessage string
 }
 
+// EventSubagentStop is the hook event a finished subagent fires.
+const EventSubagentStop = "SubagentStop"
+
 // Decode reads a hook payload. Anything that is not a JSON object naming a
-// tool is an error the caller turns into a warning, never a block: refusing
-// on an unreadable payload would stop every tool call the day Claude Code
-// changes its hook schema.
+// tool — or a SubagentStop, which names the finished agent instead — is an
+// error the caller turns into a warning, never a block: refusing on an
+// unreadable payload would stop every tool call the day Claude Code changes
+// its hook schema.
 func Decode(b []byte) (Payload, error) {
 	var top map[string]json.RawMessage
 	if err := json.Unmarshal(b, &top); err != nil {
@@ -41,13 +51,16 @@ func Decode(b []byte) (Payload, error) {
 		return Payload{}, errors.New("unparseable hook payload: not a JSON object")
 	}
 	p := Payload{
-		Event:     str(top, "hook_event_name"),
-		SessionID: str(top, "session_id"),
-		ToolName:  str(top, "tool_name"),
-		Cwd:       str(top, "cwd"),
-		Response:  top["tool_response"],
+		Event:       str(top, "hook_event_name"),
+		SessionID:   str(top, "session_id"),
+		ToolName:    str(top, "tool_name"),
+		Cwd:         str(top, "cwd"),
+		Response:    top["tool_response"],
+		AgentID:     str(top, "agent_id"),
+		AgentType:   str(top, "agent_type"),
+		LastMessage: str(top, "last_assistant_message"),
 	}
-	if p.ToolName == "" {
+	if p.ToolName == "" && p.Event != EventSubagentStop {
 		return Payload{}, errors.New("hook payload names no tool_name")
 	}
 	if raw, ok := top["tool_input"]; ok {
