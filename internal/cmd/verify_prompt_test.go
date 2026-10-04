@@ -405,3 +405,30 @@ func TestReadmeDocumentsVerifyScope(t *testing.T) {
 		t.Error("README.md has no row for `dross verify scope <phase>`")
 	}
 }
+
+// TestVerifyShowsReviews (solo-task-review c-6): /dross-verify reads the
+// reviewer's per-task record from changes.json and reports it — outcome,
+// findings, resolutions — with failed tasks and their reasons.
+func TestVerifyShowsReviews(t *testing.T) {
+	prompt := verifyPromptBody(t)
+	pre := prompt[strings.Index(prompt, "## 0. Pre-flight"):strings.Index(prompt, "## 1. ")]
+	if !strings.Contains(pre, "Keep its `reviews` key for §4") {
+		t.Error("verify.md §0 no longer reads changes.json's `reviews`")
+	}
+	if !strings.Contains(pre, "dross task show <id> <task-id>") {
+		t.Error("verify.md §0 no longer collects failed tasks' reasons")
+	}
+	report := prompt[strings.Index(prompt, "## 4. Surface to user"):strings.Index(prompt, "## 5. Wrap")]
+	for _, want := range []string{
+		"Solo review:",
+		"— fixed in the fix round",
+		"— non-blocking, left",
+		"— unresolved — task failed",
+		"failed: t-5 — <reason from `dross task show`>",
+		"Mark every unresolved finding and every failed task",
+	} {
+		if !strings.Contains(report, want) {
+			t.Errorf("verify.md §4 report lost %q", want)
+		}
+	}
+}
