@@ -538,9 +538,43 @@ func TestSummaryCounts(t *testing.T) {
 	}
 }
 
-// TestSaveTOMLAtomicFailurePreservesFile forces the temp write to fail (by
-// occupying <path>.tmp with a directory) and asserts the live file survives
-// byte-identical — the guarantee the old truncate-in-place os.Create lacked.
+// TestSpecSaveAtomicFailurePreservesFile keeps saveTOML — still the writer
+// behind Spec.Save, for spec.toml and deferred.toml — honest: with its fixed
+// <path>.tmp occupied by a directory the save fails and the live file is
+// untouched.
+func TestSpecSaveAtomicFailurePreservesFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "spec.toml")
+	original := &Spec{Criteria: []Criterion{{ID: "c-1", Text: "one"}}}
+	original.Phase.ID = "orig"
+	if err := original.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path+".tmp", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	changed := &Spec{Criteria: []Criterion{{ID: "c-9", Text: "nine"}}}
+	changed.Phase.ID = "changed"
+	if err := changed.Save(path); err == nil {
+		t.Fatal("expected Spec.Save to fail when <path>.tmp is unavailable")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("live spec was mutated on a failed save:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+// TestSaveTOMLAtomicFailurePreservesFile forces the temp write to fail (a
+// read-only phase dir, so no temp file can be created beside plan.toml) and
+// asserts the live file survives byte-identical — the guarantee the old
+// truncate-in-place os.Create lacked.
 func TestSaveTOMLAtomicFailurePreservesFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "plan.toml")
@@ -554,14 +588,25 @@ func TestSaveTOMLAtomicFailurePreservesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Occupy the temp path with a directory so os.Create(<path>.tmp) fails.
-	if err := os.Mkdir(path+".tmp", 0o755); err != nil {
+	// Plan.Save writes through the lossless door, which stages its bytes in a
+	// randomly named temp file beside the target — so a fixed <path>.tmp no
+	// longer blocks it. A read-only phase dir does: the temp file cannot be
+	// created, and the save must fail with the live file untouched.
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
 	changed := &Plan{Phase: PlanPhase{ID: "changed"}, Task: []Task{{ID: "t-9", Wave: 9, Title: "nine"}}}
-	if err := changed.Save(path); err == nil {
-		t.Fatal("expected Save to fail when the temp path is unavailable")
+	err = changed.Save(path)
+	if err == nil {
+		t.Fatal("expected Save to fail when the temp file cannot be created")
+	}
+	if !strings.Contains(err.Error(), "create") {
+		t.Errorf("err = %v, want the temp-file creation named as the failure", err)
 	}
 
 	after, err := os.ReadFile(path)

@@ -24,6 +24,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/Rivil/dross/internal/pathfence"
+	"github.com/Rivil/dross/internal/project"
 )
 
 // RefusedSegment is where an id that would escape its parent directory
@@ -508,7 +509,12 @@ func LoadPlan(path string) (*Plan, error) {
 	return &p, nil
 }
 
-func (p *Plan) Save(path string) error { return saveTOML(path, p) }
+func (p *Plan) Save(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return project.SaveTOML(path, p, project.ArrayKey{Path: "task", Field: "id"})
+}
 
 // saveTOML writes v as TOML to path atomically: it encodes into a temp sibling
 // (<path>.tmp) and os.Rename's it over the target only after a fully successful

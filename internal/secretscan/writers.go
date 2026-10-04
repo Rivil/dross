@@ -179,10 +179,10 @@ var writers = []Writer{
 	{File: "internal/changes/changes.go", UnderDross: &UnderDross{Artifacts: []string{"phases/<id>/changes.json"}}},
 	{File: "internal/milestone/milestone.go", UnderDross: &UnderDross{Artifacts: []string{"milestones/<v>.toml"}}},
 	// deferred.toml is Spec-shaped and saved through Spec.Save.
-	{File: "internal/phase/phase.go", UnderDross: &UnderDross{Artifacts: []string{"phases/<id>/spec.toml", "phases/<id>/plan.toml", "deferred.toml"}}},
+	{File: "internal/phase/phase.go", UnderDross: &UnderDross{Artifacts: []string{"phases/<id>/spec.toml", "deferred.toml"}}},
 	// project.go holds the lossless TOML door's one write verb (writeAtomic),
 	// so every store saved through project.SaveTOML is written from here.
-	{File: "internal/project/project.go", UnderDross: &UnderDross{Artifacts: []string{"project.toml", "survivors.toml"}}},
+	{File: "internal/project/project.go", UnderDross: &UnderDross{Artifacts: []string{"project.toml", "survivors.toml", "phases/<id>/plan.toml"}}},
 	{File: "internal/profile/profile.go", UnderDross: &UnderDross{Artifacts: []string{"profile.toml"}}},
 	{File: "internal/rules/rules.go", UnderDross: &UnderDross{Artifacts: []string{"rules.toml"}}},
 	{File: "internal/verify/verify.go", UnderDross: &UnderDross{Artifacts: []string{"phases/<id>/tests.json", "phases/<id>/verify.toml"}}},
