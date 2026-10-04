@@ -56,7 +56,7 @@ func issuePhase() *cobra.Command {
 		Use:   "phase",
 		Short: "Mirror a phase onto the board",
 	}
-	c.AddCommand(issuePhaseSync())
+	c.AddCommand(issuePhaseSync(), issuePhaseFinalize())
 	return c
 }
 

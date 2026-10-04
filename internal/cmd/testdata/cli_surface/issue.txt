@@ -33,6 +33,10 @@ command: issue milestone sync
 command: issue phase
   use: phase
   short: Mirror a phase onto the board
+command: issue phase finalize
+  use: finalize <phase-id>
+  short: Close a completed phase's board cards: tasks at task-complete, the phase at complete
+  flag: --base (string) default="" usage="the branch the phase was merged into, when it records none (a phase completed with --base)"
 command: issue phase sync
   use: sync <phase-id>
   short: Create or update the board issue for a phase (idempotent)
