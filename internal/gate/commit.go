@@ -127,14 +127,7 @@ func interactiveAdd(args []string) bool {
 
 func judgeCommit(c *Call) (*Refusal, error) {
 	s := c.Script()
-	at := -1
-	var g shellscan.GitCall
-	for i, cmd := range s.Commands {
-		if gc, ok := isCommit(cmd); ok {
-			at, g = i, gc
-			break
-		}
-	}
+	at, g := commitAt(s)
 	// Whose commit is it? Outside a dross repo, or in one that can never
 	// record a green, the gate has nothing to say — decided before anything
 	// else, so neither case ever spawns git.
@@ -148,10 +141,34 @@ func judgeCommit(c *Call) (*Refusal, error) {
 			return nil, err
 		}
 	}
+	snap, ref, err := commitCandidate(s, at, g)
+	if ref != nil || err != nil || onlyDross(snap.Changed) {
+		return ref, err
+	}
+	return judgeGreen(g, snap)
+}
+
+// commitAt finds the line's `git commit`: its index among the line's commands
+// and its git call, or -1.
+func commitAt(s shellscan.Script) (int, shellscan.GitCall) {
+	for i, cmd := range s.Commands {
+		if gc, ok := isCommit(cmd); ok {
+			return i, gc
+		}
+	}
+	return -1, shellscan.GitCall{}
+}
+
+// commitCandidate is the one reading of what a claimed line's `git commit`
+// would record — the real index plus the `git add`s chained ahead of it (and
+// -a) — shared by every gate that judges a commit, so no two of them can
+// disagree about the tree. A line it cannot predict is a refusal.
+func commitCandidate(s shellscan.Script, at int, g shellscan.GitCall) (treefp.Snapshot, *Refusal, error) {
 	if s.Partial || at < 0 {
-		return NewRefusal(
+		r, err := NewRefusal(
 			fmt.Sprintf("this line runs `git commit`, but its shell could not be read (%s), so what it would commit is unknown", s.Problem),
 			"fix the quoting so the line parses, then retry")
+		return treefp.Snapshot{}, r, err
 	}
 	var adds []treefp.Add
 	for _, cmd := range s.Commands[:at] {
@@ -162,35 +179,32 @@ func judgeCommit(c *Call) (*Refusal, error) {
 		switch {
 		case isGit && pg.Sub == "add":
 			if interactiveAdd(pg.Args) {
-				return NewRefusal("`git add -p`/`-i`/`-e` stages hunks the gate cannot predict", stagePlainly)
+				r, err := NewRefusal("`git add -p`/`-i`/`-e` stages hunks the gate cannot predict", stagePlainly)
+				return treefp.Snapshot{}, r, err
 			}
 			adds = append(adds, treefp.Add{Dir: pg.Dir, Args: pg.Args})
 		case cmd.Name() == "cd" || cmd.Name() == "pushd":
 		default:
-			return NewRefusal(
+			r, err := NewRefusal(
 				fmt.Sprintf("`%s` runs ahead of `git commit` in the same line, so the tree the commit records cannot be predicted", cmd.Name()),
 				"run the other commands in their own call first; chain only `git add` and `cd` ahead of `git commit`")
+			return treefp.Snapshot{}, r, err
 		}
 	}
-	return judgeCandidate(g, adds)
-}
-
-// judgeCandidate compares what the commit would record with the last green.
-func judgeCandidate(g shellscan.GitCall, adds []treefp.Add) (*Refusal, error) {
 	all, unjudgeable := commitShape(g.Args)
 	if unjudgeable {
-		return NewRefusal("this `git commit` records something other than the staged index, which the gate cannot fingerprint", stagePlainly)
+		r, err := NewRefusal("this `git commit` records something other than the staged index, which the gate cannot fingerprint", stagePlainly)
+		return treefp.Snapshot{}, r, err
 	}
+	snap, err := treefp.Candidate(g.Dir, adds, all)
+	return snap, nil, err
+}
+
+// judgeGreen compares what the commit would record with the last green.
+func judgeGreen(g shellscan.GitCall, snap treefp.Snapshot) (*Refusal, error) {
 	root, err := LocateRoot(g.Dir)
 	if err != nil {
 		return nil, err
-	}
-	snap, err := treefp.Candidate(g.Dir, adds, all)
-	if err != nil {
-		return nil, err
-	}
-	if onlyDross(snap.Changed) {
-		return nil, nil
 	}
 	green, err := gatestate.LoadGreen(root)
 	if err != nil {
