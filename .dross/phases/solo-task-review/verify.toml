@@ -1,0 +1,163 @@
+[verify]
+  phase = "solo-task-review"
+  generated_at = 2026-10-04T14:39:44.260676Z
+  verdict = "pending"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9277297721916732
+  mutants_killed = 1181
+  mutants_survived = 92
+  mutants_not_covered = 92
+  mutants_no_block = 79
+  mutants_test_gap = 13
+  mutants_in_scope = 1273
+  unclassified_in_scope = 25
+  criteria_total = 8
+  criteria_covered = 0
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 1181
+    survived = 92
+    timeout = 0
+    in_scope = 1273
+    score = 0.9277297721916732
+    file_count = 73
+    measured_on = "helicon"
+    whole_file = ["assets/embed.go — adapter-lacks-range-runner", "assets/embed_test.go — adapter-lacks-range-runner", "cmd/dross/main.go — adapter-lacks-range-runner", "internal/boardsync/backlog.go — adapter-lacks-range-runner", "internal/boardsync/backlog_reconcile_test.go — adapter-lacks-range-runner", "internal/boardsync/reap.go — adapter-lacks-range-runner", "internal/boardsync/reap_classify_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_discover.go — adapter-lacks-range-runner", "internal/boardsync/reap_discover_test.go — adapter-lacks-range-runner", "internal/boardsync/toolfence_composer_test.go — adapter-lacks-range-runner", "internal/changes/changes.go — adapter-lacks-range-runner", "internal/changes/changes_test.go — adapter-lacks-range-runner", "internal/cmd/changes.go — adapter-lacks-range-runner", "internal/cmd/cmd_test.go — adapter-lacks-range-runner", "internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/doctor_hooks_test.go — adapter-lacks-range-runner", "internal/cmd/doctor_reviewer_test.go — adapter-lacks-range-runner", "internal/cmd/execute.go — adapter-lacks-range-runner", "internal/cmd/execute_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/gate.go — adapter-lacks-range-runner", "internal/cmd/gate_override_test.go — adapter-lacks-range-runner", "internal/cmd/gate_test.go — adapter-lacks-range-runner", "internal/cmd/hermetic_env_test.go — adapter-lacks-range-runner", "internal/cmd/hooks.go — adapter-lacks-range-runner", "internal/cmd/hooks_test.go — adapter-lacks-range-runner", "internal/cmd/install.go — adapter-lacks-range-runner", "internal/cmd/install_agent_test.go — adapter-lacks-range-runner", "internal/cmd/issue_backlog_close_test.go — adapter-lacks-range-runner", "internal/cmd/quick.go — adapter-lacks-range-runner", "internal/cmd/quick_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/review.go — adapter-lacks-range-runner", "internal/cmd/review_attach.go — adapter-lacks-range-runner", "internal/cmd/review_attach_test.go — adapter-lacks-range-runner", "internal/cmd/review_test.go — adapter-lacks-range-runner", "internal/cmd/reviewer_agent.go — adapter-lacks-range-runner", "internal/cmd/ship.go — adapter-lacks-range-runner", "internal/cmd/ship_test.go — adapter-lacks-range-runner", "internal/cmd/solo_begin_test.go — adapter-lacks-range-runner", "internal/cmd/taint_schedule_test.go — adapter-lacks-range-runner", "internal/cmd/task.go — adapter-lacks-range-runner", "internal/cmd/task_reason_test.go — adapter-lacks-range-runner", "internal/cmd/verify_prompt_test.go — adapter-lacks-range-runner", "internal/gate/commit.go — adapter-lacks-range-runner", "internal/gate/downgrade_test.go — adapter-lacks-range-runner", "internal/gate/fixture_test.go — adapter-lacks-range-runner", "internal/gate/override.go — adapter-lacks-range-runner", "internal/gate/override_test.go — adapter-lacks-range-runner", "internal/gate/payload.go — adapter-lacks-range-runner", "internal/gate/review.go — adapter-lacks-range-runner", "internal/gate/review_test.go — adapter-lacks-range-runner", "internal/gate/scope.go — adapter-lacks-range-runner", "internal/gate/scope_test.go — adapter-lacks-range-runner", "internal/gate/secrets.go — adapter-lacks-range-runner", "internal/gate/soloreview.go — adapter-lacks-range-runner", "internal/gate/soloreview_test.go — adapter-lacks-range-runner", "internal/gatestate/store.go — adapter-lacks-range-runner", "internal/gatestate/store_test.go — adapter-lacks-range-runner", "internal/hooks/settings.go — adapter-lacks-range-runner", "internal/phase/phase.go — adapter-lacks-range-runner", "internal/review/agentdef_test.go — adapter-lacks-range-runner", "internal/review/context.go — adapter-lacks-range-runner", "internal/review/context_test.go — adapter-lacks-range-runner", "internal/review/ledger.go — adapter-lacks-range-runner", "internal/review/ledger_test.go — adapter-lacks-range-runner", "internal/review/verdict.go — adapter-lacks-range-runner", "internal/review/verdict_test.go — adapter-lacks-range-runner", "internal/secretpath/secretpath.go — adapter-lacks-range-runner", "internal/secretpath/secretpath_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/ship/body.go — adapter-lacks-range-runner", "internal/ship/body_test.go — adapter-lacks-range-runner", "internal/treefp/treefp.go — adapter-lacks-range-runner", "internal/treefp/treefp_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-2"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-3"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-4"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-5"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-6"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-7"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-8"
+  status = "unknown"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/override.go:272 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/override.go:274 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/override.go:276 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/override.go:276 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/override.go:278 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/review.go:94 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/review.go:96 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/review.go:98 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/review.go:138 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/review.go:146 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/scope.go:173 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/soloreview.go:133 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/soloreview.go:135 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/commit.go:159 (INVERT_NEGATIVES)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/commit.go:159 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/review/context.go:198 (INCREMENT_DECREMENT)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/review/verdict.go:101 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/review/verdict.go:103 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/review/verdict.go:103 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/review/verdict.go:105 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/review/verdict.go:105 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/review/verdict.go:109 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/ship/body.go:147 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/ship/body.go:147 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/ship/body.go:193 (INCREMENT_DECREMENT)"

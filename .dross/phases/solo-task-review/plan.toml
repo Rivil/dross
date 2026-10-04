@@ -1,4 +1,4 @@
-task_seq = 24
+task_seq = 25
 
 [phase]
   id = "solo-task-review"
@@ -261,3 +261,14 @@ task_seq = 24
   depends_on = ["t-13", "t-22"]
   test_contract = ["if `dross review status` with no ledger tells the agent to spawn in the foreground, or stops naming `dross review context` and waiting for the verdict, TestReviewStatusNoneHint fails"]
   status = "done"
+
+[[task]]
+  id = "t-25"
+  wave = 9
+  title = "Kill solo-task-review mutation survivors"
+  files = ["internal/gate/review_test.go", "internal/gate/scope_test.go", "internal/gate/commit_test.go", "internal/review/context_test.go", "internal/review/verdict_test.go", "internal/ship/body_test.go"]
+  description = "Verify r-20261004-123540 left 9 real test gaps (NOT COVERED blocks) plus two switch-case arms with no test behind them: the recorder's two context-rebuild failures and a launch with no agent id, commitAt's -1, longestRun's counter, the PR body's same-length tie-break and UTF-8 clip, a spec finding's unknown severity, and a rules.toml read error. Tests only."
+  covers = ["c-1", "c-2", "c-5", "c-6"]
+  depends_on = ["t-24"]
+  test_contract = ["if a review launch whose spec.toml is missing, or whose home carries a malformed gates.toml, records anything but an unavailable round naming 'could not be rebuilt', or a background launch with no agentId anything but an unavailable round naming the agent id, TestRecorderContextRebuildFailures fails", "if commitAt on a line with no `git commit` stops returning -1, or on `git add a.go && git commit -m x` stops returning index 1, TestCommitAt fails", "if a patch containing a ``` run is fenced with fewer than four backticks, TestContextFenceOutrunsPatch fails", "if reviews for t-3 and t-2 (same length) render t-3 first, TestReviewSectionSameLengthOrder fails; if a finding text crossing the clip cap mid-rune is not cut back to the rune start (exactly 599 bytes + …), TestReviewSectionClipsAtRuneStart fails", "if a spec finding with severity MAJOR parses, or its error stops naming 'spec finding 1', TestParseVerdict's spec-severity row fails", "if a .dross/rules.toml that cannot be read (a directory) lets ContextScope succeed or the error stops naming .dross/rules.toml, TestContextScopeRulesReadError fails"]
+  status = "pending"
