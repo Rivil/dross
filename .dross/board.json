@@ -9,6 +9,7 @@
   },
   "phases": {
     "ast-aware-mutation-ranges": "DRO-448",
+    "board-finalize-on-complete": "DRO-853",
     "board-mirror-reaper": "DRO-163",
     "board-sync-truth": "DRO-19",
     "board-task-mirror": "DRO-32",
