@@ -1,4 +1,4 @@
-task_seq = 17
+task_seq = 18
 
 [phase]
   id = "board-finalize-on-complete"
@@ -182,3 +182,14 @@ task_seq = 17
   depends_on = ["t-9", "t-12", "t-13", "t-16"]
   test_contract = ["TestEveryDocumentedIssueVerbResolves stays green with phase finalize in README's issue brace list", "readme_board_finalize_test fails if README omits dross deferred absorb, stops saying dross phase complete closes the board cards, or omits reap's creation of missing completed-phase cards", "the same test fails if ARCHITECTURE.md still says dross phase complete has no board coupling, or still attributes the task-complete / complete closes to ship's prompt", "the same test fails if ARCHITECTURE.md still says backlog sync closes a routed item whose target phase shipped, or still places the Phases/Tasks terminal emissions only in the prompt corpus", "TestCLISurfacePinned fails unless issue.txt carries reap's new Short naming missing-card creation and issue task sync's --close usage without 'ship finalize'"]
   status = "done"
+
+[[task]]
+  id = "t-18"
+  wave = 3
+  title = "Own-package tests for keyed patch edge paths and FindBySurvivor"
+  files = ["internal/project/patch_keyed_test.go", "internal/project/patch_test.go", "internal/deferred/deferred_test.go"]
+  description = "Verify round 1 (fail) found 11 in-hunk survivors that ran 0 times in their own package's suite: gremlins scores internal/project and internal/deferred against their own tests, and the plan.toml lossless and re-route-in-place claims leaned on internal/cmd tests it cannot attribute. Add in-package tests for each path; no production change expected."
+  covers = ["c-4", "c-9"]
+  test_contract = ["if a keyed insert at the end of the array stops being rewritten to an append (patch.go:638), TestKeyedInsertAtEndAppends fails — the new element must land after the last one with every other byte unchanged", "if elemCount mis-qualifies a keyed array nested under a table (patch.go:935), TestKeyedNestedArrayInserts fails", "if an element's span stops carrying the comment lines touching its last key (patch.go:969), TestKeyedMoveCarriesTrailingComments fails — a moved or deleted element takes those comments with it", "if moveElem accepts a move to a later element (patch.go:1003), TestMoveElemRefusesALaterDestination fails, naming the array", "if the move or insert op stops describing itself (patch.go:596-598), TestOpStringNamesEveryShape fails on its new move/insert rows", "if FindBySurvivor returns a dismissed entry, misses the live one, or swallows a malformed spec (deferred.go:189,192), TestFindBySurvivor fails"]
+  status = "pending"
+  depends_on = ["t-7", "t-10"]
