@@ -63,6 +63,7 @@
   locked = true
 
 [[deferred]]
+  id = "96a5b25ba5939d10"
   text = "Re-verify only what changed: when a verdict goes stale, re-measure the changed files instead of the whole phase."
   why = "An optimisation of the full re-verify this phase makes mandatory; premature until the staleness gate has run on real ships."
 
