@@ -4000,3 +4000,66 @@
   line = 77
   reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although tests take the branch — pinned by TestClassifyFallsBackToTestsJSON"
   accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "4b978fca0d6e7f48"
+  file = "internal/cmd/debug.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case fixed == abandoned:"
+  line = 165
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "1d48df63bd5f6470"
+  file = "internal/cmd/debug.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case fixed && reason != \"\":"
+  line = 167
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "2b73b99d9321149d"
+  file = "internal/cmd/debug.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case abandoned && strings.TrimSpace(reason) == \"\":"
+  line = 169
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "d9b92b1d88544124"
+  file = "internal/debugsession/store.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 109
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "dcc4b04987aedcbc"
+  file = "internal/debugsession/close.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case strings.TrimSpace(reason) == \"\":"
+  line = 59
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "829b177d4ade44cd"
+  file = "internal/debugsession/parse.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s[i] == '`':"
+  line = 197
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "0423b7d3e6457d8e"
+  file = "internal/debugsession/parse.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s == \"\":"
+  line = 355
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"

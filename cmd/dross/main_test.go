@@ -98,6 +98,44 @@ func TestShipPromptCommandsExist(t *testing.T) {
 	}
 }
 
+// debugPromptCmdRef matches a `dross <verb> [<sub>]` invocation in debug.md
+// both inline (after a backtick) and at the start of a line, which is how a
+// fenced command reads — debug.md runs `dross debug close` from a fence.
+var debugPromptCmdRef = regexp.MustCompile("(?m)(?:`|^[ \t]*)dross ([a-z][a-z0-9-]*)(?: ([a-z][a-z0-9-]*))?")
+
+// debugPromptUnresolved returns every invocation in body that does not resolve.
+func debugPromptUnresolved(top map[string]*cobra.Command, body string) (refs int, bad []string) {
+	for _, m := range debugPromptCmdRef.FindAllStringSubmatch(body, -1) {
+		refs++
+		if why := resolveCmdRef(top, m[1], m[2]); why != "" {
+			bad = append(bad, fmt.Sprintf("`%s` but %s", strings.TrimSpace("dross "+m[1]+" "+m[2]), why))
+		}
+	}
+	return refs, bad
+}
+
+// TestDebugPromptCommandsExist: /dross-debug must not narrate a verb the CLI
+// lacks — `dross debug resume` would send the agent to "unknown command"
+// mid-investigation.
+func TestDebugPromptCommandsExist(t *testing.T) {
+	top := topLevelIndex(newRoot())
+	b, err := os.ReadFile(filepath.Join("..", "..", "assets", "prompts", "debug.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs, bad := debugPromptUnresolved(top, string(b))
+	if refs < 8 {
+		t.Fatalf("parsed %d `dross <cmd>` references from debug.md — the regex or path is wrong", refs)
+	}
+	for _, msg := range bad {
+		t.Errorf("debug.md runs %s", msg)
+	}
+	// The guard bites on both forms: a missing subcommand inline and fenced.
+	if _, bad := debugPromptUnresolved(top, "run `dross debug resume x`\n```\n  dross debug reopen x\n```\n"); len(bad) != 2 {
+		t.Fatalf("the guard missed a bogus verb: %q", bad)
+	}
+}
+
 // topLevelIndex maps every top-level command name and alias to its command.
 func topLevelIndex(root *cobra.Command) map[string]*cobra.Command {
 	top := map[string]*cobra.Command{}

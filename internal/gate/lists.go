@@ -47,6 +47,9 @@ func Defaults() Lists {
 		},
 		CuratedFiles: []string{
 			"project.toml", "milestones/*.toml", "phases/*/spec.toml", "handoff.md", "rules.toml",
+			// /dross-debug sessions: narrative evidence kept with Edit, which a
+			// regenerated Write would silently lose.
+			"debug/*.md",
 		},
 	}
 }

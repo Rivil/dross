@@ -71,3 +71,63 @@ func TestReadmeDocumentsBaseTruthSurfaces(t *testing.T) {
 		t.Errorf("the phase row must document complete's --recover behaviour: %s", phaseRow)
 	}
 }
+
+// TestReadmeDocumentsDebugSessions: the README-sync convention for
+// debug-sessions. TestReadmeAdvertisesOnlyRealCommands only catches an
+// over-claim, so dropping a row would otherwise stay green.
+func TestReadmeDocumentsDebugSessions(t *testing.T) {
+	root := repoRootFromTest(t)
+	b, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme := string(b)
+
+	hasRow := func(prefix string) bool {
+		for _, line := range strings.Split(readme, "\n") {
+			if strings.HasPrefix(line, prefix) {
+				return true
+			}
+		}
+		return false
+	}
+	if !hasRow("| `/dross-debug` |") {
+		t.Error("README's slash-command table has no `/dross-debug` row")
+	}
+	if !hasRow("| `dross debug {new,list,close}` |") {
+		t.Error("README has no `dross debug {new,list,close}` command row")
+	}
+
+	// The per-project artefacts block must say the sessions are gitignored:
+	// they quote captured output (the locked session_tracking decision).
+	_, block, ok := strings.Cut(readme, "### Per-project artefacts")
+	if !ok {
+		t.Fatal("README has no Per-project artefacts section")
+	}
+	block, _, _ = strings.Cut(block, "\n### ")
+	debugLine := ""
+	for _, line := range strings.Split(block, "\n") {
+		if strings.Contains(line, "debug/") {
+			debugLine = line
+		}
+	}
+	if debugLine == "" || !strings.Contains(debugLine, "gitignored") {
+		t.Errorf("the artefacts block's debug/ line %q does not say gitignored", debugLine)
+	}
+
+	man, err := os.ReadFile(filepath.Join(root, "docs", "dross.1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(man), "dross debug") {
+		t.Error("docs/dross.1 does not document `dross debug`")
+	}
+	_, files, ok := strings.Cut(string(man), "\n.SH FILES\n")
+	if !ok {
+		t.Fatal("docs/dross.1 has no FILES section")
+	}
+	files, _, _ = strings.Cut(files, "\n.SH ")
+	if !strings.Contains(files, ".I .dross/debug/") {
+		t.Error("docs/dross.1's FILES section has no .dross/debug entry")
+	}
+}

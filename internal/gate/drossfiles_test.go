@@ -105,7 +105,7 @@ func TestDrossFilesClosedPosture(t *testing.T) {
 
 func TestCuratedShrinkBoundary(t *testing.T) {
 	e := gatesEnv(t, "curated-shrink")
-	for _, rel := range []string{"project.toml", "milestones/v1.toml", "phases/p/spec.toml", "handoff.md", "rules.toml"} {
+	for _, rel := range []string{"project.toml", "milestones/v1.toml", "phases/p/spec.toml", "handoff.md", "rules.toml", "debug/s.md"} {
 		for _, c := range []struct {
 			size    int
 			allowed bool
@@ -123,6 +123,28 @@ func TestCuratedShrinkBoundary(t *testing.T) {
 				t.Errorf("%s: an Edit was judged: %q", rel, res.Text())
 			}
 		}
+	}
+
+	// Debug sessions: `new` scaffolds them, so creating one is never judged,
+	// and the pattern claims only the session files themselves — `*` crosses
+	// no `/`, and the self-ignoring .gitignore beside them is not curated.
+	root := droot(t)
+	if res := Check(write(t, filepath.Join(root, ".dross", "debug", "x.md"), "x"), e); !res.Allowed() {
+		t.Errorf("creating a debug session was refused: %q", res.Text())
+	}
+	for _, rel := range []string{"debug/.gitignore", "debug/notes.txt", "debug/sub/x.md"} {
+		p := put(t, root, ".dross/"+rel, strings.Repeat("x", 1000))
+		if res := Check(write(t, p, "x"), e); !res.Allowed() {
+			t.Errorf("shrinking the non-session %s was refused: %q", rel, res.Text())
+		}
+	}
+
+	// gates.toml extends the defaults; an empty list there removes nothing.
+	emptied := gatesEnv(t, "curated-shrink")
+	writeLists(t, emptied.Home, "curated_files = []\n")
+	session := put(t, root, ".dross/debug/s.md", strings.Repeat("x", 1000))
+	if res := Check(write(t, session, strings.Repeat("y", 499)), emptied); res.Allowed() {
+		t.Error("an empty curated_files in gates.toml lifted the debug-session default")
 	}
 }
 

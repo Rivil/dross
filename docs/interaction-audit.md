@@ -238,3 +238,14 @@ preview).
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
 | Prune handoff items | §2 walks each ## Next / ## Open-loops item one at a time (done / keep / edit) | ✅ | pre-flight runs `dross interaction show`; "pruning is the user's call, item by item" — never a batched dump |
+
+### dross-debug
+
+| Decision point | Current pattern | Conforms | Notes |
+|---|---|---|---|
+| Which session (no arguments) | §0 proposes resuming the newest open session from `dross debug list`, or asks for the symptom and proposes a slug | ✅ | pre-flight runs `dross interaction show`; leads with the proposal |
+| Symptom wording (new session) | §0 confirms the drafted `## Symptom` before probing | ✅ | pair only |
+| Run the next probe | §1 single AskUserQuestion (run it / steer / stop), leading with one hypothesis and one probe | ✅ | pair only; `--solo` runs probes without asking |
+| Re-plan after needs-replan or a Problem | §3 BLOCKED on line one, proposes a new model, waits for agreement | ✅ | a hard stop in pair and solo alike — the user agrees the `- [replan]` entry |
+| Fix route | §4 proposes /dross-quick (standalone) or `dross task add` (mid-phase) | ✅ | /dross-debug never commits; pair only |
+| Prevention → rule | §5 offers the printed `dross rule add` line (add the rule / skip) | ✅ | pair runs exactly the printed line on approval; solo lists it in the wrap-up, never runs it |

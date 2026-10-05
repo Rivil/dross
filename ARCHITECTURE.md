@@ -342,6 +342,21 @@ The secret named by an `auth_env` never reaches an emitted surface. A refused or
 
 _introduced exec-trust-followups · ca15bb2_
 
+### Debug sessions
+
+Debug across sessions without losing the thread: `dross debug new <slug>` scaffolds a gitignored, machine-local `.dross/debug/<slug>.md` from a fixed seven-heading template, `dross debug list` reads each session's state (open, needs-replan after three failed fixes since the last re-plan, resolved, abandoned) from its header and list markers, `dross debug close --fixed` refuses without two Resolution signals and a non-empty Prevention, and `/dross-debug` drives one hypothesis per probe with evidence written before the next, the tree restored after each, a BLOCKED hard stop on needs-replan, and fixes routed to `/dross-quick` or `dross task add` rather than committed.
+
+- `Parse` / `Session.State` (header status plus fence- and comment-immune counts of hypotheses, failed-since-replan and Resolution signals; every fault named as a Problem) — `internal/debugsession/parse.go:110`
+- `Create` (seeds and `git check-ignore`-proves the self-ignoring `.dross/debug/.gitignore` before an O_EXCL write; `Load` lists newest first, `Rewrite` refuses a lost update) — `internal/debugsession/store.go:68`
+- `FixedCloseGaps` (close gates, every Problem a gap; `CloseText` rewrites only the header; `RuleAddCommand` prints a shell-safe `dross rule add` line it never runs) — `internal/debugsession/close.go:27`
+- `Debug` (`dross debug new|list|close`, a thin layer that writes nothing itself) — `internal/cmd/debug.go:18`
+- `debugNudge` (status's one `debug:` line naming every open session; the [reentry line](#session-continuity--context-hygiene) names the newest) — `internal/cmd/status.go:477`
+- `/dross-debug` probe loop (porcelain+hash snapshot compared around every probe, BLOCKED in pair and solo, fix routing) — `assets/prompts/debug.md:57`
+
+A session never rides a commit: the self-ignoring `.gitignore` keeps it out of phase and chore PRs, and a Write that would shrink one below half its size is refused by the [curated-shrink gate](#tool-call-gates), as for `handoff.md`.
+
+_introduced debug-sessions · 6ace883_
+
 ### Deferred-item routing
 
 Give every deferred idea a destination instead of leaving it write-only: `/dross-spec` routes each (pull-into-phase / milestone-backlog / named-phase / someday), parked ideas re-surface as candidate criteria when their target phase is scaffolded, and someday items get triaged through `/dross-inbox`. An item lives in one of three states — someday (no target), routed (target set, cleared back to someday with `dross deferred unroute`), or dismissed (`dross deferred dismiss`, `--undo` to reverse); a board-less repo still triages its local deferred backlog because `/dross-inbox` §0 skips the board source rather than hard-stopping. Findings are **filed** as well as routed: `dross deferred add "<text>"` turns a mid-phase discovery into a tracked item in one command with optional `--why` and `--target`, and it never refuses for want of a home — it writes into the current phase's spec when that spec loads, otherwise into a project-level store surfaced under the reserved `_project` slug (locked `storage_home`), so an *unusable* home falls back rather than erroring. Every item carries an internal stable id that keys its board link only; all four verbs keep `<phase> <idx>` addressing (locked `deferred_identity`), and `_project` is addressed by exactly that handle. One shared predicate decides whether a target is real — a phase directory exists for the slug, or the slug sits in ANY milestone's phases array — and `route`, `add` and `dross validate` all consult it (locked `target_validation`), so no stamp path can mint a silently unreachable destination and a typo is never auto-appended to the roadmap. Filing mirrors onto the issue board in the same command, best-effort: a board failure warns and leaves the authoritative local write standing (locked `board_push`). **Backlog sync covers routed items, not only unrouted ones** — a routed item used to fall out of the mirror entirely, so routing an idea made it disappear from the board. It now gets the same single issue as an unrouted one, carrying a `dross/target:<slug>` label for its destination that swaps when the route changes (locked `routed_repr`), resolved from the tracker by its identity label so a later text edit updates the live issue rather than minting a second; an unmarked coincidental match is ignored and a dismissed item produces no issue. Where the provider can express one, the item's issue is also **linked** to its target phase's issue (relates-to on YouTrack and Jira; GitHub has no link type and records no attempt). Both ways of having no link — no link type, or a target phase with no issue yet — warn and continue rather than failing the sync, and the link is established on a later sync once the target issue exists. The store is not second-class — validate walks it for dangling targets and flags a reserved `phases/_project` directory, and `dross phase rename` repoints its entries.
@@ -1104,7 +1119,7 @@ Survive `/clear` and compaction without losing the workflow thread: every durabl
 - `hooks.MutateSettings` (settings.json env-block read/modify/write beside the hook merger, so cmd holds no json codec for it) — `internal/hooks/settings.go:44`
 - `Hooks` (`dross hooks ensure`) / `ensureUserHooks` (init/onboard wiring of PreCompact, SessionStart and the [tool-call gate](#tool-call-gates) pair) — `internal/cmd/hooks.go:19`
 - `userHooks` (the one list of wired hooks: drives ensureUserHooks, the init/onboard ensured-hooks line and doctor's Hooks section) — `internal/cmd/hooks.go:65`
-- `Reentry` / `reentryLine` ("you are here + next", byte-equal to status's last line) — `internal/cmd/reentry.go:33`
+- `Reentry` / `reentryLine` ("you are here + next", byte-equal to status's last line; appends ` · debug: <slug> <state> — /dross-debug <slug>` for the newest open [debug session](#debug-sessions)) — `internal/cmd/reentry.go:78`
 - `Pause` (`dross pause --auto` mechanical snapshot merge) — `internal/cmd/pause.go:24`
 - `pauseAuto` / `autoSnapshot` (silent on a non-root, loud on a corrupt one, degrades without git) — `internal/cmd/pause.go:45`
 - `resume.md` §2 Prune (done items pruned from handoff.md with Edit; pause updates an existing handoff with Edit, so neither trips the curated-shrink gate) — `assets/prompts/resume.md:39`
@@ -1118,7 +1133,7 @@ Pause refuses rather than scaffolds. `/dross-pause` in a repo with no initialise
 
 Pause files rather than parks. A finding surfaced at a pause is written into the [deferred backlog](#deferred-item-routing) with `dross deferred add` instead of becoming an "Open loops" bullet nothing re-reads, so it leaves the handoff as a tracked, addressable item.
 
-_introduced context-hygiene · extended root-robustness · 6d33d3b · extended deferred-add-command · fb07ed1 · extended cmd-exec-baseline-drain · bf2af4e · extended tool-gate-hooks · c854daf_
+_introduced context-hygiene · extended root-robustness · 6d33d3b · extended deferred-add-command · fb07ed1 · extended cmd-exec-baseline-drain · bf2af4e · extended tool-gate-hooks · c854daf · extended debug-sessions · 3300fbe_
 
 ### Ship recovery
 
@@ -1495,6 +1510,7 @@ Claude Code's PreToolUse/PostToolUse hooks run `dross gate check` / `dross gate 
 - `tamperTarget` (tamper-guard, unliftable: tool writes to the `.dross/gate/` records or the override store — file tools, redirects, tee, cp, mv — refuse) — `internal/gate/override.go:202`
 - `judgePlanEdit` (plan-edit: Edit/MultiEdit of an existing plan.toml points at `dross task add/edit/move/remove`; a Write over one refuses once any task has left pending) — `internal/gate/drossfiles.go:100`
 - `judgeCuratedShrink` (curated-shrink: a Write cutting a curated `.dross/` file below half its size refuses; use Edit) — `internal/gate/drossfiles.go:132`
+- `Defaults` (built-in gate lists; curated files are `handoff.md` and `debug/*.md`, so a [debug session](#debug-sessions) is shrink-guarded, and a gates.toml list only adds to them) — `internal/gate/lists.go:39`
 - `judgeCandidate` (commit-green: a `git commit` is admitted only when its candidate tree — `cd`/`-C` tracked, chained `git add`s replayed, `-a`/`--all` honoured — equals the recorded full green; `.dross/`-only commits and test-less repos pass) — `internal/gate/commit.go:179`
 - `treefp.Candidate` (tree-object fingerprints from a scratch copy of the git index via GIT_INDEX_FILE, `.dross/` excluded; the real index is never touched) — `internal/treefp/treefp.go:125`
 - `greenRecorder.finish` (a full `dross test` records `.dross/gate/green.json` only for a tree unchanged across a green run; red on that tree clears it, a run that never happened leaves it) — `internal/cmd/test.go:1172`
@@ -1506,7 +1522,7 @@ Claude Code's PreToolUse/PostToolUse hooks run `dross gate check` / `dross gate 
 - `gateOff` (`dross gate off|on|status`, human-only, lifts capped at 24h) — `internal/cmd/gate.go:171`
 - `TestPromptCommitsSatisfyGreenGate` (every prompt step that stages code runs a bare `dross test` first; `.dross/`-only bookkeeping commits pass ungated) — `internal/cmd/prompt_commit_gate_test.go:80`
 
-_introduced tool-gate-hooks · 387e245_
+_introduced tool-gate-hooks · 387e245 · extended debug-sessions · c86d3f4_
 
 ### Tool-output containment
 

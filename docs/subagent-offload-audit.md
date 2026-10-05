@@ -30,6 +30,14 @@ Disposition: **offload-worthy (future)** — the scan half could fan readers per
 subsystem on a large repo; the doc generation itself must stay in the main loop
 (it is the deliverable). Not changed this phase.
 
+### debug
+
+Probes one hypothesis at a time and writes each probe's evidence to the
+session file before the next. Disposition: **inline-only** — the evidence has
+to land in the main loop to drive the next theory, and the session file plus
+the reentry line already survive `/clear` and compaction. A cold one-probe
+debugger subagent is a deferred optimisation, to measure after real sessions.
+
 ### execute
 
 Heavy step: §1b code insight — reading every `task.files` entry plus sibling

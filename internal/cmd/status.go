@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/debugsession"
 	"github.com/Rivil/dross/internal/findings"
 	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/milestone"
@@ -129,6 +130,12 @@ func Status() *cobra.Command {
 			// .dross/handoff.md; surface it so you don't forget you paused.
 			if hand := openHandoff(root); hand != "" {
 				Printf("handoff:   %s\n", hand)
+			}
+
+			// Open debug sessions. A /dross-debug investigation left mid-probe
+			// is as easy to forget as a pause; name every open one on one line.
+			if line := debugNudge(openDebugSessions(root)); line != "" {
+				Printf("debug:     %s\n", line)
 			}
 
 			// Non-spine action areas — surfaced only when the spine is idle
@@ -444,6 +451,39 @@ func openHandoff(root string) string {
 		line += fmt.Sprintf(", %d item(s) left", open)
 	}
 	return line + " — /dross-resume"
+}
+
+// openDebugSessions returns the open /dross-debug sessions under root's
+// project, most recently updated first; needs-replan counts as open. The
+// nudges built on it are best-effort: a store that cannot be read — a regular
+// file where the directory should be, an unreadable directory — yields none,
+// and never fails status or the SessionStart hook.
+func openDebugSessions(root string) []debugsession.Entry {
+	entries, err := debugsession.Load(filepath.Dir(root))
+	if err != nil {
+		return nil
+	}
+	var open []debugsession.Entry
+	for _, e := range entries {
+		if s := e.Session.State(); s == debugsession.StateOpen || s == debugsession.StateNeedsReplan {
+			open = append(open, e)
+		}
+	}
+	return open
+}
+
+// debugNudge is status's `debug:` line: every open session with the command
+// that resumes it, needs-replan labelled. "" when none is open.
+func debugNudge(open []debugsession.Entry) string {
+	parts := make([]string, len(open))
+	for i, e := range open {
+		label := e.Slug
+		if e.Session.State() == debugsession.StateNeedsReplan {
+			label += " (" + string(debugsession.StateNeedsReplan) + ")"
+		}
+		parts[i] = label + " — /dross-debug " + e.Slug
+	}
+	return strings.Join(parts, "; ")
 }
 
 // actionArea is one non-spine area of work surfaced when the spine is idle

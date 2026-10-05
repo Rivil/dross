@@ -1,0 +1,569 @@
+{
+  "phase": "debug-sessions",
+  "pr": 155,
+  "base": "milestone/v1.7",
+  "base_commit": "457ffbae517aea2151ac3d6fc66ed46662556e10",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/debugsession/parse.go",
+        "internal/debugsession/parse_test.go"
+      ],
+      "commit": "728758e",
+      "completed_at": "2026-10-05T10:55:21.683525Z",
+      "landmarks": [
+        {
+          "feature": "debug sessions",
+          "symbol": "Parse",
+          "loc": "internal/debugsession/parse.go:110",
+          "what": "parses a session file into header status plus fence/comment-immune counts of hypotheses, failed-since-replan and Resolution signals, naming every fault as a Problem"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/gate/lists.go",
+        "internal/gate/drossfiles_test.go"
+      ],
+      "commit": "c86d3f4",
+      "completed_at": "2026-10-05T11:01:07.241156Z",
+      "landmarks": [
+        {
+          "feature": "tool-call gates",
+          "symbol": "Defaults",
+          "loc": "internal/gate/lists.go:39",
+          "what": "curated-shrink claims .dross/debug/*.md so a Write cannot shrink a debug session below half its size"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/debugsession/store.go",
+        "internal/debugsession/store_test.go",
+        "internal/secretscan/writers.go",
+        "internal/cmd/secretscan_writer_enum_test.go"
+      ],
+      "commit": "1f7caa8",
+      "completed_at": "2026-10-05T11:10:19.896468Z",
+      "landmarks": [
+        {
+          "feature": "debug sessions",
+          "symbol": "Create",
+          "loc": "internal/debugsession/store.go:68",
+          "what": "scaffolds .dross/debug/\u003cslug\u003e.md from the fixed template after seeding and check-ignore-proving the self-ignoring .gitignore; Load lists newest first, Rewrite refuses lost updates"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/debugsession/close.go",
+        "internal/debugsession/close_test.go"
+      ],
+      "commit": "5b06196",
+      "completed_at": "2026-10-05T11:26:12.329196Z",
+      "landmarks": [
+        {
+          "feature": "debug sessions",
+          "symbol": "FixedCloseGaps",
+          "loc": "internal/debugsession/close.go:27",
+          "what": "close gates (2 signals + non-empty Prevention, every Problem a gap), header-only CloseText to resolved/abandoned, and the printed shell-safe dross rule add line"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/debug.go",
+        "internal/cmd/debug_test.go",
+        "cmd/dross/main.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "6ace883",
+      "completed_at": "2026-10-05T11:39:30.050664Z",
+      "landmarks": [
+        {
+          "feature": "debug sessions",
+          "symbol": "Debug",
+          "loc": "internal/cmd/debug.go:18",
+          "what": "dross debug new|list|close: scaffold, list with state and counts, and gated close that prints but never runs the dross rule add line"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/reentry.go",
+        "internal/cmd/status_debug_test.go"
+      ],
+      "commit": "3300fbe",
+      "completed_at": "2026-10-05T11:50:15.142505Z",
+      "landmarks": [
+        {
+          "feature": "re-entry nudges",
+          "symbol": "reentryLine",
+          "loc": "internal/cmd/reentry.go:78",
+          "what": "status names every open debug session on one debug: line and the reentry/SessionStart line appends the newest open session's /dross-debug command"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "assets/commands/dross-debug.md",
+        "assets/prompts/debug.md",
+        "docs/interaction-audit.md",
+        "docs/subagent-offload-audit.md",
+        "internal/cmd/debug_prompt_test.go",
+        "cmd/dross/main_test.go"
+      ],
+      "commit": "a0e5678",
+      "completed_at": "2026-10-05T12:31:16.894755Z",
+      "landmarks": [
+        {
+          "feature": "debug sessions",
+          "symbol": "/dross-debug",
+          "loc": "assets/prompts/debug.md:57",
+          "what": "systematic debugging prompt: one hypothesis per probe, evidence before the next, tree restored to a porcelain+hash snapshot, BLOCKED after three failed fixes, fixes routed never committed"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "README.md",
+        "docs/dross.1",
+        "internal/cmd/readme_doc_test.go",
+        "docs/footer-audit.md"
+      ],
+      "commit": "cb85c60",
+      "completed_at": "2026-10-05T12:36:41.665885Z",
+      "landmarks": [
+        {
+          "feature": "debug sessions",
+          "symbol": "README debug rows",
+          "loc": "README.md:227",
+          "what": "README and man page document dross debug {new,list,close}, /dross-debug and the gitignored .dross/debug/ sessions"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 3,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "TestCRLFParsesLikeLF stays green if the `strings.ReplaceAll(..., \"\\r\\n\", \"\\n\")` in Parse is deleted: heading titles, status values, list items, fence closes and Prevention lines are all TrimSpace'd, so a trailing \\r never changes any construct the three test docs use. A doc with a bare `##` line, where `##\\r` fails heading()'s space-or-EOL check, would make the test catch that change.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "fenceRun opens a backtick fence even when the info string contains backticks (CommonMark: such a line is not a fence), and the same happens for an indented ``` that closes a `- ````-opened item. One spurious opener flips fence state for the rest of the file, so quoted `- [failed]` lines can count or real items can be hidden. An odd fence count does surface as an unclosed-fence Problem. Separately, a line like \"``` \u003c!-- x\" leaves inComment set past the fence's close.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "Parse's doc comment says 'whatever it cannot trust is named in Problems, and the file reads open', and the record says 'A malformed file reads open'. Only status-line faults read open. A resolved or abandoned header with an unclosed fence or missing heading keeps its closed state, and an open one with three failures plus a duplicate heading reads needs-replan. The test_contract only pins the status case, so this is consistent, but the comment should say so and the author should confirm a closed session with a broken body is meant to stay out of the nudges.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Session.Problems is documented as 'in reading order', but missing-heading and status Problems are appended in finish(), so a header status fault on line 3 is listed after fence and comment problems from later lines.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A level-1 `# ` heading in the body falls into the level != 2 branch commented as 'a deeper heading is a subsection', so it keeps the enclosing section counting rather than ending it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "The description says 'A malformed file reads open with a named Problem', but Parse only falls back to open when the status line itself is missing, duplicated or unrecognised. A valid resolved/abandoned header keeps its status even when the body is malformed (for example an unclosed fence that hides six headings). This is documented and fits closed_fate and TestClosedHeaderWins, but it is a narrower reading than the description's wording. The TestParseProblems cases that assert Status==open for body faults all start from an open header, so they don't test this choice.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "stripComments ignores inline code spans: a Fix attempts or Resolution item mentioning `\u003c!--` in backticks starts a comment that silently hides every following line up to the next `--\u003e`. If no `--\u003e` follows, an unclosed-comment Problem is reported; if a later `--\u003e` exists, the hidden items vanish without any Problem.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "An ATX heading with a closing sequence ('## Fix attempts ##') does not match the fixed heading (its title keeps the trailing ##), and a thematic break written as '* * *' or '- - -' counts as a list item. Both are unlikely in an agent-maintained template, and the first at least shows up as a missing-heading Problem.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "Session exposes FailedSinceReplan, not a total failed count. That matches the task record, but the sibling task that implements `dross debug list`'s 'failed-fix count' should decide which number it means.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The tests also go beyond the contract: CRLF with a bare `##`, the comment-vs-fence-opener order, rejecting backticks in a backtick fence's info string, and duplicate status lines in both orders.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "listItem accepts a spaced thematic break: `- - -` or `* * *` parses as a list item with text `- -` / `* *`, so a separator under ## Resolution counts as a signal (and under ## Hypotheses as a hypothesis). That could pad the two-signal close gate. `---` is correctly rejected; only the spaced forms leak.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A closed (resolved/abandoned) header stays closed even when the body is malformed (unclosed fence, missing heading); only status-line faults force open. This matches the test_contract (\"an unrecognised status reads open\") and the closed_fate decision. It is narrower than the description's broad \"a malformed file reads open\", which sibling tasks should not rely on.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The scope probes check 'not claimed' through res.Allowed() on a 1000-\u003e1 byte shrink rather than calling Claims directly. That is equivalent here, since any claim on those paths would refuse the shrink, so widening the pattern to debug/* still fails the test via .gitignore and notes.txt.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Rewrite compares the file to `read`, then renames over it. An Edit that lands between the compare and the rename is still lost. That gap can't be closed without locking, but the doc comment's 'never silently lost' overstates the guarantee.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "If Create's WriteString or Close fails, a partial \u003cslug\u003e.md is left behind, and the next Create for that slug reports 'already exists' instead of retrying.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "unwrapPath strips the absolute path from the Load Problem and from Rewrite's read errors. Create's MkdirAll/OpenFile errors and Rewrite's CreateTemp/Rename errors still wrap PathError/LinkError and carry the absolute path. Inconsistent, not wrong.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 3,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "CloseText only rejects \\r/\\n in an abandon reason; a reason containing `\u003c!--` (e.g. \"gave up \u003c!-- see notes\") is written into the header and, on re-parse, opens a comment that hides all seven `## ` headings, so the closed session parses with an unclosed-comment Problem plus seven missing-heading Problems (State still reads abandoned). Consider refusing or escaping `\u003c!--` in the reason.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "CloseText replaces the whole status line, so any inline comment or non-lowercase key on it (e.g. `Status: open \u003c!-- x --\u003e`) is normalised to `status: \u003cstate\u003e`; harmless, and the body is untouched as the contract requires.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "CloseText replaces the whole raw status line, not just its visible part, so a comment marker on that line is lost. If a header comment closes on the status line (`\u003c!-- note` then `--\u003estatus: open`), the rewrite drops the `--\u003e`. The comment never closes, every heading and the new status line are hidden, and Parse(out) reads open with Problems even though CloseText returned success. Refuse a status line whose raw text differs from its visible text, or keep the comment parts.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The abandon reason also rejects `\u003c!--`, beyond the required \\n/\\r and blank checks. A header comment opened by the reason would hide the sections below it, so this is a sound extra guard, and TestCloseTextReason covers it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The shell-oracle test runs the printed line under real /bin/sh in a temp dir with dross shadowed by a printf function. It checks the exact argv and that no `pwned` file appears, which is a strong check on the quoting.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "FixedCloseGaps doc comment claims 'No gap quotes the session's own text', but the unrecognised-status Problem it forwards quotes the header value (%q-escaped), as the 'every Problem is a gap' test's status 'fixed' fixture shows; the comment overstates it",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-6",
+          "text": "CloseText trims but silently ignores a reason passed with StateResolved, and a session hand-reopened with its old closed: line left in place gets a second closed: line on re-close; both harmless since Parse reads neither",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "TestDebugList's 'mtime renders UTC' check only bites when the host time zone is not UTC: ModTime() comes back in time.Local, so on a UTC-zoned CI host dropping .UTC() in debugList still renders the same RFC3339 string. Pinning time.Local to a non-UTC zone in the test would make it host-independent.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "close runs CloseText before FixedCloseGaps, so an already-closed session is refused as already closed whatever gaps it has; the abandoned fixture also carries a Prevention, so a rule line leaking onto --abandoned would really be caught.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "TestDebugList's 'no sessions' subtest runs with no .dross/debug directory at all rather than an empty one; debug.go takes the same len(entries)==0 path either way, so it still catches a dropped no-sessions line",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestDebugList swaps the global time.Local for the test's duration; safe today since internal/cmd has no t.Parallel tests, but it would race if any are added",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "spec",
+          "severity": "BLOCKING",
+          "criterion": "c-3",
+          "text": "test_contract says a pause or suggestNext shift makes the `dross pause --auto` `- next:` line test or a TestReentryMatchesSuggestNext case fail, but no pause test checks the `- next:` line and no test runs pause or suggestNext with an open debug session. Moving the debug clause from reentryLine into suggestNext leaves the reentry/status output byte-identical, changes only pause's `- next:` line, and every test stays green.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "status reads the debug store twice, once for the `debug:` line and once inside reentryLine for the footer. An edit between the two reads could make them disagree within one status run, which is harmless.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestDebugNudgeHookSafety compares status and reentry byte-for-byte against a run with no debug dir, for both the regular-file case and the chmod-000 case. That is a strong check that the rest of the output is intact.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "status reads the debug store twice: once for the `debug:` line and again inside reentryLine. So the status debug line and the footer clause come from separate reads (they could disagree if a session is edited in between), and every session file is parsed twice per status run.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Closed sessions are kept forever (closed_fate), and debugsession.Load reads and parses every session file, closed ones included, on every status run and SessionStart hook. The cost grows with history, though only slightly.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The test_contract says 'the session still named' for the hook-safety cases. A chmod-000 directory can't be listed, so for that case TestDebugNudgeHookSafety asserts the output matches the bare run, and only the mangled-status-line subtest asserts that sessions are named. That is a reasonable reading of the contract.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 4,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "Pair-mode 'add the rule' runs the printed `dross rule add -- ...` line, which writes the tracked project .dross/rules.toml (loadScope default scope=project). The prompt never commits it or hands the commit to the user, so .dross/ stays dirty after the command ends, against dross-commit-hygiene. This conflicts with the 'never commits' fix_path wording, and /dross-rule (rule.md) has the same gap, so it is existing practice rather than a new regression.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "The pre-session snapshot (`git status --porcelain` plus `git diff HEAD | shasum -a 256`) does not hash untracked files. A probe that edits a file that was already untracked before the session (shown as ?? either way) passes both checks and is not caught.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The probe loop says temporary instrumentation, including 'a focused test', is added and undone with Edit. A new test file needs Write and has to be deleted, not edited back. The porcelain check would surface the leftover ?? file, so this fixes itself.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "The mid-phase fix route has /dross-debug run `dross task add`, which writes the phase's tracked plan.toml under .dross/, yet the prompt never commits it and does not say who will. Under dross-commit-hygiene that leaves .dross/ dirty when the command ends; the locked fix_path decision forbids the commit, so the prompt should at least say the running /dross-execute or the user commits it. The prompt also narrates `dross task add` without the required \u003cphase-id\u003e argument.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "§4 says /dross-quick's clean baseline is 'preserved by the probe discipline', but that discipline only restores the pre-session snapshot, which the prompt explicitly allows to hold modified files. Also, nothing says to retake the snapshot after a fix lands (HEAD moves, or `dross task add` dirties plan.toml). On the 'fix failed, back to probing' path, the §2 step-1 tree check can then halt every later probe.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The guards test themselves: TestDebugPromptNoCommitPath feeds fencedForbidden every forbidden command plus a prose decoy, and TestDebugPromptCommandsExist checks that both the inline and fenced bogus-verb forms are rejected, so neither scanner can pass vacuously.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The r-01 `make install` step in the task description is a process step that can't be checked from the diff.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "The mid-phase fix route runs `dross task add`, which writes the phase's plan.toml under .dross/, and leaves it for /dross-execute to commit. That conflicts with the dross-commit-hygiene rule (never leave .dross/ dirty across slash-command boundaries). The locked fix_path decision ('/dross-debug never commits') wins, but the conflict should be stated or resolved explicitly.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "TestDebugPromptNoCommitPath can miss a chained commit. fencedForbidden only matches lines that start with a forbidden command, and codeAdds/stagesCode skips `-A` and stops at `\u0026\u0026`. So a fenced `git add -A \u0026\u0026 git commit -m x` (or `cd x \u0026\u0026 git commit`) passes both checks.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "The '### Fix attempts' sentence that sends needs-replan or a `problem:` line from `dross debug list` to §3 is not pinned. The BLOCKED subtest checks §0's `problem:` line and §3, so deleting the routing sentence after a fix attempt keeps TestDebugPromptRequirements green.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "With no arguments, the prompt proposes resuming the newest open session or asks for a symptom and proposes a slug. That is a pair decision point with no row in the dross-debug section of interaction-audit.md.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The task description asks for `make install` (r-01) afterwards; the diff cannot show whether it ran.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 4,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "The mid-phase route runs `dross task add`, which writes the tracked .dross/phases/\u003cid\u003e/plan.toml, then leaves it for /dross-execute to commit. /dross-debug therefore ends with .dross/ dirty, which goes against dross-commit-hygiene. The locked fix_path decision and the no-commit test_contract require this, so it is a design tension to record, not an author error.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 4,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-9",
+          "text": "The states check in TestDebugPromptParity only compares the `States ... reports:` line and the wrap-up line with the parser constants. A wrong state word anywhere else in the prose would not be caught.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 4,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The `### dross-debug` audit section was appended under `## Other interactive commands (audited in phase 13)`, whose introduction describes a different set of commands. Tests pass, but a new `##` group would read more accurately.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-9",
+          "text": "TestReadmeDocumentsDebugSessions accepts a `| `/dross-debug` |` row anywhere in README.md, not just in the slash-command table, and finds `dross debug` anywhere in docs/dross.1, not just in CLI COMMANDS. That is enough for the contract, but a row moved to another section would still pass.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "No test covers the new Footer-bearing `debug` row in docs/footer-audit.md: footer_coverage_test.go machine-reads only the Exempt table. The row is correct (eight rows, and it matches debug.md's footer line), but deleting it would not fail any test.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
+}

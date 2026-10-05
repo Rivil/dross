@@ -1,0 +1,101 @@
+[phase]
+  id = "debug-sessions"
+  title = "debug-sessions"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross debug new <slug>` creates .dross/debug/<slug>.md from the fixed session template (Symptom, Hypotheses, Current theory, Next probe, Fix attempts, Resolution, Prevention) marked open, ensures .dross/debug/ is gitignored before writing, and refuses an invalid slug or one that already has a session."
+  deferred = ["72529be1cdccbdb7"]
+
+[[criteria]]
+  id = "c-2"
+  text = "`dross debug list` prints every session with its state (open, needs-replan, resolved, abandoned), hypothesis count, failed-fix count and last update; `dross status` adds one line naming the open sessions, and nothing when none are open."
+
+[[criteria]]
+  id = "c-3"
+  text = "The `dross reentry` line (the SessionStart hook output, which fires after /clear and after compaction) names an open debug session and the `/dross-debug <slug>` command that resumes it."
+
+[[criteria]]
+  id = "c-4"
+  text = "A session whose Fix attempts section records three failed attempts since its last re-plan entry reads needs-replan in `dross debug list` and `dross status`; a re-plan entry clears it."
+
+[[criteria]]
+  id = "c-5"
+  text = "`dross debug close <slug> --fixed` refuses unless the Resolution section lists at least two signals and the Prevention section is non-empty, naming each missing part; `--abandoned --reason <text>` closes without them."
+
+[[criteria]]
+  id = "c-6"
+  text = "Closing marks the session resolved or abandoned in its header, leaves the file on disk, and drops it from the status and reentry nudges."
+
+[[criteria]]
+  id = "c-7"
+  text = "A `--fixed` close prints a ready-to-run `dross rule add` command carrying the Prevention text; it never adds the rule itself."
+
+[[criteria]]
+  id = "c-8"
+  text = "A Write that would shrink a .dross/debug/*.md session below half its size is refused by the curated-file gate, as handoff.md is."
+
+[[criteria]]
+  id = "c-9"
+  text = "/dross-debug ships as an installed command, is classified in docs/interaction-audit.md, and its prompt requires: one hypothesis per probe; each probe's evidence and verdict written to the session file before the next probe starts; the tree returned to its pre-session state after each probe; a hard stop on needs-replan in pair and solo alike; a confirmed fix routed to /dross-quick or `dross task add`, never committed by /dross-debug."
+
+[[decisions]]
+  key = "session_format"
+  choice = "Markdown at .dross/debug/<slug>.md, scaffolded by `dross debug new` from a fixed template and maintained by the agent with Edit; the CLI reads only the header status line, the fixed headings and the list-item markers under them."
+  why = "Evidence is narrative and often quotes command output — CLI verbs would push it through argv (no-secrets-in-argv); fixed headings are enough to make the gates checkable."
+  locked = true
+
+[[decisions]]
+  key = "session_tracking"
+  choice = "Sessions are gitignored and machine-local, like handoff.md; they never ride a phase PR or a chore PR."
+  why = "Evidence holds captured output, and v1.7 forbids persisting captured output into published artifacts; the repo is public."
+  locked = true
+
+[[decisions]]
+  key = "replan_threshold"
+  choice = "Three failed fix attempts since the last re-plan entry put a session in needs-replan, which /dross-debug treats as a hard stop (BLOCKED on line one) in pair and solo alike."
+  why = "Three failed fixes means the model of the problem is wrong; another autonomous lap compounds it (obra/superpowers systematic-debugging)."
+  locked = true
+
+[[decisions]]
+  key = "close_gates"
+  choice = "A fixed close needs at least two signal lines under Resolution and a non-empty Prevention block; the CLI counts them, the prompt defines independence (signals of different kinds — repro gone, regression test red-before/green-after, suite or CI green)."
+  why = "A single signal is how a fix gets declared done while the cause survives (gsd-core #1958); the CLI can count at the boundary but cannot judge independence."
+  locked = true
+
+[[decisions]]
+  key = "fix_path"
+  choice = "/dross-debug never commits: probes revert their temporary changes, and a confirmed fix lands through /dross-quick (standalone) or `dross task add` (mid-phase); the close cites the landed commit among its signals."
+  why = "Reuses the existing atomic-commit, test-gate and version-bump guarantees instead of a third commit path; /dross-quick needs a clean baseline."
+  locked = true
+
+[[decisions]]
+  key = "closed_fate"
+  choice = "A closed session stays on disk with status resolved or abandoned and leaves the nudges; nothing deletes it."
+  why = "A recurrence wants the previous root cause; the file is gitignored, so keeping it costs nothing."
+  locked = true
+
+[[decisions]]
+  key = "prevention_rule"
+  choice = "The Prevention block becomes a rule only through a printed `dross rule add` command the user runs or approves; the prompt offers it in pair mode and lists it in the solo wrap-up."
+  why = "Rules are MUST-FOLLOW for every future session, so adding one is the user's call (gsd-core #1963 proposes, it does not impose)."
+  locked = true
+
+[[deferred]]
+  text = "Recall on new: when a session opens, surface resolved sessions whose symptom or root cause matches, so a recurrence starts from the last root cause."
+  why = "Needs a body of resolved sessions to match against; premature until sessions exist."
+
+[[deferred]]
+  text = "A cold debugger subagent that runs one probe in fresh context and returns evidence, so a long investigation does not fill the main context."
+  why = "Write-as-you-go plus the reentry line already survive context loss; a probe agent is an optimisation to measure after real sessions."
+
+[[deferred]]
+  id = "70fa600b189d43fb"
+  text = "Prompts that run a .dross-writing CLI verb without committing (/dross-debug's approved `dross rule add` and mid-phase `dross task add`, /dross-rule's add) leave tracked .dross/ files dirty against dross-commit-hygiene; decide who commits rules.toml/plan.toml and how a rules-only commit reaches a protected base"
+  why = "Raised by the t-7 solo reviews (debug-sessions): locked fix_path forbids /dross-debug commits, and /dross-rule already has the same gap, so the fix spans prompts beyond this phase"
+
+[[deferred]]
+  id = "c48dd0a92bf6ac08"
+  text = "Pin each assets/commands/dross-<name>.md shim's @-include to its own assets/prompts/<name>.md: TestCommandsPromptsParity checks only that both files exist, so a shim copied from another command and still including that command's prompt passes every test"
+  why = "Found by /dross-verify debug-sessions (c-9): cross-cutting across all 23 shims, not a debug-sessions defect — dross-debug.md's include is correct today"
