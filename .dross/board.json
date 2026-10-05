@@ -2453,47 +2453,47 @@
     "verify-staleness/t-1": {
       "issue": "DRO-874",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "verify-staleness/t-2": {
       "issue": "DRO-875",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "verify-staleness/t-3": {
       "issue": "DRO-876",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "verify-staleness/t-4": {
       "issue": "DRO-877",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "verify-staleness/t-5": {
       "issue": "DRO-878",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "verify-staleness/t-6": {
       "issue": "DRO-879",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "verify-staleness/t-7": {
       "issue": "DRO-881",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "verify-staleness/t-8": {
       "issue": "DRO-880",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "verify-staleness/t-9": {
       "issue": "DRO-882",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "watch-bot-prs/t-1": {
       "issue": "DRO-762",
