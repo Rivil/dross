@@ -1,0 +1,105 @@
+[verify]
+  phase = "debug-sessions"
+  generated_at = 2026-10-05T15:08:47.482791Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-10-05T15:10:33.196353Z
+  measured_commit = "c0e3c11ca078db3ba68c2c4cab475d7dd19eaf29"
+  measured_tree = "57ded09d6a5d1adc0aafb6687f7bc74dba6e8275"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9267015706806283
+  mutants_killed = 354
+  mutants_survived = 28
+  mutants_not_covered = 28
+  mutants_no_block = 25
+  mutants_test_gap = 3
+  mutants_in_scope = 382
+  unclassified_in_scope = 0
+  criteria_total = 9
+  criteria_covered = 9
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 354
+    survived = 28
+    timeout = 0
+    in_scope = 382
+    score = 0.9267015706806283
+    file_count = 19
+    measured_on = "helicon"
+    whole_file = ["cmd/dross/main.go — adapter-lacks-range-runner", "cmd/dross/main_test.go — adapter-lacks-range-runner", "internal/cmd/debug.go — adapter-lacks-range-runner", "internal/cmd/debug_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/debug_test.go — adapter-lacks-range-runner", "internal/cmd/readme_doc_test.go — adapter-lacks-range-runner", "internal/cmd/reentry.go — adapter-lacks-range-runner", "internal/cmd/secretscan_writer_enum_test.go — adapter-lacks-range-runner", "internal/cmd/status.go — adapter-lacks-range-runner", "internal/cmd/status_debug_test.go — adapter-lacks-range-runner", "internal/debugsession/close.go — adapter-lacks-range-runner", "internal/debugsession/close_test.go — adapter-lacks-range-runner", "internal/debugsession/parse.go — adapter-lacks-range-runner", "internal/debugsession/parse_test.go — adapter-lacks-range-runner", "internal/debugsession/store.go — adapter-lacks-range-runner", "internal/debugsession/store_test.go — adapter-lacks-range-runner", "internal/gate/drossfiles_test.go — adapter-lacks-range-runner", "internal/gate/lists.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/debugsession/store_test.go:TestCreateIgnoredBeforeWrite", "internal/debugsession/store_test.go:TestValidSlug", "internal/debugsession/store_test.go:TestCreateRefusesExisting", "internal/debugsession/store_test.go:TestTemplateRoundTrip", "internal/debugsession/parse_test.go:TestHeadingsAreTheSpecOrder", "internal/cmd/debug_test.go:TestDebugNew"]
+  notes = "ignore-before-write pinned by a broken .gitignore (dir, `!*`) leaving no session plus the recorded check-ignore argv; 14 invalid slugs incl. the 64/65 boundary write nothing; O_EXCL refusal keeps bytes identical; template headings DeepEqual the literal spec order"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/debug_test.go:TestDebugList", "internal/cmd/status_debug_test.go:TestStatusDebugOneLine", "internal/cmd/status_debug_test.go:TestStatusDebugNothingOpen"]
+  notes = "list rows DeepEqual for all four states with distinct hyp/failed counts (column swap fails) and a pinned mtime rendered UTC under a UTC-3 time.Local; status asserts exactly one debug: line naming both open sessions, and byte-identical output when only closed sessions exist"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/status_debug_test.go:TestReentryNamesDebugSession", "internal/cmd/status_debug_test.go:TestStatusDebugByteEqualReentry", "internal/cmd/hooks_test.go:TestEnsureUserHooksWiresGates"]
+  notes = "exact ` · debug: <slug> open — /dross-debug <slug>` suffix and (+2 more) / needs-replan cases; SessionStart wired to `dross reentry`. Firing on /clear and compaction is Claude Code behaviour, not testable here"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/debugsession/parse_test.go:TestReplanThreshold", "internal/debugsession/parse_test.go:TestSectionScope", "internal/cmd/debug_test.go:TestDebugList", "internal/cmd/status_debug_test.go:TestStatusDebugOneLine"]
+  notes = "threshold 2/3/4 and since-last-[replan] cases in the parser; list prints needs-replan and 3; status labels needs-replan and drops it after an appended [replan]. List's replan-clear rides the shared State() rather than a list-specific fixture"
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/debugsession/close_test.go:TestFixedCloseGaps", "internal/debugsession/parse_test.go:TestResolutionAndPrevention", "internal/cmd/debug_test.go:TestDebugCloseFixedRefusal", "internal/cmd/debug_test.go:TestDebugCloseFreshSessionRefused", "internal/cmd/debug_test.go:TestDebugCloseFixedPrintsNeverAdds", "internal/cmd/debug_test.go:TestDebugCloseAbandoned"]
+  notes = "gap list DeepEqual per case (1 signal -> Resolution only; empty Prevention -> Prevention only; both -> two gaps); cmd refuses naming both with the file byte-identical and succeeds at exactly 2 signals; abandon closes a zero-signal session"
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/debug_test.go:TestDebugCloseAbandoned", "internal/cmd/debug_test.go:TestDebugCloseFixedPrintsNeverAdds", "internal/debugsession/close_test.go:TestCloseTextHeaderOnly", "internal/cmd/status_debug_test.go:TestDebugCloseDropsNudges", "internal/cmd/status_debug_test.go:TestStatusDebugNothingOpen"]
+  notes = "CLI close re-parses to abandoned/resolved; body bytes unchanged from the first `## `; after a close neither status nor reentry names the slug and os.Stat finds the file"
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/debug_test.go:TestDebugCloseFixedPrintsNeverAdds", "internal/debugsession/close_test.go:TestRuleAddCommandShellOracle", "internal/debugsession/close_test.go:TestRuleAddFlatten"]
+  notes = "exactly one printed line; its /bin/sh-split argv fed to Rule() stores the flattened Prevention; project and global rules.toml snapshotted unchanged; hostile quoting round-trips with no side effect"
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/gate/drossfiles_test.go:TestCuratedShrinkBoundary"]
+  notes = "499-byte Write over 1000-byte debug/s.md refused naming Edit, 500 allowed, same table as handoff.md; creation allowed; .gitignore/notes.txt/sub/x.md not claimed; empty curated_files keeps the default"
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/debug_prompt_test.go:TestDebugPromptRequirements", "internal/cmd/debug_prompt_test.go:TestDebugPromptNoCommitPath", "internal/cmd/debug_prompt_test.go:TestDebugPromptParity", "internal/cmd/debug_prompt_test.go:TestDebugPromptIsClassified", "cmd/dross/main_test.go:TestDebugPromptCommandsExist", "internal/cmd/install_symlink_test.go:TestMakeInstallDelegates"]
+  notes = "a named subtest per prompt duty (one hypothesis, evidence-before-next scoped to the probe loop, porcelain+hash restore, BLOCKED pair and solo, routed never committed); no fenced commit/destructive line; audit section ✅; make install links every shim. Text-level checks are the ceiling for a prompt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "7 in-diff NOT COVERED survivors accepted under gremlins-attribution-ceiling: debug.go:165/167/169, store.go:109, close.go:59, parse.go:197, parse.go:355 (all CONDITIONALS_NEGATION on switch-case conditions). A -run=^$ coverprofile places each line in no block (case bodies 166/110/356 in one), and each arm is driven by a test: TestDebugCloseFlagMatrix, TestCreateRefusesExisting, TestCloseTextReason, TestParseImmunity's backticked `<!--` fixture, and every list-count test"
+
+[[finding]]
+  severity = "NOTE"
+  text = "the 3 test-gap NOT COVERED survivors are inherited status.go lines accepted in earlier phases (staleLine/humanizeAge), not this phase's code"
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-5: every cmd-level --fixed refusal fixture carries both gaps, so the single-gap refusal is pinned only in TestFixedCloseGaps; debug.go passes the gap list through unchanged (len(gaps) > 0), so the CLI path inherits it"
+
+[[finding]]
+  severity = "NOTE"
+  text = "no test pins a dross-<name>.md shim's @-include to its own prompt (TestCommandsPromptsParity checks file pairs only); cross-cutting across all shims, dross-debug.md's include is correct — filed as debug-sessions deferred[3] (someday, DRO-900)"

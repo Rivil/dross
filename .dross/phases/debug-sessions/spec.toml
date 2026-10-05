@@ -94,3 +94,8 @@
   id = "70fa600b189d43fb"
   text = "Prompts that run a .dross-writing CLI verb without committing (/dross-debug's approved `dross rule add` and mid-phase `dross task add`, /dross-rule's add) leave tracked .dross/ files dirty against dross-commit-hygiene; decide who commits rules.toml/plan.toml and how a rules-only commit reaches a protected base"
   why = "Raised by the t-7 solo reviews (debug-sessions): locked fix_path forbids /dross-debug commits, and /dross-rule already has the same gap, so the fix spans prompts beyond this phase"
+
+[[deferred]]
+  id = "c48dd0a92bf6ac08"
+  text = "Pin each assets/commands/dross-<name>.md shim's @-include to its own assets/prompts/<name>.md: TestCommandsPromptsParity checks only that both files exist, so a shim copied from another command and still including that command's prompt passes every test"
+  why = "Found by /dross-verify debug-sessions (c-9): cross-cutting across all 23 shims, not a debug-sessions defect — dross-debug.md's include is correct today"
