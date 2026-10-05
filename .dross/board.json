@@ -516,6 +516,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "board-finalize-on-complete/t-18": {
+      "issue": "DRO-871",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "board-finalize-on-complete/t-2": {
       "issue": "DRO-855",
       "plan_status": "done",

@@ -168,6 +168,23 @@
       "commit": "58b6870",
       "completed_at": "2026-10-04T22:30:07.435187Z"
     },
+    "t-18": {
+      "files": [
+        "internal/project/patch_keyed_test.go",
+        "internal/project/patch_test.go",
+        "internal/deferred/deferred_test.go"
+      ],
+      "commit": "00f4f01",
+      "completed_at": "2026-10-05T00:52:54.243209Z",
+      "landmarks": [
+        {
+          "feature": "lossless TOML writes",
+          "symbol": "TestKeyedInsertAtEndAppends",
+          "loc": "internal/project/patch_keyed_test.go",
+          "what": "keyed patcher edge paths (append-at-end, nested arrays, trailing comments, move refusal) and FindBySurvivor pinned in their own packages"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/project/patch_diff.go",
@@ -888,6 +905,51 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "TestReadmeListsDeferredAdd now asks whether the verb is in the parsed brace list instead of pinning the whole list, so adding absorb (or a later verb) no longer breaks it",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-18": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "TestKeyedMoveCarriesTrailingComments' move half never moves t-2: reordering [t-1,t-2,t-3] to [t-1,t-3,t-2] makes keyedArray move t-3 before t-2, so t-2's trailing comments stay attached whether or not elemSpan's line-969 loop runs. Only the delete half catches the regression; a reorder that moves t-2 itself (e.g. [t-2,t-1,t-3]) would make the 'a moved element takes them along' claim real.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestMoveElemRefusesALaterDestination's check that d.src is unchanged cannot fail: moveElem never mutates the doc and returns new bytes, so that check proves nothing.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-9",
+          "text": "TestFindBySurvivor kills both FindBySurvivor mutants: inverting the err check misses every key and also misses the malformed-spec case, and inverting the filter (==/!= or \u0026\u0026/||) breaks the single-live-match assertion.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-9",
+          "text": "TestFindBySurvivor's dismissed K1 fixture carries target = \"beta\", a shape phase.Deferred's doc says never occurs (dismiss is someday-only); harmless to what the test pins, but not a realistic entry",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "TestKeyedNestedArrayInserts checks that each original block is still present rather than full byte identity outside the inserts; enough for the elemCount contract, weaker than its comment's 'keeping every original byte'",
           "resolution": "non-blocking, left"
         }
       ]
