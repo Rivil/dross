@@ -1,0 +1,67 @@
+[phase]
+  id = "verify-staleness"
+  title = "verify-staleness"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "Every verify run (attached, detached, --skip-mutation) records in verify.toml the commit it measured and a fingerprint of the measured tree — every file outside .dross/** and ARCHITECTURE.md, uncommitted changes included."
+
+[[criteria]]
+  id = "c-2"
+  text = "`dross ship` refuses a pass verdict whose recorded tree no longer matches — a file outside the exemptions changed, added or removed since the run — naming the changed files and the re-verify command; --force-unverified overrides."
+  deferred = ["e8f3c04c60c82aa7"]
+
+[[criteria]]
+  id = "c-3"
+  text = "A change confined to .dross/** or ARCHITECTURE.md (ship's own landmark merge included) leaves the verdict fresh: ship proceeds without re-verify."
+
+[[criteria]]
+  id = "c-4"
+  text = "A detached run's baseline is the tree at dispatch: `dross verify results` records the dispatch-time tree, not the collect-time one, and names any file changed between dispatch and collect."
+
+[[criteria]]
+  id = "c-5"
+  text = "A verify.toml that records no tree (written before this phase) ships with a warning that its freshness is unknown, never a refusal."
+
+[[criteria]]
+  id = "c-6"
+  text = "`dross status` marks a verified phase whose verdict is stale, with the number of files changed since the run."
+
+[[criteria]]
+  id = "c-7"
+  text = "ship.md's CI-failure and merge-gate steps re-run `dross ship <phase-id>` after any fix pushed to phase/<id> and before merging, so a fix committed after the pass cannot merge under it; a prompt test pins the order."
+
+[[decisions]]
+  key = "staleness_exemptions"
+  choice = "Only .dross/** and ARCHITECTURE.md are exempt. Every other path — code, tests, README, CI config — invalidates the verdict when it changes."
+  why = "ARCHITECTURE.md is written by ship's own §3.5 after verify and .dross is bookkeeping; anything else can change a covering test or code a mutant lived in. Solo-settled 2026-10-05 (user authorized solo for the rest of v1.7)."
+  locked = true
+
+[[decisions]]
+  key = "fingerprint_scope"
+  choice = "The fingerprint covers the whole working tree (tracked plus untracked-not-ignored files) minus the exemptions, not only the phase's diff."
+  why = "A covered behaviour can change through a file the phase never touched — a base merge, a CI fix, a helper in another package. Solo-settled 2026-10-05."
+  locked = true
+
+[[decisions]]
+  key = "stale_override"
+  choice = "No new flag: --force-unverified is the one override for a stale pass, as it is for a non-pass verdict."
+  why = "A stale pass is an unverified tree; one audited escape hatch beats two. Solo-settled 2026-10-05."
+  locked = true
+
+[[decisions]]
+  key = "legacy_freshness"
+  choice = "A verify.toml with no recorded tree reads as freshness unknown: ship warns and proceeds."
+  why = "Refusing retroactively would strand every phase verified before this ships; every new verdict records its tree. Solo-settled 2026-10-05."
+  locked = true
+
+[[decisions]]
+  key = "detached_baseline"
+  choice = "A detached run's tree is captured at dispatch and carried in its run record to `verify results`."
+  why = "The host measures the tree pushed at dispatch; a collect-time capture would vouch for edits the run never saw. Solo-settled 2026-10-05."
+  locked = true
+
+[[deferred]]
+  text = "Re-verify only what changed: when a verdict goes stale, re-measure the changed files instead of the whole phase."
+  why = "An optimisation of the full re-verify this phase makes mandatory; premature until the staleness gate has run on real ships."
