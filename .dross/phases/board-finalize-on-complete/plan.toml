@@ -1,0 +1,195 @@
+task_seq = 18
+
+[phase]
+  id = "board-finalize-on-complete"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Silence unknown identity-label lookups across providers"
+  files = ["internal/forge/forge.go", "internal/forge/identity_label_test.go", "internal/forge/forge_test.go", "internal/forge/youtrack_test.go", "internal/boardsync/reap_discover.go", "internal/boardsync/identity_label_test.go"]
+  description = "forge gains IsIdentityLabel over one prefix list (dross/task:, dross/phase:, dross/deferred:, dross/target:). WarnDroppedLabels (shared by all four ListIssues)\nleaves identity labels out of its warning but still drops them, so the lookup resolves to no card. reap_discover.go's identityLabels takes its prefixes from that list."
+  covers = ["c-3"]
+  test_contract = ["against the github, forgejo, jira and youtrack httptest label indices, ListIssues(Labels: [dross/task:p/t-1]) on a board lacking the label returns no issues and a nil error, makes zero issue-list requests, and writes nothing to stderr", "the same four providers with Labels:[bug] still print 'does not know the label(s) bug'; a mixed query [dross/phase:x, bug] warns naming bug and NOT dross/phase:x", "unknown dross/status:done, dross/quick and the bare dross marker still warn — the dross/ prefix alone is not identity", "TestRESTListIssuesDropsUnknownLabels and its YouTrack twin gain an identity row (dross/phase:never-synced → zero issues, empty stderr) while the existing typo rows still warn", "ResolvePhaseIssue over a YouTrack fake whose tag list lacks dross/phase:new returns an empty key with empty captured stderr", "drift test: every reap_discover identityLabels prefix and every PhaseLabel/TaskLabel/DeferredLabel/TargetLabel output satisfies forge.IsIdentityLabel, StatusLabel/LabelQuick/LabelMarker do not, and a fifth dross/<kind>: constructor registered on one side only fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Generalize the project.toml patcher in place"
+  files = ["internal/project/patch_diff.go", "internal/project/patch_save.go", "internal/project/project.go", "internal/project/patch_save_test.go", "internal/cmd/project_writer_pin_test.go", "ARCHITECTURE.md", "internal/secretscan/writers.go"]
+  description = "toTree/diff take any instead of *Project; a new exported door (patch_save.go) does read → caller-supplied decode → diff → apply → verifyPatched → atomic write,\nwith a fresh encode only for an absent path. project.Save becomes a caller. No file moves. The writer pins widen to admit the door and nothing else;\nARCHITECTURE.md's Save/apply/diff/encodeFresh anchors are re-pointed."
+  covers = ["c-4", "c-5"]
+  test_contract = ["internal/project/save_lossless_test.go (TestSaveNoopIsByteIdentical, TestSaveRefusesUnverifiedPatch, TestSaveFailureLeavesOriginalBytes, TestSavePreservesFileMode, TestSaveVerifyNamesDifferingKey) and cmd's TestLosslessRealProjectTomlOneLineDiff pass UNMODIFIED — planOps stays Save's *Project-typed seam", "a non-Project fixture struct (root scalar, one table, an array-of-tables with a multi-line array and trailing comments) changing one scalar in item 2 changes exactly that one line", "a no-op save of the fixture performs no write (mtime unchanged); a verify mismatch forced through the door's OWN ops seam (not planOps) leaves the fixture byte-identical and returns an error naming its path", "TestEncodeFreshIsTheOnlyEncoder still reports an injected toml.Marshal fallback and a second NewEncoder; its writeAtomic/encodeFresh allowlists name the door and nothing else, so a stray caller fails by name", "TestArchitectureNamesLosslessWriter resolves every Save/apply/diff/encodeFresh anchor after the edit — a stale line number fails it — and TestNoTestLost stays green (no recorded patch test renamed, moved or copied)", "TestEveryDrossWriterIsDeclared stays green: internal/secretscan/writers.go declares patch_save.go if the door holds the write verb, and no declared file is left without one"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Record absorbed deferred ids on criteria"
+  files = ["internal/phase/phase.go", "internal/cmd/validate.go", "internal/cmd/validate_absorb_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
+  description = "Criterion gains Deferred []string (toml/json deferred,omitempty). dross validate checks every absorbed id against deferred.Collect (every phase spec plus\n.dross/deferred.toml): the id must name an entry whose Target is the spec's own phase."
+  covers = ["c-7"]
+  test_contract = ["validate is green for a criterion listing the id of an item routed to that phase, whether the item lives in another phase's spec or in .dross/deferred.toml", "validate fails with a ✗ line naming the spec path, the criterion id and the deferred id when the id names no item, an item routed to a different phase (naming that phase), an unrouted someday item, or a dismissed item", "LoadSpec of deferred = [abc] under [[criteria]] populates Criterion.Deferred", "a spec with no absorbed ids round-trips through Spec.Save without gaining a deferred key, and json_tag_parity_test stays green", "history is frozen: in a phase whose changes.json is complete, an absorbed id whose item has since been re-routed elsewhere passes validate (a NOTE at most), while the same spec in an incomplete phase still fails naming the item's new target"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Refuse routing to a completed phase"
+  files = ["internal/cmd/deferred_target.go", "internal/cmd/deferred.go", "internal/cmd/deferred_add.go", "internal/cmd/survivor.go", "internal/cmd/route_complete_test.go"]
+  description = "One refuseCompleteTarget(root, slug) helper over changes.Complete(). deferred route, survivor route and deferred add --target call it right after\nvalidDeferredTarget, before any read-modify-write. It is NOT folded into validDeferredTarget, which validate also reads."
+  covers = ["c-8"]
+  test_contract = ["deferred route <src> <idx> --target done (done's changes.json status=complete) errors naming done and complete, and a hash of the whole .dross tree is unchanged", "survivor route f.go:12 --op X --target done refuses before ResolveAt runs (a fixture with an unresolvable line still gets the complete-phase error), and the current spec.toml and survivors.toml are byte-identical", "deferred add --target done refuses with no spec or deferred.toml write and zero board requests", "control: all three succeed for a target at status=shipped and for an unscaffolded roadmap slug", "dross validate stays green on a repo that already holds an item routed to a complete phase"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 1
+  title = "Build idempotent completion-gated board finalizer"
+  files = ["internal/boardsync/finalize.go", "internal/boardsync/finalize_test.go", "internal/boardsync/task.go", "internal/boardsync/phase.go", "internal/boardsync/ctx.go", "internal/cmd/issue_test.go"]
+  description = "FinalizePhase(ctx, id) refuses unless the phase's changes.json is Complete(). It resolves or creates the phase card and every task card (plan tasks, plus\nany card carrying dross/phase:<id> and a dross/task:<id>/ label); task cards close at task-complete, then the phase card at complete. A card already at\nits terminal label AND done gets no write. Milestone linking uses only board.json's cached id, never EnsureMilestoneLink. Per-card failures are\nrecorded and the rest continue. Adds StatusComplete and StatusTaskComplete constants to ctx.go; FinalizePhase passes them, not string literals."
+  covers = ["c-1"]
+  test_contract = ["stateBoard/faultBoard with a phase card at shipped and 3 task cards at task-in-review: afterwards every task card carries dross/status:task-complete and reads closed, and the phase card carries dross/status:complete and reads closed", "no cards at all: the phase card and every task card are created then closed (close-on-create), and board.json gains the phase link and three task links", "a second FinalizePhase on that board logs only Get/List calls (zero Create/Update/Close/SetState) and leaves board.json byte-identical; a card that reads done but lacks its terminal status label is relabelled (the skip needs both)", "changes.json status=shipped → an error naming shipped before any board call (faultBoard.calls is empty)", "faultBoard.refuseClose on t-2's card → t-1, t-3 and the phase card still close, and the error names t-2 (TaskCloseError aggregation is not short-circuited)", "plan.toml absent → the phase card closes and a task card found by its dross/phase:<id> + dross/task: labels closes too; a marker card with dross/phase:<id> but no dross/task: label is not touched", "a missing phase card for a phase whose milestone has no cached board id → card created and closed, and faultBoard.milestones stays empty; issue_test's ctx.go-constant membership check covers StatusComplete", "TestLifecycleVocabularyIsTheConfigenumSet (internal/cmd/issue_test.go) lists StatusComplete and StatusTaskComplete, and fails if either constant is dropped from ctx.go or drifts from the configenum set"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 1
+  title = "Name [board].enabled and non-zero failure in prompts"
+  files = ["assets/prompts/execute.md", "assets/prompts/plan.md", "assets/prompts/quick.md", "assets/prompts/milestone.md", "assets/prompts/verify.md", "assets/prompts/ship.md", "internal/cmd/board_switch_prompt_test.go"]
+  description = "Replace every no-op-unless-[remote].board_sync / same-no-op-rule / no-op-when-board-sync-is-off variant (execute.md:57,62,116,345,396; plan.md:252;\nquick.md:203,240; milestone.md:111,164; verify.md:91; ship.md:163,167) with: the call exits 0 silently when [board].enabled is false, and a non-zero\nexit is a board failure to surface, not the disabled no-op. ship.md §6 steps 4-5 are left for t-16. r-01: make install before dogfooding the wording."
+  covers = ["c-10"]
+  test_contract = ["the test reads assets/prompts/*.md RAW (promptContent strips underscores, so a normalised scan misses it) and fails on any board_sync; reverting execute.md:57 alone fails it", "any prompt carrying a dross issue {phase sync|task sync|milestone sync|backlog sync|quick} call that lacks [board].enabled or the non-zero-exit surfacing sentence fails, naming the file; dropping the sentence from verify.md fails", "anti-vacuity: the test fails if fewer than 6 prompts with a dross issue call are found", "TestInboxPromptReadsBoardEnabled stays green (inbox.md is not reworded)"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 2
+  title = "Match keyed array-of-tables elements by identity"
+  files = ["internal/project/patch.go", "internal/project/patch_diff.go", "internal/project/patch_save.go", "internal/project/patch_keyed_test.go", "ARCHITECTURE.md"]
+  description = "The door gains an OPTIONAL identity map (options struct; nil = today's positional/deep-equal matching), so project.Save, the diff(old, new) test callers and\nt-8's survivor.Save compile unchanged. Keyed arrays (e.g. task→id) match by key, never by position: a matched element gets per-field ops, a reorder becomes a\nblock move, an insertion at index i an insert-before op, a removal a block delete. A comment run directly above a [[header]] (no blank line between) travels\nwith that element. Re-points the ARCHITECTURE.md apply/diff anchors this edit shifts."
+  covers = ["c-4"]
+  depends_on = ["t-2"]
+  test_contract = ["keyed reorder [t-1,t-2,t-3]→[t-1,t-3,t-2] relocates t-3's block whole: no field is rewritten in place, and the t-1 and t-2 blocks remain byte-identical substrings", "inserting a new element at index 1 lands it between t-1 and t-2, not at EOF, and verifyPatched accepts it; cutting the inserted block back out returns the original bytes exactly", "a comment directly above t-3's header moves with t-3 and one separated by a blank line stays put; deleting t-2 keeps '# about t-3' and removes t-2's own body comment", "changing t-4.status while removing t-2 in one diff touches exactly two regions: t-4's status line and t-2's block", "a duplicate identity value on either side → error, no write; a keyed patch that would not decode to the saved value is refused and the file is untouched", "TestDiffArrayOfTablesEditInPlace (unkeyed stack.locked) and the project lossless suite stay green", "existing callers compile and pass unmodified: save_lossless_test.go and patch_diff_test.go still call diff(old, new) with no identity map, and project.Save passes none", "TestArchitectureNamesLosslessWriter still resolves every apply/diff anchor after the keyed-patcher edit"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 2
+  title = "Write survivors.toml through the lossless patcher"
+  files = ["internal/survivor/store.go", "internal/survivor/store_lossless_test.go", "internal/cmd/survivor_lossless_test.go", "internal/secretscan/writers.go"]
+  description = "survivor.Save validates, then writes through the door, with a fresh encode only when the file does not exist. Accept, Retire and category pruning\ninherit it. Matching stays positional/deep-equal: Add replaces an existing key in place, new keys append, retire deletes, keys are unique."
+  covers = ["c-5"]
+  depends_on = ["t-2"]
+  test_contract = ["cmd test: a COMMITTED survivors.toml (the secret self-scan reads tracked files only) holding an entry with a GitHub-token-shaped text whose line ends '# dross:allow-secret'; dross survivor accept adds an entry, every original line stays byte-identical, and dross validate exits 0", "negative control in the same test: the identical store re-encoded with toml.NewEncoder makes dross validate report a secret, proving the fixture trips the scanner and the green is not vacuous", "survivor retire of the middle of three entries leaves the other two blocks (markers included) and an unpruned category byte-identical; a pruned category's block goes alone", "accept with a new category inserts its [[category]] block after the last existing category, and the accepted blocks are untouched; survivor route leaves survivors.toml byte-identical (it writes spec.toml only)", "corpus: the repo's own .dross/survivors.toml copied to a temp dir, one acceptance added → the original bytes survive unchanged ahead of the new block", "TestEveryDrossWriterIsDeclared stays green: the writer registry in internal/secretscan/writers.go names the file that really writes survivors.toml once survivor.Save goes through the door (no stale store.go row, no undeclared writer)"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 2
+  title = "Add dross deferred absorb for /dross-spec"
+  files = ["internal/cmd/deferred_absorb.go", "internal/cmd/deferred.go", "internal/cmd/deferred_absorb_test.go", "assets/prompts/spec.md", "internal/cmd/spec_prompt_test.go", "cmd/dross/testdata/cli_tree.txt"]
+  description = "dross deferred absorb <source> <idx> --criterion <c-id> [--phase <id>] (default: the current phase) resolves the item by its <source> <idx> handle,\nrequires its target to be that phase, stamps an id if the item has none, and appends the id once to the criterion's deferred list. spec.md tells\n/dross-spec to run it after §5 writes spec.toml for every criterion accepted from a §1 parked item. No toml-tagged types in cmd."
+  covers = ["c-7"]
+  depends_on = ["t-3", "t-4"]
+  test_contract = ["absorbing an item routed to the current phase writes its stable id (never <source> <idx>) into the criterion's deferred list, and dross validate then passes; a second identical run changes no byte (no duplicate id, no write)", "an id-less legacy item gets an id stamped in its source spec, and that same id lands on the criterion", "an item routed to another phase, or unrouted, is refused naming its target; an unknown criterion is refused naming it; an out-of-range idx is refused; every spec stays byte-identical", "TestDeferredEntryIDStaysInternal is unchanged: deferred list --json still has no id key", "spec_prompt_test fails if spec.md stops instructing dross deferred absorb for criteria seeded from a parked item, or places it before the '## 5. Write spec.toml' heading", "spec_prompt_test also fails if the spec.md absorb instruction omits an explicit --phase <phase-id> (current_phase is only set in §6, so the default could name another phase)"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 2
+  title = "Re-route an already-routed survivor in place"
+  files = ["internal/cmd/survivor.go", "internal/deferred/deferred.go", "internal/cmd/survivor_route_test.go"]
+  description = "deferred.FindBySurvivor(root, key) searches every deferred source. One undismissed entry carrying the key → survivor route rewrites its Target in its\nown source spec (id kept); same target → no write at all; more than one → refuse naming each <source> <idx>; none → append, minting an id at filing as\ndeferred add does. The t-4 refusal runs first."
+  covers = ["c-9"]
+  depends_on = ["t-3", "t-4"]
+  test_contract = ["a key routed from phase A (entry id X in A's spec), re-routed from current phase B to T2 → A's entry now targets T2 with id X, B's spec is byte-identical, and exactly one entry across all sources carries the key", "route K→alpha then K→beta: exactly one [[deferred]] carries survivor=K, with the id minted on the first route unchanged and target=beta", "re-routing to the same target → every spec byte-identical, mtime unchanged, and stdout says it is already routed", "backlog sync after the re-route (TestReroutedDeferredSwapsItsTargetLabel harness) creates no issue: the same dross/deferred:X card gains dross/target:T2 and loses the old target label", "two pre-existing entries carrying the key → refused naming both handles, files unchanged; re-routing to a complete target → the c-8 refusal before the lookup, and the entry keeps its old target", "a survivor item absorbed by a criterion of complete phase P, re-routed to R after P's verify still lists it → the entry targets R with its id kept, and dross validate stays green on P's spec"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 2
+  title = "Disposition-record predicate for routed items"
+  files = ["internal/boardsync/disposition.go", "internal/boardsync/disposition_test.go"]
+  description = "Disposed(root, entry) (bool, why) reads disk only. A routed survivor is disposed when survivors.toml accepts its key, or when the target's tests.json\nrun is finalized, newer than the source phase's run, ran its language leg without error, has scope.Files containing the survivor's file, and lists the\nkey in neither Surviving nor OutOfScope. A plain item is disposed when the target's changes.json is Complete() AND a target-spec criterion lists the\nitem's id. Anything unreadable → not disposed."
+  covers = ["c-6"]
+  depends_on = ["t-3"]
+  test_contract = ["survivor key accepted in survivors.toml → disposed, and why names survivors.toml", "routed survivor: target tests.json missing → not; a finalized, newer, error-free run whose scope contains the file and whose key is absent → disposed; key in OutOfScope → not; scope never touched the file → not; leg error → not; target run older than the source run → not; verify.toml not finalized → not; deferred text that does not parse to a file → not", "plain item: target complete + a target criterion deferred=[id] → disposed, why naming phases/<target>/spec.toml and the criterion id; target complete with no absorbing criterion → not (the 47a5c93 rule); absorbing criterion but target only shipped → not; a criterion listing the id in a complete phase that is NOT the item's target → not; item with an empty id → not", "the signature takes (root, entry) and no board client, so a verdict derived from card state cannot compile"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 2
+  title = "Finalize the board in dross phase complete"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_finalize.go", "internal/cmd/issue.go", "internal/cmd/phase_complete_board_test.go", "internal/cmd/testdata/cli_surface/issue.txt", "cmd/dross/testdata/cli_tree.txt"]
+  description = "phaseComplete calls finalizeBoard(id) after the remote-branch delete: openBoard (disabled → return nil, no client built), then FinalizePhase, then\nautoCommitDrossDirt + routeBaseChores for the board.json it wrote. Any failure, openBoard's included, leaves the completion intact, exits non-zero and\nnames dross issue phase finalize <id> — the same finalizeBoard, refusing unless HEAD is on the phase's recorded base. The issue.txt golden is re-minted."
+  covers = ["c-1"]
+  depends_on = ["t-5"]
+  test_contract = ["git fixture (shipFixture + simulateSquashMerge) + a board fake, [board].enabled=true: after dross phase complete every task card and the phase card read closed at task-complete / complete server-side, git status --porcelain is empty, and local base == origin/base", "board fake returning 500 on close → exit non-zero naming dross issue phase finalize <id>, while state.json carries completed <id>, changes.json reads status=complete, and phase/<id> is gone locally and on origin; a following dross issue phase finalize <id> closes every card", "[board].enabled=false with base_url pointing at a counting server → zero requests, exit 0, no board line in the output", "re-running complete after success → zero non-GET board requests, HEAD unchanged (no chore commit), board.json byte-identical", "[board].auth_env naming an unset variable → complete exits non-zero naming the finalize verb, with the completion record already written (openBoard runs after teardown, not before)", "issue phase finalize x with the board off exits 0 with zero requests and refuses off the recorded base; TestCLISurfacePinned fails if issue phase finalize is missing from issue.txt", "on the board-500 path the run still prints the completed <id> and branch/topology lines and records the phase_complete outcome event — the board failure is reported after them, never in place of them", "protected base (ChorePR fake): the board.json written by the finalizer goes out through routeBaseChores' chore-PR path, reusing the open completion-record chore PR when one exists, and the tree is clean afterwards"]
+  status = "done"
+
+[[task]]
+  id = "t-13"
+  wave = 2
+  title = "Reap creates missing cards for completed phases"
+  files = ["internal/boardsync/reap_catchup.go", "internal/boardsync/reap_catchup_test.go", "internal/boardsync/reap.go", "internal/boardsync/reap_apply.go", "internal/cmd/issue_reap_cmd.go", "internal/cmd/issue_reap_cmd_test.go"]
+  description = "ReapPlan gains Missing. Inventory walks phase dirs whose changes.json is Complete() and makes one State all dross/phase:<id> query per phase (phase and\ntask cards both carry the label) to decide which cards are missing. A dry run prints a Missing section and writes nothing; --apply calls FinalizePhase\nper phase, record-and-continue. Honors --namespace (Phases/Tasks). Creations are not journaled as closes."
+  covers = ["c-11"]
+  depends_on = ["t-1", "t-5"]
+  test_contract = ["dry run (writingIsFatalYT) with a complete phase the board has never heard of → listed with its N tasks, zero non-GET requests, board.json and reap-log.json byte-identical, and no 'does not know the label' line on stderr", "detection issues one State all dross/phase:<id> lookup per complete phase and never a bulk marker listing (asserted on the request log)", "a complete phase whose card exists CLOSED and is absent from board.json → not listed; a complete phase with its card but one card-less task → only that task is listed; a shipped-but-not-complete phase without a card → not listed", "--apply → phase card at complete and each task card at task-complete, all closed, with the labels FinalizePhase writes; a following dry run lists nothing missing", "one phase's create failing → the other phases are still created, and the exit is non-zero naming the failed phase", "--namespace Backlog → no catch-up lookup is made; reap --undo after a catch-up apply changes no created card; a complete phase with no spec.toml → listed as cannot-create with the reason and skipped by --apply"]
+  status = "done"
+
+[[task]]
+  id = "t-14"
+  wave = 3
+  title = "Write plan.toml through the keyed lossless patcher"
+  files = ["internal/phase/phase.go", "internal/phase/plan_lossless_test.go", "internal/phase/phase_test.go", "internal/cmd/task_lossless_test.go", "internal/secretscan/writers.go", "internal/project/export_test.go", "internal/project/plan_verify_test.go"]
+  description = "Plan.Save goes through the door with identity task→id, with a fresh encode only for a new file; Spec.Save keeps saveTOML. task status/add/edit/move/remove,\nissue task pull --apply and phase migrate inherit it through the one Plan.Save choke point. task_seq, reflowed waves and stripped depends_on count as\nchanged task state, not collateral."
+  covers = ["c-4"]
+  depends_on = ["t-7"]
+  test_contract = ["fixture with a header comment, '# about t-3' above t-3, inline comments on untouched lines, a trailing comment in t-2 and a hand-wrapped multi-line test_contract: task status t-2 done changes exactly t-2's status line", "task add --after t-1 inserts the new block between t-1 and t-2 and outside it only task_seq changes; task edit t-3 --title X changes only t-3's title line", "task move t-4 --before t-2 relocates t-4's block with its leading comment and rewrites only the wave lines of reflowed pending dependents, the t-2 and t-3 bytes unchanged; task remove t-3 --force deletes only t-3's block and the t-3 entries in dependents' depends_on lines", "corpus: every .dross/phases/*/plan.toml in the repo, copied to a temp dir, with its first task's status flipped → the diff is that one line (or one inserted key) and LoadPlan matches", "a forced verify mismatch → plan.toml byte-identical and task status errors naming plan.toml; a no-op status write (done→done) writes nothing (mtime unchanged)", "TestSaveTOMLAtomicFailurePreservesFile (name kept) is re-pointed to a failure the new writer actually hits (a read-only phase dir) and still proves plan.toml byte-identical"]
+  status = "done"
+
+[[task]]
+  id = "t-15"
+  wave = 3
+  title = "Close routed mirrors only on disposition records"
+  files = ["internal/boardsync/backlog.go", "internal/boardsync/reap.go", "internal/boardsync/reap_discover.go", "internal/boardsync/backlog_reconcile_test.go", "internal/boardsync/reap_classify_test.go"]
+  description = "Both paths call Disposed: SyncBacklog drops disposed items from the live push set and BacklogVerdictFor resolves them; routedVerdict and\nreapBacklogVerdictByID (linked and label-discovered cards) strand only on disposition and otherwise keep today's unattributable finished-destination\nreason. Target completion alone never closes. (t-13 ordering: shared reap.go.)"
+  covers = ["c-6"]
+  depends_on = ["t-11", "t-13"]
+  test_contract = ["TestBacklogVerdictTable gains rows: a routed survivor that is accepted → Resolved; a routed item with its target complete and no absorbing criterion → StillOpen (the 47a5c93 row kept verbatim)", "agreement test: over the same fixture rows, BacklogVerdictFor==Resolved iff reapBacklogVerdict==ReapStranded", "target complete + a target criterion listing the id → one close in backlog sync, and reap lists it stranded with a why naming phases/<target>/spec.toml and the criterion id", "after a disposition close, a second backlog sync makes zero UpdateIssue/CloseIssue calls for that card", "a label-discovered dross/deferred:<id> orphan whose item is disposed strands with the why naming the record; with the target complete and no record it stays unattributable"]
+  status = "done"
+
+[[task]]
+  id = "t-16"
+  wave = 3
+  title = "Drop ship §6 close steps; repoint lifecycle guards"
+  files = ["assets/prompts/ship.md", "internal/cmd/ship_prompt_test.go", "internal/boardsync/board_lifecycle_divergence_test.go"]
+  description = "Remove ship.md §6 steps 4 and 5; step 3 says dross phase complete closes the task and phase cards, and Recovery gains a board-finalize entry naming\ndross issue phase finalize <phase-id>. emittedStatuses gains a third source: FinalizePhase's status arguments parsed from finalize.go and resolved\nthrough package consts. mirrorLanes' Phases/Tasks rows point at it. The two recorded ship tests keep their names with inverted bodies. r-01: make install."
+  covers = ["c-2"]
+  depends_on = ["t-5", "t-6", "t-12"]
+  test_contract = ["TestShipPromptClosesTaskCardsAfterPhaseComplete (name kept) fails if ship.md contains dross issue task sync <phase-id> --status task-complete --close", "TestShipPromptEmitsTerminalBoardStatuses (name kept) fails if ship.md contains phase sync <phase-id> --status complete --close, if --status shipped no longer precedes dross phase complete <phase-id>, or if §6/Recovery stops naming dross issue phase finalize; its phase-complete-has-no-board-coupling sub-check is swapped for the finalize-recovery assertion", "deleting the task-complete argument from finalize.go fails TestEmittedStatusesAreTheLifecycleSet, and TestStateMapsKeyExactlyTheEmittedStatuses stays green only because finalize.go is scanned", "TestEveryMirrorLaneHasATerminalEmission fails if FinalizePhase stops closing either the Phases or the Tasks lane; TestCloseEmissionsCarryAValidStatus counts the finalizer's close emissions so it stays non-vacuous once the prompt --status --close lines are gone", "TestNoTestLost stays green"]
+  status = "done"
+
+[[task]]
+  id = "t-17"
+  wave = 4
+  title = "Sync docs and CLI help with board finalize"
+  files = ["README.md", "ARCHITECTURE.md", "internal/cmd/readme_board_finalize_test.go", "internal/cmd/deferred_add_test.go", "internal/cmd/issue_reap_cmd.go", "internal/cmd/issue_task.go", "internal/cmd/issue.go", "internal/cmd/testdata/cli_surface/issue.txt", "cmd/dross/testdata/cli_tree.txt"]
+  description = "README's issue verb list gains phase finalize; the reap paragraph gains completed-phase catch-up; dross phase complete is documented as finishing the\nboard; dross deferred absorb is listed. ARCHITECTURE.md's Issue board sync prose (~:559) stops saying ship emits the complete / task-complete closes, that\ndross phase complete has no board coupling, and that backlog sync closes a routed item whose target shipped; it says the Phases/Tasks terminal emissions\nlive in finalize.go. issue reap's Short names card creation, issue task sync --close drops 'use at ship finalize', and issue.txt is re-minted."
+  depends_on = ["t-9", "t-12", "t-13", "t-16"]
+  test_contract = ["TestEveryDocumentedIssueVerbResolves stays green with phase finalize in README's issue brace list", "readme_board_finalize_test fails if README omits dross deferred absorb, stops saying dross phase complete closes the board cards, or omits reap's creation of missing completed-phase cards", "the same test fails if ARCHITECTURE.md still says dross phase complete has no board coupling, or still attributes the task-complete / complete closes to ship's prompt", "the same test fails if ARCHITECTURE.md still says backlog sync closes a routed item whose target phase shipped, or still places the Phases/Tasks terminal emissions only in the prompt corpus", "TestCLISurfacePinned fails unless issue.txt carries reap's new Short naming missing-card creation and issue task sync's --close usage without 'ship finalize'"]
+  status = "done"
+
+[[task]]
+  id = "t-18"
+  wave = 3
+  title = "Own-package tests for keyed patch edge paths and FindBySurvivor"
+  files = ["internal/project/patch_keyed_test.go", "internal/project/patch_test.go", "internal/deferred/deferred_test.go"]
+  description = "Verify round 1 (fail) found 11 in-hunk survivors that ran 0 times in their own package's suite: gremlins scores internal/project and internal/deferred against their own tests, and the plan.toml lossless and re-route-in-place claims leaned on internal/cmd tests it cannot attribute. Add in-package tests for each path; no production change expected."
+  covers = ["c-4", "c-9"]
+  test_contract = ["if a keyed insert at the end of the array stops being rewritten to an append (patch.go:638), TestKeyedInsertAtEndAppends fails — the new element must land after the last one with every other byte unchanged", "if elemCount mis-qualifies a keyed array nested under a table (patch.go:935), TestKeyedNestedArrayInserts fails", "if an element's span stops carrying the comment lines touching its last key (patch.go:969), TestKeyedMoveCarriesTrailingComments fails — a moved or deleted element takes those comments with it", "if moveElem accepts a move to a later element (patch.go:1003), TestMoveElemRefusesALaterDestination fails, naming the array", "if the move or insert op stops describing itself (patch.go:596-598), TestOpStringNamesEveryShape fails on its new move/insert rows", "if FindBySurvivor returns a dismissed entry, misses the live one, or swallows a malformed spec (deferred.go:189,192), TestFindBySurvivor fails"]
+  status = "done"
+  depends_on = ["t-7", "t-10"]

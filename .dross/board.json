@@ -9,6 +9,7 @@
   },
   "phases": {
     "ast-aware-mutation-ranges": "DRO-448",
+    "board-finalize-on-complete": "DRO-853",
     "board-mirror-reaper": "DRO-163",
     "board-sync-truth": "DRO-19",
     "board-task-mirror": "DRO-32",
@@ -469,6 +470,96 @@
       "issue": "DRO-457",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "board-finalize-on-complete/t-1": {
+      "issue": "DRO-854",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-10": {
+      "issue": "DRO-863",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-11": {
+      "issue": "DRO-864",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-12": {
+      "issue": "DRO-865",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-13": {
+      "issue": "DRO-866",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-14": {
+      "issue": "DRO-867",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-15": {
+      "issue": "DRO-868",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-16": {
+      "issue": "DRO-869",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-17": {
+      "issue": "DRO-870",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-18": {
+      "issue": "DRO-871",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-2": {
+      "issue": "DRO-855",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-3": {
+      "issue": "DRO-856",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-4": {
+      "issue": "DRO-857",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-5": {
+      "issue": "DRO-858",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-6": {
+      "issue": "DRO-859",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-7": {
+      "issue": "DRO-860",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-8": {
+      "issue": "DRO-861",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-finalize-on-complete/t-9": {
+      "issue": "DRO-862",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "board-mirror-reaper/t-1": {
       "issue": "DRO-164",

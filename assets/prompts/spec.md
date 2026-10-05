@@ -182,6 +182,12 @@ Use the `Write` tool to save to `.dross/phases/<id>/spec.toml`. **Don't paste th
 
 Only surface a specific field if the user asks to see or change it.
 
+**Record what the spec absorbed.** Once `spec.toml` is written, run this for every criterion seeded from a §1 parked item — accepted as written or reworded, both count — where `<source> <idx>` is that item's handle from §1's `dross deferred list --target <id> --json`:
+```
+dross deferred absorb <source> <idx> --criterion <c-N> --phase <phase-id>
+```
+Always pass `--phase <phase-id>` explicitly: `current_phase` is only set in §6, so the default could name another phase. The record is the evidence a routed item was taken in: its board card closes once this phase completes, while an item nobody absorbed stays open. A criterion that took in several parked items gets one call per item.
+
 ## 6. Validate + wrap
 
 Run `dross validate`. If it errors, surface the schema problem and fix.

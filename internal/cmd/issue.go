@@ -56,7 +56,7 @@ func issuePhase() *cobra.Command {
 		Use:   "phase",
 		Short: "Mirror a phase onto the board",
 	}
-	c.AddCommand(issuePhaseSync())
+	c.AddCommand(issuePhaseSync(), issuePhaseFinalize())
 	return c
 }
 
@@ -331,7 +331,7 @@ func issuePhaseSync() *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&status, "status", "", "lifecycle status label ("+configenum.LifecycleStatuses.List()+"); derived from the plan if unset")
-	c.Flags().BoolVar(&doClose, "close", false, "close the issue (use on ship)")
+	c.Flags().BoolVar(&doClose, "close", false, "close the issue (dross phase complete closes it at finalize)")
 	return c
 }
 

@@ -294,13 +294,15 @@ func TestShipPromptAutoBackfill(t *testing.T) {
 	}
 }
 
-// TestShipPromptEmitsTerminalBoardStatuses proves c-6: ship moves the board
-// issue to a terminal lifecycle state rather than just closing it.
+// TestShipPromptEmitsTerminalBoardStatuses proves c-6 and its successor: ship
+// moves the board issue to shipped once the PR merges, and the terminal
+// complete belongs to `dross phase complete`, which finalizes the board itself.
 //
-// The bare `phase sync <phase-id> --close` this replaces is why "shipped" and
-// "complete" sat in both forge state maps as keys nothing ever resolved — dross
-// keyed them but never emitted them. Giving ship the two call sites is what
-// makes the bidirectional divergence gate satisfiable in both directions.
+// The bare `phase sync <phase-id> --close` that once closed the card is why
+// "shipped" and "complete" sat in both forge state maps as keys nothing ever
+// resolved. ship's own `--status complete --close` line has since moved into
+// the binary (boardsync.FinalizePhase), so a prompt still carrying it would
+// close the phase card a second time.
 func TestShipPromptEmitsTerminalBoardStatuses(t *testing.T) {
 	content := shipPromptContent(t)
 
@@ -311,7 +313,6 @@ func TestShipPromptEmitsTerminalBoardStatuses(t *testing.T) {
 		{"squash-merge bullet", strings.Index(content, "squash-merge via provider")},
 		{"--status shipped call", strings.Index(content, "phase sync <phase-id> --status shipped")},
 		{"dross phase complete", strings.Index(content, "dross phase complete <phase-id>")},
-		{"--status complete --close call", strings.Index(content, "phase sync <phase-id> --status complete --close")},
 	}
 	for _, m := range marks {
 		if m.at < 0 {
@@ -319,61 +320,60 @@ func TestShipPromptEmitsTerminalBoardStatuses(t *testing.T) {
 		}
 	}
 
-	// Order, not mere presence. Both calls exist in either arrangement, so a
-	// substring check would pass with them swapped — and swapped is wrong:
-	// shipped is the state once the PR merges but before the phase finalizes,
-	// complete is the state after.
+	// Order, not mere presence: shipped is the state once the PR merges but
+	// before the phase finalizes, so it must be emitted before complete runs.
 	for i := 1; i < len(marks); i++ {
 		if marks[i].at <= marks[i-1].at {
 			t.Errorf("%s (at %d) must come after %s (at %d)", marks[i].name, marks[i].at, marks[i-1].name, marks[i-1].at)
 		}
 	}
 
+	if strings.Contains(content, "phase sync <phase-id> --status complete --close") {
+		t.Error("ship.md still closes the phase card itself — dross phase complete finalizes the board, so this would close it a second time")
+	}
 	// The pattern that produced the dead map entries.
 	if strings.Contains(content, "phase sync <phase-id> --close") {
 		t.Error("ship.md still closes the board issue with a bare --close — that call emits no status, which is what left shipped and complete as state-map keys nothing resolves")
 	}
 
-	// Locked terminal_emit_sites: `dross phase complete` gains no board
-	// coupling. Both board moments are ship's own, so a command with zero board
-	// awareness today stays that way.
-	for i, line := range strings.Split(content, "\n") {
-		if strings.Contains(line, "dross phase complete") && strings.Contains(line, "phase sync") {
-			t.Errorf("ship.md:%d couples `dross phase complete` with a phase sync call: %s", i+1, strings.TrimSpace(line))
+	// The retry. complete exits non-zero when the board did not follow; the
+	// step that runs it and the cookbook must both name the command that
+	// finishes the job, or the failure reads as the completion failing and an
+	// agent reaches for --recover.
+	const finalize = "dross issue phase finalize <phase-id>"
+	for _, heading := range []string{"## 6. merge gate", "## recovery"} {
+		if !strings.Contains(promptSection(t, content, heading), finalize) {
+			t.Errorf("ship.md %q never names %q — a board that did not finalize has no named retry", heading, finalize)
 		}
 	}
 }
 
-// TestShipPromptClosesTaskCardsAfterPhaseComplete is c-2's emission half. A
-// terminal status nothing emits closes nothing: every task card sat in
-// task-in-review from its commit until forever, because the finalize steps had
-// no line that moved them on.
-//
-// Order is asserted, not just presence. The close belongs AFTER `dross phase
-// complete` — the cards are terminal because the phase finished, and emitting
-// it earlier would resolve them while the merge could still go sideways — and
-// before §7 Wrap, which is where the run stops doing things.
+// TestShipPromptClosesTaskCardsAfterPhaseComplete is c-2's emission half, now
+// owned by the binary. The task cards still close after the phase finishes —
+// boardsync.FinalizePhase, run last by `dross phase complete`, moves each to
+// task-complete — so ship.md must say so on the complete step and must no
+// longer carry a task close of its own, which would re-close cards the
+// finalizer already closed.
 func TestShipPromptClosesTaskCardsAfterPhaseComplete(t *testing.T) {
 	content := shipPromptContent(t)
 
-	const emit = "dross issue task sync <phase-id> --status task-complete --close"
-	at := strings.Index(content, emit)
-	if at < 0 {
-		t.Fatalf("ship.md never emits %q — every task card would stay in task-in-review forever", emit)
+	if strings.Contains(content, "dross issue task sync <phase-id> --status task-complete --close") {
+		t.Error("ship.md still closes the task cards itself — dross phase complete finalizes them")
 	}
-	complete := strings.Index(content, "dross phase complete <phase-id>")
-	if complete < 0 {
-		t.Fatal("ship.md no longer carries the `dross phase complete` step this emission is anchored to")
+	var step string
+	for _, line := range strings.Split(promptSection(t, content, "## 6. merge gate"), "\n") {
+		if strings.Contains(line, "dross phase complete <phase-id>") {
+			step = line
+			break
+		}
 	}
-	if at < complete {
-		t.Error("the task close is emitted BEFORE `dross phase complete`; the cards are terminal because the phase finished, not before it did")
+	if step == "" {
+		t.Fatal("ship.md §6 no longer carries the `dross phase complete` step")
 	}
-	wrap := strings.Index(content, "## 7. wrap")
-	if wrap < 0 {
-		t.Fatal("ship.md no longer has a §7 Wrap section to bound the finalize steps")
-	}
-	if at > wrap {
-		t.Error("the task close is emitted after the wrap section, where the run has already finished reporting")
+	for _, needle := range []string{"task-complete", "phase card to complete"} {
+		if !strings.Contains(step, needle) {
+			t.Errorf("ship.md's `dross phase complete` step must say it closes the board cards (%q missing):\n%s", needle, step)
+		}
 	}
 }
 

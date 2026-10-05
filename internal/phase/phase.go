@@ -24,6 +24,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/Rivil/dross/internal/pathfence"
+	"github.com/Rivil/dross/internal/project"
 )
 
 // RefusedSegment is where an id that would escape its parent directory
@@ -329,6 +330,11 @@ type SpecPhase struct {
 type Criterion struct {
 	ID   string `toml:"id" json:"id"`
 	Text string `toml:"text" json:"text"`
+	// Deferred lists the ids (Deferred.ID) of the parked items this criterion
+	// absorbs: the locked absorption_record decision makes this list the only
+	// evidence a routed item was taken into the phase it was routed to.
+	// omitempty so a criterion that absorbs nothing writes no key.
+	Deferred []string `toml:"deferred,omitempty" json:"deferred,omitempty"`
 }
 
 type Decision struct {
@@ -503,7 +509,12 @@ func LoadPlan(path string) (*Plan, error) {
 	return &p, nil
 }
 
-func (p *Plan) Save(path string) error { return saveTOML(path, p) }
+func (p *Plan) Save(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return project.SaveTOML(path, p, project.ArrayKey{Path: "task", Field: "id"})
+}
 
 // saveTOML writes v as TOML to path atomically: it encodes into a temp sibling
 // (<path>.tmp) and os.Rename's it over the target only after a fully successful

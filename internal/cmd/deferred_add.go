@@ -85,6 +85,9 @@ func deferredAdd() *cobra.Command {
 				if err := validDeferredTarget(root, target); err != nil {
 					return err
 				}
+				if err := refuseCompleteTarget(root, target); err != nil {
+					return err
+				}
 			}
 
 			path, source, note, err := deferredHome(root)

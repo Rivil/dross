@@ -1897,7 +1897,8 @@ func TestIssuePhaseSyncStatusFlagHelpNamesTheSet(t *testing.T) {
 // here rather than silently at sync time on a real board, which is how the
 // planning/planned drift survived as long as it did.
 func TestLifecycleVocabularyIsTheConfigenumSet(t *testing.T) {
-	for _, s := range []string{boardsync.StatusPlanned, boardsync.StatusInProgress, boardsync.StatusUAT} {
+	for _, s := range []string{boardsync.StatusPlanned, boardsync.StatusInProgress, boardsync.StatusUAT,
+		boardsync.StatusComplete, boardsync.StatusTaskComplete} {
 		if !configenum.LifecycleStatuses.Has(s) {
 			t.Errorf("issue.go declares lifecycle literal %q, which is not a configenum.LifecycleStatuses member (%s)", s, configenum.LifecycleStatuses.List())
 		}

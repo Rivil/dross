@@ -338,6 +338,68 @@ func TestRoutedBacklogFollowsItsTargetRecord(t *testing.T) {
 	}
 }
 
+// TestRoutedBacklogStrandsOnItsDispositionRecord: the one record that does
+// strand a routed mirror is its disposition — here a complete destination
+// whose criterion absorbed the item — and the plan line names that record.
+// The same destination complete without it stays a card for a human.
+func TestRoutedBacklogStrandsOnItsDispositionRecord(t *testing.T) {
+	seed := func(t *testing.T, absorbed ...string) *ReapPlan {
+		t.Helper()
+		f := &readOnlyYT{resolved: map[string]bool{}}
+		dir, ctx := reapRepo(t, f, `{"phases":{},"tasks":{},"quicks":{},"milestones":{},
+		  "backlog":{"someday:id:abc123":"PROJ-31"}}`)
+		writeSpec(t, dir, "01-src", "[phase]\nid=\"01-src\"\ntitle=\"Src\"\n\n"+
+			"[[deferred]]\n  id = \"abc123\"\n  text = \"an idea\"\n  target = \"02-dest\"\n")
+		writeAbsorbed(t, ctx.Root, "02-dest", "complete", absorbed...)
+		plan, err := Classify(ctx, nil)
+		if err != nil {
+			t.Fatalf("classify: %v", err)
+		}
+		return plan
+	}
+
+	c := cardFor(t, seed(t, "abc123").Cards, "PROJ-31")
+	if !strings.Contains(c.Why, "phases/02-dest/spec.toml") || !strings.Contains(c.Why, "c-2") {
+		t.Errorf("Why = %q, want it to name phases/02-dest/spec.toml and criterion c-2", c.Why)
+	}
+	plan := seed(t)
+	if hasKey(plan.Cards, "PROJ-31") {
+		t.Error("a routed item was stranded on its destination completing, with no criterion absorbing it")
+	}
+	if !hasKey(plan.Unattributable, "PROJ-31") {
+		t.Errorf("an undisposed item under a finished destination was not named; unattributable = %v", cardKeys(plan.Unattributable))
+	}
+}
+
+// TestOrphanDeferredStrandsOnlyOnDisposition is the same rule for a card found
+// by its dross/deferred:<id> label rather than a board.json link: disposed, it
+// strands naming the record; its destination complete alone, it is named as
+// unattributable with today's finished-destination reason.
+func TestOrphanDeferredStrandsOnlyOnDisposition(t *testing.T) {
+	seed := func(t *testing.T, absorbed ...string) candidate {
+		t.Helper()
+		f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
+			{key: "DRO-97", labels: []string{LabelMarker, DeferredLabel("abc123"), TargetLabel("02-dest")}},
+		}}
+		dir, ctx := discoverRepo(t, f, emptyBoard)
+		writeSpec(t, dir, "01-src", "[phase]\nid=\"01-src\"\ntitle=\"Src\"\n\n"+
+			"[[deferred]]\n  id = \"abc123\"\n  text = \"an idea\"\n  target = \"02-dest\"\n")
+		writeAbsorbed(t, ctx.Root, "02-dest", "complete", absorbed...)
+		found, _, err := Discover(ctx, ReapLanes)
+		if err != nil {
+			t.Fatalf("discover: %v", err)
+		}
+		return orphanFor(t, found, "DRO-97")
+	}
+
+	if c := seed(t, "abc123"); c.verdict != ReapStranded || !strings.Contains(c.card.Why, "phases/02-dest/spec.toml") || !strings.Contains(c.card.Why, "c-2") {
+		t.Errorf("disposed orphan: verdict %v, Why %q; want stranded naming phases/02-dest/spec.toml and c-2", c.verdict, c.card.Why)
+	}
+	if c := seed(t); c.verdict != ReapUnattributable || !strings.Contains(c.card.Why, "routed to 02-dest, which is complete") {
+		t.Errorf("undisposed orphan: verdict %v, Why %q; want unattributable with the finished-destination reason", c.verdict, c.card.Why)
+	}
+}
+
 // TestAlreadyTerminalIsNotStranded is what makes c-4's post-sweep dry run print
 // an honestly empty plan rather than re-listing everything it just closed.
 func TestAlreadyTerminalIsNotStranded(t *testing.T) {

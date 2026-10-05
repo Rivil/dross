@@ -33,11 +33,15 @@ command: issue milestone sync
 command: issue phase
   use: phase
   short: Mirror a phase onto the board
+command: issue phase finalize
+  use: finalize <phase-id>
+  short: Close a completed phase's board cards: tasks at task-complete, the phase at complete
+  flag: --base (string) default="" usage="the branch the phase was merged into, when it records none (a phase completed with --base)"
 command: issue phase sync
   use: sync <phase-id>
   short: Create or update the board issue for a phase (idempotent)
   flag: --status (string) default="" usage="lifecycle status label (planned | in-progress | shipped | complete | task-in-progress | task-in-review | task-complete | uat); derived from the plan if unset"
-  flag: --close (bool) default="false" noopt="true" usage="close the issue (use on ship)"
+  flag: --close (bool) default="false" noopt="true" usage="close the issue (dross phase complete closes it at finalize)"
 command: issue pull
   use: pull
   short: List open board issues not yet linked to dross work (inbound triage)
@@ -51,7 +55,7 @@ command: issue quick
   flag: --close (bool) default="false" noopt="true" usage="close the quick issue linked to <ref>"
 command: issue reap
   use: reap
-  short: Close board mirrors the forward lifecycle left stranded
+  short: Close stranded board mirrors and create the cards completed phases are missing
   flag: --namespace (stringArray) default="[]" usage="limit the sweep to one mirror namespace (repeatable; default: every namespace)"
   flag: --apply (bool) default="false" noopt="true" usage="write the plan to the board (default: dry run)"
   flag: --undo (bool) default="false" noopt="true" usage="restore the cards the last applied run closed, to the exact state each held before it"
@@ -66,4 +70,4 @@ command: issue task sync
   use: sync <phase-id> [task-id]
   short: Mirror a phase's plan tasks as issues, one per task
   flag: --status (string) default="" usage="lifecycle status to drive the task's state (planned | in-progress | shipped | complete | task-in-progress | task-in-review | task-complete | uat)"
-  flag: --close (bool) default="false" noopt="true" usage="resolve each synced task's issue (use at ship finalize; requires --status)"
+  flag: --close (bool) default="false" noopt="true" usage="resolve each synced task's issue (requires --status; dross phase complete closes them at finalize)"

@@ -24,7 +24,7 @@ func Deferred() *cobra.Command {
 		Use:   "deferred",
 		Short: "Inspect and route deferred items across phase specs",
 	}
-	c.AddCommand(deferredList(), deferredRoute(), deferredDismiss(), deferredUnroute(), deferredAdd())
+	c.AddCommand(deferredList(), deferredRoute(), deferredDismiss(), deferredUnroute(), deferredAdd(), deferredAbsorb())
 	return c
 }
 
@@ -132,6 +132,9 @@ func deferredRoute() *cobra.Command {
 			// silently unreachable destination, and a rejected route must leave
 			// every file byte-identical.
 			if err := validDeferredTarget(root, target); err != nil {
+				return err
+			}
+			if err := refuseCompleteTarget(root, target); err != nil {
 				return err
 			}
 			phaseID := args[0]

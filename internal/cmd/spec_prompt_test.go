@@ -220,3 +220,33 @@ func TestSpecPromptSkipAlreadyRouted(t *testing.T) {
 		t.Error("spec.md must skip deferred items that already have a target (dedup)")
 	}
 }
+
+// TestSpecPromptRecordsAbsorbedItems: once spec.toml is written, /dross-spec
+// records every criterion it seeded from a parked item with `dross deferred
+// absorb`, naming the phase explicitly — current_phase is only set in §6.
+func TestSpecPromptRecordsAbsorbedItems(t *testing.T) {
+	content := specPromptContent(t)
+	section5 := strings.Index(content, "## 5. write spec.toml")
+	absorb := strings.Index(content, "dross deferred absorb")
+	if section5 < 0 {
+		t.Fatal("spec.md has no '## 5. Write spec.toml' heading")
+	}
+	if absorb < 0 {
+		t.Fatal("spec.md never instructs dross deferred absorb for criteria seeded from parked items")
+	}
+	if absorb < section5 {
+		t.Fatal("spec.md places dross deferred absorb before spec.toml is written (§5)")
+	}
+	line := content[absorb:]
+	if i := strings.Index(line, "\n"); i >= 0 {
+		line = line[:i]
+	}
+	if !strings.Contains(line, "--phase <phase-id>") {
+		t.Errorf("the absorb instruction does not pass --phase <phase-id> explicitly: %q", line)
+	}
+	// A reworded parked item is still absorbed: only "accepted as written"
+	// would leave its board card open forever.
+	if !strings.Contains(content[section5:absorb], "seeded from a §1 parked item") || !strings.Contains(content[section5:absorb], "reworded") {
+		t.Error("spec.md's absorb instruction does not cover a reworded parked item")
+	}
+}

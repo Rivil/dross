@@ -56,15 +56,16 @@ var orphanLaneFor = map[orphanKind]string{
 // identityLabels is the label vocabulary the forward sync stamps, in the
 // precedence discovery reads them back. A routed deferred item carries both its
 // item id and its destination; the item id is the more specific of the two, so
-// it is consulted first.
+// it is consulted first. The prefixes are forge's, so the list that silences an
+// unknown identity label and the list reap classifies by cannot drift apart.
 var identityLabels = []struct {
 	prefix string
 	kind   orphanKind
 }{
-	{"dross/task:", orphanTask},
-	{"dross/phase:", orphanPhase},
-	{"dross/deferred:", orphanDeferred},
-	{"dross/target:", orphanTarget},
+	{forge.IdentityTaskPrefix, orphanTask},
+	{forge.IdentityPhasePrefix, orphanPhase},
+	{forge.IdentityDeferredPrefix, orphanDeferred},
+	{forge.IdentityTargetPrefix, orphanTarget},
 }
 
 // orphanIdentity recovers which artefact a card mirrors from its own labels.
@@ -172,7 +173,9 @@ func orphanVerdict(ctx *Ctx, kind orphanKind, artefact string) (ReapVerdict, str
 	case orphanTarget:
 		// A routed item never resolves on its destination completing (see
 		// routedVerdict) — and a destination still on a roadmap but
-		// unscaffolded is live work, not a lost mirror.
+		// unscaffolded is live work, not a lost mirror. A target label alone
+		// names no item, so there is no disposition record to read; a card
+		// that also carries its item id is classified by that id instead.
 		if !phase.DirExists(ctx.Root, artefact) {
 			roadmap, err := roadmapSlugs(ctx.Root)
 			if err != nil {

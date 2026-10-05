@@ -558,6 +558,13 @@ const (
 	// highest index first: every op re-indexes, so removing element 1 makes
 	// the old element 2 the new element 1.
 	opDeleteElem
+	// opMoveElem relocates element elem's raw bytes — its leading comments
+	// included — to sit just before element to (to < elem). Nothing in the
+	// block is re-rendered.
+	opMoveElem
+	// opInsertElem places a new element (value is a block) so it becomes
+	// element elem; elem equal to the element count appends.
+	opInsertElem
 )
 
 // op is one surgical edit. table is the dotted path of the table holding key;
@@ -570,6 +577,7 @@ type op struct {
 	kind  opKind
 	table []string
 	elem  int
+	to    int // opMoveElem's destination element
 	key   string
 	value any
 }
@@ -584,6 +592,10 @@ func (o op) String() string {
 		return "append [[" + t + "]]"
 	case opDeleteElem:
 		return "delete [[" + t + "]]"
+	case opMoveElem:
+		return fmt.Sprintf("move [[%s]] before element %d", t, o.to)
+	case opInsertElem:
+		return "insert [[" + t + "]]"
 	}
 	if o.value == nil {
 		return "delete " + t + "." + o.key
@@ -621,6 +633,10 @@ func apply(src []byte, ops []op) ([]byte, error) {
 }
 
 func (d *doc) applyOne(o op) ([]byte, error) {
+	if o.kind == opInsertElem && o.elem == d.elemCount(o.table) {
+		// Inserting at the end is an append.
+		o.kind, o.elem = opAppendElem, -1
+	}
 	target, err := d.qualify(o)
 	if err != nil {
 		return nil, err
@@ -637,6 +653,10 @@ func (d *doc) applyOne(o op) ([]byte, error) {
 		return d.appendElem(target, o.value)
 	case opDeleteElem:
 		return d.deleteElem(target)
+	case opMoveElem:
+		return d.moveElem(target, o.to)
+	case opInsertElem:
+		return d.insertElem(target, o.value)
 	}
 	if o.value == nil {
 		return d.deleteKey(target, o.key)
@@ -892,20 +912,132 @@ func (d *doc) shelters(h int) bool {
 }
 
 func (d *doc) deleteElem(target []seg) ([]byte, error) {
+	from, last, err := d.elemSpan(target)
+	if err != nil {
+		return nil, err
+	}
+	if from > 0 && d.lines[from-1].kind != lineBlank {
+		// A line that stays sits right against the element (a section comment
+		// over a first element): there is no separator above to take, so take
+		// the one below — what stays keeps hugging what follows.
+		for last+1 < len(d.lines) && d.lines[last+1].kind == lineBlank {
+			last++
+		}
+		return d.removeLines(from, last), nil
+	}
+	return d.removeBlock(from, last), nil
+}
+
+// elemCount is how many elements the [[table]] array has (0 when absent).
+func (d *doc) elemCount(table []string) int {
+	var path []seg
+	for _, name := range table[:len(table)-1] {
+		path = append(path, seg{name, -1})
+	}
+	return d.arrays[qualifiedKey(path, table[len(table)-1])]
+}
+
+// elemSpan returns the lines element target occupies, [from, last].
+//
+// It starts at the run of comment lines directly above the header (no blank
+// line between — a comment written against an element belongs to it), except
+// for the FIRST element, where such a run is the section's or the file's
+// heading and stays put. It ends at the element's last key, continuation or
+// sub-table line, plus any comment lines touching it. A comment set apart by a
+// blank line — a loose note between elements, or one at the end of the file —
+// belongs to no element and stays where it is.
+func (d *doc) elemSpan(target []seg) (from, last int, err error) {
 	h := d.lastHeader(func(x *header) bool { return x.array && slices.Equal(x.path, target) })
 	if h < 0 {
-		return nil, fmt.Errorf("[[%s]] element %d has no header line", strings.Join(segNames(target), "."), target[len(target)-1].elem)
+		return 0, 0, fmt.Errorf("[[%s]] element %d has no header line", strings.Join(segNames(target), "."), target[len(target)-1].elem)
 	}
-	// The element's span runs through its own sub-table headers, up to the
-	// first header that is not beneath this element.
 	end := len(d.lines)
 	for i := h + 1; i < len(d.lines); i++ {
 		if d.lines[i].kind == lineHeader && !hasSegPrefix(d.lines[i].hdr.path, target) {
-			end = i
+			end = d.leadingComments(i)
 			break
 		}
 	}
-	return d.removeBlock(h, max(d.lastContent(h+1, end), h)), nil
+	last = h
+	for i := h + 1; i < end; i++ {
+		switch d.lines[i].kind {
+		case lineKey, lineCont, lineHeader:
+			last = i
+		}
+	}
+	for last+1 < end && d.lines[last+1].kind == lineComment {
+		last++
+	}
+	from = h
+	if target[len(target)-1].elem > 0 {
+		from = d.leadingComments(h)
+	}
+	return from, last, nil
+}
+
+// leadingComments returns the first line of the comment run directly above
+// line h, or h when the line above is not a comment.
+func (d *doc) leadingComments(h int) int {
+	for h > 0 && d.lines[h-1].kind == lineComment {
+		h--
+	}
+	return h
+}
+
+// spanText is lines [from, last] verbatim, newline-terminated, with the
+// document's line endings normalised to "\n" — splice gives them back, so a
+// CRLF document's block is not double-converted on its way to the new spot.
+func (d *doc) spanText(from, last int) string {
+	text := string(d.src[d.lines[from].start:d.lines[last].end])
+	if d.eol != "\n" {
+		text = strings.ReplaceAll(text, d.eol, "\n")
+	}
+	return text + "\n"
+}
+
+// moveElem relocates element target's span to sit just before element to of
+// the same array. The bytes travel verbatim; only the separator blank line is
+// managed, so every other block stays byte-identical.
+func (d *doc) moveElem(target []seg, to int) ([]byte, error) {
+	if to >= target[len(target)-1].elem {
+		return nil, fmt.Errorf("[[%s]]: a move must go to an earlier element (%d → %d)", strings.Join(segNames(target), "."), target[len(target)-1].elem, to)
+	}
+	from, last, err := d.elemSpan(target)
+	if err != nil {
+		return nil, err
+	}
+	text := d.spanText(from, last)
+	rest, err := indexDoc(d.removeBlock(from, last))
+	if err != nil {
+		return nil, err
+	}
+	dest := append(append([]seg{}, target[:len(target)-1]...), seg{target[len(target)-1].name, to})
+	return rest.insertBeforeElem(dest, text)
+}
+
+// insertElem renders a new element and places it so it becomes element target.
+func (d *doc) insertElem(target []seg, value any) ([]byte, error) {
+	body, err := toBlock(value)
+	if err != nil {
+		return nil, err
+	}
+	lines, err := d.renderTable(segNames(target), true, body)
+	if err != nil {
+		return nil, err
+	}
+	return d.insertBeforeElem(target, strings.Join(lines, "\n")+"\n")
+}
+
+// insertBeforeElem splices text (complete lines) in front of element target's
+// span, followed by a blank separator line. Cutting text and that one blank
+// line back out returns the document exactly.
+func (d *doc) insertBeforeElem(target []seg, text string) ([]byte, error) {
+	from, _, err := d.elemSpan(target)
+	if err != nil {
+		return nil, err
+	}
+	at := d.lines[from].start
+	return d.splice(at, at, text+"\n"), nil
 }
 
 func hasSegPrefix(path, prefix []seg) bool {

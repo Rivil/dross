@@ -27,8 +27,9 @@ import (
 // THE RULE, outside internal/project: never open, create, rename onto or
 // encode into project.toml — load it with project.Load, mutate the struct,
 // call Save. Inside internal/project: exactly one BurntSushi encoder call
-// site (encodeFresh), and the file itself is only ever written by
-// writeAtomic, which only Save calls.
+// site (encodeFresh), and a file is only ever written by writeAtomic, which
+// only saveLossless calls — the lossless write door Project.Save and SaveTOML
+// both go through.
 
 // fileWriters are the os functions that put bytes at a path; the index is
 // which argument is the path (Rename's destination is its second).
@@ -43,7 +44,7 @@ var fileWriters = map[string]int{
 // the encoder for text. A new entry is a new re-encode path and needs a
 // reason here, not just a call.
 var encodeFreshCallers = map[string]bool{
-	"Save":            true, // a path that does not exist yet
+	"saveLossless":    true, // the door: a path that does not exist yet
 	"verifyPatched":   true, // canonical form of both sides, compared
 	"renderValue":     true, // one spliced value
 	"encodeCanonical": true, // the differ's generic tree
@@ -253,8 +254,8 @@ func isFileWriter(name string) bool {
 
 // projectPackageViolations spells the inside-internal/project rule over a
 // scan: one encoder in encodeFresh, its callers from the allowlist, file
-// writes only in writeAtomic (plus Save's read-only probe), writeAtomic
-// called only by Save.
+// writes only in writeAtomic (plus the door's read-only probe), writeAtomic
+// called only by the door, saveLossless.
 func projectPackageViolations(pins projectPackagePins) []string {
 	var problems []string
 	if !pins.encodeFreshExists {
@@ -270,13 +271,13 @@ func projectPackageViolations(pins projectPackagePins) []string {
 		}
 	}
 	for _, w := range pins.fileWrites {
-		if !strings.Contains(w, " in writeAtomic ") && !strings.HasPrefix(w, "os.OpenFile in Save ") {
+		if !strings.Contains(w, " in writeAtomic ") && !strings.HasPrefix(w, "os.OpenFile in saveLossless ") {
 			problems = append(problems, fmt.Sprintf("internal/project: %s — the file is written by writeAtomic alone", w))
 		}
 	}
 	for caller := range pins.writeAtomicCalls {
-		if caller != "Save" {
-			problems = append(problems, fmt.Sprintf("internal/project: %s calls writeAtomic — only Save may", caller))
+		if caller != "saveLossless" {
+			problems = append(problems, fmt.Sprintf("internal/project: %s calls writeAtomic — only saveLossless may", caller))
 		}
 	}
 	sort.Strings(problems)

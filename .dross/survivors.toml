@@ -3838,3 +3838,66 @@
   line = 147
   reason = "Equivalent mutant: writeReviews sorts the task ids of a map, so two ids are never equal and ids[i] < ids[j] and ids[i] <= ids[j] order every pair identically. The negation (>=) is the killable one, pinned by TestReviewSectionSameLengthOrder (same-length t-2/t-3 must render t-2 first)."
   accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "468ac2c21d16bf08"
+  file = "internal/project/patch.go"
+  op = "INVERT_NEGATIVES"
+  text = "o.kind, o.elem = opAppendElem, -1"
+  line = 638
+  reason = "equivalent mutant: after the insert-at-end op is rewritten to opAppendElem, qualify takes its append branch before reading elem, so -1 vs 1 cannot change behaviour; the rewrite itself is pinned by TestKeyedInsertAtEndAppends and TestKeyedNestedArrayInserts"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "230998f1a2aab3f9"
+  file = "internal/project/patch.go"
+  op = "ARITHMETIC_BASE"
+  text = "o.kind, o.elem = opAppendElem, -1"
+  line = 638
+  reason = "equivalent mutant: after the insert-at-end op is rewritten to opAppendElem, qualify takes its append branch before reading elem, so -1 vs 1 cannot change behaviour; the rewrite itself is pinned by TestKeyedInsertAtEndAppends and TestKeyedNestedArrayInserts"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "7d9b1ad2681d81b5"
+  file = "internal/boardsync/finalize.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case phaseKey == \"\":"
+  line = 120
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although the branch is taken and asserted — pinned by TestFinalizeTasksSurviveAPhaseCardCreateFailure (no phase card) and TestFinalizeClosesExistingCards (negated, the phase card is never closed)"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "eef13356dd2592b1"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Target == \"\":"
+  line = 493
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although the branch is taken and asserted — pinned by TestValidateRefusesBadAbsorbedIDs (an absorbed id naming an unrouted item)"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "24499cde58dc19c0"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Target != phaseID:"
+  line = 495
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although the branch is taken and asserted — pinned by TestValidateRefusesBadAbsorbedIDs (an absorbed id routed to another phase)"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "bdee64f39c5b0b6a"
+  file = "internal/cmd/deferred_absorb.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case item.Target == \"\":"
+  line = 71
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although the branch is taken and asserted — pinned by TestDeferredAbsorbRefusals (the unrouted case)"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "e3e0d0ffe41c51b1"
+  file = "internal/cmd/deferred_absorb.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case item.Target != phaseID:"
+  line = 73
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although the branch is taken and asserted — pinned by TestDeferredAbsorbRefusals (the routed-elsewhere case)"
+  accepted_in = "board-finalize-on-complete"

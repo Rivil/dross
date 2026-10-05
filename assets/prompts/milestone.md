@@ -108,7 +108,7 @@ dross state set current_milestone <version>
 dross state touch "scoped milestone <version>: <N> criteria, <M> phases"
 ```
 
-Mirror the milestone onto the issue board (no-op unless `[remote].board_sync` is on — safe to always run):
+Mirror the milestone onto the issue board (it exits 0 and does nothing when `[board].enabled` is false; a non-zero exit is a board failure — surface it, never read it as the disabled no-op):
 ```
 dross issue milestone sync <version>
 ```
@@ -161,7 +161,7 @@ Then resolve the milestone's board card, so the epic does not sit open forever b
 dross issue milestone sync <version> --close
 ```
 
-A no-op when board sync is off. It refuses — without writing anything — on a board whose milestone is not itself an issue (a YouTrack version bundle or agile board, a forge/GitHub milestone id): there is no card to close there, and on the forges a milestone id and an issue number are the same string, so closing blind would resolve someone else's issue.
+It exits 0 silently when `[board].enabled` is false; a non-zero exit is a board failure to surface. It refuses — without writing anything — on a board whose milestone is not itself an issue (a YouTrack version bundle or agile board, a forge/GitHub milestone id): there is no card to close there, and on the forges a milestone id and an issue number are the same string, so closing blind would resolve someone else's issue.
 
 `dross milestone complete --finalize` records `[milestone].status = complete` **before** it fast-forwards main and deletes `milestone/<version>` local + remote. Three consequences worth stating rather than discovering:
 

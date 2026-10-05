@@ -679,6 +679,32 @@ func TestYouTrackListIssuesDropsUnknownLabels(t *testing.T) {
 		}
 	})
 
+	t.Run("an unknown identity label resolves to no card, silently", func(t *testing.T) {
+		var issueCalls int
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/issueTags") {
+				_, _ = io.WriteString(w, `[{"name":"bug"}]`)
+				return
+			}
+			issueCalls++
+			_, _ = io.WriteString(w, `[{"idReadable":"PROJ-1","summary":"everything"}]`)
+		})
+
+		var issues []Issue
+		warn := captureForgeStderr(t, func() {
+			var err error
+			if issues, err = c.ListIssues(IssueFilter{Labels: []string{"dross/phase:never-synced"}}); err != nil {
+				t.Fatalf("ListIssues: %v", err)
+			}
+		})
+		if len(issues) != 0 || issueCalls != 0 {
+			t.Errorf("returned %+v via %d queries, want zero of each", issues, issueCalls)
+		}
+		if warn != "" {
+			t.Errorf("stderr = %q, want nothing for an unknown identity label", warn)
+		}
+	})
+
 	t.Run("every label unknown returns nothing, never the whole board", func(t *testing.T) {
 		var issueCalls int
 		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {

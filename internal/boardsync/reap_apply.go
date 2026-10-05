@@ -1,6 +1,7 @@
 package boardsync
 
 import (
+	"errors"
 	"fmt"
 	"github.com/Rivil/dross/internal/board"
 	"os"
@@ -179,17 +180,24 @@ func Apply(ctx *Ctx, plan *ReapPlan) error {
 	}
 
 	fmt.Fprintf(ctx.out(), "\nreaped %d card(s)", closed)
+	var closeErr error
 	if len(failures) == 0 {
 		fmt.Fprintln(ctx.out(), "")
-		return nil
+	} else {
+		fmt.Fprintf(ctx.out(), ", %d failed:\n", len(failures))
+		for _, f := range failures {
+			fmt.Fprintf(os.Stderr, "  %s\n", f.Error())
+		}
+		// Named by issue id and non-zero: a sweep that half-worked and exited 0
+		// would be indistinguishable from one that worked.
+		closeErr = fmt.Errorf("%d of %d card(s) could not be closed", len(failures), len(plan.Cards))
 	}
-	fmt.Fprintf(ctx.out(), ", %d failed:\n", len(failures))
-	for _, f := range failures {
-		fmt.Fprintf(os.Stderr, "  %s\n", f.Error())
+	// Catch-up runs after the closes, so a phase whose own card was stranded
+	// is already terminal and FinalizePhase only adds what is missing.
+	if err := ApplyMissing(ctx, plan.Missing); err != nil {
+		return errors.Join(closeErr, err)
 	}
-	// Named by issue id and non-zero: a sweep that half-worked and exited 0
-	// would be indistinguishable from one that worked.
-	return fmt.Errorf("%d of %d card(s) could not be closed", len(failures), len(plan.Cards))
+	return closeErr
 }
 
 // relabelReapedCard rewrites the card's `dross/status:` label to the lane

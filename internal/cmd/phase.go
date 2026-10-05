@@ -794,6 +794,14 @@ destructive reset of the local base branch; read the abort first.`,
 				// half-truths that drift.
 				Printf("branch: %s\n", renderTopologyLine(top))
 			}
+
+			// The board last, after everything above is already true and
+			// said (locked board_failure_posture): a tracker that cannot be
+			// reached is reported, and names its retry, without un-saying
+			// the completion.
+			if err := finalizeBoard(repoDir, phaseID, reconcileBranch); err != nil {
+				return boardNotFinalized(phaseID, err)
+			}
 			return nil
 		},
 	}

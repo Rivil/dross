@@ -80,6 +80,6 @@ A no-op when board sync is off.`,
 		},
 	}
 	c.Flags().StringVar(&status, "status", "", "lifecycle status to drive the task's state ("+configenum.LifecycleStatuses.List()+")")
-	c.Flags().BoolVar(&doClose, "close", false, "resolve each synced task's issue (use at ship finalize; requires --status)")
+	c.Flags().BoolVar(&doClose, "close", false, "resolve each synced task's issue (requires --status; dross phase complete closes them at finalize)")
 	return c
 }

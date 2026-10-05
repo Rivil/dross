@@ -30,7 +30,8 @@ import (
 // entry fails; a state map keyed on a status nothing emits fails.
 //
 // **"Emits" means call sites only** — the `--status <literal>` occurrences in
-// assets/prompts/*.md plus the values DerivePhaseStatus can return. Declared Go
+// assets/prompts/*.md, the values DerivePhaseStatus can return, and the status
+// every close call FinalizePhase reaches carries. Declared Go
 // constants are deliberately NOT counted: ctx.go's constants are defined *as*
 // members of configenum.LifecycleStatuses (cmd's issue_test.go asserts exactly that),
 // so folding them in would make the emit-set equal the Set by construction and
@@ -81,7 +82,158 @@ func emittedStatuses(t *testing.T) map[string]string {
 	for _, s := range derivePhaseStatusReturns(t, filepath.Join(root, "internal", "boardsync", "phase.go")) {
 		out[s] = "internal/boardsync/phase.go:DerivePhaseStatus"
 	}
+
+	// 3. The finalizer's close calls. The Phases and Tasks lanes' terminal
+	// statuses moved out of ship.md into FinalizePhase, which `dross phase
+	// complete` runs, so the binary is now their only call site.
+	for _, s := range finalizerCloses(t) {
+		out[s] = finalizerFile + ":FinalizePhase"
+	}
 	return out
+}
+
+// packageStringConsts collects the string constants declared in a package's
+// non-test files, by name.
+func packageStringConsts(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", dir, err)
+	}
+	consts := map[string]string{}
+	for _, pkg := range pkgs {
+		for _, f := range pkg.Files {
+			for _, decl := range f.Decls {
+				gd, ok := decl.(*ast.GenDecl)
+				if !ok || gd.Tok != token.CONST {
+					continue
+				}
+				for _, spec := range gd.Specs {
+					vs, ok := spec.(*ast.ValueSpec)
+					if !ok {
+						continue
+					}
+					for i, name := range vs.Names {
+						if i >= len(vs.Values) {
+							continue
+						}
+						if lit, ok := vs.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+							if v, err := strconv.Unquote(lit.Value); err == nil {
+								consts[name.Name] = v
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return consts
+}
+
+// finalizerFile holds the Phases and Tasks lanes' terminal emissions:
+// boardsync.FinalizePhase.
+var finalizerFile = filepath.Join("internal", "boardsync", "finalize.go")
+
+// closerFuncs are the finalizer's sinks: each drives a card to its status
+// argument and closes it. Calls to them are what is read; their own bodies
+// only pass that parameter on.
+var closerFuncs = []string{"closeNew", "finalizeCard"}
+
+// finalizerCloses resolves the status argument of every close call reachable
+// from FinalizePhase within finalize.go. Parsed rather than run, for the reason
+// derivePhaseStatusReturns gives: a fixture reaches the branches it triggers, a
+// parse reaches all of them.
+func finalizerCloses(t *testing.T) []string {
+	t.Helper()
+	path := filepath.Join(repoRootFromTest(t), finalizerFile)
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	consts := packageStringConsts(t, filepath.Dir(path))
+
+	funcs := map[string]*ast.FuncDecl{}
+	for _, decl := range file.Decls {
+		if fd, ok := decl.(*ast.FuncDecl); ok && fd.Recv == nil && fd.Body != nil {
+			funcs[fd.Name.Name] = fd
+		}
+	}
+	statusArg := map[string]int{}
+	for _, name := range closerFuncs {
+		fd, ok := funcs[name]
+		if !ok {
+			t.Fatalf("%s has no %s — the finalizer's closes cannot be read", finalizerFile, name)
+		}
+		i, at := 0, -1
+		for _, field := range fd.Type.Params.List {
+			for _, n := range field.Names {
+				if n.Name == "status" {
+					at = i
+				}
+				i++
+			}
+		}
+		if at < 0 {
+			t.Fatalf("%s's %s has no status parameter — the guard cannot tell which argument it closes with", finalizerFile, name)
+		}
+		statusArg[name] = at
+	}
+	if _, ok := funcs["FinalizePhase"]; !ok {
+		t.Fatalf("no FinalizePhase in %s — the emit-set is missing its finalizer half", finalizerFile)
+	}
+
+	var got []string
+	seen := map[string]bool{}
+	var walk func(name string)
+	walk = func(name string) {
+		fd, ok := funcs[name]
+		if !ok || seen[name] {
+			return
+		}
+		seen[name] = true
+		ast.Inspect(fd.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			fn, ok := call.Fun.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			at, closer := statusArg[fn.Name]
+			if !closer {
+				walk(fn.Name)
+				return true
+			}
+			var s string
+			resolved := false
+			if at < len(call.Args) {
+				switch arg := call.Args[at].(type) {
+				case *ast.Ident:
+					s, resolved = consts[arg.Name]
+				case *ast.BasicLit:
+					if arg.Kind == token.STRING {
+						v, err := strconv.Unquote(arg.Value)
+						s, resolved = v, err == nil
+					}
+				}
+			}
+			if !resolved {
+				t.Errorf("%s:%d calls %s with a status that is neither a string literal nor a package string constant — the emit-set cannot see what it closes with",
+					finalizerFile, fset.Position(call.Pos()).Line, fn.Name)
+				return true
+			}
+			got = append(got, s)
+			return true
+		})
+	}
+	walk("FinalizePhase")
+	if len(got) == 0 {
+		t.Fatal("FinalizePhase reaches no close call — the Phases and Tasks lanes would have no terminal emission")
+	}
+	return got
 }
 
 // derivePhaseStatusReturns resolves every value DerivePhaseStatus can return.
@@ -95,40 +247,7 @@ func derivePhaseStatusReturns(t *testing.T, path string) []string {
 	if err != nil {
 		t.Fatalf("parse %s: %v", path, err)
 	}
-	pkgs, err := parser.ParseDir(fset, filepath.Dir(path), func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
-	if err != nil {
-		t.Fatalf("parse %s: %v", filepath.Dir(path), err)
-	}
-	var decls []ast.Decl
-	for _, pkg := range pkgs {
-		for _, f := range pkg.Files {
-			decls = append(decls, f.Decls...)
-		}
-	}
-
-	consts := map[string]string{}
-	for _, decl := range decls {
-		gd, ok := decl.(*ast.GenDecl)
-		if !ok || gd.Tok != token.CONST {
-			continue
-		}
-		for _, spec := range gd.Specs {
-			vs, ok := spec.(*ast.ValueSpec)
-			if !ok {
-				continue
-			}
-			for i, name := range vs.Names {
-				if i >= len(vs.Values) {
-					continue
-				}
-				if lit, ok := vs.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
-					if v, err := strconv.Unquote(lit.Value); err == nil {
-						consts[name.Name] = v
-					}
-				}
-			}
-		}
-	}
+	consts := packageStringConsts(t, filepath.Dir(path))
 
 	var fn *ast.FuncDecl
 	for _, decl := range file.Decls {
@@ -303,7 +422,7 @@ func TestStateMapsKeyExactlyTheEmittedStatuses(t *testing.T) {
 			}
 			for _, k := range keys {
 				if _, ok := emitted[k]; !ok {
-					t.Errorf("a state map keys on a status nothing emits: %s has %q, which no prompt and no derivePhaseStatus branch produces", m.varName, k)
+					t.Errorf("a state map keys on a status nothing emits: %s has %q, which no prompt, no derivePhaseStatus branch and no finalizer close produces", m.varName, k)
 				}
 			}
 		})
@@ -441,6 +560,10 @@ func sortedSet(m map[string]string) []string {
 // mirrorLane says how one board.json namespace's cards reach a terminal state,
 // and which lifecycle statuses belong to that lane.
 type mirrorLane struct {
+	// closedBy names a Go finalizer as the lane's terminal call site instead of
+	// a prompt line: the lane is satisfied while that finalizer has a close
+	// carrying terminal, and prompt and emission stay empty.
+	closedBy string
 	// prompt and emission are the terminal call site: which prompt must carry
 	// it, and the literal that must appear there. Matched against the RAW file
 	// rather than promptContent's normalised form — quick.md's line carries a
@@ -470,16 +593,17 @@ type mirrorLane struct {
 // namespace added to Board with no entry here fails, which is the point: a new
 // kind of mirror must say how its cards end.
 var mirrorLanes = map[string]mirrorLane{
+	// The Phases and Tasks closes moved from ship.md into the binary:
+	// `dross phase complete` runs FinalizePhase, so no agent can stop before
+	// them.
 	"Phases": {
-		prompt:       "ship.md",
-		emission:     "dross issue phase sync <phase-id> --status complete --close",
+		closedBy:     finalizerFile,
 		terminal:     "complete",
 		reapTerminal: "complete",
 		others:       []string{"planned", "in-progress", "shipped", "uat"},
 	},
 	"Tasks": {
-		prompt:       "ship.md",
-		emission:     "dross issue task sync <phase-id> --status task-complete --close",
+		closedBy:     finalizerFile,
 		terminal:     "task-complete",
 		reapTerminal: "task-complete",
 		others:       []string{"task-in-progress", "task-in-review"},
@@ -560,19 +684,30 @@ func boardNamespaceFields(t *testing.T) []string {
 }
 
 // TestEveryMirrorLaneHasATerminalEmission is the guard. Every namespace dross
-// mirrors into must have a prompt line that ends its cards, and that line must
-// actually be in the corpus.
+// mirrors into must have a call site that ends its cards — a prompt line that
+// is actually in the corpus, or a finalizer close that carries the lane's
+// terminal status.
 func TestEveryMirrorLaneHasATerminalEmission(t *testing.T) {
 	fields := boardNamespaceFields(t)
+	finalized := map[string]bool{}
+	for _, s := range finalizerCloses(t) {
+		finalized[s] = true
+	}
 
 	for _, field := range fields {
 		lane, ok := mirrorLanes[field]
 		if !ok {
-			t.Errorf("board.Board has a %s namespace with no terminal emission recorded — every %s card dross creates would stay open forever; add it to mirrorLanes and give it a closing line in assets/prompts",
+			t.Errorf("board.Board has a %s namespace with no terminal emission recorded — every %s card dross creates would stay open forever; add it to mirrorLanes and give it a closing line in assets/prompts or a finalizer close",
 				field, field)
 			continue
 		}
 		t.Run(field, func(t *testing.T) {
+			if lane.closedBy != "" {
+				if !finalized[lane.terminal] {
+					t.Errorf("%s no longer closes a card at %q — %s cards would strand", lane.closedBy, lane.terminal, field)
+				}
+				return
+			}
 			content := rawPrompt(t, lane.prompt)
 			if !strings.Contains(content, lane.emission) {
 				t.Errorf("%s no longer emits %q — %s cards would strand", lane.prompt, lane.emission, field)
@@ -689,8 +824,17 @@ func TestCloseEmissionsCarryAValidStatus(t *testing.T) {
 			}
 		}
 	}
+	// The finalizer's closes are emissions too — since ship stopped carrying
+	// the Phases and Tasks closes, most of them.
+	for _, s := range finalizerCloses(t) {
+		checked++
+		if !configenum.LifecycleStatuses.Has(s) {
+			t.Errorf("%s closes a card with status %q, which is not a lifecycle status (expected %s)",
+				finalizerFile, s, configenum.LifecycleStatuses.List())
+		}
+	}
 	if checked == 0 {
-		t.Fatal("no --close emission carrying a --status was found in the prompt corpus — every assertion above was vacuous")
+		t.Fatal("no close emission carrying a status was found in the prompt corpus or the finalizer — every assertion above was vacuous")
 	}
 }
 

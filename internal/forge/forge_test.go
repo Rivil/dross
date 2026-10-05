@@ -850,6 +850,32 @@ func TestRESTListIssuesDropsUnknownLabels(t *testing.T) {
 		}
 	})
 
+	t.Run("an unknown identity label resolves to no card, silently", func(t *testing.T) {
+		var issueCalls int
+		c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				_, _ = w.Write([]byte(`[{"id":1,"name":"bug"}]`))
+				return
+			}
+			issueCalls++
+			_, _ = w.Write([]byte(`[{"number":1,"title":"a","state":"open"}]`))
+		})
+
+		var got []Issue
+		warn := captureForgeStderr(t, func() {
+			var err error
+			if got, err = c.ListIssues(IssueFilter{Labels: []string{"dross/phase:never-synced"}}); err != nil {
+				t.Fatalf("ListIssues: %v", err)
+			}
+		})
+		if len(got) != 0 || issueCalls != 0 {
+			t.Errorf("returned %+v via %d queries, want zero of each", got, issueCalls)
+		}
+		if warn != "" {
+			t.Errorf("stderr = %q, want nothing for an unknown identity label", warn)
+		}
+	})
+
 	t.Run("a failing label index refuses the query", func(t *testing.T) {
 		var issueCalls int
 		c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {

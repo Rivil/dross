@@ -339,14 +339,59 @@ func FilterKnownLabels(requested, known []string) (kept, dropped []string) {
 	return kept, dropped
 }
 
+// The identity-label prefixes: each one, followed by an artefact id, names the
+// single dross artefact a card mirrors. boardsync stamps them and reap reads
+// them back; this is the one list both sides take them from.
+const (
+	IdentityTaskPrefix     = "dross/task:"
+	IdentityPhasePrefix    = "dross/phase:"
+	IdentityDeferredPrefix = "dross/deferred:"
+	IdentityTargetPrefix   = "dross/target:"
+)
+
+var identityLabelPrefixes = []string{
+	IdentityTaskPrefix,
+	IdentityPhasePrefix,
+	IdentityDeferredPrefix,
+	IdentityTargetPrefix,
+}
+
+// IdentityLabelPrefixes returns a copy of the identity-label prefixes.
+func IdentityLabelPrefixes() []string {
+	return append([]string(nil), identityLabelPrefixes...)
+}
+
+// IsIdentityLabel reports whether label is a dross identity label. The dross/
+// prefix alone is not identity: dross/status:* and dross/quick are shared by
+// many cards, so they filter a query rather than look one card up.
+func IsIdentityLabel(label string) bool {
+	for _, p := range identityLabelPrefixes {
+		if strings.HasPrefix(label, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // WarnDroppedLabels names labels dropped by FilterKnownLabels on stderr. A
 // no-op when nothing was dropped.
+//
+// Identity labels are dropped silently. A tracker that does not know
+// dross/task:p/t-1 has no card for it yet, which is the expected answer on a
+// first sync, not a stale filter. Every new task, phase or deferred item would
+// otherwise print a warning that reads as a lookup failure.
 func WarnDroppedLabels(provider string, dropped []string) {
-	if len(dropped) == 0 {
+	var named []string
+	for _, d := range dropped {
+		if !IsIdentityLabel(d) {
+			named = append(named, d)
+		}
+	}
+	if len(named) == 0 {
 		return
 	}
 	fmt.Fprintf(os.Stderr, "warning: %s does not know the label(s) %s — dropped from the query\n",
-		provider, strings.Join(dropped, ", "))
+		provider, strings.Join(named, ", "))
 }
 
 // --- milestones ---
