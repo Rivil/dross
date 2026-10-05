@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Rivil/dross/internal/debugsession"
 	"github.com/Rivil/dross/internal/gatestate"
 	"github.com/Rivil/dross/internal/secretscan"
 )
@@ -211,6 +213,12 @@ func TestMachineLocalWritersAreReallyIgnored(t *testing.T) {
 		// record, whichever record that is.
 		secretscan.GateIgnoreSeed: func(dir string) error {
 			return gatestate.SaveExecute(dir, gatestate.Execute{Phase: "p", Mode: "pair"})
+		},
+		// The debug store's seed is the .gitignore Create writes before the
+		// first session.
+		secretscan.DebugIgnoreSeed: func(dir string) error {
+			_, err := debugsession.Create(dir, "seed", time.Now())
+			return err
 		},
 	}
 	seeded := func(seed string) string {

@@ -169,6 +169,11 @@ const ignoreSeed = "cmd.ensureDrossGitignore (drossIgnoreEntries)"
 // store writes beside its first record, so the directory needs no root line.
 const GateIgnoreSeed = "gatestate.ensureDir (.dross/gate/.gitignore)"
 
+// DebugIgnoreSeed is the self-ignoring .dross/debug/.gitignore that
+// debugsession.Create writes — and proves with git check-ignore — before the
+// first session.
+const DebugIgnoreSeed = "debugsession.Create (.dross/debug/.gitignore)"
+
 // userSettings is the Claude user-level settings file several writers merge
 // into.
 const userSettings = "~/.claude/settings.json"
@@ -217,6 +222,10 @@ var writers = []Writer{
 	{File: "internal/gatestate/store.go", MachineLocal: &MachineLocal{
 		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json", "gate/review.json", "gate/quick.json", "gate/review-context.md"}, IgnoreSeed: GateIgnoreSeed,
 		Why: "tool-gate records (green tree, execute mode, task approval, solo review ledger, quick mode) and the review context the reviewer reads; a committed copy would let a clone arrive pre-approved or pre-reviewed",
+	}},
+	{File: "internal/debugsession/store.go", MachineLocal: &MachineLocal{
+		Path: "debug/<name>.md", Also: []string{"debug/.gitignore"}, IgnoreSeed: DebugIgnoreSeed,
+		Why: "/dross-debug sessions quote captured output, which must never reach a published artifact (locked session_tracking)",
 	}},
 
 	// ---- OutsideDross: not a .dross artifact ------------------------------
