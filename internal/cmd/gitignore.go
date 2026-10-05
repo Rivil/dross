@@ -68,7 +68,36 @@ var drossIgnoreEntries = []ignoreEntry{
 			"# authorize its own API host, which is the loop the derived allowlist avoids.\n" +
 			"# dross refuses to read this file if git reports it tracked.",
 	},
+	{
+		path: mutationReportDirs[0],
+		// The tools `dross verify` runs write their reports inside the work
+		// tree. Untracked and not ignored, a report is part of the tree a
+		// verdict measured, so every run's own output would read as a change
+		// since and every pass would ship stale. Only the tool-owned dirs are
+		// seeded: a project may keep its own files under reports/.
+		comment: "# mutation reports dross verify's tools write into the work tree (gremlins).\n" +
+			"# Not ignored, a report would count as a change to the tree a verdict\n" +
+			"# measured, and every pass would read stale at ship.",
+	},
+	{
+		path: mutationReportDirs[1],
+		comment: "# mutation reports dross verify's tools write into the work tree (stryker).\n" +
+			"# Not ignored, a report would count as a change to the tree a verdict\n" +
+			"# measured, and every pass would read stale at ship.",
+	},
+	{
+		path: mutationReportDirs[2],
+		comment: "# mutation reports dross verify's tools write into the work tree (Stryker.NET).\n" +
+			"# Not ignored, a report would count as a change to the tree a verdict\n" +
+			"# measured, and every pass would read stale at ship.",
+	},
 }
+
+// mutationReportDirs are the report directories the mutation tools own:
+// gremlins' per-package reports, stryker's mutation.json, and Stryker.NET's
+// default output dir. Seeded as directories, never reports/ itself, which a
+// project may use for its own files.
+var mutationReportDirs = []string{"reports/gremlins/", "reports/mutation/", "StrykerOutput/"}
 
 // ensureDrossGitignore writes <repoDir>/.gitignore (or appends to it) so every
 // path in drossIgnoreEntries is ignored. Idempotent: a second call is a no-op
@@ -120,8 +149,9 @@ func drossGitignoreBlock(body string) string {
 }
 
 // ignoresPath reports whether any pattern in body already covers target — the
-// exact path, a glob like `.dross/*.json`, or a directory pattern like
-// `.dross/`.
+// exact path, a glob like `.dross/*.json`, a directory pattern like `.dross/`,
+// or a directory named without its slash (`/reports`), which covers everything
+// beneath it.
 //
 // Negations are skipped rather than interpreted: a `!` line does not cover
 // anything, and a repo that deliberately re-includes the file has made a choice
@@ -134,6 +164,11 @@ func ignoresPath(body, target string) bool {
 		}
 		pattern := strings.TrimPrefix(line, "/")
 		if strings.HasSuffix(pattern, "/") && strings.HasPrefix(target, pattern) {
+			return true
+		}
+		// A directory named without its trailing slash (`/reports`) ignores
+		// everything beneath it too.
+		if pattern != "" && strings.HasPrefix(target, pattern+"/") {
 			return true
 		}
 		if pattern == target {
