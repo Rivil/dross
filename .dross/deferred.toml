@@ -67,3 +67,8 @@
   text = "ci.yml has no `concurrency:` group with cancel-in-progress, so each dross ship's three pushes (branch, PR record, shipped marker) run three full ~12-minute pipelines on identical Go code (PR #131 ran four overlapping). Add a per-ref concurrency group that cancels superseded runs."
   why = "CI pipeline-optimisation audit (step 0: auto-cancel superseded runs) during the dependency-update-automation ship; parked with the timeout root cause since both are CI-duration concerns."
   target = "cmd-test-duration"
+
+[[deferred]]
+  id = "4c0e87a37bf9ac1e"
+  text = "phase complete: when only the board.json chore publish fails, the error says the board was not finalized and to retry once the board is reachable, although every card closed; and arming auto-merge on the shared chore PR right after the board commit pushes races GitHub's mergeability recompute ('Pull Request is not mergeable')"
+  why = "dogfooded on board-finalize-on-complete's own ship 2026-10-05: DRO-853 + 18 task cards closed, chore PR #150 left unarmed, complete exited 1; dross issue phase finalize recovered it. Fix: name the publish step in boardNotFinalized, and push both chore commits before one arm (or retry the arm on 'not mergeable')"
