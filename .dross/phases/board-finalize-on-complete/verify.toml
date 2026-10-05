@@ -1,36 +1,36 @@
 [verify]
   phase = "board-finalize-on-complete"
-  generated_at = 2026-10-05T00:39:37.466798Z
-  verdict = "fail"
+  generated_at = 2026-10-05T03:00:42.561961Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-10-05T00:43:01.13539Z
+  finalized_at = 2026-10-05T03:01:18.543101Z
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9380315917375456
-  mutants_killed = 1544
-  mutants_survived = 102
-  mutants_not_covered = 102
+  mutation_score = 0.9416767922235723
+  mutants_killed = 1550
+  mutants_survived = 91
+  mutants_not_covered = 91
   mutants_no_block = 79
-  mutants_test_gap = 23
+  mutants_test_gap = 12
   mutants_in_scope = 1646
-  unclassified_in_scope = 16
+  unclassified_in_scope = 0
   criteria_total = 11
-  criteria_covered = 9
-  criteria_uncovered = 2
+  criteria_covered = 11
+  criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 1544
-    survived = 102
-    timeout = 0
+    killed = 1550
+    survived = 91
+    timeout = 5
     in_scope = 1646
-    score = 0.9380315917375456
-    file_count = 62
+    score = 0.9416767922235723
+    file_count = 64
     measured_on = "helicon"
-    whole_file = ["internal/boardsync/backlog.go — adapter-lacks-range-runner", "internal/boardsync/backlog_reconcile_test.go — adapter-lacks-range-runner", "internal/boardsync/board_lifecycle_divergence_test.go — adapter-lacks-range-runner", "internal/boardsync/ctx.go — adapter-lacks-range-runner", "internal/boardsync/disposition.go — adapter-lacks-range-runner", "internal/boardsync/disposition_test.go — adapter-lacks-range-runner", "internal/boardsync/finalize.go — adapter-lacks-range-runner", "internal/boardsync/finalize_test.go — adapter-lacks-range-runner", "internal/boardsync/identity_label_test.go — adapter-lacks-range-runner", "internal/boardsync/phase.go — adapter-lacks-range-runner", "internal/boardsync/reap.go — adapter-lacks-range-runner", "internal/boardsync/reap_apply.go — adapter-lacks-range-runner", "internal/boardsync/reap_catchup.go — adapter-lacks-range-runner", "internal/boardsync/reap_catchup_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_classify_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_discover.go — adapter-lacks-range-runner", "internal/boardsync/task.go — adapter-lacks-range-runner", "internal/cmd/board_switch_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/deferred.go — adapter-lacks-range-runner", "internal/cmd/deferred_absorb.go — adapter-lacks-range-runner", "internal/cmd/deferred_absorb_test.go — adapter-lacks-range-runner", "internal/cmd/deferred_add.go — adapter-lacks-range-runner", "internal/cmd/deferred_add_test.go — adapter-lacks-range-runner", "internal/cmd/deferred_target.go — adapter-lacks-range-runner", "internal/cmd/issue.go — adapter-lacks-range-runner", "internal/cmd/issue_reap_cmd.go — adapter-lacks-range-runner", "internal/cmd/issue_reap_cmd_test.go — adapter-lacks-range-runner", "internal/cmd/issue_task.go — adapter-lacks-range-runner", "internal/cmd/issue_test.go — adapter-lacks-range-runner", "internal/cmd/phase.go — adapter-lacks-range-runner", "internal/cmd/phase_complete_board_test.go — adapter-lacks-range-runner", "internal/cmd/phase_finalize.go — adapter-lacks-range-runner", "internal/cmd/project_writer_pin_test.go — adapter-lacks-range-runner", "internal/cmd/readme_board_finalize_test.go — adapter-lacks-range-runner", "internal/cmd/route_complete_test.go — adapter-lacks-range-runner", "internal/cmd/ship_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/spec_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/survivor.go — adapter-lacks-range-runner", "internal/cmd/survivor_lossless_test.go — adapter-lacks-range-runner", "internal/cmd/survivor_route_test.go — adapter-lacks-range-runner", "internal/cmd/task_lossless_test.go — adapter-lacks-range-runner", "internal/cmd/validate.go — adapter-lacks-range-runner", "internal/cmd/validate_absorb_test.go — adapter-lacks-range-runner", "internal/deferred/deferred.go — adapter-lacks-range-runner", "internal/forge/forge.go — adapter-lacks-range-runner", "internal/forge/forge_test.go — adapter-lacks-range-runner", "internal/forge/identity_label_test.go — adapter-lacks-range-runner", "internal/forge/youtrack_test.go — adapter-lacks-range-runner", "internal/phase/phase.go — adapter-lacks-range-runner", "internal/phase/phase_test.go — adapter-lacks-range-runner", "internal/phase/plan_lossless_test.go — adapter-lacks-range-runner", "internal/project/export_test.go — adapter-lacks-range-runner", "internal/project/patch.go — adapter-lacks-range-runner", "internal/project/patch_diff.go — adapter-lacks-range-runner", "internal/project/patch_keyed_test.go — adapter-lacks-range-runner", "internal/project/patch_save.go — adapter-lacks-range-runner", "internal/project/patch_save_test.go — adapter-lacks-range-runner", "internal/project/plan_verify_test.go — adapter-lacks-range-runner", "internal/project/project.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/survivor/store.go — adapter-lacks-range-runner", "internal/survivor/store_lossless_test.go — adapter-lacks-range-runner"]
+    whole_file = ["internal/boardsync/backlog.go — adapter-lacks-range-runner", "internal/boardsync/backlog_reconcile_test.go — adapter-lacks-range-runner", "internal/boardsync/board_lifecycle_divergence_test.go — adapter-lacks-range-runner", "internal/boardsync/ctx.go — adapter-lacks-range-runner", "internal/boardsync/disposition.go — adapter-lacks-range-runner", "internal/boardsync/disposition_test.go — adapter-lacks-range-runner", "internal/boardsync/finalize.go — adapter-lacks-range-runner", "internal/boardsync/finalize_test.go — adapter-lacks-range-runner", "internal/boardsync/identity_label_test.go — adapter-lacks-range-runner", "internal/boardsync/phase.go — adapter-lacks-range-runner", "internal/boardsync/reap.go — adapter-lacks-range-runner", "internal/boardsync/reap_apply.go — adapter-lacks-range-runner", "internal/boardsync/reap_catchup.go — adapter-lacks-range-runner", "internal/boardsync/reap_catchup_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_classify_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_discover.go — adapter-lacks-range-runner", "internal/boardsync/task.go — adapter-lacks-range-runner", "internal/cmd/board_switch_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/deferred.go — adapter-lacks-range-runner", "internal/cmd/deferred_absorb.go — adapter-lacks-range-runner", "internal/cmd/deferred_absorb_test.go — adapter-lacks-range-runner", "internal/cmd/deferred_add.go — adapter-lacks-range-runner", "internal/cmd/deferred_add_test.go — adapter-lacks-range-runner", "internal/cmd/deferred_target.go — adapter-lacks-range-runner", "internal/cmd/issue.go — adapter-lacks-range-runner", "internal/cmd/issue_reap_cmd.go — adapter-lacks-range-runner", "internal/cmd/issue_reap_cmd_test.go — adapter-lacks-range-runner", "internal/cmd/issue_task.go — adapter-lacks-range-runner", "internal/cmd/issue_test.go — adapter-lacks-range-runner", "internal/cmd/phase.go — adapter-lacks-range-runner", "internal/cmd/phase_complete_board_test.go — adapter-lacks-range-runner", "internal/cmd/phase_finalize.go — adapter-lacks-range-runner", "internal/cmd/project_writer_pin_test.go — adapter-lacks-range-runner", "internal/cmd/readme_board_finalize_test.go — adapter-lacks-range-runner", "internal/cmd/route_complete_test.go — adapter-lacks-range-runner", "internal/cmd/ship_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/spec_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/survivor.go — adapter-lacks-range-runner", "internal/cmd/survivor_lossless_test.go — adapter-lacks-range-runner", "internal/cmd/survivor_route_test.go — adapter-lacks-range-runner", "internal/cmd/task_lossless_test.go — adapter-lacks-range-runner", "internal/cmd/validate.go — adapter-lacks-range-runner", "internal/cmd/validate_absorb_test.go — adapter-lacks-range-runner", "internal/deferred/deferred.go — adapter-lacks-range-runner", "internal/deferred/deferred_test.go — adapter-lacks-range-runner", "internal/forge/forge.go — adapter-lacks-range-runner", "internal/forge/forge_test.go — adapter-lacks-range-runner", "internal/forge/identity_label_test.go — adapter-lacks-range-runner", "internal/forge/youtrack_test.go — adapter-lacks-range-runner", "internal/phase/phase.go — adapter-lacks-range-runner", "internal/phase/phase_test.go — adapter-lacks-range-runner", "internal/phase/plan_lossless_test.go — adapter-lacks-range-runner", "internal/project/export_test.go — adapter-lacks-range-runner", "internal/project/patch.go — adapter-lacks-range-runner", "internal/project/patch_diff.go — adapter-lacks-range-runner", "internal/project/patch_keyed_test.go — adapter-lacks-range-runner", "internal/project/patch_save.go — adapter-lacks-range-runner", "internal/project/patch_save_test.go — adapter-lacks-range-runner", "internal/project/patch_test.go — adapter-lacks-range-runner", "internal/project/plan_verify_test.go — adapter-lacks-range-runner", "internal/project/project.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/survivor/store.go — adapter-lacks-range-runner", "internal/survivor/store_lossless_test.go — adapter-lacks-range-runner"]
 
 [[criterion]]
   id = "c-1"
@@ -49,9 +49,8 @@
 
 [[criterion]]
   id = "c-4"
-  status = "weak"
-  tests = ["internal/cmd/task_lossless_test.go:TestTaskStatusChangesOneLine", "internal/cmd/task_lossless_test.go:TestTaskAddInsertsInPlace", "internal/cmd/task_lossless_test.go:TestTaskEditChangesOneLine", "internal/cmd/task_lossless_test.go:TestTaskMoveRelocatesTheBlock", "internal/cmd/task_lossless_test.go:TestTaskRemoveTakesItsBlock", "internal/phase/plan_lossless_test.go:TestPlanCorpusOneLineStatusFlip", "internal/project/patch_keyed_test.go:TestKeyedReorderMovesTheBlock"]
-  notes = "the keyed patcher's edge paths have no internal/project test: insert-at-end rewritten to append (patch.go:638), elemCount on a nested array (:935), an element span absorbing touching trailing comments (:969), the move refusal (:1003) and the insert op's description (:598) — 9 in-hunk survivors, 0 executions in the package's own suite"
+  status = "covered"
+  tests = ["internal/cmd/task_lossless_test.go:TestTaskStatusChangesOneLine", "internal/cmd/task_lossless_test.go:TestTaskAddInsertsInPlace", "internal/cmd/task_lossless_test.go:TestTaskEditChangesOneLine", "internal/cmd/task_lossless_test.go:TestTaskMoveRelocatesTheBlock", "internal/cmd/task_lossless_test.go:TestTaskRemoveTakesItsBlock", "internal/phase/plan_lossless_test.go:TestPlanCorpusOneLineStatusFlip", "internal/project/patch_keyed_test.go:TestKeyedInsertAtEndAppends", "internal/project/patch_keyed_test.go:TestKeyedMoveCarriesTrailingComments", "internal/project/patch_keyed_test.go:TestKeyedNestedArrayInserts"]
 
 [[criterion]]
   id = "c-5"
@@ -75,9 +74,8 @@
 
 [[criterion]]
   id = "c-9"
-  status = "weak"
-  tests = ["internal/cmd/survivor_route_test.go:TestSurvivorRerouteMovesTheEntry", "internal/cmd/survivor_route_test.go:TestSurvivorRouteSameTargetIsNoop", "internal/cmd/survivor_route_test.go:TestSurvivorRerouteKeepsOneBoardCard", "internal/cmd/survivor_route_test.go:TestSurvivorRouteRefusesDuplicates"]
-  notes = "deferred.FindBySurvivor — the lookup re-route-in-place stands on — has no internal/deferred test: its Collect-error return (deferred.go:189) and its key/dismissed predicate (:192) survived in-hunk with 0 executions in the package's own suite"
+  status = "covered"
+  tests = ["internal/cmd/survivor_route_test.go:TestSurvivorRerouteMovesTheEntry", "internal/cmd/survivor_route_test.go:TestSurvivorRouteSameTargetIsNoop", "internal/cmd/survivor_route_test.go:TestSurvivorRerouteKeepsOneBoardCard", "internal/deferred/deferred_test.go:TestFindBySurvivor"]
 
 [[criterion]]
   id = "c-10"
@@ -90,81 +88,5 @@
   tests = ["internal/boardsync/reap_catchup_test.go:TestFindMissingListsAnUnknownPhase", "internal/boardsync/reap_catchup_test.go:TestApplyMissingCreatesAtTerminal", "internal/cmd/issue_reap_cmd_test.go:TestReapDryRunListsMissingPhase"]
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/boardsync/finalize.go:120 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/validate.go:493 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/validate.go:495 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/deferred_absorb.go:71 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/deferred_absorb.go:73 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/deferred/deferred.go:189 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/deferred/deferred.go:192 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:598 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:598 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:638 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:638 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:935 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:935 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:969 (INCREMENT_DECREMENT)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:1003 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/project/patch.go:1003 (ARITHMETIC_BASE)"
-
-[[finding]]
   severity = "NOTE"
-  text = "5 of the 16 in-diff survivors were accepted after collection as the gremlins switch-case attribution ceiling (go-cover gives case conditions no block; tests take each branch and assert it): finalize.go:120, validate.go:493, validate.go:495, deferred_absorb.go:71, deferred_absorb.go:73. unclassified_in_scope above is the count at collection; 11 remain undispositioned."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-4 weak: internal/project/patch.go's keyed edge paths (insert-at-end→append :638, nested elemCount :935, touching trailing comments :969, move refusal :1003, insert op description :598) ran 0 times in the package's own suite — the plan.toml lossless claim leans on cmd-level tests gremlins cannot attribute"
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-9 weak: deferred.FindBySurvivor (deferred.go:189, :192) has no internal/deferred test — the dismissed exclusion and the Collect-error return are untested in-package"
-
-[[finding]]
-  severity = "NOTE"
-  text = "score 0.94 over 1646 in-scope mutants; 79 of the 102 survivors are uncoverable by construction (no go-cover block), efficacy over the 1567 reachable = 0.99; 141 out-of-scope survivors filtered"
+  text = "round 2 after t-18: the 11 in-hunk own-package gaps of round 1 are killed; the only in-hunk survivors are 5 gremlins switch-case ceiling cases, each accepted citing the test that takes the branch. score 0.94 over 1646 in-scope (0.99 over the 1567 reachable); 86 inherited survivors in touched files were already accepted; 141 out-of-scope survivors filtered"
