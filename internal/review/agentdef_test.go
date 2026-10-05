@@ -129,3 +129,30 @@ func TestReviewerBodyDefinesGrades(t *testing.T) {
 		}
 	}
 }
+
+// TestReviewerBodyWarnsOffNearMissFences: on a diff saturated with "dross
+// verify", the reviewer twice fenced its verdict dross-verify — read as no
+// verdict, so the task failed with a pass in hand. The body names the exact
+// label and the near-misses it is not.
+func TestReviewerBodyWarnsOffNearMissFences(t *testing.T) {
+	_, body := agentDef(t)
+	for _, want := range []string{"The info string is exactly `" + VerdictFence + "`", "not `dross-verify`", "recorded as unavailable"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the body does not say %q", want)
+		}
+	}
+}
+
+// TestParseVerdictRefusesNearMissFences: the label is a contract, not a hint —
+// a near-miss is refused rather than read as a verdict.
+func TestParseVerdictRefusesNearMissFences(t *testing.T) {
+	const verdict = `{"verdict": "pass", "spec": [], "quality": []}`
+	if _, err := ParseVerdict("ok\n\n```"+VerdictFence+"\n"+verdict+"\n```\n", KindTask); err != nil {
+		t.Fatalf("the real fence was refused: %v", err)
+	}
+	for _, label := range []string{"dross-verify", "dross-review", "json"} {
+		if _, err := ParseVerdict("ok\n\n```"+label+"\n"+verdict+"\n```\n", KindTask); err == nil {
+			t.Errorf("a %s fence was read as a verdict", label)
+		}
+	}
+}

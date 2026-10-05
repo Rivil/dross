@@ -54,4 +54,4 @@ Every finding needs non-empty text. Use no other keys. A worked example:
              {"severity": "NOTE", "text": "table test covers every ledger state"}]}
 ```
 
-Write exactly one `dross-verdict` block, at the end of your reply.
+Write exactly one `dross-verdict` block, at the end of your reply. The info string is exactly `dross-verdict` — not `dross-verify`, not `dross-review`, not `json`, however much the diff under review talks about verify or review. A block with any other label is not read as a verdict: the review is recorded as unavailable and the task fails, whatever the findings said.
