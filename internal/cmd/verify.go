@@ -25,6 +25,7 @@ import (
 	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/telemetry"
 	"github.com/Rivil/dross/internal/testlane"
+	"github.com/Rivil/dross/internal/treefp"
 	"github.com/Rivil/dross/internal/verify"
 )
 
@@ -166,6 +167,13 @@ func Verify() *cobra.Command {
 				// operator watching this decides whether to wait for the host.
 				Printf("remote: %s\n", tuning.FallbackWhy)
 			}
+			// The tree is taken BEFORE the run, so the verdict names what the
+			// run measured: an edit made while a long leg runs lands after the
+			// capture and reads as a change since, never as measured.
+			measured, err := captureMeasuredTree(filepath.Dir(root))
+			if err != nil {
+				return err
+			}
 			t, err := verify.RunScoped(phaseID, files, adapters, scope)
 			if err != nil {
 				if errors.Is(err, remote.ErrHostBusy) {
@@ -179,6 +187,7 @@ func Verify() *cobra.Command {
 				}
 				return err
 			}
+			t.MeasuredCommit, t.MeasuredTree = measured.Commit, measured.Tree
 			// Stamped from the adapters the run actually used, not from the
 			// grant on disk: a --local run has a grant and ignores it, and a
 			// fallback has one it could not reach. Reading config here would
@@ -367,6 +376,14 @@ func dispatchDetached(root, projectName, phaseID string, steps []mutation.Packag
 		}
 	}
 
+	// The tree is taken before the push, so the record names what the host
+	// measures: an edit made while the tree crosses lands after the capture
+	// and reads as a change since, never as measured.
+	measured, err := captureTreeFn(repoDir)
+	if err != nil {
+		return err
+	}
+
 	runID := newRunID(time.Now())
 	runDir, err := remote.RunDir(runID)
 	if err != nil {
@@ -397,14 +414,16 @@ func dispatchDetached(root, projectName, phaseID string, steps []mutation.Packag
 	// actually started.
 	state := "scheduled"
 	rec := localstore.DetachedRun{
-		Phase:        phaseID,
-		RunID:        runID,
-		Host:         target.Host,
-		Workdir:      target.Workdir,
-		RunDir:       runDir,
-		DispatchedAt: time.Now().UTC(),
-		ScheduledFor: notBefore,
-		State:        state,
+		Phase:          phaseID,
+		RunID:          runID,
+		Host:           target.Host,
+		Workdir:        target.Workdir,
+		RunDir:         runDir,
+		DispatchedAt:   time.Now().UTC(),
+		ScheduledFor:   notBefore,
+		State:          state,
+		MeasuredCommit: measured.Commit,
+		MeasuredTree:   measured.Tree,
 	}
 	if err := localstore.RecordDetachedRun(root, repoDir, rec); err != nil {
 		return err
@@ -785,6 +804,13 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 		WholeFile:  plan.WholeFile,
 	})
 
+	// The verdict covers the tree the dispatch pushed, never the one found here
+	// at collect (locked detached_baseline); finishVerify names whatever moved
+	// in between.
+	t.MeasuredCommit, t.MeasuredTree = rec.MeasuredCommit, rec.MeasuredTree
+	if rec.MeasuredTree == "" {
+		Print("verify: this run was dispatched before trees were recorded — no measured tree, so this verdict's freshness will read as unknown")
+	}
 	if err := finishVerify(root, phaseID, spec, t, verify.MeasuredOnHost(rec.Host), gone); err != nil {
 		return err
 	}
@@ -1041,8 +1067,86 @@ func finishVerify(root, phaseID string, spec *phase.Spec, t *verify.Tests, measu
 
 	printVerifySummary(t, v)
 	printLifecycleSummary(lc, v.Summary.UnclassifiedInScope)
+	if t.MeasuredTree != "" {
+		reportTreeDrift(repoRoot, t.MeasuredTree)
+	}
 	recordVerifyOutcome(t, v)
 	return nil
+}
+
+// measuredTreeFn takes the tree a verify run measures (treefp.MeasuredTree). A
+// seam so a test can make the capture fail.
+var measuredTreeFn = treefp.MeasuredTree
+
+// captureTreeFn is the whole capture a detached dispatch runs — git or not —
+// so a dispatch test can see where it falls among probe, push and spawn.
+var captureTreeFn = captureMeasuredTree
+
+// captureMeasuredTree takes the tree a run is about to measure in repoDir.
+//
+// In a git work tree a failure refuses: a verdict written without its tree
+// reads as one recorded before trees were kept, and ship would let it through
+// with only a warning. Outside git there is no tree to take, and nothing a
+// stale verdict could ship from: the run records none and says so once.
+//
+// "Outside git" is decided by the absence of any .git above repoDir, never by
+// a git command failing: a missing git binary, a safe.directory refusal or a
+// corrupt repository all fail that command inside a real work tree, and
+// reading any of them as "not git" would let the run record no tree.
+func captureMeasuredTree(repoDir string) (treefp.Measured, error) {
+	if !underGitDir(repoDir) {
+		Print("verify: not a git work tree — no measured tree recorded, so this verdict's freshness will read as unknown")
+		return treefp.Measured{}, nil
+	}
+	m, err := measuredTreeFn(repoDir)
+	if err != nil {
+		return treefp.Measured{}, fmt.Errorf("refusing to measure: could not fingerprint the tree this run would measure: %w", err)
+	}
+	return m, nil
+}
+
+// underGitDir reports whether dir or any directory above it holds a .git —
+// a repository's directory or a linked worktree's file.
+func underGitDir(dir string) bool {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return true // cannot rule git out, so do not
+	}
+	for {
+		if _, err := os.Lstat(filepath.Join(abs, ".git")); err == nil {
+			return true
+		}
+		parent := filepath.Dir(abs)
+		if parent == abs {
+			return false
+		}
+		abs = parent
+	}
+}
+
+// reportTreeDrift re-takes the tree after the run and names every path that
+// moved since it was measured — an edit made while the run was going, or
+// output a tool wrote outside .gitignore. The verdict stands for the tree as
+// measured, so ship will read it stale until those paths are re-measured.
+func reportTreeDrift(repoDir, measured string) {
+	now, err := measuredTreeFn(repoDir)
+	if err != nil {
+		Printf("verify: could not re-check the tree after the run (%v) — ship will compare it\n", err)
+		return
+	}
+	if now.Tree == measured {
+		return
+	}
+	paths, err := treefp.Diff(repoDir, measured, now.Tree)
+	if err != nil {
+		Printf("verify: the tree changed since it was measured, and the changed files could not be listed: %v\n", err)
+		return
+	}
+	Printf("verify: %d file(s) changed since the tree was measured — this verdict covers the tree as measured:\n", len(paths))
+	for _, p := range paths {
+		Printf("  %s\n", p)
+	}
+	Print("  A path a mutation tool wrote belongs in .gitignore; any other change needs a re-verify before ship.")
 }
 
 // verifyFinalize records a telemetry outcome event with the resolved

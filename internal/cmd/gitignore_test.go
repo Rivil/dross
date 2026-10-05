@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/treefp"
 )
 
 // checkIgnored reports whether git considers path ignored in repoDir.
@@ -109,8 +111,10 @@ func TestEnsureDrossGitignoreIsIdempotent(t *testing.T) {
 		}
 	}
 	body := readIfExists(t, path)
-	if n := strings.Count(body, drossStateIgnorePath+"\n"); n != 1 {
-		t.Errorf("pattern appears %d times, want 1:\n%s", n, body)
+	for _, e := range drossIgnoreEntries {
+		if n := strings.Count(body, e.path+"\n"); n != 1 {
+			t.Errorf("pattern %s appears %d times, want 1:\n%s", e.path, n, body)
+		}
 	}
 }
 
@@ -122,11 +126,14 @@ func TestEnsureDrossGitignoreIsIdempotent(t *testing.T) {
 // TestIgnoresLocalTomlViaBroaderPattern for the partial case, where a pattern
 // covering one path must not suppress the other.
 func TestEnsureDrossGitignoreRespectsBroaderPattern(t *testing.T) {
+	// Each also covers the mutation report dirs, in a different shape: the
+	// parent dir with and without its trailing slash, anchored, and the two
+	// dirs named one by one.
 	for _, existing := range []string{
-		".dross/\n",
-		"# comment\n/.dross/state.json\n/.dross/local.toml\n",
-		"node_modules/\n.dross/state.json\n.dross/local.toml\n",
-		".dross/*.json\n.dross/*.toml\n",
+		".dross/\nreports/\nStrykerOutput/\n",
+		"# comment\n/.dross/state.json\n/.dross/local.toml\n/reports\n/StrykerOutput\n",
+		"node_modules/\n.dross/state.json\n.dross/local.toml\nreports/gremlins/\nreports/mutation/\nStrykerOutput/\n",
+		".dross/*.json\n.dross/*.toml\n/reports/\n/StrykerOutput/\n",
 	} {
 		t.Run(strings.TrimSpace(strings.ReplaceAll(existing, "\n", " ")), func(t *testing.T) {
 			dir := t.TempDir()
@@ -338,5 +345,60 @@ func TestDoctorFoundationalDocMatchesBehaviour(t *testing.T) {
 		if !strings.Contains(head, want) {
 			t.Errorf("README's foundational list should still name %s:\n%s", want, row)
 		}
+	}
+}
+
+// TestEnsureGitignoreCoversMutationReports: init ignores the report dirs the
+// mutation tools write into the work tree, gremlins' and stryker's both.
+func TestEnsureGitignoreCoversMutationReports(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	for _, report := range []string{"reports/gremlins/internal_cmd.json", "reports/mutation/mutation.json", "StrykerOutput/2026-10-05/reports/mutation-report.json"} {
+		if !checkIgnored(t, dir, report) {
+			t.Errorf("init did not ignore %s:\n%s", report, readIfExists(t, filepath.Join(dir, ".gitignore")))
+		}
+	}
+}
+
+// TestMutationReportIgnoreLeavesProjectReports: only the tool-owned dirs are
+// seeded — a project's own file under reports/ is still seen by git.
+func TestMutationReportIgnoreLeavesProjectReports(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if checkIgnored(t, dir, "reports/q3.csv") {
+		t.Errorf("the seeded ignore swallowed a project's own reports/ file:\n%s", readIfExists(t, filepath.Join(dir, ".gitignore")))
+	}
+}
+
+// TestSeededReportsKeepTheVerdictFresh: once seeded, a verify run's own
+// reports do not move the tree its verdict measured.
+func TestSeededReportsKeepTheVerdictFresh(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	gitCommit(t, dir, "init")
+	before, err := treefp.MeasuredTree(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(dir, "reports/gremlins/internal_cmd.json"), "{}\n")
+	mustWrite(t, filepath.Join(dir, "reports/mutation/mutation.json"), "{}\n")
+	after, err := treefp.MeasuredTree(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Tree != before.Tree {
+		t.Error("a verify run's own mutation reports changed the measured tree")
 	}
 }

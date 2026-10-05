@@ -1,0 +1,134 @@
+task_seq = 9
+
+[phase]
+  id = "verify-staleness"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add exemption-aware measured fingerprint to treefp"
+  files = ["internal/treefp/treefp.go", "internal/treefp/treefp_test.go"]
+  description = "New MeasuredTree(dir) -> {Commit, Tree}: `add -A` into a scratch index, drop .dross/ and ARCHITECTURE.md as literal paths anchored at dir (the dross root), write-tree. Commit = HEAD, or \"\" on an unborn HEAD. WorkingTree and tree() stay unchanged."
+  covers = ["c-1", "c-3"]
+  test_contract = ["if the exemption matches by basename or prefix, or misses one of the two paths, TestMeasuredTreeExemptions fails: editing root ARCHITECTURE.md or .dross/x leaves Tree byte-equal; docs/ARCHITECTURE.md, ARCHITECTURE.md.bak, sub/.dross/x and a root .drossrc each change it", "if MeasuredTree stops covering the whole work tree, TestMeasuredTreeCoversTheWorkTree fails: an uncommitted tracked edit, an untracked non-ignored file, a deleted tracked file, chmod +x, README.md, .github/workflows/ci.yml and x_test.go each change Tree; a .gitignore'd file does not", "if the new exemption leaks into the shared tree(), TestWorkingTreeStillCountsArchitecture fails: WorkingTree still moves when root ARCHITECTURE.md changes", "if MeasuredTree writes to the real index, TestRealIndexUntouched (extended to MeasuredTree with a partially staged file) fails", "if MeasuredTree makes an unbounded git call, TestEveryGitCallIsBounded (extended) fails", "if Tree is derived from HEAD, TestMeasuredTreeIgnoresCommitMoves fails: a .dross-only commit and a commit of exactly the measured dirty changes each leave Tree identical while Commit moves", "if Diff over two MeasuredTree ids names an exempt path or misses a non-exempt one, TestMeasuredTreeDiffNamesChanges fails", "if an edge repo is mishandled, TestMeasuredTreeEdgeRepos fails: unborn HEAD gives Commit \"\" plus a tree; a non-git dir gives an error, never \"\"", "if the exemptions anchor at the git top instead of dir, TestMeasuredTreeAnchorsAtDrossRoot fails: with dir a git subdirectory holding .dross, dir/.dross and dir/ARCHITECTURE.md are the exempt paths", "if MeasuredTree's git output (HEAD, the tree id) reaches a persisted store without the taint clearance, TestNoSpawnOutputEscapes fails — MeasuredTree carries the //dross:taint-cleared marker with its reason"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Record measured tree; classify verdict freshness"
+  files = ["internal/verify/verify.go", "internal/verify/freshness.go", "internal/verify/freshness_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
+  description = "measured_commit / measured_tree on Tests (json, omitempty) and VerifyMeta (toml, omitempty); Skeleton copies them as it copies measured_on. Pure Classify(verify, tests, currentTree, diffFn) -> fresh | stale{changed, listErr} | unknown | malformed. Four not_paths rows."
+  covers = ["c-1", "c-2", "c-5"]
+  test_contract = [
+    "if Skeleton stops copying the fields, or a finalize-shaped Load -> set verdict+finalized -> Save drops them, TestSkeletonCarriesMeasuredTree fails",
+    "if omitempty is lost, TestLegacyVerifyRoundTripsByteIdentical fails: a pre-phase verify.toml Load -> Save is byte-identical with no measured_* keys",
+    "if a legacy file can reach git or classify as anything but unknown, TestClassifyLegacyIsUnknownWithoutGit fails: no recorded tree -> unknown, diffFn never called, in a non-git dir",
+    "if the tests.json fallback is lost, TestClassifyFallsBackToTestsJSON fails: verify.toml without measured_tree beside a tests.json carrying one at an EQUAL generated_at classifies against tests.json's tree; an unequal generated_at classifies unknown",
+    "if freshness is compared by commit, TestClassifyFreshByTreeNotCommit fails: equal trees classify fresh even when measured_commit != HEAD",
+    "if a malformed id reaches git, TestClassifyRejectsMalformedTree fails: \"HEAD\", \"--output=x\" and \"abc\" classify malformed with diffFn never called",
+    "if a stale classification loses its names, or an unlistable diff reads as fresh or unknown, TestClassifyStaleNamesAndUnlistable fails",
+    "if a new field is undeclared, TestEveryPathShapedFieldIsDeclared fails",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Re-ship before merge in ship.md; keep tree in verify.md"
+  files = ["assets/prompts/ship.md", "assets/prompts/verify.md", "internal/cmd/ship_prompt_test.go", "internal/cmd/verify_prompt_test.go", "README.md"]
+  description = "ship.md §5 On failure: after `git push origin phase/<id>`, re-running `dross ship <phase-id>` is required (the 'is also safe' wording goes); a stale refusal routes to /dross-verify. §6 re-runs `dross ship <phase-id>` before the provider merge call; a refusal stops the merge, one AskUserQuestion kept. §0 step 4 / §4 step 1 name the stale-pass refusal. verify.md §3 leaves measured_commit / measured_tree as written. README rows for verify, verify results, status and ship. r-01: make install."
+  covers = ["c-7", "c-1"]
+  test_contract = [
+    "if §5 On failure's `dross ship <phase-id>` is missing, not between `git push origin phase/<id>` and 'Loop back', or the retired 'Re-running `dross ship` is also safe' survives, TestShipPromptReShipsAfterEveryCIFix fails",
+    "if §6's `dross ship <phase-id>` does not precede every provider merge call (gh pr merge, the Forgejo /pulls/<n>/merge POST with {\"Do\":\"squash\"}, the GitLab {\"squash\":true} PUT), TestShipPromptReShipsBeforeMerge fails",
+    "if neither §5 On failure nor §6 names /dross-verify as the answer to a stale refusal, TestShipPromptReShipsBeforeMerge fails",
+    "if the retry guidance or §6's single decision turn regresses, TestShipPromptReRunIsTheRetry and TestShipPromptDecisionTurnsSeparate stay red",
+    "if verify.md §3 stops telling the agent to leave measured_commit and measured_tree untouched, TestVerifyPromptKeepsTheMeasuredTree fails",
+    "if the README verify row loses its lifecycle wording, TestReadmeVerifyRowDescribesLifecycle fails",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Capture tree at attached verify start"
+  files = ["internal/cmd/verify.go", "internal/cmd/verify_measured_test.go"]
+  description = "measuredTreeFn seam (= treefp.MeasuredTree). Attached path captures after requireExecConsent and the nothing-to-do return, before RunScoped; stamps t.Measured* before finishVerify (signature unchanged). In a git tree a capture error aborts; outside git, record nothing and print one line. When t carries a tree, finishVerify re-fingerprints and names every path moved since capture, with a .gitignore hint."
+  covers = ["c-1"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = [
+    "if the tree is captured at finish instead of start, TestVerifyRecordsTheTreeAtRunStart fails: a stub adapter editing a non-exempt file during RunScoped leaves the PRE-run tree in verify.toml and stdout names that file",
+    "if tool-output drift is left unexplained, TestVerifyNamesUnignoredToolOutput fails: an adapter writing untracked reports/x.json gets that path named with the add-it-to-.gitignore hint",
+    "if --skip-mutation stops stamping, TestVerifySkipMutationRecordsTheMeasuredTree fails: in a git fixture with an uncommitted edit and an untracked file, measured_tree equals MeasuredTree taken before the run and differs from the HEAD-only tree; measured_commit equals HEAD",
+    "if a capture failure fails open, TestVerifyRefusesWhenTheTreeCannotBeMeasured fails: measuredTreeFn erroring in a git tree -> non-zero exit, adapter Run count 0, neither tests.json nor verify.toml written",
+    "if capture moves ahead of consent, TestVerifyConsentPrecedesCapture fails",
+    "if the non-git path refuses, TestVerifyOutsideGitRecordsNoTree and the existing TestVerifyWritesSkeletonWithSkipMutation fail",
+    "if finishVerify recaptures with no recorded tree, or its signature changes, the existing verify_finish_test.go and verify_notcovered_test.go cases fail",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 3
+  title = "Refuse stale pass verdict in ship"
+  files = ["internal/cmd/ship.go", "internal/cmd/verdict_fresh.go", "internal/cmd/ship_stale_test.go", "cmd/dross/testdata/cli_tree.txt"]
+  description = "verdictFreshness(root, repoDir, phaseID): loads verify.toml + tests.json, takes the tree through t-4's measuredTreeFn seam, calls verify.Classify with treefp.Diff. Ship runs it for a pass verdict AFTER the branch check and BEFORE --print-body / --no-push / repoint / autoCommitDrossDirt. Stale, malformed or a capture error refuses naming every changed file, `dross verify <id>`, /dross-verify and --force-unverified; --force-unverified proceeds with a stderr override line; unknown warns on stderr and proceeds. --force-unverified usage text + cli_tree golden. Accepted residual (locked exemptions): ship's red-proof repoint commits a non-exempt doc, so a re-ship after a repoint reads stale, naming that doc."
+  covers = ["c-2", "c-3", "c-5"]
+  depends_on = ["t-1", "t-2", "t-4"]
+  test_contract = ["if the gate misses a change kind, TestShipRefusesAStalePass fails: modify, add and delete a non-exempt file after the run -> `ship --no-push` exits non-zero naming all three paths, `dross verify <id>` and --force-unverified, without auto-committing a dirty .dross file (HEAD unchanged)", "if the gate moves after the dirty-tree check, TestShipStaleCountsUncommittedEdits fails: an uncommitted src edit alone is refused as stale, not as a dirty tree", "if a stale refusal lets anything out, TestShipStaleRefusalPushesNothing fails: no phase/x on origin, no POST /pulls, changes.json PR unset", "if exempt changes stale the verdict, TestShipExemptChangesStayFresh fails: a committed ARCHITECTURE.md landmark merge plus .dross commits pass the gate", "if exemption matching widens, TestShipExemptLookalikesGoStale fails: docs/ARCHITECTURE.md and .drossrc are each refused", "if ship's own PR-record commit stales its verdict, TestShipReRunAfterRecordCommitStaysFresh fails: the full mock flow run twice passes the gate the second time", "if the stale gate runs before the branch check, TestShipOffBranchRefusalBeatsStale fails", "if the override stops working or goes silent, TestShipForceUnverifiedOverridesStale fails: --force-unverified on a stale pass passes the gate and prints a stderr line saying stale with the changed-file count", "if the legacy path refuses or pollutes stdout, TestShipLegacyVerifyWarnsAndProceeds fails: no tree -> exit 0, 'freshness unknown' on stderr; with --json stdout decodes as exactly one object", "if an unlistable diff proceeds, TestShipRefusesUnlistableTree fails: a well-formed recorded tree whose object is absent refuses, saying the changed files could not be listed", "if a malformed field reaches git, TestShipRefusesMalformedTree fails, naming the field", "if the refusal truncates, TestShipStaleNamesEveryFile fails: 25 changed files all named", "if the usage text drifts from the golden, TestCLITreeGolden fails", "if a capture failure lets a pass ship, TestShipRefusesUnmeasurableTree fails: measuredTreeFn erroring on a recorded tree refuses, naming the capture error", "if the tree capture runs before the legacy check, TestShipLegacyNeverCaptures fails: a tree-less verify.toml with measuredTreeFn erroring still warns 'freshness unknown' and proceeds", "if the gate sits after autoCommitDrossDirt, TestShipStaleRefusalLeavesDrossDirt fails: in the full mock flow a stale refusal leaves HEAD unchanged and a dirty .dross file still dirty", "if --print-body skips the gate, TestShipPrintBodyRefusesStale fails"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  title = "Carry dispatch-time tree through detached runs"
+  files = ["internal/localstore/store.go", "internal/cmd/verify.go", "internal/cmd/verify_detach_tree_test.go", "internal/cmd/verify_detach_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
+  description = "DetachedRun gains commit/tree (toml, omitempty). dispatchDetached captures via measuredTreeFn after the probe, before detachSync, and stores it in the record (still written last). collectDetachedFrom stamps t from the record, never a collect-time capture, so finishVerify names dispatch->collect drift. A tree-less record collects with no measured_* keys and says freshness is unknown. detachRecorder.install stubs measuredTreeFn. Two not_paths rows."
+  covers = ["c-1", "c-4", "c-5"]
+  depends_on = ["t-1", "t-2", "t-4"]
+  test_contract = [
+    "if dispatch captures after the push, or not at all, TestDispatchPushesBeforeItStarts fails: its order assertion becomes probe, measure, sync, spawn",
+    "if edits during the push are vouched for, TestDispatchMeasuresBeforeThePush fails: a detachSync stub rewriting a tracked file leaves the pre-sync tree in the record, and verify results writes that tree and names the file",
+    "if collect substitutes the collect-time tree, TestCollectRecordsTheDispatchTreeNotTheCollectTree fails: a.go edited between dispatch and collect -> measured_tree equals the record's tree, stdout names a.go, verify.Classify reports stale naming a.go",
+    "if drift naming misfires, TestCollectUnchangedTreeNamesNothing fails",
+    "if collect stamps today's HEAD, TestCollectStampsTheDispatchCommit fails",
+    "if a capture failure at dispatch fails open, TestDispatchRefusesAnUnmeasurableTree fails: no detachSync, no detachSpawn, no record",
+    "if the record-last order breaks, TestDispatchSpawnFailureLeavesNoRecord fails",
+    "if the record loses the tree, or a pre-phase record is filled from the collect tree, TestDetachedRunTreeRoundTrip fails",
+    "if the real seam isn't wired into the command, TestVerifyDetachDispatchesThroughTheCommand (extended: record.Tree == MeasuredTree(dir).Tree) fails",
+    "if a new field is undeclared, TestEveryPathShapedFieldIsDeclared fails",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 4
+  title = "Mark stale verdict in dross status"
+  files = ["internal/cmd/status.go", "internal/cmd/status_stale_test.go", "assets/prompts/resume.md", "internal/cmd/resume_prompt_test.go"]
+  description = "For the current phase with a pass verdict that records a tree, HEAD on phase/<id> and the phase verified or shipped (not complete): print 'stale: verdict predates N changed file(s) — re-verify with /dross-verify'; suggestNext checks staleness BEFORE its shipped-state merge advice and names /dross-verify. Uses verdictFreshness; any freshness error prints nothing (status is a hook target). resume.md stops saying there is no stale: line and says what it now means. r-01: make install."
+  covers = ["c-6"]
+  depends_on = ["t-5"]
+  test_contract = ["if the marker or its count is lost, TestStatusMarksAStalePassWithCount fails: on phase/x with 2 non-exempt files changed after the stamp, stdout contains 'stale' and '2 file'", "if exempt or legacy states mark, TestStatusNoMarkerWhenFreshOrLegacy fails: fresh, .dross/ + ARCHITECTURE.md only, tree-less verify.toml and a complete phase each print no 'stale'", "if non-pass verdicts mark, TestStatusNoMarkerOnNonPass fails", "if another branch's work tree leaks in, TestStatusNoMarkerFromMain fails: HEAD on main prints no stale line", "if status breaks in a hook, TestStatusStaleSilentOnError fails: measuredTreeFn erroring or a non-git root carrying a tree -> exit 0, no marker, rest intact", "if an unlistable diff hides the marker, TestStatusStaleWithPrunedTree fails: prints 'stale (changed files could not be listed)'", "if status still points a stale pass at ship, TestStatusStaleSuggestsReverify fails: the re-entry footer names /dross-verify and stays byte-equal to `dross reentry`'s line", "if the shipped-state merge advice wins over staleness, TestStatusStaleWhileShippedSuggestsReverify fails: a shipped phase with an open PR and a stale tree prints the marker and a /dross-verify footer, not 'merge'", "if resume.md still says there is no stale: line, or does not route a stale marker to /dross-verify, TestResumePromptReadsTheStaleMarker fails"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  title = "Seed mutation report dirs into .gitignore"
+  files = ["internal/cmd/gitignore.go", "internal/cmd/gitignore_test.go"]
+  description = "Mutation tools write their reports inside the work tree (gremlins reports/gremlins/, stryker reports/mutation/). Untracked and not ignored, they are part of the measured tree, so every verify run's own output reads as a change since and every pass ships stale. ensureDrossGitignore (init + onboard) seeds the two tool-owned dirs — not /reports, which a project may own — each with a comment saying why."
+  covers = ["c-2", "c-3"]
+  test_contract = ["if ensureDrossGitignore stops seeding /reports/gremlins/ or /reports/mutation/, TestEnsureGitignoreCoversMutationReports fails: after init both a gremlins and a stryker report path are git-ignored", "if the seeding widens to /reports, TestMutationReportIgnoreLeavesProjectReports fails: a project file under reports/ (not a tool dir) is still not ignored", "if a seeded repo's own mutation report still moves the measured tree, TestSeededReportsKeepTheVerdictFresh fails: writing reports/gremlins/x.json leaves treefp.MeasuredTree unchanged", "if seeding is not idempotent or overrides a broader pattern, TestEnsureDrossGitignoreIsIdempotent and TestEnsureDrossGitignoreRespectsBroaderPattern fail"]
+  status = "done"
+  depends_on = ["t-4"]
+
+[[task]]
+  id = "t-9"
+  wave = 1
+  title = "Pin the reviewer's verdict fence label"
+  files = ["assets/agents/dross-task-reviewer.md", "internal/review/agentdef_test.go"]
+  description = "t-3's solo review came back unavailable twice: on a diff saturated with 'dross verify', the reviewer fenced its verdict dross-verify instead of dross-verdict, and the parser rightly refused it. The agent definition names the label once; it now says the label is exactly dross-verdict, names the near-misses it is not (dross-verify, dross-review, json), and that any other label is recorded as unavailable and fails the task. r-01: make install, then dross install so the live definition is current."
+  covers = ["c-7"]
+  test_contract = ["if the reviewer body stops naming the exact label or the near-misses it must not use, TestReviewerBodyWarnsOffNearMissFences fails: the body says the info string is exactly dross-verdict and names dross-verify as wrong", "if a near-miss fence ever parses, TestParseVerdictRefusesNearMissFences fails: a reply fenced dross-verify (or dross-review, or json) is refused by ParseVerdict", "if the body's worked example stops parsing, TestReviewerBodyMatchesParser fails"]
+  status = "done"

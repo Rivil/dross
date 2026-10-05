@@ -237,7 +237,7 @@ dross ship flag --body (string) default="" usage="PR body override (overrides ge
 dross ship flag --body-file (string) default="" usage="read PR body from file"
 dross ship flag --draft (bool) default="false" noopt="true" usage="open the PR as draft"
 dross ship flag --force (bool) default="false" noopt="true" usage="force-with-lease the push (use when re-pushing after rewriting phase/<id>)"
-dross ship flag --force-unverified (bool) default="false" noopt="true" usage="skip the 'verify must be pass' gate"
+dross ship flag --force-unverified (bool) default="false" noopt="true" usage="ship anyway when the verify verdict is not pass, or is a pass whose measured tree has since changed"
 dross ship flag --json (bool) default="false" noopt="true" usage="emit a single JSON object {url, number, result} on stdout and suppress human narration; composable with --auto for scripts and loops"
 dross ship flag --no-push (bool) default="false" noopt="true" usage="don't push the phase branch or open a PR"
 dross ship flag --print-body (bool) default="false" noopt="true" usage="print the generated PR body and exit (no push, no PR)"

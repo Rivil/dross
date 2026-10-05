@@ -10,6 +10,7 @@ import (
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/treefp"
 )
 
 // detachRecorder captures what a dispatch would have done to the host, so
@@ -28,12 +29,28 @@ type detachRecorder struct {
 	// order records the sequence of operations by name, which is what makes
 	// "pushed before started" an assertion rather than an assumption.
 	order []string
+	// measureErr makes the tree capture fail; onSync runs during the push,
+	// standing in for an edit that races the tree crossing.
+	measureErr error
+	onSync     func()
 }
 
 func (r *detachRecorder) install(t *testing.T) {
 	t.Helper()
-	origSpawn, origSync, origProbe := detachSpawn, detachSync, remoteProbeFn
-	t.Cleanup(func() { detachSpawn, detachSync, remoteProbeFn = origSpawn, origSync, origProbe })
+	origSpawn, origSync, origProbe, origCapture := detachSpawn, detachSync, remoteProbeFn, captureTreeFn
+	t.Cleanup(func() {
+		detachSpawn, detachSync, remoteProbeFn, captureTreeFn = origSpawn, origSync, origProbe, origCapture
+	})
+	// The capture is wrapped, not replaced: it is logged in order, and it
+	// fails on request, but otherwise takes the real tree — a fixture that is
+	// a git repository records a real one.
+	captureTreeFn = func(dir string) (treefp.Measured, error) {
+		r.order = append(r.order, "measure")
+		if r.measureErr != nil {
+			return treefp.Measured{}, r.measureErr
+		}
+		return origCapture(dir)
+	}
 	// The lock-tool probe precedes the push. A healthy host by default; a
 	// test that wants a flock-less one sets missing.
 	remoteProbeFn = func(tg remote.Target, tools []string) (remote.Readiness, error) {
@@ -50,6 +67,9 @@ func (r *detachRecorder) install(t *testing.T) {
 	detachSync = func(tg remote.Target, localRoot string) error {
 		r.syncs = append(r.syncs, tg.Host)
 		r.order = append(r.order, "sync")
+		if r.onSync != nil {
+			r.onSync()
+		}
 		return r.syncErr
 	}
 }
@@ -109,8 +129,10 @@ func TestDispatchPushesBeforeItStarts(t *testing.T) {
 	}
 	// The lock-tool probe precedes the push: a flock-less host is refused
 	// before the tree crosses.
-	if got := strings.Join(rec.order, " "); got != "probe sync spawn" {
-		t.Errorf("dispatch order = %v, want [probe sync spawn]", rec.order)
+	// The tree is measured after the probe and before the push, so the record
+	// names what the host will measure.
+	if got := strings.Join(rec.order, " "); got != "probe measure sync spawn" {
+		t.Errorf("dispatch order = %v, want [probe measure sync spawn]", rec.order)
 	}
 }
 
@@ -511,6 +533,10 @@ func TestVerifyDetachDispatchesThroughTheCommand(t *testing.T) {
 	dir := detachCmdRepo(t, "detachcmd", mutationTuning{Target: detachTarget()})
 	rec := &detachRecorder{}
 	rec.install(t)
+	want, err := treefp.MeasuredTree(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if err := runCmd(t, Verify(), "detachcmd", "--detach", "--at", "02:00"); err != nil {
 		t.Fatalf("dross verify --detach: %v", err)
@@ -530,6 +556,11 @@ func TestVerifyDetachDispatchesThroughTheCommand(t *testing.T) {
 	}
 	if got.State != "scheduled" {
 		t.Errorf("state = %q, want scheduled", got.State)
+	}
+	// The real capture is wired into the command: the record carries the
+	// tree the dispatch pushed.
+	if got.MeasuredTree != want.Tree || got.MeasuredCommit != want.Commit {
+		t.Errorf("record carries %s@%s, want the dispatched tree %s@%s", got.MeasuredTree, got.MeasuredCommit, want.Tree, want.Commit)
 	}
 }
 
@@ -643,8 +674,8 @@ func TestDispatchRefusesAFlocklessHost(t *testing.T) {
 	if err := dispatchDetached(root, "dross", "remote-run-detach", detachStepsFixture(), detachTarget(), time.Time{}); err != nil {
 		t.Fatalf("dispatchDetached: %v", err)
 	}
-	if strings.Join(rec2.order, " ") != "probe sync spawn" {
-		t.Errorf("order = %v, want [probe sync spawn]", rec2.order)
+	if strings.Join(rec2.order, " ") != "probe measure sync spawn" {
+		t.Errorf("order = %v, want [probe measure sync spawn]", rec2.order)
 	}
 	if strings.Join(rec2.probed, ",") != "flock" {
 		t.Errorf("probed for %v, want [flock]", rec2.probed)

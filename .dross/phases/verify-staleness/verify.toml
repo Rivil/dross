@@ -1,0 +1,142 @@
+[verify]
+  phase = "verify-staleness"
+  generated_at = 2026-10-05T07:09:35.603736Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-10-05T07:14:20.834757Z
+  measured_commit = "fd5b472ea804ef487330eccda5c8fb2259fcf0a3"
+  measured_tree = "7cf4e1fb9a4afeea1b8be73cb290140f686c14d7"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9282639885222381
+  mutants_killed = 647
+  mutants_survived = 50
+  mutants_not_covered = 50
+  mutants_no_block = 44
+  mutants_test_gap = 6
+  mutants_in_scope = 697
+  unclassified_in_scope = 16
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 647
+    survived = 50
+    timeout = 0
+    in_scope = 697
+    score = 0.9282639885222381
+    file_count = 21
+    measured_on = "helicon"
+    whole_file = ["internal/cmd/gitignore.go — adapter-lacks-range-runner", "internal/cmd/gitignore_test.go — adapter-lacks-range-runner", "internal/cmd/resume_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/ship.go — adapter-lacks-range-runner", "internal/cmd/ship_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/ship_stale_test.go — adapter-lacks-range-runner", "internal/cmd/status.go — adapter-lacks-range-runner", "internal/cmd/status_stale_test.go — adapter-lacks-range-runner", "internal/cmd/verdict_fresh.go — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_detach_test.go — adapter-lacks-range-runner", "internal/cmd/verify_detach_tree_test.go — adapter-lacks-range-runner", "internal/cmd/verify_measured_test.go — adapter-lacks-range-runner", "internal/cmd/verify_prompt_test.go — adapter-lacks-range-runner", "internal/localstore/store.go — adapter-lacks-range-runner", "internal/review/agentdef_test.go — adapter-lacks-range-runner", "internal/treefp/treefp.go — adapter-lacks-range-runner", "internal/treefp/treefp_test.go — adapter-lacks-range-runner", "internal/verify/freshness.go — adapter-lacks-range-runner", "internal/verify/freshness_test.go — adapter-lacks-range-runner", "internal/verify/verify.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/verify_measured_test.go:TestVerifyRecordsTheTreeAtRunStart", "internal/cmd/verify_measured_test.go:TestVerifySkipMutationRecordsTheMeasuredTree", "internal/cmd/verify_detach_tree_test.go:TestDispatchMeasuresBeforeThePush", "internal/treefp/treefp_test.go:TestMeasuredTreeCoversTheWorkTree", "internal/verify/freshness_test.go:TestSkeletonCarriesMeasuredTree"]
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/ship_stale_test.go:TestShipRefusesAStalePass", "internal/cmd/ship_stale_test.go:TestShipStaleNamesEveryFile", "internal/cmd/ship_stale_test.go:TestShipForceUnverifiedOverridesStale", "internal/cmd/ship_stale_test.go:TestShipRefusesUnlistableTree", "internal/verify/freshness_test.go:TestClassifyStaleNamesAndUnlistable"]
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/ship_stale_test.go:TestShipExemptChangesStayFresh", "internal/cmd/ship_stale_test.go:TestShipReRunAfterRecordCommitStaysFresh", "internal/treefp/treefp_test.go:TestMeasuredTreeExemptions", "internal/cmd/gitignore_test.go:TestSeededReportsKeepTheVerdictFresh"]
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/verify_detach_tree_test.go:TestCollectRecordsTheDispatchTreeNotTheCollectTree", "internal/cmd/verify_detach_tree_test.go:TestDispatchMeasuresBeforeThePush", "internal/cmd/verify_detach_tree_test.go:TestCollectStampsTheDispatchCommit"]
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/ship_stale_test.go:TestShipLegacyVerifyWarnsAndProceeds", "internal/cmd/ship_stale_test.go:TestShipLegacyNeverCaptures", "internal/verify/freshness_test.go:TestClassifyLegacyIsUnknownWithoutGit", "internal/cmd/verify_detach_tree_test.go:TestDetachedRunTreeRoundTrip"]
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/status_stale_test.go:TestStatusMarksAStalePassWithCount", "internal/cmd/status_stale_test.go:TestStatusNoMarkerWhenFreshOrLegacy", "internal/cmd/status_stale_test.go:TestStatusStaleSuggestsReverify"]
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/ship_prompt_test.go:TestShipPromptReShipsAfterEveryCIFix", "internal/cmd/ship_prompt_test.go:TestShipPromptReShipsBeforeMerge"]
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/cmd/gitignore.go:79 (ARITHMETIC_BASE): accepted after collection — non-viable string-concatenation mutant (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/cmd/gitignore.go:78 (ARITHMETIC_BASE): accepted after collection — non-viable string-concatenation mutant (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/cmd/gitignore.go:85 (ARITHMETIC_BASE): accepted after collection — non-viable string-concatenation mutant (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/cmd/gitignore.go:84 (ARITHMETIC_BASE): accepted after collection — non-viable string-concatenation mutant (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/cmd/gitignore.go:91 (ARITHMETIC_BASE): accepted after collection — non-viable string-concatenation mutant (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/cmd/gitignore.go:90 (ARITHMETIC_BASE): accepted after collection — non-viable string-concatenation mutant (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/cmd/status.go:923 (CONDITIONALS_NEGATION): accepted after collection — gremlins switch-case attribution ceiling (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/cmd/status.go:924 (ARITHMETIC_BASE): accepted after collection — non-viable string-concatenation mutant (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/cmd/status.go:924 (ARITHMETIC_BASE): accepted after collection — non-viable string-concatenation mutant (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/cmd/status.go:924 (ARITHMETIC_BASE): accepted after collection — non-viable string-concatenation mutant (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/cmd/status.go:925 (CONDITIONALS_NEGATION): accepted after collection — gremlins switch-case attribution ceiling (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/verify/freshness.go:75 (CONDITIONALS_NEGATION): accepted after collection — gremlins switch-case attribution ceiling (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/verify/freshness.go:77 (CONDITIONALS_NEGATION): accepted after collection — gremlins switch-case attribution ceiling (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/verify/freshness.go:77 (CONDITIONALS_NEGATION): accepted after collection — gremlins switch-case attribution ceiling (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/verify/freshness.go:75 (CONDITIONALS_NEGATION): accepted after collection — gremlins switch-case attribution ceiling (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/verify/freshness.go:77 (CONDITIONALS_NEGATION): accepted after collection — gremlins switch-case attribution ceiling (survivors.toml cites its pinning test)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "unclassified_in_scope reads 16 because that was the count at collection; all 16 (11 keys) were then accepted with test-citing reasons — 6 switch-case ceiling, 10 non-viable string-concatenation mutants — and every accepted key matches a survivor key in tests.json. Not re-run (user decision, 2026-10-05: helicon needed for server updates)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "dogfood: the detached run recorded its dispatch-time tree (7cf4e1f) and collect stamped it into this file and tests.json. score 0.93 over 697 in-scope (0.99 over 653 reachable); 34 inherited survivors already accepted; 125 out-of-scope filtered. status.go:924's malformed-tree line has no status test — filed DRO-886."

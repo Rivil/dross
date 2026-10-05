@@ -172,6 +172,8 @@ criteria_covered   = <count where status=covered>
 criteria_uncovered = <count where status=uncovered or weak>
 ```
 
+Leave `[verify].measured_commit` and `[verify].measured_tree` exactly as `dross verify` wrote them. They record the tree this verdict was measured at, and `dross ship` refuses a pass whose tree has since moved; drop them and that refusal quietly becomes a freshness-unknown warning.
+
 Leave every `[[summary.leg]]` table exactly as `dross verify` wrote it — one per language leg, carrying that leg's own killed/survived/timeout/score. **Never** recompute `mutation_score` from them: the pooled score sums raw counts across legs, which is already weighted by leg size, and averaging the legs' percentages hands a small leg the same vote as a large one. A leg carrying an `error` measured nothing; its zeroes are not a result. Read the legs when a pooled score looks fine but one leg is carrying the failure — that is what they are for.
 
 Compute `[verify].verdict`. **Read `mutation_status` first** — when status is not `measured`, the score is a 0/0 artifact and the mutation leg has nothing to say. This is the dogfood-surfaced bug from FeastAhead phase 04/05: Stryker scoped to `src/lib/utils` only, phase touched server/Svelte files, mutation_score landed at 0.0, verdict heuristic falsely flagged `fail` despite 5/5 criteria covered.

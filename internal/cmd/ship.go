@@ -223,6 +223,17 @@ func Ship() *cobra.Command {
 					phaseBranch, cur, phaseID)
 			}
 
+			// A pass covers the tree its run measured, not whatever is here
+			// now. Checked on the phase branch (another branch's tree would
+			// name changes that are not this phase's) and before --print-body,
+			// --no-push, the red-proof repoint and the .dross auto-commit, so
+			// a stale pass is refused before ship writes or pushes anything.
+			if vrf.Verify.Verdict == "pass" {
+				if err := gateFreshness(root, repoDir, phaseID, forceUnverified); err != nil {
+					return err
+				}
+			}
+
 			// 4) Title + body.
 			if title == "" {
 				title = fmt.Sprintf("phase %s: %s", phaseID, spec.Phase.Title)
@@ -574,7 +585,7 @@ func Ship() *cobra.Command {
 	c.Flags().StringVar(&bodyFile, "body-file", "", "read PR body from file")
 	c.Flags().BoolVar(&noPush, "no-push", false, "don't push the phase branch or open a PR")
 	c.Flags().BoolVar(&draft, "draft", false, "open the PR as draft")
-	c.Flags().BoolVar(&forceUnverified, "force-unverified", false, "skip the 'verify must be pass' gate")
+	c.Flags().BoolVar(&forceUnverified, "force-unverified", false, "ship anyway when the verify verdict is not pass, or is a pass whose measured tree has since changed")
 	c.Flags().BoolVar(&forcePush, "force", false,
 		"force-with-lease the push (use when re-pushing after rewriting phase/<id>)")
 	c.Flags().BoolVar(&printBody, "print-body", false, "print the generated PR body and exit (no push, no PR)")

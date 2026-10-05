@@ -3901,3 +3901,102 @@
   line = 73
   reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although the branch is taken and asserted — pinned by TestDeferredAbsorbRefusals (the routed-elsewhere case)"
   accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "003c9279bdcf9184"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "comment: \"# mutation reports dross verify's tools write into the work tree (gremlins).\\n\" +"
+  line = 78
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; a var-initializer comment string — the seeded entries are pinned by TestEnsureGitignoreCoversMutationReports"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "50fce539f66662aa"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# Not ignored, a report would count as a change to the tree a verdict\\n\" +"
+  line = 79
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; a var-initializer comment string — the seeded entries are pinned by TestEnsureGitignoreCoversMutationReports"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "9a0fd4d6e4c93cc0"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "comment: \"# mutation reports dross verify's tools write into the work tree (stryker).\\n\" +"
+  line = 84
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; a var-initializer comment string — the seeded entries are pinned by TestEnsureGitignoreCoversMutationReports"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "9efafc99a5d2930b"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# Not ignored, a report would count as a change to the tree a verdict\\n\" +"
+  line = 85
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; a var-initializer comment string — the seeded entries are pinned by TestEnsureGitignoreCoversMutationReports"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "4bff3d7643ad744d"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "comment: \"# mutation reports dross verify's tools write into the work tree (Stryker.NET).\\n\" +"
+  line = 90
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; a var-initializer comment string — the seeded entries are pinned by TestEnsureGitignoreCoversMutationReports"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "46ee88680dad7ee2"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# Not ignored, a report would count as a change to the tree a verdict\\n\" +"
+  line = 91
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; a var-initializer comment string — the seeded entries are pinned by TestEnsureGitignoreCoversMutationReports"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "4b1bc2fa681a2b11"
+  file = "internal/cmd/status.go"
+  op = "ARITHMETIC_BASE"
+  text = "return \"stale:     the verdict's \" + r.Field + \" is not an object id\" + fix"
+  line = 924
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; staleLine's stale and unlistable lines are pinned by TestStatusMarksAStalePassWithCount and TestStatusStaleWithPrunedTree"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "3965813a8b4102d6"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.State == verify.Malformed:"
+  line = 923
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although tests take the branch — negated, a stale pass renders as malformed and loses its count, which TestStatusMarksAStalePassWithCount catches"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "485ced4928dcb652"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.ListErr != nil:"
+  line = 925
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although tests take the branch — pinned by TestStatusStaleWithPrunedTree"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "5536a5559ae0d7ae"
+  file = "internal/verify/freshness.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v != nil && v.Verify.MeasuredTree != \"\":"
+  line = 75
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although tests take the branch — pinned by TestClassifyFreshByTreeNotCommit and TestClassifyLegacyIsUnknownWithoutGit"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "8dc62862d59d2334"
+  file = "internal/verify/freshness.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v != nil && t != nil && t.MeasuredTree != \"\" && t.GeneratedAt.Equal(v.Verify.GeneratedAt):"
+  line = 77
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although tests take the branch — pinned by TestClassifyFallsBackToTestsJSON"
+  accepted_in = "verify-staleness"

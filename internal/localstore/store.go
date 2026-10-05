@@ -203,6 +203,12 @@ type DetachedRun struct {
 	DispatchedAt time.Time `toml:"dispatched_at"`
 	ScheduledFor time.Time `toml:"scheduled_for,omitempty"`
 	State        string    `toml:"state"`
+	// MeasuredCommit and MeasuredTree are the tree the dispatch pushed — the
+	// one the host measures — taken before the push. Collect stamps them onto
+	// the verdict instead of the tree it finds at collect time (locked
+	// detached_baseline). Empty on a run dispatched before they were kept.
+	MeasuredCommit string `toml:"measured_commit,omitempty"`
+	MeasuredTree   string `toml:"measured_tree,omitempty"`
 }
 
 // Scheduled reports whether this run is waiting for its start time rather than
