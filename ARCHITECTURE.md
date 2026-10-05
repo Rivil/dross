@@ -154,7 +154,7 @@ Get dross's `.dross` bookkeeping commits onto a protected base without a direct 
 - `routeBaseChores` (chore PR when protected, refuse on unknown, direct push otherwise) — `internal/cmd/basebranch.go:98`
 - `publishChorePR` (`.dross`-only commits → `dross-chores/<base>` PR armed for merge-commit auto-merge; joins an open one; refuses a release-tag change on main) — `internal/cmd/chorepr.go:77`
 - `AutoMergePR` (arms `gh` auto-merge; merges directly only when already mergeable; never `--admin`) — `internal/ship/automerge.go:46`
-- `narrateBaseChores` (ship, complete and recover narrate the chore PR; complete waits on a pending one) — `internal/cmd/ship.go:682`
+- `narrateBaseChores` (ship, complete and recover narrate the chore PR; complete waits on a pending one) — `internal/cmd/ship.go:693`
 - `routeMilestoneHead` (milestone-branch commits: chore PR for `.dross`, refusal for code; integration PR held until chore PRs merge) — `internal/cmd/milestone.go:1053`
 - quick PR route (protected/unknown base → `quick/<version>` branch and PR) — `assets/prompts/quick.md:23`
 
@@ -383,14 +383,14 @@ A collect is **not a second-class verdict**: it goes through the same `finishVer
 
 - `localstore.DetachedRun` (machine-local per-phase record; deliberately outside `localKeys`) — `internal/localstore/store.go:197`
 - `remote.DetachScript` (setsid + nohup + pidfile; backgrounds only the job, not the chain) — `internal/remote/remote.go:390`
-- `dispatchDetached` (push, start the per-package sequence, record only after the host accepts) — `internal/cmd/verify.go:337`
-- `detachFetchReports` (per-package fetch, local copy cleared first so a failed fetch leaves the run unmeasured) — `internal/cmd/verify.go:518`
-- `classifyFetch` (rsync's exit code: absent report vs dead connection) — `internal/cmd/verify.go:580`
-- `cancelDetached` (lists what this machine dispatched without the network; tears down on the host that holds the run) — `internal/cmd/verify.go:934`
-- `cancelLine` (teardown text as a pure helper, so the process-group kill is assertable without a host) — `internal/cmd/verify.go:818`
-- `finishVerify` (the one seam turning a completed run into tests.json + the verify.toml skeleton, shared by both paths) — `internal/cmd/verify.go:991`
+- `dispatchDetached` (push, start the per-package sequence, record only after the host accepts) — `internal/cmd/verify.go:346`
+- `detachFetchReports` (per-package fetch, local copy cleared first so a failed fetch leaves the run unmeasured) — `internal/cmd/verify.go:537`
+- `classifyFetch` (rsync's exit code: absent report vs dead connection) — `internal/cmd/verify.go:599`
+- `cancelDetached` (lists what this machine dispatched without the network; tears down on the host that holds the run) — `internal/cmd/verify.go:960`
+- `cancelLine` (teardown text as a pure helper, so the process-group kill is assertable without a host) — `internal/cmd/verify.go:844`
+- `finishVerify` (the one seam turning a completed run into tests.json + the verify.toml skeleton, shared by both paths) — `internal/cmd/verify.go:1017`
 - `mutation.ReportlessExit` (one shared rule refusing a package that wrote no report and exited non-zero) — `internal/mutation/launcher.go:884`
-- `TestVerifyDetachDispatchesThroughTheCommand` (flags driven through `Verify`'s own RunE, not just the helpers) — `internal/cmd/verify_detach_test.go:510`
+- `TestVerifyDetachDispatchesThroughTheCommand` (flags driven through `Verify`'s own RunE, not just the helpers) — `internal/cmd/verify_detach_test.go:532`
 - `TestCollectWritesTheSameArtefactsAnAttachedRunWould` (a detached collect rebuilds scope, filters out-of-scope survivors and stamps the recorded host) — `internal/cmd/verify_results_test.go:407`
 - `fetchSpy` (runs the real `detachFetchReports` with only `runDetachArgv` stubbed, so the exit-code fetch is asserted hostlessly) — `internal/cmd/verify_results_test.go:688`
 - `TestExecScriptRefusesBeforeItReachesTheTransport` (the live transport's own guards, which every other test stubs away) — `internal/remote/remote_test.go:1094`
@@ -647,15 +647,15 @@ The store itself — the local.toml codec, key table, grants, remote grant and p
 
 - `Local` (`dross local get|set`, gitignored `.dross/local.toml` — the only local-store code left in cmd, pinned by `TestLocalGoIsOnlyTheCommandTree`) — `internal/cmd/local.go:17`
 - `localstore.Store` (local.toml store, key table, grants, remote grant/pool, tuning and detached runs) — `internal/localstore/store.go:41`
-- `localstore.ReadAllowHosts` (`allow_hosts` escape hatch; refuses a git-tracked local.toml instead of trusting it) — `internal/localstore/store.go:392`
+- `localstore.ReadAllowHosts` (`allow_hosts` escape hatch; refuses a git-tracked local.toml instead of trusting it) — `internal/localstore/store.go:398`
 - `TestReadAllowHostsRefusesTrackedLocal` (the self-authorizing hole, pinned shut) — `internal/localstore/readers_test.go:47`
 - `TestMutationTuningAcceptsOne` (reader unit tests live beside the readers, so mutation credits localstore instead of reading moved code as uncovered) — `internal/localstore/readers_test.go:161`
 - `TestReadRemoteGrantsReadsThePoolInOrder` (pool order — scalar grant first, pool after — and the by-name refusal of an unusable pool host, pinned inside localstore) — `internal/localstore/readers_test.go:265`
 - `pushQuickBaseIfRecorded` (ship + complete push chores on the recorded quick base, never an inferred one) — `internal/cmd/basebranch.go:188`
 - `TestShipReconcilesRecordedQuickBase` (pins ship's call site so a recorded quick base can't be left unpushed) — `internal/cmd/ship_test.go:1169`
-- `ensureDrossGitignore` (state.json gitignored by init + onboard, out of this repo's index) — `internal/cmd/gitignore.go:81`
+- `ensureDrossGitignore` (state.json gitignored by init + onboard, out of this repo's index) — `internal/cmd/gitignore.go:110`
 - `TestStaleBranchCheckoutCannotClobberLiveState` (end-to-end incident reproduction) — `internal/cmd/state_clobber_regression_test.go:77`
-- `TestDocsDoNotClaimStateIsTracked` (docs/prompts/.gitignore scan) — `internal/cmd/gitignore_test.go:284`
+- `TestDocsDoNotClaimStateIsTracked` (docs/prompts/.gitignore scan) — `internal/cmd/gitignore_test.go:291`
 - `TestShipToCompleteKeepsLiveState` (full ship → squash-merge → complete leaves a long live history whole) — `internal/cmd/completion_state_truth_test.go:99`
 - `TestRawCheckoutStillClobbersLiveState` (the control: proves the fixture is truncatable, so the survival assertions are not vacuous) — `internal/cmd/completion_state_truth_test.go:175`
 
@@ -719,28 +719,28 @@ A phase's mutation score covers only the files that phase touched: a survivor in
 - `NewScope` (git ∪ changes.json union) — `internal/verify/scope.go:102`
 - `Scope.Origin` (in-hunk vs inherited tag) — `internal/verify/scope.go:228`
 - `phaseScope` (merge-base resolution, git file set + hunks, degraded fallback) — `internal/cmd/verifyscope.go:45`
-- `FilterReport` (split against scope, recompute counts, tag survivors) — `internal/verify/verify.go:290`
-- `IsTestdataPath` (one segment-scoped testdata rule shared by the drain and verify) — `internal/verify/verify.go:374`
-- `RunScoped` (Stryker legs instrument only the construct-widened hunks via the optional `RangeRunner`; gremlins and hunk-less scopes fall open to whole files) — `internal/verify/verify.go:655`
+- `FilterReport` (split against scope, recompute counts, tag survivors) — `internal/verify/verify.go:298`
+- `IsTestdataPath` (one segment-scoped testdata rule shared by the drain and verify) — `internal/verify/verify.go:382`
+- `RunScoped` (Stryker legs instrument only the construct-widened hunks via the optional `RangeRunner`; gremlins and hunk-less scopes fall open to whole files) — `internal/verify/verify.go:672`
 - `ConstructResolver` (the optional adapter capability beside `RangeRunner`: a file's top-level construct spans; `Construct.Label` is what provenance prints) — `internal/mutation/construct.go:62`
 - `Stryker.Constructs` (`@babel/parser` out of Stryker's own tree under `node -`, source on stdin, every failure a dross-authored `ErrASTUnavailable` cause; `.svelte` refused pre-spawn) — `internal/mutation/construct.go:109`
-- `resolveConstructs` (asks the resolver for exactly the files the planner would range, before dispatch, never for a hunk-less scope, an absent file or a malformed hunk) — `internal/verify/verify.go:591`
+- `resolveConstructs` (asks the resolver for exactly the files the planner would range, before dispatch, never for a hunk-less scope, an absent file or a malformed hunk) — `internal/verify/verify.go:608`
 - `expandToConstructs` (pure hunk→construct widening: full span per construct, split across constructs, uncovered lines stay a bare `hunk` range, output never overlaps) — `internal/verify/range_expand.go:30`
 - `RangeRunner` (the optional adapter capability; `Range.Valid` is the one validator shared with stryker's argv) — `internal/mutation/adapter.go:174`
 - `Stryker.RunRanges` (`file:start-end` argv) — `internal/mutation/stryker.go:93`
 - `PlanRanges` (pure per-leg planner over an `ASTIndex`: ranged with its construct, or whole-file with a closed named reason; absent → malformed → ast-unavailable → ranged) — `internal/verify/range_provenance.go:108`
-- `runPlanned` (every leg persists `ranges` + `whole_file` from the one plan it dispatched; plan Degraded lines land on Scope deduped) — `internal/verify/verify.go:627`
-- `printRangeProvenance` (verify.toml legs + verify output state ranged vs whole-file per leg with the reason, one line per range naming its construct) — `internal/cmd/verify.go:1549`
+- `runPlanned` (every leg persists `ranges` + `whole_file` from the one plan it dispatched; plan Degraded lines land on Scope deduped) — `internal/verify/verify.go:644`
+- `printRangeProvenance` (verify.toml legs + verify output state ranged vs whole-file per leg with the reason, one line per range naming its construct) — `internal/cmd/verify.go:1653`
 - `verifyScope` (`dross verify scope <phase>`: raw hunks beside per-leg effective ranges; `--json` verbatim; no run → error naming the fix) — `internal/cmd/verifyscope.go:210`
 - `MutationOutOfScope` (all-filtered run status) — `internal/verify/verify.go:53`
-- `printScopeSummary` (scoped file list + `(+N more)` overflow) — `internal/cmd/verify.go:1508`
+- `printScopeSummary` (scoped file list + `(+N more)` overflow) — `internal/cmd/verify.go:1612`
 - `TestFilterReportDropsTestdataEntirely` (fixtures leave through neither exit) — `internal/verify/verify_test.go:592`
 - `TestWholeFileReasonsAreAClosedSet` (the fallback vocabulary cannot grow silently) — `internal/verify/range_provenance_test.go:323`
 - `TestASTUnavailableDegradesAndFallsWholeOnlyItsOwnFile` (an unresolvable file falls open under the one closed reason with its cause on the degraded line, and its sibling still ranges) — `internal/verify/range_provenance_test.go:217`
 - `TestConstructRangeRecoversTheDeepMutant` (the acceptance proof against real Stryker on the committed fixture: construct span 62 mutants vs the retired ±25 window 50 vs the bare line 0; node-gated) — `internal/mutation/construct_e2e_test.go:65`
 - `TestNoPadHeuristicResidue` (calibrated scan keeping the retired pad heuristic out of the three docs and every shipped .go) — `internal/cmd/pad_residue_test.go:106`
 - `mutation.Supported` (a leg records only the files its adapter can mutate — the detached collector no longer lists README.md on the gremlins leg) — `internal/mutation/adapter.go:186`
-- `constructLabel` (readouts print each range's construct; a record written before constructs reads `construct unrecorded`, never a pad) — `internal/cmd/verify.go:1542`
+- `constructLabel` (readouts print each range's construct; a record written before constructs reads `construct unrecorded`, never a pad) — `internal/cmd/verify.go:1646`
 - `TestRangedDispatchReachesTheAdapterEndToEnd` (the scope pipeline's hunk keys and the adapter's dispatched paths share one vocabulary — a real two-line edit reaches `RunRanges` as its enclosing construct's span {30,50}) — `internal/cmd/verify_range_e2e_test.go:26`
 - `TestVerifyCover_WholeFileListTruncation` (whole-file `(+N more)` overflow count and `ProvenanceOf`'s nil-scope projection pinned in-package) — `internal/cmd/verify_test.go:498`
 
@@ -773,7 +773,7 @@ A run compiles into a **scratch build cache it then throws away**, rather than i
 - `stack.MutationCache` (the per-profile declaration; names validated at load) — `internal/stack/profile.go:53`
 - `scratch` / `scratchDirFor` (run-private cache beside the tree, wiped on every exit path) — `internal/mutation/scratch.go:28`
 - `Launcher.localCacheEnv` (the one construction point both transports redirect at) — `internal/mutation/launcher.go:317`
-- `profileCacheVars` (recorded profile first, detection as the fallback that keeps it from being dead config) — `internal/cmd/verify.go:1205`
+- `profileCacheVars` (recorded profile first, detection as the fallback that keeps it from being dead config) — `internal/cmd/verify.go:1309`
 - `TestScratchIsNotInsideTheTree` (the placement the first live run corrected) — `internal/mutation/launcher_scratch_test.go:393`
 
 A failed tool invocation is recorded **one way**, by every adapter. The cut is at error *construction*, not at the persistence boundary (locked `cut_point`): an adapter never builds an error string containing a byte of tool output. It tees the stream through a capped `headBuffer` that counts every byte and retains the first 64 KiB, and on failure prints that head to **stderr at the failure point** — where the reader is already looking, exactly as the old quote read (locked `terminal_requote`) — then returns a `toolFailure` carrying only facts *about* the output: the tool's name (a bare token, because telemetry's `mutation` bucket keys on it), its exit status, how many bytes were **observed** (the total, not the retained prefix, so a 100 KiB run past a 64 KiB cap is not reported as 64 KiB), or why nothing was — a detached run tees nothing, and `0 bytes` would be a false claim the tool was silent — and a fixed-prose pointer saying the full output went to this run's stderr, with no path, because dross cannot know where its own stderr was redirected (locked `stderr_pointer`). The record wraps the underlying error so `errors.Is` classification against the remote sentinels keeps firing after the message is replaced. Its parameter list is the guarantee — a `string`, an `int` and a `capture`, no slot that could carry text — pinned by reflection, and a run that never started renders as prose rather than as `-1`. Stryker's reportless and uninstrumented paths, gremlins' three fatal paths and stryker.net's two all route through it, each asserted structurally with `errors.As(err, &toolFailure)` so reproducing the record's wording inline fails; stryker.net's no-report case is discriminated at the call site where the exit status lives. A pre-phase comment still reading "Quote it." above the code that deliberately no longer quotes is the kind of drift the residual guard in Tool-output containment exists to catch.
@@ -820,7 +820,7 @@ One reader answers "is this phase done?" for every surface that asks, so `dross 
 - `askAllThree` (cross-command guard: one fixture put to all three commands, failing by name whichever disagrees) — `internal/cmd/completion_record_truth_test.go:51`
 - `changes.Complete` (record-only doneness predicate the four re-entry surfaces share; complete, never shipped) — `internal/changes/changes.go:365`
 - `reconcilablePhases` (reconcile count off the record; its `*state.State` parameter went dead with the breadcrumb read and was removed) — `internal/cmd/phase_reconcile.go:109`
-- `phaseMergeState` (network-free no-pr/open/merged/unknown merge oracle, keyed on a phase id rather than HEAD so it answers the same from main) — `internal/cmd/status.go:742`
+- `phaseMergeState` (network-free no-pr/open/merged/unknown merge oracle, keyed on a phase id rather than HEAD so it answers the same from main) — `internal/cmd/status.go:761`
 - `TestFourReentrySurfacesAgreeOnTheCompletionRecord` (one git-backed inverted fixture put to all four surfaces; whichever reverts to history or the verdict names itself) — `internal/cmd/reentry_signal_truth_test.go:160`
 
 The guard is deliberately asymmetric — two phases done by record against one carrying `verdict = "pass"` and no record — so truth is 2/3 while a verdict-reader reports 1/3 over the *opposite* phase; a symmetric fixture would let an inverted answer pass on the matching number, and `dross status` prints only a count. It compares each command against a fixed truth rather than against each other, so it also catches a regression in the shared reader itself, where all three would move together and still agree.
@@ -928,14 +928,14 @@ One authorization — "run this repo's code on that machine" — serving every c
 
 - `remoteGrantTree` (one grant/status/revoke tree behind both spellings) — `internal/cmd/remote_grant.go:108`
 - `writeRemoteGrant` (writes the current keys, clears the deprecated aliases, leaves the tuning knobs alone) — `internal/cmd/remote_grant.go:57`
-- `Store.EffectiveRemote` (new keys win; host and workdir resolve as a pair) — `internal/localstore/store.go:372`
-- `localstore.ReadRemoteGrants` (the one reader every consumer goes through, returning the whole granted pool with the scalar grant as candidate zero; an unparseable store errors) — `internal/localstore/store.go:437`
+- `Store.EffectiveRemote` (new keys win; host and workdir resolve as a pair) — `internal/localstore/store.go:378`
+- `localstore.ReadRemoteGrants` (the one reader every consumer goes through, returning the whole granted pool with the scalar grant as candidate zero; an unparseable store errors) — `internal/localstore/store.go:443`
 - `resolveRemoteHost` (the ONE resolver behind doctor, remote status, bootstrap and lane install — it PROBES rather than reporting config, and hands the whole pool back beside the chosen target) — `internal/cmd/remote_pool.go:37`
 - `probeRemotePool` (probes every granted candidate for the lane toolchain union and returns each reachable host's own readiness, stopping early once every probed tool is covered) — `internal/cmd/remote_pool.go:136`
 - `remote.Target` / `Validate` (host + workdir allowlists, refused before any argv exists) — `internal/remote/remote.go:56`
 - `remote.SyncArgs` / `SSHArgs` / `Script` (the argv builders; they return an error INSTEAD of an argv) — `internal/remote/remote.go:646`
 - `remote.ScriptAll` (the piped script: exports, `cd`, `&&`-chained commands, `exec` on the last) — `internal/remote/remote.go:254`
-- `localstore.ResolveRemoteEnv` (`mutation_remote_env` forwards variable NAMES; values are read at run time and stored nowhere) — `internal/localstore/store.go:492`
+- `localstore.ResolveRemoteEnv` (`mutation_remote_env` forwards variable NAMES; values are read at run time and stored nowhere) — `internal/localstore/store.go:498`
 - `TestBothVerbsWriteTheSameKeys` (the alias cannot become a second implementation) — `internal/cmd/remote_grant_test.go:83`
 - `checkRemoteMutation` (doctor's Remote section — one section for the one grant) — `internal/cmd/doctor.go:1370`
 - `reportLaneToolchains` (the same Remote section reports each declared lane's effective toolchain against the granted host, naming the lane, its tools and which are missing — from the SAME single probe the adapters use, so doctor and the run can never disagree about what the host has, and a locality fallback is visible before a run hits it) — `internal/cmd/doctor.go:1327`
@@ -949,13 +949,13 @@ Bootstrap answers for **lanes as well as adapters**, off the same single probe a
 - `remoteBootstrap` (the verb: dry-run default, `--apply`, no-op over a provisioned host) — `internal/cmd/remote_bootstrap_cmd.go:29`
 - `planLaneStep` (every declared lane's toolchain planned alongside the adapters, from the shared probe and resolver; a declared install line is consent-gated at plan time) — `internal/cmd/remote_bootstrap.go:225`
 - `remoteProbeTools` (one probe returning two disjoint attributions — the adapter that wants a tool, and the lane that does) — `internal/cmd/doctor.go:1273`
-- `measuredOnOf` (provenance from the adapters used and the tuning that produced them) — `internal/cmd/verify.go:1189`
-- `verify.MeasuredAfterFallback` (a fallback names both machines; a plain "local" would lose the unmet expectation) — `internal/verify/verify.go:108`
+- `measuredOnOf` (provenance from the adapters used and the tuning that produced them) — `internal/cmd/verify.go:1293`
+- `verify.MeasuredAfterFallback` (a fallback names both machines; a plain "local" would lose the unmet expectation) — `internal/verify/verify.go:116`
 
 **The pool is resolved once, and every surface that names a host walks it.** A grant is no longer one machine: `[[remote_pool]]` declares candidates, the scalar `remote_host` grant stays candidate zero inside the same reader, and one probe answers for the whole set. The scalar-only reader was **deleted** rather than kept beside the pool walk (locked `resolution_has_one_implementation`) — four callers each doing their own resolution is how `dross doctor`, `dross remote status`, `dross remote bootstrap` and `dross test lane install` came to name a machine the next run would not use, and a second correct implementation is one refactor away from being a second wrong one. The failure was silent: the surfaces simply disagreed. Because behaviour cannot see a duplicate that happens to agree today, the guarantee is pinned **structurally**, by an AST scan for any surviving `readRemoteGrant` definition, beside the behavioural fixture (pool declared, scalar host down) that compares the resolver against what a run would pick. A host that ANSWERED and failed comes back as the failing candidate rather than as an anonymous error, so the message names the machine; a host that could not be *reached* is skipped and announced, and the walk continues. Bootstrap follows the same widening: it provisions **every** granted candidate off that one probe, reporting per host what installed, what was already present and what could not be reached — an unreachable candidate never aborts the rest, and the non-zero exit names the host left unprovisioned, so a partly-provisioned pool cannot read as success to a script.
 
 - `bootstrapPool` (provisions every granted candidate from its own probed readiness; per-host sections, one dead host does not stop the others, non-zero exit names the unprovisioned) — `internal/cmd/remote_bootstrap_cmd.go:117`
-- `verify.MeasuredAcross` (measured_on names every machine a run used and each leg carries its own host, so two runs measured on different candidates are distinguishable after the fact) — `internal/verify/verify.go:130`
+- `verify.MeasuredAcross` (measured_on names every machine a run used and each leg carries its own host, so two runs measured on different candidates are distinguishable after the fact) — `internal/verify/verify.go:138`
 - `TestScalarGrantResolutionIsGone` (the structural half: an AST scan refusing a second resolver, which output assertions cannot see) — `internal/cmd/local_resolution_test.go:41`
 - `TestACommandFailureNamesTheMachineThatFailed` (a failed pool resolution names the machine that failed rather than an anonymous granted host) — `internal/cmd/local_resolution_test.go:201`
 
@@ -977,7 +977,7 @@ Two shapes hold it. A **detached** run composes the prelude inside the `setsid` 
 - `mutation.Launcher.ensureHeld` / `checkHeld` (one hold per run before the push; released in `Close`; a lost hold refuses to record) — `internal/mutation/launcher.go:375`
 - `mutationcfg.ResolveTuning` (mints the holder — project, phase, run id — once for verify and the drain) — `internal/mutationcfg/mutationcfg.go:163`
 - `holdHostForSuite` (`dross test`'s bounded wait and the alongside path) — `internal/cmd/test.go:939`
-- `scheduledReason` (what a scheduled detached run is waiting on, for status and results) — `internal/cmd/verify.go:909`
+- `scheduledReason` (what a scheduled detached run is waiting on, for status and results) — `internal/cmd/verify.go:935`
 - `reportHostLock` (doctor names the holder) — `internal/cmd/doctor.go:1484`
 - `TestRealFlockSerializesAndReleasesOnKill` / `TestAKilledHolderReleasesWithNoCleanup` (the kernel's word, on a temp lock path; skipped where flock is absent) — `internal/remote/lock_test.go`, `internal/remote/hold_test.go`
 - `TestReadmeDocumentsTheHostLock` / `TestArchitectureDocumentsTheHostLock` (README, this entry and verify.md pinned to the lock's path, wait and `--no-wait`, `--wait` cap, doctor's flock probe and crash-safe release) — `internal/cmd/options_docs_test.go:542`
@@ -1193,8 +1193,9 @@ In `--solo` runs of /dross-execute and /dross-quick no human approves a task, so
 - Quick solo review (/dross-quick --solo is reviewed against its description before the commit) — `assets/prompts/quick.md:128`
 - Solo review block (/dross-verify reports each task's review outcome, findings, resolutions and failed-task reasons) — `assets/prompts/verify.md:226`
 - `TestCapturedAgentReviewerFixture` / `TestRecorderBackgroundRoundTrip` (captured real Agent payloads pin the foreground and background verdict paths) — `internal/gate/fixture_test.go:146`
+- `TestReviewerBodyWarnsOffNearMissFences` (the reviewer is told its fence label is exactly `dross-verdict`, not `dross-verify` — a near-miss is read as no verdict) — `internal/review/agentdef_test.go:137`
 
-_introduced solo-task-review · 6719096_
+_introduced solo-task-review · 6719096 · extended verify-staleness · d70ea24_
 
 ### Stack profiles
 
@@ -1223,16 +1224,16 @@ The **last line** — status's next-step suggestion, byte-equal to the SessionSt
 
 - `state.State` — `internal/state/state.go:17`
 - `State` (CLI) — `internal/cmd/state.go:20`
-- `Status` — `internal/cmd/status.go:25`
-- `suggestNext` (the next-step line; merge oracle consulted ahead of the verdict switch, and no doneness asserted without a record) — `internal/cmd/status.go:243`
+- `Status` — `internal/cmd/status.go:26`
+- `suggestNext` (the next-step line; merge oracle consulted ahead of the verdict switch, and no doneness asserted without a record) — `internal/cmd/status.go:250`
 - `TestSuggestNextShippedWithoutAnObservablePRWaitsOnTheMerge` (the shipped fall-through the oracle narrowed to the merge-unobservable case) — `internal/cmd/status_test.go:1820`
-- `shippedUnmergedPhase` (reports a shipped phase and the base its PR waits on; replaced the stale-completion warning) — `internal/cmd/status.go:623`
-- `recordPushPending` (PR number with neither shipped marker → record-pending; status and suggestNext name the ship re-run) — `internal/cmd/status.go:579`
-- `reconcilableCount` (read-only count behind the single-verb suggestion; never completes anything) — `internal/cmd/status.go:866`
-- `spineIdle` — `internal/cmd/status.go:362`
-- `rankAreas` — `internal/cmd/status.go:477`
-- `formatRunSignal` — `internal/cmd/status.go:496`
-- `renderActionAreas` — `internal/cmd/status.go:524`
+- `shippedUnmergedPhase` (reports a shipped phase and the base its PR waits on; replaced the stale-completion warning) — `internal/cmd/status.go:642`
+- `recordPushPending` (PR number with neither shipped marker → record-pending; status and suggestNext name the ship re-run) — `internal/cmd/status.go:598`
+- `reconcilableCount` (read-only count behind the single-verb suggestion; never completes anything) — `internal/cmd/status.go:885`
+- `spineIdle` — `internal/cmd/status.go:381`
+- `rankAreas` — `internal/cmd/status.go:496`
+- `formatRunSignal` — `internal/cmd/status.go:515`
+- `renderActionAreas` — `internal/cmd/status.go:543`
 - `stateTouch` (silent on a non-root, loud on a corrupt one) — `internal/cmd/state.go:123`
 - `stateGet` (1+ dotted paths via the shared `renderMultiGet`) — `internal/cmd/state.go:55`
 - `stateShow` (`--json` accepted; output byte-identical to bare `show`) — `internal/cmd/state.go:29`
@@ -1292,14 +1293,14 @@ Every surviving mutant a verify run reports carries exactly one state — in-dif
 - `survivorRetire` (CLI retirement path — no hand-editing of survivors.toml) — `internal/cmd/survivor.go:252`
 - `survivorDrain` (repo-wide undisposed gate; unmeasured package fatal, testdata excluded, self-routing refused) — `internal/cmd/survivor_drain.go:218`
 - `survivor.ReadRawReport` (drain's `go list` / coverage spawns and the raw gremlins decode live in survivor, not cmd) — `internal/survivor/drain.go:84`
-- `workTreeIdentifier` (verify resolves identity against the working tree) — `internal/cmd/verify.go:1590`
+- `workTreeIdentifier` (verify resolves identity against the working tree) — `internal/cmd/verify.go:1694`
 - `TestAttributionCeilingIsReal` (live fixture proving the gremlins NOT-COVERED ceiling the shared category rests on) — `internal/mutation/ceiling_test.go:180`
 - `TestRepoAcceptanceReasonsCiteRealTests` (every acceptance reason names a checkable justification) — `internal/survivor/reasons_repo_test.go:181`
 - `TestSurvivorDrainBacklogClosed` (CI gate: the routed backlog is empty and nothing was re-routed past the phase) — `internal/cmd/survivor_backlog_repo_test.go:315`
 - `auditSurvivorBacklog` (routing forward into the active milestone is scheduled disposal; routing past it stays deferral) — `internal/cmd/survivor_backlog_repo_test.go:83`
 - verify.md §2 four-state close-out table + the two drain verbs — `assets/prompts/verify.md:78`
 - `StaleAcceptancesAgainst` (staleness also asks whether the SURVIVOR is gone, not only the source line) — `internal/survivor/stale.go:87`
-- `printLifecycleSummary` (stdout takes the gate count from the same summary verify.toml writes) — `internal/cmd/verify.go:1680`
+- `printLifecycleSummary` (stdout takes the gate count from the same summary verify.toml writes) — `internal/cmd/verify.go:1784`
 - `survivor.Save` (survivors.toml patched in place through `project.SaveTOML`: unchanged entries and their `# dross:allow-secret` markers stay byte-identical) — `internal/survivor/store.go:276`
 - `deferred.FindBySurvivor` (re-routing a survivor moves its one existing entry — same id, same board card — instead of filing another; the same target writes nothing) — `internal/deferred/deferred.go:187`
 
@@ -1337,7 +1338,7 @@ Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (
 - `techdebt.Filter` (pure repo-relative exclude filter) — `internal/techdebt/filter.go:29`
 - `project.Techdebt` (`[techdebt] exclude`, nil when absent) — `internal/project/project.go:306`
 - `findings.StampLastRun` — `internal/findings/state.go:121`
-- `actionCatalog` (status actions all slash commands) — `internal/cmd/status.go:444`
+- `actionCatalog` (status actions all slash commands) — `internal/cmd/status.go:463`
 - `/dross-techdebt` thin skill — `assets/prompts/techdebt.md`
 
 _introduced status-action-surfaces-v2 · extended task-reordering · extended self-audit · extended scanner-self-exclusion · 6b90c82 · extended cmd-test-duration · 3f8ade4_
@@ -1495,7 +1496,7 @@ Claude Code's PreToolUse/PostToolUse hooks run `dross gate check` / `dross gate 
 - `judgePlanEdit` (plan-edit: Edit/MultiEdit of an existing plan.toml points at `dross task add/edit/move/remove`; a Write over one refuses once any task has left pending) — `internal/gate/drossfiles.go:100`
 - `judgeCuratedShrink` (curated-shrink: a Write cutting a curated `.dross/` file below half its size refuses; use Edit) — `internal/gate/drossfiles.go:132`
 - `judgeCandidate` (commit-green: a `git commit` is admitted only when its candidate tree — `cd`/`-C` tracked, chained `git add`s replayed, `-a`/`--all` honoured — equals the recorded full green; `.dross/`-only commits and test-less repos pass) — `internal/gate/commit.go:179`
-- `treefp.Candidate` (tree-object fingerprints from a scratch copy of the git index via GIT_INDEX_FILE, `.dross/` excluded; the real index is never touched) — `internal/treefp/treefp.go:72`
+- `treefp.Candidate` (tree-object fingerprints from a scratch copy of the git index via GIT_INDEX_FILE, `.dross/` excluded; the real index is never touched) — `internal/treefp/treefp.go:125`
 - `greenRecorder.finish` (a full `dross test` records `.dross/gate/green.json` only for a tree unchanged across a green run; red on that tree clears it, a run that never happened leaves it) — `internal/cmd/test.go:1172`
 - `judgePair` (pair-approval: in pair mode an in-repo write outside `.dross/` refuses until the exact `approve t-N` AskUserQuestion answer is recorded at the current HEAD) — `internal/gate/pair.go:102`
 - `executeBegin` (`dross execute begin <phase> [--solo]` records the run's mode the pair gate reads) — `internal/cmd/execute.go:31`
@@ -1513,7 +1514,7 @@ Captured subprocess output is never persisted: tests.json, verify.toml, PR bodie
 
 - `toolfence.Fields` (the registry: every persisted field that may carry tool-derived text, with one of three dispositions, plus the four walked roots) — `internal/toolfence/fields.go:111`
 - `LegError` / `RecordLegError` (the named carrier; it does not rewrite dross-authored diagnostics) — `internal/mutation/toolfail.go:128`
-- `RunScoped` (the persisted leg-error string comes from the carrier, the one write the walker accepts) — `internal/verify/verify.go:655`
+- `RunScoped` (the persisted leg-error string comes from the carrier, the one write the walker accepts) — `internal/verify/verify.go:672`
 - `scanRecordedWrites` (two-way walk over four roots: every sink declared, every `Recorded` write from the carrier) — `internal/cmd/toolfence_carrier_test.go:209`
 - `TestEveryPersistedTextSinkIsDeclared` (a new text sink without a declaration, or a stale declaration, is named by file and line) — `internal/cmd/toolfence_enum_test.go:60`
 - `bodySites` (sink-keyed enumeration of every PR and board body composer, with a per-group vacuity floor) — `internal/boardsync/toolfence_composer_test.go:307`
@@ -1553,21 +1554,39 @@ _introduced tracked-path-containment · fcc36fe · extended mutation-range-prove
 
 Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail. The mutation leg is scoped to the phase's own diff (see **Mutation diff scoping**), so the score and verdict rest only on files the phase touched, survivors are weighted by their in-hunk/inherited origin tag, and an all-filtered run resolves through the non-threshold branch as `out-of-scope` rather than a bare 0.00. One formula computes the score everywhere — `mutation.PooledScore`, killed/(killed+survived+timeout), pooled across language legs. Three used to disagree: verify.toml took the MEAN across legs, telemetry pooled with timeouts excluded, and the adapter doc claimed a fourth thing none of them did, so a phase's judgement depended on which surface you read. Pooling because a mean over legs of unequal size hands the smaller leg the louder vote (1/1 beside 0/9 is a 0.10 suite the mean called 0.50); timeouts in the denominator because a mutant that timed out was not killed, and excluding it let a suite that hangs on its hardest mutants outscore one that fails them. The score is printed **with the count it was computed over**, plus the uncoverable share when non-zero — 0.90 over 10 mutants and over 400 are the same number and not the same evidence, and a survivor the tooling cannot reach is a different fact from one the tests missed. "Cannot reach" is decided, not assumed: gremlins' NOT COVERED also holds lines in a count-0 block — reachable code no test ran — so `SplitNotCovered` places each NOT COVERED survivor with the drain's own `survivor.Derive` over a `-run=^$` block profile (compiled, no tests run). Only a line no go-cover block holds is uncoverable; a count-0 line is named a test gap and stays in the reachable denominator, and so does one no profile placed. That split is the only efficacy figure printed — the per-leg line carries raw counts — because a second, unsplit per-leg figure printed 1.00 beside it. The mutation verdict gates on an **absolute count** of undisposed in-scope survivors, not a score ratio: `UnclassifiedInScope` counts only survivors carrying no disposition, out-of-scope ones never reach it, and any single unclassified survivor inside the phase's own diff fails the phase — there is no tolerance band and the prompt carries no score cutoff. An adapter failure records `LanguageRun.Error` plus a FLAG finding and continues — other language legs' reports are never discarded — and a `[mutation] adapters` allowlist filters adapters by name, with filtered files falling to Skipped rather than silently passing. Verify's own wrap-up resolves "the next phase" from the **milestone's `phases` array**, not from `dross phase list`: that command is a directory listing of SCAFFOLDED phases, so using it made every unstarted successor invisible and narrated a phase 9 of 14 as the last in its milestone (2026-08-13), sending the user to the wrong next command. `phase list` remains the fallback only when no milestone is active. A resolved verdict is recorded to telemetry exactly once: `finalizeVerify` writes a `finalized = true` marker back into verify.toml as the idempotency guard (works under telemetry opt-out and log rotation; a re-run reports "already recorded", exit 0), stamps verify pending/outcome events with the phase id, and backs the auto-heal in the ship / phase-complete gates so a resolved-but-unrecorded verdict can't sit unfinalized.
 
-- `Verify` (CLI) — `internal/cmd/verify.go:40`
-- `verify.Run` — `internal/verify/verify.go:573`
+- `Verify` (CLI) — `internal/cmd/verify.go:41`
+- `verify.Run` — `internal/verify/verify.go:590`
 - `VerifySummary.UnclassifiedInScope` (absolute undisposed-in-scope gate, not a ratio) — `internal/verify/verify.go:285`
 - `LanguageRun.Error` (record-and-continue adapter failure) — `internal/verify/verify.go:83`
-- `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:1249`
-- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:1096`
+- `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:1353`
+- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:1200`
 - verify.md §2 verdict rules (diff-scoping guarantee, out-of-scope status, origin-weighted survivors) — `assets/prompts/verify.md:34`
 - `TestVerifyPromptOffloadGuidance` (verify.md §2 size-gated offload — large criterion-mapping reads fan to read-only subagents; judgement + verdict stay main-loop) — `internal/cmd/verify_prompt_test.go:20`
 - survivor lifecycle wiring (loads the acceptance store + cross-phase routed map, persists key/state into tests.json, prints the four counts, NOTEs stale acceptances without touching the verdict — see **Survivor lifecycle**) — `internal/cmd/verify.go:122`
 - `mutation.PooledScore` (the one formula: pooled across legs, timeouts in the denominator) — `internal/mutation/score.go:31`
-- `printOverallScore` (score printed with its in-scope denominator; no-block uncoverable, count-0 test-gap and unplaced shares named, the reachable efficacy the only one) — `internal/cmd/verify.go:1438`
-- `verify.SplitNotCovered` (NOT COVERED split through a fakeable `CoverageClassifier`; `NotCoveredPackages` feeds the profile only repo-local, `./`-rooted Go packages) — `internal/verify/verify.go:1073`
-- `profileClassifier` (verify's classifier IS the drain's `survivor.Derive`, so the two cannot disagree on what is uncoverable) — `internal/cmd/verify.go:1480`
+- `printOverallScore` (score printed with its in-scope denominator; no-block uncoverable, count-0 test-gap and unplaced shares named, the reachable efficacy the only one) — `internal/cmd/verify.go:1542`
+- `verify.SplitNotCovered` (NOT COVERED split through a fakeable `CoverageClassifier`; `NotCoveredPackages` feeds the profile only repo-local, `./`-rooted Go packages) — `internal/verify/verify.go:1092`
+- `profileClassifier` (verify's classifier IS the drain's `survivor.Derive`, so the two cannot disagree on what is uncoverable) — `internal/cmd/verify.go:1584`
 
 _e31bdbd · extended context-hygiene · extended verify-auto-finalize · extended subagent-offload-audit · 5c21b79 · extended mutation-diff-scope · cd0b5f6 · extended survivor-lifecycle · a6b366d · extended survivor-drain · e22b16b · extended guard-remedy-ordering · a07a56e · extended mutation-score-truth · 4fad274 · extended extracted-package-test-parity · 80c3ecc_
+
+### Verify freshness
+
+A pass verdict covers the tree its run measured, not whatever ships later. Every verify run — attached, `--skip-mutation`, and detached — records in verify.toml's `[verify]` table (and tests.json) the commit it measured and a fingerprint of the work tree, uncommitted edits included, with `.dross/` and `ARCHITECTURE.md` left out (locked `staleness_exemptions`, anchored at the dross root). An attached run takes the tree before it runs and names any path that moved while it ran; a detached run takes it before the push and collect stamps that dispatch-time tree, never the one it finds (locked `detached_baseline`). `dross ship` compares the recorded tree with the work tree after its branch check and before it writes or pushes anything: a changed, added or removed file refuses the pass as stale, naming every file, with `--force-unverified` the one override (locked `stale_override`); a verdict recorded before trees were kept warns on stderr and proceeds (locked `legacy_freshness`). `dross status` marks a stale pass on its phase branch and routes the next step to `/dross-verify`; ship.md re-runs `dross ship` after every CI fix and before the merge, so a fix pushed after the pass cannot merge under it. init/onboard ignore the mutation tools' own report dirs, so a run's output never stales its verdict.
+
+- `treefp.MeasuredTree` (the verdict's tree: `add -A` into a scratch index, `.dross` and `ARCHITECTURE.md` out as literal paths at the dross root, HEAD read before staging) — `internal/treefp/treefp.go:98`
+- `verify.ClassifyFreshness` (fresh / stale with sorted changed paths or why they could not be listed / unknown / malformed; tests.json's copy stands in only from the same run) — `internal/verify/freshness.go:71`
+- `verify.VerifyMeta` (`measured_commit` / `measured_tree`, omitempty, so a legacy verdict re-saves byte for byte) — `internal/verify/verify.go:399`
+- `captureMeasuredTree` (attached capture; refuses inside a git tree when it cannot fingerprint, records none outside one) — `internal/cmd/verify.go:1096`
+- `reportTreeDrift` (names every path that moved since the tree was taken, with the .gitignore hint for tool output) — `internal/cmd/verify.go:1131`
+- `dispatchDetached` (takes the tree after the probe and before the push; the run record carries it) — `internal/cmd/verify.go:346`
+- `localstore.DetachedRun` (`measured_commit` / `measured_tree`: the dispatch-time tree collect stamps) — `internal/localstore/store.go:197`
+- `gateFreshness` / `verdictFreshness` (ship's refusal, override and legacy warning; a tree-less verdict is judged without a capture) — `internal/cmd/verdict_fresh.go:52`
+- `staleVerdict` (status's stale marker, phase branch only, silent on any error) — `internal/cmd/status.go:900`
+- `mutationReportDirs` (reports/gremlins/, reports/mutation/, StrykerOutput/ seeded into .gitignore, never reports/ itself) — `internal/cmd/gitignore.go:100`
+- `TestShipPromptReShipsBeforeMerge` (ship.md re-ships after every CI fix and before every provider's merge call) — `internal/cmd/ship_prompt_test.go:503`
+
+_introduced verify-staleness · 49fee2e_
 
 ### Watch heartbeat (dross-watch)
 
