@@ -870,42 +870,42 @@
     "debug-sessions/t-1": {
       "issue": "DRO-891",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "debug-sessions/t-2": {
       "issue": "DRO-892",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "debug-sessions/t-3": {
       "issue": "DRO-893",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "debug-sessions/t-4": {
       "issue": "DRO-894",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "debug-sessions/t-5": {
       "issue": "DRO-895",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "debug-sessions/t-6": {
       "issue": "DRO-896",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "debug-sessions/t-7": {
       "issue": "DRO-897",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "debug-sessions/t-8": {
       "issue": "DRO-899",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "dependency-update-automation/t-1": {
       "issue": "DRO-621",
