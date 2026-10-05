@@ -3838,3 +3838,48 @@
   line = 147
   reason = "Equivalent mutant: writeReviews sorts the task ids of a map, so two ids are never equal and ids[i] < ids[j] and ids[i] <= ids[j] order every pair identically. The negation (>=) is the killable one, pinned by TestReviewSectionSameLengthOrder (same-length t-2/t-3 must render t-2 first)."
   accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "7d9b1ad2681d81b5"
+  file = "internal/boardsync/finalize.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case phaseKey == \"\":"
+  line = 120
+  reason = "gremlins switch-case attribution ceiling: go-cover gives case conditions no block, so gremlins marks them NOT COVERED although tests take this branch and assert its outcome (see dross_gremlins_switchcase_ceiling)"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "eef13356dd2592b1"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Target == \"\":"
+  line = 493
+  reason = "gremlins switch-case attribution ceiling: go-cover gives case conditions no block, so gremlins marks them NOT COVERED although tests take this branch and assert its outcome (see dross_gremlins_switchcase_ceiling)"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "24499cde58dc19c0"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Target != phaseID:"
+  line = 495
+  reason = "gremlins switch-case attribution ceiling: go-cover gives case conditions no block, so gremlins marks them NOT COVERED although tests take this branch and assert its outcome (see dross_gremlins_switchcase_ceiling)"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "bdee64f39c5b0b6a"
+  file = "internal/cmd/deferred_absorb.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case item.Target == \"\":"
+  line = 71
+  reason = "gremlins switch-case attribution ceiling: go-cover gives case conditions no block, so gremlins marks them NOT COVERED although tests take this branch and assert its outcome (see dross_gremlins_switchcase_ceiling)"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "e3e0d0ffe41c51b1"
+  file = "internal/cmd/deferred_absorb.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case item.Target != phaseID:"
+  line = 73
+  reason = "gremlins switch-case attribution ceiling: go-cover gives case conditions no block, so gremlins marks them NOT COVERED although tests take this branch and assert its outcome (see dross_gremlins_switchcase_ceiling)"
+  accepted_in = "board-finalize-on-complete"
