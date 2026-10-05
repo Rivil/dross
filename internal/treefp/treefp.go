@@ -10,6 +10,11 @@
 // equal exactly when the commit holds the tested tree, give or take .dross/ —
 // the bookkeeping dross itself writes between a test run and its commit.
 //
+// A third recipe, MeasuredTree, records the tree a verify verdict stands on.
+// It stages like WorkingTree but takes out ARCHITECTURE.md as well as .dross/,
+// both anchored at the dross root: the files a ship writes after a verdict
+// without changing what the verdict measured.
+//
 // The scratch index is a byte copy, so stat data, skip-worktree and
 // intent-to-add bits carry over and only changed files are rehashed. It lives
 // in the OS temp dir and is removed after each call. The blobs and trees the
@@ -65,6 +70,54 @@ func WorkingTree(dir string) (string, error) {
 		return "", err
 	}
 	return s.tree()
+}
+
+// Measured is the tree a verify run measured.
+type Measured struct {
+	// Commit is HEAD when the tree was taken, "" on an unborn HEAD. It is a
+	// record for the reader; freshness compares Tree, so a commit that moves
+	// HEAD without changing the tree leaves a verdict fresh.
+	Commit string
+	// Tree fingerprints the work tree as `git add -A` would stage it, with
+	// the verdict's exemptions taken out.
+	Tree string
+}
+
+// measuredExempt are the paths a verdict's tree leaves out, relative to the
+// dross root (locked staleness_exemptions): the bookkeeping dross writes after
+// a verdict, and the architecture doc ship's landmark merge commits after it.
+var measuredExempt = []string{".dross", "ARCHITECTURE.md"}
+
+// MeasuredTree fingerprints the tree a verify run measures in dir, the dross
+// root: tracked and untracked-unignored files, modes and uncommitted edits
+// included, measuredExempt out. Unlike WorkingTree — whose .dross/ exemption
+// the commit gate and the green record rely on, and which counts
+// ARCHITECTURE.md — both exemptions here are literal paths anchored at dir, so
+// a .dross below the top of the repository is the one taken out, and a
+// docs/ARCHITECTURE.md or a .drossrc is not.
+func MeasuredTree(dir string) (Measured, error) {
+	s, err := open(dir)
+	if err != nil {
+		return Measured{}, err
+	}
+	defer s.close()
+	if _, err := s.git(s.dir, "add", "-A"); err != nil {
+		return Measured{}, err
+	}
+	args := []string{"rm", "-r", "--cached", "-q", "--ignore-unmatch", "--"}
+	for _, p := range measuredExempt {
+		args = append(args, ":(literal)"+p)
+	}
+	if _, err := s.git(s.dir, args...); err != nil {
+		return Measured{}, err
+	}
+	tree, err := s.writeTree()
+	if err != nil {
+		return Measured{}, err
+	}
+	// The commit is the HEAD open read before staging, so a commit landing
+	// while the tree is written cannot be recorded against it.
+	return Measured{Commit: s.head, Tree: tree}, nil
 }
 
 // Candidate takes the commit `git commit` in dir would make after the adds
@@ -232,6 +285,7 @@ type scratch struct {
 	tmp    string // the temp dir holding the copy
 	index  string // the copy
 	unborn bool   // HEAD names no commit yet
+	head   string // the commit HEAD named when the scratch was opened
 }
 
 func open(dir string) (*scratch, error) {
@@ -248,9 +302,11 @@ func open(dir string) (*scratch, error) {
 		s.close()
 		return nil, err
 	}
-	_, err = gitrun.RawWith(gitrun.Options{Timeout: Timeout}, dir, "rev-parse", "--verify", "-q", "HEAD^{commit}")
+	out, err := gitrun.RawWith(gitrun.Options{Timeout: Timeout}, dir, "rev-parse", "--verify", "-q", "HEAD^{commit}")
 	switch {
 	case err == nil:
+		//dross:taint-cleared git rev-parse --verify HEAD^{commit} prints one commit id and nothing else; it is recorded as that id
+		s.head = strings.TrimSpace(out)
 	case gitrun.ExitCode(err) == 1:
 		s.unborn = true
 	default:
@@ -373,6 +429,11 @@ func (s *scratch) tree() (string, error) {
 	if _, err := s.git(s.dir, "rm", "-r", "--cached", "-q", "--ignore-unmatch", "--", ":/.dross"); err != nil {
 		return "", err
 	}
+	return s.writeTree()
+}
+
+// writeTree writes the scratch index as a tree.
+func (s *scratch) writeTree() (string, error) {
 	out, err := s.git(s.dir, "write-tree")
 	if err != nil {
 		return "", err

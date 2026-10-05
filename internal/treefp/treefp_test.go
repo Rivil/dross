@@ -70,6 +70,15 @@ func mustTree(t *testing.T, dir string) string {
 	return tree
 }
 
+func mustMeasured(t *testing.T, dir string) Measured {
+	t.Helper()
+	m, err := MeasuredTree(dir)
+	if err != nil || m.Tree == "" {
+		t.Fatalf("MeasuredTree = %+v, %v", m, err)
+	}
+	return m
+}
+
 func mustCandidate(t *testing.T, dir string, adds []Add, all bool) Snapshot {
 	t.Helper()
 	snap, err := Candidate(dir, adds, all)
@@ -95,11 +104,13 @@ func TestRealIndexUntouched(t *testing.T) {
 	dir := repo(t)
 	write(t, dir, "a.go", "package a // staged\n")
 	git(t, dir, "add", "a.go")
+	write(t, dir, "a.go", "package a // staged, then edited again\n")
 	write(t, dir, "b.go", "package b // unstaged\n")
 	write(t, dir, "c.go", "package c\n")
 	before := indexState(t, dir)
 
 	mustTree(t, dir)
+	mustMeasured(t, dir)
 	mustCandidate(t, dir, nil, false)
 	mustCandidate(t, dir, []Add{{Args: []string{"--", "b.go", "c.go"}}}, true)
 	if _, err := ChangedPaths(dir); err != nil {
@@ -314,8 +325,11 @@ func TestEveryGitCallIsBounded(t *testing.T) {
 	if _, err := Diff(t.TempDir(), "a", "b"); err == nil {
 		t.Error("a hanging git diff-tree reported success")
 	}
-	if took := time.Since(start); took > 4*time.Second {
-		t.Errorf("two hanging calls took %s, want each bounded by Timeout", took)
+	if _, err := MeasuredTree(t.TempDir()); err == nil {
+		t.Error("a hanging git under MeasuredTree reported success")
+	}
+	if took := time.Since(start); took > 6*time.Second {
+		t.Errorf("three hanging calls took %s, want each bounded by Timeout", took)
 	}
 }
 
@@ -480,5 +494,183 @@ func TestDirtyIgnoresDross(t *testing.T) {
 	git(t, dir, "commit", "-q", "--allow-empty", "-m", "empty")
 	if after, err := Base(dir); err != nil || after != before {
 		t.Fatalf("Base moved across .dross/-only and empty commits: %q -> %q (%v)", before, after, err)
+	}
+}
+
+// measuredRepo is repo plus a committed root ARCHITECTURE.md and README.md.
+func measuredRepo(t *testing.T) string {
+	t.Helper()
+	dir := repo(t)
+	write(t, dir, "ARCHITECTURE.md", "# arch\n")
+	write(t, dir, "README.md", "# readme\n")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-q", "-m", "docs")
+	return dir
+}
+
+// TestMeasuredTreeExemptions: the two exemptions are exactly the root
+// .dross/ and the root ARCHITECTURE.md, matched literally — a lookalike is
+// measured like any other file.
+func TestMeasuredTreeExemptions(t *testing.T) {
+	dir := measuredRepo(t)
+	base := mustMeasured(t, dir).Tree
+	write(t, dir, "ARCHITECTURE.md", "# arch, landmarks merged\n")
+	write(t, dir, ".dross/x", "bookkeeping\n")
+	if got := mustMeasured(t, dir).Tree; got != base {
+		t.Error("an exempt edit (root ARCHITECTURE.md, .dross/x) changed the measured tree")
+	}
+	for _, rel := range []string{"docs/ARCHITECTURE.md", "ARCHITECTURE.md.bak", "sub/.dross/x", ".drossrc"} {
+		t.Run(rel, func(t *testing.T) {
+			dir := measuredRepo(t)
+			base := mustMeasured(t, dir).Tree
+			write(t, dir, rel, "lookalike\n")
+			if got := mustMeasured(t, dir).Tree; got == base {
+				t.Errorf("%s is not exempt, but adding it left the measured tree unchanged", rel)
+			}
+		})
+	}
+}
+
+// TestMeasuredTreeCoversTheWorkTree: every change `git add -A` would stage
+// moves the measured tree; an ignored file does not.
+func TestMeasuredTreeCoversTheWorkTree(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(t *testing.T, dir string)
+	}{
+		{"uncommitted tracked edit", func(t *testing.T, dir string) { write(t, dir, "a.go", "package a // edited\n") }},
+		{"untracked file", func(t *testing.T, dir string) { write(t, dir, "c.go", "package c\n") }},
+		{"deleted tracked file", func(t *testing.T, dir string) {
+			if err := os.Remove(filepath.Join(dir, "b.go")); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"mode change", func(t *testing.T, dir string) {
+			if err := os.Chmod(filepath.Join(dir, "a.go"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"README", func(t *testing.T, dir string) { write(t, dir, "README.md", "# readme, edited\n") }},
+		{"CI config", func(t *testing.T, dir string) { write(t, dir, ".github/workflows/ci.yml", "on: push\n") }},
+		{"test file", func(t *testing.T, dir string) { write(t, dir, "x_test.go", "package a\n") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "mode change" && runtime.GOOS == "windows" {
+				t.Skip("no executable bit")
+			}
+			dir := measuredRepo(t)
+			base := mustMeasured(t, dir).Tree
+			tc.change(t, dir)
+			if got := mustMeasured(t, dir).Tree; got == base {
+				t.Errorf("%s left the measured tree unchanged", tc.name)
+			}
+		})
+	}
+	dir := measuredRepo(t)
+	base := mustMeasured(t, dir).Tree
+	write(t, dir, "run.log", "ignored\n")
+	if got := mustMeasured(t, dir).Tree; got != base {
+		t.Error("a .gitignore'd file changed the measured tree")
+	}
+}
+
+// TestWorkingTreeStillCountsArchitecture: the new exemption is MeasuredTree's
+// alone. The commit gate and the green record fingerprint through WorkingTree,
+// which must still see a root ARCHITECTURE.md edit.
+func TestWorkingTreeStillCountsArchitecture(t *testing.T) {
+	dir := measuredRepo(t)
+	before := mustTree(t, dir)
+	write(t, dir, "ARCHITECTURE.md", "# arch, edited\n")
+	if after := mustTree(t, dir); after == before {
+		t.Error("WorkingTree stopped counting ARCHITECTURE.md")
+	}
+}
+
+// TestMeasuredTreeIgnoresCommitMoves: the tree is the work tree's, not HEAD's.
+// A .dross-only commit, and a commit of exactly the measured edits, move
+// Commit and leave Tree alone.
+func TestMeasuredTreeIgnoresCommitMoves(t *testing.T) {
+	dir := measuredRepo(t)
+	m0 := mustMeasured(t, dir)
+	if m0.Commit == "" {
+		t.Fatal("no commit recorded on a born HEAD")
+	}
+	write(t, dir, ".dross/state.json", "{\"v\":2}\n")
+	git(t, dir, "commit", "-q", "-am", "bookkeeping")
+	m1 := mustMeasured(t, dir)
+	if m1.Tree != m0.Tree || m1.Commit == m0.Commit {
+		t.Errorf("a .dross-only commit: tree %s -> %s, commit %s -> %s; want the tree kept and the commit moved", m0.Tree, m1.Tree, m0.Commit, m1.Commit)
+	}
+	write(t, dir, "a.go", "package a // measured dirty\n")
+	dirty := mustMeasured(t, dir)
+	git(t, dir, "commit", "-q", "-am", "commit the measured edit")
+	after := mustMeasured(t, dir)
+	if after.Tree != dirty.Tree || after.Commit == dirty.Commit {
+		t.Errorf("committing exactly the measured edit: tree %s -> %s, commit %s -> %s; want the tree kept and the commit moved", dirty.Tree, after.Tree, dirty.Commit, after.Commit)
+	}
+}
+
+// TestMeasuredTreeDiffNamesChanges: Diff over two measured trees names exactly
+// the non-exempt paths that were added, removed or modified.
+func TestMeasuredTreeDiffNamesChanges(t *testing.T) {
+	dir := measuredRepo(t)
+	before := mustMeasured(t, dir).Tree
+	write(t, dir, "a.go", "package a // modified\n")
+	write(t, dir, "c.go", "package c\n")
+	if err := os.Remove(filepath.Join(dir, "b.go")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, "ARCHITECTURE.md", "# arch, edited\n")
+	write(t, dir, ".dross/x", "bookkeeping\n")
+	after := mustMeasured(t, dir).Tree
+	got, err := Diff(dir, before, after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"a.go", "b.go", "c.go"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Diff = %v, want %v", got, want)
+	}
+}
+
+// TestMeasuredTreeEdgeRepos: an unborn HEAD still has a tree and no commit;
+// outside a repository there is an error, never an empty fingerprint.
+func TestMeasuredTreeEdgeRepos(t *testing.T) {
+	dir := initRepo(t)
+	write(t, dir, "a.go", "package a\n")
+	m, err := MeasuredTree(dir)
+	if err != nil || m.Tree == "" || m.Commit != "" {
+		t.Errorf("unborn HEAD: MeasuredTree = %+v, %v; want a tree and no commit", m, err)
+	}
+	if got, err := MeasuredTree(t.TempDir()); err == nil || got.Tree != "" || got.Commit != "" {
+		t.Errorf("outside a repo: MeasuredTree = %+v, %v; want an error and nothing recorded", got, err)
+	}
+}
+
+// TestMeasuredTreeAnchorsAtDrossRoot: with the dross root below the top of the
+// repository, the exempt paths are the root's own .dross/ and ARCHITECTURE.md,
+// and the top-level files of the same names are measured.
+func TestMeasuredTreeAnchorsAtDrossRoot(t *testing.T) {
+	top := initRepo(t)
+	write(t, top, "svc/a.go", "package a\n")
+	write(t, top, "svc/.dross/state.json", "{}\n")
+	write(t, top, "svc/ARCHITECTURE.md", "# svc arch\n")
+	write(t, top, "ARCHITECTURE.md", "# top arch\n")
+	write(t, top, ".dross/state.json", "{}\n")
+	git(t, top, "add", "-A")
+	git(t, top, "commit", "-q", "-m", "init")
+	root := filepath.Join(top, "svc")
+
+	base := mustMeasured(t, root).Tree
+	write(t, top, "svc/.dross/x", "bookkeeping\n")
+	write(t, top, "svc/ARCHITECTURE.md", "# svc arch, landmarks merged\n")
+	if got := mustMeasured(t, root).Tree; got != base {
+		t.Error("the dross root's own .dross/ or ARCHITECTURE.md changed the measured tree")
+	}
+	for _, rel := range []string{"ARCHITECTURE.md", ".dross/x"} {
+		before := mustMeasured(t, root).Tree
+		write(t, top, rel, "edited at the top\n")
+		if got := mustMeasured(t, root).Tree; got == before {
+			t.Errorf("top-level %s is outside the dross root but was treated as exempt", rel)
+		}
 	}
 }
