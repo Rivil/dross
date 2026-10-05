@@ -1,0 +1,79 @@
+[phase]
+  id = "review-comment-ingest"
+  title = "review-comment-ingest"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross pr comments <pr>` pulls the PR's conversation comments, inline comments (with file:line) and review summaries into one list, each with an id, author, bot/human flag and triage status."
+
+[[criteria]]
+  id = "c-2"
+  text = "Each comment resolves to exactly one of: accept (a new task in the plan of the PR's phase), reject (a stated reason) or route (a deferred item with a target)."
+  deferred = ["00240da43142c2d1"]
+
+[[criteria]]
+  id = "c-3"
+  text = "Resolutions persist; a re-run lists only comments not yet triaged, plus any comment edited since it was triaged."
+
+[[criteria]]
+  id = "c-4"
+  text = "The CLI refuses a resolution that carries no evidence (a file:line or command output)."
+
+[[criteria]]
+  id = "c-5"
+  text = "Reject reasons are posted back to the PR only after a user confirm; accepted comments get no reply that just agrees."
+
+[[criteria]]
+  id = "c-6"
+  text = "Comment bodies reach the agent fenced as untrusted data; a body carrying a fence-breaker (a backtick run longer than the fence) cannot escape it."
+
+[[criteria]]
+  id = "c-7"
+  text = "Comment text that is persisted or printed passes the secret detector first; a planted token is redacted."
+
+[[criteria]]
+  id = "c-8"
+  text = "/dross-watch's line for each open ship PR shows its untriaged-comment count with a `/dross-respond <n>` pointer; a PR with none shows no count."
+
+[[decisions]]
+  key = "provider_scope"
+  choice = "Fetch and reply on all four providers: github, forgejo/gitea, gitlab, bitbucket."
+  why = "Parity with `dross ship comment`; the payoff is team repos, which are often GitLab or Bitbucket."
+  locked = true
+
+[[decisions]]
+  key = "command_surface"
+  choice = "New `/dross-respond <pr>` slash command over a new `dross pr` CLI noun (`dross pr comments`, `dross pr resolve`)."
+  why = "Reading review comments is a separate flow from /dross-review's posting; `dross review` already means the solo per-task review."
+  locked = true
+
+[[decisions]]
+  key = "reply_shape"
+  choice = "One combined reply comment per run via the existing ship-comment path, listing each rejected comment with its link and reason."
+  why = "Works on all four providers with existing code; matches /dross-review's one-comment rule."
+  locked = true
+
+[[decisions]]
+  key = "own_review_split"
+  choice = "A /dross-review comment is split into one triage item per finding, id `<comment-id>#<n>`."
+  why = "It is the only reviewer on this repo; one verdict for a many-finding comment is too coarse."
+  locked = true
+
+[[decisions]]
+  key = "triage_record"
+  choice = "Resolutions live in a tracked per-phase file under .dross/phases/<id>/, schema-checked by `dross validate`; it stores comment id, url, author, kind, verdict, reason and evidence — never the comment body."
+  why = "Rides the phase PR like other phase artefacts; bodies are untrusted third-party text and v1.7 forbids persisting raw captured content."
+  locked = true
+
+[[decisions]]
+  key = "pr_phase_binding"
+  choice = "The PR's phase comes from its phase/<id> head branch; a PR without one is refused."
+  why = "Accept needs a phase plan to add the task to."
+  locked = true
+
+[[decisions]]
+  key = "self_reply_exclusion"
+  choice = "/dross-respond's own combined replies are excluded from the comment list, identified by a marker it writes AND the authenticated account as author."
+  why = "Otherwise each run's reply resurfaces for triage; requiring the author too stops a third party hiding a comment by copying the marker."
+  locked = true

@@ -1,0 +1,6 @@
+{
+  "phase": "review-comment-ingest",
+  "base": "milestone/v1.7",
+  "base_commit": "1807ee5c6bf387cb1c5f280ae417a1d43e83d936",
+  "tasks": {}
+}
