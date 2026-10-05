@@ -83,10 +83,12 @@
   locked = true
 
 [[deferred]]
+  id = "0954a4bcb9d91aca"
   text = "Recall on new: when a session opens, surface resolved sessions whose symptom or root cause matches, so a recurrence starts from the last root cause."
   why = "Needs a body of resolved sessions to match against; premature until sessions exist."
 
 [[deferred]]
+  id = "9f79d7ebe8e0d898"
   text = "A cold debugger subagent that runs one probe in fresh context and returns evidence, so a long investigation does not fill the main context."
   why = "Write-as-you-go plus the reentry line already survive context loss; a probe agent is an optimisation to measure after real sessions."
 
