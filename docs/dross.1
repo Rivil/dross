@@ -72,7 +72,25 @@ test layout).
 .TP
 .B dross status
 Where am I \(em project, milestone, current phase, last activity, next
-task. Also surfaces an open handoff and unfinalized verify verdicts.
+task. Also surfaces an open handoff, open debug sessions and unfinalized
+verify verdicts.
+.TP
+.B dross debug new \fIslug\fR | \fBlist\fR | \fBclose \fIslug\fR
+The machine-local session files
+.B /dross-debug
+keeps under
+.IR .dross/debug/ .
+.B new
+scaffolds one from the fixed template, gitignored before it is written;
+.B list
+prints each session's state (open, needs-replan, resolved, abandoned),
+hypothesis count, failed fixes since the last re-plan and last update;
+.B close \fIslug\fB --fixed
+needs two Resolution signals and a Prevention, and prints a
+.B dross rule add
+line without running it;
+.B close \fIslug\fB --abandoned --reason \fIwhy\fR
+closes without them. A closed session stays on disk.
 .TP
 .B dross doctor
 Check project-level health:
@@ -412,6 +430,15 @@ loops \(->
 .B /dross-resume
 Replay the handoff, re-orient on phase/branch/diff, prune done items.
 .TP
+.B /dross-debug \fR[\fB--solo\fR] [\fIslug\fR] [\fIsymptom\fR]
+Debug systematically across sessions: one hypothesis per probe, each
+probe's evidence written to
+.I .dross/debug/<slug>.md
+before the next, the tree restored after every probe, a hard stop after
+three failed fixes, and fixes routed to
+.B /dross-quick
+or a task \(em never committed by the debug run itself.
+.TP
 .B /dross-inbox \fR[\fB--labels \fIbug,enhancement\fR]
 Triage inbound board issues into milestones, phases, or quick tasks.
 .SH FILES
@@ -487,6 +514,11 @@ Artefact \(<-> issue links for board sync.
 .TP
 .I .dross/handoff.md
 Living pause/resume handoff (gitignored).
+.TP
+.I .dross/debug/<slug>.md
+.B /dross-debug
+session files \(em machine-local, kept out of git by their own
+.IR .dross/debug/.gitignore .
 .TP
 .I ~/.claude/dross/defaults.toml
 Cross-project defaults.
