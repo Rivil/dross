@@ -444,8 +444,12 @@ verify.ProvenanceLeg.Tool tool
 verify.Scope.Base base
 verify.Scope.Degraded degraded
 verify.SkippedFile.Reason reason
+verify.Tests.MeasuredCommit measured_commit
 verify.Tests.MeasuredOn measured_on
+verify.Tests.MeasuredTree measured_tree
 verify.Tests.Phase phase
+verify.VerifyMeta.MeasuredCommit measured_commit
+verify.VerifyMeta.MeasuredTree measured_tree
 verify.VerifyMeta.Phase phase
 verify.VerifyMeta.Verdict verdict
 verify.VerifySummary.MeasuredOn measured_on

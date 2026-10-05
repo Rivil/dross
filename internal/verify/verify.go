@@ -78,6 +78,14 @@ type Tests struct {
 	// it takes; Skeleton copies it onto the summary so it survives into
 	// verify.toml. Empty on a record written before the field existed.
 	MeasuredOn string `json:"measured_on,omitempty"`
+
+	// MeasuredCommit and MeasuredTree are the tree the run measured
+	// (treefp.MeasuredTree): the HEAD it was taken at and its fingerprint.
+	// Skeleton copies them onto verify.toml's [verify] table; this copy is the
+	// fallback ClassifyFreshness reads when that one was dropped by a hand
+	// edit. Empty on a run written before the fields existed.
+	MeasuredCommit string `json:"measured_commit,omitempty"`
+	MeasuredTree   string `json:"measured_tree,omitempty"`
 }
 
 // The measurement-provenance strings live here, in one place, because they are
@@ -399,6 +407,15 @@ type VerifyMeta struct {
 	// rotated away.
 	Finalized   bool      `toml:"finalized,omitempty"`
 	FinalizedAt time.Time `toml:"finalized_at,omitempty"`
+	// MeasuredCommit is the HEAD the run measured, "" on an unborn HEAD. It
+	// is a record for the reader: freshness compares MeasuredTree, so a
+	// commit that only moves HEAD leaves the verdict fresh.
+	MeasuredCommit string `toml:"measured_commit,omitempty"`
+	// MeasuredTree fingerprints the work tree the run measured. A verdict
+	// whose tree no longer matches the tree it would ship is stale; one
+	// written before the field existed carries none, and its freshness is
+	// unknown (locked legacy_freshness).
+	MeasuredTree string `toml:"measured_tree,omitempty"`
 }
 
 // LegSummary is one language leg's own result, as measured.
@@ -832,9 +849,11 @@ func LoadVerify(path string) (*Verify, error) {
 func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 	v := &Verify{
 		Verify: VerifyMeta{
-			Phase:       t.Phase,
-			GeneratedAt: t.GeneratedAt,
-			Verdict:     "pending",
+			Phase:          t.Phase,
+			GeneratedAt:    t.GeneratedAt,
+			Verdict:        "pending",
+			MeasuredCommit: t.MeasuredCommit,
+			MeasuredTree:   t.MeasuredTree,
 		},
 		Summary: VerifySummary{
 			CriteriaTotal:  len(criteriaIDs),
