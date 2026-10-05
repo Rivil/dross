@@ -65,3 +65,18 @@
 [[deferred]]
   text = "Re-verify only what changed: when a verdict goes stale, re-measure the changed files instead of the whole phase."
   why = "An optimisation of the full re-verify this phase makes mandatory; premature until the staleness gate has run on real ships."
+
+[[deferred]]
+  id = "269bf656aa85e44f"
+  text = "Seed nested mutation report dirs: a stryker workDir below the repo root (e.g. web/reports/mutation/) is not covered by the root-anchored patterns init/onboard seed, so those reports still read as changes to the measured tree"
+  why = "verify-staleness t-8 review FLAG, accepted to avoid another round; reports/gremlins/, reports/mutation/ and StrykerOutput/ only match at the root"
+
+[[deferred]]
+  id = "69080f9a1cb15c34"
+  text = "dross status fingerprints the tree twice when on a phase branch with a pass verdict (stale marker, then the footer's suggestNext); compute freshness once per run so the cost halves and the marker and footer cannot disagree"
+  why = "verify-staleness t-7 review FLAG, accepted; status is a hook target, so the cost matters on big repos"
+
+[[deferred]]
+  id = "afeb55e94ba5544d"
+  text = "captureMeasuredTree decides 'not a git work tree' by the absence of a .git on disk, so a GIT_DIR / core.worktree setup (e.g. a bare-repo dotfiles tree) records no tree and ships with only a freshness-unknown warning"
+  why = "verify-staleness t-4 review FLAG, accepted on a rare path; checking GIT_DIR, or treating a successful rev-parse --is-inside-work-tree as git, would close it"
