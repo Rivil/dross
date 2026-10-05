@@ -64,6 +64,7 @@ func newRoot() *cobra.Command {
 		cmd.Survivor(),
 		cmd.Pause(),
 		cmd.Reentry(),
+		cmd.Debug(),
 		cmd.Hooks(),
 		cmd.Gate(),
 		cmd.Execute(),
