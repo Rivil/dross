@@ -19,6 +19,7 @@
     "cmd-test-duration": "DRO-634",
     "completion-record-truth": "DRO-135",
     "config-value-truth": "DRO-25",
+    "debug-sessions": "DRO-889",
     "deferred-add-command": "DRO-14",
     "dependency-update-automation": "DRO-620",
     "exec-consent-completeness": "DRO-332",
