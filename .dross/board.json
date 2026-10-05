@@ -88,7 +88,6 @@
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
-    "slug:board-finalize-on-complete": "DRO-852",
     "slug:ci-timing-trend": "DRO-701",
     "slug:debug-sessions": "DRO-692",
     "slug:handoff-staleness": "DRO-703",
