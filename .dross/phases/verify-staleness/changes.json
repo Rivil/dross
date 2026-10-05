@@ -1,5 +1,6 @@
 {
   "phase": "verify-staleness",
+  "pr": 152,
   "base": "milestone/v1.7",
   "base_commit": "3f81fadbfd4c791a67ccc6285d93230992a67e4e",
   "tasks": {
