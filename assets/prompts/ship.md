@@ -15,7 +15,7 @@ Open a PR for a verified phase. Pushes the `phase/<id>` branch to the provider (
    - missing `.dross/** linguist-generated=true` in `.gitattributes` (so review UIs collapse planning artefacts)
    - phase commits leaked onto local main (legacy state — heal with `dross ship recover` first)
    If anything's off, stop and have the user fix before continuing.
-4. Read `.dross/phases/<phase-id>/verify.toml` — `[verify].verdict` must be `pass`. If not, stop. Override only if the user explicitly accepts the risk: `dross ship --force-unverified`.
+4. Read `.dross/phases/<phase-id>/verify.toml` — `[verify].verdict` must be `pass`. If not, stop. A pass is also refused when it is **stale**: `dross ship` compares the tree the run measured (`[verify].measured_tree`) with the work tree, and a file outside `.dross/` and `ARCHITECTURE.md` that changed, appeared or went away since the run means the verdict no longer covers what would ship — it names those files; re-run `/dross-verify <phase-id>`. A verdict recorded before trees were kept ships with a freshness-unknown warning. Override either refusal only if the user explicitly accepts the risk: `dross ship --force-unverified`.
 5. **Verify HEAD is on `phase/<id>`** with `git symbolic-ref --short HEAD`. `dross ship` requires this — the phase branch is what gets pushed. If not on it: `dross phase checkout <phase-id>` (it should exist from `dross phase create`). Use the dross verb, never raw git — it switches through the guard that refuses a branch whose tracked `.dross/state.json` would overwrite your live machine-local one.
 6. `git status --porcelain` — must be empty. If dirty, ask user to commit or stash first.
 
@@ -116,7 +116,7 @@ carries an up-to-date `ARCHITECTURE.md` (c-6).
 Run `dross ship <phase-id>`, optionally with `--draft` and/or `--body-file`.
 
 The CLI:
-1. Re-checks the verify gate and that HEAD is on `phase/<id>`
+1. Re-checks that HEAD is on `phase/<id>`, then the verify gate — a pass whose measured tree no longer matches the work tree is refused as stale, naming the changed files
 2. Sends `.dross` chores left on the base (a pause snapshot, a gate auto-commit) to origin: pushed straight to it when origin takes direct pushes, or — when the base is protected (`dross protect --check <base>` reads `protected`) — through a **chore PR** from `dross-chores/<base>`, armed to auto-merge as a merge commit. It prints the chore PR's URL; if auto-merge is unavailable on the repo it says so, and that PR is merged by hand. An `unknown` answer pushes nothing and names the fix.
 3. Gates `phase/<id>` on origin — fetches and compares; a branch that is ahead or new is pushed (`-u`), a level one is left alone, a behind-only one refuses naming `git pull --rebase origin phase/<id>`, a diverged one refuses naming the pull or `dross ship --force`
 4. Opens the PR via the provider API — skipped when the phase's record (or the provider, when the record carries no number) already has an open PR for `phase/<id>`
@@ -141,12 +141,15 @@ If the provider reports no checks were registered — GitHub/Forgejo report none
    - Forgejo: log URL is in the commit status payload (`target_url`); `WebFetch` it.
    - GitLab: the failed job's `web_url` is in the pipeline's jobs (`GET <api_base>/projects/<id>/pipelines/<pipeline-id>/jobs`); `WebFetch` the trace or surface the job URL.
 2. Diagnose. Edit + commit the fix on `phase/<id>`, one commit per logical fix following `repo.commit_convention`.
-3. `git push origin phase/<id>` — appends to the open PR. Re-running `dross ship` is also safe: it recognises the open PR, pushes anything pending on `phase/<id>`, and reports the existing PR by number (the URL is the one from the first run or the provider page; `changes.json` stores no url). If ship refuses a diverged branch, `dross ship --force` is the path (it force-with-leases); if it refuses a behind-only one, `git pull --rebase origin phase/<id>` first. If you rebase or amend by hand, use `git push --force-with-lease`.
-4. Loop back to "Watch checks". Cap at 3 fix iterations — if checks still fail after 3 cycles, stop and hand back to the user.
+3. `git push origin phase/<id>` — appends to the open PR, so CI re-runs on the fix.
+4. Then re-run **`dross ship <phase-id>`** — required after every fix, not optional: it recognises the open PR, pushes anything still pending on `phase/<id>`, reports the existing PR by number (the URL is the one from the first run or the provider page; `changes.json` stores no url), and re-checks the verdict's freshness. A fix to any file outside `.dross/` and `ARCHITECTURE.md` makes the pass stale and ship refuses, naming the changed files: run `/dross-verify <phase-id>`, commit its record, re-run `dross ship <phase-id>`, then continue. If ship refuses a diverged branch, `dross ship --force` is the path (it force-with-leases); if it refuses a behind-only one, `git pull --rebase origin phase/<id>` first. If you rebase or amend by hand, use `git push --force-with-lease`.
+5. Loop back to "Watch checks". Cap at 3 fix iterations — if checks still fail after 3 cycles, stop and hand back to the user.
 
 **On pass:** continue to §6.
 
 ## 6. Merge gate
+
+**Re-check freshness first:** re-run `dross ship <phase-id>` before asking to merge. A fix pushed after the PR opened is in the merge, and a pass that predates it does not cover it. If ship refuses the pass as stale, do not merge: run `/dross-verify <phase-id>`, commit its record, re-run `dross ship <phase-id>`, and go back to §5's Watch checks.
 
 `AskUserQuestion`: **"All checks passed on PR #N. Merge now?"** — options: `merge` / `hold`.
 

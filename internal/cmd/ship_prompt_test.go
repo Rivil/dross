@@ -453,3 +453,71 @@ func TestShipPromptTestsBeforeDocsCommit(t *testing.T) {
 		t.Error("ship.md §3.5 has no bare `dross test` line before the docs commit")
 	}
 }
+
+// rawShipSection returns ship.md's raw text from heading to the next "## "
+// heading. Raw, not normalised: the Forgejo body is matched as written,
+// capital D and all.
+func rawShipSection(t *testing.T, heading string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "ship.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := string(b)
+	at := strings.Index(doc, heading)
+	if at < 0 {
+		t.Fatalf("ship.md has no %q section", heading)
+	}
+	rest := doc[at+len(heading):]
+	if next := strings.Index(rest, "\n## "); next >= 0 {
+		rest = rest[:next]
+	}
+	return rest
+}
+
+// TestShipPromptReShipsAfterEveryCIFix (c-7): a fix pushed after the PR opened
+// is followed by a required `dross ship <phase-id>`, so the freshness gate sees
+// it before CI is watched again — and the old "also safe" wording, which made
+// the re-ship optional, is gone.
+func TestShipPromptReShipsAfterEveryCIFix(t *testing.T) {
+	content := shipPromptContent(t)
+	onFailure := promptSection(t, content, "on failure:")
+	push := strings.Index(onFailure, "git push origin phase/<id>")
+	// The unconditional step, not the re-ship inside the stale-refusal branch.
+	reship := strings.Index(onFailure, "re-run dross ship <phase-id> — required")
+	loop := strings.Index(onFailure, "loop back")
+	if push < 0 || reship < 0 || loop < 0 {
+		t.Fatalf("ship.md §5 On failure lacks a step: push %d, re-ship %d, loop back %d", push, reship, loop)
+	}
+	if !(push < reship && reship < loop) {
+		t.Errorf("§5 On failure must push, then re-run dross ship <phase-id>, then loop back (at %d, %d, %d)", push, reship, loop)
+	}
+	if strings.Contains(content, "re-running dross ship is also safe") {
+		t.Error("ship.md still calls the re-ship optional ('also safe') — after a fix it is required")
+	}
+}
+
+// TestShipPromptReShipsBeforeMerge (c-7): §6 re-runs `dross ship <phase-id>`
+// before every provider's merge call, so a fix pushed after the pass cannot
+// merge under it, and a stale refusal is answered with /dross-verify.
+func TestShipPromptReShipsBeforeMerge(t *testing.T) {
+	gate := rawShipSection(t, "## 6. Merge gate")
+	reship := strings.Index(gate, "`dross ship <phase-id>`")
+	if reship < 0 {
+		t.Fatal("ship.md §6 never re-runs `dross ship <phase-id>`")
+	}
+	for _, call := range []string{"gh pr merge", "/pulls/<n>/merge", `{"Do":"squash"}`, `{"squash":true}`} {
+		at := strings.Index(gate, call)
+		if at < 0 {
+			t.Errorf("ship.md §6 lost its merge call %q", call)
+			continue
+		}
+		if reship > at {
+			t.Errorf("§6's re-ship comes after the merge call %q — a stale pass could merge", call)
+		}
+	}
+	onFailure := rawShipSection(t, "**On failure:**")
+	if !strings.Contains(gate, "/dross-verify") && !strings.Contains(onFailure, "/dross-verify") {
+		t.Error("neither §5 On failure nor §6 names /dross-verify as the answer to a stale refusal")
+	}
+}

@@ -432,3 +432,25 @@ func TestVerifyShowsReviews(t *testing.T) {
 		}
 	}
 }
+
+// TestVerifyPromptKeepsTheMeasuredTree (c-1): /dross-verify hand-edits
+// verify.toml, and an edit that drops the recorded tree turns ship's stale
+// refusal into a freshness-unknown warning. §3 tells the agent to leave both
+// fields exactly as written.
+func TestVerifyPromptKeepsTheMeasuredTree(t *testing.T) {
+	body := verifyPromptBody(t)
+	const heading = "## 3. Update `verify.toml`"
+	at := strings.Index(body, heading)
+	if at < 0 {
+		t.Fatalf("verify.md has no %q section", heading)
+	}
+	sec := body[at+len(heading):]
+	if next := strings.Index(sec, "\n## "); next >= 0 {
+		sec = sec[:next]
+	}
+	for _, needle := range []string{"`[verify].measured_commit`", "`[verify].measured_tree`", "exactly as `dross verify` wrote them"} {
+		if !strings.Contains(sec, needle) {
+			t.Errorf("verify.md §3 must tell the agent to keep the measured tree — missing %q", needle)
+		}
+	}
+}
