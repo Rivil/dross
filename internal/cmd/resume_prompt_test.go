@@ -91,3 +91,28 @@ func TestResumePromptPrunesWithEdit(t *testing.T) {
 		}
 	}
 }
+
+// TestResumePromptReadsTheStaleMarker: `dross status` prints a `stale:` line
+// again, for a passing verdict that predates changed files. resume.md must not
+// still say there is none, and must route the marker to /dross-verify.
+func TestResumePromptReadsTheStaleMarker(t *testing.T) {
+	content := resumePromptContent(t)
+	if strings.Contains(content, "there is no stale: line") {
+		t.Error("resume.md still says there is no stale: line to look for")
+	}
+	var bullet string
+	for _, line := range strings.Split(content, "\n") {
+		if strings.Contains(line, "stale verdict") {
+			bullet = line
+			break
+		}
+	}
+	if bullet == "" {
+		t.Fatal("resume.md has no Stale verdict reconciliation bullet")
+	}
+	for _, needle := range []string{"stale:", "/dross-verify"} {
+		if !strings.Contains(bullet, needle) {
+			t.Errorf("resume.md's stale-verdict bullet lacks %q:\n%s", needle, bullet)
+		}
+	}
+}

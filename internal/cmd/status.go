@@ -19,6 +19,7 @@ import (
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
+	"github.com/Rivil/dross/internal/verify"
 )
 
 // Status registers `dross status` — the situational-awareness command.
@@ -96,6 +97,12 @@ func Status() *cobra.Command {
 					Printf("shipped:   phase/%s — PR #%d not merged on origin/%s yet\n", sh.phaseID, sh.pr, sh.base)
 					Printf("           merge it, then `dross phase complete %s` writes the completion record\n", sh.phaseID)
 				}
+			}
+
+			// A pass that no longer covers the work tree: ship will refuse it,
+			// so say so where the user is looking rather than at the push.
+			if r, ok := staleVerdict(root, st); ok {
+				Print(staleLine(r))
 			}
 
 			// Last activity
@@ -298,10 +305,19 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 	if mainBranch == "" {
 		mainBranch = "main"
 	}
+	// A pass that predates changes to the tree it would ship outranks every
+	// step that leans on it — re-pushing a record, merging the open PR,
+	// shipping — but not a PR already merged: that work has landed, and
+	// re-measuring it changes nothing. Checked only on the phase branch.
+	_, stale := staleVerdict(root, st)
+	reverify := "/dross-verify " + st.CurrentPhase + " — the passing verdict predates files changed since its run; ship refuses it until it is re-measured"
 	if !changes.Complete(root, st.CurrentPhase) {
 		merge := phaseMergeState(root, filepath.Dir(root), st.CurrentPhase, mainBranch)
 		if merge == mergeMerged {
 			return "`dross phase complete " + st.CurrentPhase + "` — the PR is merged; this writes the completion record"
+		}
+		if stale {
+			return reverify
 		}
 		// A PR whose record never reached origin sits between merged and
 		// open on purpose: a merged PR is done whatever its record says (a
@@ -322,6 +338,9 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 	// the push and the merge — and it is the answer whenever the oracle could
 	// not see the merge for itself (no local branch, no origin ref, a base run
 	// far past the fork).
+	if stale {
+		return reverify
+	}
 	if st.CurrentPhaseStatus == "shipped" {
 		return "merge the open PR, then `dross phase complete " + st.CurrentPhase + "` — it writes the completion record"
 	}
@@ -871,4 +890,41 @@ func reconcilableCount(root string) int {
 		return 0
 	}
 	return len(ids)
+}
+
+// staleVerdict reports the current phase's verdict when it is a pass that no
+// longer covers the work tree. It answers only on phase/<id> — the session hook
+// runs status from main, whose tree is not the phase's — and only before the
+// phase is complete. Anything it cannot read is "not stale": status is a hook
+// target, and a failed check must not break or clutter it.
+func staleVerdict(root string, st *state.State) (verify.FreshnessReport, bool) {
+	id := st.CurrentPhase
+	if id == "" || changes.Complete(root, id) {
+		return verify.FreshnessReport{}, false
+	}
+	if readVerifyVerdict(filepath.Join(phase.Dir(root, id), "verify.toml")) != "pass" {
+		return verify.FreshnessReport{}, false
+	}
+	repoDir := filepath.Dir(root)
+	if cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD"); err != nil || cur != "phase/"+id {
+		return verify.FreshnessReport{}, false
+	}
+	r, err := verdictFreshness(root, repoDir, id)
+	if err != nil {
+		return verify.FreshnessReport{}, false
+	}
+	return r, r.State == verify.Stale || r.State == verify.Malformed
+}
+
+// staleLine renders the status line for a stale verdict.
+func staleLine(r verify.FreshnessReport) string {
+	const fix = " — re-verify with /dross-verify"
+	switch {
+	case r.State == verify.Malformed:
+		return "stale:     the verdict's " + r.Field + " is not an object id" + fix
+	case r.ListErr != nil:
+		return "stale:     the verdict is stale (changed files could not be listed)" + fix
+	default:
+		return fmt.Sprintf("stale:     the verdict predates %d file(s) changed since its run%s", len(r.Changed), fix)
+	}
 }
