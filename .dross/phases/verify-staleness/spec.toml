@@ -80,3 +80,8 @@
   id = "afeb55e94ba5544d"
   text = "captureMeasuredTree decides 'not a git work tree' by the absence of a .git on disk, so a GIT_DIR / core.worktree setup (e.g. a bare-repo dotfiles tree) records no tree and ships with only a freshness-unknown warning"
   why = "verify-staleness t-4 review FLAG, accepted on a rare path; checking GIT_DIR, or treating a successful rev-parse --is-inside-work-tree as git, would close it"
+
+[[deferred]]
+  id = "d4fe05fae72cfb23"
+  text = "dross status has no test for a malformed recorded tree: staleLine's malformed branch ('the verdict's <field> is not an object id') is never driven, so its wording is unpinned"
+  why = "verify-staleness verify: status.go:924's survivors were non-viable string-concat mutants and accepted, but the branch behind them has no test; the reviewer noted it on t-7 too"
