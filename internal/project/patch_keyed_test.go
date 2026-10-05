@@ -1,6 +1,7 @@
 package project
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -365,5 +366,151 @@ func TestEmptyHeaderCascadeKeepsSeparator(t *testing.T) {
 	}
 	if got := readFile(t, path); !strings.Contains(got, "\n\n[other]") {
 		t.Errorf("the separator before [other] was lost:\n%q", got)
+	}
+}
+
+// TestKeyedInsertAtEndAppends: a new element whose final index is the end of
+// the array is an append — `dross task add` with no --after is exactly this
+// shape. It lands after the last element and every original byte is kept.
+func TestKeyedInsertAtEndAppends(t *testing.T) {
+	path := seedKeyed(t, keyedSrc)
+	d := loadKeyed(t, path)
+	d.Tasks = append(d.Tasks, keyedTask{ID: "t-9", Status: "pending"})
+	if err := SaveTOML(path, d, byID); err != nil {
+		t.Fatal(err)
+	}
+	got := readFile(t, path)
+	if !strings.HasPrefix(got, keyedSrc) {
+		t.Fatalf("an append at the end rewrote existing bytes:\n%s", got)
+	}
+	if rest := got[len(keyedSrc):]; !strings.Contains(rest, "[[task]]\n  id = \"t-9\"\n  status = \"pending\"\n") {
+		t.Errorf("the new element is not after the last one; appended:\n%q", rest)
+	}
+	if got := ids(loadKeyed(t, path)); strings.Join(got, ",") != "t-1,t-2,t-3,t-9" {
+		t.Errorf("order = %v", got)
+	}
+}
+
+// nestedKeyedDoc keys an array-of-tables that sits under a table, so the
+// element count is looked up through a qualified parent segment.
+type nestedKeyedDoc struct {
+	Outer struct {
+		Name  string      `toml:"name"`
+		Items []keyedTask `toml:"item"`
+	} `toml:"outer"`
+}
+
+// TestKeyedNestedArrayInserts: [[outer.item]] matched by id takes an insert at
+// its index and an insert at its end, keeping every original byte.
+func TestKeyedNestedArrayInserts(t *testing.T) {
+	src := `[outer]
+  name = "x"
+
+[[outer.item]]
+  id = "a"
+  status = "pending"
+
+[[outer.item]]
+  id = "b"
+  status = "pending"
+`
+	path := seedKeyed(t, src)
+	var d nestedKeyedDoc
+	if _, err := toml.DecodeFile(path, &d); err != nil {
+		t.Fatal(err)
+	}
+	d.Outer.Items = []keyedTask{d.Outer.Items[0], {ID: "m", Status: "pending"}, d.Outer.Items[1], {ID: "z", Status: "pending"}}
+	if err := SaveTOML(path, &d, ArrayKey{Path: "outer.item", Field: "id"}); err != nil {
+		t.Fatal(err)
+	}
+	var back nestedKeyedDoc
+	if _, err := toml.DecodeFile(path, &back); err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, it := range back.Outer.Items {
+		order = append(order, it.ID)
+	}
+	if strings.Join(order, ",") != "a,m,b,z" {
+		t.Errorf("order = %v, want a,m,b,z:\n%s", order, readFile(t, path))
+	}
+	got := readFile(t, path)
+	for _, block := range []string{"[outer]\n  name = \"x\"\n", "[[outer.item]]\n  id = \"a\"\n  status = \"pending\"\n", "[[outer.item]]\n  id = \"b\"\n  status = \"pending\"\n"} {
+		if !strings.Contains(got, block) {
+			t.Errorf("an original block changed; missing:\n%s\nin:\n%s", block, got)
+		}
+	}
+}
+
+// TestKeyedMoveCarriesTrailingComments: comment lines touching an element's
+// last key belong to it, so a move takes them along and a delete removes them;
+// a comment set apart by a blank line stays put either way.
+func TestKeyedMoveCarriesTrailingComments(t *testing.T) {
+	src := `seq = 3
+
+[[task]]
+  id = "t-1"
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  status = "pending"
+  # t-2 trailing note
+  # and its second line
+
+# loose note
+
+[[task]]
+  id = "t-3"
+  status = "pending"
+`
+	// [t-2, t-1, t-3]: the diff moves t-2 itself to the front.
+	path := seedKeyed(t, src)
+	d := loadKeyed(t, path)
+	d.Tasks = []keyedTask{d.Tasks[1], d.Tasks[0], d.Tasks[2]}
+	if err := SaveTOML(path, d, byID); err != nil {
+		t.Fatal(err)
+	}
+	got := readFile(t, path)
+	moved := "[[task]]\n  id = \"t-2\"\n  status = \"pending\"\n  # t-2 trailing note\n  # and its second line\n"
+	at := strings.Index(got, moved)
+	if at < 0 {
+		t.Fatalf("t-2 moved without its trailing comments:\n%s", got)
+	}
+	if at > strings.Index(got, `id = "t-1"`) {
+		t.Errorf("t-2 is not ahead of t-1:\n%s", got)
+	}
+	if strings.Count(got, "# t-2 trailing note") != 1 || !strings.Contains(got, "\n# loose note\n") {
+		t.Errorf("a comment was duplicated, dropped, or the loose note moved:\n%s", got)
+	}
+
+	path = seedKeyed(t, src)
+	d = loadKeyed(t, path)
+	d.Tasks = []keyedTask{d.Tasks[0], d.Tasks[2]}
+	if err := SaveTOML(path, d, byID); err != nil {
+		t.Fatal(err)
+	}
+	got = readFile(t, path)
+	if strings.Contains(got, "t-2 trailing note") || strings.Contains(got, "its second line") {
+		t.Errorf("t-2's trailing comments survived its deletion:\n%s", got)
+	}
+	if !strings.Contains(got, "# loose note") {
+		t.Errorf("the loose note went with t-2:\n%s", got)
+	}
+}
+
+// TestMoveElemRefusesALaterDestination: the keyed diff only ever moves an
+// element earlier, so a move to its own index or a later one is a patcher
+// error, naming the array and both indices.
+func TestMoveElemRefusesALaterDestination(t *testing.T) {
+	d, err := indexDoc([]byte(keyedSrc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, to := range []int{1, 2} {
+		_, err := d.moveElem([]seg{{"task", 1}}, to)
+		if want := fmt.Sprintf("(1 → %d)", to); err == nil || !strings.Contains(err.Error(), "[[task]]") || !strings.Contains(err.Error(), want) {
+			t.Errorf("moveElem(1 → %d) = %v, want a refusal naming [[task]] and %s", to, err, want)
+		}
 	}
 }

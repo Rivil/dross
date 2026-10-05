@@ -426,3 +426,79 @@ func TestLegacyBacklogKeyShape(t *testing.T) {
 		t.Errorf("LegacyBacklogKey = %q", got)
 	}
 }
+
+// TestFindBySurvivor: the lookup re-route-in-place stands on returns only the
+// live entries carrying the key — across phase specs and the project store —
+// skips a dismissed entry with the same key, and hands a malformed spec's error
+// back rather than reading it as "no match", which would let a re-route mint a
+// second entry for a survivor already routed.
+func TestFindBySurvivor(t *testing.T) {
+	root := fixtureRoot(t)
+	gamma := filepath.Join(root, "phases", "gamma", "spec.toml")
+	if err := os.MkdirAll(filepath.Dir(gamma), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(gamma, []byte(`[phase]
+id = "gamma"
+title = "Gamma"
+
+[[deferred]]
+text = "dismissed K1"
+survivor = "K1"
+target = "beta"
+dismissed = true
+
+[[deferred]]
+text = "live K1"
+survivor = "K1"
+target = "beta"
+
+[[deferred]]
+text = "live K2"
+survivor = "K2"
+target = "beta"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(StorePath(root), []byte(`[phase]
+  id = "_project"
+  title = "project-level deferred store"
+
+[[deferred]]
+  text = "store K3"
+  survivor = "K3"
+  target = "beta"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		key, want, source string
+	}{
+		{"K1", "live K1", "gamma"},
+		{"K2", "live K2", "gamma"},
+		{"K3", "store K3", ProjectStoreSlug},
+	} {
+		got, err := FindBySurvivor(root, tc.key)
+		if err != nil {
+			t.Fatalf("FindBySurvivor(%s): %v", tc.key, err)
+		}
+		if len(got) != 1 || got[0].Text != tc.want || got[0].Source != tc.source || got[0].Dismissed {
+			t.Errorf("FindBySurvivor(%s) = %+v, want only the live %q from %s", tc.key, got, tc.want, tc.source)
+		}
+	}
+	if got, err := FindBySurvivor(root, "nobody"); err != nil || len(got) != 0 {
+		t.Errorf("FindBySurvivor(nobody) = %+v, %v; want no entries and no error", got, err)
+	}
+
+	broken := filepath.Join(root, "phases", "broken", "spec.toml")
+	if err := os.MkdirAll(filepath.Dir(broken), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(broken, []byte("[phase\nnot toml"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := FindBySurvivor(root, "K1"); err == nil || got != nil {
+		t.Errorf("FindBySurvivor over a malformed spec = %+v, %v; want nil and the read error", got, err)
+	}
+}

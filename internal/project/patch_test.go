@@ -917,6 +917,8 @@ func TestOpStringNamesEveryShape(t *testing.T) {
 		{op{kind: opKey, table: []string{"a"}, elem: 2, key: "k"}, "delete a[2].k"},
 		{op{kind: opAppendElem, table: []string{"a"}, elem: -1}, "append [[a]]"},
 		{op{kind: opDeleteElem, table: []string{"a"}, elem: 0}, "delete [[a[0]]]"},
+		{op{kind: opMoveElem, table: []string{"a"}, elem: 2, to: 0}, "move [[a[2]]] before element 0"},
+		{op{kind: opInsertElem, table: []string{"a", "b"}, elem: 1}, "insert [[a.b[1]]]"},
 	} {
 		if got := tc.o.String(); got != tc.want {
 			t.Errorf("%#v.String() = %q, want %q", tc.o, got, tc.want)
