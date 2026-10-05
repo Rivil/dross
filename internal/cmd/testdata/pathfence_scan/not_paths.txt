@@ -149,6 +149,8 @@ hooks.hookCommand.Type type
 
 # ---- localstore — local.toml's machine-local settings and detached-run records: hosts, env-var names, worker counts, ids, states
 localstore.DetachedRun.Host host
+localstore.DetachedRun.MeasuredCommit measured_commit
+localstore.DetachedRun.MeasuredTree measured_tree
 localstore.DetachedRun.Phase phase
 localstore.DetachedRun.RunID run_id
 localstore.DetachedRun.State state

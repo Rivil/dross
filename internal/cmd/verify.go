@@ -376,6 +376,14 @@ func dispatchDetached(root, projectName, phaseID string, steps []mutation.Packag
 		}
 	}
 
+	// The tree is taken before the push, so the record names what the host
+	// measures: an edit made while the tree crosses lands after the capture
+	// and reads as a change since, never as measured.
+	measured, err := captureTreeFn(repoDir)
+	if err != nil {
+		return err
+	}
+
 	runID := newRunID(time.Now())
 	runDir, err := remote.RunDir(runID)
 	if err != nil {
@@ -406,14 +414,16 @@ func dispatchDetached(root, projectName, phaseID string, steps []mutation.Packag
 	// actually started.
 	state := "scheduled"
 	rec := localstore.DetachedRun{
-		Phase:        phaseID,
-		RunID:        runID,
-		Host:         target.Host,
-		Workdir:      target.Workdir,
-		RunDir:       runDir,
-		DispatchedAt: time.Now().UTC(),
-		ScheduledFor: notBefore,
-		State:        state,
+		Phase:          phaseID,
+		RunID:          runID,
+		Host:           target.Host,
+		Workdir:        target.Workdir,
+		RunDir:         runDir,
+		DispatchedAt:   time.Now().UTC(),
+		ScheduledFor:   notBefore,
+		State:          state,
+		MeasuredCommit: measured.Commit,
+		MeasuredTree:   measured.Tree,
 	}
 	if err := localstore.RecordDetachedRun(root, repoDir, rec); err != nil {
 		return err
@@ -794,6 +804,13 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 		WholeFile:  plan.WholeFile,
 	})
 
+	// The verdict covers the tree the dispatch pushed, never the one found here
+	// at collect (locked detached_baseline); finishVerify names whatever moved
+	// in between.
+	t.MeasuredCommit, t.MeasuredTree = rec.MeasuredCommit, rec.MeasuredTree
+	if rec.MeasuredTree == "" {
+		Print("verify: this run was dispatched before trees were recorded — no measured tree, so this verdict's freshness will read as unknown")
+	}
 	if err := finishVerify(root, phaseID, spec, t, verify.MeasuredOnHost(rec.Host), gone); err != nil {
 		return err
 	}
@@ -1060,6 +1077,10 @@ func finishVerify(root, phaseID string, spec *phase.Spec, t *verify.Tests, measu
 // measuredTreeFn takes the tree a verify run measures (treefp.MeasuredTree). A
 // seam so a test can make the capture fail.
 var measuredTreeFn = treefp.MeasuredTree
+
+// captureTreeFn is the whole capture a detached dispatch runs — git or not —
+// so a dispatch test can see where it falls among probe, push and spawn.
+var captureTreeFn = captureMeasuredTree
 
 // captureMeasuredTree takes the tree a run is about to measure in repoDir.
 //
