@@ -89,3 +89,8 @@
 [[deferred]]
   text = "A cold debugger subagent that runs one probe in fresh context and returns evidence, so a long investigation does not fill the main context."
   why = "Write-as-you-go plus the reentry line already survive context loss; a probe agent is an optimisation to measure after real sessions."
+
+[[deferred]]
+  id = "70fa600b189d43fb"
+  text = "Prompts that run a .dross-writing CLI verb without committing (/dross-debug's approved `dross rule add` and mid-phase `dross task add`, /dross-rule's add) leave tracked .dross/ files dirty against dross-commit-hygiene; decide who commits rules.toml/plan.toml and how a rules-only commit reaches a protected base"
+  why = "Raised by the t-7 solo reviews (debug-sessions): locked fix_path forbids /dross-debug commits, and /dross-rule already has the same gap, so the fix spans prompts beyond this phase"
