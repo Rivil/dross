@@ -44,8 +44,8 @@
 
 [[decisions]]
   key = "command_surface"
-  choice = "New `/dross-respond <pr>` slash command over a new `dross pr` CLI noun (`dross pr comments`, `dross pr resolve`)."
-  why = "Reading review comments is a separate flow from /dross-review's posting; `dross review` already means the solo per-task review."
+  choice = "New `/dross-respond <pr>` slash command over a new `dross pr` CLI noun (`dross pr comments`, `dross pr resolve`, `dross pr reply`)."
+  why = "Reading review comments is a separate flow from /dross-review's posting; `dross review` already means the solo per-task review. `dross pr reply` was added at plan time (2026-10-06) so c-5's confirm gate and posted-tracking are enforced in Go rather than by prompt prose; it posts through ship.PostComment, the existing ship-comment path reply_shape names."
   locked = true
 
 [[decisions]]

@@ -55,6 +55,7 @@
     "remote-test-runner": "DRO-26",
     "remote-toolchain-bootstrap": "DRO-129",
     "remote-toolchain-install": "DRO-246",
+    "review-comment-ingest": "DRO-903",
     "run-block-pin-currency": "DRO-746",
     "scanner-self-exclusion": "DRO-404",
     "secret-detection": "DRO-459",
