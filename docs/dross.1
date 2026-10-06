@@ -311,6 +311,32 @@ Skip the verify gate.
 Post a markdown comment to a PR (used by
 .BR /dross-review ).
 .TP
+.B dross pr comments \fIpr\fR [\fB--all\fR]
+List the review comments on a phase PR that still need a verdict \(em or
+were edited since theirs \(em each as one metadata line and its body
+fenced as untrusted data.
+.B --all
+lists every comment with its status.
+.TP
+.B dross pr resolve \fIpr\fR \fIid\fR \fB--seen \fIdigest\fR
+Record one verdict for a comment:
+.B --accept --title
+(a new task),
+.B --reject --reason
+or
+.B --route --title --target
+(a deferred item), with one piece of evidence \(em
+.B --at \fIpath:line\fR
+or
+.B --cmd \fIc\fR \fB--output-file \fIpath\fR|\fB-\fR
+(recorded, never run).
+.TP
+.B dross pr reply \fIpr\fR [\fB--post\fR]
+Draft the one reply listing unposted rejections and print the exact
+approval label;
+.B --post
+sends it only when a human's choice of that label is recorded.
+.TP
 .B dross ship recover
 One-shot migration for legacy repos with phase commits on main or
 .I .dross/
@@ -416,6 +442,12 @@ request reviewers, watch CI, gate the merge, clean up branches.
 .B /dross-review \fIpr-number\fR [\fB--phase \fIid\fR]
 Four-lens subagent panel (security / quality / tests / spec-fidelity)
 over an open PR; posts the aggregated findings as a single comment.
+.TP
+.B /dross-respond \fIpr\fR
+Pair-only triage of a phase PR's review comments: each claim checked
+against the code, then accepted as a task, rejected with a reason or
+routed as deferred; the rejections go back in one reply, posted only on
+the user's recorded approval.
 .SS Continuity
 .TP
 .B /dross-status
@@ -499,6 +531,8 @@ Milestone scope.
 .IR plan.toml ,
 .IR verify.toml ,
 .IR tests.json ,
+.I pr-triage.toml
+(one verdict per PR review comment, never its body),
 .I REVIEW.md
 (plan review), and
 .I panel/

@@ -74,6 +74,7 @@ docs/dross.1       Man page — `man ./docs/dross.1`; print via `mandoc -T pdf d
     └── <slug>/           # bare-slug identity (v0.4); ordering lives in the milestone's phases array
         ├── spec.toml
         ├── plan.toml
+        ├── pr-triage.toml # tracked, rides the phase PR: one verdict per review comment (`dross pr resolve`), never a comment body
         ├── changes.json   # auto, written during execute
         ├── tests.json     # auto, written during verify
         └── verify.toml    # auto, written during verify
@@ -96,6 +97,7 @@ docs/dross.1       Man page — `man ./docs/dross.1`; print via `mandoc -T pdf d
 ├── dross-quick/SKILL.md
 ├── dross-ship/SKILL.md
 ├── dross-review/SKILL.md
+├── dross-respond/SKILL.md
 ├── dross-secure/SKILL.md
 ├── dross-quality/SKILL.md
 ├── dross-architecture/SKILL.md
@@ -240,6 +242,7 @@ export PATH="$HOME/.local/bin:$PATH"
 | `dross env {list,set,unset}` | Manage env keys in `~/.claude/settings.json` (hidden input, never echoed) | ✅ |
 | `dross ship <phase-id>` | Push `phase/<id>` to the provider, open PR, request reviewers. Provider's squash-merge collapses per-task commits. Refuses a pass verdict whose measured tree no longer matches the work tree — a file outside `.dross/` and `ARCHITECTURE.md` changed, appeared or went away since the run — naming the changed files; `--force-unverified` overrides. A verdict recorded before trees were kept ships with a freshness-unknown warning | ✅ |
 | `dross ship comment` | Post a markdown comment to a PR via provider (used by /dross-review) | ✅ |
+| `dross pr {comments,resolve,reply}` | The review comments on a phase's PR (backs `/dross-respond`), on every provider `dross ship` reaches. Every verb binds the PR to its same-repo `phase/<id>` head and refuses unless HEAD is that branch. `comments <pr> [--all]` lists the conversation comments, inline comments (with `path:line`) and review summaries still needing a verdict — or edited since theirs — each as one metadata line (id, kind, author, bot/human/unknown, status, `seen=<digest>`) and its body fenced as untrusted data, redacted; a `/dross-review` comment you posted is split into one item per finding, and your own replies are left out. `resolve <pr> <id> --seen <digest>` records exactly one verdict — `--accept --title` (a new task in the phase plan), `--reject --reason`, or `--route --title --target` (a deferred item) — with exactly one piece of evidence, `--at <path:line>` or `--cmd <c> --output-file <path\|->` (the command is recorded with its output's sha256, never run), into the tracked `pr-triage.toml`. `reply <pr>` drafts one comment listing the unposted rejections and prints the exact AskUserQuestion label that approves it; `--post` sends it only when that label's human answer is recorded | ✅ |
 | `dross ship recover` | One-shot migration tool for legacy repos with phase commits on main or `.dross/` stripped from prior PRs — fetch + reset + restore `.dross/` + commit, atomically | ✅ |
 | `dross protect [--apply\|--check <branch>]` | Branch protection on GitHub: a `dross: main` ruleset (no deletion, no force push, PR required, every `pull_request` job of origin/main's workflows a required check) and a `dross: milestones` ruleset (PR required into `milestone/*`), both with an empty bypass list — admin included. Previews by default; `--apply` writes both, turns on `allow_auto_merge` and reads main back, exiting non-zero on any gap. Warns when `allow_merge_commit` is off (chore and milestone PRs need it). `--check <branch>` prints exactly `protected`, `unprotected`, `unknown` or `not checked (<provider>)` and always exits 0 — what the quick/ship/milestone prompts route on | ✅ |
 | `dross issue {enable,disable,phase sync,phase finalize,task sync,task pull,milestone sync,backlog sync,quick,pull,dismiss,link,list,reap}` | Opt-in issue-board sync (Forgejo/Gitea/GitLab/YouTrack/Jira/GitHub). Mirrors milestones/phases/quicks → board issues (idempotent), pulls inbound issues for triage. Off by default; configured under `[board]` (`provider` + `base_url` + `auth_env`, plus `auth_user` for Jira). `[board.fields]` overrides the tracker-native field names sync writes to (`state`, `type`, `fix_versions`) so a renamed field — or a non-English tracker UI — syncs without a code change; unset keys keep today's literals. **Proven end-to-end against Jira Cloud (2026-07-25)** — full issue milestone sync → issue phase sync → issue pull round-trip; other backends wired but not yet dogfooded. `dross issue reap` sweeps mirrors the forward lifecycle left stranded: it classifies every dross-authored card from the on-disk record (never the card's own state), discovers cards no board.json namespace links via the `dross` marker label, prints the plan by default and writes only under `--apply`, isolates per-card failures, and reverses the last run with `--undo`. It also creates the cards a completed phase is missing — the phase card or any task card no tracker lookup finds — at their terminal state, closed, through the same finalizer `dross phase complete` runs. A routed deferred item's mirror closes only on its disposition record (its survivor accepted or measured away, or a criterion of its complete destination that absorbed it), never because the destination shipped. `dross doctor` and `/dross-watch` report the stranded count. | ✅ |
@@ -273,10 +276,11 @@ export PATH="$HOME/.local/bin:$PATH"
 | `/dross-resume` | ✅ (replay the handoff, prune what's done) |
 | `/dross-debug` | ✅ (debug across sessions — one hypothesis per probe, evidence in a gitignored `.dross/debug/<slug>.md` before the next, BLOCKED after three failed fixes, fixes routed to `/dross-quick` or a task; the SessionStart line names an open session) |
 | `/dross-inbox` | ✅ (triage inbound board issues → phase / milestone / quick / dismiss) |
-| `/dross-watch` | ✅ (read-only heartbeat — board inbound + phase-drift digest, ends with one suggested next command) |
+| `/dross-watch` | ✅ (read-only heartbeat — board inbound + phase-drift digest, ends with one suggested next command; a ship PR with review comments waiting shows `· <n> untriaged — /dross-respond <pr>` on its line) |
 | `/dross-options` | ✅ |
 | `/dross-ship` | ✅ (CI watch + merge gate + branch cleanup; on a protected base — `dross protect --check` reads `protected` — `.dross` chores go through an auto-merging chore PR, and `dross phase complete` waits for it rather than offering `--recover`) |
 | `/dross-review` | ✅ (4-lens subagent panel: security / quality / tests / spec-fidelity) |
+| `/dross-respond` | ✅ (pair-only triage of a phase PR's review comments: each claim checked against the code, then accepted as a task, rejected with a reason or routed as deferred; the rejections go back in one reply posted only on the user's recorded approval) |
 | `/dross-secure` | ✅ (context-free multi-pass security audit: real scanners + adversarial refute-panel; scaffolds a remediation phase) |
 | `/dross-quality` | ✅ (multi-pass code-quality audit: real analyzers + refute-panel over substantive maintainability dimensions; scaffolds a remediation phase) |
 | `/dross-architecture` | ✅ (generate/refresh the feature-organized `ARCHITECTURE.md` from a scan of code + git history) |
@@ -436,6 +440,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [ ] Mutation ranges are AST-aware: a range covers the enclosing syntactic construct, so no mutant covering a changed line goes ungenerated
 - [ ] No persisted artifact or published PR body carries recognisable secret material — captured output is not persisted, and what is persisted is scanned
 - [ ] `internal/cmd` holds cobra wiring only; every domain it carries today lives in a package of its own, provable by import direction
+- [x] Review-comment ingest — `/dross-respond <pr>` triages a phase PR's review comments across all four providers: `dross pr comments` lists them fenced as untrusted data, `dross pr resolve` records one evidenced verdict each (accept → task, reject → reason, route → deferred) in a tracked `pr-triage.toml` that never stores a comment body, `dross pr reply` posts the rejections once on a recorded human approval, `dross ship` refuses while an accepted comment's task is undone, and `/dross-watch` shows each ship PR's untriaged count
 - [x] Debug sessions — `/dross-debug` keeps a systematic investigation in a gitignored `.dross/debug/<slug>.md` (one hypothesis per probe, evidence before the next, hard stop after three failed fixes, two independent signals to close), `dross debug {new,list,close}` gates it, and `dross status` plus the SessionStart line name any open session
 
 ### Milestone v1.8 — Azure DevOps provider: ship and board sync reach a fifth forge (planning)
