@@ -78,7 +78,9 @@ func ListPRComments(opts OpenOpts, n int) ([]PRComment, error) {
 	switch configenum.Normalize(opts.Provider) {
 	case "github":
 		return gitHubPRComments(opts, n)
-	case "forgejo", "gitea", "gitlab", "bitbucket":
+	case "forgejo", "gitea":
+		return forgejoPRComments(opts, n)
+	case "gitlab", "bitbucket":
 		return nil, fmt.Errorf("provider %q: %w", opts.Provider, ErrPRThreadUnsupported)
 	default:
 		return nil, fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())
@@ -94,7 +96,9 @@ func PRHeadOf(opts OpenOpts, n int) (PRHead, error) {
 	switch configenum.Normalize(opts.Provider) {
 	case "github":
 		return gitHubPRHead(opts, n)
-	case "forgejo", "gitea", "gitlab", "bitbucket":
+	case "forgejo", "gitea":
+		return forgejoPRHead(opts, n)
+	case "gitlab", "bitbucket":
 		return PRHead{}, fmt.Errorf("provider %q: %w", opts.Provider, ErrPRThreadUnsupported)
 	default:
 		return PRHead{}, fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())
@@ -107,7 +111,9 @@ func AuthenticatedUser(opts OpenOpts) (Account, error) {
 	switch configenum.Normalize(opts.Provider) {
 	case "github":
 		return gitHubAuthenticatedUser(opts)
-	case "forgejo", "gitea", "gitlab", "bitbucket":
+	case "forgejo", "gitea":
+		return forgejoAuthenticatedUser(opts)
+	case "gitlab", "bitbucket":
 		return Account{}, fmt.Errorf("provider %q: %w", opts.Provider, ErrPRThreadUnsupported)
 	default:
 		return Account{}, fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())

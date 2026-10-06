@@ -377,8 +377,16 @@ ship.PRCheck.Conclusion conclusion
 ship.PRCheck.State state
 ship.PRCheck.Status status
 ship.RulesetSummary.Name name
+ship.forgejoComment.Body body
+ship.forgejoComment.HTMLURL html_url
+ship.forgejoComment.State state
 ship.forgejoPR.HTMLURL html_url
 ship.forgejoPR.Title title
+ship.forgejoPull.HTMLURL html_url
+ship.forgejoPull.State state
+ship.forgejoPullEnd.Ref ref
+ship.forgejoRepoName.FullName full_name
+ship.forgejoUser.Login login
 ship.ghPull.HTMLURL html_url
 ship.ghPull.State state
 ship.ghPullEnd.Ref ref

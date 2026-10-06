@@ -360,6 +360,10 @@ var unguessedFields = []Field{
 		"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and "+
 			"printed beside the comment — never opened.",
 		"internal/ship/prcomments.go (decoded)"),
+	reportPath("ship.forgejoComment", "Path", "path", "the Forgejo/Gitea pull-review comments API response",
+		"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and "+
+			"printed beside the comment — never opened.",
+		"internal/ship/prcomments_forgejo.go (decoded)"),
 
 	// ---- paths a tool reported about its own work --------------------------
 	reportPath("codex.astGrepMatch", "File", "file", "ast-grep --json output",
