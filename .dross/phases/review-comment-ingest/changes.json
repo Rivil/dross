@@ -22,6 +22,61 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/cmd/pr.go",
+        "internal/cmd/pr_test.go",
+        "cmd/dross/main.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "internal/prtriage/record.go",
+        "internal/prtriage/record_test.go"
+      ],
+      "commit": "7234776",
+      "completed_at": "2026-10-06T12:16:29.023283Z",
+      "landmarks": [
+        {
+          "feature": "PR review comment ingest",
+          "symbol": "cmd.loadPRThread",
+          "loc": "internal/cmd/pr.go:58",
+          "what": "dross pr comments lists a phase PR's untriaged comments fenced as untrusted data, bound to the phase branch HEAD is on"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/prtriage/reply.go",
+        "internal/prtriage/reply_test.go"
+      ],
+      "commit": "f785454",
+      "completed_at": "2026-10-06T12:58:38.420362Z",
+      "landmarks": [
+        {
+          "feature": "PR review comment ingest",
+          "symbol": "prtriage.ReplyBody",
+          "loc": "internal/prtriage/reply.go:23",
+          "what": "drafts one reply listing each unposted rejected comment with its reason, mentioning no one and unable to forge markdown structure"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/prtriage/refload.go",
+        "internal/prtriage/refload_test.go",
+        "internal/cmd/watch.go",
+        "internal/cmd/watch_test.go",
+        "internal/prtriage/record.go"
+      ],
+      "commit": "3162e45",
+      "completed_at": "2026-10-06T13:31:34.261047Z",
+      "landmarks": [
+        {
+          "feature": "dross watch digest",
+          "symbol": "cmd.countUntriaged",
+          "loc": "internal/cmd/watch.go:171",
+          "what": "each phase ship PR line carries its untriaged review-comment count from the phase branch's triage record, degrading to no count"
+        }
+      ]
+    },
     "t-17": {
       "files": [
         "internal/cmd/ship.go",
@@ -303,6 +358,233 @@
           "severity": "NOTE",
           "criterion": "c-1",
           "text": "ErrPRThreadUnsupported says \"reading a PR's comments is not supported\" but PRHeadOf and AuthenticatedUser return it too, where no comments are being read.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "outsideUntrustedFences closes a fence only on a line exactly equal to the opener, whereas CommonMark closes on any backtick-only line at least as long; a regression of Fence to a fixed or shorter fence (e.g. ``` around a body containing ````) lets the planted SYSTEM line escape yet TestPRCommentsFenceBreakerStaysFenced still passes. Only the equal-length off-by-one and an unfenced body are caught; the length invariant is pinned only by prtriage's TestFenceHoldsAgainstBreakers.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "New refusal at internal/prtriage/record.go:280 interpolates the forge-derived id raw (phase/%s ... .dross/phases/%s/plan.toml) rather than via OneLine; pathfence.Segment does not reject bidi/format controls, so a head ref carrying U+202E reaches stderr unescaped. Rare path; mirrors the pre-existing message at line 291.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In TestPRCommentsBadNumber, \"-1\" is refused by cobra's flag parser (unknown shorthand flag), not by parsePRNumber; the refuse-before-any-seam-call contract still holds.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "PhaseFromHead's switch to LocalPhase (exact match against the directory listing; e.g. refusing a case-variant head like phase/X on a case-insensitive filesystem) is not pinned by any PhaseFromHead or pr test: reverting PhaseFromHead to the old ContainID(id)+Stat path leaves every test in the diff green.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPRCommentsBadNumber's \"-1\" case is refused by cobra's flag parser (unknown shorthand flag), not by parsePRNumber; still refused before any seam call, so the contract holds, but parsePRNumber's negative branch is only reachable via `--`.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPRCommentsFailsClosed's \"no body text in the error\" assertion is vacuous at this layer: the stubbed seam errors never contain the body, so it can only fail if loadPRThread itself injected body text into an error.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-11": {
+      "outcome": "pass",
+      "rounds": 3,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "replyLinkText escapes [ and ] but not backslash, so an id holding `\\]` becomes `\\\\]`: an escaped backslash followed by a live `]` that closes the link text early. For example, id `c4\\](https://evil.example) [` makes the bullet link to evil.example. This contradicts the function's doc comment. It matters only on an unvalidated record, because Load does not call Validate and only Validate's itemID regex rejects such ids. Escaping backslash first (or also passing ids through itemID before rendering) would close it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "The description says bullets are 'sorted by id'. The sort compares id strings, so c10 lists before c9 and c5#10 before c5#2, and no test has more than one bullet, so the order is not pinned. Output is still deterministic, so the reply digest is unaffected.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestReplyReasonCannotForge also drives the forgeries through the id field and through a URL with ') [evil](' in it, which goes beyond what the contract asks.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "replyLinkText escapes backslashes after replyText/OneLine has already escaped backticks, so OneLine's \\` becomes \\\\` (an escaped backslash then a live backtick). In the link text a backtick is therefore live and can pair with a later single-backtick run (e.g. the author's OneLined \\` inside the double-backtick span) to form a code span that swallows the link's closing ]. No line or heading is forged, but the link breaks. Ids that pass the itemID schema never hold a backtick, so only an unvalidated hand-edited record reaches this. Escaping [ ] and \\ before OneLine, or dropping backticks from link text, would close it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "Bullets are sorted by plain string order (c10 before c9, c4#10 before c4#2), and no test has more than one bullet, so the ordering is untested.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "replyURL percent-encodes everything outside a safe set but does not check the scheme; the https requirement is left to Validate.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "No test drives two or more unposted rejects on the same PR, so the 'sorted by id' ordering and multi-bullet output are unexercised; the sort is plain string order (c10 before c9, c1#10 before c1#2)",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "replyText (used for the reason) escapes backticks only after OneLine, so a raw backslash before a backtick becomes an escaped backslash plus a live backtick; replyLinkText avoids this by escaping backslashes first. In the reason the effect stays inside the bullet's own inline content and cannot forge a heading, bullet or marker line",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The author sits in a double-backtick code span and OneLine guarantees no two backticks are adjacent, so a forged author cannot close the span early; URLs are percent-encoded outside a fixed safe set, so parentheses, brackets, whitespace and @ cannot break out of the link destination",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-12": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "TestWatchUntriagedDegrades asserts 'nothing on stderr' only against cobra's SetErr buffer; dross warns via os.Stderr and gitrun.Stderr, which that buffer never sees, so a degrade path that printed a warning would pass. captureStderr in internal/cmd/issue_test.go would make the check real.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "LoadForPhase's off-branch 'branch exists but has no pr-triage.toml' path (cat-file -e fails -\u003e known, empty record) is untested. This is the common case of a shipped phase not yet triaged, viewed from another branch. Changing it to return unknown would pass every test, because TestLoadForPhaseOffBranchReadsTheRef's 'b' case runs on-branch.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "The test_contract names TestWatchPRsNeverSteerSuggestion (extended with untriaged comments) and TestWatchReadOnlyBoundary (pr-triage.toml byte-identical), but the diff leaves both untouched and adds TestWatchUntriagedNeverSteers and TestWatchUntriagedReadOnly instead. Coverage is equivalent, but the names diverge from the record, and the new steer test covers only the /dross-status case, not verify or ship.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "watch.SplitPRs already drops cross-repository PRs, so the fork case in TestWatchUntriagedHeadMapping never reaches countUntriaged and the cross map there is never exercised. It is redundant defence; the test guards the end-to-end behaviour only.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestWatchUntriagedWorkingTree expects 0, which looks the same as 'unknown'. Whether the on-branch path returns known is covered instead by TestLoadForPhaseOnBranchReadsTheWorkingTree and the phase/b PR in TestWatchCallerLookedUpOnce.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "On-branch detection compares `symbolic-ref --short HEAD` with phase/\u003cid\u003e. A tag or remote that makes the short name ambiguous (heads/phase/\u003cid\u003e) would quietly fall back to the committed record. Comparing the full refs/heads/phase/\u003cid\u003e would avoid this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The caller is looked up before LoadForPhase, so a phase PR whose record turns out unknown still costs one caller API call per tick.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "The test_contract says TestWatchPRsNeverSteerSuggestion would be extended with untriaged comments and TestWatchReadOnlyBoundary would check pr-triage.toml is byte-identical. Neither was changed. New tests were added instead (TestWatchUntriagedNeverSteers, TestWatchUntriagedReadOnly). They cover the behaviour, but the new steer test checks only one suggestion state where the original checks /dross-verify, /dross-ship and /dross-status, and running the tests by their contract names misses the untriaged cases.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "TestWatchUntriagedHeadMapping's fork case cannot reach countUntriaged: watch.SplitPRs already drops IsCrossRepository PRs, so the fork never becomes a ShipPR. The cross map and the crossRepo argument passed to ParsePhaseHead in internal/cmd/watch.go are never exercised. Removing them would leave this test green.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In LoadForPhase, any failure of the `cat-file -e` probe counts as 'branch has no record' (known and empty), so a git failure other than a missing path would show the PR's full comment count instead of no count. This is unlikely, since rev-parse --verify succeeded just before.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "countUntriaged looks up the caller (a forge call) before it checks whether the phase record is readable. A tick where every phase PR's record is unknown still makes one wasted network call.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "When HEAD is phase/\u003cid\u003e but .dross/phases/\u003cid\u003e is missing, LoadForPhase returns unknown. Off-branch, a branch with no record file returns known and empty. The two cases differ, though each is defensible.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "record.go only extracts decode() from Load so both readers share the unknown-key schema check. Load behaves exactly as before.",
           "resolution": "non-blocking, left"
         }
       ]
