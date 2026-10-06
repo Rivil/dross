@@ -10,10 +10,6 @@ import (
 	"github.com/Rivil/dross/internal/configenum"
 )
 
-// ErrPRThreadUnsupported is what the PR-thread readers return for a provider
-// whose comment, head and caller reads are not wired yet, without a request.
-var ErrPRThreadUnsupported = errors.New("reading a PR's comments is not supported for this provider yet")
-
 // CommentKind is where on a PR a comment was left.
 type CommentKind string
 
@@ -83,7 +79,7 @@ func ListPRComments(opts OpenOpts, n int) ([]PRComment, error) {
 	case "bitbucket":
 		return bitbucketPRComments(opts, n)
 	case "gitlab":
-		return nil, fmt.Errorf("provider %q: %w", opts.Provider, ErrPRThreadUnsupported)
+		return gitlabPRComments(opts, n)
 	default:
 		return nil, fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())
 	}
@@ -103,7 +99,7 @@ func PRHeadOf(opts OpenOpts, n int) (PRHead, error) {
 	case "bitbucket":
 		return bitbucketPRHead(opts, n)
 	case "gitlab":
-		return PRHead{}, fmt.Errorf("provider %q: %w", opts.Provider, ErrPRThreadUnsupported)
+		return gitlabPRHead(opts, n)
 	default:
 		return PRHead{}, fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())
 	}
@@ -120,7 +116,7 @@ func AuthenticatedUser(opts OpenOpts) (Account, error) {
 	case "bitbucket":
 		return bitbucketAuthenticatedUser(opts)
 	case "gitlab":
-		return Account{}, fmt.Errorf("provider %q: %w", opts.Provider, ErrPRThreadUnsupported)
+		return gitlabAuthenticatedUser(opts)
 	default:
 		return Account{}, fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())
 	}

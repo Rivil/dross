@@ -403,6 +403,12 @@ ship.ghThreadRecord.HTMLURL html_url
 ship.ghThreadRecord.State state
 ship.ghUser.Login login
 ship.ghUser.Type type
+ship.gitlabMR.SourceBranch source_branch
+ship.gitlabMR.State state
+ship.gitlabMR.WebURL web_url
+ship.gitlabNote.Body body
+ship.gitlabNote.Type type
+ship.gitlabUser.Username username
 
 # ---- stack — stack-profile data: ids, titles, binary NAMES, commands, loadout prose, extensions, env-var names
 stack.Command.Run run

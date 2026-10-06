@@ -153,6 +153,8 @@ func TestRegistryCoversEveryKnownFieldByName(t *testing.T) {
 		"ship.bbInline.Path",
 		"ship.forgejoComment.Path",
 		"ship.ghThreadRecord.Path",
+		"ship.gitlabNoteAt.NewPath",
+		"ship.gitlabNoteAt.OldPath",
 		"codex.astGrepMatch.File",
 		"mutation.astRequest.File",
 		"mutation.gremlinsFile.Filename",
