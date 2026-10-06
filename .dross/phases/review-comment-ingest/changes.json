@@ -57,6 +57,46 @@
         }
       ]
     },
+    "t-20": {
+      "files": [
+        "internal/ship/prcomments_gitlab.go",
+        "internal/ship/prcomments_gitlab_test.go",
+        "internal/ship/prcomments.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go"
+      ],
+      "commit": "2056c8c",
+      "completed_at": "2026-10-06T10:22:07.859171Z",
+      "landmarks": [
+        {
+          "feature": "PR review comment ingest",
+          "symbol": "ship.gitlabPRComments",
+          "loc": "internal/ship/prcomments_gitlab.go:80",
+          "what": "reads GitLab MR notes with web_url#note links and a per-author bot lookup"
+        }
+      ]
+    },
+    "t-21": {
+      "files": [
+        "internal/ship/prcomments_bitbucket.go",
+        "internal/ship/prcomments_bitbucket_test.go",
+        "internal/ship/prcomments.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go"
+      ],
+      "commit": "f1ab783",
+      "completed_at": "2026-10-06T09:54:30.106886Z",
+      "landmarks": [
+        {
+          "feature": "PR review comment ingest",
+          "symbol": "ship.bitbucketPRComments",
+          "loc": "internal/ship/prcomments_bitbucket.go:106",
+          "what": "reads Bitbucket Cloud PR comments by page= without ever requesting the server-supplied next URL"
+        }
+      ]
+    },
     "t-3": {
       "files": [
         "internal/prtriage/fence.go",
@@ -123,6 +163,44 @@
           "symbol": "watch.ShipPRLine",
           "loc": "internal/watch/prs.go:105",
           "what": "a ship PR line carries its untriaged review-comment count and a /dross-respond pointer only when comments wait"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/prtriage/record.go",
+        "internal/prtriage/record_test.go",
+        "internal/secretscan/writers.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "4c8eace",
+      "completed_at": "2026-10-06T09:11:44.276573Z",
+      "landmarks": [
+        {
+          "feature": "PR review comment ingest",
+          "symbol": "prtriage.Save",
+          "loc": "internal/prtriage/record.go:202",
+          "what": "the per-phase pr-triage.toml record holds one redacted, validated verdict per comment and never a comment body"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/ship/prcomments_forgejo.go",
+        "internal/ship/prcomments_forgejo_test.go",
+        "internal/ship/prcomments.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go"
+      ],
+      "commit": "bcccf83",
+      "completed_at": "2026-10-06T09:40:10.681265Z",
+      "landmarks": [
+        {
+          "feature": "PR review comment ingest",
+          "symbol": "ship.forgejoPRComments",
+          "loc": "internal/ship/prcomments_forgejo.go:111",
+          "what": "reads Forgejo/Gitea PR comments, reviews and inline comments with every author unknown"
         }
       ]
     }
@@ -279,6 +357,93 @@
         }
       ]
     },
+    "t-20": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "prcomments_gitlab.go falls back to old_path/old_line whenever new_line is null, so a file-level or image DiffNote (both lines null) on a renamed file reports the pre-rename old_path with Line 0 as an inline item; the fallback should only take the old side when old_line is set",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "TestGitLabPRCommentURL's first half never checks the list length, so it would pass on an empty result; the URL mapping is still pinned exactly by TestGitLabPRCommentKinds",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "gitlabNotePage duplicates prThreadPageSize (both 100), and the new package-level helper deref(*int) has a very generic name in package ship",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestGitLabHostRefused sets GL_TOKEN, so on its own it cannot show the refusal comes before the env read; resolveToken's order (policy.Check before os.Getenv) is what guarantees it, and the 0-hits assertion matches the contract's parenthetical",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "sort=asc is sent on every notes page but the test server ignores it, so oldest-first ordering is not pinned by any test (not required by the test_contract)",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "gitlabNotes accepts a JSON null page as an empty final page, unlike ghListAll which rejects a nil batch; harmless against real GitLab but slightly less strict than the GitHub arm",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestGitLabHostRefused sets GL_TOKEN, so it shows zero hits and ErrRefused but not that the refusal comes before the env read; that order is guaranteed by the shared resolveToken, the same as in the sibling Forgejo and Bitbucket tests",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-21": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "TestBitbucketHostRefused sets BB_TOKEN, so it cannot show the host refusal comes before the token read; that ordering rests on the existing resolveToken (policy.Check before os.Getenv), not on anything this test asserts",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "bitbucketPRComments drops only deleted comments; if Bitbucket Cloud's comment list also returns the caller's unpublished draft (pending) comments, they would be listed as triage items, unlike the GitHub path, which drops PENDING reviews",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "PRHead.URL (links.html.href) is mapped but no test checks it; the record does not claim it, so this is not a spec gap",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
     "t-3": {
       "outcome": "pass",
       "rounds": 1,
@@ -416,6 +581,92 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The r-01 `make install` step cannot be confirmed from the diff; it is a process step for the author after editing assets/prompts/watch.md.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "Save's stale-read guard is check-then-write with no lock: it compares os.ReadFile(path) to readBytes, then project.SaveTOML re-reads and writes, so a concurrent writer landing between the compare and the write is silently clobbered. The sequential two-Save test passes but the guard is not atomic.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSaveRedactsEveryString's 'redacting %s changed the caller's record' check is vacuous: the Record passed to redactRecord wraps a copy of r, so an in-place mutation of the slice element could never show through f[name].",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "Validate does not refuse fields belonging to another verdict (e.g. a reject carrying task/deferred/target, or an accept carrying a target), so a hand-edited record can hold contradictory pointers that still validate.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "forgejoListAll treats any page shorter than 50 as the last one. A Gitea/Forgejo instance whose [api] MAX_RESPONSE_ITEMS is below 50 cuts limit=50 down, so a full page of reviews looks short and the list is silently truncated: the partial result ListPRComments promises never to return. The `added == 0` stop has the same weakness on a server that honours limit but ignores page. Checking the X-Total-Count header would close both. forgejoListOpenPRs already makes the same page-size assumption.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The doc comment on forgejoPRComment calls it `forgejoItem`, so it names the wrong function.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestForgejoHostRefused sets FORGE_TOKEN, so it cannot tell whether the host check runs before the env read. That order comes from the existing resolveToken. The test does check the zero-hit and ErrRefused results, which is the observable part of the contract.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "forgejoListAll only stops on a page that adds no new id, so it always spends one extra request. It also means a paged list over (prThreadMaxPages-1)*50 = 450 items is refused as 'may be truncated' even when it was read in full. The GitHub reader allows up to ~999. This fails safe and is unlikely to matter for reviews.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A JSON `null` list answer decodes to an empty batch and reads as 'no comments'. ghListAll refuses a nil batch as not the promised list. The two readers handle this differently.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "TestForgejoPRCommentPaging checks that page= and limit= are sent, but not that limit is exactly 50: a limit of 100 would still give 51 items and still hit the 500 on page 2.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "forgejoAuthenticatedUser goes through forgejoTarget, so a /user read needs opts.URL to parse as owner/repo even though the endpoint doesn't use it.",
           "resolution": "non-blocking, left"
         }
       ]

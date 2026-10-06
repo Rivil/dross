@@ -1944,6 +1944,16 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "review-comment-ingest/t-20": {
+      "issue": "DRO-920",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-comment-ingest/t-21": {
+      "issue": "DRO-919",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "review-comment-ingest/t-3": {
       "issue": "DRO-906",
       "plan_status": "done",
@@ -1966,6 +1976,16 @@
     },
     "review-comment-ingest/t-7": {
       "issue": "DRO-917",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-comment-ingest/t-8": {
+      "issue": "DRO-918",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-comment-ingest/t-9": {
+      "issue": "DRO-921",
       "plan_status": "in_progress",
       "board_state": "task-in-progress"
     },
