@@ -192,6 +192,9 @@ var writers = []Writer{
 	{File: "internal/rules/rules.go", UnderDross: &UnderDross{Artifacts: []string{"rules.toml"}}},
 	{File: "internal/verify/verify.go", UnderDross: &UnderDross{Artifacts: []string{"phases/<id>/tests.json", "phases/<id>/verify.toml"}}},
 	{File: "internal/watch/watch.go", UnderDross: &UnderDross{Artifacts: []string{"watch.state.json"}}},
+	// pr resolve puts plan.toml or spec.toml back byte for byte when the
+	// triage record save after its task or deferred write fails.
+	{File: "internal/cmd/pr_resolve.go", UnderDross: &UnderDross{Artifacts: []string{"phases/<id>/plan.toml", "phases/<id>/spec.toml"}}},
 	// The red-proof repoint rewrites the doc changes.json pins, which is any
 	// repo-contained path; its plausible home is the phase dir.
 	{File: "internal/cmd/redproof_repoint.go", UnderDross: &UnderDross{Artifacts: []string{"phases/<id>/proof.md"}}},

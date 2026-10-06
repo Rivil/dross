@@ -22,7 +22,7 @@ func PR() *cobra.Command {
 		Use:   "pr",
 		Short: "Read and triage the review comments on a phase's PR (backs /dross-respond)",
 	}
-	c.AddCommand(prComments())
+	c.AddCommand(prComments(), prResolve())
 	return c
 }
 
@@ -46,15 +46,16 @@ type prThread struct {
 func parsePRNumber(arg string) (int, error) {
 	n, err := strconv.Atoi(arg)
 	if err != nil || n <= 0 || strconv.Itoa(n) != arg {
-		return 0, fmt.Errorf("%q is not a PR number — pass the number alone, e.g. `dross pr comments 138`", arg)
+		return 0, fmt.Errorf("invalid PR number %q — pass the number alone, e.g. `dross pr comments 138`", arg)
 	}
 	return n, nil
 }
 
 // loadPRThread binds PR arg to its phase and reads its thread. It refuses a
-// PR whose head is not a same-repo phase/<id> branch with a plan here, and
-// refuses unless HEAD is on that branch — the record it reads and the plan a
-// verdict writes to are that branch's — before a single comment is fetched.
+// PR whose head is not a same-repo phase/<id> branch, refuses unless HEAD is
+// on that branch — the record it reads and the plan a verdict writes to are
+// that branch's — and then refuses a phase with no plan here, all before a
+// single comment is fetched.
 func loadPRThread(arg string) (*prThread, error) {
 	n, err := parsePRNumber(arg)
 	if err != nil {
@@ -81,16 +82,20 @@ func loadPRThread(arg string) (*prThread, error) {
 	if t.head, err = ship.PRHeadOfFunc(t.opts, n); err != nil {
 		return nil, fmt.Errorf("read PR #%d: %w", n, err)
 	}
-	if t.phase, err = prtriage.PhaseFromHead(t.repoDir, t.head.Ref, t.head.CrossRepo); err != nil {
-		return nil, fmt.Errorf("PR #%d does not ship a phase — `dross pr` triages a PR whose head is a phase/<id> branch planned here: %w", n, err)
+	id, err := prtriage.ParsePhaseHead(t.head.Ref, t.head.CrossRepo)
+	if err != nil {
+		return nil, fmt.Errorf("invalid PR for `dross pr`: PR #%d does not ship a phase — it triages a PR whose head is a phase/<id> branch planned here: %w", n, err)
 	}
 	cur, err := gitrun.Trim(t.repoDir, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("read current branch: %w", err)
 	}
-	if cur != "phase/"+t.phase {
-		return nil, fmt.Errorf("PR #%d ships phase/%s but HEAD is on %s; switch with `dross phase checkout %s`, then re-run",
-			n, t.phase, prtriage.OneLine(cur), t.phase)
+	if cur != "phase/"+id {
+		return nil, fmt.Errorf("invalid branch: `dross pr` works on the phase/<id> branch the PR ships — PR #%d ships phase/%s but HEAD is on %s; switch with `dross phase checkout %[2]s`, then re-run",
+			n, prtriage.OneLine(id), prtriage.OneLine(cur))
+	}
+	if t.phase, err = prtriage.PhaseFromHead(t.repoDir, t.head.Ref, t.head.CrossRepo); err != nil {
+		return nil, fmt.Errorf("invalid PR for `dross pr`: PR #%d does not ship a phase planned here: %w", n, err)
 	}
 
 	if t.self, err = ship.AuthenticatedUserFunc(t.opts); err != nil {
