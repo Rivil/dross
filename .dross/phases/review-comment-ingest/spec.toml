@@ -56,8 +56,8 @@
 
 [[decisions]]
   key = "own_review_split"
-  choice = "A /dross-review comment is split into one triage item per finding, id `<comment-id>#<n>`."
-  why = "It is the only reviewer on this repo; one verdict for a many-finding comment is too coarse."
+  choice = "A /dross-review comment posted by the authenticated account is split into one triage item per finding, id `<comment-id>#<n>`; any other author's comment carrying that header stays one whole item."
+  why = "It is the only reviewer on this repo; one verdict for a many-finding comment is too coarse. Splitting only self-authored comments (plan time, 2026-10-06) stops a third party hiding text outside the finding bullets behind a copied header."
   locked = true
 
 [[decisions]]
