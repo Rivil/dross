@@ -153,6 +153,21 @@ func TestShipPRLine(t *testing.T) {
 	}
 }
 
+func TestShipPRLineUntriaged(t *testing.T) {
+	p := ShipPR{Number: 138, Head: "phase/x", Checks: ship.ChecksFailing}
+	if got := ShipPRLine(p); got != "pr: #138 phase/x — failing" {
+		t.Errorf("no untriaged comments: %q, want the line unchanged", got)
+	}
+	p.Untriaged = 3
+	if got, want := ShipPRLine(p), "pr: #138 phase/x — failing · 3 untriaged — /dross-respond 138"; got != want {
+		t.Errorf("ShipPRLine = %q, want %q", got, want)
+	}
+	p.Untriaged = 1
+	if got, want := ShipPRLine(p), "pr: #138 phase/x — failing · 1 untriaged — /dross-respond 138"; got != want {
+		t.Errorf("ShipPRLine = %q, want %q", got, want)
+	}
+}
+
 func jsonKeys(t *testing.T, v any) []string {
 	t.Helper()
 	b, err := json.Marshal(v)
@@ -178,6 +193,9 @@ func TestPRRecordJSONKeys(t *testing.T) {
 		t.Errorf("BotPR keys = %v, want %v", got, want)
 	}
 	if got, want := jsonKeys(t, ShipPR{}), []string{"checks", "head", "number", "url"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("ShipPR keys = %v, want %v", got, want)
+		t.Errorf("ShipPR keys = %v, want %v (untriaged omitted at 0)", got, want)
+	}
+	if got, want := jsonKeys(t, ShipPR{Untriaged: 3}), []string{"checks", "head", "number", "untriaged", "url"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("ShipPR keys with a count = %v, want %v", got, want)
 	}
 }

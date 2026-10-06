@@ -26,6 +26,9 @@ type ShipPR struct {
 	Head   string           `json:"head"`
 	URL    string           `json:"url"`
 	Checks ship.CheckRollup `json:"checks"`
+	// Untriaged is how many review comments on the PR are not yet triaged.
+	// Zero is omitted: a PR with nothing waiting carries no count.
+	Untriaged int `json:"untriaged,omitempty"`
 }
 
 // shipHeadPrefixes are the branch prefixes dross ships from.
@@ -96,7 +99,13 @@ func BotSummary(bots []BotPR) string {
 	return fmt.Sprintf("bot PRs: %d open (%d failing), oldest %dd", len(bots), failing, oldest)
 }
 
-// ShipPRLine is the digest's line for one ship PR: `pr: #138 phase/x — failing`.
+// ShipPRLine is the digest's line for one ship PR: `pr: #138 phase/x — failing`,
+// followed by ` · 3 untriaged — /dross-respond 138` only when review comments
+// are waiting.
 func ShipPRLine(p ShipPR) string {
-	return fmt.Sprintf("pr: #%d %s — %s", p.Number, p.Head, p.Checks)
+	line := fmt.Sprintf("pr: #%d %s — %s", p.Number, p.Head, p.Checks)
+	if p.Untriaged > 0 {
+		line += fmt.Sprintf(" · %d untriaged — /dross-respond %d", p.Untriaged, p.Number)
+	}
+	return line
 }

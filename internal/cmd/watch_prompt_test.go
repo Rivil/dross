@@ -139,8 +139,15 @@ func TestWatchPromptShipPRLine(t *testing.T) {
 	if !strings.Contains(watchPromptContent(t), "ship_prs") {
 		t.Error("watch.md must name the ship_prs field")
 	}
-	if !strings.Contains(watchPromptSection(t, "2.", "3."), "pr: #<n> <head> — <checks>") {
-		t.Error("§2 (render) must carry the `pr: #<n> <head> — <checks>` line")
+	render := watchPromptSection(t, "2.", "3.")
+	for _, want := range []string{
+		"pr: #<n> <head> — <checks>",
+		"· <u> untriaged — /dross-respond <n>",
+		"when untriaged is absent, the line ends at <checks>",
+	} {
+		if !strings.Contains(render, want) {
+			t.Errorf("§2 (render) must carry %q", want)
+		}
 	}
 }
 
