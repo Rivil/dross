@@ -183,24 +183,22 @@ type ghRepoName struct {
 // failure is ghAPI's fixed prose, or fixed prose of its own for an answer
 // that is not JSON — never gh's output.
 //
-// The decode carries no //dross:taint-cleared marker, unlike rulesets.go's,
-// because here one would clear nothing: the records leave this package only as
-// fields of PRComment, PRHead and Account values built field by field, and
-// the exec-taint engine follows a struct literal's taint per field, so the
-// returns carry none and no code reads those fields yet. TestGhMarkersAreLoadBearing
-// refuses a marker whose removal brings back no gh-origin finding. The marker
-// belongs at the first conversion where a reader escapes one of those fields;
-// TestNoSpawnOutputEscapes names that site when it appears.
+// The decoded record is cleared here, once, for every reader downstream: the
+// exec-taint engine follows a field's taint program-wide, so a prtriage reader
+// of PRComment.Body or CommentAuthor.Login would otherwise carry gh's stream
+// into a digest, a writer or an error.
 func ghGetJSON[T any](repo ghRepo, endpoint string) (T, error) {
 	var zero T
 	out, err := ghAPI(repo, "GET", endpoint, nil)
 	if err != nil {
 		return zero, err
 	}
-	var decoded T
-	if json.Unmarshal(out, &decoded) != nil {
+	var raw T
+	if json.Unmarshal(out, &raw) != nil {
 		return zero, errors.New("GitHub's answer is not the JSON it promises")
 	}
+	//dross:taint-cleared a decoded GitHub REST record: ids, logins, states, urls and comment text are forge data, not gh's prose; comment bodies stay untrusted and prtriage redacts and fences them before anything prints them
+	decoded := raw
 	return decoded, nil
 }
 
