@@ -96,6 +96,14 @@ One-shot task; code insight is bounded by the single task's files.
 Disposition: **inline-only** — the size gate that justifies offload in execute
 rarely triggers for a quick task; if one grows that large it belongs in a phase.
 
+### respond
+
+Walks a PR's review comments one at a time, checking each claim against the
+code before a verdict. Disposition: **inline-only** — each verdict is the
+user's call on evidence read in the main loop, and the comments arrive already
+fenced and redacted by `dross pr comments`; a reader subagent would hand back a
+summary of untrusted text, which is the one thing the verdict must not rest on.
+
 ### resume
 
 Replays handoff + re-orients on branch/diff. Disposition: **inline-only** —

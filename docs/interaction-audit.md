@@ -249,3 +249,11 @@ preview).
 | Re-plan after needs-replan or a Problem | §3 BLOCKED on line one, proposes a new model, waits for agreement | ✅ | a hard stop in pair and solo alike — the user agrees the `- [replan]` entry |
 | Fix route | §4 proposes /dross-quick (standalone) or `dross task add` (mid-phase) | ✅ | /dross-debug never commits; pair only |
 | Prevention → rule | §5 offers the printed `dross rule add` line (add the rule / skip) | ✅ | pair runs exactly the printed line on approval; solo lists it in the wrap-up, never runs it |
+
+### dross-respond
+
+| Decision point | Current pattern | Conforms | Notes |
+|---|---|---|---|
+| Which PR | §0 takes it from the argument, or asks (the `/dross-watch` line names it) | ✅ | pre-flight runs `dross interaction show` |
+| Verdict per comment | §2 one AskUserQuestion per item — accept / reject / route — leading with the recommendation and its evidence | ✅ | verified against the code first; one `dross pr resolve` per answer |
+| Post the reply | §3 one AskUserQuestion offering the exact `post reply #<n> <digest>` label the draft run printed | ✅ | the recorded answer is the only thing that lets `--post` send; any other answer posts nothing |
