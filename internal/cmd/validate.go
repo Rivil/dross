@@ -14,6 +14,7 @@ import (
 	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/prtriage"
 	"github.com/Rivil/dross/internal/rules"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -101,12 +102,16 @@ func Validate() *cobra.Command {
 				specPath := filepath.Join(dir, "spec.toml")
 				planPath := filepath.Join(dir, "plan.toml")
 				var spec *phase.Spec
+				specErr := false
 				if _, err := loadIfExists(specPath, func() (any, error) { s, err := phase.LoadSpec(specPath); spec = s; return s, err }); err != nil {
 					problems = append(problems, fmt.Sprintf("%s: %v", specPath, err))
+					specErr = true
 				}
 				var plan *phase.Plan
+				planErr := false
 				if _, err := loadIfExists(planPath, func() (any, error) { p, err := phase.LoadPlan(planPath); plan = p; return p, err }); err != nil {
 					problems = append(problems, fmt.Sprintf("%s: %v", planPath, err))
+					planErr = true
 				}
 				if plan != nil && !strings.HasPrefix(id, plan.Phase.ID) && id != plan.Phase.ID {
 					problems = append(problems, fmt.Sprintf("%s: plan.phase.id (%s) does not match directory (%s)", planPath, plan.Phase.ID, id))
@@ -129,6 +134,12 @@ func Validate() *cobra.Command {
 					if absorbable != nil {
 						problems = append(problems, absorbedProblems(root, id, specPath, spec, absorbable)...)
 					}
+				}
+				// A spec or plan that did not decode is reported above; its ids
+				// are unknown, so the record is not judged against them — that
+				// would call every accept and route dangling.
+				if !specErr && !planErr {
+					problems = append(problems, triageProblems(dir, spec, plan)...)
 				}
 			}
 
@@ -187,6 +198,37 @@ func Validate() *cobra.Command {
 			return fmt.Errorf("%d problem(s) found", len(problems))
 		},
 	}
+}
+
+// triageProblems checks a phase's pr-triage.toml against the task ids of its
+// plan and the deferred ids of its spec — the same Validate a `dross pr
+// resolve` save runs, here over whatever a hand edit left. A phase with no
+// record has nothing to check.
+func triageProblems(dir string, spec *phase.Spec, plan *phase.Plan) []string {
+	path := filepath.Join(dir, prtriage.File)
+	rec, data, err := prtriage.Load(path)
+	if err != nil {
+		return []string{fmt.Sprintf("%s: %s", path, strings.TrimPrefix(err.Error(), prtriage.File+": "))}
+	}
+	if data == nil {
+		return nil
+	}
+	var refs prtriage.Refs
+	if plan != nil {
+		for _, t := range plan.Task {
+			refs.Tasks = append(refs.Tasks, t.ID)
+		}
+	}
+	if spec != nil {
+		for _, d := range spec.Deferred {
+			refs.Deferred = append(refs.Deferred, d.ID)
+		}
+	}
+	var out []string
+	for _, e := range prtriage.Validate(rec, refs) {
+		out = append(out, fmt.Sprintf("%s: %s", path, strings.TrimPrefix(e.Error(), prtriage.File+": ")))
+	}
+	return out
 }
 
 // enumProblems reports every enum-valued project.toml key holding a value its
