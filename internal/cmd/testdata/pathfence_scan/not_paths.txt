@@ -377,6 +377,13 @@ ship.PRCheck.Conclusion conclusion
 ship.PRCheck.State state
 ship.PRCheck.Status status
 ship.RulesetSummary.Name name
+ship.bbAccount.DisplayName display_name
+ship.bbAccount.Nickname nickname
+ship.bbAccount.Type type
+ship.bbAccount.UUID uuid
+ship.bbCommentList.Next next
+ship.bbPull.State state
+ship.bbRepoName.FullName full_name
 ship.forgejoComment.Body body
 ship.forgejoComment.HTMLURL html_url
 ship.forgejoComment.State state

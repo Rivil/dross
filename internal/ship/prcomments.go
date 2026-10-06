@@ -80,7 +80,9 @@ func ListPRComments(opts OpenOpts, n int) ([]PRComment, error) {
 		return gitHubPRComments(opts, n)
 	case "forgejo", "gitea":
 		return forgejoPRComments(opts, n)
-	case "gitlab", "bitbucket":
+	case "bitbucket":
+		return bitbucketPRComments(opts, n)
+	case "gitlab":
 		return nil, fmt.Errorf("provider %q: %w", opts.Provider, ErrPRThreadUnsupported)
 	default:
 		return nil, fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())
@@ -98,7 +100,9 @@ func PRHeadOf(opts OpenOpts, n int) (PRHead, error) {
 		return gitHubPRHead(opts, n)
 	case "forgejo", "gitea":
 		return forgejoPRHead(opts, n)
-	case "gitlab", "bitbucket":
+	case "bitbucket":
+		return bitbucketPRHead(opts, n)
+	case "gitlab":
 		return PRHead{}, fmt.Errorf("provider %q: %w", opts.Provider, ErrPRThreadUnsupported)
 	default:
 		return PRHead{}, fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())
@@ -113,7 +117,9 @@ func AuthenticatedUser(opts OpenOpts) (Account, error) {
 		return gitHubAuthenticatedUser(opts)
 	case "forgejo", "gitea":
 		return forgejoAuthenticatedUser(opts)
-	case "gitlab", "bitbucket":
+	case "bitbucket":
+		return bitbucketAuthenticatedUser(opts)
+	case "gitlab":
 		return Account{}, fmt.Errorf("provider %q: %w", opts.Provider, ErrPRThreadUnsupported)
 	default:
 		return Account{}, fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())
