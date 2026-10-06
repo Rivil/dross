@@ -92,19 +92,29 @@ func Load(path string) (Record, []byte, error) {
 	if err != nil {
 		return Record{}, nil, fmt.Errorf("read %s: %w", File, err)
 	}
+	rec, err := decode(b)
+	if err != nil {
+		return Record{}, nil, err
+	}
+	return rec, b, nil
+}
+
+// decode parses a record's bytes, refusing any key the schema does not know.
+// Load reads them from a file; LoadForPhase from a phase branch.
+func decode(b []byte) (Record, error) {
 	var rec Record
 	md, err := toml.Decode(string(b), &rec)
 	if err != nil {
-		return Record{}, nil, fmt.Errorf("decode %s: %w", File, err)
+		return Record{}, fmt.Errorf("decode %s: %w", File, err)
 	}
 	if extra := md.Undecoded(); len(extra) > 0 {
 		keys := make([]string, len(extra))
 		for i, k := range extra {
 			keys[i] = k.String()
 		}
-		return Record{}, nil, fmt.Errorf("%s: unknown key %s — the record holds no such field", File, strings.Join(keys, ", "))
+		return Record{}, fmt.Errorf("%s: unknown key %s — the record holds no such field", File, strings.Join(keys, ", "))
 	}
-	return rec, b, nil
+	return rec, nil
 }
 
 // Upsert sets r as the resolution for its id: it replaces an existing entry
