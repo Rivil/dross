@@ -1,7 +1,8 @@
 // Package gatestate is the machine-local record the tool gates judge against:
 // the tree the last full green `dross test` ran on, the mode /dross-execute
 // is running in, the approval a human gave the current task, the solo review
-// ledger, the mode a /dross-quick run is in, and the review context file.
+// ledger, the mode a /dross-quick run is in, the review context file, and the
+// approval a human gave to post one drafted PR reply.
 //
 // Records live in .dross/gate/, which carries its own `*` .gitignore: a green
 // or an approval is a fact about THIS machine, and a copy committed to the repo
@@ -39,6 +40,7 @@ const (
 	ApprovalFile = "approval.json"
 	ReviewFile   = "review.json"
 	QuickFile    = "quick.json"
+	ReplyFile    = "reply.json"
 	// ContextFile is the rendered review context the reviewer reads. It is
 	// written by `dross review context` and never read back by a gate: the
 	// recorder regenerates the context and compares digests.
@@ -66,6 +68,14 @@ type Approval struct {
 	Task  string    `json:"task"`
 	Head  string    `json:"head"`
 	At    time.Time `json:"at"`
+}
+
+// ReplyApproval is a human's approval to post one drafted PR reply: the PR,
+// and the digest of the exact body they were shown.
+type ReplyApproval struct {
+	PR     int       `json:"pr"`
+	Digest string    `json:"digest"`
+	At     time.Time `json:"at"`
 }
 
 // Review is the solo review ledger for one armed scope: a plan task (Phase,
@@ -159,6 +169,43 @@ func LoadApproval(root string) (*Approval, error) {
 
 // SaveApproval records an approval.
 func SaveApproval(root string, a Approval) error { return save(root, ApprovalFile, a) }
+
+// LoadReplyApproval returns the reply approval, or nil when there is none.
+func LoadReplyApproval(root string) (*ReplyApproval, error) {
+	var a ReplyApproval
+	ok, err := load(root, ReplyFile, &a)
+	if err != nil || !ok {
+		return nil, err
+	}
+	if err := a.check(); err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+// SaveReplyApproval records a reply approval, replacing any earlier one.
+func SaveReplyApproval(root string, a ReplyApproval) error {
+	if err := a.check(); err != nil {
+		return fmt.Errorf("refusing to record it: %w", err)
+	}
+	return save(root, ReplyFile, a)
+}
+
+// ClearReplyApproval removes the reply approval once it is spent; none is not
+// an error.
+func ClearReplyApproval(root string) error { return remove(root, ReplyFile) }
+
+// check refuses an approval that names no PR or no digest: an empty digest
+// could only ever match another empty one.
+func (a ReplyApproval) check() error {
+	if a.PR <= 0 {
+		return fmt.Errorf("%s: reply approval names no PR", rel(ReplyFile))
+	}
+	if strings.TrimSpace(a.Digest) == "" {
+		return fmt.Errorf("%s: reply approval has no digest", rel(ReplyFile))
+	}
+	return nil
+}
 
 // LoadReview returns the review ledger, or nil when there is none.
 func LoadReview(root string) (*Review, error) {
