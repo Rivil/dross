@@ -172,6 +172,8 @@ dross phase show flag --json (bool) default="false" noopt="true" usage="emit the
 dross pr | use="pr" short="Read and triage the review comments on a phase's PR (backs /dross-respond)"
 dross pr comments | use="comments <pr>" short="List a phase PR's review comments that still need a verdict, bodies fenced as untrusted data"
 dross pr comments flag --all (bool) default="false" noopt="true" usage="list every comment with its status, not only those that need a verdict"
+dross pr reply | use="reply <pr>" short="Draft the one reply listing a phase PR's rejected comments; --post sends it once a human approved that draft"
+dross pr reply flag --post (bool) default="false" noopt="true" usage="post the drafted reply (needs a recorded human approval of exactly this draft)"
 dross pr resolve | use="resolve <pr> <item-id>" short="Record one verdict for a phase PR's review comment: accept as a task, reject with a reason, or route as deferred"
 dross pr resolve flag --accept (bool) default="false" noopt="true" usage="accept: add a task to the PR phase's plan (needs --title)"
 dross pr resolve flag --at (string) default="" usage="evidence: a path:line or path:line-line in the repo"

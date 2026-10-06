@@ -22,7 +22,7 @@ func PR() *cobra.Command {
 		Use:   "pr",
 		Short: "Read and triage the review comments on a phase's PR (backs /dross-respond)",
 	}
-	c.AddCommand(prComments(), prResolve())
+	c.AddCommand(prComments(), prResolve(), prReply())
 	return c
 }
 
