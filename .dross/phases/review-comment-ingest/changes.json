@@ -2,5 +2,423 @@
   "phase": "review-comment-ingest",
   "base": "milestone/v1.7",
   "base_commit": "1807ee5c6bf387cb1c5f280ae417a1d43e83d936",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/ship/prcomments.go",
+        "internal/ship/prcomments_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go"
+      ],
+      "commit": "414cfcc",
+      "completed_at": "2026-10-06T07:54:56.908586Z",
+      "landmarks": [
+        {
+          "feature": "PR review comment ingest",
+          "symbol": "ship.ListPRComments",
+          "loc": "internal/ship/prcomments.go:74",
+          "what": "reads a PR's conversation, inline and review comments plus head and caller through per-provider seams"
+        }
+      ]
+    },
+    "t-18": {
+      "files": [
+        "internal/gate/reply_confirm.go",
+        "internal/gate/reply_confirm_test.go",
+        "internal/gatestate/store.go",
+        "internal/secretscan/writers.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "5ad499f",
+      "completed_at": "2026-10-06T08:56:24.987366Z",
+      "landmarks": [
+        {
+          "feature": "tool gates",
+          "symbol": "gate.ReplyApproveLabel",
+          "loc": "internal/gate/reply_confirm.go:32",
+          "what": "a human picking 'post reply #\u003cpr\u003e \u003cdigest\u003e' in AskUserQuestion is the only way a PR reply approval is recorded"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/secretscan/redact.go",
+        "internal/secretscan/redact_test.go"
+      ],
+      "commit": "8fb7fdd",
+      "completed_at": "2026-10-06T08:23:30.173553Z",
+      "landmarks": [
+        {
+          "feature": "secret detection",
+          "symbol": "secretscan.Redact",
+          "loc": "internal/secretscan/redact.go:35",
+          "what": "scrubs every credential-shaped value (PEM blocks whole) from untrusted text to a fixed point before it is persisted or printed"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/prtriage/fence.go",
+        "internal/prtriage/fence_test.go"
+      ],
+      "commit": "fd8b8b7",
+      "completed_at": "2026-10-06T08:26:59.065756Z",
+      "landmarks": [
+        {
+          "feature": "PR review comment ingest",
+          "symbol": "prtriage.Fence",
+          "loc": "internal/prtriage/fence.go:22",
+          "what": "fences untrusted comment text one backtick longer than any run inside it with controls shown as visible escapes"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/prtriage/split.go",
+        "internal/prtriage/split_test.go"
+      ],
+      "commit": "51f1d8e",
+      "completed_at": "2026-10-06T08:29:57.25802Z",
+      "landmarks": [
+        {
+          "feature": "PR review comment ingest",
+          "symbol": "prtriage.SplitReview",
+          "loc": "internal/prtriage/split.go:36",
+          "what": "splits a /dross-review comment into numbered findings outside code fences"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/prtriage/evidence.go",
+        "internal/prtriage/evidence_test.go",
+        "internal/pathfence/fields.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/pathfence/fields_test.go"
+      ],
+      "commit": "c39e3a1",
+      "completed_at": "2026-10-06T08:39:41.58587Z",
+      "landmarks": [
+        {
+          "feature": "PR review comment ingest",
+          "symbol": "prtriage.ParseAt",
+          "loc": "internal/prtriage/evidence.go:61",
+          "what": "evidence for a triage verdict is a contained, line-checked file:line or a command plus its output's sha256 — never the output"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/watch/prs.go",
+        "internal/watch/prs_test.go",
+        "assets/prompts/watch.md",
+        "internal/cmd/watch_prompt_test.go"
+      ],
+      "commit": "8c288c4",
+      "completed_at": "2026-10-06T08:42:23.047303Z",
+      "landmarks": [
+        {
+          "feature": "dross watch digest",
+          "symbol": "watch.ShipPRLine",
+          "loc": "internal/watch/prs.go:105",
+          "what": "a ship PR line carries its untriaged review-comment count and a /dross-respond pointer only when comments wait"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "spec",
+          "severity": "BLOCKING",
+          "criterion": "c-1",
+          "text": "The task description says there is 'One load-bearing //dross:taint-cleared marker at the decode', but internal/ship/prcomments.go has no //dross:taint-cleared marker at all. The ghGetJSON decode of ghAPI output is unmarked.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "BLOCKING",
+          "criterion": "c-1",
+          "text": "Without the marker at the decode, gh-tainted PRComment/PRHead/Account values are returned from ListPRComments, PRHeadOf and AuthenticatedUser. The live load uses Tests:false and nothing calls these exports or their *Func seams, so they have no in-program callers. The engine counts a tainted return from such a function as an escape (TestTaintedReturnFailsClosed), so TestNoSpawnOutputEscapes should fail with three findings. This breaks the test_contract line that says the new decode structs must not escape the guards. Fix: add one marker at the decode in ghGetJSON, using the same 'x := raw' pattern as rulesets.go:89.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "No test drives the forgejo/gitea/gitlab/bitbucket arms. Nothing checks that they return ErrPRThreadUnsupported (errors.Is) without spawning gh, so a regression there would go unnoticed until t-8/t-20/t-21.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "ghListAll treats a JSON null page as an error and an empty [] page as a normal last page. Together with the maxPages refusal, this keeps a failed list read from ever returning partial results.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "\"the other forges never spawn gh\" only asserts some error plus zero spawns; it never checks errors.Is(err, ErrPRThreadUnsupported), and its messages talk about a missing api_base/token that these placeholder arms never look at. It still catches a stray gh spawn, but would not notice the sentinel being swapped for another error before t-8/t-20/t-21.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "ErrPRThreadUnsupported says \"reading a PR's comments is not supported\" but PRHeadOf and AuthenticatedUser return it too, where no comments are being read.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-18": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "recordReplyApproval swallows a chosenLabels error, and its comment says the pair-approval recorder already warns about it. recordApproval only reaches chosenLabels when a plan task is in_progress, so during /dross-respond (normally outside an execute run) a hook-schema change silently disables reply approvals with no warning. It fails closed because --post refuses, but the stated reason for staying quiet does not hold.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "When several answers in one AskUserQuestion response are well-formed reply labels, each is saved in turn and the last in random map order wins; harmless with a single question, but which approval is recorded is not deterministic.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "recordReplyApproval warns on every AskUserQuestion with no readable answers in a dross repo; while an execute task is in progress pair-approval warns on the same response too, so that path now produces two near-identical warnings",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "ReplyApproval.check only refuses a blank digest, while the recorder enforces 64 lower-case hex; a malformed digest planted in reply.json would load, though tamper-guard keeps tool calls from writing it and a mismatched digest cannot match a real draft",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestReplyApprovalIsGateProtected pins existing tamper-guard coverage of .dross/gate/ (no new gate code was needed); it is a regression guard rather than a test of new behaviour",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestRedactOverlappingRulesReplaceOnce never reaches the code that merges overlapping matches in redactLine. ghTok() (\"ghp_\" + \"A1b2\"x9) has Shannon entropy of about 2.47, below keyContextMinEntropy 3.0, so the key-context rule's carve-out drops it and only the github-token match exists. The test would pass with the merge loop removed or broken. A high-entropy 36-char ghp_ token would actually exercise the overlap.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-7",
+          "text": "Redact makes one pass, so the documented guarantees (Redact(Redact(s)) == Redact(s), ScanString(out) empty) can fail in a rare path. Example: a key-context value that is carved out for low overall entropy but contains another rule's match, such as `password = ` + 16 distinct high-entropy chars + `.` + ghp_ token + `.` + a long run of `a`. Only the token is redacted. Rescanning then sees a 17-char high-entropy key-context value before `[redacted`, so the output scans dirty and a second Redact changes it. Contrived, but repeating until the text stops changing (or rescanning after replacement) would close it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "redactLine's doc comment says a merged match is 'named for the rule that reaches it first in report order'. The code names it for the match that starts earliest and uses report order only to break ties. So `password = abc.ghp_...` is named key-context, not github-token.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-7",
+          "text": "Hits from Redact's second and later fixed-point passes are numbered against the partly redacted text, not the input. After a multi-line PEM block collapses to one line, a carve-out remainder found in a later pass is reported on a smaller line than its original one. Those hits are also appended after the first-pass hits, so the hit list is not ordered by line.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "If redactPasses (8) runs out while the text is still changing, Redact returns quietly and its doc-promised guarantees (idempotence, clean rescan) no longer hold. The termination argument (each pass removes credential bytes) makes this effectively unreachable.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Redact's hits leave Location empty, so Hit.String() renders ' at :N' until a caller fills Location in. This is documented in the doc comment; the sibling integration task should set it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Tests go beyond the contract: TestRedactOverlappingRulesReplaceOnce pins union-and-naming of overlapping spans (with a ScanUnfiltered precondition), and TestRedactReachesAFixedPoint pins the carve-out remainder case that justifies the multi-pass loop.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-6",
+          "text": "Task description says 'normalises CRLF/CR -\u003e LF', but Fence escapes a lone CR as \\r (only CRLF becomes LF); this matches the test_contract ('a lone CR ... render visibly'), so only the description wording diverges",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "escapeRune leaves U+2028/U+2029 (line/paragraph separator) and the bidi marks U+200E/U+200F/U+061C unescaped; outside the spec's listed set, but relevant to OneLine's 'cannot span lines' intent",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "OneLine backslash-escapes backticks without escaping pre-existing backslashes, so input \"\\`\" yields \"\\\\`\" where the backtick is unescaped under Markdown; no two backticks ever touch, so the no-run contract still holds",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "fenceState ignores list-item scope: a snippet fence opened inside a finding (e.g. an indented ```go) stays open until a matching closer, so if that closer is missing, every later finding, heading and the footer are folded into one finding's Text. GitHub would end that fence at the next column-0 bullet. No text is lost, and the contract asks for this behaviour when the fence is closed, but an unclosed fence costs per-finding triage.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "startsWithHeader uses strings.HasPrefix, so a first line like `## /dross-reviewer` also counts as the header. This is harmless because the caller restricts splitting to the authenticated account's own comments.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSplitFindingIsolation ignores the ok results, so on its own it would pass if SplitReview returned nil every time. TestSplitReviewCounts covers that case on the same input.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 3,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "Require tests presence with e.At != \"\" / e.Cmd != \"\", so Evidence{At: \" \"} or Evidence{Cmd: \"  \", OutputSHA256: \u003c64 hex\u003e, OutputBytes: 1} pass as evidence, and an At carrying a stray OutputSHA256/OutputBytes (no cmd) is accepted despite the 'exactly one form' doc comment. Harmless while every write goes through ParseAt/FromOutput, but a hand-edited triage record that is later checked with Require would get through; consider TrimSpace plus a SplitAt check on At.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "ParseAt uses pathfence.Stat, which calls os.Stat and follows symlinks, while Contain is lexical only. An in-repo symlink to a file outside the repo is accepted as a 'regular file' and read to count its lines. Nothing is stored, and this comes from pathfence itself rather than from this diff.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "ErrNoEvidence (a library error) names CLI flags --at, --cmd and --output-file that no code in this diff defines; the sibling task adding `dross pr resolve` must use exactly these flag names, or the message will point users at flags that do not exist.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "SplitAt accepts a locator whose path cleans to empty or '.' (e.g. \" :3\", \".:3\", \"./:3\"), because pathfence.InTree returns (\"\", true) for whitespace and (\".\", true) for '.'. ParseAt then refuses it via Contain/Stat, but Require (the hand-edited-record check) is lexical only, so it accepts at = \" :3\" as valid evidence naming no file. Reject clean == \"\" || clean == \".\" in SplitAt.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Require checks only that OutputSHA256 is 64 characters long, not that it is hex; a hand-edited non-hex digest of the right length passes.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "ErrNoEvidence hard-codes CLI flag names (--at, --cmd, --output-file) before the `dross pr resolve` command that defines them exists; the sibling CLI task must use exactly these names or the message will be wrong.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "ParseAt checks containment by path text only (pathfence.Contain), then Stat/ReadFile follow symlinks. An in-repo symlink pointing outside the repo is accepted, and its target's line count can appear in the error. This matches the project's existing lexical design, and only the line count leaks.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "ErrNoEvidence names CLI flags (--at, --cmd, --output-file \u003cpath|-\u003e) that this diff does not define. The sibling task building `dross pr resolve` has to use exactly these names or the message will be wrong.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "The new information-only sentence in watch.md (the /dross-respond pointer stays on its PR's own line and is never the next: line) is not pinned by any test; TestWatchPromptPRsAreInformationOnly only still holds, as the test_contract asks. Rewording it later would go unnoticed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The r-01 `make install` step cannot be confirmed from the diff; it is a process step for the author after editing assets/prompts/watch.md.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
 }

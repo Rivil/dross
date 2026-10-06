@@ -77,3 +77,33 @@
   choice = "/dross-respond's own combined replies are excluded from the comment list, identified by a marker it writes AND the authenticated account as author."
   why = "Otherwise each run's reply resurfaces for triage; requiring the author too stops a third party hiding a comment by copying the marker."
   locked = true
+
+[[deferred]]
+  id = "5d07e2bfde8b5284"
+  text = "BLOCKING for SvelteKit: the Stryker adapter escapes [ ] + paths into globs then appends a range (src/routes/x/[[]id[]]/@(+page.server.ts):38-38); Stryker 9 refuses \"Cannot combine a glob expression with a mutation range\" and the whole leg exits 1 (22 of 1,092 ranges). Pass the literal path when a range is attached, or fall back to whole-file for that file with a recorded whole_file reason — never drop the leg."
+  why = "Reported 2026-10-06 by the BarkTime session (dross 0.1.0.0 c0e3c11, phase auth-hardening, remote helicon); log at /private/tmp/claude-501/-Users-rivil-Development-barktime/47fb500d-7134-4a47-a8dc-d3f109bd2072/scratchpad/verify-auth-hardening.log"
+
+[[deferred]]
+  id = "f25ac52c16facd00"
+  text = "Stryker mutate list includes test files (*.svelte.test.ts, tests/integration/*.integration.test.ts, tests/r02/*.spec.ts); exclude test and spec files from mutate."
+  why = "Reported 2026-10-06 by the BarkTime session (dross 0.1.0.0 c0e3c11, phase auth-hardening, remote helicon); log at /private/tmp/claude-501/-Users-rivil-Development-barktime/47fb500d-7134-4a47-a8dc-d3f109bd2072/scratchpad/verify-auth-hardening.log"
+
+[[deferred]]
+  id = "e8b96a051d3c0129"
+  text = "A crashed mutation adapter is summarised as mutation_status = \"skipped\" (\"no adapter ran\"), the same as --skip-mutation; give a failed tool its own status (e.g. error) so the verify prompt surfaces it instead of reading a deliberate skip."
+  why = "Reported 2026-10-06 by the BarkTime session (dross 0.1.0.0 c0e3c11, phase auth-hardening, remote helicon); log at /private/tmp/claude-501/-Users-rivil-Development-barktime/47fb500d-7134-4a47-a8dc-d3f109bd2072/scratchpad/verify-auth-hardening.log"
+
+[[deferred]]
+  id = "826defc4a0caa1aa"
+  text = "The remote host lock records a stale pid: /tmp/dross-host.lock on helicon named FeastAhead run t-20261006-064013 pid 3179219 (no such process) while the real holder was pid 3198398 (bash flock 9 under sshd-session); doctor and the wait heartbeats repeat the wrong pid. The lock works; the attribution does not. (This session also waited 10m per gate on that attribution.)"
+  why = "Reported 2026-10-06 by the BarkTime session (dross 0.1.0.0 c0e3c11, phase auth-hardening, remote helicon); log at /private/tmp/claude-501/-Users-rivil-Development-barktime/47fb500d-7134-4a47-a8dc-d3f109bd2072/scratchpad/verify-auth-hardening.log"
+
+[[deferred]]
+  id = "bd09456baf509cd7"
+  text = "Verify ergonomics: validate the Stryker mutate list locally before queueing on the host lock (BarkTime waited ~2.5h, then failed in <1s on a config error); `dross verify --detach` on a TS-only phase errors \"nothing to mutate … no Go packages\" instead of saying detach supports gremlins only."
+  why = "Reported 2026-10-06 by the BarkTime session (dross 0.1.0.0 c0e3c11, phase auth-hardening, remote helicon); log at /private/tmp/claude-501/-Users-rivil-Development-barktime/47fb500d-7134-4a47-a8dc-d3f109bd2072/scratchpad/verify-auth-hardening.log"
+
+[[deferred]]
+  id = "10b5dfad63d2c39d"
+  text = "With no Stryker config in the repo (no stryker.conf.{json,js,mjs,cjs}, stryker.config.*, or package.json \"stryker\" key), the TS leg silently runs Stryker's default command runner over `npm test` — no coverage analysis, and possibly the wrong suite (BarkTime: npm test = vitest unit project, criteria covered by tests/integration + e2e), so mutants read as surviving. Refuse or degrade loudly: mark the leg unmeasurable with a reason (\"no stryker config — default command runner over npm test would measure the wrong suite\") or require an explicit opt-in."
+  why = "Reported 2026-10-06 by the BarkTime session as item 7 of its Stryker adapter report (DRO-908..912)"

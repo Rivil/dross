@@ -130,6 +130,7 @@
     "someday:id:0d1268f8311bb7e4": "DRO-221",
     "someday:id:0eb3dd31220aa3bc": "DRO-101",
     "someday:id:0ff357a83faebe37": "DRO-633",
+    "someday:id:10b5dfad63d2c39d": "DRO-914",
     "someday:id:121f867fd1bffb0c": "DRO-287",
     "someday:id:12d7c0ffc1d5958c": "DRO-559",
     "someday:id:130a1cf4bc7049f2": "DRO-92",
@@ -218,6 +219,7 @@
     "someday:id:5b44c276a72e30e0": "DRO-587",
     "someday:id:5c2c048407b679b5": "DRO-159",
     "someday:id:5ce81220350107e7": "DRO-553",
+    "someday:id:5d07e2bfde8b5284": "DRO-908",
     "someday:id:5dab5fae441290c5": "DRO-569",
     "someday:id:5eb60ec16b7a84fb": "DRO-521",
     "someday:id:6144f7eecebde5c0": "DRO-403",
@@ -260,6 +262,7 @@
     "someday:id:7ea6759938b910a4": "DRO-84",
     "someday:id:7ea9ec91fc39cfc8": "DRO-510",
     "someday:id:824e1d18383d113f": "DRO-571",
+    "someday:id:826defc4a0caa1aa": "DRO-911",
     "someday:id:82da70858aaff13e": "DRO-303",
     "someday:id:82e3e60f30734120": "DRO-443",
     "someday:id:84db6f7af8f57cef": "DRO-49",
@@ -348,6 +351,7 @@
     "someday:id:b91e1b595a02be5f": "DRO-473",
     "someday:id:bbd9eedc6a156f81": "DRO-509",
     "someday:id:bbfec942cd67b785": "DRO-65",
+    "someday:id:bd09456baf509cd7": "DRO-912",
     "someday:id:bd1e72da1a5f0812": "DRO-353",
     "someday:id:bd34f0c4f23160c8": "DRO-113",
     "someday:id:bd82504b50176b09": "DRO-531",
@@ -389,6 +393,7 @@
     "someday:id:e1489451481fee30": "DRO-831",
     "someday:id:e5ef2935a451c594": "DRO-119",
     "someday:id:e7207129f4d8a7fc": "DRO-48",
+    "someday:id:e8b96a051d3c0129": "DRO-910",
     "someday:id:e948eb6e07e8138b": "DRO-16",
     "someday:id:e9ec89d79a2df7c8": "DRO-566",
     "someday:id:ea1e0c0348521c5b": "DRO-107",
@@ -409,6 +414,7 @@
     "someday:id:f0d699cce6b70445": "DRO-71",
     "someday:id:f0dc1a8d37ee93eb": "DRO-616",
     "someday:id:f1b1b4359fc352ac": "DRO-360",
+    "someday:id:f25ac52c16facd00": "DRO-909",
     "someday:id:f2704a9445152ac0": "DRO-528",
     "someday:id:f551232700a801da": "DRO-674",
     "someday:id:f655ef5fce125f23": "DRO-833",
@@ -1922,6 +1928,46 @@
       "issue": "DRO-255",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "review-comment-ingest/t-1": {
+      "issue": "DRO-904",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-comment-ingest/t-18": {
+      "issue": "DRO-916",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-comment-ingest/t-2": {
+      "issue": "DRO-905",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-comment-ingest/t-3": {
+      "issue": "DRO-906",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-comment-ingest/t-4": {
+      "issue": "DRO-907",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-comment-ingest/t-5": {
+      "issue": "DRO-913",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-comment-ingest/t-6": {
+      "issue": "DRO-915",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-comment-ingest/t-7": {
+      "issue": "DRO-917",
+      "plan_status": "in_progress",
+      "board_state": "task-in-progress"
     },
     "run-block-pin-currency/t-1": {
       "issue": "DRO-747",

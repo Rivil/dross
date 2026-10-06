@@ -6,8 +6,8 @@ task_seq = 21
   id = "t-1"
   wave = 1
   title = "Fetch GitHub PR comments, head and caller"
-  files = ["internal/ship/prcomments.go", "internal/ship/prcomments_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/pathfence/fields.go"]
-  description = "New. PRComment{ID, Kind conversation|inline|review, Author{ID, Login, Bot bot|human|unknown}, Path, Line, URL, Body}, PRHead{Ref, CrossRepo, Open, URL}, Account{ID, Login}. ListPRComments / PRHeadOf / AuthenticatedUser dispatch through exported *Func seams (three seams, not one FetchPRThread); the forgejo/gitea, gitlab and bitbucket arms return unsupported until t-8, t-20 and t-21 wire them. The GitHub arm uses githubRepo + ghAPI (GET, endpoint behind `--`) over issues/{n}/comments, pulls/{n}/comments and pulls/{n}/reviews at per_page=100 until a short page, refusing a run of maxPages full pages; it also reads pulls/{n} and user. One load-bearing //dross:taint-cleared marker at the decode."
+  files = ["internal/ship/prcomments.go", "internal/ship/prcomments_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/pathfence/fields.go", "internal/pathfence/fields_test.go"]
+  description = "New. PRComment{ID, Kind conversation|inline|review, Author{ID, Login, Bot bot|human|unknown}, Path, Line, URL, Body}, PRHead{Ref, CrossRepo, Open, URL}, Account{ID, Login}. ListPRComments / PRHeadOf / AuthenticatedUser dispatch through exported *Func seams (three seams, not one FetchPRThread); the forgejo/gitea, gitlab and bitbucket arms return unsupported until t-8, t-20 and t-21 wire them. The GitHub arm uses githubRepo + ghAPI (GET, endpoint behind `--`) over issues/{n}/comments, pulls/{n}/comments and pulls/{n}/reviews at per_page=100 until a short page, refusing a run of maxPages full pages; it also reads pulls/{n} and user. No //dross:taint-cleared marker at the decode (amended at execute, 2026-10-06): the decoded records leave ship only as fields of freshly built PRComment/PRHead/Account values, the exec-taint engine carries no whole-value taint through them, and TestGhMarkersAreLoadBearing refuses a marker that clears nothing — the marker goes where a later reader first escapes a field (TestNoSpawnOutputEscapes names it)."
   covers = ["c-1"]
   test_contract = [
     '''if kinds are mis-mapped, TestGitHubPRCommentKinds fails: a stubbed gh answering the three list endpoints yields exactly one conversation, one inline (internal/x.go:42; original_line used when line is null) and one review, with ids, logins, html_urls and bodies mapped''',
@@ -19,7 +19,7 @@ task_seq = 21
     '''if head or caller decoding breaks, TestGitHubPRHeadAndCaller fails: head.repo.full_name != base (or head.repo null) -> CrossRepo; state closed -> Open false; `user` {login rivil, id 7} -> Account{ID "7", Login "rivil"}''',
     '''if the new spawn or decode structs escape the guards, TestNoSpawnOutputEscapes, TestGhMarkersAreLoadBearing, TestEveryOutboundSeamIsRegistered or TestEveryPathShapedFieldIsDeclared fails''',
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-2"
@@ -36,14 +36,14 @@ task_seq = 21
     '''if clean text is mangled, TestRedactCleanTextUntouched fails: `$GITHUB_TOKEN`, `<your-token>`, AKIAIOSFODNN7EXAMPLE, a low-entropy `password = aaaa...` and CRLF text come back byte-identical with zero hits''',
     '''if redaction eats the surrounding prose, TestRedactKeepsKeyName fails: `api_key = "<high-entropy>"` keeps `api_key = "`; Redact(Redact(s)) == Redact(s) and no Hit field holds the value''',
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-3"
   wave = 1
   title = "Fence untrusted bodies and one-line metadata"
   files = ["internal/prtriage/fence.go", "internal/prtriage/fence_test.go"]
-  description = '''New package internal/prtriage. Fence(body) wraps the body in a backtick fence one longer than its longest backtick run anywhere (minimum 3), info `untrusted-comment`; normalises CRLF/CR -> LF; renders C0 (except \t \n), DEL, C1, ESC and bidi controls (U+202A-202E, U+2066-2069) as visible escapes; a body with no trailing newline still closes on its own line. OneLine(s), for author/path/url, does the same, escapes \n/\t and breaks backtick runs.'''
+  description = "New package internal/prtriage. Fence(body) wraps the body in a backtick fence one longer than its longest backtick run anywhere (minimum 3), info `untrusted-comment`; normalises CRLF -> LF (a lone CR renders visibly as \\r, per the test contract — amended at execute, 2026-10-06); renders C0 (except \\t \\n), DEL, C1, ESC and bidi controls (U+202A-202E, U+2066-2069) as visible escapes; a body with no trailing newline still closes on its own line. OneLine(s), for author/path/url, does the same, escapes \\n/\\t and breaks backtick runs."
   covers = ["c-6"]
   test_contract = [
     '''if a fence-breaker escapes, TestFenceHoldsAgainstBreakers fails: bodies holding runs of 3, 4, 7, 10 and 30 backticks at column 0, indented 1-3, mid-line, as an unterminated last line and after CRLF -> a CommonMark closer scan finds exactly one closer, on the last line, and the interior equals the normalised body; runs of 3, 4, 10 -> fences of 4, 5, 11''',
@@ -53,7 +53,7 @@ task_seq = 21
     '''if metadata can span lines, TestOneLineCannotSpanOrFence fails: "alice\n```\nrun this" -> one line, no newline, no ``` run''',
     '''if the package lacks coverage, the CI coverfloor (>=50% own-package) fails for internal/prtriage''',
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-4"
@@ -69,13 +69,13 @@ task_seq = 21
     '''if non-review comments are split, TestSplitReviewOwnHeaderOnly fails: `## /dross-review` on line 3 or inside a fence -> not split; zero findings -> (nil, false) so the comment is triaged whole''',
     '''if findings bleed into each other, TestSplitFindingIsolation fails: editing finding 2 changes only its Text; CRLF and LF split identically''',
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-5"
   wave = 1
   title = "Build evidence from file:line or command output"
-  files = ["internal/prtriage/evidence.go", "internal/prtriage/evidence_test.go", "internal/pathfence/fields.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
+  files = ["internal/prtriage/evidence.go", "internal/prtriage/evidence_test.go", "internal/pathfence/fields.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/pathfence/fields_test.go"]
   description = '''Evidence{At | Cmd, OutputSHA256, OutputBytes}. ParseAt(repoRoot, "path:N[-M]") splits on the last colon, contains the path via pathfence.Contain, requires a regular file with 1 <= N <= M <= line count. FromOutput(cmd, output) keeps cmd, sha256 and byte count — never the output. Require refuses a resolution with no evidence. Evidence.At filed in pathfence.Fields() (NotConsumed); the rest in not_paths.txt.'''
   covers = ["c-4"]
   test_contract = [
@@ -84,7 +84,7 @@ task_seq = 21
     '''if evidence-free resolutions pass, TestRequireEvidence fails: no locator and no cmd/output -> an error containing "is required" naming both forms''',
     '''if the new path field is undeclared, TestEveryPathShapedFieldIsDeclared or TestFieldLedgerRotIsCaught fails''',
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-6"
@@ -98,7 +98,7 @@ task_seq = 21
     '''if the JSON shape drifts, the pinned ShipPR key-set test in internal/watch/prs_test.go fails: it gains `untriaged`, omitted at 0 and carried at 3''',
     '''if watch.md and the digest diverge, TestWatchPromptNamesEveryDigestField or TestWatchPromptShipPRLine fails (§2 carries the suffix and omits it when absent); TestWatchPromptPRsAreInformationOnly still holds''',
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-18"
@@ -108,7 +108,7 @@ task_seq = 21
   description = "ReplyApproveLabel(pr, digest) = \"post reply #<pr> <digest>\". A Recorder on AskUserQuestion (the pair-approval pattern in internal/gate/pair.go) reads only the tool_response chosen labels; an exact match records gatestate.ReplyApproval{PR, Digest, At} in gate/reply.json, which the override gate already write-protects from the agent. gatestate gains Load/Save/ClearReplyApproval; gate/reply.json joins the store.go row in writers.go. Recording needs no prtriage: the label carries the digest."
   covers = ["c-5"]
   test_contract = ["if a non-exact answer records, TestReplyApprovalRecordsExactLabelOnly fails: a tool_response choosing \"post reply #12 <64-hex>\" records {PR 12, Digest}; a label with trailing text, a different case, a freeform answer, a reject or steer label, and the label present only in tool_input record nothing", "if a malformed label records, TestReplyApprovalRejectsMalformed fails: \"post reply #0 <d>\", \"post reply #x <d>\" and \"post reply #12 xyz\" (non-hex or short digest) record nothing", "if the record can be forged, TestReplyApprovalIsGateProtected fails: a Write or Edit to .dross/gate/reply.json and a Bash redirect into it are refused by the override gate", "if the store loses or keeps a stale approval, TestReplyApprovalStore fails: Save then Load round-trips; a second Save replaces the first; Clear removes it; a missing file loads nil", "if the new record is undeclared, TestMachineLocalWritersAreReallyIgnored, TestEveryDrossWriterIsDeclared or TestEveryFileConstIsDeclared fails (gate/reply.json in the store.go row)", "if the new gatestate field is unfiled, TestEveryPathShapedFieldIsDeclared fails: gatestate.ReplyApproval.Digest (and any other tagged string field it adds) has a row in not_paths.txt beside the gatestate.Approval rows"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-7"
@@ -119,13 +119,13 @@ task_seq = 21
   covers = ["c-2", "c-3", "c-4", "c-7"]
   depends_on = ["t-2", "t-5"]
   test_contract = ["if a body can be persisted, TestResolutionHasNoBodyField fails: reflection over Resolution and Evidence finds no body/text/content/comment tag; Load of a file holding `body = \"...\"` errors naming the key", "if a malformed resolution validates, TestRecordValidate fails for each of: verdict \"maybe\"; unknown kind; reject with blank reason; zero evidence; evidence with both or neither of at and cmd; accept with no task or a task absent from Refs; route with no target or a deferred id absent from Refs; duplicate id; id not matching ^[cir][0-9]+(#[1-9][0-9]*)?$ (\"c12#0\", \"z12\"); an http:// url; an `at` escaping the repo — each problem names entry and field, and Save refuses leaving the file byte-identical", "if a string field skips redaction, TestSaveRedactsEveryString fails: a ghp_ token planted in every string field (enumerated by reflection) saves as `[redacted github-token]` and ScanString over the file is empty", "if concurrent saves clobber, TestRecordSaveRefusesStaleRead fails: two Saves from the same read -> the second is refused and the file holds the first", "if writes are lossy, TestRecordRoundTripLossless fails: Load(Save(r)) == r; missing file loads empty; a hand comment above an untouched entry survives an Upsert of another", "if a non-phase head binds, TestPhaseFromHead fails: \"milestone/v1.7\", \"feature/x\", \"phase/\", \"phase/a/b\", \"phase/../x\", cross-repo \"phase/x\" and \"phase/x\" with no plan.toml are refused; \"phase/x\" with a plan -> \"x\"", "if the artifact is undeclared, TestEveryDrossWriterIsDeclared, TestEveryFileConstIsDeclared, TestEveryScannedArtifactIsReached (phases/<id>/pr-triage.toml) or TestCmdDeclaresNoTomlStore fails", "if an empty url validates, TestRecordValidate fails: url \"\" is refused naming the entry and the url field, so a reply can never carry a dead link", "if the head mapping is loose, TestParsePhaseHead fails: \"milestone/v1.7\", \"feature/x\", \"phase/\", \"phase/a/b\", \"phase/../x\" and cross-repo \"phase/x\" are refused and \"phase/x\" -> \"x\", with no file read"]
-  status = "pending"
+  status = "in_progress"
 
 [[task]]
   id = "t-8"
   wave = 2
   title = "Fetch comments, head and caller on Forgejo/Gitea"
-  files = ["internal/ship/prcomments_forgejo.go", "internal/ship/prcomments_forgejo_test.go", "internal/ship/prcomments.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/pathfence/fields.go"]
+  files = ["internal/ship/prcomments_forgejo.go", "internal/ship/prcomments_forgejo_test.go", "internal/ship/prcomments.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/pathfence/fields.go", "internal/pathfence/fields_test.go"]
   description = "forgejo/gitea: issue comments paged by page=&limit=50 (url = html_url), reviews that have a body as kind review, and the inline comments of each review as inline (path + line). Every author reads unknown (the forge exposes no bot flag). Head/CrossRepo/Open from the pulls endpoint, caller from /user. Requests only via jsonGet after resolveToken (host allowlist). Wires the forgejo and gitea arms into the t-1 dispatch."
   covers = ["c-1"]
   depends_on = ["t-1"]
@@ -136,7 +136,7 @@ task_seq = 21
   id = "t-21"
   wave = 2
   title = "Fetch comments, head and caller on Bitbucket"
-  files = ["internal/ship/prcomments_bitbucket.go", "internal/ship/prcomments_bitbucket_test.go", "internal/ship/prcomments.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/pathfence/fields.go"]
+  files = ["internal/ship/prcomments_bitbucket.go", "internal/ship/prcomments_bitbucket_test.go", "internal/ship/prcomments.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/pathfence/fields.go", "internal/pathfence/fields_test.go"]
   description = "PR comments at pagelen=100 with page URLs built from page= (`next` is only a \"more\" signal and is never requested, because bbRequest sends Basic auth to any URL); deleted comments dropped; inline.path + to (else from) -> inline, others conversation, no review kind; url = links.html.href. author.type app_user -> bot, user -> human. Head/CrossRepo/Open from the pullrequests endpoint, caller from /user matched by uuid, never display_name. Requests only via bbRequest after bbCredentials (host allowlist). Wires the bitbucket arm into the t-1 dispatch."
   covers = ["c-1"]
   test_contract = ["if a kind is mis-mapped, TestBitbucketPRCommentKinds fails: an httptest fixture yields conversation and inline items (inline.path + to, from when to is null) with ids, uuids, links.html.href urls and bodies, and no review item", "if deleted comments leak in, TestBitbucketDeletedDropped fails: a comment with deleted: true is dropped", "if Bitbucket follows a server-supplied URL, TestBitbucketNeverFollowsNext fails: a `next` naming a second httptest host -> that server sees 0 requests and all pages still arrive via page=", "if paging returns partial data, TestBitbucketPRCommentPaging fails: 100+1 comments -> 101 via page=2; a 500 on page 2 -> (nil, err)", "if the bot flag is wrong, TestBitbucketAuthorFlag fails: author.type app_user -> bot, user -> human", "if the host allowlist is bypassed or a token leaks, TestBitbucketHostRefused (an off-allowlist api_base errors before credentials are read, 0 hits) or TestBitbucketScrubsToken (a 403 echoing Authorization -> `[redacted $...]`) fails", "if the caller is matched by name, TestBitbucketHeadAndCaller fails: two authors with display_name \"rivil\" and different uuids -> only the uuid matching /user is the caller; source.repository.full_name != destination.repository.full_name -> CrossRepo; state MERGED or DECLINED -> Open false", "if the new reads escape the guards, TestEveryOutboundSeamIsRegistered, TestReadOnlyTransportsSendNoBody or TestEveryPathShapedFieldIsDeclared fails (inline.path in pathfence.Fields(); other tagged strings in not_paths.txt)"]
@@ -147,7 +147,7 @@ task_seq = 21
   id = "t-20"
   wave = 2
   title = "Fetch comments, head and caller on GitLab"
-  files = ["internal/ship/prcomments_gitlab.go", "internal/ship/prcomments_gitlab_test.go", "internal/ship/prcomments.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/pathfence/fields.go"]
+  files = ["internal/ship/prcomments_gitlab.go", "internal/ship/prcomments_gitlab_test.go", "internal/ship/prcomments.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/pathfence/fields.go", "internal/pathfence/fields_test.go"]
   description = "MR notes at per_page=100 sort=asc via page=; system notes dropped; a DiffNote new_path/new_line (old_* fallback) -> inline, other notes -> conversation, no review kind. Each item url = the MR web_url + \"#note_<id>\" (notes carry no web url of their own). The bot flag comes from one GET /users/:id per distinct author (bot true -> bot, false -> human, lookup failure -> unknown). Head/CrossRepo/Open from the MR endpoint, caller from /user. Requests only via gitlabReq after resolveToken (host allowlist). Wires the gitlab arm into the t-1 dispatch."
   covers = ["c-1"]
   test_contract = ["if a kind is mis-mapped, TestGitLabPRCommentKinds fails: an httptest fixture yields conversation and inline items (DiffNote new_path/new_line, old_* when new_* is null) with ids, logins, bodies and path:line, and no review item", "if links are dead, TestGitLabPRCommentURL fails: every item url equals the MR web_url + \"#note_<id>\"; an MR response with no web_url -> error, never an empty url", "if system noise leaks in, TestGitLabSystemNotesDropped fails: an \"added 1 commit\" system note is dropped", "if paging breaks or returns partial data, TestGitLabPRCommentPaging fails: 100+3 notes -> 103 via page=; a 500 on page 2 -> (nil, err), never page 1 items", "if the bot lookup is wrong or chatty, TestGitLabAuthorBotLookup fails: authors 5 and 6 across 4 notes -> exactly 2 /users/:id calls; bot true -> bot, bot false -> human; a 404 on /users/6 -> unknown with the list still returned", "if the host allowlist is bypassed, TestGitLabHostRefused fails: an off-allowlist api_base errors before the auth env is read (server sees 0 hits) for notes, MR, users and caller", "if a token leaks into errors, TestGitLabScrubsToken fails: a 403 echoing the token header -> an error carrying `[redacted $...]`, never the token", "if head or caller identity is wrong, TestGitLabHeadAndCaller fails: source_project_id != target_project_id -> CrossRepo; state merged or closed -> Open false; /user -> Account{ID, Login}", "if the new reads escape the guards, TestEveryOutboundSeamIsRegistered, TestReadOnlyTransportsSendNoBody or TestEveryPathShapedFieldIsDeclared fails (new_path/old_path in pathfence.Fields(); other tagged strings in not_paths.txt)"]
@@ -158,8 +158,8 @@ task_seq = 21
   id = "t-9"
   wave = 3
   title = "Classify and render comments against the record"
-  files = ["internal/prtriage/items.go", "internal/prtriage/items_test.go"]
-  description = "Items(comments, self): ids `c|i|r<forge-id>`; a comment expands to `<id>#<n>` via SplitReview only when its author ID == self ID (any other author, even with the `## /dross-review` header, stays one whole item); empty bodies dropped; a comment is dropped only when its first non-blank line == ReplyMarker AND author ID == self ID. Digest = sha256 of CRLF-normalised item text. Pending(items, rec) is the only definition of untriaged (untriaged | edited (was <verdict>)). ResolutionFrom(item) carries no body. Render prints per item one OneLine, Redacted metadata line (id · kind · @login · bot|human|unknown · path:line · status · seen=<digest>) then Fence(Redact(body))."
+  files = ["internal/prtriage/items.go", "internal/prtriage/items_test.go", "internal/ship/prcomments.go"]
+  description = "Items(comments, self): ids `c|i|r<forge-id>`; a comment expands to `<id>#<n>` via SplitReview only when its author ID == self ID (any other author, even with the `## /dross-review` header, stays one whole item); empty bodies dropped; a comment is dropped only when its first non-blank line == ReplyMarker AND author ID == self ID. Digest = sha256 of CRLF-normalised item text. Pending(items, rec) is the only definition of untriaged (untriaged | edited (was <verdict>)). ResolutionFrom(item) carries no body. Render prints per item one OneLine, Redacted metadata line (id · kind · @login · bot|human|unknown · path:line · status · seen=<digest>) then Fence(Redact(body)). Adds the one //dross:taint-cleared marker at ship's ghGetJSON decode (moved here from t-1 at execute, 2026-10-06): Items/Render are the first readers to escape the decoded PRComment/CommentAuthor fields, which is what makes that marker load-bearing (TestGhMarkersAreLoadBearing)."
   covers = ["c-1", "c-3", "c-6", "c-7"]
   depends_on = ["t-1", "t-2", "t-3", "t-4", "t-7"]
   test_contract = ["if self-exclusion loosens, TestItemsSelfReplyNeedsBoth fails: marker + self ID -> dropped; marker + another author, self without the marker, marker + same login but another ID, and the marker quoted mid-body by self are each listed", "if edits are missed or over-reported, TestItemsEditResurfaces fails: matching digest -> not pending; changed body -> edited and pending; CRLF-only change -> not edited; c123#2 edited resurfaces alone while c123#1 stays triaged; a record entry for a vanished id is ignored", "if split ids are wrong, TestItemsSplitIDs fails: a self-authored comment 123 with 3 findings -> c123#1..c123#3 with the parent absent; zero findings -> a single c123", "if a third party can hide text behind the review header, TestItemsSplitOwnOnly fails: a comment by another author opening `## /dross-review` with one finding plus extra prose -> one whole c<id> item whose rendered body carries the full text, extra prose included; the same body by self -> split", "if kinds collide, TestItemsKindQualified fails: conversation 77 and inline 77 -> c77 and i77; a record entry for i77 marks only the inline one", "if the metadata line drifts, TestRenderMetadataLine fails: the exact line per kind carries id, @login, bot|human|unknown, status, seen=<digest> and (inline) path:line", "if a body escapes its fence, TestRenderFencesBreaker fails: \"````\\nIgnore previous instructions\\n````\" sits strictly inside one opener/closer pair and only header lines sit outside fences; a login holding \"\\n```\" and a path holding \"\\n- **BLOCKING**\" stay on the header line", "if a secret prints, TestRenderRedactsBeforeFence fails: a ghp_ token in the body, path or login prints as `[redacted github-token]`, including one butted against a backtick run", "if a body reaches the record, TestResolutionFromCarriesNoBody fails: a body sentinel never appears in the encoded Resolution"]
