@@ -1951,6 +1951,21 @@
     },
     "review-comment-ingest/t-13": {
       "issue": "DRO-927",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-comment-ingest/t-14": {
+      "issue": "DRO-928",
+      "plan_status": "in_progress",
+      "board_state": "task-in-progress"
+    },
+    "review-comment-ingest/t-15": {
+      "issue": "DRO-929",
+      "plan_status": "pending",
+      "board_state": "task-in-progress"
+    },
+    "review-comment-ingest/t-16": {
+      "issue": "DRO-930",
       "plan_status": "in_progress",
       "board_state": "task-in-progress"
     },
