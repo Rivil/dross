@@ -22,6 +22,22 @@
         }
       ]
     },
+    "t-17": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_triage_test.go"
+      ],
+      "commit": "d60ff57",
+      "completed_at": "2026-10-06T11:17:15.31153Z",
+      "landmarks": [
+        {
+          "feature": "phase shipping",
+          "symbol": "cmd.gateAcceptedTriage",
+          "loc": "internal/cmd/ship.go:614",
+          "what": "ship refuses while an accepted review comment's task is still open"
+        }
+      ]
+    },
     "t-18": {
       "files": [
         "internal/gate/reply_confirm.go",
@@ -38,6 +54,22 @@
           "symbol": "gate.ReplyApproveLabel",
           "loc": "internal/gate/reply_confirm.go:32",
           "what": "a human picking 'post reply #\u003cpr\u003e \u003cdigest\u003e' in AskUserQuestion is the only way a PR reply approval is recorded"
+        }
+      ]
+    },
+    "t-19": {
+      "files": [
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_triage_test.go"
+      ],
+      "commit": "0994809",
+      "completed_at": "2026-10-06T11:44:18.649222Z",
+      "landmarks": [
+        {
+          "feature": "artefact validation",
+          "symbol": "cmd.triageProblems",
+          "loc": "internal/cmd/validate.go:207",
+          "what": "dross validate checks each phase's pr-triage.toml against its plan tasks and spec deferred items"
         }
       ]
     },
@@ -203,6 +235,23 @@
           "what": "reads Forgejo/Gitea PR comments, reviews and inline comments with every author unknown"
         }
       ]
+    },
+    "t-9": {
+      "files": [
+        "internal/prtriage/items.go",
+        "internal/prtriage/items_test.go",
+        "internal/ship/prcomments.go"
+      ],
+      "commit": "0738bd1",
+      "completed_at": "2026-10-06T10:50:51.281159Z",
+      "landmarks": [
+        {
+          "feature": "PR review comment ingest",
+          "symbol": "prtriage.Items",
+          "loc": "internal/prtriage/items.go:44",
+          "what": "turns a PR thread into kind-qualified triage items, splitting only self-authored /dross-review comments and dropping only self-authored replies"
+        }
+      ]
     }
   },
   "reviews": {
@@ -258,6 +307,56 @@
         }
       ]
     },
+    "t-17": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "gateAcceptedTriage was inserted between shipComment's doc comment and func shipComment, so gateAcceptedTriage's godoc now opens with 'shipComment posts a markdown comment...' and shipComment has lost its doc comment; move the three shipComment lines down to sit directly above func shipComment",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "the 'no record' subtest asserts only success and one POST, not byte-identical behaviour; acceptable because the gate returns nil with no side effects when Load reports an absent file",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "gateAcceptedTriage treats any failed task as settled whether or not it has a Reason; the record's 'failed (with its recorded reason)' may intend a reason to be required, and `dross task status failed` allows an empty one. Only the with-reason case is tested.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A task with an empty status (which Plan.Summary counts as pending) is correctly refused, but the refusal line renders as `c12 -\u003e t-17 ()`.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The 'no record' subtest checks only that ship succeeds and that POST /pulls happens once, which is weaker than the contract's 'byte-identical to today'; the gate returns nil early with no side effects, so this is safe.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The gate sits ahead of --print-body, so an open accept also refuses `dross ship --print-body`; the freshness gate is placed the same way.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
     "t-18": {
       "outcome": "pass",
       "rounds": 2,
@@ -296,6 +395,56 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "TestReplyApprovalIsGateProtected pins existing tamper-guard coverage of .dross/gate/ (no new gate code was needed); it is a regression guard rather than a test of new behaviour",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-19": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "The test_contract says each ✗ names pr-triage.toml and the id, but the body-key case comes from prtriage.Load's undecoded-key error ('unknown key resolution.body'), which does not name resolution c1. The 'a body key' subtest only checks for 'body' and the path. A body key also stops the decode, so any other problem in that record goes unreported until it is removed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "triageProblems runs even when spec.toml or plan.toml failed to decode (spec or plan is nil), so its id list is empty. Every accept and route entry is then also reported as naming an unknown task or deferred item, on top of the decode error. absorbedProblems deliberately avoids this kind of follow-on noise.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "prtriage.Validate errors already start with 'pr-triage.toml: ', and triageProblems adds the full path in front, so each line reads '\u003cpath\u003e/pr-triage.toml: pr-triage.toml: resolution c1 reason: ...'. Redundant but harmless.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "A `body =` key fails in prtriage.Load, so its line names `resolution.body` rather than the resolution id, and in a record that also has other faults it is the only line printed. The contract's 'one ✗ per problem naming pr-triage.toml and the id' holds only for faults found by Validate; the test covers the body key in its own subtest.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "triageProblems trims only the `pr-triage.toml: ` prefix, but Load's read and decode errors start with `read pr-triage.toml: ` / `decode pr-triage.toml: `, so those lines name the file twice. The 'each line names the file once' subtest covers only Validate errors.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "When spec.toml or plan.toml fails to decode, the whole triage record is skipped, including its own unknown-key and decode errors, which only show up once the spec or plan is fixed. The code comment documents this as deliberate.",
           "resolution": "non-blocking, left"
         }
       ]
@@ -667,6 +816,71 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "forgejoAuthenticatedUser goes through forgejoTarget, so a /user read needs opts.URL to parse as owner/repo even though the endpoint doesn't use it.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "TestRenderFencesBreaker's outsideFences closes a fence only on an exact-length match (l == fence), unlike CommonMark's at-least-as-long closer rule that fence_test.go's closesFence models. A Render that hard-coded a ``` fence would let the '````' breaker escape in any real renderer, yet this test would still pass. The code is correct (it delegates to Fence, which TestFenceHoldsAgainstBreakers guards), but this test cannot catch the breaker regression it is named for. Reuse closesFence.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "TestRenderMetadataLine asserts the exact line for inline and conversation only. The contract says 'per kind', but no review-kind line is checked, and the 'human' author class is never asserted.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Pending decides by string-matching Status's output ('untriaged' or an 'edited ' prefix), and Status echoes an unknown record verdict verbatim. A hand-edited record (Load does not validate) whose verdict reads 'untriaged' or 'edited …' would show as pending. This fails in the harmless direction.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The doc comment above outsideFences in items_test.go names it 'fenceOpeners' and describes counting fences, which is not what the helper does.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The taint-cleared marker at ghGetJSON clears every decoded GitHub record for all downstream readers. A future reader of PRComment.Body outside prtriage that prints it unfenced will not be caught by the taint gate. The marker's justification relies on prtriage being the only reader.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "Status re-derives the pending predicate (no record entry, or digest differs) independently of Pending, though the task names Pending as the one definition of untriaged; the two could drift so a rendered status disagrees with the pending list. Pending could be expressed via a shared helper that Status also uses.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Items silently drops a comment whose Kind is not conversation/inline/review (kindLetter miss); unreachable with today's providers, but a new kind would vanish from triage without an error.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The ghGetJSON marker clears every decoded GitHub REST record (thread records, pulls, user) program-wide, so a future reader of PRComment fields outside prtriage will not be flagged by the taint gate; redacting and fencing there rests on convention. This matches the task's stated placement.",
           "resolution": "non-blocking, left"
         }
       ]
