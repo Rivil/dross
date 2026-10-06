@@ -343,9 +343,19 @@ rules.Rule.ID id
 rules.Rule.Severity severity
 rules.Rule.Text text
 
-# ---- prtriage — triage evidence: the command a resolution cites and its output's sha256
+# ---- prtriage — the triage record: comment ids, kinds, links, author logins, verdicts, reasons, task/deferred ids, route targets, digests, evidence commands
 prtriage.Evidence.Cmd cmd
 prtriage.Evidence.OutputSHA256 output_sha256
+prtriage.Resolution.Author author
+prtriage.Resolution.Deferred deferred
+prtriage.Resolution.Digest digest
+prtriage.Resolution.ID id
+prtriage.Resolution.Kind kind
+prtriage.Resolution.Reason reason
+prtriage.Resolution.Target target
+prtriage.Resolution.Task task
+prtriage.Resolution.URL url
+prtriage.Resolution.Verdict verdict
 
 # ---- security — security-finding identity and prose
 security.Finding.Class class
