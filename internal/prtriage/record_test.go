@@ -307,3 +307,25 @@ func TestPhaseFromHead(t *testing.T) {
 		t.Errorf("PhaseFromHead(phase/x) = %q, %v", id, err)
 	}
 }
+
+func TestLocalPhase(t *testing.T) {
+	root := t.TempDir()
+	if _, ok := LocalPhase(root, "x"); ok {
+		t.Error("a repo with no .dross/phases resolved x")
+	}
+	phases := filepath.Join(root, ".dross", "phases")
+	if err := os.MkdirAll(filepath.Join(phases, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(phases, "notadir"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := LocalPhase(root, "x"); !ok || got != "x" {
+		t.Errorf("LocalPhase(x) = %q, %v", got, ok)
+	}
+	for _, id := range []string{"y", "notadir", "", ".", ".."} {
+		if got, ok := LocalPhase(root, id); ok {
+			t.Errorf("LocalPhase(%q) = %q, want no match", id, got)
+		}
+	}
+}

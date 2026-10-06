@@ -267,13 +267,19 @@ func ParsePhaseHead(head string, crossRepo bool) (string, error) {
 }
 
 // PhaseFromHead is ParsePhaseHead for a verb that will write to the phase: the
-// id must also have a plan.toml under root's .dross/phases/.
+// id must name a phase directory under root's .dross/phases/ that holds a
+// plan.toml. What it returns is that directory's own name, read from the
+// listing: a head ref is forge data, so no path is ever built from it.
 func PhaseFromHead(root, head string, crossRepo bool) (string, error) {
 	id, err := ParsePhaseHead(head, crossRepo)
 	if err != nil {
 		return "", err
 	}
-	dir, err := phase.ContainID(filepath.Join(root, ".dross"), id)
+	local, ok := LocalPhase(root, id)
+	if !ok {
+		return "", fmt.Errorf("PR head phase/%s names no planned phase here: .dross/phases/%[1]s/plan.toml is missing", OneLine(id))
+	}
+	dir, err := phase.ContainID(filepath.Join(root, ".dross"), local)
 	if err != nil {
 		return "", fmt.Errorf("PR head %s does not name one phase/<id>", OneLine(head))
 	}
@@ -282,7 +288,23 @@ func PhaseFromHead(root, head string, crossRepo bool) (string, error) {
 		return "", err
 	}
 	if info, err := pathfence.Stat(plan); err != nil || !info.Mode().IsRegular() {
-		return "", fmt.Errorf("PR head phase/%s names no planned phase here: .dross/phases/%s/plan.toml is missing", id, id)
+		return "", fmt.Errorf("PR head phase/%s names no planned phase here: .dross/phases/%[1]s/plan.toml is missing", OneLine(id))
 	}
-	return id, nil
+	return local, nil
+}
+
+// LocalPhase is the phase directory under root's .dross/phases/ whose name is
+// id, as the listing spells it — the name to build paths from when id came
+// from somewhere else. It reads nothing but the listing.
+func LocalPhase(root, id string) (string, bool) {
+	entries, err := os.ReadDir(filepath.Join(root, ".dross", "phases"))
+	if err != nil {
+		return "", false
+	}
+	for _, e := range entries {
+		if e.IsDir() && e.Name() == id {
+			return e.Name(), true
+		}
+	}
+	return "", false
 }
