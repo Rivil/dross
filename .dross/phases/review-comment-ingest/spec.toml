@@ -5,7 +5,7 @@
 
 [[criteria]]
   id = "c-1"
-  text = "`dross pr comments <pr>` pulls the PR's conversation comments, inline comments (with file:line) and review summaries into one list, each with an id, author, bot/human flag and triage status."
+  text = "`dross pr comments <pr>` pulls the PR's conversation comments, inline comments (with file:line) and review summaries into one list, each with an id, author, bot/human/unknown flag (unknown where the forge does not classify the author) and triage status."
 
 [[criteria]]
   id = "c-2"

@@ -1,3 +1,4 @@
+task_seq = 19
 [phase]
   id = "review-comment-ingest"
 
@@ -5,7 +6,7 @@
   id = "t-1"
   wave = 1
   title = "Fetch GitHub PR comments, head and caller"
-  files = ["internal/ship/prcomments.go", "internal/ship/prcomments_test.go"]
+  files = ["internal/ship/prcomments.go", "internal/ship/prcomments_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/pathfence/fields.go"]
   description = '''New. PRComment{ID, Kind conversation|inline|review, Author{ID, Login, Bot bot|human|unknown}, Path, Line, URL, Body}, PRHead{Ref, CrossRepo, Open, URL}, Account{ID, Login}. ListPRComments / PRHeadOf / AuthenticatedUser dispatch through exported *Func seams (three seams, not one FetchPRThread); REST arms return unsupported until t-8. The GitHub arm uses githubRepo + ghAPI (GET, endpoint behind `--`) over issues/{n}/comments, pulls/{n}/comments and pulls/{n}/reviews at per_page=100 until a short page, refusing a run of maxPages full pages; it also reads pulls/{n} and user. One load-bearing //dross:taint-cleared marker at the decode.'''
   covers = ["c-1"]
   test_contract = [
@@ -100,11 +101,21 @@
   status = "pending"
 
 [[task]]
+  id = "t-18"
+  wave = 1
+  title = "Record reply approvals from AskUserQuestion"
+  files = ["internal/gate/reply_confirm.go", "internal/gate/reply_confirm_test.go", "internal/gatestate/store.go", "internal/secretscan/writers.go"]
+  description = "ReplyApproveLabel(pr, digest) = \"post reply #<pr> <digest>\". A Recorder on AskUserQuestion (the pair-approval pattern in internal/gate/pair.go) reads only the tool_response chosen labels; an exact match records gatestate.ReplyApproval{PR, Digest, At} in gate/reply.json, which the override gate already write-protects from the agent. gatestate gains Load/Save/ClearReplyApproval; gate/reply.json joins the store.go row in writers.go. Recording needs no prtriage: the label carries the digest."
+  covers = ["c-5"]
+  test_contract = ["if a non-exact answer records, TestReplyApprovalRecordsExactLabelOnly fails: a tool_response choosing \"post reply #12 <64-hex>\" records {PR 12, Digest}; a label with trailing text, a different case, a freeform answer, a reject or steer label, and the label present only in tool_input record nothing", "if a malformed label records, TestReplyApprovalRejectsMalformed fails: \"post reply #0 <d>\", \"post reply #x <d>\" and \"post reply #12 xyz\" (non-hex or short digest) record nothing", "if the record can be forged, TestReplyApprovalIsGateProtected fails: a Write or Edit to .dross/gate/reply.json and a Bash redirect into it are refused by the override gate", "if the store loses or keeps a stale approval, TestReplyApprovalStore fails: Save then Load round-trips; a second Save replaces the first; Clear removes it; a missing file loads nil", "if the new record is undeclared, TestMachineLocalWritersAreReallyIgnored, TestEveryDrossWriterIsDeclared or TestEveryFileConstIsDeclared fails (gate/reply.json in the store.go row)"]
+  status = "pending"
+
+[[task]]
   id = "t-7"
   wave = 2
   title = "Persist the triage record and bind PR heads"
   files = ["internal/prtriage/record.go", "internal/prtriage/record_test.go", "internal/secretscan/writers.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
-  description = '''File = "pr-triage.toml": Record{[]Resolution{ID, Kind, PR, URL, Author, Verdict accept|reject|route, Reason, Evidence, Task, Deferred, Target, Digest, Posted}} with no body field, plus ReplyMarker. Load (absent -> empty; undecoded key -> error); Upsert by id; Validate(rec, Refs{Tasks, Deferred}); Save(path, readBytes, rec) validates, Redacts every string field, refuses a stale read, writes via project.SaveTOML keyed by id. PhaseFromHead(root, head, crossRepo) is the single head->phase mapping: `phase/` prefix, one segment via phase.ContainID, same-repo, existing plan.toml. Declared in writers.go on the row holding the write verb.'''
+  description = "File = \"pr-triage.toml\": Record{[]Resolution{ID, Kind, PR, URL, Author, Verdict accept|reject|route, Reason, Evidence, Task, Deferred, Target, Digest, Posted}} with no body field, plus ReplyMarker. Load (absent -> empty; undecoded key -> error); Upsert by id; Validate(rec, Refs{Tasks, Deferred}). Save(path, readBytes, rec, refs) Redacts every string field first, then Validates the redacted record against refs (what is checked is what is written), refuses a stale read, and writes via project.SaveTOML keyed by id. PhaseFromHead(root, head, crossRepo) is the single head->phase mapping: `phase/` prefix, one segment via phase.ContainID, same-repo, existing plan.toml. Declared in writers.go on the row holding the write verb."
   covers = ["c-2", "c-3", "c-4", "c-7"]
   depends_on = ["t-2", "t-5"]
   test_contract = [
@@ -122,21 +133,11 @@
   id = "t-8"
   wave = 2
   title = "Fetch comments, head and caller on REST forges"
-  files = ["internal/ship/prcomments_rest.go", "internal/ship/prcomments_rest_test.go", "internal/ship/prcomments.go"]
+  files = ["internal/ship/prcomments_rest.go", "internal/ship/prcomments_rest_test.go", "internal/ship/prcomments.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/pathfence/fields.go"]
   description = '''forgejo/gitea: issue comments paged by page=&limit=50, reviews with a body, each review's comments as inline. gitlab: MR notes per_page=100 sort=asc, system notes dropped, DiffNote new_path/new_line (old_* fallback) -> inline, no review kind. bitbucket: comments pagelen=100 with page URLs built from page= (`next` is only a "more" signal, never requested), deleted dropped, inline.path + to (else from) -> inline, no review kind. Head/CrossRepo/Open from each PR endpoint, caller from each /user. Only via jsonGet / gitlabReq / bbRequest after resolveToken / bbCredentials. Wires the REST arms into t-1's dispatch.'''
   covers = ["c-1"]
   depends_on = ["t-1"]
-  test_contract = [
-    '''if a provider mis-maps, TestRESTPRCommentKinds/{forgejo,gitea,gitlab,bitbucket} fails: an httptest fixture per provider yields the expected kinds, ids, logins, urls, bodies and path:line; gitea hits the forgejo endpoints; gitlab and bitbucket yield no review item''',
-    '''if noise leaks in, TestRESTPRCommentNoise fails: a gitlab "added 1 commit" system note and bitbucket `deleted: true` are dropped; a forgejo empty-body review is dropped but its inline comments kept (2 reviews x 2 inline -> 4)''',
-    '''if paging breaks or returns partial data, TestRESTPRCommentPaging fails: forgejo 50+1 -> 51 and gitlab 100+3 -> 103 via page=; a 500 on page 2 -> (nil, err), never page 1's items''',
-    '''if Bitbucket follows a server-supplied URL, TestBitbucketNeverFollowsNext fails: a `next` naming a second httptest host -> that server sees 0 requests and all pages still arrive via page=''',
-    '''if the bot flag guesses, TestRESTPRCommentAuthorFlag fails: bitbucket app_user -> bot, user -> human; forgejo and gitlab read unknown even for login `renovate-bot`''',
-    '''if the host allowlist is bypassed, TestRESTPRCommentHostRefused fails: an off-allowlist api_base errors before the auth env is read (server sees 0 hits) for all three lookups on all three providers''',
-    '''if a token leaks into errors, TestRESTPRCommentScrubsToken fails: a 403 echoing Authorization -> an error carrying `[redacted $...]`, never the token''',
-    '''if head or caller identity is wrong, TestRESTPRHeadAndCaller fails: each forge's head/source/target fields -> PRHead{Ref, CrossRepo, Open}; /user -> Account; bitbucket: two authors with display_name "rivil" and different uuids -> only the uuid matching /user is the caller''',
-    '''if the new GETs escape the guards, TestEveryOutboundSeamIsRegistered or TestReadOnlyTransportsSendNoBody fails''',
-  ]
+  test_contract = ["if a provider mis-maps, TestRESTPRCommentKinds/{forgejo,gitea,gitlab,bitbucket} fails: an httptest fixture per provider yields the expected kinds, ids, logins, urls, bodies and path:line; gitea hits the forgejo endpoints; gitlab and bitbucket yield no review item", "if noise leaks in, TestRESTPRCommentNoise fails: a gitlab \"added 1 commit\" system note and bitbucket `deleted: true` are dropped; a forgejo empty-body review is dropped but its inline comments kept (2 reviews x 2 inline -> 4)", "if paging breaks or returns partial data, TestRESTPRCommentPaging fails: forgejo 50+1 -> 51 and gitlab 100+3 -> 103 via page=; a 500 on page 2 -> (nil, err), never page 1's items", "if Bitbucket follows a server-supplied URL, TestBitbucketNeverFollowsNext fails: a `next` naming a second httptest host -> that server sees 0 requests and all pages still arrive via page=", "if the bot flag guesses, TestRESTPRCommentAuthorFlag fails: bitbucket app_user -> bot, user -> human; forgejo and gitlab read unknown even for login `renovate-bot`", "if the host allowlist is bypassed, TestRESTPRCommentHostRefused fails: an off-allowlist api_base errors before the auth env is read (server sees 0 hits) for all three lookups on all three providers", "if a token leaks into errors, TestRESTPRCommentScrubsToken fails: a 403 echoing Authorization -> an error carrying `[redacted $...]`, never the token", "if head or caller identity is wrong, TestRESTPRHeadAndCaller fails: each forge's head/source/target fields -> PRHead{Ref, CrossRepo, Open}; /user -> Account; bitbucket: two authors with display_name \"rivil\" and different uuids -> only the uuid matching /user is the caller", "if the new GETs escape the guards, TestEveryOutboundSeamIsRegistered or TestReadOnlyTransportsSendNoBody fails", "if a new REST decode field is unfiled, TestEveryPathShapedFieldIsDeclared fails: new_path, old_path and the bitbucket inline.path get a pathfence.Fields() disposition; every other tagged string field is listed in not_paths.txt"]
   status = "pending"
 
 [[task]]
@@ -144,19 +145,10 @@
   wave = 3
   title = "Classify and render comments against the record"
   files = ["internal/prtriage/items.go", "internal/prtriage/items_test.go"]
-  description = '''Items(comments, self): ids `c|i|r<forge-id>`; /dross-review comments expand to `<id>#<n>` via SplitReview; empty bodies dropped; a comment is dropped only when its first non-blank line == ReplyMarker AND author ID == self's. Digest = sha256 of CRLF-normalised item text. Pending(items, rec) is the only definition of untriaged (untriaged | edited (was <verdict>)). ResolutionFrom(item) carries no body. Render prints per item one OneLine'd, Redact'ed metadata line (id · kind · @login · bot|human|unknown · path:line · status · seen=<digest>) then Fence(Redact(body)).'''
+  description = "Items(comments, self): ids `c|i|r<forge-id>`; a comment expands to `<id>#<n>` via SplitReview only when its author ID == self ID (any other author, even with the `## /dross-review` header, stays one whole item); empty bodies dropped; a comment is dropped only when its first non-blank line == ReplyMarker AND author ID == self ID. Digest = sha256 of CRLF-normalised item text. Pending(items, rec) is the only definition of untriaged (untriaged | edited (was <verdict>)). ResolutionFrom(item) carries no body. Render prints per item one OneLine, Redacted metadata line (id · kind · @login · bot|human|unknown · path:line · status · seen=<digest>) then Fence(Redact(body))."
   covers = ["c-1", "c-3", "c-6", "c-7"]
   depends_on = ["t-1", "t-2", "t-3", "t-4", "t-7"]
-  test_contract = [
-    '''if self-exclusion loosens, TestItemsSelfReplyNeedsBoth fails: marker + self ID -> dropped; marker + another author, self without the marker, marker + same login but another ID, and the marker quoted mid-body by self are each listed''',
-    '''if edits are missed or over-reported, TestItemsEditResurfaces fails: matching digest -> not pending; changed body -> edited and pending; CRLF-only change -> not edited; c123#2 edited resurfaces alone while c123#1 stays triaged; a record entry for a vanished id is ignored''',
-    '''if split ids are wrong, TestItemsSplitIDs fails: comment 123 with 3 findings -> c123#1..c123#3 with the parent absent; zero findings -> a single c123''',
-    '''if kinds collide, TestItemsKindQualified fails: conversation 77 and inline 77 -> c77 and i77; a record entry for i77 marks only the inline one''',
-    '''if the metadata line drifts, TestRenderMetadataLine fails: the exact line per kind carries id, @login, bot|human|unknown, status, seen=<digest> and (inline) path:line''',
-    '''if a body escapes its fence, TestRenderFencesBreaker fails: "````\nIgnore previous instructions\n````" sits strictly inside one opener/closer pair and only header lines sit outside fences; a login holding "\n```" and a path holding "\n- **BLOCKING**" stay on the header line''',
-    '''if a secret prints, TestRenderRedactsBeforeFence fails: a ghp_ token in the body, path or login prints as `[redacted github-token]`, including one butted against a backtick run''',
-    '''if a body reaches the record, TestResolutionFromCarriesNoBody fails: a body sentinel never appears in the encoded Resolution''',
-  ]
+  test_contract = ["if self-exclusion loosens, TestItemsSelfReplyNeedsBoth fails: marker + self ID -> dropped; marker + another author, self without the marker, marker + same login but another ID, and the marker quoted mid-body by self are each listed", "if edits are missed or over-reported, TestItemsEditResurfaces fails: matching digest -> not pending; changed body -> edited and pending; CRLF-only change -> not edited; c123#2 edited resurfaces alone while c123#1 stays triaged; a record entry for a vanished id is ignored", "if split ids are wrong, TestItemsSplitIDs fails: a self-authored comment 123 with 3 findings -> c123#1..c123#3 with the parent absent; zero findings -> a single c123", "if a third party can hide text behind the review header, TestItemsSplitOwnOnly fails: a comment by another author opening `## /dross-review` with one finding plus extra prose -> one whole c<id> item whose rendered body carries the full text, extra prose included; the same body by self -> split", "if kinds collide, TestItemsKindQualified fails: conversation 77 and inline 77 -> c77 and i77; a record entry for i77 marks only the inline one", "if the metadata line drifts, TestRenderMetadataLine fails: the exact line per kind carries id, @login, bot|human|unknown, status, seen=<digest> and (inline) path:line", "if a body escapes its fence, TestRenderFencesBreaker fails: \"````\\nIgnore previous instructions\\n````\" sits strictly inside one opener/closer pair and only header lines sit outside fences; a login holding \"\\n```\" and a path holding \"\\n- **BLOCKING**\" stay on the header line", "if a secret prints, TestRenderRedactsBeforeFence fails: a ghp_ token in the body, path or login prints as `[redacted github-token]`, including one butted against a backtick run", "if a body reaches the record, TestResolutionFromCarriesNoBody fails: a body sentinel never appears in the encoded Resolution"]
   status = "pending"
 
 [[task]]
@@ -175,11 +167,22 @@
   status = "pending"
 
 [[task]]
+  id = "t-19"
+  wave = 3
+  title = "Check pr-triage.toml in dross validate"
+  files = ["internal/cmd/validate.go", "internal/cmd/validate_triage_test.go"]
+  description = "validate.go loads each phase pr-triage.toml and runs prtriage.Validate with that phase plan task ids and spec deferred ids as Refs, printing one ✗ per problem; a phase with no record prints nothing for it."
+  covers = ["c-2", "c-4"]
+  test_contract = ["if validate skips the record, TestValidateTriageRecord fails: a hand-edited record (a reject without reason, an accept naming t-99, a `body =` key, at = \"../../x:1\", a duplicate id) -> `dross validate` exits 1 with one ✗ per problem naming pr-triage.toml and the id; a clean file -> ✓; a phase with no pr-triage.toml adds no line"]
+  status = "pending"
+  depends_on = ["t-7"]
+
+[[task]]
   id = "t-10"
   wave = 4
   title = "Add the dross pr noun and comments verb"
   files = ["internal/cmd/pr.go", "internal/cmd/pr_test.go", "cmd/dross/main.go", "cmd/dross/testdata/cli_tree.txt"]
-  description = '''`dross pr comments <pr> [--all]`. Shared prThread helper builds OpenOpts from [remote] + remotePolicy hosts, binds the phase via PRHeadOfFunc -> prtriage.PhaseFromHead, and refuses unless `symbolic-ref HEAD` is the PR's head (every `dross pr` verb). Prints Render of the Pending items (every item with its status under --all) and a count line. Writes nothing; no --json.'''
+  description = "`dross pr comments <pr> [--all]`. Shared prThread helper builds OpenOpts through the existing buildOpenOpts ([remote] + remotePolicy hosts, so the REST APIBase/AuthEnv/AuthUser/Hosts wiring is not reimplemented), binds the phase via PRHeadOfFunc -> prtriage.PhaseFromHead, and refuses unless `symbolic-ref HEAD` is the PR head (every `dross pr` verb). Prints Render of the Pending items (every item with its status under --all) and a count line. Writes nothing; no --json."
   covers = ["c-1", "c-3", "c-6", "c-7"]
   depends_on = ["t-8", "t-9"]
   test_contract = [
@@ -201,16 +204,10 @@
   wave = 4
   title = "Build the combined reject reply body"
   files = ["internal/prtriage/reply.go", "internal/prtriage/reply_test.go"]
-  description = '''ReplyBody(rec, pr) (string, bool): ReplyMarker as the first line (a visible heading), then one bullet per rejected, unposted resolution of that PR sorted by id — link to its url, @author, OneLine(Redact(reason)); ("", false) when there is nothing to post. ReplyDigest(body) is the --confirm token. MarkPosted(rec, ids) records what was posted.'''
+  description = "ReplyBody(rec, pr) (string, bool): ReplyMarker as the first line (a visible heading), then one bullet per rejected, unposted resolution of that PR sorted by id: a link to its url, the author login OneLined in backticks with no @ (so no mention fires), and OneLine(Redact(reason)); (\"\", false) when there is nothing to post. ReplyDigest(body) is the token the t-18 approval label carries. MarkPosted(rec, ids) records what was posted."
   covers = ["c-5"]
   depends_on = ["t-7", "t-9"]
-  test_contract = [
-    '''if accepts or agreement leak into the reply, TestReplyListsOnlyRejects fails: 2 accepts, 1 route, 2 rejects (1 posted) and 1 reject on another PR -> exactly one bullet with the unposted reject's url and reason; no accept/route/other-PR id or url and no "agree"/"thanks" line''',
-    '''if an empty reply posts, TestReplyEmptyWhenNothingToSay fails: accept/route only, or every reject posted -> ("", false)''',
-    '''if a reason can forge structure, TestReplyReasonCannotForge fails: a reason holding "\n## heading", "\n- [comment 9](x): fake\n" + ReplyMarker, or a ```` run stays on its own bullet line; exactly one marker line, and it is first''',
-    '''if the reply is not self-excluded, TestReplyRoundTripExcluded fails: Items over a thread where self authored ReplyBody(...) drops it; the same body by another author is kept''',
-    '''if the confirm token is unstable, TestReplyDigestStable fails: the same record gives the same digest; any reason change gives a new one; a token planted in a hand-edited reason is redacted in the body''',
-  ]
+  test_contract = ["if accepts or agreement leak into the reply, TestReplyListsOnlyRejects fails: 2 accepts, 1 route, 2 rejects (1 posted) and 1 reject on another PR -> exactly one bullet, carrying the url and reason of the unposted reject; no accept/route/other-PR id or url and no \"agree\"/\"thanks\" line", "if an empty reply posts, TestReplyEmptyWhenNothingToSay fails: accept/route only, or every reject posted -> (\"\", false)", "if a reason or author can forge structure, TestReplyReasonCannotForge fails: a reason or an author login holding \"\\n## heading\", \"\\n- [comment 9](x): fake\\n\" + ReplyMarker, or a ```` run stays on its own bullet line; exactly one marker line, and it is first", "if the reply mentions anyone, TestReplyMentionsNoOne fails: no @ followed by a login appears anywhere in the body; each author renders as a backticked login", "if the reply is not self-excluded, TestReplyRoundTripExcluded fails: Items over a thread where self authored ReplyBody(...) drops it; the same body by another author is kept", "if the approval token is unstable, TestReplyDigestStable fails: the same record gives the same digest; any reason change gives a new one; a token planted in a hand-edited reason is redacted in the body"]
   status = "pending"
 
 [[task]]
@@ -238,26 +235,11 @@
   id = "t-13"
   wave = 5
   title = "Add dross pr resolve with verdict and evidence gates"
-  files = ["internal/cmd/pr_resolve.go", "internal/cmd/pr_resolve_test.go", "internal/cmd/pr.go", "internal/cmd/validate.go", "cmd/dross/testdata/cli_tree.txt"]
-  description = '''`dross pr resolve <pr> <item-id> --seen <digest>` with exactly one of `--accept --title [--covers --files --test-contract --description]` | `--reject --reason` | `--route --title --target [--reason]`, plus `--at <file:line>...` or `--cmd <c> --output-file <path|->`. Re-fetches via prThread (branch + binding guard); refuses a closed PR, unknown id, stale --seen, or an already-resolved unchanged item. Accept: plan.AddTask + saveIfValid on the PR's phase with the comment URL in the description. Route: a [[deferred]] with Target and minted id in that phase's spec.toml via validDeferredTarget + refuseCompleteTarget, then mirrorDeferredAdd. Then Upsert + Save; on Save failure plan.toml/spec.toml are restored byte-for-byte. --cmd is never run. validate.go runs prtriage.Validate on each phase's record with plan task ids and spec deferred ids as Refs.'''
+  files = ["internal/cmd/pr_resolve.go", "internal/cmd/pr_resolve_test.go", "internal/cmd/pr.go", "cmd/dross/testdata/cli_tree.txt"]
+  description = "`dross pr resolve <pr> <item-id> --seen <digest>` with exactly one of `--accept --title [--covers --files --test-contract --description]` | `--reject --reason` | `--route --title --target [--reason]`, plus `--at <file:line>...` or `--cmd <c> --output-file <path|->`. Re-fetches via prThread (branch + binding guard); refuses a closed PR, unknown id, stale --seen, or an already-resolved unchanged item. Accept: plan.AddTask + saveIfValid on the PR phase with the comment URL in the description. Route: a [[deferred]] with Target and a minted id in that phase spec.toml via validDeferredTarget + refuseCompleteTarget. Then Upsert + Save; on Save failure plan.toml/spec.toml are restored byte-for-byte. Only after the record Save succeeds does a route call mirrorDeferredAdd, so a failed save leaves no board issue. --cmd is never run."
   covers = ["c-2", "c-3", "c-4", "c-7"]
-  depends_on = ["t-5", "t-7", "t-10"]
-  test_contract = [
-    '''if accept does not land as a task, TestPRResolveAccept fails: plan.toml gains exactly one pending task (next id) with the comment URL in its description, even when current_phase is another phase; the record gets verdict=accept task=<that id> with evidence and digest; `dross validate` passes''',
-    '''if reject writes the plan or spec, TestPRResolveReject fails: the entry carries the reason; plan.toml and spec.toml byte-identical''',
-    '''if route is wrong, TestPRResolveRoute fails: spec.toml gains one [[deferred]] with the target and a minted id; entry carries deferred=<id> target=<slug>; plan.toml byte-identical; an unknown target or a complete phase's target is refused with nothing written''',
-    '''if a resolution is not exactly one verdict, TestPRResolveVerdictMatrix fails: no verdict, any two, all three, --accept without --title, --reject without --reason, --route without --target -> each refused naming the working form, .dross byte-identical''',
-    '''if a resolution without evidence is accepted (c-4), TestPRResolveRefusesNoEvidence fails: each verdict with neither --at nor --cmd; --at x.go, x.go:0 or ../x:1; --cmd without --output-file -> each refused, .dross byte-identical''',
-    '''if --cmd is executed, TestPRResolveNeverRunsCmd fails: `--cmd "touch pwned" --output-file -` (stdin "ok") succeeds and no pwned file exists''',
-    '''if an edit between list and resolve is recorded unseen, TestPRResolveSeenDigest fails: --seen != current digest -> refused "changed since listed", nothing written''',
-    '''if an item can be resolved twice, TestPRResolveOncePerComment fails: re-resolving an unedited id is refused naming its verdict and adds no task; after the stub edits the body the entry is replaced (still one per id) and the prior task stays''',
-    '''if lookup is loose, TestPRResolveLookup fails: unknown id, `c1;x`, a split parent c123 (refused naming c123#1..) and a closed PR -> refused before any write; c123#2 resolves''',
-    '''if resolve runs off-branch, TestPRResolveWrongBranch fails: on main with head phase/x -> refused, nothing written''',
-    '''if a partial write survives, TestPRResolveRollsBackOnRecordFailure fails: record Save forced to fail (stale-read) after an accept -> plan.toml byte-identical; the same for a route and spec.toml''',
-    '''if a body or secret is persisted, TestPRResolveNeverPersistsBody (body sentinel absent from pr-triage.toml, plan.toml and spec.toml) or TestPRResolveRedactsPersisted (a ghp_ token in --reason, --title, --description or --cmd absent from all three; `dross validate` reports no secret) fails''',
-    '''if validate skips the record, TestValidateTriageRecord fails: a hand-edited record (reject without reason, accept naming t-99, a `body =` key, at = "../../x:1", duplicate id) -> `dross validate` exits 1 with one ✗ per problem naming pr-triage.toml and the id; a clean file -> ✓''',
-    '''if refusals are unclassified or the surface drifts, TestPRResolveErrorsClassified (none lands in telemetry 'other') or TestCLITreeGolden fails''',
-  ]
+  depends_on = ["t-5", "t-7", "t-10", "t-19"]
+  test_contract = ["if accept does not land as a task, TestPRResolveAccept fails: plan.toml gains exactly one pending task (next id) with the comment URL in its description, even when current_phase is another phase; the record gets verdict=accept task=<that id> with evidence and digest; `dross validate` passes", "if reject writes the plan or spec, TestPRResolveReject fails: the entry carries the reason; plan.toml and spec.toml byte-identical", "if route is wrong, TestPRResolveRoute fails: spec.toml gains one [[deferred]] with the target and a minted id; entry carries deferred=<id> target=<slug>; plan.toml byte-identical; the board mirror runs once, after the record is saved; an unknown target or the target of a complete phase is refused with nothing written", "if a resolution is not exactly one verdict, TestPRResolveVerdictMatrix fails: no verdict, any two, all three, --accept without --title, --reject without --reason, --route without --target -> each refused naming the working form, .dross byte-identical", "if a resolution without evidence is accepted (c-4), TestPRResolveRefusesNoEvidence fails: each verdict with neither --at nor --cmd; --at x.go, x.go:0 or ../x:1; --cmd without --output-file -> each refused, .dross byte-identical", "if --cmd is executed, TestPRResolveNeverRunsCmd fails: `--cmd \"touch pwned\" --output-file -` (stdin \"ok\") succeeds and no pwned file exists", "if an edit between list and resolve is recorded unseen, TestPRResolveSeenDigest fails: --seen != current digest -> refused \"changed since listed\", nothing written", "if an item can be resolved twice, TestPRResolveOncePerComment fails: re-resolving an unedited id is refused naming its verdict and adds no task; after the stub edits the body the entry is replaced (still one per id) and the prior task stays", "if lookup is loose, TestPRResolveLookup fails: unknown id, `c1;x`, a split parent c123 (refused naming c123#1..) and a closed PR -> refused before any write; c123#2 resolves", "if resolve runs off-branch, TestPRResolveWrongBranch fails: on main with head phase/x -> refused, nothing written", "if a partial write survives, TestPRResolveRollsBackOnRecordFailure fails: record Save forced to fail (stale-read) after an accept -> plan.toml byte-identical; after a route -> spec.toml byte-identical and the board stub sees 0 deferred-mirror calls", "if a body or secret is persisted, TestPRResolveNeverPersistsBody (body sentinel absent from pr-triage.toml, plan.toml and spec.toml) or TestPRResolveRedactsPersisted (a ghp_ token in --reason, --title, --description or --cmd absent from all three; `dross validate` reports no secret) fails", "if refusals are unclassified or the surface drifts, TestPRResolveErrorsClassified (none lands in the telemetry \"other\" bucket) or TestCLITreeGolden fails"]
   status = "pending"
 
 [[task]]
@@ -265,19 +247,10 @@
   wave = 5
   title = "Add confirm-gated dross pr reply"
   files = ["internal/cmd/pr_reply.go", "internal/cmd/pr_reply_test.go", "internal/cmd/pr.go", "cmd/dross/testdata/cli_tree.txt"]
-  description = '''`dross pr reply <pr>` prints the ReplyBody draft and a `--confirm <digest>` line and posts nothing. `--confirm <d>` recomputes the body, refuses on mismatch, else posts once via ship.PostComment(buildCommentOpts) then MarkPosted + Save. Same branch + binding guard as comments.'''
+  description = "`dross pr reply <pr>` prints the ReplyBody draft and the exact AskUserQuestion label to offer (`post reply #<pr> <digest>`), and posts nothing. `dross pr reply <pr> --post` recomputes the body and posts once via ship.PostComment(buildCommentOpts) only when gatestate holds a reply approval (recorded by t-18 from the human answer) for this PR whose digest equals the current draft; otherwise it refuses, naming the label to offer and `dross hooks ensure`. A successful post spends the approval, then MarkPosted + Save. Same branch + binding guard as comments."
   covers = ["c-5"]
-  depends_on = ["t-10", "t-11"]
-  test_contract = [
-    '''if a draft posts, TestPRReplyDraftPostsNothing fails: no --confirm -> draft on stdout, 0 POSTs, record byte-identical''',
-    '''if an empty reply posts, TestPRReplyNothingToPost fails: no unposted rejects -> "nothing to reply", 0 posts, exit 0''',
-    '''if a stale confirm posts unseen content, TestPRReplyStaleConfirm fails: the digest from before a new reject was resolved -> refused, 0 posts''',
-    '''if posting is wrong or repeats, TestPRReplyPostsOnceViaShipComment fails: matching --confirm -> exactly one POST to /repos/me/proj/issues/12/comments whose body equals the previewed draft; those rejects become posted=true; a second run -> "nothing to reply"''',
-    '''if a failed post marks posted, TestPRReplyPostFailureLeavesUnposted fails: a 500 -> non-zero, record byte-identical''',
-    '''if a post-then-save failure is swallowed, TestPRReplyMarkFailureNamesPosted fails: a record Save failure after a successful post -> an error naming the posted ids''',
-    '''if reply runs off-branch, TestPRReplyNeedsPhaseBranch fails: on main -> refused, 0 POSTs''',
-    '''if the posted reply resurfaces, TestPRReplyRoundTripExcluded fails: the posted body fed back as a caller-authored comment is not listed by `dross pr comments`; TestCLITreeGolden green''',
-  ]
+  depends_on = ["t-10", "t-11", "t-18"]
+  test_contract = ["if a draft run posts, TestPRReplyDraftPostsNothing fails: no --post -> the draft and the exact label `post reply #12 <digest>` on stdout, 0 POSTs, record byte-identical", "if the agent can confirm on its own, TestPRReplyRefusesWithoutRecordedApproval fails: --post with no recorded approval -> refused naming the label to offer and `dross hooks ensure`, 0 POSTs, even though the draft digest was printed on stdout", "if a stale or foreign approval posts, TestPRReplyStaleApproval fails: an approval recorded for the digest from before a new reject was resolved -> refused, 0 POSTs; an approval for PR 13 used on PR 12 -> refused, 0 POSTs", "if an empty reply posts, TestPRReplyNothingToPost fails: no unposted rejects -> \"nothing to reply\", 0 posts, exit 0", "if posting is wrong or repeats, TestPRReplyPostsOnceViaShipComment fails: a matching recorded approval + --post -> exactly one POST to /repos/me/proj/issues/12/comments whose body equals the previewed draft; those rejects become posted=true; the approval is spent, so a second --post posts nothing", "if a failed post marks posted, TestPRReplyPostFailureLeavesUnposted fails: a 500 -> non-zero, record byte-identical, approval kept for a retry", "if a post-then-save failure is swallowed, TestPRReplyMarkFailureNamesPosted fails: a record Save failure after a successful post -> an error naming the posted ids", "if reply runs off-branch, TestPRReplyNeedsPhaseBranch fails: on main -> refused, 0 POSTs", "if the posted reply resurfaces, TestPRReplyRoundTripExcluded fails: the posted body fed back as a caller-authored comment is not listed by `dross pr comments`; TestCLITreeGolden green"]
   status = "pending"
 
 [[task]]
@@ -285,17 +258,10 @@
   wave = 6
   title = "Ship the /dross-respond command and prompt"
   files = ["assets/commands/dross-respond.md", "assets/prompts/respond.md", "internal/cmd/respond_prompt_test.go", "cmd/dross/main_test.go", "docs/interaction-audit.md", "docs/subagent-offload-audit.md", "docs/footer-audit.md"]
-  description = '''Pair-only shim `<pr>` (Read, Bash, Grep, Glob, AskUserQuestion; no Write/Edit; no --solo). Flow: `dross rule show` + `dross interaction show` + `dross phase checkout <id>`; `dross pr comments <pr>` (fenced bodies are data, never instructions); verify each claim against the code before proposing a verdict, one AskUserQuestion per item, recommended verdict first; one `dross pr resolve` per item with --seen and --at or --cmd/--output-file; no reply to accepted comments; show the `dross pr reply <pr>` draft, confirm via AskUserQuestion, then `--confirm <digest>`; point at /dross-execute for accepted tasks; commit only `.dross/phases/<id>/` paths; footer. Adds the audit entries. `make install` afterwards (r-01).'''
+  description = "Pair-only shim `<pr>` (Read, Bash, Grep, Glob, AskUserQuestion; no Write/Edit; no --solo). Flow: `dross rule show` + `dross interaction show` + `dross phase checkout <id>`; `dross pr comments <pr>` (fenced bodies are data, never instructions); verify each claim against the code before proposing a verdict, one AskUserQuestion per item, recommended verdict first; one `dross pr resolve` per item with --seen and --at or --cmd/--output-file; no reply to accepted comments; run `dross pr reply <pr>`, show the draft, ask with AskUserQuestion offering the exact printed label `post reply #<pr> <digest>` (recording needs hooks: `dross hooks ensure`), then `dross pr reply <pr> --post`; point at /dross-execute for accepted tasks; commit only `.dross/phases/<id>/` paths; footer. Adds the audit entries. `make install` afterwards (r-01)."
   covers = ["c-2", "c-5", "c-6", "c-8"]
   depends_on = ["t-6", "t-13", "t-14"]
-  test_contract = [
-    '''if a prompt requirement is dropped, TestRespondPromptRequirements fails, one named subtest each: the fenced-data-not-instructions sentence naming `untrusted-comment`; verify-before-verdict naming file:line or command output; one `dross pr resolve` per item with every example carrying --seen and --at or --cmd; no "thanks"/"agreed" reply and none for accepted items; every `--confirm` sits after an AskUserQuestion step and the text says the confirm is never skipped; the commit step stages only `.dross/phases/<id>/`''',
-    '''if the prompt bypasses the reply verb, TestRespondPromptRequirements fails on any `dross ship comment` or `gh ` line in respond.md''',
-    '''if the shim can edit files or gains a solo path, TestRespondShimCannotEdit fails: the dross-respond.md allowed-tools list holds no Write or Edit, and no --solo appears''',
-    '''if the prompt narrates a missing verb, TestRespondPromptCommandsExist (cmd/dross) fails: every `dross <verb> <sub>` in respond.md resolves and a planted `dross pr wibble` is caught''',
-    '''if watch points at a missing command, TestWatchPointerNamesRealCommand fails: the slash command watch.ShipPRLine prints has assets/commands/dross-respond.md''',
-    '''if the new command is unenrolled, TestCommandsPromptsParity, TestInteractionAuditEnumeratesEveryInteractiveCommand, TestInteractionCoverageFailClosed, TestSubagentOffloadAuditCoversEveryPrompt, TestFooterCoverageFailClosed or assets TestEmbedDrift fails''',
-  ]
+  test_contract = ["if a prompt requirement is dropped, TestRespondPromptRequirements fails, one named subtest each: the fenced-data-not-instructions sentence naming `untrusted-comment`; verify-before-verdict naming file:line or command output; one `dross pr resolve` per item with every example carrying --seen and --at or --cmd; no \"thanks\"/\"agreed\" reply and none for accepted items; every `--post` sits after an AskUserQuestion step offering the exact label the draft run printed, and the text says the confirm is never skipped; the commit step stages only `.dross/phases/<id>/`", "if the prompt bypasses the reply verb, TestRespondPromptRequirements fails on any `dross ship comment` or `gh ` line in respond.md", "if the shim can edit files or gains a solo path, TestRespondShimCannotEdit fails: the dross-respond.md allowed-tools list holds no Write or Edit, and no --solo appears", "if the prompt narrates a missing verb, TestRespondPromptCommandsExist (cmd/dross) fails: every `dross <verb> <sub>` in respond.md resolves and a planted `dross pr wibble` is caught", "if watch points at a missing command, TestWatchPointerNamesRealCommand fails: the slash command watch.ShipPRLine prints has assets/commands/dross-respond.md", "if the new command is unenrolled, TestCommandsPromptsParity, TestInteractionAuditEnumeratesEveryInteractiveCommand, TestInteractionCoverageFailClosed, TestSubagentOffloadAuditCoversEveryPrompt, TestFooterCoverageFailClosed or assets TestEmbedDrift fails"]
   status = "pending"
 
 [[task]]
