@@ -348,6 +348,12 @@ var unguessedFields = []Field{
 		"the file a quality finding points at — compared across runs and printed.",
 		"internal/quality/lifecycle.go"),
 
+	// ---- forge review comments: where an inline comment is anchored --------
+	reportPath("ship.ghThreadRecord", "Path", "path", "the GitHub pull-request review-comments API response",
+		"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and "+
+			"printed beside the comment — never opened.",
+		"internal/ship/prcomments.go (decoded)"),
+
 	// ---- paths a tool reported about its own work --------------------------
 	reportPath("codex.astGrepMatch", "File", "file", "ast-grep --json output",
 		"decoded from ast-grep's own report; dross does not open it.",

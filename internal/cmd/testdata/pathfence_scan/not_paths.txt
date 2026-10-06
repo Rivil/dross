@@ -350,7 +350,7 @@ security.Finding.Refutation refutation
 security.Finding.Severity severity
 security.Finding.Title title
 
-# ---- ship — forge PR payloads: branch names, titles, URLs, author logins, check states
+# ---- ship — forge PR payloads: branch names, titles, URLs, author logins and types, check and review states, repo names, comment bodies
 ship.BasePR.HeadRefName headrefname
 ship.BasePR.Title title
 ship.BasePR.URL url
@@ -364,6 +364,15 @@ ship.PRCheck.Status status
 ship.RulesetSummary.Name name
 ship.forgejoPR.HTMLURL html_url
 ship.forgejoPR.Title title
+ship.ghPull.HTMLURL html_url
+ship.ghPull.State state
+ship.ghPullEnd.Ref ref
+ship.ghRepoName.FullName full_name
+ship.ghThreadRecord.Body body
+ship.ghThreadRecord.HTMLURL html_url
+ship.ghThreadRecord.State state
+ship.ghUser.Login login
+ship.ghUser.Type type
 
 # ---- stack — stack-profile data: ids, titles, binary NAMES, commands, loadout prose, extensions, env-var names
 stack.Command.Run run
