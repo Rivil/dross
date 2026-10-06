@@ -149,6 +149,7 @@ func TestRegistryCoversEveryKnownFieldByName(t *testing.T) {
 		"findings.Record.File",
 		"security.Finding.File",
 		"quality.Finding.File",
+		"prtriage.Evidence.At",
 		"ship.ghThreadRecord.Path",
 		"codex.astGrepMatch.File",
 		"mutation.astRequest.File",

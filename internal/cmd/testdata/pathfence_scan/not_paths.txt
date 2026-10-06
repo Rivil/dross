@@ -342,6 +342,10 @@ rules.Rule.ID id
 rules.Rule.Severity severity
 rules.Rule.Text text
 
+# ---- prtriage — triage evidence: the command a resolution cites and its output's sha256
+prtriage.Evidence.Cmd cmd
+prtriage.Evidence.OutputSHA256 output_sha256
+
 # ---- security — security-finding identity and prose
 security.Finding.Class class
 security.Finding.Evidence evidence

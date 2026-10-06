@@ -348,6 +348,13 @@ var unguessedFields = []Field{
 		"the file a quality finding points at — compared across runs and printed.",
 		"internal/quality/lifecycle.go"),
 
+	// ---- PR triage: the locator a resolution cites ------------------------
+	reportPath("prtriage.Evidence", "At", "at", "phases/<id>/pr-triage.toml",
+		"a file:line locator a triage resolution cites. ParseAt contains and line-checks the "+
+			"value it is given before it is recorded; from the record it is only split and checked "+
+			"lexically, never opened.",
+		"internal/prtriage/evidence.go (SplitAt)"),
+
 	// ---- forge review comments: where an inline comment is anchored --------
 	reportPath("ship.ghThreadRecord", "Path", "path", "the GitHub pull-request review-comments API response",
 		"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and "+
