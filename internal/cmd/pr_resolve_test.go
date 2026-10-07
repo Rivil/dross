@@ -160,6 +160,41 @@ func TestPRResolveRoute(t *testing.T) {
 	}
 }
 
+// TestPRResolveRouteWithReason: a route's --reason leads the deferred item's
+// why, ahead of the comment link; a blank one adds nothing.
+func TestPRResolveRouteWithReason(t *testing.T) {
+	const link = "review comment https://github.com/acme/widgets/pull/7#c1"
+	for _, tc := range []struct {
+		name    string
+		reason  []string
+		wantWhy string
+	}{
+		{"reason", []string{"--reason", "wrong layer"}, "wrong layer — " + link},
+		{"blank reason", []string{"--reason", "  "}, link},
+		{"no reason", nil, link},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, _, _ := resolveRepo(t)
+			args := append([]string{"c1", "--seen", seen1(), "--route", "--title", "Rework paging", "--target", "later", "--at", "x.go:1"}, tc.reason...)
+			if _, err := resolve(t, "", args...); err != nil {
+				t.Fatal(err)
+			}
+			spec, err := phase.LoadSpec(phaseFile(dir, "spec.toml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(spec.Deferred) != 1 || spec.Deferred[0].Why != tc.wantWhy {
+				t.Fatalf("spec deferred = %+v, want one item whose why is %q", spec.Deferred, tc.wantWhy)
+			}
+			if tc.name == "reason" {
+				if r := loadTriage(t, dir).Resolution; len(r) != 1 || r[0].Reason != "wrong layer" {
+					t.Errorf("record = %+v, want the route's reason recorded", r)
+				}
+			}
+		})
+	}
+}
+
 // refusals are invocations refused before anything is written, with the text
 // each refusal must name.
 var verdictRefusals = map[string][]string{
