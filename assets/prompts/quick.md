@@ -214,6 +214,12 @@ Match the repo's trailer convention, as in §5.
 
 ## 7. Wrap-up
 
+The quick task is committed and done, so close its board issue **first, before anything switches branch** (same board rule: silent only when `[board].enabled` is false, a non-zero exit is a failure to surface):
+```
+dross issue quick $NEW_VERSION --close
+```
+The close finds the issue through the link §6 wrote into `.dross/board.json`, so it must run on the branch holding that link. On the PR route that is `quick/<NEW_VERSION>`: the base has no copy until the PR merges, and a close run after `dross checkout <base>` fails with `no board issue linked to quick ref`. The close writes nothing under `.dross/`, so the tree stays clean for the push.
+
 **PR route only** (§0.4): the work commit and §6's bookkeeping commit both sit on `quick/<NEW_VERSION>`. Publish the branch and open its PR into the base, then go back to the base:
 ```
 git push -u origin quick/<NEW_VERSION>
@@ -235,11 +241,6 @@ Next: continue working, or /dross-quick "<another task>" — another small chang
       ↳ --solo — run it autonomously when the change is trivial and well-specified.
 
 state is on disk — safe to /clear · fresh session: /dross-status
-```
-
-The quick task is committed and done, so close its board issue (same board rule: silent only when `[board].enabled` is false, a non-zero exit is a failure to surface):
-```
-dross issue quick $NEW_VERSION --close
 ```
 
 ## Hard rules
