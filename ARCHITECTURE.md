@@ -65,11 +65,12 @@ _introduced 01-architecture-comprehension-layer · extended architecture-doc-enh
 
 Schema-check every .dross/ TOML/JSON artefact, including that plan `covers` reference real spec criteria. The two validators divide the work by blast radius (locked `status_check_home`): `dross validate` stays **structural only** because it runs in every slash command's wrap step and must never newly fail an existing repo, while `dross doctor` is the sole **enum-enforcing** validator. Doctor therefore owns the plan-task status check — a task whose `status` falls outside `pending|in_progress|done|failed` is reported as an exit-code issue naming both phase and task id, closing the hole where a hand-edited plan.toml silently dropped a task out of `NextRunnable`. A phase directory with no plan.toml is skipped in silence (spec'd-but-unplanned is legal); an unparseable one is its own issue rather than a clean verdict.
 
-- `Validate` — `internal/cmd/validate.go:30`
-- `loadIfExists` — `internal/cmd/validate.go:504`
+- `Validate` — `internal/cmd/validate.go:31`
+- `loadIfExists` — `internal/cmd/validate.go:546`
 - `taskStatusIssues` (doctor's plan-task status enum check) — `internal/cmd/doctor.go:832`
+- `triageProblems` (each phase's `pr-triage.toml` is checked against its plan tasks and spec deferred items — an accept must name a real task, a route a real deferred item) — `internal/cmd/validate.go:207`
 
-_c8b346e · extended cli-surface-sweep · d105fd0_
+_c8b346e · extended cli-surface-sweep · d105fd0 · extended review-comment-ingest · 0994809_
 
 ### Board issue intake
 
@@ -154,7 +155,7 @@ Get dross's `.dross` bookkeeping commits onto a protected base without a direct 
 - `routeBaseChores` (chore PR when protected, refuse on unknown, direct push otherwise) — `internal/cmd/basebranch.go:98`
 - `publishChorePR` (`.dross`-only commits → `dross-chores/<base>` PR armed for merge-commit auto-merge; joins an open one; refuses a release-tag change on main) — `internal/cmd/chorepr.go:77`
 - `AutoMergePR` (arms `gh` auto-merge; merges directly only when already mergeable; never `--admin`) — `internal/ship/automerge.go:46`
-- `narrateBaseChores` (ship, complete and recover narrate the chore PR; complete waits on a pending one) — `internal/cmd/ship.go:693`
+- `narrateBaseChores` (ship, complete and recover narrate the chore PR; complete waits on a pending one) — `internal/cmd/ship.go:749`
 - `routeMilestoneHead` (milestone-branch commits: chore PR for `.dross`, refusal for code; integration PR held until chore PRs merge) — `internal/cmd/milestone.go:1053`
 - quick PR route (protected/unknown base → `quick/<version>` branch and PR) — `assets/prompts/quick.md:23`
 
@@ -200,7 +201,7 @@ Make a wrong invocation self-correcting: an unknown subcommand or flag fails non
 - `EnforceSubcommandKnown` (unknown-subcommand guard, non-zero exit) — `internal/cmd/subcommand_guard.go:17`
 - `decorateFlagError` / `InstallFlagHints` (root FlagErrorFunc parent-walk, telemetry-preserving) — `internal/cmd/flag_hint.go:30`
 - `LineTeachesMisreach` (prompt-corpus guard against broken invocations) — `internal/cmd/hints.go:139`
-- `TestMisreachesAreSelfCorrecting` (c-2 executed against the assembled tree) — `cmd/dross/main_test.go:320`
+- `TestMisreachesAreSelfCorrecting` (c-2 executed against the assembled tree) — `cmd/dross/main_test.go:358`
 
 _introduced cli-surface-sweep · ad037f3_
 
@@ -212,7 +213,7 @@ Make every structured `show` machine-readable on the same terms: `project`, `mil
 - `render.JSON` (every `--json` document and TOML show that cmd prints goes through render's four byte-pinned shapes, so `internal/cmd` imports neither encoder) — `internal/render/render.go:23`
 - `summarizeStats` (one aggregation struct behind both table and JSON) — `internal/cmd/stats.go:133`
 - `taskShow` (`--json` status normalised through `orPending`) — `internal/cmd/task.go:132`
-- `TestEveryStructuredShowAcceptsJSON` (tree walk + wired-not-just-registered check) — `cmd/dross/main_test.go:455`
+- `TestEveryStructuredShowAcceptsJSON` (tree walk + wired-not-just-registered check) — `cmd/dross/main_test.go:493`
 
 _introduced board-state-map-truth · 3272339 · extended cmd-exec-baseline-drain · 1063e65_
 
@@ -307,7 +308,7 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `boardFieldKey` (`board.fields.<name>` addressed per leaf; a bogus name is rejected by name, bare `board.fields` is not a leaf) — `internal/cmd/project.go:601`
 - `enumKeys` (the one table both enum gates read: five dotted keys → their `configenum` Sets) — `internal/cmd/project.go:325`
 - `checkEnumValue` (set-time refusal, run before the write so a rejected value leaves project.toml byte-unchanged) — `internal/cmd/project.go:339`
-- `enumProblems` (validate re-checks the same table, catching the hand-edited or cloned file the setter never saw) — `internal/cmd/validate.go:210`
+- `enumProblems` (validate re-checks the same table, catching the hand-edited or cloned file the setter never saw) — `internal/cmd/validate.go:252`
 - `project.Project.Save` (the sole project.toml writer: load → diff → patch → canonical verify → atomic temp+fsync+rename; fresh encode only for an absent path) — `internal/project/project.go:501`
 - `saveLossless` / `SaveTOML` (the lossless write door Save and every other hand-annotated TOML store share: decode into the value's own type, diff, patch, verify, atomic write; `SaveTOML` exports it with its own `doorOps` seam) — `internal/project/project.go:516`
 - `apply` / `indexDoc` (raw-byte patcher: line-indexed value spans, header blocks, per-op re-index, inline tables refused by line) — `internal/project/patch.go:619`
@@ -376,7 +377,7 @@ Give every deferred idea a destination instead of leaving it write-only: `/dross
 - `validDeferredTarget` (one target rule shared by route, add and validate) — `internal/cmd/deferred_target.go:54`
 - `deferred.ResolveSource` (route/unroute/dismiss resolve `_project` through the store helper) — `internal/deferred/deferred.go:148`
 - `mirrorDeferredAdd` (same-command board mirror; warns and keeps the local write on failure) — `internal/cmd/deferred_add.go:158`
-- `danglingTargets` (validate walks the store; reserved `phases/_project` dir flagged; rename repoints store entries) — `internal/cmd/validate.go:441`
+- `danglingTargets` (validate walks the store; reserved `phases/_project` dir flagged; rename repoints store entries) — `internal/cmd/validate.go:483`
 - `TestParksHomelessFindingScopesToOpenLoops` (self-retiring guard against parking a finding instead of filing it) — `internal/cmd/deferred_homeless_repo_test.go:40`
 - `/dross-inbox` board-off fallback + dismiss funnel — `assets/prompts/inbox.md`
 - `resolveBacklogIssue` (routed items mirrored with a `dross/target:` label, resolved by identity label) — `internal/boardsync/backlog.go:323`
@@ -384,7 +385,7 @@ Give every deferred idea a destination instead of leaving it write-only: `/dross
 - `forge.IssueLinker` (optional link capability: YouTrack + Jira, absent on GitHub by design) — `internal/forge/forge.go:202`
 - `refuseCompleteTarget` (deferred route, survivor route and `deferred add --target` refuse a destination that is already complete, before any write; locked `route_to_complete`) — `internal/cmd/deferred_target.go:70`
 - `deferredAbsorb` (`dross deferred absorb` records a parked item's stable id on the criterion that takes it in — the record its board mirror closes on; `/dross-spec` runs it for every criterion seeded from a parked item) — `internal/cmd/deferred_absorb.go:27`
-- `absorbedProblems` (validate refuses an absorbed id that names no item, or one dismissed, unrouted or routed elsewhere, while the phase is open) — `internal/cmd/validate.go:476`
+- `absorbedProblems` (validate refuses an absorbed id that names no item, or one dismissed, unrouted or routed elsewhere, while the phase is open) — `internal/cmd/validate.go:518`
 
 _introduced deferred-item-routing · 6509930 · extended deferred-triage-gaps · 539d475 · extended deferred-unroute-command · fb24bc2 · extended survivor-lifecycle · a6b366d · extended deferred-add-command · 5e86a7b · extended board-sync-truth · a587471 · extended cmd-package-decomposition · adc37f7 · extended board-finalize-on-complete · 328f2f2_
 
@@ -835,7 +836,7 @@ One reader answers "is this phase done?" for every surface that asks, so `dross 
 - `askAllThree` (cross-command guard: one fixture put to all three commands, failing by name whichever disagrees) — `internal/cmd/completion_record_truth_test.go:51`
 - `changes.Complete` (record-only doneness predicate the four re-entry surfaces share; complete, never shipped) — `internal/changes/changes.go:365`
 - `reconcilablePhases` (reconcile count off the record; its `*state.State` parameter went dead with the breadcrumb read and was removed) — `internal/cmd/phase_reconcile.go:109`
-- `phaseMergeState` (network-free no-pr/open/merged/unknown merge oracle, keyed on a phase id rather than HEAD so it answers the same from main) — `internal/cmd/status.go:761`
+- `phaseMergeState` (network-free no-pr/open/merged/unknown merge oracle, keyed on a phase id rather than HEAD so it answers the same from main) — `internal/cmd/status.go:801`
 - `TestFourReentrySurfacesAgreeOnTheCompletionRecord` (one git-backed inverted fixture put to all four surfaces; whichever reverts to history or the verdict names itself) — `internal/cmd/reentry_signal_truth_test.go:160`
 
 The guard is deliberately asymmetric — two phases done by record against one carrying `verdict = "pass"` and no record — so truth is 2/3 while a verdict-reader reports 1/3 over the *opposite* phase; a symmetric fixture would let an inverted answer pass on the matching number, and `dross status` prints only a count. It compares each command against a fixed truth rather than against each other, so it also catches a regression in the shared reader itself, where all three would move together and still agree.
@@ -902,16 +903,40 @@ Phase artefacts (plan.toml / spec.toml) are written atomically: saveTOML encodes
 
 _introduced task-lifecycle-commands · 367c723_
 
+### PR review comment triage (dross-respond)
+
+Pull a phase PR's review comments — conversation, inline (with file:line) and review summaries — from any of the four ship providers into one list, and resolve each to exactly one evidenced verdict: **accept** (a new task in the phase's plan), **reject** (a stated reason) or **route** (a deferred item with a target). `/dross-respond` drives it pair-only over the `dross pr` noun: `dross pr comments` lists what is still untriaged, `dross pr resolve` records a verdict, `dross pr reply` posts the rejections back. The PR's phase comes from its `phase/<id>` head branch and a PR without one is refused (locked `pr_phase_binding`). Comment bodies are untrusted third-party text: they reach the agent fenced one backtick longer than any run inside them, with controls rendered as visible escapes, and pass the secret scrubber before anything is printed or persisted. Resolutions live in a tracked per-phase `pr-triage.toml` that stores id, url, author, kind, verdict, reason and evidence — never a body (locked `triage_record`); a re-run lists only comments not yet triaged plus any edited since. A verdict without evidence — a contained, line-checked `file:line`, or a command plus its output's sha256, never the output — is refused. A `/dross-review` comment posted by the authenticated account is split into one item per finding (`<comment-id>#<n>`); anyone else's copy of that header stays whole (locked `own_review_split`), and the run's own reply is excluded by marker *and* author (locked `self_reply_exclusion`). Rejections go out as one combined reply through the existing ship-comment path (locked `reply_shape`), only after a recorded human approval of that exact draft; accepts get no agreeing reply.
+
+- `ship.ListPRComments` (one thread read per provider seam, plus `PRHeadOf` / `AuthenticatedUser`; a list that may be truncated is refused, never returned partial) — `internal/ship/prcomments.go:70`
+- `forgejoPRComments` / `gitlabPRComments` / `bitbucketPRComments` (per-provider arms: Forgejo/Gitea authors are always unknown, GitLab notes link `web_url#note` with a per-author bot lookup, Bitbucket pages by `page=` without following a server-supplied next URL) — `internal/ship/prcomments_forgejo.go:111`, `internal/ship/prcomments_gitlab.go:80`, `internal/ship/prcomments_bitbucket.go:106`
+- `prtriage.Items` (a thread becomes kind-qualified triage items; splits and self-reply drops apply only to self-authored comments) — `internal/prtriage/items.go:44`
+- `prtriage.SplitReview` (numbered findings outside code fences) — `internal/prtriage/split.go:36`
+- `prtriage.Fence` (fence one backtick longer than any run in the body; controls shown as escapes) — `internal/prtriage/fence.go:22`
+- `prtriage.ParseAt` (evidence is a contained, line-checked file:line, or a command plus output sha256) — `internal/prtriage/evidence.go:61`
+- `prtriage.Save` (one redacted, validated verdict per comment; stale-read guarded; never a body) — `internal/prtriage/record.go:212`
+- `prtriage.ReplyBody` (one reply listing each unposted reject by id, mentioning no one and unable to forge markdown structure) — `internal/prtriage/reply.go:23`
+- `loadPRThread` (`dross pr comments`: bound to the phase branch HEAD is on, bodies fenced as untrusted data) — `internal/cmd/pr.go:59`
+- `resolveItem` (`dross pr resolve`: one evidenced verdict per comment; the plan or spec write rolls back if the record cannot be saved) — `internal/cmd/pr_resolve.go:201`
+- `postReply` (`dross pr reply --post`: posts once on a recorded approval of the exact draft, validating the record first) — `internal/cmd/pr_reply.go:56`
+- `/dross-respond` prompt (pair-only: verify each claim, one verdict per item, one human-approved reply) — `assets/prompts/respond.md:1`
+- `TestReadmeDocumentsRespond` (pins the `dross pr` row, `/dross-respond`, tracked `pr-triage.toml`, the watch pointer and man sections) — `internal/cmd/readme_doc_test.go:138`
+- `TestReplyApprovalCheck` / `TestRedactStringsWalksSlices` / `TestReplyOrdersRejectsByID` (approval PR/digest check on save and load; every string and struct slice redacted; several rejects listed in id order) — `internal/gatestate/store_test.go:384`, `internal/prtriage/record_test.go:187`, `internal/prtriage/reply_test.go:73`
+- `TestPRReplyWithRoutedResolution` / `TestPRResolveRouteWithReason` (reply validates spec deferred ids and refuses an unreadable spec; a route's reason prefixes the deferred item's why) — `internal/cmd/pr_reply_test.go:298`, `internal/cmd/pr_resolve_test.go:165`
+
+Ship refuses while an accepted comment's task is still open (see [Shipping / pull requests](#shipping--pull-requests)); `dross validate` checks the record against the plan and spec (see [Artefact validation](#artefact-validation)); the reply approval is a [tool-call gate](#tool-call-gates); and `/dross-watch` shows each ship PR's untriaged count (see [Watch heartbeat](#watch-heartbeat-dross-watch)).
+
+_introduced review-comment-ingest · 414cfcc_
+
 ### README accuracy guard
 
 Keeps the README's command table from lying about the CLI: `newRoot` is extracted from `main` so a test can inspect the real assembled command tree, and a parity test asserts every `` `dross <cmd>` `` the README advertises is a real top-level command (the over-claim failure mode) plus that the status line isn't a stale `v0.x`. Under-claiming (an internal command the table omits) is allowed. A companion needle guard pins the surfaces a user has to *know about* to recover a phase — `dross local`, `quick_base`, and complete's `--base` / `--recover` — so shipping the behaviour without documenting it fails the suite.
 
 - `newRoot` (testable command-tree assembly) — `cmd/dross/main.go:16`
 - `TestReadmeAdvertisesOnlyRealCommands` (over-claim guard) — `cmd/dross/main_test.go:36`
-- `TestReadmeStatusNotStale` (stale-version guard) — `cmd/dross/main_test.go:288`
+- `TestReadmeStatusNotStale` (stale-version guard) — `cmd/dross/main_test.go:326`
 - `TestReadmeDocumentsBaseTruthSurfaces` (needle guard: `dross local`, `quick_base`, `--base`/`--recover`) — `internal/cmd/readme_doc_test.go:43`
-- `TestNarratedCommandsResolveAgainstTheTree` (fourth sibling: `dross <cmd>` narrated from a Go string literal) — `cmd/dross/main_test.go:218`
-- `TestNarratedCommandsGuardCatchesBogusSubcommands` (the guard's own failure path — top-level resolution alone must not satisfy it) — `cmd/dross/main_test.go:269`
+- `TestNarratedCommandsResolveAgainstTheTree` (fourth sibling: `dross <cmd>` narrated from a Go string literal) — `cmd/dross/main_test.go:256`
+- `TestNarratedCommandsGuardCatchesBogusSubcommands` (the guard's own failure path — top-level resolution alone must not satisfy it) — `cmd/dross/main_test.go:307`
 - `TestReadmeDocumentsTestLanes` (needle guard: the lane verbs, `dross test --files` and the per-lane grant documented in README and options.md) — `internal/cmd/options_docs_test.go:188`
 - `declaredExitValues` (needle guard over `--toolchain`, the per-lane fallback and exit 8 in README / options.md / execute.md — and it asserts the documented exit-code list against `test.go`'s own const block, so a new code cannot ship undocumented) — `internal/cmd/lane_toolchain_docs_test.go:161`
 - `TestReadmeDocumentsLaneHostAffinity` (needle guard: the granted pool, per-lane toolchain routing across candidates, the split-run announcement, the four surfaces that must resolve alike, and pool-wide bootstrap) — `internal/cmd/options_docs_test.go:444`
@@ -1066,8 +1091,9 @@ A credential-shaped value cannot leave the repo through dross: an embedded, dete
 - `pinnedMarkerSites` (self-scan: the whole tracked tree is clean, `dross:allow-secret` sites pinned per file, validate proven hermetically over a clone of HEAD) — `internal/cmd/secretscan_selfscan_test.go:173`
 - `walkCache.get` (self-scan tests share one tracked-tree walk per test binary; a failed or skipped walk is re-raised to every reader) — `internal/cmd/secretscan_selfscan_test.go:126`
 - `TestGitHubFineGrainedPATFires` (the `github_pat_` alternation pinned at its 22-char floor; the randomized echo corpus covers both GitHub shapes) — `internal/secretscan/secretscan_test.go:130`
+- `Redact` (the detector as a scrubber: every credential-shaped value in untrusted text — a PEM block whole — is replaced, re-scanning to a fixed point, before that text is persisted or printed) — `internal/secretscan/redact.go:35`
 
-_introduced secret-detection · 636370b · extended cmd-test-duration · 43a79f2 · extended extracted-package-test-parity · 041a89b_
+_introduced secret-detection · 636370b · extended cmd-test-duration · 43a79f2 · extended extracted-package-test-parity · 041a89b · extended review-comment-ingest · 8fb7fdd_
 
 ### Security audit (dross-secure)
 
@@ -1119,7 +1145,7 @@ Survive `/clear` and compaction without losing the workflow thread: every durabl
 - `hooks.MutateSettings` (settings.json env-block read/modify/write beside the hook merger, so cmd holds no json codec for it) — `internal/hooks/settings.go:44`
 - `Hooks` (`dross hooks ensure`) / `ensureUserHooks` (init/onboard wiring of PreCompact, SessionStart and the [tool-call gate](#tool-call-gates) pair) — `internal/cmd/hooks.go:19`
 - `userHooks` (the one list of wired hooks: drives ensureUserHooks, the init/onboard ensured-hooks line and doctor's Hooks section) — `internal/cmd/hooks.go:65`
-- `Reentry` / `reentryLine` ("you are here + next", byte-equal to status's last line; appends ` · debug: <slug> <state> — /dross-debug <slug>` for the newest open [debug session](#debug-sessions)) — `internal/cmd/reentry.go:78`
+- `Reentry` / `reentryLine` ("you are here + next", byte-equal to status's last line; appends ` · debug: <slug> <state> — /dross-debug <slug>` for the newest open [debug session](#debug-sessions)) — `internal/cmd/reentry.go:33`
 - `Pause` (`dross pause --auto` mechanical snapshot merge) — `internal/cmd/pause.go:24`
 - `pauseAuto` / `autoSnapshot` (silent on a non-root, loud on a corrupt one, degrades without git) — `internal/cmd/pause.go:45`
 - `resume.md` §2 Prune (done items pruned from handoff.md with Edit; pause updates an existing handoff with Edit, so neither trips the curated-shrink gate) — `assets/prompts/resume.md:39`
@@ -1152,17 +1178,18 @@ _52f6c75 · extended ship-complete-recovery-hardening · extended ship-clean-tre
 
 Push the phase branch and open a provider-aware PR/MR (GitHub/Forgejo/GitLab/Bitbucket) with reviewers, merging the phase's landmarks into ARCHITECTURE.md first — auto-backfilling the whole doc via the prompt-driven generation when it's absent, so an older repo self-heals on its next interactive ship (non-blocking; `--auto` skips it) — marks the phase `shipped` in the machine-local, gitignored `state.json` and **leaves `current_phase` set**, because a phase is not complete until its PR is merged and ship runs before that is known; `dross phase complete` is the sole writer of the completed-state transition (see [Phase lifecycle](#phase-lifecycle)). The `shipped <id>` breadcrumb is history-scan-guarded so a re-ship never doubles it, and ship returns on a clean tree; squash-merge collapses per-task commits. The GitLab path is raw REST (no `gh`/`glab` CLI): `openGitLabPR` opens a Merge Request (source/target branch, `Draft:` prefix, `web_url`→URL, `iid`→Number) and resolves reviewer usernames→ids non-fatally; `postGitLabComment` posts an MR note. The post-push PR/MR URL is intentionally printed, not persisted to state.json (avoids the completion-chore divergence); the PR *number*, however, is recorded per-phase in changes.json (`changes.SetPR`), then committed **and pushed** onto the phase branch — drag-proof, unlike cumulative history — so the squash-merge carries the record onto the base's changes.json where `phase complete`'s `mergeGate` reads it to authoritatively confirm the merge (the push is essential: a local-only record never reaches the PR/squash/base, which would leave `mergeGate` blind and refusing every squash-merged completion). The CI-watch + squash-merge steps are prompt-driven (ship.md §5/§6) with the locked GitLab pipeline-status mapping. A non-interactive fast-path makes ship callable from a script or loop: `dross ship --auto` requests zero reviewers for the run without mutating `remote.reviewers` (gating the narration + telemetry off `opts.Reviewers`) and keeps the generated body, while `--json` emits a single `{url, number, result}` object on stdout through a suppressible `narrate` closure — the two compose, and explicit `--body`/`--body-file`/`--draft` still win. `ship.md §0.5` skips the interactive body-preview/body-override/reviewer turns and shells to `dross ship --auto`, opening the PR and returning without driving the merge. Bitbucket Cloud is a real ship provider over HTTP Basic (`auth_scheme = basic` + `[remote].auth_user`, its app-password/API-token wire format): `openBitbucketPR` creates the PR from the nested source/destination branch payload and reads the URL back off `links.html.href`, `postBitbucketComment` posts a `content.raw` note, and `bitbucketPRStatus` reports the authoritative merged status from `state == "MERGED"` plus `destination.branch.name` as BaseRef — a status all 5 ship providers now answer authoritatively via `ship.GetPRStatus`, not just Bitbucket — every provider switch on the path normalises through `configenum`, so the set ship dispatches, the set doctor blesses and the set the init/onboard prompts tell an agent to write are one set. GitLab and Forgejo/Gitea complete the same pair of surfaces Bitbucket did: `gitlabPRStatus` / `forgejoPRStatus` complete the `GetPRStatus` dispatch (`state == merged` + `target_branch`→BaseRef for GitLab; a `merged` boolean, not `state`, plus `base.ref`→BaseRef for Forgejo/Gitea, since Gitea's `state` field reports misleadingly), and `gitlabOpenMRsTargeting` / `forgejoOpenPRsTargeting` complete `OpenPRsTargeting` (GitLab paginates via `per_page`/`page`; Forgejo/Gitea filters client-side by `base.ref` since Gitea has no `base=` query param) — so every ship provider now answers both merge-status and open-PRs-by-base authoritatively, not just GitHub/Bitbucket.
 
-- `Ship` (CLI; `--auto` / `--json` non-interactive flags) — `internal/cmd/ship.go:79`
+- `Ship` (CLI; `--auto` / `--json` non-interactive flags) — `internal/cmd/ship.go:80`
 - `ship.OpenPR` (provider switch → github/forgejo/`openGitLabPR`/`openBitbucketPR`) — `internal/ship/open.go:51`
 - `ship.PostComment` / `postGitLabComment` / `postBitbucketComment` — `internal/ship/comment.go`
 - `openBitbucketPR` (Basic-auth PR creation, nested branch payload) — `internal/ship/bitbucket.go:220`
 - `bitbucketPRStatus` (authoritative `state == MERGED` + `destination.branch.name` as BaseRef) — `internal/ship/bitbucket.go:119`
 - `gitlabPRStatus` / `gitlabOpenMRsTargeting` (GitLab PRStatus + open-MRs-by-target parity) — `internal/ship/gitlab.go:102`, `internal/ship/gitlab.go:104`
 - `forgejoPRStatus` / `forgejoOpenPRsTargeting` (Forgejo/Gitea PRStatus + open-PRs-by-base parity) — `internal/ship/forgejo.go:86`
-- `buildOpenOpts` / `buildCommentOpts` (thread remote auth_scheme/project_id/auth_user) — `internal/cmd/ship.go:46`
+- `buildOpenOpts` / `buildCommentOpts` (thread remote auth_scheme/project_id/auth_user) — `internal/cmd/ship.go:47`
 - `changes.SetPR` (records opened PR number per-phase for the completion merge-gate) — `internal/changes/changes.go:256`
 - `ship.BuildPRBody` — `internal/ship/body.go:23`
-- verify-gate auto-heal (records a resolved-but-unrecorded verdict via `finalizeVerify` BEFORE the pass-only refusal — partial/fail recorded, then still refused) — `internal/cmd/ship.go:123`
+- verify-gate auto-heal (records a resolved-but-unrecorded verdict via `finalizeVerify` BEFORE the pass-only refusal — partial/fail recorded, then still refused) — `internal/cmd/ship.go:185`
+- `gateAcceptedTriage` (ship refuses while a review comment accepted through [PR review comment triage](#pr-review-comment-triage-dross-respond) still has an open task) — `internal/cmd/ship.go:614`
 
 Teardown ownership is explicit and single: the merge step **merges only**. No provider is asked to delete the source branch as part of it — no `--delete-branch`, no remove-source-branch field, no branch-removal call — because GitHub's delete-on-merge flag performs its own raw checkout of the base branch, a switch outside the guard, and that is what destroyed a live `state.json` on an earlier ship. `dross phase complete` performs both the local and the remote deletion on every provider, which also makes one behaviour of what was a per-provider split (Forgejo/GitLab/Bitbucket merge over REST and never switch branches). `ship.md` is pinned to that shape by a prompt guard rather than by convention.
 
@@ -1180,7 +1207,7 @@ Ship is an **ordered ladder gated on origin**, and the shipped flip is its last 
 - `TestBaseBranchCarriesNoOwnRevList` (shared_origin_gate: the base safety net carries no private origin comparison) — `internal/cmd/originpush_test.go:257`
 - `TestShipPromptReRunIsTheRetry` (ship.md names the re-run, never a second PR; §4 ladder order pinned) — `internal/cmd/ship_prompt_test.go:384`
 
-_introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended gitlab-ship-provider · extended ship-auto-noninteractive · extended verify-merge-before-completion · extended ship-architecture-autogen · extended pr-record-reaches-base · extended verify-auto-finalize · extended validator-truth · extended completion-state-truth · extended provider-merge-parity · extended push-gates-on-origin · d136ae3_
+_introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended gitlab-ship-provider · extended ship-auto-noninteractive · extended verify-merge-before-completion · extended ship-architecture-autogen · extended pr-record-reaches-base · extended verify-auto-finalize · extended validator-truth · extended completion-state-truth · extended provider-merge-parity · extended push-gates-on-origin · d136ae3 · extended review-comment-ingest · d60ff57_
 
 ### Solo task review
 
@@ -1196,7 +1223,7 @@ In `--solo` runs of /dross-execute and /dross-quick no human approves a task, so
 - `ArmedScope` (resolves which solo task or quick a review covers and its ledger key; one context loader for verb and recorder) — `internal/gate/scope.go:53`
 - `judgeSoloReview` (solo-review gate: a solo code commit needs a recorded pass for exactly the candidate tree; `.dross/`-only and pair-mode commits pass) — `internal/gate/soloreview.go:38`
 - `judgeDowngrade` (while a solo scope is armed with uncommitted code, dross calls that would shed its review refuse) — `internal/gate/soloreview.go:156`
-- `SaveReview` (machine-local review ledger, quick marker and context records under `.dross/gate/`; the tamper guard refuses their deletion as well as writes) — `internal/gatestate/store.go:179`
+- `SaveReview` (machine-local review ledger, quick marker and context records under `.dross/gate/`; the tamper guard refuses their deletion as well as writes) — `internal/gatestate/store.go:226`
 - `taskReviewFor` (a solo task's resolved review rides into changes.json; a failed solo task must be stashed before it is marked failed) — `internal/cmd/review_attach.go:31`
 - `Changes.SetReview` (each task's review outcome and resolved findings sit beside, never inside, its task record) — `internal/changes/changes.go:433`
 - `writeReviews` (PR body lists each solo task's review outcome and findings, escaped and budget-capped) — `internal/ship/body.go:135`
@@ -1239,16 +1266,16 @@ The **last line** — status's next-step suggestion, byte-equal to the SessionSt
 
 - `state.State` — `internal/state/state.go:17`
 - `State` (CLI) — `internal/cmd/state.go:20`
-- `Status` — `internal/cmd/status.go:26`
-- `suggestNext` (the next-step line; merge oracle consulted ahead of the verdict switch, and no doneness asserted without a record) — `internal/cmd/status.go:250`
+- `Status` — `internal/cmd/status.go:27`
+- `suggestNext` (the next-step line; merge oracle consulted ahead of the verdict switch, and no doneness asserted without a record) — `internal/cmd/status.go:257`
 - `TestSuggestNextShippedWithoutAnObservablePRWaitsOnTheMerge` (the shipped fall-through the oracle narrowed to the merge-unobservable case) — `internal/cmd/status_test.go:1820`
-- `shippedUnmergedPhase` (reports a shipped phase and the base its PR waits on; replaced the stale-completion warning) — `internal/cmd/status.go:642`
-- `recordPushPending` (PR number with neither shipped marker → record-pending; status and suggestNext name the ship re-run) — `internal/cmd/status.go:598`
-- `reconcilableCount` (read-only count behind the single-verb suggestion; never completes anything) — `internal/cmd/status.go:885`
-- `spineIdle` — `internal/cmd/status.go:381`
-- `rankAreas` — `internal/cmd/status.go:496`
-- `formatRunSignal` — `internal/cmd/status.go:515`
-- `renderActionAreas` — `internal/cmd/status.go:543`
+- `shippedUnmergedPhase` (reports a shipped phase and the base its PR waits on; replaced the stale-completion warning) — `internal/cmd/status.go:682`
+- `recordPushPending` (PR number with neither shipped marker → record-pending; status and suggestNext name the ship re-run) — `internal/cmd/status.go:638`
+- `reconcilableCount` (read-only count behind the single-verb suggestion; never completes anything) — `internal/cmd/status.go:925`
+- `spineIdle` — `internal/cmd/status.go:388`
+- `rankAreas` — `internal/cmd/status.go:536`
+- `formatRunSignal` — `internal/cmd/status.go:555`
+- `renderActionAreas` — `internal/cmd/status.go:583`
 - `stateTouch` (silent on a non-root, loud on a corrupt one) — `internal/cmd/state.go:123`
 - `stateGet` (1+ dotted paths via the shared `renderMultiGet`) — `internal/cmd/state.go:55`
 - `stateShow` (`--json` accepted; output byte-identical to bare `show`) — `internal/cmd/state.go:29`
@@ -1353,7 +1380,7 @@ Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (
 - `techdebt.Filter` (pure repo-relative exclude filter) — `internal/techdebt/filter.go:29`
 - `project.Techdebt` (`[techdebt] exclude`, nil when absent) — `internal/project/project.go:306`
 - `findings.StampLastRun` — `internal/findings/state.go:121`
-- `actionCatalog` (status actions all slash commands) — `internal/cmd/status.go:463`
+- `actionCatalog` (status actions all slash commands) — `internal/cmd/status.go:503`
 - `/dross-techdebt` thin skill — `assets/prompts/techdebt.md`
 
 _introduced status-action-surfaces-v2 · extended task-reordering · extended self-audit · extended scanner-self-exclusion · 6b90c82 · extended cmd-test-duration · 3f8ade4_
@@ -1489,7 +1516,7 @@ Stated limit, measured rather than assumed: this buys a **free laptop, not a fas
 - `testLaneEdit` (`dross test lane edit <name>`: every field in place — match, command, selector, empty_exit, template and join — keeping the lane's position; reads cobra's `Changed` so omitted and empty stay distinct, and *stales* the grant instead of revoking it) — `internal/cmd/test_lane.go:386`
 - `laneRefusal` (the one CLI gate for a proposed lane, validating a synthetic one-lane project so a neighbour's fault cannot block the edit that fixes it) — `internal/cmd/test_lane.go:132`
 - `testlane.Expand` (`{path}` repeats the template per path, `{paths}` substitutes them into one instance and joins when declared; the sole shell quoter, so template text and substituted path are quoted by one implementation) — `internal/testlane/template.go:52`
-- `laneWholeTreeWarning` (names the lane and the token when a scoped selector is declared on a command already ending in `./...` or `.`) — `internal/cmd/validate.go:551`
+- `laneWholeTreeWarning` (names the lane and the token when a scoped selector is declared on a command already ending in `./...` or `.`) — `internal/cmd/validate.go:593`
 - `TestLaneSelectorRefusalIsGone` (pins the deletion of the orphaned per-field-group gate laneRefusal subsumed, and that laneRefusal itself stays) — `internal/cmd/test_lane_edit_test.go:731`
 - `TestExecutePromptDocumentsPrepareExit` (execute.md lists exit 7 among the codes that mean the run did not happen, so an agent cannot send a reader hunting a bug in code that never ran) — `internal/cmd/execute_prompt_test.go:158`
 - `TestExecutePromptPassesTaskFilesToTest` (execute's pre-commit gate scopes itself to the task's own plan.toml files) — `internal/cmd/prompt_test_command_test.go:128`
@@ -1511,18 +1538,19 @@ Claude Code's PreToolUse/PostToolUse hooks run `dross gate check` / `dross gate 
 - `judgePlanEdit` (plan-edit: Edit/MultiEdit of an existing plan.toml points at `dross task add/edit/move/remove`; a Write over one refuses once any task has left pending) — `internal/gate/drossfiles.go:100`
 - `judgeCuratedShrink` (curated-shrink: a Write cutting a curated `.dross/` file below half its size refuses; use Edit) — `internal/gate/drossfiles.go:132`
 - `Defaults` (built-in gate lists; curated files are `handoff.md` and `debug/*.md`, so a [debug session](#debug-sessions) is shrink-guarded, and a gates.toml list only adds to them) — `internal/gate/lists.go:39`
-- `judgeCandidate` (commit-green: a `git commit` is admitted only when its candidate tree — `cd`/`-C` tracked, chained `git add`s replayed, `-a`/`--all` honoured — equals the recorded full green; `.dross/`-only commits and test-less repos pass) — `internal/gate/commit.go:179`
+- `commitCandidate` (commit-green: a `git commit` is admitted only when its candidate tree — `cd`/`-C` tracked, chained `git add`s replayed, `-a`/`--all` honoured — equals the recorded full green; `.dross/`-only commits and test-less repos pass) — `internal/gate/commit.go:166`
 - `treefp.Candidate` (tree-object fingerprints from a scratch copy of the git index via GIT_INDEX_FILE, `.dross/` excluded; the real index is never touched) — `internal/treefp/treefp.go:125`
 - `greenRecorder.finish` (a full `dross test` records `.dross/gate/green.json` only for a tree unchanged across a green run; red on that tree clears it, a run that never happened leaves it) — `internal/cmd/test.go:1172`
 - `judgePair` (pair-approval: in pair mode an in-repo write outside `.dross/` refuses until the exact `approve t-N` AskUserQuestion answer is recorded at the current HEAD) — `internal/gate/pair.go:102`
 - `executeBegin` (`dross execute begin <phase> [--solo]` records the run's mode the pair gate reads) — `internal/cmd/execute.go:31`
 - `TestCapturedAskUserQuestionFixture` (pins the live AskUserQuestion PostToolUse shape the approval reader parses) — `internal/gate/fixture_test.go:18`
-- `gatestate.save` (machine-local `.dross/gate/` records behind a self-ignoring .gitignore, written atomically; a corrupt record is an error naming the path) — `internal/gatestate/store.go:284`
+- `ReplyApproveLabel` (reply-approval: a human picking exactly `post reply #<pr> <digest>` in AskUserQuestion is the only way a PR reply approval is recorded; `dross pr reply --post` reads it) — `internal/gate/reply_confirm.go:32`
+- `gatestate.save` (machine-local `.dross/gate/` records behind a self-ignoring .gitignore, written atomically; a corrupt record is an error naming the path) — `internal/gatestate/store.go:331`
 - `LiftedBy` (human lifts in `~/.claude/dross/gate-overrides.json` with expiry — workflow gates per repo, secret gates machine-wide; a corrupt store lifts nothing) — `internal/gate/override.go:147`
 - `gateOff` (`dross gate off|on|status`, human-only, lifts capped at 24h) — `internal/cmd/gate.go:171`
 - `TestPromptCommitsSatisfyGreenGate` (every prompt step that stages code runs a bare `dross test` first; `.dross/`-only bookkeeping commits pass ungated) — `internal/cmd/prompt_commit_gate_test.go:80`
 
-_introduced tool-gate-hooks · 387e245 · extended debug-sessions · c86d3f4_
+_introduced tool-gate-hooks · 387e245 · extended debug-sessions · c86d3f4 · extended review-comment-ingest · 5ad499f_
 
 ### Tool-output containment
 
@@ -1598,7 +1626,7 @@ A pass verdict covers the tree its run measured, not whatever ships later. Every
 - `dispatchDetached` (takes the tree after the probe and before the push; the run record carries it) — `internal/cmd/verify.go:346`
 - `localstore.DetachedRun` (`measured_commit` / `measured_tree`: the dispatch-time tree collect stamps) — `internal/localstore/store.go:197`
 - `gateFreshness` / `verdictFreshness` (ship's refusal, override and legacy warning; a tree-less verdict is judged without a capture) — `internal/cmd/verdict_fresh.go:52`
-- `staleVerdict` (status's stale marker, phase branch only, silent on any error) — `internal/cmd/status.go:900`
+- `staleVerdict` (status's stale marker, phase branch only, silent on any error) — `internal/cmd/status.go:940`
 - `mutationReportDirs` (reports/gremlins/, reports/mutation/, StrykerOutput/ seeded into .gitignore, never reports/ itself) — `internal/cmd/gitignore.go:100`
 - `TestShipPromptReShipsBeforeMerge` (ship.md re-ships after every CI fix and before every provider's merge call) — `internal/cmd/ship_prompt_test.go:503`
 
@@ -1606,17 +1634,19 @@ _introduced verify-staleness · 49fee2e_
 
 ### Watch heartbeat (dross-watch)
 
-Read-only `/loop` heartbeat: `dross watch --json` surfaces board issues new-since-last-tick vs carried (an atomically-persisted seen-set diff keyed on id + open/closed state) plus the current milestone's drifting phases, and ends with exactly one ranked suggested command. A board that is off or unreachable degrades to a drift-only digest; the only thing a run ever writes is `.dross/watch.state.json`. The digest also carries the **stranded-mirror count** — cards whose artefact finished but whose lane never closed them — read from the reap sweep's own classifier rather than a second opinion, and omitted entirely when it is zero or the board was unreachable, so a quiet board stays quiet. The prompt names `dross issue reap` in prose as the remedy but emits no sweep command (locked `prompt_edge`): the heartbeat is a detector, and a 90-call whole-board walk is not something a `/loop` tick should trigger on its own. Drift itself is classified off the completion record via [Phase doneness](#phase-doneness), so a finished phase leaves the digest permanently instead of reappearing as verified-unshipped drift once its state-history breadcrumb ages out. The digest also carries the forge's **open PRs** (GitHub only, keyed on `gh`'s `author.is_bot`): `bot_prs` — Dependabot and pin-bump PRs, each with its age in raw days since opened (created-at, since both bots force-push in place) and a failing > pending > passing check rollup, rendered as one `bot PRs: N open (F failing), oldest Nd` line — and `ship_prs`, one `pr: #N phase/x — <checks>` line per open same-repo `phase/`/`milestone/` head. Both come from one bounded `gh pr list` spawn that fails quiet, and are **absent rather than empty** when the forge cannot be queried, so "unknown" never reads as "none"; neither ever steers the suggested command.
+Read-only `/loop` heartbeat: `dross watch --json` surfaces board issues new-since-last-tick vs carried (an atomically-persisted seen-set diff keyed on id + open/closed state) plus the current milestone's drifting phases, and ends with exactly one ranked suggested command. A board that is off or unreachable degrades to a drift-only digest; the only thing a run ever writes is `.dross/watch.state.json`. The digest also carries the **stranded-mirror count** — cards whose artefact finished but whose lane never closed them — read from the reap sweep's own classifier rather than a second opinion, and omitted entirely when it is zero or the board was unreachable, so a quiet board stays quiet. The prompt names `dross issue reap` in prose as the remedy but emits no sweep command (locked `prompt_edge`): the heartbeat is a detector, and a 90-call whole-board walk is not something a `/loop` tick should trigger on its own. Drift itself is classified off the completion record via [Phase doneness](#phase-doneness), so a finished phase leaves the digest permanently instead of reappearing as verified-unshipped drift once its state-history breadcrumb ages out. The digest also carries the forge's **open PRs** (GitHub only, keyed on `gh`'s `author.is_bot`): `bot_prs` — Dependabot and pin-bump PRs, each with its age in raw days since opened (created-at, since both bots force-push in place) and a failing > pending > passing check rollup, rendered as one `bot PRs: N open (F failing), oldest Nd` line — and `ship_prs`, one `pr: #N phase/x — <checks>` line per open same-repo `phase/`/`milestone/` head. Both come from one bounded `gh pr list` spawn that fails quiet, and are **absent rather than empty** when the forge cannot be queried, so "unknown" never reads as "none"; neither ever steers the suggested command. Each phase ship-PR line also carries its **untriaged review-comment count** with a `/dross-respond <n>` pointer, read from that phase branch's own `pr-triage.toml` (the working tree when HEAD is on it, the branch ref otherwise); a PR with nothing waiting shows no count, and a record it cannot read degrades to no count rather than a guess — the pointer stays on its PR's line and never becomes the suggested command.
 
-- `Watch` (`dross watch --json`) — `internal/cmd/watch.go:49`
-- `watchDigest.Stranded` (stranded-mirror count, omitted when zero or the board is unreachable) — `internal/cmd/watch.go:34`
-- `openPRDigest` (`bot_prs`/`ship_prs` from the forge: absent when unknown, `[]` when none) — `internal/cmd/watch.go:148`
-- `suggestedCommand` (ranked verify→ship→reconcile→inbox→status) — `internal/cmd/watch.go:166`
+- `Watch` (`dross watch --json`) — `internal/cmd/watch.go:51`
+- `watchDigest.Stranded` (stranded-mirror count, omitted when zero or the board is unreachable) — `internal/cmd/watch.go:36`
+- `openPRDigest` (`bot_prs`/`ship_prs` from the forge: absent when unknown, `[]` when none) — `internal/cmd/watch.go:150`
+- `countUntriaged` (per ship PR, the untriaged-comment count from the phase branch's triage record; unknown degrades to no count) — `internal/cmd/watch.go:171`
+- `suggestedCommand` (ranked verify→ship→reconcile→inbox→status) — `internal/cmd/watch.go:216`
 - `watch.State.Diff` (new/carried seen-set delta) — `internal/watch/watch.go:85`
 - `watch.ClassifyDrift` (milestone-scoped phase drift) — `internal/watch/drift.go:42`
-- `watch.SplitPRs` (bot PRs by forge flag + `age_days`; same-repo phase/milestone ship PRs) — `internal/watch/prs.go:38`
+- `watch.SplitPRs` (bot PRs by forge flag + `age_days`; same-repo phase/milestone ship PRs) — `internal/watch/prs.go:41`
+- `watch.ShipPRLine` (a ship PR line carries the untriaged count and `/dross-respond` pointer only when comments wait) — `internal/watch/prs.go:105`
 - `ship.ListOpenPRs` (one bounded `gh pr list` spawn with bot flag and check rollup; quiet `nil, err` on any failure) — `internal/ship/openprs.go:86`
 - `boardsync.CollectInbound` (mark-free inbound filter, shared with `issue pull`) — `internal/boardsync/inbound.go:18`
 - `/dross-watch` prompt (non-interactive broadcast; bot-PR summary and per-ship-PR lines) — `assets/prompts/watch.md:1`
 
-_introduced dross-watch · 5694cf5 · extended board-mirror-reaper · 757a576 · extended reentry-signal-truth · f19cc07 · extended watch-bot-prs · bd79cf1_
+_introduced dross-watch · 5694cf5 · extended board-mirror-reaper · 757a576 · extended reentry-signal-truth · f19cc07 · extended watch-bot-prs · bd79cf1 · extended review-comment-ingest · 3162e45_
