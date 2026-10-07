@@ -1,0 +1,151 @@
+[verify]
+  phase = "review-comment-ingest"
+  generated_at = 2026-10-07T05:56:48.726287Z
+  verdict = "fail"
+  finalized = true
+  finalized_at = 2026-10-07T05:58:31.336296Z
+  measured_commit = "a151624685c8fa0435fb23c2af8de02c36ea31b3"
+  measured_tree = "40c8d0662ffd7639efb9855d1ac007fd9905fd9f"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.830546265328874
+  mutants_killed = 745
+  mutants_survived = 152
+  mutants_not_covered = 152
+  mutants_no_block = 134
+  mutants_test_gap = 18
+  mutants_in_scope = 897
+  unclassified_in_scope = 12
+  criteria_total = 8
+  criteria_covered = 7
+  criteria_uncovered = 1
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 745
+    survived = 152
+    timeout = 0
+    in_scope = 897
+    score = 0.830546265328874
+    file_count = 49
+    measured_on = "helicon"
+    whole_file = ["cmd/dross/main.go — adapter-lacks-range-runner", "cmd/dross/main_test.go — adapter-lacks-range-runner", "internal/cmd/pr.go — adapter-lacks-range-runner", "internal/cmd/pr_reply.go — adapter-lacks-range-runner", "internal/cmd/pr_reply_test.go — adapter-lacks-range-runner", "internal/cmd/pr_resolve.go — adapter-lacks-range-runner", "internal/cmd/pr_resolve_test.go — adapter-lacks-range-runner", "internal/cmd/pr_test.go — adapter-lacks-range-runner", "internal/cmd/readme_doc_test.go — adapter-lacks-range-runner", "internal/cmd/respond_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/ship.go — adapter-lacks-range-runner", "internal/cmd/ship_triage_test.go — adapter-lacks-range-runner", "internal/cmd/validate.go — adapter-lacks-range-runner", "internal/cmd/validate_triage_test.go — adapter-lacks-range-runner", "internal/cmd/watch.go — adapter-lacks-range-runner", "internal/cmd/watch_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/watch_test.go — adapter-lacks-range-runner", "internal/gate/reply_confirm.go — adapter-lacks-range-runner", "internal/gate/reply_confirm_test.go — adapter-lacks-range-runner", "internal/gatestate/store.go — adapter-lacks-range-runner", "internal/pathfence/fields.go — adapter-lacks-range-runner", "internal/pathfence/fields_test.go — adapter-lacks-range-runner", "internal/prtriage/evidence.go — adapter-lacks-range-runner", "internal/prtriage/evidence_test.go — adapter-lacks-range-runner", "internal/prtriage/fence.go — adapter-lacks-range-runner", "internal/prtriage/fence_test.go — adapter-lacks-range-runner", "internal/prtriage/items.go — adapter-lacks-range-runner", "internal/prtriage/items_test.go — adapter-lacks-range-runner", "internal/prtriage/record.go — adapter-lacks-range-runner", "internal/prtriage/record_test.go — adapter-lacks-range-runner", "internal/prtriage/refload.go — adapter-lacks-range-runner", "internal/prtriage/refload_test.go — adapter-lacks-range-runner", "internal/prtriage/reply.go — adapter-lacks-range-runner", "internal/prtriage/reply_test.go — adapter-lacks-range-runner", "internal/prtriage/split.go — adapter-lacks-range-runner", "internal/prtriage/split_test.go — adapter-lacks-range-runner", "internal/secretscan/redact.go — adapter-lacks-range-runner", "internal/secretscan/redact_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/ship/prcomments.go — adapter-lacks-range-runner", "internal/ship/prcomments_bitbucket.go — adapter-lacks-range-runner", "internal/ship/prcomments_bitbucket_test.go — adapter-lacks-range-runner", "internal/ship/prcomments_forgejo.go — adapter-lacks-range-runner", "internal/ship/prcomments_forgejo_test.go — adapter-lacks-range-runner", "internal/ship/prcomments_gitlab.go — adapter-lacks-range-runner", "internal/ship/prcomments_gitlab_test.go — adapter-lacks-range-runner", "internal/ship/prcomments_test.go — adapter-lacks-range-runner", "internal/watch/prs.go — adapter-lacks-range-runner", "internal/watch/prs_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/ship/prcomments_test.go:TestGitHubPRCommentKinds", "internal/ship/prcomments_test.go:TestGitHubPRCommentAuthorFlag", "internal/ship/prcomments_forgejo_test.go:TestForgejoPRCommentKinds", "internal/ship/prcomments_forgejo_test.go:TestForgejoAuthorUnknown", "internal/ship/prcomments_gitlab_test.go:TestGitLabPRCommentKinds", "internal/ship/prcomments_gitlab_test.go:TestGitLabAuthorBotLookup", "internal/ship/prcomments_bitbucket_test.go:TestBitbucketPRCommentKinds", "internal/ship/prcomments_bitbucket_test.go:TestBitbucketAuthorFlag", "internal/cmd/pr_test.go:TestPRCommentsListsEveryKind", "internal/prtriage/items_test.go:TestItemsSplitOwnOnly"]
+  notes = "Kinds, path:line, ids and bot/human/unknown asserted per provider (unknown on forgejo/gitea); the cmd-level line carries id, kind, author, flag, file:line and triage status. GitLab/Bitbucket expose no review-summary kind. Own-review split asserted at unit level only."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/pr_resolve_test.go:TestPRResolveAccept", "internal/cmd/pr_resolve_test.go:TestPRResolveReject", "internal/cmd/pr_resolve_test.go:TestPRResolveRoute", "internal/cmd/pr_resolve_test.go:TestPRResolveVerdictMatrix", "internal/cmd/pr_resolve_test.go:TestPRResolveOncePerComment", "internal/prtriage/record_test.go:TestRecordValidate"]
+  notes = "Accept lands a task in the PR phase's plan even with current_phase elsewhere; route lands a deferred item with its target; zero/two/three verdicts, reject without reason and route without target are refused with .dross unchanged. The repeat-resolve test only drives accept->accept, but the guard (pr_resolve.go:98) is verdict-independent."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/pr_test.go:TestPRCommentsRerunPendingOnly", "internal/prtriage/items_test.go:TestItemsEditResurfaces", "internal/prtriage/record_test.go:TestRecordRoundTripLossless", "internal/cmd/pr_resolve_test.go:TestPRResolveOncePerComment"]
+  notes = "Edits are detected by a CRLF-folded sha256 of the body; the cmd test resolves c1 on disk, asserts it is absent on re-run, then edits it and asserts 'edited (was reject)'."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/pr_resolve_test.go:TestPRResolveRefusesNoEvidence", "internal/cmd/pr_resolve_test.go:TestPRResolveVerdictMatrix", "internal/prtriage/evidence_test.go:TestParseAtRefuses", "internal/prtriage/evidence_test.go:TestFromOutputNeverStoresOutput", "internal/prtriage/evidence_test.go:TestRequireEvidence", "internal/cmd/validate_triage_test.go:TestValidateTriageRecord"]
+  notes = "All three verdicts refused without evidence with a .dross digest unchanged; a missing file or line past EOF is refused at prtriage.ParseAt (unit), which pr_resolve.go:156 calls."
+
+[[criterion]]
+  id = "c-5"
+  status = "weak"
+  tests = ["internal/cmd/pr_reply_test.go:TestPRReplyRefusesWithoutRecordedApproval", "internal/cmd/pr_reply_test.go:TestPRReplyStaleApproval", "internal/cmd/pr_reply_test.go:TestPRReplyPostsOnceViaShipComment", "internal/prtriage/reply_test.go:TestReplyListsOnlyRejects", "internal/gate/reply_confirm_test.go:TestReplyApprovalRecordsExactLabelOnly", "internal/cmd/respond_prompt_test.go:TestRespondPromptRequirements"]
+  notes = "The confirm gate itself is tight (no or stale approval -> 0 POSTs; accepts and routes absent from the body). Weak because three in-hunk survivor sites sit on its surface: pr_reply.go:127 (no reply test has a spec.toml, so a record holding a route never passes the pre-post validation in a test), reply.go:33 (multi-reject order never driven), gatestate/store.go:177-204 (approval validation untested in its own package). Remediation: t-22, t-24, t-25."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/prtriage/fence_test.go:TestFenceHoldsAgainstBreakers", "internal/prtriage/fence_test.go:TestFenceTildeAndInfoInside", "internal/prtriage/fence_test.go:TestFenceEscapesControls", "internal/prtriage/items_test.go:TestRenderFencesBreaker", "internal/cmd/pr_test.go:TestPRCommentsFenceBreakerStaysFenced"]
+  notes = "Fence = longest backtick run + 1 across runs of 3..30 (indented, mid-line, unterminated, CRLF). The t-9/t-10 reviewer FLAG on an exact-length closer no longer holds: closesUntrustedFence closes on any run >= the opener."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/pr_test.go:TestPRCommentsRedactsPlantedToken", "internal/prtriage/items_test.go:TestRenderRedactsBeforeFence", "internal/prtriage/record_test.go:TestSaveRedactsEveryString", "internal/cmd/pr_resolve_test.go:TestPRResolveRedactsPersisted", "internal/secretscan/redact_test.go:TestRedactIgnoresAllowMarker", "internal/prtriage/reply_test.go:TestReplyDigestStable"]
+  notes = "Planted tokens are redacted in printed body, login and path, and in every persisted string field (reflection). The record.go:248 survivor is redactStrings' slice arm, unreachable from today's Resolution (no slice field); tracked as BLOCKING + t-23, it does not weaken today's redaction."
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/watch/prs_test.go:TestShipPRLineUntriaged", "internal/cmd/watch_test.go:TestWatchShipPRUntriagedCount", "internal/cmd/watch_test.go:TestWatchShipPRNoneShowsNoCount", "internal/cmd/watch_test.go:TestWatchUntriagedDegrades", "internal/cmd/watch_prompt_test.go:TestWatchPromptShipPRLine", "internal/cmd/respond_prompt_test.go:TestWatchPointerNamesRealCommand"]
+  notes = "Exact line strings for counts 0/1/3 incl. '/dross-respond 138'; the none case asserts neither count nor pointer. watch.md's template is checked by fragment; the model's rendering of it is not testable."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/pr_reply.go:127 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gatestate/store.go:177 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gatestate/store.go:180 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gatestate/store.go:188 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gatestate/store.go:201 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gatestate/store.go:201 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gatestate/store.go:204 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/prtriage/reply.go:33 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/prtriage/reply.go:33 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/prtriage/record.go:248 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/prtriage/record.go:248 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/prtriage/record.go:248 (INCREMENT_DECREMENT)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "criterion c-5 is weak: the confirm-gated reply has no test with a spec.toml present (pr_reply.go:127), none with two or more unposted rejects (reply.go:33), and its approval validator is untested inside internal/gatestate — remediation tasks t-22, t-24, t-25"
+
+[[finding]]
+  severity = "NOTE"
+  text = "remediation tasks t-22..t-25 added at wave 8, one per gap site (gatestate check, redactStrings slice arm, reply order, pr reply with spec+route); after the re-verify, reply.go:33's CONDITIONALS_BOUNDARY (< to <=) should read LIVED as an equivalent mutant (ids are unique) and be accepted then"
+
+[[finding]]
+  severity = "NOTE"
+  text = "accepted 59 NOT-COVERED sites this run as unkillable by construction: 45 switch-case conditions (gremlins-attribution-ceiling), 2 const initializers (const-initializer-arithmetic), 12 string concatenations where + to - cannot compile (new category string-concat-non-viable); 5 of them were out-of-diff standing debt (doctor.go:627, gate.go:41, gitignore.go:19, reviewer_agent.go:18, automerge.go:107)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "re-collected run r-20261006-170242 after the accepts by restoring its [[detached_run]] record (no re-run); efficacy over the 763 reachable mutants = 0.98, 0 lived"
+
+[[finding]]
+  severity = "NOTE"
+  text = "tooling defects found during this verify, filed someday: DRO-931 (survivor.Derive calls a never-run one-line closure an attribution ceiling — reply.go:33 was a real gap) and DRO-932 (solo-review findings fixed in a later round keep resolution 'non-blocking, left')"

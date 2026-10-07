@@ -107,3 +107,13 @@
   id = "10b5dfad63d2c39d"
   text = "With no Stryker config in the repo (no stryker.conf.{json,js,mjs,cjs}, stryker.config.*, or package.json \"stryker\" key), the TS leg silently runs Stryker's default command runner over `npm test` — no coverage analysis, and possibly the wrong suite (BarkTime: npm test = vitest unit project, criteria covered by tests/integration + e2e), so mutants read as surviving. Refuse or degrade loudly: mark the leg unmeasurable with a reason (\"no stryker config — default command runner over npm test would measure the wrong suite\") or require an explicit opt-in."
   why = "Reported 2026-10-06 by the BarkTime session as item 7 of its Stryker adapter report (DRO-908..912)"
+
+[[deferred]]
+  id = "3350d782d7d1b710"
+  text = "survivor.Derive labels a NOT COVERED mutant inside a one-line closure (e.g. reply.go:33's sort.Slice less func) as 'attribution ceiling: go-cover shows count 1' when the count belongs to the enclosing call statement's block on the same line and the closure body's own block never ran. That steers a real coverage gap toward accept. Classify by the block that holds the mutant's column, not by any block on its line."
+  why = "Found verifying review-comment-ingest (run r-20261006-170242, 2026-10-07): the t-11 reviewer had flagged the multi-reject ordering as untested; the drain said 'ceiling'. Caught by reading TestMarkPosted, not by the tool."
+
+[[deferred]]
+  id = "034f42b8cd2144b1"
+  text = "Solo task review: a finding raised in round N and fixed in a later round keeps resolution 'non-blocking, left' in changes.json reviews, so /dross-verify's Solo review block reports fixed defects as open. Re-resolve earlier-round findings when a later round's diff addresses them (or record per-finding status at the final round)."
+  why = "Found verifying review-comment-ingest (2026-10-07): 7 of 7 spot-checked 'left' FLAGs describing code defects (forgejo paging, gitlab rename fallback, reply link escaping x2, reply post ordering, respond.md commit/empty-list) were already fixed in the tree."
