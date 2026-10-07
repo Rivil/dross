@@ -181,6 +181,31 @@ func TestSaveRedactsEveryString(t *testing.T) {
 	}
 }
 
+// TestRedactStringsWalksSlices drives the slice arm no Resolution field reaches
+// today: a slice field added later is redacted element by element, slices of
+// structs included, with none skipped.
+func TestRedactStringsWalksSlices(t *testing.T) {
+	tok := recToken()
+	type inner struct{ S string }
+	p := struct {
+		Strs   []string
+		Nested []inner
+	}{
+		Strs:   []string{"first " + tok, "middle " + tok, "last " + tok},
+		Nested: []inner{{"first " + tok}, {"middle " + tok}, {"last " + tok}},
+	}
+	redactStrings(reflect.ValueOf(&p).Elem())
+	for i, pos := range []string{"first", "middle", "last"} {
+		want := pos + " [redacted github-token]"
+		if p.Strs[i] != want {
+			t.Errorf("Strs[%d] = %q, want %q", i, p.Strs[i], want)
+		}
+		if p.Nested[i].S != want {
+			t.Errorf("Nested[%d].S = %q, want %q", i, p.Nested[i].S, want)
+		}
+	}
+}
+
 func TestRecordSaveRefusesStaleRead(t *testing.T) {
 	path := filepath.Join(t.TempDir(), File)
 	_, read, err := Load(path)
