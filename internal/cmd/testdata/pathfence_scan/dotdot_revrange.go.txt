@@ -5,6 +5,7 @@ package scanfixture
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -30,4 +31,16 @@ func validateGitRef(name string) error {
 		return fmt.Errorf("unsafe git ref: %q contains \"@{\"", name)
 	}
 	return nil
+}
+
+// The two cases above make no path call, so the marker check alone keeps them
+// out. These two DO carry a marker (filepath.Join), so it is the `+` rule that
+// must keep them out: a rev-range built next to a joined path, and a relative
+// "../" link being BUILT rather than tested.
+func rangeBesideAPath(repo, base, head string) (string, []string) {
+	return filepath.Join(repo, ".git"), []string{"log", base + ".." + head}
+}
+
+func relativeLink(dir, name string) string {
+	return filepath.Join(dir, "README.md") + " -> " + "../" + name
 }

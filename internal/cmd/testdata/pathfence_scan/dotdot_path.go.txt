@@ -46,3 +46,20 @@ func normalize(p string) (string, bool) {
 	}
 	return c, true
 }
+
+// Join is the most plausible way to build the path a second containment check
+// inspects, and it is the ONLY path call here. Before Join was a marker this
+// whole function was skipped (tracked-path-containment c-1, hole 2).
+func joinEscape(root, name string) (string, bool) {
+	p := filepath.Join(root, name)
+	return p, !strings.HasPrefix(p, "..")
+}
+
+// An escape test written solely as a "../" prefix, with no bare ".." arm. The
+// scan used to report only the exact ".." literal, so this reported nothing
+// (tracked-path-containment c-1, hole 3). The copy is buggy as well — it lets
+// a bare ".." through — which is exactly why it must not exist outside
+// internal/pathfence.
+func slashOnly(p string) bool {
+	return !strings.HasPrefix(path.Clean(p), "../")
+}

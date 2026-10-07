@@ -49,6 +49,12 @@ var pathMarkers = map[string]bool{
 	"filepath.Separator": true, "os.PathSeparator": true,
 	"path.Clean": true, "path.Base": true,
 	"filepath.Rel": true, "filepath.IsAbs": true, "filepath.Clean": true,
+	// The builders. Join is the most common way to make the path a ".." test
+	// then inspects, so without it a function that joins and prefix-checks
+	// carried no marker and was skipped whole (tracked-path-containment c-1).
+	"filepath.Join": true, "path.Join": true,
+	"filepath.Dir": true, "path.Dir": true,
+	"filepath.Split": true, "path.Split": true,
 }
 
 // The unwrap ban's floors: ~25% under the 278 os.* call sites it examines
@@ -325,18 +331,39 @@ func TestNoSecondDotDotImplementation(t *testing.T) {
 	assertWalkCovers(t, "\"..\"", visited)
 }
 
-// TestDotDotScanTripsOnItsFixtures self-tests the literal scan against the two
-// shapes this phase removed and the two it must leave alone.
+// TestDotDotScanTripsOnItsFixtures self-tests the literal scan against the
+// shapes it must report and the ones it must leave alone. The must-trip side is
+// checked per function, not as a total: a total holds when one shape stops
+// being reported while another is reported twice.
 func TestDotDotScanTripsOnItsFixtures(t *testing.T) {
 	trip := findPathDotDotSrc(t, "dotdot_path.go.txt")
-	if len(trip) != 3 {
-		t.Errorf("the must-trip fixture reported %d findings, want 3 "+
-			"(the os.PathSeparator form, the path.Base form, and the path.Clean form):\n%s",
+	want := map[string]int{
+		"containedPath": 1, // filepath.Rel + an os.PathSeparator-joined prefix test
+		"runDir":        1, // path.Base equality with a bare ".." arm
+		"normalize":     2, // path.Clean, then both the ".." and the "../" arm
+		"joinEscape":    1, // filepath.Join is the only marker
+		"slashOnly":     1, // a "../" prefix test with no bare ".." arm
+	}
+	got := map[string]int{}
+	for _, hit := range trip {
+		for fn := range want {
+			if strings.Contains(hit, ": "+fn+" tests ") {
+				got[fn]++
+			}
+		}
+	}
+	for fn, n := range want {
+		if got[fn] != n {
+			t.Errorf("must-trip fixture: %s reported %d time(s), want %d", fn, got[fn], n)
+		}
+	}
+	if len(trip) != 6 {
+		t.Errorf("the must-trip fixture reported %d findings, want 6:\n%s",
 			len(trip), strings.Join(trip, "\n"))
 	}
 
 	if pass := findPathDotDotSrc(t, "dotdot_revrange.go.txt"); len(pass) != 0 {
-		t.Errorf("a git rev-range or a ref-name rule was reported as a path comparison:\n%s",
+		t.Errorf("a git rev-range, a relative-path build or a ref-name rule was reported as a path comparison:\n%s",
 			strings.Join(pass, "\n"))
 	}
 }
@@ -380,13 +407,16 @@ func findPathDotDotSrc(t *testing.T, name string) []string {
 	return findPathDotDot(fset, f)
 }
 
-// findPathDotDot reports every ".." literal that sits in a path context.
+// findPathDotDot reports every ".." or "../" literal that sits in a path
+// context. Both are reported: an escape check written solely as
+// HasPrefix(clean, "../") carries no bare ".." and would otherwise slip past.
 //
 // Two shape rules keep the legal uses out, rather than an exemption list that
 // would go stale the moment a fifth call site is added:
 //
 //   - a literal that is an operand of a `+` is a git rev-list RANGE
-//     (main+".."+work), not a comparison against a cleaned path;
+//     (main+".."+work) or a relative path being built ("../"+name), not a
+//     comparison against a cleaned path;
 //   - a literal in a function that makes no path call at all is a ref-name rule
 //     (refguard's strings.Contains), which git requires for its own reasons.
 func findPathDotDot(fset *token.FileSet, f *ast.File) []string {
@@ -402,17 +432,21 @@ func findPathDotDot(fset *token.FileSet, f *ast.File) []string {
 		concat := concatOperands(fn.Body)
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
 			lit, ok := n.(*ast.BasicLit)
-			if !ok || lit.Kind != token.STRING || lit.Value != `".."` || concat[lit] {
+			if !ok || lit.Kind != token.STRING || !dotDotLiterals[lit.Value] || concat[lit] {
 				return true
 			}
 			pos := fset.Position(lit.Pos())
-			out = append(out, fmt.Sprintf("%s:%d: %s tests \"..\" directly",
-				pos.Filename, pos.Line, fn.Name.Name))
+			out = append(out, fmt.Sprintf("%s:%d: %s tests %s directly",
+				pos.Filename, pos.Line, fn.Name.Name, lit.Value))
 			return true
 		})
 	}
 	return out
 }
+
+// dotDotLiterals are the escape-test literals the scan reports, in Go source
+// form (quotes included, as ast.BasicLit.Value carries them).
+var dotDotLiterals = map[string]bool{`".."`: true, `"../"`: true}
 
 // hasPathMarker reports whether a function body contains any token that makes
 // its ".." a path question: a separator constant, a "../" literal, or a call to
