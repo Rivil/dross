@@ -1,4 +1,4 @@
-task_seq = 25
+task_seq = 26
 [phase]
   id = "review-comment-ingest"
 
@@ -279,7 +279,7 @@ task_seq = 25
   description = "Verify gap (2026-10-07, run r-20261006-170242): gremlins mutates internal/gatestate with only that package's tests, and ReplyApproval.check plus LoadReplyApproval's error paths (store.go:177-204) are exercised only from internal/gate, so 6 mutants survive NOT COVERED (CONDITIONALS_NEGATION at 177/180/188/201/204, CONDITIONALS_BOUNDARY at 201). Add tests in internal/gatestate/store_test.go (package gatestate): SaveReplyApproval refuses PR 0 and -1 and accepts PR 1; refuses an empty or whitespace digest; LoadReplyApproval returns nil, nil with no reply.json, returns an error and nil for malformed JSON and for a hand-written file naming PR 0 or no digest, and round-trips a valid approval. Tests only — no change to store.go."
   covers = ["c-5"]
   test_contract = ["if check()'s PR guard is negated or its <= 0 boundary moves, TestReplyApprovalCheck fails: SaveReplyApproval refuses PR 0 and PR -1 and accepts PR 1", "if the digest guard is dropped or negated, TestReplyApprovalCheck fails: an empty or whitespace-only digest is refused on save and a non-empty one is accepted", "if LoadReplyApproval swallows a load error or skips check(), TestLoadReplyApprovalRefusesBadFile fails: malformed JSON, a file naming PR 0 and a file with no digest each return an error and a nil approval; a missing file returns nil, nil; a valid file round-trips"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-23"
@@ -289,7 +289,7 @@ task_seq = 25
   description = "Verify gap (2026-10-07, run r-20261006-170242): the reflect.Slice arm of redactStrings (record.go:247-250) exists so a slice field added to Resolution later cannot escape redaction, but Resolution has no slice field today, so the loop never runs and 3 mutants at record.go:248 survive NOT COVERED (CONDITIONALS_BOUNDARY, CONDITIONALS_NEGATION, INCREMENT_DECREMENT). Add an in-package test in internal/prtriage/record_test.go (package prtriage) that calls redactStrings on a test-local struct holding a []string field and a nested []struct{ S string } field, with a planted token (built from parts so the secret self-scan stays clean) in the first, a middle and the last element of each. Tests only — no change to record.go."
   covers = ["c-7"]
   test_contract = ["if the slice loop's condition is negated, TestRedactStringsWalksSlices fails: a planted token in a []string element and in a nested []struct{S string} element survives unredacted", "if the slice loop's bound or increment is mutated, TestRedactStringsWalksSlices fails: the first, a middle and the last element are each redacted, with no panic and no element skipped"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-24"
@@ -299,7 +299,7 @@ task_seq = 25
   description = "Verify gap (2026-10-07, run r-20261006-170242): ReplyBody sorts the unposted rejects by id (reply.go:33), but no test gives it two or more unposted rejects on one PR (TestMarkPosted posts one of its two first), so the sort.Slice less closure never runs and 2 mutants survive NOT COVERED. Add a test in internal/prtriage/reply_test.go with three unposted rejects on the same PR stored out of order (e.g. i2, c7, c4) and assert the bullets come out c4, c7, i2, exactly three, one per reject. After the re-verify the CONDITIONALS_BOUNDARY mutant (< to <=) will read LIVED, not NOT COVERED: it is equivalent, because record ids are unique (Validate refuses a duplicate id) and sort.Slice orders distinct keys the same under < and <= — accept it then with that reason, as body.go:147 already is. Tests only — no change to reply.go."
   covers = ["c-5"]
   test_contract = ["if the sort's comparison is negated, TestReplyOrdersRejectsByID fails: three unposted rejects stored as i2, c7, c4 must render as c4, c7, i2", "if the sort is dropped, TestReplyOrdersRejectsByID fails: the bullets keep record order i2, c7, c4"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-25"
@@ -309,4 +309,14 @@ task_seq = 25
   description = "Verify gap (2026-10-07, run r-20261006-170242): phaseRefs (pr_reply.go:124-130) loads spec.toml only when it exists, and no pr reply test fixture has one, so the deferred-id half of the pre-post Validate is untested — a reply on a PR whose record also holds a route (the normal shape on a real phase) is never exercised, and pr_reply.go:127 survives NOT COVERED (CONDITIONALS_NEGATION). Add cmd-level tests in internal/cmd/pr_reply_test.go: (a) the phase dir has a spec.toml whose deferred item a route resolution names, plus one unposted reject — --post with a recorded approval POSTs exactly once and marks the reject posted; (b) spec.toml present but malformed — --post refuses with 0 POSTs, the error names spec.toml, and the record and approval are unchanged. Tests only — no change to pr_reply.go."
   covers = ["c-5"]
   test_contract = ["if phaseRefs stops reading spec.toml's deferred ids or inverts the load-error check, TestPRReplyWithRoutedResolution fails: a record holding a route to a spec deferred item plus one unposted reject posts exactly once and marks the reject posted", "if a spec.toml load error is swallowed, TestPRReplyRefusesBadSpec fails: a malformed spec.toml refuses --post with 0 POSTs, an error naming spec.toml, and pr-triage.toml and the approval byte-identical"]
-  status = "pending"
+  status = "done"
+
+[[task]]
+  id = "t-26"
+  wave = 8
+  title = "Drive a route that carries a reason"
+  files = ["internal/cmd/pr_resolve_test.go"]
+  description = "Verify gap found clearing the pre-existing red (2026-10-07): verify b9b2e51 accepted pr_resolve.go:271 (`why = r + \" — \" + why`) as non-viable string concat, but it sits in a function body, and TestStringConcatArithmeticMutantIsNoOp shows such a line is a coverage gap killed by covering it. No test routes with --reason (TestPRResolveRoute passes none), so the branch never runs. The acceptance was retired. Add TestPRResolveRouteWithReason in internal/cmd/pr_resolve_test.go: a route with --reason writes a spec deferred item whose Why is '<reason> — review comment <url>' and records the reason; a whitespace-only --reason and no --reason both keep Why as 'review comment <url>'. Tests only — no change to pr_resolve.go."
+  covers = ["c-2"]
+  test_contract = ["if the reason prefix is dropped or its guard negated, TestPRResolveRouteWithReason fails: a route with --reason \"wrong layer\" writes a deferred item whose Why is \"wrong layer — review comment <url>\"", "if a blank reason is not trimmed away, TestPRResolveRouteWithReason fails: --reason \"  \" and no --reason both leave Why as \"review comment <url>\" with no leading separator"]
+  status = "done"

@@ -259,6 +259,81 @@
         }
       ]
     },
+    "t-22": {
+      "files": [
+        "internal/gatestate/store_test.go"
+      ],
+      "commit": "d66af09",
+      "completed_at": "2026-10-07T07:14:38.799319Z",
+      "landmarks": [
+        {
+          "feature": "PR review reply gate",
+          "symbol": "TestReplyApprovalCheck",
+          "loc": "internal/gatestate/store_test.go:384",
+          "what": "pins ReplyApproval's PR/digest check on save and load inside gatestate's own tests"
+        }
+      ]
+    },
+    "t-23": {
+      "files": [
+        "internal/prtriage/record_test.go"
+      ],
+      "commit": "347c8c5",
+      "completed_at": "2026-10-07T07:22:28.99518Z",
+      "landmarks": [
+        {
+          "feature": "triage record redaction",
+          "symbol": "TestRedactStringsWalksSlices",
+          "loc": "internal/prtriage/record_test.go:187",
+          "what": "pins redactStrings redacting every element of string and struct slices"
+        }
+      ]
+    },
+    "t-24": {
+      "files": [
+        "internal/prtriage/reply_test.go"
+      ],
+      "commit": "c6144bf",
+      "completed_at": "2026-10-07T07:35:07.804951Z",
+      "landmarks": [
+        {
+          "feature": "PR review reply",
+          "symbol": "TestReplyOrdersRejectsByID",
+          "loc": "internal/prtriage/reply_test.go:73",
+          "what": "pins the combined reply listing several unposted rejects sorted by comment id"
+        }
+      ]
+    },
+    "t-25": {
+      "files": [
+        "internal/cmd/pr_reply_test.go"
+      ],
+      "commit": "a8e17e8",
+      "completed_at": "2026-10-07T07:48:38.122658Z",
+      "landmarks": [
+        {
+          "feature": "PR review reply",
+          "symbol": "TestPRReplyWithRoutedResolution",
+          "loc": "internal/cmd/pr_reply_test.go:298",
+          "what": "pins pr reply --post validating spec deferred ids and refusing an unreadable spec.toml before posting"
+        }
+      ]
+    },
+    "t-26": {
+      "files": [
+        "internal/cmd/pr_resolve_test.go"
+      ],
+      "commit": "f46a478",
+      "completed_at": "2026-10-07T09:05:20.088066Z",
+      "landmarks": [
+        {
+          "feature": "PR review comment triage",
+          "symbol": "TestPRResolveRouteWithReason",
+          "loc": "internal/cmd/pr_resolve_test.go:165",
+          "what": "pins a route's --reason prefixing the deferred item's why and a blank reason adding nothing"
+        }
+      ]
+    },
     "t-3": {
       "files": [
         "internal/prtriage/fence.go",
