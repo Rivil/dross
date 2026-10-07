@@ -195,7 +195,9 @@ func containScope(repoDir string, s *verify.Scope) ([]pathfence.Contained, error
 	for _, f := range s.Files {
 		c, err := pathfence.Contain(repoDir, "verify scope", f)
 		if err != nil {
-			return nil, fmt.Errorf("verify scope: %w", err)
+			// Contain already leads with the artifact; wrapping it again
+			// printed "verify scope: verify scope: ...".
+			return nil, err
 		}
 		out = append(out, c)
 	}

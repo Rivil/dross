@@ -437,6 +437,18 @@ func TestContainScopeRefusesUncontainedEntry(t *testing.T) {
 	if got != nil {
 		t.Errorf("a refusal still returned candidates: %v", got)
 	}
+	// c-5: diagnosable from the message alone — and the artifact said once.
+	// Contain already leads with it, so a second wrap read "verify scope:
+	// verify scope: ..." and no Contains check could see the stutter.
+	msg := err.Error()
+	for _, want := range []string{"../x", "/repo"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("refusal does not name %q: %s", want, msg)
+		}
+	}
+	if n := strings.Count(msg, "verify scope"); n != 1 {
+		t.Errorf("refusal names its artifact %d times, want once: %s", n, msg)
+	}
 }
 
 // TestContainScopeHandlesNilScope: the detached path reconstructs its scope,
