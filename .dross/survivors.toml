@@ -58,10 +58,6 @@
   name = "scanner-no-progress-guard"
   reason = "A no-progress guard in internal/shellscan's parser loops — parseList's `if p.pos == start`, and parseCommand's `if p.pos == before` after parseRedirect and after readWord: when an iteration consumed nothing it fails the scan and steps one byte, so a future grammar gap degrades to Partial instead of looping forever. No input reaches one today: parseList hands every byte to a branch that consumes it, atRedirect only returns true where parseRedirect will consume an operator from redirOps, and readWord only stalls on a metacharacter parseCommand has already dispatched. Checked 2026-10-03 by fuzzing (FuzzScan, 53.6M executions, ~1,100 new interesting inputs) a copy of the package with each guard replaced by a panic: none fired. The mutants here only change what an unreachable branch does (the string-concatenation ARITHMETIC_BASE is not even viable). Keep the guards; if one is ever reached, TestFuzzSeedsNeverPanic and the fuzz harness's Partial/Problem invariant are where it shows."
 
-[[category]]
-  name = "string-concat-non-viable"
-  reason = "ARITHMETIC_BASE rewrites the + of a string concatenation to -, *, / or %; none of those operators is defined on Go strings, so the mutant never compiles and is never viable — no test a caller could write can kill it. Where the line is a const or package-level var initializer it also sits in no go-cover block. Same class as the per-entry string-concat acceptances already in this file (e.g. internal/cmd/milestone.go:1054); the standing fix is for the gremlins adapter to drop non-compiling string-operator mutants before they reach the survivor list."
-
 [[accepted]]
   key = "742de35850fac7e6"
   file = "internal/cmd/survivor.go"
@@ -4075,7 +4071,7 @@
   text = "const drossLocalIgnorePath = \".dross/\" + localstore.File"
   line = 19
   accepted_in = "review-comment-ingest"
-  category = "string-concat-non-viable"
+  category = "const-initializer-arithmetic"
 
 [[accepted]]
   key = "0f1fcf502aacf534"
@@ -4186,15 +4182,6 @@
   category = "gremlins-attribution-ceiling"
 
 [[accepted]]
-  key = "25d41e7d9b1ad4df"
-  file = "internal/cmd/pr_resolve.go"
-  op = "ARITHMETIC_BASE"
-  text = "why = r + \" — \" + why"
-  line = 271
-  accepted_in = "review-comment-ingest"
-  category = "string-concat-non-viable"
-
-[[accepted]]
   key = "a7ca3b45946759bb"
   file = "internal/cmd/pr_resolve.go"
   op = "CONDITIONALS_NEGATION"
@@ -4219,7 +4206,7 @@
   text = "const reviewerFile = review.ReviewerAgent + \".md\""
   line = 18
   accepted_in = "review-comment-ingest"
-  category = "string-concat-non-viable"
+  category = "const-initializer-arithmetic"
 
 [[accepted]]
   key = "7b89ed08d4088e7c"
@@ -4237,7 +4224,7 @@
   text = "\"a file:line locator a triage resolution cites. ParseAt contains and line-checks the \"+"
   line = 353
   accepted_in = "review-comment-ingest"
-  category = "string-concat-non-viable"
+  category = "const-initializer-arithmetic"
 
 [[accepted]]
   key = "e820cf07851cb229"
@@ -4246,7 +4233,7 @@
   text = "\"value it is given before it is recorded; from the record it is only split and checked \"+"
   line = 354
   accepted_in = "review-comment-ingest"
-  category = "string-concat-non-viable"
+  category = "const-initializer-arithmetic"
 
 [[accepted]]
   key = "6c89416b0b5d526d"
@@ -4255,7 +4242,7 @@
   text = "\"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and \"+"
   line = 360
   accepted_in = "review-comment-ingest"
-  category = "string-concat-non-viable"
+  category = "const-initializer-arithmetic"
 
 [[accepted]]
   key = "3150db5a77b68820"
@@ -4264,7 +4251,7 @@
   text = "\"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and \"+"
   line = 364
   accepted_in = "review-comment-ingest"
-  category = "string-concat-non-viable"
+  category = "const-initializer-arithmetic"
 
 [[accepted]]
   key = "41a6586b8527289a"
@@ -4273,7 +4260,7 @@
   text = "\"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and \"+"
   line = 368
   accepted_in = "review-comment-ingest"
-  category = "string-concat-non-viable"
+  category = "const-initializer-arithmetic"
 
 [[accepted]]
   key = "df9e57ef56e0c77a"
@@ -4282,7 +4269,7 @@
   text = "\"the repo file (new side) a reviewer anchored a diff note to, decoded into PRComment.Path and \"+"
   line = 372
   accepted_in = "review-comment-ingest"
-  category = "string-concat-non-viable"
+  category = "const-initializer-arithmetic"
 
 [[accepted]]
   key = "c8f5c95a48b5dd56"
@@ -4291,7 +4278,7 @@
   text = "\"the repo file (old side) a diff note on a removed line is anchored to, decoded into \"+"
   line = 376
   accepted_in = "review-comment-ingest"
-  category = "string-concat-non-viable"
+  category = "const-initializer-arithmetic"
 
 [[accepted]]
   key = "cee1ff0fe15c7650"
@@ -4444,7 +4431,7 @@
   text = "var ErrStaleRead = errors.New(File + \" changed since it was read — load it again and redo the change\")"
   line = 205
   accepted_in = "review-comment-ingest"
-  category = "string-concat-non-viable"
+  category = "const-initializer-arithmetic"
 
 [[accepted]]
   key = "7cb3ff59fe179a87"
@@ -4498,7 +4485,7 @@
   text = "panic(\"secretscan: no \" + pemRuleName + \" rule\")"
   line = 108
   accepted_in = "review-comment-ingest"
-  category = "string-concat-non-viable"
+  reason = "Unreachable while the rules table holds the pem-private-key rule: pemRule() scans the package-level rules slice and returns on the first name match, so its trailing panic runs only if that rule were deleted. Every PEM redaction reaches pemRule through redactOnce and pemHit, and TestRedactPEMWhole asserts the [redacted pem-private-key] marker and a hit named pem-private-key, so deleting the rule fails that test long before this panic could run. The mutant itself swaps a string + for an operator Go strings do not define, so it would not compile even on a reached line."
 
 [[accepted]]
   key = "584bd49540793a2a"
