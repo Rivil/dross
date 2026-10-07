@@ -274,6 +274,81 @@ digest = "`+strings.Repeat("ab", 32)+`"
 	}
 }
 
+// routeEntry is a route resolution of PR 12 parking comment id as deferred
+// item abc.
+func routeEntry(id string) string {
+	return `[[resolution]]
+id = "` + id + `"
+kind = "conversation"
+pr = 12
+url = "https://forge.example/me/proj/pulls/12#` + id + `"
+author = "bob"
+verdict = "route"
+deferred = "abc"
+target = "later"
+at = "x.go:1"
+digest = "` + strings.Repeat("ab", 32) + `"
+`
+}
+
+// TestPRReplyWithRoutedResolution: on a phase whose spec holds the deferred
+// item a route names — the normal shape of a real phase — the pre-post check
+// reads the spec's ids, so the reply goes out once and only the reject is
+// marked posted.
+func TestPRReplyWithRoutedResolution(t *testing.T) {
+	dir, f, _ := replyRepo(t)
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "x", "spec.toml"), `[phase]
+id = "x"
+title = "X"
+
+[[deferred]]
+id = "abc"
+text = "rework paging"
+target = "later"
+`)
+	mustWrite(t, replyRecordPath(dir), replyEntry("c1", "bounded by maxPages", false)+routeEntry("c2"))
+	body, _ := draft(t, dir)
+	approve(t, dir, 12, prtriage.ReplyDigest(body))
+	if _, err := runReply(t, "--post"); err != nil {
+		t.Fatalf("a record holding a route to a spec deferred item: %v", err)
+	}
+	if f.posts.Load() != 1 {
+		t.Errorf("%d POSTs, want exactly 1", f.posts.Load())
+	}
+	rec, _, err := prtriage.Load(replyRecordPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rec.Resolution {
+		if want := r.ID == "c1"; r.Posted != want {
+			t.Errorf("%s posted = %v, want %v", r.ID, r.Posted, want)
+		}
+	}
+}
+
+// TestPRReplyRefusesBadSpec: a spec.toml that cannot be read stops --post
+// before anything is sent, marked or spent.
+func TestPRReplyRefusesBadSpec(t *testing.T) {
+	dir, f, _ := replyRepo(t)
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "x", "spec.toml"), "[phase\n")
+	body, _ := draft(t, dir)
+	approve(t, dir, 12, prtriage.ReplyDigest(body))
+	recPath, apprPath := replyRecordPath(dir), gatestate.Path(dir, gatestate.ReplyFile)
+	rec, appr := readOrEmpty(t, recPath), readOrEmpty(t, apprPath)
+	if _, err := runReply(t, "--post"); err == nil || !strings.Contains(err.Error(), "spec.toml") {
+		t.Errorf("a malformed spec.toml: %v, want a refusal naming spec.toml", err)
+	}
+	if f.posts.Load() != 0 {
+		t.Errorf("%d POSTs with an unreadable spec.toml", f.posts.Load())
+	}
+	if readOrEmpty(t, recPath) != rec {
+		t.Errorf("%s changed", prtriage.File)
+	}
+	if appr == "" || readOrEmpty(t, apprPath) != appr {
+		t.Error("the approval was spent or never recorded")
+	}
+}
+
 func TestPRReplyNeedsPhaseBranch(t *testing.T) {
 	dir, f, _ := replyRepo(t)
 	body, _ := draft(t, dir)
