@@ -378,3 +378,68 @@ func TestReviewPendingRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// TestReplyApprovalCheck: an approval naming no PR or no digest is refused
+// before anything is written, and a well-formed one saves.
+func TestReplyApprovalCheck(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		a    ReplyApproval
+		want string // the refusal, or "" for a save that goes through
+	}{
+		{"PR 0", ReplyApproval{PR: 0, Digest: "d", At: at}, "names no PR"},
+		{"PR -1", ReplyApproval{PR: -1, Digest: "d", At: at}, "names no PR"},
+		{"empty digest", ReplyApproval{PR: 1, Digest: "", At: at}, "no digest"},
+		{"blank digest", ReplyApproval{PR: 1, Digest: " \t", At: at}, "no digest"},
+		{"PR 1", ReplyApproval{PR: 1, Digest: "d", At: at}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := SaveReplyApproval(dir, tc.a)
+			if tc.want != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.want) {
+					t.Fatalf("SaveReplyApproval(%+v) = %v; want a refusal containing %q", tc.a, err, tc.want)
+				}
+				if _, statErr := os.Stat(Path(dir, ReplyFile)); !os.IsNotExist(statErr) {
+					t.Errorf("a refused approval was written: stat = %v", statErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("SaveReplyApproval(%+v) = %v", tc.a, err)
+			}
+			if got, err := LoadReplyApproval(dir); err != nil || got == nil || *got != tc.a {
+				t.Errorf("load after save = %+v, %v; want %+v", got, err, tc.a)
+			}
+		})
+	}
+}
+
+// TestLoadReplyApprovalRefusesBadFile: a missing reply.json reads as no
+// approval, a valid one round-trips, and one that is malformed or fails check()
+// is an error, never a usable approval.
+func TestLoadReplyApprovalRefusesBadFile(t *testing.T) {
+	dir := t.TempDir()
+	if a, err := LoadReplyApproval(dir); a != nil || err != nil {
+		t.Errorf("missing reply approval = %+v, %v; want nil, nil", a, err)
+	}
+	want := ReplyApproval{PR: 7, Digest: "sha256:abc", At: at}
+	if err := SaveReplyApproval(dir, want); err != nil {
+		t.Fatal(err)
+	}
+	if a, err := LoadReplyApproval(dir); err != nil || a == nil || *a != want {
+		t.Errorf("reply approval round trip = %+v, %v; want %+v", a, err, want)
+	}
+	for name, body := range map[string]string{
+		"malformed": `{"pr":7,"digest":"sha`,
+		"PR 0":      `{"pr":0,"digest":"sha256:abc","at":"2026-10-03T09:00:00Z"}`,
+		"no digest": `{"pr":7,"digest":"","at":"2026-10-03T09:00:00Z"}`,
+	} {
+		if err := os.WriteFile(Path(dir, ReplyFile), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if a, err := LoadReplyApproval(dir); err == nil || a != nil || !strings.Contains(err.Error(), ".dross/gate/reply.json") {
+			t.Errorf("%s reply.json = %+v, %v; want an error naming .dross/gate/reply.json", name, a, err)
+		}
+	}
+}
