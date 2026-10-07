@@ -129,7 +129,10 @@ The CLI:
 After the PR opens, watch CI to completion. Skip this section ONLY if the repo has no `.github/workflows/`, `.forgejo/workflows/`, `.gitea/workflows/`, `.gitlab-ci.yml`, AND the provider reports no checks for the head SHA.
 
 **Watch checks:**
-- GitHub: `gh pr checks <pr-url> --watch --fail-fast` — blocks until all checks finish; non-zero exit on failure.
+- GitHub: never gate on `gh pr checks --watch`. It exits 0 as soon as the checks registered **so far** pass, and a fast third-party check (GitGuardian, say) can be the only one registered while the Actions run is still queued — it reads green with CI unrun. Watch the runs themselves, in this order. SHA = head of `phase/<id>` (`git rev-parse origin/phase/<id>`).
+  1. Wait for the runs to register: poll `gh run list --commit <sha> --json databaseId,workflowName,status` every ~15s until it lists at least one run, for up to ~10 minutes. A repo with workflows whose run never registers in that window joins the no-checks path below — surface it, never read it as a pass.
+  2. Watch each run to completion: `gh run watch <run-id> --exit-status` — non-zero on failure.
+  3. Once every run has finished, read the full check set: `gh pr checks <pr-url>` (no `--watch`). Every check must pass, third-party ones included; one still pending → re-read after ~30s; any failure → **On failure**.
 - Forgejo / Gitea: poll every ~30s — `GET <api_base>/repos/<owner>/<repo>/commits/<sha>/status` (auth header `token $<auth_env>`). Stop when `state` ∈ `success | failure | error`. SHA = head of `phase/<id>`.
 - GitLab: poll every ~30s — `GET <api_base>/projects/<id>/pipelines?sha=<sha>` (auth header `PRIVATE-TOKEN: $<auth_env>`, or `Authorization: Bearer` when `remote.auth_scheme = bearer`); `<id>` is the URL-encoded `owner/repo` (or numeric `remote.project_id`). Read the latest pipeline's `status` and apply the locked mapping: `success` → pass (go to §6); `failed` or `canceled` → fail (drop to **On failure**); `running` / `pending` / `created` / `preparing` → keep polling; `manual` / `skipped` → **do not guess** — surface to the user and ask whether to proceed without a green pipeline. SHA = head of `phase/<id>`.
 
