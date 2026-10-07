@@ -24,7 +24,7 @@ so the two conventions stay single-purpose.
 
 ## Footer-bearing
 
-The eight durable-boundary commands and the fresh-session command each footer
+The nine durable-boundary commands and the fresh-session command each footer
 names:
 
 | Command | Fresh-session next |
@@ -37,6 +37,7 @@ names:
 | quick | /dross-status |
 | pause | /dross-resume |
 | debug | /dross-debug \<slug\> (the session it leaves open or just closed) |
+| respond | /dross-execute (a comment was accepted) · /dross-status (none was) |
 
 ## Exempt
 

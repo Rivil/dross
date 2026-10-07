@@ -124,7 +124,7 @@ gate.listFile.SecretTools secret_tools
 gate.Override.Name name
 gate.Override.Repo repo
 
-# ---- gatestate — machine-local gate records: tree object ids, phase/task ids, HEAD SHAs, modes, runner labels, review kinds and attempt keys, quick descriptions
+# ---- gatestate — machine-local gate records: tree object ids, phase/task ids, HEAD SHAs, modes, runner labels, review kinds and attempt keys, quick descriptions, reply digests
 gatestate.Approval.Head head
 gatestate.Approval.Phase phase
 gatestate.Approval.Task task
@@ -138,6 +138,7 @@ gatestate.Launch.Tree tree
 gatestate.Quick.Description description
 gatestate.Quick.Head head
 gatestate.Quick.Mode mode
+gatestate.ReplyApproval.Digest digest
 gatestate.Review.Attempt attempt
 gatestate.Review.Kind kind
 gatestate.Review.Phase phase
@@ -342,6 +343,20 @@ rules.Rule.ID id
 rules.Rule.Severity severity
 rules.Rule.Text text
 
+# ---- prtriage — the triage record: comment ids, kinds, links, author logins, verdicts, reasons, task/deferred ids, route targets, digests, evidence commands
+prtriage.Evidence.Cmd cmd
+prtriage.Evidence.OutputSHA256 output_sha256
+prtriage.Resolution.Author author
+prtriage.Resolution.Deferred deferred
+prtriage.Resolution.Digest digest
+prtriage.Resolution.ID id
+prtriage.Resolution.Kind kind
+prtriage.Resolution.Reason reason
+prtriage.Resolution.Target target
+prtriage.Resolution.Task task
+prtriage.Resolution.URL url
+prtriage.Resolution.Verdict verdict
+
 # ---- security — security-finding identity and prose
 security.Finding.Class class
 security.Finding.Evidence evidence
@@ -350,7 +365,7 @@ security.Finding.Refutation refutation
 security.Finding.Severity severity
 security.Finding.Title title
 
-# ---- ship — forge PR payloads: branch names, titles, URLs, author logins, check states
+# ---- ship — forge PR payloads: branch names, titles, URLs, author logins and types, check and review states, repo names, comment bodies
 ship.BasePR.HeadRefName headrefname
 ship.BasePR.Title title
 ship.BasePR.URL url
@@ -362,8 +377,38 @@ ship.PRCheck.Conclusion conclusion
 ship.PRCheck.State state
 ship.PRCheck.Status status
 ship.RulesetSummary.Name name
+ship.bbAccount.DisplayName display_name
+ship.bbAccount.Nickname nickname
+ship.bbAccount.Type type
+ship.bbAccount.UUID uuid
+ship.bbCommentList.Next next
+ship.bbPull.State state
+ship.bbRepoName.FullName full_name
+ship.forgejoComment.Body body
+ship.forgejoComment.HTMLURL html_url
+ship.forgejoComment.State state
 ship.forgejoPR.HTMLURL html_url
 ship.forgejoPR.Title title
+ship.forgejoPull.HTMLURL html_url
+ship.forgejoPull.State state
+ship.forgejoPullEnd.Ref ref
+ship.forgejoRepoName.FullName full_name
+ship.forgejoUser.Login login
+ship.ghPull.HTMLURL html_url
+ship.ghPull.State state
+ship.ghPullEnd.Ref ref
+ship.ghRepoName.FullName full_name
+ship.ghThreadRecord.Body body
+ship.ghThreadRecord.HTMLURL html_url
+ship.ghThreadRecord.State state
+ship.ghUser.Login login
+ship.ghUser.Type type
+ship.gitlabMR.SourceBranch source_branch
+ship.gitlabMR.State state
+ship.gitlabMR.WebURL web_url
+ship.gitlabNote.Body body
+ship.gitlabNote.Type type
+ship.gitlabUser.Username username
 
 # ---- stack — stack-profile data: ids, titles, binary NAMES, commands, loadout prose, extensions, env-var names
 stack.Command.Run run

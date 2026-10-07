@@ -1,0 +1,119 @@
+[phase]
+  id = "review-comment-ingest"
+  title = "review-comment-ingest"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross pr comments <pr>` pulls the PR's conversation comments, inline comments (with file:line) and review summaries into one list, each with an id, author, bot/human/unknown flag (unknown where the forge does not classify the author) and triage status."
+
+[[criteria]]
+  id = "c-2"
+  text = "Each comment resolves to exactly one of: accept (a new task in the plan of the PR's phase), reject (a stated reason) or route (a deferred item with a target)."
+  deferred = ["00240da43142c2d1"]
+
+[[criteria]]
+  id = "c-3"
+  text = "Resolutions persist; a re-run lists only comments not yet triaged, plus any comment edited since it was triaged."
+
+[[criteria]]
+  id = "c-4"
+  text = "The CLI refuses a resolution that carries no evidence (a file:line or command output)."
+
+[[criteria]]
+  id = "c-5"
+  text = "Reject reasons are posted back to the PR only after a user confirm; accepted comments get no reply that just agrees."
+
+[[criteria]]
+  id = "c-6"
+  text = "Comment bodies reach the agent fenced as untrusted data; a body carrying a fence-breaker (a backtick run longer than the fence) cannot escape it."
+
+[[criteria]]
+  id = "c-7"
+  text = "Comment text that is persisted or printed passes the secret detector first; a planted token is redacted."
+
+[[criteria]]
+  id = "c-8"
+  text = "/dross-watch's line for each open ship PR shows its untriaged-comment count with a `/dross-respond <n>` pointer; a PR with none shows no count."
+
+[[decisions]]
+  key = "provider_scope"
+  choice = "Fetch and reply on all four providers: github, forgejo/gitea, gitlab, bitbucket."
+  why = "Parity with `dross ship comment`; the payoff is team repos, which are often GitLab or Bitbucket."
+  locked = true
+
+[[decisions]]
+  key = "command_surface"
+  choice = "New `/dross-respond <pr>` slash command over a new `dross pr` CLI noun (`dross pr comments`, `dross pr resolve`, `dross pr reply`)."
+  why = "Reading review comments is a separate flow from /dross-review's posting; `dross review` already means the solo per-task review. `dross pr reply` was added at plan time (2026-10-06) so c-5's confirm gate and posted-tracking are enforced in Go rather than by prompt prose; it posts through ship.PostComment, the existing ship-comment path reply_shape names."
+  locked = true
+
+[[decisions]]
+  key = "reply_shape"
+  choice = "One combined reply comment per run via the existing ship-comment path, listing each rejected comment with its link and reason."
+  why = "Works on all four providers with existing code; matches /dross-review's one-comment rule."
+  locked = true
+
+[[decisions]]
+  key = "own_review_split"
+  choice = "A /dross-review comment posted by the authenticated account is split into one triage item per finding, id `<comment-id>#<n>`; any other author's comment carrying that header stays one whole item."
+  why = "It is the only reviewer on this repo; one verdict for a many-finding comment is too coarse. Splitting only self-authored comments (plan time, 2026-10-06) stops a third party hiding text outside the finding bullets behind a copied header."
+  locked = true
+
+[[decisions]]
+  key = "triage_record"
+  choice = "Resolutions live in a tracked per-phase file under .dross/phases/<id>/, schema-checked by `dross validate`; it stores comment id, url, author, kind, verdict, reason and evidence — never the comment body."
+  why = "Rides the phase PR like other phase artefacts; bodies are untrusted third-party text and v1.7 forbids persisting raw captured content."
+  locked = true
+
+[[decisions]]
+  key = "pr_phase_binding"
+  choice = "The PR's phase comes from its phase/<id> head branch; a PR without one is refused."
+  why = "Accept needs a phase plan to add the task to."
+  locked = true
+
+[[decisions]]
+  key = "self_reply_exclusion"
+  choice = "/dross-respond's own combined replies are excluded from the comment list, identified by a marker it writes AND the authenticated account as author."
+  why = "Otherwise each run's reply resurfaces for triage; requiring the author too stops a third party hiding a comment by copying the marker."
+  locked = true
+
+[[deferred]]
+  id = "5d07e2bfde8b5284"
+  text = "BLOCKING for SvelteKit: the Stryker adapter escapes [ ] + paths into globs then appends a range (src/routes/x/[[]id[]]/@(+page.server.ts):38-38); Stryker 9 refuses \"Cannot combine a glob expression with a mutation range\" and the whole leg exits 1 (22 of 1,092 ranges). Pass the literal path when a range is attached, or fall back to whole-file for that file with a recorded whole_file reason — never drop the leg."
+  why = "Reported 2026-10-06 by the BarkTime session (dross 0.1.0.0 c0e3c11, phase auth-hardening, remote helicon); log at /private/tmp/claude-501/-Users-rivil-Development-barktime/47fb500d-7134-4a47-a8dc-d3f109bd2072/scratchpad/verify-auth-hardening.log"
+
+[[deferred]]
+  id = "f25ac52c16facd00"
+  text = "Stryker mutate list includes test files (*.svelte.test.ts, tests/integration/*.integration.test.ts, tests/r02/*.spec.ts); exclude test and spec files from mutate."
+  why = "Reported 2026-10-06 by the BarkTime session (dross 0.1.0.0 c0e3c11, phase auth-hardening, remote helicon); log at /private/tmp/claude-501/-Users-rivil-Development-barktime/47fb500d-7134-4a47-a8dc-d3f109bd2072/scratchpad/verify-auth-hardening.log"
+
+[[deferred]]
+  id = "e8b96a051d3c0129"
+  text = "A crashed mutation adapter is summarised as mutation_status = \"skipped\" (\"no adapter ran\"), the same as --skip-mutation; give a failed tool its own status (e.g. error) so the verify prompt surfaces it instead of reading a deliberate skip."
+  why = "Reported 2026-10-06 by the BarkTime session (dross 0.1.0.0 c0e3c11, phase auth-hardening, remote helicon); log at /private/tmp/claude-501/-Users-rivil-Development-barktime/47fb500d-7134-4a47-a8dc-d3f109bd2072/scratchpad/verify-auth-hardening.log"
+
+[[deferred]]
+  id = "826defc4a0caa1aa"
+  text = "The remote host lock records a stale pid: /tmp/dross-host.lock on helicon named FeastAhead run t-20261006-064013 pid 3179219 (no such process) while the real holder was pid 3198398 (bash flock 9 under sshd-session); doctor and the wait heartbeats repeat the wrong pid. The lock works; the attribution does not. (This session also waited 10m per gate on that attribution.)"
+  why = "Reported 2026-10-06 by the BarkTime session (dross 0.1.0.0 c0e3c11, phase auth-hardening, remote helicon); log at /private/tmp/claude-501/-Users-rivil-Development-barktime/47fb500d-7134-4a47-a8dc-d3f109bd2072/scratchpad/verify-auth-hardening.log"
+
+[[deferred]]
+  id = "bd09456baf509cd7"
+  text = "Verify ergonomics: validate the Stryker mutate list locally before queueing on the host lock (BarkTime waited ~2.5h, then failed in <1s on a config error); `dross verify --detach` on a TS-only phase errors \"nothing to mutate … no Go packages\" instead of saying detach supports gremlins only."
+  why = "Reported 2026-10-06 by the BarkTime session (dross 0.1.0.0 c0e3c11, phase auth-hardening, remote helicon); log at /private/tmp/claude-501/-Users-rivil-Development-barktime/47fb500d-7134-4a47-a8dc-d3f109bd2072/scratchpad/verify-auth-hardening.log"
+
+[[deferred]]
+  id = "10b5dfad63d2c39d"
+  text = "With no Stryker config in the repo (no stryker.conf.{json,js,mjs,cjs}, stryker.config.*, or package.json \"stryker\" key), the TS leg silently runs Stryker's default command runner over `npm test` — no coverage analysis, and possibly the wrong suite (BarkTime: npm test = vitest unit project, criteria covered by tests/integration + e2e), so mutants read as surviving. Refuse or degrade loudly: mark the leg unmeasurable with a reason (\"no stryker config — default command runner over npm test would measure the wrong suite\") or require an explicit opt-in."
+  why = "Reported 2026-10-06 by the BarkTime session as item 7 of its Stryker adapter report (DRO-908..912)"
+
+[[deferred]]
+  id = "3350d782d7d1b710"
+  text = "survivor.Derive labels a NOT COVERED mutant inside a one-line closure (e.g. reply.go:33's sort.Slice less func) as 'attribution ceiling: go-cover shows count 1' when the count belongs to the enclosing call statement's block on the same line and the closure body's own block never ran. That steers a real coverage gap toward accept. Classify by the block that holds the mutant's column, not by any block on its line."
+  why = "Found verifying review-comment-ingest (run r-20261006-170242, 2026-10-07): the t-11 reviewer had flagged the multi-reject ordering as untested; the drain said 'ceiling'. Caught by reading TestMarkPosted, not by the tool."
+
+[[deferred]]
+  id = "034f42b8cd2144b1"
+  text = "Solo task review: a finding raised in round N and fixed in a later round keeps resolution 'non-blocking, left' in changes.json reviews, so /dross-verify's Solo review block reports fixed defects as open. Re-resolve earlier-round findings when a later round's diff addresses them (or record per-finding status at the final round)."
+  why = "Found verifying review-comment-ingest (2026-10-07): 7 of 7 spot-checked 'left' FLAGs describing code defects (forgejo paging, gitlab rename fallback, reply link escaping x2, reply post ordering, respond.md commit/empty-list) were already fixed in the tree."

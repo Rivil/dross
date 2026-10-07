@@ -4063,3 +4063,525 @@
   line = 355
   accepted_in = "debug-sessions"
   category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "516fa53b0315b1c8"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "const drossLocalIgnorePath = \".dross/\" + localstore.File"
+  line = 19
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "0f1fcf502aacf534"
+  file = "internal/cmd/doctor.go"
+  op = "ARITHMETIC_BASE"
+  text = "const pinHostTimeout = 3 * time.Second"
+  line = 627
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "8d41f10fdb02f54c"
+  file = "internal/cmd/gate.go"
+  op = "ARITHMETIC_BASE"
+  text = "const gateLiftCap = 24 * time.Hour"
+  line = 41
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "b1dc411aa4fce8f1"
+  file = "internal/cmd/pr_reply.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case saveErr != nil:"
+  line = 104
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "cd60afe128979944"
+  file = "internal/cmd/pr_reply.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case spendErr != nil:"
+  line = 107
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "bae806672adfea94"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case n != 1:"
+  line = 132
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "f877b40a633e5381"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case strings.TrimSpace(f.seen) == \"\":"
+  line = 134
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "e712d8e720dd54c1"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.accept && strings.TrimSpace(f.title) == \"\":"
+  line = 136
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "4c59fcb0aaa030f6"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.reject && strings.TrimSpace(f.reason) == \"\":"
+  line = 138
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "7caf3c802de9c16a"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.route && (strings.TrimSpace(f.title) == \"\" || strings.TrimSpace(f.target) == \"\"):"
+  line = 140
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "d437c8a2aaf60151"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.at != \"\" && f.cmd != \"\":"
+  line = 142
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "9999edee0c352491"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.cmd != \"\" && f.outputFile == \"\":"
+  line = 144
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "2c63e27b41a89e65"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.at == \"\" && f.cmd == \"\":"
+  line = 146
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "a7ca3b45946759bb"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case res.Task != \"\":"
+  line = 296
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "4316ecf9284d2b15"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case res.Deferred != \"\":"
+  line = 298
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "838b0a4cd71da772"
+  file = "internal/cmd/reviewer_agent.go"
+  op = "ARITHMETIC_BASE"
+  text = "const reviewerFile = review.ReviewerAgent + \".md\""
+  line = 18
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "7b89ed08d4088e7c"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case st != phase.StatusDone && st != phase.StatusFailed:"
+  line = 646
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "73676f024131ef27"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"a file:line locator a triage resolution cites. ParseAt contains and line-checks the \"+"
+  line = 353
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "e820cf07851cb229"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"value it is given before it is recorded; from the record it is only split and checked \"+"
+  line = 354
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "6c89416b0b5d526d"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and \"+"
+  line = 360
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "3150db5a77b68820"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and \"+"
+  line = 364
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "41a6586b8527289a"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and \"+"
+  line = 368
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "df9e57ef56e0c77a"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"the repo file (new side) a reviewer anchored a diff note to, decoded into PRComment.Path and \"+"
+  line = 372
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "c8f5c95a48b5dd56"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"the repo file (old side) a diff note on a removed line is anchored to, decoded into \"+"
+  line = 376
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "cee1ff0fe15c7650"
+  file = "internal/prtriage/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case hasAt && (e.OutputSHA256 != \"\" || e.OutputBytes != 0):"
+  line = 117
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "ae8e4e605c73a48f"
+  file = "internal/prtriage/evidence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case !isSHA256Hex(e.OutputSHA256) || e.OutputBytes <= 0:"
+  line = 123
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "f8ad966d1f04ec7e"
+  file = "internal/prtriage/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !isSHA256Hex(e.OutputSHA256) || e.OutputBytes <= 0:"
+  line = 123
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "f33f93d8e78ce32b"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r == '\\n':"
+  line = 84
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "352d1136c1d4ed77"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r == '\\t':"
+  line = 86
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "6208dd45a8098cd5"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r == '\\r':"
+  line = 88
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "02ab67dd5574ccc8"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case r < 0x20 || r == 0x7f:"
+  line = 90
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "88f321330c66ceae"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r < 0x20 || r == 0x7f:"
+  line = 90
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "49f6ec803321a6b8"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case r >= 0x80 && r <= 0x9f,"
+  line = 92
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "b7cb5c407bd85ab4"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r >= 0x80 && r <= 0x9f,"
+  line = 92
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "1716f4b28879153f"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "r >= 0x202a && r <= 0x202e,"
+  line = 93
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "147c6ebd39a23510"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "r >= 0x202a && r <= 0x202e,"
+  line = 93
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "6efaac8b7e12d55a"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "r >= 0x2066 && r <= 0x2069:"
+  line = 94
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "755f12c512820081"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "r >= 0x2066 && r <= 0x2069:"
+  line = 94
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "c5533a99b931d29d"
+  file = "internal/prtriage/items.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.Digest != it.Digest:"
+  line = 111
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "565c3b2618ac0454"
+  file = "internal/prtriage/record.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case kindOf[r.ID[0]] != r.Kind:"
+  line = 161
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "08eaaa374a2e1d76"
+  file = "internal/prtriage/record.go"
+  op = "ARITHMETIC_BASE"
+  text = "var ErrStaleRead = errors.New(File + \" changed since it was read — load it again and redo the change\")"
+  line = 205
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "7cb3ff59fe179a87"
+  file = "internal/prtriage/reply.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', '0' <= c && c <= '9',"
+  line = 70
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "54b0c6b0f07b1ee1"
+  file = "internal/prtriage/reply.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', '0' <= c && c <= '9',"
+  line = 70
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "d3e7c983791d53cb"
+  file = "internal/prtriage/reply.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "strings.IndexByte(\"-._~:/?#&=+,;%!$*'\", c) >= 0:"
+  line = 71
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "5bfb89da0da26b6e"
+  file = "internal/prtriage/reply.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "strings.IndexByte(\"-._~:/?#&=+,;%!$*'\", c) >= 0:"
+  line = 71
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "4e63263381f3ee16"
+  file = "internal/prtriage/split.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case headingLine.MatchString(line), line == \"---\":"
+  line = 68
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "0d3515b2a20c8ec0"
+  file = "internal/secretscan/redact.go"
+  op = "ARITHMETIC_BASE"
+  text = "panic(\"secretscan: no \" + pemRuleName + \" rule\")"
+  line = 108
+  accepted_in = "review-comment-ingest"
+  reason = "Unreachable while the rules table holds the pem-private-key rule: pemRule() scans the package-level rules slice and returns on the first name match, so its trailing panic runs only if that rule were deleted. Every PEM redaction reaches pemRule through redactOnce and pemHit, and TestRedactPEMWhole asserts the [redacted pem-private-key] marker and a hit named pem-private-key, so deleting the rule fails that test long before this panic could run. The mutant itself swaps a string + for an operator Go strings do not define, so it would not compile even on a reached line."
+
+[[accepted]]
+  key = "584bd49540793a2a"
+  file = "internal/ship/automerge.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case pr.AutoMergeRequest != nil:"
+  line = 107
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "e6f6f64112fd7bb2"
+  file = "internal/ship/prcomments.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.Line != nil:"
+  line = 279
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "10b0d76342e8f7a5"
+  file = "internal/ship/prcomments.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.OriginalLine != nil:"
+  line = 281
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "115e7b4adee27bee"
+  file = "internal/ship/prcomments_bitbucket.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.Inline.To != nil:"
+  line = 153
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "9d236f072ba12b0e"
+  file = "internal/ship/prcomments_bitbucket.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.Inline.From != nil:"
+  line = 155
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "7bb67a6af6cfb44f"
+  file = "internal/ship/prcomments_gitlab.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case at.NewLine != nil && *at.NewLine > 0:"
+  line = 134
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "b6de2bcebafd4cdd"
+  file = "internal/ship/prcomments_gitlab.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case at.NewLine != nil && *at.NewLine > 0:"
+  line = 134
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "7ee2ad9e9cf163bf"
+  file = "internal/ship/prcomments_gitlab.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case at.OldLine != nil && *at.OldLine > 0:"
+  line = 136
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "8fda4f4c316256a7"
+  file = "internal/ship/prcomments_gitlab.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case at.OldLine != nil && *at.OldLine > 0:"
+  line = 136
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "f0a1edbfcbf2cc9f"
+  file = "internal/ship/prcomments_gitlab.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case at.NewPath != \"\":"
+  line = 138
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "c2f897c854d1e707"
+  file = "internal/ship/prcomments_gitlab.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil || u.Bot == nil:"
+  line = 171
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"

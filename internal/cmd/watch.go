@@ -6,6 +6,8 @@ import (
 
 	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/forge"
+	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/prtriage"
 	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/watch"
@@ -155,7 +157,55 @@ func openPRDigest() (*[]watch.BotPR, *[]watch.ShipPR) {
 		return nil, nil
 	}
 	bots, ships := watch.SplitPRs(prs, time.Now())
+	countUntriaged(p, prs, ships)
 	return &bots, &ships
+}
+
+// countUntriaged sets each phase ship PR's untriaged review-comment count —
+// prtriage.Pending over the PR's comments and its phase's record — so its
+// line can point at /dross-respond. A head that does not map to a phase
+// (prtriage.ParsePhaseHead), a record that cannot be read, a caller or
+// comment fetch that fails: each leaves that PR's count at zero, shown as no
+// count at all, and never fails the tick. The caller is looked up once per
+// tick, and only when there is a phase PR to count.
+func countUntriaged(p *project.Project, prs []ship.OpenPRRecord, ships []watch.ShipPR) {
+	root, err := FindRoot()
+	if err != nil {
+		return
+	}
+	repoDir := filepath.Dir(root)
+	hosts, err := remotePolicy(root, repoDir, p)
+	if err != nil {
+		return
+	}
+	opts := buildOpenOpts(p, hosts)
+	cross := make(map[int]bool, len(prs))
+	for _, pr := range prs {
+		cross[pr.Number] = pr.IsCrossRepository
+	}
+	var self *ship.Account
+	for i := range ships {
+		id, err := prtriage.ParsePhaseHead(ships[i].Head, cross[ships[i].Number])
+		if err != nil {
+			continue
+		}
+		if self == nil {
+			acct, err := ship.AuthenticatedUserFunc(opts)
+			if err != nil {
+				return
+			}
+			self = &acct
+		}
+		rec, known := prtriage.LoadForPhase(repoDir, id)
+		if !known {
+			continue
+		}
+		comments, err := ship.ListPRCommentsFunc(opts, ships[i].Number)
+		if err != nil {
+			continue
+		}
+		ships[i].Untriaged = len(prtriage.Pending(prtriage.Items(comments, *self), rec))
+	}
 }
 
 // suggestedCommand ranks the single next command per the locked

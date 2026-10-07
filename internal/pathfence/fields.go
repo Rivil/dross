@@ -348,6 +348,35 @@ var unguessedFields = []Field{
 		"the file a quality finding points at — compared across runs and printed.",
 		"internal/quality/lifecycle.go"),
 
+	// ---- PR triage: the locator a resolution cites ------------------------
+	reportPath("prtriage.Evidence", "At", "at", "phases/<id>/pr-triage.toml",
+		"a file:line locator a triage resolution cites. ParseAt contains and line-checks the "+
+			"value it is given before it is recorded; from the record it is only split and checked "+
+			"lexically, never opened.",
+		"internal/prtriage/evidence.go (SplitAt)"),
+
+	// ---- forge review comments: where an inline comment is anchored --------
+	reportPath("ship.ghThreadRecord", "Path", "path", "the GitHub pull-request review-comments API response",
+		"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and "+
+			"printed beside the comment — never opened.",
+		"internal/ship/prcomments.go (decoded)"),
+	reportPath("ship.forgejoComment", "Path", "path", "the Forgejo/Gitea pull-review comments API response",
+		"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and "+
+			"printed beside the comment — never opened.",
+		"internal/ship/prcomments_forgejo.go (decoded)"),
+	reportPath("ship.bbInline", "Path", "path", "the Bitbucket Cloud pull-request comments API response",
+		"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and "+
+			"printed beside the comment — never opened.",
+		"internal/ship/prcomments_bitbucket.go (decoded)"),
+	reportPath("ship.gitlabNoteAt", "NewPath", "new_path", "the GitLab merge-request notes API response",
+		"the repo file (new side) a reviewer anchored a diff note to, decoded into PRComment.Path and "+
+			"printed beside the comment — never opened.",
+		"internal/ship/prcomments_gitlab.go (decoded)"),
+	reportPath("ship.gitlabNoteAt", "OldPath", "old_path", "the GitLab merge-request notes API response",
+		"the repo file (old side) a diff note on a removed line is anchored to, decoded into "+
+			"PRComment.Path and printed beside the comment — never opened.",
+		"internal/ship/prcomments_gitlab.go (decoded)"),
+
 	// ---- paths a tool reported about its own work --------------------------
 	reportPath("codex.astGrepMatch", "File", "file", "ast-grep --json output",
 		"decoded from ast-grep's own report; dross does not open it.",

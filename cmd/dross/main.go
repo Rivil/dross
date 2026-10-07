@@ -53,6 +53,7 @@ func newRoot() *cobra.Command {
 		cmd.Defaults(),
 		cmd.Env(),
 		cmd.Ship(),
+		cmd.PR(),
 		cmd.Protect(),
 		cmd.Stats(),
 		cmd.Issue(),

@@ -779,3 +779,23 @@ func TestMainEntryPoint(t *testing.T) {
 		})
 	}
 }
+
+// TestRespondPromptCommandsExist: /dross-respond must not narrate a verb the
+// CLI lacks — a renamed `dross pr` verb would strand the triage mid-PR.
+func TestRespondPromptCommandsExist(t *testing.T) {
+	top := topLevelIndex(newRoot())
+	b, err := os.ReadFile(filepath.Join("..", "..", "assets", "prompts", "respond.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs, bad := debugPromptUnresolved(top, string(b))
+	if refs < 8 {
+		t.Fatalf("parsed %d `dross <cmd>` references from respond.md — the regex or path is wrong", refs)
+	}
+	for _, msg := range bad {
+		t.Errorf("respond.md runs %s", msg)
+	}
+	if _, bad := debugPromptUnresolved(top, "run `dross pr wibble 3`\n"); len(bad) != 1 {
+		t.Fatalf("the guard missed a planted `dross pr wibble`: %q", bad)
+	}
+}

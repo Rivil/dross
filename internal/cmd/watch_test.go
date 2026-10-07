@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Rivil/dross/internal/prtriage"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/watch"
 )
@@ -708,4 +710,309 @@ func TestWatchShortMatchesReadme(t *testing.T) {
 		return
 	}
 	t.Fatal("README.md has no `dross watch` row")
+}
+
+// --- untriaged review comments on ship PR lines (review-comment-ingest t-12) ---
+
+// untriagedStubs scripts the caller and per-PR comment seams for watch and
+// counts their calls.
+type untriagedStubs struct {
+	self         ship.Account
+	selfErr      error
+	comments     map[int][]ship.PRComment
+	commentsErr  error
+	selfCalls    int
+	commentCalls int
+}
+
+func stubUntriaged(t *testing.T, s *untriagedStubs) {
+	t.Helper()
+	prevU, prevL := ship.AuthenticatedUserFunc, ship.ListPRCommentsFunc
+	ship.AuthenticatedUserFunc = func(ship.OpenOpts) (ship.Account, error) {
+		s.selfCalls++
+		return s.self, s.selfErr
+	}
+	ship.ListPRCommentsFunc = func(_ ship.OpenOpts, n int) ([]ship.PRComment, error) {
+		s.commentCalls++
+		return s.comments[n], s.commentsErr
+	}
+	t.Cleanup(func() { ship.AuthenticatedUserFunc, ship.ListPRCommentsFunc = prevU, prevL })
+}
+
+// untriagedRepo is prWatchRepo made a git repo with branches phase/a (its
+// record resolving c1 and c2 at their digests, committed) and phase/b,
+// checked out on phase/b.
+func untriagedRepo(t *testing.T) string {
+	t.Helper()
+	dir := prWatchRepo(t)
+	for _, args := range [][]string{
+		{"init", "-q", "-b", "main"}, {"config", "user.email", "t@example.com"}, {"config", "user.name", "T"},
+		{"config", "commit.gpgsign", "false"}, {"config", "gc.auto", "0"},
+	} {
+		mustGit(t, dir, args...)
+	}
+	gitCommit(t, dir, "base")
+	mustGit(t, dir, "checkout", "-q", "-b", "phase/a")
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "a", "plan.toml"), "[phase]\nid = \"a\"\n")
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "a", prtriage.File),
+		watchResolution("c1", "first")+"\n"+watchResolution("c2", "second"))
+	gitCommit(t, dir, "triage a")
+	mustGit(t, dir, "checkout", "-q", "-b", "phase/b", "main")
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "b", "plan.toml"), "[phase]\nid = \"b\"\n")
+	gitCommit(t, dir, "plan b")
+	return dir
+}
+
+// watchResolution resolves conversation comment id, whose body is body.
+func watchResolution(id, body string) string {
+	return fmt.Sprintf(`[[resolution]]
+id = %q
+kind = "conversation"
+pr = 138
+url = "https://github.com/o/r/pull/138#c"
+author = "alice"
+verdict = "reject"
+reason = "no"
+at = "README.md:1"
+digest = %q
+`, id, prtriage.Digest(body))
+}
+
+func watchComment(id, authorID, body string) ship.PRComment {
+	return ship.PRComment{ID: id, Kind: ship.CommentConversation, Body: body,
+		Author: ship.CommentAuthor{ID: authorID, Login: "u" + authorID, Bot: ship.AuthorHuman}}
+}
+
+// threeOnA is phase a's PR #138 thread: c1 and c2 resolved in the record,
+// c3 not.
+func threeOnA() map[int][]ship.PRComment {
+	return map[int][]ship.PRComment{138: {
+		watchComment("1", "11", "first"), watchComment("2", "11", "second"), watchComment("3", "11", "third"),
+	}}
+}
+
+func shipPR(t *testing.T, d watchDigest, n int) *watch.ShipPR {
+	t.Helper()
+	if d.ShipPRs == nil {
+		t.Fatal("ship_prs absent")
+	}
+	for i := range *d.ShipPRs {
+		if (*d.ShipPRs)[i].Number == n {
+			return &(*d.ShipPRs)[i]
+		}
+	}
+	t.Fatalf("no ship PR #%d in %+v", n, *d.ShipPRs)
+	return nil
+}
+
+func TestWatchUntriagedOffBranch(t *testing.T) {
+	untriagedRepo(t)
+	stubListOpenPRs(t, []ship.OpenPRRecord{openPRRecord(138, "rivil", false, "phase/a", day, ship.ChecksPassing)}, nil)
+	stubUntriaged(t, &untriagedStubs{self: ship.Account{ID: "7", Login: "rivil"}, comments: threeOnA()})
+	if got := shipPR(t, runWatchJSON(t), 138).Untriaged; got != 1 {
+		t.Errorf("on phase/b, phase a's PR shows %d untriaged, want 1 (2 of 3 resolved on phase/a)", got)
+	}
+}
+
+func TestWatchUntriagedWorkingTree(t *testing.T) {
+	dir := untriagedRepo(t)
+	mustGit(t, dir, "checkout", "-q", "phase/a")
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "a", prtriage.File),
+		watchResolution("c1", "first")+"\n"+watchResolution("c2", "second")+"\n"+watchResolution("c3", "third"))
+	stubListOpenPRs(t, []ship.OpenPRRecord{openPRRecord(138, "rivil", false, "phase/a", day, ship.ChecksPassing)}, nil)
+	stubUntriaged(t, &untriagedStubs{self: ship.Account{ID: "7", Login: "rivil"}, comments: threeOnA()})
+	if got := shipPR(t, runWatchJSON(t), 138).Untriaged; got != 0 {
+		t.Errorf("an uncommitted resolution on phase/a left %d untriaged, want 0", got)
+	}
+}
+
+func TestWatchShipPRUntriagedCount(t *testing.T) {
+	untriagedRepo(t)
+	stubListOpenPRs(t, []ship.OpenPRRecord{
+		openPRRecord(138, "rivil", false, "phase/a", day, ship.ChecksFailing),
+		openPRRecord(139, "rivil", false, "milestone/v1.7", day, ship.ChecksNone),
+	}, nil)
+	comments := threeOnA()
+	comments[138] = append(comments[138], watchComment("4", "11", "fourth"))
+	s := &untriagedStubs{self: ship.Account{ID: "7", Login: "rivil"}, comments: comments}
+	stubUntriaged(t, s)
+
+	raw := watchStdout(t, "--json")
+	var d watchDigest
+	if err := json.Unmarshal([]byte(raw), &d); err != nil {
+		t.Fatal(err)
+	}
+	if got := shipPR(t, d, 138).Untriaged; got != 2 {
+		t.Errorf("#138 untriaged = %d, want 2", got)
+	}
+	if strings.Count(raw, `"untriaged"`) != 1 {
+		t.Errorf("want the untriaged key on #138 only:\n%s", raw)
+	}
+	if s.commentCalls != 1 {
+		t.Errorf("%d comment fetches, want 1 (none for the milestone PR)", s.commentCalls)
+	}
+	human := watchStdout(t)
+	if !strings.Contains(human, "pr: #138 phase/a — failing · 2 untriaged — /dross-respond 138") {
+		t.Errorf("the human line for 138 lacks its pointer:\n%s", human)
+	}
+	if !strings.Contains(human, "pr: #139 milestone/v1.7 — none\n") || strings.Contains(human, "/dross-respond 139") {
+		t.Errorf("the milestone PR line changed:\n%s", human)
+	}
+}
+
+func TestWatchUntriagedHeadMapping(t *testing.T) {
+	untriagedRepo(t)
+	fork := openPRRecord(140, "mallory", false, "phase/a", day, ship.ChecksPassing)
+	fork.IsCrossRepository = true
+	stubListOpenPRs(t, []ship.OpenPRRecord{fork, openPRRecord(141, "rivil", false, "phase/../a", day, ship.ChecksPassing)}, nil)
+	s := &untriagedStubs{self: ship.Account{ID: "7", Login: "rivil"}, comments: map[int][]ship.PRComment{
+		140: {watchComment("9", "11", "x")}, 141: {watchComment("9", "11", "x")},
+	}}
+	stubUntriaged(t, s)
+	d := runWatchJSON(t)
+	if s.commentCalls != 0 || s.selfCalls != 0 {
+		t.Errorf("%d comment and %d caller calls for a fork and a malformed head, want none", s.commentCalls, s.selfCalls)
+	}
+	for _, p := range *d.ShipPRs {
+		if p.Untriaged != 0 {
+			t.Errorf("#%d carries a count %d", p.Number, p.Untriaged)
+		}
+	}
+}
+
+func TestWatchShipPRNoneShowsNoCount(t *testing.T) {
+	reply := prtriage.ReplyMarker + "\n\n- [c1](https://x): `` a `` — no"
+	for name, comments := range map[string][]ship.PRComment{
+		"every comment resolved":  {watchComment("1", "11", "first"), watchComment("2", "11", "second")},
+		"only own marked replies": {watchComment("5", "7", reply)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			untriagedRepo(t)
+			stubListOpenPRs(t, []ship.OpenPRRecord{openPRRecord(138, "rivil", false, "phase/a", day, ship.ChecksPassing)}, nil)
+			stubUntriaged(t, &untriagedStubs{self: ship.Account{ID: "7", Login: "rivil"}, comments: map[int][]ship.PRComment{138: comments}})
+			raw := watchStdout(t, "--json")
+			if strings.Contains(raw, `"untriaged"`) {
+				t.Errorf("a fully triaged PR carries the key:\n%s", raw)
+			}
+			if human := watchStdout(t); !strings.Contains(human, "pr: #138 phase/a — passing\n") {
+				t.Errorf("the line is not the pre-phase format:\n%s", human)
+			}
+		})
+	}
+}
+
+func TestWatchUntriagedDegrades(t *testing.T) {
+	cases := map[string]func(t *testing.T, dir string, s *untriagedStubs){
+		"comments error": func(_ *testing.T, _ string, s *untriagedStubs) { s.commentsErr = errors.New("HTTP 500") },
+		"caller error":   func(_ *testing.T, _ string, s *untriagedStubs) { s.selfErr = errors.New("gh is not logged in") },
+		"malformed record": func(t *testing.T, dir string, _ *untriagedStubs) {
+			mustGit(t, dir, "checkout", "-q", "phase/a")
+			mustWrite(t, filepath.Join(dir, ".dross", "phases", "a", prtriage.File), "body = \"pasted\"\n")
+		},
+		"no ref and no file": func(t *testing.T, dir string, _ *untriagedStubs) {
+			mustGit(t, dir, "branch", "-q", "-D", "phase/a")
+		},
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := untriagedRepo(t)
+			stubListOpenPRs(t, []ship.OpenPRRecord{
+				openPRRecord(138, "rivil", false, "phase/a", day, ship.ChecksPassing),
+				openPRRecord(141, "app/dependabot", true, "dependabot/x", day, ship.ChecksFailing),
+			}, nil)
+			s := &untriagedStubs{self: ship.Account{ID: "7", Login: "rivil"}, comments: threeOnA()}
+			setup(t, dir, s)
+			stubUntriaged(t, s)
+			c := Watch()
+			var out, errOut bytes.Buffer
+			c.SetArgs([]string{"--json"})
+			c.SetOut(&out)
+			c.SetErr(&errOut)
+			var err error
+			var raw string
+			stderr := captureStderr(t, func() {
+				raw = captureStdout(t, func() { err = c.Execute() })
+			})
+			if err != nil {
+				t.Fatalf("the tick failed: %v", err)
+			}
+			if errOut.Len() != 0 || stderr != "" {
+				t.Errorf("stderr: %q %q", errOut.String(), stderr)
+			}
+			if strings.Contains(raw, `"untriaged"`) {
+				t.Errorf("a count shown though it cannot be known:\n%s", raw)
+			}
+			var d watchDigest
+			if err := json.Unmarshal([]byte(raw), &d); err != nil || d.BotPRs == nil || len(*d.BotPRs) != 1 || len(*d.ShipPRs) != 1 {
+				t.Errorf("the other PR lines are not intact: %v\n%s", err, raw)
+			}
+		})
+	}
+}
+
+func TestWatchCallerLookedUpOnce(t *testing.T) {
+	untriagedRepo(t)
+	stubListOpenPRs(t, []ship.OpenPRRecord{
+		openPRRecord(138, "rivil", false, "phase/a", day, ship.ChecksPassing),
+		openPRRecord(142, "rivil", false, "phase/b", day, ship.ChecksPassing),
+	}, nil)
+	s := &untriagedStubs{self: ship.Account{ID: "7", Login: "rivil"}, comments: threeOnA()}
+	stubUntriaged(t, s)
+	_ = runWatchJSON(t)
+	if s.selfCalls != 1 || s.commentCalls != 2 {
+		t.Errorf("%d caller and %d comment calls for two phase PRs, want 1 and 2", s.selfCalls, s.commentCalls)
+	}
+
+	untriagedRepo(t)
+	stubListOpenPRs(t, fivePRs()[:4], nil)
+	s = &untriagedStubs{self: ship.Account{ID: "7", Login: "rivil"}}
+	stubUntriaged(t, s)
+	_ = runWatchJSON(t)
+	if s.selfCalls != 0 || s.commentCalls != 0 {
+		t.Errorf("no phase PR: %d caller and %d comment calls, want none", s.selfCalls, s.commentCalls)
+	}
+}
+
+func TestWatchNeverPrintsCommentText(t *testing.T) {
+	const planted = "PLANTED-7c1e-SENTINEL"
+	untriagedRepo(t)
+	stubListOpenPRs(t, []ship.OpenPRRecord{openPRRecord(138, "rivil", false, "phase/a", day, ship.ChecksPassing)}, nil)
+	c := watchComment("9", "11", "body "+planted)
+	c.Author.Login, c.Path = "author-"+planted, "path/"+planted
+	stubUntriaged(t, &untriagedStubs{self: ship.Account{ID: "7", Login: "rivil"}, comments: map[int][]ship.PRComment{138: {c}}})
+	for _, args := range [][]string{nil, {"--json"}} {
+		if out := watchStdout(t, args...); strings.Contains(out, planted) {
+			t.Errorf("watch %v printed comment text:\n%s", args, out)
+		}
+	}
+}
+
+func TestWatchUntriagedReadOnly(t *testing.T) {
+	dir := untriagedRepo(t)
+	mustGit(t, dir, "checkout", "-q", "phase/a")
+	rec := filepath.Join(dir, ".dross", "phases", "a", prtriage.File)
+	before := mustRead(t, rec)
+	stubListOpenPRs(t, []ship.OpenPRRecord{openPRRecord(138, "rivil", false, "phase/a", day, ship.ChecksPassing)}, nil)
+	stubUntriaged(t, &untriagedStubs{self: ship.Account{ID: "7", Login: "rivil"}, comments: threeOnA()})
+	_ = runWatchJSON(t)
+	if mustRead(t, rec) != before {
+		t.Error("watch changed pr-triage.toml")
+	}
+}
+
+// TestWatchUntriagedNeverSteers: comments waiting on a phase PR show on its
+// line and never change suggested_command.
+func TestWatchUntriagedNeverSteers(t *testing.T) {
+	untriagedRepo(t)
+	stubListOpenPRs(t, []ship.OpenPRRecord{openPRRecord(138, "rivil", false, "phase/a", day, ship.ChecksFailing)}, nil)
+	stubUntriaged(t, &untriagedStubs{self: ship.Account{ID: "7", Login: "rivil"}, comments: map[int][]ship.PRComment{}})
+	quiet := runWatchJSON(t).Suggested
+	stubUntriaged(t, &untriagedStubs{self: ship.Account{ID: "7", Login: "rivil"}, comments: threeOnA()})
+	d := runWatchJSON(t)
+	if shipPR(t, d, 138).Untriaged == 0 {
+		t.Fatal("the loud fixture produced no count — the comparison would be vacuous")
+	}
+	if d.Suggested != quiet {
+		t.Errorf("suggested = %q with untriaged comments, %q without", d.Suggested, quiet)
+	}
 }

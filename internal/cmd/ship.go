@@ -15,6 +15,7 @@ import (
 	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/prtriage"
 	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/secretscan"
 	"github.com/Rivil/dross/internal/ship"
@@ -232,6 +233,14 @@ func Ship() *cobra.Command {
 				if err := gateFreshness(root, repoDir, phaseID, forceUnverified); err != nil {
 					return err
 				}
+			}
+
+			// An accepted review comment is a promise to do its task; shipping
+			// with that task still pending or in progress breaks it. Checked
+			// before the body, the push and every provider call, and a record
+			// that does not load refuses rather than being skipped.
+			if err := gateAcceptedTriage(phaseDir); err != nil {
+				return err
 			}
 
 			// 4) Title + body.
@@ -596,6 +605,53 @@ func Ship() *cobra.Command {
 	c.AddCommand(shipComment())
 	c.AddCommand(shipRecover())
 	return c
+}
+
+// gateAcceptedTriage refuses while any accepted review comment names a task
+// its plan still has pending or in progress, naming each comment and task. A
+// task done, or failed with its recorded reason, has settled. No pr-triage.toml,
+// or one holding only rejects and routes, leaves ship as it was.
+func gateAcceptedTriage(phaseDir string) error {
+	path := filepath.Join(phaseDir, prtriage.File)
+	rec, data, err := prtriage.Load(path)
+	if err != nil {
+		return fmt.Errorf("%s does not load, so its accepted comments cannot be checked — fix it (`dross validate` names each problem), then re-run ship: %w", path, err)
+	}
+	if data == nil {
+		return nil
+	}
+	var accepts []prtriage.Resolution
+	for _, r := range rec.Resolution {
+		if r.Verdict == prtriage.VerdictAccept {
+			accepts = append(accepts, r)
+		}
+	}
+	if len(accepts) == 0 {
+		return nil
+	}
+	plan, err := phase.LoadPlan(filepath.Join(phaseDir, "plan.toml"))
+	if err != nil {
+		return fmt.Errorf("load plan to check accepted review comments: %w", err)
+	}
+	status := map[string]string{}
+	for _, t := range plan.Task {
+		status[t.ID] = t.Status
+	}
+	var open []string
+	for _, r := range accepts {
+		id, task := prtriage.OneLine(r.ID), prtriage.OneLine(r.Task)
+		switch st, ok := status[r.Task]; {
+		case !ok:
+			open = append(open, fmt.Sprintf("%s -> %s (not in the plan)", id, task))
+		case st != phase.StatusDone && st != phase.StatusFailed:
+			open = append(open, fmt.Sprintf("%s -> %s (%s)", id, task, prtriage.OneLine(st)))
+		}
+	}
+	if len(open) == 0 {
+		return nil
+	}
+	return fmt.Errorf("accepted review comments still have open tasks — finish them with /dross-execute, or mark one failed with its reason, then re-run ship:\n  %s",
+		strings.Join(open, "\n  "))
 }
 
 // shipComment posts a markdown comment to an existing PR via the

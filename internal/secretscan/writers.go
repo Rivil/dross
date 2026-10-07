@@ -187,11 +187,14 @@ var writers = []Writer{
 	{File: "internal/phase/phase.go", UnderDross: &UnderDross{Artifacts: []string{"phases/<id>/spec.toml", "deferred.toml"}}},
 	// project.go holds the lossless TOML door's one write verb (writeAtomic),
 	// so every store saved through project.SaveTOML is written from here.
-	{File: "internal/project/project.go", UnderDross: &UnderDross{Artifacts: []string{"project.toml", "survivors.toml", "phases/<id>/plan.toml"}}},
+	{File: "internal/project/project.go", UnderDross: &UnderDross{Artifacts: []string{"project.toml", "survivors.toml", "phases/<id>/plan.toml", "phases/<id>/pr-triage.toml"}}},
 	{File: "internal/profile/profile.go", UnderDross: &UnderDross{Artifacts: []string{"profile.toml"}}},
 	{File: "internal/rules/rules.go", UnderDross: &UnderDross{Artifacts: []string{"rules.toml"}}},
 	{File: "internal/verify/verify.go", UnderDross: &UnderDross{Artifacts: []string{"phases/<id>/tests.json", "phases/<id>/verify.toml"}}},
 	{File: "internal/watch/watch.go", UnderDross: &UnderDross{Artifacts: []string{"watch.state.json"}}},
+	// pr resolve puts plan.toml or spec.toml back byte for byte when the
+	// triage record save after its task or deferred write fails.
+	{File: "internal/cmd/pr_resolve.go", UnderDross: &UnderDross{Artifacts: []string{"phases/<id>/plan.toml", "phases/<id>/spec.toml"}}},
 	// The red-proof repoint rewrites the doc changes.json pins, which is any
 	// repo-contained path; its plausible home is the phase dir.
 	{File: "internal/cmd/redproof_repoint.go", UnderDross: &UnderDross{Artifacts: []string{"phases/<id>/proof.md"}}},
@@ -220,8 +223,8 @@ var writers = []Writer{
 		Why: "host allowlist additions and quick_base; a committed copy would let a repo authorize its own API host",
 	}},
 	{File: "internal/gatestate/store.go", MachineLocal: &MachineLocal{
-		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json", "gate/review.json", "gate/quick.json", "gate/review-context.md"}, IgnoreSeed: GateIgnoreSeed,
-		Why: "tool-gate records (green tree, execute mode, task approval, solo review ledger, quick mode) and the review context the reviewer reads; a committed copy would let a clone arrive pre-approved or pre-reviewed",
+		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json", "gate/review.json", "gate/quick.json", "gate/review-context.md", "gate/reply.json"}, IgnoreSeed: GateIgnoreSeed,
+		Why: "tool-gate records (green tree, execute mode, task approval, solo review ledger, quick mode, reply approval) and the review context the reviewer reads; a committed copy would let a clone arrive pre-approved or pre-reviewed",
 	}},
 	{File: "internal/debugsession/store.go", MachineLocal: &MachineLocal{
 		Path: "debug/<name>.md", Also: []string{"debug/.gitignore"}, IgnoreSeed: DebugIgnoreSeed,
