@@ -13,9 +13,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/Rivil/dross/internal/compilefence"
 	"github.com/Rivil/dross/internal/findings"
 	"github.com/Rivil/dross/internal/pathfence"
+	"github.com/Rivil/dross/internal/quality"
 	"github.com/Rivil/dross/internal/security"
 	"github.com/Rivil/dross/internal/stack"
 )
@@ -373,6 +376,131 @@ func TestSecurityRunReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestHostileFindingNamesStayInsideRunDir is tracked-path-containment c-3's
+// behavioural half: a finding whose id, title and file all read "../main.go"
+// goes through the REAL write paths a finding reaches — `scaffold` (spec.toml)
+// and `findings reconcile` (the tool's state ledger) — and nothing outside the
+// run dir and the tool's own .dross directory changes.
+//
+// The run dir and the repo share one parent, and the sentinel sits in it, so
+// "../main.go" names the sentinel whether a regression resolved it against the
+// run dir or against the working directory. The writes are proven to have
+// carried the hostile value — spec.toml holds it, reconcile reports it new — so
+// an unchanged sentinel cannot mean the finding never reached a writer.
+func TestHostileFindingNamesStayInsideRunDir(t *testing.T) {
+	const hostile = "../main.go"
+	for _, tc := range []struct {
+		name    string
+		command func() *cobra.Command
+		toolDir func(root string) string
+		save    func(t *testing.T, runDir string)
+	}{
+		{"security", Security, security.SecurityDir, func(t *testing.T, runDir string) {
+			l := security.Ledger{Findings: []security.Finding{{ID: hostile, Title: hostile, File: hostile,
+				Severity: security.SeverityHigh, Class: "path-traversal", Refutation: "panel: confirmed"}}}
+			if err := security.Save(containedIn(t, runDir, "findings.toml"), l); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"quality", Quality, quality.QualityDir, func(t *testing.T, runDir string) {
+			l := quality.Ledger{Findings: []quality.Finding{{ID: hostile, Title: hostile, File: hostile,
+				Risk: quality.RiskHigh, Dimension: quality.Complexity, Refutation: "panel: confirmed"}}}
+			if err := quality.Save(containedIn(t, runDir, "findings.toml"), l); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := t.TempDir()
+			repo := filepath.Join(base, "repo")
+			runDir := filepath.Join(base, "run")
+			for _, d := range []string{repo, runDir} {
+				if err := os.Mkdir(d, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			sentinel := filepath.Join(base, "main.go")
+			original := []byte("package main // sentinel: a finding-derived name must never reach here\n")
+			if err := os.WriteFile(sentinel, original, 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			chdir(t, repo)
+			if err := runCmd(t, Init()); err != nil {
+				t.Fatal(err)
+			}
+			toolDir := tc.toolDir(filepath.Join(repo, ".dross"))
+			if err := os.MkdirAll(toolDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			tc.save(t, runDir)
+
+			before := snapshotFiles(t, base)
+			out := captureStdout(t, func() {
+				if err := runCmd(t, tc.command(), "scaffold", runDir); err != nil {
+					t.Fatalf("scaffold: %v", err)
+				}
+				if err := runCmd(t, tc.command(), "findings", "reconcile", runDir); err != nil {
+					t.Fatalf("findings reconcile: %v", err)
+				}
+			})
+			after := snapshotFiles(t, base)
+
+			if got, err := os.ReadFile(sentinel); err != nil || string(got) != string(original) {
+				t.Fatalf("the sentinel a %q finding names was changed or removed (err %v)", hostile, err)
+			}
+			allowed := func(path string) bool {
+				return strings.HasPrefix(path, runDir+string(os.PathSeparator)) ||
+					strings.HasPrefix(path, toolDir+string(os.PathSeparator))
+			}
+			for path, content := range after {
+				if prev, ok := before[path]; (!ok || prev != content) && !allowed(path) {
+					t.Errorf("%s wrote %s, outside the run dir and %s", tc.name, path, toolDir)
+				}
+			}
+			for path := range before {
+				if _, ok := after[path]; !ok && !allowed(path) {
+					t.Errorf("%s removed %s, outside the run dir and %s", tc.name, path, toolDir)
+				}
+			}
+
+			spec, err := os.ReadFile(filepath.Join(runDir, "spec.toml"))
+			if err != nil {
+				t.Fatalf("scaffold wrote no spec.toml into the run dir: %v", err)
+			}
+			if !strings.Contains(string(spec), hostile) {
+				t.Errorf("spec.toml does not carry %q, so the hostile finding never reached the "+
+					"scaffold writer and an untouched sentinel proves nothing:\n%s", hostile, spec)
+			}
+			if !strings.Contains(out, "1 new") {
+				t.Errorf("reconcile did not fold the hostile finding in as new, so it never reached "+
+					"the state writer:\n%s", out)
+			}
+		})
+	}
+}
+
+// snapshotFiles maps every regular file under dir to its contents.
+func snapshotFiles(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		out[path] = string(b)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 // TestSecurityCover_ReconcileLoadsRealLedger drives the REAL securityFindings
