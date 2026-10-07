@@ -67,6 +67,31 @@ func TestReplyListsOnlyRejects(t *testing.T) {
 	}
 }
 
+// TestReplyOrdersRejectsByID: several unposted rejects come out sorted by id,
+// whatever order the record holds them in. The stored order is the reverse of
+// the sorted one, so a dropped sort and a reversed one both show.
+func TestReplyOrdersRejectsByID(t *testing.T) {
+	rec := prtriage.Record{Resolution: []prtriage.Resolution{
+		resolution("i2", 7, prtriage.VerdictReject, "reason i2"),
+		resolution("c7", 7, prtriage.VerdictReject, "reason c7"),
+		resolution("c4", 7, prtriage.VerdictReject, "reason c4"),
+	}}
+	body, ok := prtriage.ReplyBody(rec, 7)
+	if !ok {
+		t.Fatal("nothing to post")
+	}
+	b := bullets(body)
+	want := []string{"c4", "c7", "i2"}
+	if len(b) != len(want) {
+		t.Fatalf("bullets %q, want one per reject in the order %v", b, want)
+	}
+	for i, id := range want {
+		if !strings.HasPrefix(b[i], "- ["+id+"](") || !strings.HasSuffix(b[i], "reason "+id) {
+			t.Errorf("bullet %d = %q, want reject %s with its own reason", i, b[i], id)
+		}
+	}
+}
+
 func TestReplyEmptyWhenNothingToSay(t *testing.T) {
 	posted := resolution("c5", 7, prtriage.VerdictReject, "r")
 	posted.Posted = true
