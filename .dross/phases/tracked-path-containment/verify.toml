@@ -1,11 +1,11 @@
 [verify]
   phase = "tracked-path-containment"
-  generated_at = 2026-10-07T16:38:03.567749Z
-  verdict = "partial"
+  generated_at = 2026-10-08T05:39:29.350196Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-10-07T16:41:30.580026Z
-  measured_commit = "7ab55265d6ac18d14dae46630b169f4efaa4912f"
-  measured_tree = "2270096c270e4762910623c7cdd3a3d6d154679c"
+  finalized_at = 2026-10-08T05:41:16.241794Z
+  measured_commit = "c3588ae74ac103482ef224fcea9a00437e2e9201"
+  measured_tree = "7542e5ad3d9f496b9c873e2f7ef44c6bb268836e"
 
 [summary]
   mutation_status = "skipped"
@@ -26,37 +26,37 @@
   id = "c-1"
   status = "covered"
   tests = ["internal/cmd/security_test.go:568:TestContainedPathIsGone", "internal/cmd/redproof_set_test.go:418:TestCheckRedProofDocDelegatesContainment", "internal/cmd/redproof_set_test.go:452:TestCheckRedProofDocKeepsItsOwnRefusals", "internal/cmd/redproof_set_test.go:494:TestCheckRedProofDocReturnsRepoRelativeSlashForm", "internal/cmd/security_test.go:604:TestRunDirSitesPassContainedThrough", "internal/cmd/pathfence_enum_test.go:325:TestNoSecondDotDotImplementation", "internal/cmd/pathfence_enum_test.go:338:TestDotDotScanTripsOnItsFixtures", "internal/cmd/pathfence_enum_test.go:374:TestDotDotScanSeesTheRealLiterals"]
-  notes = "Was weak (2026-09-09) on three holes in the no-second-..-test ban; all three are closed. (1) Package scope: exec-taint-enumeration (#134) replaced scannedPackages (8 of 36) with the shared whole-module load, and assertWalkCovers fails on any visited package with zero files and names argfence/hostallow explicitly. (2) Join/Dir/Split were not markers, so a Join-built path with a .. prefix test skipped its whole function: added to pathMarkers in quick 1.7.26.1 (7010590), must-trip fixture joinEscape. (3) Only the exact \"..\" literal was reported, so a HasPrefix(clean, \"../\")-only check escaped: \"../\" is reported too, must-trip fixture slashOnly, and two Join-carrying must-not-trip cases exercise the + rule itself. TestDotDotScanTripsOnItsFixtures now counts per function; with the old marker/literal sets it reports 3 of 6 and fails (observed 2026-10-07). TestContainedPathIsGone is still name-only, but a renamed reimplementation is now caught by the literal ban, which no longer has the gaps that made the name check carry the clause."
+  notes = "Was weak (2026-09-09) on three holes in the no-second-..-test ban; all three are closed. (1) Package scope: exec-taint-enumeration (#134) replaced scannedPackages (8 of 36) with the shared whole-module load, and assertWalkCovers fails on any visited package with zero files and names argfence/hostallow explicitly. (2) Join/Dir/Split were not markers, so a Join-built path with a .. prefix test skipped its whole function: added to pathMarkers in quick 1.7.26.1 (7010590, #163), must-trip fixture joinEscape. (3) Only the exact \"..\" literal was reported, so a HasPrefix(clean, \"../\")-only check escaped: \"../\" is reported too, must-trip fixture slashOnly, and two Join-carrying must-not-trip cases exercise the + rule itself. TestDotDotScanTripsOnItsFixtures counts per function; with the old marker/literal sets it reports 3 of 6 and fails (observed 2026-10-07). TestContainedPathIsGone is still name-only, but a renamed reimplementation is caught by the literal ban, which no longer has the gaps that made the name check carry the clause."
 
 [[criterion]]
   id = "c-2"
   status = "covered"
-  tests = ["internal/verify/scope_test.go:458:TestValidateRecordedRefusesEscape", "internal/cmd/verifyscope_test.go:350:TestPhaseScopeRefusesEscapingRecordedPath", "internal/cmd/verify_scoping_test.go:544:TestVerifyRefusesEscapingRecordedPathEndToEnd", "internal/cmd/verify_scoping_test.go:572:TestVerifyResultsRefusesEscapingRecordedPath", "internal/verify/scope_test.go:504:TestGitLaneStillDegradesOnEscape"]
-  notes = "Unchanged since 2026-09-09: ValidateRecorded is the first statement of phaseScope, ahead of any git subprocess or NewScope, and pure (only pathfence.Contain). The end-to-end test installs a stub adapter so an ungated run would succeed and write both artefacts; it asserts the refusal and that neither artefact exists, for both the attached run and the detached collect. Residual (FLAG below): the 'not dispatched' clause rests on no-artefacts-written, not on the stub's recorded files."
+  tests = ["internal/verify/scope_test.go:458:TestValidateRecordedRefusesEscape", "internal/cmd/verifyscope_test.go:350:TestPhaseScopeRefusesEscapingRecordedPath", "internal/cmd/verify_scoping_test.go:544:TestVerifyRefusesEscapingRecordedPathEndToEnd", "internal/cmd/verify_scoping_test.go:580:TestVerifyResultsRefusesEscapingRecordedPath", "internal/verify/scope_test.go:504:TestGitLaneStillDegradesOnEscape"]
+  notes = "ValidateRecorded is the first statement of phaseScope, ahead of any git subprocess or NewScope, and pure (only pathfence.Contain). The end-to-end test installs a stub adapter so an ungated run would succeed and write both artefacts; it asserts the refusal and that neither artefact exists, for the attached run and the detached collect — and, since quick 1.7.26.2 (5a639a8, #164), that the stub adapter was handed no files, so 'not dispatched' is asserted rather than inferred from the missing artefacts (red-proven: disabling the gate fails it with 'handed [a.go]'). 'Not stat-ed' is structural: pathfence.Stat accepts only a Contained, so an escaping path has no value to stat through it."
 
 [[criterion]]
   id = "c-3"
   status = "covered"
   tests = ["internal/cmd/security_test.go:392:TestHostileFindingNamesStayInsideRunDir", "internal/cmd/security_test.go:604:TestRunDirSitesPassContainedThrough", "internal/cmd/security_test.go:720:TestRunDirSitesCannotUnwrap", "internal/security/scaffold_test.go:88:TestWriteScaffoldSpecWritesIntoRunDirNotCwd", "internal/quality/scaffold_test.go:88:TestWriteScaffoldSpecWritesIntoRunDirNotCwd", "internal/cmd/redproof_repoint_test.go:479:TestRepointRefusesAnEscapingDocAndWritesNothing"]
-  notes = "Was weak (2026-09-09) as unfalsifiable: every run-dir site passes a literal filename, and no test drove a finding-derived name anywhere. TestHostileFindingNamesStayInsideRunDir (quick 1.7.26.1, 7010590) now does, for security and quality: a finding whose id, title and file read ../main.go goes through the real scaffold and findings-reconcile write paths, with the run dir and repo sharing a parent that holds a sentinel main.go, so the name hits the sentinel whether resolved against the run dir or the cwd. It asserts the sentinel is byte-identical, nothing outside the run dir and the tool's .dross dir is written or removed, and — against vacuity — spec.toml carries the hostile text and reconcile reports it new. Red-proven 2026-10-07: an os.WriteFile(filepath.Join(runDir, finding.File)) inserted into security scaffold fails it on the sentinel."
+  notes = "Was weak (2026-09-09) as unfalsifiable: every run-dir site passes a literal filename, and no test drove a finding-derived name anywhere. TestHostileFindingNamesStayInsideRunDir (quick 1.7.26.1, 7010590, #163) now does, for security and quality: a finding whose id, title and file read ../main.go goes through the real scaffold and findings-reconcile write paths, with the run dir and repo sharing a parent that holds a sentinel main.go, so the name hits the sentinel whether resolved against the run dir or the cwd. It asserts the sentinel is byte-identical, nothing outside the run dir and the tool's .dross dir is written or removed, and — against vacuity — spec.toml carries the hostile text and reconcile reports it new. Red-proven 2026-10-07: an os.WriteFile(filepath.Join(runDir, finding.File)) inserted into security scaffold fails it on the sentinel."
 
 [[criterion]]
   id = "c-4"
   status = "covered"
   tests = ["internal/pathfence/pathfence_test.go:23:TestContainedCannotBeConstructedOutsidePackage", "internal/cmd/security_test.go:720:TestRunDirSitesCannotUnwrap", "internal/security/findings_test.go:94:TestLoadAndSaveRequireContainedPath", "internal/quality/findings_test.go:136:TestLoadAndSaveRequireContainedPath", "internal/pathfence/pathfence_test.go:48:TestSeamRefusesZeroContained", "internal/cmd/pathfence_enum_test.go:167:TestNoUnwrappedPathReachesAnOSCall", "internal/cmd/pathfence_enum_test.go:227:TestUnwrapScanTripsOnItsFixtures", "internal/cmd/pathfence_enum_test.go:275:TestUnwrapScanSkipsTestFiles", "internal/compilefence/compilefence_test.go:52:TestPositiveControl"]
-  notes = "Unchanged since 2026-09-09 and still the best-covered criterion: Contain is the only constructor of a Contained, TestContainedCannotBeConstructedOutsidePackage runs a real go build and requires the unexported-field failure, and the unwrap ban (now over the whole-module load with per-package floors, #134) catches a .String() reaching os.*. The containedVar name list the 2026-09-09 FLAG named in TestRunDirSitesPassContainedThrough is gone."
+  notes = "Contain is the only constructor of a Contained; TestContainedCannotBeConstructedOutsidePackage runs a real go build and requires the unexported-field failure, and the unwrap ban (whole-module load with per-package floors since #134) catches a .String() reaching os.*. The containedVar name list the 2026-09-09 FLAG named in TestRunDirSitesPassContainedThrough is gone."
 
 [[criterion]]
   id = "c-5"
   status = "covered"
-  tests = ["internal/pathfence/pathfence_test.go:68:TestContainEscapeNamesPathArtifactAndRoot", "internal/verify/scope_test.go:458:TestValidateRecordedRefusesEscape", "internal/cmd/verifyscope_test.go:350:TestPhaseScopeRefusesEscapingRecordedPath", "internal/cmd/verify_scoping_test.go:503:assertEscapeRefusal"]
-  notes = "Unchanged since 2026-09-09: the escape refusal is asserted as three independent Contains checks (offending path, artifact, root) at the pathfence, verify, cmd and end-to-end layers, so a reworded message stays green and a message that drops a fact fails. Residuals (FLAGs below): the absolute-path refusal's message content is still unasserted, and containScope still prints its artifact twice."
+  tests = ["internal/pathfence/pathfence_test.go:68:TestContainEscapeNamesPathArtifactAndRoot", "internal/pathfence/pathfence_test.go:104:TestContainAbsoluteNamesPathArtifactAndRoot", "internal/verify/scope_test.go:458:TestValidateRecordedRefusesEscape", "internal/cmd/verifyscope_test.go:350:TestPhaseScopeRefusesEscapingRecordedPath", "internal/cmd/verifyscope_test.go:427:TestContainScopeRefusesUncontainedEntry", "internal/cmd/verify_scoping_test.go:522:assertEscapeRefusal"]
+  notes = "Both refusal arms are asserted as independent Contains checks over {offending path, artifact, root}, so a reworded message stays green and a message that drops a fact fails: the escape arm at the pathfence, verify, cmd and end-to-end layers, and — since quick 1.7.26.2 (5a639a8, #164) — the absolute arm via TestContainAbsoluteNamesPathArtifactAndRoot (red-proven: dropping the root fails it while the sentinel-only test still passes). containScope no longer double-prefixes its artifact; TestContainScopeRefusesUncontainedEntry asserts path, root and a single 'verify scope' (red-proven: restoring the second wrap fails it with 'names its artifact 2 times')."
 
 [[criterion]]
   id = "c-6"
   status = "covered"
   tests = ["internal/cmd/pathfence_fields_test.go:224:TestEveryPathShapedFieldIsDeclared", "internal/cmd/pathfence_fields_test.go:238:TestWalkerFindsANonEmptySet", "internal/cmd/pathfence_fields_test.go:274:TestWalkerSelfTest", "internal/cmd/pathfence_carrier_test.go:75:TestDeclaredCarriersAreContained", "internal/cmd/pathfence_carrier_test.go:94:TestEveryConsumedCarrierIsBound", "internal/pathfence/fields_test.go:*:Validate suite"]
-  notes = "Was weak (2026-09-09): the walker decided what was path-shaped from an 11-word tag vocabulary and four schema dirs, and three new fields under unlisted tags passed silently. exec-taint-enumeration (#134) replaced both lists: EVERY toml/json-tagged field bottoming out in a string, in every package of the shared load, must be declared in pathfence.Fields() or the not_paths.txt ledger, checked both ways (undeclared fails with the row to paste; stale fails), with a field-count floor. The disproving experiment re-run 2026-10-07: a `workdir`-tagged string field added to phase.Task fails TestEveryPathShapedFieldIsDeclared naming phase.Task.Workdir. The live example the old note cited, the detached run's RunDir, is now declared (pathfence/fields.go:291)."
+  notes = "Was weak (2026-09-09): the walker decided what was path-shaped from an 11-word tag vocabulary and four schema dirs, and three new fields under unlisted tags passed silently. exec-taint-enumeration (#134) replaced both lists: EVERY toml/json-tagged field bottoming out in a string, in every package of the shared load, must be declared in pathfence.Fields() or the not_paths.txt ledger, checked both ways (undeclared fails with the row to paste; stale fails), with a field-count floor. The disproving experiment re-run 2026-10-07: a `workdir`-tagged string field added to phase.Task fails TestEveryPathShapedFieldIsDeclared naming phase.Task.Workdir. The detached run's RunDir, the old note's live example, is now declared (pathfence/fields.go:291)."
 
 [[finding]]
   severity = "NOTE"
@@ -3179,21 +3179,13 @@
   text = "mutation scope is degraded (source: git+changes) — phase already merged: diffing recorded fork point c71c6ae..HEAD, which may include sibling work merged since"
 
 [[finding]]
-  severity = "FLAG"
-  text = "c-5: the absolute-path refusal has no message-content test. TestContainAbsoluteIsItsOwnSentinel (internal/pathfence/pathfence_test.go:85) and TestValidateRecordedRefusesAbsolute (internal/verify/scope_test.go:478) assert only the ErrAbsolute sentinel; the message at internal/pathfence/pathfence.go:107 carries path, artifact and root, but a reword dropping the root ships undetected. Open since 2026-09-09 (deferred to secret-detection, which re-deferred it to someday)."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-5: containScope double-prefixes its error: internal/cmd/verifyscope.go:196 passes artifact \"verify scope\" into pathfence.Contain, then :198 wraps it again with fmt.Errorf(\"verify scope: %w\", err), so the user reads `verify scope: verify scope: \"...\" resolves outside ...`. Invisible to the strings.Contains assertions. Open since 2026-09-09 (deferred, someday)."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-2: the 'not dispatched to a mutation adapter' clause is inferred, not asserted. TestVerifyRefusesEscapingRecordedPathEndToEnd (internal/cmd/verify_scoping_test.go:544) asserts the refusal and that no artefact was written, but never that the stub adapter's recorded files (stubMutationAdapter.got) are empty, and nothing instruments the absence of a stat — a refactor that stat-ed or dispatched before refusing would pass. Open since 2026-09-09 (deferred, someday)."
+  severity = "NOTE"
+  text = "Re-verify 2026-10-08 with --skip-mutation, to re-map criteria after the 2026-09-09 weaknesses were closed; the verdict rests on criterion coverage alone. The phase's measured run (r-20260907-132210, helicon) scored 0.94 over 956 in-scope mutants (896 killed, 60 survived, all NOT COVERED by construction; efficacy 1.00 over the reachable 896) with 0 unclassified — that measurement predates later phases' edits to these files and is not re-run here."
 
 [[finding]]
   severity = "NOTE"
-  text = "Re-verify 2026-10-07 with --skip-mutation, to re-map criteria after the weaknesses were closed; the verdict rests on criterion coverage alone. The phase's measured run (r-20260907-132210, helicon) scored 0.94 over 956 in-scope mutants (896 killed, 60 survived, all NOT COVERED by construction; efficacy 1.00 over the reachable 896) with 0 unclassified — that measurement predates later phases' edits to these files and is not re-run here."
+  text = "Every weak criterion and FLAG from 2026-09-09 is closed. Weak→covered: c-1 hole 1 and c-6 by exec-taint-enumeration (#134); c-1 holes 2-3 and c-3 by quick 1.7.26.1 (7010590, #163). FLAGs: the hand-maintained lists (scannedPackages, pathShapedTags, schemaDirs, containedVar) by #134; the absolute-path message test, containScope's double prefix and the asserted no-dispatch by quick 1.7.26.2 (5a639a8, #164); TestContainedPathIsGone's name-only check is backstopped by the widened literal ban. Each fix was red-proven by a reverted probe (recorded per criterion), and the 2026-10-07 interim re-verify (02faaab, partial) is superseded."
 
 [[finding]]
   severity = "NOTE"
-  text = "All three weak criteria from 2026-09-09 are now covered: c-1 hole 1 and c-6 by exec-taint-enumeration (#134, whole-module load and full tagged-field enumeration), c-1 holes 2-3 and c-3 by quick 1.7.26.1 (7010590, #163). Each was re-checked by experiment on 2026-10-07: the old scanner fails the new fixture test (3 of 6 reported), an escaping write in security scaffold fails the c-3 test, and an undeclared `workdir` field on phase.Task fails the c-6 enumeration."
+  text = "Still deferred, by design: symlink-resolving containment. pathfence.Contain is lexical — the documented limit on Contain — so an in-repo symlink pointing outside the repo is not refused; the criteria here are all lexical and none claims otherwise. The raw-string reader scan deferred alongside it shipped with exec-taint-enumeration's path-field taint scan."
