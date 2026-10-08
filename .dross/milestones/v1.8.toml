@@ -1,9 +1,12 @@
-phases = ["azure-devops-provider"]
+phases = ["context-boundaries", "test-output-summaries", "prompt-partials", "solo-task-subagent", "memory-prune-advisor"]
 
 [milestone]
   version = "v1.8"
-  status = "planning"
-  started = "2026-09-11"
-  base = "milestone/v1.7"
+  title = "1.8 context economy — shrink what every turn re-reads"
+  status = "active"
+  started = "2026-10-08"
+  base = "main"
 
 [scope]
+  success_criteria = ["Once a session passes a configurable context threshold (default ~150k tokens), dross's next pair-mode gate leads with 'checkpoint + /clear', and a hook injects the same nudge outside gates.", "`dross test`, verify and mutation runs print counts plus failing tests to the conversation and write the full log to a gitignored file whose path they print. A green run prints no per-test lines.", "A repeat `dross rule show` in the same session prints a one-line 'rules unchanged' marker instead of the full block, unless the rules changed since the last call.", "execute.md and verify.md each load at ≤15 KB (from ~26 KB today). Rarely taken branches are fetched on demand through a dross command, and a test fails if either prompt goes back over budget.", "`/dross-status` lists memory-prune suggestions for the repo's Claude memory dir, each with a $/month estimate weighted by the repo's share of usage. It never deletes, and it never suggests a memory that holds a guard phrase (NEVER, ASK, don't re-raise, ...).", "Time is a constraint, not a trade. No v1.8 change adds agent round-trips to a command's common path, and each phase records before/after turn counts and wall-clock time for the flow it touches."]
+  non_goals = ["No more subagent delegation, shorter skill descriptions or polling-output trimming as cost levers. All three were measured and rejected on 2026-10-05: delegation start-up costs more than it saves, the descriptions total ~1.3k tokens, and polling isn't in the top 15 re-reads.", "execute.md §0 keeps reading spec.toml and plan.toml whole. Slice-reads stay an unapproved proposal and are not v1.8 work."]
