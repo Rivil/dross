@@ -1,0 +1,21 @@
+// Must-fail fixture: the 2026-09-07 experiment, kept. phase.Task as it stands,
+// plus three new string fields under tag words the old eleven-word vocabulary
+// never held. The old walker passed this silently; the enumeration must report
+// exactly these three, one finding each (TestTaskExperimentStaysAFailure). With
+// the EXPERIMENT lines removed it is the live struct, and must yield nothing.
+package phase
+
+type Task struct {
+	ID           string   `toml:"id" json:"id"`
+	Wave         int      `toml:"wave" json:"wave"`
+	Title        string   `toml:"title" json:"title"`
+	Files        []string `toml:"files" json:"files"`
+	Description  string   `toml:"description,omitempty" json:"description,omitempty"`
+	Covers       []string `toml:"covers,omitempty" json:"covers,omitempty"`
+	DependsOn    []string `toml:"depends_on,omitempty" json:"depends_on,omitempty"`
+	TestContract []string `toml:"test_contract,omitempty" json:"test_contract,omitempty"`
+	Status       string   `toml:"status,omitempty" json:"status,omitempty"`
+	WorkDir      string   `toml:"workdir"`    // EXPERIMENT
+	OutputDir    string   `toml:"output_dir"` // EXPERIMENT
+	Spec         string   `toml:"spec"`       // EXPERIMENT
+}

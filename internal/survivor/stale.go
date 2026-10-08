@@ -4,7 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // The two structural reasons an acceptance can go stale. Both are statements
@@ -48,6 +49,14 @@ type Unverifiable struct {
 type Report struct {
 	Stale        []Stale
 	Unverifiable []Unverifiable
+}
+
+// AcceptanceFile contains an acceptance's recorded file under root. The path is
+// read back out of survivors.toml, which is hand-editable, so an entry naming
+// `../outside` must be refused rather than read: it is a path the store holds,
+// not one this process checked when it wrote it.
+func AcceptanceFile(root string, a Acceptance) (pathfence.Contained, error) {
+	return pathfence.Contain(root, StoreFile+" acceptance file", a.File)
 }
 
 // StaleAcceptances reports which of the store's acceptances have lost their
@@ -98,7 +107,11 @@ func StaleAcceptancesAgainst(root string, s *Store, observed map[string]bool) Re
 		}
 		c, ok := files[a.File]
 		if !ok {
-			src, err := os.ReadFile(filepath.Join(root, a.File))
+			var src []byte
+			path, err := AcceptanceFile(root, a)
+			if err == nil {
+				src, err = pathfence.ReadFile(path)
+			}
 			c = cached{src: src, err: err}
 			files[a.File] = c
 		}

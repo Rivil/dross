@@ -1,0 +1,130 @@
+// Must-trip fixture (TestStrykerPrePhaseBranchTrips): the stryker.go branch
+// tool-output-not-persisted removed, from 6f27eaa^, with minimal stubs. The
+// tee, headBuffer, quote(), the reportless errors.New(msg) and
+// checkInstrumented's Errorf are copied verbatim (lines 115-118, 142, 150,
+// 176-222 and 315 of that file; TestStrykerPrePhaseBranchIsPinned holds them
+// byte for byte), plus the spec's two-line paraphrase: the head rendered into
+// a strings.Builder, quoted.String() passed to fmt.Errorf on the next line.
+package stryker
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"os/exec"
+	"strings"
+)
+
+const (
+	strykerHeadBytes = 64 << 10
+	strykerHeadLines = 40
+
+	strykerInitialTestFailureText    = "One or more tests failed in the initial test run"
+	strykerInitialTestTruncationNote = "the list above may be truncated"
+	strykerDropWarningText           = "did not result in any files"
+)
+
+
+// headBuffer retains the first `limit` bytes written through it and silently
+// discards the rest, always reporting a full write so it can sit inside an
+// io.MultiWriter without truncating the stream its sibling is rendering.
+type headBuffer struct {
+	limit int
+	buf   bytes.Buffer
+}
+
+func (h *headBuffer) Write(p []byte) (int, error) {
+	if room := h.limit - h.buf.Len(); room > 0 {
+		if len(p) <= room {
+			h.buf.Write(p)
+		} else {
+			h.buf.Write(p[:room])
+		}
+	}
+	// len(p), never the amount kept: a short count is an io.ErrShortWrite to
+	// io.MultiWriter, which would abort the write to os.Stderr as well and
+	// truncate the live output the moment the cap was reached.
+	return len(p), nil
+}
+
+func (h *headBuffer) quote(n int) string {
+	text := strings.TrimRight(h.buf.String(), "\n")
+	if text == "" {
+		return "stryker produced no output at all — it may not have started."
+	}
+	lines := strings.Split(text, "\n")
+	truncated := false
+	if len(lines) > n {
+		lines, truncated = lines[:n], true
+	}
+	var b strings.Builder
+	b.WriteString("the head of stryker's output, which is where the cause is:\n\n")
+	for _, l := range lines {
+		b.WriteString("    ")
+		b.WriteString(l)
+		b.WriteString("\n")
+	}
+	if truncated {
+		b.WriteString("    … (output continues above)\n")
+	}
+	return b.String()
+}
+
+// run is the branch around the tee, cut to what the escape needs.
+func run(cmd *exec.Cmd, reportPath string) ([]byte, error) {
+	head := &headBuffer{limit: strykerHeadBytes}
+	sink := io.MultiWriter(os.Stderr, head)
+	cmd.Stdout = sink
+	cmd.Stderr = sink
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			printHead(os.Stderr, head)
+			return nil, fmt.Errorf("stryker invocation failed: %w", err)
+		}
+	}
+
+	b, err := os.ReadFile(reportPath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			msg := fmt.Sprintf("stryker did not write a report at %s.\n%s", reportPath, head.quote(strykerHeadLines))
+			if strings.Contains(head.buf.String(), strykerInitialTestFailureText) {
+				msg += "\n" + strykerInitialTestTruncationNote
+			}
+			return nil, errors.New(msg) // WANT taint
+		}
+		return nil, fmt.Errorf("read stryker report: %w", err)
+	}
+	if err := checkInstrumented(nil, head); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// checkInstrumented, cut to its escape.
+func checkInstrumented(dropped []string, head *headBuffer) error {
+	if len(dropped) == 0 {
+		return nil
+	}
+	msg := fmt.Sprintf("stryker instrumented none of %d file(s) it was asked to mutate: %s.\n",
+		len(dropped), strings.Join(dropped, ", "))
+	if strings.Contains(head.buf.String(), strykerDropWarningText) {
+		msg += "stryker said so itself — look for \"" + strykerDropWarningText + "\" below.\n"
+	}
+	return fmt.Errorf("%s\n%s", msg, head.quote(strykerHeadLines)) // WANT taint
+}
+
+// paraphrase is the spec's c-3 shape in two lines.
+func paraphrase(head *headBuffer) error {
+	var quoted strings.Builder
+	fmt.Fprint(&quoted, head.quote(strykerHeadLines))
+	return fmt.Errorf("stryker failed:\n%s", quoted.String()) // WANT taint
+}
+
+// printHead is where the head belongs: the terminal.
+func printHead(w io.Writer, h *headBuffer) { fmt.Fprint(w, h.quote(strykerHeadLines)) }
+
+var _ = bytes.MinRead

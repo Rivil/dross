@@ -996,3 +996,53 @@ func TestEditSetsDescriptionFromFlag(t *testing.T) {
 		t.Errorf("description = %q, want %q", got, "what it does")
 	}
 }
+
+// TestTaskAddRefusesEscapingFile is the write-side containment gate reached
+// through the CLI. plan.toml must stay byte-unchanged: saveIfValid's write sits
+// behind ValidatePlan, so a refusal cannot half-apply.
+func TestTaskAddRefusesEscapingFile(t *testing.T) {
+	for _, tc := range []struct{ name, file string }{
+		{"parent traversal", "../x"},
+		{"absolute", "/etc/passwd"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			chdir(t, t.TempDir())
+			scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+			planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+			before := mustRead(t, planPath)
+
+			err := runCmd(t, Task(), "add", "01-test",
+				"--title", "bad", "--covers", "c-1", "--files", tc.file)
+			if err == nil {
+				t.Fatalf("task add accepted --files %q", tc.file)
+			}
+			for _, want := range []string{tc.file, "plan.toml"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("refusal does not name %q:\n%s", want, err.Error())
+				}
+			}
+			assertPlanUnchanged(t, planPath, before)
+		})
+	}
+}
+
+// TestTaskAddAcceptsContainedFile is the positive control: the gate must not
+// have made the ordinary path refuse. Without it, a mis-wired root would make
+// every add fail and the refusal test above would pass for the wrong reason.
+func TestTaskAddAcceptsContainedFile(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+
+	if err := runCmd(t, Task(), "add", "01-test",
+		"--title", "ok", "--covers", "c-1", "--files", "internal/a.go"); err != nil {
+		t.Fatalf("task add refused a repo-relative file: %v", err)
+	}
+	plan, _, err := loadPhasePlan("01-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	added := plan.FindTask("t-3")
+	if added == nil || !slices.Contains(added.Files, "internal/a.go") {
+		t.Fatalf("the added task did not keep its files: %+v", added)
+	}
+}

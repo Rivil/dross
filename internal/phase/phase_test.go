@@ -1,12 +1,15 @@
 package phase
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 func TestInsertRelative(t *testing.T) {
@@ -535,9 +538,43 @@ func TestSummaryCounts(t *testing.T) {
 	}
 }
 
-// TestSaveTOMLAtomicFailurePreservesFile forces the temp write to fail (by
-// occupying <path>.tmp with a directory) and asserts the live file survives
-// byte-identical — the guarantee the old truncate-in-place os.Create lacked.
+// TestSpecSaveAtomicFailurePreservesFile keeps saveTOML — still the writer
+// behind Spec.Save, for spec.toml and deferred.toml — honest: with its fixed
+// <path>.tmp occupied by a directory the save fails and the live file is
+// untouched.
+func TestSpecSaveAtomicFailurePreservesFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "spec.toml")
+	original := &Spec{Criteria: []Criterion{{ID: "c-1", Text: "one"}}}
+	original.Phase.ID = "orig"
+	if err := original.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path+".tmp", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	changed := &Spec{Criteria: []Criterion{{ID: "c-9", Text: "nine"}}}
+	changed.Phase.ID = "changed"
+	if err := changed.Save(path); err == nil {
+		t.Fatal("expected Spec.Save to fail when <path>.tmp is unavailable")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("live spec was mutated on a failed save:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+// TestSaveTOMLAtomicFailurePreservesFile forces the temp write to fail (a
+// read-only phase dir, so no temp file can be created beside plan.toml) and
+// asserts the live file survives byte-identical — the guarantee the old
+// truncate-in-place os.Create lacked.
 func TestSaveTOMLAtomicFailurePreservesFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "plan.toml")
@@ -551,14 +588,25 @@ func TestSaveTOMLAtomicFailurePreservesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Occupy the temp path with a directory so os.Create(<path>.tmp) fails.
-	if err := os.Mkdir(path+".tmp", 0o755); err != nil {
+	// Plan.Save writes through the lossless door, which stages its bytes in a
+	// randomly named temp file beside the target — so a fixed <path>.tmp no
+	// longer blocks it. A read-only phase dir does: the temp file cannot be
+	// created, and the save must fail with the live file untouched.
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
 	changed := &Plan{Phase: PlanPhase{ID: "changed"}, Task: []Task{{ID: "t-9", Wave: 9, Title: "nine"}}}
-	if err := changed.Save(path); err == nil {
-		t.Fatal("expected Save to fail when the temp path is unavailable")
+	err = changed.Save(path)
+	if err == nil {
+		t.Fatal("expected Save to fail when the temp file cannot be created")
+	}
+	if !strings.Contains(err.Error(), "create") {
+		t.Errorf("err = %v, want the temp-file creation named as the failure", err)
 	}
 
 	after, err := os.ReadFile(path)
@@ -612,5 +660,40 @@ func TestDeferredSurvivorRoundTrip(t *testing.T) {
 	}
 	if loaded.Deferred[1].Survivor != "" {
 		t.Errorf("ordinary entry should carry no survivor key, got %q", loaded.Deferred[1].Survivor)
+	}
+}
+
+// TestPhaseIDsAreContained: a phase id is an untrusted path segment — read back
+// from hand-editable files and from tracker keys and labels — so one that
+// would escape phases/ never resolves outside it. Dir lands on the fixed
+// refused segment inside phases/, DirExists reports no directory even when
+// the escaped target exists, and ContainID refuses with ErrEscapes.
+func TestPhaseIDsAreContained(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, ".dross")
+	if err := os.MkdirAll(filepath.Join(root, "phases", "real"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(parent, "outside"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	phases := filepath.Join(root, "phases")
+	for _, id := range []string{"../../outside", "../outside", "/etc", "a/../../x"} {
+		dir := Dir(root, id)
+		if dir != filepath.Join(phases, RefusedSegment) {
+			t.Errorf("Dir(%q) = %s, want the refused segment inside phases/", id, dir)
+		}
+		if _, err := ContainID(root, id); !errors.Is(err, pathfence.ErrEscapes) && !errors.Is(err, pathfence.ErrAbsolute) {
+			t.Errorf("ContainID(%q) = %v, want a containment refusal", id, err)
+		}
+	}
+	if DirExists(root, "../../outside") {
+		t.Error("DirExists stat'ed an escaping slug's real target outside phases/")
+	}
+	if !DirExists(root, "real") || Dir(root, "real") != filepath.Join(phases, "real") {
+		t.Error("an in-tree phase id no longer resolves")
+	}
+	if c, err := ContainID(root, "real"); err != nil || c.Rel() != "real" {
+		t.Errorf("ContainID(real) = %v, %v", c, err)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -253,7 +254,7 @@ var vectorDrivers = map[string]func(t *testing.T, repoDir string, v vector) stri
 			if err != nil {
 				return err
 			}
-			cfg := boardConfig(p.Board, p.Remote.URL, nil)
+			cfg := boardsync.Config(p.Board, p.Remote.URL, nil)
 			return cfg.Hosts.Check("[board].base_url", cfg.APIBase)
 		})
 	},
@@ -411,7 +412,7 @@ func TestRedProofPinsBaseCommit(t *testing.T) {
 		t.Logf("cannot verify pinned base commit %s — %s (ci.yml fetches full history so this check still runs in CI)", pin.SHA, why)
 	case verdict == reachUnreachable:
 		t.Errorf("%s pins base commit %s, which is unreachable — %s. Repoint it to the phase's fork point %s",
-			pin.Doc, pin.SHA, why, fixtureForkPoint(t, root, pin.Phase))
+			pin.Doc.Rel(), pin.SHA, why, fixtureForkPoint(t, root, pin.Phase))
 	}
 
 	for _, v := range loadVectors(t) {
@@ -426,13 +427,15 @@ func TestRedProofPinsBaseCommit(t *testing.T) {
 // re-runnable, and an unrecorded proof is one nothing checks.
 func fixtureRedProofPin(t *testing.T, root string) redProofPin {
 	t.Helper()
-	pins, err := discoverRedProofPins(filepath.Join(root, RootDirName))
+	pins, err := discoverRedProofPins(filepath.Join(root, RootDirName), root)
 	if err != nil {
 		t.Fatalf("discover red-proof pins: %v", err)
 	}
 	want := fixtureDir + "/RUN.md"
 	for _, p := range pins {
-		if p.Doc == want {
+		// Rel(): redProofPin.Doc is a pathfence.Contained now, and the fixture
+		// path this compares against is repo-relative.
+		if p.Doc.Rel() == want {
 			return p
 		}
 	}

@@ -3,8 +3,14 @@
 package project
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -24,6 +30,7 @@ type Project struct {
 	Env         Env               `toml:"env" json:"env"`
 	Goals       Goals             `toml:"goals" json:"goals"`
 	Mutation    Mutation          `toml:"mutation,omitempty" json:"mutation,omitempty"`
+	Techdebt    Techdebt          `toml:"techdebt,omitempty" json:"techdebt,omitempty"`
 	Constraints map[string]string `toml:"constraints,omitempty" json:"constraints,omitempty"`
 	Competition []Competitor      `toml:"competition,omitempty" json:"competition,omitempty"`
 }
@@ -293,6 +300,24 @@ type Goals struct {
 	Differentiators []string `toml:"differentiators,omitempty" json:"differentiators,omitempty"`
 }
 
+// Techdebt holds the knobs for `dross techdebt`. The table is optional; an
+// absent one leaves Exclude nil and the scan covers every tracked file outside
+// the shared skip set (stack.SkipDirs).
+type Techdebt struct {
+	// Exclude lists repo-relative patterns the tech-debt scan leaves out — the
+	// one mechanism for exempting a package (dross's own internal/techdebt/,
+	// whose marker regex and fixtures would otherwise report themselves) or a
+	// file class, covering .go, .md and .toml alike. Semantics, in order:
+	//   - an entry ending in "/" is a directory prefix ("internal/techdebt/"
+	//     drops everything beneath it, but not internal/techdebtx/);
+	//   - any other entry is a path.Match glob against the repo-relative slash
+	//     path and, when the pattern has no "/", also against the base name
+	//     ("*.golden" drops docs/a.golden as well as a.golden).
+	// A pattern that does not compile is a scan-time error, not a silent
+	// no-op; validate does not pre-check globs (deferred).
+	Exclude []string `toml:"exclude,omitempty" json:"exclude,omitempty"`
+}
+
 // Mutation holds per-adapter knobs for the mutation testing pipeline.
 // Each sub-table is optional; unset values fall back to the adapter's
 // built-in default.
@@ -389,29 +414,227 @@ type Competitor struct {
 
 // Load reads a project.toml file.
 func Load(path string) (*Project, error) {
-	var p Project
-	if _, err := toml.DecodeFile(path, &p); err != nil {
+	src, err := os.ReadFile(path)
+	if err != nil {
 		return nil, fmt.Errorf("decode %s: %w", path, err)
 	}
-	// A nil Project alongside the error, not a partly-usable one: no caller
-	// can safely proceed on a config dross has just said it refuses to honour.
-	if err := p.Mutation.refuseRemote(path); err != nil {
-		return nil, err
-	}
-	return &p, nil
+	return decode(src, path)
 }
 
-// Save writes a project.toml file (overwrites).
+// decode is Load on bytes already in hand — the same decoder and the same
+// refusals, so a patched document is judged exactly as the file would be.
+func decode(src []byte, path string) (*Project, error) {
+	v, err := decodeLike(&Project{}, src, path)
+	if err != nil {
+		return nil, err
+	}
+	return v.(*Project), nil
+}
+
+// checkLoaded is the refusal a Project applies to every document it loads.
+// A nil Project goes back alongside the error, not a partly-usable one: no
+// caller can safely proceed on a config dross has just said it refuses to
+// honour.
+func (p *Project) checkLoaded(path string) error {
+	return p.Mutation.refuseRemote(path)
+}
+
+// loadChecker is a document type that refuses some decodable contents. The
+// door runs it on the file it reads and on the text it is about to write, so a
+// patched document is refused exactly as Load would refuse the file.
+type loadChecker interface {
+	checkLoaded(path string) error
+}
+
+// checkDocPtr refuses anything but a non-nil pointer to a struct — the only
+// shape the door can decode a file back into.
+func checkDocPtr(v any, path string) error {
+	rt := reflect.TypeOf(v)
+	if rt == nil || rt.Kind() != reflect.Pointer || rt.Elem().Kind() != reflect.Struct || reflect.ValueOf(v).IsNil() {
+		return fmt.Errorf("save %s: want a non-nil pointer to a struct, got %T", path, v)
+	}
+	return nil
+}
+
+// decodeLike decodes src into a fresh value of v's type (v must be a non-nil
+// pointer to a struct), then runs the type's loadChecker if it has one.
+func decodeLike(v any, src []byte, path string) (any, error) {
+	if err := checkDocPtr(v, path); err != nil {
+		return nil, err
+	}
+	out := reflect.New(reflect.TypeOf(v).Elem()).Interface()
+	if _, err := toml.Decode(string(src), out); err != nil {
+		return nil, fmt.Errorf("decode %s: %w", path, err)
+	}
+	if c, ok := out.(loadChecker); ok {
+		if err := c.checkLoaded(path); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// planOps is the diff step Save runs, as a variable so a test can hand Save
+// an op the patcher renders wrongly and prove the verify step refuses it.
+var planOps = func(old, new *Project) ([]op, error) { return diff(old, new) }
+
+// Save writes p to path. It is the ONLY project.toml writer in dross.
+//
+// A path that does not exist yet gets the encoder's fresh document. A path
+// that does is PATCHED: the file is loaded, diffed against p, and only the
+// lines the differing fields occupy are rewritten — comments, hand-added
+// keys, indentation and line endings elsewhere survive byte-for-byte. The
+// patched text is then decoded and re-encoded canonically and must match p's
+// own canonical form, so a patcher bug can never replace the file with a
+// document that loads differently; on mismatch the file is left untouched.
+//
+// A file Load refuses (the remote_host trap, a decode error) is never fallen
+// back to a whole-file encode: the error is returned and the bytes stay.
+// No differing field means no write at all — not even an mtime bump.
+//
+// The bytes land via a temp file in the same directory, fsynced and renamed
+// over the original with its mode preserved, so a crash mid-write leaves
+// either the old document or the new one, never a truncated one.
+//
+// All of that is saveLossless, the door every lossless TOML writer shares;
+// Save supplies only its own diff seam, planOps.
 func (p *Project) Save(path string) error {
-	f, err := os.Create(path)
+	return saveLossless(path, p, func(old, new any) ([]op, error) {
+		return planOps(old.(*Project), new.(*Project))
+	})
+}
+
+// saveLossless is the lossless write door: Project.Save and SaveTOML both
+// write through it, and nothing else in the package writes a file. v is a
+// non-nil pointer to a TOML-tagged struct; plan diffs the document on disk
+// (decoded into v's type) against v.
+//
+// An absent path gets the encoder's fresh document. An existing one is read,
+// decoded (with v's type's loadChecker), diffed, patched, verified to load as
+// v, and only then written — atomically, with its mode kept. No differing
+// field means no write at all.
+func saveLossless(path string, v any, plan func(old, new any) ([]op, error)) error {
+	// Checked before the fresh-encode branch too: a struct value would encode
+	// fine on first write and then make every later save fail to decode.
+	if err := checkDocPtr(v, path); err != nil {
+		return err
+	}
+	name := filepath.Base(path)
+	existing, err := os.ReadFile(path)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("read %s: %w", path, err)
+		}
+		fresh, err := encodeFresh(v)
+		if err != nil {
+			return fmt.Errorf("encode %s: %w", name, err)
+		}
+		return writeAtomic(path, fresh, 0o644)
+	}
+
+	old, err := decodeLike(v, existing, path)
+	if err != nil {
+		return err
+	}
+	ops, err := plan(old, v)
+	if err != nil {
+		return fmt.Errorf("diff %s: %w", path, err)
+	}
+	if len(ops) == 0 {
+		return nil
+	}
+	patched, err := apply(existing, ops)
+	if err != nil {
+		return fmt.Errorf("patch %s: %w", path, err)
+	}
+	if err := verifyPatched(patched, v, path); err != nil {
+		return err
+	}
+
+	// A read-only file refuses the write the way os.Create did. The rename
+	// below would replace it regardless — only the directory's permission
+	// gates a rename — and a permission the user set on the file is not
+	// something atomicity should route around.
+	if f, err := os.OpenFile(path, os.O_WRONLY, 0); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	} else {
+		f.Close()
+	}
+	mode := fs.FileMode(0o644)
+	if st, err := os.Stat(path); err == nil {
+		mode = st.Mode().Perm()
+	}
+	return writeAtomic(path, patched, mode)
+}
+
+// verifyPatched proves the patched text loads as v: both are re-encoded
+// canonically, so nil-vs-empty slices and map order cannot false-positive,
+// and the first differing line is named so the failing key is in the error.
+func verifyPatched(patched []byte, v any, path string) error {
+	name := filepath.Base(path)
+	got, err := decodeLike(v, patched, path)
+	if err != nil {
+		return fmt.Errorf("patched %s does not load; the file was left untouched: %w", path, err)
+	}
+	want, err := encodeFresh(v)
+	if err != nil {
+		return fmt.Errorf("encode %s: %w", name, err)
+	}
+	have, err := encodeFresh(got)
+	if err != nil {
+		return fmt.Errorf("encode patched %s: %w", name, err)
+	}
+	if bytes.Equal(have, want) {
+		return nil
+	}
+	wl, hl := strings.Split(string(want), "\n"), strings.Split(string(have), "\n")
+	for i := 0; i < len(wl) || i < len(hl); i++ {
+		var w, h string
+		if i < len(wl) {
+			w = wl[i]
+		}
+		if i < len(hl) {
+			h = hl[i]
+		}
+		if w != h {
+			return fmt.Errorf("patched %s would not load as saved at %q (wanted %q); the file was left untouched",
+				path, strings.TrimSpace(h), strings.TrimSpace(w))
+		}
+	}
+	return fmt.Errorf("patched %s would not load as saved; the file was left untouched", path)
+}
+
+// writeAtomic writes data to path through a temp file in the same directory,
+// fsynced and renamed into place, with the requested mode.
+func writeAtomic(path string, data []byte, mode fs.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return fmt.Errorf("create %s: %w", path, err)
 	}
-	defer f.Close()
-	enc := toml.NewEncoder(f)
-	enc.Indent = "  "
-	if err := enc.Encode(p); err != nil {
-		return fmt.Errorf("encode project.toml: %w", err)
+	tmpName := tmp.Name()
+	cleanup := func() { os.Remove(tmpName) }
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		cleanup()
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		cleanup()
+		return fmt.Errorf("sync %s: %w", path, err)
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return fmt.Errorf("close %s: %w", path, err)
+	}
+	if err := os.Chmod(tmpName, mode); err != nil {
+		cleanup()
+		return fmt.Errorf("chmod %s: %w", path, err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		cleanup()
+		return fmt.Errorf("rename %s: %w", path, err)
 	}
 	return nil
 }

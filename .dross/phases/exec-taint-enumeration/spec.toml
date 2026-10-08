@@ -1,0 +1,180 @@
+[phase]
+  id = "exec-taint-enumeration"
+  title = "exec-taint-enumeration"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "Every point where a spawned process's output enters the program (Output/CombinedOutput results, Stdout/Stderr buffers and pipes) is derived from type-checked source, and each such value must end terminal-only, in the shared recorder, or at an in-source marker with prose — any other path fails the test."
+
+[[criteria]]
+  id = "c-2"
+  text = "Taint crosses function boundaries: a spawn-derived value returned from a helper, stored in a struct field, or written through an io.Writer argument stays tainted at its consumers — wrapping the spawn or the conversion in a helper does not hide it, proven by a fixture per channel."
+
+[[criteria]]
+  id = "c-3"
+  text = "Re-introducing the pre-phase stryker.go branch verbatim — head rendered into a strings.Builder, quoted.String() passed to fmt.Errorf on the next line — fails the guard, proven by a fixture carrying that exact shape."
+
+[[criteria]]
+  id = "c-4"
+  text = "A consumer that loads a path field declared in the pathfence field registry and passes its raw string to an os.* call — never constructing a pathfence.Contained — fails the suite, proven by a fixture; a field declared not-consumed that reaches os.* fails too."
+
+[[criteria]]
+  id = "c-5"
+  text = "The new scans walk a package set derived from the module itself: a package added under internal/ or cmd/ is in scope with no list to edit, and a test fails if any package containing a spawn site or a declared-path-field read sits outside the walk."
+
+[[criteria]]
+  id = "c-6"
+  text = "A finding names the file and line where the tainted value escapes, the spawn site (or declared path field) it traces back to, and the remedy — proven by a fixture that introduces one violation of each scan and asserts all three facts in the message."
+
+[[criteria]]
+  id = "c-7"
+  text = "No scan can pass vacuously: each fails when its live-tree walk enumerates fewer sources than a stated floor, and each is pinned by a fixture corpus whose must-trip and must-not-trip answers are written down."
+
+[[criteria]]
+  id = "c-8"
+  text = "The type-checked load happens once per test binary and all scans together add at most 45s to their package's CI test time, read from the timing table cmd-test-duration added. (Raised from 15s on 2026-09-24, accepted by the user: the cost is the ~9 live-tree engine runs under -race that the plan's own gates and per-marker removal guards require. After t-25's worklist scheduler, PR #134 CI run 36031681034 measured internal/cmd at 245.9s against 205.1s on #132 and 211.8s on #133.)"
+
+[[criteria]]
+  id = "c-9"
+  text = "The existing pathfence guards cannot go stale silently: they walk c-5's derived package set, the .String() unwrap ban keys off the pathfence.Contained type rather than a list of local names, and adding a path-shaped string field under an unlisted tag word or in an unlisted schema dir fails the suite — proven by the 2026-09-07 experiment (workdir/output_dir/spec string fields on phase.Task) kept as a must-fail fixture."
+
+[[criteria]]
+  id = "c-10"
+  text = "The exec-consent audit attributes reach through the shared SSA call graph: an interface call resolves to the implementers whose concrete types actually flow to it, so a spawning implementer that is never passed in is not attributed to the command; a dispatch the graph still cannot resolve stays a reported finding, never a silent union; every existing exec-consent calibration fixture keeps its written-down verdict."
+
+[[decisions]]
+  key = "loader_mechanism"
+  choice = "golang.org/x/tools go/packages + go/ssa, imported from _test.go files only. Scoped to this phase: it reverses exec-consent-completeness's no-x/tools precedent for the taint and reach scans."
+  why = "c-2 needs def-use tracking across returns, struct fields and io.Writer arguments; SSA provides it, hand-rolling it over go/types is the phase's riskiest part. Test-only import never links into the shipped binary, so the single-static-binary argument behind the precedent does not apply; Dependabot now tracks the added module."
+  locked = true
+
+[[decisions]]
+  key = "clearance_model"
+  choice = "Taint drops automatically once the value stops being text — converted to int or bool via strconv, ==, strings.Contains/HasPrefix, len. A spawn-derived value that stays text (a SHA or branch sliced out of output) needs an in-source marker with prose at the conversion site."
+  why = "Mechanical and content-blind: a bool or int cannot carry secret text, so exit-code and Contains checks need no ceremony. A sanitizer registry would be another hand-maintained list, the shape v1.7 keeps retiring."
+  locked = true
+
+[[decisions]]
+  key = "taint_sources"
+  choice = "Every exec.Command / exec.CommandContext in non-test source is a taint source — git and gh included. No binary is classified as safe."
+  why = "Matches exec-consent-completeness: a classifier that decides which binaries look dangerous is the recurring vulnerability. git log and gh api output can carry secret material as readily as a mutation tool's."
+  locked = true
+
+[[decisions]]
+  key = "terminal_definition"
+  choice = "Terminal means the concrete os.Stdout / os.Stderr and cobra's OutOrStdout / ErrOrStderr. An error value is never terminal. A generic io.Writer parameter is not terminal — taint is followed to its callers."
+  why = "Error strings are exactly what reached verify.toml before tool-output-not-persisted (its locked cut_point). Treating any io.Writer as terminal would let a strings.Builder launder the head — the c-3 shape."
+  locked = true
+
+[[decisions]]
+  key = "marker_grammar"
+  choice = "The clearance marker is a //dross:-prefixed directive on the line immediately above the conversion, with the same grammar as //dross:exec-exempt: no space after the slashes, reason separated by whitespace, non-empty prose above a length floor. Exact directive name set at plan time."
+  why = "Reason lives next to the code and reads in review; reusing one proven grammar avoids a second parser with its own edge cases."
+  locked = true
+
+[[decisions]]
+  key = "check_surface"
+  choice = "The scans are Go tests only — no CLI command and no doctor section."
+  why = "They are repo invariants over dross's own source; a dross user's repo has no dross spawn sites to enumerate, so a user-facing surface would be dead everywhere but here. Same reasoning as exec-consent-completeness."
+  locked = true
+
+[[deferred]]
+  id = "878416f6cd34704f"
+  text = "dross status suggests `dross phase reconcile` (\"N phase branches are waiting on a completion\") for phase branches that are merely in progress or scaffolded, and ranks it above the real next step. On 2026-09-23 the two counted branches were exec-taint-enumeration (spec just locked, next = /dross-plan) and extracted-package-test-parity (scaffolded, never started); neither was finished."
+  why = "Reconcile's candidate rule is 'phase/<id> branch exists locally and changes.json has no completion record', which matches every unfinished phase. The merge gate skips them harmlessly, but the status nudge stays wrong for as long as any phase is in flight, and the handoff carried it as an open loop across two pauses."
+
+[[deferred]]
+  id = "77c89a219d7573dc"
+  text = "Seed the five hand-ignored .dross paths in ensureDrossGitignore (internal/cmd/gitignore.go drossIgnoreEntries): handoff.md, reap-log.json, and the security/, quality/ and techdebt/ run dirs. Only state.json and local.toml are seeded today; this repo ignores the other five through its own hand-edited .gitignore, so in a fresh init/onboard repo they are stageable and a `git add .dross` can commit them — including security run output that must never be pre-disclosed on a public repo."
+  why = "Carried undecided across several handoffs; out of scope for exec-taint-enumeration. Seeding them would also move their secretscan classification from UnderDross to MachineLocal (internal/secretscan/writers.go), so the enum test entries change with it."
+
+[[deferred]]
+  id = "f551232700a801da"
+  text = "Enforce dross hard rules with Claude Code PreToolUse/PostToolUse hooks instead of prompt text, installed through the existing hooks.MergeHook path (PreCompact and SessionStart already ship that way). Candidates: refuse `git commit` unless a green test run is recorded for the current tree; refuse Edit/Write on .dross/**/plan.toml and point at `dross task`; in pair mode, record AskUserQuestion approvals via PostToolUse and refuse the next task's edits until one exists; refuse stream-merging (2>&1) on tools known to emit secrets on stderr; a managed secret-read guard (gsd-core #4221); refuse a write that sharply shrinks a curated .dross/ file (gsd-core #2255)."
+  why = "Every hard rule in the user's global CLAUDE.md came from an incident where a prompt rule was skipped: the 2026-05-29 false-green commit and batched pair-mode approvals, the 2026-08-25 secret leaks through 2>&1. A hook refuses the call; a prompt only asks. Fits v1.7's theme: every path to a dangerous operation goes through the gate. Sources: code.claude.com/docs/en/hooks, anthropics/claude-code plugins/hookify, nizos/tdd-guard, open-gsd/gsd-core."
+  target = "tool-gate-hooks"
+
+[[deferred]]
+  id = "a5993f191f2b0f16"
+  text = "In /dross-execute --solo, run a cold subagent review after each task and before its commit: spec compliance first (does the diff satisfy every sub-surface the covered criteria name), then code quality. A finding blocks the commit or opens a fix round; pair mode keeps the human as the gate. The reviewer must not inherit the user's CLAUDE.md or auto-memory, or it is not cold (gsd-core #2483)."
+  why = "execute.md has no per-task independent review. exec-taint-enumeration ran 24 tasks solo and its c-1 gap (the Stderr-buffer source channel pinned by no fixture) and its c-8 CI overrun surfaced only at verify and CI; a per-task criterion check would have caught c-1 at t-5. Source: obra/superpowers subagent-driven-development."
+  target = "solo-task-review"
+
+[[deferred]]
+  id = "e8f3c04c60c82aa7"
+  text = "Record in verify.toml the tree each covered file was verified at, and have `dross ship` refuse (or route to re-verify) when any covered file changed after the verdict was written. A .dross/-only commit does not invalidate it."
+  why = "verify.toml records no commit and ship.go gates on the verdict alone, so a fix committed after a pass ships under that pass: a gate bypass, which is v1.7's theme. Source: open-gsd/gsd-core #4155 (invalidate verification results when covered inputs change)."
+  target = "verify-staleness"
+
+[[deferred]]
+  id = "72529be1cdccbdb7"
+  text = "/dross-debug: systematic debugging with a persistent session file at .dross/debug/<slug>.md holding the symptom, each hypothesis tried with its evidence and verdict, the current theory and the next probe, so an investigation survives /clear and compaction the way handoff.md does. Method: root cause before any fix, one hypothesis at a time, stop and re-plan after repeated failed fixes. Accept a fix only on more than one signal (gsd-core #1958), and close each session with a Prevention block that can become a /dross-rule (gsd-core #1963)."
+  why = "The internal/cmd hang investigation and the c-8 CI-timing diagnosis (cold-GOCACHE runs on helicon) were multi-session debug efforts with nowhere to keep their state. Sources: obra/superpowers systematic-debugging and root-cause-tracing, GSD /gsd:debug, open-gsd/gsd-core."
+  target = "debug-sessions"
+
+[[deferred]]
+  id = "00240da43142c2d1"
+  text = "A verb that pulls a PR's review comments (human or bot) and triages each one against the code: accept it into a task via `dross task add`, reject it with a stated technical reason posted back, or route it to a phase. Verify the claim before acting on it; no performative agreement."
+  why = "/dross-review posts findings but nothing brings reviewer comments back into the plan. Lower value on this solo repo, where the only reviewer is /dross-review; it pays off on team repos. Source: obra/superpowers receiving-code-review."
+  target = "review-comment-ingest"
+
+[[deferred]]
+  id = "ddf9c9e63e17d0fc"
+  text = "/dross-spec edge-case step: propose the two or three edge classes that apply to the phase (from boundary, empty, encoding, ordering, precision, idempotency, concurrency, adjacency) plus must-NOT criteria; each proposal ends covered, dismissed with a reason, or deferred. One decision per turn, never a walk of all eight."
+  why = "Mutation testing cannot flag a branch that was never written; only the spec can. Sources: GSD spec-phase edge probing, github/spec-kit /checklist, Kiro EARS requirements."
+  target = "spec-edge-probe"
+
+[[deferred]]
+  id = "c7d43efe3667c110"
+  text = "/dross-review: add an edge-case lens (a diff that handles some values of an enum, status or flag and silently skips the rest) and a silent-failure lens (swallowed errors, quiet fallbacks)."
+  why = "Targets the gremlins switch-case attribution ceiling that survivors are routinely accepted for, and Go's discarded-error shape. Sources: BMAD Edge Case Hunter (v6.10), anthropics/claude-code pr-review-toolkit silent-failure-hunter."
+  target = "review-edge-lenses"
+
+[[deferred]]
+  id = "c7348fe83200c482"
+  text = "Milestone close-out check before `dross milestone complete`: enumerate what is unresolved (deferred items routed into the milestone, unclassified survivors, phases unverified or unshipped, the milestone's own status) and require each resolved or acknowledged."
+  why = "Close-out misses recur: v0.9 left status=active, the milestone.status-set CLI gap, v1.4 complete with its PR to main never opened. Sources: GSD audit-milestone, open-gsd/gsd-core #2646."
+  target = "milestone-closeout-check"
+
+[[deferred]]
+  id = "c54759da0ff89c69"
+  text = "Before planning, check that the symbols, paths and file:line claims a spec.toml or plan.toml cites still resolve in the tree, reusing the architecture codex's symbol resolver; a claim that resolves to nothing is named before the plan is built on it."
+  why = "exec-taint-enumeration's c-3 text cites quoted.String(), which never existed in real code; the verify had to discover that by hand. Sources: open-gsd/gsd-core #3348 (context-drift pre-check) and #1956 (cross-artifact fact drift)."
+  target = "spec-fact-drift"
+
+[[deferred]]
+  id = "189f66578878a28a"
+  text = "A machine-checkable precondition on a plan.toml task (a command that must exit 0, or a recorded measurement under a bound) that dross checks before the task starts, so a gate written into a task description is enforced rather than read."
+  why = "exec-taint-enumeration's t-1 carried its gate in prose (measure load+SSA+VTA under -race before t-5; over 10s, narrow first). The plan-level form of the check-preconditions-before-dependent-work rule. Source: open-gsd/gsd-core #1949 (precondition task element, design by contract)."
+  target = "task-preconditions"
+
+[[deferred]]
+  id = "1e0a0171b87ba8b1"
+  text = "Tag each locked decision in spec.toml as reversible or one-way (file formats, public CLI surface, a new dependency) and give one-way decisions an explicit confirm step in /dross-spec."
+  why = "Decisions that are expensive to undo (e.g. exec-taint-enumeration's loader_mechanism, which reversed a no-x/tools precedent) currently get the same treatment as cheap ones. Source: open-gsd/gsd-core #1951 (reversibility tagging)."
+  target = "one-way-door-decisions"
+
+[[deferred]]
+  id = "03c01d14d87babd2"
+  text = "Persist per-package CI test time across runs and warn when a package's trend nears its cap (e.g. at 90% of go test's timeout), extending the single-run timing table cmd-test-duration added."
+  why = "internal/cmd crept up to go test's 10m default before anyone noticed, and c-8's budget was read by hand from two runs about 16s apart. Source: open-gsd/gsd-core #4036 (timeout-vs-cap trending, warn at 90%)."
+  target = "ci-timing-trend"
+
+[[deferred]]
+  id = "3d561e984ebf0d4e"
+  text = "Before `dross verify` (attached or --detach) dispatches a mutation leg, print the packages it will mutate, the mutant-site count per package (go/ast for gremlins; Stryker's own count where available) and an ETA from per-package throughput recorded on earlier runs on that host, with the basis stated. Record actual per-package durations after each run so the next estimate improves."
+  why = "exec-taint-enumeration's detached run (16 whole packages, ~5.2k mutant sites, ~3.25k in internal/cmd) took 1h44m. It was announced as ~1h40m from a past phase's duration without checking this run's shape, then re-projected mid-run at ~2.5h because nothing gave per-package throughput; both numbers were guesses. The inputs were all known before dispatch, and a go/ast site count takes about a second."
+  target = "verify-eta"
+
+[[deferred]]
+  id = "23cd8142a6ba122b"
+  text = "Record HEAD when `dross pause` writes .dross/handoff.md, and have resume/status warn when the handoff is many commits behind."
+  why = "Cheap guard against resuming from a stale thread. Sources: GSD forensics state-staleness check, open-gsd/gsd-core #2573."
+  target = "handoff-staleness"
+
+[[deferred]]
+  id = "9b6917084dd5f7cc"
+  text = "Behaviour evals for dross's own slash-command prompts via `claude plugin eval`: a fixture repo with .dross/ state and assertions such as AskUserQuestion precedes git commit in pair mode, and no Edit on plan.toml. Run on demand, never per push."
+  why = "Prompt edits and model upgrades can regress command behaviour with no test noticing. Placed last because the feature shipped in 2026-09, is nondeterministic and token-costly, and can be switched off server-side. Sources: code.claude.com/docs/en/plugin-evals, obra/superpowers writing-skills."
+  target = "prompt-behaviour-evals"

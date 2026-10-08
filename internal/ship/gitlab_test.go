@@ -407,3 +407,121 @@ func TestGitLabOpenPRsTargetingMissingToken(t *testing.T) {
 		t.Errorf("%d request(s) made before the token check", requests)
 	}
 }
+
+func gitlabHeadOpts(server *httptest.Server, scheme string) OpenOpts {
+	return OpenOpts{
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
+		AuthEnv: "MOCK_GITLAB_TOKEN", AuthScheme: scheme, BaseBranch: "main",
+	}
+}
+
+// TestGitLabHeadLookupQueryAndAuth: the query filters server-side on the
+// source branch and the opened state, under both auth schemes, and iid (not
+// id) is the number ship records.
+func TestGitLabHeadLookupQueryAndAuth(t *testing.T) {
+	t.Setenv("MOCK_GITLAB_TOKEN", "secret")
+	var gotQuery, gotAuth, gotPrivate string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		gotAuth = r.Header.Get("Authorization")
+		gotPrivate = r.Header.Get("PRIVATE-TOKEN")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"iid":5,"id":9001,"web_url":"https://gitlab.example/me/p/-/merge_requests/5","target_branch":"main"}]`))
+	}))
+	t.Cleanup(server.Close)
+
+	res, err := FindOpenPRByHead(gitlabHeadOpts(server, ""), "phase/x")
+	if err != nil {
+		t.Fatalf("FindOpenPRByHead: %v", err)
+	}
+	if res == nil || res.Number != 5 {
+		t.Fatalf("got %+v, want Number 5 (iid, not id)", res)
+	}
+	if res.URL != "https://gitlab.example/me/p/-/merge_requests/5" {
+		t.Errorf("URL = %q", res.URL)
+	}
+	if !strings.Contains(gotQuery, "source_branch=phase%2Fx") {
+		t.Errorf("query missing source_branch=phase/x: %q", gotQuery)
+	}
+	if !strings.Contains(gotQuery, "state=opened") {
+		t.Errorf("query missing state=opened: %q", gotQuery)
+	}
+	if gotPrivate != "secret" || gotAuth != "" {
+		t.Errorf("default scheme: PRIVATE-TOKEN = %q, Authorization = %q", gotPrivate, gotAuth)
+	}
+
+	if _, err := FindOpenPRByHead(gitlabHeadOpts(server, "bearer"), "phase/x"); err != nil {
+		t.Fatalf("FindOpenPRByHead (bearer): %v", err)
+	}
+	if gotAuth != "Bearer secret" || gotPrivate != "" {
+		t.Errorf("bearer scheme: Authorization = %q, PRIVATE-TOKEN = %q", gotAuth, gotPrivate)
+	}
+}
+
+func TestGitLabHeadLookupNoMatch(t *testing.T) {
+	t.Setenv("MOCK_GITLAB_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	t.Cleanup(server.Close)
+
+	res, err := FindOpenPRByHead(gitlabHeadOpts(server, ""), "phase/x")
+	if err != nil {
+		t.Fatalf("FindOpenPRByHead: %v", err)
+	}
+	if res != nil {
+		t.Errorf("got %+v, want nil for no open MR", res)
+	}
+}
+
+// TestGitLabHeadLookupMultiple: two open MRs share the source branch with
+// different targets; the one targeting opts.BaseBranch is the phase's own.
+func TestGitLabHeadLookupMultiple(t *testing.T) {
+	t.Setenv("MOCK_GITLAB_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"iid":3,"web_url":"u3","target_branch":"release/1.0"},
+			{"iid":4,"web_url":"u4","target_branch":"main"}
+		]`))
+	}))
+	t.Cleanup(server.Close)
+
+	res, err := FindOpenPRByHead(gitlabHeadOpts(server, ""), "phase/x")
+	if err != nil {
+		t.Fatalf("FindOpenPRByHead: %v", err)
+	}
+	if res == nil || res.Number != 4 {
+		t.Fatalf("got %+v, want Number 4 (target_branch == BaseBranch)", res)
+	}
+}
+
+// A 500 or a 401 is (nil, err), never (nil, nil): an auth failure read as
+// "no MR" would have ship open a duplicate.
+func TestGitLabHeadLookup500IsError(t *testing.T) {
+	t.Setenv("MOCK_GITLAB_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(server.Close)
+
+	res, err := FindOpenPRByHead(gitlabHeadOpts(server, ""), "phase/x")
+	if err == nil || res != nil {
+		t.Fatalf("a 500 must be (nil, err), got (%+v, %v)", res, err)
+	}
+}
+
+func TestGitLabHeadLookup401IsError(t *testing.T) {
+	t.Setenv("MOCK_GITLAB_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"message":"401 Unauthorized"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	res, err := FindOpenPRByHead(gitlabHeadOpts(server, ""), "phase/x")
+	if err == nil || res != nil {
+		t.Fatalf("a 401 must be (nil, err), got (%+v, %v)", res, err)
+	}
+}

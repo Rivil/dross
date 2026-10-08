@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/board"
+	"github.com/Rivil/dross/internal/boardsync"
 )
 
 // fakeForge is a minimal forge REST tracker: it records what dross asked it to
@@ -332,7 +333,7 @@ func TestTaskIssueIsRelatedToItsPhase(t *testing.T) {
 		if !strings.Contains(body, parent) {
 			t.Errorf("task issue %q does not name its phase issue %s in the body:\n%s", title, parent, body)
 		}
-		if !containsStr(f.labelNames(c), phaseLabel("01-auth")) {
+		if !containsStr(f.labelNames(c), boardsync.PhaseLabel("01-auth")) {
 			t.Errorf("task issue %q does not carry the phase label (labels: %v)", title, f.labelNames(c))
 		}
 	}
@@ -419,14 +420,14 @@ func TestNoStateFieldWarnsOnceAndContinues(t *testing.T) {
 	labelled := 0
 	for _, labels := range f.createdLabels() {
 		for _, l := range labels {
-			if l == statusLabel("task-in-progress") {
+			if l == boardsync.StatusLabel("task-in-progress") {
 				labelled++
 			}
 		}
 	}
 	if labelled != 2 {
 		t.Errorf("%d of 2 task issues carry %s — the warning replaces the state field, it does not replace the label",
-			labelled, statusLabel("task-in-progress"))
+			labelled, boardsync.StatusLabel("task-in-progress"))
 	}
 }
 
@@ -565,9 +566,9 @@ func TestTaskResolvedByLabelIsSilentAndReused(t *testing.T) {
 func TestDuplicateTaskIssuesWarnAndUpdateTheFirst(t *testing.T) {
 	f := newFakeForge(t)
 	dir := taskSyncRepo(t, f)
-	label := taskLabel("01-auth", "t-1")
-	f.seedIssue(81, labelMarker, phaseLabel("01-auth"), label)
-	f.seedIssue(82, labelMarker, phaseLabel("01-auth"), label)
+	label := boardsync.TaskLabel("01-auth", "t-1")
+	f.seedIssue(81, boardsync.LabelMarker, boardsync.PhaseLabel("01-auth"), label)
+	f.seedIssue(82, boardsync.LabelMarker, boardsync.PhaseLabel("01-auth"), label)
 
 	stderr := captureStderr(t, func() {
 		_ = captureStdout(t, func() {

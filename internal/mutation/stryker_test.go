@@ -2,6 +2,7 @@ package mutation
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -11,10 +12,12 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // realistic Stryker output: 1 file, 5 mutants — 3 killed, 1 survived,
-// 1 timeout. NoCoverage rolls up into survived (the test never even ran it).
+// 1 timeout. NoCoverage rolls up into survived AND not-covered (no test ran it).
 const fixtureSimple = `{
   "schemaVersion": "1",
   "thresholds": {"high": 80, "low": 60, "break": null},
@@ -111,6 +114,36 @@ func TestParseStrykerJSONNoCoverageRollsUpAsSurvived(t *testing.T) {
 	}
 	if len(r.Surviving) != 1 || r.Surviving[0].File != "src/auth.ts" {
 		t.Errorf("NoCoverage mutant should be in Surviving list: %+v", r.Surviving)
+	}
+	// ...and as NOT COVERED, at every level the reader can see: the report
+	// aggregate, the per-file row FilterReport rescored from, and the
+	// survivor row itself. Until 2026-09-19 all three said zero.
+	if r.NotCovered != 1 {
+		t.Errorf("NoCoverage must count as not-covered; got NotCovered=%d", r.NotCovered)
+	}
+	if fs := r.Files["src/auth.ts"]; fs.NotCovered != 1 || fs.Survived != 1 {
+		t.Errorf("per-file row must carry not-covered: %+v", fs)
+	}
+	if !r.Surviving[0].NotCovered {
+		t.Errorf("survivor row must be tagged NotCovered: %+v", r.Surviving[0])
+	}
+}
+
+// TestParseStrykerJSONSurvivedIsNotNotCovered is the other half: a mutant the
+// tests ran and missed stays a plain survivor, so the not-covered share can
+// never inflate to hide weak assertions behind "uncoverable".
+func TestParseStrykerJSONSurvivedIsNotNotCovered(t *testing.T) {
+	r, err := ParseStrykerJSON([]byte(fixtureSimple))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.NotCovered != 0 {
+		t.Errorf("plain Survived must not count as not-covered; got %d", r.NotCovered)
+	}
+	for _, m := range r.Surviving {
+		if m.NotCovered {
+			t.Errorf("plain survivor tagged NotCovered: %+v", m)
+		}
 	}
 }
 
@@ -271,7 +304,7 @@ func TestDispatch(t *testing.T) {
 // Node — the invocation must use @stryker-mutator/core.
 func TestStrykerRunArgsScopedPackage(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo"}
-	args, _, err := s.runArgs([]string{"src/a.ts", "src/b.ts"})
+	args, _, err := s.runArgs([]string{"src/a.ts", "src/b.ts"}, nil)
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -299,7 +332,7 @@ func TestStrykerRunArgsScopedPackage(t *testing.T) {
 func TestStrykerWorkdirMonorepo(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
 
-	args, _, err := s.runArgs([]string{"web/src/a.ts", "web/src/b.svelte"})
+	args, _, err := s.runArgs([]string{"web/src/a.ts", "web/src/b.svelte"}, nil)
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -368,7 +401,7 @@ func TestStrykerPinPatternRejectsLooseSpecs(t *testing.T) {
 // a developer machine — the shape of the 2025–2026 npm compromises.
 func TestStrykerRunArgsPinned(t *testing.T) {
 	s := &Stryker{ProjectRoot: t.TempDir()}
-	args, _, err := s.runArgs([]string{"src/api/tags.ts"})
+	args, _, err := s.runArgs([]string{"src/api/tags.ts"}, nil)
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -555,7 +588,7 @@ func TestStrykerRunUnknownStatusCountsAsError(t *testing.T) {
 func TestStrykerMutateEscapesBracketPaths(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
 
-	args, requested, err := s.runArgs([]string{"web/src/routes/recipes/[id]/+page.server.ts"})
+	args, requested, err := s.runArgs([]string{"web/src/routes/recipes/[id]/+page.server.ts"}, nil)
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -616,7 +649,7 @@ func TestStrykerEscapeIsSinglePass(t *testing.T) {
 // a change to those is a change to every existing measurement.
 func TestStrykerPlainPathsAreUnchanged(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
-	args, requested, err := s.runArgs([]string{"web/src/lib/utils/format.ts", "web/src/lib/server/tier.ts"})
+	args, requested, err := s.runArgs([]string{"web/src/lib/utils/format.ts", "web/src/lib/server/tier.ts"}, nil)
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -641,12 +674,12 @@ func TestStrykerEscapeRunsAfterTheFence(t *testing.T) {
 
 	// A dash entry that only becomes one after the workdir trim is still
 	// refused — escaping happens after both, so it cannot rescue it.
-	if _, _, err := s.runArgs([]string{"web/-rf.ts"}); err == nil {
+	if _, _, err := s.runArgs([]string{"web/-rf.ts"}, nil); err == nil {
 		t.Error("escaping smuggled a leading-dash path past the fence")
 	}
 	// And a bracket path is not refused: escaping never introduces a dash, so
 	// the fence must have nothing to say about it.
-	if _, _, err := s.runArgs([]string{"web/src/routes/[id]/+page.ts"}); err != nil {
+	if _, _, err := s.runArgs([]string{"web/src/routes/[id]/+page.ts"}, nil); err != nil {
 		t.Errorf("a bracket path was refused by the fence: %v", err)
 	}
 }
@@ -742,12 +775,18 @@ func TestStrykerReportlessErrorNamesHeadOfOutput(t *testing.T) {
 	const cause = "Missing required environment variable: DATABASE_URL"
 	defer noisyStryker(t, s, "INFO Stryker Starting\n"+cause, 1, nil)()
 
-	_, _, err := captureStderr(t, func() (*Report, error) { return s.Run([]string{"src/a.ts"}) })
+	out, _, err := captureStderr(t, func() (*Report, error) { return s.Run([]string{"src/a.ts"}) })
 	if err == nil {
 		t.Fatal("a reportless failure returned nil error")
 	}
-	if !strings.Contains(err.Error(), cause) {
-		t.Errorf("the error does not quote the real cause:\n%v", err)
+	// MOVED, not relaxed. The cause must still reach the reader — it just
+	// reaches them on the terminal, at the failure point, instead of inside a
+	// string dross then writes to tests.json and verify.toml.
+	if !strings.Contains(out, cause) {
+		t.Errorf("the real cause was not re-printed to stderr at the failure point:\n%s", out)
+	}
+	if strings.Contains(err.Error(), cause) {
+		t.Errorf("the tool's own output is back inside the error, which is what gets persisted:\n%v", err)
 	}
 	if strings.Contains(err.Error(), "check stryker config") {
 		t.Errorf("the misleading advice is still there:\n%v", err)
@@ -755,9 +794,14 @@ func TestStrykerReportlessErrorNamesHeadOfOutput(t *testing.T) {
 }
 
 // TestStrykerHardFailsOnUninstrumentedFile is locked decision drop_behaviour.
+//
+// The drop is the one stryker itself reports — a --mutate glob that resolved
+// to no file prints strykerDropWarningText at project-read time. Absence from
+// the report WITHOUT that warning is a file with nothing mutable (2026-09-18)
+// and is tolerated by TestCheckInstrumentedToleratesAWholeFileWithNoMutants.
 func TestStrykerHardFailsOnUninstrumentedFile(t *testing.T) {
 	s := &Stryker{ProjectRoot: t.TempDir()}
-	defer noisyStryker(t, s, "done", 0, func(p string) {
+	defer noisyStryker(t, s, "INFO ProjectReader Globbing expression \"src/c.ts\" "+strykerDropWarningText+".\ndone", 0, func(p string) {
 		writeReport(t, p, "src/a.ts", "src/b.ts") // asked for three
 	})()
 
@@ -782,23 +826,34 @@ func TestStrykerHardFailsOnUninstrumentedFile(t *testing.T) {
 	}
 }
 
-// TestStrykerDropWarningIsQuoted: stryker's own wording for the fault, carried
-// through verbatim so a user can search for it.
-func TestStrykerDropWarningIsQuoted(t *testing.T) {
+// TestStrykerDropWarningReachesTheTerminal: stryker's own wording for the fault,
+// carried through verbatim so a user can search for it.
+//
+// MOVED, not relaxed, by the same cut as the reportless path: the warning is
+// the TOOL's text, so it goes to the terminal at the failure point and not into
+// an error dross persists. What stays in the error is dross's own hint telling
+// the reader to look for it there.
+func TestStrykerDropWarningReachesTheTerminal(t *testing.T) {
 	s := &Stryker{ProjectRoot: t.TempDir()}
 	const warning = `Glob pattern "src/routes/x/[id]/y.ts" did not result in any files.`
 	defer noisyStryker(t, s, "WARN ProjectReader "+warning, 0, func(p string) {
 		writeReport(t, p, "src/a.ts")
 	})()
 
-	_, _, err := captureStderr(t, func() (*Report, error) {
+	out, _, err := captureStderr(t, func() (*Report, error) {
 		return s.Run([]string{"src/a.ts", "src/routes/x/[id]/y.ts"})
 	})
 	if err == nil {
 		t.Fatal("a dropped glob returned nil error")
 	}
-	if !strings.Contains(err.Error(), warning) {
-		t.Errorf("stryker's own warning is not in the error:\n%v", err)
+	if !strings.Contains(out, warning) {
+		t.Errorf("stryker's own warning was not re-printed to stderr:\n%s", out)
+	}
+	if strings.Contains(err.Error(), warning) {
+		t.Errorf("stryker's own wording is inside the error, which is what gets persisted:\n%v", err)
+	}
+	if !strings.Contains(err.Error(), strykerDropWarningText) {
+		t.Errorf("the error no longer tells the reader what to look for:\n%v", err)
 	}
 }
 
@@ -945,8 +1000,25 @@ func TestStrykerHeadBufferIsBoundedAndDoesNotSwallowTheStream(t *testing.T) {
 	if got, want := len(out), lines*(len(line)+1); got < want {
 		t.Errorf("the stream was truncated: os.Stderr got %d bytes, want the full %d", got, want)
 	}
-	if n := strings.Count(err.Error(), "\n"); n > strykerHeadLines+10 {
-		t.Errorf("the error quoted %d lines; it must quote at most ~%d", n, strykerHeadLines)
+	// RETARGETED at the stderr block. Counting lines in the error would now
+	// pass vacuously — the error carries no quoted output at all — so a
+	// printHead that had stopped emitting anything would look fine. The cap
+	// belongs on the thing that is actually bounded.
+	const banner = "the head of stryker's output"
+	i := strings.Index(out, banner)
+	if i < 0 {
+		t.Fatalf("the head was never re-printed to stderr; the line cap below would be vacuous")
+	}
+	block := out[i:]
+	n := strings.Count(block, "\n")
+	if n > strykerHeadLines+10 {
+		t.Errorf("the re-printed head is %d lines; it must be at most ~%d", n, strykerHeadLines)
+	}
+	if n < strykerHeadLines {
+		t.Errorf("the re-printed head is only %d lines; the stream was long enough for %d", n, strykerHeadLines)
+	}
+	if strings.Contains(err.Error(), line) {
+		t.Errorf("the tool's output is inside the error: %v", err)
 	}
 }
 
@@ -1040,5 +1112,41 @@ func TestStrykerTruncationNoteAbsentOnOtherAborts(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), strykerInitialTestTruncationNote) {
 		t.Errorf("the truncation note was attached to an abort that printed no failure list:\n%v", err)
+	}
+}
+
+// TestStrykerRefusesAnEscapingWorkdir: project.toml's mutation.stryker.workdir
+// is hand-editable, and the Stryker leg clears, fetches and reads its report
+// under it. One that escapes the project root is refused before anything is
+// spawned or touched, and workDir never resolves outside the root.
+func TestStrykerRefusesAnEscapingWorkdir(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "repo")
+	s := &Stryker{ProjectRoot: root, Workdir: "../outside"}
+	if _, err := s.RunRanges([]string{"src/a.ts"}, nil); !errors.Is(err, pathfence.ErrEscapes) {
+		t.Fatalf("RunRanges with an escaping workdir = %v, want a containment refusal", err)
+	}
+	if got := s.workDir(); !strings.HasPrefix(got, root+string(filepath.Separator)) {
+		t.Errorf("workDir() = %s, outside the project root %s", got, root)
+	}
+	if c, err := ContainStrykerWorkdir(root, "packages/web"); err != nil || c.Rel() != "packages/web" {
+		t.Errorf("ContainStrykerWorkdir(packages/web) = %v, %v", c, err)
+	}
+}
+
+// TestInapplicableCeilingReadIsContained: the const-line cache reads files a
+// mutation tool reported; one naming ../outside is not read.
+func TestInapplicableCeilingReadIsContained(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "repo")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(parent, "outside.go"), []byte("package p\n\nconst x = 1 + 2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &constLineCache{root: root}
+	if c.isConstLine("../outside.go", 3) {
+		t.Error("the cache read a file outside the repo root")
 	}
 }

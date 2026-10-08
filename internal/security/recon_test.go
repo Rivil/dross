@@ -487,3 +487,28 @@ func TestBuildManifest_missingDedicatedScannerSkipped(t *testing.T) {
 		t.Error("skipped osv-scanner has no install hint")
 	}
 }
+
+// TestManifestCarriesExclusions is the drift pin for c-5: the manifest's skipped
+// set is stack.SkipDirs() itself, so a private copy inside security — or a
+// scanner that stopped honouring one name — shows up as a mismatch here, and
+// the allowlist location is the file `security run` writes.
+func TestManifestCarriesExclusions(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "main.go"), "package main")
+	m, err := BuildManifest(root, func(string) (string, error) { return "", errors.New("missing") })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(m.Exclusions.SkippedDirs, stack.SkipDirs()) {
+		t.Fatalf("SkippedDirs = %v, want stack.SkipDirs() = %v", m.Exclusions.SkippedDirs, stack.SkipDirs())
+	}
+	for _, want := range []string{"testdata", "fixtures", ".dross"} {
+		if !contains(m.Exclusions.SkippedDirs, want) {
+			t.Errorf("SkippedDirs %v missing %q", m.Exclusions.SkippedDirs, want)
+		}
+	}
+	if m.Exclusions.Allowlist != GitleaksConfigName {
+		t.Fatalf("Allowlist = %q, want %q until run writes it", m.Exclusions.Allowlist, GitleaksConfigName)
+	}
+}

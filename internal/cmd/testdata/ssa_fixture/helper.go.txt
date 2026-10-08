@@ -1,0 +1,7 @@
+// The sibling package root.go.txt imports as example.com/fixture/helperpkg.
+package helperpkg
+
+import "os/exec"
+
+// Run returns what c prints to stdout.
+func Run(c *exec.Cmd) ([]byte, error) { return c.Output() }

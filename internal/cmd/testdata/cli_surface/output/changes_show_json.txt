@@ -1,0 +1,22 @@
+{
+  "phase": "p1",
+  "base": "main",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "a.go",
+        "a_test.go"
+      ],
+      "commit": "abc1234",
+      "completed_at": "2026-01-02T03:04:05Z",
+      "landmarks": [
+        {
+          "feature": "golden",
+          "symbol": "A",
+          "loc": "a.go:1",
+          "what": "does \u003ca\u003e \u0026 b"
+        }
+      ]
+    }
+  }
+}

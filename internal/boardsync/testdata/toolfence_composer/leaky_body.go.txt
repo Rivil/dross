@@ -1,0 +1,43 @@
+package cmd
+
+import (
+	"fmt"
+
+	"github.com/Rivil/dross/internal/forge"
+	"github.com/Rivil/dross/internal/verify"
+)
+
+// The must-trip fixture: a board issue body composed out of a Recorded field.
+//
+// leg is a verify.LegSummary, whose Error is declared Recorded — it holds the
+// mutation adapter's failure record. Rendering it into an issue body is exactly
+// what c-6 forbids, and it is written here as a fixture rather than inferred
+// from the live tree so the scan is calibrated on a written-down answer.
+func leakyBoardBody(client forge.Client, leg verify.LegSummary) error {
+	_, err := client.CreateIssue(forge.IssueInput{
+		Title: "leg failed",
+		Body:  fmt.Sprintf("The %s leg failed:\n\n%s\n", leg.Tool, leg.Error),
+	})
+	return err
+}
+
+// The must-NOT-trip sibling: the same sink rendering a Renderable field.
+// Finding.Text is derived from a record whose own text is already scrubbed
+// (spec decision renderable_derivation), so a composer may print it.
+func cleanBoardBody(client forge.Client, f verify.Finding) error {
+	_, err := client.CreateIssue(forge.IssueInput{
+		Title: "finding",
+		Body:  fmt.Sprintf("- **%s**: %s\n", f.Severity, f.Text),
+	})
+	return err
+}
+
+// The other must-NOT-trip shape: err.Error() is a METHOD CALL, not a read of a
+// declared field, and it appears in ordinary code everywhere.
+func errorMethodIsNotAFieldRead(client forge.Client, err error) error {
+	_, e := client.CreateIssue(forge.IssueInput{
+		Title: "oops",
+		Body:  fmt.Sprintf("failed: %v\n", err.Error()),
+	})
+	return e
+}

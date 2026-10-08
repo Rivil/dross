@@ -11,7 +11,7 @@ Three checks, in order: mutation efficacy (mechanical), criterion-to-test mappin
 1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for this command.
 2. Resolve target phase from `$ARGUMENTS` or `state.json`'s `current_phase`. Fail if neither resolves.
 3. Read `.dross/phases/<id>/spec.toml` and `plan.toml`. If either is missing, route to `/dross-spec` or `/dross-plan` first.
-4. Read `.dross/phases/<id>/changes.json`. If missing or empty: `/dross-execute` hasn't touched anything for this phase yet — stop and route there.
+4. Read `.dross/phases/<id>/changes.json`. If missing or empty: `/dross-execute` hasn't touched anything for this phase yet — stop and route there. Keep its `reviews` key for §4: in a `--solo` run, each task's reviewer outcome (`outcome`, `rounds`, `cause`) and every finding with its `resolution`. Note any task `plan.toml` marks `failed` too, with the reason `dross task show <id> <task-id>` prints.
 5. Parse `--skip-mutation` flag. Default OFF (run mutation testing). Skip if user explicitly asked.
 6. Check exec consent before §1 — `dross verify` shells out to mutation tools that run this repo's test suite, and it refuses without it:
    ```
@@ -19,7 +19,9 @@ Three checks, in order: mutation efficacy (mechanical), criterion-to-test mappin
    ```
    Exit 0 means trusted; continue. Non-zero means untrusted or stale — **stop and show the user the exact `runtime.test_command` line** from project.toml, then let them run `dross trust`. Never run `dross trust` on their behalf: the gate exists so a human reads the line the repo supplied.
 
-   When you need to run the suite directly at any point in this command, use `dross test` rather than interpolating `runtime.test_command` — it is the one consent-gated execution site, and it uses the granted remote host when there is one (`--local` forces this machine). A **3** or **4** exit means the run did not happen; do not read it as a verdict.
+   When you need to run the suite directly at any point in this command, use `dross test` rather than interpolating `runtime.test_command` — it is a consent-gated execution site, and it uses the granted remote host when there is one (`--local` forces this machine). A **3** or **4** exit means the run did not happen; do not read it as a verdict.
+
+   The gate is not a fixed list of verbs. Every dross command that spawns a process is covered, enumerated from the source by `TestEverySpawnSiteGatedOrExempt`, so `dross survivor drain` refuses in an untrusted tree exactly as `dross verify` does. `dross doctor` prints the current state and what the grant authorizes.
 
 ## 1. Mechanical pass — `dross verify`
 
@@ -65,13 +67,28 @@ and none of them is a red suite — a run that **did not report** says nothing
 about the tests. On `10` or `11` the run is alive and fine: wait and collect
 again. Never fill in verify.toml from a run you did not collect.
 
+**A `scheduled` run naming a holder is waiting its turn, not stalled.** Every
+remote mutation leg takes the host lock (`/tmp/dross-host.lock`) before it runs,
+so a run dispatched while another repo's leg holds the host reads as `scheduled`
+with a reason line — `waiting on <project>/<phase> run <id> (pid N) since <time>`
+— in `verify status` and `verify results` (still exit `10`). That is the lock
+working: it is **not a failure**, needs no cancel and no cleanup, and the run
+starts by itself the moment the holder releases (a holder that dies releases it
+too — there is no stale lock to clear). An attached `dross verify` waits the same
+way, printing the holder once and a heartbeat every few minutes. Use `--no-wait`
+only for an unattended probe that must not block — it refuses a held host with
+exit `15`, naming the holder, and writes nothing; it never makes the run happen
+sooner.
+
 **Read the score with its denominator.** `dross verify` now prints it that way — `score: 0.90 over 191 in-scope mutant(s)`, plus a second line naming how many of those are uncoverable by construction and what the efficacy is over the rest. Carry both into your report: 0.90 over 10 mutants and 0.90 over 400 are the same number and not the same evidence, and a survivor the tooling cannot reach is a different fact from one the tests missed.
 
 **The score covers only this phase's changed files.** Mutation tools attribute at a coarser granularity than a phase does — gremlins mutates a whole Go package — so every report is filtered against the phase's change set before it reaches these files. A survivor in an untouched sibling is real, but it is not this phase's, and it is neither scored nor flagged here. `[summary].mutants_in_scope` is the denominator that filtering left: read it next to the score, because 0.50 over 2 mutants and 0.50 over 200 are the same number and not the same evidence.
 
+**A run says which lines it measured, and where it fell back to whole files.** Each leg in tests.json carries `ranges` — the effective line ranges the tool was actually told, each widened to the enclosing top-level construct it names (`file → [{start, end, construct}]`; `construct` is `hunk` when no construct enclosed the lines) — and `whole_file` — every file that leg mutated whole, with its reason (`adapter-lacks-range-runner`, `scope-has-no-hunks`, `file-absent-from-hunks`, `malformed-range`, `ast-unavailable`). verify.toml's `[[summary.leg]]` restates them as `ranges` and `whole_file`. An `ast-unavailable` file degrades the scope like a malformed range does: the run measured whole files where it could have ranged, and the degraded line names why (no node, no parser in the tree, a parse position). Run `dross verify scope <phase>` to read the last run's provenance in one place (raw hunks beside effective ranges, per leg), or `--json` for the record itself. A leg with no `ranges` is a whole-file leg and is never called ranged: gremlins always is, and a stryker leg that fell back says why. Judge the score against what was actually instrumented, not against the phase's diff.
+
 **Read both files before continuing.** They're the inputs for the LLM judgement step.
 
-Move the board issue to the UAT state (no-op unless `[remote].board_sync` is on — safe to always run). A phase awaiting a verdict is neither being worked nor delivered, so it gets its own state rather than sharing in-progress or shipped:
+Move the board issue to the UAT state (it exits 0 and does nothing when `[board].enabled` is false; a non-zero exit is a board failure — surface it, never read it as the disabled no-op). A phase awaiting a verdict is neither being worked nor delivered, so it gets its own state rather than sharing in-progress or shipped:
 ```
 dross issue phase sync <phase> --status uat
 ```
@@ -155,6 +172,8 @@ criteria_covered   = <count where status=covered>
 criteria_uncovered = <count where status=uncovered or weak>
 ```
 
+Leave `[verify].measured_commit` and `[verify].measured_tree` exactly as `dross verify` wrote them. They record the tree this verdict was measured at, and `dross ship` refuses a pass whose tree has since moved; drop them and that refusal quietly becomes a freshness-unknown warning.
+
 Leave every `[[summary.leg]]` table exactly as `dross verify` wrote it — one per language leg, carrying that leg's own killed/survived/timeout/score. **Never** recompute `mutation_score` from them: the pooled score sums raw counts across legs, which is already weighted by leg size, and averaging the legs' percentages hands a small leg the same vote as a large one. A leg carrying an `error` measured nothing; its zeroes are not a result. Read the legs when a pooled score looks fine but one leg is carrying the failure — that is what they are for.
 
 Compute `[verify].verdict`. **Read `mutation_status` first** — when status is not `measured`, the score is a 0/0 artifact and the mutation leg has nothing to say. This is the dogfood-surfaced bug from FeastAhead phase 04/05: Stryker scoped to `src/lib/utils` only, phase touched server/Svelte files, mutation_score landed at 0.0, verdict heuristic falsely flagged `fail` despite 5/5 criteria covered.
@@ -206,8 +225,18 @@ verify <phase-id> — <verdict>
       - <one-line per flag>
     NOTE (<count> — see verify.toml)
 
+  Solo review:  <only when changes.json has `reviews` or a task failed>
+    t-3  pass after 2 rounds
+      - BLOCKING spec c-1: <finding> — fixed in the fix round
+      - FLAG quality: <finding> — non-blocking, left
+    t-5  exhausted after 2 rounds — UNRESOLVED
+      - BLOCKING spec c-3: <finding> — unresolved — task failed
+    failed: t-5 — <reason from `dross task show`>
+
   Verdict: <pass | partial | fail>
 ```
+
+The **Solo review** block shows what the per-task reviewer flagged in a `--solo` run, one line per finding with its resolution. Mark every unresolved finding and every failed task: a task the reviewer failed was never committed, so no criterion's coverage may lean on it.
 
 Keep the map to one line per criterion; if the user wants the surviving-mutant detail behind a `weak`/`uncovered` row, point them at `verify.toml` rather than dumping it.
 

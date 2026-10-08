@@ -1,0 +1,33 @@
+// Must-trip fixture reproducing the exact shapes this phase removed from the
+// run-dir writers in internal/security and internal/quality, and from the
+// red-proof repoint apply path.
+//
+// It is a FIXTURE rather than an assertion about the post-fix tree on purpose:
+// those sites are clean now, so a scan calibrated on them proves only that it
+// was written after the fix. This keeps the regression falsifiable when the
+// tree moves.
+package scanfixture
+
+import (
+	"os"
+	"strings"
+
+	"github.com/Rivil/dross/internal/pathfence"
+)
+
+// The security.go / quality.go report writer as it was: an unwrapped path
+// handed straight to os.WriteFile.
+func writeRunReport(reportPath pathfence.Contained, b *strings.Builder) error {
+	return os.WriteFile(reportPath.String(), []byte(b.String()), 0o644)
+}
+
+// The findings ledger writer, before the seam took over.
+func saveLedger(c pathfence.Contained, body []byte) error {
+	return os.WriteFile(c.String(), body, 0o644)
+}
+
+// The red-proof repoint rollback write — the one call a partial adoption is
+// most likely to leave behind, since every behavioural test passes without it.
+func rollback(doc pathfence.Contained, orig []byte, mode os.FileMode) error {
+	return os.WriteFile(doc.String(), orig, mode)
+}

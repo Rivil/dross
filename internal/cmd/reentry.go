@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -9,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -51,7 +51,7 @@ func Reentry() *cobra.Command {
 				return err
 			}
 			line := reentryLine(root, proj, st)
-			out, err := json.Marshal(sessionStartOutput{
+			out, err := render.MarshalJSON(sessionStartOutput{
 				SystemMessage: line,
 				HookSpecificOutput: sessionStartHookOutput{
 					HookEventName:     "SessionStart",
@@ -71,6 +71,10 @@ func Reentry() *cobra.Command {
 // line of `dross status` — status prints it verbatim, reentry embeds it in
 // the hook envelope, so a fresh session reads the same "you are here"
 // whichever it runs first.
+//
+// An open debug session rides the end of the line, not suggestNext: the
+// phase's own next step stays what it was, and the hook — which fires after
+// /clear and after compaction — still names the investigation to resume.
 func reentryLine(root string, proj *project.Project, st *state.State) string {
 	where := "(no phase)"
 	if st.CurrentPhase != "" {
@@ -79,5 +83,13 @@ func reentryLine(root string, proj *project.Project, st *state.State) string {
 			where += " (" + st.CurrentPhaseStatus + ")"
 		}
 	}
-	return fmt.Sprintf("you are here: %s · v%s — next: %s", where, st.Version, suggestNext(root, proj, st))
+	line := fmt.Sprintf("you are here: %s · v%s — next: %s", where, st.Version, suggestNext(root, proj, st))
+	if open := openDebugSessions(root); len(open) > 0 {
+		e := open[0]
+		line += fmt.Sprintf(" · debug: %s %s — /dross-debug %s", e.Slug, e.Session.State(), e.Slug)
+		if len(open) > 1 {
+			line += fmt.Sprintf(" (+%d more)", len(open)-1)
+		}
+	}
+	return line
 }

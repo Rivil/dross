@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/Rivil/dross/internal/gitrun"
+	"github.com/Rivil/dross/internal/secretscan"
 )
 
 // autoCommitDrossDirt is the shared dirty-tree gate behind ship, phase
@@ -18,10 +20,14 @@ import (
 //     commit, then proceed (committed=true)
 //   - any path outside .dross/ → dirtyTreeError, staging nothing
 func autoCommitDrossDirt(repoDir, action string) (committed bool, err error) {
-	status, err := gitStatusRaw(repoDir)
+	// Raw, not Read: trimming would eat the first line's leading status column
+	// (" M path") and break the positional parse below.
+	raw, err := gitrun.Raw(repoDir, "status", "--porcelain")
 	if err != nil {
 		return false, fmt.Errorf("git status: %w", err)
 	}
+	//dross:taint-cleared status --porcelain prints two status letters and a repo path per line, never file content
+	status := strings.TrimRight(raw, "\n")
 	if status == "" {
 		return false, nil
 	}
@@ -32,30 +38,33 @@ func autoCommitDrossDirt(repoDir, action string) (committed bool, err error) {
 			}
 		}
 	}
-	if out, err := gitCombined(repoDir, gitPathArgs("add", nil, ".dross")...); err != nil {
-		return false, fmt.Errorf("git add .dross: %w\n%s", err, out)
+	// Secret gate, AFTER the code-dirt refusal and BEFORE `git add`: this is
+	// the primitive that turns an untracked note into a commit, so it is the
+	// one that refuses — which covers ship, phase complete, record completion,
+	// phase start and milestone prune in one place. Same scanner as validate
+	// and ship's pre-flight (the ship_gate_scope decision); a scan error is a
+	// refusal too, since an artifact it could not read is one it cannot vouch
+	// for.
+	hits, err := scanDrossArtifacts(repoDir)
+	if err != nil {
+		return false, fmt.Errorf("refusing to auto-commit .dross: %w", err)
+	}
+	if len(hits) > 0 {
+		return false, fmt.Errorf("refusing to auto-commit .dross: %w", &secretscan.ErrHit{Hits: hits})
+	}
+	if err := gitrun.Run(repoDir, gitPathArgs("add", nil, ".dross")...); err != nil {
+		return false, fmt.Errorf("git add .dross: %w", err)
 	}
 	// Empty-commit guard: a status entry can stage to nothing (e.g. a change
 	// already reverted); nil means no staged diff, so there is nothing to commit.
-	if gitNoOut(repoDir, "diff", "--cached", "--quiet") == nil {
+	if gitrun.Quiet(repoDir, "diff", "--cached", "--quiet") == nil {
 		return false, nil
 	}
 	msg := fmt.Sprintf("chore(dross): auto-commit bookkeeping before %s", action)
-	if out, err := gitCombined(repoDir, "commit", "-m", msg); err != nil {
-		return false, fmt.Errorf("git commit: %w\n%s", err, out)
+	if err := gitrun.Run(repoDir, "commit", "-m", msg); err != nil {
+		return false, fmt.Errorf("git commit: %w", err)
 	}
 	return true, nil
-}
-
-// gitStatusRaw returns `git status --porcelain` without trimming leading
-// whitespace — gitTrim would eat the first line's leading status column
-// (" M path") and break positional parsing.
-func gitStatusRaw(repoDir string) (string, error) {
-	out, err := exec.Command("git", "-C", repoDir, "status", "--porcelain").Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimRight(string(out), "\n"), nil
 }
 
 // porcelainPaths extracts the path(s) named by one `git status --porcelain`

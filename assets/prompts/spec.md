@@ -78,7 +78,7 @@ Using the context from §1 (project goals, milestone constraints, locked stack) 
   - Phase "Meal tagging" → `Tag storage`, `Duplicate handling`, `Tag input UX`, `Max tags per item`
 - **Keep it to the genuine ones — a soft ~3–4.** Don't pad to hit a number, and don't truncate a real uncertainty to stay under one. Order them **most-impactful / most-uncertain first**, so if the user later hands you the rest (§3b off-ramp), the consequential ones are already settled.
 - **Skip what's already decided.** Don't re-ask anything settled by `stack.locked` in project.toml, a `[[decisions]]` carried in a prior phase's spec.toml, or a choice already implied by an acceptance criterion. If you skip an area for this reason, say so ("session handling is fixed by the locked auth library — not asking").
-- **Stay inside the phase boundary.** A gray area clarifies HOW to build what's already scoped — never WHETHER to add a new capability. If a candidate is really a new capability, it's a deferred idea (§4), not a gray area.
+- **Stay inside the phase boundary.** A gray area clarifies HOW to build what's already scoped — never WHETHER to add a new capability. If a candidate is really a new capability, it's a §4a candidate (sorted include-first), not a gray area.
 
 **What is NOT a gray area — decide these yourself, don't ask:** internal architecture, code patterns, performance tuning, anything the planner or executor resolves — **even when you're unsure about them**. Uncertainty alone doesn't earn a question; the choice must *also* be contract-shaping / user-observable. Ask only about user-facing and contract-shaping choices you can't confidently settle.
 
@@ -94,7 +94,7 @@ There is **no selection step** — do not ask the user which areas to discuss, a
 
 While discussing:
 - If the user references a doc/spec/file ("follow the schema in `X`"), read it and let it inform your follow-ups.
-- If the user raises something outside the phase boundary, capture it as a deferred idea and redirect: **"`<that>` is its own capability — noting it as deferred. For now let's stay on `<phase>`."**
+- If the user raises something that isn't a gray area, don't defer it by reflex — note it as a §4a candidate and sort it there (include-first). Redirect only the discussion: **"noting `<that>` as a candidate — I'll sort it in §4. For now let's stay on `<area>`."**
 
 ### 3c. Capture outcomes
 
@@ -118,13 +118,17 @@ For each deferred idea capture:
 
 When resuming/extending an existing spec, **skip any deferred item that already has a target** — it's already routed; don't re-offer it (idempotent, no duplicate routing).
 
-### 4a. Route every surfaced candidate — defer-first, then destination
+### 4a. Route every surfaced candidate — include-first, then destination
 
-A bare deferred item is write-only: it dies in this spec and never comes back. So every surfaced candidate — a §3 gray-area-adjacent proposal, an optional sub-feature, or an idea the user punted above — gets the **defer-or-add either/or** from the interaction playbook (not open recording, not silent parking). Drive it as a **two-step** `AskUserQuestion`, one item per turn:
+A bare deferred item is write-only: it dies in this spec and never comes back. So every surfaced candidate — a §3 gray-area-adjacent proposal, an optional sub-feature, or an idea the user raised along the way — is sorted with the **include-first** rule from the interaction playbook (not open recording, not silent parking). An idea the user *explicitly* punted above is already a defer — skip step 1 and go straight to step 2.
 
-**Step 1 — the entry gate (defer-first).** Lead with **defer it** and offer **add to current phase**:
-- **add to current phase** — it's actually in scope. This is the **Pull into the current phase** branch: move it *out* of deferred and add it as a new `[[criteria]]` entry (back to §2). It is no longer deferred. This is the *only* place the pull-in is offered.
-- **defer it** (the lead) — it's not this phase. Keep it deferred and go to step 2 for a destination. Defer-first keeps the phase boundary tight by default while making inclusion a one-click choice.
+Sort each candidate first. **Belongs in this phase** → don't ask a defer question: **Pull into the current phase** — add it as a new `[[criteria]]` entry through §2's accept / reword / drop gate, with accept as the lead. Anything else is driven as a **two-step** `AskUserQuestion`, one item per turn:
+
+**Step 1 — the entry gate (include-first).** An either/or of **add to current phase** and **defer it**; which one leads depends on the case:
+- **Genuinely borderline** → lead with **add to current phase**.
+- **Clearly has a home elsewhere** (a named roadmap phase, or a separate capability) → lead with **defer it**, and put the reason and the likely destination in the option's description.
+- **add to current phase** — it's in scope after all. This is the **Pull into the current phase** branch: add it as a new `[[criteria]]` entry (back to §2). It is not deferred. This is the *only* place the pull-in is offered.
+- **defer it** — it's not this phase. Keep it deferred and go to step 2 for a destination. Deferral is not the safe default: in-scope work parked in the backlog is scope that leaked.
 
 **Step 2 — the destination (only after "defer it").** Route the deferred item via `AskUserQuestion` (lead with the most likely). The entry gate already settled add-vs-defer, so this step **does not re-offer** the pull-in — only the parking destinations:
 - **Park in the milestone backlog** — relevant, but not this phase. Coin a short slug from the idea; after the spec is written (§5) run:
@@ -177,6 +181,12 @@ Use the `Write` tool to save to `.dross/phases/<id>/spec.toml`. **Don't paste th
 **"Spec written: N criteria, M locked decisions, K deferred — lock it? (y / edit \<what>)"**
 
 Only surface a specific field if the user asks to see or change it.
+
+**Record what the spec absorbed.** Once `spec.toml` is written, run this for every criterion seeded from a §1 parked item — accepted as written or reworded, both count — where `<source> <idx>` is that item's handle from §1's `dross deferred list --target <id> --json`:
+```
+dross deferred absorb <source> <idx> --criterion <c-N> --phase <phase-id>
+```
+Always pass `--phase <phase-id>` explicitly: `current_phase` is only set in §6, so the default could name another phase. The record is the evidence a routed item was taken in: its board card closes once this phase completes, while an item nobody absorbed stays open. A criterion that took in several parked items gets one call per item.
 
 ## 6. Validate + wrap
 

@@ -1,0 +1,98 @@
+# lossless fixture: a hand-edited project.toml with comments, unmodeled keys,
+# a multi-line array and every value shape the patcher has to leave alone.
+
+[project]
+  name = "fixture"
+  version = "1.7.5.0"  # bumped
+  # what the project is for
+  description = "a # b"  # real
+  created = "2026-06-19"
+
+[stack]
+  languages = ["go"]
+
+  [[stack.locked]]
+    choice = "Go, distributed as a single static binary CLI"
+    why = "No runtime dependencies for users; one install artifact."
+    locked_at = "2026-06-19"
+    note = "hand-added under locked"
+
+  [[stack.locked]]
+    choice = "Cobra for command structure"
+    why = "Standard Go CLI framework."
+    locked_at = "2026-06-19"
+
+  [[stack.locked]]
+    choice = "TOML for all .dross config and state schemas"
+    why = "Hand-editable, comment-friendly, round-trips cleanly."
+    locked_at = "2026-06-19"
+
+  [[stack.locked]]
+    choice = "Slash commands shipped as Claude Code skills from assets/"
+    why = "CLI provides state; markdown prompts provide orchestration."
+    locked_at = "2026-06-19"
+
+[runtime]
+  mode = "native"
+  # the suite is slow on the laptop; prefer the remote runner
+  test_command = "go test -count=1 ./..."
+  typecheck_command = "go vet ./..."
+  build_command = "make build"
+
+  [[runtime.test_lane]]
+    name = "cmd"
+    match = ["internal/cmd/**"]
+    command = "go test ./internal/cmd/..."
+
+  [[runtime.test_lane]]
+    # the project package is the fast lane
+    name = "project"
+    match = ["internal/project/**"]
+    command = "go test ./internal/project/..."
+
+  [[runtime.test_lane]]
+    name = "ship"
+    match = ["internal/ship/**"]
+    command = "go test ./internal/ship/..."
+
+[repo]
+  layout = "single"
+  git_main_branch = "main"
+  commit_convention = "conventional"
+  squash_merge = true
+
+[remote]
+  url = "https://example.invalid/rivil/fixture"
+  provider = "github"
+  mirror = "https://example.invalid/mirror/fixture"
+
+[board]
+  provider = "youtrack"
+  base_url = "https://issues.example.invalid"
+  enabled = true
+  milestone_mode = "epic"
+
+  [board.state_map]
+    planned = "Open"
+
+[paths]
+
+[env]
+
+[goals]
+  core_value = "A low-overhead loop for AI-assisted development."
+  non_goals = [
+    "Not a general-purpose tool", # marketing is out of scope
+    "No feature PRs that don't match the author's workflow",
+  ]
+
+[custom]
+  anything = 1
+
+[[competition]]
+  name = "one"
+  url = "https://one.invalid"
+
+[[competition]]
+  name = "two"
+  note = "hand-added"

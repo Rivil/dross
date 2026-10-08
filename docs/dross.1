@@ -72,7 +72,25 @@ test layout).
 .TP
 .B dross status
 Where am I \(em project, milestone, current phase, last activity, next
-task. Also surfaces an open handoff and unfinalized verify verdicts.
+task. Also surfaces an open handoff, open debug sessions and unfinalized
+verify verdicts.
+.TP
+.B dross debug new \fIslug\fR | \fBlist\fR | \fBclose \fIslug\fR
+The machine-local session files
+.B /dross-debug
+keeps under
+.IR .dross/debug/ .
+.B new
+scaffolds one from the fixed template, gitignored before it is written;
+.B list
+prints each session's state (open, needs-replan, resolved, abandoned),
+hypothesis count, failed fixes since the last re-plan and last update;
+.B close \fIslug\fB --fixed
+needs two Resolution signals and a Prevention, and prints a
+.B dross rule add
+line without running it;
+.B close \fIslug\fB --abandoned --reason \fIwhy\fR
+closes without them. A closed session stays on disk.
 .TP
 .B dross doctor
 Check project-level health:
@@ -293,6 +311,32 @@ Skip the verify gate.
 Post a markdown comment to a PR (used by
 .BR /dross-review ).
 .TP
+.B dross pr comments \fIpr\fR [\fB--all\fR]
+List the review comments on a phase PR that still need a verdict \(em or
+were edited since theirs \(em each as one metadata line and its body
+fenced as untrusted data.
+.B --all
+lists every comment with its status.
+.TP
+.B dross pr resolve \fIpr\fR \fIid\fR \fB--seen \fIdigest\fR
+Record one verdict for a comment:
+.B --accept --title
+(a new task),
+.B --reject --reason
+or
+.B --route --title --target
+(a deferred item), with one piece of evidence \(em
+.B --at \fIpath:line\fR
+or
+.B --cmd \fIc\fR \fB--output-file \fIpath\fR|\fB-\fR
+(recorded, never run).
+.TP
+.B dross pr reply \fIpr\fR [\fB--post\fR]
+Draft the one reply listing unposted rejections and print the exact
+approval label;
+.B --post
+sends it only when a human's choice of that label is recorded.
+.TP
 .B dross ship recover
 One-shot migration for legacy repos with phase commits on main or
 .I .dross/
@@ -398,6 +442,12 @@ request reviewers, watch CI, gate the merge, clean up branches.
 .B /dross-review \fIpr-number\fR [\fB--phase \fIid\fR]
 Four-lens subagent panel (security / quality / tests / spec-fidelity)
 over an open PR; posts the aggregated findings as a single comment.
+.TP
+.B /dross-respond \fIpr\fR
+Pair-only triage of a phase PR's review comments: each claim checked
+against the code, then accepted as a task, rejected with a reason or
+routed as deferred; the rejections go back in one reply, posted only on
+the user's recorded approval.
 .SS Continuity
 .TP
 .B /dross-status
@@ -411,6 +461,15 @@ loops \(->
 .TP
 .B /dross-resume
 Replay the handoff, re-orient on phase/branch/diff, prune done items.
+.TP
+.B /dross-debug \fR[\fB--solo\fR] [\fIslug\fR] [\fIsymptom\fR]
+Debug systematically across sessions: one hypothesis per probe, each
+probe's evidence written to
+.I .dross/debug/<slug>.md
+before the next, the tree restored after every probe, a hard stop after
+three failed fixes, and fixes routed to
+.B /dross-quick
+or a task \(em never committed by the debug run itself.
 .TP
 .B /dross-inbox \fR[\fB--labels \fIbug,enhancement\fR]
 Triage inbound board issues into milestones, phases, or quick tasks.
@@ -472,6 +531,8 @@ Milestone scope.
 .IR plan.toml ,
 .IR verify.toml ,
 .IR tests.json ,
+.I pr-triage.toml
+(one verdict per PR review comment, never its body),
 .I REVIEW.md
 (plan review), and
 .I panel/
@@ -487,6 +548,11 @@ Artefact \(<-> issue links for board sync.
 .TP
 .I .dross/handoff.md
 Living pause/resume handoff (gitignored).
+.TP
+.I .dross/debug/<slug>.md
+.B /dross-debug
+session files \(em machine-local, kept out of git by their own
+.IR .dross/debug/.gitignore .
 .TP
 .I ~/.claude/dross/defaults.toml
 Cross-project defaults.

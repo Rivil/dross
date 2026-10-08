@@ -1,0 +1,45 @@
+task_seq = 0
+
+[phase]
+  id = "supply-chain-currency"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Pin toolchain in go.mod, workflows read it"
+  files = ["go.mod", ".github/workflows/ci.yml", ".github/workflows/release.yml", "internal/cmd/toolchain_source_test.go", "internal/mutation/ceiling_test.go"]
+  description = "go.mod: `go 1.27.0` + `toolchain go1.27.1`. Bump actions/setup-go to the latest v7 tagged SHA (it reads the toolchain line; v5.2.0 reads only the go directive) in all three steps across ci.yml (test, mutation-ts) and release.yml, switching `go-version: '1.25.13'` to `go-version-file: go.mod`; rewrite the pin comments to point at go.mod as the source. Add a `go version` step after each setup-go so the CI log proves the scanned toolchain. Other action pins stay deferred. New test parses go.mod with x/mod/modfile and scans both workflows. Audit workflow edits against the CI supply-chain hardening checklist (applies to every task that edits a workflow)."
+  covers = ["c-1", "c-2"]
+  test_contract = ["if go.mod loses its `toolchain` directive, or the toolchain is below the `go` directive, TestToolchainSingleSource fails", "if any actions/setup-go step in any .github/workflows/*.yml carries a `go-version:` key or lacks `go-version-file: go.mod`, TestToolchainSingleSource fails", "if any advisory is reachable on the go1.27.1 toolchain, the ci.yml `govulncheck ./...` step fails (c-1 evidence: the executor's observed local `govulncheck ./...` exit 0 plus the CI step)", "if any actions/setup-go step in any workflow is pinned to a SHA older than the v7 tag recorded in the test, TestToolchainSingleSource fails (v5.2.0 ignores the toolchain directive)", "if the CI log's `go version` step does not report go1.27.1, the toolchain go.mod declares is not the one govulncheck scanned (c-1 evidence: observed in the CI run for this task's commit)", "if go cover on the pinned toolchain no longer proves the switch-case arm body executed (count >= 1 on the arm's return line), TestAttributionCeilingIsReal fails — the proof of execution must not depend on a go-cover block layout that changed between go1.26 and go1.27"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Bump direct deps, gate tidy drift in CI"
+  files = ["go.mod", "go.sum", ".github/workflows/ci.yml"]
+  description = "Bump every direct dep to latest (toml v1.6.0, cobra v1.10.2, x/mod v0.41.0, x/term v0.46.0, and pflag v1.0.10 — flag_hint.go imports it directly so tidy promotes it; minisign v0.3.0 already latest; re-check all with `go list -m -u all` at execute time), `go mod tidy` on the final `go` directive. c-3 evidence: `go list -m -u all` shows no bracketed update on any direct dep. Add a `go mod tidy -diff` step to the ci.yml test job so drift fails CI. Audit the ci.yml edit against the CI supply-chain hardening checklist. GitHub Action pins beyond setup-go (t-1) stay deferred."
+  covers = ["c-3"]
+  depends_on = ["t-1"]
+  test_contract = ["if the committed go.mod/go.sum drift from a tidy tree, the ci.yml `go mod tidy -diff` step fails", "if cobra 1.8→1.10 changes unknown-flag error wording or command dispatch, flag_hint_test.go and the Execute()-driven tests under internal/cmd fail", "if any direct dep in go.mod is behind its latest release, `go list -m -u all` prints a bracketed newer version for it (recorded as c-3 evidence at execute time)"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Release builds readonly + runs govulncheck"
+  files = [".github/workflows/release.yml", ".github/workflows/ci.yml", ".goreleaser.yaml", "internal/cmd/release_pipeline_test.go"]
+  description = "release.yml job env gains `GOFLAGS: -mod=readonly`; remove the goreleaser `before: hooks: go mod tidy`. Add install-govulncheck and `govulncheck ./...` steps after setup-go and before goreleaser, gated on `new_tag != ''`, no `|| true`. Pin govulncheck in both ci.yml and release.yml to the current latest tag (v1.8.0 as of 2026-09-14). New test follows the readRepoFile pattern in release_signing_test.go. Audit both workflow edits against the CI supply-chain hardening checklist."
+  covers = ["c-4"]
+  test_contract = ["if the release job env lacks `GOFLAGS: -mod=readonly`, TestReleaseJobBuildsReadonly fails", "if .goreleaser.yaml carries any `before:` hook, TestGoreleaserHasNoBeforeHooks fails", "if release.yml has no `govulncheck ./...` step, or it appears after the goreleaser step, or is followed by `|| true`, TestReleaseJobRunsGovulncheck fails", "if ci.yml and release.yml pin different govulncheck versions, TestGovulncheckPinAgrees fails"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Ban ${{ }} inside run: blocks"
+  files = [".github/workflows/release.yml", "internal/cmd/workflow_run_expressions_test.go"]
+  description = "Move release.yml's two run-block expressions (`github.event.inputs.version`, `steps.tag.outputs.new_tag`) to step `env:` and read them as shell vars. New test: a line-based scanner (no YAML dependency) that tracks `run:` single-line and `|`/`>` block forms by indentation and flags any `${{` inside; unit table over inline fixtures plus a sweep over .github/workflows/*.yml. Audit the release.yml edit against the CI supply-chain hardening checklist."
+  covers = ["c-5"]
+  test_contract = ["if the scanner misses a single-line `run: echo ${{ x }}` or a `${{` line inside a `run: |` block, TestRunBlockScanner fails", "if the scanner flags a `${{ }}` in an `env:` or `with:` value, TestRunBlockScanner fails (false-positive guard)", "if any .github/workflows/*.yml contains `${{` inside a run: block, TestWorkflowsHaveNoExpressionsInRun fails"]
+  status = "done"

@@ -1,0 +1,86 @@
+// Writer-channel corpus for the taint engine (TestTaintFollowsWriters). A
+// generic io.Writer parameter is not the terminal: the stream Run plugs into it
+// lands in whatever each CALLER passes. A strings.Builder carries it on;
+// os.Stderr and an options struct holding cmd.OutOrStdout() end it. A writer
+// parameter nothing calls is an escape, a package variable only ever holding
+// os.Stderr is terminal, and one also reassigned to a builder is not. An object
+// plugged in through io.MultiWriter receives the stream through its own Write.
+package writer
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
+
+	"github.com/spf13/cobra"
+)
+
+// Run plugs w into the command: whatever w is receives the stream.
+func Run(c *exec.Cmd, w io.Writer) error {
+	c.Stdout = w
+	return c.Run()
+}
+
+func intoBuilder(c *exec.Cmd) error {
+	var b strings.Builder
+	_ = Run(c, &b)
+	return errors.New(b.String()) // WANT taint
+}
+
+func intoStderr(c *exec.Cmd) error { return Run(c, os.Stderr) }
+
+type options struct{ Out io.Writer }
+
+func intoOptions(cmd *cobra.Command, c *exec.Cmd) error {
+	opts := &options{Out: cmd.OutOrStdout()}
+	return Run(c, opts.Out)
+}
+
+// Orphan writes into a writer no caller in the program hands it.
+func Orphan(c *exec.Cmd, w io.Writer) error {
+	c.Stdout = w // WANT taint
+	return c.Run()
+}
+
+var logOut io.Writer = os.Stderr
+
+func intoPackageVar(c *exec.Cmd) error { return Run(c, logOut) }
+
+var sink io.Writer = os.Stderr
+
+var captured strings.Builder
+
+func redirect() { sink = &captured }
+
+func intoReassigned(c *exec.Cmd) error {
+	return Run(c, sink) // WANT taint
+}
+
+// headBuffer keeps the head of a stream it is teed into.
+type headBuffer struct{ buf strings.Builder }
+
+func (h *headBuffer) Write(p []byte) (int, error) { return h.buf.Write(p) }
+
+func printHead(w io.Writer, h *headBuffer) { fmt.Fprint(w, h.buf.String()) }
+
+func teeLeak(c *exec.Cmd) error {
+	var head headBuffer
+	c.Stdout = io.MultiWriter(os.Stderr, &head)
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("run: %s", head.buf.String()) // WANT taint
+	}
+	return nil
+}
+
+func teeClean(c *exec.Cmd) error {
+	var head headBuffer
+	c.Stdout = io.MultiWriter(os.Stderr, &head)
+	if err := c.Run(); err != nil {
+		printHead(os.Stderr, &head)
+		return errors.New("the command failed; its output is above")
+	}
+	return nil
+}

@@ -66,7 +66,7 @@ type Rule struct {
 var table = map[string]Rule{
 	"git": {
 		Kind:  Separator,
-		Token: "--end-of-options",
+		Token: "--end-of-options", // dross:allow-secret
 		Why:   "git >= 2.24 ends option parsing without reclassifying refs as pathspecs; `--` would make a branch name a path",
 	},
 	"gh": {
@@ -95,6 +95,10 @@ var table = map[string]Rule{
 	"npx": {
 		Kind: Reject,
 		Why:  "npx consumes leading-dash arguments itself before the wrapped binary sees them",
+	},
+	"node": {
+		Kind: Reject,
+		Why:  "node reads options ahead of the script operand and honours no end-of-options token; the only positional dross passes is the literal `-`, the request rides on stdin",
 	},
 	"dotnet": {
 		Kind: Reject,

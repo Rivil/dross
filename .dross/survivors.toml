@@ -34,6 +34,30 @@
   name = "detach-seam-body"
   reason = "The body of a `var detach* = func(...)` process-construction seam in internal/cmd/verify.go — detachSync, detachStatus, detachCancel. Every test in verify_detach_test.go, verify_results_test.go and verify_status_test.go replaces the whole var, so these bodies never execute: a live `go test -coverprofile ./internal/cmd` on 2026-08-31 reports count 0 for every block covering lines 167, 363, 367 and 568-573. Executing them would mean spawning real ssh, because remote.commandFn — the transport seam these bodies bottom out in — is unexported and unreachable from package cmd, and the phase's locked tests_spawn_no_ssh decision forbids a test that needs a host. Their effect is asserted instead of their line: the stubs return the same errors the real bodies would propagate, and TestResultsOnAnUnreachableHostIsNotAVerdict, TestDispatchPushesBeforeItStarts and TestCancelAgainstAnUnreachableHostStillClearsButSaysSo pin what the caller does with them. Move the seam boundary below remote.Exec, or export a transport stub from internal/remote, and these become reachable and owe tests rather than this reason."
 
+[[category]]
+  name = "gremlins-switch-case"
+  reason = "gremlins attributes no go-cover block to a bare `switch { case ... }` case-condition, so every arm reports NOT_COVERED even when a test drives it. Validate's arms are each exercised by TestValidateNamesEveryMalformedShape with a written-down expected message (no disposition, >1 disposition, blank Carrier, empty Why, no Writer, no SourcedFrom, duplicate name). Tooling attribution limit, not a test gap — see dross_gremlins_switchcase_ceiling."
+
+[[category]]
+  name = "gremlins-var-initializer"
+  reason = "the `+` is string-literal concatenation inside `var fields = []Field{...}`, the package-level registry. gremlins attributes no go-cover block to a package-level var initializer, so every operator in the declaration reports NOT_COVERED. There is nothing a test could assert to kill it either: the operands are constant prose, and what the registry must hold is asserted structurally by TestRegistryPinsEveryDeclaredField (name + disposition + count) and by Validate's non-empty Why/Writers rules, not by matching the prose verbatim."
+
+[[category]]
+  name = "host-lock-switch-case"
+  reason = "gremlins attributes no go-cover block to a bare switch{}/select{} case-condition, so each arm reports NOT_COVERED even when a test drives it — a tooling attribution limit, not a test gap (see dross_gremlins_switchcase_ceiling). The host-lock arms here are each asserted: verify.go scheduledReason/status arms by TestStatusNamesWhatAScheduledRunWaitsOn, TestScheduledByOwnRunIDIsNotWaiting, TestScheduledWithFreeLockSaysNotStarted, TestEmptyRecordIsNamedAsSuch, TestLockReadErrorKeepsStatusUseful and TestStatusPointsAFinishedRunAtTheCollectVerb; test.go holdHostForSuite arms by TestExpiredWaitSpawnsAnywayNamingTheHolder, TestMissingFlockWarnsAndRuns and TestTestHoldsAcrossSyncAndSuite; doctor.go reportHostLock arms by TestDoctorReportsMissingFlockAsHostTool, TestDoctorNamesTheCurrentHolder and TestDoctorFreeLockIsOneLine; hold.go event arms by TestMissingFlockIsNamed, TestAcquirePrintsTheHolderOnce, TestAcquireExpiredRunsAlongside and TestReleaseClosesStdinThenWaits (the 2s select timeout); lock.go LockPrelude wait forms by TestLockPreludeWaitForms and TestRealBoundedWaitRunsAlongside, and ParseLockStatus arms value-by-value by TestParseLockStatus."
+
+[[category]]
+  name = "host-lock-var-initializer"
+  reason = "A package-level var initializer (launcherHeartbeat = 5*time.Minute, holdKeepalive = 30*time.Second, holderLull = 300*time.Millisecond) is evaluated at init before any instrumented statement, so go-cover emits no block for its line and gremlins reports every operator in it NOT_COVERED. The values are tuning knobs the tests deliberately shrink (TestVanishedLaptopFreesWithinTheLease, TestAcquireHeartbeatsWhileWaiting, TestLauncherRoutesWaitLinesToItsLog set them via the var), so the initializer's arithmetic is never what a test observes; the wiring that reads them is what is asserted. Tooling attribution limit, not a test gap."
+
+[[category]]
+  name = "host-lock-seam-body"
+  reason = "The body of a `var x = func(...)` process-construction seam — testHold (internal/cmd/test.go), remoteLockStatusFn (internal/cmd/doctor.go), launcherHold (internal/mutation/launcher.go). Each wraps remote.Acquire / remote.ExecScript, which spawn a real ssh hold session; every test replaces the whole var (installHoldRecorder, fakeLockStatus, recordHold) so the body never executes and the err != nil guard reports NOT_COVERED. Same class as the accepted detach-seam-body entries in verify.go: the effect is asserted instead of the line — TestSuiteFailureStillReleases, TestMissingFlockWarnsAndRuns, TestDoctorSkipsLockStatusWithoutFlock, TestBusyRefusalSpawnsNothing and TestUnlockableHostIsNeverMeasuredOn pin what each caller does with the error the real body would propagate. Move the seam boundary below remote.Exec and these become reachable and owe tests rather than this reason."
+
+[[category]]
+  name = "scanner-no-progress-guard"
+  reason = "A no-progress guard in internal/shellscan's parser loops — parseList's `if p.pos == start`, and parseCommand's `if p.pos == before` after parseRedirect and after readWord: when an iteration consumed nothing it fails the scan and steps one byte, so a future grammar gap degrades to Partial instead of looping forever. No input reaches one today: parseList hands every byte to a branch that consumes it, atRedirect only returns true where parseRedirect will consume an operator from redirOps, and readWord only stalls on a metacharacter parseCommand has already dispatched. Checked 2026-10-03 by fuzzing (FuzzScan, 53.6M executions, ~1,100 new interesting inputs) a copy of the package with each guard replaced by a panic: none fired. The mutants here only change what an unreachable branch does (the string-concatenation ARITHMETIC_BASE is not even viable). Keep the guards; if one is ever reached, TestFuzzSeedsNeverPanic and the fuzz harness's Partial/Problem invariant are where it shows."
+
 [[accepted]]
   key = "742de35850fac7e6"
   file = "internal/cmd/survivor.go"
@@ -611,15 +635,6 @@
   accepted_in = "survivor-drain"
 
 [[accepted]]
-  key = "28ece17d11f1de42"
-  file = "internal/cmd/gitignore.go"
-  op = "ARITHMETIC_BASE"
-  text = "const drossLocalIgnorePath = \".dross/\" + LocalFile"
-  line = 17
-  category = "const-initializer-arithmetic"
-  accepted_in = "survivor-drain"
-
-[[accepted]]
   key = "48cac81a1a5e0bc7"
   file = "internal/cmd/gitignore.go"
   op = "ARITHMETIC_BASE"
@@ -761,15 +776,6 @@
   text = "case res != nil:"
   line = 554
   category = "gremlins-attribution-ceiling"
-  accepted_in = "survivor-drain"
-
-[[accepted]]
-  key = "da9683b212e497f3"
-  file = "internal/cmd/ship.go"
-  op = "CONDITIONALS_NEGATION"
-  text = "if out, err := gitCombined(repoDir, \"commit\", \"-m\", shipMsg); err != nil {"
-  line = 264
-  reason = "Unreachable given the caller, not untested: ship runs autoCommitDrossDirt immediately above this guard, which does git add .dross and commits, and its pre-stage gate refuses any non-.dross dirt before anything is staged at all. The index is therefore empty on every path into the guard, so its commit branch cannot be reached. TestAutoCommitDrossDirtLeavesTheIndexEmpty pins that premise for both the dirty and clean cases and fails the day autoCommitDrossDirt stops draining the index, at which point the branch becomes reachable and owes a test rather than this reason."
   accepted_in = "survivor-drain"
 
 [[accepted]]
@@ -917,15 +923,6 @@
   accepted_in = "survivor-drain"
 
 [[accepted]]
-  key = "2f4b2750232fddbd"
-  file = "internal/cmd/update.go"
-  op = "CONDITIONALS_NEGATION"
-  text = "if resolved, err := filepath.EvalSymlinks(exe); err == nil {"
-  line = 184
-  category = "self-replacing-binary-path"
-  accepted_in = "survivor-drain"
-
-[[accepted]]
   key = "e1dbef123483111f"
   file = "internal/cmd/env.go"
   op = "CONDITIONALS_NEGATION"
@@ -959,15 +956,6 @@
   text = "}); err != nil {"
   line = 148
   category = "gremlins-attribution-ceiling"
-  accepted_in = "survivor-drain"
-
-[[accepted]]
-  key = "67bbc496d8103359"
-  file = "internal/cmd/update.go"
-  op = "CONDITIONALS_NEGATION"
-  text = "if err != nil {"
-  line = 181
-  category = "self-replacing-binary-path"
   accepted_in = "survivor-drain"
 
 [[accepted]]
@@ -1077,24 +1065,6 @@
   line = 211
   reason = "ARITHMETIC_BASE mutates + to - on a string concatenation inside an error message; the mutant does not compile and is never viable. The branch it sits in is covered by TestRemoteRestoreTableIsClosed."
   accepted_in = "remote-mutation-runner"
-
-[[accepted]]
-  key = "7838ed0a7daca324"
-  file = "internal/cmd/doctor.go"
-  op = "CONDITIONALS_NEGATION"
-  text = "case docErr != nil:"
-  line = 540
-  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. These two arms (the replay doc cannot be read; the doc carries no base-commit line) are asserted line-for-line by TestRedProofUnreadableDocIsAnIssue and TestRedProofDocWithoutABaseCommitLineIsAnIssue, with TestRedProofDocAgreeingWithTheRecordIsClean pinning the green path they are distinguished from."
-  accepted_in = "red-proof-reachability"
-
-[[accepted]]
-  key = "b808ff3a5274aed1"
-  file = "internal/cmd/doctor.go"
-  op = "CONDITIONALS_NEGATION"
-  text = "case docSHA == \"\":"
-  line = 543
-  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. These two arms (the replay doc cannot be read; the doc carries no base-commit line) are asserted line-for-line by TestRedProofUnreadableDocIsAnIssue and TestRedProofDocWithoutABaseCommitLineIsAnIssue, with TestRedProofDocAgreeingWithTheRecordIsClean pinning the green path they are distinguished from."
-  accepted_in = "red-proof-reachability"
 
 [[accepted]]
   key = "08ec1d7666c48b32"
@@ -1313,9 +1283,3305 @@
   accepted_in = "lane-selector-preview"
 
 [[accepted]]
-  key = "6efb661ce18f93d2"
-  file = "internal/cmd/milestone.go"
+  key = "00055a8a8fa719fd"
+  file = "internal/pathfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.Consumed == nil && f.NotConsumed == nil:"
+  line = 97
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "4b6cf3537d63041a"
+  file = "internal/pathfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.Consumed != nil && f.NotConsumed != nil:"
+  line = 99
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "5d536c93b05cc880"
+  file = "internal/pathfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.Consumed != nil:"
+  line = 101
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "d068356e35e5acce"
+  file = "internal/pathfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.NotConsumed != nil:"
+  line = 105
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "709e23135976a3e0"
+  file = "internal/pathfence/fields.go"
   op = "ARITHMETIC_BASE"
-  text = "return false, 0, fmt.Errorf(\"push of %d local commit(s) on %s failed: %w\\n%s\\n\"+"
-  line = 1054
-  reason = "ARITHMETIC_BASE mutates + to - on a string concatenation joining the two halves of the ahead-push failure message; the mutant does not compile and is never viable, so no test a caller could write can kill it. The branch it sits in is covered by TestMilestonePushHeadRefusedAheadPushNamesCommitCount, which asserts the message names the exact commit count that would be lost at --finalize. Same class as the accepted string-concat entry on the remote-restore table; the standing fix is the deferred item that teaches the gremlins adapter to drop these before they reach the survivor list at all."
+  text = "Why: \"ValidatePlan gates these at WRITE time and opens nothing; a validator \" +"
+  line = 141
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "96ef6b73f72cff14"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"constructs no Contained, so it proves nothing about a reader. Every \" +"
+  line = 142
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "f3267416de3b9515"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"an env-file load order dross records but never opens itself; the shell \" +"
+  line = 153
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "d96394c1c8b29972"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"glob PATTERNS matched against candidate paths, not paths themselves. \" +"
+  line = 163
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "afec035a1d99da28"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"an ENUM LABEL (git-only / changes-only / union / none) recording which \" +"
+  line = 191
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "4b70699c88303253"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"inputs contributed to the scope. The `source` tag is path-shaped; the \" +"
+  line = 192
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "43e9be2007cbd072"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"paths a mutation TOOL reported in its own output, recorded verbatim for \" +"
+  line = 200
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "d8a183dbe40db22a"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"TEST NAMES (e.g. TestContainRefusesEscape), not paths. The `tests` tag \" +"
+  line = 208
+  category = "const-initializer-arithmetic"
+  accepted_in = "tracked-path-containment"
+
+[[accepted]]
+  key = "00aad70020843f46"
+  file = "internal/toolfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set == 0:"
+  line = 144
+  category = "gremlins-switch-case"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "faa9b759b6a45958"
+  file = "internal/toolfence/fields.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case set > 1:"
+  line = 146
+  category = "gremlins-switch-case"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "2b0e99f70412b4da"
+  file = "internal/toolfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set > 1:"
+  line = 146
+  category = "gremlins-switch-case"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "16117ae482689c5f"
+  file = "internal/toolfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.Recorded != nil:"
+  line = 148
+  category = "gremlins-switch-case"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "1b3acf0544db4270"
+  file = "internal/toolfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.NotToolStream != nil:"
+  line = 152
+  category = "gremlins-switch-case"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "f597bb3708895fb1"
+  file = "internal/toolfence/fields.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.Renderable != nil:"
+  line = 159
+  category = "gremlins-switch-case"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "c84ab53d5bbbb990"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"composed as \\\"mutation adapter <tool> failed: \\\" + LanguageRun.Error. It is \" +"
+  line = 197
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "0e6b29bc410f49fc"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"how a failed leg reaches a human at all, and forbidding a composer to render \" +"
+  line = 198
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "15278f8924a6c8a2"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"it would delete the Findings section from every PR body while removing no \" +"
+  line = 199
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "f85e5d29af472b4a"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"tool output — the record it interpolates carries none. Pinned rather than \" +"
+  line = 200
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "9aa4e889abc044a4"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"asserted: persist_toolfence_test.go fixes this field to exactly the recorder \" +"
+  line = 201
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "9f6b1fd3852da20b"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"the redacted top-level message of a dross command's own error, kept only for \" +"
+  line = 211
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "8ae76e9d0b5d3cce"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"the CarriesDetail allowlist so the `other` bucket is not opaque. An adapter \" +"
+  line = 212
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "62ef2ef2e9e5e470"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"dross's own reason no adapter ran on a file — a missing extension mapping, or \" +"
+  line = 220
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "e28a9845768eab33"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"a path that no longer exists in the working tree. No tool is invoked on a \" +"
+  line = 221
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "0d7ccdf7e3f041c9"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"the agent's own note on a criterion's verdict. No Go code assigns it: \" +"
+  line = 232
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "d53fd0f24575e241"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"Skeleton writes the field empty and it is filled in by the agent editing \" +"
+  line = 233
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "46d531f82c4f6559"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"authored by the agent editing verify.toml (no Go writer; the stale-declaration \" +"
+  line = 236
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "6eca6a2845b8ad2a"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"the survivor-lifecycle state's explanation — routed to <target>, acceptance \" +"
+  line = 244
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "04d83978cb636ee5"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"withheld, identity unresolved. Composed by dross from its own survivor ledger, \" +"
+  line = 245
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "300747b89c42ba01"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"dross's own list of what the scope could not establish. The git-failure \" +"
+  line = 253
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "02ee2af3a63b561b"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"entries interpolate gitReason(err), whose exec error renders as \\\"exit status 1\\\" \" +"
+  line = 254
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "9a8fb23cf536eb31"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"— it carries no tool output only because exec.ExitError.Error() omits the \" +"
+  line = 255
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "d33fda28f3ed57a0"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"stderr that .Output() captured. That is a stdlib PROPERTY this entry relies \" +"
+  line = 256
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "fd5c31b8b48fa4d9"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"on, not a guarantee dross makes; a writer switching to CombinedOutput would \" +"
+  line = 257
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "86345120968bca7e"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"make the claim false. []string rather than a scalar, which is why the walker \" +"
+  line = 258
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "6285ba116a3f4657"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"the mutated source slice, read out of the tool's PARSED REPORT (a mutant's \" +"
+  line = 269
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "2d9c9bcc277625cf"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"replacement text), not out of its captured stdout. It is the project's own \" +"
+  line = 270
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "b5928b475acf1300"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"source as the tool rewrote it. Untagged on this struct — capitalised in \" +"
+  line = 271
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "69b6a222ed194656"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"tests.json — which is why the walker matches untagged exported string fields \" +"
+  line = 272
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "07ab3eedba418d65"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"the same survivor-lifecycle explanation as OutOfScopeMutant.Note, applied to \" +"
+  line = 280
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "721ff6002b37d97a"
+  file = "internal/toolfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"an in-scope survivor. Composed by dross from its own ledger. Untagged, as \" +"
+  line = 281
+  category = "gremlins-var-initializer"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "355692065237ac43"
+  file = "internal/mutation/toolfail.go"
+  op = "INVERT_NEGATIVES"
+  text = "const exitDidNotStart = -1"
+  line = 25
+  reason = "Confirmed 2026-09-11 with go test -coverprofile over internal/mutation: no coverage block exists at toolfail.go:25 while RecordLegError's guard at :139 shows count 1, so gremlins never compiles or runs this mutant. It IS killable in reality: applying the mutation by hand (-1 -> 1) fails TestRecordRealExitStatusOne on both arms ('exit status 1' absent, 'did not start' present). The 2026-09-09 verify misread this survivor as a weak-assertion gap in TestRecordStartFailure; that test was still worth adding, but the survivor is the const-initializer ceiling."
+  category = "const-initializer-arithmetic"
+  accepted_in = "tool-output-not-persisted"
+
+[[accepted]]
+  key = "42134cc83e6018c2"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case ferr == nil && found != nil && found.Number > 0:"
+  line = 358
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "50919a010c495368"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ferr == nil && found != nil && found.Number > 0:"
+  line = 358
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "d10c623b19d4e08d"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ferr != nil:"
+  line = 364
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "c78e5c7e85fb9fa5"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case existing && res != nil:"
+  line = 612
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "3f8ec78670a777cd"
+  file = "internal/cmd/originpush.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case d.Missing, len(d.Ahead) > 0 && !d.Behind:"
+  line = 72
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "c1bdfd1d107c4522"
+  file = "internal/cmd/originpush.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d.Missing, len(d.Ahead) > 0 && !d.Behind:"
+  line = 72
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "f419b9832f55879b"
+  file = "internal/cmd/originpush.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(d.Ahead) == 0 && !d.Behind:"
+  line = 74
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "fc66d1b6d218d872"
+  file = "internal/cmd/originpush.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d.Behind && len(d.Ahead) == 0:"
+  line = 76
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "push-gates-on-origin"
+
+[[accepted]]
+  key = "64b506ef3dd7034a"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(rest) == 0:"
+  line = 127
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "e1c87f2f04729df7"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case rest[0] == '#':"
+  line = 129
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "2528bd865a3572b5"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case rest[0] == '[':"
+  line = 131
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "e14c0aebb8abaaee"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case pos < len(src) && src[pos] == '\"':"
+  line = 299
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "dcfe215e604e2d39"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case pos < len(src) && src[pos] == '\"':"
+  line = 299
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "6894f23552413ba8"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case pos < len(src) && src[pos] == '\\'':"
+  line = 308
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "91d4b9eb31f39411"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case pos < len(src) && src[pos] == '\\'':"
+  line = 308
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "131b4d359f3f31ff"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case src[pos] == '\"':"
+  line = 360
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "d773fa2519956c38"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case src[pos] == '\\'':"
+  line = 364
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "523388133cc09b78"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case src[pos] == '[':"
+  line = 366
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "43e1ca521b8929cc"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case src[pos] == '{':"
+  line = 368
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "bc4d3b092098c49b"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case src[pos] == '\"':"
+  line = 391
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "ffeda0ac960809d6"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == open:"
+  line = 464
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "25e850532cefcc21"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == close:"
+  line = 466
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "d31af888696bdae0"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == '\"' || c == '\\'':"
+  line = 471
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "111ed6205875a7ff"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == '#':"
+  line = 477
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "ffd08944a80981e6"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == '{':"
+  line = 481
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "81b4c6cfff68274f"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case h >= '0' && h <= '9':"
+  line = 528
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "841d519f18017ef5"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case h >= '0' && h <= '9':"
+  line = 528
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "edcc08d7dcd6259d"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case h >= 'a' && h <= 'f':"
+  line = 530
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "833978b59c41e3f9"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case h >= 'a' && h <= 'f':"
+  line = 530
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "6793212a57c9ef71"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case h >= 'A' && h <= 'F':"
+  line = 532
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "d017c5c156def884"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case h >= 'A' && h <= 'F':"
+  line = 532
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "3e29033b708754e1"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case o.kind == opAppendElem:"
+  line = 660
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "f0915b713bfd0fe6"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case o.elem < 0 && isArray:"
+  line = 662
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "e6694aa4e444428e"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case o.elem < 0 && isArray:"
+  line = 662
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "246403e13ec90440"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case o.elem >= 0 && o.elem >= n:"
+  line = 664
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "5e284d15ae7907bc"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case o.elem >= 0 && o.elem >= n:"
+  line = 664
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "07b5fd810ed23374"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "if h := d.lastHeader(func(x *header) bool { return slices.Equal(x.path, table) }); h >= 0 {"
+  line = 768
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "885556a14f7c04b4"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if h := d.lastHeader(func(x *header) bool { return slices.Equal(x.path, table) }); h >= 0 {"
+  line = 768
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "5cb75ec48cb164c1"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "if h := d.lastHeader(func(x *header) bool { return hasNamePrefix(x.path, prefix) }); h >= 0 {"
+  line = 821
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "e5c028c960a94569"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if h := d.lastHeader(func(x *header) bool { return hasNamePrefix(x.path, prefix) }); h >= 0 {"
+  line = 821
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "44b74058c6abb7fa"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "if h := d.lastHeader(func(x *header) bool { return hasNamePrefix(x.path, names) }); h >= 0 {"
+  line = 928
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "2cf09974a5b5fee1"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if h := d.lastHeader(func(x *header) bool { return hasNamePrefix(x.path, names) }); h >= 0 {"
+  line = 928
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "35ec167a24dc7a24"
+  file = "internal/cmd/redproof_replay.go"
+  op = "ARITHMETIC_BASE"
+  text = "const redProofReplayTimeout = 20 * time.Minute"
+  line = 40
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "1e92ac12a621397a"
+  file = "internal/remote/remote.go"
+  op = "ARITHMETIC_BASE"
+  text = "const RunsProtectRule = \"--filter=P /\" + RunsDirName"
+  line = 673
+  category = "const-initializer-arithmetic"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "90b742483f92661b"
+  file = "internal/project/patch.go"
+  op = "ARITHMETIC_BASE"
+  text = "return nil, fmt.Errorf(\"line %d: value runs past end of file\", lineNo+1)"
+  line = 264
+  reason = "The 'value runs past end of file' error is unreachable by construction: parseKeyLine's endLine is lineNo plus the newlines inside the scanned value span, and scanValue only extends a span across lines that exist in src, so endLine can never exceed len(d.lines) when the guard is evaluated — it is defensive against a future indexer change. The mutated arithmetic on lineNo+1 changes only the text of an error no input can trigger, so no test can distinguish it. The span-termination paths either side of the guard are pinned by TestIndexLiteralStrings (unterminated literal at EOF, no trailing newline) and TestIndexMultilineBasicEscapesAndExtraQuotes (unterminated multi-line basic string)."
+  accepted_in = "project-toml-lossless-writes"
+
+[[accepted]]
+  key = "e310e98a1ee7c205"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"a READOUT of verify.Scope.Files — the projection `dross verify scope` \" +"
+  line = 208
+  category = "const-initializer-arithmetic"
+  accepted_in = "mutation-range-provenance"
+
+[[accepted]]
+  key = "2246926ea0d0e284"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"prints and emits as --json. Copied field-for-field from a loaded \" +"
+  line = 209
+  category = "const-initializer-arithmetic"
+  accepted_in = "mutation-range-provenance"
+
+[[accepted]]
+  key = "a779d67c307c9547"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"tests.json, whose Files were already contained on the way in; nothing \" +"
+  line = 210
+  category = "const-initializer-arithmetic"
+  accepted_in = "mutation-range-provenance"
+
+[[accepted]]
+  key = "b1a5ea0c6255471f"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"a READOUT of verify.LanguageRun.Files — the paths the leg was \" +"
+  line = 218
+  category = "const-initializer-arithmetic"
+  accepted_in = "mutation-range-provenance"
+
+[[accepted]]
+  key = "a83b7bb9e6714555"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"dispatched, copied verbatim into the `dross verify scope` projection. \" +"
+  line = 219
+  category = "const-initializer-arithmetic"
+  accepted_in = "mutation-range-provenance"
+
+[[accepted]]
+  key = "3b84c99f86b1c3c6"
+  file = "internal/cmd/verifyscope.go"
+  op = "ARITHMETIC_BASE"
+  text = "base = \"base \" + short(t.Scope.Base)"
+  line = 192
+  reason = "ARITHMETIC_BASE swaps the + on a string concatenation (base = \"base \" + short(t.Scope.Base)) for -, *, / or %; none of those compiles on strings, so the mutant is never viable and no test a caller could write can kill it. The line's behaviour is covered from internal/cmd by TestVerifyScopePrintsRawAndEffective, which asserts the header line prints. Same class as the accepted string-concat entry at internal/cmd/milestone.go:1054; the standing fix is the deferred item that teaches the gremlins adapter to drop uncompilable string-operator mutants before they reach the survivor list."
+  accepted_in = "mutation-range-provenance"
+
+[[accepted]]
+  key = "9e916095d3396cbb"
+  file = "internal/verify/range_expand.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case l == cur.End || l == cur.End+1:"
+  line = 83
+  reason = "switch-case condition in runs(): exercised by TestExpandKeepsUncoveredLinesAsTheBareHunk (multi-line hunks 5-7 and 70-72 take both arms) and TestExpandOutputNeverOverlaps' 200-layout property check; gremlins attributes no coverage block to a case condition (go-cover attribution ceiling, see dross_gremlins_switchcase_ceiling)"
+  accepted_in = "ast-aware-mutation-ranges"
+
+[[accepted]]
+  key = "8bec72b35d5cabc9"
+  file = "internal/verify/range_expand.go"
+  op = "ARITHMETIC_BASE"
+  text = "case l == cur.End || l == cur.End+1:"
+  line = 83
+  reason = "same switch-case line: cur.End+1 adjacency is what coalesces 5,6,7 into one run in TestExpandKeepsUncoveredLinesAsTheBareHunk; a -1 there would split the run and fail it — NOT-COVERED is gremlins' case-condition attribution ceiling, not a test gap"
+  accepted_in = "ast-aware-mutation-ranges"
+
+[[accepted]]
+  key = "5adfd4d9206c88fa"
+  file = "internal/mutation/construct.go"
+  op = "ARITHMETIC_BASE"
+  text = "var constructTimeout = 30 * time.Second"
+  line = 71
+  reason = "package-level var initializer (constructTimeout = 30 * time.Second); TestConstructsClassifiesTimeout overrides the value to exercise the deadline, so the initializer expression itself runs only at package init — gremlins' const/var-initializer attribution ceiling"
+  accepted_in = "ast-aware-mutation-ranges"
+
+[[accepted]]
+  key = "6a17ee01f41ce365"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set == 0:"
+  line = 102
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "0cc55dc9cd6a58c0"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case set > 1:"
+  line = 104
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "3c3f0391197d4b3c"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set > 1:"
+  line = 104
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "013e83efb8c225df"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case t.Screened != nil:"
+  line = 106
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "ea07f06db71b2f11"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case t.ReadOnly != nil:"
+  line = 110
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "f051f49b7aa86c97"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case t.Seam != nil:"
+  line = 114
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "dc9ddf3447c199ab"
+  file = "internal/secretscan/sinks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case caller == \"\":"
+  line = 116
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "7f6b918c89c9dded"
+  file = "internal/secretscan/payload.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case i > 0 && isFlag(args[i-1]) && !strings.Contains(args[i-1], \"=\"):"
+  line = 85
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "ae69c57be2fe93c7"
+  file = "internal/secretscan/payload.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case i > 0 && isFlag(args[i-1]) && !strings.Contains(args[i-1], \"=\"):"
+  line = 85
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "ae616c9115f04c12"
+  file = "internal/secretscan/payload.go"
+  op = "INVERT_NEGATIVES"
+  text = "case i > 0 && isFlag(args[i-1]) && !strings.Contains(args[i-1], \"=\"):"
+  line = 85
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "121e817dbeb1b929"
+  file = "internal/secretscan/payload.go"
+  op = "ARITHMETIC_BASE"
+  text = "case i > 0 && isFlag(args[i-1]) && !strings.Contains(args[i-1], \"=\"):"
+  line = 85
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "cf27a1a7f13e6ef7"
+  file = "internal/secretscan/rules.go"
+  op = "ARITHMETIC_BASE"
+  text = "valueClass + `{16,})`),"
+  line = 89
+  category = "const-initializer-arithmetic"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "8274dbb775061358"
+  file = "internal/secretscan/rules.go"
+  op = "ARITHMETIC_BASE"
+  text = "Regex: regexp.MustCompile(`(?i)[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|api[_-]key|access[_-]key|token|authorization)[\"']?\\s*[:=]\\s*[\"']?(` +"
+  line = 88
+  category = "const-initializer-arithmetic"
+  accepted_in = "secret-detection"
+
+[[accepted]]
+  key = "4300a33f7652e936"
+  file = "internal/cmd/verify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case st.State == \"scheduled\":"
+  line = 877
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "442e63bee38d48c1"
+  file = "internal/cmd/verify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case st.Lock.Holder.RunID == rec.RunID:"
+  line = 918
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "9d1ffa3b19fba48d"
+  file = "internal/cmd/test.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 976
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "9833fd87c93e767f"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 1690
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "2e1c6b23770a4eff"
+  file = "internal/remote/hold.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.State == \"noflock\":"
+  line = 286
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "6f61fe4eac30fa9f"
+  file = "internal/remote/hold.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.State == \"acquired\":"
+  line = 289
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "2cfb47ac92c9aab8"
+  file = "internal/remote/hold.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.State == \"waiting\":"
+  line = 292
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "5228460e5728bfd9"
+  file = "internal/remote/hold.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.State == \"busy\":"
+  line = 305
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "3dd65c2d096abf4f"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case spec.Wait.Max > 0:"
+  line = 197
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "ac789011f0bbd90f"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case k == \"tool\":"
+  line = 310
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "4fe52af218f51998"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case k == \"lock\":"
+  line = 315
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "9ef4c6c0ade30df7"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v == \"free\":"
+  line = 318
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "4b4837f1cac1130b"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v == \"busy\":"
+  line = 320
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "93b8a9f610cb44b4"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v == \"noflock\":"
+  line = 322
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "d556fa3f6e9867f5"
+  file = "internal/remote/lock.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case spec.Wait.Max > 0:"
+  line = 197
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "2e1ce5e1c3d86b3a"
+  file = "internal/remote/hold.go"
+  op = "ARITHMETIC_BASE"
+  text = "case <-time.After(2 * time.Second):"
+  line = 425
+  category = "host-lock-switch-case"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "f923151839070da7"
+  file = "internal/mutation/launcher.go"
+  op = "ARITHMETIC_BASE"
+  text = "var launcherHeartbeat = 5 * time.Minute"
+  line = 132
+  category = "host-lock-var-initializer"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "190209543dac1b7b"
+  file = "internal/remote/hold.go"
+  op = "ARITHMETIC_BASE"
+  text = "var holdKeepalive = 30 * time.Second"
+  line = 74
+  category = "host-lock-var-initializer"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "b36292c9bc836ecf"
+  file = "internal/remote/hold.go"
+  op = "ARITHMETIC_BASE"
+  text = "var holderLull = 300 * time.Millisecond"
+  line = 85
+  category = "host-lock-var-initializer"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "69089bea12679633"
+  file = "internal/cmd/test.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 940
+  category = "host-lock-seam-body"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "08f88b0e44f6badf"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 1674
+  category = "host-lock-seam-body"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "d0e3f80d21f4d44c"
+  file = "internal/mutation/launcher.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 119
+  category = "host-lock-seam-body"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "2caf9845fdcc836e"
+  file = "internal/cmd/test.go"
+  op = "ARITHMETIC_BASE"
+  text = "const defaultTestWait = 10 * time.Minute"
+  line = 913
+  category = "const-initializer-arithmetic"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "982d869c110b84f2"
+  file = "internal/remote/hold.go"
+  op = "ARITHMETIC_BASE"
+  text = "Held HoldOutcome = iota + 1"
+  line = 47
+  category = "const-initializer-arithmetic"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "e450c0e981169e60"
+  file = "internal/mutation/stryker.go"
+  op = "ARITHMETIC_BASE"
+  text = "const strykerInitialTestTruncationNote = \"stryker aborted on its initial test run and names ONLY the first failing test above — \" +"
+  line = 292
+  category = "const-initializer-arithmetic"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "17411b76c6bef6d3"
+  file = "internal/mutation/stryker.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"that list is truncated by design, so an unknown number of further failures remain. \" +"
+  line = 293
+  category = "const-initializer-arithmetic"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "97dd2029bdc5a17c"
+  file = "internal/mutation/toolfail.go"
+  op = "ARITHMETIC_BASE"
+  text = "const exitDidNotStart = -1"
+  line = 25
+  category = "const-initializer-arithmetic"
+  accepted_in = "remote-host-mutex"
+
+[[accepted]]
+  key = "cc23934aff23856c"
+  file = "cmd/testsummary/table.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.Test == \"\":"
+  line = 29
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "cmd-test-duration"
+
+[[accepted]]
+  key = "442e62396f37d815"
+  file = "cmd/testsummary/stream.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Action == \"build-output\":"
+  line = 109
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "cmd-test-duration"
+
+[[accepted]]
+  key = "692e2b2b9f211162"
+  file = "cmd/testsummary/stream.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Action == \"build-fail\":"
+  line = 111
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "cmd-test-duration"
+
+[[accepted]]
+  key = "56461f6f4673ba68"
+  file = "cmd/testsummary/stream.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Package == \"\":"
+  line = 115
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "cmd-test-duration"
+
+[[accepted]]
+  key = "6a6fc78f8d1988ea"
+  file = "cmd/testsummary/stream.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Test == \"\":"
+  line = 117
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "cmd-test-duration"
+
+[[accepted]]
+  key = "311227d19ebcdc5b"
+  file = "internal/secretscan/rules.go"
+  op = "ARITHMETIC_BASE"
+  text = "Regex:   regexp.MustCompile(`(?i)authorization[\"']?\\s*[:=]\\s*[\"']?(?:basic|bearer)\\s+(` + valueClass + `{8,})`),"
+  line = 101
+  category = "const-initializer-arithmetic"
+  accepted_in = "cmd-test-duration"
+
+[[accepted]]
+  key = "2d460282d0d7ce46"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"where the telemetry log lives, printed for the reader — the log itself is opened elsewhere, \"+"
+  line = 324
+  category = "const-initializer-arithmetic"
+  accepted_in = "exec-taint-enumeration"
+
+[[accepted]]
+  key = "4567adb9bfd0396b"
+  file = "internal/update/apply.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 153
+  category = "self-replacing-binary-path"
+  accepted_in = "cmd-exec-baseline-drain"
+
+[[accepted]]
+  key = "d8fd3b13613cf94a"
+  file = "internal/update/apply.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if resolved, err := filepath.EvalSymlinks(exe); err == nil {"
+  line = 156
+  category = "self-replacing-binary-path"
+  accepted_in = "cmd-exec-baseline-drain"
+
+[[accepted]]
+  key = "8fae2750a8c2f2f3"
+  file = "internal/diag/redproof.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case pin.DocErr != nil:"
+  line = 91
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "98e44f4743cd2a2e"
+  file = "internal/diag/redproof.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case pin.DocSHA == \"\":"
+  line = 94
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "7bba35982355e11b"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.UnderDross != nil:"
+  line = 88
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "2c0a7db8fbe6a218"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.MachineLocal != nil:"
+  line = 90
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "1f12c32ce7150371"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.OutsideDross != nil:"
+  line = 92
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "2e34f2e6c7f6e32b"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set == 0:"
+  line = 116
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "75a19da200419cbc"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.UnderDross != nil:"
+  line = 120
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "acd159f1b6fcc5d5"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.MachineLocal != nil:"
+  line = 129
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "21ad5b02cbd71e9d"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w.OutsideDross != nil:"
+  line = 139
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "2fe69242a047572f"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case set > 1:"
+  line = 118
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "9b0da82a3806bf2a"
+  file = "internal/secretscan/writers.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case set > 1:"
+  line = 118
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "extracted-package-test-parity"
+
+[[accepted]]
+  key = "d7da56e5551ee67b"
+  file = "internal/pincheck/bump.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.Kind == KindNPM:"
+  line = 64
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "5bac0359f6263922"
+  file = "internal/pincheck/classify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case target != \"\":"
+  line = 104
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "9eb28f66882f1533"
+  file = "internal/pincheck/classify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case offLine != \"\":"
+  line = 106
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "21b41e8edca9a9fd"
+  file = "internal/pincheck/sites.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 121
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "2598e13c19eb4260"
+  file = "internal/pincheck/sites.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case l.inBlock && l.blockKey == \"run\":"
+  line = 265
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "1c1471299e3064bd"
+  file = "internal/pincheck/sites.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case l.key == \"run\" && !isBlockScalarIndicator(l.value):"
+  line = 268
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "9274ef8541a0cbe9"
+  file = "internal/pincheck/sites.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case l.key == \"uses\":"
+  line = 270
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "6269f2f8ad79ab61"
+  file = "internal/pincheck/upstream.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone:"
+  line = 94
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "d3e681112a0f53dc"
+  file = "internal/pincheck/upstream.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case resp.StatusCode != http.StatusOK:"
+  line = 96
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "run-block-pin-currency"
+
+[[accepted]]
+  key = "87043d80e1fa9e84"
+  file = "internal/ship/openprs.go"
+  op = "ARITHMETIC_BASE"
+  text = "var prListTimeout = 20 * time.Second"
+  line = 70
+  category = "const-initializer-arithmetic"
+  accepted_in = "watch-bot-prs"
+
+[[accepted]]
+  key = "c16d21d9afc719ee"
+  file = "internal/cmd/milestone.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case head.Pushed && head.Commits > 0:"
+  line = 269
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "2a9d366caecc7f0a"
+  file = "internal/cmd/milestone.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case head.Pushed && head.Commits > 0:"
+  line = 269
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "52ad447923637d5a"
+  file = "internal/cmd/milestone.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case head.ChorePR != nil:"
+  line = 273
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "38b22fba834ec792"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.ChorePR != nil:"
+  line = 682
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "936c543a39815dc7"
+  file = "internal/cmd/chorepr.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 122
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "b7486b25ad888b20"
+  file = "internal/cmd/ship_recover.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.ChorePR != nil:"
+  line = 252
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "213fe25020058a1f"
+  file = "internal/protect/assess.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case rs.CurrentUserCanBypass == \"always\", rs.CurrentUserCanBypass == \"pull_requests_only\", rs.CurrentUserCanBypass == \"exempt\","
+  line = 199
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "306083a6fb45ba41"
+  file = "internal/protect/assess.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "rs.BypassActors != nil && len(*rs.BypassActors) > 0:"
+  line = 200
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "8cf8ab55b7c22515"
+  file = "internal/protect/assess.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "rs.BypassActors != nil && len(*rs.BypassActors) > 0:"
+  line = 200
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "a7a8854e2564bb9b"
+  file = "internal/protect/assess.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case rs.BypassActors == nil:"
+  line = 202
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "0c9934062d97e1aa"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v == \"\":"
+  line = 151
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "a0873dffaadf1518"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case q == '\"' && text[i] == '\\\\':"
+  line = 432
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "be273fbeda9aed41"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case text[i] == q && q == '\\'' && i+1 < len(text) && text[i+1] == '\\'':"
+  line = 434
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "56849975856f5390"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case text[i] == q && q == '\\'' && i+1 < len(text) && text[i+1] == '\\'':"
+  line = 434
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "9b88b7ab6875747a"
+  file = "internal/protect/workflows.go"
+  op = "ARITHMETIC_BASE"
+  text = "case text[i] == q && q == '\\'' && i+1 < len(text) && text[i+1] == '\\'':"
+  line = 434
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "55be653ad0b945cb"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case text[i] == q:"
+  line = 436
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "ffdd807abe937064"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s[0] == '\"' && s[len(s)-1] == '\"':"
+  line = 450
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "84ad195a901ad214"
+  file = "internal/protect/workflows.go"
+  op = "INVERT_NEGATIVES"
+  text = "case s[0] == '\"' && s[len(s)-1] == '\"':"
+  line = 450
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "b007fdebbbcf9e6c"
+  file = "internal/protect/workflows.go"
+  op = "ARITHMETIC_BASE"
+  text = "case s[0] == '\"' && s[len(s)-1] == '\"':"
+  line = 450
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "cda5912144f0698e"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s[0] == '\\'' && s[len(s)-1] == '\\'':"
+  line = 455
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "f29a27d4057b780c"
+  file = "internal/protect/workflows.go"
+  op = "INVERT_NEGATIVES"
+  text = "case s[0] == '\\'' && s[len(s)-1] == '\\'':"
+  line = 455
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "e57256a0292e21cc"
+  file = "internal/protect/workflows.go"
+  op = "ARITHMETIC_BASE"
+  text = "case s[0] == '\\'' && s[len(s)-1] == '\\'':"
+  line = 455
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "d0444b882bd4b6ac"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case quote == '\"' && c == '\\\\':"
+  line = 472
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "18728c8db1eddd00"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == quote:"
+  line = 474
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "be39abc2666355f7"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == '#' && (i == 0 || s[i-1] == ' ' || s[i-1] == '\\t'):"
+  line = 480
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "c18bed95a7fe9540"
+  file = "internal/protect/workflows.go"
+  op = "INVERT_NEGATIVES"
+  text = "case c == '#' && (i == 0 || s[i-1] == ' ' || s[i-1] == '\\t'):"
+  line = 480
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "6c9d73e73af52b84"
+  file = "internal/protect/workflows.go"
+  op = "ARITHMETIC_BASE"
+  text = "case c == '#' && (i == 0 || s[i-1] == ' ' || s[i-1] == '\\t'):"
+  line = 480
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "aca6ec3e34d0dbc2"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case (c == '\"' || c == '\\'') && strings.IndexByte(\" :-[{,\", prev) >= 0:"
+  line = 482
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "77798607d52ed308"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case (c == '\"' || c == '\\'') && strings.IndexByte(\" :-[{,\", prev) >= 0:"
+  line = 482
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "a872e6b2cc6bb614"
+  file = "internal/ship/rulesets.go"
+  op = "ARITHMETIC_BASE"
+  text = "var ghAPITimeout = 20 * time.Second"
+  line = 49
+  category = "gremlins-var-initializer"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "a66f2de661c0223a"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == quote && quote == '\\'' && i+1 < len(s) && s[i+1] == '\\'':"
+  line = 474
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "b83c488d120fdb20"
+  file = "internal/protect/workflows.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case c == quote && quote == '\\'' && i+1 < len(s) && s[i+1] == '\\'':"
+  line = 474
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "0dc22af9987902eb"
+  file = "internal/protect/workflows.go"
+  op = "ARITHMETIC_BASE"
+  text = "case c == quote && quote == '\\'' && i+1 < len(s) && s[i+1] == '\\'':"
+  line = 474
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "main-branch-protection"
+
+[[accepted]]
+  key = "ccef9c5a7a86bb72"
+  file = "internal/treefp/treefp.go"
+  op = "ARITHMETIC_BASE"
+  text = "var Timeout = 30 * time.Second"
+  line = 34
+  category = "const-initializer-arithmetic"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "87673b15136de29a"
+  file = "internal/cmd/gate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case o != nil:"
+  line = 277
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "bb3d96dda1769149"
+  file = "internal/cmd/test.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case runErr == nil:"
+  line = 1178
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "c10285dfc822967b"
+  file = "internal/cmd/test.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case errors.As(runErr, &ec) && ec.Code == exitSuiteFailed:"
+  line = 1197
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "3e916f43438fa396"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--\":"
+  line = 84
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "33d150aae75a6114"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case strings.HasPrefix(a, \"-\") && len(a) > 1:"
+  line = 93
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "3b9909c68d31762c"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case strings.HasPrefix(a, \"-\") && len(a) > 1:"
+  line = 93
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "ad0516db7a24edc0"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == 'a':"
+  line = 96
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "a23c17a8e4de1642"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == 'p' || ch == 'o' || ch == 'i':"
+  line = 98
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "04e65b98bcdb4b69"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case strings.IndexByte(commitShortValue, ch) >= 0:"
+  line = 100
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "1782c87e754f1681"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case strings.IndexByte(commitShortValue, ch) >= 0:"
+  line = 100
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "c07503aac9ae29ad"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case isGit && pg.Sub == \"add\":"
+  line = 163
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "927231b73434cefa"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case cmd.Name() == \"cd\" || cmd.Name() == \"pushd\":"
+  line = 168
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "bf9380b0a632c91a"
+  file = "internal/gate/engine.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case g.Name == \"\":"
+  line = 119
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "f3569eb6fb23eb1e"
+  file = "internal/gate/engine.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 279
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "112fd1f087f31246"
+  file = "internal/gate/engine.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 299
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "3ea4b92b56a8017e"
+  file = "internal/gate/pair.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--solo\":"
+  line = 72
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "48ab8c336df39b0d"
+  file = "internal/gate/pair.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case appr == nil:"
+  line = 132
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "c399cce3418e746b"
+  file = "internal/gate/pair.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case appr.Phase != run.Phase || appr.Task != run.Task:"
+  line = 133
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "741ffd200c866fd7"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"-C\":"
+  line = 199
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "68d610eb665ed591"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == ' ' || c == '\\t' || c == '\\r':"
+  line = 458
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "077e4a55ebaee40c"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"{\":"
+  line = 589
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "6e7118ee0f2d6dac"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"}\" || w == \"done\" || w == \"fi\" || w == \"esac\":"
+  line = 592
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "6740c8c66a705677"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"if\":"
+  line = 601
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "57219279e898465e"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"while\" || w == \"until\":"
+  line = 604
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "74045b0f2ad3842c"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"for\" || w == \"select\":"
+  line = 607
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "bbdcc5f7d11e3d14"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"case\":"
+  line = 611
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "d0245213ec0b338c"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case w == \"function\":"
+  line = 614
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "afc3d9a30e2d06d6"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case op == \"&>\" || op == \"&>>\":"
+  line = 846
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "4ba3365a1bf92cf1"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case op[0] == '<':"
+  line = 848
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "5d8360b3ecf5f40c"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '\\n' || ch == ';' || ch == '|' || ch == ')':"
+  line = 886
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "58877a0648df9a76"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '&' && p.peekAt(1) != '>':"
+  line = 888
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "3073b0ef86806581"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '#':"
+  line = 890
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "e9c13e4189b492d9"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case (ch == '<' || ch == '>') && p.peekAt(1) == '(':"
+  line = 893
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "91ecb73636d495d2"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '(':"
+  line = 905
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "b93f5f5f7f783880"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '\"' && !heredocMode:"
+  line = 1087
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "40c4bf38e5d59113"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '\\\\':"
+  line = 1090
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "e0072adb5cd8d029"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case next == '$' || next == '`' || next == '\\\\' || (next == '\"' && !heredocMode):"
+  line = 1095
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "08b862c411beae99"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '$':"
+  line = 1102
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "92700e7083a4acb0"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case next == '(' && p.peekAt(2) == '(':"
+  line = 1152
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "41f5fbdb62b9ac69"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case next == '(':"
+  line = 1155
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "3681baa80927ed89"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case next == '{':"
+  line = 1160
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "8693453f41cca032"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"HOME\" && p.st.home != \"\":"
+  line = 1191
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "9778f7e55209bc0d"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name != \"\":"
+  line = 1194
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "efe80a63af8f6fb5"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !p.eof() && !isMeta(p.src[p.pos]) && p.src[p.pos] != '\"':"
+  line = 1197
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "c479dac88b05eef9"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"-S\" || strings.HasPrefix(a, \"-S\") || strings.HasPrefix(a, \"--split-string\"):"
+  line = 1379
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "e7188f42cedb7fae"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"-u\" || a == \"--unset\" || a == \"-C\" || a == \"--chdir\":"
+  line = 1382
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "1731d8bd0c8deb75"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(a) > 0 && a[0] == '-':"
+  line = 1384
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "24a1be4f996d34de"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(a) > 0 && a[0] == '-':"
+  line = 1384
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "4c8dc847f8aee310"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(a) > 1 && a[0] == '-':"
+  line = 1416
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "6b8910647c9b75d3"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(a) > 1 && a[0] == '-':"
+  line = 1416
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "564d3534dd1db609"
+  file = "internal/treefp/treefp.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 148
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "2ac15548a766e3f7"
+  file = "internal/treefp/treefp.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case gitrun.ExitCode(err) == 1:"
+  line = 149
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "812be7f96f2a43dc"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == '\\\\' && p.peekAt(1) == '\\n':"
+  line = 460
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "bc81f3fab92c21e1"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case p.peekAt(0) == '\\n':"
+  line = 722
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "0f847df00f860020"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case p.peekAt(0) == '#':"
+  line = 725
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "0d32cf26bc1b709d"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case next == '\\n':"
+  line = 1093
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "1114ec60051a3aac"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch == '`':"
+  line = 1104
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "3d024847baeb247c"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--\":"
+  line = 1376
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "0b21f03928909161"
+  file = "internal/shellscan/scan.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--\":"
+  line = 1411
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "7e82618f8101b7b0"
+  file = "internal/cmd/gate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 265
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "de7101ca4bab9e41"
+  file = "internal/cmd/gate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case root == \"\":"
+  line = 267
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "788ebabc114ee418"
+  file = "internal/gate/commit.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--all\":"
+  line = 86
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "7cfa842188019cbe"
+  file = "internal/shellscan/scan.go"
+  op = "ARITHMETIC_BASE"
+  text = "p.st.fail(\"unreadable character \" + strconv.QuoteRune(rune(p.src[p.pos])))"
+  line = 632
+  category = "scanner-no-progress-guard"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "ffb32a4fafeff0a8"
+  file = "internal/shellscan/scan.go"
+  op = "INCREMENT_DECREMENT"
+  text = "p.pos++"
+  line = 633
+  category = "scanner-no-progress-guard"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "bd73aa3428faca76"
+  file = "internal/shellscan/scan.go"
+  op = "INCREMENT_DECREMENT"
+  text = "p.pos++"
+  line = 902
+  category = "scanner-no-progress-guard"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "872137d969967685"
+  file = "internal/shellscan/scan.go"
+  op = "ARITHMETIC_BASE"
+  text = "p.st.fail(\"unreadable character \" + strconv.QuoteRune(rune(p.src[p.pos])))"
+  line = 916
+  category = "scanner-no-progress-guard"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "a4c0b9b04516a260"
+  file = "internal/shellscan/scan.go"
+  op = "INCREMENT_DECREMENT"
+  text = "p.pos++"
+  line = 917
+  category = "scanner-no-progress-guard"
+  accepted_in = "tool-gate-hooks"
+
+[[accepted]]
+  key = "68aa487540e40c67"
+  file = "internal/gate/override.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--\":"
+  line = 272
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "a2b802301039cf6b"
+  file = "internal/gate/override.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case g.Sub == \"clean\" && short && strings.ContainsAny(a[1:], \"xX\"):"
+  line = 274
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "b1e7d16eb406cf27"
+  file = "internal/gate/override.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case g.Sub == \"stash\" && (a == \"--all\" || (short && strings.Contains(a[1:], \"a\"))):"
+  line = 276
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "fd1d4dd65021fb85"
+  file = "internal/gate/override.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case g.Sub == \"clean\" && !strings.HasPrefix(a, \"-\"):"
+  line = 278
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "8ae0cc18a7773247"
+  file = "internal/gate/review.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case bad != nil:"
+  line = 94
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "d8a970ca43ba0fe6"
+  file = "internal/gate/review.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case status == \"completed\":"
+  line = 96
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "d1ee8214ac12cb3a"
+  file = "internal/gate/review.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case agentID == \"\":"
+  line = 98
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "d1ba4acf0ba78dc4"
+  file = "internal/gate/scope.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 173
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "9ba3ef130947537a"
+  file = "internal/gate/soloreview.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--solo\":"
+  line = 133
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "d77b8c9b0452e70f"
+  file = "internal/gate/soloreview.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--reason\":"
+  line = 135
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "b44ab8bb9805cddc"
+  file = "internal/review/verdict.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == \"\":"
+  line = 101
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "902081db07651317"
+  file = "internal/review/verdict.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case kind == KindQuick && c != QuickCriterion:"
+  line = 103
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "2d152dedd555a123"
+  file = "internal/review/verdict.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case kind != KindQuick && c == QuickCriterion:"
+  line = 105
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "bad38ed3a2572e36"
+  file = "internal/ship/body.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "return ids[i] < ids[j]"
+  line = 147
+  reason = "Equivalent mutant: writeReviews sorts the task ids of a map, so two ids are never equal and ids[i] < ids[j] and ids[i] <= ids[j] order every pair identically. The negation (>=) is the killable one, pinned by TestReviewSectionSameLengthOrder (same-length t-2/t-3 must render t-2 first)."
+  accepted_in = "solo-task-review"
+
+[[accepted]]
+  key = "468ac2c21d16bf08"
+  file = "internal/project/patch.go"
+  op = "INVERT_NEGATIVES"
+  text = "o.kind, o.elem = opAppendElem, -1"
+  line = 638
+  reason = "equivalent mutant: after the insert-at-end op is rewritten to opAppendElem, qualify takes its append branch before reading elem, so -1 vs 1 cannot change behaviour; the rewrite itself is pinned by TestKeyedInsertAtEndAppends and TestKeyedNestedArrayInserts"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "230998f1a2aab3f9"
+  file = "internal/project/patch.go"
+  op = "ARITHMETIC_BASE"
+  text = "o.kind, o.elem = opAppendElem, -1"
+  line = 638
+  reason = "equivalent mutant: after the insert-at-end op is rewritten to opAppendElem, qualify takes its append branch before reading elem, so -1 vs 1 cannot change behaviour; the rewrite itself is pinned by TestKeyedInsertAtEndAppends and TestKeyedNestedArrayInserts"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "7d9b1ad2681d81b5"
+  file = "internal/boardsync/finalize.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case phaseKey == \"\":"
+  line = 120
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although the branch is taken and asserted — pinned by TestFinalizeTasksSurviveAPhaseCardCreateFailure (no phase card) and TestFinalizeClosesExistingCards (negated, the phase card is never closed)"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "eef13356dd2592b1"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Target == \"\":"
+  line = 493
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although the branch is taken and asserted — pinned by TestValidateRefusesBadAbsorbedIDs (an absorbed id naming an unrouted item)"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "24499cde58dc19c0"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Target != phaseID:"
+  line = 495
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although the branch is taken and asserted — pinned by TestValidateRefusesBadAbsorbedIDs (an absorbed id routed to another phase)"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "bdee64f39c5b0b6a"
+  file = "internal/cmd/deferred_absorb.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case item.Target == \"\":"
+  line = 71
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although the branch is taken and asserted — pinned by TestDeferredAbsorbRefusals (the unrouted case)"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "e3e0d0ffe41c51b1"
+  file = "internal/cmd/deferred_absorb.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case item.Target != phaseID:"
+  line = 73
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although the branch is taken and asserted — pinned by TestDeferredAbsorbRefusals (the routed-elsewhere case)"
+  accepted_in = "board-finalize-on-complete"
+
+[[accepted]]
+  key = "003c9279bdcf9184"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "comment: \"# mutation reports dross verify's tools write into the work tree (gremlins).\\n\" +"
+  line = 78
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; a var-initializer comment string — the seeded entries are pinned by TestEnsureGitignoreCoversMutationReports"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "50fce539f66662aa"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# Not ignored, a report would count as a change to the tree a verdict\\n\" +"
+  line = 79
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; a var-initializer comment string — the seeded entries are pinned by TestEnsureGitignoreCoversMutationReports"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "9a0fd4d6e4c93cc0"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "comment: \"# mutation reports dross verify's tools write into the work tree (stryker).\\n\" +"
+  line = 84
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; a var-initializer comment string — the seeded entries are pinned by TestEnsureGitignoreCoversMutationReports"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "9efafc99a5d2930b"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# Not ignored, a report would count as a change to the tree a verdict\\n\" +"
+  line = 85
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; a var-initializer comment string — the seeded entries are pinned by TestEnsureGitignoreCoversMutationReports"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "4bff3d7643ad744d"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "comment: \"# mutation reports dross verify's tools write into the work tree (Stryker.NET).\\n\" +"
+  line = 90
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; a var-initializer comment string — the seeded entries are pinned by TestEnsureGitignoreCoversMutationReports"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "46ee88680dad7ee2"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# Not ignored, a report would count as a change to the tree a verdict\\n\" +"
+  line = 91
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; a var-initializer comment string — the seeded entries are pinned by TestEnsureGitignoreCoversMutationReports"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "4b1bc2fa681a2b11"
+  file = "internal/cmd/status.go"
+  op = "ARITHMETIC_BASE"
+  text = "return \"stale:     the verdict's \" + r.Field + \" is not an object id\" + fix"
+  line = 924
+  reason = "non-viable: gremlins ARITHMETIC_BASE on a string concatenation — '+' to '-' does not compile for strings, so no test can kill it; staleLine's stale and unlistable lines are pinned by TestStatusMarksAStalePassWithCount and TestStatusStaleWithPrunedTree"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "3965813a8b4102d6"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.State == verify.Malformed:"
+  line = 923
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although tests take the branch — negated, a stale pass renders as malformed and loses its count, which TestStatusMarksAStalePassWithCount catches"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "485ced4928dcb652"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.ListErr != nil:"
+  line = 925
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although tests take the branch — pinned by TestStatusStaleWithPrunedTree"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "5536a5559ae0d7ae"
+  file = "internal/verify/freshness.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v != nil && v.Verify.MeasuredTree != \"\":"
+  line = 75
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although tests take the branch — pinned by TestClassifyFreshByTreeNotCommit and TestClassifyLegacyIsUnknownWithoutGit"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "8dc62862d59d2334"
+  file = "internal/verify/freshness.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v != nil && t != nil && t.MeasuredTree != \"\" && t.GeneratedAt.Equal(v.Verify.GeneratedAt):"
+  line = 77
+  reason = "gremlins switch-case attribution ceiling: go-cover gives a case condition no block, so gremlins marks it NOT COVERED although tests take the branch — pinned by TestClassifyFallsBackToTestsJSON"
+  accepted_in = "verify-staleness"
+
+[[accepted]]
+  key = "4b978fca0d6e7f48"
+  file = "internal/cmd/debug.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case fixed == abandoned:"
+  line = 165
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "1d48df63bd5f6470"
+  file = "internal/cmd/debug.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case fixed && reason != \"\":"
+  line = 167
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "2b73b99d9321149d"
+  file = "internal/cmd/debug.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case abandoned && strings.TrimSpace(reason) == \"\":"
+  line = 169
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "d9b92b1d88544124"
+  file = "internal/debugsession/store.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 109
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "dcc4b04987aedcbc"
+  file = "internal/debugsession/close.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case strings.TrimSpace(reason) == \"\":"
+  line = 59
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "829b177d4ade44cd"
+  file = "internal/debugsession/parse.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s[i] == '`':"
+  line = 197
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "0423b7d3e6457d8e"
+  file = "internal/debugsession/parse.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s == \"\":"
+  line = 355
+  accepted_in = "debug-sessions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "516fa53b0315b1c8"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "const drossLocalIgnorePath = \".dross/\" + localstore.File"
+  line = 19
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "0f1fcf502aacf534"
+  file = "internal/cmd/doctor.go"
+  op = "ARITHMETIC_BASE"
+  text = "const pinHostTimeout = 3 * time.Second"
+  line = 627
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "8d41f10fdb02f54c"
+  file = "internal/cmd/gate.go"
+  op = "ARITHMETIC_BASE"
+  text = "const gateLiftCap = 24 * time.Hour"
+  line = 41
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "b1dc411aa4fce8f1"
+  file = "internal/cmd/pr_reply.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case saveErr != nil:"
+  line = 104
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "cd60afe128979944"
+  file = "internal/cmd/pr_reply.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case spendErr != nil:"
+  line = 107
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "bae806672adfea94"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case n != 1:"
+  line = 132
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "f877b40a633e5381"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case strings.TrimSpace(f.seen) == \"\":"
+  line = 134
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "e712d8e720dd54c1"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.accept && strings.TrimSpace(f.title) == \"\":"
+  line = 136
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "4c59fcb0aaa030f6"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.reject && strings.TrimSpace(f.reason) == \"\":"
+  line = 138
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "7caf3c802de9c16a"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.route && (strings.TrimSpace(f.title) == \"\" || strings.TrimSpace(f.target) == \"\"):"
+  line = 140
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "d437c8a2aaf60151"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.at != \"\" && f.cmd != \"\":"
+  line = 142
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "9999edee0c352491"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.cmd != \"\" && f.outputFile == \"\":"
+  line = 144
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "2c63e27b41a89e65"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case f.at == \"\" && f.cmd == \"\":"
+  line = 146
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "a7ca3b45946759bb"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case res.Task != \"\":"
+  line = 296
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "4316ecf9284d2b15"
+  file = "internal/cmd/pr_resolve.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case res.Deferred != \"\":"
+  line = 298
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "838b0a4cd71da772"
+  file = "internal/cmd/reviewer_agent.go"
+  op = "ARITHMETIC_BASE"
+  text = "const reviewerFile = review.ReviewerAgent + \".md\""
+  line = 18
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "7b89ed08d4088e7c"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case st != phase.StatusDone && st != phase.StatusFailed:"
+  line = 646
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "73676f024131ef27"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"a file:line locator a triage resolution cites. ParseAt contains and line-checks the \"+"
+  line = 353
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "e820cf07851cb229"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"value it is given before it is recorded; from the record it is only split and checked \"+"
+  line = 354
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "6c89416b0b5d526d"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and \"+"
+  line = 360
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "3150db5a77b68820"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and \"+"
+  line = 364
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "41a6586b8527289a"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"the repo file a reviewer anchored an inline comment to, decoded into PRComment.Path and \"+"
+  line = 368
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "df9e57ef56e0c77a"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"the repo file (new side) a reviewer anchored a diff note to, decoded into PRComment.Path and \"+"
+  line = 372
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "c8f5c95a48b5dd56"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"the repo file (old side) a diff note on a removed line is anchored to, decoded into \"+"
+  line = 376
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "cee1ff0fe15c7650"
+  file = "internal/prtriage/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case hasAt && (e.OutputSHA256 != \"\" || e.OutputBytes != 0):"
+  line = 117
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "ae8e4e605c73a48f"
+  file = "internal/prtriage/evidence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case !isSHA256Hex(e.OutputSHA256) || e.OutputBytes <= 0:"
+  line = 123
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "f8ad966d1f04ec7e"
+  file = "internal/prtriage/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !isSHA256Hex(e.OutputSHA256) || e.OutputBytes <= 0:"
+  line = 123
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "f33f93d8e78ce32b"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r == '\\n':"
+  line = 84
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "352d1136c1d4ed77"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r == '\\t':"
+  line = 86
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "6208dd45a8098cd5"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r == '\\r':"
+  line = 88
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "02ab67dd5574ccc8"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case r < 0x20 || r == 0x7f:"
+  line = 90
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "88f321330c66ceae"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r < 0x20 || r == 0x7f:"
+  line = 90
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "49f6ec803321a6b8"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case r >= 0x80 && r <= 0x9f,"
+  line = 92
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "b7cb5c407bd85ab4"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r >= 0x80 && r <= 0x9f,"
+  line = 92
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "1716f4b28879153f"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "r >= 0x202a && r <= 0x202e,"
+  line = 93
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "147c6ebd39a23510"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "r >= 0x202a && r <= 0x202e,"
+  line = 93
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "6efaac8b7e12d55a"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "r >= 0x2066 && r <= 0x2069:"
+  line = 94
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "755f12c512820081"
+  file = "internal/prtriage/fence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "r >= 0x2066 && r <= 0x2069:"
+  line = 94
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "c5533a99b931d29d"
+  file = "internal/prtriage/items.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.Digest != it.Digest:"
+  line = 111
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "565c3b2618ac0454"
+  file = "internal/prtriage/record.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case kindOf[r.ID[0]] != r.Kind:"
+  line = 161
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "08eaaa374a2e1d76"
+  file = "internal/prtriage/record.go"
+  op = "ARITHMETIC_BASE"
+  text = "var ErrStaleRead = errors.New(File + \" changed since it was read — load it again and redo the change\")"
+  line = 205
+  accepted_in = "review-comment-ingest"
+  category = "const-initializer-arithmetic"
+
+[[accepted]]
+  key = "7cb3ff59fe179a87"
+  file = "internal/prtriage/reply.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', '0' <= c && c <= '9',"
+  line = 70
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "54b0c6b0f07b1ee1"
+  file = "internal/prtriage/reply.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', '0' <= c && c <= '9',"
+  line = 70
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "d3e7c983791d53cb"
+  file = "internal/prtriage/reply.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "strings.IndexByte(\"-._~:/?#&=+,;%!$*'\", c) >= 0:"
+  line = 71
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "5bfb89da0da26b6e"
+  file = "internal/prtriage/reply.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "strings.IndexByte(\"-._~:/?#&=+,;%!$*'\", c) >= 0:"
+  line = 71
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "4e63263381f3ee16"
+  file = "internal/prtriage/split.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case headingLine.MatchString(line), line == \"---\":"
+  line = 68
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "0d3515b2a20c8ec0"
+  file = "internal/secretscan/redact.go"
+  op = "ARITHMETIC_BASE"
+  text = "panic(\"secretscan: no \" + pemRuleName + \" rule\")"
+  line = 108
+  accepted_in = "review-comment-ingest"
+  reason = "Unreachable while the rules table holds the pem-private-key rule: pemRule() scans the package-level rules slice and returns on the first name match, so its trailing panic runs only if that rule were deleted. Every PEM redaction reaches pemRule through redactOnce and pemHit, and TestRedactPEMWhole asserts the [redacted pem-private-key] marker and a hit named pem-private-key, so deleting the rule fails that test long before this panic could run. The mutant itself swaps a string + for an operator Go strings do not define, so it would not compile even on a reached line."
+
+[[accepted]]
+  key = "584bd49540793a2a"
+  file = "internal/ship/automerge.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case pr.AutoMergeRequest != nil:"
+  line = 107
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "e6f6f64112fd7bb2"
+  file = "internal/ship/prcomments.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.Line != nil:"
+  line = 279
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "10b0d76342e8f7a5"
+  file = "internal/ship/prcomments.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.OriginalLine != nil:"
+  line = 281
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "115e7b4adee27bee"
+  file = "internal/ship/prcomments_bitbucket.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.Inline.To != nil:"
+  line = 153
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "9d236f072ba12b0e"
+  file = "internal/ship/prcomments_bitbucket.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.Inline.From != nil:"
+  line = 155
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "7bb67a6af6cfb44f"
+  file = "internal/ship/prcomments_gitlab.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case at.NewLine != nil && *at.NewLine > 0:"
+  line = 134
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "b6de2bcebafd4cdd"
+  file = "internal/ship/prcomments_gitlab.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case at.NewLine != nil && *at.NewLine > 0:"
+  line = 134
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "7ee2ad9e9cf163bf"
+  file = "internal/ship/prcomments_gitlab.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case at.OldLine != nil && *at.OldLine > 0:"
+  line = 136
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "8fda4f4c316256a7"
+  file = "internal/ship/prcomments_gitlab.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case at.OldLine != nil && *at.OldLine > 0:"
+  line = 136
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "f0a1edbfcbf2cc9f"
+  file = "internal/ship/prcomments_gitlab.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case at.NewPath != \"\":"
+  line = 138
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "c2f897c854d1e707"
+  file = "internal/ship/prcomments_gitlab.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil || u.Bot == nil:"
+  line = 171
+  accepted_in = "review-comment-ingest"
+  category = "gremlins-attribution-ceiling"

@@ -58,7 +58,7 @@ func TestPolicyFor(t *testing.T) {
 }
 
 func TestPolicyCoversEveryKnownBinary(t *testing.T) {
-	want := []string{"ast-grep", "dotnet", "gh", "git", "go", "gremlins", "npx", "rsync", "semgrep", "sh", "ssh"}
+	want := []string{"ast-grep", "dotnet", "gh", "git", "go", "gremlins", "node", "npx", "rsync", "semgrep", "sh", "ssh"}
 	var got []string
 	for k := range Policy() {
 		got = append(got, k)
@@ -145,6 +145,23 @@ func TestFenceRejectTools(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, []string{"./internal/cmd", "."}) {
 		t.Errorf("Fence(gremlins) = %v, want the values verbatim", got)
+	}
+}
+
+// node is Reject like the rest of the tool family: the construct resolver
+// spawns `node -` as two LITERALS that never pass through Fence, so the
+// policy exists for a derived operand added later — which is refused rather
+// than read as a node option. Even the bare `-` is refused here: a value
+// that begins with a dash has no safe spelling under Reject.
+func TestFenceRejectsALeadingDashForNode(t *testing.T) {
+	got, err := Fence("node", "script", "astspan.js")
+	if err != nil || !reflect.DeepEqual(got, []string{"astspan.js"}) {
+		t.Fatalf("Fence(node, script, astspan.js) = %v, %v; want the value through", got, err)
+	}
+	for _, bad := range []string{"-", "--eval"} {
+		if _, err := Fence("node", "script", bad); err == nil {
+			t.Errorf("Fence(node, script, %q) = nil error, want a rejection", bad)
+		}
 	}
 }
 

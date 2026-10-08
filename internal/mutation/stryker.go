@@ -1,7 +1,6 @@
 package mutation
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,8 +10,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Rivil/dross/internal/argfence"
+	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/remote"
 )
 
@@ -52,6 +53,14 @@ type Stryker struct {
 	// the lockfile-respecting install that has to happen on the host before
 	// stryker runs there. Unset is an error rather than a guess at npm.
 	PackageManager string
+
+	// ReuseReport parses the report already at reportPath() instead of
+	// launching stryker — nothing is spawned, locally or remotely. It exists
+	// for one case: a long run that completed and was fetched, then refused
+	// by a dross-side check, so the measurement is on disk and the only other
+	// way to get it into tests.json is to run it again (7h48m on 2026-09-18).
+	// The path and mtime are printed so a stale report cannot pass as fresh.
+	ReuseReport bool
 }
 
 func (s *Stryker) Name() string { return "stryker" }
@@ -65,9 +74,35 @@ func (s *Stryker) Supports(file string) bool {
 }
 
 // Run invokes stryker on the given files, then parses the JSON report.
+//
+// Whole-file scope: it is RunRanges with no ranges, which is the fail-open
+// limb rather than a separate path. One body, so the ranged case cannot drift
+// away from the case every other caller still uses.
 func (s *Stryker) Run(files []string) (*Report, error) {
+	return s.RunRanges(files, nil)
+}
+
+// RunRanges invokes stryker on the given files, restricted to the given line
+// ranges where any were supplied, then parses the JSON report.
+//
+// A file absent from `ranges` is mutated WHOLE. That is deliberate and it is
+// the contract RangeRunner documents: the caller's hunks may be incomplete —
+// a degraded diff, a file recorded in changes.json that git never saw change —
+// and mutating nothing because nothing was known is how a phase passes having
+// measured nothing.
+func (s *Stryker) RunRanges(files []string, ranges map[string][]Range) (*Report, error) {
 	if len(files) == 0 {
 		return &Report{Tool: s.Name()}, nil
+	}
+	// Refused before anything is spawned or read: the workdir is where the
+	// report is cleared, fetched to and read from.
+	if s.Workdir != "" {
+		if _, err := ContainStrykerWorkdir(s.ProjectRoot, s.Workdir); err != nil {
+			return nil, err
+		}
+	}
+	if s.ReuseReport {
+		return s.reuseReport(files, ranges)
 	}
 
 	// Built before anything is spawned, and carrying Workdir: cmd.Dir on a
@@ -92,10 +127,14 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 	// come back in, which is what checkInstrumented diffs against below. The
 	// argv carries the ESCAPED form; comparing THAT to report keys would find
 	// every bracket path "missing".
-	args, requested, err := s.runArgs(files)
+	args, requested, err := s.runArgs(files, ranges)
 	if err != nil {
 		return nil, err
 	}
+	// The trimmed paths that were actually narrowed. checkInstrumented needs
+	// it: a narrowed file can legitimately contribute NO mutants, and its
+	// absence from the report is then a fact about the hunk, not a drop.
+	narrowed := narrowedSet(requested, s.Workdir, ranges)
 	reportPath := s.reportPath()
 	if err := lr.clearReport("", reportPath); err != nil {
 		return nil, err
@@ -116,14 +155,19 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 	sink := io.MultiWriter(os.Stderr, head)
 	cmd.Stdout = sink
 	cmd.Stderr = sink
-	if err := cmd.Run(); err != nil {
+	// Retained past the branch below: the exit status is the one fact about a
+	// reportless run worth recording, and it is only available here.
+	runErr := cmd.Run()
+	exitStatus := 0
+	if runErr != nil {
 		// Stryker exits non-zero when surviving mutants exist —
 		// that's a successful run with bad results, not an adapter
 		// failure. We still try to read the report.
 		var exitErr *exec.ExitError
-		if !errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("stryker invocation failed: %w (is stryker installed in the project? `npm i -D %s` or equivalent)", err, strykerPin)
+		if !errors.As(runErr, &exitErr) {
+			return nil, fmt.Errorf("stryker invocation failed: %w (is stryker installed in the project? `npm i -D %s` or equivalent)", runErr, strykerPin)
 		}
+		exitStatus = exitErr.ExitCode()
 	}
 
 	if err := lr.fetchReport("", reportPath); err != nil {
@@ -138,16 +182,27 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 			// variable, a --mutate list that resolved to nothing, a crash in
 			// the instrumenter. The config was fine each time and the real
 			// cause was sitting at the HEAD of the output, which the user had
-			// just watched scroll past. Quote it.
-			msg := fmt.Sprintf("stryker did not write a report at %s.\n%s", reportPath, head.quote(strykerHeadLines))
+			// just watched scroll past.
+			//
+			// The head goes to the TERMINAL, not into the error. The user
+			// has already watched the whole stream scroll past, so the cause
+			// is re-printed here, at the failure point, where they are
+			// looking — and the error carries only facts ABOUT that output
+			// (spec decision cut_point). Nothing downstream has to scrub,
+			// because the string was never built.
+			head.printHead(os.Stderr, "stryker", strykerHeadLines)
+			fmt.Fprintln(os.Stderr)
+			err := fmt.Errorf("stryker did not write a report at %s: %w",
+				reportPath, RecordToolFailure("stryker", exitStatus, Observed(head.observed())))
 			// Attached only on an initial-test-run abort. Unconditionally it
 			// would claim a truncated failure list on aborts that never
 			// printed one — a bad --mutate glob, a missing runner, a crash in
-			// the instrumenter (locked decision note_trigger).
-			if strings.Contains(head.buf.String(), strykerInitialTestFailureText) {
-				msg += "\n" + strykerInitialTestTruncationNote
+			// the instrumenter (locked decision note_trigger). Fixed
+			// dross-authored prose, so it stays in the error.
+			if head.contains(strykerInitialTestFailureText) {
+				err = fmt.Errorf("%w\n%s", err, strykerInitialTestTruncationNote)
 			}
-			return nil, errors.New(msg)
+			return nil, err
 		}
 		return nil, fmt.Errorf("read stryker report: %w", err)
 	}
@@ -159,7 +214,47 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 	// workdir-relative to repo-relative. `requested` is the trimmed
 	// workdir-relative form, so the two only speak the same paths on this side
 	// of that call — one line later and every path would look dropped.
-	if err := s.checkInstrumented(b, requested, head); err != nil {
+	if err := s.checkInstrumented(b, requested, narrowed, head); err != nil {
+		return nil, err
+	}
+	s.rePrefixFiles(report)
+	return report, nil
+}
+
+// reuseReport is the ReuseReport arm of RunRanges: the same request
+// computation and the same post-report checks, with the launch cut out.
+//
+// LOUD BY DESIGN. A reused report is a measurement of whatever tree stryker
+// saw when it ran, and nothing here can prove that was this tree. So the
+// path and the file's mtime are printed at the point of use, and the head
+// buffer handed to checkInstrumented is empty — no run, so nothing could
+// have warned, and every absent file reads as "contributed no mutants".
+func (s *Stryker) reuseReport(files []string, ranges map[string][]Range) (*Report, error) {
+	_, requested, err := s.runArgs(files, ranges)
+	if err != nil {
+		return nil, err
+	}
+	narrowed := narrowedSet(requested, s.Workdir, ranges)
+	reportPath := s.reportPath()
+	info, err := os.Stat(reportPath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf("--reuse-report: no stryker report at %s — nothing to reuse; run without the flag", reportPath)
+		}
+		return nil, fmt.Errorf("--reuse-report: stat %s: %w", reportPath, err)
+	}
+	fmt.Fprintf(os.Stderr,
+		"stryker: REUSING existing report %s — written %s (%s ago); no run was launched, so this measures the tree as it was then\n",
+		reportPath, info.ModTime().UTC().Format(time.RFC3339), time.Since(info.ModTime()).Round(time.Minute))
+	b, err := os.ReadFile(reportPath)
+	if err != nil {
+		return nil, fmt.Errorf("read stryker report: %w", err)
+	}
+	report, err := ParseStrykerJSON(b)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.checkInstrumented(b, requested, narrowed, &headBuffer{limit: strykerHeadBytes}); err != nil {
 		return nil, err
 	}
 	s.rePrefixFiles(report)
@@ -173,53 +268,6 @@ const (
 	strykerHeadBytes = 64 << 10
 	strykerHeadLines = 40
 )
-
-// headBuffer retains the first `limit` bytes written through it and silently
-// discards the rest, always reporting a full write so it can sit inside an
-// io.MultiWriter without truncating the stream its sibling is rendering.
-type headBuffer struct {
-	limit int
-	buf   bytes.Buffer
-}
-
-func (h *headBuffer) Write(p []byte) (int, error) {
-	if room := h.limit - h.buf.Len(); room > 0 {
-		if len(p) <= room {
-			h.buf.Write(p)
-		} else {
-			h.buf.Write(p[:room])
-		}
-	}
-	// len(p), never the amount kept: a short count is an io.ErrShortWrite to
-	// io.MultiWriter, which would abort the write to os.Stderr as well and
-	// truncate the live output the moment the cap was reached.
-	return len(p), nil
-}
-
-// quote renders at most n lines of the retained head, indented, for embedding
-// in an error.
-func (h *headBuffer) quote(n int) string {
-	text := strings.TrimRight(h.buf.String(), "\n")
-	if text == "" {
-		return "stryker produced no output at all — it may not have started."
-	}
-	lines := strings.Split(text, "\n")
-	truncated := false
-	if len(lines) > n {
-		lines, truncated = lines[:n], true
-	}
-	var b strings.Builder
-	b.WriteString("the head of stryker's output, which is where the cause is:\n\n")
-	for _, l := range lines {
-		b.WriteString("    ")
-		b.WriteString(l)
-		b.WriteString("\n")
-	}
-	if truncated {
-		b.WriteString("    … (output continues above)\n")
-	}
-	return b.String()
-}
 
 // strykerDropWarningText is Stryker's own wording when a --mutate glob resolves
 // to no file (@stryker-mutator/core, src/fs/project-reader.ts). Named here so
@@ -270,7 +318,26 @@ const strykerInitialTestTruncationNote = "stryker aborted on its initial test ru
 // against report.Files would therefore hard-fail on a file that was
 // instrumented perfectly well, and such files are common enough to make the
 // check unusable. Reading the raw keys tells the two apart exactly.
-func (s *Stryker) checkInstrumented(data []byte, requested []string, head *headBuffer) error {
+//
+// ABSENCE ALONE IS NOT A DROP. A file can legitimately contribute ZERO mutants
+// and then appear in no report key at all: a narrowed file whose hunk only
+// touched comments, imports or a type annotation, and — the whole-file case —
+// a declarations-only .d.ts or a .svelte whose script is imports and a Props
+// interface. Stryker omits such files from the report's `files` object
+// entirely, which is indistinguishable HERE from the drop this guard exists
+// to catch. On 2026-09-18 a complete 7h48m run over 181 files was refused for
+// two such files (feastahead src/app.d.ts, EmptyState.svelte), and the whole
+// leg was lost.
+//
+// So the DISCRIMINATOR IS STRYKER'S OWN DROP WARNING, not the file's shape.
+// A --mutate glob that resolves to nothing — the 2026-08-26 bracket-path
+// case — makes stryker print strykerDropWarningText at project-read time,
+// and while that line is in the head buffer every absent file refuses, as
+// before. While it is absent, an absent file contributed no mutants and is
+// named on stderr instead. The head is bounded (strykerHeadBytes), but the
+// warning is printed before the dry run, well inside the first 64 KB of any
+// run that got as far as writing a report.
+func (s *Stryker) checkInstrumented(data []byte, requested []string, narrowed map[string]bool, head *headBuffer) error {
 	var raw strykerReport
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return fmt.Errorf("decode stryker report: %w", err)
@@ -300,6 +367,27 @@ func (s *Stryker) checkInstrumented(data []byte, requested []string, head *headB
 			dropped = append(dropped, want)
 		}
 	}
+	if len(dropped) > 0 && !head.contains(strykerDropWarningText) {
+		var quietRanged, quietWhole []string
+		for _, d := range dropped {
+			if narrowed[d] {
+				quietRanged = append(quietRanged, d)
+			} else {
+				quietWhole = append(quietWhole, d)
+			}
+		}
+		if len(quietRanged) > 0 {
+			fmt.Fprintf(os.Stderr,
+				"stryker: %d narrowed file(s) contributed no mutants in their changed lines: %s\n",
+				len(quietRanged), strings.Join(quietRanged, ", "))
+		}
+		if len(quietWhole) > 0 {
+			fmt.Fprintf(os.Stderr,
+				"stryker: %d whole file(s) contributed no mutants (nothing mutable — declarations, imports or types only): %s\n",
+				len(quietWhole), strings.Join(quietWhole, ", "))
+		}
+		return nil
+	}
 	if len(dropped) == 0 {
 		return nil
 	}
@@ -309,10 +397,17 @@ func (s *Stryker) checkInstrumented(data []byte, requested []string, head *headB
 			"Refusing to report a score over the rest: a partial run looks exactly like a complete one,\n"+
 			"which is how six route files vanished from a run unnoticed on 2026-08-26.\n",
 		len(dropped), strings.Join(dropped, ", "))
-	if strings.Contains(head.buf.String(), strykerDropWarningText) {
-		msg += "stryker said so itself — look for \"" + strykerDropWarningText + "\" below.\n"
-	}
-	return fmt.Errorf("%s\n%s", msg, head.quote(strykerHeadLines))
+	// Reached only with the warning in the head — absence without it returned
+	// above — so the hint is unconditional.
+	msg += "stryker said so itself — look for \"" + strykerDropWarningText + "\" below.\n"
+	// The tool SUCCEEDED here — it wrote a report, it just did not instrument
+	// everything. So there is no tool failure to record, and the dropped-path
+	// list is the whole diagnostic. The head still goes to the terminal, where
+	// the "did not result in any files" line the hint points at is readable.
+	fmt.Fprintln(os.Stderr)
+	head.printHead(os.Stderr, "stryker", strykerHeadLines)
+	fmt.Fprintln(os.Stderr)
+	return errors.New(msg)
 }
 
 // strykerPin is the exact @stryker-mutator/core version dross invokes.
@@ -350,7 +445,7 @@ const strykerPin = "@stryker-mutator/core@9.6.1"
 // ORDER IS LOAD-BEARING. The escape runs last — after the workdir trim and
 // after the argfence check, never instead of either. Escaping first would
 // leave the fence inspecting a string the argv no longer contains.
-func (s *Stryker) runArgs(files []string) (argv []string, requested []string, err error) {
+func (s *Stryker) runArgs(files []string, ranges map[string][]Range) (argv []string, requested []string, err error) {
 	if _, err := argfence.Fence("npx", "workdir", s.Workdir); err != nil {
 		return nil, nil, err
 	}
@@ -366,11 +461,72 @@ func (s *Stryker) runArgs(files []string) (argv []string, requested []string, er
 	}
 	mutate := make([]string, 0, len(requested))
 	for _, f := range requested {
-		mutate = append(mutate, escapeGlobMeta(f))
+		// ORDER, again. The escape runs on the PATH, and the range is appended
+		// to the escaped result — never the other way round. escapeGlobMeta
+		// rewrites "[" and "]" into bracket expressions, and a ":10-12" already
+		// glued on would be inside the string it inspects. Stryker's own
+		// spec is "<glob>:<start>-<end>", so the range is the suffix by
+		// definition.
+		escaped := escapeGlobMeta(f)
+		rs := ranges[rangeKey(f, s.Workdir)]
+		if len(rs) == 0 {
+			mutate = append(mutate, escaped)
+			continue
+		}
+		// VALIDATED AS A SET, before a single range is emitted. Emitting the
+		// good ones and then falling back on the bad one would put both
+		// "a.ts:1-2" and "a.ts" in the same --mutate list: harmless to the
+		// result, but it makes the argv misdescribe the run, and an argv that
+		// misdescribes the run is how a scope problem hides.
+		bad := -1
+		for i, r := range rs {
+			if !r.Valid() {
+				bad = i
+				break
+			}
+		}
+		if bad >= 0 {
+			// A malformed range would silently select nothing, which is the
+			// whole-file case wearing a narrowed file's clothes. Fall back to
+			// the whole file, loudly enough to be greppable.
+			fmt.Fprintf(os.Stderr,
+				"stryker: ignoring malformed range %d-%d for %s; mutating the whole file\n",
+				rs[bad].Start, rs[bad].End, f)
+			mutate = append(mutate, escaped)
+			continue
+		}
+		for _, r := range rs {
+			mutate = append(mutate, fmt.Sprintf("%s:%d-%d", escaped, r.Start, r.End))
+		}
 	}
 	return []string{"npx", "--yes", strykerPin, "run",
 		"--mutate", strings.Join(mutate, ","),
 		"--reporters", "json"}, requested, nil
+}
+
+// rangeKey maps a workdir-TRIMMED path back to the key the caller's range map
+// uses, which is repo-relative. The trim is what runArgs did one step earlier;
+// undoing it here keeps the map's keys in the caller's vocabulary rather than
+// making every caller learn the adapter's workdir.
+func rangeKey(trimmed, workdir string) string {
+	if workdir == "" {
+		return trimmed
+	}
+	return workdir + "/" + trimmed
+}
+
+// narrowedSet reports which of the trimmed request paths were range-scoped.
+func narrowedSet(requested []string, workdir string, ranges map[string][]Range) map[string]bool {
+	if len(ranges) == 0 {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, f := range requested {
+		if len(ranges[rangeKey(f, workdir)]) > 0 {
+			out[f] = true
+		}
+	}
+	return out
 }
 
 // escapeGlobMeta makes a literal path safe to hand Stryker as a --mutate glob.
@@ -452,7 +608,22 @@ func (s *Stryker) workDir() string {
 	if s.Workdir == "" {
 		return s.ProjectRoot
 	}
-	return filepath.Join(s.ProjectRoot, s.Workdir)
+	c, err := ContainStrykerWorkdir(s.ProjectRoot, s.Workdir)
+	if err != nil {
+		// RunRanges refuses an escaping workdir before any of this runs; a
+		// stray caller still lands inside the project root, where nothing is.
+		return filepath.Join(s.ProjectRoot, "_refused")
+	}
+	dir := c.String()
+	return dir
+}
+
+// ContainStrykerWorkdir contains the Stryker leg's workdir under the project
+// root. It is project.toml's mutation.stryker.workdir — a hand-editable path
+// the report is cleared at, fetched to and read from — so one that escapes the
+// root is refused with pathfence.ErrEscapes.
+func ContainStrykerWorkdir(projectRoot, workdir string) (pathfence.Contained, error) {
+	return pathfence.Contain(projectRoot, "project.toml mutation.stryker.workdir", workdir)
 }
 
 // reportPath is where stryker's json reporter writes, under the workdir.
@@ -538,7 +709,8 @@ type strykerPos struct {
 //	Survived                → survived (recorded with snippet)
 //	Timeout                 → timeout
 //	RuntimeError, CompileError → errors
-//	NoCoverage              → survived (test never even ran the mutant)
+//	NoCoverage              → survived AND not-covered (no test ran the mutant;
+//	                          the subset verify reports as uncoverable)
 //	Pending, Ignored        → ignored (not counted)
 //
 // Score uses Stryker's convention: killed / (killed + survived + timeout)
@@ -556,13 +728,27 @@ func ParseStrykerJSON(data []byte) (*Report, error) {
 				r.Killed++
 				r.addFile(path, FileStat{Killed: 1})
 			case "Survived", "NoCoverage":
+				// NoCoverage is a survivor — the mutant was not killed — but
+				// one no test reached, which is a different fact from one
+				// the tests ran and missed. Folding it into Survived alone
+				// (as this did until 2026-09-19) printed mutants_not_covered
+				// = 0 against reports carrying thousands of them, so the
+				// "uncoverable by construction" line lied for every
+				// stryker leg.
+				notCovered := m.Status == "NoCoverage"
 				r.Survived++
-				r.addFile(path, FileStat{Survived: 1})
+				if notCovered {
+					r.NotCovered++
+					r.addFile(path, FileStat{Survived: 1, NotCovered: 1})
+				} else {
+					r.addFile(path, FileStat{Survived: 1})
+				}
 				r.Surviving = append(r.Surviving, Mutant{
-					File:    path,
-					Line:    m.Location.Start.Line,
-					Op:      m.MutatorName,
-					Snippet: m.Replacement,
+					File:       path,
+					Line:       m.Location.Start.Line,
+					Op:         m.MutatorName,
+					Snippet:    m.Replacement,
+					NotCovered: notCovered,
 				})
 			case "Timeout":
 				r.Timeout++

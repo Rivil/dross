@@ -14,9 +14,11 @@ import (
 	"github.com/Rivil/dross/assets"
 )
 
-// Install registers `dross install` — the single installer for dross slash commands
-// and prompts. It materializes the embedded command skills into
-// ~/.claude/skills/dross-<name>/SKILL.md and the prompts into ~/.claude/dross/prompts.
+// Install registers `dross install` — the single installer for dross slash commands,
+// prompts and agent definitions. It materializes the embedded command skills into
+// ~/.claude/skills/dross-<name>/SKILL.md, the prompts into ~/.claude/dross/prompts,
+// and the agent definitions (the solo task reviewer) into the user agents directory
+// Claude Code reads ($CLAUDE_CONFIG_DIR/agents, else ~/.claude/agents).
 //
 // Off a source checkout it symlinks assets/ (live dev edits apply immediately);
 // otherwise it writes real-file copies from the embedded FS so an end-user install
@@ -39,7 +41,7 @@ func Install() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("resolve home: %w", err)
 			}
-			in := &installer{home: home, out: cmd.OutOrStdout()}
+			in := &installer{home: home, agents: userAgentsDir(home), out: cmd.OutOrStdout()}
 			switch {
 			case linkMode:
 				src, ok := detectSourceDir()
@@ -100,6 +102,7 @@ func detectSourceDir() (string, bool) {
 // install_test.go can drive it directly against a temp HOME without cobra plumbing.
 type installer struct {
 	home      string    // base whose .claude/ subtree is written
+	agents    string    // agent definitions dir ("" = home/.claude/agents); Install resolves CLAUDE_CONFIG_DIR
 	link      bool      // true = symlink source assets/; false = copy from embed.FS
 	sourceDir string    // absolute assets/ path; required when link is true
 	out       io.Writer // progress output (nil = discard)
@@ -108,6 +111,13 @@ type installer struct {
 func (in *installer) skillsDir() string { return filepath.Join(in.home, ".claude", "skills") }
 func (in *installer) promptsDir() string {
 	return filepath.Join(in.home, ".claude", "dross", "prompts")
+}
+
+func (in *installer) agentsDir() string {
+	if in.agents != "" {
+		return in.agents
+	}
+	return filepath.Join(in.home, ".claude", "agents")
 }
 
 func (in *installer) logf(format string, args ...any) {
@@ -126,7 +136,7 @@ func (in *installer) run() error {
 	if err := in.syncPrompts(); err != nil {
 		return err
 	}
-	return nil
+	return syncAgents(in.agentsDir(), in.link, in.sourceDir, in.logf)
 }
 
 // commandSkills returns the skill directory names (dross-<name>) for every embedded

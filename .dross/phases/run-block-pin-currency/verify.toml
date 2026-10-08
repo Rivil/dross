@@ -1,0 +1,113 @@
+[verify]
+  phase = "run-block-pin-currency"
+  generated_at = 2026-09-29T18:03:36.225764Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-09-29T18:04:59.275628Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9153674832962138
+  mutants_killed = 411
+  mutants_survived = 38
+  mutants_not_covered = 38
+  mutants_no_block = 37
+  mutants_test_gap = 1
+  mutants_in_scope = 449
+  unclassified_in_scope = 0
+  criteria_total = 10
+  criteria_covered = 10
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 411
+    survived = 38
+    timeout = 0
+    in_scope = 449
+    score = 0.9153674832962138
+    file_count = 26
+    measured_on = "helicon"
+    whole_file = ["cmd/pincheck/coverage_test.go — adapter-lacks-range-runner", "cmd/pincheck/main.go — adapter-lacks-range-runner", "cmd/pincheck/parity_test.go — adapter-lacks-range-runner", "internal/cmd/action_pins_test.go — adapter-lacks-range-runner", "internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/doctor_pins_test.go — adapter-lacks-range-runner", "internal/cmd/hermetic_env_test.go — adapter-lacks-range-runner", "internal/cmd/interaction_snippet_test.go — adapter-lacks-range-runner", "internal/cmd/node_version_source_test.go — adapter-lacks-range-runner", "internal/cmd/pin_currency_workflow_test.go — adapter-lacks-range-runner", "internal/cmd/plan_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/release_pipeline_test.go — adapter-lacks-range-runner", "internal/cmd/spec_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/workflow_run_expressions_test.go — adapter-lacks-range-runner", "internal/mutation/ts_fixture_test.go — adapter-lacks-range-runner", "internal/pincheck/bump.go — adapter-lacks-range-runner", "internal/pincheck/bump_test.go — adapter-lacks-range-runner", "internal/pincheck/check.go — adapter-lacks-range-runner", "internal/pincheck/check_test.go — adapter-lacks-range-runner", "internal/pincheck/classify.go — adapter-lacks-range-runner", "internal/pincheck/classify_test.go — adapter-lacks-range-runner", "internal/pincheck/sites.go — adapter-lacks-range-runner", "internal/pincheck/sites_test.go — adapter-lacks-range-runner", "internal/pincheck/upstream.go — adapter-lacks-range-runner", "internal/pincheck/upstream_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["cmd/pincheck/coverage_test.go:TestEveryPinSiteIsChecked", "internal/pincheck/sites_test.go:TestScanFindsEverySiteKind", "internal/pincheck/sites_test.go:TestScanNodeVersionFiles", "internal/pincheck/sites_test.go:TestDedupeOrdersByKind"]
+  notes = "Independent sweep of the live tree (run-block go install, node-version/-file, goreleaser-action version, go.mod toolchain, Go-source consts) fails on any hit with no checked site; fixture proves a line-continued install and a new const both fail. TestDedupeOrdersByKind now kills both sites.go:141 mutants."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/pincheck/classify_test.go:TestClassifyCooldownBoundary", "internal/pincheck/classify_test.go:TestClassifyOffLineIsInfo", "cmd/pincheck/coverage_test.go:TestPincheckExitCodes"]
+  notes = "7-day boundary pinned both sides (incl. day-dated Node releases); off-line majors/minors are info; one stale pin exits non-zero naming its target."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/pincheck/upstream_test.go:TestFetchFailuresAreUnknown", "internal/pincheck/check_test.go:TestCheckModes", "cmd/pincheck/coverage_test.go:TestPincheckExitCodes"]
+  notes = "503, 410, timeout, closed listener and malformed JSON all classify unknown, never current; strict mode fails on unknown; a 503 upstream exits the cron entrypoint non-zero."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/pin_currency_workflow_test.go:TestPinCurrencyRunsWeekly", "internal/cmd/pin_currency_workflow_test.go:TestPinCurrencyPermissions", "cmd/pincheck/coverage_test.go:TestPincheckExitCodes"]
+  notes = "Workflow-content tests pin the cron, contents:read, a read-only check job, and an unsoftened `go run ./cmd/pincheck` (no continue-on-error / || true). First live scheduled run unobserved until v1.7 is on main (locked live_proof)."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/release_pipeline_test.go:TestGovulncheckDeclaredOnce"]
+  notes = "Both ci.yml test and release.yml release jobs must use ./.github/actions/govulncheck before scanning; fixtures fail a second declaration and a floating @latest."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/mutation/ts_fixture_test.go:TestStrykerPinMatchesFixture"]
+  notes = "strykerPin compared to the fixture's package.json and package-lock.json @stryker-mutator/core; mismatch in either direction fails."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/release_pipeline_test.go:TestGoreleaserPinnedOutsideWorkflows", "internal/cmd/release_pipeline_test.go:TestGoreleaserCheckedOnPRs", "cmd/pincheck/coverage_test.go:TestEveryPinSiteIsChecked"]
+  notes = "Exactly one exact vX.Y.Z pin in .github/actions/goreleaser; goreleaser-action or an install inside a workflow fails; the coverage sweep proves the action's pin is a checked site."
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["live: go run ./cmd/pincheck on the committed tree (2026-09-29, re-run at this verify)"]
+  notes = "State criterion, observed rather than unit-tested: exit 0, 6 pins checked all current, .node-version at 24.21.0 (off 24.19.0); Node 26 and stryker 10 reported as off-line info only. The weekly cron (c-4) is the standing regression check."
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["cmd/pincheck/parity_test.go:TestPinVerdictParity", "internal/cmd/doctor_pins_test.go:TestDoctorPinSectionStaleWarns", "internal/cmd/doctor_pins_test.go:TestDoctorPinSectionUnknownIsNotIssue", "internal/cmd/doctor_pins_test.go:TestDoctorPinSectionSilentWithoutPins", "internal/cmd/doctor_pins_test.go:TestDoctorPinScanErrorWarns", "internal/pincheck/upstream_test.go:TestGoreleaserModule"]
+  notes = "Upgraded from weak: the two uncovered in-hunk lines on doctor's path are now killed — doctor.go:502 (scan error counted as exactly one warning, verdict unmoved) by TestDoctorPinScanErrorWarns, upstream.go:139 (v-less goreleaser version) by TestGoreleaserModule. Parity test proves cron and doctor classify a fixture pin identically."
+
+[[criterion]]
+  id = "c-10"
+  status = "covered"
+  tests = ["internal/cmd/pin_currency_workflow_test.go:TestPinBumpPRUpdatesOpenPR", "internal/cmd/pin_currency_workflow_test.go:TestPinCurrencyPermissions", "internal/cmd/pin_currency_workflow_test.go:TestPinCurrencyBumpWiring", "internal/pincheck/bump_test.go:TestBumpRewritesOnlyStaleSites", "internal/pincheck/bump_test.go:TestBumpOutcomeString", "cmd/pincheck/coverage_test.go:TestPincheckBumpCommand"]
+  notes = "Script run against a bare origin: create once, edit the open PR in place, never force over a human commit; write scopes on the bump job only. TestBumpOutcomeString kills bump.go:32-33. First live bump PR unobserved until v1.7 is on main (locked live_proof)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation measured on helicon, run r-20260929-161128: 0.92 over 449 in-scope mutants (killed 411, survived 38); 37 no-block (uncoverable by construction), efficacy 1.00 over the 412 reachable; zero LIVED mutants in any package. All 6 survivors that failed the previous verify (doctor.go:502, bump.go:32/33, sites.go:141 x2, upstream.go:139) are KILLED."
+
+[[finding]]
+  severity = "NOTE"
+  text = "All 38 in-scope survivors are accepted, none unclassified: 10 in-hunk switch-case survivors in internal/pincheck (bump.go:64, classify.go:104/106, sites.go:121/265/268/270, upstream.go:94 x2/96) under gremlins-attribution-ceiling, plus 28 inherited survivors in doctor.go carrying their existing accept reasons."
+
+[[finding]]
+  severity = "NOTE"
+  text = "sites.go:141 CONDITIONALS_BOUNDARY was expected to go LIVED once covered (hand-mutation at :135 passed the suite); gremlins KILLED it and the :135/:138 boundaries too, so no accept was needed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Unobserved until v1.7 is on main (locked live_proof): the first scheduled pin-currency run and a real bump PR — including whether needs.check.outputs.stale survives the check job failing, which the bump job's if: depends on."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Unobserved until the ship PR's CI: mutation-ts on Node 24.21.0 (DROSS_REQUIRE_E2E=1), and the first shellcheck of scripts/pin-bump-pr.sh (shellcheck not installed on the laptop)."

@@ -72,6 +72,19 @@ func RemoveStatusline(settings []byte, command string) ([]byte, error) {
 	return root.marshalIndented()
 }
 
+// ExistingCommand extracts statusLine.command from raw settings, or "" when
+// there is none or the document does not parse — the name a clobber refusal
+// shows the user.
+func ExistingCommand(data []byte) string {
+	var v struct {
+		StatusLine struct {
+			Command string `json:"command"`
+		} `json:"statusLine"`
+	}
+	_ = json.Unmarshal(data, &v)
+	return v.StatusLine.Command
+}
+
 // commandOf extracts the .command string from a statusLine value, or "" if the
 // value is not an object or has no command.
 func commandOf(raw json.RawMessage) string {

@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/gate"
+	"github.com/Rivil/dross/internal/review"
 )
 
 // executePromptContent loads assets/prompts/execute.md and normalises it
@@ -184,5 +187,188 @@ func TestExecutePromptPullsBoardTaskMoves(t *testing.T) {
 		if !strings.Contains(content, needle) {
 			t.Errorf("execute.md must wire the inbound board task pull: missing %q", needle)
 		}
+	}
+}
+
+// TestExecutePromptOffersApproveLabel: the pair-approval gate records an
+// approval only when the answer is exactly gate.ApproveLabel(task), so §1c
+// must offer that label — built from the same function, so a format drift on
+// either side fails here — in place of the old bare `proceed`, alongside the
+// steer / show me / skip reactions. The hard rule must name it too.
+func TestExecutePromptOffersApproveLabel(t *testing.T) {
+	body := promptBody(t, "execute.md")
+	label := "`" + gate.ApproveLabel("<task-id>") + "`"
+	c := sectionOf(body, "### 1c.", "### ")
+	if c == "" {
+		t.Fatal("execute.md has no §1c section")
+	}
+	if !strings.Contains(c, "- "+label) {
+		t.Errorf("§1c does not offer the option %s", label)
+	}
+	for _, opt := range []string{"`steer`", "`show me <X>`", "`skip`"} {
+		if !strings.Contains(c, "- "+opt) {
+			t.Errorf("§1c lost the %s option", opt)
+		}
+	}
+	if strings.Contains(c, "`proceed`") {
+		t.Error("§1c still offers a bare `proceed` — the gate records only the approve label")
+	}
+	rules := sectionOf(body, "## Hard rules", "## ")
+	if !strings.Contains(rules, label) || strings.Contains(rules, "`proceed`") {
+		t.Errorf("the pair-mode hard rule must name %s, not `proceed`", label)
+	}
+}
+
+// TestExecutePromptBeginsBeforeLoop: the pair-approval gate reads the mode
+// `dross execute begin` records, so the prompt must record it — both
+// branches — before the per-task loop writes anything.
+func TestExecutePromptBeginsBeforeLoop(t *testing.T) {
+	body := promptBody(t, "execute.md")
+	loop := strings.Index(body, "## 1. Per-task loop")
+	if loop < 0 {
+		t.Fatal("execute.md has no \"## 1. Per-task loop\" heading")
+	}
+	for _, line := range []string{"dross execute begin <id>\n", "dross execute begin <id> --solo\n"} {
+		if i := strings.Index(body, line); i < 0 || i > loop {
+			t.Errorf("%q must appear before the per-task loop (at %d, loop at %d)", strings.TrimSpace(line), i, loop)
+		}
+	}
+}
+
+// TestExecutePromptLaneCommitRunsFullSuite: in a laned repo §1e's --files run
+// records no green, so a commit straight after it would be refused. §1f must
+// run a bare `dross test` — the full run the commit gate counts — before the
+// task's files are staged.
+func TestExecutePromptLaneCommitRunsFullSuite(t *testing.T) {
+	f := sectionOf(promptBody(t, "execute.md"), "### 1f.", "### ")
+	if f == "" {
+		t.Fatal("execute.md has no §1f section")
+	}
+	if !strings.Contains(f, "[[runtime.test_lane]]") {
+		t.Error("§1f must say when the extra full run is needed: when [[runtime.test_lane]] is declared")
+	}
+	add := strings.Index(f, "git add <task.files>")
+	test := bareDrossTestRE.FindStringIndex(f)
+	if add < 0 || test == nil || test[0] > add {
+		t.Errorf("§1f must run a bare `dross test` before `git add <task.files>` (test at %v, add at %d)", test, add)
+	}
+}
+
+// soloReview is execute.md §1f, and the solo review block inside it.
+func soloReview(t *testing.T) (string, string) {
+	t.Helper()
+	f := sectionOf(promptBody(t, "execute.md"), "### 1f.", "### ")
+	if f == "" {
+		t.Fatal("execute.md has no §1f section")
+	}
+	i := strings.Index(f, "**Solo review (`--solo` only).**")
+	j := strings.Index(f, "The commit gate checks this too")
+	if i < 0 || j < i {
+		t.Fatal("§1f has no solo review block")
+	}
+	return f, f[i:j]
+}
+
+func mustIdx(t *testing.T, s, sub string) int {
+	t.Helper()
+	i := strings.Index(s, sub)
+	if i < 0 {
+		t.Fatalf("missing %q", sub)
+	}
+	return i
+}
+
+// TestExecuteSoloReviewPlacement (c-1): in a solo run the reviewer runs after
+// the full green `dross test` and before the commit; pair mode spawns none.
+func TestExecuteSoloReviewPlacement(t *testing.T) {
+	f, block := soloReview(t)
+	test := bareDrossTestRE.FindStringIndex(f)
+	if test == nil {
+		t.Fatal("§1f lost its bare `dross test`")
+	}
+	ctx, spawn, status, add := mustIdx(t, f, "dross review context"), mustIdx(t, f, `subagent_type: "`+review.ReviewerAgent+`"`), mustIdx(t, f, "dross review status"), mustIdx(t, f, "git add <task.files>")
+	if !(test[0] < ctx && ctx < spawn && spawn < status && status < add) {
+		t.Errorf("solo review order: dross test %d, review context %d, spawn %d, review status %d, git add %d — want that order", test[0], ctx, spawn, status, add)
+	}
+	if !strings.Contains(block, "In **pair mode skip this entirely**: the human is the gate.") {
+		t.Error("the solo review block no longer says pair mode skips it")
+	}
+	c := sectionOf(promptBody(t, "execute.md"), "### 1c.", "### ")
+	if strings.Contains(c, "dross review") || strings.Contains(c, review.ReviewerAgent) {
+		t.Error("§1c (the pair approval step) spawns or prepares the reviewer")
+	}
+}
+
+// TestExecuteReviewerSpawnForeground: the spawn carries the reviewer's exact
+// name and the printed line as the whole prompt. Since review_pass_signal's
+// amendment a background spawn records through its SubagentStop, so the step
+// no longer demands a foreground spawn — it waits for the reviewer to finish.
+func TestExecuteReviewerSpawnForeground(t *testing.T) {
+	_, block := soloReview(t)
+	var spawn string
+	for _, para := range strings.Split(block, "\n") {
+		if strings.Contains(para, "subagent_type:") {
+			spawn = para
+		}
+	}
+	for _, want := range []string{`subagent_type: "` + review.ReviewerAgent + `"`, "**verbatim** as the whole prompt", "Add nothing to it", "**wait for its completion notice**"} {
+		if !strings.Contains(spawn, want) {
+			t.Errorf("the spawn step lost %q:\n%s", want, spawn)
+		}
+	}
+}
+
+// TestExecuteReviewFailurePath (c-3): one fix round, re-tested before the
+// re-review; a still-failing review sets the code aside before marking the
+// task failed, and the loop moves on.
+func TestExecuteReviewFailurePath(t *testing.T) {
+	_, block := soloReview(t)
+	blocked := block[mustIdx(t, block, "- `blocked`"):mustIdx(t, block, "- `pass-stale`")]
+	if !strings.Contains(blocked, "**one fix round**, never more") {
+		t.Error("the blocked branch no longer caps the fix round at one")
+	}
+	if mustIdx(t, blocked, "re-run `dross test`") > mustIdx(t, blocked, "dross review context") {
+		t.Error("the fix round re-reviews before re-running `dross test`")
+	}
+	fail := block[mustIdx(t, block, "- `exhausted` or `unavailable`"):]
+	stash, failed, next := mustIdx(t, fail, "git stash push -u -- . ':(exclude).dross'"), mustIdx(t, fail, "dross task status <phase> <task-id> failed"), mustIdx(t, fail, "dross task next <phase>")
+	if !(stash < failed && failed < next) {
+		t.Errorf("failure path order: stash %d, failed %d, task next %d — want stash, then failed, then next", stash, failed, next)
+	}
+}
+
+// TestExecuteReviewSpawnError (review_unavailable): an errored spawn records
+// nothing, so the prompt itself must route it to a failed task.
+func TestExecuteReviewSpawnError(t *testing.T) {
+	_, block := soloReview(t)
+	fail := block[mustIdx(t, block, "- `exhausted` or `unavailable`"):]
+	for _, want := range []string{"**or the spawn itself errored**", `--reason "<the error>"`} {
+		if !strings.Contains(fail, want) {
+			t.Errorf("the failure path lost %q", want)
+		}
+	}
+}
+
+func TestExecuteNoCodeSkipsReview(t *testing.T) {
+	_, block := soloReview(t)
+	if !strings.Contains(block, "A task that changed only `.dross/` (no code) also skips it") {
+		t.Error("the solo review block no longer skips .dross/-only tasks")
+	}
+}
+
+// TestExecuteSoloRedStashes: the red-test solo path must stash before
+// marking failed — `failed` refuses while a solo task's code is uncommitted.
+func TestExecuteSoloRedStashes(t *testing.T) {
+	e := sectionOf(promptBody(t, "execute.md"), "### 1e.", "### ")
+	red := e[mustIdx(t, e, "**Red, solo mode**"):]
+	if mustIdx(t, red, "git stash push -u -- . ':(exclude).dross'") > mustIdx(t, red, "dross task status <phase> <task-id> failed") {
+		t.Error("§1e's solo red path marks failed before stashing")
+	}
+}
+
+func TestExecutePromptSoloBeginNeedsReviewer(t *testing.T) {
+	pre := sectionOf(promptBody(t, "execute.md"), "## 0. Pre-flight", "## 1.")
+	if !strings.Contains(pre, "A `--solo` begin refuses unless the solo task reviewer") || !strings.Contains(pre, "`dross install`") {
+		t.Error("§0 no longer routes a refused solo begin to `dross install`")
 	}
 }

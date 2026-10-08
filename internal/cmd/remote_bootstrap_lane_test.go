@@ -102,13 +102,12 @@ func TestBootstrapPlansLaneStepsWithNoAdapterAllowlist(t *testing.T) {
 	}
 }
 
-// TestBootstrapEmptyMessageNamesBothSources: the repo shape with nothing to do
-// is now empty for TWO reasons, and a message naming only adapters would tell a
-// user with lanes that they have none.
-//
-// Reached through an allowlist that selects no known adapter — the only way the
-// tool set is genuinely empty.
-func TestBootstrapEmptyMessageNamesBothSources(t *testing.T) {
+// TestBootstrapWithNoAdaptersOrLanesStillPlansTheHostLock: a repo whose
+// allowlist selects no known adapter and declares no lane used to be the one
+// shape with nothing to bootstrap. It is not any more — every granted host
+// needs the lock's tool (remote-host-mutex), and the plan says so in its own
+// words rather than claiming there is nothing to do.
+func TestBootstrapWithNoAdaptersOrLanesStillPlansTheHostLock(t *testing.T) {
 	bootstrapLaneFixture(t, "", "no-such-adapter")
 	probeMissing(t)
 	rec := &execRecorder{}
@@ -118,11 +117,11 @@ func TestBootstrapEmptyMessageNamesBothSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "nothing to bootstrap") {
-		t.Fatalf("a repo with no tools at all did not report an empty plan:\n%s", out)
+	if strings.Contains(out, "nothing to bootstrap") {
+		t.Fatalf("a granted host was told there is nothing to bootstrap while it still needs the lock tool:\n%s", out)
 	}
-	if !strings.Contains(out, "test lanes") {
-		t.Errorf("the empty message names only adapters:\n%s", out)
+	if !strings.Contains(out, "flock (host lock)") {
+		t.Errorf("the plan does not name the host lock's tool:\n%s", out)
 	}
 }
 

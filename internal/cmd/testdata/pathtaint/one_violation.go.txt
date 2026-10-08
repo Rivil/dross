@@ -1,0 +1,18 @@
+// Single-violation fixture for the path-field taint scan
+// (TestPathFindingNamesEscapeFieldRemedy): one changes.TaskRecord.Files element
+// opened with os.ReadFile, found by its anchor comment.
+package oneviolation
+
+import (
+	"os"
+
+	"github.com/Rivil/dross/internal/changes"
+)
+
+func readFirst(rec changes.TaskRecord) []byte {
+	if len(rec.Files) == 0 {
+		return nil
+	}
+	body, _ := os.ReadFile(rec.Files[0]) // anchor: escape
+	return body
+}

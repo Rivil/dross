@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/project"
 )
 
@@ -56,7 +57,7 @@ func branchTopology(repoDir, root, workOverride string) (topology, error) {
 
 	// Detached HEAD leaves Head empty rather than erroring — the rest of the
 	// answer is still true and still worth printing.
-	if head, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD"); err == nil {
+	if head, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD"); err == nil {
 		t.Head = head
 	}
 
@@ -77,7 +78,7 @@ func branchTopology(repoDir, root, workOverride string) (topology, error) {
 	// far Work is behind, which is a different question and always 0 for a
 	// freshly-merged milestone branch.
 	if !t.OnMain {
-		if out, err := gitTrim(repoDir, gitRefArgs("rev-list", []string{"--count"}, t.Main+".."+t.Work)...); err == nil {
+		if out, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", []string{"--count"}, t.Main+".."+t.Work)...); err == nil {
 			if n, err := strconv.Atoi(strings.TrimSpace(out)); err == nil {
 				t.AheadOfMain = n
 			}

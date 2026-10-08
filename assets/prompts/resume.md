@@ -31,7 +31,8 @@ Then reconcile handoff against reality and flag drift:
 - **Branch mismatch** — handoff says `phase/<id>` but you're on a different branch. Offer to `dross phase checkout <id>` — the guarded checkout, which refuses rather than creating a branch that isn't there; if it refuses, surface it, don't guess.
 - **Dirty drift** — `## Dirty` lists files but the tree is clean now (committed since?), or new dirty files appeared. Note it.
 - **Stale next** — the `## Next` action looks already-done given the diff. Call it out rather than re-doing it.
-- **Shipped, not merged** — `dross status` reads `shipped` and names the open PR plus the base it's waiting on. This is a **normal** mid-flight state, not drift: `dross ship` leaves `current_phase` set precisely because the phase isn't done until the PR merges. Don't treat it as finished, don't start a new phase on top of it, and don't "reconcile" it — the next step is the merge gate, then `dross phase complete <id>`. (There is no `stale:` line to look for any more; the state it warned about — a phase reading `completed` while its PR is unmerged — is unreachable now that only a confirmed merge clears `current_phase`.)
+- **Shipped, not merged** — `dross status` reads `shipped` and names the open PR plus the base it's waiting on. This is a **normal** mid-flight state, not drift: `dross ship` leaves `current_phase` set precisely because the phase isn't done until the PR merges. Don't treat it as finished, don't start a new phase on top of it, and don't "reconcile" it — the next step is the merge gate, then `dross phase complete <id>`. (A phase reading `completed` while its PR is unmerged is unreachable now that only a confirmed merge clears `current_phase`.)
+- **Stale verdict** — `dross status` prints a `stale:` line: the phase's passing verdict predates files changed since its run, so `dross ship` refuses it and the merge has to wait. Route to `/dross-verify <phase-id>` before shipping or merging. Never pass `--force-unverified` on the user's behalf — that override is theirs to choose.
 - **Diverged base** — `dross phase complete` aborts with a fast-forward failure, meaning local `<main>` has genuinely diverged from origin. Reconcile with the guarded verbs — `dross phase complete --recover`, or `dross ship recover` outside the merge loop — which reset and restore the `.dross/` tree behind `guardLiveState`. **Never** hand over a raw `git reset --hard` or `git checkout` here: those are exactly the unguarded switches that replay a tracked `state.json` over the live machine-local copy. Resume **never auto-mutates** state to resolve this — surface it and let the user choose.
 
 If the handoff is older than a few days, say so — memory may have moved on.
@@ -41,10 +42,13 @@ If the handoff is older than a few days, say so — memory may have moved on.
 The handoff is a checklist. Walk the items and close out what's done. Via `AskUserQuestion` (or just confirm in prose if it's obvious):
 - For each `## Next` / `## Open loops` item: **done** (remove it) / **keep** (still open) / **edit** (reword).
 
-Then rewrite `.dross/handoff.md` with only what's left:
-- Items still open stay.
-- Refresh the `phase:` / `branch:` header line and the `## Dirty` list from current reality.
+Then prune `.dross/handoff.md` in place with `Edit`, one change at a time:
+- A **done** item: `Edit` its line out. Items still open stay exactly as written.
+- An **edit** item: `Edit` that line to the new wording.
+- Refresh the `phase:` / `branch:` header line and the `## Dirty` list from current reality, each with its own `Edit`.
 - If **everything** is resolved → delete the file (`rm .dross/handoff.md`). The `dross status` nudge disappears; you're fully resumed onto a clean slate.
+
+Never replace the whole file with `Write`. A pruned handoff is usually far smaller than the one you read, and the curated-file gate refuses a `Write` that cuts `handoff.md` below half its size. An `Edit` per change also leaves every line you didn't touch byte-for-byte intact.
 
 Never silently drop an item the user didn't mark done. Pruning is the user's call, item by item.
 

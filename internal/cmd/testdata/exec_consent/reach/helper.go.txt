@@ -1,0 +1,50 @@
+// The helper layer of the reach fixture: every spawn lives here, two packages
+// away from the command that reaches it, so an edge set that stopped at package
+// boundaries would report all of them as reachable from nothing.
+//
+// A fixture, not compiled source — see ungated.go.txt for why .go.txt.
+
+package helperpkg
+
+import "os/exec"
+
+// HopOne -> hopTwo -> a spawn. Two NAMED hops, neither of them the command.
+func HopOne() error { return hopTwo() }
+
+func hopTwo() error {
+	return exec.Command("git", "log", "--oneline").Run()
+}
+
+// GatedOnly reaches its spawn through a package-level var seam, which is how
+// this codebase makes a subprocess substitutable in tests.
+func GatedOnly() error { return runFn() }
+
+var runFn = doSpawn
+
+func doSpawn() error {
+	return exec.Command("go", "test", "./...").Run()
+}
+
+// Shared is reached by BOTH commands, which is the mixed class: a marker is
+// required, and the finding for an unmarked one names the ungated reach.
+func Shared() error { return sharedSpawn() }
+
+func sharedSpawn() error {
+	return exec.Command("rsync", "-a", "src", "dst").Run()
+}
+
+// Displayed is reached only by the command that reads consent without acting
+// on it, so it is ungated however the name rule is written.
+func Displayed() error {
+	return exec.Command("markdownlint", "docs").Run()
+}
+
+// Orphan is reached by no command at all. Fail-closed: an unresolvable or
+// absent path must read as "no gate covers this", never as "nothing to do".
+func Orphan() error {
+	return exec.Command("cargo", "build").Run()
+}
+
+// LaneConsented is the name-rule bait: a caller that discards its verdict must
+// not be counted as gating just because the identifier ends in "Consented".
+func LaneConsented() (int, error) { return 0, nil }

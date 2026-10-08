@@ -1,0 +1,26 @@
+id = "golden"
+title = "Golden"
+
+[signals]
+  files = ["golden.mod"]
+  priority = 1
+
+[runtime]
+  [runtime.test]
+    run = "golden test"
+
+[[tools]]
+  name = "goldlint"
+  kind = "analyzer"
+  core = true
+  install = "go install example.com/goldlint@latest"
+
+[[tools]]
+  name = "goldscan"
+  kind = "scanner"
+  install = "go install example.com/goldscan@latest"
+
+[loadout]
+  mcp_tools = ["golden-mcp — look things up"]
+  guardrails = ["Check the <signature> & the docs."]
+  conventions = ["One command per file."]

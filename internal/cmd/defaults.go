@@ -5,10 +5,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/defaults"
+	"github.com/Rivil/dross/internal/render"
 )
 
 func Defaults() *cobra.Command {
@@ -38,7 +38,7 @@ func defaultsShow() *cobra.Command {
 				return emitJSON(d)
 			}
 			Printf("# %s\n", path)
-			return toml.NewEncoder(os.Stdout).Encode(d)
+			return render.TOML(os.Stdout, d)
 		},
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)

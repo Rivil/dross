@@ -1,0 +1,16 @@
+// A fixture, not compiled source: the .go.txt suffix keeps it out of the build
+// while parser.ParseFile still reads it with real file names and real line
+// numbers. TestExecConsentFindingNamesFileLineAndRemedy needs both, because the
+// anchors the finding prints are the whole of its usefulness.
+//
+// It holds exactly ONE ungated, unmarked spawn. The marked one above it is
+// there so "exactly one finding" is a precision claim as well as a recall one.
+
+package fixture
+
+import "os/exec"
+
+//dross:exec-exempt git rev-parse resolves a ref and cannot reach repo-authored code
+var head = exec.Command("git", "rev-parse", "HEAD")
+
+var build = exec.Command("go", "build", "./...")

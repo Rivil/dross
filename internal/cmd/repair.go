@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -87,8 +88,8 @@ to write the restores and commit the result.`,
 				}
 			}
 
-			if out, err := gitCombined(repoDir, gitPathArgs("add", nil, RootDirName)...); err != nil {
-				return fmt.Errorf("git add %s: %w\n%s", RootDirName, err, out)
+			if err := gitrun.Run(repoDir, gitPathArgs("add", nil, RootDirName)...); err != nil {
+				return fmt.Errorf("git add %s: %w", RootDirName, err)
 			}
 			// Empty-commit guard. Restoring a clobbered tracked file to HEAD's
 			// blob can never itself produce a diff against HEAD — the working
@@ -96,13 +97,13 @@ to write the restores and commit the result.`,
 			// clobber. state.json is gitignored and never stages at all. A
 			// real diff only arises when a restored phase dir carries content
 			// local HEAD never had (t-3's origin-sourced restore).
-			if gitNoOut(repoDir, "diff", "--cached", "--quiet") == nil {
+			if gitrun.Quiet(repoDir, "diff", "--cached", "--quiet") == nil {
 				Print("\nrestored — nothing further to commit (already matches git history)")
 				return nil
 			}
 			msg := "chore(dross): repair clobbered .dross/ artefacts"
-			if out, err := gitCombined(repoDir, "commit", "-m", msg); err != nil {
-				return fmt.Errorf("git commit: %w\n%s", err, out)
+			if err := gitrun.Run(repoDir, "commit", "-m", msg); err != nil {
+				return fmt.Errorf("git commit: %w", err)
 			}
 			Print("\nrepaired and committed")
 			return nil
@@ -120,7 +121,7 @@ to write the restores and commit the result.`,
 // always stale regardless.
 func checkStaleState(repoDir, root, statePath, mainBranch string) (stale bool, reconstructed *state.State, err error) {
 	var branchPhase string
-	if branch, berr := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD"); berr == nil {
+	if branch, berr := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD"); berr == nil {
 		if id, ok := strings.CutPrefix(branch, "phase/"); ok {
 			branchPhase = id
 		}

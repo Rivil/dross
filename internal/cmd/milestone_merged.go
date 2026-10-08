@@ -3,6 +3,8 @@ package cmd
 import (
 	"errors"
 	"fmt"
+
+	"github.com/Rivil/dross/internal/gitrun"
 )
 
 // This file answers one question and writes nothing: has milestone/<version>
@@ -38,7 +40,7 @@ func milestoneMergedIntoMain(repoDir, branch, mainBranch string) (merged, localO
 	}
 
 	// Best-effort: offline is a supported mode, not a failure.
-	fetched := gitNoOut(repoDir, "fetch", "-q", "origin") == nil
+	fetched := gitrun.Quiet(repoDir, "fetch", "-q", "origin") == nil
 
 	remoteRef := "refs/remotes/origin/" + branch
 	remoteMain := "refs/remotes/origin/" + mainBranch
@@ -75,5 +77,5 @@ func milestoneMergedIntoMain(repoDir, branch, mainBranch string) (merged, localO
 
 // gitRefExists reports whether a fully-qualified ref resolves in repoDir.
 func gitRefExists(repoDir, ref string) bool {
-	return gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, ref)...) == nil
+	return gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, ref)...) == nil
 }

@@ -27,9 +27,9 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
-	"path/filepath"
 	"sync"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // DropInapplicable removes mutants that cannot be killed by any test, and
@@ -113,7 +113,12 @@ func (c *constLineCache) isConstLine(file string, line int) bool {
 	}
 	lines, ok := c.byFile[file]
 	if !ok {
-		lines = constLines(filepath.Join(c.root, file))
+		// file is a path a mutation tool reported; it is contained under
+		// the repo root before it is read. One that escapes drops nothing.
+		lines = map[int]bool{}
+		if p, err := pathfence.Contain(c.root, "mutation report file", file); err == nil {
+			lines = constLines(p)
+		}
 		c.byFile[file] = lines
 	}
 	return lines[line]
@@ -122,14 +127,14 @@ func (c *constLineCache) isConstLine(file string, line int) bool {
 // constLines returns the set of source lines covered by const declarations.
 // A file that cannot be read or parsed yields an empty set, which drops
 // nothing — see DropInapplicable's note on certainty.
-func constLines(path string) map[int]bool {
+func constLines(path pathfence.Contained) map[int]bool {
 	out := map[int]bool{}
-	src, err := os.ReadFile(path)
+	src, err := pathfence.ReadFile(path)
 	if err != nil {
 		return out
 	}
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, path, src, 0)
+	f, err := parser.ParseFile(fset, path.Rel(), src, 0)
 	if err != nil {
 		return out
 	}

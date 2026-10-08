@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/project"
@@ -950,7 +951,7 @@ func TestBoardConfigCarriesFields(t *testing.T) {
 			FixVersions: "Release",
 		},
 	}
-	cfg := boardConfig(b, "https://yt.example.com", nil)
+	cfg := boardsync.Config(b, "https://yt.example.com", nil)
 	if cfg.Fields.State != "Статус" {
 		t.Errorf("Fields.State = %q, want Статус", cfg.Fields.State)
 	}
@@ -961,7 +962,7 @@ func TestBoardConfigCarriesFields(t *testing.T) {
 		t.Errorf("Fields.FixVersions = %q, want Release", cfg.Fields.FixVersions)
 	}
 
-	if zero := boardConfig(project.Board{Provider: "youtrack"}, "", nil); zero.Fields != (forge.Fields{}) {
+	if zero := boardsync.Config(project.Board{Provider: "youtrack"}, "", nil); zero.Fields != (forge.Fields{}) {
 		t.Errorf("Fields = %+v for an unconfigured board, want the zero value", zero.Fields)
 	}
 }

@@ -294,13 +294,15 @@ func TestShipPromptAutoBackfill(t *testing.T) {
 	}
 }
 
-// TestShipPromptEmitsTerminalBoardStatuses proves c-6: ship moves the board
-// issue to a terminal lifecycle state rather than just closing it.
+// TestShipPromptEmitsTerminalBoardStatuses proves c-6 and its successor: ship
+// moves the board issue to shipped once the PR merges, and the terminal
+// complete belongs to `dross phase complete`, which finalizes the board itself.
 //
-// The bare `phase sync <phase-id> --close` this replaces is why "shipped" and
-// "complete" sat in both forge state maps as keys nothing ever resolved — dross
-// keyed them but never emitted them. Giving ship the two call sites is what
-// makes the bidirectional divergence gate satisfiable in both directions.
+// The bare `phase sync <phase-id> --close` that once closed the card is why
+// "shipped" and "complete" sat in both forge state maps as keys nothing ever
+// resolved. ship's own `--status complete --close` line has since moved into
+// the binary (boardsync.FinalizePhase), so a prompt still carrying it would
+// close the phase card a second time.
 func TestShipPromptEmitsTerminalBoardStatuses(t *testing.T) {
 	content := shipPromptContent(t)
 
@@ -311,7 +313,6 @@ func TestShipPromptEmitsTerminalBoardStatuses(t *testing.T) {
 		{"squash-merge bullet", strings.Index(content, "squash-merge via provider")},
 		{"--status shipped call", strings.Index(content, "phase sync <phase-id> --status shipped")},
 		{"dross phase complete", strings.Index(content, "dross phase complete <phase-id>")},
-		{"--status complete --close call", strings.Index(content, "phase sync <phase-id> --status complete --close")},
 	}
 	for _, m := range marks {
 		if m.at < 0 {
@@ -319,60 +320,258 @@ func TestShipPromptEmitsTerminalBoardStatuses(t *testing.T) {
 		}
 	}
 
-	// Order, not mere presence. Both calls exist in either arrangement, so a
-	// substring check would pass with them swapped — and swapped is wrong:
-	// shipped is the state once the PR merges but before the phase finalizes,
-	// complete is the state after.
+	// Order, not mere presence: shipped is the state once the PR merges but
+	// before the phase finalizes, so it must be emitted before complete runs.
 	for i := 1; i < len(marks); i++ {
 		if marks[i].at <= marks[i-1].at {
 			t.Errorf("%s (at %d) must come after %s (at %d)", marks[i].name, marks[i].at, marks[i-1].name, marks[i-1].at)
 		}
 	}
 
+	if strings.Contains(content, "phase sync <phase-id> --status complete --close") {
+		t.Error("ship.md still closes the phase card itself — dross phase complete finalizes the board, so this would close it a second time")
+	}
 	// The pattern that produced the dead map entries.
 	if strings.Contains(content, "phase sync <phase-id> --close") {
 		t.Error("ship.md still closes the board issue with a bare --close — that call emits no status, which is what left shipped and complete as state-map keys nothing resolves")
 	}
 
-	// Locked terminal_emit_sites: `dross phase complete` gains no board
-	// coupling. Both board moments are ship's own, so a command with zero board
-	// awareness today stays that way.
-	for i, line := range strings.Split(content, "\n") {
-		if strings.Contains(line, "dross phase complete") && strings.Contains(line, "phase sync") {
-			t.Errorf("ship.md:%d couples `dross phase complete` with a phase sync call: %s", i+1, strings.TrimSpace(line))
+	// The retry. complete exits non-zero when the board did not follow; the
+	// step that runs it and the cookbook must both name the command that
+	// finishes the job, or the failure reads as the completion failing and an
+	// agent reaches for --recover.
+	const finalize = "dross issue phase finalize <phase-id>"
+	for _, heading := range []string{"## 6. merge gate", "## recovery"} {
+		if !strings.Contains(promptSection(t, content, heading), finalize) {
+			t.Errorf("ship.md %q never names %q — a board that did not finalize has no named retry", heading, finalize)
 		}
 	}
 }
 
-// TestShipPromptClosesTaskCardsAfterPhaseComplete is c-2's emission half. A
-// terminal status nothing emits closes nothing: every task card sat in
-// task-in-review from its commit until forever, because the finalize steps had
-// no line that moved them on.
-//
-// Order is asserted, not just presence. The close belongs AFTER `dross phase
-// complete` — the cards are terminal because the phase finished, and emitting
-// it earlier would resolve them while the merge could still go sideways — and
-// before §7 Wrap, which is where the run stops doing things.
+// TestShipPromptClosesTaskCardsAfterPhaseComplete is c-2's emission half, now
+// owned by the binary. The task cards still close after the phase finishes —
+// boardsync.FinalizePhase, run last by `dross phase complete`, moves each to
+// task-complete — so ship.md must say so on the complete step and must no
+// longer carry a task close of its own, which would re-close cards the
+// finalizer already closed.
 func TestShipPromptClosesTaskCardsAfterPhaseComplete(t *testing.T) {
 	content := shipPromptContent(t)
 
-	const emit = "dross issue task sync <phase-id> --status task-complete --close"
-	at := strings.Index(content, emit)
+	if strings.Contains(content, "dross issue task sync <phase-id> --status task-complete --close") {
+		t.Error("ship.md still closes the task cards itself — dross phase complete finalizes them")
+	}
+	var step string
+	for _, line := range strings.Split(promptSection(t, content, "## 6. merge gate"), "\n") {
+		if strings.Contains(line, "dross phase complete <phase-id>") {
+			step = line
+			break
+		}
+	}
+	if step == "" {
+		t.Fatal("ship.md §6 no longer carries the `dross phase complete` step")
+	}
+	for _, needle := range []string{"task-complete", "phase card to complete"} {
+		if !strings.Contains(step, needle) {
+			t.Errorf("ship.md's `dross phase complete` step must say it closes the board cards (%q missing):\n%s", needle, step)
+		}
+	}
+}
+
+// TestShipPromptReRunIsTheRetry (c-3): the "do not re-run dross ship" guidance
+// is gone — a re-run is the sanctioned retry. §5's On-failure block says so,
+// §4's step list describes the gated push -> open-or-reuse -> record -> mark
+// order the binary actually runs, and Recovery gains the record-push item.
+func TestShipPromptReRunIsTheRetry(t *testing.T) {
+	content := shipPromptContent(t)
+
+	for _, stale := range []string{"do not re-run", "would open a second pr"} {
+		if strings.Contains(content, stale) {
+			t.Errorf("ship.md still carries the retired guidance %q", stale)
+		}
+	}
+
+	onFailure := promptSection(t, content, "on failure:")
+	if !strings.Contains(onFailure, "re-run dross ship") && !strings.Contains(onFailure, "re-running dross ship") {
+		t.Errorf("ship.md §5 On-failure must name re-running dross ship as safe:\n%s", onFailure)
+	}
+	for _, needle := range []string{"dross ship --force", "git pull --rebase origin phase/<id>"} {
+		if !strings.Contains(onFailure, needle) {
+			t.Errorf("ship.md §5 On-failure must name %q for the refusal it answers", needle)
+		}
+	}
+	// A re-run reports the number, not a URL: changes.json stores none. The
+	// slice runs from the re-run sentence to the next heading.
+	rerun := strings.Index(onFailure, "re-run")
+	if rerun < 0 {
+		rerun = strings.Index(onFailure, "re-running")
+	}
+	if rerun >= 0 && strings.Contains(onFailure[rerun:], "<pr-url>") {
+		t.Error("ship.md §5 claims a re-run returns a PR URL — changes.json stores none")
+	}
+
+	recovery := promptSection(t, content, "## recovery")
+	for _, needle := range []string{"record push", "dross ship"} {
+		if !strings.Contains(recovery, needle) {
+			t.Errorf("ship.md Recovery must name %q", needle)
+		}
+	}
+
+	// §4's CLI step list: the gate precedes the open, the record precedes
+	// the mark, and the mark is explicitly last.
+	steps := promptSection(t, content, "## 4. ship")
+	order := []string{"gates phase/<id> on origin", "opens the pr", "commits the pr record", "marks the phase shipped"}
+	last := -1
+	for _, needle := range order {
+		at := strings.Index(steps, needle)
+		if at < 0 {
+			t.Errorf("ship.md §4 step list missing %q", needle)
+			continue
+		}
+		if at < last {
+			t.Errorf("ship.md §4 step %q is out of order", needle)
+		}
+		last = at
+	}
+}
+
+// TestShipPromptTestsBeforeDocsCommit: the ARCHITECTURE.md commit changes the
+// tree verify measured, so §3.5 must run a full `dross test` before it — the
+// commit gate refuses a code commit without a recorded green for that tree.
+func TestShipPromptTestsBeforeDocsCommit(t *testing.T) {
+	sec := sectionOf(promptBody(t, "ship.md"), "## 3.5", "## 4.")
+	commit := strings.Index(sec, `git commit -m "docs(`)
+	if commit < 0 {
+		t.Fatal("ship.md §3.5 no longer commits ARCHITECTURE.md with `git commit -m \"docs(` — re-point this test")
+	}
+	before := false
+	for _, loc := range bareDrossTestRE.FindAllStringIndex(sec, -1) {
+		if loc[0] < commit {
+			before = true
+		}
+	}
+	if !before {
+		t.Error("ship.md §3.5 has no bare `dross test` line before the docs commit")
+	}
+}
+
+// rawShipSection returns ship.md's raw text from heading to the next "## "
+// heading. Raw, not normalised: the Forgejo body is matched as written,
+// capital D and all.
+func rawShipSection(t *testing.T, heading string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "ship.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := string(b)
+	at := strings.Index(doc, heading)
 	if at < 0 {
-		t.Fatalf("ship.md never emits %q — every task card would stay in task-in-review forever", emit)
+		t.Fatalf("ship.md has no %q section", heading)
 	}
-	complete := strings.Index(content, "dross phase complete <phase-id>")
-	if complete < 0 {
-		t.Fatal("ship.md no longer carries the `dross phase complete` step this emission is anchored to")
+	rest := doc[at+len(heading):]
+	if next := strings.Index(rest, "\n## "); next >= 0 {
+		rest = rest[:next]
 	}
-	if at < complete {
-		t.Error("the task close is emitted BEFORE `dross phase complete`; the cards are terminal because the phase finished, not before it did")
+	return rest
+}
+
+// TestShipPromptReShipsAfterEveryCIFix (c-7): a fix pushed after the PR opened
+// is followed by a required `dross ship <phase-id>`, so the freshness gate sees
+// it before CI is watched again — and the old "also safe" wording, which made
+// the re-ship optional, is gone.
+func TestShipPromptReShipsAfterEveryCIFix(t *testing.T) {
+	content := shipPromptContent(t)
+	onFailure := promptSection(t, content, "on failure:")
+	push := strings.Index(onFailure, "git push origin phase/<id>")
+	// The unconditional step, not the re-ship inside the stale-refusal branch.
+	reship := strings.Index(onFailure, "re-run dross ship <phase-id> — required")
+	loop := strings.Index(onFailure, "loop back")
+	if push < 0 || reship < 0 || loop < 0 {
+		t.Fatalf("ship.md §5 On failure lacks a step: push %d, re-ship %d, loop back %d", push, reship, loop)
 	}
-	wrap := strings.Index(content, "## 7. wrap")
-	if wrap < 0 {
-		t.Fatal("ship.md no longer has a §7 Wrap section to bound the finalize steps")
+	if !(push < reship && reship < loop) {
+		t.Errorf("§5 On failure must push, then re-run dross ship <phase-id>, then loop back (at %d, %d, %d)", push, reship, loop)
 	}
-	if at > wrap {
-		t.Error("the task close is emitted after the wrap section, where the run has already finished reporting")
+	if strings.Contains(content, "re-running dross ship is also safe") {
+		t.Error("ship.md still calls the re-ship optional ('also safe') — after a fix it is required")
+	}
+}
+
+// TestShipPromptReShipsBeforeMerge (c-7): §6 re-runs `dross ship <phase-id>`
+// before every provider's merge call, so a fix pushed after the pass cannot
+// merge under it, and a stale refusal is answered with /dross-verify.
+func TestShipPromptReShipsBeforeMerge(t *testing.T) {
+	gate := rawShipSection(t, "## 6. Merge gate")
+	reship := strings.Index(gate, "`dross ship <phase-id>`")
+	if reship < 0 {
+		t.Fatal("ship.md §6 never re-runs `dross ship <phase-id>`")
+	}
+	for _, call := range []string{"gh pr merge", "/pulls/<n>/merge", `{"Do":"squash"}`, `{"squash":true}`} {
+		at := strings.Index(gate, call)
+		if at < 0 {
+			t.Errorf("ship.md §6 lost its merge call %q", call)
+			continue
+		}
+		if reship > at {
+			t.Errorf("§6's re-ship comes after the merge call %q — a stale pass could merge", call)
+		}
+	}
+	onFailure := rawShipSection(t, "**On failure:**")
+	if !strings.Contains(gate, "/dross-verify") && !strings.Contains(onFailure, "/dross-verify") {
+		t.Error("neither §5 On failure nor §6 names /dross-verify as the answer to a stale refusal")
+	}
+}
+
+// prChecksWatch matches a `gh pr checks` invocation carrying --watch on the
+// same line, in any argument order.
+var prChecksWatch = regexp.MustCompile("gh pr checks[^\n`]*--watch")
+
+// TestShipPromptGitHubCIWatchWaitsForRuns: `gh pr checks --watch` exits 0 as
+// soon as the checks registered SO FAR pass, so with only a fast third-party
+// check registered and the Actions run still queued it reads green with CI
+// unrun (seen on #138, worked around by hand on every ship since). §5's GitHub
+// arm waits for the head SHA's runs to register, watches each run, and only
+// then reads the whole check set — in that order. No prompt may gate on the
+// --watch form, so a milestone or review flow cannot reintroduce it.
+func TestShipPromptGitHubCIWatchWaitsForRuns(t *testing.T) {
+	gate := rawShipSection(t, "## 5. CI gate")
+	steps := []string{"gh run list --commit <sha>", "gh run watch <run-id> --exit-status", "gh pr checks <pr-url>"}
+	last := -1
+	for _, step := range steps {
+		at := strings.Index(gate, step)
+		if at < 0 {
+			t.Errorf("ship.md §5 lost its GitHub step %q", step)
+			continue
+		}
+		if at < last {
+			t.Errorf("ship.md §5 runs %q out of order — register, watch each run, then read every check", step)
+		}
+		last = at
+	}
+
+	dir := filepath.Join(repoRootFromTest(t), "assets", "prompts")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := 0
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) != ".md" {
+			continue
+		}
+		seen++
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(string(b), "\n") {
+			// The one sanctioned mention is §5's own warning naming the form.
+			if m := prChecksWatch.FindString(line); m != "" && !strings.Contains(line, "never gate on `"+m) {
+				t.Errorf("%s gates CI on %q — it exits green before the Actions run registers", e.Name(), m)
+			}
+		}
+	}
+	if seen == 0 {
+		t.Fatal("no prompts found — the ban checked nothing")
 	}
 }

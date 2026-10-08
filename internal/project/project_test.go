@@ -1,6 +1,10 @@
 package project
 
 import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -481,5 +485,112 @@ func TestDeclaredPrepareRenders(t *testing.T) {
 	}
 	if got := reloaded.Runtime.TestLane[0].Prepare; got != "make build" {
 		t.Errorf("round-trip lost the prepare: %q", got)
+	}
+}
+
+// TestProjectTechdebtExcludeRoundTrip pins the [techdebt] exclude list through a
+// Load → Save → Load cycle: dropping omitempty or mis-tagging the field breaks the
+// second Load, and order is preserved because the entries are applied in order.
+func TestProjectTechdebtExcludeRoundTrip(t *testing.T) {
+	body := `[techdebt]
+  exclude = ["internal/techdebt/", "*.golden"]
+`
+	dir := t.TempDir()
+	src := filepath.Join(dir, "project.toml")
+	if err := os.WriteFile(src, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Load(src)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := []string{"internal/techdebt/", "*.golden"}
+	if !reflect.DeepEqual(p.Techdebt.Exclude, want) {
+		t.Fatalf("Exclude after first Load = %v, want %v", p.Techdebt.Exclude, want)
+	}
+	dst := filepath.Join(dir, "saved.toml")
+	if err := p.Save(dst); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	again, err := Load(dst)
+	if err != nil {
+		t.Fatalf("second Load: %v", err)
+	}
+	if !reflect.DeepEqual(again.Techdebt.Exclude, want) {
+		t.Fatalf("Exclude after round trip = %v, want %v", again.Techdebt.Exclude, want)
+	}
+}
+
+// TestProjectNoTechdebtSectionIsNil: an adopter without a [techdebt] table gets a
+// nil Exclude (scan everything) and no error — the knob is opt-in.
+func TestProjectNoTechdebtSectionIsNil(t *testing.T) {
+	body := `[project]
+  name = "x"
+`
+	path := filepath.Join(t.TempDir(), "project.toml")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if p.Techdebt.Exclude != nil {
+		t.Fatalf("Exclude = %v, want nil with no [techdebt] table", p.Techdebt.Exclude)
+	}
+}
+
+// TestProjectPackageHasOneEncoder pins the encoder hand-off: every non-test
+// file in this package makes exactly one BurntSushi encoder call between
+// them — toml.NewEncoder or toml.Marshal — and it lives in encodeFresh. A
+// second call site is a re-encode path the patcher does not verify, which is
+// the whole-file overwrite this phase exists to remove.
+func TestProjectPackageHasOneEncoder(t *testing.T) {
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {
+		return !strings.HasSuffix(fi.Name(), "_test.go")
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sites []string
+	for _, pkg := range pkgs {
+		for name, f := range pkg.Files {
+			for _, decl := range f.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok {
+					continue
+				}
+				ast.Inspect(fn, func(n ast.Node) bool {
+					call, ok := n.(*ast.CallExpr)
+					if !ok {
+						return true
+					}
+					sel, ok := call.Fun.(*ast.SelectorExpr)
+					if !ok {
+						return true
+					}
+					pkg, ok := sel.X.(*ast.Ident)
+					if !ok || pkg.Name != "toml" {
+						return true
+					}
+					if sel.Sel.Name == "NewEncoder" || sel.Sel.Name == "Marshal" {
+						sites = append(sites, fmt.Sprintf("%s in %s (%s)", sel.Sel.Name, fn.Name.Name, filepath.Base(name)))
+					}
+					return true
+				})
+			}
+		}
+	}
+	if len(sites) != 1 || !strings.HasPrefix(sites[0], "NewEncoder in encodeFresh") {
+		t.Errorf("encoder call sites = %v, want exactly [NewEncoder in encodeFresh]", sites)
+	}
+	// The differ's tree conversion still routes through encodeFresh.
+	src, err := os.ReadFile("patch_diff.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), "return encodeFresh(p)") {
+		t.Error("encodeCanonical no longer routes through encodeFresh")
 	}
 }

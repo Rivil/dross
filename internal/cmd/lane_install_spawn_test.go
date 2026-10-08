@@ -28,15 +28,19 @@ import (
 // rather than returning the named error — so the caller reporting a failed
 // install would instead take the process down.
 func TestLocalInstallRefusesEmptyArgv(t *testing.T) {
-	out, err := runInstallLocally(nil)
+	var stderr strings.Builder
+	prev := installStderr
+	installStderr = &stderr
+	defer func() { installStderr = prev }()
+	err := runInstallLocally(nil)
 	if err == nil {
 		t.Fatal("an empty install command was accepted")
 	}
 	if got := err.Error(); !strings.Contains(got, "empty install command") {
 		t.Errorf("error does not name the empty command, got %q", got)
 	}
-	if out != "" {
-		t.Errorf("a command that never ran produced output %q", out)
+	if stderr.Len() != 0 {
+		t.Errorf("a command that never ran produced output %q", stderr.String())
 	}
 }
 
@@ -46,18 +50,25 @@ func TestLocalInstallRefusesEmptyArgv(t *testing.T) {
 // The wrap is what puts the binary's name on a failure whose own message is
 // only ever "exit status N". Dropping it leaves the operator an exit code and
 // no subject. The output assertion is the second half: a failing install
-// returns its tail ALONGSIDE the error, and that tail is the whole diagnostic
-// value of capturing output rather than streaming it.
+// prints its tail to stderr — never onto the error — and that tail is the whole
+// diagnostic value of capturing output rather than streaming it.
 func TestLocalInstallWrapsFailureWithTheBinary(t *testing.T) {
-	out, err := runInstallLocally([]string{"sh", "-c", "echo the tail; exit 3"})
+	var stderr strings.Builder
+	prev := installStderr
+	installStderr = &stderr
+	defer func() { installStderr = prev }()
+	err := runInstallLocally([]string{"sh", "-c", "echo the tail; exit 3"})
 	if err == nil {
 		t.Fatal("a command that exited 3 was reported as a successful install")
 	}
 	if got := err.Error(); !strings.HasPrefix(got, "sh: ") {
 		t.Errorf("error does not lead with the binary that failed, got %q", got)
 	}
-	if !strings.Contains(out, "the tail") {
-		t.Errorf("a failed install dropped its output, got %q", out)
+	if !strings.Contains(stderr.String(), "the tail") {
+		t.Errorf("a failed install dropped its output, got %q", stderr.String())
+	}
+	if strings.Contains(err.Error(), "the tail") {
+		t.Errorf("a failed install's output reached the error: %q", err)
 	}
 }
 
@@ -69,11 +80,15 @@ func TestLocalInstallWrapsFailureWithTheBinary(t *testing.T) {
 // empty string on every successful install, and nothing else in the suite would
 // notice, since the seam's stub supplies its own output.
 func TestLocalInstallCapturesOutputOnSuccess(t *testing.T) {
-	out, err := runInstallLocally([]string{"sh", "-c", "echo installed pnpm"})
-	if err != nil {
+	var stderr strings.Builder
+	prev := installStderr
+	installStderr = &stderr
+	defer func() { installStderr = prev }()
+	if err := runInstallLocally([]string{"sh", "-c", "echo installed pnpm"}); err != nil {
 		t.Fatalf("runInstallLocally: %v", err)
 	}
-	if !strings.Contains(out, "installed pnpm") {
-		t.Errorf("the install's output was not captured, got %q", out)
+	// Captured, not streamed: a successful install stays quiet.
+	if stderr.Len() != 0 {
+		t.Errorf("a successful install printed %q", stderr.String())
 	}
 }

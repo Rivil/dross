@@ -1,0 +1,79 @@
+[verify]
+  phase = "secret-detection"
+  generated_at = 2026-09-20T12:32:43.864181Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-09-20T12:33:25.959874Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9342672413793104
+  mutants_killed = 867
+  mutants_survived = 61
+  mutants_not_covered = 61
+  mutants_in_scope = 928
+  unclassified_in_scope = 0
+  criteria_total = 6
+  criteria_covered = 6
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 867
+    survived = 61
+    timeout = 0
+    in_scope = 928
+    score = 0.9342672413793104
+    file_count = 35
+    measured_on = "helicon"
+    whole_file = ["internal/argfence/policy.go — adapter-lacks-range-runner", "internal/cmd/cleantree.go — adapter-lacks-range-runner", "internal/cmd/env_test.go — adapter-lacks-range-runner", "internal/cmd/hermetic_env_test.go — adapter-lacks-range-runner", "internal/cmd/secretscan.go — adapter-lacks-range-runner", "internal/cmd/secretscan_gate_test.go — adapter-lacks-range-runner", "internal/cmd/secretscan_scope_test.go — adapter-lacks-range-runner", "internal/cmd/secretscan_selfscan_test.go — adapter-lacks-range-runner", "internal/cmd/secretscan_transport_enum_test.go — adapter-lacks-range-runner", "internal/cmd/secretscan_writer_enum_test.go — adapter-lacks-range-runner", "internal/cmd/ship.go — adapter-lacks-range-runner", "internal/cmd/validate.go — adapter-lacks-range-runner", "internal/forge/forge.go — adapter-lacks-range-runner", "internal/forge/github.go — adapter-lacks-range-runner", "internal/forge/hostallow_test.go — adapter-lacks-range-runner", "internal/forge/hostile_config_test.go — adapter-lacks-range-runner", "internal/forge/jira.go — adapter-lacks-range-runner", "internal/forge/secretscan_test.go — adapter-lacks-range-runner", "internal/forge/youtrack.go — adapter-lacks-range-runner", "internal/secretscan/payload.go — adapter-lacks-range-runner", "internal/secretscan/rules.go — adapter-lacks-range-runner", "internal/secretscan/secretscan.go — adapter-lacks-range-runner", "internal/secretscan/secretscan_test.go — adapter-lacks-range-runner", "internal/secretscan/sinks.go — adapter-lacks-range-runner", "internal/secretscan/sinks_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/security/gitleaks_test.go — adapter-lacks-range-runner", "internal/ship/basepr.go — adapter-lacks-range-runner", "internal/ship/bitbucket.go — adapter-lacks-range-runner", "internal/ship/comment.go — adapter-lacks-range-runner", "internal/ship/gitlab.go — adapter-lacks-range-runner", "internal/ship/headpr.go — adapter-lacks-range-runner", "internal/ship/merged.go — adapter-lacks-range-runner", "internal/ship/open.go — adapter-lacks-range-runner", "internal/ship/secretscan_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/secretscan/secretscan_test.go:TestEveryRuleHasAHitCase", "internal/secretscan/secretscan_test.go:TestGitHubFineGrainedPATFires", "internal/secretscan/secretscan_test.go:TestBenignCorpusZeroHits", "internal/secretscan/secretscan_test.go:TestCarveOutsAreNotVacuous", "internal/secretscan/secretscan_test.go:TestKeyContextIsKeyAware", "internal/secretscan/secretscan_test.go:TestReportNeverEchoesTheValue"]
+  notes = "Hit corpus pins one instance per rule; benign corpus (16-hex ids, SHAs, UUIDs, base64, env refs, placeholders) yields zero hits; carve-outs proven non-vacuous. The prior FLAG (github_pat_ named but unfired) is closed by t-9: TestGitHubFineGrainedPATFires asserts one github-token hit at the 22-char floor and zero at 21, so deleting the github_pat_ alternation from rules.go:45 reds it; randomLine now coin-flips ghp_/github_pat_ so the 50-instance echo test covers both shapes."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/forge/secretscan_test.go:TestCreateIssueRefusedBeforeRequest", "internal/forge/secretscan_test.go:TestUpdateIssueBodyPatchRefused", "internal/forge/secretscan_test.go:TestEnsureMilestoneDescriptionRefused", "internal/ship/secretscan_test.go:TestOpenPRGitHubRefusedBeforeGh", "internal/ship/secretscan_test.go:TestOpenPRForgejoGitLabBitbucketRefused", "internal/ship/secretscan_test.go:TestPostCommentRefused", "internal/ship/secretscan_test.go:TestOpenPRBenignBodyStillPosts"]
+  notes = "Every board backend (forgejo/github/jira/youtrack) refuses with *secretscan.ErrHit and zero write requests reach the counting server; gh is refused before exec (refuseGh stub); REST providers refused; benign bodies still post."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/secretscan_scope_test.go:TestValidateRefusesOnArtifactSecret", "internal/cmd/secretscan_scope_test.go:TestScopeIsTrackedPlusStageable", "internal/cmd/secretscan_scope_test.go:TestScanErrorIsARefusalNotASkip", "internal/cmd/secretscan_gate_test.go:TestShipRefusesCommittedSecretOnCleanTree", "internal/cmd/secretscan_gate_test.go:TestShipPrintBodyStillScans", "internal/cmd/secretscan_gate_test.go:TestAutoCommitRefusesUntrackedSecretNote", "internal/cmd/secretscan_gate_test.go:TestShipAndValidateShareOneScanner"]
+  notes = "Validate refuses on a planted token; ship refuses on a committed secret with no push landing and zero PR-open requests; auto-commit refuses before git add (note stays untracked, zero commits); AST test pins validate/ship/auto-commit on one scanner."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/secretscan_transport_enum_test.go:TestEveryOutboundSeamIsRegistered", "internal/cmd/secretscan_transport_enum_test.go:TestTransportScanTripsOnTheLeakyFixture", "internal/cmd/secretscan_transport_enum_test.go:TestStaleTransportDeclarationFails", "internal/cmd/secretscan_writer_enum_test.go:TestEveryDrossWriterIsDeclared", "internal/cmd/secretscan_writer_enum_test.go:TestMachineLocalWritersAreReallyIgnored", "internal/cmd/secretscan_writer_enum_test.go:TestWriterScanTripsOnTheFixture", "internal/cmd/secretscan_writer_enum_test.go:TestStaleWriterDeclarationFails"]
+  notes = "Registry-plus-residual AST walks over internal/ with non-vacuity floors (>=10 transport sites, >=30 writer files, >=100 files visited); leaky fixtures must trip on the named arms; stale declarations fail. MachineLocal claims proven against the real gitignore seed."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/secretscan/secretscan_test.go:TestReportNeverEchoesTheValue", "internal/secretscan/secretscan_test.go:TestHitLocationIsFileLine", "internal/forge/secretscan_test.go:TestPayloadErrorNeverEchoes", "internal/cmd/secretscan_gate_test.go:TestShipRefusesCommittedSecretOnCleanTree"]
+  notes = "50 random instances per rule (now both GitHub shapes): no 6-byte window of the value appears in Hit.String, Report, or ErrHit.Error; fixed prefix and file:line asserted. Gate tests assert no token echo in refusal text."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/secretscan_selfscan_test.go:TestDrossTreeHasNoUnmarkedHits", "internal/cmd/secretscan_selfscan_test.go:TestSelfScanIsNotVacuous", "internal/cmd/secretscan_selfscan_test.go:TestSelfScanCoversTheWholeTreeNotJustDross", "internal/cmd/secretscan_selfscan_test.go:TestValidateOnDrossItself"]
+  notes = "Every tracked file (>=1500, >=900 under .dross/) scans clean; a planted leak yields exactly one hit; validate runs hermetically over a clone of HEAD with tracked .dross overlaid."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Re-verify after t-9 (test-only amend). Run r-20260920-103638 on helicon: identical to the prior pass — 867 killed, 61 survived, all 61 NOT-COVERED and already accepted (gremlins-attribution-ceiling / const-initializer-arithmetic / cross-package-only-coverage); efficacy over the 867 reachable mutants = 1.00; 0 unclassified in scope. A regex alternation is not a gremlins mutation target, so c-1's closure is proven by the test's assertion shape (22-char hit / 21-char miss), not by a new kill count."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Hit fingerprint prints the rule's fixed Prefix, not the matched prefix — a github_pat_ hit reports prefix=ghp_. Cosmetic; no value is echoed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Handoff loop closed: c-4's UnderDross classification of handoff.md/reap-log.json/run dirs is enforced by TestMachineLocalWritersAreReallyIgnored against the real seed — a MachineLocal claim for an unseeded path fails the test, so the plan's premise was wrong and the registry is right."

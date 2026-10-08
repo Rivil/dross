@@ -15,6 +15,8 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 type Milestone struct {
@@ -41,11 +43,28 @@ type Scope struct {
 	NonGoals        []string `toml:"non_goals,omitempty" json:"non_goals,omitempty"`
 }
 
-// FilePath returns the canonical milestone toml path.
-// e.g. FilePath(".dross", "v1.0") -> ".dross/milestones/v1.0.toml"
-func FilePath(root, version string) string {
-	return filepath.Join(root, "milestones", version+".toml")
+// ContainVersion contains a milestone version's toml under root/milestones.
+// A version is read back from hand-editable state.json and spec.toml, so it is
+// untrusted: one that escapes milestones/ is refused with pathfence.ErrEscapes.
+func ContainVersion(root, version string) (pathfence.Contained, error) {
+	return pathfence.Contain(filepath.Join(root, "milestones"), "milestone version", version+".toml")
 }
+
+// FilePath returns the canonical milestone toml path.
+// e.g. FilePath(".dross", "v1.0") -> ".dross/milestones/v1.0.toml". A version
+// that would escape milestones/ resolves to the refused segment
+// (phase.RefusedSegment), where no milestone exists.
+func FilePath(root, version string) string {
+	c, err := ContainVersion(root, version)
+	if err != nil {
+		return filepath.Join(root, "milestones", refusedSegment+".toml")
+	}
+	p := c.String()
+	return p
+}
+
+// refusedSegment mirrors phase.RefusedSegment.
+const refusedSegment = "_refused"
 
 func Load(path string) (*Milestone, error) {
 	var m Milestone

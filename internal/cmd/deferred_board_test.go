@@ -76,7 +76,7 @@ func TestDeferredAddMirrorsToBoard(t *testing.T) {
 }
 
 // TestDeferredAddMirrorsRoutedItem: the push is unconditional on --target, so a
-// routed add is mirrored too. A `Target != ""` skip copied from syncBacklog
+// routed add is mirrored too. A `Target != ""` skip copied from boardsync.SyncBacklog
 // fails here.
 func TestDeferredAddMirrorsRoutedItem(t *testing.T) {
 	f := newFakeBoard(t)

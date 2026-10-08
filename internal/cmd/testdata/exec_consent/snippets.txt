@@ -1,0 +1,78 @@
+# Snippets the exec-consent enumerator must classify. A checker that degraded
+# into "return nothing" passes the real gate forever and reads as coverage, so
+# it is made to prove it can still see — and to prove the verdict turns on the
+# MARKER and its POSITION, never on which binary is being spawned.
+#
+# Each block is:
+#   FLAG <name>   — the enumerator MUST report at least one finding
+#   PASS <name>   — the enumerator MUST report none
+# followed by one or more lines of Go, wrapped by the test into
+#   func execConsentSnippet(ctx context.Context, pkg, dir, ref, host string) { … }
+#
+# The PASS rows are not only assertions: TestEverySpawnSiteGatedOrExempt
+# materialises them into real source and sweeps that tree, so the repo-wide gate
+# has a non-vacuous green corpus before t-10 widens it to internal/ and cmd/.
+#
+# The floor is derived: TestExecConsentFlagsItsOwnSnippets asserts it exercised
+# every row it parsed, so a row cannot be deleted or skipped without failing.
+
+# --- an unmarked spawn is a finding, whatever it spawns ---
+
+FLAG unmarked-git-spawn
+	exec.Command("git", "status", "--porcelain")
+
+FLAG unmarked-unknown-binary
+	exec.Command("cargo", "test", pkg)
+
+FLAG unmarked-command-context
+	exec.CommandContext(ctx, "git", "show", ref)
+
+# --- marker grammar: prose is required, and it must say something ---
+
+FLAG reasonless-marker
+	//dross:exec-exempt
+	exec.Command("git", "rev-parse", "HEAD")
+
+FLAG reason-is-only-the-subcommand
+	//dross:exec-exempt status
+	exec.Command("git", "status")
+
+FLAG marker-glued-to-its-reason
+	//dross:exec-exemptgit status reads the tree and runs no repo-authored code
+	exec.Command("git", "status")
+
+FLAG spaced-comment-is-not-a-directive
+	// dross:exec-exempt git status reads the tree and runs no repo-authored code
+	exec.Command("git", "status")
+
+# --- position, not proximity ---
+
+FLAG marker-two-lines-above
+	//dross:exec-exempt git status reads the tree and runs no repo-authored code
+	_ = dir
+	exec.Command("git", "status")
+
+FLAG marker-below-the-call
+	exec.Command("git", "status")
+	//dross:exec-exempt git status reads the tree and runs no repo-authored code
+
+# --- the green corpus ---
+
+PASS marked-with-prose
+	//dross:exec-exempt git status reads the working tree; it runs no repo-authored code
+	exec.Command("git", "status", "--porcelain")
+
+PASS marked-command-context
+	//dross:exec-exempt git show is plumbing over objects, never repo-authored code
+	exec.CommandContext(ctx, "git", "show", ref)
+
+PASS marked-unknown-binary
+	//dross:exec-exempt the argv is fixed by dross; cargo reads no repo-authored line
+	exec.Command("cargo", "--version")
+
+PASS marker-with-tab-before-its-reason
+	//dross:exec-exempt	rsync moves the tree and never executes a repo-authored line
+	exec.Command("rsync", "-a", dir, host)
+
+PASS not-a-spawn-at-all
+	_ = host

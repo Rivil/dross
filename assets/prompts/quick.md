@@ -18,13 +18,24 @@ Use when:
 4. **Verify the current branch matches the mode** with `git symbolic-ref --short HEAD`:
    - **In-phase** (`current_phase` set, `current_phase_status` NOT `shipped`): branch must be `phase/<current_phase>`. If not, switch to it with `dross phase checkout <current_phase>` (or stop if it doesn't exist locally). Quick changes inside a phase belong on the phase branch — they ship together with the phase.
    - **Shipped phase** (`current_phase` set, `current_phase_status` = `shipped`): the phase's PR is already open and may already be merged; `dross phase complete` is about to delete `phase/<current_phase>` locally and on origin, so work committed there would be lost or need re-shipping. Treat this as **standalone** and follow the rule below. `dross ship` leaves `current_phase` set until a confirmed merge, which is what makes this window reachable — surface it to the user in one line rather than silently routing.
-   - **Standalone** (no `current_phase`, or a shipped one per the case above): run `dross base-branch` and branch must be **that** — the active milestone's integration branch (`milestone/<version>`) when one exists, else the configured main branch. Don't hardcode `repo.git_main_branch`; `dross base-branch` resolves the milestone-vs-main cutover for you (and nudges on stderr when no milestone is active). Standalone quick changes go to that base directly via a small commit. Once the branch is confirmed, record it: `dross local set quick_base <branch>` — `dross ship` and `dross phase complete` reconcile that recorded branch rather than re-deriving one, so an unpushed `.dross` chore left here can't re-seed divergence later. The store is `.dross/local.toml`, gitignored so the value never rides cumulative history.
+   - **Standalone** (no `current_phase`, or a shipped one per the case above): run `dross base-branch` to get the base — the active milestone's integration branch (`milestone/<version>`) when one exists, else the configured main branch. Don't hardcode `repo.git_main_branch`; `dross base-branch` resolves the milestone-vs-main cutover for you (and nudges on stderr when no milestone is active). Then ask whether origin takes direct pushes to it: `dross protect --check <base>` prints exactly one answer, and that picks the route below. Only the direct route records its base with `dross local set quick_base <base>`; the PR route records none.
+     - `unprotected` or `not checked (<provider>)` → **direct route**: the branch must be the base itself, and the quick lands on it as a small commit. Once the branch is confirmed, record it: `dross local set quick_base <base>` — `dross ship` and `dross phase complete` reconcile that recorded branch rather than re-deriving one, so an unpushed `.dross` chore left here can't re-seed divergence later. The store is `.dross/local.toml`, gitignored so the value never rides cumulative history.
+     - `protected` or `unknown` → **PR route**: origin refuses direct pushes to the base, or can't say whether it does, so the quick reaches the base through a PR. From the base, up to date with origin, create `quick/<preview-version>` — the version the orientation block previews, which §6's bump makes `<NEW_VERSION>` — with `git branch quick/<preview-version>`, move onto it with `dross checkout quick/<preview-version>`, and work there. Record **no** quick_base: the PR carries the work and its `.dross` bookkeeping both, and a feature branch recorded as a base would have ship and complete reconcile it. §7 opens the PR.
 5. Check `git status --porcelain`. If working tree is dirty:
    - Surface the diff to the user.
    - Ask via `AskUserQuestion`: "commit existing work first / stash / abort". Atomic commit semantics require a clean baseline.
 6. Parse `$ARGUMENTS`:
    - Strip a leading/trailing `--solo` flag → **solo mode** (autonomous, no approval gate). Default without it is **pair mode**.
    - The remainder is the freeform task description. If it's empty, ask for one and stop until the user provides it — quick can't operate without intent. (In solo mode an empty description is a hard stop, not a prompt — there's no one to answer.)
+7. Record the quick for the tool gates — its mode and its description, which is the solo reviewer's only spec source:
+   ```
+   dross quick begin "<description>"
+   ```
+   or, only in solo mode:
+   ```
+   dross quick begin --solo "<description>"
+   ```
+   A solo begin refuses unless the solo task reviewer is installed and current — **stop and ask the user to run `dross install`**. From here on, every way this run ends runs `dross quick end`: after the commit (§5), and on every abort path below, always **after** discarding the working changes.
 
 Print one orientation block:
 ```
@@ -60,7 +71,7 @@ In one block, 3-6 lines covering:
 - `proceed` — write the code as proposed
 - `steer` — user gives free-form direction; revise the proposal
 - `show me <X>` — user requests more context; treat as steer
-- `abort` — stop without writing anything
+- `abort` — stop without writing anything, then `dross quick end`
 
 Never write code without an explicit `proceed` in pair mode — that's the contract. These gates mirror `/dross-execute`'s shape — the §1c approval (proceed/steer/show/abort) and the §4 red-test gate below the §1e fix/abort — adapted to a single task with no task-loop `skip`/`mark failed`.
 
@@ -80,8 +91,9 @@ If `runtime.test_command` is set and the change is behavioural, **write/update t
 Show `git diff` (filtered to the touched files). Run `dross validate` if any `.dross/` files changed.
 
 Before running it, check consent — dross will not run a repo's test command
-until this machine has explicitly trusted it, and the loop commands below refuse
-without it:
+until this machine has explicitly trusted it. The gate covers every dross
+command that spawns a process, enumerated from the source rather than kept as a
+list of names, so assume a command that runs something refuses without it:
 ```
 dross trust --check
 ```
@@ -107,11 +119,28 @@ Three outcomes:
 
 **Red, pair mode** → surface the failure tail (last 30-40 lines). Ask via `AskUserQuestion`:
 - `fix here` — address inline, re-run
-- `abort` — discard the working changes (`git checkout -- <files>` for tracked, `rm` for newly-written files), state stays untouched
+- `abort` — discard the working changes (`git checkout -- <files>` for tracked, `rm` for newly-written files), then `dross quick end`; state stays untouched
 
-**Red, solo mode** → try **one** bounded fix (a single Edit pass), then re-run. If still red, abort: discard the working changes (`git checkout -- <files>`, `rm` newly-written files), leave state untouched, and report the failure. No version bump on a failed solo quick. Never loop on red.
+**Red, solo mode** → try **one** bounded fix (a single Edit pass), then re-run. If still red, abort: discard the working changes (`git checkout -- <files>`, `rm` newly-written files), then `dross quick end`, leave state untouched, and report the failure. No version bump on a failed solo quick. Never loop on red.
 
 **No test command configured** → warn once. In pair mode, ask via `AskUserQuestion` (`proceed without tests` / `abort`). In solo mode, proceed without a gate and note `no test gate` in the commit body.
+
+**Solo review (`--solo` only).** In solo mode no human approves the change, so a cold reviewer checks it against the quick's stated description — after the green `dross test`, before the commit. In **pair mode skip this entirely**: the user is the checker.
+
+1. Build the review context:
+   ```
+   dross review context
+   ```
+   It prints the reviewer's `subagent_type` and a `prompt:` line, never the diff.
+2. Spawn the reviewer with the Agent tool: `subagent_type: "dross-task-reviewer"`, and the printed prompt line **verbatim** as the whole prompt — add nothing to it; the reviewer sees only the context, and a widened prompt makes the review unavailable. It may run in the background (an interactive session runs every subagent there): **wait for its completion notice** before reading the status — its verdict reaches dross only when it finishes.
+3. Read where it stands:
+   ```
+   dross review status
+   ```
+   - `pass` → commit (§5).
+   - `blocked` → **one fix round**, never more: address every blocking finding it lists, re-run `dross test`, then `dross review context` and the reviewer again, and re-read `dross review status`. A second block exhausts the review.
+   - `pass-stale` → the tree moved after the review: re-run `dross test`, `dross review context` and the reviewer.
+   - `exhausted` or `unavailable`, **or the spawn itself errored** → abort: discard the working changes (`git checkout -- <files>`, `rm` newly-written files) **first**, then `dross quick end`. Report the reviewer's findings (`dross review status` lists them). No version bump.
 
 ## 5. Commit
 
@@ -143,6 +172,11 @@ In **solo mode**, add a `solo: yes` line to the body (below `Quick:`) so autonom
 
 **Match the repository's existing trailer convention.** Check recent history (`git log -1 --format=%B`): if commits carry a `Co-Authored-By` trailer, include one; if they don't, omit it. Don't introduce the trailer into a repo that doesn't already use it, and don't strip it from one that does. Do not skip hooks (`--no-verify`). If a pre-commit hook fails, treat it as a red test (step 4) — fix inline, commit fresh, never amend.
 
+In solo mode the commit gate refuses a code commit unless a passing review was recorded for exactly the tree being committed. Once the commit lands, clear the quick marker:
+```
+dross quick end
+```
+
 ## 6. Record + bump version
 
 ```
@@ -166,7 +200,7 @@ Always touch state:
 dross state touch "quick: <one-line summary of the task>"
 ```
 
-Mirror the quick task onto the issue board, keyed by the new version (no-op unless `[remote].board_sync` is on — safe to always run):
+Mirror the quick task onto the issue board, keyed by the new version (it exits 0 and does nothing when `[board].enabled` is false; a non-zero exit is a board failure — surface it, never read it as the disabled no-op):
 ```
 dross issue quick $NEW_VERSION "quick: <one-line summary>"
 ```
@@ -180,23 +214,33 @@ Match the repo's trailer convention, as in §5.
 
 ## 7. Wrap-up
 
+The quick task is committed and done, so close its board issue **first, before anything switches branch** (same board rule: silent only when `[board].enabled` is false, a non-zero exit is a failure to surface):
+```
+dross issue quick $NEW_VERSION --close
+```
+The close finds the issue through the link §6 wrote into `.dross/board.json`, so it must run on the branch holding that link. On the PR route that is `quick/<NEW_VERSION>`: the base has no copy until the PR merges, and a close run after `dross checkout <base>` fails with `no board issue linked to quick ref`. The close writes nothing under `.dross/`, so the tree stays clean for the push.
+
+**PR route only** (§0.4): the work commit and §6's bookkeeping commit both sit on `quick/<NEW_VERSION>`. Publish the branch and open its PR into the base, then go back to the base:
+```
+git push -u origin quick/<NEW_VERSION>
+gh pr create --base <base> --head quick/<NEW_VERSION> --fill
+dross checkout <base> && git pull --ff-only
+```
+No auto-merge and no admin merge: the user merges it once CI is green, like any PR. Surface the PR URL `gh` prints, and never push the base itself.
+
 Print:
 ```
 Quick task complete.
   Commit:   <SHA> "<commit subject>"
   Version:  <prev> → <new>
   Phase:    <phase-id> (recorded as quick-N in changes.json) | standalone
+  Route:    direct to <base> | PR <url> into <base>   ← standalone only
   Files:    <touched-files>
 
 Next: continue working, or /dross-quick "<another task>" — another small change.
       ↳ --solo — run it autonomously when the change is trivial and well-specified.
 
 state is on disk — safe to /clear · fresh session: /dross-status
-```
-
-The quick task is committed and done, so close its board issue (no-op unless board sync is on):
-```
-dross issue quick $NEW_VERSION --close
 ```
 
 ## Hard rules

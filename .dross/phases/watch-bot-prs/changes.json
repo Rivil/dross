@@ -1,0 +1,80 @@
+{
+  "phase": "watch-bot-prs",
+  "pr": 138,
+  "base": "milestone/v1.7",
+  "base_commit": "8c99783b041a324bee7e563d08c854b81dbc8412",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/ship/openprs.go",
+        "internal/ship/openprs_test.go",
+        "internal/ship/gh_failure_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "f46460c",
+      "completed_at": "2026-09-30T15:42:49.745157Z",
+      "landmarks": [
+        {
+          "feature": "forge open-PR listing",
+          "symbol": "ListOpenPRs",
+          "loc": "internal/ship/openprs.go:86",
+          "what": "one bounded gh pr list spawn decoding open PRs with bot flag and a failing\u003epending\u003epassing check rollup; quiet (nil, err) on any failure"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "assets/prompts/watch.md",
+        "internal/cmd/watch_prompt_test.go",
+        "README.md",
+        "assets/commands/dross-watch.md"
+      ],
+      "commit": "57a0a2a",
+      "completed_at": "2026-09-30T15:46:08.383408Z",
+      "landmarks": [
+        {
+          "feature": "watch digest",
+          "symbol": "/dross-watch render",
+          "loc": "assets/prompts/watch.md:40",
+          "what": "prompt renders a bot-PR summary line and one line per ship PR; absent PR fields print nothing and never steer suggested_command"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/watch/prs.go",
+        "internal/watch/prs_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "1c3571e",
+      "completed_at": "2026-09-30T15:49:28.784629Z",
+      "landmarks": [
+        {
+          "feature": "watch digest",
+          "symbol": "SplitPRs",
+          "loc": "internal/watch/prs.go:38",
+          "what": "splits open PRs into bot PRs (forge flag, age_days) and same-repo phase/milestone ship PRs, with the exact summary and per-PR digest lines"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/watch.go",
+        "internal/cmd/watch_test.go",
+        "internal/ship/openprs.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "bd79cf1",
+      "completed_at": "2026-09-30T15:55:20.209115Z",
+      "landmarks": [
+        {
+          "feature": "watch digest",
+          "symbol": "openPRDigest",
+          "loc": "internal/cmd/watch.go:148",
+          "what": "dross watch emits bot_prs/ship_prs from the forge (absent when unknown, [] when none) and renders them above next: without steering the suggestion"
+        }
+      ]
+    }
+  }
+}

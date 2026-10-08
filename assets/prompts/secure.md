@@ -63,7 +63,10 @@ permissions on `~/.claude/dross/`.
 The contract is **informed, not silent, and not brittle**:
 
 1. **Detect** — `dross security detect` lists the languages found and, per the
-   data-driven catalog, which scanners are installed vs missing.
+   data-driven catalog, which scanners are installed vs missing. Its final
+   `exclusions:` block names what the scan scopes out — the skipped directories
+   (the shared skip set: `.dross`, `testdata`, `fixtures`, `vendor`, …) and the
+   gitleaks allowlist location — so the narrowing is on the record, never silent.
 2. **Plan + gate** — present the plan: what will run, what's missing, and the exact
    **install instructions** for the gaps. Then **gate** with `AskUserQuestion`:
    *install the missing tools first*, or *proceed with partial coverage*. Never
@@ -88,6 +91,17 @@ The contract is **informed, not silent, and not brittle**:
      a path that begins with a dash is read as an option otherwise. dross applies the
      same policy to the scanners it spawns itself (`internal/argfence`); semgrep is
      agent-driven, so the discipline has to live here.
+   - **gitleaks — pass the run-dir allowlist via `--config`.** `dross security run`
+     writes `gitleaks.toml` into the run dir and prints its path on the
+     `gitleaks allowlist:` line; hand exactly that file to gitleaks, flags before
+     the fenced operand: `gitleaks git --config <run-dir>/gitleaks.toml -- .`.
+     That config **extends the default rules** (`[extend] useDefault = true` — drop
+     it and `--config` yields a zero-rule scan), allowlists **only dross identity
+     ids** (a 16-hex value in id/key context, the shape every adopter's
+     `.dross/tests.json` carries), and **path-excludes nothing** — `.dross/` stays
+     scanned, because that is exactly where subprocess output can land. Whatever
+     survives the allowlist is a finding to dismiss on its merits in the ledger,
+     never a reason to widen the regex.
 
 ## 3. Fan-out manual audit — cold, parallel subagents
 

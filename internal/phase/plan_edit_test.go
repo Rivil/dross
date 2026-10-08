@@ -253,7 +253,7 @@ func TestMoveTaskAdoptsAnchorWaveAndReflows(t *testing.T) {
 	if got := p.FindTask("t-4").Wave; got != 2 {
 		t.Errorf("done transitive dependent wave = %d, want 2 (frozen)", got)
 	}
-	if err := ValidatePlan(p, nil); err != nil {
+	if err := ValidatePlan(p, nil, testRepoRoot); err != nil {
 		t.Errorf("plan invalid after legal move: %v", err)
 	}
 }
@@ -377,7 +377,7 @@ func TestValidatePlan(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ValidatePlan(tc.plan, spec)
+			err := ValidatePlan(tc.plan, spec, testRepoRoot)
 			if tc.wantErr && err == nil {
 				t.Fatalf("ValidatePlan() = nil, want error")
 			}
@@ -397,7 +397,7 @@ func TestValidatePlan(t *testing.T) {
 func TestValidatePlanCoversParity(t *testing.T) {
 	spec := &Spec{Criteria: []Criterion{{ID: "c-1"}}}
 	plan := &Plan{Task: []Task{{ID: "t-1", Covers: []string{"c-99"}}}}
-	err := ValidatePlan(plan, spec)
+	err := ValidatePlan(plan, spec, testRepoRoot)
 	if err == nil {
 		t.Fatal("expected covers error")
 	}
@@ -558,5 +558,70 @@ func TestEditTaskLeavesUnsetFieldsAlone(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.TestContract, pre.TestContract) {
 		t.Errorf("test_contract = %v, want it untouched (%v)", got.TestContract, pre.TestContract)
+	}
+}
+
+// testRepoRoot is the containment root every ValidatePlan call in this file
+// validates against. It never has to exist: pathfence.Contain is lexical, so
+// the check needs a root to name in its message, not one to stat.
+const testRepoRoot = "/repo"
+
+// TestValidatePlanRefusesEscapingTaskFiles is the write-side gate. plan.toml is
+// hand-editable and committed, and nothing in dross opens a task file — so the
+// only place an escaping entry can be caught is before it is written.
+func TestValidatePlanRefusesEscapingTaskFiles(t *testing.T) {
+	for _, tc := range []struct {
+		name, file string
+	}{
+		{"parent traversal", "../x"},
+		{"deep traversal", "../../etc/passwd"},
+		{"absolute", "/etc/passwd"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := &Plan{Task: []Task{{ID: "t-7", Files: []string{"a.go", tc.file}}}}
+			err := ValidatePlan(plan, nil, testRepoRoot)
+			if err == nil {
+				t.Fatalf("ValidatePlan accepted a task file %q", tc.file)
+			}
+			// c-5: the message must carry the offending task, the path, the
+			// artifact it came from, and the root it escaped.
+			for _, want := range []string{"t-7", tc.file, "plan.toml", testRepoRoot} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("refusal does not name %q:\n%s", want, err.Error())
+				}
+			}
+		})
+	}
+}
+
+// TestValidatePlanReportsContainmentAlongsideOtherDefects preserves the
+// report-everything-at-once contract. A hand-edited plan usually has more than
+// one thing wrong with it, and short-circuiting on the first containment defect
+// would make fixing it a round-trip per problem.
+func TestValidatePlanReportsContainmentAlongsideOtherDefects(t *testing.T) {
+	plan := &Plan{Task: []Task{
+		{ID: "t-1", Files: []string{"../x"}},
+		{ID: "t-1"},
+	}}
+	err := ValidatePlan(plan, nil, testRepoRoot)
+	if err == nil {
+		t.Fatal("ValidatePlan accepted a plan with both defects")
+	}
+	for _, want := range []string{"duplicate task id t-1", "../x"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("one error must list every defect; %q is missing:\n%s", want, err.Error())
+		}
+	}
+}
+
+// TestValidatePlanAcceptsContainedTaskFiles: the gate must not fire on ordinary
+// plans. An interior "a/../b.go" cleans to "b.go" and stays inside the repo, so
+// it is accepted — refusing on a bare ".." substring would reject it.
+func TestValidatePlanAcceptsContainedTaskFiles(t *testing.T) {
+	plan := &Plan{Task: []Task{{ID: "t-1", Files: []string{
+		"internal/a.go", "./internal/b.go", "a/../b.go", `internal\c.go`, "", "  ",
+	}}}}
+	if err := ValidatePlan(plan, nil, testRepoRoot); err != nil {
+		t.Fatalf("ValidatePlan refused an ordinary task file list: %v", err)
 	}
 }

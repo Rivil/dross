@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 )
@@ -75,7 +77,11 @@ func (s bootstrapStep) origin() string {
 	if s.Lane != "" {
 		return "lane " + s.Lane
 	}
-	return s.Adapter
+	if s.Adapter != "" {
+		return s.Adapter
+	}
+	// Attributed to neither: the one tool every remote mutation leg needs.
+	return "host lock"
 }
 
 // bootstrapRecipe describes how (or whether) one tool can be installed.
@@ -108,6 +114,11 @@ var bootstrapRecipes = map[string]bootstrapRecipe{
 	},
 	"dotnet": {
 		refusal: "dotnet is the .NET SDK itself — install it on the host (bootstrap does not install language runtimes)",
+	},
+	// The host lock's tool is a system package, not something a Go toolchain
+	// installs: the same line install_scope draws for runtimes.
+	remote.LockTool: {
+		refusal: "flock is part of util-linux — install it with the host's package manager (bootstrap does not install system packages)",
 	},
 }
 
@@ -228,7 +239,7 @@ func planLaneStep(root, repoDir string, p *project.Project, laneName, tool strin
 	case resolved.Refusal != "":
 		step.Refusal = resolved.Refusal
 	case resolved.Line != "":
-		if _, cerr := LaneInstallConsented(root, repoDir, lane.Name, laneInstallConsentLine(lane)); cerr != nil {
+		if _, cerr := consent.LaneInstallConsented(localstore.GrantStore(root), repoDir, lane.Name, consent.LaneInstallLine(lane)); cerr != nil {
 			step.Refusal = fmt.Sprintf("lane %s's install line is not trusted on this machine — read it with `dross trust --lane-install %s`", lane.Name, lane.Name)
 			return
 		}

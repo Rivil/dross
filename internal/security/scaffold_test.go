@@ -1,6 +1,7 @@
 package security
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -65,15 +66,42 @@ func TestScaffoldEmptyRefuses(t *testing.T) {
 }
 
 func TestScaffoldRoundTripsLoadSpec(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "spec.toml")
-	if err := WriteScaffoldSpec(path, "06-remediate", "Remediate security findings", sampleLedger()); err != nil {
+	dir := t.TempDir()
+	if err := WriteScaffoldSpec(containedIn(t, dir, "spec.toml"), "06-remediate", "Remediate security findings", sampleLedger()); err != nil {
 		t.Fatal(err)
 	}
-	spec, err := phase.LoadSpec(path)
+	spec, err := phase.LoadSpec(filepath.Join(dir, "spec.toml"))
 	if err != nil {
 		t.Fatalf("emitted spec.toml failed to round-trip through phase.LoadSpec: %v", err)
 	}
 	if spec.Phase.ID != "06-remediate" || len(spec.Criteria) != 2 {
 		t.Fatalf("round-tripped spec wrong: id=%q criteria=%d", spec.Phase.ID, len(spec.Criteria))
+	}
+}
+
+// TestWriteScaffoldSpecWritesIntoRunDirNotCwd pins the one boundary where the
+// Contained is unwrapped: WriteScaffoldSpec hands phase.Spec.Save the JOINED
+// form, so the spec lands in the run dir regardless of where the process is
+// running. A build that reached for Rel() instead would still pass every other
+// test in this file — they all run with the temp dir reachable relatively — and
+// would silently scatter spec.toml wherever the command happened to be invoked.
+func TestWriteScaffoldSpecWritesIntoRunDirNotCwd(t *testing.T) {
+	runDir := t.TempDir()
+	c := containedIn(t, runDir, "spec.toml")
+
+	// Move the process somewhere else entirely, so a working-directory-relative
+	// write cannot land on the expected path by coincidence.
+	elsewhere := t.TempDir()
+	t.Chdir(elsewhere)
+
+	if err := WriteScaffoldSpec(c, "06-remediate", "Remediate security findings", sampleLedger()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(runDir, "spec.toml")); err != nil {
+		t.Fatalf("spec.toml is not in the run dir: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(elsewhere, "spec.toml")); err == nil {
+		t.Fatal("spec.toml was written relative to the working directory — WriteScaffoldSpec " +
+			"unwrapped the Contained with Rel() instead of its joined form")
 	}
 }

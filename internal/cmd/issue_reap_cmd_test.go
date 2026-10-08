@@ -4,10 +4,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/boardsync"
 )
 
 // writeStrandedFixture seeds a repo whose board.json is stranded in all five
@@ -136,7 +139,7 @@ func TestReapWholeBoardCoversFiveLanes(t *testing.T) {
 			t.Fatalf("reap: %v", err)
 		}
 	})
-	want := boardNamespaceFields(t)
+	want := boardsync.BoardNamespaceNames()
 	if len(want) == 0 {
 		t.Fatal("reflection found no namespaces — the guard would pass vacuously")
 	}
@@ -199,7 +202,7 @@ func TestReapNamespaceFilterScopesThePlan(t *testing.T) {
 		if err == nil {
 			t.Fatal("an unknown --namespace was accepted")
 		}
-		for _, lane := range boardNamespaceFields(t) {
+		for _, lane := range boardsync.BoardNamespaceNames() {
 			if !strings.Contains(err.Error(), lane) {
 				t.Errorf("error %q does not name the valid namespace %s", err, lane)
 			}
@@ -212,11 +215,11 @@ func TestReapNamespaceFilterScopesThePlan(t *testing.T) {
 // go stale the moment a namespace is added, and the error a typo produced would
 // name a set that no longer matches reality.
 func TestReapNamespaceSetIsReadOffBoardNotTranscribed(t *testing.T) {
-	got := boardNamespaceNames()
-	want := boardNamespaceFields(t)
+	got := boardsync.BoardNamespaceNames()
+	want := boardsync.BoardNamespaceNames()
 	sort.Strings(want)
 	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("boardNamespaceNames() = %v, want board.Board's map fields %v", got, want)
+		t.Errorf("boardsync.BoardNamespaceNames() = %v, want board.Board's map fields %v", got, want)
 	}
 }
 
@@ -231,5 +234,47 @@ func TestReapIsANoOpWhenBoardSyncIsOff(t *testing.T) {
 
 	if err := runCmd(t, Issue(), "reap"); err != nil {
 		t.Fatalf("reap with board sync off must be a silent no-op: %v", err)
+	}
+}
+
+// TestReapDryRunListsMissingPhase: a complete phase the board has never heard
+// of shows in the dry run with its tasks — and the dry run writes nothing,
+// leaves board.json and the reap ledger as they were, and prints no
+// unknown-label warning for the identity lookup that found it missing.
+func TestReapDryRunListsMissingPhase(t *testing.T) {
+	f := &writingIsFatalYT{readOnlyYT: readOnlyYT{resolved: map[string]bool{}}}
+	dir := reapCmdRepoStrict(t, f, `{"phases":{},"tasks":{},"quicks":{},"milestones":{}}`)
+	writeSpec(t, dir, "p", "[phase]\nid = \"p\"\ntitle = \"P\"\n")
+	writePlan(t, dir, "p", "[phase]\nid = \"p\"\n\n[[task]]\nid = \"t-1\"\nwave = 1\ntitle = \"one\"\nstatus = \"done\"\n\n[[task]]\nid = \"t-2\"\nwave = 1\ntitle = \"two\"\nstatus = \"done\"\n")
+	writeChanges(t, dir, "p", "complete")
+	boardPath := filepath.Join(dir, ".dross", "board.json")
+	board := mustRead(t, boardPath)
+	logPath := filepath.Join(dir, ".dross", "reap-log.json")
+
+	var out string
+	stderr := captureStderr(t, func() {
+		out = captureStdout(t, func() {
+			if err := runCmd(t, Issue(), "reap"); err != nil {
+				t.Fatalf("reap: %v", err)
+			}
+		})
+	})
+	if !strings.Contains(out, "Missing (1 completed phase)") || !strings.Contains(out, "2 task cards: t-1, t-2") {
+		t.Errorf("dry run does not list p's missing cards:\n%s", out)
+	}
+	if f.writes != 0 {
+		t.Errorf("%d write requests during a dry run", f.writes)
+	}
+	if mustRead(t, boardPath) != board {
+		t.Error("a dry run changed board.json")
+	}
+	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+		t.Errorf("a dry run touched reap-log.json (stat err = %v)", err)
+	}
+	// The whole-board marker listing may still name the bare `dross` marker
+	// on a board that has never seen one — a shared label, which t-1 keeps
+	// warning on. The catch-up's own identity lookup must stay silent.
+	if strings.Contains(stderr, "dross/phase:p") {
+		t.Errorf("the catch-up identity lookup warned:\n%s", stderr)
 	}
 }

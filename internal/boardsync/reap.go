@@ -1,0 +1,515 @@
+package boardsync
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/deferred"
+	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/phase"
+)
+
+// The reap classifier. `dross issue reap` sweeps mirror cards the forward
+// lifecycle left behind — cards whose artefact finished before the edge that
+// would have closed them existed, or on a run where that edge failed.
+//
+// The whole design rests on one rule: a close decision is derived from the
+// ON-DISK RECORD, never from the card. The board is what is wrong here; asking
+// it whether a card should be closed would be asking the patient for the
+// diagnosis. A card's own state is read for exactly one purpose — to skip a
+// card that is already terminal — and never to decide that a card SHOULD be
+// closed.
+//
+// The verdict is deny-by-default: only a record that positively shows the
+// artefact finished yields a close. Everything else is either left alone
+// (still live work) or named as unattributable (no record can speak for it).
+
+// ReapVerdict is what the classifier concluded about one recorded mirror.
+//
+// It mirrors BacklogVerdict's three-way shape deliberately — the load-bearing
+// value is the third one, for the same reason: a card no record explains is NOT
+// thereby resolved, and closing on absence of evidence would resolve work
+// nobody finished.
+type ReapVerdict int
+
+const (
+	// ReapStillOpen — the artefact is live. The card is correctly open.
+	ReapStillOpen ReapVerdict = iota
+	// ReapStranded — the record shows the artefact finished; the card did not
+	// follow.
+	ReapStranded
+	// ReapUnattributable — no record can speak for this card. Named in the
+	// plan, never closed.
+	ReapUnattributable
+)
+
+// ReapCard is one classified mirror. Why names the on-disk record that
+// justified the verdict, so a plan line can be audited without re-deriving it.
+type ReapCard struct {
+	Key      string // the tracker's readable issue id
+	Lane     string // the board.Board map field this mirror is recorded in
+	Terminal string // the lifecycle status the sweep would write
+	Why      string // the record that justified the verdict
+}
+
+// ReapPlan is the classified whole-board inventory.
+type ReapPlan struct {
+	// Cards are stranded: their record shows the artefact done and the card is
+	// not yet terminal.
+	Cards []ReapCard
+	// Unattributable are named but never closed — a quick with no completion
+	// record, a slug whose phase directory is gone, a backlog key no deferred
+	// store explains. Surfaced rather than swallowed, per the survivor-drain
+	// habit: an unexplained mirror is a real loose end.
+	Unattributable []ReapCard
+	// Missing are completed phases the board has no card for — the catch-up
+	// half of the sweep. --apply creates them at their terminal state.
+	Missing []MissingPhase
+}
+
+// ReapLane is one mirror class: the board.Board map field that records it and
+// the lifecycle status the sweep writes when it closes one.
+//
+// The terminal is the SAME state the forward lifecycle writes for that class —
+// the locked reap_state decision. A sweep-specific state would make the board
+// two histories instead of one, and the state map is what mirror-terminal-state
+// just made trustworthy.
+type ReapLane struct {
+	Name     string
+	Terminal string
+}
+
+// milestoneStatusComplete is the [milestone].status a finalized milestone
+// carries — one of configenum.MilestoneStatuses. cmd's milestone finalize
+// writes it (milestone_finalize_state.go names the same literal); the reap
+// reads it back as the authoritative already-finalized marker.
+const milestoneStatusComplete = "complete"
+
+// ReapLanes is the production lane registry. Its Name values are board.Board's
+// map field names, which is what lets the namespace filter validate against
+// reflection over that struct rather than against a literal list that would
+// silently go stale.
+//
+// Every terminal here is asserted against the forward lifecycle's own terminal
+// for that lane, in board_lifecycle_divergence_test.go's mirrorLanes registry.
+// The locked reap_state decision is that a reaped card lands in the SAME state
+// the forward path writes — one coherent history per board, one state map to
+// trust — and two tables saying so independently would drift the first time one
+// changed.
+var ReapLanes = []ReapLane{
+	{Name: "Phases", Terminal: "complete"},
+	{Name: "Tasks", Terminal: StatusTaskComplete},
+	{Name: "Milestones", Terminal: "complete"},
+	{Name: "Backlog", Terminal: "complete"},
+	{Name: "Quicks", Terminal: "complete"},
+}
+
+// reapLaneFor looks a lane up by its board.Board field name. The guard in
+// board_lifecycle_divergence_test.go drives it from reflection over that
+// struct, so a namespace added there with no entry here fails by field name in
+// the same run that adds it.
+func ReapLaneFor(name string) (ReapLane, bool) {
+	for _, l := range ReapLanes {
+		if l.Name == name {
+			return l, true
+		}
+	}
+	return ReapLane{}, false
+}
+
+func ReapLaneNames() []string {
+	names := make([]string, 0, len(ReapLanes))
+	for _, l := range ReapLanes {
+		names = append(names, l.Name)
+	}
+	return names
+}
+
+// candidate is a mirror plus the verdict its record produced, before the
+// already-terminal filter runs.
+type candidate struct {
+	card    ReapCard
+	verdict ReapVerdict
+}
+
+// classifyReap builds the plan for the named lanes (empty = whole board). It
+// issues no write of any kind: not to the tracker, and not to disk. The only
+// tracker traffic is the read that skips cards already sitting terminal.
+func Classify(ctx *Ctx, namespaces []string) (*ReapPlan, error) {
+	lanes, err := resolveReapLanes(namespaces)
+	if err != nil {
+		return nil, err
+	}
+	var cands []candidate
+	for _, lane := range lanes {
+		var lc []candidate
+		var err error
+		switch lane.Name {
+		case "Phases":
+			lc = classifyPhaseMirrors(ctx, lane)
+		case "Tasks":
+			lc = classifyTaskMirrors(ctx, lane)
+		case "Milestones":
+			lc = classifyMilestoneMirrors(ctx, lane)
+		case "Backlog":
+			lc, err = classifyBacklogMirrors(ctx, lane)
+		case "Quicks":
+			lc = classifyQuickMirrors(ctx, lane)
+		default:
+			return nil, fmt.Errorf("lane %q has no classifier", lane.Name)
+		}
+		if err != nil {
+			return nil, err
+		}
+		cands = append(cands, lc...)
+	}
+	return buildReapPlan(ctx, cands)
+}
+
+// buildReapPlan applies the already-terminal filter and splits the survivors
+// into the two plan lists.
+//
+// The card read happens HERE and nowhere else, which is what keeps the verdict
+// record-derived: by the time a card's state is looked at, the decision that it
+// ought to close has already been made from disk. A card the tracker already
+// holds resolved is dropped entirely — not "closed again" — which is what makes
+// a second dry run after a full apply print an honestly empty plan.
+func buildReapPlan(ctx *Ctx, cands []candidate) (*ReapPlan, error) {
+	plan := &ReapPlan{}
+	for _, c := range cands {
+		if c.verdict == ReapStillOpen {
+			continue
+		}
+		done, err := IssueIsDone(ctx, c.card.Key)
+		if err != nil {
+			// A card that cannot be read cannot be shown stranded. Leaving it
+			// out of Cards is the deny-by-default reading; it stays visible as
+			// unattributable so the run does not silently lose it.
+			plan.Unattributable = append(plan.Unattributable, withWhy(c.card, fmt.Sprintf("could not read the card back: %v", err)))
+			continue
+		}
+		if done {
+			continue // already terminal — not stranded
+		}
+		if c.verdict == ReapUnattributable {
+			plan.Unattributable = append(plan.Unattributable, c.card)
+			continue
+		}
+		plan.Cards = append(plan.Cards, c.card)
+	}
+	return plan, nil
+}
+
+func withWhy(c ReapCard, why string) ReapCard {
+	c.Why = why
+	return c
+}
+
+// resolveReapLanes maps requested namespace names onto lanes, preserving the
+// registry's order so a plan reads the same way every run.
+func resolveReapLanes(namespaces []string) ([]ReapLane, error) {
+	if len(namespaces) == 0 {
+		return ReapLanes, nil
+	}
+	want := map[string]bool{}
+	for _, n := range namespaces {
+		want[strings.ToLower(strings.TrimSpace(n))] = true
+	}
+	var out []ReapLane
+	for _, l := range ReapLanes {
+		if want[strings.ToLower(l.Name)] {
+			delete(want, strings.ToLower(l.Name))
+			out = append(out, l)
+		}
+	}
+	if len(want) > 0 {
+		var unknown []string
+		for n := range want {
+			unknown = append(unknown, n)
+		}
+		sort.Strings(unknown)
+		return nil, fmt.Errorf("unknown namespace(s) %s; expected one of %s",
+			strings.Join(unknown, ", "), strings.Join(ReapLaneNames(), ", "))
+	}
+	return out, nil
+}
+
+// --- per-lane classifiers ---
+
+// phaseRecordVerdict is the shared gate for the phase and task lanes: both
+// classes of card are closed on the completion of the SAME artefact, so they
+// must not be able to disagree about it.
+//
+// The narrowing is changes.Complete's, not its own: the same predicate the
+// re-entry surfaces read, so a change to what "complete" means cannot leave the
+// reap lane answering the old question.
+//
+// It is narrower than phase.Done on purpose, and the narrowing is not a second
+// doneness answer: phase.Done answers "did this phase finish its run?", which
+// StatusShipped satisfies. The sweep asks a different question — "has this
+// phase reached the state the Phases lane's terminal claims?" — and only
+// StatusComplete answers that. A record stuck at shipped is a phase whose
+// finalize half has not run; its card belongs in `shipped`, which is a live
+// forward state, not a stranded one. Reaping it would announce a completion the
+// record does not carry, which c-3 forbids.
+func phaseRecordVerdict(root, slug string) (ReapVerdict, string) {
+	if !phase.DirExists(root, slug) {
+		return ReapUnattributable, fmt.Sprintf("no phase directory .dross/phases/%s/ — renamed or deleted", slug)
+	}
+	c, err := changes.Load(changes.FilePath(root, slug), slug)
+	if err != nil {
+		return ReapUnattributable, fmt.Sprintf("phases/%s/changes.json is unreadable: %v", slug, err)
+	}
+	if c.Complete() {
+		return ReapStranded, fmt.Sprintf("phases/%s/changes.json status=%s", slug, c.Status)
+	}
+	return ReapStillOpen, ""
+}
+
+func classifyPhaseMirrors(ctx *Ctx, lane ReapLane) []candidate {
+	var out []candidate
+	for _, slug := range sortedMapKeys(ctx.Board.Phases) {
+		issue := ctx.Board.Phases[slug]
+		if issue == "" {
+			continue
+		}
+		v, why := phaseRecordVerdict(ctx.Root, slug)
+		out = append(out, candidate{card: ReapCard{Key: issue, Lane: lane.Name, Terminal: lane.Terminal, Why: why}, verdict: v})
+	}
+	return out
+}
+
+func classifyTaskMirrors(ctx *Ctx, lane ReapLane) []candidate {
+	var out []candidate
+	for _, key := range sortedMapKeys(ctx.Board.Tasks) {
+		link := ctx.Board.Tasks[key]
+		if link.Issue == "" {
+			continue
+		}
+		slug, _, ok := strings.Cut(key, "/")
+		if !ok || slug == "" {
+			out = append(out, candidate{
+				card:    ReapCard{Key: link.Issue, Lane: lane.Name, Terminal: lane.Terminal, Why: fmt.Sprintf("task key %q names no phase", key)},
+				verdict: ReapUnattributable,
+			})
+			continue
+		}
+		v, why := phaseRecordVerdict(ctx.Root, slug)
+		out = append(out, candidate{card: ReapCard{Key: link.Issue, Lane: lane.Name, Terminal: lane.Terminal, Why: why}, verdict: v})
+	}
+	return out
+}
+
+// classifyMilestoneMirrors follows the milestone's own toml status, never the
+// epic's state.
+//
+// The lane is skipped wholesale where the milestones slot does not hold an
+// issue at all — a YouTrack version bundle name, an agile board name, a numeric
+// forge milestone id. That is not a stranded card being ignored: it is not a
+// card. CheckMilestoneClosable is the same gate `issue milestone sync --close`
+// uses, and it exists because a numeric milestone id shares an id space with
+// those backends' issue keys, so addressing it as one would resolve a human's
+// issue #7.
+func classifyMilestoneMirrors(ctx *Ctx, lane ReapLane) []candidate {
+	if err := CheckMilestoneClosable(ctx); err != nil {
+		return nil
+	}
+	var out []candidate
+	for _, version := range sortedMapKeys(ctx.Board.Milestones) {
+		id := ctx.Board.Milestones[version]
+		if id == "" {
+			continue
+		}
+		card := ReapCard{Key: id, Lane: lane.Name, Terminal: lane.Terminal}
+		m, err := milestone.Load(milestone.FilePath(ctx.Root, version))
+		if err != nil {
+			card.Why = fmt.Sprintf("no milestone toml for %s", version)
+			out = append(out, candidate{card: card, verdict: ReapUnattributable})
+			continue
+		}
+		if m.Milestone.Status == milestoneStatusComplete {
+			card.Why = fmt.Sprintf("milestones/%s.toml status=%s", version, m.Milestone.Status)
+			out = append(out, candidate{card: card, verdict: ReapStranded})
+			continue
+		}
+		out = append(out, candidate{card: card, verdict: ReapStillOpen})
+	}
+	return out
+}
+
+// roadmapSlugs is every phase slug named on any milestone's roadmap, whether or
+// not it has been scaffolded.
+//
+// It is what lets the backlog verdict tell "renamed or lost" apart from "on a
+// roadmap and not built yet". The phase directory alone cannot: both cases look
+// like an absent directory, and calling live backlog unattributable reports
+// planned work as an unexplained mirror — permanently, on every run.
+func roadmapSlugs(root string) (map[string]string, error) {
+	all, err := milestone.LoadAll(root)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for version, m := range all {
+		for _, slug := range m.Phases {
+			if _, seen := out[slug]; !seen {
+				out[slug] = version
+			}
+		}
+	}
+	return out, nil
+}
+
+// classifyBacklogMirrors decides each recorded backlog mirror from disk alone.
+//
+// It answers the same three-way question BacklogVerdictFor does, and closes a
+// routed item on the same record — Disposed — so the two cannot disagree about
+// which mirrors are done. It cannot reuse that function whole: it is
+// whole-board rather than per-milestone, since the sweep has no single version
+// in hand, so a key is explained by whatever record owns it (a phase directory
+// for `slug:`, a deferred store entry for `someday:`) rather than by membership
+// in one milestone's live set.
+func classifyBacklogMirrors(ctx *Ctx, lane ReapLane) ([]candidate, error) {
+	// deferred.Collect, not deferred.EnsureIDs: the latter stamps missing ids
+	// back into spec.toml, and a dry run must not write to disk either. An
+	// id-less entry is still reachable under its legacy positional key.
+	items, err := deferred.Collect(ctx.Root)
+	if err != nil {
+		return nil, err
+	}
+	byKey := map[string]deferred.Entry{}
+	for _, d := range items {
+		if d.ID != "" {
+			byKey[DeferredBacklogKey(d.ID)] = d
+		}
+		byKey[deferred.LegacyBacklogKey(d.Source, d.Index)] = d
+	}
+	roadmap, err := roadmapSlugs(ctx.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []candidate
+	for _, key := range ctx.Board.BacklogKeys() {
+		issue, ok := ctx.Board.BacklogID(key)
+		if !ok || issue == "" {
+			continue
+		}
+		v, why := reapBacklogVerdict(ctx, key, byKey, roadmap)
+		out = append(out, candidate{card: ReapCard{Key: issue, Lane: lane.Name, Terminal: lane.Terminal, Why: why}, verdict: v})
+	}
+	return out, nil
+}
+
+func reapBacklogVerdict(ctx *Ctx, key string, deferred map[string]deferred.Entry, roadmap map[string]string) (ReapVerdict, string) {
+	if slug, ok := strings.CutPrefix(key, "slug:"); ok {
+		return slugVerdict(ctx.Root, slug, roadmap)
+	}
+	d, ok := deferred[key]
+	if !ok {
+		return ReapUnattributable, fmt.Sprintf("no deferred entry explains backlog key %q", key)
+	}
+	if d.Dismissed {
+		// A dismissed idea is a decision, not a loose end.
+		return ReapStranded, fmt.Sprintf("deferred item %s %d is dismissed", d.Source, d.Index)
+	}
+	// The one rule a routed item closes on, shared with backlog sync: its
+	// disposition record, never its destination finishing.
+	if disposed, why := Disposed(ctx.Root, d); disposed {
+		return ReapStranded, fmt.Sprintf("deferred item %s %d is disposed: %s", d.Source, d.Index, why)
+	}
+	if d.Target != "" {
+		if !phase.DirExists(ctx.Root, d.Target) {
+			// The destination has not been built yet. A routed item whose
+			// target is still on a roadmap is live work, not a lost mirror.
+			v, why := slugVerdict(ctx.Root, d.Target, roadmap)
+			if v == ReapStranded {
+				// Unreachable in practice (slugVerdict only strands a
+				// scaffolded slug) but kept explicit rather than assumed.
+				return v, fmt.Sprintf("routed to %s; %s", d.Target, why)
+			}
+			return v, fmt.Sprintf("routed to %s: %s", d.Target, why)
+		}
+		return routedVerdict(ctx.Root, d.Target)
+	}
+	return ReapStillOpen, ""
+}
+
+// routedVerdict decides a routed item whose destination phase is scaffolded
+// and that no disposition record shows done (see Disposed).
+//
+// The destination finishing is NOT evidence the item was done, so it never
+// strands the card. A route can land on a phase that already shipped (the
+// item was never in its scope), and a destination can be rescoped away from
+// the item; both read as "destination complete". Closing on that resolved
+// hundreds of live items on a real board (feastahead, 2026-10-04: 527 of 545
+// closures lacked evidence). A routed item under a finished destination is
+// named as unattributable — left open for a human to judge — and one under a
+// live destination is still open.
+func routedVerdict(root, target string) (ReapVerdict, string) {
+	v, why := phaseRecordVerdict(root, target)
+	switch v {
+	case ReapStranded:
+		return ReapUnattributable, fmt.Sprintf("routed to %s, which is complete — a finished destination does not show this item was done (it may have been routed after the phase shipped, or rescoped out); close it by hand once it is disposed", target)
+	case ReapUnattributable:
+		return ReapUnattributable, fmt.Sprintf("routed to %s but %s", target, why)
+	}
+	return ReapStillOpen, ""
+}
+
+// slugVerdict decides a roadmap slug's mirror.
+//
+// Scaffolded is the resolution — the same evidence backlog sync uses. An
+// UNSCAFFOLDED slug splits in two, and conflating them is what made the sweep
+// report live work as an unexplained mirror: a slug still named on a
+// milestone's roadmap is backlog that has simply not been built yet and its
+// card is correctly open, while a slug on no roadmap at all was renamed or
+// deleted and nothing on disk can speak for it.
+func slugVerdict(root, slug string, roadmap map[string]string) (ReapVerdict, string) {
+	if phase.DirExists(root, slug) {
+		return ReapStranded, fmt.Sprintf("phases/%s/ exists — the slug was scaffolded", slug)
+	}
+	if version, ok := roadmap[slug]; ok {
+		return ReapStillOpen, fmt.Sprintf("still on %s's roadmap and not scaffolded", version)
+	}
+	return ReapUnattributable, fmt.Sprintf("slug %q is on no milestone roadmap and has no phase directory — renamed or deleted", slug)
+}
+
+// classifyQuickMirrors names every quick card and closes none.
+//
+// A quick task leaves no completion record on disk. state.json's version
+// counter is the only trace, and it proves that a LATER bump happened, not that
+// this quick finished: the internal digit advances when the next quick starts,
+// so ordering evidence would close a quick that was abandoned halfway exactly
+// as readily as one that shipped. The lane therefore has a reap path in the
+// only honest sense — it is classified, listed, and left for a human.
+func classifyQuickMirrors(ctx *Ctx, lane ReapLane) []candidate {
+	var out []candidate
+	for _, ref := range sortedMapKeys(ctx.Board.Quicks) {
+		issue := ctx.Board.Quicks[ref]
+		if issue == "" {
+			continue
+		}
+		out = append(out, candidate{
+			card: ReapCard{
+				Key: issue, Lane: lane.Name, Terminal: lane.Terminal,
+				Why: fmt.Sprintf("quick %s has no completion record on disk — close it by hand if it finished", ref),
+			},
+			verdict: ReapUnattributable,
+		})
+	}
+	return out
+}
+
+// sortedMapKeys gives every lane a stable walk order, so two runs over the same
+// board print the same plan.
+func sortedMapKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}

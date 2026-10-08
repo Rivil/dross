@@ -1,0 +1,68 @@
+[phase]
+id        = "exec-consent-completeness"
+title     = "exec-consent-completeness"
+milestone = "v1.7"
+
+[[criteria]]
+id   = "c-1"
+text = "A test derives the set of process-spawn sites from the source tree itself and fails when one is not behind a consent gate; no hand-maintained list of command names is consulted."
+
+[[criteria]]
+id   = "c-2"
+text = "Every discovered spawn site either sits behind a consent gate or carries an in-source exemption marker stating why it cannot reach repo-authored code; an unmarked, ungated site fails the test."
+
+[[criteria]]
+id   = "c-3"
+text = "`dross survivor drain` refuses in an untrusted tree: it spawns `go test` over the repo's own packages and today runs ungated."
+
+[[criteria]]
+id   = "c-4"
+text = "When the enumerating test fails it names the file, the line, and the remedy (gate it or mark it exempt), proven by a fixture that introduces an ungated spawn site."
+
+[[criteria]]
+id   = "c-5"
+text = "The gate's own documentation — execGatedCommands' package comment, `dross doctor`'s consent section, and any prompt text — describes the enumerated surface rather than a closed set of six command names."
+
+[[criteria]]
+id   = "c-6"
+text = "Enumeration follows reach, not just direct calls: a command that spawns through a helper package (verify → internal/mutation → gremlins) is attributed to that command, so wrapping a spawn in a new package does not hide it."
+
+[[criteria]]
+id   = "c-7"
+text = "A lane dispatched to a remote host is consent-checked before anything is transferred to or executed on that host; an ungranted or stale lane is refused locally, not on the host."
+
+[[decisions]]
+key    = "enumerator_mechanism"
+choice = "Stdlib go/ast + go/parser over internal/ and cmd/, with a function-to-function edge set built from the same ASTs to attribute reach."
+why    = "Zero new dependencies — go.mod carries no golang.org/x/tools, and adding a large module cuts against the single-static-binary posture and v1.7's own supply-chain-currency criterion. ast-grep would make an external binary a test-suite prerequisite and has no call graph."
+locked = true
+
+[[decisions]]
+key    = "spawn_surface"
+choice = "Every os/exec construction (exec.Command / exec.CommandContext) anywhere in the NON-TEST source of internal/ and cmd/ counts as a spawn site, including those inside overridable var seams. Files ending in _test.go are outside the surface."
+why    = "Mechanical and judgement-free. Enumerating only 'unsafe-looking' argv would put a classifier inside the enumerator, which is the recurring vulnerability trust.go's package comment already names. The _test.go boundary is a file-scope rule, not that classifier: a spawn inside a test file only runs under `go test`, which is itself the command the consent gate authorizes, so gating it would be gating a run already consented to. subprocargs_audit_test.go:345 draws the same boundary, and matching it keeps the repo's two audits scoped alike. Amended at plan time (2026-09-04) after the plan review found the original 'anywhere' wording put 82 fixture spawn sites across 40 files inside a surface the phase never intended to sweep."
+locked = true
+
+[[decisions]]
+key    = "exemption_marker"
+choice = "A `//dross:exec-exempt <reason>` comment on the line above the call; the enumerator requires non-empty prose and fails a bare marker."
+why    = "The reason lives next to the code and reads in review. A central exemption file would drift and re-create the hand-maintained list c-1 exists to kill."
+locked = true
+
+[[decisions]]
+key    = "drain_grant"
+choice = "`survivor drain` joins execGatedCommands and is covered by runtime.test_command consent."
+why    = "Consenting to 'dross may run this repo's suite here' is the same permission drain needs. A fourth grant family would cost another trust surface and re-prompt every existing user for no additional authority."
+locked = true
+
+[[decisions]]
+key    = "check_surface"
+choice = "The enumerator is a Go test only — no new CLI command and no doctor section."
+why    = "It is a repo-invariant check on dross's own source. A dross user's repo has no exec.Command sites to enumerate, so a user-facing surface would be dead in every tree but this one."
+locked = true
+
+[[decisions]]
+key    = "remote_authority"
+choice = "Remote execution is authorized by the existing per-lane grant plus the existing host allowlist (readAllowHosts); no new grant family."
+why    = "Remote is a transport detail — the lane grant says the line may run, the allowlist says the host may be used. Both already exist; the work is proving every remote path passes through both, not inventing a third authority."
+locked = true

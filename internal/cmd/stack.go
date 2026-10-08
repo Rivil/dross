@@ -4,14 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 
-	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/stack"
 )
 
@@ -67,9 +66,7 @@ func stackShow() *cobra.Command {
 			if asJSON {
 				return emitJSON(p)
 			}
-			enc := toml.NewEncoder(os.Stdout)
-			enc.Indent = "  "
-			return enc.Encode(p)
+			return render.TOML(os.Stdout, p)
 		},
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
@@ -155,7 +152,7 @@ func stackLoadout() *cobra.Command {
 			if p == nil {
 				return fmt.Errorf("stack profile %q not found", id)
 			}
-			Print(stack.RenderLoadout(p, runtime.GOOS, exec.LookPath))
+			Print(stack.RenderLoadout(p, runtime.GOOS, stack.LookPath))
 			return nil
 		},
 	}

@@ -524,4 +524,91 @@ func TestVerifyPromptTeachesTheDetachedPath(t *testing.T) {
 		t.Error("assets/prompts/verify.md does not tell the agent that a non-finished " +
 			"result state is not a verdict about the code")
 	}
+	// The host lock's reading, beside the detached strings: a scheduled run
+	// naming a holder is a wait, not a stall, and --no-wait is for an
+	// unattended probe — an agent that cancelled a waiting run, or reached
+	// for --no-wait to "speed it up", would be acting on the opposite reading.
+	for _, want := range []string{"waiting on", "not a failure", "--no-wait"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("assets/prompts/verify.md does not teach %q beside the detached path", want)
+		}
+	}
+}
+
+// TestReadmeDocumentsTheHostLock pins the facts a reader of the README needs
+// to predict a wait: where the lock is, that a leg waits and can refuse, that
+// the suite waits up to a cap and then shares the host, how a wait is named,
+// and that a dead holder leaves nothing to clear.
+func TestReadmeDocumentsTheHostLock(t *testing.T) {
+	root := repoRootForDocs(t)
+	b, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatalf("read README.md: %v", err)
+	}
+	readme := string(b)
+	for _, want := range []string{
+		"/tmp/dross-host.lock",
+		"waiting on",
+		"running alongside",
+		"--wait",
+		"10m",
+		"--wait 0",
+	} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("README.md does not document %q", want)
+		}
+	}
+	if !strings.Contains(readme, "no stale lock") && !strings.Contains(readme, "nothing to clear") {
+		t.Error("README.md does not say a dead holder leaves nothing to clear")
+	}
+	verifyRow := readmeRow(t, "dross verify <phase>`")
+	if !strings.Contains(verifyRow, "--no-wait") || !strings.Contains(verifyRow, "`15`") {
+		t.Errorf("the dross verify row does not document --no-wait with exit 15:\n%s", verifyRow)
+	}
+	testRow := readmeRow(t, "dross test [selector...]")
+	if !strings.Contains(testRow, "--wait") || !strings.Contains(testRow, "10m") || !strings.Contains(testRow, "--wait 0") {
+		t.Errorf("the dross test row does not document --wait / 10m / --wait 0:\n%s", testRow)
+	}
+	doctorRow := readmeRow(t, "dross doctor`")
+	if !strings.Contains(doctorRow, "flock") || !strings.Contains(doctorRow, "host busy") {
+		t.Errorf("the dross doctor row does not document flock and host busy:\n%s", doctorRow)
+	}
+}
+
+// TestResultsRowStillEnumeratesTenToFourteen: the waiting state is documented
+// as exit 10 with a holder reason, not as a new code (locked
+// detached_waiting_state). The row's backticked numbers are the contract a
+// poller reads, and they must be exactly 10–14.
+func TestResultsRowStillEnumeratesTenToFourteen(t *testing.T) {
+	row := readmeRow(t, "dross verify results <phase>")
+	codes := map[string]bool{}
+	for _, m := range regexp.MustCompile("`([0-9]+)`").FindAllStringSubmatch(row, -1) {
+		codes[m[1]] = true
+	}
+	want := []string{"10", "11", "12", "13", "14"}
+	for _, c := range want {
+		if !codes[c] {
+			t.Errorf("results row does not enumerate exit %s", c)
+		}
+	}
+	if len(codes) != len(want) {
+		t.Errorf("results row enumerates %v, want exactly 10–14", codes)
+	}
+}
+
+// TestArchitectureDocumentsTheHostLock pins the facts a future editor would
+// simplify away and break c-7 or c-4 with: the path, the protected_regular
+// open rule, the conv=nocreat write, and the read -t lease.
+func TestArchitectureDocumentsTheHostLock(t *testing.T) {
+	root := repoRootForDocs(t)
+	b, err := os.ReadFile(filepath.Join(root, "ARCHITECTURE.md"))
+	if err != nil {
+		t.Fatalf("read ARCHITECTURE.md: %v", err)
+	}
+	doc := string(b)
+	for _, want := range []string{"/tmp/dross-host.lock", "protected_regular", "conv=nocreat", "read -t"} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("ARCHITECTURE.md does not document %q", want)
+		}
+	}
 }

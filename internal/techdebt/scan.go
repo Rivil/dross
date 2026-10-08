@@ -46,6 +46,22 @@ var DefaultThresholds = Thresholds{MaxFileLines: 600, MaxLineChars: 400}
 // that merely contain one ("TODOList").
 var markerRe = regexp.MustCompile(`\b(TODO|FIXME|HACK|XXX)\b`)
 
+// markerWords are markerRe's alternatives as plain needles.
+var markerWords = []string{"TODO", "FIXME", "HACK", "XXX"}
+
+// mayHaveMarker reports whether line holds a marker word anywhere. It gates
+// markerRe, never replaces it: strings.Contains is assembly, which the -race
+// tax on the regex VM does not reach, but only the regex knows \b — `TODOList`
+// passes the gate and is still rejected.
+func mayHaveMarker(line string) bool {
+	for _, w := range markerWords {
+		if strings.Contains(line, w) {
+			return true
+		}
+	}
+	return false
+}
+
 // Scan reads each path and returns its tech-debt findings. Files that can't be
 // read are skipped silently (the path set may include freshly-deleted entries);
 // binary files (those containing a NUL byte) and empty files yield nothing. I/O
@@ -71,8 +87,10 @@ func scanContent(path string, content []byte, th Thresholds) []Finding {
 	lines := splitLines(content)
 	var out []Finding
 	for i, line := range lines {
-		if m := markerRe.FindString(line); m != "" {
-			out = append(out, Finding{File: path, Line: i + 1, Class: ClassMarker, Detail: m})
+		if mayHaveMarker(line) {
+			if m := markerRe.FindString(line); m != "" {
+				out = append(out, Finding{File: path, Line: i + 1, Class: ClassMarker, Detail: m})
+			}
 		}
 		if th.MaxLineChars > 0 && len(line) > th.MaxLineChars {
 			out = append(out, Finding{File: path, Line: i + 1, Class: ClassLongLine, Detail: fmt.Sprintf("%d chars", len(line))})

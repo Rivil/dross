@@ -38,20 +38,27 @@ func TestSpecPromptRoutesFourDestinations(t *testing.T) {
 	}
 }
 
-// TestSpecPromptDeferFirstEitherOr proves c-1's framing half: a surfaced
-// borderline candidate is routed through the defer-first either/or from the
-// playbook — lead "defer it", offer "add to current phase". Drop the framing and
-// the needles disappear.
-func TestSpecPromptDeferFirstEitherOr(t *testing.T) {
+// TestSpecPromptIncludeFirstEitherOr proves c-1's framing half as revised on
+// 2026-09-29: a surfaced candidate is sorted include-first — an in-scope one is
+// pulled in with no defer question, a borderline one leads with "add to current
+// phase", and only one with a clear home elsewhere leads with "defer it". Drop
+// the framing and the needles disappear; restore the defer-first lead and the
+// absence check fails.
+func TestSpecPromptIncludeFirstEitherOr(t *testing.T) {
 	content := specPromptContent(t)
 	for _, needle := range []string{
-		"defer-first",          // defer leads
-		"add to current phase", // the alternative
-		"defer it",             // the lead option, spelled out
+		"include-first",                  // the rule's name
+		"belongs in this phase",          // case 1: pulled in, no defer question
+		"lead with add to current phase", // case 2: borderline leads with add
+		"clearly has a home elsewhere",   // case 3: the only defer lead
+		"defer it",                       // the alternative, spelled out
 	} {
 		if !strings.Contains(content, needle) {
-			t.Errorf("spec.md §4a missing defer-first framing %q", needle)
+			t.Errorf("spec.md §4a missing include-first framing %q", needle)
 		}
+	}
+	if strings.Contains(content, "defer-first") {
+		t.Error("spec.md still carries the retired defer-first lead")
 	}
 }
 
@@ -211,5 +218,35 @@ func TestSpecPromptSkipAlreadyRouted(t *testing.T) {
 	content := specPromptContent(t)
 	if !strings.Contains(content, "already has a target") {
 		t.Error("spec.md must skip deferred items that already have a target (dedup)")
+	}
+}
+
+// TestSpecPromptRecordsAbsorbedItems: once spec.toml is written, /dross-spec
+// records every criterion it seeded from a parked item with `dross deferred
+// absorb`, naming the phase explicitly — current_phase is only set in §6.
+func TestSpecPromptRecordsAbsorbedItems(t *testing.T) {
+	content := specPromptContent(t)
+	section5 := strings.Index(content, "## 5. write spec.toml")
+	absorb := strings.Index(content, "dross deferred absorb")
+	if section5 < 0 {
+		t.Fatal("spec.md has no '## 5. Write spec.toml' heading")
+	}
+	if absorb < 0 {
+		t.Fatal("spec.md never instructs dross deferred absorb for criteria seeded from parked items")
+	}
+	if absorb < section5 {
+		t.Fatal("spec.md places dross deferred absorb before spec.toml is written (§5)")
+	}
+	line := content[absorb:]
+	if i := strings.Index(line, "\n"); i >= 0 {
+		line = line[:i]
+	}
+	if !strings.Contains(line, "--phase <phase-id>") {
+		t.Errorf("the absorb instruction does not pass --phase <phase-id> explicitly: %q", line)
+	}
+	// A reworded parked item is still absorbed: only "accepted as written"
+	// would leave its board card open forever.
+	if !strings.Contains(content[section5:absorb], "seeded from a §1 parked item") || !strings.Contains(content[section5:absorb], "reworded") {
+		t.Error("spec.md's absorb instruction does not cover a reworded parked item")
 	}
 }

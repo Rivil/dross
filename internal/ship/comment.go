@@ -65,7 +65,11 @@ func postGitHubComment(opts CommentOpts) error {
 	// --body past `--` would not crash — cobra would read the body text as a
 	// second positional and the comment would post with the wrong content,
 	// which is the worse failure of the two.
-	out, err := ghCommand("pr", "comment", "--body", opts.Body, "--", fmt.Sprint(opts.PRNumber)).CombinedOutput()
+	cmd, err := screenedGH("pr", "comment", "--body", opts.Body, "--", fmt.Sprint(opts.PRNumber))
+	if err != nil {
+		return err
+	}
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		// Surface the missing-gh case with the original install pointer
 		// rather than the raw exec error — but key it on the LOOKUP having
@@ -82,7 +86,7 @@ func postGitHubComment(opts CommentOpts) error {
 		if errors.Is(err, exec.ErrNotFound) {
 			return errors.New("github backend needs the `gh` CLI on PATH (https://cli.github.com)")
 		}
-		return fmt.Errorf("gh pr comment: %w\n%s", err, string(out))
+		return ghFailed("gh pr comment", err, out)
 	}
 	return nil
 }

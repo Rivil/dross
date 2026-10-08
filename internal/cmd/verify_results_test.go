@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -361,7 +363,7 @@ func collectRepo(t *testing.T, phaseID string) string {
 	// A REAL Gremlins: gremlinsAdapter type-asserts the concrete type, and
 	// Collect only reads files, so nothing is spawned.
 	prev := configuredAdaptersFn
-	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) ([]mutation.Adapter, mutationTuning, error) {
+	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool, _ string, _ remote.WaitPolicy) ([]mutation.Adapter, mutationTuning, error) {
 		return []mutation.Adapter{&mutation.Gremlins{ProjectRoot: dir}}, mutationTuning{}, nil
 	}
 	t.Cleanup(func() { configuredAdaptersFn = prev })
@@ -469,6 +471,90 @@ func TestCollectWritesTheSameArtefactsAnAttachedRunWould(t *testing.T) {
 	}
 	if !strings.Contains(body, `"c-1"`) {
 		t.Errorf("verify.toml carries no block for the spec's criterion:\n%s", body)
+	}
+}
+
+// TestCollectRecordsWholeFileProvenance: the detached leg goes through the
+// same planner the attached path runs, so it names every dispatched file as
+// whole-file with the gremlins reason — not nothing, which would leave a
+// collected run indistinguishable from one that never recorded provenance.
+func TestCollectRecordsWholeFileProvenance(t *testing.T) {
+	const id = "collect"
+	dir := collectRepo(t, id)
+	root := filepath.Join(dir, RootDirName)
+
+	if err := collectDetached(id); err != nil {
+		t.Fatalf("collectDetached: %v", err)
+	}
+	testsPath, _ := verify.FilePaths(root, id)
+	raw, err := os.ReadFile(testsPath)
+	if err != nil {
+		t.Fatalf("tests.json was not written: %v", err)
+	}
+	if strings.Contains(string(raw), `"ranges"`) {
+		t.Errorf("a gremlins leg must carry no ranges key:\n%s", raw)
+	}
+	got, err := verify.LoadTests(testsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Languages) != 1 {
+		t.Fatalf("want one go leg, got %+v", got.Languages)
+	}
+	leg := got.Languages[0]
+	if len(leg.Files) == 0 {
+		t.Fatal("the leg dispatched no files")
+	}
+	for _, f := range leg.Files {
+		if reason := leg.WholeFile[f]; reason != verify.WholeFileNoRangeRunner {
+			t.Errorf("whole_file[%s] = %q, want %q", f, reason, verify.WholeFileNoRangeRunner)
+		}
+	}
+	if len(leg.WholeFile) != len(leg.Files) {
+		t.Errorf("whole_file names %d files, leg dispatched %d", len(leg.WholeFile), len(leg.Files))
+	}
+}
+
+// TestCollectLegListsOnlyMutableFiles: a scope that also carries non-Go files
+// (a README, a prompt) must not put them on the gremlins leg. The attached
+// path groups by Dispatch before planning, so its leg never lists them; the
+// collected leg used to hand the raw candidate list to both Files and
+// PlanRanges, and its whole-file count over-read by every such file.
+func TestCollectLegListsOnlyMutableFiles(t *testing.T) {
+	const id = "collect"
+	dir := collectRepo(t, id)
+	root := filepath.Join(dir, RootDirName)
+
+	writeScopeFile(t, dir, "README.md", "# x\n")
+	writeScopeFile(t, dir, "assets/prompts/verify.md", "# verify\n")
+	mustGit(t, dir, "add", "README.md", "assets/prompts/verify.md")
+	mustGit(t, dir, "commit", "-qam", "phase edits docs")
+	if err := runCmd(t, Changes(), "record", id, "t-2", "--files", "README.md,assets/prompts/verify.md"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := collectDetached(id); err != nil {
+		t.Fatalf("collectDetached: %v", err)
+	}
+	testsPath, _ := verify.FilePaths(root, id)
+	got, err := verify.LoadTests(testsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Languages) != 1 {
+		t.Fatalf("want one go leg, got %+v", got.Languages)
+	}
+	leg := got.Languages[0]
+	if !reflect.DeepEqual(leg.Files, []string{"a.go"}) {
+		t.Errorf("leg.Files = %v, want only the mutable a.go", leg.Files)
+	}
+	if len(leg.WholeFile) != 1 || leg.WholeFile["a.go"] != verify.WholeFileNoRangeRunner {
+		t.Errorf("whole_file = %v, want exactly {a.go: %s}", leg.WholeFile, verify.WholeFileNoRangeRunner)
+	}
+	// The scope itself still names the docs: filtering is the LEG's, never
+	// the scope's, or a phase that only edited docs would read as empty.
+	if !containsString(got.Scope.Files, "README.md") {
+		t.Errorf("scope lost README.md: %v", got.Scope.Files)
 	}
 }
 
@@ -850,6 +936,24 @@ func TestClassifyFetchReadsRsyncsVerdict(t *testing.T) {
 	}
 }
 
+// TestClassifyFetchReadsARealExitStatus: the exit status reaches classifyFetch
+// from a real process, through the spawn that moved to internal/verify — not a
+// hand-built verdict. `sh -c 'exit 23'` must classify exactly as rsync's 23.
+func TestClassifyFetchReadsARealExitStatus(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sh-driven exit status is unix-only")
+	}
+	raw := verify.RunDetachArgv([]string{"sh", "-c", "exit 23"})
+	if raw == nil {
+		t.Fatal("`exit 23` reported success")
+	}
+	got := classifyFetch("helicon", raw)
+	want := remote.Classify("rsync", "helicon", 23)
+	if !errors.Is(got, remote.ErrPartial) || got.Error() != want.Error() {
+		t.Errorf("classifyFetch(real exit 23) = %v, want %v", got, want)
+	}
+}
+
 // TestASuccessfulCollectClearsTheRecord: leaving it would report a phase as
 // having a run in flight forever, and block every future --detach on it.
 func TestASuccessfulCollectClearsTheRecord(t *testing.T) {
@@ -892,6 +996,65 @@ func TestCollectRefusesARunThatProducedNothing(t *testing.T) {
 	}
 	if got := exitCodeOf(err); got != exitResultsFailed {
 		t.Errorf("exit code = %d, want %d (failed)", got, exitResultsFailed)
+	}
+	assertNoArtefacts(t, root, id)
+}
+
+// TestRunScopedLegNeverListsUnsupportedFiles pins the attached-path invariant
+// the collector now mirrors: RunScoped groups by Dispatch, so a file no
+// adapter supports lands in Skipped and never on a leg.
+func TestRunScopedLegNeverListsUnsupportedFiles(t *testing.T) {
+	stub := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}
+	files := []string{"a.go", "README.md", "assets/prompts/verify.md"}
+	got, err := verify.RunScoped("p", files, []mutation.Adapter{stub}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Languages) != 1 {
+		t.Fatalf("want one leg, got %+v", got.Languages)
+	}
+	if !reflect.DeepEqual(got.Languages[0].Files, []string{"a.go"}) {
+		t.Errorf("leg.Files = %v, want only a.go", got.Languages[0].Files)
+	}
+	var skipped []string
+	for _, s := range got.Skipped {
+		skipped = append(skipped, s.File)
+	}
+	if !reflect.DeepEqual(skipped, []string{"README.md", "assets/prompts/verify.md"}) {
+		t.Errorf("skipped = %v, want the two docs", skipped)
+	}
+}
+
+// TestResultsWaitingOnAHolderIsScheduledNotRunning: a detached run waiting
+// on the host lock reads as scheduled (exit 10, not 11) with the holder
+// named — no new state, no new code (locked detached_waiting_state) — and
+// nothing is written.
+func TestResultsWaitingOnAHolderIsScheduledNotRunning(t *testing.T) {
+	const id = "remote-run-detach"
+	root := resultsFixture(t, id) // no --at
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "scheduled", HasLock: true,
+		Lock: remote.LockStatus{Held: true, Holder: remote.Holder{
+			Project: "proj-b", Phase: "phase-x", RunID: "r-other", PID: 99,
+			Since: time.Date(2026, 9, 21, 9, 0, 0, 0, time.UTC)}}}, nil)
+
+	err := collectDetached(id)
+	if got := exitCodeOf(err); got != exitResultsScheduled {
+		t.Errorf("exit code = %d, want %d (scheduled): %v", got, exitResultsScheduled, err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "waiting on proj-b/phase-x run r-other (pid 99) since 2026-09-21T09:00:00Z") {
+		t.Errorf("the refusal does not name the holder: %v", err)
+	}
+	assertNoArtefacts(t, root, id)
+
+	// Lock free, no --at: not started yet, still 10.
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "scheduled", HasLock: true}, nil)
+	err = collectDetached(id)
+	if got := exitCodeOf(err); got != exitResultsScheduled {
+		t.Errorf("free lock: exit code = %d, want %d: %v", got, exitResultsScheduled, err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "not started yet") {
+		t.Errorf("free lock: %v", err)
 	}
 	assertNoArtefacts(t, root, id)
 }

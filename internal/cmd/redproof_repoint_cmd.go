@@ -43,7 +43,7 @@ func phaseRedProofRepoint() *cobra.Command {
 			}
 			repoDir := filepath.Dir(root)
 
-			pins, err := discoverRedProofPins(root)
+			pins, err := discoverRedProofPins(root, repoDir)
 			if err != nil {
 				return err
 			}
@@ -96,7 +96,10 @@ func repointOnePin(root, repoDir string, pin redProofPin, apply bool) bool {
 		return true
 	}
 
-	Printf("%s: %s pins %s, which has rotted — %s\n", pin.Phase, plan.Doc, plan.OldSHA, plan.Why)
+	// Rel(): plan.Doc is a Contained, whose String() is the joined absolute
+	// path. A bare %s here would print one machine's layout in a line the
+	// operator reads as a repo-relative doc name.
+	Printf("%s: %s pins %s, which has rotted — %s\n", pin.Phase, plan.Doc.Rel(), plan.OldSHA, plan.Why)
 	Printf("  proposed: %s (%s's fork point)\n", plan.NewSHA, pin.Phase)
 	verb := "would write"
 	if apply {
@@ -159,7 +162,8 @@ func checkReplayBeforeRepoint(root, repoDir string, plan redProofRepointPlan) (s
 	case err != nil:
 		return fmt.Sprintf("the replay could not be run at %s, and an error is not evidence the proof went red: %v", short(plan.NewSHA), err), false
 	case !res.Red:
-		return fmt.Sprintf("the replay did NOT go red at %s (exit 0) — the proof does not reproduce there, so moving the pin onto it would record a proof that no longer exists:\n%s", short(plan.NewSHA), res.Tail), false
+		printReplayTail(res.Tail)
+		return fmt.Sprintf("the replay did NOT go red at %s (exit 0) — the proof does not reproduce there, so moving the pin onto it would record a proof that no longer exists (its last lines are printed above)", short(plan.NewSHA)), false
 	}
 	return fmt.Sprintf("verified: the replay went red at %s (exit %d)", short(plan.NewSHA), res.ExitCode), true
 }

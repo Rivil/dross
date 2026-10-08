@@ -9,6 +9,7 @@ import (
 
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -189,7 +190,7 @@ func TestProgressNoCurrentMilestoneExitsNonZero(t *testing.T) {
 // unfinished fourth still reads remaining.
 //
 // This replaces a version that ran against dross's own .dross directory. That
-// one handed the real root to buildMilestoneProgress, whose phaseIsDone falls
+// one handed the real root to buildMilestoneProgress, whose phase.IsDone falls
 // back to state.json history — a gitignored, machine-local file. So it passed
 // locally off the fallback and depended on CI's fresh checkout to exercise the
 // markers it claimed to measure: green here for a reason CI does not have,
@@ -220,7 +221,7 @@ func TestProgressCountsSeveralMarkerCompletePhases(t *testing.T) {
 
 // TestProgressWithoutStateFile pins the fresh-clone case CI caught: state.json
 // is machine-local and gitignored, so a checkout nobody has run a dross command
-// in has none at all. It feeds only phaseIsDone's history fallback, never the
+// in has none at all. It feeds only phase.IsDone's history fallback, never the
 // authoritative changes.json marker, so its absence has to degrade the fallback
 // to "nothing recorded" rather than fail the command outright.
 //
@@ -294,10 +295,10 @@ func TestProgressPlainOutputOmitsEmptyLists(t *testing.T) {
 }
 
 // TestPhaseDoneResolvesScaffoldedness pins the shared reader's entry point
-// (phasedone.go): a caller holding only a slug gets the unscaffolded arm
+// (internal/phase/done.go): a caller holding only a slug gets the unscaffolded arm
 // resolved for it, so `dross status` and `dross phase list` cannot answer that
 // case differently from buildMilestoneProgress, which computes scaffolded-ness
-// for its own reporting and calls the inner phaseIsDone.
+// for its own reporting and calls the inner phase.IsDone.
 func TestPhaseDoneResolvesScaffoldedness(t *testing.T) {
 	dir := progressRepo(t, "v1.3", "active", "built", "never-built")
 	scaffoldPhase(t, dir, "built", changes.StatusComplete)
@@ -306,10 +307,10 @@ func TestPhaseDoneResolvesScaffoldedness(t *testing.T) {
 	touchHistory(t, dir, "completed never-built")
 
 	root := filepath.Join(dir, ".dross")
-	if !phaseDone(root, "built") {
+	if !phase.Done(root, "built") {
 		t.Error("a scaffolded phase with a complete record must read done")
 	}
-	if phaseDone(root, "never-built") {
+	if phase.Done(root, "never-built") {
 		t.Error("an unscaffolded slug is never done, whatever history says")
 	}
 }
@@ -326,7 +327,7 @@ func TestPhaseDoneSurvivesMissingStateFile(t *testing.T) {
 		t.Fatalf("remove state.json: %v", err)
 	}
 
-	if !phaseDone(root, "built") {
+	if !phase.Done(root, "built") {
 		t.Error("the durable marker alone must carry a phase with no state.json")
 	}
 }

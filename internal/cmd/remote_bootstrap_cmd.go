@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 )
@@ -66,7 +67,7 @@ func remoteBootstrap() *cobra.Command {
 				Print("no mutation adapters and no test lanes configured — nothing to bootstrap")
 				return nil
 			}
-			targets, err := readRemoteGrants(root, filepath.Dir(root))
+			targets, err := localstore.ReadRemoteGrants(root, filepath.Dir(root))
 			if err != nil {
 				return err
 			}

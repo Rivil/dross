@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -21,10 +22,10 @@ func TestDonenessIgnoresCompletionBreadcrumb(t *testing.T) {
 	touchHistory(t, dir, "completed breadcrumb-only")
 
 	root := filepath.Join(dir, ".dross")
-	if phaseDone(root, "breadcrumb-only") {
+	if phase.Done(root, "breadcrumb-only") {
 		t.Error("a completion breadcrumb alone must not read done — that is the capped-window fallback this phase deleted")
 	}
-	if phaseIsDone(root, "breadcrumb-only", true) {
+	if phase.IsDone(root, "breadcrumb-only", true) {
 		t.Error("the inner reader must agree with the entry point")
 	}
 	rep, err := buildMilestoneProgress(root, "v1.3")
@@ -46,7 +47,7 @@ func TestDonenessSurvivesHistoryEviction(t *testing.T) {
 	scaffoldPhase(t, dir, "marked", changes.StatusComplete)
 	root := filepath.Join(dir, ".dross")
 
-	if !phaseDone(root, "marked") {
+	if !phase.Done(root, "marked") {
 		t.Fatal("precondition: a marker-complete phase reads done before any churn")
 	}
 
@@ -65,7 +66,7 @@ func TestDonenessSurvivesHistoryEviction(t *testing.T) {
 		}
 	}
 
-	if !phaseDone(root, "marked") {
+	if !phase.Done(root, "marked") {
 		t.Error("a durable marker must outlive the history window — doneness read a window, not a record")
 	}
 	rep, err := buildMilestoneProgress(root, "v1.3")
@@ -110,25 +111,8 @@ func TestDonenessAcceptsExactlyShippedAndComplete(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if got := phaseDone(root, "p"); got != done[status] {
+		if got := phase.Done(root, "p"); got != done[status] {
 			t.Errorf("status %q reads done=%v, want %v — the switch accepts exactly {shipped, complete}", status, got, done[status])
-		}
-	}
-}
-
-// TestDonenessReaderDoesNotReadState is the source-level half of the guard. The
-// behavioural tests above catch a fallback that changes an answer; this one
-// catches the reader growing a state.State parameter again at all, which is how
-// the fallback got in the first time.
-func TestDonenessReaderDoesNotReadState(t *testing.T) {
-	b, err := os.ReadFile("phasedone.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	src := string(b)
-	for _, banned := range []string{"internal/state", "state.State", "s.History"} {
-		if strings.Contains(src, banned) {
-			t.Errorf("the doneness reader references %q — doneness reads changes.json alone", banned)
 		}
 	}
 }

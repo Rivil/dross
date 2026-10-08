@@ -1,0 +1,14 @@
+// Harness self-test for the WANT corpus checker. Under the stub scanner — every
+// call to flag() is a finding — this file holds one matched annotation, one
+// finding with no WANT (UNEXPECTED), and one WANT with no finding (MISSED).
+// TestCorpusHarnessReportsBothDirections requires both mismatches reported.
+package mismatch
+
+func flag() {}
+
+func probe() int {
+	flag() // WANT stub
+	flag()
+	n := 1 // WANT stub
+	return n
+}

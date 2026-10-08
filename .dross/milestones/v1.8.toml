@@ -1,0 +1,9 @@
+phases = ["azure-devops-provider"]
+
+[milestone]
+  version = "v1.8"
+  status = "planning"
+  started = "2026-09-11"
+  base = "milestone/v1.7"
+
+[scope]

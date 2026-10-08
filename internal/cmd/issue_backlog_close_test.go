@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/Rivil/dross/internal/boardsync"
 )
 
 // backlogCloseFake is a YouTrack stand-in that additionally models resolution:
@@ -286,17 +288,20 @@ func TestBacklogClosesScaffoldedSlugOnly(t *testing.T) {
 	}
 }
 
-// TestRoutedBacklogClosesOnlyWhenTargetResolved is c-6's other half. A routed
-// item's work lands in its TARGET phase, so the target's own issue is the only
-// honest signal that the idea is done. The two cases differ in nothing but that
-// read-back.
+// TestRoutedBacklogClosesOnlyWhenTargetResolved pins that a routed item's
+// mirror NEVER closes on its target phase's issue resolving. The target
+// finishing was once read as the idea being done, but a route can land on a
+// phase that already shipped (the item was never in its scope) or one later
+// rescoped away from it — feastahead, 2026-10-04: 527 of 545 backlog closures
+// had no evidence behind them. The two cases differ in nothing but the
+// target's read-back, and both must leave the mirror open.
 func TestRoutedBacklogClosesOnlyWhenTargetResolved(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
 		targetResolved bool
 		wantCloses     int
 	}{
-		{"target shipped", true, 1},
+		{"target shipped", true, 0},
 		{"target still open", false, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -308,7 +313,7 @@ target = "destination"
 `)
 			// The target phase and its board issue already exist.
 			scaffoldBacklogPhase(t, dir, "destination")
-			f.seed("PROJ-900", "destination — Destination", labelMarker, phaseLabel("destination"))
+			f.seed("PROJ-900", "destination — Destination", boardsync.LabelMarker, boardsync.PhaseLabel("destination"))
 			f.mu.Lock()
 			f.resolved["PROJ-900"] = tc.targetResolved
 			f.mu.Unlock()
@@ -402,7 +407,7 @@ text = "an idea"
 func TestUnattributableBacklogKeyIsNeverClosed(t *testing.T) {
 	f := newBacklogCloseFake(t)
 	dir := backlogCloseRepo(t, f.srv.URL, []string{"still-waiting"}, "")
-	f.seed("PROJ-901", "[backlog] someone-elses-slug", labelMarker)
+	f.seed("PROJ-901", "[backlog] someone-elses-slug", boardsync.LabelMarker)
 	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
 		`{"phases":{},"quicks":{},"milestones":{},"backlog":{"slug:someone-elses-slug":"PROJ-901"}}`)
 

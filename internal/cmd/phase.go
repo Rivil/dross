@@ -1,17 +1,16 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
@@ -87,7 +86,7 @@ func phaseList() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// One doneness reader for the whole tool (phasedone.go): this
+			// One doneness reader for the whole tool (internal/phase/done.go): this
 			// listing, `dross status` and `dross milestone progress` count the
 			// same phases done, off the completion record rather than a verify
 			// verdict.
@@ -104,7 +103,7 @@ func phaseList() *cobra.Command {
 			}
 			done := 0
 			for _, id := range phase.Ordered(milestonePhaseOrder(root), ids) {
-				if phaseDone(root, id) {
+				if phase.Done(root, id) {
 					done++
 					Printf("✓ %s\n", id)
 				} else {
@@ -143,10 +142,10 @@ func listMilestoneRoadmap(root, version string) error {
 	done := 0
 	for _, slug := range m.Phases {
 		switch {
-		case phaseDone(root, slug):
+		case phase.Done(root, slug):
 			done++
 			Printf("✓ %s\n", slug)
-		case !phaseDirExists(root, slug):
+		case !phase.DirExists(root, slug):
 			Printf("  %s (not scaffolded)\n", slug)
 		default:
 			Printf("  %s\n", slug)
@@ -353,7 +352,7 @@ func phaseCreate() *cobra.Command {
 // forkPhaseBranch asks the same question to refuse, which is the behaviour
 // --adopt is opting out of.
 func localBranchExists(repoDir, branch string) bool {
-	return gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) == nil
+	return gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) == nil
 }
 
 // phaseComplete finalizes a phase after its PR has been squash-merged
@@ -440,7 +439,7 @@ destructive reset of the local base branch; read the abort first.`,
 			case s.CurrentPhase != "":
 				phaseID = s.CurrentPhase
 			default:
-				if cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD"); err == nil {
+				if cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD"); err == nil {
 					if rest, ok := strings.CutPrefix(cur, "phase/"); ok {
 						phaseID = rest
 					}
@@ -509,28 +508,44 @@ destructive reset of the local base branch; read the abort first.`,
 				recordedPR = ch.PR
 			}
 
-			if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
-				return fmt.Errorf("git fetch: %w\n%s", err, out)
+			if err := gitrun.Run(repoDir, "fetch", "origin"); err != nil {
+				return fmt.Errorf("git fetch: %w", err)
 			}
 
 			// Safety net (c-2): .dross-only chores sitting unpushed on the
 			// local base (pause auto-snapshot, gate auto-commits) re-seed
 			// divergence at the next squash-merge. Complete already requires
-			// network, so it absorbs the push; a code-ahead base or a failed
-			// push is a hard refusal.
-			basePushed, err := pushBaseIfAheadDrossOnly(repoDir, reconcileBranch)
+			// network, so it absorbs them — pushed straight to an
+			// unprotected base, or through a chore PR when the base refuses
+			// direct pushes; a code-ahead base, an unreadable protection
+			// answer or a failed push is a hard refusal.
+			baseRoute, err := routeBaseChores(repoDir, reconcileBranch)
 			if err != nil {
 				return err
 			}
-			if basePushed {
-				Printf("pushed unpushed .dross chores on %s to origin\n", reconcileBranch)
-			}
-			quickPushed, quickBase, err := pushQuickBaseIfRecorded(repoDir, root, reconcileBranch)
+			narrateBaseChores(Printf, reconcileBranch, "", baseRoute)
+			quickRoute, quickBase, err := routeQuickBaseChores(repoDir, root, reconcileBranch)
 			if err != nil {
 				return err
 			}
-			if quickPushed {
-				Printf("pushed unpushed .dross chores on %s (recorded quick_base) to origin\n", quickBase)
+			narrateBaseChores(Printf, quickBase, " (recorded quick_base)", quickRoute)
+			if c := baseRoute.ChorePR; c != nil {
+				if c.Merged {
+					// It merged at once, so origin/<base> moved after the
+					// fetch above; the fast-forward below needs to see it.
+					if err := gitrun.Run(repoDir, "fetch", "origin"); err != nil {
+						return fmt.Errorf("git fetch: %w", err)
+					}
+				} else if gitrun.Quiet(repoDir, gitRefArgs("merge-base", []string{"--is-ancestor"}, "refs/remotes/origin/"+reconcileBranch, "refs/heads/"+reconcileBranch)...) != nil {
+					// Local base holds chores origin hasn't merged yet AND
+					// origin has moved on: the fast-forward below can't
+					// succeed until the chore PR lands. Not a divergence to
+					// --recover from — just a wait. Refused here, before any
+					// checkout, so nothing local has moved.
+					return fmt.Errorf("local %s holds .dross chores still waiting in chore PR %s, and origin/%s has moved on, so %s can't fast-forward yet — "+
+						"re-run `dross phase complete %s` once it merges",
+						reconcileBranch, pullURL(p.Remote.URL, c.Number), reconcileBranch, reconcileBranch, phaseID)
+				}
 			}
 
 			// Origin-side fallback for the recorded PR (c-3): post-squash-merge
@@ -591,9 +606,9 @@ destructive reset of the local base branch; read the abort first.`,
 			// on its own line ahead of the sha and the caller reads the
 			// separator as the answer. --verify makes it resolve-or-fail, which
 			// is what this read wanted anyway.
-			phaseTipSHA, _ := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+phaseBranch)...)
+			phaseTipSHA, _ := gitrun.Trim(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+phaseBranch)...)
 
-			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+			cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
 			}
@@ -603,7 +618,7 @@ destructive reset of the local base branch; read the abort first.`,
 				}
 			}
 
-			if out, err := guardedFF(repoDir, "origin/"+reconcileBranch); err != nil {
+			if err := guardedFF(repoDir, "origin/"+reconcileBranch); err != nil {
 				// The ff abort IS the divergence signal: local <branch> holds
 				// commits origin/<branch> doesn't. The clean-tree guard above
 				// already ran, so no uncommitted work is at risk. The merge
@@ -613,10 +628,10 @@ destructive reset of the local base branch; read the abort first.`,
 				// Without --recover, refuse and point at the fix, changing
 				// nothing destructive.
 				if !recoverFlag {
-					return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged.\n%s\n"+
+					return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged (git's abort is printed above).\n"+
 						"Re-run `dross phase complete --recover` to reset %s to origin and restore .dross/ "+
 						"(or use `dross ship recover`). Recovery is a destructive reset of local %s — read the abort first.",
-						reconcileBranch, reconcileBranch, out, reconcileBranch, reconcileBranch)
+						reconcileBranch, reconcileBranch, reconcileBranch, reconcileBranch)
 				}
 				// --recover: the heal restores the tree from the phase tip and
 				// leaves state.json alone.
@@ -718,15 +733,19 @@ destructive reset of the local base branch; read the abort first.`,
 			// that the base ends level with origin; a local-only record commit
 			// would leave it one ahead, which is the divergence the whole
 			// reconcile path exists to prevent.
-			if _, err := pushBaseIfAheadDrossOnly(repoDir, reconcileBranch); err != nil {
+			recordRoute, err := routeBaseChores(repoDir, reconcileBranch)
+			if err != nil {
 				return fmt.Errorf("publish completion record: %w", err)
+			}
+			if c := recordRoute.ChorePR; c != nil {
+				Printf("completion record: %s\n", c.narrate())
 			}
 
 			// Delete the local phase branch (best-effort: only if it exists).
 			localDeleted := false
-			if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+phaseBranch)...); err == nil {
-				if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, phaseBranch)...); err != nil {
-					return fmt.Errorf("git branch -D %s: %w\n%s", phaseBranch, err, out)
+			if err := gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+phaseBranch)...); err == nil {
+				if err := gitrun.Run(repoDir, gitRefArgs("branch", []string{"-D"}, phaseBranch)...); err != nil {
+					return fmt.Errorf("git branch -D %s: %w", phaseBranch, err)
 				}
 				localDeleted = true
 			}
@@ -737,15 +756,15 @@ destructive reset of the local base branch; read the abort first.`,
 			// never pushed), so we only push --delete when the ref still
 			// exists. ls-remote queries origin directly rather than trusting
 			// possibly-stale remote-tracking refs left by the earlier fetch.
-			remoteRef, err := gitTrim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", phaseBranch)...)
+			remoteRef, err := gitrun.Trim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", phaseBranch)...)
 			if err != nil {
 				return fmt.Errorf("git ls-remote origin %s: %w", phaseBranch, err)
 			}
 			if remoteRef != "" {
 				// --delete moves ahead of the separator so the remote and the branch are
 				// both plain positionals behind it; git accepts either ordering.
-				if out, err := gitCombined(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", phaseBranch)...); err != nil {
-					return fmt.Errorf("git push origin --delete %s: %w\n%s", phaseBranch, err, out)
+				if err := gitrun.Run(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", phaseBranch)...); err != nil {
+					return fmt.Errorf("git push origin --delete %s: %w", phaseBranch, err)
 				}
 			}
 
@@ -774,6 +793,14 @@ destructive reset of the local base branch; read the abort first.`,
 				// status` — one truth stated in two places rather than two
 				// half-truths that drift.
 				Printf("branch: %s\n", renderTopologyLine(top))
+			}
+
+			// The board last, after everything above is already true and
+			// said (locked board_failure_posture): a tracker that cannot be
+			// reached is reported, and names its retry, without un-saying
+			// the completion.
+			if err := finalizeBoard(repoDir, phaseID, reconcileBranch); err != nil {
+				return boardNotFinalized(phaseID, err)
 			}
 			return nil
 		},
@@ -829,7 +856,7 @@ func resolveCompleteBase(repoDir, root string, p *project.Project, s *state.Stat
 		if err := validateGitRef("--base", baseFlag); err != nil {
 			return "", err
 		}
-		if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+baseFlag)...); err != nil {
+		if err := gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+baseFlag)...); err != nil {
 			return "", fmt.Errorf("--base %s: no such local branch", baseFlag)
 		}
 		return baseFlag, nil
@@ -862,14 +889,15 @@ func resolveCompleteBase(repoDir, root string, p *project.Project, s *state.Stat
 // Best-effort: any git or parse failure yields "" and the caller refuses.
 func phaseRefRecordedBase(repoDir, phaseID string) string {
 	ref := "refs/heads/phase/" + phaseID + ":.dross/phases/" + phaseID + "/" + changes.File
-	out, err := exec.Command("git", append([]string{"-C", repoDir}, gitRefArgs("show", nil, ref)...)...).Output()
+	out, err := gitrun.Read(repoDir, gitRefArgs("show", nil, ref)...)
 	if err != nil {
 		return ""
 	}
-	var ch changes.Changes
-	if err := json.Unmarshal(out, &ch); err != nil {
+	ch, err := changes.Decode([]byte(out))
+	if err != nil {
 		return ""
 	}
+	//dross:taint-cleared the recorded base branch read out of the phase ref's committed changes.json; nothing else from the blob is kept
 	return ch.Base
 }
 
@@ -881,7 +909,7 @@ func completeBaseCandidates(repoDir string, p *project.Project, s *state.State) 
 	cands := []string{p.Repo.GitMainBranch}
 	if s.CurrentMilestone != "" {
 		ms := "milestone/" + s.CurrentMilestone
-		if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+ms)...) == nil {
+		if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+ms)...) == nil {
 			cands = append(cands, ms)
 		}
 	}
@@ -897,12 +925,12 @@ func completeBaseCandidates(repoDir string, p *project.Project, s *state.State) 
 // 0 and the caller's ancestry fallback stands.
 func originRecordedPR(repoDir, base, phaseID string) int {
 	ref := "origin/" + base + ":" + ".dross/phases/" + phaseID + "/changes.json"
-	out, err := exec.Command("git", append([]string{"-C", repoDir}, gitRefArgs("show", nil, ref)...)...).Output()
+	out, err := gitrun.Read(repoDir, gitRefArgs("show", nil, ref)...)
 	if err != nil {
 		return 0
 	}
-	var ch changes.Changes
-	if err := json.Unmarshal(out, &ch); err != nil {
+	ch, err := changes.Decode([]byte(out))
+	if err != nil {
 		return 0
 	}
 	return ch.PR
@@ -958,7 +986,7 @@ func mergeGate(repoDir string, opts ship.OpenOpts, phaseID, phaseBranch, reconci
 	// Fallback: git ancestry. A missing origin/phase/<id> ref (squash-deleted)
 	// OR a non-ancestor result both mean "can't confirm the merge" — refuse
 	// with guidance rather than trust the breadcrumb or false-complete.
-	if err := gitNoOut(repoDir, gitRefArgs("merge-base", []string{"--is-ancestor"}, "origin/"+phaseBranch, "origin/"+reconcileBranch)...); err != nil {
+	if err := gitrun.Quiet(repoDir, gitRefArgs("merge-base", []string{"--is-ancestor"}, "origin/"+phaseBranch, "origin/"+reconcileBranch)...); err != nil {
 		return fmt.Errorf("cannot confirm %s has merged into %s — no merged-PR status was available and origin/%s is not an ancestor of origin/%s "+
 			"(the phase branch may have been squash-deleted, or the PR isn't merged yet).\n"+
 			"Refusing so the phase branch isn't lost. If the PR really merged, use `dross phase complete --recover` or verify the merge manually.",
@@ -1019,7 +1047,7 @@ func forkPhaseBranch(repoDir, root, phaseID, branchName string) (base string, mi
 	if committed {
 		Printf("auto-committed .dross-only bookkeeping\n")
 	}
-	if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branchName)...); err == nil {
+	if err := gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branchName)...); err == nil {
 		return "", false, fmt.Errorf("branch %s already exists locally; delete it first or pass --no-branch", branchName)
 	}
 	base, milestoneActive, err = resolveNewWorkBase(repoDir, root)
@@ -1039,7 +1067,7 @@ func forkPhaseBranch(repoDir, root, phaseID, branchName string) (base string, mi
 	// to, which is not this phase's fork point. A rev-parse that fails is not
 	// fatal: the branch exists and the base is recorded, and the backfill
 	// resolver covers a missing fork point on demand.
-	tip, tipErr := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, base)...)
+	tip, tipErr := gitrun.Trim(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, base)...)
 	if tipErr != nil {
 		tip = ""
 	}
@@ -1061,31 +1089,6 @@ func dirtyTreeError(action, status string) error {
 	}
 	return fmt.Errorf("working tree is dirty; commit or stash before %s:\n%s",
 		action, strings.Join(lines, "\n"))
-}
-
-// gitNoOut runs git silently, discarding output. Used when only the
-// exit status matters (e.g. ref-exists probes).
-func gitNoOut(repoDir string, args ...string) error {
-	gitArgvTap(args)
-	full := append([]string{"-C", repoDir}, args...)
-	return exec.Command("git", full...).Run()
-}
-
-// gitArgvTap records every argv dross hands to git. It is nil in production and
-// costs one nil check; tests install a recorder and assert on ORDERING —
-// specifically that a config-derived positional never precedes its separator.
-//
-// This is the only way to test the property that matters. Asserting on the
-// builders in gitargs.go proves the builders work; it says nothing about a call
-// site that quietly went back to a bare literal list, which is the regression
-// this phase exists to prevent. All three exec helpers feed it, so a new call
-// site is visible whichever one it picks.
-var gitArgvRecorder func([]string)
-
-func gitArgvTap(args []string) {
-	if gitArgvRecorder != nil {
-		gitArgvRecorder(args)
-	}
 }
 
 // isDir reports whether path exists and is a directory.

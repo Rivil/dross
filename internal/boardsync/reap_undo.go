@@ -1,0 +1,96 @@
+package boardsync
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/Rivil/dross/internal/forge"
+	"github.com/Rivil/dross/internal/reaplog"
+)
+
+// `dross issue reap --undo` — reverse the last applied run.
+//
+// The reversal lives on the verb that caused it rather than an `unreap`
+// sibling, and it targets the LAST run only: that is the locked undo_shape
+// decision, and the last run is the only one anyone realistically wants back.
+//
+// It writes each card's recorded prior column back UNCONDITIONALLY. There is
+// deliberately no conflict check: a card someone moved since the sweep is
+// exactly the card most likely to need putting back, and skipping it would make
+// undo quietly partial — the operator would read "restored" and find a board
+// that still is not.
+
+// undoReap restores the cards of the last applied run.
+func Undo(ctx *Ctx) error {
+	// The capability gate is asserted HERE, at the call site, rather than on
+	// BoardClient — the same shape the no-linker fallback uses. A backend with
+	// no column model cannot restore an arbitrary prior column, and the honest
+	// answer is to refuse by name and write nothing rather than reopen every
+	// card into `open` and report success.
+	writer, ok := ctx.Client.(forge.StateWriter)
+	if !ok {
+		return fmt.Errorf("--undo needs a board whose cards have a workflow state; %s has no column model, so a card that sat in a named column cannot be restored — nothing was written",
+			ctx.Proj.Board.Provider)
+	}
+
+	path := reaplog.FilePath(ctx.Root)
+	log, err := reaplog.Load(path)
+	if err != nil {
+		return err
+	}
+	run := log.Last()
+	closed := run.Closed()
+	if len(closed) == 0 {
+		fmt.Fprintln(ctx.out(), "nothing to undo — no applied sweep is recorded")
+		return nil
+	}
+
+	var failures []*reapFailure
+	restored := 0
+	for _, card := range closed {
+		if err := writer.SetStateRaw(card.Issue, card.PriorState); err != nil {
+			failures = append(failures, &reapFailure{key: card.Issue, err: err})
+			continue
+		}
+		// The sweep rewrote the card's `dross/status:` label alongside the
+		// close, so a restore that put back only the column would leave the
+		// card reading terminal to anything that trusts the label. The ledger
+		// recorded the full prior set for exactly this. Like the relabel on the
+		// way out, a failure here warns rather than failing the card: the
+		// column is the load-bearing restore and it has already succeeded.
+		if len(card.PriorLabels) > 0 {
+			labels := card.PriorLabels
+			if _, err := ctx.Client.UpdateIssue(card.Issue, forge.IssuePatch{Labels: &labels}); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: restored %s but could not put its labels back: %v\n", card.Issue, Wrap(err))
+			}
+		}
+		if card.DroppedLink != "" {
+			restoreDroppedLink(ctx, card)
+		}
+		restored++
+	}
+
+	if err := ctx.Board.Save(ctx.BoardPath); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(ctx.out(), "restored %d card(s)", restored)
+	if len(failures) == 0 {
+		fmt.Fprintln(ctx.out(), "")
+		return nil
+	}
+	fmt.Fprintf(ctx.out(), ", %d failed:\n", len(failures))
+	for _, f := range failures {
+		fmt.Fprintf(os.Stderr, "  %s\n", f.Error())
+	}
+	return fmt.Errorf("%d of %d card(s) could not be restored", len(failures), len(closed))
+}
+
+// restoreDroppedLink puts back the board.json entry the sweep deleted. Only the
+// lanes that drop one record a DroppedLink, so the class switch has exactly the
+// arms lanesDroppingTheirLink names.
+func restoreDroppedLink(ctx *Ctx, card reaplog.Card) {
+	if card.Class == "Backlog" {
+		ctx.Board.SetBacklog(card.DroppedLink, card.Issue)
+	}
+}

@@ -2,7 +2,9 @@ package codex
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -149,7 +151,10 @@ var runAstGrepFn = func(file, lang, pattern string) ([]astGrepMatch, error) {
 	}
 	var raw []astGrepMatch
 	if err := json.Unmarshal(out, &raw); err != nil {
-		return nil, fmt.Errorf("decode ast-grep JSON: %w", err)
+		// ast-grep's output quotes the source it matched; it goes to stderr,
+		// where the user is looking, and the error stays fixed prose.
+		fmt.Fprintf(os.Stderr, "ast-grep printed output that is not its JSON:\n%s\n", out)
+		return nil, errors.New("decode ast-grep JSON: ast-grep's output is not the JSON it promises (printed above)")
 	}
 	return raw, nil
 }
@@ -217,5 +222,6 @@ func sortedAstGrepLangs() []string {
 // The binary is named as a literal here, not taken from argv[0], so the
 // subprocess audit gate can resolve this site to a tool and look its policy up.
 var astGrepOutput = func(argv []string) ([]byte, error) {
+	//dross:exec-exempt ast-grep parses source into a syntax tree and prints matches; the argv is astGrepArgv's own, the binary is a literal, and no repo-authored line runs
 	return exec.Command("ast-grep", argv[1:]...).Output()
 }

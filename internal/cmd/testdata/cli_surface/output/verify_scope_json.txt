@@ -1,0 +1,44 @@
+{
+  "phase": "p1",
+  "generated_at": "2026-09-18T07:00:00Z",
+  "files": [
+    "src/a.ts",
+    "x.go"
+  ],
+  "hunks": {
+    "src/a.ts": [
+      {
+        "start": 10,
+        "end": 12
+      }
+    ]
+  },
+  "legs": [
+    {
+      "name": "typescript",
+      "tool": "stryker",
+      "files": [
+        "src/a.ts"
+      ],
+      "ranges": {
+        "src/a.ts": [
+          {
+            "start": 1,
+            "end": 37,
+            "construct": "FunctionDeclaration tally"
+          }
+        ]
+      }
+    },
+    {
+      "name": "go",
+      "tool": "gremlins",
+      "files": [
+        "x.go"
+      ],
+      "whole_file": {
+        "x.go": "adapter-lacks-range-runner"
+      }
+    }
+  ]
+}

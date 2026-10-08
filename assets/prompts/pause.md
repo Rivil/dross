@@ -89,7 +89,9 @@ On a re-pause: show what you're *keeping* from the old file vs *adding*, so noth
 
 ## 3. Write + ignore
 
-1. Write the confirmed content to `.dross/handoff.md` (overwrites — it's the single living doc).
+1. Save the confirmed content to `.dross/handoff.md`, the single living doc:
+   - **No handoff yet** → create it with `Write`.
+   - **Re-pause (the file exists)** → update it in place with `Edit`, one section at a time: the header line, `## Thread`, `## Next`, the loops you added or closed, `## Dirty`. Never overwrite an existing handoff with `Write`. The curated-file gate refuses a `Write` that shrinks `handoff.md` below half its size, and an `Edit` cannot silently drop a loop you meant to keep.
 2. Ensure it's gitignored so it never lands in a commit or PR. Check the project's `.gitignore`; if `.dross/handoff.md` isn't covered, append it:
    ```
    # dross handoff — local working memory, not tracked
@@ -121,7 +123,7 @@ Then stop. Pause does not commit, stash, or change branches — it only records.
 
 - **No initialised root → refuse and write nothing.** An absent `.dross/` and an incomplete one are the same refusal (§0 step 2): never create `.dross`, never write `.dross/handoff.md`, never edit `.gitignore`, never touch state. Pause records a session; it does not bootstrap a project.
 - **Record only — never mutate work.** No commits, no stashing, no `git checkout`, no code edits. Pause writes one markdown file and touches state. That's the whole contract.
-- **One living file.** Always `.dross/handoff.md`. Never timestamped copies, never an archive directory — re-pausing updates the same file.
+- **One living file.** Always `.dross/handoff.md`. Never timestamped copies, never an archive directory — re-pausing updates the same file, with `Edit`.
 - **Gitignored, always.** The handoff is local working memory. If you can't confirm it's ignored, ignore it before writing the content.
 - **You draft, the user steers.** Don't make the user dictate the whole thing — reconstruct from the session, then let them amend. But never invent a `## Next` you can't justify from what actually happened.
 - **Don't editorialise the work.** This isn't a review. Capture where things stand; don't suggest refactors or relitigate decisions.

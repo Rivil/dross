@@ -9,9 +9,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/prtriage"
 	"github.com/Rivil/dross/internal/rules"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -87,17 +90,28 @@ func Validate() *cobra.Command {
 			// never be one validate calls dangling (locked target_validation).
 			validTargets := deferredTargetSet(root)
 
+			// Every deferred item, keyed by its stable id, for the absorbed-id
+			// check: a criterion may absorb an item from any source. Collect
+			// fails only on a phase list, spec or store this walk reports in
+			// its own right, so the check stands down rather than report the
+			// same broken file twice — or call every absorbed id unknown.
+			absorbable, _ := deferredByID(root)
+
 			for _, id := range phaseIDs {
 				dir := phase.Dir(root, id)
 				specPath := filepath.Join(dir, "spec.toml")
 				planPath := filepath.Join(dir, "plan.toml")
 				var spec *phase.Spec
+				specErr := false
 				if _, err := loadIfExists(specPath, func() (any, error) { s, err := phase.LoadSpec(specPath); spec = s; return s, err }); err != nil {
 					problems = append(problems, fmt.Sprintf("%s: %v", specPath, err))
+					specErr = true
 				}
 				var plan *phase.Plan
+				planErr := false
 				if _, err := loadIfExists(planPath, func() (any, error) { p, err := phase.LoadPlan(planPath); plan = p; return p, err }); err != nil {
 					problems = append(problems, fmt.Sprintf("%s: %v", planPath, err))
+					planErr = true
 				}
 				if plan != nil && !strings.HasPrefix(id, plan.Phase.ID) && id != plan.Phase.ID {
 					problems = append(problems, fmt.Sprintf("%s: plan.phase.id (%s) does not match directory (%s)", planPath, plan.Phase.ID, id))
@@ -117,6 +131,15 @@ func Validate() *cobra.Command {
 				}
 				if spec != nil {
 					problems = append(problems, danglingTargets(specPath, spec, validTargets)...)
+					if absorbable != nil {
+						problems = append(problems, absorbedProblems(root, id, specPath, spec, absorbable)...)
+					}
+				}
+				// A spec or plan that did not decode is reported above; its ids
+				// are unknown, so the record is not judged against them — that
+				// would call every accept and route dangling.
+				if !specErr && !planErr {
+					problems = append(problems, triageProblems(dir, spec, plan)...)
 				}
 			}
 
@@ -140,6 +163,23 @@ func Validate() *cobra.Command {
 				}
 			}
 
+			// Secret-shaped values in any stageable .dross artifact. Runs
+			// unconditionally after the structural walk so a malformed spec
+			// never hides a token elsewhere, and reports through the same
+			// ✗ / exit-1 path: a secret in an artifact is a problem with the
+			// artifact, not a separate verdict. The scanner is the one ship
+			// and the auto-commit gate call too (scanDrossArtifacts), so the
+			// three cannot disagree about what counts as a hit. Each line is
+			// a fingerprint — rule, location, length, fixed prefix — never
+			// the value.
+			if hits, err := scanDrossArtifacts(filepath.Dir(root)); err != nil {
+				problems = append(problems, err.Error())
+			} else {
+				for _, h := range hits {
+					problems = append(problems, "secret: "+h.String())
+				}
+			}
+
 			// Warnings print on EVERY run and never touch the exit status.
 			// Repetition is the point (the locked warning_surface decision):
 			// a message that appeared once at declaration time scrolls away
@@ -158,6 +198,37 @@ func Validate() *cobra.Command {
 			return fmt.Errorf("%d problem(s) found", len(problems))
 		},
 	}
+}
+
+// triageProblems checks a phase's pr-triage.toml against the task ids of its
+// plan and the deferred ids of its spec — the same Validate a `dross pr
+// resolve` save runs, here over whatever a hand edit left. A phase with no
+// record has nothing to check.
+func triageProblems(dir string, spec *phase.Spec, plan *phase.Plan) []string {
+	path := filepath.Join(dir, prtriage.File)
+	rec, data, err := prtriage.Load(path)
+	if err != nil {
+		return []string{fmt.Sprintf("%s: %s", path, strings.TrimPrefix(err.Error(), prtriage.File+": "))}
+	}
+	if data == nil {
+		return nil
+	}
+	var refs prtriage.Refs
+	if plan != nil {
+		for _, t := range plan.Task {
+			refs.Tasks = append(refs.Tasks, t.ID)
+		}
+	}
+	if spec != nil {
+		for _, d := range spec.Deferred {
+			refs.Deferred = append(refs.Deferred, d.ID)
+		}
+	}
+	var out []string
+	for _, e := range prtriage.Validate(rec, refs) {
+		out = append(out, fmt.Sprintf("%s: %s", path, strings.TrimPrefix(e.Error(), prtriage.File+": ")))
+	}
+	return out
 }
 
 // enumProblems reports every enum-valued project.toml key holding a value its
@@ -414,6 +485,58 @@ func danglingTargets(path string, spec *phase.Spec, valid map[string]bool) []str
 	for _, d := range spec.Deferred {
 		if d.Target != "" && !valid[d.Target] {
 			problems = append(problems, fmt.Sprintf("%s: deferred target %q names no phase dir or milestone.phases entry", path, d.Target))
+		}
+	}
+	return problems
+}
+
+// deferredByID indexes every deferred item — every phase spec plus the
+// project store — by its stable id. Items with no id yet are left out: an
+// absorbed id can only name an item that has one.
+func deferredByID(root string) (map[string]deferred.Entry, error) {
+	entries, err := deferred.Collect(root)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]deferred.Entry, len(entries))
+	for _, e := range entries {
+		if e.ID != "" {
+			out[e.ID] = e
+		}
+	}
+	return out, nil
+}
+
+// absorbedProblems checks every id a criterion of phaseID's spec absorbs: it
+// must name a deferred item routed to phaseID (locked absorption_record).
+//
+// A complete phase is not checked. Its spec is a record of what it did, and the
+// items it absorbed go on living: one that survived is re-routed, another is
+// dismissed or deleted from its source. None of that can be answered by
+// rewriting finished history, so the check applies only while the phase is
+// still open — which is when an absorbed id is written and can be wrong.
+func absorbedProblems(root, phaseID, path string, spec *phase.Spec, byID map[string]deferred.Entry) []string {
+	var problems []string
+	checked := false
+	for _, c := range spec.Criteria {
+		for _, id := range c.Deferred {
+			if !checked {
+				if changes.Complete(root, phaseID) {
+					return nil
+				}
+				checked = true
+			}
+			e, ok := byID[id]
+			switch {
+			case !ok:
+				problems = append(problems, fmt.Sprintf("%s: criterion %s absorbs deferred %s, which names no deferred item", path, c.ID, id))
+			case e.Dismissed:
+				problems = append(problems, fmt.Sprintf("%s: criterion %s absorbs deferred %s, which is dismissed", path, c.ID, id))
+			case e.Target == "":
+				problems = append(problems, fmt.Sprintf("%s: criterion %s absorbs deferred %s, which is unrouted (someday)", path, c.ID, id))
+			case e.Target != phaseID:
+				problems = append(problems, fmt.Sprintf("%s: criterion %s absorbs deferred %s, which is routed to %s, not %s", path, c.ID, id, e.Target, phaseID))
+			}
 		}
 	}
 	return problems

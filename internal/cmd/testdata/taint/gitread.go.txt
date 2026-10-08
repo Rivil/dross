@@ -1,0 +1,48 @@
+// gitRead corpus for the exec-output taint engine
+// (TestGitReadContentIsNotCleared). gitTrim's marker is true only for the ref
+// invocations it is pinned to. A patch body read through the unmarked gitRead —
+// verifyscope's `git diff -U0` shape — and quoted into a returned error is a
+// finding whose origin is gitRead's spawn; a SHA read through gitTrim is clean.
+package gitread
+
+import (
+	"fmt"
+	"os/exec"
+	"strings"
+)
+
+func gitTrim(repoDir string, args ...string) (string, error) {
+	out, err := exec.Command("git", append([]string{"-C", repoDir}, args...)...).Output()
+	if err != nil {
+		return "", err
+	}
+	//dross:taint-cleared gitTrim runs only pinned ref invocations: ref names, object ids and counts
+	return strings.TrimSpace(string(out)), nil
+}
+
+func gitRead(repoDir string, args ...string) (string, error) {
+	out, err := exec.Command("git", append([]string{"-C", repoDir}, args...)...).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func hunkScope(repoDir, sha string) error {
+	patch, err := gitRead(repoDir, "diff", "-U0", "--no-renames", "--no-color", sha, "HEAD")
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(patch, "diff --git") {
+		return fmt.Errorf("unexpected patch: %s", patch) // WANT taint
+	}
+	return nil
+}
+
+func headSHA(repoDir string) error {
+	head, err := gitTrim(repoDir, "rev-parse", "HEAD")
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf("HEAD is %s", head)
+}

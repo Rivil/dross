@@ -1,0 +1,564 @@
+{
+  "phase": "verify-staleness",
+  "pr": 152,
+  "base": "milestone/v1.7",
+  "base_commit": "3f81fadbfd4c791a67ccc6285d93230992a67e4e",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/treefp/treefp.go",
+        "internal/treefp/treefp_test.go"
+      ],
+      "commit": "49fee2e",
+      "completed_at": "2026-10-05T03:56:16.831066Z",
+      "landmarks": [
+        {
+          "feature": "verify freshness",
+          "symbol": "treefp.MeasuredTree",
+          "loc": "internal/treefp/treefp.go:98",
+          "what": "fingerprints the work tree a verdict measured with .dross/ and ARCHITECTURE.md exempt at the dross root, plus the HEAD it was taken at"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/verify/verify.go",
+        "internal/verify/freshness.go",
+        "internal/verify/freshness_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "5633f24",
+      "completed_at": "2026-10-05T04:04:47.830284Z",
+      "landmarks": [
+        {
+          "feature": "verify freshness",
+          "symbol": "verify.ClassifyFreshness",
+          "loc": "internal/verify/freshness.go:71",
+          "what": "judges a verdict's recorded tree against the tree that would ship: fresh, stale with changed paths, unknown (legacy), malformed"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/ship.md",
+        "assets/prompts/verify.md",
+        "internal/cmd/ship_prompt_test.go",
+        "internal/cmd/verify_prompt_test.go",
+        "README.md"
+      ],
+      "commit": "5f8e3b6",
+      "completed_at": "2026-10-05T05:02:17.8086Z",
+      "landmarks": [
+        {
+          "feature": "verify freshness",
+          "symbol": "TestShipPromptReShipsBeforeMerge",
+          "loc": "internal/cmd/ship_prompt_test.go",
+          "what": "ship.md re-runs dross ship after every CI fix and before the merge, so a post-pass fix cannot merge under a stale verdict"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_measured_test.go"
+      ],
+      "commit": "0033de6",
+      "completed_at": "2026-10-05T04:19:31.287726Z",
+      "landmarks": [
+        {
+          "feature": "verify freshness",
+          "symbol": "captureMeasuredTree",
+          "loc": "internal/cmd/verify.go:1075",
+          "what": "an attached verify takes the tree before the run, refuses inside git when it cannot, and names paths that moved during the run"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/verdict_fresh.go",
+        "internal/cmd/ship_stale_test.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "d6ccfd7",
+      "completed_at": "2026-10-05T04:28:28.889436Z",
+      "landmarks": [
+        {
+          "feature": "verify freshness",
+          "symbol": "gateFreshness",
+          "loc": "internal/cmd/verdict_fresh.go:52",
+          "what": "ship refuses a pass whose measured tree moved, naming every changed file; --force-unverified overrides; a tree-less verdict warns"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/localstore/store.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_detach_tree_test.go",
+        "internal/cmd/verify_detach_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "12cd999",
+      "completed_at": "2026-10-05T04:36:31.088558Z",
+      "landmarks": [
+        {
+          "feature": "verify freshness",
+          "symbol": "dispatchDetached",
+          "loc": "internal/cmd/verify.go:346",
+          "what": "a detached run records the tree it pushes; collect stamps that dispatch-time tree and names files changed since"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/status_stale_test.go",
+        "assets/prompts/resume.md",
+        "internal/cmd/resume_prompt_test.go"
+      ],
+      "commit": "1642166",
+      "completed_at": "2026-10-05T04:52:09.777235Z",
+      "landmarks": [
+        {
+          "feature": "verify freshness",
+          "symbol": "staleVerdict",
+          "loc": "internal/cmd/status.go:900",
+          "what": "dross status marks a stale pass on its phase branch and routes the next step to /dross-verify"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/gitignore.go",
+        "internal/cmd/gitignore_test.go"
+      ],
+      "commit": "81ecd03",
+      "completed_at": "2026-10-05T04:43:59.451542Z",
+      "landmarks": [
+        {
+          "feature": "verify freshness",
+          "symbol": "mutationReportDirs",
+          "loc": "internal/cmd/gitignore.go:100",
+          "what": "init/onboard ignore the mutation tools' report dirs so a verify run's own output never stales its verdict"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "assets/agents/dross-task-reviewer.md",
+        "internal/review/agentdef_test.go"
+      ],
+      "commit": "d70ea24",
+      "completed_at": "2026-10-05T04:59:11.617702Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "dross-task-reviewer",
+          "loc": "assets/agents/dross-task-reviewer.md",
+          "what": "the reviewer is told its verdict fence is exactly dross-verdict and that a near-miss label fails the task"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "TestEveryGitCallIsBounded's extension cannot catch an unbounded call inside MeasuredTree itself: the stub git hangs on the first call (rev-parse --git-path in realIndex), so the function errors before reaching its own rev-parse HEAD. Dropping Timeout from that call would still pass the test.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "The test_contract says TestRealIndexUntouched is extended 'with a partially staged file', but the setup adds none: a.go is fully staged and b.go is fully unstaged, with no file having both staged and unstaged changes. Any write to the real index is still caught, because add -A would stage b.go and c.go.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "MeasuredTree runs rev-parse HEAD^{commit} a second time even though open() already ran it and threw the output away. The second read happens after write-tree, so a commit landing in between would record a Commit that does not match the measured Tree. The impact is small because freshness compares Tree only.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The package doc still says 'Two recipes share it' and says a fingerprint has only .dross/ taken out; MeasuredTree is a third recipe and also drops ARCHITECTURE.md.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The lookalike tests (docs/ARCHITECTURE.md, ARCHITECTURE.md.bak, sub/.dross/x, .drossrc) and the subdirectory-root test would catch exemptions matched by basename, by prefix, or anchored at the git top.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "The extended TestEveryGitCallIsBounded only catches an unbounded call that comes first. Its stub git hangs on every call, so MeasuredTree fails at open()'s first rev-parse, a path it shares with WorkingTree. If someone later swapped MeasuredTree's own `rm --cached` or `write-tree` for a call without Timeout, the test would still pass. A stub that hangs only on specific git commands (verbs) would actually test MeasuredTree's own calls.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The //dross:taint-cleared marker for HEAD is on the `s.head = strings.TrimSpace(out)` line in open(), not in MeasuredTree's body. The tree id is cleared by the existing marker in writeTree(). That is the right place: the scan only accepts a marker on the line that converts the git output, and one inside MeasuredTree would be an orphan.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "open() now captures HEAD for every recipe, not just MeasuredTree. WorkingTree, Candidate, ChangedPaths and the other recipes behave the same; they just ignore the new field.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "test_contract says TestClassifyLegacyIsUnknownWithoutGit runs 'in a non-git dir', but the test never chdirs to a temp dir. Only the diffFn spy guards against git calls, so a git call added directly inside ClassifyFreshness would go unnoticed when the suite runs from inside the repo.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "TestLegacyVerifyRoundTripsByteIdentical builds its 'legacy' file with today's Save instead of a literal pre-phase verify.toml fixture. If omitempty is lost, the byte-identical check still passes (both saves gain the same keys); only the strings.Contains check catches it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "If both verify.toml and tests.json have a zero generated_at, Equal is true and tests.json can vouch for the verdict. This is a rare hand-edit edge case.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "TestLegacyVerifyRoundTripsByteIdentical uses the live bookkeeping file .dross/phases/board-finalize-on-complete/verify.toml as its fixture. If that phase is archived or its verify.toml is re-saved, the test breaks for reasons unrelated to omitempty. A frozen copy under internal/verify/testdata would be sturdier.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "ClassifyFreshness checks the recorded ids against objectID but trusts current.Tree. An empty or bad current fingerprint from the caller would classify stale and go straight to the differ. The caller is expected to supply a valid tree, so that is where the check belongs.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The malformed test also covers uppercase hex and a malformed measured_commit, which goes beyond the contract's three values.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "verify.md §3's rationale ('drop them and that refusal quietly becomes a freshness-unknown warning') overstates the effect: ClassifyFreshness falls back to tests.json's measured_tree when generated_at matches, so dropping the verify.toml fields degrades to unknown only when that fallback is also missing. The instruction itself is correct.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-7",
+          "text": "TestShipPromptReShipsBeforeMerge anchors on the first `dross ship \u003cphase-id\u003e` mention anywhere in §6, so any earlier mention, not only the re-run instruction, would satisfy the ordering check against the merge calls.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "spec",
+          "severity": "BLOCKING",
+          "criterion": "c-1",
+          "text": "test_contract says that if finishVerify recaptures with no recorded tree, the existing verify_finish_test.go and verify_notcovered_test.go cases fail. They don't: their chdirDross fixtures are not git repos and they only check that certain text is present, so removing the `if t.MeasuredTree != \"\"` guard just prints an extra 'could not re-check the tree' line and every test still passes. TestVerifyOutsideGitRecordsNoTree also doesn't check for a single line or that measuredTreeFn isn't called again. No test fails when that half of the line is broken.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "captureMeasuredTree treats any failure of `git rev-parse --is-inside-work-tree` as 'not a git work tree'. That includes a missing git binary, a safe.directory 'dubious ownership' refusal and a corrupt repo. In those cases a run inside a real git tree records no tree, which ship reads as freshness unknown and lets through with a warning. That is the fail-open outcome the description refuses.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestVerifySkipMutationRecordsTheMeasuredTree uses useStubAdapter, which ignores the skip flag, so the stub adapter still runs under --skip-mutation. It catches a stamp gated on the flag in RunE, but it is not a real no-adapter skip run.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestVerifyRecordsTheTreeAtRunStart checks the recorded pre-run tree and the drift message together, so moving the capture to finish would fail it on both counts.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "underGitDir decides 'outside git' only by looking for a .git file or directory above the dross root. A work tree reached through GIT_DIR/GIT_WORK_TREE or core.worktree (e.g. a bare-repo dotfiles setup) has no .git, so the run records no tree and ship reads it as freshness unknown. That is the fail-open the captureMeasuredTree comment says it guards against. It is a rare path, but checking GIT_DIR, or treating any successful `git rev-parse --is-inside-work-tree` as git, would close it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestVerifyOutsideGitRecordsNoTree, the second half of TestCaptureRefusesWhenGitFailsInsideARepo, and now the existing TestVerifyWritesSkeletonWithSkipMutation all assume no .git exists above os.TempDir(). If TMPDIR is inside a checkout they would fail or refuse.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In TestVerifySkipMutationRecordsTheMeasuredTree the stub adapter still runs, because useStubAdapter ignores the skip flag. The stamping code is the same either way, so the test still fails if stamping were made conditional on --skip-mutation.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "verdictFreshness copies ClassifyFreshness's tests.json fallback rule (same generated_at) to decide whether to take the tree at all. This is deliberate, so a legacy verdict never captures (TestShipLegacyNeverCaptures), but the two copies can drift apart. If they diverge, a recordable verdict could read as unknown and ship with only a warning.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "With --force-unverified, a Malformed verdict is still announced as 'shipping a stale pass'. Also, the Stale+ListErr refusal always blames the cause on 'the tree it measured is gone from this clone', but treefp.Diff can fail for other reasons. The underlying error is still appended, so nothing is lost.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "In TestShipRefusesAStalePass, the 'dirty .dross file not auto-committed' assertion runs under --no-push, which returns before autoCommitDrossDirt wherever the gate sits, so it can never fail. TestShipStaleRefusalLeavesDrossDirt covers that ordering through the full flow.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "TestShipLegacyVerifyWarnsAndProceeds calls t.Fatalf inside nested captureStdout/captureStderr closures, which do not defer the restore. If that assertion ever fails, os.Stdout and os.Stderr stay swapped for later tests. This only matters when the test is already failing.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "The description says dispatch captures through measuredTreeFn and that detachRecorder.install stubs measuredTreeFn. The diff adds a new seam, captureTreeFn (wrapping captureMeasuredTree, which still calls measuredTreeFn), and stubs that instead. It behaves the same and includes the outside-git handling; the order and command tests prove it is wired in.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "When a record has no tree, collectDetachedFrom says the run 'was dispatched before trees were recorded'. A run dispatched now from a directory that is not a git work tree also records an empty tree (captureMeasuredTree returns Measured{} there), so in that case the message gives the wrong reason.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestCollectUnchangedTreeNamesNothing only checks that nothing is reported, so it would pass if no tree were carried at all. The sibling tests cover the tree being present.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "staleVerdict runs twice per `dross status` (once for the marker, again via reentryLine -\u003e suggestNext). Each run does a full treefp.MeasuredTree (git add -A into a temp index, then write-tree) plus a diff-tree, on a hook target. suggestNext also computes it before the merged-PR return, which never uses it. Computing it once and passing it in would halve the cost and stop the marker and the footer from ever disagreeing.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The second `if stale { return reverify }` in suggestNext (just before the shipped-status merge advice) can never fire. staleVerdict returns false whenever changes.Complete is true, and when the phase is not complete a stale verdict has already returned inside the `!changes.Complete` block.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "No test covers staleLine's Malformed branch ('the verdict's \u003cfield\u003e is not an object id'). That branch goes beyond what the test_contract claims.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The marker fires on a pass verdict for any phase that is not complete; it does not check CurrentPhaseStatus for verified/shipped as the description says. This matches the codebase's habit of not trusting the free-text status field, and also marks a stale pass while the phase is back in execute.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "For a stale shipped phase, the `shipped:` block still prints 'merge it, then `dross phase complete`' right above the stale marker. Only the footer was rerouted to /dross-verify.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "TestEnsureDrossGitignoreIsIdempotent still counts only the .dross/state.json line, so it could not fail if reports/gremlins/ or reports/mutation/ were re-appended on every call (e.g. if the seeded path became anchored as /reports/gremlins/). Non-idempotence of the new entries is caught only by RespectsBroaderPattern case 3 and by the pre-existing second-call equality check in TestEnsureGitignoreCoversLocalToml. Extend the idempotence test to count every drossIgnoreEntries path.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "Stryker.NET writes its report under StrykerOutput/ at the project root (internal/mutation/stryker_net.go outputDir default), which neither seeded dir covers. In a .NET project each verify run's own output still moves the measured tree and the pass reads stale, the same failure this task fixes for gremlins and stryker-js.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The new rule in ignoresPath (a slashless pattern covers paths beneath it) matches gitignore semantics for directories and is exercised by the '/reports' case. The function's doc comment still lists only the exact, glob and trailing-slash shapes.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "The description says ensureDrossGitignore seeds 'the two tool-owned dirs' (reports/gremlins/, reports/mutation/), but the diff also seeds a third, StrykerOutput/. It is a real dross tool directory, but it goes beyond what the task record covers.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "reports/gremlins/, reports/mutation/ and StrykerOutput/ each have a slash in the middle, so git only matches them at the repo root. Stryker writes its report under its workDir, which can be a subproject (e.g. web/reports/mutation/mutation.json per stryker_test.go:346). Those reports stay untracked and not ignored, so the verdict still reads as stale for subproject stryker setups.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSeededReportsKeepTheVerdictFresh writes only gremlins and stryker reports. The extra StrykerOutput/ entry is checked only through git check-ignore, not through MeasuredTree.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The new ignoresPath branch (a slash-less directory pattern covers what is beneath it) matches git semantics for a root .gitignore. It errs toward under-detecting coverage on globs, which at worst adds a redundant line.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The task says it covers c-7, which is about ship.md re-running dross ship before merge. This task's work is the reviewer fence label, which looks unrelated, so the mapping is probably a planning slip. The record claims no ship.md work, so this is not a spec finding.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestReviewerBodyWarnsOffNearMissFences pins only dross-verify among the near-misses. The description also names dross-review and json, but the test_contract only requires dross-verify, so this meets the contract.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestParseVerdictRefusesNearMissFences pins behaviour the parser already had. It guards against regressions rather than testing new code, which is fine.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "r-01 (make install, then dross install) is a step done after the commit. It is not visible in the diff and was not checked.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
+}

@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -84,8 +84,8 @@ func autoSnapshot(root string, now time.Time) (string, error) {
 	fmt.Fprintf(&b, "- captured: %s\n", now.Format("2006-01-02 15:04 UTC"))
 
 	branch := "(no git)"
-	if out, err := exec.Command("git", "-C", repoDir, "symbolic-ref", "--short", "HEAD").Output(); err == nil {
-		branch = strings.TrimSpace(string(out))
+	if out, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD"); err == nil {
+		branch = out
 	}
 	fmt.Fprintf(&b, "- branch: %s\n", branch)
 	fmt.Fprintf(&b, "- dirty: %s\n", dirtySummary(repoDir))
@@ -112,19 +112,23 @@ func autoSnapshot(root string, now time.Time) (string, error) {
 }
 
 // dirtySummary renders `git status --porcelain` as one line: "clean", or a
-// count plus the first few paths.
+// count plus the first few paths. Only trailing newlines are trimmed — the
+// first line's leading status column (" M path") is part of what l[3:] slices
+// past.
 func dirtySummary(repoDir string) string {
-	out, err := exec.Command("git", "-C", repoDir, "status", "--porcelain").Output()
+	out, err := gitrun.Raw(repoDir, "status", "--porcelain")
 	if err != nil {
 		return "(no git)"
 	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) == 1 && lines[0] == "" {
+	status := strings.TrimRight(out, "\n")
+	if strings.TrimSpace(status) == "" {
 		return "clean"
 	}
+	lines := strings.Split(status, "\n")
 	paths := make([]string, 0, len(lines))
 	for _, l := range lines {
 		if len(l) > 3 {
+			//dross:taint-cleared a porcelain line is two status letters, a space and a repo path: l[3:] is the path
 			paths = append(paths, strings.TrimSpace(l[3:]))
 		}
 	}

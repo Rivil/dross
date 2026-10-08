@@ -1,0 +1,78 @@
+[phase]
+  id = "board-finalize-on-complete"
+  title = "board-finalize-on-complete"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross phase complete` finishes the board itself: every task card of the phase ends at task-complete and closed, and the phase card at complete and closed. Re-running it changes nothing, and with board sync off it makes no board call."
+
+[[criteria]]
+  id = "c-2"
+  text = "/dross-ship §6 no longer instructs the task-card and phase-card close steps that `dross phase complete` now performs; a prompt test pins their absence."
+
+[[criteria]]
+  id = "c-3"
+  text = "A lookup by a dross identity label (dross/task:, dross/phase:, dross/deferred: and every other dross/ identity label) that the board does not know yet prints no warning and resolves to no card; a filter query naming an unknown non-identity label still warns."
+
+[[criteria]]
+  id = "c-4"
+  text = "Every dross write to plan.toml (task status, add, edit, move, remove) leaves every comment and every line outside the task(s) it changed byte-identical."
+
+[[criteria]]
+  id = "c-5"
+  text = "Every dross write to survivors.toml (survivor accept, route, retire) leaves existing entries byte-identical, trailing `# dross:allow-secret` markers included: a test accepts a survivor into a store holding a marked entry and `dross validate` stays green."
+
+[[criteria]]
+  id = "c-6"
+  text = "Backlog sync and reap close a routed item's mirror only on a disposition record — a routed survivor when survivors.toml accepts its key or the target phase's recorded verify run no longer lists it surviving; a routed deferred item when the completed target's spec carries a criterion that absorbed it — and never on target completion alone."
+
+[[criteria]]
+  id = "c-7"
+  text = "A spec criterion records the ids of the deferred items it absorbs, /dross-spec writes them when it seeds a criterion from a parked item, and `dross validate` refuses an absorbed id that names no deferred item routed to that phase."
+
+[[criteria]]
+  id = "c-8"
+  text = "`dross deferred route` and `dross survivor route` refuse a target phase that is already complete, naming it, and leave every file unchanged."
+
+[[criteria]]
+  id = "c-9"
+  text = "Routing an already-routed survivor key updates its existing deferred entry in place — same id, same board card — instead of minting a new entry and card; re-routing it to the same target changes nothing."
+
+[[criteria]]
+  id = "c-10"
+  text = "The prompts name the real board switch (`[board].enabled`) and tell the agent that a non-zero board-sync exit is a failure to surface, not the disabled no-op; a prompt test forbids the stale `[remote].board_sync` wording."
+
+[[criteria]]
+  id = "c-11"
+  text = "`dross issue reap` also finds completed phases (and their tasks) that never got a board card: dry-run lists them and writes nothing; --apply creates each at its terminal state, closed."
+
+[[decisions]]
+  key = "board_failure_posture"
+  choice = "Board finalization runs last in `dross phase complete`, after the completion record and branch teardown. A board failure leaves the completion intact, exits non-zero, and names `dross issue phase finalize <id>` — the same idempotent finalizer, exposed as a verb — as the retry. Board sync off: silent, no call."
+  why = "Completion is git/state truth and must not roll back over a board blip; a warning-only failure is the silent missed card c-10 exists to stop. Solo-settled 2026-10-04 (user authorized solo for the rest of v1.7)."
+  locked = true
+
+[[decisions]]
+  key = "absorption_record"
+  choice = "A criterion carries `deferred = [\"<deferred id>\", …]` naming the parked items it absorbs; that list is the only evidence a routed deferred item was absorbed. Ids, not `<source> <idx>`."
+  why = "Ties the evidence to the criterion verify checks, so a dropped criterion absorbs nothing; Deferred.ID already exists and survives neighbours being removed. Solo-settled 2026-10-04."
+  locked = true
+
+[[decisions]]
+  key = "catch_up_home"
+  choice = "Missing-card creation for completed phases and their tasks lives in `dross issue reap`, under its dry-run / --apply posture and on-disk-record evidence — not a new verb. It creates through the same finalizer complete uses."
+  why = "One reconciliation verb for historical board drift, and the one feastahead was already told to run; one finalizer keeps complete and catch-up from drifting apart. Solo-settled 2026-10-04."
+  locked = true
+
+[[decisions]]
+  key = "serialization_approach"
+  choice = "plan.toml and survivors.toml writes go through the raw-byte patcher approach project.toml uses (generalized, no new TOML dependency); BurntSushi/toml stays the decoder and validator."
+  why = "Proven by project-toml-lossless-writes; one write discipline across dross's TOML stores instead of a second mechanism."
+  locked = true
+
+[[decisions]]
+  key = "route_to_complete"
+  choice = "Routing to a complete phase is refused outright, with no override flag."
+  why = "A finished phase cannot absorb new scope; feastahead routed 261 survivors to a phase merged five days earlier."
+  locked = true

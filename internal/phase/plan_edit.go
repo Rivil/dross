@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // taskIDNum parses the numeric ordinal from a task id of the form "t-<n>".
@@ -77,9 +79,20 @@ func deriveWave(explicitWave int, dependsOn []string, tasks []Task) int {
 // covers->criterion check, so callers without a spec still get the structural
 // id/dependency guards.
 //
+// It is also the WRITE-SIDE containment gate for plan.toml task files: every
+// `files` entry runs through pathfence.Contain against repoRoot, so a
+// hand-edited plan naming "../x" or "/etc/passwd" is refused before it is
+// written rather than after something opens it. Nothing in dross opens a task
+// file — that is why the field registry declares phase.Task.Files as not
+// consumed — so this gate is what keeps the declaration honest: the path never
+// gets to be wrong in the first place.
+//
 // Every defect is reported together in one error, each naming the offending id,
-// so a single call surfaces all problems at once.
-func ValidatePlan(plan *Plan, spec *Spec) error {
+// so a single call surfaces all problems at once. A containment defect joins
+// that report rather than short-circuiting it: a hand-edited plan usually has
+// more than one thing wrong with it, and fixing them one round-trip at a time
+// is the behaviour this contract exists to avoid.
+func ValidatePlan(plan *Plan, spec *Spec, repoRoot string) error {
 	var problems []string
 
 	// Duplicate task ids.
@@ -111,6 +124,20 @@ func ValidatePlan(plan *Plan, spec *Spec) error {
 				if !crit[cov] {
 					problems = append(problems, fmt.Sprintf("task %s covers unknown criterion %s", t.ID, cov))
 				}
+			}
+		}
+	}
+
+	// Task files must stay inside the repo. A blank entry is skipped rather
+	// than refused: an empty string is bookkeeping noise, not an escape, and
+	// refusing it is a behaviour change this gate does not own.
+	for _, t := range plan.Task {
+		for _, f := range t.Files {
+			if strings.TrimSpace(f) == "" {
+				continue
+			}
+			if _, err := pathfence.Contain(repoRoot, "plan.toml", f); err != nil {
+				problems = append(problems, fmt.Sprintf("task %s: %v", t.ID, err))
 			}
 		}
 	}

@@ -14,8 +14,19 @@ func DetectLanguages(root string) ([]string, error) {
 // and which were skipped (missing). Recording both is the whole point — a thin
 // toolbelt must never read as a clean "all clear".
 type Manifest struct {
-	Languages []string
-	Tools     []ToolStatus
+	Languages  []string
+	Tools      []ToolStatus
+	Exclusions Exclusions
+}
+
+// Exclusions records what a run scoped out, so the manifest names the narrowing
+// rather than letting it happen silently (c-5). SkippedDirs is the shared skip
+// set every dross scanner honours (stack.SkipDirs — never a private copy);
+// Allowlist is the gitleaks config location: the bare file name until `security
+// run` writes it into the run dir and replaces this with the concrete path.
+type Exclusions struct {
+	SkippedDirs []string
+	Allowlist   string
 }
 
 // Ran returns the scanners that are installed and will run.
@@ -71,5 +82,9 @@ func BuildManifest(root string, lookPath func(string) (string, error)) (Manifest
 	for _, id := range stack.MarkerProfiles(root, profiles) {
 		add(profileScanners(id))
 	}
-	return Manifest{Languages: langs, Tools: Detect(scanners, lookPath)}, nil
+	return Manifest{
+		Languages:  langs,
+		Tools:      Detect(scanners, lookPath),
+		Exclusions: Exclusions{SkippedDirs: stack.SkipDirs(), Allowlist: GitleaksConfigName},
+	}, nil
 }

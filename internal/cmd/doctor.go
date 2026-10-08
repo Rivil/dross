@@ -1,27 +1,33 @@
 package cmd
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"slices"
-	"sort"
-	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/architecture"
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/configenum"
-	"github.com/Rivil/dross/internal/hostallow"
+	"github.com/Rivil/dross/internal/diag"
+	"github.com/Rivil/dross/internal/gitrun"
+	"github.com/Rivil/dross/internal/hooks"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/mutationcfg"
 	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/pincheck"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/review"
 	"github.com/Rivil/dross/internal/state"
 	"github.com/Rivil/dross/internal/testlane"
 )
@@ -63,6 +69,9 @@ func Doctor() *cobra.Command {
 			redProofWarnings := 0
 			duplicateSlugWarnings := 0
 			backfillResidueWarnings := 0
+			pinWarnings := 0
+			protectionWarnings := 0
+			hookWarnings := 0
 
 			// --- Foundational files ---
 			//
@@ -99,7 +108,7 @@ func Doctor() *cobra.Command {
 			}
 
 			// --- [remote] checks ---
-			gitURL := gitRemoteOriginURL(repoDir)
+			gitURL, _ := gitrun.Read(repoDir, "remote", "get-url", "origin")
 
 			Print("Remote:")
 			switch {
@@ -137,7 +146,7 @@ func Doctor() *cobra.Command {
 				issues++
 			}
 
-			warnings = append(warnings, remoteCombinationWarnings(p.Remote.Provider, p.Remote.AuthScheme, p.Remote.AuthUser)...)
+			warnings = append(warnings, diag.RemoteCombination(p.Remote.Provider, p.Remote.AuthScheme, p.Remote.AuthUser)...)
 
 			Print("")
 
@@ -202,7 +211,7 @@ func Doctor() *cobra.Command {
 				// `project set` refuses to write one, so a key here arrives by
 				// hand-editing or predates the planned/planning rename;
 				// `dross project set --unset board.state_map.<key>` clears it.
-				for _, k := range sortedStateMapKeys(b.StateMap) {
+				for _, k := range diag.SortedStateMapKeys(b.StateMap) {
 					if !configenum.LifecycleStatuses.Has(k) {
 						Printf("  ✗ [board].state_map.%s is not a lifecycle status (expected %s)\n", k, configenum.LifecycleStatuses.List())
 						Printf("    Fix: dross project set --unset board.state_map.%s\n", k)
@@ -210,7 +219,7 @@ func Doctor() *cobra.Command {
 					}
 				}
 
-				warnings = append(warnings, boardCombinationWarnings(b.Provider, b.MilestoneMode, b.AuthUser)...)
+				warnings = append(warnings, diag.BoardCombination(b.Provider, b.MilestoneMode, b.AuthUser)...)
 
 				if boardIssues == 0 {
 					if b.BaseURL == "" {
@@ -259,6 +268,21 @@ func Doctor() *cobra.Command {
 			Print("")
 
 			issues += checkConfigTrust(root, repoDir, p)
+
+			// --- Hooks ---
+			hookSec := hooksSection(repoDir)
+			printSections([]diag.Section{hookSec})
+			issues += diag.Issues([]diag.Section{hookSec})
+			for _, l := range hookSec.Lines {
+				if l.Level == diag.Warn {
+					hookWarnings++
+				}
+			}
+
+			// --- Reviewer ---
+			revSec := reviewerSection(repoDir)
+			printSections([]diag.Section{revSec})
+			issues += diag.Issues([]diag.Section{revSec})
 
 			// --- Phase work on main ---
 			//
@@ -323,16 +347,13 @@ func Doctor() *cobra.Command {
 			// none gets no section at all.
 			if lines, present := redProofChecks(root, repoDir); present {
 				Print("Red proofs:")
+				printLines(lines)
 				for _, l := range lines {
-					switch l.level {
+					switch l.Level {
 					case doctorIssue:
-						Printf("  ✗ %s\n", l.text)
 						issues++
 					case doctorWarn:
-						Printf("  ⚠ %s\n", l.text)
 						redProofWarnings++
-					default:
-						Printf("  ✓ %s\n", l.text)
 					}
 				}
 				Print("")
@@ -389,7 +410,7 @@ func Doctor() *cobra.Command {
 			// checkout replacing the live copy — the incident this milestone
 			// closed. The fix is one command, so print the command.
 			Print("State file:")
-			if gitNoOut(repoDir, "ls-files", "--error-unmatch", "--", RootDirName+"/"+state.File) == nil {
+			if gitrun.Quiet(repoDir, "ls-files", "--error-unmatch", "--", RootDirName+"/"+state.File) == nil {
 				Printf("  ✗ %s/%s is tracked — a branch carrying a stale copy can replace the live one. Fix: `git rm --cached %s/%s` (it is already gitignored)\n",
 					RootDirName, state.File, RootDirName, state.File)
 				issues++
@@ -482,6 +503,53 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
+			// --- Pin currency ---
+			//
+			// The pins Dependabot cannot reach — run-block `go install` pins,
+			// setup-node's version, goreleaser-action's version, go.mod's
+			// toolchain — checked against their upstreams by the same checker
+			// and staleness rules as the dross repo's weekly cron (locked
+			// decision check_surface), in lenient mode (doctor_net): a stale or
+			// unpinned pin is a warning naming what to do, an unreachable
+			// upstream or a newer major is a line. None of it moves the exit
+			// code — /dross-ship and /dross-review gate on doctor, and upstream's
+			// release calendar must not block them. Silent when the repo holds
+			// no such pin.
+			if sec, _, err := PinCurrencySection(context.Background(), repoDir, pinResolver, time.Now()); err != nil {
+				Print("Pin currency:")
+				Printf("  ⚠ could not scan the repo's pins: %v\n", err)
+				Print("")
+				pinWarnings++
+			} else if len(sec.Lines) > 0 {
+				Print(sec.Heading)
+				printLines(sec.Lines)
+				Print("    Advisory only — bump a stale pin to the version named; this never changes doctor's exit code.")
+				Print("")
+				for _, l := range sec.Lines {
+					if l.Level == doctorWarn {
+						pinWarnings++
+					}
+				}
+			}
+
+			// --- Branch protection ---
+			//
+			// main's live rules on GitHub against origin/<main>'s pull_request
+			// jobs (protectionSection). Gaps are warnings naming `dross
+			// protect`; none moves the exit code — /dross-ship gates on doctor.
+			// Omitted with no [remote], like the other remote-only sections.
+			if sec, present := protectionSection(root, repoDir, p); present {
+				Print(sec.Heading)
+				printLines(sec.Lines)
+				Print("    Advisory only — this never changes doctor's exit code.")
+				Print("")
+				for _, l := range sec.Lines {
+					if l.Level == doctorWarn {
+						protectionWarnings++
+					}
+				}
+			}
+
 			// --- Duplicate roadmap slugs ---
 			//
 			// Carrying a phase forward onto a later milestone's roadmap is a
@@ -490,7 +558,7 @@ func Doctor() *cobra.Command {
 			// makes the ambiguity invisible at the listing, which is why it is
 			// named here instead: doctor is where faults belong. Advisory —
 			// nothing is broken, so the exit code is unchanged.
-			if dups := duplicateRoadmapSlugs(root); len(dups) > 0 {
+			if dups := diag.RoadmapDuplicates(root); len(dups) > 0 {
 				Print("Duplicate roadmap slugs:")
 				for _, d := range dups {
 					Printf("  ⚠ %s is on %d milestone roadmaps (%s) — listed once, at its %s position\n",
@@ -505,7 +573,7 @@ func Doctor() *cobra.Command {
 			//
 			// c-5: a phase a milestone signed up for, carrying no completion
 			// marker, that `dross phase backfill` cannot close from evidence.
-			// Doneness reads changes.json alone now (phasedone.go), so such a
+			// Doneness reads changes.json alone now (internal/phase/done.go), so such a
 			// phase counts not-done forever with nothing saying why — it is
 			// indistinguishable at every surface from a phase that was never
 			// started. Named here rather than in the sweep's output, following
@@ -541,86 +609,150 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
-			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings+backfillResidueWarnings)
+			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings+backfillResidueWarnings+pinWarnings+protectionWarnings+hookWarnings)
 		},
 	}
 }
 
-// doctorLine is one rendered check result. The level is carried rather than
-// baked into the text so the caller decides what a warning costs — a
-// cannot-determine red proof must not move the exit code, and a line that
-// printed its own glyph would make that decision unreadable.
-type doctorLine struct {
-	level string
-	text  string
+// pinResolver is the seam doctor's Pin currency section reads upstream
+// through. Typed as pincheck's Resolver so internal/cmd never imports net/http
+// itself (boundary_test.go). The test binary's TestMain swaps in a counting
+// resolver that never dials and fails the binary if anything reached it, so a
+// doctor test can only touch upstream through a stub it installs on purpose.
+var pinResolver pincheck.Resolver = pincheck.NewResolver(pincheck.DefaultEndpoints(), pinHostTimeout)
+
+// pinHostTimeout bounds each upstream request doctor makes. Short on purpose:
+// doctor runs in every dross-managed repo and must stay usable offline, where
+// an unreachable host is a line, not a wait (locked decision doctor_net).
+const pinHostTimeout = 3 * time.Second
+
+// PinCurrencySection builds doctor's "Pin currency" block over the generic
+// pin sites under repoDir — the subset every dross-managed repo can carry; the
+// Go-source pins only the dross repo holds are the weekly cron's alone. It runs
+// pincheck.Check in lenient mode, so the lines' levels come from the one
+// checker the cron uses: stale and unpinned warn, unknown and info are notes,
+// and nothing is ever an Issue. The Section is empty when the repo holds no
+// such pin. The results the lines were rendered from come back beside it.
+//
+// Exported so cmd/pincheck's parity test can drive this path beside the cron's
+// and prove both classify a pin the same way.
+func PinCurrencySection(ctx context.Context, repoDir string, r pincheck.Resolver, now time.Time) (diag.Section, []pincheck.Result, error) {
+	sites, err := pincheck.Scan(repoDir)
+	if err != nil {
+		return diag.Section{}, nil, err
+	}
+	sec := diag.Section{Heading: "Pin currency:"}
+	results := pincheck.Check(ctx, sites, r, pincheck.Lenient, now).Results
+	for _, res := range results {
+		sec.Lines = append(sec.Lines, pinCurrencyLine(res))
+	}
+	return sec, results, nil
 }
+
+// pinCurrencyLine renders one lenient result. The level follows the checker's
+// severity; the text names the pin and what its verdict points at.
+func pinCurrencyLine(res pincheck.Result) doctorLine {
+	where := fmt.Sprintf("%s:%d %s", res.File, res.Line, res.Name)
+	var text string
+	switch res.Verdict {
+	case pincheck.Current:
+		text = fmt.Sprintf("%s %s is current", where, res.Version)
+	case pincheck.Stale:
+		text = fmt.Sprintf("%s %s is stale — bump to %s (a newer release on its line has been out more than 7 days)", where, res.Version, res.Target)
+	case pincheck.Unpinned:
+		text = fmt.Sprintf("%s is not pinned to an exact release: %s", where, res.Classification.Reason)
+	case pincheck.Info:
+		text = fmt.Sprintf("    · %s %s — a newer release exists off its line (%s): a migration, not a bump", where, res.Version, res.Latest)
+	default:
+		text = fmt.Sprintf("    · %s %s — could not check upstream: %s", where, res.Version, res.Classification.Reason)
+	}
+	switch res.Severity {
+	case pincheck.SeverityWarn:
+		return doctorLine{Level: doctorWarn, Text: text}
+	case pincheck.SeverityFail:
+		return doctorLine{Level: doctorIssue, Text: text}
+	case pincheck.SeverityLine:
+		return doctorLine{Level: diag.Note, Text: text}
+	}
+	return doctorLine{Level: doctorOK, Text: text}
+}
+
+// doctorLine and the three levels are the in-package names for diag.Line:
+// every check returns lines, and Doctor() decides what each level costs.
+type doctorLine = diag.Line
 
 const (
-	doctorOK    = "ok"
-	doctorWarn  = "warn"
-	doctorIssue = "issue"
+	doctorOK    = diag.OK
+	doctorWarn  = diag.Warn
+	doctorIssue = diag.Issue
 )
 
-// redProofChecks classifies every discovered red-proof pin. present is false
-// when the repo records none, so projects without red proofs get no section.
-func redProofChecks(root, repoDir string) ([]doctorLine, bool) {
-	pins, err := discoverRedProofPins(root)
-	if err != nil {
-		return []doctorLine{{doctorIssue, fmt.Sprintf("could not read red-proof pins: %v", err)}}, true
+// printLines renders check lines with doctor's glyphs: ✓ / ⚠ / ✗ under a
+// two-space indent, and a Note verbatim — it carries its own indentation.
+func printLines(lines []doctorLine) {
+	for _, l := range lines {
+		switch l.Level {
+		case diag.Issue:
+			Printf("  ✗ %s\n", l.Text)
+		case diag.Warn:
+			Printf("  ⚠ %s\n", l.Text)
+		case diag.Note:
+			Print(l.Text)
+		default:
+			Printf("  ✓ %s\n", l.Text)
+		}
 	}
-	if len(pins) == 0 {
-		return nil, false
-	}
-	var lines []doctorLine
-	for _, pin := range pins {
-		lines = append(lines, redProofPinLines(root, repoDir, pin)...)
-	}
-	return lines, true
 }
 
-// redProofPinLines is the per-pin verdict. A pin earns its ✓ only by being
-// reachable AND agreeing with its doc: the record staying sound while the prose
-// names a different commit still sends the next reader to the wrong place.
-func redProofPinLines(root, repoDir string, pin redProofPin) []doctorLine {
-	verdict, why, err := classifyReachability(repoDir, pin.SHA)
+// printSections renders headed blocks, each followed by a blank line.
+func printSections(sections []diag.Section) {
+	for _, sec := range sections {
+		Print(sec.Heading)
+		printLines(sec.Lines)
+		Print("")
+	}
+}
+
+// redProofChecks classifies every discovered red-proof pin and hands the
+// verdicts to diag.RedProof. present is false when the repo records none, so
+// projects without red proofs get no section. The git-backed classification
+// (reachability, the doc's own SHA, the repoint hint) is read HERE and passed
+// in: diag renders verdicts and spawns nothing.
+func redProofChecks(root, repoDir string) ([]doctorLine, bool) {
+	pins, err := discoverRedProofPins(root, repoDir)
 	if err != nil {
-		return []doctorLine{{doctorIssue, fmt.Sprintf("%s: cannot check the pin in %s: %v", pin.Phase, pin.Doc, err)}}
+		return diag.RedProof(nil, err)
 	}
-
-	var lines []doctorLine
-	switch verdict {
-	case reachUnreachable:
-		lines = append(lines, doctorLine{doctorIssue, fmt.Sprintf(
-			"%s: %s pins %s, which is unreachable — %s. Fix: %s",
-			pin.Phase, pin.Doc, pin.SHA, why, redProofRepointHint(root, repoDir, pin))})
-	case reachIndeterminate:
-		lines = append(lines, doctorLine{doctorWarn, fmt.Sprintf(
-			"%s: cannot determine whether %s (pinned by %s) is reachable — %s",
-			pin.Phase, short(pin.SHA), pin.Doc, why)})
+	in := make([]diag.RedProofPin, 0, len(pins))
+	for _, pin := range pins {
+		in = append(in, classifyRedProofPin(root, repoDir, pin))
 	}
+	return diag.RedProof(in, nil)
+}
 
+// redProofPinLines is the per-pin verdict, classified here and rendered by
+// diag.PinLines.
+func redProofPinLines(root, repoDir string, pin redProofPin) []doctorLine {
+	return diag.PinLines(classifyRedProofPin(root, repoDir, pin))
+}
+
+// classifyRedProofPin reads everything diag needs to judge one pin: whether
+// origin reaches the SHA, what the replay doc says its base commit is, and
+// the repair to name if the pin is unreachable.
+func classifyRedProofPin(root, repoDir string, pin redProofPin) diag.RedProofPin {
+	out := diag.RedProofPin{Phase: pin.Phase, SHA: pin.SHA, Doc: pin.Doc.Rel()}
+	verdict, why, err := classifyReachability(repoDir, pin.SHA)
+	out.Reach, out.Why, out.ReachErr = diag.Reach(verdict), why, err
+	if err != nil {
+		return out
+	}
 	// The doc cross-check runs whatever the verdict: it is a separate claim
 	// about a separate artefact, and a shallow clone can still read a file.
-	docSHA, docErr := redProofDocSHA(repoDir, pin.Doc)
-	switch {
-	case docErr != nil:
-		lines = append(lines, doctorLine{doctorIssue, fmt.Sprintf(
-			"%s: pins %s as its replay doc, which cannot be read: %v", pin.Phase, pin.Doc, docErr)})
-	case docSHA == "":
-		lines = append(lines, doctorLine{doctorIssue, fmt.Sprintf(
-			"%s: %s carries no `base commit:` line, so nothing cross-checks the recorded %s",
-			pin.Phase, pin.Doc, short(pin.SHA))})
-	case !sameCommitSHA(docSHA, pin.SHA):
-		lines = append(lines, doctorLine{doctorIssue, fmt.Sprintf(
-			"%s: %s says base commit %s but the record pins %s — the prose and the record disagree",
-			pin.Phase, pin.Doc, docSHA, pin.SHA)})
+	out.DocSHA, out.DocErr = redProofDocSHA(pin.Doc)
+	if verdict == reachUnreachable {
+		out.RepointHint = redProofRepointHint(root, repoDir, pin)
 	}
-
-	if len(lines) == 0 {
-		lines = append(lines, doctorLine{doctorOK, fmt.Sprintf(
-			"%s: %s pins %s, %s", pin.Phase, pin.Doc, short(pin.SHA), why)})
-	}
-	return lines
+	return out
 }
 
 // redProofRepointHint names the repair: the `red-proof repoint` verb, which
@@ -645,129 +777,6 @@ func redProofRepointHint(root, repoDir string, pin redProofPin) string {
 	// is reported, not handed over as an argument to retype.
 	return fmt.Sprintf("repoint it to %s's fork point %s — `dross phase red-proof repoint %s --apply`",
 		pin.Phase, fork, pin.Phase)
-}
-
-// sameCommitSHA compares a doc's pin against a record's. Either side may be
-// abbreviated — the doc is written by hand for a human reader — so containment
-// counts, and an empty operand never matches.
-func sameCommitSHA(a, b string) bool {
-	a, b = strings.ToLower(strings.TrimSpace(a)), strings.ToLower(strings.TrimSpace(b))
-	if a == "" || b == "" {
-		return false
-	}
-	return strings.HasPrefix(a, b) || strings.HasPrefix(b, a)
-}
-
-// duplicateRoadmapSlug is one slug and every milestone roadmap listing it.
-type duplicateRoadmapSlug struct {
-	Slug     string
-	Versions []string
-}
-
-// duplicateRoadmapSlugs names every slug on more than one milestone's phases
-// array, in the order those slugs are first listed, each with the versions
-// carrying it — the first of which is the position `dross phase list` renders
-// it at (phase.Ordered keeps the first occurrence).
-//
-// A milestone that fails to load is skipped, matching milestonePhaseOrder: this
-// is a finding, never a hard dependency.
-func duplicateRoadmapSlugs(root string) []duplicateRoadmapSlug {
-	versions, err := milestone.List(root)
-	if err != nil {
-		return nil
-	}
-	on := map[string][]string{}
-	var order []string
-	for _, v := range versions {
-		m, err := milestone.Load(milestone.FilePath(root, v))
-		if err != nil {
-			continue
-		}
-		for _, slug := range m.Phases {
-			if len(on[slug]) == 0 {
-				order = append(order, slug)
-			}
-			// A slug repeated inside ONE array is still one roadmap: what this
-			// reports is the same phase claimed by two milestones.
-			if !slices.Contains(on[slug], v) {
-				on[slug] = append(on[slug], v)
-			}
-		}
-	}
-	var out []duplicateRoadmapSlug
-	for _, slug := range order {
-		if len(on[slug]) > 1 {
-			out = append(out, duplicateRoadmapSlug{Slug: slug, Versions: on[slug]})
-		}
-	}
-	return out
-}
-
-// remoteCombinationWarnings reports [remote] pairings that are individually
-// valid but fail once ship runs. Empty and "none" providers stay silent: they
-// mean "this repo has no remote", not a misconfigured one.
-func remoteCombinationWarnings(provider, authScheme, authUser string) []string {
-	var out []string
-	prov := configenum.Normalize(provider)
-	scheme := configenum.Normalize(authScheme)
-	if prov == "" || prov == "none" {
-		return nil
-	}
-
-	// A provider the tooling happily writes but ship cannot dispatch: the PR
-	// step is the first thing to say so, at the end of a phase.
-	if !configenum.ShipProviders.Has(prov) {
-		out = append(out, fmt.Sprintf("[remote].provider = %q — ship cannot open a PR for it (expected %s); /dross-ship will fail at the PR step", provider, configenum.ShipProviders.List()))
-	}
-
-	// Basic auth is user:token on the wire, so a missing user sends
-	// base64(:token) and 401s on every call — a guaranteed ship failure that
-	// nothing else surfaces until the token looks to blame.
-	if (prov == "bitbucket" || scheme == "basic") && strings.TrimSpace(authUser) == "" {
-		out = append(out, "[remote].auth_user is not set but the credential is HTTP Basic user:token — every ship call will 401")
-	}
-
-	// Only bitbucket dispatches Basic: gitlab falls through to PRIVATE-TOKEN
-	// and github ignores the scheme entirely, so setting it elsewhere is a
-	// silent no-op that reads as configured.
-	if scheme == "basic" && prov != "bitbucket" {
-		out = append(out, fmt.Sprintf("[remote].auth_scheme = basic but the %s backend sends no Basic credential — the setting has no effect", prov))
-	}
-	return out
-}
-
-// boardCombinationWarnings reports [board] pairings that pass every per-field
-// check and still error at the first board op.
-// sortedStateMapKeys returns the [board].state_map keys in a stable order, so
-// a project.toml with several bad keys reports them the same way every run.
-func sortedStateMapKeys(m map[string]string) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func boardCombinationWarnings(provider, milestoneMode, authUser string) []string {
-	var out []string
-	prov := configenum.Normalize(provider)
-
-	// A mode outside the provider's own accept-set. Skipped when the mode is
-	// globally invalid (already a hard failure above) or when the provider maps
-	// milestones by some other means and never reads the field at all.
-	if configenum.MilestoneModes.Has(milestoneMode) {
-		if modes := configenum.MilestoneModesFor(prov); modes != nil && !modes.Has(milestoneMode) {
-			out = append(out, fmt.Sprintf("[board].milestone_mode = %q is not supported by the %s backend (expected %s) — milestone sync will error", milestoneMode, prov, modes.List()))
-		}
-	}
-
-	// Jira's REST credential is Basic email:token; auth_env alone authenticates
-	// nothing.
-	if prov == "jira" && strings.TrimSpace(authUser) == "" {
-		out = append(out, "[board].auth_user is not set but Jira authenticates as Basic email:token — board ops will 401")
-	}
-	return out
 }
 
 // architectureLinkWarnings resolves every symbol link in ARCHITECTURE.md against
@@ -975,13 +984,12 @@ func phaseCommitsOnMain(root, repoDir, mainBranch string) ([]leakedPhaseCommit, 
 	}
 
 	// List commits on local main not in origin/main.
-	out, err := exec.Command("git", append([]string{"-C", repoDir},
-		gitRefArgs("rev-list", nil, "origin/"+mainBranch+".."+mainBranch)...)...).Output()
+	out, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", nil, "origin/"+mainBranch+".."+mainBranch)...)
 	if err != nil {
 		return nil, err
 	}
 	var leaked []leakedPhaseCommit
-	for _, sha := range strings.Fields(string(out)) {
+	for _, sha := range strings.Fields(out) {
 		if pid, ok := recorded[sha]; ok {
 			leaked = append(leaked, leakedPhaseCommit{sha: sha, phaseID: pid})
 		}
@@ -1074,318 +1082,161 @@ func parseGitForCompare(raw string) (host, path string) {
 // cannot be exercised any other way: CI's git is new enough, so without a seam
 // the check would only ever be observed passing.
 var gitVersionOutput = func() (string, error) {
-	out, err := exec.Command("git", "--version").Output()
-	return string(out), err
+	return gitrun.Trim(".", "--version")
 }
 
-// endOfOptionsMinGit is the git version that introduced --end-of-options, which
-// every rewritten call site now emits. Below it, those argv are unparseable —
-// so this is not advice, it is the floor the locked ref_separator_token decision
-// depends on and nothing else in the phase enforces.
-const endOfOptionsMinGit = "2.24"
-
-// checkConfigTrust reports hostile-or-broken config BEFORE a command refuses
-// mid-run, and returns the number of issues found.
-//
-// Every finding here counts as an issue, not a warning. A finding printed
-// without moving doctor's exit code is a finding nobody acts on — and for two
-// of these the alternative to acting is a command dying halfway through a
-// branch operation, or a token going somewhere the user never chose.
+// checkConfigTrust gathers what diag.ConfigTrust needs from this machine —
+// the host allowlist, the git version, the consent store, the gitignore
+// matcher, the ref validator and the gated-command roster — prints the
+// sections it returns, then the remote-mutation and local-toolchain checks
+// beneath them. It returns the number of issues found.
 func checkConfigTrust(root, repoDir string, p *project.Project) int {
-	issues := 0
-
-	// 1. Branch names git would reject.
-	Print("Branch names:")
-	branchChecks := []struct{ kind, value string }{
-		{"repo.git_main_branch", p.Repo.GitMainBranch},
-	}
-	// branch_pattern is rendered with a placeholder id rather than read raw:
-	// the pattern itself is not a ref, the thing it produces is. Nothing
-	// consumes it today (branch names are built as "phase/"+id), which is
-	// exactly why it needs reporting — it is broken config that becomes a live
-	// vector the day something starts honouring it.
-	if bp := p.Repo.BranchPattern; bp != "" {
-		rendered := strings.ReplaceAll(bp, "<id>", "example-phase")
-		branchChecks = append(branchChecks, struct{ kind, value string }{"repo.branch_pattern", rendered})
-	}
-	clean := true
-	for _, bc := range branchChecks {
-		if bc.value == "" {
-			continue
-		}
-		if err := validateGitRef(bc.kind, bc.value); err != nil {
-			Printf("  ✗ %v\n", err)
-			Printf("    Fix: `dross project set %s <name>` — git reads a leading dash as an option, not a branch.\n", bc.kind)
-			issues++
-			clean = false
-		}
-	}
-	if clean {
-		Printf("  ✓ configured branch names are valid git refs\n")
-	}
-	Print("")
-
-	// 2. API hosts outside the derived allowlist.
-	Print("API host:")
-	extra, hostErr := readAllowHosts(root, repoDir)
-	if hostErr != nil {
-		Printf("  ✗ %v\n", hostErr)
-		issues++
-	}
-	policy := hostallow.Derive(p.Remote.URL, extra)
-	hostChecks := []struct{ kind, value string }{
-		{"[remote].api_base", p.Remote.APIBase},
-		{"[board].base_url", p.Board.BaseURL},
-	}
-	clean = true
-	for _, hc := range hostChecks {
-		if hc.value == "" {
-			continue
-		}
-		if err := policy.Check(hc.kind, hc.value); err != nil {
-			Printf("  ✗ %v\n", err)
-			// The escape hatch is named here and nowhere else in the runtime
-			// paths: a refusal with no way forward is where a legitimate
-			// self-hosted user gets stuck and starts editing the guard out.
-			if h := hostOf(hc.value); h != "" {
-				Printf("    Fix (only if you trust this host): `dross local set allow_hosts %s`\n", h)
-			}
-			issues++
-			clean = false
-		}
-	}
-	if clean && hostErr == nil {
-		Printf("  ✓ configured API hosts are within the allowlist derived from [remote].url\n")
-	}
-	Print("")
-
-	// 3. local.toml not gitignored.
-	//
-	// Doctor is the ONLY command that runs against already-onboarded repos,
-	// which never re-run init or onboard. Without this, those repos would
-	// never gain the ignore line at all.
-	Print("Machine-local store:")
-	body, rerr := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
-	// if/else-if rather than a tagless switch: go-cover attributes a switch
-	// case-condition to no basic block, so a mutant sitting on one is reported
-	// NOT-COVERED even when a test drives the arm. An `else if` condition does
-	// get a block, so the existing tests can kill it.
-	if rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
-		Printf("  ⚠ couldn't read .gitignore: %v\n", rerr)
-	} else if !ignoresPath(string(body), drossLocalIgnorePath) {
-		Printf("  ✗ %s is not gitignored — a committed copy would let a cloned repo authorize its own API host.\n", drossLocalIgnorePath)
-		Printf("    Fix: add `%s` to .gitignore (and `git rm --cached %s` if it is already tracked).\n",
-			drossLocalIgnorePath, drossLocalIgnorePath)
-		issues++
-	} else {
-		Printf("  ✓ %s is gitignored\n", drossLocalIgnorePath)
-	}
-	Print("")
-
-	// 4. git too old for --end-of-options.
-	Print("git version:")
-	raw, gerr := gitVersionOutput()
-	// if/else-if for the same coverage-attribution reason as the block above.
-	if gerr != nil {
-		Printf("  ⚠ couldn't read `git --version`: %v\n", gerr)
-	} else if gitVersionAtLeast(raw, endOfOptionsMinGit) {
-		Printf("  ✓ %s supports --end-of-options\n", strings.TrimSpace(raw))
-	} else {
-		Printf("  ✗ %s is older than git %s, which introduced --end-of-options.\n", strings.TrimSpace(raw), endOfOptionsMinGit)
-		Printf("    dross places that separator before every config-derived ref, so git will reject those commands. Fix: upgrade git.\n")
-		issues++
-	}
-	Print("")
-
-	// 5. exec consent for runtime.test_command.
-	//
-	// The half the locked exec_consent_gate decision admits the CLI cannot
-	// enforce on its own: the gate refuses at the moment of use, but nothing
-	// tells the user what state they are in until something has already
-	// refused. Doctor is where that becomes visible before it bites.
-	//
-	// Severity is split deliberately. ABSENT is the honest state of every fresh
-	// clone and is reported as an advisory with the remedy — failing doctor on
-	// it would make a clean checkout look broken. STALE is an exit-code issue:
-	// something WAS trusted here and the command has since changed, which is
-	// precisely the signature the consent binding exists to catch.
-	Print("Exec consent:")
-	switch state, cerr := CheckConsent(root, repoDir, p.Runtime.TestCommand); state {
-	case ConsentGranted:
-		Printf("  ✓ this machine has trusted the configured test command\n")
-	case ConsentStale:
-		Printf("  ✗ consent is stale — the test command has CHANGED since it was trusted here:\n")
-		Printf("      %s\n", p.Runtime.TestCommand)
-		Printf("    Fix (only after reading that line): `dross trust`\n")
-		issues++
-	case ConsentRefused:
-		Printf("  ✗ %v\n", cerr)
-		issues++
-	case ConsentNotApplicable:
-		// Lane-aware since lanes gained their own grants: in a lanes-only repo
-		// `dross test --files` runs the lanes under those grants and never
-		// reaches this gate, so the old wording — "the loop commands refuse" —
-		// is false in exactly the repo shape lanes exist to serve, and telling
-		// that user to configure a whole-suite command sends them to fix
-		// something that is not broken.
-		if len(p.Runtime.TestLane) > 0 {
-			Printf("  ⚠ no runtime.test_command is configured; `dross test --files` still runs the lanes below.\n")
-			Printf("    A bare `dross test` has nothing to run — set one only if you want a whole-suite command.\n")
-		} else {
-			Printf("  ⚠ no runtime.test_command is configured, so the loop commands refuse.\n")
-			Printf("    Fix: `dross project set runtime.test_command \"<cmd>\"`, then `dross trust`.\n")
-		}
-	default:
-		Printf("  ⚠ this machine has not trusted the configured test command:\n")
-		Printf("      %s\n", p.Runtime.TestCommand)
-		Printf("    Fix (only after reading that line): `dross trust`\n")
-	}
-	issues += reportLaneConsent(root, repoDir, p)
-	Print("")
+	extra, hostErr := localstore.ReadAllowHosts(root, repoDir)
+	sections, issues := diag.ConfigTrust(root, repoDir, p, diag.TrustInputs{
+		AllowHosts:      extra,
+		AllowHostsErr:   hostErr,
+		GitVersion:      gitVersionOutput,
+		Grants:          localstore.GrantStore(root),
+		IgnoresPath:     ignoresPath,
+		LocalIgnorePath: drossLocalIgnorePath,
+		ValidateRef:     validateGitRef,
+		GatedCommands:   execGatedCommands,
+	})
+	printSections(sections)
 
 	issues += checkRemoteMutation(root, repoDir, p)
 	checkMutationToolchain(p)
-
 	return issues
 }
 
-// reportLaneConsent prints one row per declared [[runtime.test_lane]], on the
-// same state machine and the same severity split as the whole-suite grant above.
-//
-// It exists for the timing, not for the information. A lane grant that first
-// announces itself by refusing mid-gate is discovered at the worst possible
-// moment — after the code is written, while the agent is trying to commit — and
-// the refusal arrives per lane, so a repo with four lanes can surface four
-// separate surprises across four tasks. Doctor answers the same question in one
-// place, before any of it.
-//
-// A repo with no lanes prints nothing at all: the section would otherwise grow
-// a permanent "no lanes configured" line in every repo that never wanted them.
-func reportLaneConsent(root, repoDir string, p *project.Project) int {
-	issues := 0
-	for _, lane := range p.Runtime.TestLane {
-		state, cerr := LaneConsented(root, repoDir, lane.Name, laneConsentLine(lane))
-		switch state {
-		case ConsentGranted:
-			Printf("  ✓ lane %q: trusted\n", lane.Name)
-		case ConsentStale:
-			// An issue, exactly as the whole-suite stale case is: something
-			// WAS trusted under this name and the command has since changed,
-			// which is the signature the binding exists to catch.
-			Printf("  ✗ lane %q: consent is stale — what it runs has CHANGED since it was trusted here:\n", lane.Name)
-			Printf("      %s\n", lane.Command)
-			printLanePrepare(lane)
-			// Named as the fix in every arm that prints lines, prepare
-			// included: the state doctor reports and the state that refuses
-			// mid-run must agree on what closes it, or a stale prepare would
-			// send the reader looking for a second verb that does not exist.
-			Printf("    Fix (only after reading that): `dross trust --lane %s`\n", lane.Name)
-			issues++
-		case ConsentRefused:
-			Printf("  ✗ lane %q: %v\n", lane.Name, cerr)
-			issues++
-		case ConsentNotApplicable:
-			Printf("  ⚠ lane %q declares no command, so it can never be trusted or run.\n", lane.Name)
-			Printf("    Fix: re-add it with a command, or `dross validate` for the full report.\n")
+// projectSettingsFiles are the repo-level settings files Claude Code layers
+// over the user-level one, relative to the repo root.
+var projectSettingsFiles = []string{".claude/settings.json", ".claude/settings.local.json"}
+
+// hooksSection reports the dross hooks in the user-level settings.json Claude
+// Code reads (CLAUDE_CONFIG_DIR honoured) — every hook ensureUserHooks wires,
+// in its order. A missing gate hook is an issue — the gates are off — and so
+// is a gate command wired only under a matcher (it fires for some tools and
+// not others), "disableAllHooks": true, or a file that cannot be read. The
+// same key in repoDir's own .claude/settings.json or settings.local.json
+// turns every hook off in this repo however the user-level file is wired, so
+// it is an issue too, as is either file failing to parse. A missing
+// PreCompact or SessionStart hook is a warning: dross works without them, it
+// only loses pause and re-entry.
+func hooksSection(repoDir string) diag.Section {
+	sec := diag.Section{Heading: "Hooks:"}
+	add := func(level diag.Level, format string, a ...any) {
+		sec.Lines = append(sec.Lines, diag.Line{Level: level, Text: fmt.Sprintf(format, a...)})
+	}
+	path, err := userSettingsPath()
+	if err != nil {
+		add(diag.Issue, "cannot locate the user-level settings.json: %v", err)
+		return sec
+	}
+	doc, err := hooks.ReadSettings(path)
+	if err != nil {
+		add(diag.Issue, "the user-level settings.json cannot be read (%v) — Claude Code runs none of its hooks until it is fixed", err)
+		return sec
+	}
+	b, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		add(diag.Issue, "the user-level settings.json cannot be read: %v", err)
+		return sec
+	}
+	if off, _ := doc["disableAllHooks"].(bool); off {
+		add(diag.Issue, "settings.json sets \"disableAllHooks\": true — Claude Code runs no hooks, so every dross gate is off. Fix: remove the key")
+	}
+	for _, h := range userHooks {
+		// The gate pair is the tool-call gates: without it every gate is off.
+		gate := h.command == GateCheckHook || h.command == GateRecordHook
+		merged, err := hooks.MergeHook(b, h.event, h.command)
+		if err != nil {
+			add(diag.Issue, "%s → %s cannot be checked: %v", h.event, h.command, err)
+			continue
+		}
+		present := len(b) > 0 && bytes.Equal(merged, b)
+		switch {
+		case !present && gate:
+			add(diag.Issue, "%s → `%s` is not wired, so the tool-call gates are off. Fix: `dross hooks ensure`", h.event, h.command)
+		case !present:
+			add(diag.Warn, "%s → `%s` is not wired. Fix: `dross hooks ensure`", h.event, h.command)
+		case gate && !matcherless(doc, h.event, h.command):
+			add(diag.Issue, "%s → `%s` is wired only under a matcher, so it fires for some tools and not others. Fix: remove the matcher, or move the command into a matcher-less group (`dross hooks ensure` leaves a file that already names it alone)", h.event, h.command)
 		default:
-			// Advisory, like the whole-suite ABSENT case: this is the honest
-			// state of every fresh clone, and failing doctor on it would make
-			// a clean checkout look broken.
-			Printf("  ⚠ lane %q: not trusted on this machine:\n", lane.Name)
-			Printf("      %s\n", lane.Command)
-			printLanePrepare(lane)
-			Printf("    Fix (only after reading that): `dross trust --lane %s`\n", lane.Name)
+			add(diag.OK, "%s → %s", h.event, h.command)
 		}
 	}
-	return issues
-}
-
-// printLanePrepare prints one lane's bootstrap line under its command, and
-// nothing at all for a lane declaring none.
-//
-// Under rather than beside, and only when declared: the same grant covers both
-// lines, so a report that showed one of them would understate what the user is
-// being asked to trust — while a `prepare: -` row on every pre-existing lane
-// would read as something they are expected to go and set.
-func printLanePrepare(lane project.TestLane) {
-	if lane.Prepare != "" {
-		Printf("      prepare: %s\n", lane.Prepare)
+	for _, rel := range projectSettingsFiles {
+		pdoc, err := hooks.ReadSettings(filepath.Join(repoDir, filepath.FromSlash(rel)))
+		if err != nil {
+			add(diag.Issue, "%s cannot be read (%v), so whether it turns this repo's hooks off cannot be told. Fix: repair or remove it", rel, err)
+			continue
+		}
+		if off, _ := pdoc["disableAllHooks"].(bool); off {
+			add(diag.Issue, "%s sets \"disableAllHooks\": true — Claude Code runs no hooks in this repo, so every dross gate is off here though the user-level file wires them. Fix: remove the key", rel)
+		}
 	}
+	return sec
 }
 
-// checkMutationToolchain reports whether the LOCAL toolchain each configured
-// mutation adapter needs is actually present.
-//
-// The timing is the point. Without it a non-Go stack discovers the gap only
-// when a verify run comes back having measured nothing — and an empty
-// measurement does not announce itself: the phase scores over zero mutants and
-// no line says why. Doctor asks the same question before any of that.
-//
-// ADVISORY, never an issue, and it returns no count for that reason. Most repos
-// are single-stack: failing a Go-only clone for lacking Node would be a check
-// people learn to ignore, and a check people ignore protects nothing. It is
-// also scoped to the adapters this project actually configures — a warning
-// about a toolchain the project never needed is noise that trains the reader to
-// skim past the ones that matter.
+// reviewerSection reports the solo task reviewer definition: installed where
+// Claude Code reads user agents and byte-identical to the one this dross
+// ships. Missing, stale (a linked source edited past the binary included) or
+// shadowed by a repo-level definition is an issue — every solo begin refuses
+// in that state — naming the path and the fix.
+func reviewerSection(repoDir string) diag.Section {
+	sec := diag.Section{Heading: "Reviewer:"}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		sec.Lines = append(sec.Lines, diag.Line{Level: diag.Issue, Text: fmt.Sprintf("cannot resolve home to find the solo reviewer: %v", err)})
+		return sec
+	}
+	r := reviewerStatusIn(userAgentsDir(home), repoDir)
+	if r.State == reviewerOK {
+		sec.Lines = append(sec.Lines, diag.Line{Level: diag.OK, Text: fmt.Sprintf("solo reviewer %s is installed and current", review.ReviewerAgent)})
+		return sec
+	}
+	sec.Lines = append(sec.Lines, diag.Line{Level: diag.Issue, Text: fmt.Sprintf("%s — solo runs refuse to begin. Fix: %s", r.Problem(), r.Remedy())})
+	return sec
+}
+
+// matcherless reports whether command runs from a group under hooks.<event>
+// that matches every tool: no matcher, an empty one, or "*".
+func matcherless(doc map[string]any, event, command string) bool {
+	hk, _ := doc["hooks"].(map[string]any)
+	groups, _ := hk[event].([]any)
+	for _, g := range groups {
+		group, _ := g.(map[string]any)
+		if m, ok := group["matcher"].(string); ok && m != "" && m != "*" {
+			continue
+		}
+		entries, _ := group["hooks"].([]any)
+		for _, e := range entries {
+			if entry, _ := e.(map[string]any); entry["command"] == command {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// checkMutationToolchain prints the local toolchain gaps diag reports, as a
+// section only when there is one — no gaps, no heading.
 func checkMutationToolchain(p *project.Project) {
-	tools, needBy := remoteMutationTools(p)
-	var missing []string
-	for _, tool := range tools {
-		if _, err := execLookPath(tool); err != nil {
-			missing = append(missing, tool)
-		}
-	}
-	if len(missing) == 0 {
+	lines := diag.MutationToolchain(p, execLookPath)
+	if len(lines) == 0 {
 		return
 	}
 	Print("Mutation toolchain:")
-	for _, tool := range missing {
-		Printf("  ⚠ %s is not installed — the %s adapter needs it to measure %s files here.\n",
-			tool, needBy[tool], mutationToolLanguage(needBy[tool]))
-		Printf("    Without it a verify run reports nothing measured rather than a bad score. Fix: %s\n", mutationToolInstall[tool])
-	}
+	printLines(lines)
 	Print("")
 }
 
 // execLookPath is the PATH lookup seam, so a test can drive both arms without
-// depending on what the developer happens to have installed.
-var execLookPath = exec.LookPath
-
-// mutationToolInstall is how to get each toolchain. A diagnostic that names a
-// gap without naming the fix sends the reader searching.
-var mutationToolInstall = map[string]string{
-	"gremlins": "go install github.com/go-gremlins/gremlins/cmd/gremlins@latest",
-	"npx":      "install Node 20+ (https://nodejs.org) — npx ships with it",
-	"dotnet":   "install the .NET SDK (https://dotnet.microsoft.com/download)",
-}
-
-// mutationToolLanguage names what goes unmeasured, so the warning says what it
-// costs rather than only what is absent.
-func mutationToolLanguage(adapter string) string {
-	switch adapter {
-	case "stryker":
-		return "TypeScript/JavaScript/Svelte"
-	case "stryker-net":
-		return "C#"
-	default:
-		return "Go"
-	}
-}
-
-// remoteAdapterTools maps each mutation adapter to the binary its run needs on
-// the REMOTE host. Only the adapters the project actually runs are probed: a
-// Go-only repo has no business failing doctor because the mutation host has no
-// dotnet.
-var remoteAdapterTools = map[string]string{
-	"gremlins":    "gremlins",
-	"stryker":     "npx",
-	"stryker-net": "dotnet",
-}
-
-// remoteAdapterOrder pins the probe order so doctor's output is stable run to
-// run. Map iteration order is not, and an unstable diagnostic is one nobody can
-// diff against yesterday's.
-var remoteAdapterOrder = []string{"stryker", "gremlins", "stryker-net"}
+// depending on what the developer happens to have installed. It is bound to
+// mutationcfg's seam so doctor and the adapter layer resolve through the same
+// lookup.
+var execLookPath = mutationcfg.LookPath
 
 // remoteProbeFn is the readiness seam.
 //
@@ -1394,33 +1245,6 @@ var remoteAdapterOrder = []string{"stryker", "gremlins", "stryker-net"}
 // would be the worst kind of green: it would pass on a host the run then fails
 // on, which is exactly the mid-run discovery c-5 exists to prevent.
 var remoteProbeFn = remote.Probe
-
-// remoteMutationTools returns the tools to probe for, in a stable order, plus
-// which adapter needs each — so a missing binary can name the adapter that
-// wanted it rather than leaving the user to guess.
-func remoteMutationTools(p *project.Project) ([]string, map[string]string) {
-	allowed := map[string]bool{}
-	for _, name := range p.Mutation.Adapters {
-		allowed[name] = true
-	}
-	var tools []string
-	needBy := map[string]string{}
-	for _, adapter := range remoteAdapterOrder {
-		// An empty allowlist means every adapter runs — the same rule
-		// configuredAdapters applies, and the two must not disagree about which
-		// adapters a repo has.
-		if len(allowed) > 0 && !allowed[adapter] {
-			continue
-		}
-		tool := remoteAdapterTools[adapter]
-		if _, seen := needBy[tool]; seen {
-			continue
-		}
-		tools = append(tools, tool)
-		needBy[tool] = adapter
-	}
-	return tools, needBy
-}
 
 // remoteProbeTools is everything doctor asks the host about, in ONE probe: the
 // mutation adapters' tools first, then every declared lane's toolchain.
@@ -1447,10 +1271,19 @@ func remoteMutationTools(p *project.Project) ([]string, map[string]string) {
 // growing a private derivation of its own, which is exactly the drift its own
 // test forbids.
 func remoteProbeTools(p *project.Project) (tools []string, needBy, laneBy map[string]string) {
-	tools, needBy = remoteMutationTools(p)
+	tools, needBy = mutationcfg.Tools(p)
 	seen := map[string]bool{}
 	for _, tool := range tools {
 		seen[tool] = true
+	}
+	// The host lock's tool rides the same probe, after the adapters and
+	// before the lanes. It belongs to neither attribution: no adapter or
+	// lane wants it — every remote mutation leg does — so the callers that
+	// print "the X adapter needs it" or "lane Y needs it" skip it and doctor
+	// reports it in its own words.
+	if !seen[remote.LockTool] {
+		seen[remote.LockTool] = true
+		tools = append(tools, remote.LockTool)
 	}
 	laneBy = map[string]string{}
 	for _, lane := range p.Runtime.TestLane {
@@ -1589,7 +1422,18 @@ func checkRemoteMutation(root, repoDir string, p *project.Project) int {
 			Printf("  ⚠ %s\n", n)
 		}
 		Printf("  ✓ %s reachable — workdir %s, %d cores (mutation runs and `dross test`)\n", target.Host, target.Workdir, ready.Cores)
+		lockable := true
 		for _, missing := range ready.Missing {
+			if missing == remote.LockTool {
+				// The lock's tool is a host requirement in its own words: no
+				// adapter wanted it, every mutation leg needs it, and a leg
+				// refuses rather than measuring unlocked without it (c-5).
+				Printf("  ✗ %s is not installed on %s — the host lock needs it; mutation legs refuse until it is (util-linux).\n",
+					remote.LockTool, target.Host)
+				issues++
+				lockable = false
+				continue
+			}
 			// One line per missing tool, each naming the adapter that wanted
 			// it: "something is missing" sends the user looking, and the
 			// remedy differs per toolchain.
@@ -1605,55 +1449,57 @@ func checkRemoteMutation(root, repoDir string, p *project.Project) int {
 			Printf("  ✗ %s is not installed on %s — the %s adapter needs it there.\n", missing, target.Host, adapter)
 			issues++
 		}
+		if lockable {
+			reportHostLock(*target)
+		}
 		reportLaneToolchains(target.Host, p, ready.Missing)
 	}
 	Print("")
 	return issues
 }
 
-// hostOf extracts a bare host from a URL for the allow_hosts hint. Returns ""
-// when there is nothing quotable — a hint naming garbage is worse than none.
-func hostOf(rawURL string) string {
-	u, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil || u.Hostname() == "" {
-		return ""
+// remoteLockStatusFn probes the host lock: LockStatusScript over the same
+// transport a run uses, parsed by ParseLockStatus. A seam so doctor's tests
+// can name a holder without a host. It is only reached once the probe has
+// found flock, because the script's own tool gate would just say so again.
+//
+// The script is a parameter rather than built inside, so a test can pin that
+// what reaches the host is the probing script and never a bare read of the
+// record — a record is stale the moment its writer dies.
+var remoteLockStatusFn = func(t remote.Target, script string) (remote.LockStatus, error) {
+	out, err := remote.ExecScript(t, script)
+	if err != nil {
+		return remote.LockStatus{}, err
 	}
-	if port := u.Port(); port != "" {
-		return u.Hostname() + ":" + port
-	}
-	return u.Hostname()
+	return remote.ParseLockStatus(out)
 }
 
-// gitVersionAtLeast compares `git --version` output against a "MAJOR.MINOR"
-// floor. It parses only the two leading components: git's suffixes vary by
-// platform ("2.39.5 (Apple Git-154)", "2.44.0.windows.1"), and a stricter
-// parser would report a false finding on a perfectly capable git — which is how
-// a version check gets deleted.
-func gitVersionAtLeast(raw, floor string) bool {
-	nums := func(s string) (int, int, bool) {
-		fields := strings.Fields(s)
-		for _, f := range fields {
-			parts := strings.SplitN(f, ".", 3)
-			if len(parts) < 2 {
-				continue
-			}
-			maj, err1 := strconv.Atoi(parts[0])
-			min, err2 := strconv.Atoi(parts[1])
-			if err1 == nil && err2 == nil {
-				return maj, min, true
-			}
-		}
-		return 0, 0, false
+// reportHostLock prints one line about the host lock: free, or held by whom.
+//
+// A held lock is ADVISORY, never an issue. Another leg measuring on the host
+// is the system working — the next leg waits its turn — and the line exists
+// so the person reading doctor knows what a wait they are about to see is
+// waiting on (c-5). A probe that could not be read is a warning for the same
+// reason: it says nothing about this repo's health.
+func reportHostLock(t remote.Target) {
+	st, err := remoteLockStatusFn(t, remote.LockStatusScript())
+	switch {
+	case err != nil:
+		Printf("  ⚠ could not read the host lock on %s: %v\n", t.Host, err)
+	case st.ToolMissing:
+		// The probe said flock was there a moment ago; the script disagrees.
+		// Reported rather than reconciled — the host is changing under us.
+		Printf("  ⚠ %s answered the probe but the lock script found no %s\n", t.Host, remote.LockTool)
+	case !st.Held:
+		Printf("  ✓ host lock free\n")
+	case st.Holder.IsZero():
+		Printf("  ℹ host busy: the host lock is held (holder not yet recorded)\n")
+	default:
+		h := st.Holder
+		Printf("  ℹ host busy: held by %s/%s run %s (user %s, pid %d) since %s (%s)\n",
+			h.Project, h.Phase, h.RunID, h.User, h.PID,
+			h.Since.UTC().Format(time.RFC3339), time.Since(h.Since).Round(time.Second))
 	}
-	fMaj, fMin, ok := nums(floor)
-	if !ok {
-		return true // an unparseable floor must not fail every repo
-	}
-	gMaj, gMin, ok := nums(raw)
-	if !ok {
-		return true // an unreadable version is a warning above, not a finding
-	}
-	return gMaj > fMaj || (gMaj == fMaj && gMin >= fMin)
 }
 
 // backfillResidueEntry is one roadmap phase backfill cannot close, with why.
@@ -1699,11 +1545,11 @@ func backfillResidue(root, repoDir, base string) []backfillResidueEntry {
 				continue
 			}
 			seen[slug] = true
-			if phaseDone(root, slug) {
+			if phase.Done(root, slug) {
 				continue
 			}
 			switch {
-			case !phaseDirExists(root, slug):
+			case !phase.DirExists(root, slug):
 				out = append(out, backfillResidueEntry{slug, "on " + v + "'s roadmap with no phase directory"})
 			case phaseBranchRefCached(repoDir, slug):
 				out = append(out, backfillResidueEntry{slug, "phase/" + slug + " still exists — in flight, not shipped"})
@@ -1745,7 +1591,7 @@ func reportStrandedMirrors() {
 		Print("")
 		return
 	}
-	plan, _, err := reapInventory(ctx, nil)
+	plan, _, err := boardsync.Inventory(ctx, nil)
 	if err != nil {
 		Printf("  … could not classify board mirrors (%v)\n", err)
 		Print("")
@@ -1761,7 +1607,7 @@ func reportStrandedMirrors() {
 		byLane[c.Lane]++
 	}
 	Printf("  ! %d stranded board mirror(s) — cards whose artefact finished but whose card did not\n", len(plan.Cards))
-	for _, lane := range reapLanes {
+	for _, lane := range boardsync.ReapLanes {
 		if n := byLane[lane.Name]; n > 0 {
 			Printf("    %-12s %d    Fix: dross issue reap --namespace %s\n", lane.Name, n, lane.Name)
 		}

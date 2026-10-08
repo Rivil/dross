@@ -1,0 +1,43 @@
+// Fixture for the unwrap ban. Every Contained accessor here sits inside an os.*
+// argument, and each is a distinct reason the ban exists — except
+// builderWrite, the must-NOT-trip row: the ban is keyed on the type, so a
+// strings.Builder's String() is not the seam and is never flagged.
+package scanfixture
+
+import (
+	"os"
+	"strings"
+
+	"github.com/Rivil/dross/internal/pathfence"
+)
+
+// stringUnwrap: this WORKS at runtime — String() is the joined absolute form —
+// which is exactly why nothing but the scan catches it. The ban is policy: the
+// seam is the audited way in.
+func stringUnwrap(c pathfence.Contained) ([]byte, error) {
+	return os.ReadFile(c.String())
+}
+
+// relUnwrap is worse: Rel() resolves against the process working directory
+// rather than the containment root, so this reads or writes the wrong file. A
+// scan banning only String() would let this through.
+func relUnwrap(c pathfence.Contained) ([]byte, error) {
+	return os.ReadFile(c.Rel())
+}
+
+// statUnwrap and removeUnwrap cover the rest of the os verb set.
+func statUnwrap(c pathfence.Contained) error {
+	_, err := os.Stat(c.String())
+	return err
+}
+
+func removeUnwrap(c pathfence.Contained) error {
+	return os.Remove(c.Rel())
+}
+
+// builderWrite is must-NOT-trip. b is a strings.Builder, not a Contained: the
+// type-blind ban reported it anyway and told its author to reshape correct
+// code; the type-keyed ban reads the receiver's type and leaves it alone.
+func builderWrite(p string, b *strings.Builder) error {
+	return os.WriteFile(p, []byte(b.String()), 0o644)
+}

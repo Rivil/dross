@@ -1,0 +1,38 @@
+package verify
+
+import "github.com/Rivil/dross/internal/mutation"
+
+// The must-NOT-trip fixture for the assignment arm.
+
+// Through the carrier, wrapped in a method call — the accepted shape the live
+// tree uses.
+func writeThroughCarrier(err error) LanguageRun {
+	return LanguageRun{
+		Tool:  "stryker",
+		Error: mutation.RecordLegError(err).String(),
+	}
+}
+
+// A conversion wrapping the carrier's return is still the carrier.
+func writeThroughConversion(err error) LanguageRun {
+	var lr LanguageRun
+	lr.Error = string(mutation.RecordLegError(err).String())
+	return lr
+}
+
+// A COPY of an already-declared field. LegSummary.Error is populated from
+// LanguageRun.Error, which is itself Recorded, so the guarantee travels with the
+// value — requiring a no-op re-wrap here would be ceremony, not safety.
+func copyFromDeclaredField(lr LanguageRun) LegSummary {
+	return LegSummary{
+		Tool:  lr.Tool,
+		Error: lr.Error,
+	}
+}
+
+// A raw fmt.Sprintf into a NotToolStream field is ACCEPTED. This is the shape
+// lifecycle.go uses for Mutant.Note, and a guard that failed it would be
+// unadoptable rather than fail-closed.
+func writeNotToolStream(m *OutOfScopeMutant, target string) {
+	m.Note = "routed to " + target
+}

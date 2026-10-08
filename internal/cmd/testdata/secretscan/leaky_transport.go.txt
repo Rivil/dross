@@ -1,0 +1,94 @@
+package ship
+
+// Calibration fixture for the transport residual scan. Each function is one
+// written-down answer; the test's fixture registry declares cleanPost
+// (Screened), lateScreen (Screened), readOnlyGet (ReadOnly), ghCommand (Seam
+// behind screenedGH) and screenedGH (Screened) — nothing else.
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"os/exec"
+
+	"github.com/Rivil/dross/internal/secretscan"
+)
+
+// (a) POST with no screen, and no registry entry: undeclared.
+func leakyPost(endpoint string, body any) error {
+	buf := new(bytes.Buffer)
+	_ = json.NewEncoder(buf).Encode(body)
+	req, err := http.NewRequest("POST", endpoint, buf)
+	if err != nil {
+		return err
+	}
+	client := &http.Client{}
+	_, err = client.Do(req)
+	return err
+}
+
+// (b) registered Screened, but the screen runs AFTER the request is built.
+func lateScreen(endpoint string, body any) error {
+	buf := new(bytes.Buffer)
+	_ = json.NewEncoder(buf).Encode(body)
+	req, err := http.NewRequest("POST", endpoint, buf)
+	if err != nil {
+		return err
+	}
+	if err := secretscan.ScanPayload("POST "+endpoint, body); err != nil {
+		return err
+	}
+	client := &http.Client{}
+	_, err = client.Do(req)
+	return err
+}
+
+// (c) clean: screened before the request, registered Screened.
+func cleanPost(endpoint string, body any) error {
+	if err := secretscan.ScanPayload("POST "+endpoint, body); err != nil {
+		return err
+	}
+	buf := new(bytes.Buffer)
+	_ = json.NewEncoder(buf).Encode(body)
+	req, err := http.NewRequest("POST", endpoint, buf)
+	if err != nil {
+		return err
+	}
+	client := &http.Client{}
+	_, err = client.Do(req)
+	return err
+}
+
+// The seam and its one screened caller, mirroring open.go.
+var ghCommand = func(args ...string) *exec.Cmd { return exec.Command("gh", args...) }
+
+func screenedGH(args ...string) (*exec.Cmd, error) {
+	if err := secretscan.ScanArgv("gh", args); err != nil {
+		return nil, err
+	}
+	return ghCommand(args...), nil
+}
+
+// (d) a second caller of the seam identifier, outside screenedGH.
+func leakyGH(title string) *exec.Cmd {
+	return ghCommand("pr", "create", "--title", title)
+}
+
+// (e) GET with a nil body, registered ReadOnly: passes.
+func readOnlyGet(endpoint string) ([]byte, error) {
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return nil, nil
+}
+
+// (f) a package var bound to a func literal that reaches exec.Command, with
+// no Seam entry: undeclared, and attributed to the var's name, not lost.
+var rawGH = func(args ...string) *exec.Cmd { return exec.Command("gh", args...) }

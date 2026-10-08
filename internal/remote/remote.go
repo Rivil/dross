@@ -27,6 +27,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/gitrun"
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 var (
@@ -84,6 +87,13 @@ type Target struct {
 	// shell, so a value that is not a plain canonical absolute path is refused
 	// rather than quoted and hoped for.
 	ScratchBase string
+	// Lock is who takes the host lock for this run and how long they wait for
+	// it. It rides on the target for the same reason Env does: every remote
+	// command in a run is issued under the same hold, and the holder's
+	// identity is what a waiter, `verify status` and doctor name. A zero Lock
+	// is a valid target for commands that do not lock (a probe, a status
+	// read); the callers that DO lock refuse a zero holder themselves.
+	Lock LockSpec
 }
 
 // EnvVar is one variable to export on the remote.
@@ -151,7 +161,7 @@ func (t Target) Validate() error {
 			return fmt.Errorf("remote environment name %q is not a plain variable name: %w", e.Name, ErrUnsafeTarget)
 		}
 	}
-	return nil
+	return t.Lock.Holder.validate()
 }
 
 // In returns the same target rooted at a subdirectory of its workdir — the
@@ -326,8 +336,12 @@ func RunDir(runID string) (string, error) {
 	if runID == "" {
 		return "", fmt.Errorf("remote: empty run id: %w", ErrUnsafeTarget)
 	}
-	if runID != path.Base(runID) || runID == "." || runID == ".." {
-		return "", fmt.Errorf("remote: run id %q is not a single path segment: %w", runID, ErrUnsafeTarget)
+	// The segment test is pathfence's — one containment rule, not two — but the
+	// refusal stays wrapped in ErrUnsafeTarget. Callers distinguish a refusal
+	// from a transport failure on that sentinel, so returning a bare pathfence
+	// error here would break every one of them.
+	if err := pathfence.Segment("run id", runID); err != nil {
+		return "", fmt.Errorf("remote: %w: %w", err, ErrUnsafeTarget)
 	}
 	return path.Join(RunsDirName, runID), nil
 }
@@ -355,6 +369,24 @@ func RunDir(runID string) (string, error) {
 // existence is the completion signal: a run that died — host rebooted, OOM
 // killer, someone's `pkill` — leaves no exit file, which is what makes
 // "finished with failures" distinguishable from "never finished" at fetch time.
+//
+// The host lock is taken INSIDE the detached job, after any --at sleep and
+// before the state file says running. Inside, because a lock taken by the
+// outer chain belongs to the ssh session and is released the moment ssh
+// returns — which is immediately. After the sleep, because a run that locked
+// and then slept would hold the host idle for the hours it was told to wait.
+// Before running, because a state file that said running while the job sat
+// in flock would make `verify status` lie about what the host is doing. The
+// job therefore starts as `scheduled` whether or not it has an --at: both are
+// "dispatched, not yet started", and the reason it has not started (a future
+// instant, or another holder) is what a status read distinguishes.
+//
+// A host without flock finishes at once with exit 127 and a log line naming
+// the tool, rather than measuring unlocked or sitting at scheduled forever.
+// The dispatching side probes for the tool before it pushes anything, so this
+// is belt and braces — but the belt is on the laptop and the braces are here,
+// and a refusal that only lived on one side would be lost the day the other
+// side's check was refactored away.
 func DetachScript(t Target, runDir string, argv []string, notBefore time.Time) (string, error) {
 	if err := t.Validate(); err != nil {
 		return "", err
@@ -364,6 +396,17 @@ func DetachScript(t Target, runDir string, argv []string, notBefore time.Time) (
 	}
 	if runDir == "" {
 		return "", fmt.Errorf("remote: empty run directory: %w", ErrUnsafeTarget)
+	}
+	if t.Lock.Holder.RunID == "" {
+		// A detached job that holds the host must be nameable by whoever
+		// waits on it. A blank holder is a lock nobody can explain.
+		return "", fmt.Errorf("remote: detached run on %q has no lock holder run id: %w", t.Host, ErrUnsafeTarget)
+	}
+	// Always the unbounded policy: an attached leg waits for the host, and a
+	// detached one has even less reason not to — there is no session to hold.
+	lock, err := LockPrelude(LockSpec{Holder: t.Lock.Holder, Wait: Forever})
+	if err != nil {
+		return "", err
 	}
 
 	q := func(s string) string { return shellQuote(s) }
@@ -378,11 +421,23 @@ func DetachScript(t Target, runDir string, argv []string, notBefore time.Time) (
 	var inner strings.Builder
 	if !notBefore.IsZero() {
 		fmt.Fprintf(&inner, "__t=%d; __n=$(date +%%s); "+
-			"if [ \"$__t\" -gt \"$__n\" ]; then sleep $((__t - __n)); fi; ",
+			"if [ \"$__t\" -gt \"$__n\" ]; then sleep $((__t - __n)); fi\n",
 			notBefore.Unix())
 	}
-	// Written after the sleep, so a scheduled run reads as scheduled until it
-	// actually starts rather than from the moment it was dispatched.
+	inner.WriteString(lock)
+	// The lock's outcome decides whether the tool runs at all. Each refusal
+	// records an exit code and moves the state to finished so a collect sees
+	// a run that ended, not one that is still waiting; the protocol lines the
+	// prelude printed above are already in the log, naming the reason.
+	inner.WriteString("if [ \"$__lock\" = noflock ]; then " +
+		"printf '%s\\n' 'flock is not installed on this host — the host lock needs it and the run did not start; run dross doctor'; " +
+		"printf '%s\\n' 127 > " + exitPath + "; printf '%s' finished > " + statePath + "; " +
+		"elif [ \"$__lock\" != acquired ]; then " +
+		"printf '%s\\n' 'the host lock could not be taken and the run did not start; see the lock= line above'; " +
+		"printf '%s\\n' 126 > " + exitPath + "; printf '%s' finished > " + statePath + "; " +
+		"else\n")
+	// Written after the sleep AND the lock, so a run reads as scheduled until
+	// it actually starts rather than from the moment it was dispatched.
 	inner.WriteString("printf '%s' running > " + statePath + "; ")
 	for i, a := range argv {
 		if i > 0 {
@@ -392,14 +447,13 @@ func DetachScript(t Target, runDir string, argv []string, notBefore time.Time) (
 	}
 	// `$?` is captured before anything else can overwrite it, and the state
 	// file is only moved to finished once the code is durably recorded — a
-	// reader that saw finished with no exit file would have to guess.
+	// reader that saw finished with no exit file would have to guess. fd 9
+	// stays open across the tool and is released when this shell exits: no
+	// unlock is written here, on purpose (see LockPrelude).
 	inner.WriteString("; __c=$?; printf '%s\\n' \"$__c\" > " + exitPath +
-		"; printf '%s' finished > " + statePath)
+		"; printf '%s' finished > " + statePath + "; fi")
 
-	initial := "running"
-	if !notBefore.IsZero() {
-		initial = "scheduled"
-	}
+	initial := "scheduled"
 
 	var b strings.Builder
 	writePreamble(&b, t)
@@ -435,6 +489,12 @@ func DetachScript(t Target, runDir string, argv []string, notBefore time.Time) (
 // has not written anything yet" and "the run directory is gone" is the
 // difference between waiting and reporting a lost run — c-6's distinction, and
 // one that three empty values on their own cannot express.
+//
+// The host lock's state rides along in the same round trip (see
+// LockStatusScript): a run that reads as scheduled is either waiting for its
+// --at instant or waiting on whoever holds the host, and only the lock's
+// holder record can say which. A second ssh for that would double the cost
+// of every status listing.
 func StatusScript(t Target, runDir string) (string, error) {
 	if err := t.Validate(); err != nil {
 		return "", err
@@ -451,6 +511,7 @@ func StatusScript(t Target, runDir string) (string, error) {
 			q(path.Join(runDir, f)) + " 2>/dev/null)\"")
 	}
 	b.WriteByte('\n')
+	b.WriteString(LockStatusScript())
 	return b.String(), nil
 }
 
@@ -466,6 +527,12 @@ type RunStatus struct {
 	ExitCode  int
 	HasExit   bool
 	PID       int
+	// Lock is the host lock's state as the same round trip probed it. Zero
+	// when the output carried no lock lines at all — an older script, or a
+	// probe that never ran — which readers treat as "unknown", never as free.
+	Lock LockStatus
+	// HasLock reports whether Lock was read at all.
+	HasLock bool
 }
 
 // ParseStatus reads StatusScript's output.
@@ -476,9 +543,14 @@ type RunStatus struct {
 func ParseStatus(out string) (RunStatus, error) {
 	var s RunStatus
 	seen := false
+	var lockLines []string
 	for _, line := range strings.Split(out, "\n") {
 		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
 		if !ok {
+			continue
+		}
+		if k == "tool" || k == "lock" || strings.HasPrefix(k, "holder.") {
+			lockLines = append(lockLines, strings.TrimSpace(line))
 			continue
 		}
 		switch k {
@@ -486,12 +558,16 @@ func ParseStatus(out string) (RunStatus, error) {
 			s.DirExists = v == "yes"
 			seen = true
 		case "state":
-			s.State = v
+			st, err := protocolToken("run state", v)
+			if err != nil {
+				return RunStatus{}, err
+			}
+			s.State = st
 		case "exit":
 			if v != "" {
 				n, err := strconv.Atoi(v)
 				if err != nil {
-					return RunStatus{}, fmt.Errorf("remote: unreadable exit code %q: %w", v, err)
+					return RunStatus{}, unreadableField("exit code", v)
 				}
 				s.ExitCode, s.HasExit = n, true
 			}
@@ -499,7 +575,7 @@ func ParseStatus(out string) (RunStatus, error) {
 			if v != "" {
 				n, err := strconv.Atoi(v)
 				if err != nil {
-					return RunStatus{}, fmt.Errorf("remote: unreadable pid %q: %w", v, err)
+					return RunStatus{}, unreadableField("pid", v)
 				}
 				s.PID = n
 			}
@@ -507,6 +583,13 @@ func ParseStatus(out string) (RunStatus, error) {
 	}
 	if !seen {
 		return RunStatus{}, fmt.Errorf("remote: no status lines in output")
+	}
+	if len(lockLines) > 0 {
+		ls, err := ParseLockStatus(strings.Join(lockLines, "\n"))
+		if err != nil {
+			return RunStatus{}, err
+		}
+		s.Lock, s.HasLock = ls, true
 	}
 	return s, nil
 }
@@ -521,6 +604,14 @@ func ParseStatus(out string) (RunStatus, error) {
 //     deletion, and every report location is gitignored, so a stale remote
 //     REPORT survives this. Staleness of reports is the launcher's explicit rm,
 //     not this flag.
+//   - RunsProtectRule keeps --delete away from RunsDirName. That directory
+//     exists only on the host — nothing on this side ever creates it, so it is
+//     neither tracked nor gitignored here, and the exclude list (built from
+//     what git ignores LOCALLY) never names it. Without the protect rule every
+//     sync — a `dross test` while a leg is in flight, a second phase's
+//     dispatch — deleted the live run's state/exit/pid directory out from
+//     under it: `verify results` then reported the run gone while gremlins
+//     kept burning the host's cores as an orphan. Measured 2026-09-13.
 //   - the ignore rule keeps dependency dirs and build output off the wire. In
 //     a git work tree it is --exclude-from naming the repo's own ignored-path
 //     list, asked of git rather than approximated; elsewhere it stays the
@@ -569,6 +660,7 @@ func SyncArgs(t Target, localRoot string) ([]string, func(), error) {
 		"rsync",
 		"-az",
 		"--delete",
+		RunsProtectRule,
 		ignore,
 		// The trailing slash is load-bearing: without it rsync creates
 		// <workdir>/<basename>/ and every remote path in the run is off by one
@@ -577,6 +669,13 @@ func SyncArgs(t Target, localRoot string) ([]string, func(), error) {
 		t.Host + ":" + t.Workdir,
 	}, cleanup, nil
 }
+
+// RunsProtectRule is the rsync filter that shields RunsDirName on the host from
+// --delete. `P` is rsync's protect modifier: the receiver keeps a matching
+// path even though the sender has no such file. Anchored with a leading /
+// so only the workdir's own runs directory is meant, and written as one argv
+// element without shell quotes for the same reason gitignoreMergeRule is.
+const RunsProtectRule = "--filter=P /" + RunsDirName
 
 // ignoreRule returns the single rsync argv element that keeps ignored paths off
 // the wire, plus a cleanup func for any temp file it had to write.
@@ -629,9 +728,11 @@ func ignoreRule(root string) (string, func(), error) {
 	}
 	// -z because git C-style-quotes paths with unusual characters otherwise,
 	// and a quoted path is not the path rsync needs to match.
-	out, err := exec.Command("git", "-C", root, "ls-files",
+	// Raw, not Read: trimming would eat nothing today, but a NUL listing is
+	// content, and the one place it is sliced is the marked loop below.
+	out, err := gitrun.Raw(root, "ls-files",
 		"--others", "--ignored", "--exclude-standard",
-		"--directory", "--no-empty-directory", "-z").Output()
+		"--directory", "--no-empty-directory", "-z")
 	if err != nil {
 		return "", noop, fmt.Errorf("listing ignored paths in %s: %w", root, err)
 	}
@@ -641,7 +742,8 @@ func ignoreRule(root string) (string, func(), error) {
 	}
 	cleanup := func() { os.Remove(f.Name()) }
 	var b strings.Builder
-	for _, p := range strings.Split(string(out), "\x00") {
+	//dross:taint-cleared git ls-files -z --others --ignored prints NUL-separated paths the repo ignores; each entry becomes one anchored rsync exclude pattern, and nothing else of git's output is kept
+	for _, p := range strings.Split(out, "\x00") {
 		if p == "" {
 			continue
 		}
@@ -674,8 +776,8 @@ const gitignoreMergeRule = "--filter=:- .gitignore"
 // isGitWorkTree reports whether root is inside a git work tree. Used to choose
 // between asking git and falling back, so a plain directory is not an error.
 func isGitWorkTree(root string) bool {
-	out, err := exec.Command("git", "-C", root, "rev-parse", "--is-inside-work-tree").Output()
-	return err == nil && strings.TrimSpace(string(out)) == "true"
+	out, err := gitrun.Trim(root, "rev-parse", "--is-inside-work-tree")
+	return err == nil && out == "true"
 }
 
 // FetchArgs returns the argv that copies remoteRel — a path relative to the
@@ -792,6 +894,7 @@ var commandFn = buildCommand
 // entry with a reason in internal/cmd/subprocargs_audit_test.go — accommodation
 // that someone had to write down, rather than a silence nobody chose.
 func buildCommand(argv []string, stdin string) *exec.Cmd {
+	//dross:exec-exempt argv[0] is always the literal ssh or rsync chosen by SSHArgs/SyncArgs/FetchArgs, and every operand is validated against the host and workdir allowlist before the argv exists; any repo-authored line this transport CARRIES is consent-checked by the caller before dispatch (runTestLanes, remote bootstrap and lane preview all resolve the lane grant first)
 	cmd := exec.Command(argv[0])
 	cmd.Args = argv
 	if stdin != "" {
@@ -901,7 +1004,8 @@ func parseCores(host, out string) (int, error) {
 	s := strings.TrimSpace(out)
 	n, err := strconv.Atoi(s)
 	if err != nil {
-		return 0, fmt.Errorf("remote %s: unreadable core count %q: %w", host, s, ErrRemoteCommand)
+		fmt.Fprintf(diagStderr, "remote %s: the core-count probe printed %q\n", host, s)
+		return 0, fmt.Errorf("remote %s: unreadable core count (printed above): %w", host, ErrRemoteCommand)
 	}
 	if n <= 0 {
 		return 0, fmt.Errorf("remote %s: reported %d cores: %w", host, n, ErrRemoteCommand)

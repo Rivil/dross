@@ -1,0 +1,6 @@
+{
+  "remote_defaults": {
+    "provider": "github"
+  },
+  "telemetry": {}
+}

@@ -1,0 +1,207 @@
+// Sink corpus for the exec-output taint engine (TestExecTaintSinks): where a
+// spawn-derived value may end. Terminal writes — os.Stdout/os.Stderr, cobra's
+// OutOrStdout/ErrOrStderr, fmt.Print* — are clean. An error, a file, the
+// environment and the mutation recorder's text parameter are escapes. The
+// clearance model lets an int or a bool through and nothing else: TrimSpace,
+// Split, Fields and Sprintf keep the text, and so does a rune.
+//
+// Every transform-set package is called somewhere in this corpus or in
+// sources.go.txt (TestTaintTransformSetIsExercised).
+package sinks
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"unicode"
+
+	"github.com/spf13/cobra"
+
+	"github.com/Rivil/dross/internal/mutation"
+)
+
+// ---- terminal: the stream ends on the user's screen ----
+
+func toStderr(c *exec.Cmd) {
+	out, _ := c.Output()
+	fmt.Fprintln(os.Stderr, string(out))
+	os.Stderr.Write(out)
+}
+
+func toCobra(cmd *cobra.Command, c *exec.Cmd) {
+	out, _ := c.Output()
+	fmt.Fprint(cmd.ErrOrStderr(), string(out))
+	cmd.OutOrStdout().Write(out)
+}
+
+func toStdout(c *exec.Cmd) {
+	out, _ := c.Output()
+	fmt.Printf("%s", out)
+	fmt.Println(string(out))
+}
+
+// Printf mirrors internal/cmd/root.go's stdout wrapper: taint followed into it
+// ends at fmt.Printf.
+func Printf(format string, a ...any) { fmt.Printf(format, a...) }
+
+func viaWrapper(c *exec.Cmd) {
+	out, _ := c.Output()
+	Printf("%s\n", out)
+}
+
+// ---- a writer that is not the terminal carries the stream onward ----
+
+func intoBuilder(c *exec.Cmd) error {
+	out, _ := c.Output()
+	var b strings.Builder
+	fmt.Fprint(&b, string(out))
+	return errors.New(b.String()) // WANT taint
+}
+
+func intoBuffer(c *exec.Cmd) error {
+	out, _ := c.Output()
+	var buf bytes.Buffer
+	fmt.Fprint(&buf, out)
+	return errors.New(buf.String()) // WANT taint
+}
+
+// ---- unknown externals are escapes, never allowed by default ----
+
+func toFile(c *exec.Cmd, p string) {
+	out, _ := c.Output()
+	_ = os.WriteFile(p, out, 0o600) // WANT taint
+}
+
+func toEnv(c *exec.Cmd) {
+	out, _ := c.Output()
+	_ = os.Setenv("DROSS_LAST", strings.TrimSpace(string(out))) // WANT taint
+}
+
+// ---- the recorder takes counts, never text ----
+
+func recordedText(c *exec.Cmd) error {
+	out, _ := c.Output()
+	seen := mutation.Observed(len(out))
+	return mutation.RecordToolFailure(string(out), 1, seen) // WANT taint
+}
+
+func recordedCount(c *exec.Cmd) error {
+	out, _ := c.Output()
+	return mutation.RecordToolFailure("git", 1, mutation.Observed(len(out)))
+}
+
+// ---- clearance: an int or a bool clears; text stays text ----
+
+func parsed(c *exec.Cmd) error {
+	out, _ := c.Output()
+	n, err := strconv.Atoi(string(out))
+	if errors.Is(err, os.ErrNotExist) {
+		return errors.New("impossible, but errors.Is must not taint the sentinel")
+	}
+	if err != nil {
+		return fmt.Errorf("parse count: %w", err) // WANT taint
+	}
+	return fmt.Errorf("count %d", n)
+}
+
+func tested(c *exec.Cmd) error {
+	out, _ := c.Output()
+	s := string(out)
+	if strings.Contains(s, "x") || strings.HasPrefix(s, "y") || s == "z" || len(s) > 3 {
+		return errors.New("fixed prose")
+	}
+	return fmt.Errorf("%v %v %v %d %v", strings.Contains(s, "a"), strings.HasPrefix(s, "b"), s == "c", len(s),
+		slices.Contains(strings.Split(s, "\n"), "d"))
+}
+
+func trimmed(c *exec.Cmd) error {
+	out, _ := c.Output()
+	return errors.New(strings.TrimSpace(string(out))) // WANT taint
+}
+
+func split(c *exec.Cmd) error {
+	out, _ := c.Output()
+	return errors.New(strings.Split(string(out), "\n")[0]) // WANT taint
+}
+
+func fielded(c *exec.Cmd) error {
+	out, _ := c.Output()
+	return errors.New(strings.Fields(string(out))[0]) // WANT taint
+}
+
+func formatted(c *exec.Cmd) error {
+	out, _ := c.Output()
+	return errors.New(fmt.Sprintf("got %s", out)) // WANT taint
+}
+
+func trimmedBytes(c *exec.Cmd) error {
+	out, _ := c.Output()
+	return errors.New(string(bytes.TrimSpace(out))) // WANT taint
+}
+
+// ---- a rune is an integer that carries text ----
+
+func runeLoop(c *exec.Cmd) error {
+	out, _ := c.Output()
+	r := strings.NewReader(string(out))
+	var b strings.Builder
+	for {
+		ch, _, err := r.ReadRune()
+		if err != nil {
+			break
+		}
+		b.WriteRune(ch)
+	}
+	return errors.New(b.String()) // WANT taint
+}
+
+func decodeLoop(c *exec.Cmd) error {
+	out, _ := c.Output()
+	var b strings.Builder
+	for _, ch := range string(out) {
+		b.WriteRune(unicode.ToUpper(ch))
+	}
+	return errors.New(b.String()) // WANT taint
+}
+
+// ---- the rest of the transform set keeps the text ----
+
+var shaLine = regexp.MustCompile(`[0-9a-f]{40}`)
+
+func matched(c *exec.Cmd) error {
+	out, _ := c.Output()
+	return errors.New(shaLine.FindString(string(out))) // WANT taint
+}
+
+func joined(c *exec.Cmd, root string) error {
+	out, _ := c.Output()
+	_, err := os.ReadFile(filepath.Join(root, string(out))) // WANT taint
+	return err
+}
+
+func sorted(c *exec.Cmd) error {
+	out, _ := c.Output()
+	lines := strings.Split(string(out), "\n")
+	sort.Strings(lines)
+	return errors.New(lines[0]) // WANT taint
+}
+
+type ghPR struct{ URL string }
+
+func decoded(c *exec.Cmd) error {
+	out, _ := c.Output()
+	var pr ghPR
+	if err := json.Unmarshal(out, &pr); err != nil {
+		return errors.New("unparseable")
+	}
+	return errors.New(pr.URL) // WANT taint
+}

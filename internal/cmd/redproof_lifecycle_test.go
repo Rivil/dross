@@ -125,7 +125,7 @@ func TestShipRepointsDoomedPin(t *testing.T) {
 	if hasDoctorIssue(lines, "x") {
 		t.Errorf("doctor still reports an issue after the merge: %+v", lines)
 	}
-	docSHA, err := redProofDocSHA(dir, doc)
+	docSHA, err := redProofDocSHA(containedDoc(t, dir, doc))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestDoomedPinIsNotRotted(t *testing.T) {
 	dir, _, _, _ := doomedShipFixture(t)
 	root := filepath.Join(dir, ".dross")
 
-	pins, err := discoverRedProofPins(root)
+	pins, err := discoverRedProofPins(root, dir)
 	if err != nil {
 		t.Fatal(err)
 	}

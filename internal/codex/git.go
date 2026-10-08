@@ -1,8 +1,9 @@
 package codex
 
 import (
-	"os/exec"
 	"strings"
+
+	"github.com/Rivil/dross/internal/gitrun"
 )
 
 // recentLog returns up to 5 recent commit subjects that touched files
@@ -16,8 +17,9 @@ func recentLog(dir string) ([]string, error) {
 	// leading dash as an option wherever it appears, not only in ref position.
 	// The token is spelled out here rather than imported: internal/codex must
 	// not depend on internal/cmd, and one shared constant is not worth
-	// inverting that dependency.
-	cmd := exec.Command("git", "-C", dir,
+	// inverting that dependency. A log is content, so it goes through
+	// gitrun.Read, which clears nothing.
+	out, err := gitrun.Read(dir,
 		"log",
 		"--max-count=5",
 		"--no-merges",
@@ -25,12 +27,11 @@ func recentLog(dir string) ([]string, error) {
 		"--", // end of options; everything after is a pathspec
 		dir,
 	)
-	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
 	var lines []string
-	for _, l := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+	for _, l := range strings.Split(out, "\n") {
 		l = strings.TrimSpace(l)
 		if l != "" {
 			lines = append(lines, l)

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/mutationcfg"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 )
@@ -170,12 +171,20 @@ func TestBothSitesBuildTheSameGremlins(t *testing.T) {
 	}
 	fromVerify := adapterByName(t, adapters, "gremlins").(*mutation.Gremlins)
 
-	mt, err := resolveMutationTuning(p, root)
+	mt, err := resolveMutationTuning(p, root, "", remote.Forever)
 	if err != nil {
 		t.Fatalf("resolveMutationTuning: %v", err)
 	}
-	fromDrain := mt.gremlins(fromVerify.ProjectRoot, p, nil)
+	fromDrain := mt.Gremlins(fromVerify.ProjectRoot, p, nil)
 
+	// Each site mints its own run id on the host lock (a second-resolution
+	// stamp), which is the one field the two are MEANT to differ on; the
+	// holder's project and wait must still agree.
+	if fromVerify.Remote.Lock.Holder.RunID == "" || fromDrain.Remote.Lock.Holder.RunID == "" {
+		t.Errorf("a site built a remote target with no lock holder: verify=%+v drain=%+v",
+			fromVerify.Remote.Lock, fromDrain.Remote.Lock)
+	}
+	fromVerify.Remote.Lock.Holder.RunID, fromDrain.Remote.Lock.Holder.RunID = "", ""
 	if !reflect.DeepEqual(fromVerify, fromDrain) {
 		t.Errorf("the two construction sites disagree:\n verify: %+v\n drain:  %+v", fromVerify, fromDrain)
 	}
@@ -255,7 +264,7 @@ func TestGrantDropsTheDockerPrefixAtBothSites(t *testing.T) {
 	stubProbe(t, 32, nil)
 
 	p := loadWiringProject(t, root)
-	if dockerPrefix(p) == "" {
+	if mutationcfg.DockerPrefix(p) == "" {
 		t.Fatal("the fixture is not in docker mode — this test would prove nothing")
 	}
 
@@ -273,11 +282,11 @@ func TestGrantDropsTheDockerPrefixAtBothSites(t *testing.T) {
 	}
 
 	// The drain's site agrees.
-	mt, err := resolveMutationTuning(p, root)
+	mt, err := resolveMutationTuning(p, root, "", remote.Forever)
 	if err != nil {
 		t.Fatal(err)
 	}
-	g := mt.gremlins(filepath.Dir(root), p, nil)
+	g := mt.Gremlins(filepath.Dir(root), p, nil)
 	if g.Prefix != "" || g.Remote == nil {
 		t.Errorf("the drain site disagrees: Prefix=%q Remote=%+v", g.Prefix, g.Remote)
 	}
@@ -305,7 +314,7 @@ func TestMutualExclusionStaysUnreachableFromBothSites(t *testing.T) {
 				t.Errorf("docker=%v: adapter %q carries BOTH a prefix and a target", docker, a.Name())
 			}
 		}
-		mt, err := resolveMutationTuning(p, root)
+		mt, err := resolveMutationTuning(p, root, "", remote.Forever)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -321,7 +330,7 @@ func TestMutualExclusionStaysUnreachableFromBothSites(t *testing.T) {
 func TestNoGrantKeepsTheDockerPrefixUnchanged(t *testing.T) {
 	root := wiringFixture(t, nil, true)
 	p := loadWiringProject(t, root)
-	want := dockerPrefix(p)
+	want := mutationcfg.DockerPrefix(p)
 	if want == "" {
 		t.Fatal("the fixture is not in docker mode")
 	}
@@ -335,7 +344,7 @@ func TestNoGrantKeepsTheDockerPrefixUnchanged(t *testing.T) {
 			t.Errorf("adapter %q prefix = %q, want %q", a.Name(), got, want)
 		}
 	}
-	mt, err := resolveMutationTuning(p, root)
+	mt, err := resolveMutationTuning(p, root, "", remote.Forever)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,5 +426,46 @@ func TestSkipMutationNeedsNoRemote(t *testing.T) {
 	}
 	if *calls != 0 {
 		t.Errorf("--skip-mutation probed the remote %d times", *calls)
+	}
+}
+
+// TestAdapterProjectRootIsTheRepoRootFromASubdirectory: ProjectRoot is the
+// rsync SOURCE a remote run pushes onto the granted workdir with --delete.
+// FindRoot resolves .dross from any subdirectory, so a verify launched from
+// one has to push the same tree as one launched from the root — with cwd as
+// the source, `cd web && dross verify` synced web/ over the whole remote
+// tree and deleted every sibling (feastahead on helicon, 2026-09-13).
+func TestAdapterProjectRootIsTheRepoRootFromASubdirectory(t *testing.T) {
+	root := wiringFixture(t, map[string]string{
+		"mutation_remote_host":    "helicon",
+		"mutation_remote_workdir": "/srv/dross",
+	}, false)
+	stubProbe(t, 32, nil)
+	repo := filepath.Dir(root)
+	sub := filepath.Join(repo, "web")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, sub)
+
+	adapters, _, err := configuredAdapters(loadWiringProject(t, root), root, false)
+	if err != nil {
+		t.Fatalf("configuredAdapters: %v", err)
+	}
+	for _, a := range adapters {
+		var got string
+		switch v := a.(type) {
+		case *mutation.Gremlins:
+			got = v.ProjectRoot
+		case *mutation.Stryker:
+			got = v.ProjectRoot
+		case *mutation.StrykerNet:
+			got = v.ProjectRoot
+		default:
+			t.Fatalf("unexpected adapter %T", a)
+		}
+		if got != repo {
+			t.Errorf("%s: ProjectRoot = %q, want the repo root %q (cwd was %q)", a.Name(), got, repo, sub)
+		}
 	}
 }

@@ -1,0 +1,80 @@
+[verify]
+  phase = "exec-consent-completeness"
+  generated_at = 2026-09-04T11:34:08.475336Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-09-04T11:35:31.264164Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.972972972972973
+  mutants_killed = 1548
+  mutants_survived = 43
+  mutants_not_covered = 43
+  mutants_in_scope = 1591
+  unclassified_in_scope = 0
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 1548
+    survived = 43
+    timeout = 0
+    in_scope = 1591
+    score = 0.972972972972973
+    file_count = 43
+    measured_on = "helicon"
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/execconsent_audit_test.go:222:TestEverySpawnSiteGatedOrExempt", "internal/cmd/execconsent_audit_test.go:1949:TestExecGatingIsANameRuleNotARoster", "internal/cmd/execconsent_audit_test.go:397:TestExecConsentVerdictIgnoresBinaryName", "internal/cmd/execconsent_audit_test.go:254:TestDroppingAScanRootFailsTheFloor"]
+  notes = "The gate derives sites from the AST of the live tree and fails on any ungated one. No-roster is proven twice: an invented Consented identifier gates its caller, and two ungated sites differing only in binary name produce identical verdicts."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/execconsent_audit_test.go:222:TestEverySpawnSiteGatedOrExempt", "internal/cmd/execconsent_audit_test.go:1854:TestExecUnreachableIsAFinding", "internal/cmd/execconsent_audit_test.go:1876:TestExecMixedReachNeedsAMarker", "internal/cmd/execconsent_audit_test.go:1916:TestExecGatedOnlySiteRejectsAMarker", "internal/cmd/execconsent_audit_test.go:411:TestExecConsentMarkerGrammar", "internal/cmd/execconsent_audit_test.go:446:TestExecConsentSkipsTestFiles"]
+  notes = "Both directions bite: an unmarked ungated site is a finding, a site reachable from nothing fails closed rather than passing as nothing-to-gate, and a marker on an already-gated site is itself a finding — so the sweep is not clearable by marking. Marker grammar rejects a bare marker and a one-word reason."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/survivor_drain_consent_test.go:92:TestDrainRefusesWithoutConsent", "internal/cmd/survivor_drain_consent_test.go:116:TestDrainReportRefusesWithoutConsent", "internal/cmd/survivor_drain_consent_test.go:142:TestDrainGateOpensWithConsent"]
+  notes = "The refusal is asserted as zero spawns, not just a non-nil error: go list, the mutation adapter and go test -coverprofile all count zero. --report is covered separately because its coverage pass spawns the suite. The gate is proven to open, so it is not a brick."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/execconsent_audit_test.go:352:TestExecConsentFindingNamesFileLineAndRemedy", "internal/cmd/testdata/exec_consent/ungated.go.txt"]
+  notes = "Fixture introduces one ungated spawn beside one legitimate site; the test asserts exactly two sites and one finding, and that the finding carries the file, the looked-up line number, and the remedy string 'gate it or mark it exempt'. The line is derived from the fixture, so a comment added to it does not falsify the test."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/execconsent_docs_test.go:62:TestGateCommentDescribesTheEnumeratedSurface", "internal/cmd/execconsent_docs_test.go:84:TestGateCommentPointerResolves", "internal/cmd/execconsent_docs_test.go:112:TestNoCommandCountSurvivesAnywhere", "internal/cmd/execconsent_docs_test.go:160:TestPromptsDescribeTheGateAsEnumerated", "internal/cmd/execconsent_docs_test.go:190:TestDoctorNamesTheGatedSurface"]
+  notes = "All three named surfaces are asserted: execGatedCommands' comment (no closed-set framing, no command count, points at a test name proven to exist), doctor's Exec consent section (names survivor drain and the exemption marker, no count), and verify/execute/quick.md. The count grep is repo-wide over every .go file and every shipped prompt, so the rot cannot survive in a fourth file. Confirmed live in this run's `dross doctor` output."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/execconsent_audit_test.go:1773:TestExecReachCrossesPackages", "internal/cmd/execconsent_audit_test.go:2346:TestMutationSpawnsAreGatedViaVerify", "internal/cmd/execconsent_audit_test.go:2400:TestDeletingVerifysGateFlagsEveryMutationSpawn", "internal/cmd/execconsent_audit_test.go:2454:TestAnExtraHopKeepsTheAttribution", "internal/cmd/execconsent_audit_test.go:1799:TestExecReachDoesNotDegenerate", "internal/cmd/execconsent_audit_test.go:1827:TestExecReachFollowsVarSeams"]
+  notes = "The exact verify -> internal/mutation -> gremlins path named in the criterion is asserted on the real graph, and the attribution is proven load-bearing: deleting verify's requireExecConsent must flag every mutation spawn, and an extra intermediate hop must not move the verdict. Precision is held by the degeneracy check (doctor must NOT reach gremlins) and var-seam following in both alias and literal spellings."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/lane_remote_consent_test.go:91:TestStaleLaneGrantRefusesBeforeTheHostIsContacted", "internal/cmd/lane_remote_consent_test.go:131:TestUngrantedLanesReachNeitherPreflightNorSync", "internal/cmd/lane_remote_consent_test.go:160:TestUnreachableHostCannotMaskALaneRefusal", "internal/cmd/lane_remote_consent_test.go:186:TestLaneGrantedForItsCommandIsRefusedOnceAPrepareAppears", "internal/cmd/lane_remote_consent_test.go:230:TestBootstrapInstallRefusalIsLaneScoped", "internal/cmd/lane_remote_consent_test.go:279:TestPreviewDoesNotProbeForAnUngrantedLane", "internal/cmd/lane_remote_consent_test.go:311:TestPreviewStillProbesForAGrantedLane"]
+  notes = "Refused-locally is asserted as zero ssh probes and zero rsync argvs, with the host stubbed REACHABLE so a run that got as far as asking would have been told yes. Ordering is pinned by the unreachable-host case: exit must be exitLaneRefused, never exitTransport, so a dead network cannot mask the consent property. Precision half proves a granted lane still probes, so the refusal is not unconditional."
+
+[[finding]]
+  severity = "NOTE"
+  text = "43 in-scope survivors, all lifecycle=accepted and origin=inherited, all NOT_COVERED by gremlins: the known switch-case / const-initializer / no-TTY attribution ceiling, each carrying a recorded reason. Efficacy over the 1548 reachable mutants is 1.00. Zero in-diff survivors and zero unclassified — nothing to drain this run."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation measured on helicon over 1591 in-scope mutants across 43 files; 80 out-of-scope survivors filtered (files this phase did not touch)."

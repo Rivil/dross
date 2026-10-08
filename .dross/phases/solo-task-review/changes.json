@@ -1,0 +1,530 @@
+{
+  "phase": "solo-task-review",
+  "pr": 146,
+  "base": "milestone/v1.7",
+  "base_commit": "7cbf7d63bd3dc063cd85511eb1b19fa8d1082d2f",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/gate/testdata/agent_reviewer_post.json",
+        "internal/gate/testdata/agent_background_post.json",
+        "internal/gate/testdata/agent_default_async_post.json",
+        "internal/gate/fixture_test.go"
+      ],
+      "commit": "244ea49",
+      "completed_at": "2026-10-04T08:58:40.846084Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "TestCapturedAgentReviewerFixture",
+          "loc": "internal/gate/fixture_test.go:146",
+          "what": "captured Agent PostToolUse fixtures prove a foreground reviewer's verdict reaches the hook and omitClaudeMd isolates it"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/gate/review.go",
+        "internal/gate/review_test.go"
+      ],
+      "commit": "7aeff9d",
+      "completed_at": "2026-10-04T11:17:03.835988Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "recordReview",
+          "loc": "internal/gate/review.go:47",
+          "what": "PostToolUse recorder writes the reviewer's own verdict as a pass/block/stale/unavailable round bound to the reviewed tree"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/install.go",
+        "internal/cmd/reviewer_agent.go",
+        "internal/cmd/install_agent_test.go",
+        "internal/cmd/cmd_test.go",
+        "internal/cmd/hermetic_env_test.go",
+        "internal/secretscan/writers.go"
+      ],
+      "commit": "b3d6c44",
+      "completed_at": "2026-10-04T09:58:06.352516Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "reviewerStatusIn",
+          "loc": "internal/cmd/reviewer_agent.go:126",
+          "what": "dross install puts the reviewer where Claude Code reads agents; readiness reports ok/missing/stale/shadowed with a remedy"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/changes.go",
+        "internal/cmd/task.go",
+        "internal/cmd/review_attach.go",
+        "internal/cmd/review_attach_test.go"
+      ],
+      "commit": "7c57302",
+      "completed_at": "2026-10-04T10:02:52.831688Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "taskReviewFor",
+          "loc": "internal/cmd/review_attach.go:31",
+          "what": "a solo task's resolved review rides into changes.json from the recorder's ledger; failed solo tasks must be stashed first"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/cmd/review.go",
+        "internal/cmd/review_test.go",
+        "cmd/dross/main.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "internal/review/context.go",
+        "internal/review/context_test.go"
+      ],
+      "commit": "f77261c",
+      "completed_at": "2026-10-04T10:40:53.492765Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "reviewContext",
+          "loc": "internal/cmd/review.go:54",
+          "what": "dross review context writes the scoped context and prints the reviewer's exact prompt line; review status reads the ledger"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/cmd/quick.go",
+        "internal/cmd/execute.go",
+        "internal/cmd/solo_begin_test.go",
+        "cmd/dross/main.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "534ea88",
+      "completed_at": "2026-10-04T10:54:01.941757Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "quickBegin",
+          "loc": "internal/cmd/quick.go:47",
+          "what": "dross quick begin/end record a quick's mode and description; solo begins refuse without the shipped reviewer"
+        }
+      ]
+    },
+    "t-15": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_reviewer_test.go",
+        "internal/cmd/doctor_hooks_test.go",
+        "internal/cmd/testdata/cli_surface/doctor_run.txt",
+        "internal/cmd/solo_begin_test.go"
+      ],
+      "commit": "72b9f0c",
+      "completed_at": "2026-10-04T11:02:17.451237Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "reviewerSection",
+          "loc": "internal/cmd/doctor.go:1187",
+          "what": "dross doctor fails when the solo reviewer is missing, stale or shadowed, naming path and fix"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        "assets/prompts/execute.md",
+        "internal/cmd/execute_prompt_test.go"
+      ],
+      "commit": "f58f476",
+      "completed_at": "2026-10-04T11:30:00.936198Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "Solo review loop",
+          "loc": "assets/prompts/execute.md:262",
+          "what": "/dross-execute --solo reviews every task before its commit with one fix round; failed reviews stash and move on"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "assets/prompts/quick.md",
+        "internal/cmd/quick_prompt_test.go",
+        "assets/prompts/execute.md",
+        "internal/cmd/execute_prompt_test.go"
+      ],
+      "commit": "47f427c",
+      "completed_at": "2026-10-04T12:13:28.545674Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "quick solo review",
+          "loc": "assets/prompts/quick.md:128",
+          "what": "/dross-quick --solo is reviewed against its description before the commit; reviewers may run in the background"
+        }
+      ]
+    },
+    "t-18": {
+      "files": [
+        "internal/gate/commit.go",
+        "internal/gate/soloreview.go",
+        "internal/gate/soloreview_test.go",
+        "internal/cmd/gate_override_test.go",
+        "README.md"
+      ],
+      "commit": "9001669",
+      "completed_at": "2026-10-04T12:24:51.361547Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "judgeSoloReview",
+          "loc": "internal/gate/soloreview.go:27",
+          "what": "solo-review gate refuses a solo code commit without a recorded pass for exactly the committed tree"
+        }
+      ]
+    },
+    "t-19": {
+      "files": [
+        "internal/gate/scope.go",
+        "internal/gate/scope_test.go"
+      ],
+      "commit": "0cbe3bd",
+      "completed_at": "2026-10-04T10:15:59.362273Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "ArmedScope",
+          "loc": "internal/gate/scope.go:53",
+          "what": "resolves which solo task or quick a review covers and its ledger key; one context loader for verb and recorder"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/review/verdict.go",
+        "internal/review/verdict_test.go",
+        "internal/review/ledger.go",
+        "internal/review/ledger_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "eb61691",
+      "completed_at": "2026-10-04T09:02:17.820189Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "ParseVerdict",
+          "loc": "internal/review/verdict.go:80",
+          "what": "parses the reviewer's dross-verdict fence (spec findings always block, quality graded) and StateOf enforces the one-fix-round cap"
+        }
+      ]
+    },
+    "t-20": {
+      "files": [
+        "internal/gate/soloreview.go",
+        "internal/gate/downgrade_test.go"
+      ],
+      "commit": "a687f4c",
+      "completed_at": "2026-10-04T12:28:45.84684Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "judgeDowngrade",
+          "loc": "internal/gate/soloreview.go:156",
+          "what": "while a solo scope is armed with uncommitted code, dross calls that would shed its review are refused"
+        }
+      ]
+    },
+    "t-21": {
+      "files": [
+        "internal/gate/payload.go",
+        "internal/gate/fixture_test.go",
+        "internal/gate/testdata/agent_reviewer_bg_launch_post.json",
+        "internal/gate/testdata/reviewer_subagent_stop.json"
+      ],
+      "commit": "5fadaae",
+      "completed_at": "2026-10-04T11:42:21.876228Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "Decode",
+          "loc": "internal/gate/payload.go:45",
+          "what": "gate payloads include SubagentStop (agent id, type, final message); captured background launch+stop fixtures"
+        }
+      ]
+    },
+    "t-22": {
+      "files": [
+        "internal/gate/review.go",
+        "internal/gate/review_test.go",
+        "internal/gatestate/store.go",
+        "internal/gatestate/store_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "a337bba",
+      "completed_at": "2026-10-04T11:46:23.606286Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "recordReview",
+          "loc": "internal/gate/review.go:52",
+          "what": "background reviewer launches wait as pending and the agent's SubagentStop delivers the verdict round"
+        }
+      ]
+    },
+    "t-23": {
+      "files": [
+        "internal/cmd/hooks.go",
+        "internal/cmd/hooks_test.go",
+        "internal/cmd/gate.go",
+        "internal/cmd/gate_test.go",
+        "internal/cmd/doctor_hooks_test.go",
+        "internal/hooks/settings.go",
+        "internal/cmd/testdata/cli_surface/doctor_run.txt",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "955c923",
+      "completed_at": "2026-10-04T12:01:23.983882Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "userHooks",
+          "loc": "internal/cmd/hooks.go:72",
+          "what": "SubagentStop runs dross gate record so a background reviewer's verdict is recorded; doctor flags it missing"
+        }
+      ]
+    },
+    "t-24": {
+      "files": [
+        "internal/cmd/review.go",
+        "internal/cmd/review_test.go"
+      ],
+      "commit": "300837f",
+      "completed_at": "2026-10-04T12:35:21.788251Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "reviewStatus",
+          "loc": "internal/cmd/review.go:138",
+          "what": "review status tells the agent to spawn the reviewer and wait for its verdict (any spawn mode)"
+        }
+      ]
+    },
+    "t-25": {
+      "files": [
+        "internal/gate/review_test.go",
+        "internal/gate/scope_test.go",
+        "internal/gate/commit_test.go",
+        "internal/review/context_test.go",
+        "internal/review/verdict_test.go",
+        "internal/ship/body_test.go"
+      ],
+      "commit": "6719096",
+      "completed_at": "2026-10-04T14:49:19.487937Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "TestRecorderContextRebuildFailures",
+          "loc": "internal/gate/review_test.go:1",
+          "what": "tests closing verify round 1's NOT-COVERED survivors"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/treefp/treefp.go",
+        "internal/treefp/treefp_test.go",
+        "internal/review/context.go",
+        "internal/review/context_test.go",
+        "internal/secretpath/secretpath.go",
+        "internal/secretpath/secretpath_test.go",
+        "internal/gate/secrets.go"
+      ],
+      "commit": "8c70513",
+      "completed_at": "2026-10-04T09:09:53.913843Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "BuildContext",
+          "loc": "internal/review/context.go:71",
+          "what": "renders the scoped, secret-withholding review context over a config-independent whole-tree diff and digests it"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/cmd/task.go",
+        "internal/cmd/task_reason_test.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "0943fc2",
+      "completed_at": "2026-10-04T09:12:33.536104Z",
+      "landmarks": [
+        {
+          "feature": "task lifecycle",
+          "symbol": "taskStatus",
+          "loc": "internal/cmd/task.go:188",
+          "what": "task status failed --reason records why a task failed; any other status clears it"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/changes/changes.go",
+        "internal/changes/changes_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "cb29983",
+      "completed_at": "2026-10-04T09:14:51.193182Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "SetReview",
+          "loc": "internal/changes/changes.go:422",
+          "what": "changes.json carries each solo task's review outcome and resolved findings beside (never inside) its task record"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/gatestate/store.go",
+        "internal/gatestate/store_test.go",
+        "internal/gate/override.go",
+        "internal/gate/override_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/secretscan/writers.go",
+        "internal/cmd/taint_schedule_test.go"
+      ],
+      "commit": "a955623",
+      "completed_at": "2026-10-04T09:22:22.474975Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "SaveReview",
+          "loc": "internal/gatestate/store.go:166",
+          "what": "machine-local review ledger, quick marker and review context records; tamper-guard refuses their deletion as well as writes"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "assets/agents/dross-task-reviewer.md",
+        "assets/embed.go",
+        "assets/embed_test.go",
+        "internal/review/agentdef_test.go"
+      ],
+      "commit": "537cfc4",
+      "completed_at": "2026-10-04T09:25:01.695016Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "dross-task-reviewer",
+          "loc": "assets/agents/dross-task-reviewer.md:1",
+          "what": "isolated reviewer agent definition (omitClaudeMd, read-only tools, inherited model) that ends with one dross-verdict block"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/ship/body.go",
+        "internal/ship/body_test.go",
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go",
+        "internal/boardsync/toolfence_composer_test.go"
+      ],
+      "commit": "6442c6d",
+      "completed_at": "2026-10-04T09:29:14.535203Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "writeReviews",
+          "loc": "internal/ship/body.go:135",
+          "what": "PR body lists each solo task's review outcome and resolved findings, escaped and budget-capped"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "assets/prompts/verify.md",
+        "internal/cmd/verify_prompt_test.go"
+      ],
+      "commit": "95a4c39",
+      "completed_at": "2026-10-04T09:41:13.514735Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "Solo review block",
+          "loc": "assets/prompts/verify.md:226",
+          "what": "/dross-verify reports each solo task's review outcome, findings, resolutions and failed-task reasons"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-24": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "TestReviewStatusNoneHint does not assert 'status: none' itself; it relies on the fixture having no ledger, which TestReviewStatusAgreesWithLedger already shows comes out as none, and an unarmed run would still fail the 'wait for its verdict' check",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-25": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "TestReviewSectionSameLengthOrder compares strings.Index results without checking either id is present: if `t-2` were missing from the body (Index -1) the test would still pass. Asserting both indexes are \u003e= 0 would make it a real check.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-6",
+          "text": "If the tie-break were removed outright rather than reversed, the order of two same-length ids would follow Go's random map iteration, so TestReviewSectionSameLengthOrder would catch that mutant only about half the time. A reversed comparison is caught every time.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "TestReviewSectionClipsAtRuneStart's failure message slices body[strings.Index(body, \"## Reviewer\"):], which panics if the heading is absent. That only happens on the failure path, and the test still fails, but the panic hides the real diagnostic.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "TestRecorderContextRebuildFailures reaches both 'could not be rebuilt' arms: the missing spec through ContextScope and the malformed gates.toml through the BuildContext secrets error.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestReviewSectionSameLengthOrder relies on map iteration for its input order, so a mutant that drops the same-length tie-break comparator entirely may survive intermittently; reversing it (the contract's case) is caught deterministically",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
+}

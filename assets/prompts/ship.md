@@ -15,7 +15,7 @@ Open a PR for a verified phase. Pushes the `phase/<id>` branch to the provider (
    - missing `.dross/** linguist-generated=true` in `.gitattributes` (so review UIs collapse planning artefacts)
    - phase commits leaked onto local main (legacy state — heal with `dross ship recover` first)
    If anything's off, stop and have the user fix before continuing.
-4. Read `.dross/phases/<phase-id>/verify.toml` — `[verify].verdict` must be `pass`. If not, stop. Override only if the user explicitly accepts the risk: `dross ship --force-unverified`.
+4. Read `.dross/phases/<phase-id>/verify.toml` — `[verify].verdict` must be `pass`. If not, stop. A pass is also refused when it is **stale**: `dross ship` compares the tree the run measured (`[verify].measured_tree`) with the work tree, and a file outside `.dross/` and `ARCHITECTURE.md` that changed, appeared or went away since the run means the verdict no longer covers what would ship — it names those files; re-run `/dross-verify <phase-id>`. A verdict recorded before trees were kept ships with a freshness-unknown warning. Override either refusal only if the user explicitly accepts the risk: `dross ship --force-unverified`.
 5. **Verify HEAD is on `phase/<id>`** with `git symbolic-ref --short HEAD`. `dross ship` requires this — the phase branch is what gets pushed. If not on it: `dross phase checkout <phase-id>` (it should exist from `dross phase create`). Use the dross verb, never raw git — it switches through the guard that refuses a branch whose tracked `.dross/state.json` would overwrite your live machine-local one.
 6. `git status --porcelain` — must be empty. If dirty, ask user to commit or stash first.
 
@@ -93,33 +93,46 @@ carries an up-to-date `ARCHITECTURE.md` (c-6).
      per-phase heading or a "Phase NN" section — the doc is organized by feature,
      never by phase. A duplicate per-phase heading appearing means the merge
      regressed.
-4. Show the `git diff` of `ARCHITECTURE.md`. On the user's OK, commit it onto
-   `phase/<id>` (it lives at repo root, so the provider squash-merge carries it
-   into the PR):
+4. Show the `git diff` of `ARCHITECTURE.md`. On the user's OK, run the full
+   suite on the edited tree — a bare `dross test`, no selector and no `--files`
+   — before committing. The commit gate admits a commit only when a full green
+   was recorded for exactly the tree being committed, and the doc edit changed
+   that tree since verify ran:
+   ```
+   dross test
+   ```
+   On green, commit it onto `phase/<id>` (it lives at repo root, so the provider
+   squash-merge carries it into the PR):
    ```
    git add ARCHITECTURE.md
    git commit -m "docs(<phase-slug>): merge phase landmarks into ARCHITECTURE.md"
    ```
    Match the repo's existing trailer convention. The tree is clean again
-   afterwards, so §4's clean-tree re-check passes.
+   afterwards, so §4's clean-tree re-check passes. A gate refusal is a stop:
+   read its rule and remedy, and never route around one.
 
 ## 4. Ship
 
 Run `dross ship <phase-id>`, optionally with `--draft` and/or `--body-file`.
 
 The CLI:
-1. Re-checks the verify gate and that HEAD is on `phase/<id>`
-2. `git push -u origin phase/<id>`
-3. Opens the PR via the provider API
-4. Requests reviewers
-5. Updates `state.json` with the shipped action + PR URL
+1. Re-checks that HEAD is on `phase/<id>`, then the verify gate — a pass whose measured tree no longer matches the work tree is refused as stale, naming the changed files
+2. Sends `.dross` chores left on the base (a pause snapshot, a gate auto-commit) to origin: pushed straight to it when origin takes direct pushes, or — when the base is protected (`dross protect --check <base>` reads `protected`) — through a **chore PR** from `dross-chores/<base>`, armed to auto-merge as a merge commit. It prints the chore PR's URL; if auto-merge is unavailable on the repo it says so, and that PR is merged by hand. An `unknown` answer pushes nothing and names the fix.
+3. Gates `phase/<id>` on origin — fetches and compares; a branch that is ahead or new is pushed (`-u`), a level one is left alone, a behind-only one refuses naming `git pull --rebase origin phase/<id>`, a diverged one refuses naming the pull or `dross ship --force`
+4. Opens the PR via the provider API — skipped when the phase's record (or the provider, when the record carries no number) already has an open PR for `phase/<id>`
+5. Requests reviewers
+6. Commits the PR record (`chore(dross): record PR #N for <id>`) and pushes it through the same origin gate
+7. **Only then** marks the phase shipped — `state.json` and the record's status flip together, and the marker commit is pushed. Until that push lands the phase still reads verified, and `dross status` names the retry.
 
 ## 5. CI gate
 
 After the PR opens, watch CI to completion. Skip this section ONLY if the repo has no `.github/workflows/`, `.forgejo/workflows/`, `.gitea/workflows/`, `.gitlab-ci.yml`, AND the provider reports no checks for the head SHA.
 
 **Watch checks:**
-- GitHub: `gh pr checks <pr-url> --watch --fail-fast` — blocks until all checks finish; non-zero exit on failure.
+- GitHub: never gate on `gh pr checks --watch`. It exits 0 as soon as the checks registered **so far** pass, and a fast third-party check (GitGuardian, say) can be the only one registered while the Actions run is still queued — it reads green with CI unrun. Watch the runs themselves, in this order. SHA = head of `phase/<id>` (`git rev-parse origin/phase/<id>`).
+  1. Wait for the runs to register: poll `gh run list --commit <sha> --json databaseId,workflowName,status` every ~15s until it lists at least one run, for up to ~10 minutes. A repo with workflows whose run never registers in that window joins the no-checks path below — surface it, never read it as a pass.
+  2. Watch each run to completion: `gh run watch <run-id> --exit-status` — non-zero on failure.
+  3. Once every run has finished, read the full check set: `gh pr checks <pr-url>` (no `--watch`). Every check must pass, third-party ones included; one still pending → re-read after ~30s; any failure → **On failure**.
 - Forgejo / Gitea: poll every ~30s — `GET <api_base>/repos/<owner>/<repo>/commits/<sha>/status` (auth header `token $<auth_env>`). Stop when `state` ∈ `success | failure | error`. SHA = head of `phase/<id>`.
 - GitLab: poll every ~30s — `GET <api_base>/projects/<id>/pipelines?sha=<sha>` (auth header `PRIVATE-TOKEN: $<auth_env>`, or `Authorization: Bearer` when `remote.auth_scheme = bearer`); `<id>` is the URL-encoded `owner/repo` (or numeric `remote.project_id`). Read the latest pipeline's `status` and apply the locked mapping: `success` → pass (go to §6); `failed` or `canceled` → fail (drop to **On failure**); `running` / `pending` / `created` / `preparing` → keep polling; `manual` / `skipped` → **do not guess** — surface to the user and ask whether to proceed without a green pipeline. SHA = head of `phase/<id>`.
 
@@ -131,12 +144,15 @@ If the provider reports no checks were registered — GitHub/Forgejo report none
    - Forgejo: log URL is in the commit status payload (`target_url`); `WebFetch` it.
    - GitLab: the failed job's `web_url` is in the pipeline's jobs (`GET <api_base>/projects/<id>/pipelines/<pipeline-id>/jobs`); `WebFetch` the trace or surface the job URL.
 2. Diagnose. Edit + commit the fix on `phase/<id>`, one commit per logical fix following `repo.commit_convention`.
-3. `git push origin phase/<id>` — appends to the open PR. Do NOT re-run `dross ship` (would open a second PR). If you rebase or amend, use `git push --force-with-lease` (or `dross ship --force`).
-4. Loop back to "Watch checks". Cap at 3 fix iterations — if checks still fail after 3 cycles, stop and hand back to the user.
+3. `git push origin phase/<id>` — appends to the open PR, so CI re-runs on the fix.
+4. Then re-run **`dross ship <phase-id>`** — required after every fix, not optional: it recognises the open PR, pushes anything still pending on `phase/<id>`, reports the existing PR by number (the URL is the one from the first run or the provider page; `changes.json` stores no url), and re-checks the verdict's freshness. A fix to any file outside `.dross/` and `ARCHITECTURE.md` makes the pass stale and ship refuses, naming the changed files: run `/dross-verify <phase-id>`, commit its record, re-run `dross ship <phase-id>`, then continue. If ship refuses a diverged branch, `dross ship --force` is the path (it force-with-leases); if it refuses a behind-only one, `git pull --rebase origin phase/<id>` first. If you rebase or amend by hand, use `git push --force-with-lease`.
+5. Loop back to "Watch checks". Cap at 3 fix iterations — if checks still fail after 3 cycles, stop and hand back to the user.
 
 **On pass:** continue to §6.
 
 ## 6. Merge gate
+
+**Re-check freshness first:** re-run `dross ship <phase-id>` before asking to merge. A fix pushed after the PR opened is in the merge, and a pass that predates it does not cover it. If ship refuses the pass as stale, do not merge: run `/dross-verify <phase-id>`, commit its record, re-run `dross ship <phase-id>`, and go back to §5's Watch checks.
 
 `AskUserQuestion`: **"All checks passed on PR #N. Merge now?"** — options: `merge` / `hold`.
 
@@ -150,11 +166,9 @@ If `merge`:
    - GitLab: `PUT <api_base>/projects/<id>/merge_requests/<iid>/merge` body `{"squash":true}` (auth header as in §5) — the squash collapses per-task commits.
 
    **`dross phase complete` performs the local AND remote `phase/<id>` deletion, on every provider.** Never ask the provider to delete the branch as part of the merge — the merge call above is the whole step; no delete flag, no remove-source-branch field, no branch-removal API call. GitHub's delete-on-merge flag does its own raw checkout of the base branch, a branch switch outside dross's guard, and that is what destroyed a live `state.json` on a previous ship. Forgejo and GitLab merge over REST and never switch branches, so dropping provider-side teardown everywhere gives dross one teardown owner instead of a per-provider split.
-2. **Mark the board issue shipped** (no-op unless `[remote].board_sync` is on — safe to always run): `dross issue phase sync <phase-id> --status shipped`. The PR is merged but the phase isn't finalized yet, so `shipped` is the honest state here — and it's the moment the board should stop showing the phase as in-progress.
-3. **Finalize locally**: `dross phase complete <phase-id>` — switches to the base this phase was forked from (read from the phase's own record, never inferred), fast-forwards it from origin, writes the completion record into the machine-local `.dross/state.json`, then deletes `phase/<id>` locally and on origin. It commits nothing: `state.json` is gitignored, so the record rides no commit anywhere.
-4. **Close the task cards** (same no-op rule): `dross issue task sync <phase-id> --status task-complete --close`. Every task card has been sitting in `task-in-review` since its commit landed; the phase is now finished, so they all move to the task lane's terminal state at once. `task-complete` is separate from the phase lane's `complete` on purpose — the two lanes each carry their own `dross/status:` label — and `--close` requires a `--status`, so this cannot be shortened to a bare `--close`.
-5. **Close the board issue at its terminal state** (same no-op rule): `dross issue phase sync <phase-id> --status complete --close`. Closing with a `--status` rather than a bare `--close` is what keeps `shipped` and `complete` statuses dross actually emits — a bare `--close` left both as state-map keys nothing ever resolved.
-6. **Reconcile the milestone backlog** (same no-op rule): `dross issue backlog sync --phase <phase-id>`. It resolves the version from the phase's own `spec.toml`, pushes the live backlog, then closes the mirrors whose artefact has resolved — a `slug:` whose phase is now scaffolded, a routed item whose target phase has shipped, a dismissed idea. A mirror it cannot show resolved is named on stderr and left open, never closed on a guess. Exits 0 doing nothing for a phase outside any milestone.
+2. **Mark the board issue shipped** (it exits 0 and does nothing when `[board].enabled` is false; a non-zero exit is a board failure — surface it, never read it as the disabled no-op): `dross issue phase sync <phase-id> --status shipped`. The PR is merged but the phase isn't finalized yet, so `shipped` is the honest state here — and it's the moment the board should stop showing the phase as in-progress.
+3. **Finalize locally and on the board**: `dross phase complete <phase-id>` — switches to the base this phase was forked from (read from the phase's own record, never inferred), fast-forwards it from origin, writes the completion record into the machine-local `.dross/state.json`, then deletes `phase/<id>` locally and on origin. It commits nothing for the completion: `state.json` is gitignored, so the record rides no commit anywhere. Last, it finalizes the board (same `[board].enabled` rule — no board call when it is false): every task card moves to `task-complete` and the phase card to `complete`, all closed, and a card an earlier run never created is created closed. The `board.json` links that writes are committed and published like any other `.dross` chore. A board that cannot be reached never undoes the completion — complete exits non-zero naming `dross issue phase finalize <phase-id>`, which is a board failure to surface (see Recovery), not the disabled no-op.
+4. **Reconcile the milestone backlog** (same board rule: silent only when `[board].enabled` is false, a non-zero exit is a failure to surface): `dross issue backlog sync --phase <phase-id>`. It resolves the version from the phase's own `spec.toml`, pushes the live backlog, then closes the mirrors whose artefact has resolved — a `slug:` whose phase is now scaffolded, a dismissed idea, a routed item with a disposition record (its survivor accepted or measured away by the destination's verify run, or a complete destination's criterion that absorbed it). A routed item is NOT closed because its target phase shipped: a finished destination does not show the item was done (it may have been routed after the ship, or rescoped out). A mirror it cannot show resolved is named on stderr and left open, never closed on a guess. Exits 0 doing nothing for a phase outside any milestone.
 
 > **Two merge levels (v0.7 branch topology).** Phase PRs **squash-merge** into
 > their base — `milestone/<version>` when a milestone is active, else `main` —
@@ -191,7 +205,7 @@ If the PR opened but reviewer-request failed, surface that — it's non-fatal bu
 
 ## Recovery
 
-Most ships finish clean: §6's squash-merge plus `dross phase complete` fast-forwards the phase's recorded base from origin and tears down the branch. When the merge step goes sideways, recover with a dross command — **never hand-edit `.dross/` or re-commit it by hand.** That manual surgery is exactly what drifted in the past; a dross command owns the restore and the commit. The three mid-merge failure states and their one-command fixes:
+Most ships finish clean: §6's squash-merge plus `dross phase complete` fast-forwards the phase's recorded base from origin, tears down the branch, and finalizes the board. When the merge step goes sideways, recover with a dross command — **never hand-edit `.dross/` or re-commit it by hand.** That manual surgery is exactly what drifted in the past; a dross command owns the restore and the commit. The mid-flight failure states and their one-command fixes:
 
 1. **Fast-forward abort.** `dross phase complete` stops with a "fast-forward … failed" error — local main has diverged from origin/main (a stray commit on main, or a legacy completion chore). Fix: **`dross phase complete --recover`** — it resets main to origin and restores the cumulative `.dross/` tree in one shot, then finishes the completion. Pass `--recover` only after reading the abort: it is a destructive reset of local main.
 
@@ -199,7 +213,13 @@ Most ships finish clean: §6's squash-merge plus `dross phase complete` fast-for
 
 3. **Dirty tree after push.** `dross ship` returned but `git status` is not clean — an older ship left its post-push `.dross/` write uncommitted, and `dross phase complete` refuses on a dirty tree. Fix: re-run **`dross ship`** — it is idempotent and commits its own post-push `.dross/` records, leaving a clean tree. You stage nothing yourself.
 
-If you find yourself reaching for git plumbing against `.dross/`, stop — one of the three commands above already covers it.
+4. **Record push failed.** `dross ship` opened the PR but the push carrying its record was refused — the error names the retry. `dross status` reads the phase as verified, not shipped, and prints `pending: … re-run dross ship <id>`. Fix: run **`dross ship <phase-id>`** again — it recognises the open PR, pushes the record, then flips the phase to shipped. A refusal naming `git pull --rebase` or `--force` means origin's `phase/<id>` moved under you; do that first. (The mirror case — the record landed but the shipped-marker push failed — reports the phase *as* shipped and names the same re-run.)
+
+5. **Chore PR pending** (protected base). `dross phase complete` refuses, naming a chore PR and saying to re-run once it merges: the base's `.dross` chores are still waiting in that PR while origin has moved on, so the base can't fast-forward yet. This is a wait, not a divergence — never `--recover` here. Once the chore PR merges (auto-merge lands it when the required checks pass; merge it by hand if ship said auto-merge is unavailable), re-run **`dross phase complete <phase-id>`**. On a protected base complete's own completion record goes out through a chore PR as well; it prints that URL, and nothing more is needed once it merges.
+
+6. **Board not finalized.** `dross phase complete` exits non-zero saying the phase is complete but its board was not finalized — the board was unreachable, a token was missing, or a card refused its close. The completion stands; only the cards lag. Fix: once the board is reachable, run **`dross issue phase finalize <phase-id>`** from the base the phase merged into. It is the same finalizer complete runs, resumes from the links the failed run recorded, and only reads cards already at their terminal state, so re-running it is safe.
+
+If you find yourself reaching for git plumbing against `.dross/`, stop — one of the commands above already covers it.
 
 ## Subagent review panel — DEFERRED
 

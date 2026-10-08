@@ -1,0 +1,49 @@
+Interface dispatch resolved by what flows, not by who implements
+(TestExecDispatchFollowsTheFlow). One command hands dispatchlib.Drive a Quiet
+runner; Loud, in a third package, implements the same interface and spawns. A
+union over implementers would attribute Loud's spawn to the command; the call
+graph must not, because no Loud value ever reaches Drive. The test's twin
+rewrite passes Loud{} instead, and then the command must reach the spawn.
+
+-- root.go --
+package dispatchroot
+
+import (
+	"github.com/spf13/cobra"
+
+	"example.com/fixture/dispatchlib"
+	_ "example.com/fixture/dispatchloud"
+)
+
+// Quietly drives a runner that does nothing.
+func Quietly() *cobra.Command {
+	return &cobra.Command{
+		Use: "quietly",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return dispatchlib.Drive(dispatchlib.Quiet{})
+		},
+	}
+}
+
+-- lib.go --
+package dispatchlib
+
+// Runner is dispatched through an interface, so which Go runs is a question of
+// data flow.
+type Runner interface{ Go() error }
+
+type Quiet struct{}
+
+func (Quiet) Go() error { return nil }
+
+func Drive(r Runner) error { return r.Go() }
+
+-- loud.go --
+package dispatchloud
+
+import "os/exec"
+
+// Loud satisfies dispatchlib.Runner from another package and spawns.
+type Loud struct{}
+
+func (Loud) Go() error { return exec.Command("git", "gc").Run() }

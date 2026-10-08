@@ -21,6 +21,17 @@ Run a phase plan to completion. **Pair-mode by default**: propose, pause, steer,
    - `--solo` → autonomous mode
    - `--from <task-id>` → start at this task (skip earlier-wave done tasks; resume mid-phase)
 8. Detect resume state: if any task has `status = "in_progress"`, ask user "continue task X / reset to pending and pick fresh".
+9. Record the run's mode for the tool gates, once, before the per-task loop:
+   ```
+   dross execute begin <id>
+   ```
+   or, only when `--solo` was passed:
+   ```
+   dross execute begin <id> --solo
+   ```
+   In pair mode the pair-approval gate then refuses `Edit`/`Write` outside `.dross/` until the user approves the task in progress (§1c). The mode is chosen here and nowhere else: while a task is in progress the gate refuses a switch to `--solo`.
+
+   A `--solo` begin refuses unless the solo task reviewer (§1f) is installed and current — it names the problem and the fix. **Stop and ask the user to run `dross install`** (or remove the repo-level definition it names); never start a solo run without the reviewer, since every task would fail its review.
 
 Print one orientation block:
 ```
@@ -43,13 +54,12 @@ Skip this when the phase has no milestone (`PATCH` is `0` — there's no ordinal
 assign). `dross phase number` recomputes from the milestone's `phases` array, so
 it stays correct even after a phase is inserted or reordered.
 
-Mark the board issue in-progress (no-op unless `[remote].board_sync` is on — safe to always run):
+Mark the board issue in-progress (it exits 0 and does nothing when `[board].enabled` is false; a non-zero exit is a board failure — surface it, never read it as the disabled no-op):
 ```
 dross issue phase sync <id> --status in-progress
 ```
 
-**Pull any board-side task moves back into the plan** (same no-op rule — safe to
-always run). The outbound direction is wired throughout this prompt (`dross issue
+**Pull any board-side task moves back into the plan** (same board rule: silent only when `[board].enabled` is false, a non-zero exit is a failure to surface). The outbound direction is wired throughout this prompt (`dross issue
 task sync`, below); this is the inbound half, and without it a card someone moved
 on the board never reaches `plan.toml`, so `dross task next` picks from a stale
 plan:
@@ -101,9 +111,9 @@ If empty: jump to step 2. Otherwise mark in progress:
 dross task status <phase> $TASK_ID in_progress
 dross issue task sync <phase> $TASK_ID --status task-in-progress
 ```
-The second line mirrors this task onto the board and moves its card. It is a
-no-op when board sync is off, so call it unconditionally — the same way the
-phase-sync above is called.
+The second line mirrors this task onto the board and moves its card. It exits 0
+silently when `[board].enabled` is false, so call it unconditionally — the same
+way the phase-sync above is called — and surface a non-zero exit as a board failure.
 
 Read the task with `dross task show <phase> $TASK_ID`. Display its full record to the user.
 
@@ -131,7 +141,7 @@ In one block, write 3-7 lines covering:
 - Anything you're uncertain about
 
 Then in **pair mode** (the default), use `AskUserQuestion` with options:
-- `proceed` — write the code as proposed
+- `approve <task-id>` — the literal label with this task's id (e.g. `approve t-3`): write the code as proposed. The user picking exactly this label is what records the approval the pair-approval gate unlocks edits on; it lasts until this task's commit. Any other answer records nothing.
 - `steer` — user gives free-form direction; revise approach
 - `show me <X>` — user requests more context (treat as steer with `<X>` as the ask)
 - `skip` — mark task as `failed` with reason "skipped by user", advance to next
@@ -140,7 +150,7 @@ In **solo mode** (`--solo`): skip the pause, proceed directly. Note in the resul
 
 ### 1d. Implement
 
-Write code via `Edit`/`Write`. Constraints:
+Write code via `Edit`/`Write`. In pair mode the pair-approval gate refuses either one outside `.dross/` until the user's `approve <task-id>` is recorded; that refusal means go back to §1c and ask, never work around it. Constraints:
 - Touch only files in `task.files`. If you need to touch others, **pause and ask** before doing so — this is a plan deviation worth surfacing.
 - Honor every `locked = true` decision in `spec.toml`. If a decision conflicts with what you'd write, stop and ask the user to either revise the task or unlock the decision in spec.
 - Respect rules.toml — especially "always run X via docker compose exec" patterns. If the rule says route through docker and you'd type `pnpm install` directly, you've violated the rule.
@@ -155,8 +165,9 @@ Show `git diff` (filtered to `task.files` if helpful). Run `dross validate` to e
 If the touched files include `.svelte` and `mcp__svelte__svelte-autofixer` is available, run it on each touched component before the test gate and re-apply fixes until clean. The autofixer catches Svelte 4 → Svelte 5 syntax drift (runes, `onclick` vs `on:click`, snippets vs slots, deprecated APIs) that training data otherwise keeps reaching for. Same pattern for any future language-specific MCP autofixer.
 
 Before running it, check consent — dross will not run a repo's test command
-until this machine has explicitly trusted it, and the loop commands below refuse
-without it:
+until this machine has explicitly trusted it. The gate covers every dross
+command that spawns a process, enumerated from the source rather than kept as a
+list of names, so assume a command that runs something refuses without it:
 ```
 dross trust --check
 ```
@@ -230,11 +241,47 @@ Three outcomes:
 - `mark failed` — set status to `failed`, advance (later tasks that don't depend on this one keep going)
 - `abort phase` — stop the loop entirely; current state is preserved
 
-**Red, solo mode** → try one bounded fix (max one Edit pass). If still red, mark `failed` and continue.
+**Red, solo mode** → try one bounded fix (max one Edit pass). If still red, set the task's code aside **first**, then mark it failed and continue — a failed task is never committed, and `failed` refuses in a solo run while code is uncommitted:
+```
+git stash push -u -- . ':(exclude).dross'
+dross task status <phase> <task-id> failed --reason "<the failing test, one line>"
+dross task next <phase>
+```
 
 **No test command configured** → warn once at the start of the phase: "no `runtime.test_command` set, skipping per-task test gate. /dross-verify will catch unverified work later." Don't repeat the warning per task.
 
 ### 1f. Commit + record
+
+The commit gate admits a code commit only when a **full** green `dross test` was recorded for exactly the tree being committed. In a repo with no lanes, §1e's run already was the full suite and recorded it. When `[[runtime.test_lane]]` is declared, §1e's `--files` run measured only the matched lanes and recorded nothing, so run the full suite bare first: no selector, no `--files`:
+```
+dross test
+```
+Read its exit status the same way as in §1e; only **0** lets you commit. If anything outside `.dross/` changed since a green run, run it again. A refused `git commit` is a hard stop, never something to route around.
+
+**Solo review (`--solo` only).** In solo mode no human approves the task, so a cold reviewer does — after the full green run, before the commit. In **pair mode skip this entirely**: the human is the gate. A task that changed only `.dross/` (no code) also skips it: a `.dross/`-only commit is ungated.
+
+1. Build the review context:
+   ```
+   dross review context
+   ```
+   It prints the reviewer's `subagent_type` and a `prompt:` line. It never prints the diff — don't paste it either.
+2. Spawn the reviewer with the Agent tool: `subagent_type: "dross-task-reviewer"`, and the printed prompt line **verbatim** as the whole prompt. Add nothing to it — the reviewer sees only the context, and a widened prompt makes the review unavailable. It may run in the background (an interactive session runs every subagent there): **wait for its completion notice** before reading the status — its verdict reaches dross only when it finishes.
+3. Read where it stands:
+   ```
+   dross review status
+   ```
+   - `pass` → commit (below).
+   - `blocked` → **one fix round**, never more: address every blocking finding it lists, re-run `dross test` (bare), then `dross review context` and the reviewer again, and re-read `dross review status`. A second block exhausts the review.
+   - `pass-stale` → the tree moved after the review: re-run `dross test`, `dross review context` and the reviewer.
+   - `exhausted` or `unavailable`, **or the spawn itself errored** (unknown agent, API failure, interrupt — the recorder never sees an errored call, so status still reads `none`) → the task fails. Set its code aside first, then mark it:
+     ```
+     git stash push -u -- . ':(exclude).dross'
+     dross task status <phase> <task-id> failed
+     dross task next <phase>
+     ```
+     For a spawn error add `--reason "<the error>"` to the `failed` line; otherwise the reason comes from the review record. The loop moves on to the next independent task.
+
+The commit gate checks this too: in a solo run it refuses a code commit unless a passing review was recorded for exactly the tree being committed.
 
 Atomic commit, one task per commit. Use specific files, never `git add -A`:
 ```
@@ -294,7 +341,8 @@ dross issue task sync <phase> <task-id> --status task-in-review
 ```
 The task's card moves to a review state as the commit lands — the work is
 done and is now waiting on the phase's verdict, which is a different thing
-from still being worked. No-op when board sync is off.
+from still being worked. Silent when `[board].enabled` is false; a non-zero exit
+is a board failure to surface.
 
 Continue to the 1g post-commit gate.
 
@@ -345,7 +393,7 @@ git add .dross/
 git commit -m "chore(dross): execute <id> bookkeeping"
 ```
 
-Re-sync the board issue so its checklist reflects the completed tasks (no-op unless board sync is on):
+Re-sync the board issue so its checklist reflects the completed tasks (same board rule: silent only when `[board].enabled` is false, a non-zero exit is a failure to surface):
 ```
 dross issue phase sync <id>
 ```
@@ -359,7 +407,8 @@ and update state status to `partial` instead.
 ## Hard rules
 
 - **Follow the interaction playbook (`_interaction.md`).** Drive each pair-mode turn as a single-decision `AskUserQuestion` that leads with the default — the §1c approval, §1e red-path, and §1g post-commit gate are separate turns, never bundled, and the next task's approval never rides along behind the current one.
-- **Pair mode is the default.** Never write code without an explicit user `proceed` in pair mode. The whole point is the user is part of the loop.
+- **Pair mode is the default.** Never write code without the user picking `approve <task-id>` for that task in pair mode. The whole point is the user is part of the loop.
+- **A gate refusal is a hard stop.** When a dross gate refuses a tool call, read its rule and follow its remedy — never route around it with another tool, path or command. If the gate itself is wrong here, stop and tell the user: only they can lift it, with `dross gate off <name>` in their own terminal.
 - **Phase work commits to `phase/<id>`, never the main branch.** If `git symbolic-ref --short HEAD` returns the main branch, stop and fix before continuing.
 - **Atomic commits.** Exactly one commit per completed task. No batched multi-task commits.
 - **Touch only `task.files`.** Plan deviation requires explicit user OK.

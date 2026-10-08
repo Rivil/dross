@@ -1,0 +1,16 @@
+{
+  "generated": "2026-01-02",
+  "source": "fixture",
+  "dimensions": {
+    "pace": {
+      "rating": "fast",
+      "confidence": "medium",
+      "directive": "move quickly"
+    },
+    "verbosity": {
+      "rating": "terse",
+      "confidence": "high",
+      "directive": "keep it short"
+    }
+  }
+}

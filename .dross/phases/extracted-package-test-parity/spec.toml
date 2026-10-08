@@ -1,0 +1,69 @@
+[phase]
+  id = "extracted-package-test-parity"
+  title = "extracted-package-test-parity"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross survivor drain --packages ./internal/boardsync,./internal/diag,./internal/secretscan` reports zero survivors without a disposition: each is killed by a same-package test or accepted under a named gremlins-ceiling category with its reason, and none is accepted as `cross-package-only-coverage` (the 18 existing writers.go acceptances in that category are retired)."
+
+[[criteria]]
+  id = "c-2"
+  text = "internal/boardsync backlog.go, reap_apply.go, reap_undo.go, inbound.go, milestone.go and internal/secretscan writers.go each reach >=80% statement coverage from their own package's tests alone (`go test -cover ./internal/<pkg>/`)."
+
+[[criteria]]
+  id = "c-3"
+  text = "No behaviour change outside verify's NOT COVERED summary (c-5): the internal/cmd `issue` and `doctor` end-to-end tests and the CLI surface/output pins (incl. TestNoTestLost) pass with no assertion edits."
+
+[[criteria]]
+  id = "c-4"
+  text = "CI fails when any non-test .go file under internal/ outside internal/cmd has <50% statement coverage from its own package's tests — a flat floor with no allowlist — and a self-test proves the check fails on a below-floor file."
+
+[[criteria]]
+  id = "c-5"
+  text = "`dross verify` counts a gremlins NOT COVERED mutant as uncoverable only when no coverage block holds its line; a count-0 block is reported as a test gap and counts as reachable in every efficacy figure verify prints (the summary's 'efficacy over reachable' and the per-leg note) — proven by a new test."
+
+[[decisions]]
+  key = "test_home"
+  choice = "Close the blind spot with package-local tests, not cross-package coverage attribution (-coverpkg)."
+  why = "gremlins runs per package; attributing cmd's e2e coverage would run the ~600s cmd suite once per boardsync mutant."
+  locked = true
+
+[[decisions]]
+  key = "cmd_e2e_tests_stay"
+  choice = "New boardsync/secretscan tests are additions; the internal/cmd `issue` cobra e2e tests stay as the command-level proof."
+  why = "Inherited test_policy from cmd-package-decomposition: cmd keeps cobra e2e tests, only unit tests move with code."
+  locked = true
+
+[[decisions]]
+  key = "c1_evidence"
+  choice = "c-1 is proven by a whole-package `dross survivor drain` run over the three packages, not by verify's diff-scoped mutation."
+  why = "This phase's diff is test files; diff-scoped verify generates no mutants in the production files the survivors live in."
+  locked = true
+
+[[decisions]]
+  key = "guard_shape"
+  choice = "c-4 is a CI per-file floor of 50% own-package statement coverage, flat, no allowlist; verify/detach.go gets a test rather than an exemption."
+  why = "Measured 2026-09-26: only this phase's 6 files and verify/detach.go sit below 60%; a zero-only ban misses backlog.go/reap_apply.go at 2%; an accept-category refusal is bypassed by renaming the category."
+  locked = true
+
+[[decisions]]
+  key = "secretscan_fold"
+  choice = "secretscan/writers.go joins c-1 and c-2 rather than getting a separate criterion."
+  why = "Same blind spot, accepted away in secret-detection (18 survivors, 0% own coverage); keeps one drain outcome and one coverage outcome."
+  locked = true
+
+[[deferred]]
+  id = "070539a4434a8ff3"
+  text = "boardsync reap Undo leaves dross/status:<terminal> on a card that had no labels before the reap: reap_undo.go:61 skips the label restore when PriorLabels is empty, so the card still reads terminal to anything trusting the label"
+  why = "Found by the extracted-package-test-parity plan review (t-8 round-trip contract); that phase is test-only (c-3, t-12 forbid production edits), so the fix is parked."
+
+[[deferred]]
+  id = "3d7fab45c3b0a674"
+  text = "survivor evidence mislabels switch-case conditions: a `case X:` line whose arm body starts on the next line sits in no go-cover block, so survivor.Derive reports 'no coverage block: a const initializer or declaration' (evidence.go CoverageNoBlock arm) — the drain then points the operator at const-initializer-arithmetic although the mechanism is the switch-case attribution ceiling (the arm bodies run, count>=1). Derive should recognise a case-clause line and say so"
+  why = "Found by the extracted-package-test-parity drain (t-11): all 11 outstanding survivors (writers.go 88/90/92/116/118x2/120/129/139, diag/redproof.go 91/94) were switch-case conditions labelled as declarations; accepted under gremlins-attribution-ceiling per the sinks.go precedent. This phase is test-only (c-3), so the deriver fix is parked."
+
+[[deferred]]
+  id = "fa3d17955ecdf1cb"
+  text = "dross phase insert run mid-verify hijacks the session: it auto-commits the stale untracked tests.json/verify.toml as 'bookkeeping before starting a phase', checks out the new phase/<slug> branch and repoints current_phase to it — so a following survivor route (which writes to the current phase's spec) fails with 'no such spec.toml'. It should refuse, or not check out, when current_phase_status is verifying/complete"
+  why = "Hit 2026-09-22 verifying cmd-package-decomposition; reverted by hand (reset --mixed HEAD~1, cherry-pick the roadmap insert, dross state set current_phase). Carried unfiled in the handoff since then."

@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"encoding/json"
 	"os"
+
+	"github.com/Rivil/dross/internal/render"
 )
 
 // emitJSON writes v as the bare JSON document — no envelope, no wrapper key,
@@ -17,11 +18,7 @@ import (
 // The header line is dropped rather than commented out or moved into a field
 // because a `#` line is not JSON — anything downstream would have to strip it
 // before parsing, which is the one thing --json exists to avoid.
-func emitJSON(v any) error {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
-}
+func emitJSON(v any) error { return render.JSON(os.Stdout, v) }
 
 // jsonFlagUsage is the one usage string every `show --json` registers, so the
 // tree-walk gate in json_show_test.go sees a uniform flag rather than nine

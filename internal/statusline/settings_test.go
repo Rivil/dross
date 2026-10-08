@@ -233,3 +233,19 @@ func TestMalformedSettingsErrors(t *testing.T) {
 		t.Errorf("valid object with leading whitespace errored: %v", err)
 	}
 }
+
+// TestExistingCommand: the clobber refusal names the command already wired,
+// and reads nothing out of a document that does not parse.
+func TestExistingCommand(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{`{"statusLine":{"command":"x"}}`, "x"},
+		{`{"statusLine":{"type":"command"}}`, ""},
+		{`{"theme":"dark"}`, ""},
+		{`{not json`, ""},
+		{``, ""},
+	} {
+		if got := ExistingCommand([]byte(tc.in)); got != tc.want {
+			t.Errorf("ExistingCommand(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

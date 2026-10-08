@@ -118,11 +118,19 @@ Don't proceed until 100% green or the user explicitly waives a row.
 
 ## 9. Repo init
 
-If not already a git repo: `git init`, create `.gitignore` from a sensible default for the chosen stack, write the initial commit:
+If not already a git repo: `git init`, create `.gitignore` from a sensible default for the chosen stack.
+
+When §7 recorded a `runtime.test_command`, run the suite before the initial commit. The commit gate admits a code commit only once a full `dross test` has gone green on exactly the tree being committed. First check consent with `dross trust --check`. If it is not trusted yet, show the user the exact `runtime.test_command` line and let them grant it by running `dross trust` themselves — never on their behalf. Then:
+```
+dross test
+```
+On red, fix the scaffold (or ask the user) and re-run before committing. With no test command and no test lane the gate stays silent, so skip this step.
+
+Write the initial commit:
 ```
 git add . && git commit -m "chore: initialise project via dross"
 ```
-Ask before committing.
+Ask before committing. A gate refusal is a stop: read its rule and remedy, and never route around one.
 
 ## 9.5 Telemetry
 

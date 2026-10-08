@@ -1,0 +1,98 @@
+Return-channel corpus for the taint engine (TestTaintCrossesReturns). Taint
+leaves a function through its results and must arrive at the caller's
+consumer: through a helper in another package, a conversion helper, a generic,
+a closure, a channel between goroutines (internal/remote/hold.go's shape) and
+a two-function recursion. Summaries apply per call site, so a helper handed a
+literal stays clean where the same helper handed output trips.
+
+-- a.go --
+package a
+
+import (
+	"os/exec"
+	"strings"
+)
+
+// Rev returns what the command printed, trimmed.
+func Rev(c *exec.Cmd) string {
+	out, _ := c.Output()
+	return strings.TrimSpace(string(out))
+}
+
+// Norm is called with output at one site and with a literal at another.
+func Norm(s string) string { return strings.TrimSpace(s) }
+
+// ToStr is a conversion helper: wrapping the conversion must not hide it.
+func ToStr(b []byte) string { return string(b) }
+
+// Id is generic; its instance must carry taint like any function.
+func Id[T any](v T) T { return v }
+
+-- b.go --
+package b
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+
+	"example.com/fixture/a"
+)
+
+func useRev(c *exec.Cmd) error {
+	return errors.New(a.Rev(c)) // WANT taint
+}
+
+func printRev(c *exec.Cmd) {
+	fmt.Fprintln(os.Stderr, a.Rev(c))
+}
+
+func siteA(c *exec.Cmd) error {
+	out, _ := c.Output()
+	return errors.New(a.Norm(string(out))) // WANT taint
+}
+
+func siteB() error {
+	return errors.New(a.Norm("a literal"))
+}
+
+func viaToStr(c *exec.Cmd) error {
+	out, _ := c.Output()
+	return fmt.Errorf("git: %s", a.ToStr(out)) // WANT taint
+}
+
+func viaGeneric(c *exec.Cmd) error {
+	out, _ := c.Output()
+	return errors.New(a.Id(string(out))) // WANT taint
+}
+
+func viaClosure(c *exec.Cmd) error {
+	out, _ := c.Output()
+	f := func() string { return string(out) }
+	return errors.New(f()) // WANT taint
+}
+
+func viaChan(c *exec.Cmd) error {
+	ch := make(chan string, 1)
+	go func() {
+		out, _ := c.Output()
+		ch <- string(out)
+	}()
+	s := <-ch
+	return errors.New(s) // WANT taint
+}
+
+func ping(c *exec.Cmd, n int) string {
+	if n == 0 {
+		out, _ := c.Output()
+		return string(out)
+	}
+	return pong(c, n-1)
+}
+
+func pong(c *exec.Cmd, n int) string { return ping(c, n) }
+
+func recursive(c *exec.Cmd) error {
+	return errors.New(pong(c, 3)) // WANT taint
+}

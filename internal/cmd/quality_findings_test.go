@@ -68,7 +68,7 @@ func TestQualityFoldSurvivesRerun(t *testing.T) {
 	led := quality.Ledger{Findings: []quality.Finding{
 		{ID: "f-1", Dimension: quality.Complexity, Risk: quality.RiskHigh, File: "a.go", Title: "cyclomatic spike"},
 	}}
-	if err := quality.Save(filepath.Join(runDir, "findings.toml"), led); err != nil {
+	if err := quality.Save(containedIn(t, runDir, "findings.toml"), led); err != nil {
 		t.Fatal(err)
 	}
 

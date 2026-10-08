@@ -1,0 +1,890 @@
+[phase]
+  id = "cmd-package-decomposition"
+  title = "cmd-package-decomposition"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "Consent and fingerprinting (Fingerprint, CheckConsent, lane/replay/run/install consent, the requireExecConsent gate) live in their own package; internal/cmd keeps only the `trust` subcommand tree and the gate call."
+
+[[criteria]]
+  id = "c-2"
+  text = "Board reconciliation (backlog/phase/milestone sync, reap, task pull) lives in its own package; internal/cmd keeps only the `issue` subcommand tree."
+
+[[criteria]]
+  id = "c-3"
+  text = "Diagnostic checks (red-proof, roadmap duplicates, remote/board combination warnings, config trust, lane consent, mutation toolchain) live in their own package and return structured results; Doctor() in internal/cmd only composes and prints them."
+
+[[criteria]]
+  id = "c-4"
+  text = "Mutation-adapter construction (configuredAdapters, tuning, gremlins/stryker selection, toolchain probe) lives outside internal/cmd; `verify` and `doctor` both consume the single construction path."
+
+[[criteria]]
+  id = "c-5"
+  text = "An architecture test enumerates every package under internal/ and proves the boundary by import direction: cobra is imported only by internal/cmd, no extracted package imports internal/cmd, internal/cmd imports each of the four extracted packages, and internal/cmd files may not import os/exec, net/http or go/ast except those named in a shrink-only baseline — adding a file to the baseline fails the test."
+
+[[criteria]]
+  id = "c-6"
+  text = "No user-visible CLI change: names, flags, output and exit codes of `trust`, `issue`, `doctor` and `verify` are unchanged — the existing internal/cmd tests pass with no assertion edits, and unit tests of moved functions move with the code."
+
+[[decisions]]
+  key = "proof_shape"
+  choice = "The c-5 test asserts cobra exclusivity, the four positive imports, no reverse import of internal/cmd, AND a forbidden-import ratchet on internal/cmd (os/exec, net/http, go/ast)."
+  why = "Exclusivity alone snapshots today's boundary; the ratchet is what makes new domain logic landing in cmd a test failure, which is the milestone's 'provable by import direction' in enforceable form."
+  locked = true
+
+[[decisions]]
+  key = "ratchet_baseline"
+  choice = "The forbidden-import rule carries an explicit shrink-only allowlist of the cmd files still importing os/exec after this phase (the ~13 outside the four named domains). Adding a file fails; removing one passes."
+  why = "18 cmd files import os/exec today and only ~5 belong to the four domains in scope; draining the rest would double the phase. A visible, shrinking baseline keeps the debt honest without inflating scope."
+  locked = true
+
+[[decisions]]
+  key = "adapter_home"
+  choice = "Adapter construction lands in a new thin package internal/mutationcfg that imports project, mutation and remote; internal/mutation stays project-agnostic."
+  why = "internal/mutation today imports only argfence, remote and telemetry; giving it a project dependency would couple the adapter layer to the config schema and drag project into its pure tests."
+  locked = true
+
+[[decisions]]
+  key = "test_policy"
+  choice = "Unit tests of a moved function move into its new package with unexported access intact; internal/cmd retains only tests that drive a cobra command end-to-end."
+  why = "Keeps the export surface minimal and lands mutation-score attribution in the package that owns the code; leaving tests in cmd would force a wide exported API and keep the 281-file test monolith."
+  locked = true
+
+[[deferred]]
+  id = "8984d322864ccbda"
+  text = "Drain the remaining os/exec callers out of internal/cmd (cleantree, init, pause, run, stack, update, worktree_files, ship_recover, statusline, techdebt, milestone_stale, redproof_replay, lane_install) so the ratchet baseline reaches empty."
+  why = "Outside the four domains the milestone names; would double this phase."
+  target = "cmd-exec-baseline-drain"
+
+[[deferred]]
+  id = "5b31e812f90c9acf"
+  text = "Move local.go persistence (localStore, remote grants, detached runs, tuning keys) out of internal/cmd into its own package."
+  why = "Fifth domain the milestone criterion does not name; c-1 crosses it via whatever seam the planner picks."
+  target = "cmd-exec-baseline-drain"
+
+[[deferred]]
+  id = "9f8730a679d3366b"
+  text = "survivor internal/boardsync/reap.go:472 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "0dd21a7b7a3b074d"
+
+[[deferred]]
+  id = "ae5bff1b4c7231e2"
+  text = "survivor internal/boardsync/reap_apply.go:40 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "e7f3fba1467dbf0e"
+
+[[deferred]]
+  id = "86bc9eda388c7b74"
+  text = "survivor internal/boardsync/reap_apply.go:44 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "371641483fcd6612"
+
+[[deferred]]
+  id = "77ddedc03eb852d3"
+  text = "survivor internal/boardsync/reap_apply.go:48 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "73cc7a7b0a1c815a"
+
+[[deferred]]
+  id = "9aa7ec98f9579798"
+  text = "survivor internal/boardsync/reap_apply.go:52 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "b3aa28503e64cae2"
+
+[[deferred]]
+  id = "8ba53caabfc3e89d"
+  text = "survivor internal/boardsync/reap_apply.go:56 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "c8144bc88404074b"
+
+[[deferred]]
+  id = "027c158d779b52f1"
+  text = "survivor internal/boardsync/reap_apply.go:125 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "0800b5441f8c7ca7"
+
+[[deferred]]
+  id = "bbd9eedc6a156f81"
+  text = "survivor internal/boardsync/reap_apply.go:125 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "0800b5441f8c7ca7"
+
+[[deferred]]
+  id = "7ea9ec91fc39cfc8"
+  text = "survivor internal/boardsync/reap_apply.go:126 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "96cc0303b9903b3a"
+
+[[deferred]]
+  id = "7a167e1029eed9ee"
+  text = "survivor internal/boardsync/reap_apply.go:144 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "a314b54be6869cb0"
+
+[[deferred]]
+  id = "d06c810dc624aeb2"
+  text = "survivor internal/boardsync/reap_apply.go:164 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "3c5adf14f81744f9"
+
+[[deferred]]
+  id = "a340f8a5d2c6e410"
+  text = "survivor internal/boardsync/reap_apply.go:171 (INCREMENT_DECREMENT)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "12802580d194caaa"
+
+[[deferred]]
+  id = "d75cfba66b5b905c"
+  text = "survivor internal/boardsync/reap_apply.go:174 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "4215c111b49f7b9a"
+
+[[deferred]]
+  id = "97814768a1ec8efc"
+  text = "survivor internal/boardsync/reap_apply.go:177 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "0eb628d8b0082c23"
+
+[[deferred]]
+  id = "308fe68fbb9505cf"
+  text = "survivor internal/boardsync/reap_apply.go:182 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "1c4b151ed1134145"
+
+[[deferred]]
+  id = "43e9c26fcab00abd"
+  text = "survivor internal/boardsync/reap_apply.go:200 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "428fd7e12d428434"
+
+[[deferred]]
+  id = "34aff0971055b27c"
+  text = "survivor internal/boardsync/reap_apply.go:204 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "e03b13af48881dfd"
+
+[[deferred]]
+  id = "289c68e099548ed3"
+  text = "survivor internal/boardsync/reap_apply.go:211 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "599315bf01f54af1"
+
+[[deferred]]
+  id = "8d112784a461cffb"
+  text = "survivor internal/boardsync/reap_apply.go:211 (INVERT_NEGATIVES)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "e67110a3a11c1ab8"
+
+[[deferred]]
+  id = "5eb60ec16b7a84fb"
+  text = "survivor internal/boardsync/reap_apply.go:211 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "871c2e6d2145c31e"
+
+[[deferred]]
+  id = "93b12bb9e251a4ca"
+  text = "survivor internal/boardsync/reap_apply.go:215 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "1507921516520d9f"
+
+[[deferred]]
+  id = "7e23bf5af7656e9e"
+  text = "survivor internal/boardsync/reap_apply.go:241 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "b00574f379c4d9af"
+
+[[deferred]]
+  id = "1fef640f34a45430"
+  text = "survivor internal/boardsync/reap_apply.go:253 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "64140b470cfaa8ca"
+
+[[deferred]]
+  id = "d41948a0ab3fd3ad"
+  text = "survivor internal/boardsync/reap_apply.go:258 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "b0152ec77603bbab"
+
+[[deferred]]
+  id = "6d4df4d16ae5bd22"
+  text = "survivor internal/boardsync/reap_apply.go:279 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "00a210d6832ac827"
+
+[[deferred]]
+  id = "25f2647bef34ce5d"
+  text = "survivor internal/boardsync/reap_apply.go:279 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "2ab0dd0593b54755"
+
+[[deferred]]
+  id = "f2704a9445152ac0"
+  text = "survivor internal/boardsync/reap_apply.go:279 (INCREMENT_DECREMENT)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "52eaebc4d0101a31"
+
+[[deferred]]
+  id = "633a59504b1350e2"
+  text = "survivor internal/boardsync/reap_apply.go:280 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "2b52bbc3159ebe51"
+
+[[deferred]]
+  id = "585ea4027cea6bf1"
+  text = "survivor internal/boardsync/reap_apply.go:291 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "5fe38b856074f1a9"
+
+[[deferred]]
+  id = "bd82504b50176b09"
+  text = "survivor internal/boardsync/reap_apply.go:304 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "7c55ab7064232098"
+
+[[deferred]]
+  id = "7a95d07371bb19ca"
+  text = "survivor internal/boardsync/reap_apply.go:304 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "6f624ad6d077bfe7"
+
+[[deferred]]
+  id = "70c89341f53c5c35"
+  text = "survivor internal/boardsync/reap_undo.go:38 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "81fa744acce17c24"
+
+[[deferred]]
+  id = "67badd3a637240db"
+  text = "survivor internal/boardsync/reap_undo.go:43 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "1090ecbc7197184d"
+
+[[deferred]]
+  id = "9a0a21a11a6a8e52"
+  text = "survivor internal/boardsync/reap_undo.go:51 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "b9861a000f798f6f"
+
+[[deferred]]
+  id = "d2c979e0019d797d"
+  text = "survivor internal/boardsync/reap_undo.go:61 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "8e412d9e7ca954e5"
+
+[[deferred]]
+  id = "a913d02bfd4d23b8"
+  text = "survivor internal/boardsync/reap_undo.go:61 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "f5fdde79d378f5dd"
+
+[[deferred]]
+  id = "a6eb879578b4dfef"
+  text = "survivor internal/boardsync/reap_undo.go:63 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "2cee4f6a96f9955b"
+
+[[deferred]]
+  id = "344061534674f2d3"
+  text = "survivor internal/boardsync/reap_undo.go:67 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "07dc237a7d85707e"
+
+[[deferred]]
+  id = "d0e85a749b371977"
+  text = "survivor internal/boardsync/reap_undo.go:70 (INCREMENT_DECREMENT)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "41fa622a3218932b"
+
+[[deferred]]
+  id = "fde90c26fcb9de7b"
+  text = "survivor internal/boardsync/reap_undo.go:73 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "f099ca7eb8f63e1a"
+
+[[deferred]]
+  id = "fa33806da7ae4d92"
+  text = "survivor internal/boardsync/reap_undo.go:78 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "92a4340c6a5b0230"
+
+[[deferred]]
+  id = "de730bc44c29443c"
+  text = "survivor internal/boardsync/reap_undo.go:93 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "5781cfeadfd038ca"
+
+[[deferred]]
+  id = "9a9e3cb3c13ea13f"
+  text = "survivor internal/boardsync/task.go:78 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "1f0c365fb4b06796"
+
+[[deferred]]
+  id = "7bf5a38bb4a1344d"
+  text = "survivor internal/boardsync/task.go:217 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "d36b632000c4cec8"
+
+[[deferred]]
+  id = "ef2a1dfad233dd0b"
+  text = "survivor internal/boardsync/task.go:217 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "1279476cc4c10516"
+
+[[deferred]]
+  id = "ef688bf30ce24775"
+  text = "survivor internal/boardsync/task.go:257 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "85d6bbc7396095a6"
+
+[[deferred]]
+  id = "58e9bf6438fdb25b"
+  text = "survivor internal/boardsync/task.go:261 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "8c8efbd4d94c8252"
+
+[[deferred]]
+  id = "0182df9deb7a1aff"
+  text = "survivor internal/boardsync/backlog.go:78 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "899aca150772b237"
+
+[[deferred]]
+  id = "4b6d45dd78092d31"
+  text = "survivor internal/boardsync/backlog.go:92 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "cf398504563698b9"
+
+[[deferred]]
+  id = "2587d7e469007637"
+  text = "survivor internal/boardsync/backlog.go:106 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "416f19213c317726"
+
+[[deferred]]
+  id = "2897846862e1ea1d"
+  text = "survivor internal/boardsync/backlog.go:110 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "873d08bcef1e6413"
+
+[[deferred]]
+  id = "5ce81220350107e7"
+  text = "survivor internal/boardsync/backlog.go:113 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "5bb85e50e75d61e0"
+
+[[deferred]]
+  id = "c648f395c95323ea"
+  text = "survivor internal/boardsync/backlog.go:150 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "6da0230c1343fa38"
+
+[[deferred]]
+  id = "3fb0fcccefa74773"
+  text = "survivor internal/boardsync/backlog.go:159 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "8681b5401de5c704"
+
+[[deferred]]
+  id = "a45d01de3ba46329"
+  text = "survivor internal/boardsync/backlog.go:177 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "2cce39ef6c10d81a"
+
+[[deferred]]
+  id = "a8b1cba4cb9bc4e0"
+  text = "survivor internal/boardsync/backlog.go:183 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "478edfd8ced0209c"
+
+[[deferred]]
+  id = "cedbe52911ab0fb9"
+  text = "survivor internal/boardsync/backlog.go:187 (INCREMENT_DECREMENT)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "009024ff71417195"
+
+[[deferred]]
+  id = "12d7c0ffc1d5958c"
+  text = "survivor internal/boardsync/backlog.go:204 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "e599b23a5868517d"
+
+[[deferred]]
+  id = "3155eb5a0ec79b20"
+  text = "survivor internal/boardsync/backlog.go:208 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "a76f6ea3f9e44b87"
+
+[[deferred]]
+  id = "a9c3e0be2ea172c9"
+  text = "survivor internal/boardsync/backlog.go:211 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "42adb301f41e3d1e"
+
+[[deferred]]
+  id = "09c1286a13989981"
+  text = "survivor internal/boardsync/backlog.go:221 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "4b8c864466b15b46"
+
+[[deferred]]
+  id = "8c750ff4afd958ff"
+  text = "survivor internal/boardsync/backlog.go:82 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "6ebfd1c26c3760bb"
+
+[[deferred]]
+  id = "c893c64201724fe8"
+  text = "survivor internal/boardsync/backlog.go:49 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "738174966ca6f420"
+
+[[deferred]]
+  id = "0cc616a86217cf25"
+  text = "survivor internal/boardsync/backlog.go:57 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "cef922c03b1935f1"
+
+[[deferred]]
+  id = "e9ec89d79a2df7c8"
+  text = "survivor internal/boardsync/backlog.go:259 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "ab1cf730c31e6d16"
+
+[[deferred]]
+  id = "f007c3363645a7fb"
+  text = "survivor internal/boardsync/backlog.go:263 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "90f06f01d070f050"
+
+[[deferred]]
+  id = "8536d3cd598f4566"
+  text = "survivor internal/boardsync/backlog.go:267 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "96c45130cd1d4e0b"
+
+[[deferred]]
+  id = "5dab5fae441290c5"
+  text = "survivor internal/boardsync/backlog.go:270 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "3ac7562d7406381d"
+
+[[deferred]]
+  id = "cffd2f1b37e77b2d"
+  text = "survivor internal/boardsync/backlog.go:288 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "ad0fa97f5b25a192"
+
+[[deferred]]
+  id = "824e1d18383d113f"
+  text = "survivor internal/boardsync/backlog.go:297 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "059a5752898ae9d6"
+
+[[deferred]]
+  id = "5433add0623c64ef"
+  text = "survivor internal/boardsync/backlog.go:317 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "16da13e242f9cf17"
+
+[[deferred]]
+  id = "533deb3742a699da"
+  text = "survivor internal/boardsync/backlog.go:319 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "f7c72795337452a3"
+
+[[deferred]]
+  id = "a48603c43e466309"
+  text = "survivor internal/boardsync/backlog.go:330 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "d0e9ff993ff3876d"
+
+[[deferred]]
+  id = "8fc7378d851b3753"
+  text = "survivor internal/boardsync/backlog.go:83 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "70f82c38c54479b6"
+
+[[deferred]]
+  id = "67bc92bf73da8083"
+  text = "survivor internal/boardsync/backlog.go:330 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "bf3712fa16d7d2b6"
+
+[[deferred]]
+  id = "a8a807e66caa7594"
+  text = "survivor internal/boardsync/backlog.go:350 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "cdfebdc3e5e91161"
+
+[[deferred]]
+  id = "44293e7da25d51f2"
+  text = "survivor internal/boardsync/backlog.go:362 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "2728ee75719f1e92"
+
+[[deferred]]
+  id = "ee4a9302df5cbeba"
+  text = "survivor internal/boardsync/backlog.go:375 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "dad51d1e46681005"
+
+[[deferred]]
+  id = "3e44dc319deb5721"
+  text = "survivor internal/boardsync/backlog.go:362 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "2728ee75719f1e92"
+
+[[deferred]]
+  id = "d28be751e2edcc86"
+  text = "survivor internal/boardsync/backlog.go:71 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "3e72abf064359aa5"
+
+[[deferred]]
+  id = "0b1634dcc8c4954f"
+  text = "survivor internal/boardsync/backlog.go:388 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "a9aa5cb061c7d27e"
+
+[[deferred]]
+  id = "2709130252a6042a"
+  text = "survivor internal/boardsync/backlog.go:399 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "55214961812fc7a6"
+
+[[deferred]]
+  id = "8b3ba815eeb9f43f"
+  text = "survivor internal/boardsync/backlog.go:392 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "2cd1f02faaa378f1"
+
+[[deferred]]
+  id = "efc05aa076dbdf4c"
+  text = "survivor internal/boardsync/backlog.go:405 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "c2973266ccd8f897"
+
+[[deferred]]
+  id = "48f9a44d4baeba06"
+  text = "survivor internal/boardsync/backlog.go:402 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "ec51bc830d811910"
+
+[[deferred]]
+  id = "5b44c276a72e30e0"
+  text = "survivor internal/boardsync/backlog.go:405 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "2ae05991d9be3671"
+
+[[deferred]]
+  id = "3251fb1afb189c30"
+  text = "survivor internal/boardsync/backlog.go:419 (INCREMENT_DECREMENT)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "36e2b14c87f7c799"
+
+[[deferred]]
+  id = "8ee60c918d6bfe87"
+  text = "survivor internal/boardsync/backlog.go:412 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "14439240edb8e6be"
+
+[[deferred]]
+  id = "deada906586f73f1"
+  text = "survivor internal/boardsync/backlog.go:429 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "a7170b55f51ea0ac"
+
+[[deferred]]
+  id = "b24a961b96b8ea9f"
+  text = "survivor internal/boardsync/backlog.go:423 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "722c7b85f3c5fdbb"
+
+[[deferred]]
+  id = "b2b926c3b2c34205"
+  text = "survivor internal/boardsync/backlog.go:429 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "a7170b55f51ea0ac"
+
+[[deferred]]
+  id = "95f1b84c6d96b480"
+  text = "survivor internal/boardsync/backlog.go:429 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "a7170b55f51ea0ac"
+
+[[deferred]]
+  id = "b1de70d77f018d05"
+  text = "survivor internal/boardsync/backlog.go:447 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "c427d86161f77dc3"
+
+[[deferred]]
+  id = "c4204b7b046c8e9f"
+  text = "survivor internal/boardsync/backlog.go:433 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "dc21f9623bcbed77"
+
+[[deferred]]
+  id = "fa1314822c9ca2e1"
+  text = "survivor internal/boardsync/backlog.go:452 (INCREMENT_DECREMENT)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "622a443a01ce6498"
+
+[[deferred]]
+  id = "f95098e0fc3de054"
+  text = "survivor internal/boardsync/backlog.go:454 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "7b93277d5b0fe9b7"
+
+[[deferred]]
+  id = "d173728ee9cc2c88"
+  text = "survivor internal/boardsync/backlog.go:57 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "cef922c03b1935f1"
+
+[[deferred]]
+  id = "cca644b48f004e7c"
+  text = "survivor internal/boardsync/backlog.go:57 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "cef922c03b1935f1"
+
+[[deferred]]
+  id = "db143389f2301b3b"
+  text = "survivor internal/boardsync/inbound.go:20 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "ddfe4e1c475497a0"
+
+[[deferred]]
+  id = "559177675cd27ce3"
+  text = "survivor internal/boardsync/inbound.go:53 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "b30b34d17ed13db1"
+
+[[deferred]]
+  id = "048a8371efe854c7"
+  text = "survivor internal/boardsync/inbound.go:56 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "3b6cabccb2cabec6"
+
+[[deferred]]
+  id = "dca29970883adae7"
+  text = "survivor internal/boardsync/inbound.go:61 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "f43d92a6ed009b1f"
+
+[[deferred]]
+  id = "0824d227a6d8bebe"
+  text = "survivor internal/boardsync/milestone.go:46 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "68f1af8298ce4dac"
+
+[[deferred]]
+  id = "17e1ad6227bc1386"
+  text = "survivor internal/boardsync/milestone.go:50 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "5e6495b679221940"
+
+[[deferred]]
+  id = "07a9f5077b8d1871"
+  text = "survivor internal/boardsync/milestone.go:68 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "0179fe8697a6e98a"
+
+[[deferred]]
+  id = "78c49626e6d364c4"
+  text = "survivor internal/boardsync/milestone.go:71 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "47a3ceddd6e11fa9"
+
+[[deferred]]
+  id = "8a556a1c847659ab"
+  text = "survivor internal/boardsync/phase.go:65 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "aac9d1a4f85b7620"
+
+[[deferred]]
+  id = "d806124150fbeda6"
+  text = "survivor internal/boardsync/phase.go:94 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "59ddbc10d304ade2"
+
+[[deferred]]
+  id = "4bf51b2c89f253ec"
+  text = "survivor internal/boardsync/phase.go:138 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "df6fbd030894c1d3"
+
+[[deferred]]
+  id = "64166d9f34b2423f"
+  text = "survivor internal/boardsync/phase.go:147 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "2c9585dee416ff59"
+
+[[deferred]]
+  id = "fb22dcfca9323a62"
+  text = "survivor internal/boardsync/phase.go:198 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "62756cf447e82708"
+
+[[deferred]]
+  id = "4e984b3ba19db9ab"
+  text = "survivor internal/boardsync/task_pull.go:49 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "61efe8608b40f4c8"
+
+[[deferred]]
+  id = "2a6681f1b5d09dfa"
+  text = "survivor internal/boardsync/task_pull.go:53 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "f362cd71675f6239"
+
+[[deferred]]
+  id = "87d3f60084186af6"
+  text = "survivor internal/boardsync/task_pull.go:68 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "0d61db18970fe9fc"
+
+[[deferred]]
+  id = "f0dc1a8d37ee93eb"
+  text = "survivor internal/boardsync/task_pull.go:67 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "e09802c1ec693873"
+
+[[deferred]]
+  id = "feea20b1c61df9b9"
+  text = "survivor internal/boardsync/task_pull.go:66 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "f9f390c4bd216b0f"
+
+[[deferred]]
+  id = "059b1038c70d944b"
+  text = "survivor internal/diag/redproof.go:91 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "8fae2750a8c2f2f3"
+
+[[deferred]]
+  id = "93982a21433b0e5b"
+  text = "survivor internal/diag/redproof.go:94 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "extracted-package-test-parity"
+  survivor = "98e44f4743cd2a2e"

@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/remote"
 )
 
@@ -76,6 +78,14 @@ type Tests struct {
 	// it takes; Skeleton copies it onto the summary so it survives into
 	// verify.toml. Empty on a record written before the field existed.
 	MeasuredOn string `json:"measured_on,omitempty"`
+
+	// MeasuredCommit and MeasuredTree are the tree the run measured
+	// (treefp.MeasuredTree): the HEAD it was taken at and its fingerprint.
+	// Skeleton copies them onto verify.toml's [verify] table; this copy is the
+	// fallback ClassifyFreshness reads when that one was dropped by a hand
+	// edit. Empty on a run written before the fields existed.
+	MeasuredCommit string `json:"measured_commit,omitempty"`
+	MeasuredTree   string `json:"measured_tree,omitempty"`
 }
 
 // The measurement-provenance strings live here, in one place, because they are
@@ -219,6 +229,21 @@ type LanguageRun struct {
 	// reads and fixes, while a leg that never ran means this phase has no
 	// evidence about that language at all — which must not be verifiable past.
 	RemoteTransport bool `json:"remote_transport,omitempty"`
+
+	// Ranges records, per file, the effective line ranges this leg's adapter
+	// was actually told to mutate — widened to the enclosing top-level
+	// construct, which each range names. Scope.Hunks keeps the raw diff; this keeps what the tool
+	// was told, so a run's claimed scope is provable from its own record. It
+	// lives on the leg rather than the Scope because ranges are adapter-
+	// specific (gremlins has none): the leg is the honest owner of its own
+	// output, and the Scope stays the pure pre-run input. Absent on a leg
+	// that ranged nothing.
+	Ranges map[string][]EffectiveRange `json:"ranges,omitempty"`
+	// WholeFile names every file this leg mutated WHOLE rather than by range,
+	// with the reason from the closed set in range_provenance.go. A leg that
+	// measured whole files must never read as a ranged one, so the fallback
+	// is a named fact here, not an absence in Ranges.
+	WholeFile map[string]string `json:"whole_file,omitempty"`
 }
 
 type SkippedFile struct {
@@ -382,6 +407,15 @@ type VerifyMeta struct {
 	// rotated away.
 	Finalized   bool      `toml:"finalized,omitempty"`
 	FinalizedAt time.Time `toml:"finalized_at,omitempty"`
+	// MeasuredCommit is the HEAD the run measured, "" on an unborn HEAD. It
+	// is a record for the reader: freshness compares MeasuredTree, so a
+	// commit that only moves HEAD leaves the verdict fresh.
+	MeasuredCommit string `toml:"measured_commit,omitempty"`
+	// MeasuredTree fingerprints the work tree the run measured. A verdict
+	// whose tree no longer matches the tree it would ship is stale; one
+	// written before the field existed carries none, and its freshness is
+	// unknown (locked legacy_freshness).
+	MeasuredTree string `toml:"measured_tree,omitempty"`
 }
 
 // LegSummary is one language leg's own result, as measured.
@@ -411,6 +445,35 @@ type LegSummary struct {
 	// hosts were involved and leaves the reader to guess which score belongs to
 	// which — and the guess is exactly what makes two runs comparable or not.
 	MeasuredOn string `toml:"measured_on,omitempty"`
+
+	// Ranges and WholeFile restate the leg's range provenance in a shape an
+	// agent or a human reads without opening tests.json: Ranges is one
+	// "file:start-end (construct)" per effective range, WholeFile one
+	// "file — reason" per file the leg mutated whole, both sorted. Flat
+	// strings rather than tables on purpose — verify.toml is the readable
+	// summary and tests.json / `dross verify scope --json` are the machine
+	// record. Both are omitted when empty, so a verify.toml written before
+	// they existed round-trips unchanged.
+	Ranges    []string `toml:"ranges,omitempty"`
+	WholeFile []string `toml:"whole_file,omitempty"`
+}
+
+// legProvenance flattens a leg's recorded ranges and whole-file reasons into
+// the LegSummary strings. Each range carries the construct it was widened
+// to, so the summary states not just what was measured but why the range
+// is the size it is.
+func legProvenance(lr LanguageRun) (ranges, whole []string) {
+	for f, rs := range lr.Ranges {
+		for _, r := range rs {
+			ranges = append(ranges, fmt.Sprintf("%s:%d-%d (%s)", f, r.Start, r.End, r.Construct))
+		}
+	}
+	for f, reason := range lr.WholeFile {
+		whole = append(whole, f+" — "+reason)
+	}
+	sort.Strings(ranges)
+	sort.Strings(whole)
+	return ranges, whole
 }
 
 type VerifySummary struct {
@@ -454,6 +517,16 @@ type VerifySummary struct {
 	// coverage blind spots ("test never ran the line"). Omitted when
 	// zero — only gremlins currently reports this status.
 	MutantsNotCovered int `toml:"mutants_not_covered,omitempty"`
+	// MutantsNoBlock and MutantsTestGap split MutantsNotCovered by where a
+	// go-cover profile puts each survivor's line (SplitNotCovered). Only a
+	// no-block line is uncoverable by construction: go-cover instruments no
+	// statement there, so the mutant is never built and no test can kill it.
+	// A line inside a block is reachable code no test ran — a test gap, which
+	// stays in the reachable denominator. NOT COVERED survivors in neither
+	// count had no profile to place them and are reachable too: "not looked
+	// at" must never read as uncoverable. Omitted when zero.
+	MutantsNoBlock int `toml:"mutants_no_block,omitempty"`
+	MutantsTestGap int `toml:"mutants_test_gap,omitempty"`
 	// MutantsInScope is the denominator the score was computed over:
 	// killed + survived + timeout, counting only mutants in files this phase
 	// touched. Always written, including as 0, because it is the sample size
@@ -493,11 +566,19 @@ type Finding struct {
 	Text     string `toml:"text"`
 }
 
-// FilePaths returns canonical paths for tests.json and verify.toml.
+// FilePaths returns canonical paths for tests.json and verify.toml. The phase
+// id is contained under phases/; one that would escape resolves to the refused
+// segment (phase.RefusedSegment), where neither file exists.
 func FilePaths(root, phaseID string) (tests, verify string) {
-	dir := filepath.Join(root, "phases", phaseID)
+	dir := filepath.Join(root, "phases", refusedPhaseSegment)
+	if c, err := pathfence.Contain(filepath.Join(root, "phases"), "phase id", phaseID); err == nil {
+		dir = c.String()
+	}
 	return filepath.Join(dir, TestsFile), filepath.Join(dir, VerifyFile)
 }
+
+// refusedPhaseSegment mirrors phase.RefusedSegment.
+const refusedPhaseSegment = "_refused"
 
 // Run executes the configured adapters against the given files, grouped
 // by language, and returns the aggregated Tests struct. It does NOT
@@ -510,13 +591,84 @@ func Run(phaseID string, files []string, adapters []mutation.Adapter) (*Tests, e
 	return RunScoped(phaseID, files, adapters, nil)
 }
 
+// resolveConstructs asks a range-capable adapter for the top-level
+// constructs of every file it could range, BEFORE PlanRanges runs — so the
+// planner stays pure and the record is authored from what was resolved here,
+// on this machine, not inferred from the remote (the planning_locus lock).
+//
+// Only files the planner would range are resolved: a hunk-less scope, a file
+// absent from the hunks and a malformed raw hunk each fall open on their own
+// reason without a spawn. A RangeRunner that is not a ConstructResolver
+// gets an error per file rather than a bare-hunk range — narrowing to the
+// raw hunk is the ungenerated-mutant hole this exists to close.
+//
+// Every resolver error is recorded, never returned: a parser that is missing
+// or a file it refuses costs that file its precision (whole-file, degraded),
+// not the leg its run.
+func resolveConstructs(a mutation.Adapter, files []string, scope *Scope) ASTIndex {
+	if scope == nil || len(scope.Hunks) == 0 {
+		return nil
+	}
+	if _, ok := a.(mutation.RangeRunner); !ok {
+		return nil
+	}
+	cr, hasResolver := a.(mutation.ConstructResolver)
+	idx := make(ASTIndex, len(files))
+	for _, f := range files {
+		hunks := scope.Hunks[f]
+		if len(hunks) == 0 {
+			continue
+		}
+		if _, malformed := firstMalformed(hunks); malformed {
+			continue
+		}
+		if !hasResolver {
+			idx[f] = ASTResult{Err: fmt.Errorf("%w: adapter has no construct resolver", mutation.ErrASTUnavailable)}
+			continue
+		}
+		cs, err := cr.Constructs(f)
+		idx[f] = ASTResult{Constructs: cs, Err: err}
+	}
+	return idx
+}
+
+// runPlanned dispatches one adapter's leg the way its RangePlan says: by
+// range when the adapter can express it AND the plan found something to
+// narrow, whole otherwise. The plan is what gets recorded, and this is the
+// only place it is executed — so the record and the dispatch cannot disagree.
+//
+// Both guards are load-bearing. Asserting RangeRunner without checking would
+// stop the Go leg running at all; an empty Dispatch is every file falling
+// open (no hunks, all absent, all malformed), and narrowing to an empty set
+// would mutate nothing where the record says whole.
+func runPlanned(a mutation.Adapter, files []string, plan RangePlan) (*mutation.Report, error) {
+	if rr, ok := a.(mutation.RangeRunner); ok && len(plan.Dispatch) > 0 {
+		return rr.RunRanges(files, plan.Dispatch)
+	}
+	return a.Run(files)
+}
+
+// appendDegraded adds a plan's Degraded lines to the scope, nil-safe and
+// deduped: a nil scope has nowhere to record them (and nothing to degrade),
+// and a line already present would print the same warning twice.
+func appendDegraded(scope *Scope, lines []string) {
+	if scope == nil {
+		return
+	}
+	for _, l := range lines {
+		if !slices.Contains(scope.Degraded, l) {
+			scope.Degraded = append(scope.Degraded, l)
+		}
+	}
+}
+
 // RunScoped is Run with diff scoping applied to each leg's report. A nil scope
 // is the unscoped behaviour, which is what Run passes.
 //
 // Filtering happens AFTER each adapter returns. What the adapter was
-// dispatched to mutate is not narrowed here — narrowing the dispatch would
-// change which mutants exist, and this is only about which of them this phase
-// is answerable for.
+// DISPATCHED to mutate is narrowed too, when the adapter can range and the
+// scope knows its hunks (PlanRanges) — and that decision is recorded on the
+// leg before the tool runs, so a failed leg still says what it was told.
 func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scope *Scope) (*Tests, error) {
 	t := &Tests{
 		Phase:       phaseID,
@@ -549,8 +701,29 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 
 	for _, name := range names {
 		a := adapterByName[name]
-		report, err := a.Run(byAdapter[name])
+		// Resolved, then planned once, recorded on whichever leg results,
+		// and executed from the same value: provenance is known before the
+		// tool runs, and the resolver is asked before anything is dispatched.
+		asts := resolveConstructs(a, byAdapter[name], scope)
+		plan := PlanRanges(a, byAdapter[name], scope, asts)
+		appendDegraded(scope, plan.Degraded)
+		// Recorded as ABSENT when empty, never as an empty object: omitempty
+		// drops it on the way out, so the loaded record would otherwise
+		// differ from the one that was saved.
+		if len(plan.WholeFile) == 0 {
+			plan.WholeFile = nil
+		}
+		report, err := runPlanned(a, byAdapter[name], plan)
 		if err != nil {
+			if errors.Is(err, remote.ErrHostBusy) {
+				// Not a leg result: the host is held and this run was told
+				// not to wait. Every remote leg takes the same lock, so no
+				// later adapter could run either, and a tests.json recording
+				// "busy" against each leg would be a run that never happened
+				// written down as one that did. The caller maps this to its
+				// own exit code and writes nothing.
+				return nil, err
+			}
 			// Record-and-continue: adapters run in sorted-name order, so a
 			// failing early adapter (e.g. stryker misconfigured) must not
 			// throw away a finished gremlins report.
@@ -562,11 +735,22 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 				// leg with no provenance sends the reader to the wrong box.
 				MeasuredOn: MeasuredOnHost(AdapterHost(a)),
 				Files:      byAdapter[name],
-				Error:      err.Error(),
+				// Through the carrier, never err.Error() directly. The named
+				// type is what the toolfence walker keys on: a Recorded field
+				// accepts an assignment only when the recorder produced the
+				// value, and a bare string gives the guard nothing to see.
+				// The carrier does not rewrite the error — an adapter that
+				// failed on a dross-authored diagnostic must keep saying so.
+				Error: mutation.RecordLegError(err).String(),
 				// Classified while the error VALUE is still live. Everything
 				// downstream sees only Error, a string, and errors.Is cannot be
 				// re-run against prose.
 				RemoteTransport: errors.Is(err, remote.ErrTransport),
+				// Stamped on the failure too: what the tool was TOLD is known
+				// whether or not it answered, and a failed ranged leg that
+				// forgot its ranges would be re-read as a whole-file one.
+				Ranges:    plan.Ranges,
+				WholeFile: plan.WholeFile,
 			})
 			continue
 		}
@@ -582,6 +766,8 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 			MeasuredOn: MeasuredOnHost(AdapterHost(a)),
 			Files:      byAdapter[name],
 			Mutation:   kept,
+			Ranges:     plan.Ranges,
+			WholeFile:  plan.WholeFile,
 		})
 	}
 
@@ -663,9 +849,11 @@ func LoadVerify(path string) (*Verify, error) {
 func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 	v := &Verify{
 		Verify: VerifyMeta{
-			Phase:       t.Phase,
-			GeneratedAt: t.GeneratedAt,
-			Verdict:     "pending",
+			Phase:          t.Phase,
+			GeneratedAt:    t.GeneratedAt,
+			Verdict:        "pending",
+			MeasuredCommit: t.MeasuredCommit,
+			MeasuredTree:   t.MeasuredTree,
 		},
 		Summary: VerifySummary{
 			CriteriaTotal:  len(criteriaIDs),
@@ -683,6 +871,9 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 	// mutant in ten, and the mean called it 0.50.
 	var timeouts int
 	for _, lr := range t.Languages {
+		// Stated for the error leg too: what the tool was told is known
+		// whether or not it answered.
+		ranges, whole := legProvenance(lr)
 		if lr.Mutation == nil {
 			// Recorded, not skipped: a leg that failed is a leg that measured
 			// nothing, and leaving it out would make the run look like it only
@@ -693,6 +884,8 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 				Error:      lr.Error,
 				FileCount:  len(lr.Files),
 				MeasuredOn: lr.MeasuredOn,
+				Ranges:     ranges,
+				WholeFile:  whole,
 			})
 			continue
 		}
@@ -724,6 +917,8 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 			Score:      mutation.PooledScore(lr.Mutation.Killed, lr.Mutation.Survived, lr.Mutation.Timeout),
 			FileCount:  len(lr.Files),
 			MeasuredOn: lr.MeasuredOn,
+			Ranges:     ranges,
+			WholeFile:  whole,
 		})
 	}
 	// Every mutant the tools produced landed outside this phase's files. The
@@ -861,6 +1056,86 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 		})
 	}
 	return v
+}
+
+// NotCoveredKind is where a go-cover profile puts a NOT COVERED survivor's line.
+type NotCoveredKind int
+
+const (
+	// NotCoveredUnplaced — no profile placed the line, or the profile shows
+	// it running. Counted as reachable: an unexamined line proves nothing.
+	NotCoveredUnplaced NotCoveredKind = iota
+	// NotCoveredNoBlock — no coverage block holds the line. Uncoverable by
+	// construction: the mutant is never built.
+	NotCoveredNoBlock
+	// NotCoveredTestGap — a coverage block holds the line and no test ran
+	// it. Reachable code a test could run.
+	NotCoveredTestGap
+)
+
+// CoverageClassifier places a NOT COVERED survivor's line against a go-cover
+// profile. An interface for the same reason Identifier is one: the real
+// classifier is the survivor drain's, over a profile the caller had to build,
+// and the split itself stays pure and fakeable.
+type CoverageClassifier interface {
+	ClassifyNotCovered(file string, line int, op string) NotCoveredKind
+}
+
+// SplitNotCovered sorts the run's in-scope NOT COVERED survivors into
+// MutantsNoBlock and MutantsTestGap.
+//
+// NOT COVERED used to be printed whole as "uncoverable by construction" and
+// dropped from the reachable denominator. It also holds lines in a count-0
+// block — code a test could run and none did — so a real test gap read as
+// efficacy 1.00 over everything reachable. Only the no-block half is
+// uncoverable; the split is what lets the summary say so.
+func SplitNotCovered(v *Verify, t *Tests, c CoverageClassifier) {
+	v.Summary.MutantsNoBlock, v.Summary.MutantsTestGap = 0, 0
+	for _, lr := range t.Languages {
+		if lr.Mutation == nil {
+			continue
+		}
+		for _, m := range lr.Mutation.Surviving {
+			if !m.NotCovered {
+				continue
+			}
+			switch c.ClassifyNotCovered(m.File, m.Line, m.Op) {
+			case NotCoveredNoBlock:
+				v.Summary.MutantsNoBlock++
+			case NotCoveredTestGap:
+				v.Summary.MutantsTestGap++
+			}
+		}
+	}
+}
+
+// NotCoveredPackages lists the Go packages holding the run's in-scope NOT
+// COVERED survivors, sorted and deduped, for the profile SplitNotCovered is
+// classified against.
+//
+// Each is "./"-rooted so `go test` reads it as a directory and never as a
+// flag, and a survivor path that is not local to the repo — absolute, or
+// climbing out with ".." — is left out rather than handed to the toolchain.
+func NotCoveredPackages(t *Tests) []string {
+	seen := map[string]bool{}
+	var pkgs []string
+	for _, lr := range t.Languages {
+		if lr.Mutation == nil {
+			continue
+		}
+		for _, m := range lr.Mutation.Surviving {
+			if !m.NotCovered || filepath.Ext(m.File) != ".go" || !filepath.IsLocal(m.File) {
+				continue
+			}
+			pkg := "./" + filepath.ToSlash(filepath.Dir(m.File))
+			if !seen[pkg] {
+				seen[pkg] = true
+				pkgs = append(pkgs, pkg)
+			}
+		}
+	}
+	sort.Strings(pkgs)
+	return pkgs
 }
 
 // FilesFromChanges flattens changes.json's per-task file lists into

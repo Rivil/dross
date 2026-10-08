@@ -1,5 +1,6 @@
-// Package assets embeds the shipped command skills (commands/dross-*.md) and
-// prompts (prompts/*.md) into the dross binary so the CLI is a self-contained
+// Package assets embeds the shipped command skills (commands/dross-*.md),
+// prompts (prompts/*.md) and custom agent definitions (agents/dross-*.md —
+// the solo task reviewer) into the dross binary so the CLI is a self-contained
 // distribution unit: `dross install` materializes these into ~/.claude with no
 // source checkout, and `dross update` carries its own assets across a self-update.
 // Embedding keeps a single source of truth — the same bytes make install links
@@ -8,7 +9,7 @@ package assets
 
 import "embed"
 
-// FS holds every command skill and prompt shipped with dross.
+// FS holds every command skill, prompt and agent definition shipped with dross.
 //
 // The `all:` prefix is required, not cosmetic: go:embed otherwise skips files
 // whose names begin with `_` or `.`, which would silently drop
@@ -16,7 +17,7 @@ import "embed"
 // the embedded file set matches the on-disk set precisely so a narrowed pattern
 // (or a dropped `all:`) fails loudly.
 //
-//go:embed all:commands all:prompts
+//go:embed all:commands all:prompts all:agents
 var FS embed.FS
 
 // InteractionPlaybook is the propose-and-react interaction playbook

@@ -27,7 +27,7 @@ import (
 // else. Two tests did exactly this before this guard existed:
 //
 //   - TestProgressAgainstThisRepo handed the real .dross directory to
-//     buildMilestoneProgress, whose phaseIsDone falls back to state.json history.
+//     buildMilestoneProgress, whose phase.IsDone falls back to state.json history.
 //     It never spelled "state.json" anywhere, which is why the rule below cannot
 //     be a name check alone.
 //   - TestHandoffParksNoHomelessFinding read .dross/handoff.md and Skipf'd in CI,

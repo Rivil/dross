@@ -9,9 +9,7 @@ package quality
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -27,27 +25,6 @@ func RunID(now time.Time, sha string) string {
 		sha = "nogit"
 	}
 	return fmt.Sprintf("%s-%s", now.Format(runIDTimeFormat), sha)
-}
-
-// ShortSHA returns the short HEAD sha for the repo at repoDir, or "nogit" if it
-// can't be read (not a git repo, no commits). Best-effort — it never errors, so
-// a missing repo degrades to a stable "nogit" rather than failing a run.
-func ShortSHA(repoDir string) string {
-	out, err := exec.Command("git", "-C", repoDir, "rev-parse", "--short", "HEAD").Output()
-	if err != nil {
-		return "nogit"
-	}
-	return normalizeSHA(string(out))
-}
-
-// normalizeSHA trims git's output and falls back to "nogit" when it is empty —
-// the empty-but-no-error case, extracted so the fallback branch is unit-testable.
-func normalizeSHA(out string) string {
-	sha := strings.TrimSpace(out)
-	if sha == "" {
-		return "nogit"
-	}
-	return sha
 }
 
 // QualityDir is the conventional parent for all quality run artifacts:

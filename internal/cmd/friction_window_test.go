@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/phase"
 )
@@ -244,7 +245,7 @@ func TestFrictionWindow_BoardStateResolves(t *testing.T) {
 		{ID: "t-1", Wave: 1, Title: "one", Status: phase.StatusPending},
 		{ID: "t-2", Wave: 1, Title: "two", Status: phase.StatusPending},
 	}}
-	status := derivePhaseStatus(plan)
+	status := boardsync.DerivePhaseStatus(plan)
 
 	if !configenum.LifecycleStatuses.Has(status) {
 		t.Fatalf("a locked-but-unstarted plan derives %q, which is not a lifecycle status (%s) — no state map can resolve it",

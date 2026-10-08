@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"io/fs"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -10,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/findings"
+	"github.com/Rivil/dross/internal/gitrun"
+	"github.com/Rivil/dross/internal/stack"
 	"github.com/Rivil/dross/internal/techdebt"
 )
 
@@ -31,9 +32,21 @@ func Techdebt() *cobra.Command {
 			}
 			repoDir := filepath.Dir(root)
 			now := time.Now().UTC()
-			sha := techdebt.ShortSHA(repoDir)
+			sha := gitrun.ShortSHA(repoDir)
 
 			paths, err := trackedFiles(repoDir)
+			if err != nil {
+				return err
+			}
+			// [techdebt] exclude from project.toml: the adopter's own exemptions
+			// (dross lists internal/techdebt/, whose marker regex and fixtures
+			// would otherwise report themselves). A bad pattern is the command's
+			// error, surfaced before any run dir exists.
+			proj, _, err := loadProject()
+			if err != nil {
+				return err
+			}
+			paths, err = techdebt.Filter(repoDir, paths, proj.Techdebt.Exclude)
 			if err != nil {
 				return err
 			}
@@ -59,18 +72,26 @@ func Techdebt() *cobra.Command {
 
 // trackedFiles returns the absolute paths of the repo's tracked files via
 // `git ls-files`, honoring the locked "scan tracked files" decision (untracked,
-// ignored, and vendored files are excluded). `.dross/` bookkeeping is excluded
-// on both paths — planning artefacts (milestone prose, plan.toml strings,
-// tests.json dumps) are generated workflow state, and scanning them drowned
-// real code debt 5:1 on this repo's own v1.0 self-audit. When repoDir is not a
-// git repo (so ls-files fails), it falls back to a tree walk that skips .git
-// and .dross, so the scan still runs — the run id will carry the "nogit" sha.
+// ignored, and vendored files are excluded). Any path with a directory
+// component in the shared skip set (stack.SkipDir) is dropped on both paths —
+// the one definition every dross scanner honours, so the tech-debt scan can
+// never see a tree language detection or the security manifest scoped out.
+// That set is wider than the two fixture names that motivated it: tracked
+// build/, dist/, .idea/, .vscode/, node_modules/ and vendor/ content also
+// leaves the scan, deliberately — a second, narrower copy here is the drift the
+// skip_dir_set decision forbids. `.dross/` bookkeeping is in the set too —
+// planning artefacts (milestone prose, plan.toml strings, tests.json dumps) are
+// generated workflow state, and scanning them drowned real code debt 5:1 on
+// this repo's own v1.0 self-audit. When repoDir is not a git repo (so ls-files
+// fails), it falls back to a tree walk that prunes the same set, so the scan
+// still runs — the run id will carry the "nogit" sha.
 func trackedFiles(repoDir string) ([]string, error) {
-	out, err := exec.Command("git", "-C", repoDir, "ls-files", "-z").Output()
+	out, err := gitrun.Raw(repoDir, "ls-files", "-z")
 	if err == nil {
 		var paths []string
-		for _, rel := range strings.Split(strings.TrimRight(string(out), "\x00"), "\x00") {
-			if rel == "" || rel == ".dross" || strings.HasPrefix(rel, ".dross/") {
+		//dross:taint-cleared git ls-files -z prints NUL-separated tracked paths; each becomes a file the scan reads, and nothing else of git's output is kept
+		for _, rel := range strings.Split(strings.TrimRight(out, "\x00"), "\x00") {
+			if rel == "" || inSkippedDir(rel) {
 				continue
 			}
 			paths = append(paths, filepath.Join(repoDir, rel))
@@ -83,8 +104,7 @@ func trackedFiles(repoDir string) ([]string, error) {
 			return nil // skip unreadable entries rather than aborting the scan
 		}
 		if d.IsDir() {
-			switch d.Name() {
-			case ".git", ".dross":
+			if p != repoDir && stack.SkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -93,4 +113,18 @@ func trackedFiles(repoDir string) ([]string, error) {
 		return nil
 	})
 	return paths, walkErr
+}
+
+// inSkippedDir reports whether any DIRECTORY component of the slash-form
+// relative path rel is in the shared skip set. The final component is the file
+// itself and is never tested, so a file named "vendor" or "testdata.py" at the
+// root still scans; the match is whole-segment, so "testdata-like/" does not.
+func inSkippedDir(rel string) bool {
+	segs := strings.Split(rel, "/")
+	for _, seg := range segs[:len(segs)-1] {
+		if stack.SkipDir(seg) {
+			return true
+		}
+	}
+	return false
 }

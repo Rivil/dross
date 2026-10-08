@@ -1,0 +1,3 @@
+# <HOME>/.claude/dross/defaults.toml
+[remote_defaults]
+  provider = "github"

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -14,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -36,7 +36,7 @@ func stateShow() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			b, _ := json.MarshalIndent(s, "", "  ")
+			b, _ := render.MarshalJSONIndent(s)
 			os.Stdout.Write(b)
 			fmt.Println()
 			return nil

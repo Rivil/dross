@@ -1,14 +1,26 @@
 package cmd
 
 import (
+	"errors"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
+	"github.com/Rivil/dross/internal/compilefence"
 	"github.com/Rivil/dross/internal/findings"
+	"github.com/Rivil/dross/internal/pathfence"
+	"github.com/Rivil/dross/internal/quality"
 	"github.com/Rivil/dross/internal/security"
+	"github.com/Rivil/dross/internal/stack"
 )
 
 func TestSecurityCommandRegistered(t *testing.T) {
@@ -137,7 +149,7 @@ func TestSecurityScaffoldCommand(t *testing.T) {
 		{ID: "f-1", Title: "cmd injection in git shell-out", Severity: security.SeverityCritical,
 			Class: "cmd-injection", Refutation: "panel: confirmed reachable"},
 	}}
-	if err := security.Save(filepath.Join(runDir, "findings.toml"), ledger); err != nil {
+	if err := security.Save(containedIn(t, runDir, "findings.toml"), ledger); err != nil {
 		t.Fatal(err)
 	}
 
@@ -160,7 +172,7 @@ func TestSecurityScaffoldEmptyLedgerErrors(t *testing.T) {
 	ledger := security.Ledger{Findings: []security.Finding{
 		{ID: "f-1", Severity: security.SeverityHigh, Refutation: ""},
 	}}
-	if err := security.Save(filepath.Join(runDir, "findings.toml"), ledger); err != nil {
+	if err := security.Save(containedIn(t, runDir, "findings.toml"), ledger); err != nil {
 		t.Fatal(err)
 	}
 	if err := runCmd(t, Security(), "scaffold", runDir); err == nil {
@@ -274,24 +286,73 @@ func TestSecurityRunImageEnvFallback(t *testing.T) {
 	}
 }
 
+// containedIn builds the run-dir Contained the security and quality commands
+// build at their eight call sites, so a test can hand the retyped
+// security.Save / quality.Save a value without duplicating the Contain call.
+func containedIn(t *testing.T, runDir, name string) pathfence.Contained {
+	t.Helper()
+	c, err := pathfence.Contain(runDir, "run directory", name)
+	if err != nil {
+		t.Fatalf("Contain(%q, %q): %v", runDir, name, err)
+	}
+	return c
+}
+
+// assertRunDirContainment is the shared behaviour the two duplicated
+// containedPath blocks (security_test.go and quality_test.go) collapsed onto
+// when containedPath was deleted: one implementation, asserted once, exercised
+// from both commands' read-only tests.
+//
+// The message assertions are tighter than containedPath's were: a refusal must
+// name the offending path, the artifact ("run directory") and the root, so a
+// delegation that drops the c-5 context fails here rather than passing silently.
+func assertRunDirContainment(t *testing.T, runDir string) {
+	t.Helper()
+
+	for _, name := range []string{"../main.go", filepath.Join("..", "..", "etc", "passwd")} {
+		_, err := pathfence.Contain(runDir, "run directory", name)
+		if err == nil {
+			t.Errorf("Contain accepted %q — it must refuse a path escaping the run dir", name)
+			continue
+		}
+		if !errors.Is(err, pathfence.ErrEscapes) {
+			t.Errorf("Contain(%q) error is not ErrEscapes: %v", name, err)
+		}
+		msg := err.Error()
+		for _, want := range []string{name, "run directory", runDir} {
+			if !strings.Contains(msg, want) {
+				t.Errorf("refusal of %q does not name %q — a hand-edited artifact cannot be fixed from the message alone:\n%s",
+					name, want, msg)
+			}
+		}
+	}
+
+	// An absolute path is refused too, and distinguishably so: it never escapes,
+	// so it carries ErrAbsolute rather than ErrEscapes.
+	if _, err := pathfence.Contain(runDir, "run directory", filepath.Join(runDir, "report.md")); !errors.Is(err, pathfence.ErrAbsolute) {
+		t.Errorf("Contain must refuse an absolute path with ErrAbsolute, got %v", err)
+	}
+
+	// A normal artifact name resolves inside the run dir.
+	got, err := pathfence.Contain(runDir, "run directory", "report.md")
+	if err != nil {
+		t.Fatalf("Contain refused a normal name: %v", err)
+	}
+	if !strings.HasPrefix(got.String(), runDir+string(os.PathSeparator)) {
+		t.Errorf("Contain(%q) = %q, escapes run dir", "report.md", got.String())
+	}
+	if got.Rel() != "report.md" {
+		t.Errorf("Contain(%q).Rel() = %q, want the root-relative form", "report.md", got.Rel())
+	}
+}
+
 func TestSecurityRunReadOnly(t *testing.T) {
 	runDir := t.TempDir()
 
-	// A finding-derived name escaping the run dir must be refused.
-	if _, err := containedPath(runDir, "../main.go"); err == nil {
-		t.Error("containedPath accepted \"../main.go\" — it must refuse a path escaping the run dir")
-	}
-	if _, err := containedPath(runDir, filepath.Join("..", "..", "etc", "passwd")); err == nil {
-		t.Error("containedPath accepted a deep traversal path; it must refuse it")
-	}
-	// A normal artifact name resolves inside the run dir.
-	got, err := containedPath(runDir, "report.md")
-	if err != nil {
-		t.Fatalf("containedPath refused a normal name: %v", err)
-	}
-	if !strings.HasPrefix(got, runDir+string(os.PathSeparator)) {
-		t.Errorf("containedPath(%q) = %q, escapes run dir", "report.md", got)
-	}
+	// A finding-derived name escaping the run dir must be refused. The check is
+	// pathfence's now — containedPath is gone — but the behaviour it guarded is
+	// asserted here unchanged.
+	assertRunDirContainment(t, runDir)
 
 	// A full run must touch only paths under .dross/security/.
 	repo := t.TempDir()
@@ -303,7 +364,7 @@ func TestSecurityRunReadOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	secDir := filepath.Join(repo, ".dross", "security")
-	err = filepath.Walk(secDir, func(path string, _ os.FileInfo, err error) error {
+	err := filepath.Walk(secDir, func(path string, _ os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -317,10 +378,135 @@ func TestSecurityRunReadOnly(t *testing.T) {
 	}
 }
 
+// TestHostileFindingNamesStayInsideRunDir is tracked-path-containment c-3's
+// behavioural half: a finding whose id, title and file all read "../main.go"
+// goes through the REAL write paths a finding reaches — `scaffold` (spec.toml)
+// and `findings reconcile` (the tool's state ledger) — and nothing outside the
+// run dir and the tool's own .dross directory changes.
+//
+// The run dir and the repo share one parent, and the sentinel sits in it, so
+// "../main.go" names the sentinel whether a regression resolved it against the
+// run dir or against the working directory. The writes are proven to have
+// carried the hostile value — spec.toml holds it, reconcile reports it new — so
+// an unchanged sentinel cannot mean the finding never reached a writer.
+func TestHostileFindingNamesStayInsideRunDir(t *testing.T) {
+	const hostile = "../main.go"
+	for _, tc := range []struct {
+		name    string
+		command func() *cobra.Command
+		toolDir func(root string) string
+		save    func(t *testing.T, runDir string)
+	}{
+		{"security", Security, security.SecurityDir, func(t *testing.T, runDir string) {
+			l := security.Ledger{Findings: []security.Finding{{ID: hostile, Title: hostile, File: hostile,
+				Severity: security.SeverityHigh, Class: "path-traversal", Refutation: "panel: confirmed"}}}
+			if err := security.Save(containedIn(t, runDir, "findings.toml"), l); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"quality", Quality, quality.QualityDir, func(t *testing.T, runDir string) {
+			l := quality.Ledger{Findings: []quality.Finding{{ID: hostile, Title: hostile, File: hostile,
+				Risk: quality.RiskHigh, Dimension: quality.Complexity, Refutation: "panel: confirmed"}}}
+			if err := quality.Save(containedIn(t, runDir, "findings.toml"), l); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := t.TempDir()
+			repo := filepath.Join(base, "repo")
+			runDir := filepath.Join(base, "run")
+			for _, d := range []string{repo, runDir} {
+				if err := os.Mkdir(d, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			sentinel := filepath.Join(base, "main.go")
+			original := []byte("package main // sentinel: a finding-derived name must never reach here\n")
+			if err := os.WriteFile(sentinel, original, 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			chdir(t, repo)
+			if err := runCmd(t, Init()); err != nil {
+				t.Fatal(err)
+			}
+			toolDir := tc.toolDir(filepath.Join(repo, ".dross"))
+			if err := os.MkdirAll(toolDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			tc.save(t, runDir)
+
+			before := snapshotFiles(t, base)
+			out := captureStdout(t, func() {
+				if err := runCmd(t, tc.command(), "scaffold", runDir); err != nil {
+					t.Fatalf("scaffold: %v", err)
+				}
+				if err := runCmd(t, tc.command(), "findings", "reconcile", runDir); err != nil {
+					t.Fatalf("findings reconcile: %v", err)
+				}
+			})
+			after := snapshotFiles(t, base)
+
+			if got, err := os.ReadFile(sentinel); err != nil || string(got) != string(original) {
+				t.Fatalf("the sentinel a %q finding names was changed or removed (err %v)", hostile, err)
+			}
+			allowed := func(path string) bool {
+				return strings.HasPrefix(path, runDir+string(os.PathSeparator)) ||
+					strings.HasPrefix(path, toolDir+string(os.PathSeparator))
+			}
+			for path, content := range after {
+				if prev, ok := before[path]; (!ok || prev != content) && !allowed(path) {
+					t.Errorf("%s wrote %s, outside the run dir and %s", tc.name, path, toolDir)
+				}
+			}
+			for path := range before {
+				if _, ok := after[path]; !ok && !allowed(path) {
+					t.Errorf("%s removed %s, outside the run dir and %s", tc.name, path, toolDir)
+				}
+			}
+
+			spec, err := os.ReadFile(filepath.Join(runDir, "spec.toml"))
+			if err != nil {
+				t.Fatalf("scaffold wrote no spec.toml into the run dir: %v", err)
+			}
+			if !strings.Contains(string(spec), hostile) {
+				t.Errorf("spec.toml does not carry %q, so the hostile finding never reached the "+
+					"scaffold writer and an untouched sentinel proves nothing:\n%s", hostile, spec)
+			}
+			if !strings.Contains(out, "1 new") {
+				t.Errorf("reconcile did not fold the hostile finding in as new, so it never reached "+
+					"the state writer:\n%s", out)
+			}
+		})
+	}
+}
+
+// snapshotFiles maps every regular file under dir to its contents.
+func snapshotFiles(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		out[path] = string(b)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
 // TestSecurityCover_ReconcileLoadsRealLedger drives the REAL securityFindings
 // ItemsForRun closure (not the fakeTool stub) end-to-end via `reconcile <run-dir>`.
 // A valid findings.toml with one finding must reconcile as "1 new". If either
-// guard in the closure — containedPath's err check (security.go:46) or
+// guard in the closure — pathfence.Contain's err check (security.go:46) or
 // security.Load's err check (security.go:50) — is negated to `if err == nil`, the
 // closure returns early with zero items and the output reads "0 new" instead.
 func TestSecurityCover_ReconcileLoadsRealLedger(t *testing.T) {
@@ -338,7 +524,7 @@ func TestSecurityCover_ReconcileLoadsRealLedger(t *testing.T) {
 		{ID: "f-1", Title: "tainted exec", Severity: security.SeverityHigh,
 			Class: "cmd-injection", File: "x.go", Refutation: "panel: confirmed"},
 	}}
-	if err := security.Save(filepath.Join(runDir, "findings.toml"), ledger); err != nil {
+	if err := security.Save(containedIn(t, runDir, "findings.toml"), ledger); err != nil {
 		t.Fatal(err)
 	}
 
@@ -370,5 +556,318 @@ func TestSecurityCover_ReconcileMalformedLedgerErrors(t *testing.T) {
 	if err := runCmd(t, securityFindings(), "reconcile", runDir); err == nil {
 		t.Fatal("reconcile of a malformed findings.toml returned nil; the security.Load " +
 			"error guard must surface the parse error")
+	}
+}
+
+// --- t-11 structural guards: the second containment implementation is gone ---
+
+// TestContainedPathIsGone asserts the duplicate check was DELETED, not merely
+// left unused. c-1 is about there being one implementation; a dead-but-present
+// containedPath would satisfy every behavioural test here and still be a second
+// ..-prefix test in non-test code for the next reader to reach for.
+func TestContainedPathIsGone(t *testing.T) {
+	fset := token.NewFileSet()
+	err := filepath.Walk("..", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		f, perr := parser.ParseFile(fset, path, nil, 0)
+		if perr != nil {
+			return perr
+		}
+		for _, d := range f.Decls {
+			fn, ok := d.(*ast.FuncDecl)
+			if ok && fn.Name.Name == "containedPath" {
+				t.Errorf("%s still declares containedPath — the second containment implementation must be deleted, not left unused", path)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestRunDirSitesPassContainedThrough is the structural half of c-1/c-3 for the
+// cmd layer. Behavioural tests cannot see the difference between a site that
+// keeps its Contained and one that unwraps it and re-joins — both open the same
+// file — so the shape is asserted directly, over the shared load's typed
+// syntax:
+//
+//   - each file builds its paths with exactly four pathfence.Contain calls,
+//   - no site re-derives a path with filepath.Join over the run dir,
+//   - no site unwraps a Contained with .String() — whatever the local is named,
+//   - neither report writer reaches os.WriteFile behind the seam's back.
+func TestRunDirSitesPassContainedThrough(t *testing.T) {
+	v := liveView(t)
+	for _, file := range []string{"security.go", "quality.go"} {
+		t.Run(file, func(t *testing.T) {
+			f, info := liveCmdFile(t, v, file)
+			fset := v.Fset
+			contains := 0
+			ast.Inspect(f, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				sel, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				pkg, _ := sel.X.(*ast.Ident)
+				switch {
+				case pkg != nil && pkg.Name == "pathfence" && sel.Sel.Name == "Contain":
+					contains++
+				case pkg != nil && pkg.Name == "os" && sel.Sel.Name == "WriteFile":
+					t.Errorf("%s:%d: os.WriteFile — the report writer must go through pathfence.WriteFile",
+						file, fset.Position(call.Pos()).Line)
+				case pkg != nil && pkg.Name == "filepath" && sel.Sel.Name == "Join" && joinsRunDir(call):
+					t.Errorf("%s:%d: filepath.Join over the run dir — the site must keep the Contained it was given, not re-derive the path",
+						file, fset.Position(call.Pos()).Line)
+				}
+				return true
+			})
+			for _, hit := range containedStringCalls(fset, info, f) {
+				t.Errorf("%s — the Contained must pass through unconverted; unwrapping here un-moves the boundary t-3 moved", hit)
+			}
+			if contains != 4 {
+				t.Errorf("%s has %d pathfence.Contain calls, want 4 (findings.toml x2, spec.toml, report.md)", file, contains)
+			}
+		})
+	}
+}
+
+// TestContainedStringCheckIsTypeKeyed: the pass-through check finds a
+// Contained's .String() by the receiver's type, so a Contained under a name
+// nobody listed is caught, and a builder's String() is not.
+func TestContainedStringCheckIsTypeKeyed(t *testing.T) {
+	fx := loadFixture(t, fixturePath("pathfence_scan", "unwrap_renamed.go.txt"))
+	var got []string
+	for _, p := range fx.Pkgs {
+		for _, f := range p.Syntax {
+			got = append(got, containedStringCalls(fx.Fset, p.Info, f)...)
+		}
+	}
+	joined := strings.Join(got, "\n")
+	if len(got) != 2 || !strings.Contains(joined, "renamed.String()") || !strings.Contains(joined, "x.String()") {
+		t.Errorf("containedStringCalls = %v, want x.String() and renamed.String()", got)
+	}
+	builder := loadFixture(t, fixturePath("pathfence_scan", "unwrap_os.go.txt"))
+	for _, p := range builder.Pkgs {
+		for _, f := range p.Syntax {
+			for _, hit := range containedStringCalls(builder.Fset, p.Info, f) {
+				if strings.Contains(hit, "b.String()") {
+					t.Errorf("a strings.Builder's String() was read as a Contained unwrap: %s", hit)
+				}
+			}
+		}
+	}
+}
+
+// containedStringCalls reports every .String() called on a pathfence.Contained.
+func containedStringCalls(fset *token.FileSet, info *types.Info, f *ast.File) []string {
+	var out []string
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) != 0 {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "String" || !isContained(info.TypeOf(sel.X)) {
+			return true
+		}
+		pos := fset.Position(call.Pos())
+		out = append(out, fmt.Sprintf("%s:%d: %s.String()", filepath.Base(pos.Filename), pos.Line, types.ExprString(sel.X)))
+		return true
+	})
+	return out
+}
+
+// liveCmdFile is one internal/cmd file's typed syntax from the shared load.
+func liveCmdFile(t *testing.T, v *srcView, base string) (*ast.File, *types.Info) {
+	t.Helper()
+	for _, p := range v.Pkgs {
+		if p.Path != modulePath+"/internal/cmd" {
+			continue
+		}
+		for _, f := range p.Syntax {
+			if filepath.Base(v.Fset.Position(f.Pos()).Filename) == base {
+				return f, p.Info
+			}
+		}
+	}
+	t.Fatalf("internal/cmd/%s is not in the shared load", base)
+	return nil, nil
+}
+
+// joinsRunDir reports whether a filepath.Join call takes runDir as its first
+// argument — the shape a site would revert to if it stopped carrying a Contained.
+func joinsRunDir(call *ast.CallExpr) bool {
+	if len(call.Args) == 0 {
+		return false
+	}
+	id, ok := call.Args[0].(*ast.Ident)
+	return ok && id.Name == "runDir"
+}
+
+// TestRunDirSitesCannotUnwrap is the compile-time counterpart: inserting a
+// .String() between a run-dir Contain and the retyped security/quality function
+// must fail to BUILD, so the boundary t-3 moved cannot be quietly un-moved by a
+// later edit that "just needed a string here".
+func TestRunDirSitesCannotUnwrap(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs go build")
+	}
+	compilefence.AssertCompiles(t, `package tmpfence
+
+import (
+	"github.com/Rivil/dross/internal/pathfence"
+	"github.com/Rivil/dross/internal/security"
+)
+
+func f(runDir string) {
+	c, err := pathfence.Contain(runDir, "run directory", "findings.toml")
+	if err != nil {
+		return
+	}
+	_, _ = security.Load(c)
+}
+`)
+
+	compilefence.AssertDoesNotCompile(t, `package tmpfence
+
+import (
+	"github.com/Rivil/dross/internal/pathfence"
+	"github.com/Rivil/dross/internal/security"
+)
+
+func f(runDir string) {
+	c, err := pathfence.Contain(runDir, "run directory", "findings.toml")
+	if err != nil {
+		return
+	}
+	_, _ = security.Load(c.String())
+}
+`, "as pathfence.Contained value in argument to security.Load")
+
+	compilefence.AssertDoesNotCompile(t, `package tmpfence
+
+import (
+	"github.com/Rivil/dross/internal/pathfence"
+	"github.com/Rivil/dross/internal/quality"
+)
+
+func f(runDir string) {
+	c, err := pathfence.Contain(runDir, "run directory", "spec.toml")
+	if err != nil {
+		return
+	}
+	_ = quality.WriteScaffoldSpec(c.String(), "07-x", "x", quality.Ledger{})
+}
+`, "as pathfence.Contained value in argument to quality.WriteScaffoldSpec")
+}
+
+// TestSecurityDetectNamesExclusions: detect names what it scopes out — every
+// name in the shared skip set and the gitleaks allowlist file — so a run's
+// narrowing is on the record before anything is written (c-5).
+func TestSecurityDetectNamesExclusions(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "main.go"), "package main")
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Security(), "detect", dir); err != nil {
+			t.Fatalf("detect: %v", err)
+		}
+	})
+	if !strings.Contains(out, "exclusions:") {
+		t.Fatalf("detect output has no exclusions block:\n%s", out)
+	}
+	for _, name := range stack.SkipDirs() {
+		if !strings.Contains(out, name) {
+			t.Errorf("detect output does not name skipped directory %q:\n%s", name, out)
+		}
+	}
+	if !strings.Contains(out, "gitleaks.toml") {
+		t.Errorf("detect output does not name the gitleaks allowlist:\n%s", out)
+	}
+	// detect is read-only: no run dir may appear.
+	if _, err := os.Stat(filepath.Join(dir, ".dross", "security")); !os.IsNotExist(err) {
+		t.Errorf("detect created .dross/security (stat err=%v) — it must stay read-only", err)
+	}
+}
+
+// TestSecurityRunWritesGitleaksConfig: run writes the allowlist into the run
+// dir, announces its path, and report.md names a path that exists — a report
+// naming a file that was never written fails the Stat.
+func TestSecurityRunWritesGitleaksConfig(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Security(), "run", "."); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	})
+	secDir := filepath.Join(dir, ".dross", "security")
+	runDir := filepath.Join(secDir, soleRunDir(t, secDir))
+	cfgPath := filepath.Join(runDir, security.GitleaksConfigName)
+	body, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("run did not write %s: %v", security.GitleaksConfigName, err)
+	}
+	if !strings.Contains(string(body), "useDefault = true") {
+		t.Fatalf("gitleaks.toml does not extend the default rules:\n%s", body)
+	}
+	// FindRoot resolves symlinks (macOS /var → /private/var), so compare the
+	// announced path by its resolved form.
+	resolved, err := filepath.EvalSymlinks(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "gitleaks allowlist: "+resolved) {
+		t.Errorf("run stdout does not announce the allowlist path %q:\n%s", resolved, out)
+	}
+	report, err := os.ReadFile(filepath.Join(runDir, "report.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var named string
+	for _, line := range strings.Split(string(report), "\n") {
+		if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "- gitleaks allowlist: "); ok {
+			named = strings.TrimSpace(rest)
+		}
+	}
+	if named == "" {
+		t.Fatalf("report.md has no `gitleaks allowlist:` line:\n%s", report)
+	}
+	if _, err := os.Stat(named); err != nil {
+		t.Fatalf("report.md names allowlist %q but it does not exist: %v", named, err)
+	}
+}
+
+// TestSecurityRunReportRecordsExclusions: report.md carries an Exclusions
+// section listing the skipped directories and the allowlist file.
+func TestSecurityRunReportRecordsExclusions(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Security(), "run", "."); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	secDir := filepath.Join(dir, ".dross", "security")
+	report, err := os.ReadFile(filepath.Join(secDir, soleRunDir(t, secDir), "report.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, needle := range []string{"## Exclusions", "testdata", "fixtures", "gitleaks.toml"} {
+		if !strings.Contains(string(report), needle) {
+			t.Errorf("report.md missing %q:\n%s", needle, report)
+		}
 	}
 }

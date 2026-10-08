@@ -1,0 +1,60 @@
+[verify]
+  phase = "scanner-self-exclusion"
+  generated_at = 2026-09-13T09:34:02.894378Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-09-13T09:34:45.422535Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 1.0
+  mutants_killed = 73
+  mutants_survived = 0
+  mutants_not_covered = 0
+  mutants_in_scope = 73
+  unclassified_in_scope = 0
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 73
+    survived = 0
+    timeout = 0
+    in_scope = 73
+    score = 1.0
+    file_count = 17
+    measured_on = "helicon"
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/stack/detect_test.go:TestDetectLanguagesDrossRootIsGoOnly", "internal/stack/detect_test.go:TestDetectFixtureOnlyExtIsUnsupported", "internal/stack/detect_test.go:TestMarkerProfilesSkipsFixtures", "internal/stack/detect_test.go:TestSkipDirIsSegmentNotSubstring", "internal/stack/detect_test.go:TestSkipDirsSingleDefinition"]
+  notes = "exact [go] on the real root; Detect + MarkerProfiles each pinned against a fixtures/-only tree; segment-not-substring; go/ast walk forbids a second testdata/fixtures literal outside detect.go"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/techdebt_selfscan_test.go:TestTechdebtSelfScanExcludesOwnPackage", "internal/techdebt/filter_test.go:TestFilterTrailingSlashIsPrefix", "internal/cmd/techdebt_test.go:TestTechdebtAppliesProjectExclude"]
+  notes = "real-repo scan: zero findings under internal/techdebt/ after Filter, negative control requires >=1 marker unfiltered, over-exclusion bounded on both sides"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/techdebt_test.go:TestTrackedFilesSkipsFixtureDirs", "internal/cmd/techdebt_selfscan_test.go:TestTechdebtDrossTreeNoFixtureFindings"]
+  notes = "both enumerator branches (ls-files + no-git walk); raw scan proves the fixture files trip long-line/oversized thresholds so the 0-finding assertion is not vacuous"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/security/gitleaks_test.go:TestIdentityIDAllowlistShape", "internal/security/gitleaks_test.go:TestGitleaksConfigExtendsDefault", "internal/security/gitleaks_test.go:TestGitleaksConfigNotPathExcluded", "internal/security/gitleaks_test.go:TestGitleaksLiveAllowlist", "internal/security/gitleaks_test.go:TestGitleaksDrossTreeNoIdentityHits", "internal/cmd/secure_prompt_test.go:TestSecurePromptMandatedSections/c-4"]
+  notes = "12-row shape table parsed back from the emitted TOML; live gitleaks legs ran green locally 2026-09-13 (gitleaks on PATH, not skipped): positive control fires without --config, zero ^[0-9a-f]{16}$ secrets over dross git history with it"
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/security_test.go:TestSecurityDetectNamesExclusions", "internal/security/recon_test.go:TestManifestCarriesExclusions", "internal/cmd/security_test.go:TestSecurityRunWritesGitleaksConfig", "internal/cmd/security_test.go:TestSecurityRunReportRecordsExclusions", "internal/cmd/secure_prompt_test.go:TestSecurePromptMandatedSections/c-5"]
+  notes = "detect output names every stack.SkipDirs() entry + gitleaks.toml and stays read-only; manifest DeepEquals stack.SkipDirs() (drift pin); report.md names a path that Stat succeeds on"

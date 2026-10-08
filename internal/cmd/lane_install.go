@@ -13,12 +13,17 @@ package cmd
 // between two commands with different answers about the same host.
 
 import (
+	"bytes"
 	"fmt"
-	"os/exec"
+	"io"
+	"os"
 	"strings"
 
+	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/testlane"
 )
 
 // installStep is what dross intends to do about ONE tool a lane needs.
@@ -187,7 +192,7 @@ func laneInstallable(s installStep) bool {
 // its own flag rather than as a script.
 func installArgv(s installStep) ([]string, error) {
 	if s.Line != "" {
-		rest, err := shArgvFor("test_lane.install", s.Line)
+		rest, err := testlane.ShArgvFor("test_lane.install", s.Line)
 		if err != nil {
 			return nil, err
 		}
@@ -207,20 +212,33 @@ func installArgv(s installStep) ([]string, error) {
 // so both install surfaces and both of their test suites stub the same variable.
 var localInstallFn = runInstallLocally
 
+// installStderr is where a failed install's own output goes: this process's
+// stderr. Tests swap it to capture what a user would see.
+var installStderr io.Writer = os.Stderr
+
 // runInstallLocally spawns an install argv on this machine.
 //
 // Output is captured rather than streamed: an install is short and its whole
 // value on failure is the tail, unlike a suite whose silence is indistinguishable
-// from a hang.
-func runInstallLocally(argv []string) (string, error) {
+// from a hang. On failure that output is printed to stderr, where the user is
+// looking — never returned, so it cannot reach an error, telemetry or a record.
+func runInstallLocally(argv []string) error {
 	if len(argv) == 0 {
-		return "", fmt.Errorf("empty install command")
+		return fmt.Errorf("empty install command")
 	}
-	out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput()
+	out, err := testlane.RunInstall(argv)
 	if err != nil {
-		return string(out), fmt.Errorf("%s: %w", argv[0], err)
+		printInstallOutput(argv[0], out)
+		return fmt.Errorf("%s: %w", argv[0], err)
 	}
-	return string(out), nil
+	return nil
+}
+
+// printInstallOutput shows a failed install's own output on stderr.
+func printInstallOutput(bin string, out []byte) {
+	if len(bytes.TrimSpace(out)) > 0 {
+		fmt.Fprintf(installStderr, "%s printed:\n%s\n", bin, bytes.TrimRight(out, "\n"))
+	}
 }
 
 // runLaneInstall executes one step on the side the caller chose: the granted
@@ -239,21 +257,25 @@ func runInstallLocally(argv []string) (string, error) {
 // The dry-run default stays the callers': whether to run at all is a decision
 // about the invocation, while whether this line MAY run is a decision about the
 // line, and only the second one belongs to a shared helper.
-func runLaneInstall(root, repoDir string, target *remote.Target, lane project.TestLane, s installStep) (string, error) {
+func runLaneInstall(root, repoDir string, target *remote.Target, lane project.TestLane, s installStep) error {
 	if s.Line != "" {
-		state, cerr := LaneInstallConsented(root, repoDir, lane.Name, laneInstallConsentLine(lane))
+		state, cerr := consent.LaneInstallConsented(localstore.GrantStore(root), repoDir, lane.Name, consent.LaneInstallLine(lane))
 		if cerr != nil {
 			// Refused BEFORE the argv is even rendered, so an ungranted line
 			// never reaches a seam and never reaches a transport.
-			return "", laneInstallRefusal(lane, state, cerr)
+			return consent.LaneInstallRefusal(lane, state, cerr)
 		}
 	}
 	argv, err := installArgv(s)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if target != nil {
-		return remoteExecFn(*target, argv)
+		out, err := remoteExecFn(*target, argv)
+		if err != nil {
+			printInstallOutput(argv[0], []byte(out))
+		}
+		return err
 	}
 	return localInstallFn(argv)
 }

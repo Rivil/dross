@@ -85,6 +85,13 @@ func f(limit int) error {
 		return out, nil
 	}
 	t.Cleanup(func() { goListDirs = orig })
+
+	// The drain is consent-gated: it shells `go list` and, with --report,
+	// `go test -coverprofile` over the repo's own packages. Every fixture that
+	// drives a gated command needs the grant, or the whole file measures the
+	// refusal instead of the drain. survivor_drain_consent_test.go is where the
+	// refusal is asserted, and it deliberately does NOT call this.
+	trustFixture(t)
 	return dir
 }
 
@@ -665,39 +672,6 @@ func TestDrainCeilingIsPerMutantNotPerFile(t *testing.T) {
 	if !strings.Contains(out, "1 of these are covered AND operator-applicable") {
 		t.Errorf("expected exactly one killable survivor:\n%s", out)
 	}
-}
-
-// TestRealGoListDirsSurfacesFailures covers the REAL package-discovery closure.
-// Every other drain test substitutes goListDirs wholesale, so the function that
-// actually shells out to the toolchain had no coverage: a broken `go list` would
-// have surfaced as an empty package set — a drain that reports nothing
-// outstanding because it looked at nothing.
-func TestRealGoListDirsSurfacesFailures(t *testing.T) {
-	t.Run("a directory with no Go module is an error", func(t *testing.T) {
-		// Not a module: `go list ./...` exits non-zero.
-		_, err := goListDirs(t.TempDir())
-		if err == nil {
-			t.Fatal("goListDirs over a non-module directory returned no error")
-		}
-		if !strings.Contains(err.Error(), "go list") {
-			t.Errorf("err = %q, want the go list context", err)
-		}
-	})
-
-	t.Run("this repo lists its packages", func(t *testing.T) {
-		dirs, err := goListDirs(repoRootFromTest(t))
-		if err != nil {
-			t.Fatalf("goListDirs over the real repo: %v", err)
-		}
-		if len(dirs) < 20 {
-			t.Fatalf("listed %d package dirs, want the whole repo — the blank-line filter or the split is wrong", len(dirs))
-		}
-		for _, d := range dirs {
-			if strings.TrimSpace(d) == "" {
-				t.Error("a blank line survived into the package list")
-			}
-		}
-	})
 }
 
 // TestRunGremlinsOverPackagesRequiresAProject covers the real adapter-dispatch

@@ -1,0 +1,92 @@
+[verify]
+  phase = "board-finalize-on-complete"
+  generated_at = 2026-10-05T03:00:42.561961Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-10-05T03:01:18.543101Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9416767922235723
+  mutants_killed = 1550
+  mutants_survived = 91
+  mutants_not_covered = 91
+  mutants_no_block = 79
+  mutants_test_gap = 12
+  mutants_in_scope = 1646
+  unclassified_in_scope = 0
+  criteria_total = 11
+  criteria_covered = 11
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 1550
+    survived = 91
+    timeout = 5
+    in_scope = 1646
+    score = 0.9416767922235723
+    file_count = 64
+    measured_on = "helicon"
+    whole_file = ["internal/boardsync/backlog.go — adapter-lacks-range-runner", "internal/boardsync/backlog_reconcile_test.go — adapter-lacks-range-runner", "internal/boardsync/board_lifecycle_divergence_test.go — adapter-lacks-range-runner", "internal/boardsync/ctx.go — adapter-lacks-range-runner", "internal/boardsync/disposition.go — adapter-lacks-range-runner", "internal/boardsync/disposition_test.go — adapter-lacks-range-runner", "internal/boardsync/finalize.go — adapter-lacks-range-runner", "internal/boardsync/finalize_test.go — adapter-lacks-range-runner", "internal/boardsync/identity_label_test.go — adapter-lacks-range-runner", "internal/boardsync/phase.go — adapter-lacks-range-runner", "internal/boardsync/reap.go — adapter-lacks-range-runner", "internal/boardsync/reap_apply.go — adapter-lacks-range-runner", "internal/boardsync/reap_catchup.go — adapter-lacks-range-runner", "internal/boardsync/reap_catchup_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_classify_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_discover.go — adapter-lacks-range-runner", "internal/boardsync/task.go — adapter-lacks-range-runner", "internal/cmd/board_switch_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/deferred.go — adapter-lacks-range-runner", "internal/cmd/deferred_absorb.go — adapter-lacks-range-runner", "internal/cmd/deferred_absorb_test.go — adapter-lacks-range-runner", "internal/cmd/deferred_add.go — adapter-lacks-range-runner", "internal/cmd/deferred_add_test.go — adapter-lacks-range-runner", "internal/cmd/deferred_target.go — adapter-lacks-range-runner", "internal/cmd/issue.go — adapter-lacks-range-runner", "internal/cmd/issue_reap_cmd.go — adapter-lacks-range-runner", "internal/cmd/issue_reap_cmd_test.go — adapter-lacks-range-runner", "internal/cmd/issue_task.go — adapter-lacks-range-runner", "internal/cmd/issue_test.go — adapter-lacks-range-runner", "internal/cmd/phase.go — adapter-lacks-range-runner", "internal/cmd/phase_complete_board_test.go — adapter-lacks-range-runner", "internal/cmd/phase_finalize.go — adapter-lacks-range-runner", "internal/cmd/project_writer_pin_test.go — adapter-lacks-range-runner", "internal/cmd/readme_board_finalize_test.go — adapter-lacks-range-runner", "internal/cmd/route_complete_test.go — adapter-lacks-range-runner", "internal/cmd/ship_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/spec_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/survivor.go — adapter-lacks-range-runner", "internal/cmd/survivor_lossless_test.go — adapter-lacks-range-runner", "internal/cmd/survivor_route_test.go — adapter-lacks-range-runner", "internal/cmd/task_lossless_test.go — adapter-lacks-range-runner", "internal/cmd/validate.go — adapter-lacks-range-runner", "internal/cmd/validate_absorb_test.go — adapter-lacks-range-runner", "internal/deferred/deferred.go — adapter-lacks-range-runner", "internal/deferred/deferred_test.go — adapter-lacks-range-runner", "internal/forge/forge.go — adapter-lacks-range-runner", "internal/forge/forge_test.go — adapter-lacks-range-runner", "internal/forge/identity_label_test.go — adapter-lacks-range-runner", "internal/forge/youtrack_test.go — adapter-lacks-range-runner", "internal/phase/phase.go — adapter-lacks-range-runner", "internal/phase/phase_test.go — adapter-lacks-range-runner", "internal/phase/plan_lossless_test.go — adapter-lacks-range-runner", "internal/project/export_test.go — adapter-lacks-range-runner", "internal/project/patch.go — adapter-lacks-range-runner", "internal/project/patch_diff.go — adapter-lacks-range-runner", "internal/project/patch_keyed_test.go — adapter-lacks-range-runner", "internal/project/patch_save.go — adapter-lacks-range-runner", "internal/project/patch_save_test.go — adapter-lacks-range-runner", "internal/project/patch_test.go — adapter-lacks-range-runner", "internal/project/plan_verify_test.go — adapter-lacks-range-runner", "internal/project/project.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/survivor/store.go — adapter-lacks-range-runner", "internal/survivor/store_lossless_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/phase_complete_board_test.go:TestCompleteFinalizesTheBoard", "internal/cmd/phase_complete_board_test.go:TestCompleteRerunIsReadOnly", "internal/cmd/phase_complete_board_test.go:TestCompleteBoardOffMakesNoCall", "internal/boardsync/finalize_test.go:TestFinalizeClosesExistingCards", "internal/boardsync/finalize_test.go:TestFinalizeIsIdempotent"]
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/ship_prompt_test.go:TestShipPromptClosesTaskCardsAfterPhaseComplete", "internal/cmd/ship_prompt_test.go:TestShipPromptEmitsTerminalBoardStatuses", "internal/boardsync/board_lifecycle_divergence_test.go:TestEveryMirrorLaneHasATerminalEmission"]
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/forge/identity_label_test.go:TestIdentityLabelLookupIsSilent", "internal/forge/identity_label_test.go:TestUnknownFilterLabelStillWarns", "internal/forge/identity_label_test.go:TestMixedQueryWarnsOnlyFilterLabel", "internal/boardsync/identity_label_test.go:TestIdentityLabelsAgreeWithForge", "internal/boardsync/identity_label_test.go:TestResolvePhaseIssueFirstSyncIsSilent"]
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/task_lossless_test.go:TestTaskStatusChangesOneLine", "internal/cmd/task_lossless_test.go:TestTaskAddInsertsInPlace", "internal/cmd/task_lossless_test.go:TestTaskEditChangesOneLine", "internal/cmd/task_lossless_test.go:TestTaskMoveRelocatesTheBlock", "internal/cmd/task_lossless_test.go:TestTaskRemoveTakesItsBlock", "internal/phase/plan_lossless_test.go:TestPlanCorpusOneLineStatusFlip", "internal/project/patch_keyed_test.go:TestKeyedInsertAtEndAppends", "internal/project/patch_keyed_test.go:TestKeyedMoveCarriesTrailingComments", "internal/project/patch_keyed_test.go:TestKeyedNestedArrayInserts"]
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/survivor_lossless_test.go:TestSurvivorAcceptKeepsAllowSecretMarkers", "internal/cmd/survivor_lossless_test.go:TestSurvivorRouteLeavesStoreUntouched", "internal/survivor/store_lossless_test.go:TestRetireMiddleKeepsNeighbours"]
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/boardsync/disposition_test.go:TestDisposedSurvivorByDestinationRun", "internal/boardsync/disposition_test.go:TestDisposedAbsorbedItem", "internal/boardsync/backlog_reconcile_test.go:TestBacklogVerdictTable", "internal/boardsync/backlog_reconcile_test.go:TestBacklogAndReapAgreeOnDisposition", "internal/boardsync/backlog_reconcile_test.go:TestSyncBacklogClosesAnAbsorbedItemOnce", "internal/boardsync/reap_classify_test.go:TestRoutedBacklogStrandsOnItsDispositionRecord", "internal/boardsync/reap_classify_test.go:TestOrphanDeferredStrandsOnlyOnDisposition"]
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/validate_absorb_test.go:TestValidateRefusesBadAbsorbedIDs", "internal/cmd/validate_absorb_test.go:TestValidateAcceptsAbsorbedIDs", "internal/cmd/validate_absorb_test.go:TestCriterionDeferredRoundTrips", "internal/cmd/spec_prompt_test.go:TestSpecPromptRecordsAbsorbedItems", "internal/cmd/deferred_absorb_test.go:TestDeferredAbsorbRecordsTheID"]
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/route_complete_test.go:TestDeferredRouteRefusesCompleteTarget", "internal/cmd/route_complete_test.go:TestSurvivorRouteRefusesCompleteTargetBeforeResolve", "internal/cmd/route_complete_test.go:TestDeferredAddRefusesCompleteTarget"]
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/survivor_route_test.go:TestSurvivorRerouteMovesTheEntry", "internal/cmd/survivor_route_test.go:TestSurvivorRouteSameTargetIsNoop", "internal/cmd/survivor_route_test.go:TestSurvivorRerouteKeepsOneBoardCard", "internal/deferred/deferred_test.go:TestFindBySurvivor"]
+
+[[criterion]]
+  id = "c-10"
+  status = "covered"
+  tests = ["internal/cmd/board_switch_prompt_test.go:TestNoPromptNamesBoardSyncKey", "internal/cmd/board_switch_prompt_test.go:TestBoardCallingPromptsSurfaceFailure"]
+
+[[criterion]]
+  id = "c-11"
+  status = "covered"
+  tests = ["internal/boardsync/reap_catchup_test.go:TestFindMissingListsAnUnknownPhase", "internal/boardsync/reap_catchup_test.go:TestApplyMissingCreatesAtTerminal", "internal/cmd/issue_reap_cmd_test.go:TestReapDryRunListsMissingPhase"]
+
+[[finding]]
+  severity = "NOTE"
+  text = "round 2 after t-18: the 11 in-hunk own-package gaps of round 1 are killed; the only in-hunk survivors are 5 gremlins switch-case ceiling cases, each accepted citing the test that takes the branch. score 0.94 over 1646 in-scope (0.99 over the 1567 reachable); 86 inherited survivors in touched files were already accepted; 141 out-of-scope survivors filtered"

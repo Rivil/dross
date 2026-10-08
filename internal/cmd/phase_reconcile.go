@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/phase"
 )
 
@@ -103,7 +104,7 @@ var runSubcommand = func(parent *cobra.Command, sub *cobra.Command, args ...stri
 // completed, a breadcrumb read resurrects it here — a long-finished phase whose
 // local branch happens to still exist gets counted as waiting on a completion
 // forever. changes.Complete never scrolls. It is also deliberately narrower
-// than phaseDone, which counts `shipped` as done: a shipped-not-merged phase is
+// than phase.Done, which counts `shipped` as done: a shipped-not-merged phase is
 // exactly what this list is for.
 func reconcilablePhases(root, repoDir string) ([]string, error) {
 	ids, err := phase.List(root)
@@ -115,7 +116,7 @@ func reconcilablePhases(root, repoDir string) ([]string, error) {
 		if changes.Complete(root, id) {
 			continue
 		}
-		if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/phase/"+id)...) != nil {
+		if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/phase/"+id)...) != nil {
 			continue // no branch left: nothing to tear down
 		}
 		out = append(out, id)

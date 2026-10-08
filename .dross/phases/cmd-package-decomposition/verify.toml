@@ -1,0 +1,599 @@
+[verify]
+  phase = "cmd-package-decomposition"
+  generated_at = 2026-09-22T08:27:24.518748Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-09-22T08:28:12.863909Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9124124124124124
+  mutants_killed = 1823
+  mutants_survived = 175
+  mutants_not_covered = 175
+  mutants_in_scope = 1998
+  unclassified_in_scope = 0
+  criteria_total = 6
+  criteria_covered = 6
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 1823
+    survived = 175
+    timeout = 0
+    in_scope = 1998
+    score = 0.9124124124124124
+    file_count = 125
+    measured_on = "helicon"
+    whole_file = ["internal/boardsync/backlog.go — adapter-lacks-range-runner", "internal/boardsync/board_lifecycle_divergence_test.go — adapter-lacks-range-runner", "internal/boardsync/config_test.go — adapter-lacks-range-runner", "internal/boardsync/ctx.go — adapter-lacks-range-runner", "internal/boardsync/inbound.go — adapter-lacks-range-runner", "internal/boardsync/lifecycle.go — adapter-lacks-range-runner", "internal/boardsync/lifecycle_test.go — adapter-lacks-range-runner", "internal/boardsync/milestone.go — adapter-lacks-range-runner", "internal/boardsync/phase.go — adapter-lacks-range-runner", "internal/boardsync/reap.go — adapter-lacks-range-runner", "internal/boardsync/reap_apply.go — adapter-lacks-range-runner", "internal/boardsync/reap_classify_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_discover.go — adapter-lacks-range-runner", "internal/boardsync/reap_discover_test.go — adapter-lacks-range-runner", "internal/boardsync/reap_undo.go — adapter-lacks-range-runner", "internal/boardsync/reap_undo_test.go — adapter-lacks-range-runner", "internal/boardsync/sync_test.go — adapter-lacks-range-runner", "internal/boardsync/task.go — adapter-lacks-range-runner", "internal/boardsync/task_pull.go — adapter-lacks-range-runner", "internal/boardsync/task_pull_test.go — adapter-lacks-range-runner", "internal/boardsync/task_test.go — adapter-lacks-range-runner", "internal/boardsync/toolfence_composer_test.go — adapter-lacks-range-runner", "internal/cmd/backfill_durability_test.go — adapter-lacks-range-runner", "internal/cmd/boundary_test.go — adapter-lacks-range-runner", "internal/cmd/cli_surface_test.go — adapter-lacks-range-runner", "internal/cmd/consent_shim_test.go — adapter-lacks-range-runner", "internal/cmd/deferred.go — adapter-lacks-range-runner", "internal/cmd/deferred_add.go — adapter-lacks-range-runner", "internal/cmd/deferred_board_test.go — adapter-lacks-range-runner", "internal/cmd/deferred_store_test.go — adapter-lacks-range-runner", "internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/doctor_lane_toolchain_test.go — adapter-lacks-range-runner", "internal/cmd/doctor_test.go — adapter-lacks-range-runner", "internal/cmd/execconsent_audit_test.go — adapter-lacks-range-runner", "internal/cmd/friction_window_test.go — adapter-lacks-range-runner", "internal/cmd/hermetic_dross_read_test.go — adapter-lacks-range-runner", "internal/cmd/hostile_config_test.go — adapter-lacks-range-runner", "internal/cmd/hostpolicy_test.go — adapter-lacks-range-runner", "internal/cmd/issue.go — adapter-lacks-range-runner", "internal/cmd/issue_backlog_close_test.go — adapter-lacks-range-runner", "internal/cmd/issue_close_truth_test.go — adapter-lacks-range-runner", "internal/cmd/issue_quick_close_test.go — adapter-lacks-range-runner", "internal/cmd/issue_reap_apply_test.go — adapter-lacks-range-runner", "internal/cmd/issue_reap_classify_test.go — adapter-lacks-range-runner", "internal/cmd/issue_reap_cmd.go — adapter-lacks-range-runner", "internal/cmd/issue_reap_cmd_test.go — adapter-lacks-range-runner", "internal/cmd/issue_reap_undo_test.go — adapter-lacks-range-runner", "internal/cmd/issue_task.go — adapter-lacks-range-runner", "internal/cmd/issue_task_close_test.go — adapter-lacks-range-runner", "internal/cmd/issue_task_pull.go — adapter-lacks-range-runner", "internal/cmd/issue_task_pull_test.go — adapter-lacks-range-runner", "internal/cmd/issue_task_state_test.go — adapter-lacks-range-runner", "internal/cmd/issue_task_test.go — adapter-lacks-range-runner", "internal/cmd/issue_test.go — adapter-lacks-range-runner", "internal/cmd/issue_verb_shape_test.go — adapter-lacks-range-runner", "internal/cmd/lane_install.go — adapter-lacks-range-runner", "internal/cmd/lane_preview.go — adapter-lacks-range-runner", "internal/cmd/lane_preview_locality.go — adapter-lacks-range-runner", "internal/cmd/local.go — adapter-lacks-range-runner", "internal/cmd/local_test.go — adapter-lacks-range-runner", "internal/cmd/milestone_dispatch_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/milestone_progress.go — adapter-lacks-range-runner", "internal/cmd/milestone_progress_test.go — adapter-lacks-range-runner", "internal/cmd/mutation_remote_wiring_test.go — adapter-lacks-range-runner", "internal/cmd/mutationcfg_shim_test.go — adapter-lacks-range-runner", "internal/cmd/phase.go — adapter-lacks-range-runner", "internal/cmd/phase_backfill.go — adapter-lacks-range-runner", "internal/cmd/phase_backfill_test.go — adapter-lacks-range-runner", "internal/cmd/phase_lifecycle.go — adapter-lacks-range-runner", "internal/cmd/phase_reconcile.go — adapter-lacks-range-runner", "internal/cmd/phase_reconcile_test.go — adapter-lacks-range-runner", "internal/cmd/project_test.go — adapter-lacks-range-runner", "internal/cmd/redproof_lifecycle_test.go — adapter-lacks-range-runner", "internal/cmd/redproof_replay.go — adapter-lacks-range-runner", "internal/cmd/redproof_repoint_cmd_test.go — adapter-lacks-range-runner", "internal/cmd/redproof_repoint_test.go — adapter-lacks-range-runner", "internal/cmd/redproof_set_test.go — adapter-lacks-range-runner", "internal/cmd/redproof_test.go — adapter-lacks-range-runner", "internal/cmd/remote_bootstrap.go — adapter-lacks-range-runner", "internal/cmd/remote_grant.go — adapter-lacks-range-runner", "internal/cmd/run.go — adapter-lacks-range-runner", "internal/cmd/ship_test.go — adapter-lacks-range-runner", "internal/cmd/status.go — adapter-lacks-range-runner", "internal/cmd/status_test.go — adapter-lacks-range-runner", "internal/cmd/survivor_backlog_repo_test.go — adapter-lacks-range-runner", "internal/cmd/survivor_drain.go — adapter-lacks-range-runner", "internal/cmd/task_lifecycle_test.go — adapter-lacks-range-runner", "internal/cmd/test.go — adapter-lacks-range-runner", "internal/cmd/test_lane.go — adapter-lacks-range-runner", "internal/cmd/test_lane_install.go — adapter-lacks-range-runner", "internal/cmd/toolfence_enum_test.go — adapter-lacks-range-runner", "internal/cmd/trust.go — adapter-lacks-range-runner", "internal/cmd/trust_lane_install_test.go — adapter-lacks-range-runner", "internal/cmd/trust_lane_test.go — adapter-lacks-range-runner", "internal/cmd/trust_test.go — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_lock_test.go — adapter-lacks-range-runner", "internal/cmd/verify_scratch_test.go — adapter-lacks-range-runner", "internal/cmd/verify_test.go — adapter-lacks-range-runner", "internal/cmd/verifyscope.go — adapter-lacks-range-runner", "internal/cmd/watch.go — adapter-lacks-range-runner", "internal/consent/consent.go — adapter-lacks-range-runner", "internal/consent/consent_test.go — adapter-lacks-range-runner", "internal/consent/lane.go — adapter-lacks-range-runner", "internal/consent/lane_test.go — adapter-lacks-range-runner", "internal/consent/store.go — adapter-lacks-range-runner", "internal/consent/store_test.go — adapter-lacks-range-runner", "internal/deferred/deferred.go — adapter-lacks-range-runner", "internal/deferred/deferred_test.go — adapter-lacks-range-runner", "internal/diag/combinations.go — adapter-lacks-range-runner", "internal/diag/diag.go — adapter-lacks-range-runner", "internal/diag/diag_test.go — adapter-lacks-range-runner", "internal/diag/redproof.go — adapter-lacks-range-runner", "internal/diag/redproof_test.go — adapter-lacks-range-runner", "internal/diag/roadmap.go — adapter-lacks-range-runner", "internal/diag/toolchain.go — adapter-lacks-range-runner", "internal/diag/toolchain_test.go — adapter-lacks-range-runner", "internal/diag/trust.go — adapter-lacks-range-runner", "internal/diag/trust_test.go — adapter-lacks-range-runner", "internal/mutationcfg/mutationcfg.go — adapter-lacks-range-runner", "internal/mutationcfg/mutationcfg_test.go — adapter-lacks-range-runner", "internal/mutationcfg/toolchain.go — adapter-lacks-range-runner", "internal/mutationcfg/toolchain_test.go — adapter-lacks-range-runner", "internal/phase/done.go — adapter-lacks-range-runner", "internal/phase/done_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection", "internal/consent/consent_test.go:TestFingerprint", "internal/consent/consent_test.go:TestConsentStates", "internal/consent/consent_test.go:TestReplayAndRunSetsAreIndependent", "internal/consent/lane_test.go:TestOneLaneGoesStaleAlone", "internal/consent/lane_test.go:TestInstallGrantsAreIsolatedPerLane", "internal/cmd/trust_test.go", "internal/cmd/exec_consent_test.go:TestEverySpawnSiteGatedOrExempt"]
+  notes = "Boundary rule 3 proves cmd imports internal/consent; 24 consent unit tests moved with the code; trust_test.go drives the cobra tree end to end; the gate call (requireExecConsent) stays in cmd and every spawn site is enumerated as gated."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection", "internal/boardsync/sync_test.go:TestSyncPhaseCreatesThenUpdates", "internal/boardsync/lifecycle_test.go:TestLifecycleMappingRoundTrips", "internal/boardsync/reap_classify_test.go:TestClassifyBoardMoved", "internal/boardsync/reap_discover_test.go:TestUnlinkedMirrorIsDiscovered", "internal/boardsync/task_test.go:TestSyncTasksMintsOneIssuePerTask", "internal/boardsync/task_pull_test.go", "internal/cmd/issue_test.go", "internal/cmd/issue_reap_apply_test.go:TestReapApplyClosesEveryLane", "internal/cmd/issue_reap_undo_test.go"]
+  notes = "Boundary rule 3 proves cmd imports internal/boardsync; 66 boardsync tests; issue*_test.go drive `issue` through cobra. Cross-check: 116 NotCovered survivors in boardsync (backlog/reap_apply/reap_undo/inbound) are a per-package blind spot — the e2e tests that kill them live in cmd, which gremlins cannot see for a boardsync mutant. Routed to extracted-package-test-parity, not a covering-test gap."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection", "internal/diag/diag_test.go:TestLevelsAndIssues", "internal/diag/trust_test.go:TestConfigTrustExecConsentLadder", "internal/diag/trust_test.go:TestLaneConsentLevels", "internal/diag/redproof_test.go:TestPinLinesMatrix", "internal/diag/diag_test.go:TestRoadmapDuplicatesNamesEveryClaimant", "internal/diag/diag_test.go:TestCombinationWarnings", "internal/diag/toolchain_test.go:TestMutationToolchainNamesTheAdapter", "internal/cmd/cli_surface_test.go:TestDoctorRunGolden"]
+  notes = "diag tests assert structured Issue results per check; TestDoctorRunGolden pins the composed transcript + exit code byte-for-byte. 2 NotCovered survivors in diag/redproof.go routed with the boardsync set."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection", "internal/mutationcfg/mutationcfg_test.go:TestDrainAndVerifyBuildTheSameGremlins", "internal/mutationcfg/toolchain_test.go:TestToolsAndAdaptersShareTheRoster", "internal/mutationcfg/mutationcfg_test.go:TestConfiguredAdaptersAllowlist", "internal/mutationcfg/mutationcfg_test.go:TestResolveTuningFallsBackWhenUnreached", "internal/cmd/mutation_remote_wiring_test.go", "internal/cmd/verify_lock_test.go", "internal/cmd/doctor_lane_toolchain_test.go"]
+  notes = "verify (configuredAdaptersFor), the survivor drain and doctor (mutationcfg.Tools/LookPath) all resolve through mutationcfg; TestDrainAndVerifyBuildTheSameGremlins pins the single construction path. Merge with remote-host-mutex threaded the host-lock holder through Source.Lock; verify_lock_test.go still asserts the minted holder."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection", "internal/cmd/boundary_test.go:TestCmdForbiddenImportRatchet", "internal/cmd/boundary_test.go:TestBoundaryDirectionRulesFire", "internal/cmd/boundary_test.go:TestBoundaryVacuityFloor"]
+  notes = "Live-tree run plus synthetic-map proofs that each rule fires (reverse import, cobra outside cmd, dropped extracted import, new os/exec importer, stale baseline entry) and a vacuity floor of 30 packages."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/cli_surface_test.go:TestCLISurfacePinned", "internal/cmd/cli_surface_test.go:TestDoctorRunGolden", "internal/cmd/boundary_test.go:TestNoTestLost", "internal/cmd/cli_surface_test.go:TestGoldenMissingFails"]
+  notes = "Goldens for the four trees + full doctor transcript/exit, re-minted from milestone/v1.7 after the merge (only --no-wait and remote-host-mutex test rows changed). TestNoTestLost proves every pre-move test is defined in exactly as many packages as before. Edits to existing cmd tests inspected by diff: identifier re-qualification only, no assertion changes."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Score 0.91 over 1998 in-scope mutants; all 175 survivors are NotCovered (efficacy over the 1823 reachable = 1.00). 112 keys routed to extracted-package-test-parity: the extraction moved backlog/reap_apply/reap_undo/inbound into internal/boardsync while their covering tests stayed in internal/cmd as cobra e2e tests (locked test_policy), so per-package gremlins now reports them uncovered (boardsync own-test coverage: backlog.go 7%, reap_apply.go 9%, reap_undo.go 0%, inbound.go 0%). The code is tested; the mutation gate on it is blind until that phase gives boardsync package-level tests."
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap.go:472 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:40 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:44 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:48 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:52 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:56 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:125 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:125 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:126 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:144 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:164 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:171 (INCREMENT_DECREMENT) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:174 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:177 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:182 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:200 (ARITHMETIC_BASE) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:204 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:211 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:211 (INVERT_NEGATIVES) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:211 (ARITHMETIC_BASE) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:215 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:241 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:253 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:258 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:279 (CONDITIONALS_BOUNDARY) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:279 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:279 (INCREMENT_DECREMENT) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:280 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:291 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:304 (CONDITIONALS_BOUNDARY) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_apply.go:304 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_undo.go:38 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_undo.go:43 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_undo.go:51 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_undo.go:61 (CONDITIONALS_BOUNDARY) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_undo.go:61 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_undo.go:63 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_undo.go:67 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_undo.go:70 (INCREMENT_DECREMENT) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_undo.go:73 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_undo.go:78 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/reap_undo.go:93 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/task.go:78 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/task.go:217 (CONDITIONALS_BOUNDARY) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/task.go:217 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/task.go:257 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/task.go:261 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:78 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:92 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:106 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:110 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:113 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:150 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:159 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:177 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:183 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:187 (INCREMENT_DECREMENT) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:204 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:208 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:211 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:221 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:82 (ARITHMETIC_BASE) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:49 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:57 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:259 (ARITHMETIC_BASE) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:263 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:267 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:270 (ARITHMETIC_BASE) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:288 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:297 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:317 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:319 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:330 (CONDITIONALS_BOUNDARY) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:83 (ARITHMETIC_BASE) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:330 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:350 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:362 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:375 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:362 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:71 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:388 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:399 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:392 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:405 (CONDITIONALS_BOUNDARY) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:402 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:405 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:419 (INCREMENT_DECREMENT) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:412 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:429 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:423 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:429 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:429 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:447 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:433 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:452 (INCREMENT_DECREMENT) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:454 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:57 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/backlog.go:57 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/inbound.go:20 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/inbound.go:53 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/inbound.go:56 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/inbound.go:61 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/milestone.go:46 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/milestone.go:50 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/milestone.go:68 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/milestone.go:71 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/phase.go:65 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/phase.go:94 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/phase.go:138 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/phase.go:147 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/phase.go:198 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/task_pull.go:49 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/task_pull.go:53 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/task_pull.go:68 (ARITHMETIC_BASE) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/task_pull.go:67 (ARITHMETIC_BASE) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/boardsync/task_pull.go:66 (ARITHMETIC_BASE) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/diag/redproof.go:91 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/diag/redproof.go:94 (CONDITIONALS_NEGATION) — routed to extracted-package-test-parity"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/reap_apply_test.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/board_lifecycle_divergence_test.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/deferred_store.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap_apply.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap_discover.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap_discover_test.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap_undo.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/phasedone.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/task_lifecycle.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/toolfence_composer/leaky_body.go.txt: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/toolfence_composer_test.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "stale acceptance: internal/cmd/doctor.go (7838ed0a7daca324) — mutant no longer produced — retire it from .dross/survivors.toml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "stale acceptance: internal/cmd/doctor.go (b808ff3a5274aed1) — mutant no longer produced — retire it from .dross/survivors.toml"

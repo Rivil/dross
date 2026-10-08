@@ -279,3 +279,38 @@ func TestDriftShippedRecordStillDrifts(t *testing.T) {
 		t.Errorf("a shipped record with no open PR should still drift, got %q ok=%v", kind, ok)
 	}
 }
+
+// TestDriftPROpenButStateNotShipped pins drift.go across the shipped_timing
+// change: it is keyed on state.json's shipped status plus a PR number, and
+// that is unchanged. A record carrying a PR but no shipped marker anywhere
+// (the PR opened, the record push failed) is still verified-unshipped — the
+// ship has not finished — while both markers reading shipped is the waiting-
+// on-merge window and no drift.
+func TestDriftPROpenButStateNotShipped(t *testing.T) {
+	root := t.TempDir()
+	writePhase(t, root, "auth", planDone, "verdict = \"pass\"\n")
+	if err := os.WriteFile(filepath.Join(root, "phases", "auth", "changes.json"),
+		[]byte(`{"phase":"auth","pr":42,"base":"main","tasks":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ds, err := ClassifyDrift(root, &state.State{})
+	if err != nil {
+		t.Fatalf("ClassifyDrift: %v", err)
+	}
+	if kind, ok := driftKind(ds, "auth"); !ok || kind != DriftVerifiedUnshipped {
+		t.Errorf("PR open with no shipped marker is still unshipped, got %q ok=%v", kind, ok)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, "phases", "auth", "changes.json"),
+		[]byte(`{"phase":"auth","pr":42,"base":"main","status":"shipped","tasks":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ds, err = ClassifyDrift(root, &state.State{CurrentPhase: "auth", CurrentPhaseStatus: "shipped"})
+	if err != nil {
+		t.Fatalf("ClassifyDrift: %v", err)
+	}
+	if kind, ok := driftKind(ds, "auth"); ok {
+		t.Errorf("both markers shipped + PR 42 is awaiting merge, not drift; got %s", kind)
+	}
+}

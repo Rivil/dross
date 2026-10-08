@@ -374,3 +374,83 @@ func TestReadmeVerifyRowDescribesLifecycle(t *testing.T) {
 		}
 	}
 }
+
+// TestVerifyPromptReadsRangeProvenance pins the provenance paragraph
+// (mutation-range-provenance c-5): the agent judging a score must know the
+// record says which lines were instrumented and where it fell back, and the
+// command that reads it.
+func TestVerifyPromptReadsRangeProvenance(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "verify.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt := string(b)
+	for _, phrase := range []string{
+		"`whole_file`",
+		"`ranges`",
+		"dross verify scope <phase>",
+		"never called ranged",
+	} {
+		if !strings.Contains(prompt, phrase) {
+			t.Errorf("verify.md lost its range-provenance phrase %q", phrase)
+		}
+	}
+}
+
+// TestReadmeDocumentsVerifyScope: the README command table is the surface a
+// reader scans first; a verb missing from it is a verb nobody runs.
+func TestReadmeDocumentsVerifyScope(t *testing.T) {
+	body := docsBody(t, "README.md")
+	if !strings.Contains(body, "| `dross verify scope <phase>`") {
+		t.Error("README.md has no row for `dross verify scope <phase>`")
+	}
+}
+
+// TestVerifyShowsReviews (solo-task-review c-6): /dross-verify reads the
+// reviewer's per-task record from changes.json and reports it — outcome,
+// findings, resolutions — with failed tasks and their reasons.
+func TestVerifyShowsReviews(t *testing.T) {
+	prompt := verifyPromptBody(t)
+	pre := prompt[strings.Index(prompt, "## 0. Pre-flight"):strings.Index(prompt, "## 1. ")]
+	if !strings.Contains(pre, "Keep its `reviews` key for §4") {
+		t.Error("verify.md §0 no longer reads changes.json's `reviews`")
+	}
+	if !strings.Contains(pre, "dross task show <id> <task-id>") {
+		t.Error("verify.md §0 no longer collects failed tasks' reasons")
+	}
+	report := prompt[strings.Index(prompt, "## 4. Surface to user"):strings.Index(prompt, "## 5. Wrap")]
+	for _, want := range []string{
+		"Solo review:",
+		"— fixed in the fix round",
+		"— non-blocking, left",
+		"— unresolved — task failed",
+		"failed: t-5 — <reason from `dross task show`>",
+		"Mark every unresolved finding and every failed task",
+	} {
+		if !strings.Contains(report, want) {
+			t.Errorf("verify.md §4 report lost %q", want)
+		}
+	}
+}
+
+// TestVerifyPromptKeepsTheMeasuredTree (c-1): /dross-verify hand-edits
+// verify.toml, and an edit that drops the recorded tree turns ship's stale
+// refusal into a freshness-unknown warning. §3 tells the agent to leave both
+// fields exactly as written.
+func TestVerifyPromptKeepsTheMeasuredTree(t *testing.T) {
+	body := verifyPromptBody(t)
+	const heading = "## 3. Update `verify.toml`"
+	at := strings.Index(body, heading)
+	if at < 0 {
+		t.Fatalf("verify.md has no %q section", heading)
+	}
+	sec := body[at+len(heading):]
+	if next := strings.Index(sec, "\n## "); next >= 0 {
+		sec = sec[:next]
+	}
+	for _, needle := range []string{"`[verify].measured_commit`", "`[verify].measured_tree`", "exactly as `dross verify` wrote them"} {
+		if !strings.Contains(sec, needle) {
+			t.Errorf("verify.md §3 must tell the agent to keep the measured tree — missing %q", needle)
+		}
+	}
+}

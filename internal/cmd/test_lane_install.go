@@ -15,6 +15,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/testlane"
@@ -126,9 +128,9 @@ func testLaneInstall() *cobra.Command {
 			// has not earned one. runLaneInstall gates too — this is the early
 			// half, not a substitute for it.
 			if lane.Install != "" {
-				state, cerr := LaneInstallConsented(root, repoDir, lane.Name, laneInstallConsentLine(lane))
+				state, cerr := consent.LaneInstallConsented(localstore.GrantStore(root), repoDir, lane.Name, consent.LaneInstallLine(lane))
 				if cerr != nil {
-					return laneInstallRefusal(lane, state, cerr)
+					return consent.LaneInstallRefusal(lane, state, cerr)
 				}
 			}
 
@@ -293,7 +295,7 @@ func reportLaneInstall(root, repoDir string, lane project.TestLane, site laneIns
 			Printf("  → %s would install on %s: %s\n", s.Tool, site.Machine, installPreview(s))
 		default:
 			Printf("  → %s installing on %s: %s\n", s.Tool, site.Machine, installPreview(s))
-			if _, err := runLaneInstall(root, repoDir, site.Target, lane, s); err != nil {
+			if err := runLaneInstall(root, repoDir, site.Target, lane, s); err != nil {
 				Printf("    ✗ %v\n", err)
 				failed++
 				continue

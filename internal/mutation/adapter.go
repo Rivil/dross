@@ -32,8 +32,8 @@ type Report struct {
 	// separately because high NotCovered + low LIVED usually means a
 	// coverage-tool blind spot (e.g. Go's package-init code in top-level
 	// `var` arrays) rather than weak assertions — actionable diagnosis
-	// the score alone can't surface. Other adapters (Stryker, Stryker.NET)
-	// don't report this status and leave the field at zero.
+	// the score alone can't surface. Stryker (and Stryker.NET, which shares
+	// the decoder) report it as NoCoverage; gremlins as "NOT COVERED".
 	NotCovered int
 
 	// Files attributes the same counters per source file: every mutant
@@ -95,6 +95,12 @@ type Mutant struct {
 	Op      string // operator (e.g. "ConditionalNegation")
 	Snippet string // the surviving mutated source slice
 
+	// NotCovered marks a survivor no test ever executed (stryker NoCoverage,
+	// gremlins NOT COVERED) as opposed to one the tests ran and missed. It
+	// rides into tests.json's surviving rows so a reader can split the two
+	// without going back to the tool's own report.
+	NotCovered bool `json:",omitempty"`
+
 	// Origin is OriginInHunk or OriginInherited once diff scoping has
 	// classified the mutant; empty as the adapter produces it. It lives on
 	// Mutant rather than on a verify-side wrapper because kept survivors
@@ -128,8 +134,64 @@ type Adapter interface {
 	Run(files []string) (*Report, error)
 }
 
+// Range is an inclusive line range, both ends counted. It mirrors
+// verify.Range, which is where these values come from — a phase's changed
+// hunks, parsed out of `git diff -U0`.
+type Range struct {
+	Start int
+	End   int
+}
+
+// Valid reports whether r is a range a tool could honour: lines are counted
+// from 1 and the range must not run backwards. It is the ONE definition of
+// well-formed shared by the adapter that emits ranges (stryker's argv builder)
+// and the verify layer that plans them — two predicates would let verify
+// dispatch a range stryker then refuses, and the refusal's whole-file fallback
+// would be a fact the run record never learned.
+func (r Range) Valid() bool {
+	return r.Start >= 1 && r.End >= r.Start
+}
+
+// RangeRunner is the OPTIONAL half of Adapter: an adapter that can restrict
+// mutation to a file's changed LINES rather than the whole file.
+//
+// WHY OPTIONAL. Not every tool can express it. Gremlins mutates Go packages
+// and takes no line scope at all, and forcing the method onto the Adapter
+// interface would mean every adapter growing a body it cannot honour — which
+// is worse than a type assertion, because a stub that ignores its ranges
+// measures the whole file while claiming it did not.
+//
+// WHY IT MATTERS. Without it a phase that edits one line of a 700-mutant file
+// inherits all 700: they are instrumented, run, and reported as that phase's
+// survivors. dross already knows better — it parses the hunks and uses them to
+// TAG each survivor in-hunk or inherited — but it learns it too late, after
+// the cost has been paid and the score diluted.
+//
+// FAIL-OPEN IS PART OF THE CONTRACT. A file with no entry in ranges is mutated
+// WHOLE. A caller that cannot supply ranges passes nil and gets exactly
+// today's behaviour. A scope that silently narrowed is the one outcome
+// phaseScope refuses to produce, and this seam must not reintroduce it.
+type RangeRunner interface {
+	Adapter
+	RunRanges(files []string, ranges map[string][]Range) (*Report, error)
+}
+
 // ErrNotImplemented is returned by stub adapters in v0.
 var ErrNotImplemented = errors.New("mutation adapter not yet implemented")
+
+// Supported keeps, in order, the files a can mutate. A leg's recorded file
+// list must be what its tool was actually able to instrument: a scope that
+// also carries README.md hands the gremlins leg a file it never mutates, and
+// a whole-file count that includes it over-reads by exactly that file.
+func Supported(a Adapter, files []string) []string {
+	var out []string
+	for _, f := range files {
+		if a.Supports(f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
 
 // Dispatch picks an adapter for a file extension. Returns nil if none.
 func Dispatch(file string, adapters []Adapter) Adapter {

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
 	"github.com/spf13/cobra"
 )
@@ -92,7 +93,7 @@ func buildMilestoneProgress(root, version string) (*milestoneProgressReport, err
 	if err != nil {
 		return nil, err
 	}
-	// Doneness reads changes.json alone (phasedone.go), so state.json is not
+	// Doneness reads changes.json alone (internal/phase/done.go), so state.json is not
 	// loaded here at all. It is machine-local and gitignored — absent in a
 	// fresh clone and on CI — and reading it was only ever feeding a history
 	// fallback that is now gone.
@@ -104,8 +105,8 @@ func buildMilestoneProgress(root, version string) (*milestoneProgressReport, err
 		Unscaffolded: []string{},
 	}
 	for _, slug := range m.Phases {
-		scaffolded := phaseDirExists(root, slug)
-		if phaseIsDone(root, slug, scaffolded) {
+		scaffolded := phase.DirExists(root, slug)
+		if phase.IsDone(root, slug, scaffolded) {
 			rep.Done++
 			continue
 		}

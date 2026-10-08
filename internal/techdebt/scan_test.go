@@ -1,8 +1,10 @@
 package techdebt
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -120,5 +122,68 @@ func TestScanReadsPathSetSkipsUnreadable(t *testing.T) {
 	fs := Scan([]string{good, bin, missing}, DefaultThresholds)
 	if count(fs, ClassMarker) != 1 || fs[0].File != good {
 		t.Fatalf("Scan over [good, binary, missing] = %+v; want exactly the good marker", fs)
+	}
+}
+
+// markersEveryLine is scanContent's marker pass with markerRe on every line —
+// the reference the needle-gated scan must equal.
+func markersEveryLine(path string, content []byte) []Finding {
+	if len(content) == 0 || bytes.IndexByte(content, 0) >= 0 {
+		return nil
+	}
+	var out []Finding
+	for i, line := range splitLines(content) {
+		if m := markerRe.FindString(line); m != "" {
+			out = append(out, Finding{File: path, Line: i + 1, Class: ClassMarker, Detail: m})
+		}
+	}
+	return out
+}
+
+// TestScanPrefilterMatchesRegex fails if gating markerRe on mayHaveMarker
+// changes a single finding: needle-but-no-boundary rows, every marker word,
+// CRLF, a marker 500 chars into a line, and binary content.
+func TestScanPrefilterMatchesRegex(t *testing.T) {
+	corpus := []string{
+		"TODOList := buildTODOList()",
+		"xTODO",
+		"XXXX",
+		"todo: lowercase is not a marker",
+		"finish this TODO",
+		"a\r\n// TODO b\r\nc\r\n",
+		strings.Repeat("y ", 250) + "FIXME",
+		"TODO\x00binary",
+		"x := 1 // FIXME later",
+		"/* HACK */",
+		"XXX: revisit",
+		"clean\nFIXME one\nTODOList\nHACK two\n",
+		"return nil",
+	}
+	markers := 0
+	for _, c := range corpus {
+		got := scanContent("f", []byte(c), Thresholds{})
+		want := markersEveryLine("f", []byte(c))
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%q: gated scan = %+v, every-line regex = %+v", c, got, want)
+		}
+		markers += len(want)
+	}
+	if markers < 7 {
+		t.Fatalf("corpus drifted: the reference found %d markers, want at least 7", markers)
+	}
+}
+
+// TestMayHaveMarker fails if the gate lets a marker-free line through (the
+// always-true mutant restores full regex cost) or blocks any marker word.
+func TestMayHaveMarker(t *testing.T) {
+	for _, w := range []string{"TODO", "FIXME", "HACK", "XXX"} {
+		if !mayHaveMarker("// " + w) {
+			t.Errorf("mayHaveMarker blocks %s", w)
+		}
+	}
+	for _, line := range []string{"return nil", "", "todo fixme hack xxx", "func main() {}"} {
+		if mayHaveMarker(line) {
+			t.Errorf("mayHaveMarker(%q) = true on a marker-free line", line)
+		}
 	}
 }

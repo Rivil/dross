@@ -1,0 +1,35 @@
+{
+  "project": {
+    "name": "golden",
+    "version": "1.2.3.0",
+    "description": "fixture for the output goldens",
+    "created": "2026-01-02"
+  },
+  "stack": {
+    "languages": [
+      "go"
+    ]
+  },
+  "runtime": {
+    "mode": "native",
+    "test_command": "go test ./..."
+  },
+  "repo": {
+    "layout": "",
+    "git_main_branch": "main",
+    "commit_convention": "conventional",
+    "squash_merge": false
+  },
+  "remote": {},
+  "board": {
+    "fields": {}
+  },
+  "paths": {},
+  "env": {},
+  "goals": {},
+  "mutation": {
+    "gremlins": {},
+    "stryker": {}
+  },
+  "techdebt": {}
+}

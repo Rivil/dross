@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/redact"
+	"github.com/Rivil/dross/internal/secretscan"
 )
 
 // GitHubClient talks to GitHub's REST issues API. GitHub's issues + milestones
@@ -366,6 +367,13 @@ func (c *GitHubClient) do(method, endpoint string, body, out any) error {
 
 // doRaw is the unredacted request. Nothing outside do may call it.
 func (c *GitHubClient) doRaw(method, endpoint string, body, out any) error {
+	// The payload is screened before any bytes are encoded or a request is
+	// built (criterion c-2 of secret-detection): a credential in an issue body must
+	// never leave the process, and one line here covers every method that
+	// routes through do — now and later.
+	if err := secretscan.ScanPayload(method+" "+endpoint, body); err != nil {
+		return err
+	}
 	var rdr io.Reader
 	if body != nil {
 		buf := new(bytes.Buffer)

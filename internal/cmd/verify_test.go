@@ -10,6 +10,7 @@ import (
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/telemetry"
 	"github.com/Rivil/dross/internal/verify"
 )
@@ -278,37 +279,6 @@ func TestVerifyFinalizeMissingFile(t *testing.T) {
 	}
 }
 
-// dockerPrefix derives the runtime prefix from project.toml. Pin its
-// behaviour so a refactor of TestCommand parsing doesn't silently break
-// docker-routed mutation runs.
-func TestDockerPrefixDerivation(t *testing.T) {
-	cases := []struct {
-		mode, testCmd, want string
-	}{
-		{"native", "pnpm test", ""},
-		{"docker", "docker compose exec app pnpm test", "docker compose exec app"},
-		{"docker", "docker compose exec app npm test", "docker compose exec app"},
-		{"docker", "docker compose exec api yarn test", "docker compose exec api"},
-		{"docker", "docker compose exec app bun test", "docker compose exec app"},
-		{"docker", "docker compose exec node node test.js", "docker compose exec node"},
-		// docker mode but unrecognised runner — falls back to default
-		{"docker", "weird invocation", "docker compose exec app"},
-		// docker mode with no test_command at all — falls back to default
-		{"docker", "", "docker compose exec app"},
-		// self-audit inj-4a: a binary that merely STARTS WITH "docker"
-		// (dockerevil) must NOT be promoted into the exec prefix — the
-		// leading field has to be exactly "docker". Falls back to default.
-		{"docker", "dockerevil compose exec app pnpm test", "docker compose exec app"},
-		{"docker", "docker-malicious run --privileged x", "docker compose exec app"},
-	}
-	for _, c := range cases {
-		p := &project.Project{Runtime: project.Runtime{Mode: c.mode, TestCommand: c.testCmd}}
-		if got := dockerPrefix(p); got != c.want {
-			t.Errorf("dockerPrefix(mode=%q, test=%q) = %q want %q", c.mode, c.testCmd, got, c.want)
-		}
-	}
-}
-
 // --- printVerifySummary coverage (verify.go:248-284) ---
 //
 // These call printVerifySummary directly with hand-built Tests/Verify so
@@ -333,35 +303,38 @@ func verifyCovVerify(status string) *verify.Verify {
 	return v
 }
 
-// TestVerifyCover_SummaryEfficacyNote exercises the non-nil-mutation
-// branch (253), the NotCovered>0 branch (260), efficacyDenom math (265),
-// the denom>0 branch (266), and the efficacy + printed sum (267,269).
-// Killed=6, Survived=4, NotCovered=2, Timeout=1:
-//
-//	efficacyDenom = 6 + (4 - 2) = 8
-//	efficacy      = 6 / 8       = 0.75
-//	printed total = 6 + 4 + 1   = 11
+// TestVerifyCover_SummaryEfficacyNote is c-5 for the leg line: a leg with NOT
+// COVERED survivors prints its raw count and no efficacy of its own. The old
+// per-leg note dropped every NOT COVERED mutant, count-0 test gaps included,
+// and called them all never run — on the 2026-09-28 run it printed 1.00 beside
+// the summary's 0.99 over the reachable. The one efficacy figure left is the
+// summary's, and the test gap stays in its denominator: 11 in scope, 1 no-block,
+// 10 reachable.
 func TestVerifyCover_SummaryEfficacyNote(t *testing.T) {
 	m := &mutation.Report{
 		Tool: "gremlins", Killed: 6, Survived: 4, NotCovered: 2, Timeout: 1, Errors: 0, Score: 0.60,
 	}
+	v := verifyCovVerify(verify.MutationMeasured)
+	v.Summary.MutantsKilled, v.Summary.MutantsSurvived, v.Summary.MutantsInScope = 6, 4, 11
+	v.Summary.MutantsNotCovered, v.Summary.MutantsNoBlock, v.Summary.MutantsTestGap = 2, 1, 1
 	out := captureStdout(t, func() {
-		printVerifySummary(verifyCovTests(m), verifyCovVerify(verify.MutationMeasured))
+		printVerifySummary(verifyCovTests(m), v)
 	})
-	for _, want := range []string{
-		"killed=6 survived=4 (not_covered=2) timeout=1 errors=0 score=0.60",
-		"note: 2/11 mutants NOT COVERED",
-		"efficacy excluding them = 0.75",
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("summary missing %q\n--- out ---\n%s", want, out)
+	if !strings.Contains(out, "killed=6 survived=4 (not_covered=2) timeout=1 errors=0 score=0.60") {
+		t.Errorf("the leg line lost its counts:\n%s", out)
+	}
+	for _, never := range []string{"efficacy excluding", "tests never ran them"} {
+		if strings.Contains(out, never) {
+			t.Errorf("the leg still prints %q, which drops count-0 test gaps:\n%s", never, out)
 		}
+	}
+	if n := strings.Count(out, "efficacy"); n != 1 || !strings.Contains(out, "efficacy over the 10 reachable") {
+		t.Errorf("want one efficacy figure, over the 10 reachable (the test gap kept in), got %d:\n%s", n, out)
 	}
 }
 
-// TestVerifyCover_SummaryNoNoteWhenCovered pins the NotCovered==0 side of
-// branch 260: no efficacy note is printed. Kills the boundary (>=0 would
-// print) and negation mutants on line 260.
+// TestVerifyCover_SummaryNoNoteWhenCovered: a leg with no NOT COVERED survivor
+// prints no NOT COVERED line and no efficacy note.
 func TestVerifyCover_SummaryNoNoteWhenCovered(t *testing.T) {
 	m := &mutation.Report{
 		Tool: "gremlins", Killed: 6, Survived: 4, NotCovered: 0, Timeout: 1, Score: 0.60,
@@ -377,10 +350,9 @@ func TestVerifyCover_SummaryNoNoteWhenCovered(t *testing.T) {
 	}
 }
 
-// TestVerifyCover_SummaryDenomZeroSkipsEfficacy drives NotCovered>0 (enters
-// block 260) but efficacyDenom==0 (branch 266 false), so the inner efficacy
-// line is skipped. Killed=0, Survived=2, NotCovered=2 → denom = 0+(2-2)=0.
-// Kills the boundary (>=0 would divide 0/0 and print) and negation on 266.
+// TestVerifyCover_SummaryDenomZeroSkipsEfficacy: a leg that is all NOT COVERED
+// (Killed=0, Survived=2, NotCovered=2) still prints its count and no per-leg
+// efficacy. The old note's zero-denominator guard is gone with the note.
 func TestVerifyCover_SummaryDenomZeroSkipsEfficacy(t *testing.T) {
 	m := &mutation.Report{
 		Tool: "gremlins", Killed: 0, Survived: 2, NotCovered: 2, Timeout: 0, Score: 0.0,
@@ -503,6 +475,66 @@ func TestVerifyCover_ScopeFileListTruncation(t *testing.T) {
 	}
 }
 
+// wholeFileLegFixture builds a Tests with one gremlins leg whose whole_file
+// map carries n files under a single reason, named like scopeSummaryFile so
+// absence assertions mean absence.
+func wholeFileLegFixture(n int) *verify.Tests {
+	wf := make(map[string]string, n)
+	for i := 0; i < n; i++ {
+		wf[scopeSummaryFile(i)] = verify.WholeFileNoRangeRunner
+	}
+	return &verify.Tests{
+		Phase:     "01-cov",
+		Languages: []verify.LanguageRun{{Name: "go", Tool: "gremlins", WholeFile: wf}},
+	}
+}
+
+// TestVerifyCover_WholeFileListTruncation drives the >cap side of
+// printRangeProvenance's own truncation — a twin of the scope line's, with its
+// own subtraction at a different site, so it owes its own exact figure: over a
+// cap of 12, 15 whole-file entries read "(+3 more)" while the ×count still
+// reports the full set. Surfaced by verify run r-20260918-073404, where this
+// line printed "(+11 more)" with nothing asserting the 11.
+func TestVerifyCover_WholeFileListTruncation(t *testing.T) {
+	const over = 3
+	out := captureStdout(t, func() { printRangeProvenance(wholeFileLegFixture(scopeFileListCap + over)) })
+
+	if !strings.Contains(out, " (+3 more)") {
+		t.Errorf("expected exactly %q for %d whole-file entries over a cap of %d\n--- out ---\n%s",
+			" (+3 more)", scopeFileListCap+over, scopeFileListCap, out)
+	}
+	if want := fmt.Sprintf("whole-file gremlins ×%d — %s:", scopeFileListCap+over, verify.WholeFileNoRangeRunner); !strings.Contains(out, want) {
+		t.Errorf("the ×count must report the full set (%q):\n%s", want, out)
+	}
+	if last := scopeSummaryFile(scopeFileListCap - 1); !strings.Contains(out, last) {
+		t.Errorf("expected the %dth file %q to be named:\n%s", scopeFileListCap, last, out)
+	}
+	for i := scopeFileListCap; i < scopeFileListCap+over; i++ {
+		if name := scopeSummaryFile(i); strings.Contains(out, name) {
+			t.Errorf("file %q is past the cap and must not be named:\n%s", name, out)
+		}
+	}
+	if strings.Contains(out, "ranged") {
+		t.Errorf("a leg with no ranges printed as ranged:\n%s", out)
+	}
+}
+
+// TestVerifyCover_WholeFileListAtCapIsNotTruncated pins the boundary of the
+// same condition: exactly cap entries name every file and print no suffix.
+func TestVerifyCover_WholeFileListAtCapIsNotTruncated(t *testing.T) {
+	out := captureStdout(t, func() { printRangeProvenance(wholeFileLegFixture(scopeFileListCap)) })
+
+	if strings.Contains(out, "more)") {
+		t.Errorf("exactly %d entries is at the cap, not over it — no suffix expected:\n%s",
+			scopeFileListCap, out)
+	}
+	for i := 0; i < scopeFileListCap; i++ {
+		if name := scopeSummaryFile(i); !strings.Contains(out, name) {
+			t.Errorf("expected every file at the cap to be named, missing %q:\n%s", name, out)
+		}
+	}
+}
+
 // TestVerifyCover_ScopeFileListAtCapIsNotTruncated pins the boundary: exactly
 // cap files print every name and no suffix at all. A `>=` mutant on the
 // truncation condition prints "(+0 more)" here and fails.
@@ -604,51 +636,6 @@ func TestVerifyCover_RecordOutcomeNilTestsZeroScore(t *testing.T) {
 	body := mustRead(t, telemPath)
 	if strings.Contains(body, "mutation_score") || strings.Contains(body, `"nums"`) {
 		t.Errorf("no mutation_score expected when summary score is 0:\n%s", body)
-	}
-}
-
-// TestConfiguredAdaptersAllowlist pins the [mutation] adapters escape hatch:
-// empty means all adapters; non-empty filters by Name(), so a polyglot repo
-// can run only the adapter that's actually set up.
-func TestConfiguredAdaptersAllowlist(t *testing.T) {
-	// Takes the (adapters, error) pair whole: configuredAdapters can now refuse
-	// — an unreachable granted remote, a tracked local.toml — and a helper that
-	// dropped the error would let this test pass on an empty list.
-	names := func(as []mutation.Adapter, _ mutationTuning, err error) []string {
-		t.Helper()
-		if err != nil {
-			t.Fatalf("configuredAdapters: %v", err)
-		}
-		var out []string
-		for _, a := range as {
-			out = append(out, a.Name())
-		}
-		return out
-	}
-
-	p := &project.Project{}
-	if got := names(configuredAdapters(p, "", false)); len(got) != 3 {
-		t.Fatalf("empty allowlist must return all adapters, got %v", got)
-	}
-
-	p.Mutation.Adapters = []string{"gremlins"}
-	got := names(configuredAdapters(p, "", false))
-	if len(got) != 1 || got[0] != "gremlins" {
-		t.Errorf("allowlist [gremlins] must filter to gremlins only, got %v", got)
-	}
-
-	p.Mutation.Adapters = []string{"stryker", "gremlins"}
-	got = names(configuredAdapters(p, "", false))
-	if len(got) != 2 {
-		t.Errorf("allowlist [stryker gremlins] must keep both, got %v", got)
-	}
-
-	skipped, _, err := configuredAdapters(p, "", true)
-	if err != nil {
-		t.Fatalf("--skip-mutation returned an error: %v", err)
-	}
-	if skipped != nil {
-		t.Errorf("--skip-mutation must still return nil regardless of allowlist, got %v", names(skipped, mutationTuning{}, nil))
 	}
 }
 
@@ -777,7 +764,7 @@ func (s *stubMutationAdapter) Run(files []string) (*mutation.Report, error) {
 func useStubAdapter(t *testing.T, a mutation.Adapter) {
 	t.Helper()
 	prev := configuredAdaptersFn
-	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) ([]mutation.Adapter, mutationTuning, error) {
+	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool, _ string, _ remote.WaitPolicy) ([]mutation.Adapter, mutationTuning, error) {
 		return []mutation.Adapter{a}, mutationTuning{}, nil
 	}
 	t.Cleanup(func() { configuredAdaptersFn = prev })

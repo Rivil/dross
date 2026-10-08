@@ -1,21 +1,31 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Rivil/dross/internal/defaults"
+	"github.com/Rivil/dross/internal/pincheck"
+	"github.com/Rivil/dross/internal/protect"
+	"github.com/Rivil/dross/internal/ship"
 )
 
 // ambientHome is the HOME this test binary inherited, captured before TestMain
 // replaces it. Kept so TestHermeticHome_IsIsolated can assert the replacement
 // actually happened rather than trust it.
 var ambientHome = os.Getenv("HOME")
+
+// ambientClaudeConfigDir is the CLAUDE_CONFIG_DIR this test binary inherited,
+// captured before TestMain clears it.
+var ambientClaudeConfigDir = os.Getenv("CLAUDE_CONFIG_DIR")
 
 // TestMain pins HOME to an empty throwaway directory for the whole package.
 //
@@ -42,11 +52,37 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "hermetic HOME: setenv: %v\n", err)
 		os.Exit(1)
 	}
+	// CLAUDE_CONFIG_DIR outranks HOME for everything Claude Code reads —
+	// settings.json and the agents directory install writes the solo reviewer
+	// into. Cleared, it resolves under the throwaway HOME above, so a machine
+	// that exports it never gets test agents or hooks written into its real
+	// config. chdir() still pins a per-test one.
+	if err := os.Unsetenv("CLAUDE_CONFIG_DIR"); err != nil {
+		fmt.Fprintf(os.Stderr, "hermetic CLAUDE_CONFIG_DIR: unsetenv: %v\n", err)
+		os.Exit(1)
+	}
 	if err := pinGitConfig(home); err != nil {
 		fmt.Fprintf(os.Stderr, "hermetic git config: %v\n", err)
 		os.Exit(1)
 	}
+	pinResolver = countingPinResolver{}
+	stubBranchProtection()
 	code := m.Run()
+	if err := pinDialErr(pinDials.Load()); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		if code == 0 {
+			code = 1
+		}
+	}
+	// The shared source program is loaded once per binary (srcprog_test.go); a
+	// second load is a loader that bypassed the sync.Once, doubling the suite's
+	// most expensive setup without any test noticing.
+	if err := srcLoadCountErr(srcProgLoads.Load()); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		if code == 0 {
+			code = 1
+		}
+	}
 	_ = os.RemoveAll(home)
 	os.Exit(code)
 }
@@ -82,6 +118,72 @@ func pinGitConfig(home string) error {
 		return fmt.Errorf("setenv GIT_CONFIG_GLOBAL: %w", err)
 	}
 	return nil
+}
+
+// errHermeticGH is what every branch-protection write seam answers under
+// TestMain: a test that wants a write to succeed installs its own stub.
+var errHermeticGH = errors.New("hermetic test stub: no gh, no network")
+
+// stubBranchProtection swaps every ship seam that would run `gh api` or
+// `gh pr merge` for one that never dials. Reads answer "known, no rules" —
+// an unprotected base — so every flow written before branch protection
+// existed keeps its direct push; writes and auto-merge fail loudly. A test
+// that needs a protected base, a successful write or an armed PR installs its
+// own stub and restores this one. OpenPRFunc is left on OpenPR: the ship
+// tests here already drive it through a stub gh on PATH.
+func stubBranchProtection() {
+	ship.BranchRulesFunc = func(ship.OpenOpts, string) ship.BranchRulesResult {
+		return ship.BranchRulesResult{Known: true}
+	}
+	ship.RepoMergeSettingsFunc = func(ship.OpenOpts) ship.MergeSettings {
+		return ship.MergeSettings{Reason: errHermeticGH.Error()}
+	}
+	ship.ListRulesetsFunc = func(ship.OpenOpts) ([]ship.RulesetSummary, error) { return nil, errHermeticGH }
+	ship.CreateRulesetFunc = func(ship.OpenOpts, protect.Ruleset) (int64, error) { return 0, errHermeticGH }
+	ship.UpdateRulesetFunc = func(ship.OpenOpts, int64, protect.Ruleset) error { return errHermeticGH }
+	ship.SetAllowAutoMergeFunc = func(ship.OpenOpts, bool) error { return errHermeticGH }
+	ship.AutoMergePRFunc = func(ship.OpenOpts, int, string) (ship.AutoMergeResult, error) {
+		return ship.AutoMergeResult{}, fmt.Errorf("%w: %v", ship.ErrAutoMergeUnavailable, errHermeticGH)
+	}
+}
+
+// TestHermeticBranchProtection_NeverDials pins stubBranchProtection, so
+// dropping it from TestMain fails here by name rather than as a test that
+// shells out to the real gh and reads the developer's live repo settings.
+func TestHermeticBranchProtection_NeverDials(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		seam, real any
+	}{
+		{"BranchRulesFunc", ship.BranchRulesFunc, ship.BranchRules},
+		{"RepoMergeSettingsFunc", ship.RepoMergeSettingsFunc, ship.RepoMergeSettings},
+		{"ListRulesetsFunc", ship.ListRulesetsFunc, ship.ListRulesets},
+		{"CreateRulesetFunc", ship.CreateRulesetFunc, ship.CreateRuleset},
+		{"UpdateRulesetFunc", ship.UpdateRulesetFunc, ship.UpdateRuleset},
+		{"SetAllowAutoMergeFunc", ship.SetAllowAutoMergeFunc, ship.SetAllowAutoMerge},
+		{"AutoMergePRFunc", ship.AutoMergePRFunc, ship.AutoMergePR},
+	} {
+		if reflect.ValueOf(tc.seam).Pointer() == reflect.ValueOf(tc.real).Pointer() {
+			t.Errorf("%s is still its gh implementation — TestMain must stub it", tc.name)
+		}
+	}
+	if reflect.ValueOf(ship.OpenPRFunc).Pointer() != reflect.ValueOf(ship.OpenPR).Pointer() {
+		t.Error("OpenPRFunc must keep its OpenPR default under TestMain")
+	}
+
+	opts := ship.OpenOpts{Provider: "github", URL: "https://github.com/Rivil/dross"}
+	if got := ship.BranchRulesFunc(opts, "main"); !got.Known || len(got.Rules) != 0 {
+		t.Errorf("stubbed BranchRules = %+v, want known with no rules (unprotected)", got)
+	}
+	if got := ship.RepoMergeSettingsFunc(opts); got.Known {
+		t.Errorf("stubbed RepoMergeSettings = %+v, want unknown", got)
+	}
+	if _, err := ship.AutoMergePRFunc(opts, 1, "merge"); !errors.Is(err, ship.ErrAutoMergeUnavailable) {
+		t.Errorf("stubbed AutoMergePR err = %v, want ErrAutoMergeUnavailable", err)
+	}
+	if err := ship.SetAllowAutoMergeFunc(opts, true); err == nil {
+		t.Error("stubbed SetAllowAutoMerge succeeded")
+	}
 }
 
 // TestHermeticGitConfig_DisablesBackgroundMaintenance pins the TestMain git
@@ -143,8 +245,8 @@ func TestHermeticHome_IsIsolated(t *testing.T) {
 // never adopted; reverting that leaves init inheriting absentToken and doctor
 // reporting it unset.
 func TestHermeticHome_HostileGlobalDefaultsDoNotRedden(t *testing.T) {
-	const absentToken = "DROSS_TEST_ABSENT_TOKEN"
-	t.Setenv(absentToken, "") // empty reads as unset to doctor's os.Getenv check
+	const absentToken = "DROSS_TEST_ABSENT_TOKEN" // dross:allow-secret
+	t.Setenv(absentToken, "")                     // empty reads as unset to doctor's os.Getenv check
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -171,5 +273,59 @@ func TestHermeticHome_DoctorScaffoldOwnsItsToken(t *testing.T) {
 	}
 	if os.Getenv(doctorTokenEnv) == "" {
 		t.Errorf("the scaffold must export $%s, or doctor flags it as unset", doctorTokenEnv)
+	}
+}
+
+// pinDials counts upstream lookups that reached doctor's default pin resolver.
+var pinDials atomic.Int64
+
+// countingPinResolver is the pin resolver every test in this binary gets
+// unless it installs a stub. It never dials: it counts the lookup and answers
+// with an error, and TestMain fails the binary if the count is non-zero after
+// the run — a doctor test that would have reached proxy.golang.org or
+// nodejs.org from a developer's laptop or CI is a test whose verdict depends on
+// the network (locked decision doctor_net keeps doctor usable offline; its
+// tests must be too).
+type countingPinResolver struct{}
+
+func (countingPinResolver) Releases(context.Context, pincheck.Site) ([]pincheck.Release, error) {
+	pinDials.Add(1)
+	return nil, errors.New("hermetic test binary: doctor's pin resolver would have reached the network — install a stub")
+}
+
+// pinDialErr is TestMain's verdict on the dial count.
+func pinDialErr(n int64) error {
+	if n == 0 {
+		return nil
+	}
+	return fmt.Errorf("hermetic pin resolver: %d upstream lookup(s) reached doctor's default resolver — a test ran the Pin currency section without installing a stub (withPinResolver)", n)
+}
+
+// withPinResolver installs r as doctor's pin resolver for one test.
+func withPinResolver(t *testing.T, r pincheck.Resolver) {
+	t.Helper()
+	prev := pinResolver
+	pinResolver = r
+	t.Cleanup(func() { pinResolver = prev })
+}
+
+// TestDialCounterTrips proves the guard can fire: a lookup through the default
+// resolver increments the count TestMain gates on, and a non-zero count is an
+// error. The one lookup made here is taken back so the binary stays green.
+func TestDialCounterTrips(t *testing.T) {
+	if _, ok := pinResolver.(countingPinResolver); !ok {
+		t.Fatalf("pinResolver is %T — TestMain should have installed the counting resolver", pinResolver)
+	}
+	before := pinDials.Load()
+	_, err := pinResolver.Releases(context.Background(), pincheck.Site{Kind: pincheck.KindNode, Name: "node", Version: "24.19.0", Pinned: true})
+	if err == nil {
+		t.Error("the counting resolver answered — it must fail every lookup")
+	}
+	if got := pinDials.Load(); got != before+1 {
+		t.Errorf("dial count %d → %d, want one increment", before, got)
+	}
+	pinDials.Add(-1)
+	if pinDialErr(1) == nil || pinDialErr(0) != nil {
+		t.Error("pinDialErr must fail on a non-zero count and pass on zero")
 	}
 }

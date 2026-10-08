@@ -1,0 +1,118 @@
+[phase]
+  id = "tool-gate-hooks"
+  title = "tool-gate-hooks"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross hooks ensure` (and init/onboard) idempotently wires dross's PreToolUse + PostToolUse gate hooks into user-level settings.json beside PreCompact/SessionStart; a re-run is byte-identical and foreign hook entries survive verbatim."
+
+[[criteria]]
+  id = "c-2"
+  text = "A refused tool call is blocked before it executes and Claude receives a message naming the rule broken and the sanctioned path (e.g. \"use `dross task edit`\"); an allowed call produces no output and no block."
+
+[[criteria]]
+  id = "c-3"
+  text = "An Edit/MultiEdit on an existing `.dross/phases/*/plan.toml` is refused and points at `dross task add/edit/move/remove`; /dross-plan creating plan.toml with Write stays allowed."
+
+[[criteria]]
+  id = "c-4"
+  text = "A Bash `git commit` is refused unless `dross test` recorded a green run for the exact tree being committed; a commit whose staged changes are all under `.dross/` passes ungated. A green from a raw `go test` does not count."
+
+[[criteria]]
+  id = "c-5"
+  text = "While /dross-execute runs in pair mode, an Edit/Write to a file outside `.dross/` is refused until an AskUserQuestion approval has been recorded since the previous task's commit; in --solo the gate stays silent."
+
+[[criteria]]
+  id = "c-6"
+  text = "A Bash invocation of a tool declared as secret-emitting (default list includes `pass-cli`) is refused unless both its stdout and its stderr are redirected away from the transcript (stdout to a file, stderr to a file or /dev/null) — piping, an open stream, or a merge into an open stdout (`2>&1`, `|&`) all refuse; the same shapes on any other tool pass."
+
+[[criteria]]
+  id = "c-7"
+  text = "A Read, or a Bash `cat`/`head`/`tail`/`less`/`sed`, of a path matching a declared secret pattern (defaults: `*.env`, `.env*`, `*.pem`, `*.key`, `id_*` private keys, age key files) is refused; env templates (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`) are exempt; `source`-ing an env file stays allowed."
+
+[[criteria]]
+  id = "c-8"
+  text = "A Write that replaces an existing curated `.dross/` file (project.toml, milestones/*.toml, phases/*/spec.toml, handoff.md, rules) with content under half its current byte size is refused; Edit and growth pass."
+
+[[criteria]]
+  id = "c-9"
+  text = "`dross doctor` reports whether each dross hook (PreCompact, SessionStart, PreToolUse, PostToolUse) is wired in the effective settings.json and fails (non-zero exit) when a gate hook is absent."
+
+[[decisions]]
+  key = "hook_scope"
+  choice = "Gate hooks live user-level in ~/.claude/settings.json (honouring CLAUDE_CONFIG_DIR), wired through the existing hooks.MergeHook path."
+  why = "Carried from context-hygiene's locked hook_scope: one global wiring covers every repo with zero per-repo files."
+  locked = true
+
+[[decisions]]
+  key = "guard_scope"
+  choice = "Secret guards (c-6, c-7) fire in every repo; the dross-workflow gates (c-3, c-4, c-5, c-8) allow every call outside a .dross/ repo."
+  why = "The 2026-08-25 leaks happened outside dross repos; dross-only secret guards would not have stopped either incident."
+  locked = true
+
+[[decisions]]
+  key = "gate_override"
+  choice = "`dross gate off <name>` lifts a gate until an expiry; the gate refuses that command when it arrives through the agent's Bash tool, so only the human (own terminal) can lift a gate."
+  why = "An override the agent can run is the first thing it reaches for after a refusal, which makes every gate advisory."
+  locked = true
+
+[[decisions]]
+  key = "pair_approval_signal"
+  choice = "Only the exact canonical approve label for the current task (e.g. \"approve t-N\") in an AskUserQuestion answer is recorded as approval; reject, clarify or freeform answers record nothing. execute.md offers that label at each per-task gate."
+  why = "A rejection or clarify answer must stop work (CLAUDE.md rule 9); counting any answer would let a rejection unlock edits, the 2026-05-29 shape."
+  locked = true
+
+[[decisions]]
+  key = "gate_error_posture"
+  choice = "Closed in-domain: a call a gate claims but cannot judge (state unreadable, git fails) is refused naming the error; an unparseable hook payload passes with a warning."
+  why = "Fail-open in-domain silently stops protecting; fail-closed on an unparseable payload would block every tool call after a hook-schema change. The human-only off switch is the escape from a buggy gate."
+  locked = true
+
+[[decisions]]
+  key = "plan_overwrite"
+  choice = "A Write overwriting an existing plan.toml is allowed while every task is `pending` and refused once any task has left pending."
+  why = "/dross-plan resume and plan-review BLOCKING rewrites need whole-file Write before execution; after execution starts `dross task` is the only safe mutation path."
+  locked = true
+
+[[decisions]]
+  key = "shell_detection_depth"
+  choice = "Bash gates detect direct invocations, including chained commands (`&&`, `;`, `|`), `git -C <dir>` and env-var prefixes; `eval`, `sh -c` and encoded obfuscation are out of scope."
+  why = "The gates target the honest-mistake shapes of the recorded incidents; an agent deliberately evading them is outside the threat model."
+  locked = true
+
+[[decisions]]
+  key = "green_run_definition"
+  choice = "A green that satisfies c-4 is a full `dross test` run over every declared lane, local or remote; a single-lane run records nothing."
+  why = "A partial run proves less than the tree being committed."
+  locked = true
+
+[[decisions]]
+  key = "full_run_source"
+  choice = "Where runtime.test_command is set, a bare selector-free `dross test` running it is the full run (it is the whole suite per test-lane-config's locked bare_test_run, and is not changed). In a lanes-only repo (no test_command) a bare `dross test` runs every declared lane unscoped, and that is the full run. `--files` in a laned repo never counts."
+  why = "Honours bare_test_run instead of overturning it — feastahead's test_command already runs both lanes, so adding lanes to the bare run would double them. Only lanes-only repos had no way to produce a full green."
+  locked = true
+
+[[decisions]]
+  key = "no_test_repo"
+  choice = "In a dross repo with neither runtime.test_command nor a test lane, the commit gate (c-4) stays silent."
+  why = "No green can ever be recorded there, so gating would refuse every agent commit indefinitely; the gate arms once a test command or lane is declared."
+  locked = true
+
+[[decisions]]
+  key = "gate_list_source"
+  choice = "Secret-emitting tools, secret path patterns and curated .dross/ files ship as built-in defaults; the extension mechanism is the planner's call."
+  why = "Secret guards fire outside dross repos (guard_scope), where no project.toml exists to hold the lists."
+  locked = true
+
+[[deferred]]
+  id = "40377fedfaf41cb3"
+  text = "dross doctor's Hooks section reads only user-level settings.json; a project-level .claude/settings.json or settings.local.json with \"disableAllHooks\": true still shows ✓ for every gate hook"
+  why = "plan review round 1 (REVIEW.md spec-level note): the gates can be silently disabled per-repo while doctor reports them wired"
+  target = "tool-gate-hooks"
+
+[[deferred]]
+  id = "3a9ffbbca3428cab"
+  text = "Stale hook wording after t-17: `dross hooks ensure` Short still says 'PreCompact + SessionStart', and init/onboard print 'Ensured user-level Claude hooks (PreCompact …, SessionStart …)' though both now also wire the PreToolUse/PostToolUse gate pair"
+  why = "found during t-17; the fix touches cmd/dross/testdata/cli_tree.txt, init.go and onboard.go, none in t-17's file list, so it was left out rather than widen the task"
+  target = "tool-gate-hooks"

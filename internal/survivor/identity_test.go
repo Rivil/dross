@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // TestNormalizationInvariantSpellings pins that whitespace and line-ending
@@ -449,4 +450,28 @@ func TestResolveAtSplitsRootFromRelPath(t *testing.T) {
 			t.Errorf("an unreadable subject was reported as gone: %v", err)
 		}
 	})
+}
+
+// TestReportedPathsAreContained: a path a mutation tool reported — or one typed
+// on the command line — is contained under the repo root before it is read.
+// The escaping target exists and holds a resolvable line, so a raw read would
+// succeed.
+func TestReportedPathsAreContained(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "repo")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(parent, "outside.go"), []byte("package p\n\nvar x = 1 + 2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ResolveAt(root, "../outside.go", 3, "ARITHMETIC_BASE"); !errors.Is(err, pathfence.ErrEscapes) {
+		t.Errorf("ResolveAt(../outside.go) = %v, want a containment refusal", err)
+	}
+	if _, err := ApplicabilityAt(root, "../outside.go", 3, "ARITHMETIC_BASE"); !errors.Is(err, pathfence.ErrEscapes) {
+		t.Errorf("ApplicabilityAt(../outside.go) = %v, want a containment refusal", err)
+	}
+	if c, err := ContainReported(root, "sub/x.go"); err != nil || c.Rel() != "sub/x.go" {
+		t.Errorf("ContainReported(sub/x.go) = %v, %v", c, err)
+	}
 }

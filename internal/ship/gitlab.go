@@ -14,6 +14,7 @@ import (
 
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/redact"
+	"github.com/Rivil/dross/internal/secretscan"
 )
 
 // --- GitLab via REST ---
@@ -169,6 +170,47 @@ func gitlabOpenMRsTargeting(opts OpenOpts, base string) ([]BasePR, error) {
 	}
 }
 
+// gitlabOpenMRBySource returns the open MR whose source branch is head, or
+// (nil, nil) when there is none. GitLab filters server-side on source_branch,
+// and an open source branch can carry at most one MR per target — when more
+// than one comes back (different targets), the one targeting opts.BaseBranch
+// is the phase's own; otherwise the first is returned, since any open MR on
+// the head is the duplicate ship must not create.
+func gitlabOpenMRBySource(opts OpenOpts, head string) (*OpenResult, error) {
+	ref, token, err := gitlabTarget(opts)
+	if err != nil {
+		return nil, err
+	}
+	endpoint := strings.TrimRight(opts.APIBase, "/") + fmt.Sprintf(
+		"/projects/%s/merge_requests?state=opened&source_branch=%s", ref, url.QueryEscape(head))
+	respBody, status, err := gitlabReq("GET", endpoint, opts.AuthEnv, opts.AuthScheme, token, nil)
+	if err != nil {
+		return nil, fmt.Errorf("list open MRs from %s: %w", head, err)
+	}
+	if status >= 300 {
+		return nil, fmt.Errorf("list open MRs from %s: HTTP %d: %s", head, status, string(respBody))
+	}
+	var mrs []struct {
+		IID          int    `json:"iid"`
+		WebURL       string `json:"web_url"`
+		TargetBranch string `json:"target_branch"`
+	}
+	if err := json.Unmarshal(respBody, &mrs); err != nil {
+		return nil, fmt.Errorf("parse open MRs from %s: %w", head, err)
+	}
+	if len(mrs) == 0 {
+		return nil, nil
+	}
+	pick := mrs[0]
+	for _, mr := range mrs {
+		if opts.BaseBranch != "" && mr.TargetBranch == opts.BaseBranch {
+			pick = mr
+			break
+		}
+	}
+	return &OpenResult{Number: pick.IID, URL: pick.WebURL}, nil
+}
+
 // gitlabProjectRef returns the GitLab project identifier for the API path.
 // A positive numeric projectID wins (the config override); otherwise the
 // URL-encoded "owner/repo" path (owner%2Frepo) is used.
@@ -193,6 +235,11 @@ func gitlabAuthHeader(req *http.Request, scheme, token string) {
 // gitlabReq performs a GitLab REST request with the scheme-appropriate auth
 // header, returning the raw body and status. body is JSON-encoded when non-nil.
 func gitlabReq(method, endpoint, authEnv, scheme, token string, body any) ([]byte, int, error) {
+	// Screened before the encoder runs (criterion c-2 of secret-detection).
+	// A nil body — every GET here — passes untouched.
+	if err := secretscan.ScanPayload(method+" "+endpoint, body); err != nil {
+		return nil, 0, err
+	}
 	var buf io.Reader
 	if body != nil {
 		b := new(bytes.Buffer)

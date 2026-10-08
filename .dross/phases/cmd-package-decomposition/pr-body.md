@@ -1,0 +1,33 @@
+# cmd-package-decomposition — cmd-package-decomposition
+
+## Acceptance criteria
+
+| ID | Criterion | Status | Tests |
+|---|---|---|---|
+| `c-1` | Consent and fingerprinting (Fingerprint, CheckConsent, lane/replay/run/install consent, the requireExecConsent gate) live in their own package; internal/cmd keeps only the `trust` subcommand tree and the gate call. | covered | internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection, internal/consent/consent_test.go:TestFingerprint, internal/consent/consent_test.go:TestConsentStates, internal/consent/consent_test.go:TestReplayAndRunSetsAreIndependent, internal/consent/lane_test.go:TestOneLaneGoesStaleAlone, internal/consent/lane_test.go:TestInstallGrantsAreIsolatedPerLane, internal/cmd/trust_test.go, internal/cmd/exec_consent_test.go:TestEverySpawnSiteGatedOrExempt |
+| `c-2` | Board reconciliation (backlog/phase/milestone sync, reap, task pull) lives in its own package; internal/cmd keeps only the `issue` subcommand tree. | covered | internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection, internal/boardsync/sync_test.go:TestSyncPhaseCreatesThenUpdates, internal/boardsync/lifecycle_test.go:TestLifecycleMappingRoundTrips, internal/boardsync/reap_classify_test.go:TestClassifyBoardMoved, internal/boardsync/reap_discover_test.go:TestUnlinkedMirrorIsDiscovered, internal/boardsync/task_test.go:TestSyncTasksMintsOneIssuePerTask, internal/boardsync/task_pull_test.go, internal/cmd/issue_test.go, internal/cmd/issue_reap_apply_test.go:TestReapApplyClosesEveryLane, internal/cmd/issue_reap_undo_test.go |
+| `c-3` | Diagnostic checks (red-proof, roadmap duplicates, remote/board combination warnings, config trust, lane consent, mutation toolchain) live in their own package and return structured results; Doctor() in internal/cmd only composes and prints them. | covered | internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection, internal/diag/diag_test.go:TestLevelsAndIssues, internal/diag/trust_test.go:TestConfigTrustExecConsentLadder, internal/diag/trust_test.go:TestLaneConsentLevels, internal/diag/redproof_test.go:TestPinLinesMatrix, internal/diag/diag_test.go:TestRoadmapDuplicatesNamesEveryClaimant, internal/diag/diag_test.go:TestCombinationWarnings, internal/diag/toolchain_test.go:TestMutationToolchainNamesTheAdapter, internal/cmd/cli_surface_test.go:TestDoctorRunGolden |
+| `c-4` | Mutation-adapter construction (configuredAdapters, tuning, gremlins/stryker selection, toolchain probe) lives outside internal/cmd; `verify` and `doctor` both consume the single construction path. | covered | internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection, internal/mutationcfg/mutationcfg_test.go:TestDrainAndVerifyBuildTheSameGremlins, internal/mutationcfg/toolchain_test.go:TestToolsAndAdaptersShareTheRoster, internal/mutationcfg/mutationcfg_test.go:TestConfiguredAdaptersAllowlist, internal/mutationcfg/mutationcfg_test.go:TestResolveTuningFallsBackWhenUnreached, internal/cmd/mutation_remote_wiring_test.go, internal/cmd/verify_lock_test.go, internal/cmd/doctor_lane_toolchain_test.go |
+| `c-5` | An architecture test enumerates every package under internal/ and proves the boundary by import direction: cobra is imported only by internal/cmd, no extracted package imports internal/cmd, internal/cmd imports each of the four extracted packages, and internal/cmd files may not import os/exec, net/http or go/ast except those named in a shrink-only baseline — adding a file to the baseline fails the test. | covered | internal/cmd/boundary_test.go:TestCmdBoundaryByImportDirection, internal/cmd/boundary_test.go:TestCmdForbiddenImportRatchet, internal/cmd/boundary_test.go:TestBoundaryDirectionRulesFire, internal/cmd/boundary_test.go:TestBoundaryVacuityFloor |
+| `c-6` | No user-visible CLI change: names, flags, output and exit codes of `trust`, `issue`, `doctor` and `verify` are unchanged — the existing internal/cmd tests pass with no assertion edits, and unit tests of moved functions move with the code. | covered | internal/cmd/cli_surface_test.go:TestCLISurfacePinned, internal/cmd/cli_surface_test.go:TestDoctorRunGolden, internal/cmd/boundary_test.go:TestNoTestLost, internal/cmd/cli_surface_test.go:TestGoldenMissingFails |
+
+## Decisions locked
+
+- **proof_shape** 🔒 — The c-5 test asserts cobra exclusivity, the four positive imports, no reverse import of internal/cmd, AND a forbidden-import ratchet on internal/cmd (os/exec, net/http, go/ast). *(Exclusivity alone snapshots today's boundary; the ratchet is what makes new domain logic landing in cmd a test failure, which is the milestone's 'provable by import direction' in enforceable form.)*
+- **ratchet_baseline** 🔒 — The forbidden-import rule carries an explicit shrink-only allowlist of the cmd files still importing os/exec after this phase (the ~13 outside the four named domains). Adding a file fails; removing one passes. *(18 cmd files import os/exec today and only ~5 belong to the four domains in scope; draining the rest would double the phase. A visible, shrinking baseline keeps the debt honest without inflating scope.)*
+- **adapter_home** 🔒 — Adapter construction lands in a new thin package internal/mutationcfg that imports project, mutation and remote; internal/mutation stays project-agnostic. *(internal/mutation today imports only argfence, remote and telemetry; giving it a project dependency would couple the adapter layer to the config schema and drag project into its pure tests.)*
+- **test_policy** 🔒 — Unit tests of a moved function move into its new package with unexported access intact; internal/cmd retains only tests that drive a cobra command end-to-end. *(Keeps the export surface minimal and lands mutation-score attribution in the package that owns the code; leaving tests in cmd would force a wide exported API and keep the 281-file test monolith.)*
+
+## Efficacy
+
+- Mutation score: **91.2%** (1823 killed / 175 survived)
+- Criteria coverage: **6/6** covered, 0 uncovered
+- Verdict: **PASS**
+
+## Findings
+
+- **NOTE**: Score 0.91 over 1998 in-scope mutants; all 175 survivors are NotCovered (efficacy over the 1823 reachable = 1.00). 112 keys routed to extracted-package-test-parity: the extraction moved backlog/reap_apply/reap_undo/inbound into internal/boardsync while their covering tests stayed in internal/cmd as cobra e2e tests (locked test_policy), so per-package gremlins now reports them uncovered (boardsync own-test coverage: backlog.go 7%, reap_apply.go 9%, reap_undo.go 0%, inbound.go 0%). The code is tested; the mutation gate on it is blind until that phase gives boardsync package-level tests.
+
+---
+_Generated by `dross ship`. Edit before push if you want this body changed._
+

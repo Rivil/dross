@@ -22,8 +22,14 @@ const (
 	extSignalWeight  = 1
 )
 
-// skipDirs are never descended when collecting extension signals — VCS, vendored,
-// and build noise would otherwise let a stray dependency file flip detection.
+// skipDirs is the one shared definition of directories a dross scanner never
+// descends — VCS, vendored, and build noise would otherwise let a stray dependency
+// file flip detection, and fixture trees (testdata, fixtures) would surface
+// languages and tech-debt findings that belong to the tests, not the project.
+// Language detection, MarkerProfiles, the tech-debt enumerator and the gitleaks
+// allowlist description all consume this set through SkipDir/SkipDirs; a second
+// copy per scanner is exactly the drift the symmetric-controls milestone forbids
+// (skip_dir_set decision), and TestSkipDirsSingleDefinition pins it.
 var skipDirs = map[string]bool{
 	".git":         true,
 	".dross":       true,
@@ -33,6 +39,27 @@ var skipDirs = map[string]bool{
 	"build":        true,
 	".idea":        true,
 	".vscode":      true,
+	"testdata":     true,
+	"fixtures":     true,
+}
+
+// SkipDir reports whether a single path segment names a directory the shared skip
+// set excludes. It is a whole-segment predicate — callers compare one component at
+// a time, so "mytestdata" or a file named "testdata.py" never match.
+func SkipDir(name string) bool {
+	return skipDirs[name]
+}
+
+// SkipDirs returns the shared skip set as a sorted copy, for callers that record or
+// display what a scan scoped out (the security manifest, the gitleaks allowlist
+// description). Mutating the result does not affect the set.
+func SkipDirs() []string {
+	out := make([]string, 0, len(skipDirs))
+	for name := range skipDirs {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Detect resolves the strongest-matching profile for the tree at root and returns

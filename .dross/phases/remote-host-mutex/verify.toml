@@ -1,0 +1,89 @@
+[verify]
+  phase = "remote-host-mutex"
+  generated_at = 2026-09-21T11:38:18.391414Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-09-21T13:26:00.636694Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9412897016361886
+  mutants_killed = 978
+  mutants_survived = 61
+  mutants_not_covered = 61
+  mutants_in_scope = 1039
+  unclassified_in_scope = 0
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 978
+    survived = 61
+    timeout = 0
+    in_scope = 1039
+    score = 0.9412897016361886
+    file_count = 38
+    measured_on = "helicon"
+    whole_file = ["internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/doctor_lane_toolchain_test.go — adapter-lacks-range-runner", "internal/cmd/doctor_remote_test.go — adapter-lacks-range-runner", "internal/cmd/mutation_remote_wiring_test.go — adapter-lacks-range-runner", "internal/cmd/options_docs_test.go — adapter-lacks-range-runner", "internal/cmd/remote_bootstrap.go — adapter-lacks-range-runner", "internal/cmd/remote_bootstrap_lane_test.go — adapter-lacks-range-runner", "internal/cmd/remote_bootstrap_test.go — adapter-lacks-range-runner", "internal/cmd/subprocargs_audit_test.go — adapter-lacks-range-runner", "internal/cmd/survivor_drain.go — adapter-lacks-range-runner", "internal/cmd/test.go — adapter-lacks-range-runner", "internal/cmd/test_remote_test.go — adapter-lacks-range-runner", "internal/cmd/test_wait_test.go — adapter-lacks-range-runner", "internal/cmd/trust_test.go — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_detach_test.go — adapter-lacks-range-runner", "internal/cmd/verify_lock_test.go — adapter-lacks-range-runner", "internal/cmd/verify_results_test.go — adapter-lacks-range-runner", "internal/cmd/verify_reuse_report_test.go — adapter-lacks-range-runner", "internal/cmd/verify_scoping_test.go — adapter-lacks-range-runner", "internal/cmd/verify_status_test.go — adapter-lacks-range-runner", "internal/cmd/verify_test.go — adapter-lacks-range-runner", "internal/mutation/construct_test.go — adapter-lacks-range-runner", "internal/mutation/launcher.go — adapter-lacks-range-runner", "internal/mutation/launcher_lock_test.go — adapter-lacks-range-runner", "internal/mutation/launcher_scratch_test.go — adapter-lacks-range-runner", "internal/mutation/launcher_test.go — adapter-lacks-range-runner", "internal/mutation/remote_env_test.go — adapter-lacks-range-runner", "internal/mutation/remote_failure_test.go — adapter-lacks-range-runner", "internal/mutation/restore_test.go — adapter-lacks-range-runner", "internal/mutation/scratch_space_test.go — adapter-lacks-range-runner", "internal/remote/hold.go — adapter-lacks-range-runner", "internal/remote/hold_test.go — adapter-lacks-range-runner", "internal/remote/lock.go — adapter-lacks-range-runner", "internal/remote/lock_test.go — adapter-lacks-range-runner", "internal/remote/remote.go — adapter-lacks-range-runner", "internal/remote/remote_test.go — adapter-lacks-range-runner", "internal/verify/verify.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/remote/lock_test.go:TestRealFlockSerializesAndReleasesOnKill", "internal/remote/hold_test.go:TestTwoHoldsSerializeOnARealFlock", "internal/remote/remote_test.go:TestDetachScriptLocksBeforeItRuns", "internal/remote/remote_test.go:TestDetachLockIsHeldByTheDetachedJob", "internal/mutation/launcher_lock_test.go:TestRemoteRunHoldsOnceAcrossEveryPackage"]
+  notes = "Kernel flock serialises two real shells (second reports waiting, never acquires while first lives); attached Acquire serialises two holds; detached job takes flock inside setsid after --at sleep and before the tool's argv; launcher holds once across every package. Real-flock tests skip on macOS (no flock(1)) and run on helicon."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/remote/lock_test.go:TestLockPathIgnoresWorkdir", "internal/remote/hold_test.go:TestTwoHoldsSerializeOnARealFlock"]
+  notes = "Lock-open and record-write lines are byte-identical across /srv/a and /srv/b targets and carry no workdir; two projects in two workdirs serialise on one real flock."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/remote/hold_test.go:TestAcquirePrintsTheHolderOnce", "internal/remote/hold_test.go:TestAcquireHeartbeatsWhileWaiting", "internal/cmd/verify_status_test.go:TestStatusNamesWhatAScheduledRunWaitsOn", "internal/cmd/verify_results_test.go:TestResultsWaitingOnAHolderIsScheduledNotRunning"]
+  notes = "Attached: exact 'waiting on <project>/<phase> run <id> (pid N) since <time>' line asserted verbatim, then heartbeats. Detached: status and results both name the holder in the same words, results stays exit 10."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/remote/lock_test.go:TestRealFlockSerializesAndReleasesOnKill", "internal/remote/hold_test.go:TestAKilledHolderReleasesWithNoCleanup", "internal/remote/hold_test.go:TestHoldSessionDiesWithItsStdin", "internal/remote/hold_test.go:TestVanishedLaptopFreesWithinTheLease", "internal/remote/remote_test.go:TestDetachScriptKeepsFdNineOpen"]
+  notes = "SIGKILLed holder: next acquire is Held within 2s, stale record left in place, no waiter line; hold session dies with its stdin; suspended laptop freed by the host-side lease; detached job never closes fd 9 or flock -u."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/doctor_remote_test.go:TestDoctorReportsMissingFlockAsHostTool", "internal/cmd/doctor_remote_test.go:TestDoctorNamesTheCurrentHolder", "internal/cmd/doctor_remote_test.go:TestDoctorFreeLockIsOneLine", "internal/cmd/remote_bootstrap_test.go:TestBootstrapRefusesToInstallFlock"]
+  notes = "Missing flock is one host-tool issue naming util-linux and not an adapter tool; busy host prints holder/pid/user/since with no issue added and no 'free' line."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/test_wait_test.go:TestTestWaitDefaultsToTenMinutes", "internal/cmd/test_wait_test.go:TestWaitZeroSpawnsAtOnce", "internal/cmd/test_wait_test.go:TestExpiredWaitSpawnsAnywayNamingTheHolder", "internal/cmd/test_wait_test.go:TestTestNeverWaitsForever", "internal/cmd/test_wait_test.go:TestLocalTestTakesNoLock"]
+  notes = "Default cap 10m and --wait <dur> reach the hold seam; --wait 0 renders flock -n and spawns at once on busy; expired wait sequence is hold→warn→sync→ssh→release with a 'waited 10m … running alongside' line; no cap ever reaches the seam as Forever."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/remote/lock_test.go:TestLockPreludeOpensWithoutCreate", "internal/remote/lock_test.go:TestLockPreludeCreatesWorldWritable", "internal/remote/lock_test.go:TestFailedRecordWriteStillAcquires", "internal/remote/lock_test.go:TestLockPreludeWritesRecordWithoutCreate"]
+  notes = "Pins the mechanism cross-user exclusion rests on: guarded create + chmod 0666, lock taken on a read-only fd 9 (no O_CREAT open that fs.protected_regular refuses for user B), record write never O_CREAT, and a refused record write still acquires. No suite can run two uids, so the behaviour is asserted at the script level and against a 0444 file."
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation measured on helicon: score 0.94 over 1039 in-scope mutants; all 61 survivors are gremlins NOT_COVERED — efficacy over the 978 reachable mutants is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "22 in-hunk survivors were undispositioned at collection; all were gremlins attribution ceilings and were accepted this run under host-lock-switch-case (16: switch/select case-conditions), host-lock-var-initializer (3: launcherHeartbeat, holdKeepalive, holderLull) and host-lock-seam-body (3: testHold, remoteLockStatusFn, launcherHold — same class as the accepted detach-seam-body entries). None was downgraded: each line's arm is driven by a named test; the tooling attributes no coverage block to it."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Reclassification after the drain was NOT a re-run of the leg: `dross verify results` forgets a collected run and --reuse-report is stryker-only, so `dross survivor drain --phase remote-host-mutex --report reports/gremlins/{internal_cmd,internal_remote,internal_mutation,internal_verify}.json` was run over the same fetched reports — first read 152 classified / 22+5 outstanding, second read (after the accepts) '152 accepted, 0 routed, 0 outstanding'. unclassified_in_scope and the 22 seeded BLOCKING findings were updated from that observed output."
+
+[[finding]]
+  severity = "NOTE"
+  text = "drain surfaced 5 further ARITHMETIC_BASE survivors on const-declaration lines (test.go:913, hold.go:47 in-hunk; remote.go:673, stryker.go:292/293, toolfail.go:25 outside the diff) that verify drops as inapplicable via DropInapplicable before scoring — the two tools disagree on this class. Accepted all six under const-initializer-arithmetic so the drain reads zero. Tooling gap for the backlog: (a) post-collect reclassification needs a re-leg, (b) drain and verify apply different inapplicability rules."

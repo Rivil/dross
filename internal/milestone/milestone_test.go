@@ -202,3 +202,22 @@ func TestFilePath(t *testing.T) {
 		t.Errorf("got %q want %q", got, want)
 	}
 }
+
+// TestMilestoneVersionIsContained: a version read back from state.json or a
+// spec is a path segment; one that would escape milestones/ resolves to the
+// refused segment, never outside.
+func TestMilestoneVersionIsContained(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".dross")
+	milestones := filepath.Join(root, "milestones")
+	if got := FilePath(root, "v1.0"); got != filepath.Join(milestones, "v1.0.toml") {
+		t.Errorf("FilePath(v1.0) = %s", got)
+	}
+	for _, v := range []string{"../../x", "../state", "/etc/passwd"} {
+		if got := FilePath(root, v); got != filepath.Join(milestones, "_refused.toml") {
+			t.Errorf("FilePath(%q) = %s, want the refused segment inside milestones/", v, got)
+		}
+		if _, err := ContainVersion(root, v); err == nil {
+			t.Errorf("ContainVersion(%q) accepted an escaping version", v)
+		}
+	}
+}

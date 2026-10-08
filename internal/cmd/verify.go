@@ -4,16 +4,20 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/deferred"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/mutationcfg"
+	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
@@ -21,6 +25,7 @@ import (
 	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/telemetry"
 	"github.com/Rivil/dross/internal/testlane"
+	"github.com/Rivil/dross/internal/treefp"
 	"github.com/Rivil/dross/internal/verify"
 )
 
@@ -36,7 +41,10 @@ import (
 func Verify() *cobra.Command {
 	var skipMutation bool
 	var detach bool
+	var noWait bool
 	var detachAt string
+	var reuseReport bool
+	var baseOverride string
 	c := &cobra.Command{
 		Use:   "verify <phase-id>",
 		Short: "Run mutation testing per language and write tests.json + verify.toml skeleton",
@@ -50,6 +58,18 @@ func Verify() *cobra.Command {
 				return err
 			}
 			phaseID := args[0]
+			// A flag pair with no coherent meaning, refused before any I/O:
+			// a detached run waits on the host by design (there is no session
+			// to hold), so "do not wait" has nothing to apply to.
+			if noWait && detach {
+				return errors.New("--no-wait with --detach: a detached run waits for the host by design; drop one of the two")
+			}
+			// The attached leg's lock policy (locked attached_busy_policy):
+			// wait for the host, unless told to refuse instead.
+			wait := remote.Forever
+			if noWait {
+				wait = remote.WaitPolicy{}
+			}
 			root, err := FindRoot()
 			if err != nil {
 				return err
@@ -79,7 +99,11 @@ func Verify() *cobra.Command {
 			// correctness fix, not a mode: without it a survivor in an
 			// untouched file of the same package gates this phase, and a
 			// neighbour's kills inflate its score.
-			scope := phaseScope(filepath.Dir(root), ch.Base, recorded)
+			scope, err := phaseScope(filepath.Dir(root),
+				scopeBase{Branch: ch.Base, ForkPoint: ch.BaseCommit, Override: baseOverride}, recorded)
+			if err != nil {
+				return err
+			}
 
 			// The UNION is what gets mutated, not just the recorded files. A
 			// file git saw change but no task recorded would otherwise never
@@ -87,7 +111,11 @@ func Verify() *cobra.Command {
 			// the same escape hatch this phase closes on the attribution side.
 			// Widening happens here, at dispatch; the post-Report filter never
 			// narrows it back.
-			files, gone := mutationCandidates(filepath.Dir(root), scope.Files)
+			candidates, err := containScope(filepath.Dir(root), scope)
+			if err != nil {
+				return err
+			}
+			files, gone := mutationCandidates(candidates)
 			if len(files) == 0 && len(gone) == 0 {
 				Print("verify: no changes recorded for this phase and nothing changed since the base.")
 				Print("Run /dross-execute first, or record changes manually with `dross changes record`.")
@@ -97,9 +125,14 @@ func Verify() *cobra.Command {
 			// A refusal or an unreachable remote aborts HERE, before
 			// RunScoped — so neither tests.json nor verify.toml is written,
 			// and the run never falls back to a local-only adapter list.
-			adapters, tuning, err := configuredAdaptersFn(proj, root, skipMutation)
+			adapters, tuning, err := configuredAdaptersFn(proj, root, skipMutation, phaseID, wait)
 			if err != nil {
 				return err
+			}
+			if reuseReport {
+				if err := applyReuseReport(adapters, skipMutation, detach); err != nil {
+					return err
+				}
 			}
 
 			if detach {
@@ -126,7 +159,7 @@ func Verify() *cobra.Command {
 				if len(steps) == 0 {
 					return fmt.Errorf("nothing to mutate for phase %s — no Go packages in scope", phaseID)
 				}
-				return dispatchDetached(root, phaseID, steps, tuning.Target, notBefore)
+				return dispatchDetached(root, proj.Project.Name, phaseID, steps, tuning.Target, notBefore)
 			}
 
 			if tuning.FellBackFrom != "" {
@@ -134,10 +167,27 @@ func Verify() *cobra.Command {
 				// operator watching this decides whether to wait for the host.
 				Printf("remote: %s\n", tuning.FallbackWhy)
 			}
-			t, err := verify.RunScoped(phaseID, files, adapters, scope)
+			// The tree is taken BEFORE the run, so the verdict names what the
+			// run measured: an edit made while a long leg runs lands after the
+			// capture and reads as a change since, never as measured.
+			measured, err := captureMeasuredTree(filepath.Dir(root))
 			if err != nil {
 				return err
 			}
+			t, err := verify.RunScoped(phaseID, files, adapters, scope)
+			if err != nil {
+				if errors.Is(err, remote.ErrHostBusy) {
+					// The host is held and --no-wait said not to wait: a
+					// refusal with its own code, naming the holder, and
+					// nothing written — no leg ran, so there is no run to
+					// record. RunScoped returns this one rather than
+					// recording it as a leg failure for exactly that reason.
+					return &ExitCodeError{Code: exitVerifyHostBusy, Err: fmt.Errorf(
+						"refusing to measure: %w\nWait for it (drop --no-wait), or measure elsewhere", err)}
+				}
+				return err
+			}
+			t.MeasuredCommit, t.MeasuredTree = measured.Commit, measured.Tree
 			// Stamped from the adapters the run actually used, not from the
 			// grant on disk: a --local run has a grant and ignores it, and a
 			// fallback has one it could not reach. Reading config here would
@@ -149,12 +199,44 @@ func Verify() *cobra.Command {
 		"do not run mutation tests (record what would have been mutated, skip execution)")
 	c.Flags().BoolVar(&detach, "detach", false,
 		"start the run on the granted host and return immediately; collect it later with `dross verify results <phase>`")
+	c.Flags().BoolVar(&noWait, "no-wait", false,
+		"refuse (exit 15, naming the holder) instead of waiting when another run holds the granted host")
 	c.Flags().StringVar(&detachAt, "at", "",
 		"with --detach, start the run at HH:MM (next occurrence) or an RFC3339 instant, on the host's clock")
+	c.Flags().BoolVar(&reuseReport, "reuse-report", false,
+		"stryker only: parse the report already on disk instead of launching a run (path + mtime are printed; other legs still run)")
+	c.Flags().StringVar(&baseOverride, "base", "",
+		"diff from this commit instead of the resolved fork point (a merged phase falls back to changes.json's base_commit automatically; use this when it has none)")
 	c.AddCommand(verifyFinalize())
 	c.AddCommand(verifyResults())
 	c.AddCommand(verifyStatus())
+	c.AddCommand(verifyScope())
 	return c
+}
+
+// applyReuseReport turns --reuse-report on for every stryker adapter in the
+// list. It is an explicit opt-in that changes what a run measures, so the two
+// flags that make it meaningless refuse: --skip-mutation runs no adapter at
+// all, and --detach launches on the host — a reused report is precisely a run
+// that is NOT launched.
+func applyReuseReport(adapters []mutation.Adapter, skip, detach bool) error {
+	if skip {
+		return errors.New("--reuse-report with --skip-mutation: nothing runs under --skip-mutation, so there is no leg to reuse a report for")
+	}
+	if detach {
+		return errors.New("--reuse-report with --detach: a reused report is a run that is not launched; drop one of the two")
+	}
+	applied := false
+	for _, a := range adapters {
+		if s, ok := a.(*mutation.Stryker); ok {
+			s.ReuseReport = true
+			applied = true
+		}
+	}
+	if !applied {
+		return errors.New("--reuse-report: no stryker adapter is configured for this project, so there is no report to reuse")
+	}
+	return nil
 }
 
 // detachSpawn is the seam every detached dispatch goes through, swapped in
@@ -173,11 +255,9 @@ var detachSync = func(t remote.Target, localRoot string) error {
 	return runDetachArgv(argv)
 }
 
-var runDetachArgv = func(argv []string) error {
-	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
-	return cmd.Run()
-}
+// runDetachArgv is the transport seam a detached push and collect run their
+// built argv through — verify.RunDetachArgv, behind this file's consent checks.
+var runDetachArgv = verify.RunDetachArgv
 
 // detachRequiresAHost refuses a detached run that has nowhere to detach to.
 //
@@ -257,12 +337,18 @@ func detachSequence(steps []mutation.PackageStep) string {
 // has accepted the script: a record written first would name a run that never
 // started, and the one-run-per-phase guard would then refuse the retry that
 // would have fixed it. A dispatch that fails leaves nothing behind to clean up.
-func dispatchDetached(root, phaseID string, steps []mutation.PackageStep, target *remote.Target, notBefore time.Time) error {
+//
+// The host lock's holder is stamped HERE, with the run id this dispatch mints,
+// so the identity a waiter sees on the host is the identity `verify status`
+// looks the run up by. Stamping it anywhere else would let the two drift —
+// and DetachScript refuses an anonymous holder, so the stamp and its only
+// caller land together.
+func dispatchDetached(root, projectName, phaseID string, steps []mutation.PackageStep, target *remote.Target, notBefore time.Time) error {
 	repoDir := filepath.Dir(root)
 
 	// Checked before the push, which is the expensive part: a phase that
 	// already has a run in flight must not rsync a tree to a host first.
-	existing, err := findDetachedRun(root, repoDir, phaseID)
+	existing, err := localstore.FindDetachedRun(root, repoDir, phaseID)
 	if err != nil {
 		return err
 	}
@@ -274,40 +360,72 @@ func dispatchDetached(root, phaseID string, steps []mutation.PackageStep, target
 			existing.DispatchedAt.Format(time.RFC3339), phaseID)
 	}
 
+	// The lock tool is probed before the push, through the same seam doctor
+	// probes through, so a flock-less host is refused on the laptop with the
+	// doctor wording — not discovered in a host log hours later. The script
+	// itself refuses too (exit 127), but that refusal is only readable after
+	// a status round trip.
+	ready, err := remoteProbeFn(*target, []string{remote.LockTool})
+	if err != nil {
+		return fmt.Errorf("probe %s for %s: %w", target.Host, remote.LockTool, err)
+	}
+	for _, m := range ready.Missing {
+		if m == remote.LockTool {
+			return fmt.Errorf("%s is not installed on %s — the host lock needs it; run dross doctor",
+				remote.LockTool, target.Host)
+		}
+	}
+
+	// The tree is taken before the push, so the record names what the host
+	// measures: an edit made while the tree crosses lands after the capture
+	// and reads as a change since, never as measured.
+	measured, err := captureTreeFn(repoDir)
+	if err != nil {
+		return err
+	}
+
 	runID := newRunID(time.Now())
 	runDir, err := remote.RunDir(runID)
 	if err != nil {
 		return err
 	}
+	stamped := *target
+	stamped.Lock = remote.LockSpec{
+		Holder: remote.Holder{Project: projectName, Phase: phaseID, RunID: runID},
+		Wait:   remote.Forever,
+	}
 
-	if err := detachSync(*target, repoDir); err != nil {
+	if err := detachSync(stamped, repoDir); err != nil {
 		return fmt.Errorf("push the tree to %s: %w", target.Host, err)
 	}
 
-	script, err := remote.DetachScript(*target, runDir,
+	script, err := remote.DetachScript(stamped, runDir,
 		[]string{"bash", "-c", detachSequence(steps)}, notBefore)
 	if err != nil {
 		return err
 	}
-	if _, err := detachSpawn(*target, script); err != nil {
+	if _, err := detachSpawn(stamped, script); err != nil {
 		return fmt.Errorf("start the detached run on %s: %w", target.Host, err)
 	}
 
-	state := "running"
-	if !notBefore.IsZero() {
-		state = "scheduled"
+	// Every detached run starts as scheduled: the job takes the host lock
+	// before it runs, so "dispatched, not yet started" is the initial state
+	// whether or not there is an --at. The host's state file says when it
+	// actually started.
+	state := "scheduled"
+	rec := localstore.DetachedRun{
+		Phase:          phaseID,
+		RunID:          runID,
+		Host:           target.Host,
+		Workdir:        target.Workdir,
+		RunDir:         runDir,
+		DispatchedAt:   time.Now().UTC(),
+		ScheduledFor:   notBefore,
+		State:          state,
+		MeasuredCommit: measured.Commit,
+		MeasuredTree:   measured.Tree,
 	}
-	rec := detachedRun{
-		Phase:        phaseID,
-		RunID:        runID,
-		Host:         target.Host,
-		Workdir:      target.Workdir,
-		RunDir:       runDir,
-		DispatchedAt: time.Now().UTC(),
-		ScheduledFor: notBefore,
-		State:        state,
-	}
-	if err := recordDetachedRun(root, repoDir, rec); err != nil {
+	if err := localstore.RecordDetachedRun(root, repoDir, rec); err != nil {
 		return err
 	}
 
@@ -374,6 +492,12 @@ const (
 	exitResultsUnreachable = 13
 	exitResultsGone        = 14
 )
+
+// exitVerifyHostBusy is `dross verify --no-wait` finding the granted host held
+// by another run. Its own code, outside test.go's 1–8 and the results band
+// above: nothing was measured and nothing was written, and a caller polling
+// on the number must not mistake it for a verdict or for a results state.
+const exitVerifyHostBusy = 15
 
 // detachStatus reads a run's host-side state. Swapped in tests.
 var detachStatus = func(t remote.Target, runDir string) (remote.RunStatus, error) {
@@ -468,9 +592,10 @@ var detachFetchReports = func(t remote.Target, localRoot string, steps []mutatio
 // before measuring, arriving through a different door.
 //
 // An error that is already classified passes through, so a test can hand this
-// an rsync verdict without constructing an *exec.ExitError. An error that is
-// neither classified nor an exit status means rsync did not run at all, which
-// is not an absent report either.
+// an rsync verdict without spawning rsync. An error that is neither classified
+// nor an exit status means rsync did not run at all, which is not an absent
+// report either. The exit status is read through ExitCode() alone — os/exec's
+// ExitError carries it — so this file needs no process API of its own.
 func classifyFetch(host string, err error) error {
 	if err == nil {
 		return nil
@@ -479,7 +604,7 @@ func classifyFetch(host string, err error) error {
 		errors.Is(err, remote.ErrRemoteCommand) {
 		return err
 	}
-	var ee *exec.ExitError
+	var ee interface{ ExitCode() int }
 	if errors.As(err, &ee) {
 		return remote.Classify("rsync", host, ee.ExitCode())
 	}
@@ -488,14 +613,30 @@ func classifyFetch(host string, err error) error {
 
 // verifyResults registers `dross verify results <phase>`.
 func verifyResults() *cobra.Command {
-	return &cobra.Command{
+	var baseOverride string
+	c := &cobra.Command{
 		Use:   "results <phase-id>",
 		Short: "Collect a detached mutation run and write tests.json + verify.toml",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			return collectDetached(args[0])
+			// FIRST. `verify results` reads like the harmless half of a
+			// detached run — it collects rather than measures — but
+			// detachFetchReports rsyncs from the recorded host per package,
+			// and the artefacts it then writes are this phase's verdict. The
+			// enumerator found it reaching verify.go's spawn seam with no
+			// grant of its own, which made every mutation spawn MIXED:
+			// covered when `verify` reached it, uncovered when this did.
+			if err := requireExecConsent(); err != nil {
+				return err
+			}
+			return collectDetachedFrom(args[0], baseOverride)
 		},
 	}
+	// The scope is rebuilt at collection, so a run dispatched with --base has
+	// to be collected with the same one or the two would disagree.
+	c.Flags().StringVar(&baseOverride, "base", "",
+		"diff from this commit instead of the resolved fork point; pass the same value the run was dispatched with")
+	return c
 }
 
 // collectDetached is `verify results`: read the record, ask the host it names,
@@ -506,13 +647,19 @@ func verifyResults() *cobra.Command {
 // half-finished run would carry a score computed over the packages that
 // happened to be done, and it would look exactly like a complete one.
 func collectDetached(phaseID string) error {
+	return collectDetachedFrom(phaseID, "")
+}
+
+// collectDetachedFrom is collectDetached with an explicit --base; the scope
+// rebuilt here resolves its fork point exactly as the attached path does.
+func collectDetachedFrom(phaseID, baseOverride string) error {
 	root, err := FindRoot()
 	if err != nil {
 		return err
 	}
 	repoDir := filepath.Dir(root)
 
-	rec, err := findDetachedRun(root, repoDir, phaseID)
+	rec, err := localstore.FindDetachedRun(root, repoDir, phaseID)
 	if err != nil {
 		return err
 	}
@@ -542,10 +689,15 @@ func collectDetached(phaseID string) error {
 			rec.RunID, rec.Host, rec.RunDir)}
 	}
 	if !st.HasExit {
-		if rec.Scheduled() && st.State == "scheduled" {
+		// Scheduled is every detached run's initial state now — the job takes
+		// the host lock before it runs — so the guard is on the host's word
+		// alone, and the REASON it has not started is what varies: a future
+		// --at, or another run holding the host. Same exit code either way
+		// (locked detached_waiting_state).
+		if st.State == "scheduled" {
 			return &ExitCodeError{Code: exitResultsScheduled, Err: fmt.Errorf(
-				"run %s on %s has not started yet — scheduled for %s",
-				rec.RunID, rec.Host, rec.ScheduledFor.Format(time.RFC3339))}
+				"run %s on %s has not started yet — %s",
+				rec.RunID, rec.Host, scheduledReason(*rec, st, time.Now()))}
 		}
 		return &ExitCodeError{Code: exitResultsRunning, Err: fmt.Errorf(
 			"run %s on %s is still running (dispatched %s)",
@@ -574,10 +726,19 @@ func collectDetached(phaseID string) error {
 	for taskID, r := range ch.Tasks {
 		filesByTask[taskID] = r.Files
 	}
-	scope := phaseScope(repoDir, ch.Base, verify.FilesFromChanges(filesByTask))
-	files, gone := mutationCandidates(repoDir, scope.Files)
+	scope, err := phaseScope(repoDir,
+		scopeBase{Branch: ch.Base, ForkPoint: ch.BaseCommit, Override: baseOverride},
+		verify.FilesFromChanges(filesByTask))
+	if err != nil {
+		return err
+	}
+	candidates, err := containScope(repoDir, scope)
+	if err != nil {
+		return err
+	}
+	files, gone := mutationCandidates(candidates)
 
-	adapters, _, err := configuredAdaptersFn(proj, root, false)
+	adapters, _, err := configuredAdaptersFn(proj, root, false, phaseID, remote.Forever)
 	if err != nil {
 		return err
 	}
@@ -618,6 +779,18 @@ func collectDetached(phaseID string) error {
 	}
 	kept, dropped := verify.FilterReport(report, scope, "go")
 	t.OutOfScope = append(t.OutOfScope, dropped...)
+	// The same planner the attached path runs, so a collected leg carries the
+	// same provenance an attached one would — whole_file for every file, with
+	// its reason — rather than nothing. A ZERO Gremlins, not the tuned
+	// constructor: PlanRanges is pure and only type-asserts RangeRunner, and
+	// this path must not build anything that could run.
+	//
+	// Only the files gremlins can mutate: the attached path groups by
+	// Dispatch before it plans, so its leg never lists README.md; the
+	// collected leg must say the same, or its whole-file count over-reads by
+	// every non-Go file in scope.
+	legFiles := mutation.Supported(&mutation.Gremlins{}, files)
+	plan := verify.PlanRanges(&mutation.Gremlins{}, legFiles, scope, nil)
 	t.Languages = append(t.Languages, verify.LanguageRun{
 		Name: "go",
 		Tool: "gremlins",
@@ -625,14 +798,23 @@ func collectDetached(phaseID string) error {
 		// dispatch record named, and re-deriving it here would stamp today's
 		// pool onto a report measured hours ago somewhere else.
 		MeasuredOn: verify.MeasuredOnHost(rec.Host),
-		Files:      files,
+		Files:      legFiles,
 		Mutation:   kept,
+		Ranges:     plan.Ranges,
+		WholeFile:  plan.WholeFile,
 	})
 
+	// The verdict covers the tree the dispatch pushed, never the one found here
+	// at collect (locked detached_baseline); finishVerify names whatever moved
+	// in between.
+	t.MeasuredCommit, t.MeasuredTree = rec.MeasuredCommit, rec.MeasuredTree
+	if rec.MeasuredTree == "" {
+		Print("verify: this run was dispatched before trees were recorded — no measured tree, so this verdict's freshness will read as unknown")
+	}
 	if err := finishVerify(root, phaseID, spec, t, verify.MeasuredOnHost(rec.Host), gone); err != nil {
 		return err
 	}
-	if _, err := clearDetachedRun(root, repoDir, phaseID); err != nil {
+	if _, err := localstore.ClearDetachedRun(root, repoDir, phaseID); err != nil {
 		return err
 	}
 	Printf("collected run %s from %s\n", rec.RunID, rec.Host)
@@ -694,7 +876,7 @@ func printDetachedStatus() error {
 	if err != nil {
 		return err
 	}
-	runs, err := readDetachedRuns(root, filepath.Dir(root))
+	runs, err := localstore.ReadDetachedRuns(root, filepath.Dir(root))
 	if err != nil {
 		return err
 	}
@@ -719,11 +901,54 @@ func printDetachedStatus() error {
 			Printf("  state    gone (the run directory is no longer on %s)\n", r.Host)
 		case st.HasExit:
 			Printf("  state    finished (exit %d) — collect with `dross verify results %s`\n", st.ExitCode, r.Phase)
+		case st.State == "scheduled":
+			Printf("  state    %s\n", st.State)
+			// One reason per line: the --at line above already explains a
+			// run waiting for its instant, so only a run past that (or with
+			// none) says what else it waits on.
+			if why := scheduledWaitLine(r, st, time.Now()); why != "" {
+				Printf("  %s\n", why)
+			}
 		default:
 			Printf("  state    %s\n", st.State)
 		}
 	}
 	return nil
+}
+
+// scheduledWaitLine is what a scheduled run is waiting on, beyond a future
+// --at — or "" when the --at line has already said it.
+//
+// The lock state comes from the SAME status round trip (StatusScript carries
+// LockStatusScript), so naming the holder costs no second probe. The holder
+// is only named when it is someone else: a lock held by this record's own run
+// id is the job racing its own state write, not a wait.
+func scheduledWaitLine(rec localstore.DetachedRun, st remote.RunStatus, now time.Time) string {
+	if rec.Scheduled() && rec.ScheduledFor.After(now) {
+		return ""
+	}
+	return scheduledReason(rec, st, now)
+}
+
+// scheduledReason renders why a scheduled run has not started, for the
+// results verb's one-line refusal and the status listing alike.
+func scheduledReason(rec localstore.DetachedRun, st remote.RunStatus, now time.Time) string {
+	switch {
+	case rec.Scheduled() && rec.ScheduledFor.After(now):
+		return fmt.Sprintf("scheduled for %s (host clock)", rec.ScheduledFor.Format(time.RFC3339))
+	case !st.HasLock:
+		// The probe's lock lines were absent (ParseStatus tolerates that).
+		// The listing stays useful; the reason is honestly unknown.
+		return "not started yet (could not read the host lock)"
+	case !st.Lock.Held:
+		return "not started yet"
+	case st.Lock.Holder.RunID == rec.RunID:
+		return "starting (holds the host lock)"
+	case st.Lock.Holder.IsZero():
+		return "waiting on the host lock (holder not yet recorded)"
+	default:
+		return remote.WaitLine(st.Lock.Holder)
+	}
 }
 
 // cancelDetached kills a run on its host and drops the record.
@@ -738,7 +963,7 @@ func cancelDetached(phaseID string) error {
 		return err
 	}
 	repoDir := filepath.Dir(root)
-	rec, err := findDetachedRun(root, repoDir, phaseID)
+	rec, err := localstore.FindDetachedRun(root, repoDir, phaseID)
 	if err != nil {
 		return err
 	}
@@ -752,7 +977,7 @@ func cancelDetached(phaseID string) error {
 	target := remote.Target{Host: rec.Host, Workdir: rec.Workdir}
 	cerr := detachCancel(target, rec.RunDir, path.Join(rec.RunDir, "pid"))
 
-	removed, err := clearDetachedRun(root, repoDir, phaseID)
+	removed, err := localstore.ClearDetachedRun(root, repoDir, phaseID)
 	if err != nil {
 		return err
 	}
@@ -830,6 +1055,11 @@ func finishVerify(root, phaseID string, spec *phase.Spec, t *verify.Tests, measu
 		ids = append(ids, c.ID)
 	}
 	v := verify.Skeleton(t, ids)
+	var prof *survivor.Profile
+	if pkgs := verify.NotCoveredPackages(t); len(pkgs) > 0 {
+		prof = notCoveredProfileFn(repoRoot, pkgs)
+	}
+	verify.SplitNotCovered(v, t, profileClassifier{repoRoot: repoRoot, prof: prof})
 	appendStalenessNotes(v, repoRoot, store)
 	if err := v.Save(verifyPath); err != nil {
 		return err
@@ -837,8 +1067,86 @@ func finishVerify(root, phaseID string, spec *phase.Spec, t *verify.Tests, measu
 
 	printVerifySummary(t, v)
 	printLifecycleSummary(lc, v.Summary.UnclassifiedInScope)
+	if t.MeasuredTree != "" {
+		reportTreeDrift(repoRoot, t.MeasuredTree)
+	}
 	recordVerifyOutcome(t, v)
 	return nil
+}
+
+// measuredTreeFn takes the tree a verify run measures (treefp.MeasuredTree). A
+// seam so a test can make the capture fail.
+var measuredTreeFn = treefp.MeasuredTree
+
+// captureTreeFn is the whole capture a detached dispatch runs — git or not —
+// so a dispatch test can see where it falls among probe, push and spawn.
+var captureTreeFn = captureMeasuredTree
+
+// captureMeasuredTree takes the tree a run is about to measure in repoDir.
+//
+// In a git work tree a failure refuses: a verdict written without its tree
+// reads as one recorded before trees were kept, and ship would let it through
+// with only a warning. Outside git there is no tree to take, and nothing a
+// stale verdict could ship from: the run records none and says so once.
+//
+// "Outside git" is decided by the absence of any .git above repoDir, never by
+// a git command failing: a missing git binary, a safe.directory refusal or a
+// corrupt repository all fail that command inside a real work tree, and
+// reading any of them as "not git" would let the run record no tree.
+func captureMeasuredTree(repoDir string) (treefp.Measured, error) {
+	if !underGitDir(repoDir) {
+		Print("verify: not a git work tree — no measured tree recorded, so this verdict's freshness will read as unknown")
+		return treefp.Measured{}, nil
+	}
+	m, err := measuredTreeFn(repoDir)
+	if err != nil {
+		return treefp.Measured{}, fmt.Errorf("refusing to measure: could not fingerprint the tree this run would measure: %w", err)
+	}
+	return m, nil
+}
+
+// underGitDir reports whether dir or any directory above it holds a .git —
+// a repository's directory or a linked worktree's file.
+func underGitDir(dir string) bool {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return true // cannot rule git out, so do not
+	}
+	for {
+		if _, err := os.Lstat(filepath.Join(abs, ".git")); err == nil {
+			return true
+		}
+		parent := filepath.Dir(abs)
+		if parent == abs {
+			return false
+		}
+		abs = parent
+	}
+}
+
+// reportTreeDrift re-takes the tree after the run and names every path that
+// moved since it was measured — an edit made while the run was going, or
+// output a tool wrote outside .gitignore. The verdict stands for the tree as
+// measured, so ship will read it stale until those paths are re-measured.
+func reportTreeDrift(repoDir, measured string) {
+	now, err := measuredTreeFn(repoDir)
+	if err != nil {
+		Printf("verify: could not re-check the tree after the run (%v) — ship will compare it\n", err)
+		return
+	}
+	if now.Tree == measured {
+		return
+	}
+	paths, err := treefp.Diff(repoDir, measured, now.Tree)
+	if err != nil {
+		Printf("verify: the tree changed since it was measured, and the changed files could not be listed: %v\n", err)
+		return
+	}
+	Printf("verify: %d file(s) changed since the tree was measured — this verdict covers the tree as measured:\n", len(paths))
+	for _, p := range paths {
+		Printf("  %s\n", p)
+	}
+	Print("  A path a mutation tool wrote belongs in .gitignore; any other change needs a re-verify before ship.")
 }
 
 // verifyFinalize records a telemetry outcome event with the resolved
@@ -923,103 +1231,51 @@ func finalizeVerify(root, phaseID string) (recorded bool, verdict string, err er
 // did not shell out. It is what makes "refused" different from "refused after
 // spawning gremlins" — and gremlins runs the untrusted repo's Go tests, which is
 // the code execution the consent gate exists to prevent.
-var configuredAdaptersFn = configuredAdapters
+var configuredAdaptersFn = configuredAdaptersFor
 
-// mutationTuning is the machine-local half of every adapter's construction:
-// WHERE the run happens, and how parallel it is.
-//
-// It exists because there are two construction sites — configuredAdapters here
-// and runGremlinsOverPackages in the drain — and a knob added to one of them
-// only is a run that behaves differently depending on which command you reached
-// it through. One table read once, applied at both.
-type mutationTuning struct {
-	// Prefix is the local runtime prefix, and is EMPTY whenever Target is set.
-	Prefix string
-	// Target is the granted remote, with Cores filled in by the probe. Nil runs
-	// locally.
-	Target *remote.Target
-	// Workers and TestCPU are the machine-local overrides. Zero means unset,
-	// which the adapters read as "apply your own default" — not as zero.
-	Workers int
-	TestCPU int
-	// FellBackFrom names the host this run meant to use and could not reach;
-	// FallbackWhy is the reason. Both empty on an ordinary run of either kind.
-	//
-	// They are carried rather than dropped because a fallback's numbers were
-	// measured HERE while a remote measurement was expected — and a record that
-	// says only "local" loses the fact that the expectation went unmet.
-	FellBackFrom string
-	FallbackWhy  string
-}
+// mutationTuning is the in-package name for mutationcfg.Tuning — the
+// machine-local half of every adapter's construction, resolved once by
+// mutationcfg.ResolveTuning and applied at both construction sites (verify
+// here, the survivor drain's gremlins run).
+type mutationTuning = mutationcfg.Tuning
 
-// gremlins is the single Gremlins constructor. Both sites go through it, so a
-// knob can only be added in one place.
-func (mt mutationTuning) gremlins(projectRoot string, p *project.Project, cacheVars []string) *mutation.Gremlins {
-	return &mutation.Gremlins{
-		CacheVars:          cacheVars,
-		Prefix:             mt.Prefix,
-		ProjectRoot:        projectRoot,
-		TimeoutCoefficient: p.Mutation.Gremlins.TimeoutCoefficient,
-		Workers:            mt.Workers,
-		TestCPU:            mt.TestCPU,
-		Remote:             mt.Target,
+// hostLock mints the run's identity on the host lock, once, for both
+// construction sites: the project name, the phase (empty for a drain, which
+// has none) and a fresh run id, with the caller's wait policy. Every adapter
+// built from the resulting tuning shares the one Target, so a waiter on the
+// host sees one identity for the whole run — and a remote target with no
+// holder is refused by the launcher, so there is no path from this table to
+// an unnamed hold.
+func hostLock(p *project.Project, phaseID string, wait remote.WaitPolicy) remote.LockSpec {
+	return remote.LockSpec{
+		Holder: remote.Holder{Project: p.Project.Name, Phase: phaseID, RunID: newRunID(time.Now())},
+		Wait:   wait,
 	}
 }
 
-// resolveMutationTuning reads the grant and the tuning knobs, and probes the
-// remote once for the core count the worker default derives from.
-//
-// The probe is unconditional rather than only-when-workers-is-unset, and that is
-// the point: it doubles as the reachability pre-flight. A grant that cannot be
-// reached must abort the command HERE, before a tree is pushed and before any
-// adapter runs, rather than surfacing as an empty report the run cannot
-// distinguish from "nothing to measure".
-//
-// A grant DROPS the docker prefix (the locked docker_prefix_under_remote
-// decision) rather than refusing on it. dockerPrefix gates on runtime.mode,
-// which describes the DEV stack and says nothing about where mutation runs — so
-// aborting on the combination would refuse every docker-mode repo that grants a
-// remote, which is the common case and the one this exists for. Shedding the
-// prefix is also exactly right: the point is to run on the remote's OWN
-// toolchain, and whether that toolchain is present is doctor's question.
-func resolveMutationTuning(p *project.Project, root string) (mutationTuning, error) {
-	targets, err := readRemoteGrants(root, filepath.Dir(root))
-	if err != nil {
-		return mutationTuning{}, err
+// localSource is the Source cmd hands mutationcfg: grants and tuning knobs
+// from local.toml, the remote pool walk (with its notices) for host selection,
+// the stack profile's cache vars, and the lock identity a selected host is
+// held under. The pool walk stays here on purpose — it narrates skipped hosts
+// to the user, which is a command's concern.
+func localSource(root string, lock remote.LockSpec) mutationcfg.Source {
+	repoDir := filepath.Dir(root)
+	return mutationcfg.Source{
+		Lock:   lock,
+		Grants: func() ([]*remote.Target, error) { return localstore.ReadRemoteGrants(root, repoDir) },
+		Tuning: func() (int, int, error) { return localstore.ReadMutationTuning(root) },
+		Select: func(targets []*remote.Target) (*remote.Target, mutationcfg.Selection, error) {
+			target, pool, err := selectRemoteTarget(targets, nil)
+			if err != nil {
+				return nil, mutationcfg.Selection{}, err
+			}
+			if target == nil {
+				return nil, mutationcfg.Selection{Fallback: true, Why: pool.Why}, nil
+			}
+			return target, mutationcfg.Selection{Cores: pool.Candidates[0].Ready.Cores}, nil
+		},
+		CacheVars: profileCacheVars,
 	}
-	workers, testCPU, err := readMutationTuning(root)
-	if err != nil {
-		return mutationTuning{}, err
-	}
-	mt := mutationTuning{Workers: workers, TestCPU: testCPU}
-	if len(targets) == 0 {
-		mt.Prefix = dockerPrefix(p)
-		return mt, nil
-	}
-	// Walks the authorized hosts in order and takes the first that answers.
-	// With one candidate this is exactly the previous behaviour.
-	target, pool, perr := selectRemoteTarget(targets, nil)
-	if perr != nil {
-		return mutationTuning{}, fmt.Errorf(
-			"remote mutation host %s is not usable: %w\n"+
-				"Nothing was measured. Check ssh access, run `dross doctor`, or withdraw the grant with `dross mutation remote revoke`.",
-			targets[0].Host, perr)
-	}
-	if target == nil {
-		// A host we could not REACH gives no answer, and the local machine
-		// still can. Aborting here is what forced `dross remote revoke` as a
-		// workaround when helicon was unreachable for hours — the fallback is
-		// per-run and touches no config, so the next run probes again.
-		mt.Prefix = dockerPrefix(p)
-		// The LAST candidate's reason: with one host it is that host's, and
-		// with several it is why the final attempt failed, after each earlier
-		// skip was already printed.
-		mt.FellBackFrom, mt.FallbackWhy = targets[len(targets)-1].Host, pool.Why
-		return mt, nil
-	}
-	target.Cores = pool.Candidates[0].Ready.Cores
-	mt.Target = target
-	return mt, nil
 }
 
 // measuredOnOf resolves a run's provenance from the adapters it used and the
@@ -1077,91 +1333,25 @@ func profileCacheVars(p *project.Project, repoDir string) []string {
 	return sp.MutationCache.Vars
 }
 
-// configuredAdapters returns the list of mutation adapters appropriate
-// for the project, with the runtime prefix or the granted remote applied,
-// plus the tuning it resolved — the caller needs the latter to record where
-// the run's numbers actually came from.
-func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.Adapter, mutationTuning, error) {
-	if skip {
-		return nil, mutationTuning{}, nil // verify still runs — files end up in Skipped
-	}
-	mt, err := resolveMutationTuning(p, root)
-	if err != nil {
-		return nil, mutationTuning{}, err
-	}
-	// Project root for stryker is the runtime's cwd — host cwd for native,
-	// or the host cwd for docker (we read the report via bind-mounted fs).
-	// If docker volume layout diverges, this is where we'd surface config.
-	cwd, _ := os.Getwd()
-	cacheVars := profileCacheVars(p, filepath.Dir(root))
-	all := []mutation.Adapter{
-		&mutation.Stryker{
-			Prefix:      mt.Prefix,
-			ProjectRoot: cwd,
-			Workdir:     p.Mutation.Stryker.Workdir,
-			Remote:      mt.Target,
-			CacheVars:   cacheVars,
-			// Only consulted for a remote run, where the host has to install
-			// dependencies before stryker can resolve anything. Passed rather
-			// than defaulted: installing with the wrong manager produces a tree
-			// stryker resolves differently.
-			PackageManager: p.Stack.PackageManager,
-		},
-		mt.gremlins(cwd, p, cacheVars),
-		&mutation.StrykerNet{Prefix: mt.Prefix, ProjectRoot: cwd, Remote: mt.Target, CacheVars: cacheVars},
-	}
-	if len(p.Mutation.Adapters) == 0 {
-		return all, mt, nil
-	}
-	// [mutation] adapters = [...] allowlist: files whose adapter is filtered
-	// out fall into verify's existing Skipped path downstream.
-	allowed := map[string]bool{}
-	for _, name := range p.Mutation.Adapters {
-		allowed[name] = true
-	}
-	var out []mutation.Adapter
-	for _, a := range all {
-		if allowed[a.Name()] {
-			out = append(out, a)
-		}
-	}
-	return out, mt, nil
+// configuredAdaptersFor is the production wrapper over mutationcfg.Configured
+// with cmd's localSource: the adapters appropriate for the project, with the
+// runtime prefix or the granted remote applied, plus the tuning it resolved —
+// the caller needs the latter to record where the run's numbers actually came
+// from. configuredAdaptersFn above is bound to it, so it stays a named
+// function rather than a closure.
+//
+// phaseID and wait are the run's identity on the host lock: what a waiter is
+// told it waits on, and how long this run waits for someone else.
+func configuredAdaptersFor(p *project.Project, root string, skip bool, phaseID string, wait remote.WaitPolicy) ([]mutation.Adapter, mutationTuning, error) {
+	return mutationcfg.Configured(p, root, skip, localSource(root, hostLock(p, phaseID, wait)))
 }
 
-// dockerPrefix returns the runtime command prefix for docker mode.
-// For native, returns "". For docker, derives from runtime.test_command
-// (which already has the right shape: "docker compose exec app pnpm test").
-//
-// We strip the trailing runner+args to get the prefix. Field-based
-// (not substring) so a container name that happens to match a runner
-// name (e.g. "docker compose exec node node test.js") doesn't fool us.
-func dockerPrefix(p *project.Project) string {
-	if p.Runtime.Mode != "docker" {
-		return ""
-	}
-	tc := p.Runtime.TestCommand
-	fields := strings.Fields(tc)
-	// The prefix's leading binary must be EXACTLY "docker" — not merely a
-	// string starting with "docker" (HasPrefix would accept "dockerevil",
-	// promoting an arbitrary PATH binary into the exec prefix built below).
-	// project.toml is a committed file, so under clone-and-run this is the
-	// difference between a bounded `docker` invocation and arbitrary code.
-	if len(fields) == 0 || fields[0] != "docker" {
-		return "docker compose exec app"
-	}
-	runners := map[string]bool{
-		"pnpm": true, "npm": true, "yarn": true, "bun": true,
-		"node": true, "deno": true,
-		"go": true, "make": true,
-	}
-	// We need at minimum [docker, compose, exec, <service>] before any
-	// runner, so start scanning from index 4.
-	for i := 4; i < len(fields); i++ {
-		if runners[fields[i]] {
-			return strings.Join(fields[:i], " ")
-		}
-	}
-	return "docker compose exec app"
+// configuredAdapters is configuredAdaptersFor with no phase and the waiting
+// policy — the construction the wiring tests inspect, where which phase the
+// run belongs to is not the question. Verify itself always goes through
+// configuredAdaptersFn with the phase it was given.
+func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.Adapter, mutationTuning, error) {
+	return configuredAdaptersFor(p, root, skip, "", remote.Forever)
 }
 
 // mutationCandidates splits the scope's file set into what may be handed to a
@@ -1176,12 +1366,27 @@ func dockerPrefix(p *project.Project) string {
 //     changes.json, so recording them as skips would seed four to six
 //     permanent NOTEs into every verify.toml — a standing backlog no phase can
 //     ever drain, which is what rule r-02 forbids.
-func mutationCandidates(repoDir string, files []string) (dispatch, gone []string) {
-	for _, f := range files {
+//
+// It takes []pathfence.Contained rather than []string because this is where a
+// scope path meets the filesystem: the Stat below goes through the pathfence
+// seam, so a caller that skipped the containment check has no value to pass and
+// fails to build. containScope is the only way to get one.
+//
+// The RETURNS stay []string. dispatch feeds the mutation adapters and gone
+// feeds the skip report, and both consume plain repo-relative paths — the
+// containment guarantee is about what reached the filesystem, not about what
+// the adapters are handed afterwards.
+func mutationCandidates(files []pathfence.Contained) (dispatch, gone []string) {
+	for _, c := range files {
+		// Rel(), not String(): this is a repo-relative prefix test, and the
+		// joined absolute form never carries a ".dross/" prefix. Neither
+		// accessor reaches an os.* argument here, so both are legal under the
+		// residual scan; only one of them is correct.
+		f := c.Rel()
 		if f == ".dross" || strings.HasPrefix(f, ".dross/") {
 			continue
 		}
-		if _, err := os.Stat(filepath.Join(repoDir, f)); err != nil {
+		if _, err := pathfence.Stat(c); err != nil {
 			gone = append(gone, f)
 			continue
 		}
@@ -1297,18 +1502,9 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 		m := lr.Mutation
 		Printf("  %s (%s): %d files — killed=%d survived=%d (not_covered=%d) timeout=%d errors=%d score=%.2f\n",
 			lr.Name, lr.Tool, len(lr.Files), m.Killed, m.Survived, m.NotCovered, m.Timeout, m.Errors, m.Score)
-		if m.NotCovered > 0 {
-			// Show the gremlins-style efficacy (ignores NOT COVERED) when it
-			// diverges meaningfully from dross's score. Often signals a
-			// coverage blind spot — e.g. Go's package-init code in top-level
-			// var arrays — rather than weak tests.
-			efficacyDenom := m.Killed + (m.Survived - m.NotCovered)
-			if efficacyDenom > 0 {
-				efficacy := float64(m.Killed) / float64(efficacyDenom)
-				Printf("    note: %d/%d mutants NOT COVERED — tests never ran them; efficacy excluding them = %.2f\n",
-					m.NotCovered, m.Killed+m.Survived+m.Timeout, efficacy)
-			}
-		}
+		// No per-leg efficacy. It used to drop every NOT COVERED mutant from its
+		// denominator, count-0 test gaps included, and printed 1.00 beside
+		// printOverallScore's split. That split is the only efficacy figure.
 	}
 	for _, s := range t.Skipped {
 		Printf("  skipped %s — %s\n", s.File, s.Reason)
@@ -1354,14 +1550,50 @@ func printOverallScore(v *verify.Verify) {
 		v.Summary.MutationScore, v.Summary.MutantsInScope,
 		v.Summary.MutantsKilled, v.Summary.MutantsSurvived)
 	// Only when there are any. A line that is always present stops being read,
-	// and "0 uncoverable" is not news.
-	if v.Summary.MutantsNotCovered > 0 {
-		reachable := v.Summary.MutantsInScope - v.Summary.MutantsNotCovered
-		Printf("    of which %d uncoverable by construction (gremlins attributes no coverage block to them) — "+
+	// and "0 uncoverable" is not news. Only a no-block survivor leaves the
+	// reachable denominator; the rest of NOT COVERED is named and stays in it.
+	s := v.Summary
+	if s.MutantsNoBlock > 0 {
+		Printf("    of which %d uncoverable by construction (no go-cover block holds their line) — "+
 			"efficacy over the %d reachable = %.2f\n",
-			v.Summary.MutantsNotCovered, reachable,
-			mutation.PooledScore(v.Summary.MutantsKilled, v.Summary.MutantsSurvived-v.Summary.MutantsNotCovered, 0))
+			s.MutantsNoBlock, s.MutantsInScope-s.MutantsNoBlock,
+			mutation.PooledScore(s.MutantsKilled, s.MutantsSurvived-s.MutantsNoBlock, 0))
 	}
+	if s.MutantsTestGap > 0 {
+		Printf("    of which %d NOT COVERED in a coverage block no test ran — a test gap, counted as reachable\n",
+			s.MutantsTestGap)
+	}
+	if rest := s.MutantsNotCovered - s.MutantsNoBlock - s.MutantsTestGap; rest > 0 {
+		Printf("    of which %d NOT COVERED unplaced (no coverage profile, or it shows the line running) — "+
+			"counted as reachable\n", rest)
+	}
+}
+
+// notCoveredProfileFn builds the profile verify splits NOT COVERED survivors
+// against. It compiles the packages' tests with coverage and runs none of them
+// (-run=^$): the split needs only WHERE the blocks are, since gremlins already
+// measured that the line never ran — and running the suites here would repeat
+// the internal/cmd leg on whichever machine collects the run.
+var notCoveredProfileFn = func(repoRoot string, pkgs []string) *survivor.Profile {
+	return survivor.RunCoverageProfile(repoRoot, append([]string{"-run=^$"}, pkgs...))
+}
+
+// profileClassifier places a NOT COVERED survivor with the drain's own
+// classifier, survivor.Derive, so verify and `dross survivor drain` cannot
+// disagree about which lines are uncoverable.
+type profileClassifier struct {
+	repoRoot string
+	prof     *survivor.Profile
+}
+
+func (c profileClassifier) ClassifyNotCovered(file string, line int, op string) verify.NotCoveredKind {
+	switch survivor.Derive(c.repoRoot, file, line, op, c.prof, true).Coverage {
+	case survivor.CoverageNoBlock:
+		return verify.NotCoveredNoBlock
+	case survivor.CoverageNotCovered:
+		return verify.NotCoveredTestGap
+	}
+	return verify.NotCoveredUnplaced
 }
 
 // scopeFileListCap bounds how many scoped files are named before the line
@@ -1399,6 +1631,57 @@ func printScopeSummary(t *verify.Tests, v *verify.Verify) {
 	}
 	for _, d := range t.Scope.Degraded {
 		Printf("  scope degraded: %s\n", d)
+	}
+	printRangeProvenance(t)
+}
+
+// printRangeProvenance says, per leg, how the scope was applied: `ranged` for
+// the files the tool was told to narrow, `whole-file` with its reason for the
+// rest. A leg that ranged nothing never prints the word "ranged" — a run that
+// measured whole files must not read as a ranged one.
+// constructLabel is what a readout prints for a range: the construct it was
+// widened to, or a placeholder for a record written before ranges carried
+// one. The placeholder is a statement about the RECORD, not the run — an old
+// tests.json still loads and still says what it measured.
+func constructLabel(r verify.EffectiveRange) string {
+	if r.Construct == "" {
+		return "construct unrecorded"
+	}
+	return r.Construct
+}
+
+func printRangeProvenance(t *verify.Tests) {
+	for _, lr := range t.Languages {
+		if n := len(lr.Ranges); n > 0 {
+			Printf("  ranged %s %d file(s)\n", lr.Tool, n)
+			// One line per range naming what it was widened to: the
+			// construct is the claim, and a reader checks it against the
+			// raw hunk without opening tests.json.
+			for _, f := range sortedMapKeys(lr.Ranges) {
+				for _, r := range lr.Ranges[f] {
+					Printf("    %s:%d-%d (%s)\n", f, r.Start, r.End, constructLabel(r))
+				}
+			}
+		}
+		byReason := map[string][]string{}
+		for f, reason := range lr.WholeFile {
+			byReason[reason] = append(byReason[reason], f)
+		}
+		reasons := make([]string, 0, len(byReason))
+		for r := range byReason {
+			reasons = append(reasons, r)
+		}
+		sort.Strings(reasons)
+		for _, r := range reasons {
+			files := byReason[r]
+			sort.Strings(files)
+			suffix := ""
+			if len(files) > scopeFileListCap {
+				suffix = fmt.Sprintf(" (+%d more)", len(files)-scopeFileListCap)
+				files = files[:scopeFileListCap]
+			}
+			Printf("  whole-file %s ×%d — %s: %s%s\n", lr.Tool, len(byReason[r]), r, strings.Join(files, ", "), suffix)
+		}
 	}
 }
 
@@ -1441,7 +1724,7 @@ func acceptedReasons(store *survivor.Store) (map[string]string, error) {
 }
 
 // routedSurvivors builds the key→target map from every phase's [[deferred]]
-// entries. It walks all specs (via collectDeferred) rather than just the
+// entries. It walks all specs (via deferred.Collect) rather than just the
 // current phase's: a survivor routed while phase A was current is still routed
 // when phase B runs, and a phase-local read would resurrect it as unclassified
 // debt the moment the phase changed.
@@ -1450,7 +1733,7 @@ func acceptedReasons(store *survivor.Store) (map[string]string, error) {
 // at a destination — as are entries with no target, which are "someday" and
 // therefore still unclassified.
 func routedSurvivors(root string) (map[string]string, error) {
-	entries, err := collectDeferred(root)
+	entries, err := deferred.Collect(root)
 	if err != nil {
 		return nil, err
 	}

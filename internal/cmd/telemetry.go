@@ -21,12 +21,18 @@ import (
 // Recording is best-effort. If defaults can't be read, we still try to
 // record (env var is the authoritative kill-switch).
 func RecordCLIEvent(c *cobra.Command, dur time.Duration, runErr error) {
-	if !telemetryEnabled() {
-		return
-	}
 	cmdPath := ""
 	if c != nil {
 		cmdPath = c.CommandPath()
+	}
+	// The gate hook verbs run on every tool call, and a refusal's text can
+	// name a secret path — neither belongs in a usage log. Checked before the
+	// enabled lookup, which reads a file: these run before every tool call.
+	if cmdPath == GateCheckHook || cmdPath == GateRecordHook {
+		return
+	}
+	if !telemetryEnabled() {
+		return
 	}
 	repoHash := ""
 	// LocateRoot, not FindRoot: an incomplete `.dross/` is still this repo, and

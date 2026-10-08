@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 )
@@ -55,6 +56,22 @@ func validDeferredTarget(root, slug string) error {
 		return nil
 	}
 	return deferredTargetError(slug)
+}
+
+// refuseCompleteTarget refuses a destination phase that is already complete
+// (locked route_to_complete, no override). A finished phase cannot take new
+// scope, so an item routed there is parked where nothing will ever pick it up
+// — feastahead routed 261 survivors to a phase merged five days earlier.
+//
+// It is a separate check from validDeferredTarget and deferredTargetSet on
+// purpose: validate's dangling-target walk reads that set, and an item routed
+// to a phase that later completed is history validate must keep accepting.
+// Only a NEW route is refused.
+func refuseCompleteTarget(root, slug string) error {
+	if changes.Complete(root, slug) {
+		return fmt.Errorf("--target %q is already complete — a finished phase cannot take new scope; route the item to a phase that is still open", slug)
+	}
+	return nil
 }
 
 // deferredTargetError is the shared rejection. It is deliberately phrased

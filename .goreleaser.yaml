@@ -2,10 +2,10 @@ version: 2
 
 project_name: dross
 
-before:
-  hooks:
-    - go mod tidy
-
+# No `before:` hooks. The old `go mod tidy` hook needed a writable module graph,
+# which is exactly what release.yml's GOFLAGS=-mod=readonly forbids: the graph
+# govulncheck scanned there must be the graph these builds use. Tidy drift is
+# caught in CI (`go mod tidy -diff`), never repaired at release time.
 builds:
   - id: dross
     main: ./cmd/dross

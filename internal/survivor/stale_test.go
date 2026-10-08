@@ -1,12 +1,15 @@
 package survivor
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 // staleFixture writes a small tree and a store of acceptances against it.
@@ -125,6 +128,37 @@ func TestStaleReportsReadErrorsSeparately(t *testing.T) {
 	}
 	if rep.Unverifiable[0].Err == nil || !strings.Contains(rep.Unverifiable[0].Err.Error(), "weird.go") {
 		t.Errorf("unverifiable entry must carry the read error naming the file, got %v", rep.Unverifiable[0].Err)
+	}
+}
+
+// TestStaleRefusesAnEscapingFile: survivors.toml is hand-editable, so an entry
+// naming a file outside the repository must be refused by containment, never
+// read. The escaping target exists and holds the recorded text, so a pass that
+// read it would call the acceptance intact.
+func TestStaleRefusesAnEscapingFile(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "repo")
+	writeFile(t, filepath.Join(root, "inside.go"), "package p\n")
+	writeFile(t, filepath.Join(parent, "escape"), "package p\n\treturn secret\n")
+	s := &Store{}
+	if err := s.Add(Acceptance{Key: "k-escape", File: "../escape", Op: "OP", Text: "return secret", Reason: "hand-edited"}); err != nil {
+		t.Fatal(err)
+	}
+
+	rep := StaleAcceptancesAgainst(root, s, map[string]bool{"k-escape": true})
+	if len(rep.Stale) != 0 {
+		t.Errorf("an escaping entry was classified stale: %+v", rep.Stale)
+	}
+	if len(rep.Unverifiable) != 1 {
+		t.Fatalf("want the escaping entry unverifiable, got %+v (stale %+v)", rep.Unverifiable, rep.Stale)
+	}
+	err := rep.Unverifiable[0].Err
+	if !errors.Is(err, pathfence.ErrEscapes) || !strings.Contains(err.Error(), "../escape") {
+		t.Errorf("the entry must fail containment naming the path, got %v", err)
+	}
+
+	if _, err := AcceptanceFile(root, Acceptance{File: "sub/ok.go"}); err != nil {
+		t.Errorf("AcceptanceFile refused an in-tree path: %v", err)
 	}
 }
 

@@ -13,7 +13,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/diag"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -593,28 +595,6 @@ func TestDoctorSilentWithoutDuplicateRoadmapSlugs(t *testing.T) {
 	})
 	if strings.Contains(out, "Duplicate roadmap slugs:") {
 		t.Errorf("no slug is on two roadmaps here:\n%s", out)
-	}
-}
-
-// TestDuplicateRoadmapSlugsIgnoresRepeatWithinOneArray: what the check reports
-// is two milestones claiming one phase. A slug listed twice inside a single
-// array is a malformed array, not a re-scope, and naming it here would report a
-// second milestone that does not exist.
-func TestDuplicateRoadmapSlugsIgnoresRepeatWithinOneArray(t *testing.T) {
-	dir := t.TempDir()
-	chdir(t, dir)
-	if err := runCmd(t, Init()); err != nil {
-		t.Fatalf("init: %v", err)
-	}
-	root := filepath.Join(dir, ".dross")
-	mustWrite(t, filepath.Join(root, "milestones", "v1.4.toml"), `phases = ["twice", "twice"]
-
-[milestone]
-  version = "v1.4"
-  status = "active"
-`)
-	if got := duplicateRoadmapSlugs(root); len(got) != 0 {
-		t.Errorf("duplicateRoadmapSlugs = %v, want none — one array is one roadmap", got)
 	}
 }
 
@@ -1297,7 +1277,7 @@ func TestDoctorWarnsUnshippableRemoteProvider(t *testing.T) {
 
 	// An unset provider likewise. runDoctorEnum cannot express "set to empty",
 	// so the empty case is asserted against the check directly.
-	if w := remoteCombinationWarnings("", "", ""); len(w) != 0 {
+	if w := diag.RemoteCombination("", "", ""); len(w) != 0 {
 		t.Errorf("an unset remote provider must stay silent, got: %v", w)
 	}
 }
@@ -2335,8 +2315,8 @@ func TestDoctorWarnsOnIndeterminateRedProof(t *testing.T) {
 		t.Errorf("a shallow clone produced %d red-proof issue(s), which would redden a sound pin:\n%s", n, redProofSection(out))
 	}
 	for _, l := range mustRedProofChecks(t, dst) {
-		if l.level != doctorWarn {
-			t.Errorf("shallow-clone pin classified %s (want %s): %s", l.level, doctorWarn, l.text)
+		if l.Level != doctorWarn {
+			t.Errorf("shallow-clone pin classified %s (want %s): %s", l.Level, doctorWarn, l.Text)
 		}
 	}
 }
@@ -2378,8 +2358,8 @@ func TestDoctorCleanRedProofsHaveNoFindings(t *testing.T) {
 		t.Fatal("this repo records no red-proof pin — the live pin is unchecked")
 	}
 	for _, l := range lines {
-		if l.level != doctorOK {
-			t.Errorf("this repo's own pin produced a %s: %s", l.level, l.text)
+		if l.Level != doctorOK {
+			t.Errorf("this repo's own pin produced a %s: %s", l.Level, l.Text)
 		}
 	}
 }
@@ -2565,5 +2545,59 @@ func TestDoctorSkipsStrandedCheckWhenBoardDisabled(t *testing.T) {
 	}
 	if strings.Contains(out, "Board mirrors:") {
 		t.Errorf("the stranded section ran with board sync off:\n%s", out)
+	}
+}
+
+// --- t-8: an escaping red_proof.doc aborts the whole red-proof section ------
+
+// TestDoctorReportsAnEscapingDocAtDiscovery pins the message the operator gets.
+// It has to be distinguishable from the per-pin unreadable-doc arm: a corrupt
+// path and a missing file need different fixes, and "which cannot be read"
+// would send the reader looking for a file that was never the problem.
+func TestDoctorReportsAnEscapingDocAtDiscovery(t *testing.T) {
+	root := pinFixture(t, map[string]*changes.RedProof{
+		"escaping": {SHA: "a6ef729", Doc: "../../victim.md"},
+	})
+	repoDir := filepath.Dir(root)
+
+	lines, present := redProofChecks(root, repoDir)
+	if !present {
+		t.Fatal("doctor reported no red-proof section for a record that carries a pin")
+	}
+	if len(lines) != 1 || lines[0].Level != doctorIssue {
+		t.Fatalf("want exactly one issue line, got %+v", lines)
+	}
+	text := lines[0].Text
+	for _, want := range []string{"../../victim.md", "changes.json", repoDir} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the discovery refusal does not name %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "which cannot be read") {
+		t.Errorf("a corrupt path was reported with the missing-file wording, which names the wrong fix:\n%s", text)
+	}
+}
+
+// TestOneEscapingDocSuppressesEveryOtherVerdict pins the ACCEPTED REGRESSION as
+// a test rather than leaving it as prose in the plan.
+//
+// Discovery refuses the whole record when any doc escapes, so a sound pin
+// alongside it loses its verdict. That is the cost of the hard lane and it was
+// chosen over a per-pin skip. Pinning it here means a later change that quietly
+// softens discovery — restoring the other verdicts — goes red and has to be
+// argued for rather than slipped in.
+func TestOneEscapingDocSuppressesEveryOtherVerdict(t *testing.T) {
+	root := pinFixture(t, map[string]*changes.RedProof{
+		"escaping": {SHA: "a6ef729", Doc: "../../victim.md"},
+		"sound":    {SHA: "a6ef729", Doc: "fixtures/proof/RUN.md"},
+	})
+
+	lines, _ := redProofChecks(root, filepath.Dir(root))
+	if len(lines) != 1 {
+		t.Fatalf("want exactly one line for the whole section, got %+v — discovery has been "+
+			"softened into a per-pin skip, which is the lane escape_failure_mode rejects", lines)
+	}
+	if strings.Contains(lines[0].Text, "sound") {
+		t.Errorf("the sound pin still earned a verdict: %q", lines[0].Text)
 	}
 }

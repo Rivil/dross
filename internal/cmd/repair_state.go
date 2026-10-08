@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -56,7 +57,7 @@ func reconstructState(repoDir, root, mainBranch string) (*state.State, error) {
 		s.LastAction = last.Action
 	}
 
-	branch, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+	branch, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
 		return s, nil // detached HEAD or similar — nothing to infer, not fatal
 	}
@@ -84,7 +85,7 @@ func historyFromPhaseCommits(repoDir, mainBranch string) ([]state.Activity, erro
 	if err := validateGitRef("repo.git_main_branch", mainBranch); err != nil {
 		return nil, err
 	}
-	out, err := gitTrim(repoDir, gitRefArgs("log", []string{"--reverse", "--pretty=format:%at\x1f%s"}, mainBranch)...)
+	out, err := gitrun.Read(repoDir, gitRefArgs("log", []string{"--reverse", "--pretty=format:%at\x1f%s"}, mainBranch)...)
 	if err != nil {
 		return nil, fmt.Errorf("git log %s: %w", mainBranch, err)
 	}
@@ -93,6 +94,7 @@ func historyFromPhaseCommits(repoDir, mainBranch string) ([]state.Activity, erro
 	}
 	var history []state.Activity
 	for _, line := range strings.Split(out, "\n") {
+		//dross:taint-cleared a `%at\x1f%s` line of the base branch log: only subjects in the `phase <id>: <title>` shape dross writes at ship are kept, restored to the history they were recorded from
 		ts, subject, found := strings.Cut(line, "\x1f")
 		if !found {
 			continue

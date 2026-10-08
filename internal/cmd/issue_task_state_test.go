@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/Rivil/dross/internal/boardsync"
 )
 
 // The forge fake in issue_task_test.go cannot relate issues and has no workflow
@@ -254,7 +256,7 @@ func linkingTaskRepo(t *testing.T, f *taskStateForge) string {
 		`{"phases":{"01-auth":"PROJ-9"},"tasks":{},"quicks":{},"milestones":{},"backlog":{},"dismissed":[]}`)
 	f.mu.Lock()
 	f.issues["PROJ-9"] = "01-auth — Auth"
-	f.tags["PROJ-9"] = []string{labelMarker, phaseLabel("01-auth")}
+	f.tags["PROJ-9"] = []string{boardsync.LabelMarker, boardsync.PhaseLabel("01-auth")}
 	f.mu.Unlock()
 	return dir
 }

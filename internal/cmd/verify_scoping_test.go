@@ -7,10 +7,13 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/pflag"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/verify"
 )
@@ -225,6 +228,29 @@ func TestScopingHasNoOptOut(t *testing.T) {
 		// the attribution; a scheduled run scopes exactly as the immediate one
 		// it would otherwise have been.
 		"at": true,
+		// Moves where the stryker REPORT comes from — the file already on
+		// disk instead of a fresh launch — not what it scopes to. The reuse
+		// arm computes the same requested/narrowed set from the same scoped
+		// file list, and the parsed report goes through the same post-Report
+		// filter, so a reused report cannot be a wider run either. What it
+		// CAN be is stale, which is why it prints the report's mtime.
+		"reuse-report": true,
+		// Moves where the diff STARTS, not whether one is taken. It exists
+		// for the post-merge case, where merge-base(base, HEAD) is HEAD and
+		// the git side would otherwise contribute nothing at all. It is not
+		// free of narrowing: a base LATER than the true fork yields fewer
+		// hunks, and on a ranged stryker leg fewer hunks is fewer instrumented
+		// lines (the recorded files themselves never leave scope — the union
+		// with changes.json holds). That is accepted because the value is an
+		// explicit, user-typed commit, resolved or refused (never degraded),
+		// and named on Scope.Degraded so the run prints the substitution —
+		// the same trust changes.json's own base_commit already carries.
+		"base": true,
+		// Moves what happens when the granted host is HELD — refuse with
+		// exit 15 instead of waiting — not what the run scopes to. A run
+		// that refused measured nothing; one that waited scopes exactly as
+		// the immediate one it would otherwise have been.
+		"no-wait": true,
 	}
 
 	var got []string
@@ -456,5 +482,293 @@ func TestVerifyPersistsKeyAndStateIntoTestsJSON(t *testing.T) {
 	}
 	if !strings.Contains(o.Note, "01-persist") {
 		t.Errorf("routed entry lost its destination: %+v", o)
+	}
+}
+
+// --- t-5: an escaping changes.json path aborts the run ----------------------
+
+// seedEscapingChanges hand-edits a phase's changes.json to record one in-repo
+// file and one path escaping the repo, and seeds a REAL file at that path
+// outside the tree.
+//
+// The real file is the point. Without it the run would be stopped by the `gone`
+// lane — the path does not exist — and the test would pass whether or not the
+// gate exists. With it, a run that reached os.Stat would have found the file
+// and dispatched it to a mutation adapter, so only the gate can refuse it.
+// It returns the absolute path of the seeded file.
+func seedEscapingChanges(t *testing.T, dir, phaseID string) string {
+	t.Helper()
+	outside := filepath.Join(filepath.Dir(dir), "x.go")
+	if err := os.WriteFile(outside, []byte("package outside\n\nfunc X() bool { return true }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Remove(outside) })
+
+	root := filepath.Join(dir, ".dross")
+	path := changes.FilePath(root, phaseID)
+	ch, err := changes.Load(path, phaseID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch.Record("t-1", []string{"a.go", "../x.go"}, "abc1234", "", nil)
+	if err := ch.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	return outside
+}
+
+// assertEscapeRefusal checks the refusal is diagnosable (c-5) and is the HARD
+// lane, not the soft one.
+func assertEscapeRefusal(t *testing.T, dir string, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("verify accepted a changes.json recording a path outside the repo")
+	}
+	for _, want := range []string{"../x.go", "changes.json", dir} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal does not name %q:\n%s", want, err.Error())
+		}
+	}
+	// The escape must not have been softened into a degraded note or a skip.
+	for _, forbidden := range []string{"ignored out-of-repo path", "gone", "skipped"} {
+		if strings.Contains(err.Error(), forbidden) {
+			t.Errorf("the escape was downgraded (%q) rather than refused:\n%s", forbidden, err.Error())
+		}
+	}
+}
+
+// TestVerifyRefusesEscapingRecordedPathEndToEnd drives the real CLI. A stub
+// adapter is installed deliberately: without the gate this run SUCCEEDS and
+// writes both artefacts, so the assertions below are a must-trip rather than a
+// tautology.
+func TestVerifyRefusesEscapingRecordedPathEndToEnd(t *testing.T) {
+	dir := scopedVerifyRepo(t, "escape")
+	phaseSpec(t, "01-escape")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go")
+	mustSetBase(t, "01-escape", "base")
+	seedEscapingChanges(t, dir, "01-escape")
+
+	stub := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}
+	useStubAdapter(t, stub)
+
+	err := runCmd(t, Verify(), "01-escape")
+	// c-2's "not dispatched to a mutation adapter", asserted rather than
+	// inferred from the missing artefacts: a run that dispatched and THEN
+	// refused would write nothing either. Checked before the refusal itself so
+	// an ungated run reports this too, not only the missing error.
+	if len(stub.got) != 0 {
+		t.Errorf("the mutation adapter was handed %v for a refused scope", stub.got)
+	}
+	assertEscapeRefusal(t, dir, err)
+
+	// Nothing was written: the refusal lands before RunScoped, so neither
+	// artefact exists to be mistaken for a verdict.
+	root := filepath.Join(dir, ".dross")
+	testsPath, verifyPath := verify.FilePaths(root, "01-escape")
+	for _, p := range []string{testsPath, verifyPath} {
+		if _, statErr := os.Stat(p); statErr == nil {
+			t.Errorf("%s was written for a refused run", filepath.Base(p))
+		}
+	}
+}
+
+// TestVerifyResultsRefusesEscapingRecordedPath covers the detached
+// finish/collect path, which rebuilds the same scope from the same inputs.
+// Guarding only the attached call site leaves this red.
+func TestVerifyResultsRefusesEscapingRecordedPath(t *testing.T) {
+	dir := scopedVerifyRepo(t, "escape-detached")
+	phaseSpec(t, "01-escape-detached")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go")
+	mustSetBase(t, "01-escape-detached", "base")
+	seedEscapingChanges(t, dir, "01-escape-detached")
+
+	root := filepath.Join(dir, ".dross")
+	if err := recordDetachedRun(root, dir, detachedRun{
+		Phase: "01-escape-detached", RunID: "r-1", Host: "helicon", Workdir: "/srv/x",
+		RunDir: ".dross-runs/r-1", DispatchedAt: time.Now().UTC(), State: "running",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "finished", HasExit: true, ExitCode: 0}, nil)
+
+	assertEscapeRefusal(t, dir, collectDetached("01-escape-detached"))
+
+	testsPath, verifyPath := verify.FilePaths(root, "01-escape-detached")
+	for _, p := range []string{testsPath, verifyPath} {
+		if _, statErr := os.Stat(p); statErr == nil {
+			t.Errorf("%s was written for a refused collect", filepath.Base(p))
+		}
+	}
+}
+
+// stubRangeAdapter is stubMutationAdapter with the optional RangeRunner half:
+// it records the range map RunScoped handed it, so a test can see whether the
+// real scope pipeline narrowed anything.
+type stubRangeAdapter struct {
+	stubMutationAdapter
+	ranges map[string][]mutation.Range
+	// constructs is the canned resolver answer for every file; asked records
+	// which files were resolved, in order.
+	constructs []mutation.Construct
+	asked      []string
+}
+
+func (s *stubRangeAdapter) RunRanges(files []string, ranges map[string][]mutation.Range) (*mutation.Report, error) {
+	s.ranges = ranges
+	return s.stubMutationAdapter.Run(files)
+}
+
+func (s *stubRangeAdapter) Constructs(file string) ([]mutation.Construct, error) {
+	s.asked = append(s.asked, file)
+	if s.constructs == nil {
+		return []mutation.Construct{{Start: 30, End: 50, Kind: "FunctionDeclaration", Name: "edited"}}, nil
+	}
+	return s.constructs, nil
+}
+
+// TestVerifyOutputNamesWholeFileLegs: a leg that measured whole files must
+// say so and never read as ranged; a leg that ranged must say that and never
+// call its ranged file whole-file. Same fixture as
+// TestScopingAttributionHoldsEndToEnd, read through stdout this once because
+// the printed line IS the claim under test.
+func TestVerifyOutputNamesWholeFileLegs(t *testing.T) {
+	dir := scopedVerifyRepo(t, "wording")
+	phaseSpec(t, "01-wording")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go only")
+	mustSetBase(t, "01-wording", "base")
+
+	// Gremlins' shape: Adapter, not RangeRunner.
+	useStubAdapter(t, &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})})
+	out := runVerifyCapturing(t, "01-wording")
+
+	var sawWholeFile bool
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "whole-file") && strings.Contains(line, verify.WholeFileNoRangeRunner) {
+			sawWholeFile = true
+		}
+	}
+	if !sawWholeFile {
+		t.Errorf("no line names the gremlins leg whole-file with its reason:\n%s", out)
+	}
+	if strings.Contains(out, "ranged") {
+		t.Errorf("a whole-file run printed as ranged:\n%s", out)
+	}
+
+	// The other side: a RangeRunner over the same repo is told a.go's padded
+	// range and prints as ranged, never whole-file for that file.
+	ranger := &stubRangeAdapter{stubMutationAdapter: stubMutationAdapter{name: "stryker", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}}
+	useStubAdapter(t, ranger)
+	out = runVerifyCapturing(t, "01-wording")
+
+	if !strings.Contains(out, "ranged stryker 1 file(s)") {
+		t.Errorf("a ranged leg did not print as ranged:\n%s", out)
+	}
+	if strings.Contains(out, "pad") {
+		t.Errorf("a ranged leg still speaks of a pad:\n%s", out)
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "whole-file") && strings.Contains(line, "a.go") {
+			t.Errorf("the ranged file printed as whole-file: %s", line)
+		}
+	}
+	if len(ranger.ranges["a.go"]) == 0 {
+		t.Errorf("the stub was never handed a.go's range: %v", ranger.ranges)
+	}
+}
+
+// TestVerifyOutputNamesTheConstructPerRange: a ranged leg prints one line per
+// range naming what it was widened to — the construct the planner resolved,
+// never a placeholder for a fresh run and never a pad.
+func TestVerifyOutputNamesTheConstructPerRange(t *testing.T) {
+	dir := scopedVerifyRepo(t, "perrange")
+	phaseSpec(t, "01-perrange")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go only")
+	mustSetBase(t, "01-perrange", "base")
+
+	// The edit is on line 3; the canned construct encloses it.
+	ranger := &stubRangeAdapter{stubMutationAdapter: stubMutationAdapter{name: "stryker", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})},
+		constructs: []mutation.Construct{{Start: 1, End: 3, Kind: "FunctionDeclaration", Name: "edited"}}}
+	useStubAdapter(t, ranger)
+	out := runVerifyCapturing(t, "01-perrange")
+
+	if !strings.Contains(out, "ranged stryker 1 file(s)") {
+		t.Errorf("no ranged count line:\n%s", out)
+	}
+	var perRange string
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "a.go:") {
+			perRange = line
+		}
+	}
+	if perRange == "" {
+		t.Fatalf("no per-range line for a.go:\n%s", out)
+	}
+	if !strings.HasSuffix(strings.TrimSpace(perRange), "(FunctionDeclaration edited)") {
+		t.Errorf("per-range line = %q, want the resolved construct label", perRange)
+	}
+	if strings.Contains(out, "construct unrecorded") {
+		t.Errorf("a fresh run printed the pre-construct placeholder:\n%s", out)
+	}
+	if strings.Contains(out, "pad") {
+		t.Errorf("verify output still speaks of a pad:\n%s", out)
+	}
+}
+
+// stubRangeNoResolver is a RangeRunner that is NOT a ConstructResolver — a
+// range-capable tool with no way to say what encloses a line.
+type stubRangeNoResolver struct {
+	stubMutationAdapter
+	ranged bool
+}
+
+func (s *stubRangeNoResolver) RunRanges(files []string, _ map[string][]mutation.Range) (*mutation.Report, error) {
+	s.ranged = true
+	return s.stubMutationAdapter.Run(files)
+}
+
+// TestVerifyOutputWarnsWhenTheASTIsUnavailable: c-4 through the command. A
+// hunked file whose constructs cannot be resolved is mutated whole under
+// ast-unavailable, the scope's degraded warning names the file and the
+// cause, and the run never reads as ranged.
+func TestVerifyOutputWarnsWhenTheASTIsUnavailable(t *testing.T) {
+	dir := scopedVerifyRepo(t, "noast")
+	phaseSpec(t, "01-noast")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go only")
+	mustSetBase(t, "01-noast", "base")
+
+	stub := &stubRangeNoResolver{stubMutationAdapter: stubMutationAdapter{name: "stryker", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}}
+	useStubAdapter(t, stub)
+	out := runVerifyCapturing(t, "01-noast")
+
+	var sawWarning, sawWholeFile bool
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "scope degraded") && strings.Contains(line, "AST unavailable for a.go") {
+			sawWarning = true
+		}
+		if strings.Contains(line, "whole-file stryker") && strings.Contains(line, verify.WholeFileASTUnavailable) {
+			sawWholeFile = true
+		}
+	}
+	if !sawWarning {
+		t.Errorf("no degraded warning names the unresolved file:\n%s", out)
+	}
+	if !sawWholeFile {
+		t.Errorf("no whole-file line carries %s:\n%s", verify.WholeFileASTUnavailable, out)
+	}
+	if strings.Contains(out, "ranged") {
+		t.Errorf("a run that lost its precision printed as ranged:\n%s", out)
+	}
+	if stub.ranged {
+		t.Error("RunRanges was called with nothing resolved; the whole-file arm must run")
 	}
 }

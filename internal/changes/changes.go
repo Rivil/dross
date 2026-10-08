@@ -14,14 +14,28 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/pathfence"
 )
 
 const File = "changes.json"
 
-// FilePath is .dross/phases/<phase-id>/changes.json
+// FilePath is .dross/phases/<phase-id>/changes.json. The phase id is a path
+// segment read back from hand-editable files and the tracker, so it is
+// contained under phases/; one that would escape resolves to the refused
+// segment (phase.RefusedSegment — this package cannot import phase), where no
+// changes.json exists.
 func FilePath(root, phaseID string) string {
-	return filepath.Join(root, "phases", phaseID, File)
+	c, err := pathfence.Contain(filepath.Join(root, "phases"), "phase id", phaseID)
+	if err != nil {
+		return filepath.Join(root, "phases", refusedSegment, File)
+	}
+	dir := c.String()
+	return filepath.Join(dir, File)
 }
+
+// refusedSegment mirrors phase.RefusedSegment.
+const refusedSegment = "_refused"
 
 type Changes struct {
 	Phase string `json:"phase"`
@@ -68,6 +82,38 @@ type Changes struct {
 	// to — the doc names no phase, and a SHA with no owner is a dead end.
 	RedProof *RedProof             `json:"red_proof,omitempty"`
 	Tasks    map[string]TaskRecord `json:"tasks"`
+	// Reviews holds each solo task's reviewer verdict, its findings and how
+	// each was resolved (solo-task-review c-6), keyed by task id. It sits
+	// beside Tasks, not inside a TaskRecord: a failed task has a review but no
+	// record, and every TaskRecord's files feed verify's mutation scope — a
+	// review must never put a stashed, uncommitted file there.
+	Reviews map[string]TaskReview `json:"reviews,omitempty"`
+}
+
+// TaskReview is one solo task's review record. Outcome is the review
+// ledger's final standing (pass, blocked, exhausted, unavailable); Cause
+// names why an unavailable or exhausted review failed the task.
+//
+// These are changes' own types: importing internal/review would cycle
+// (review -> phase -> changes).
+type TaskReview struct {
+	Outcome  string          `json:"outcome"`
+	Rounds   int             `json:"rounds"`
+	Cause    string          `json:"cause,omitempty"`
+	Findings []ReviewFinding `json:"findings,omitempty"`
+}
+
+// ReviewFinding is one reviewer finding: the round it came from, spec or
+// quality, its severity, the criterion it cites, its text, and what became of
+// it ("fixed in the fix round", "non-blocking, left", "unresolved — task
+// failed").
+type ReviewFinding struct {
+	Round      int    `json:"round"`
+	Kind       string `json:"kind"`
+	Severity   string `json:"severity"`
+	Criterion  string `json:"criterion,omitempty"`
+	Text       string `json:"text"`
+	Resolution string `json:"resolution"`
 }
 
 // RedProof is the machine half of a red proof: the pinned commit and the path
@@ -322,6 +368,28 @@ func Load(path string, phaseID string) (*Changes, error) {
 	return &c, nil
 }
 
+// ErrNotARecord is Decode's refusal of bytes that are not a changes.json
+// document.
+var ErrNotARecord = errors.New("not a changes.json record")
+
+// Decode parses a changes.json document read from somewhere other than this
+// checkout's own file — a copy out of a ref's committed tree. A document with
+// no tasks decodes to an empty task map, never nil.
+//
+// Its error carries no byte of the input, unlike Load's: those bytes are
+// whatever the ref held, and a JSON syntax error quotes the character it
+// choked on, so the decoder's message is dropped rather than wrapped.
+func Decode(b []byte) (*Changes, error) {
+	var c Changes
+	if err := json.Unmarshal(b, &c); err != nil {
+		return nil, ErrNotARecord
+	}
+	if c.Tasks == nil {
+		c.Tasks = map[string]TaskRecord{}
+	}
+	return &c, nil
+}
+
 func (c *Changes) Save(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -346,6 +414,27 @@ func (c *Changes) Record(taskID string, files []string, commit, notes string, la
 		Notes:       notes,
 		Landmarks:   landmarks,
 	}
+}
+
+// SetReview records one task's review, loading the phase's record (or
+// starting fresh) and saving it. It writes only that entry: a review never
+// creates a TaskRecord, and every other field survives.
+func SetReview(root, phaseID, taskID string, r TaskReview) error {
+	path := FilePath(root, phaseID)
+	c, err := Load(path, phaseID)
+	if err != nil {
+		return err
+	}
+	c.SetReview(taskID, r)
+	return c.Save(path)
+}
+
+// SetReview sets the review entry for a task.
+func (c *Changes) SetReview(taskID string, r TaskReview) {
+	if c.Reviews == nil {
+		c.Reviews = map[string]TaskReview{}
+	}
+	c.Reviews[taskID] = r
 }
 
 // Complete reports whether a phase's record says `dross phase complete`

@@ -129,7 +129,7 @@ func TestRemoteScratchSpaceRefusesAFullHost(t *testing.T) {
 	t.Cleanup(func() { remoteSpaceProbe = orig })
 
 	l := &Launcher{
-		Target:    &remote.Target{Host: "h", Workdir: "/home/u/dross"},
+		Target:    &remote.Target{Host: "h", Workdir: "/home/u/dross", Lock: testLock()},
 		CacheVars: []string{"GOCACHE"},
 	}
 	err := l.checkRemoteScratchSpace()
@@ -152,7 +152,7 @@ func TestRemoteScratchSpaceAsksOnce(t *testing.T) {
 	}
 	t.Cleanup(func() { remoteSpaceProbe = orig })
 
-	l := &Launcher{Target: &remote.Target{Host: "h", Workdir: "/home/u/dross"}, CacheVars: []string{"GOCACHE"}}
+	l := &Launcher{Target: &remote.Target{Host: "h", Workdir: "/home/u/dross", Lock: testLock()}, CacheVars: []string{"GOCACHE"}}
 	for i := 0; i < 3; i++ {
 		if err := l.checkRemoteScratchSpace(); err != nil {
 			t.Fatalf("a roomy host must run: %v", err)
@@ -173,7 +173,7 @@ func TestRemoteScratchSpaceUnknownIsNotARefusal(t *testing.T) {
 	}
 	t.Cleanup(func() { remoteSpaceProbe = orig })
 
-	l := &Launcher{Target: &remote.Target{Host: "h", Workdir: "/home/u/dross"}, CacheVars: []string{"GOCACHE"}}
+	l := &Launcher{Target: &remote.Target{Host: "h", Workdir: "/home/u/dross", Lock: testLock()}, CacheVars: []string{"GOCACHE"}}
 	if err := l.checkRemoteScratchSpace(); err != nil {
 		t.Errorf("a df that failed must not refuse the run: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestRemoteScratchSpaceUnknownIsNotARefusal(t *testing.T) {
 // TestRemoteScratchBaseMovesTheHostCache pins the remote override.
 func TestRemoteScratchBaseMovesTheHostCache(t *testing.T) {
 	l := &Launcher{
-		Target:    &remote.Target{Host: "h", Workdir: "/home/u/dross", ScratchBase: "/var/lib/buildcache"},
+		Target:    &remote.Target{Host: "h", Workdir: "/home/u/dross", ScratchBase: "/var/lib/buildcache", Lock: testLock()},
 		CacheVars: []string{"GOCACHE"},
 	}
 	if got, want := l.remoteScratch(), "/var/lib/buildcache/.dross-cache/dross"; got != want {

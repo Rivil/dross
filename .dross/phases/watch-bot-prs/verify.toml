@@ -1,0 +1,79 @@
+[verify]
+  phase = "watch-bot-prs"
+  generated_at = 2026-10-01T07:34:17.483546Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-10-01T07:44:16.131234Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9
+  mutants_killed = 45
+  mutants_survived = 5
+  mutants_not_covered = 5
+  mutants_no_block = 5
+  mutants_test_gap = 0
+  mutants_in_scope = 50
+  unclassified_in_scope = 0
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 45
+    survived = 5
+    timeout = 0
+    in_scope = 50
+    score = 0.9
+    file_count = 8
+    measured_on = "helicon"
+    whole_file = ["internal/cmd/watch.go — adapter-lacks-range-runner", "internal/cmd/watch_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/watch_test.go — adapter-lacks-range-runner", "internal/ship/gh_failure_test.go — adapter-lacks-range-runner", "internal/ship/openprs.go — adapter-lacks-range-runner", "internal/ship/openprs_test.go — adapter-lacks-range-runner", "internal/watch/prs.go — adapter-lacks-range-runner", "internal/watch/prs_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/watch_test.go:TestWatchPRDigestJSON", "internal/watch/prs_test.go:TestSplitPRsBotsByFlag", "internal/watch/prs_test.go:TestPRAgeDays", "internal/watch/prs_test.go:TestPRRecordJSONKeys", "internal/ship/openprs_test.go:TestListOpenPRsDecodesBotFlag"]
+  notes = "bot_prs end to end through --json: #141/#142 in, human #150 out; bot #141's title, author, url, 12d age and checks asserted (title added in t-5 after verify mapped c-1 weak — dropping Title: p.Title passed before). Bot identity is the forge flag, not the login (a human 'dependabot-fan' stays out); key set pinned exactly."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/watch/prs_test.go:TestBotSummary", "internal/cmd/watch_test.go:TestWatchHumanPRLines", "internal/cmd/watch_prompt_test.go:TestWatchPromptBotPRLine", "internal/cmd/watch_prompt_test.go:TestWatchPromptPRAbsentPrintsNothing"]
+  notes = "BotSummary renders `bot PRs: N open, oldest Nd` and empty for none; the human digest prints it exactly once above next: and nothing once both bots are dropped; the /dross-watch render section carries the line and its absent-prints-nothing rule."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/watch_test.go:TestWatchPRsAbsentWhenForgeUnreachable", "internal/cmd/watch_test.go:TestWatchPRsUnsupportedProvider", "internal/cmd/watch_test.go:TestWatchPRsReachableButEmpty", "internal/ship/openprs_test.go:TestListOpenPRsFailureIsNilAndQuiet", "internal/ship/openprs_test.go:TestListOpenPRsUnsupportedProviders", "internal/ship/openprs_test.go:TestListOpenPRsTimesOut"]
+  notes = "Unreachable forge omits both keys, exits 0, and --json plus the human render are byte-identical to the no-provider digest; an unloadable [remote] degrades the same way; unsupported providers never spawn gh; a reached-but-empty forge prints [] not null, pinning absent vs empty."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/ship/openprs_test.go:TestCheckRollup", "internal/watch/prs_test.go:TestBotSummary", "internal/cmd/watch_test.go:TestWatchPRDigestJSON", "internal/cmd/watch_test.go:TestWatchHumanPRLines"]
+  notes = "Rollup maps every CheckRun conclusion and StatusContext state to passing/failing/pending/none, unknown COMPLETED conclusions to pending (never passing), order-independent; summary counts failing only (pending/none never count) — `bot PRs: 2 open (1 failing), oldest 12d` asserted in the live digest."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/watch/prs_test.go:TestSplitPRsShipHeads", "internal/watch/prs_test.go:TestShipPRLine", "internal/cmd/watch_test.go:TestWatchPRDigestJSON", "internal/cmd/watch_test.go:TestWatchHumanPRLines", "internal/cmd/watch_prompt_test.go:TestWatchPromptShipPRLine", "internal/cmd/watch_test.go:TestWatchPRsAbsentWhenForgeUnreachable"]
+  notes = "ship_prs = [138 139] with head, url and checks; fork PRs on phase/ heads excluded. Digest prints one `pr: #<n> <head> — <checks>` line per ship PR — both #138 and #139 required above next: (#139 added in t-5 after verify mapped c-5 weak — a first-line-only render passed before). c-3's absent rule covers ship_prs in the same test."
+
+[[finding]]
+  severity = "NOTE"
+  text = "all 5 in-scope survivors are NOT COVERED with no go-cover block, each accepted: 4 inherited internal/cmd/watch.go:181/186 switch-case conditions (gremlins-attribution-ceiling) and in-hunk internal/ship/openprs.go:70 ARITHMETIC_BASE on `var prListTimeout = 20 * time.Second` (const-initializer-arithmetic, accepted 2026-10-01; value pinned by TestPRListTimeoutDefault). Efficacy over the 45 reachable = 1.00; 0 unclassified in scope."
+
+[[finding]]
+  severity = "NOTE"
+  text = "120 out-of-scope survivors filtered; 0 out-of-diff unclassified (108 accepted across the run)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "t-5 (f5853c7) landed after the mutation run: test-only, adding the c-1 title and c-5 #139 assertions; full suite green on helicon. Mutation numbers are from r-20260930-164928 and remain valid — added assertions can only kill more."
+
+[[finding]]
+  severity = "NOTE"
+  text = "the live smoke against this repo only ever saw an empty PR list ([]), so is_bot and the ship-head match have not yet been exercised on a real bot or ship PR — first real evidence is the PR this phase ships plus the next Dependabot / pin-bump PR."

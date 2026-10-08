@@ -8,9 +8,9 @@ package cmd
 // — dross rsyncs the working tree there and runs this repo's code on it, as the
 // user. `dross local set` is a generic key-writer: anything it can write, an
 // agent can write without ever showing the user what it is authorizing. So the
-// keys are absent from localKeys (see local.go) and granted only here, by a verb
-// that prints the host and workdir it is about to authorize BEFORE it writes
-// them.
+// keys are absent from localstore.Keys (see internal/localstore) and granted
+// only here, by a verb that prints the host and workdir it is about to
+// authorize BEFORE it writes them.
 //
 // That ordering is the whole mechanism, not a nicety. A grant that wrote first
 // and printed after would have authorized the host by the time the user read
@@ -33,6 +33,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/remote"
 )
 
@@ -49,12 +51,12 @@ var grantRemoteWrite = writeRemoteGrant
 //
 // It writes the CURRENT keys and clears the deprecated mutation_remote_*
 // aliases in the same save, so re-granting migrates a legacy file instead of
-// leaving both generations on disk for effectiveRemote to arbitrate. A revoke
+// leaving both generations on disk for Store.EffectiveRemote to arbitrate. A revoke
 // (host and workdir empty) therefore clears all four, which is what makes
 // "withdraw it" mean withdrawn rather than withdrawn-from-one-spelling.
 func writeRemoteGrant(root, host, workdir string) error {
-	path := localPath(root)
-	l, err := loadLocal(path)
+	path := localstore.Path(root)
+	l, err := localstore.Load(path)
 	if err != nil {
 		return err
 	}
@@ -69,15 +71,15 @@ func writeRemoteGrant(root, host, workdir string) error {
 		// authorized while a run still has somewhere to go.
 		l.RemotePool = nil
 	}
-	return l.save(path)
+	return l.Save(path)
 }
 
 // appendRemoteGrant adds a host to the pool, leaving the scalar grant and every
 // other entry in place. Re-adding an identical entry is a no-op rather than a
 // duplicate, so a repeated grant does not make the same host get probed twice.
 var appendRemoteGrant = func(root, host, workdir string) error {
-	path := localPath(root)
-	l, err := loadLocal(path)
+	path := localstore.Path(root)
+	l, err := localstore.Load(path)
 	if err != nil {
 		return err
 	}
@@ -89,8 +91,8 @@ var appendRemoteGrant = func(root, host, workdir string) error {
 			return nil
 		}
 	}
-	l.RemotePool = append(l.RemotePool, remoteCandidate{Host: host, Workdir: workdir})
-	return l.save(path)
+	l.RemotePool = append(l.RemotePool, localstore.RemoteCandidate{Host: host, Workdir: workdir})
+	return l.Save(path)
 }
 
 // Remote registers `dross remote`.
@@ -136,7 +138,7 @@ func remoteGrant() *cobra.Command {
 			// a committed local.toml would put the authorization on the wire to
 			// every clone — the exact self-authorizing shape this store exists
 			// to prevent.
-			if err := refuseTrackedLocal(filepath.Dir(root)); err != nil {
+			if err := consent.RefuseTrackedLocal(filepath.Dir(root)); err != nil {
 				return err
 			}
 
@@ -164,7 +166,7 @@ func remoteGrant() *cobra.Command {
 				return err
 			}
 
-			Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
+			Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, localstore.File)
 			if addToPool {
 				Print("Added to the pool — the first authorized host that answers runs the job.")
 			}
@@ -239,14 +241,14 @@ func remoteRevoke() *cobra.Command {
 				return err
 			}
 			repoDir := filepath.Dir(root)
-			if err := refuseTrackedLocal(repoDir); err != nil {
+			if err := consent.RefuseTrackedLocal(repoDir); err != nil {
 				return err
 			}
-			l, err := loadLocal(localPath(root))
+			l, err := localstore.Load(localstore.Path(root))
 			if err != nil {
 				return err
 			}
-			host, workdir := l.effectiveRemote()
+			host, workdir := l.EffectiveRemote()
 			if host == "" && workdir == "" {
 				Print("remote: not granted — nothing to revoke")
 				return nil

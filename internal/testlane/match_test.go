@@ -327,3 +327,70 @@ func TestNoMatchLeavesMatchedNil(t *testing.T) {
 		t.Errorf("Matched = %v, want nil when no lane was hit", sel.Matched)
 	}
 }
+
+// --- t-7: the escape test is pathfence's, the policy stays here -------------
+
+// TestNormalizeKeepsItsVerdictsAfterDelegation pins what the shared check must
+// answer. The distinction that a naive delegation loses is escaped-vs-Unmatched:
+// an out-of-tree path is a different result from an in-tree path that matched no
+// lane, and collapsing them would report a typo'd absolute path as "no lane
+// covers this" rather than "this is not in the repo".
+func TestNormalizeKeepsItsVerdictsAfterDelegation(t *testing.T) {
+	for _, tc := range []struct {
+		in       string
+		wantNorm string
+		wantIn   bool
+	}{
+		{"../x.go", "../x.go", false},
+		{"internal/../../x", "../x", false},
+		{"/abs/x.go", "/abs/x.go", false},
+		{"docs/../a.go", "a.go", true},
+		{"./internal/a.go", "internal/a.go", true},
+		// testlane's own policy, asserted because pathfence takes no position
+		// on either: an empty path is a non-path, in-tree so it surfaces as
+		// Unmatched rather than as an escape; "." is in-tree too.
+		{"", "", true},
+		{"   ", "", true},
+		{".", ".", true},
+	} {
+		gotNorm, gotIn := normalize(tc.in)
+		if gotNorm != tc.wantNorm || gotIn != tc.wantIn {
+			t.Errorf("normalize(%q) = (%q, %v), want (%q, %v)",
+				tc.in, gotNorm, gotIn, tc.wantNorm, tc.wantIn)
+		}
+	}
+}
+
+// TestOutOfTreeKeepsDistinctEscapesApart is the observable consequence of the
+// cleaned string surviving the false branch. Select dedupes on the NORMALIZED
+// form, so a delegation that discarded InTree's false-branch string would key
+// every escape on "" and silently drop all but the first — a file set could
+// then report one refused path while two were refused.
+func TestOutOfTreeKeepsDistinctEscapesApart(t *testing.T) {
+	sel := Select([][]string{{"**/*.go"}}, []string{"../a.go", "../b.go", "internal/../../a.go"})
+
+	// "../a.go" and "internal/../../a.go" clean to the same path and dedupe;
+	// "../b.go" is a different one and must survive.
+	want := []string{"../a.go", "../b.go"}
+	if !reflect.DeepEqual(sel.OutOfTree, want) {
+		t.Errorf("OutOfTree = %v, want %v", sel.OutOfTree, want)
+	}
+	if len(sel.Lanes) != 0 {
+		t.Errorf("an escaping path selected a lane: %v", sel.Lanes)
+	}
+	if len(sel.Unmatched) != 0 {
+		t.Errorf("an escape landed in Unmatched rather than OutOfTree: %v", sel.Unmatched)
+	}
+}
+
+// TestEmptyPathIsUnmatchedNotAnEscape: the empty arm has to stay ahead of the
+// shared check for the reason its comment gives — a non-path is not an escape.
+func TestEmptyPathIsUnmatchedNotAnEscape(t *testing.T) {
+	sel := Select([][]string{{"**/*.go"}}, []string{""})
+	if len(sel.OutOfTree) != 0 {
+		t.Errorf("an empty path was reported as an escape: %v", sel.OutOfTree)
+	}
+	if !reflect.DeepEqual(sel.Unmatched, []string{""}) {
+		t.Errorf("Unmatched = %v, want the empty path reported as unmatched", sel.Unmatched)
+	}
+}

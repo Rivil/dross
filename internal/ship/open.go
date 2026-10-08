@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/redact"
+	"github.com/Rivil/dross/internal/secretscan"
 )
 
 // OpenOpts is everything OpenPR needs across providers.
@@ -61,10 +63,52 @@ func OpenPR(opts OpenOpts) (*OpenResult, error) {
 	}
 }
 
+// OpenPRFunc is the overridable seam cmd-package callers use, and cmd-package
+// tests stub, to open a PR without gh or a network — the unexported
+// ghCommand seam is unreachable from package cmd. Production code calls
+// OpenPRFunc, not OpenPR directly.
+var OpenPRFunc = OpenPR
+
 // --- GitHub via gh ---
 
 // ghCommand is overridable from tests.
+//
+//dross:exec-exempt gh is the forge API client; every argv reaching it is built by this package and fenced by argfence, and gh runs no repo-authored line
 var ghCommand = func(args ...string) *exec.Cmd { return exec.Command("gh", args...) }
+
+// screenedGH is the only way this package reaches ghCommand. It runs the
+// secret scan over the argv first (criterion c-2 of secret-detection): a
+// credential in a PR body or title must never reach `gh`, and the seam stays
+// a plain test double with nothing to remember. TestNoRawGhCommandCallOutsideTheSeam
+// pins that no call site goes around it.
+func screenedGH(args ...string) (*exec.Cmd, error) {
+	if err := secretscan.ScanArgv("gh", args); err != nil {
+		return nil, err
+	}
+	return ghCommand(args...), nil
+}
+
+// ghStderr is where a failed gh invocation's own output goes: this process's
+// stderr. Tests swap it to capture what a user would see.
+var ghStderr io.Writer = os.Stderr
+
+// ghFailed reports a failed gh invocation. gh's own output — which can carry
+// an API response body — goes to stderr, where the user is already looking,
+// and the error names the subcommand and gh's exit status only. An error is
+// never the terminal: it can reach telemetry or a persisted record.
+func ghFailed(what string, err error, out []byte) error {
+	if len(out) > 0 {
+		fmt.Fprintf(ghStderr, "%s: gh said:\n%s\n", what, bytes.TrimRight(out, "\n"))
+	}
+	return fmt.Errorf("%s: %w", what, err)
+}
+
+// ghUnparseable reports gh output that is not the JSON it promised: the raw
+// output goes to stderr, the error is fixed prose.
+func ghUnparseable(what string, out []byte) error {
+	fmt.Fprintf(ghStderr, "%s: gh printed:\n%s\n", what, bytes.TrimRight(out, "\n"))
+	return fmt.Errorf("%s: gh's output is not the JSON it promises (printed above)", what)
+}
 
 func openGitHubPR(opts OpenOpts) (*OpenResult, error) {
 	if _, err := exec.LookPath("gh"); err != nil {
@@ -90,15 +134,17 @@ func openGitHubPR(opts OpenOpts) (*OpenResult, error) {
 	for _, r := range opts.Reviewers {
 		args = append(args, "--reviewer", r)
 	}
-	out, err := ghCommand(args...).CombinedOutput()
+	cmd, err := screenedGH(args...)
 	if err != nil {
-		return nil, fmt.Errorf("gh pr create: %w\n%s", err, string(out))
+		return nil, err
 	}
-	prURL := strings.TrimSpace(string(out))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, ghFailed("gh pr create", err, out)
+	}
 	// gh prints the URL on the last line; pick that to be safe.
-	if lines := strings.Split(prURL, "\n"); len(lines) > 0 {
-		prURL = strings.TrimSpace(lines[len(lines)-1])
-	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	prURL := strings.TrimSpace(lines[len(lines)-1])
 	return &OpenResult{
 		Number: parsePRNumber(prURL),
 		URL:    prURL,
@@ -128,6 +174,11 @@ func parsePRNumber(url string) int {
 // jsonPost POSTs JSON with a token auth header. Returns parsed
 // response body (or the raw bytes via "_raw") on success.
 func jsonPost(endpoint, authEnv, token string, body any) (map[string]any, error) {
+	// Screened before the encoder runs (criterion c-2 of secret-detection):
+	// a credential in a PR body or comment must never leave the process.
+	if err := secretscan.ScanPayload("POST "+endpoint, body); err != nil {
+		return nil, err
+	}
 	buf := new(bytes.Buffer)
 	if err := json.NewEncoder(buf).Encode(body); err != nil {
 		return nil, err

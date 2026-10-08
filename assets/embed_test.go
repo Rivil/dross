@@ -9,12 +9,15 @@ import (
 	"testing"
 )
 
+// assetRoots are the embedded asset directories the drift guard compares.
+var assetRoots = []string{"commands", "prompts", "agents"}
+
 // embeddedMarkdown walks FS and returns every embedded *.md path (slash-separated,
-// rooted at commands/ or prompts/).
+// rooted at commands/, prompts/ or agents/).
 func embeddedMarkdown(t *testing.T) map[string][]byte {
 	t.Helper()
 	out := map[string][]byte{}
-	for _, root := range []string{"commands", "prompts"} {
+	for _, root := range assetRoots {
 		err := fs.WalkDir(FS, root, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -36,13 +39,13 @@ func embeddedMarkdown(t *testing.T) map[string][]byte {
 	return out
 }
 
-// onDiskMarkdown walks the assets/commands and assets/prompts directories on disk
+// onDiskMarkdown walks the assets/commands, assets/prompts and assets/agents directories on disk
 // (the package dir is the test's working directory) and returns every *.md path
 // using the same slash-separated, root-relative keys as embeddedMarkdown.
 func onDiskMarkdown(t *testing.T) map[string][]byte {
 	t.Helper()
 	out := map[string][]byte{}
-	for _, root := range []string{"commands", "prompts"} {
+	for _, root := range assetRoots {
 		err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err

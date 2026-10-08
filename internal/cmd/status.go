@@ -13,11 +13,14 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/debugsession"
 	"github.com/Rivil/dross/internal/findings"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
+	"github.com/Rivil/dross/internal/verify"
 )
 
 // Status registers `dross status` — the situational-awareness command.
@@ -87,8 +90,20 @@ func Status() *cobra.Command {
 			// open PR and the base it waits on rather than warning about it.
 			// Read-only; status never mutates.
 			if sh, ok := shippedUnmergedPhase(root, st, mainBranch); ok {
-				Printf("shipped:   phase/%s — PR #%d not merged on origin/%s yet\n", sh.phaseID, sh.pr, sh.base)
-				Printf("           merge it, then `dross phase complete %s` writes the completion record\n", sh.phaseID)
+				if sh.recordPending {
+					// PR open, record not on origin: the shipped_timing
+					// window. Not shipped — ship is the retry.
+					Printf("pending:   phase/%s — PR #%d is open but its record has not reached origin; re-run `dross ship %s`\n", sh.phaseID, sh.pr, sh.phaseID)
+				} else {
+					Printf("shipped:   phase/%s — PR #%d not merged on origin/%s yet\n", sh.phaseID, sh.pr, sh.base)
+					Printf("           merge it, then `dross phase complete %s` writes the completion record\n", sh.phaseID)
+				}
+			}
+
+			// A pass that no longer covers the work tree: ship will refuse it,
+			// so say so where the user is looking rather than at the push.
+			if r, ok := staleVerdict(root, st); ok {
+				Print(staleLine(r))
 			}
 
 			// Last activity
@@ -115,6 +130,12 @@ func Status() *cobra.Command {
 			// .dross/handoff.md; surface it so you don't forget you paused.
 			if hand := openHandoff(root); hand != "" {
 				Printf("handoff:   %s\n", hand)
+			}
+
+			// Open debug sessions. A /dross-debug investigation left mid-probe
+			// is as easy to forget as a pause; name every open one on one line.
+			if line := debugNudge(openDebugSessions(root)); line != "" {
+				Printf("debug:     %s\n", line)
 			}
 
 			// Non-spine action areas — surfaced only when the spine is idle
@@ -148,7 +169,7 @@ func Status() *cobra.Command {
 // name when the milestone toml is missing or lists no phases (e.g. a
 // freshly-set current_milestone with no scoped toml yet).
 //
-// Doneness comes from phaseDone (phasedone.go), the same reader `dross
+// Doneness comes from phase.Done (internal/phase/done.go), the same reader `dross
 // milestone progress` and `dross phase list` use — never from verify.toml's
 // verdict. Counting verdicts here is what made the status bar disagree with
 // milestone progress across all of v1.4: eleven phases carrying completion
@@ -161,7 +182,7 @@ func renderMilestone(root, version string) {
 	}
 	done := 0
 	for _, id := range m.Phases {
-		if phaseDone(root, id) {
+		if phase.Done(root, id) {
 			done++
 		}
 	}
@@ -291,11 +312,29 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 	if mainBranch == "" {
 		mainBranch = "main"
 	}
+	// A pass that predates changes to the tree it would ship outranks every
+	// step that leans on it — re-pushing a record, merging the open PR,
+	// shipping — but not a PR already merged: that work has landed, and
+	// re-measuring it changes nothing. Checked only on the phase branch.
+	_, stale := staleVerdict(root, st)
+	reverify := "/dross-verify " + st.CurrentPhase + " — the passing verdict predates files changed since its run; ship refuses it until it is re-measured"
 	if !changes.Complete(root, st.CurrentPhase) {
-		switch phaseMergeState(root, filepath.Dir(root), st.CurrentPhase, mainBranch) {
-		case mergeMerged:
+		merge := phaseMergeState(root, filepath.Dir(root), st.CurrentPhase, mainBranch)
+		if merge == mergeMerged {
 			return "`dross phase complete " + st.CurrentPhase + "` — the PR is merged; this writes the completion record"
-		case mergeOpen:
+		}
+		if stale {
+			return reverify
+		}
+		// A PR whose record never reached origin sits between merged and
+		// open on purpose: a merged PR is done whatever its record says (a
+		// legacy record with no status is exactly this shape), but an open
+		// one whose record is still local needs the record pushed before
+		// anyone is told to merge it. Ship is the retry.
+		if pr, pending := recordPushPending(root, st, st.CurrentPhase); pending {
+			return "`dross ship " + st.CurrentPhase + "` — push the PR record for #" + strconv.Itoa(pr)
+		}
+		if merge == mergeOpen {
 			return "merge the open PR, then `dross phase complete " + st.CurrentPhase + "` — it writes the completion record"
 		}
 		// mergeNoPR and mergeUnknown fall through: nothing was observed that
@@ -306,6 +345,9 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 	// the push and the merge — and it is the answer whenever the oracle could
 	// not see the merge for itself (no local branch, no origin ref, a base run
 	// far past the fork).
+	if stale {
+		return reverify
+	}
 	if st.CurrentPhaseStatus == "shipped" {
 		return "merge the open PR, then `dross phase complete " + st.CurrentPhase + "` — it writes the completion record"
 	}
@@ -409,6 +451,39 @@ func openHandoff(root string) string {
 		line += fmt.Sprintf(", %d item(s) left", open)
 	}
 	return line + " — /dross-resume"
+}
+
+// openDebugSessions returns the open /dross-debug sessions under root's
+// project, most recently updated first; needs-replan counts as open. The
+// nudges built on it are best-effort: a store that cannot be read — a regular
+// file where the directory should be, an unreadable directory — yields none,
+// and never fails status or the SessionStart hook.
+func openDebugSessions(root string) []debugsession.Entry {
+	entries, err := debugsession.Load(filepath.Dir(root))
+	if err != nil {
+		return nil
+	}
+	var open []debugsession.Entry
+	for _, e := range entries {
+		if s := e.Session.State(); s == debugsession.StateOpen || s == debugsession.StateNeedsReplan {
+			open = append(open, e)
+		}
+	}
+	return open
+}
+
+// debugNudge is status's `debug:` line: every open session with the command
+// that resumes it, needs-replan labelled. "" when none is open.
+func debugNudge(open []debugsession.Entry) string {
+	parts := make([]string, len(open))
+	for i, e := range open {
+		label := e.Slug
+		if e.Session.State() == debugsession.StateNeedsReplan {
+			label += " (" + string(debugsession.StateNeedsReplan) + ")"
+		}
+		parts[i] = label + " — /dross-debug " + e.Slug
+	}
+	return strings.Join(parts, "; ")
 }
 
 // actionArea is one non-spine area of work surfaced when the spine is idle
@@ -545,6 +620,36 @@ type shippedPhase struct {
 	phaseID string
 	pr      int
 	base    string
+	// recordPending: the PR is open but neither marker reads shipped — the
+	// record commit never reached origin. Status names the retry, not the
+	// merge.
+	recordPending bool
+}
+
+// recordPushPending derives the "record pending" shape from the two markers,
+// with no field of its own: the phase's record carries a PR number but not
+// the shipped status, and state.json does not read shipped either. The
+// shipped_timing decision flips both markers only after the push carrying the
+// record lands, so this shape means exactly "PR opened, record push failed".
+//
+// A shipped state.json outranks a missing record status: records written
+// before Status existed carry a PR number and nothing else, and the machine
+// that shipped them still reads shipped. Complete is the caller's suppressor.
+func recordPushPending(root string, st *state.State, phaseID string) (pr int, pending bool) {
+	ch, err := changes.Load(changes.FilePath(root, phaseID), phaseID)
+	if err != nil || ch == nil || ch.PR == 0 {
+		return 0, false
+	}
+	if ch.Status == changes.StatusShipped || stateShipped(st, phaseID) {
+		return ch.PR, false
+	}
+	return ch.PR, true
+}
+
+// stateShipped reports whether state.json names phaseID as the current phase
+// and reads shipped.
+func stateShipped(st *state.State, phaseID string) bool {
+	return st != nil && st.CurrentPhase == phaseID && st.CurrentPhaseStatus == "shipped"
 }
 
 // shippedUnmergedPhase reports whether the working copy is sitting on a phase
@@ -558,9 +663,11 @@ type shippedPhase struct {
 // `dross phase complete` confirms the merge. The window is now deliberate and
 // long-lived, and status simply names it.
 //
-// The shipped signal is current_phase_status, with the phase's recorded PR
-// number as the fallback for a state that lost the status (a fresh clone, a
-// hand-edited state.json) but still carries the tracked record.
+// The shipped signal is either marker — current_phase_status (machine-local)
+// or the record's own status (tracked, so a fresh clone reads it). A PR
+// number with neither is reported too, but as record-pending: the PR opened
+// and the push carrying its record failed, so the retry is named instead of
+// the merge.
 //
 // The merged-check is retained and is the reason this is not a bare status
 // read: the post-merge/pre-complete window is exactly what this phase makes
@@ -575,7 +682,7 @@ type shippedPhase struct {
 func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (shippedPhase, bool) {
 	var none shippedPhase
 	repoDir := filepath.Dir(root)
-	cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+	cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
 		return none, false
 	}
@@ -594,10 +701,13 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 			sh.base = ch.Base
 		}
 	}
-	shippedStatus := st.CurrentPhase == phaseID && st.CurrentPhaseStatus == "shipped"
-	if !shippedStatus && sh.pr == 0 {
+	// The shipped signal is either marker: state.json (machine-local) or the
+	// record's status (tracked, so a fresh clone reads it). A PR number with
+	// neither is the record-pending shape — reported, but as a retry.
+	if sh.pr == 0 {
 		return none, false
 	}
+	_, sh.recordPending = recordPushPending(root, st, phaseID)
 	// A completion record closes the question: complete confirmed the merge and
 	// wrote it. The PR record above outlives that — it stays on the phase
 	// branch — so without this a completed phase visited from its old branch
@@ -607,7 +717,7 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 	// The record, not state.History's `completed <id>` breadcrumb: history is a
 	// capped 50-entry window, so the breadcrumb read went silent again fifty
 	// actions later and the line came back on a phase that finished long ago.
-	// Narrower than phaseDone on purpose — `shipped` is precisely the state
+	// Narrower than phase.Done on purpose — `shipped` is precisely the state
 	// this line exists to announce.
 	if changes.Complete(root, phaseID) {
 		return none, false
@@ -615,7 +725,7 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 
 	// No origin ref, no answer. Never a claim taken on a missing base.
 	baseRef := "origin/" + sh.base
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, baseRef)...) != nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, baseRef)...) != nil {
 		return none, false
 	}
 	merged, err := isAncestor(repoDir, cur, baseRef)
@@ -629,7 +739,7 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 	// the base's history doesn't descend from, which ancestry cannot see.
 	// "^cur" rather than "--not cur": --not is an option and would be read as
 	// a revision behind the separator. The caret form is equivalent.
-	count, err := gitTrim(repoDir, gitRefArgs("rev-list", []string{"--count"}, baseRef, "^"+cur)...)
+	count, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", []string{"--count"}, baseRef, "^"+cur)...)
 	if err != nil {
 		return none, false
 	}
@@ -704,11 +814,11 @@ func phaseMergeState(root, repoDir, slug, mainBranch string) string {
 	// The local branch is the only thing there is to compare against. `dross
 	// phase complete` deletes it on the way out and a fresh clone never had it,
 	// so its absence is genuinely "no local evidence" — not "unmerged".
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+branch)...) != nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+branch)...) != nil {
 		return mergeUnknown
 	}
 	baseRef := "origin/" + base
-	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, baseRef)...) != nil {
+	if gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, baseRef)...) != nil {
 		return mergeUnknown
 	}
 	merged, err := isAncestor(repoDir, branch, baseRef)
@@ -723,7 +833,7 @@ func phaseMergeState(root, repoDir, slug, mainBranch string) string {
 	// scan is per-commit, so a base that has run far ahead of the fork is
 	// answered with silence rather than a slow status — see
 	// staleSquashScanLimit.
-	count, err := gitTrim(repoDir, gitRefArgs("rev-list", []string{"--count"}, baseRef, "^"+branch)...)
+	count, err := gitrun.Trim(repoDir, gitRefArgs("rev-list", []string{"--count"}, baseRef, "^"+branch)...)
 	if err != nil {
 		return mergeUnknown
 	}
@@ -820,4 +930,41 @@ func reconcilableCount(root string) int {
 		return 0
 	}
 	return len(ids)
+}
+
+// staleVerdict reports the current phase's verdict when it is a pass that no
+// longer covers the work tree. It answers only on phase/<id> — the session hook
+// runs status from main, whose tree is not the phase's — and only before the
+// phase is complete. Anything it cannot read is "not stale": status is a hook
+// target, and a failed check must not break or clutter it.
+func staleVerdict(root string, st *state.State) (verify.FreshnessReport, bool) {
+	id := st.CurrentPhase
+	if id == "" || changes.Complete(root, id) {
+		return verify.FreshnessReport{}, false
+	}
+	if readVerifyVerdict(filepath.Join(phase.Dir(root, id), "verify.toml")) != "pass" {
+		return verify.FreshnessReport{}, false
+	}
+	repoDir := filepath.Dir(root)
+	if cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD"); err != nil || cur != "phase/"+id {
+		return verify.FreshnessReport{}, false
+	}
+	r, err := verdictFreshness(root, repoDir, id)
+	if err != nil {
+		return verify.FreshnessReport{}, false
+	}
+	return r, r.State == verify.Stale || r.State == verify.Malformed
+}
+
+// staleLine renders the status line for a stale verdict.
+func staleLine(r verify.FreshnessReport) string {
+	const fix = " — re-verify with /dross-verify"
+	switch {
+	case r.State == verify.Malformed:
+		return "stale:     the verdict's " + r.Field + " is not an object id" + fix
+	case r.ListErr != nil:
+		return "stale:     the verdict is stale (changed files could not be listed)" + fix
+	default:
+		return fmt.Sprintf("stale:     the verdict predates %d file(s) changed since its run%s", len(r.Changed), fix)
+	}
 }

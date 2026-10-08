@@ -1,5 +1,7 @@
 package stack
 
+import "os/exec"
+
 // ResolvedRuntime is the runtime command set a profile contributes to
 // project.toml [runtime]. Empty slots mean the profile declares no command there.
 type ResolvedRuntime struct {
@@ -11,7 +13,13 @@ type ResolvedRuntime struct {
 
 // ResolveRuntime resolves all four runtime slots of a profile for the given GOOS,
 // using lookPath to gate command variants by binary availability. Pass
-// exec.LookPath in production; inject a fake in tests.
+// LookPath in production; inject a fake in tests.
+// LookPath resolves bin on this machine's PATH — the production lookPath for
+// ResolveRuntime, ResolveCommand and RenderLoadout.
+func LookPath(bin string) (string, error) {
+	return exec.LookPath(bin)
+}
+
 func ResolveRuntime(p *Profile, goos string, lookPath func(string) (string, error)) ResolvedRuntime {
 	return ResolvedRuntime{
 		Test:      ResolveCommand(p.Runtime.Test, goos, lookPath),

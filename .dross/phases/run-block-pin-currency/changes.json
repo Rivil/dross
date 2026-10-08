@@ -1,0 +1,256 @@
+{
+  "phase": "run-block-pin-currency",
+  "pr": 137,
+  "base": "milestone/v1.7",
+  "base_commit": "0b2d15dbc3d985be1c299e07a8e21526a8ff1a06",
+  "status": "complete",
+  "tasks": {
+    "quick-1": {
+      "files": [
+        "ARCHITECTURE.md",
+        "README.md",
+        "assets/prompts/_interaction.md",
+        "assets/prompts/plan.md",
+        "assets/prompts/spec.md",
+        "internal/cmd/interaction_snippet_test.go",
+        "internal/cmd/plan_prompt_test.go",
+        "internal/cmd/spec_prompt_test.go",
+        "internal/cmd/testdata/cli_surface/tests_before.txt"
+      ],
+      "commit": "d1bb26d",
+      "completed_at": "2026-09-29T08:29:18.345693Z",
+      "notes": "quick: make candidate surfacing include-first instead of defer-first"
+    },
+    "t-1": {
+      "files": [
+        "internal/pincheck/sites.go",
+        "internal/pincheck/sites_test.go"
+      ],
+      "commit": "a46cf1b",
+      "completed_at": "2026-09-29T10:34:50.347589Z",
+      "landmarks": [
+        {
+          "feature": "pin currency",
+          "symbol": "Scan",
+          "loc": "internal/pincheck/sites.go:85",
+          "what": "scans run-block go install, setup-node, goreleaser-action and go.mod toolchain pins into Sites, unpinned values carrying a reason"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        ".github/workflows/pin-currency.yml",
+        ".github/workflows/ci.yml",
+        "scripts/pin-bump-pr.sh",
+        "internal/cmd/pin_currency_workflow_test.go"
+      ],
+      "commit": "63b9545",
+      "completed_at": "2026-09-29T12:56:58.416769Z",
+      "landmarks": [
+        {
+          "feature": "pin currency",
+          "symbol": "TestPinBumpPRUpdatesOpenPR",
+          "loc": "internal/cmd/pin_currency_workflow_test.go:332",
+          "what": "weekly pin-currency workflow: read-only strict check, write-scoped bump job opening or updating one PR via scripts/pin-bump-pr.sh, then dispatching CI"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "ARCHITECTURE.md",
+        "README.md"
+      ],
+      "commit": "40208a3",
+      "completed_at": "2026-09-29T13:05:12.014014Z",
+      "landmarks": [
+        {
+          "feature": "pin currency",
+          "symbol": "PinCurrencySection",
+          "loc": "internal/cmd/doctor.go:601",
+          "what": "ARCHITECTURE Pin currency entry and README doctor row document the section and the weekly workflow"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/mutation/testdata/ts-project/.node-version"
+      ],
+      "commit": "aa173a9",
+      "completed_at": "2026-09-29T13:07:57.989977Z",
+      "notes": "mutation-ts on Node 24.21.0 pending until the ship PR's CI; make install + live doctor section awaiting user OK",
+      "landmarks": [
+        {
+          "feature": "pin currency",
+          "symbol": "Bump",
+          "loc": "internal/pincheck/bump.go:56",
+          "what": "tree brought current by the bump planner itself: fixture Node 24.19.0 → 24.21.0; live pincheck exits 0"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/pincheck/sites_test.go",
+        "internal/pincheck/bump_test.go",
+        "internal/pincheck/upstream_test.go",
+        "internal/cmd/doctor_pins_test.go"
+      ],
+      "commit": "ace04c0",
+      "completed_at": "2026-09-29T16:09:35.367626Z",
+      "landmarks": [
+        {
+          "feature": "pin currency",
+          "symbol": "TestDoctorPinScanErrorWarns",
+          "loc": "internal/cmd/doctor_pins_test.go:160",
+          "what": "tests close verify's count-0 blocks: doctor scan error counts one warning (via telemetry), BumpOutcome reason suffix, dedupe kind tie-break, v-less goreleaser version"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/pincheck/classify.go",
+        "internal/pincheck/classify_test.go"
+      ],
+      "commit": "c80a34c",
+      "completed_at": "2026-09-29T10:37:11.788831Z",
+      "landmarks": [
+        {
+          "feature": "pin currency",
+          "symbol": "Classify",
+          "loc": "internal/pincheck/classify.go:69",
+          "what": "judges a pin current/stale/info on its own line against the list maximum with a 7-day cooldown and picks the bump target"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        ".github/actions/govulncheck/action.yml",
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+        "internal/cmd/release_pipeline_test.go",
+        "internal/cmd/action_pins_test.go",
+        "internal/cmd/workflow_run_expressions_test.go",
+        "internal/cmd/testdata/cli_surface/tests_before.txt"
+      ],
+      "commit": "a1bc935",
+      "completed_at": "2026-09-29T10:40:29.947496Z",
+      "landmarks": [
+        {
+          "feature": "pin currency",
+          "symbol": "TestGovulncheckDeclaredOnce",
+          "loc": "internal/cmd/release_pipeline_test.go:137",
+          "what": "govulncheck's version declared once in a local composite action both CI and release use; workflow sweeps cover composite actions"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        ".github/actions/goreleaser/action.yml",
+        ".github/workflows/release.yml",
+        ".github/workflows/ci.yml",
+        "internal/cmd/release_pipeline_test.go"
+      ],
+      "commit": "9fb8b6e",
+      "completed_at": "2026-09-29T11:35:27.849062Z",
+      "landmarks": [
+        {
+          "feature": "pin currency",
+          "symbol": "TestGoreleaserPinnedOutsideWorkflows",
+          "loc": "internal/cmd/release_pipeline_test.go:231",
+          "what": "goreleaser pinned to an exact version in a local composite action outside workflows, validated by a goreleaser-check job on every PR"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        ".github/workflows/ci.yml",
+        "internal/mutation/testdata/ts-project/.node-version",
+        "internal/cmd/node_version_source_test.go",
+        "internal/mutation/ts_fixture_test.go"
+      ],
+      "commit": "de12b64",
+      "completed_at": "2026-09-29T11:41:28.462924Z",
+      "landmarks": [
+        {
+          "feature": "pin currency",
+          "symbol": "TestNodeVersionSingleSource",
+          "loc": "internal/cmd/node_version_source_test.go:110",
+          "what": "Node's version read from one exact version file via node-version-file; strykerPin forced to track the fixture's @stryker-mutator/core"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/pincheck/upstream.go",
+        "internal/pincheck/upstream_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "fc8bdff",
+      "completed_at": "2026-09-29T11:37:58.937201Z",
+      "notes": "plan deviation approved by user: not_paths.txt rows for nodeRelease fields",
+      "landmarks": [
+        {
+          "feature": "pin currency",
+          "symbol": "Resolver",
+          "loc": "internal/pincheck/upstream.go:25",
+          "what": "reads each pin kind's upstream release list (proxy, golang.org/toolchain, nodejs index, npm) and maps any fetch failure to Unknown via Judge"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/pincheck/check.go",
+        "internal/pincheck/check_test.go",
+        "cmd/pincheck/main.go",
+        "cmd/pincheck/coverage_test.go"
+      ],
+      "commit": "e6ebd1d",
+      "completed_at": "2026-09-29T11:44:12.777412Z",
+      "landmarks": [
+        {
+          "feature": "pin currency",
+          "symbol": "Check",
+          "loc": "internal/pincheck/check.go:84",
+          "what": "one checker in Strict (cron fails on stale/unknown/unpinned) or Lenient (doctor never fails) mode; cmd/pincheck runs it over every pin and writes stale= to GITHUB_OUTPUT"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/pincheck/bump.go",
+        "internal/pincheck/bump_test.go",
+        "cmd/pincheck/main.go",
+        "cmd/pincheck/coverage_test.go",
+        "internal/secretscan/writers.go"
+      ],
+      "commit": "c35c68b",
+      "completed_at": "2026-09-29T12:54:29.538325Z",
+      "notes": "plan deviations approved by user: cmd bump test in coverage_test.go; secretscan writers.go entry; versionToken→versionAt rename",
+      "landmarks": [
+        {
+          "feature": "pin currency",
+          "symbol": "Bump",
+          "loc": "internal/pincheck/bump.go:56",
+          "what": "rewrites each stale pin's version token in place to its cooldown-cleared target; skips npm pins, refuses .github/workflows/"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_pins_test.go",
+        "internal/cmd/hermetic_env_test.go",
+        "cmd/pincheck/parity_test.go"
+      ],
+      "commit": "701126b",
+      "completed_at": "2026-09-29T13:01:32.140114Z",
+      "landmarks": [
+        {
+          "feature": "pin currency",
+          "symbol": "PinCurrencySection",
+          "loc": "internal/cmd/doctor.go:601",
+          "what": "doctor's always-on lenient pin-currency section: stale warns with its bump target, nothing moves the exit code; parity-tested against the cron"
+        }
+      ]
+    }
+  }
+}

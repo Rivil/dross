@@ -137,11 +137,11 @@ func TestGuardedHelpersRefuseLeadingDash(t *testing.T) {
 		assertRefused(t, checkoutBranchNew(t.TempDir(), "phase/x", payload), "git checkout")
 	})
 	t.Run("guardedFF", func(t *testing.T) {
-		_, err := guardedFF(t.TempDir(), payload)
+		err := guardedFF(t.TempDir(), payload)
 		assertRefused(t, err, "git merge")
 	})
 	t.Run("guardedResetHard", func(t *testing.T) {
-		_, err := guardedResetHard(t.TempDir(), payload)
+		err := guardedResetHard(t.TempDir(), payload)
 		assertRefused(t, err, "git reset")
 	})
 }

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/mutationcfg"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/testlane"
@@ -36,7 +37,8 @@ func doctorLaneFixture(t *testing.T, host string, adapters []string, lanes strin
 	t.Helper()
 	doctorRemoteFixture(t, host, "/srv/dross", adapters)
 	present := map[string]bool{}
-	for _, tool := range remoteAdapterTools {
+	allTools, _ := mutationcfg.Tools(&project.Project{}) // empty allowlist = every adapter
+	for _, tool := range allTools {
 		present[tool] = true
 	}
 	fakeLookPath(t, present)
@@ -422,6 +424,9 @@ func TestRemoteProbeToolsListIsUnchanged(t *testing.T) {
 	// of, deduped adapter-first — which is exactly what the list meant before
 	// the third return value existed.
 	want, _ := remoteMutationTools(p)
+	// The host lock's tool sits between the adapters and the lanes
+	// (remote-host-mutex); it is the one entry neither derivation produces.
+	want = append(want, remote.LockTool)
 	seen := map[string]bool{}
 	for _, tool := range want {
 		seen[tool] = true

@@ -1,8 +1,10 @@
 package project
 
 import (
+	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -146,5 +148,26 @@ func TestDetectRemote(t *testing.T) {
 				t.Errorf("APIBase: got %q, want %q", got.APIBase, tc.wantAPIBase)
 			}
 		})
+	}
+}
+
+// TestDetectRemoteDropsUserinfo: a remote can carry a token in its userinfo,
+// and the detected remote is what init writes to project.toml. No form of the
+// URL may bring the token along.
+func TestDetectRemoteDropsUserinfo(t *testing.T) {
+	for _, raw := range []string{
+		"https://u:CANARY-TOK@github.com/o/r.git",
+		"https://CANARY-TOK@github.com/o/r",
+		"ssh://git:CANARY-TOK@github.com/o/r.git",
+		"https://u:CANARY@TOK@github.com/o/r",
+		"CANARY-TOK@github.com:o/r.git",
+	} {
+		r := DetectRemote(raw)
+		if r.URL != "https://github.com/o/r" {
+			t.Errorf("%s: URL = %q, want https://github.com/o/r", raw, r.URL)
+		}
+		if s := fmt.Sprintf("%+v", r); strings.Contains(s, "CANARY") || strings.Contains(s, "TOK") {
+			t.Errorf("%s: the userinfo reached the detected remote: %s", raw, s)
+		}
 	}
 }

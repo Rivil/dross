@@ -122,7 +122,7 @@ func TestQualityScaffold(t *testing.T) {
 		{ID: "f-1", Title: "god function orchestrates the whole run", Risk: quality.RiskCritical,
 			Dimension: quality.Complexity, Refutation: "panel: central, churny — confirmed"},
 	}}
-	if err := quality.Save(filepath.Join(runDir, "findings.toml"), ledger); err != nil {
+	if err := quality.Save(containedIn(t, runDir, "findings.toml"), ledger); err != nil {
 		t.Fatal(err)
 	}
 
@@ -145,7 +145,7 @@ func TestQualityScaffoldEmptyErrors(t *testing.T) {
 	ledger := quality.Ledger{Findings: []quality.Finding{
 		{ID: "f-1", Risk: quality.RiskHigh, Refutation: ""},
 	}}
-	if err := quality.Save(filepath.Join(runDir, "findings.toml"), ledger); err != nil {
+	if err := quality.Save(containedIn(t, runDir, "findings.toml"), ledger); err != nil {
 		t.Fatal(err)
 	}
 	if err := runCmd(t, Quality(), "scaffold", runDir); err == nil {
@@ -156,21 +156,10 @@ func TestQualityScaffoldEmptyErrors(t *testing.T) {
 func TestQualityRunReadOnly(t *testing.T) {
 	runDir := t.TempDir()
 
-	// A finding-derived name escaping the run dir must be refused.
-	if _, err := containedPath(runDir, "../main.go"); err == nil {
-		t.Error("containedPath accepted \"../main.go\" — it must refuse a path escaping the run dir")
-	}
-	if _, err := containedPath(runDir, filepath.Join("..", "..", "etc", "passwd")); err == nil {
-		t.Error("containedPath accepted a deep traversal path; it must refuse it")
-	}
-	// A normal artifact name resolves inside the run dir.
-	got, err := containedPath(runDir, "report.md")
-	if err != nil {
-		t.Fatalf("containedPath refused a normal name: %v", err)
-	}
-	if !strings.HasPrefix(got, runDir+string(os.PathSeparator)) {
-		t.Errorf("containedPath(%q) = %q, escapes run dir", "report.md", got)
-	}
+	// Same shared containment behaviour the security command asserts — the two
+	// duplicated containedPath blocks collapsed onto one implementation, so
+	// repointing one command and leaving the other fails here.
+	assertRunDirContainment(t, runDir)
 
 	// A full run must touch only paths under .dross/quality/.
 	repo := t.TempDir()
@@ -182,7 +171,7 @@ func TestQualityRunReadOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	qDir := filepath.Join(repo, ".dross", "quality")
-	err = filepath.Walk(qDir, func(path string, _ os.FileInfo, err error) error {
+	err := filepath.Walk(qDir, func(path string, _ os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

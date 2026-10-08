@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Rivil/dross/internal/gitrun"
 )
 
 func TestRunID(t *testing.T) {
@@ -21,7 +23,7 @@ func TestRunID(t *testing.T) {
 func TestShortSHAFallback(t *testing.T) {
 	// t.TempDir() lives in the OS temp tree, outside any git repo, so
 	// `git rev-parse` fails and ShortSHA must fall back to "nogit".
-	if got := ShortSHA(t.TempDir()); got != "nogit" {
+	if got := gitrun.ShortSHA(t.TempDir()); got != "nogit" {
 		t.Fatalf("ShortSHA(non-repo) = %q, want \"nogit\"", got)
 	}
 }
@@ -29,14 +31,14 @@ func TestShortSHAFallback(t *testing.T) {
 func TestNormalizeSHA(t *testing.T) {
 	// Empty / whitespace-only git output falls back to "nogit"; a real sha is
 	// trimmed and returned. (Covers the empty-output branch ShortSHA can't force.)
-	if got := normalizeSHA("   \n"); got != "nogit" {
-		t.Errorf("normalizeSHA(blank) = %q, want \"nogit\"", got)
+	if got := gitrun.NormalizeSHA("   \n"); got != "nogit" {
+		t.Errorf("gitrun.NormalizeSHA(blank) = %q, want \"nogit\"", got)
 	}
-	if got := normalizeSHA(""); got != "nogit" {
-		t.Errorf("normalizeSHA(empty) = %q, want \"nogit\"", got)
+	if got := gitrun.NormalizeSHA(""); got != "nogit" {
+		t.Errorf("gitrun.NormalizeSHA(empty) = %q, want \"nogit\"", got)
 	}
-	if got := normalizeSHA("abc1234\n"); got != "abc1234" {
-		t.Errorf("normalizeSHA(sha) = %q, want \"abc1234\"", got)
+	if got := gitrun.NormalizeSHA("abc1234\n"); got != "abc1234" {
+		t.Errorf("gitrun.NormalizeSHA(sha) = %q, want \"abc1234\"", got)
 	}
 }
 

@@ -218,3 +218,94 @@ func TestChangesRecordOverwritesOnRerun(t *testing.T) {
 		t.Errorf("new commit missing\n%s", out)
 	}
 }
+
+// filelessTaskPlan pairs a task that declares a file with one that declares
+// none — the plan shape `dross task add --files ""` produces for work whose
+// artifact is a repo setting rather than an edit.
+const filelessTaskPlan = `[phase]
+id = "01-test"
+[[task]]
+id = "t-1"
+wave = 1
+title = "has files"
+files = ["a.go"]
+covers = ["c-1"]
+[[task]]
+id = "t-2"
+wave = 1
+title = "repo setting, no file"
+files = []
+covers = ["c-1"]
+`
+
+// TestChangesRecordAcceptsFilelessPlannedTask: a task the plan itself declares
+// fileless can be recorded with no --files. Its changes record is the only
+// durable trace such a task leaves, so the landmark and notes it carries must
+// survive the write.
+func TestChangesRecordAcceptsFilelessPlannedTask(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", filelessTaskPlan)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Changes(),
+			"record", "01-test", "t-2",
+			"--notes", "enabled the repo setting",
+			"--landmark", "feature=Supply-chain currency, what=alerts on",
+		); err != nil {
+			t.Fatalf("record for a plan-declared fileless task should succeed: %v", err)
+		}
+	})
+	if !strings.Contains(out, "no files") {
+		t.Errorf("record output should say the task is fileless, got: %s", out)
+	}
+
+	shown := captureStdout(t, func() {
+		runCmd(t, Changes(), "show", "01-test")
+	})
+	for _, want := range []string{
+		`"t-2"`,
+		`"enabled the repo setting"`,
+		`"feature": "Supply-chain currency"`,
+		`"what": "alerts on"`,
+	} {
+		if !strings.Contains(shown, want) {
+			t.Errorf("changes show missing %q\n--- output ---\n%s", want, shown)
+		}
+	}
+}
+
+// TestChangesRecordRejectsFilelessWhenPlanDeclaresFiles: the relaxation is
+// narrow. A task whose plan entry names files must record them — that is the
+// silent-no-op case the original blanket guard existed to catch.
+func TestChangesRecordRejectsFilelessWhenPlanDeclaresFiles(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", filelessTaskPlan)
+
+	err := runCmd(t, Changes(), "record", "01-test", "t-1")
+	if err == nil {
+		t.Fatal("expected an error recording no files for a task that declares a.go")
+	}
+	for _, want := range []string{"at least one", "declares 1 file"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should name the mismatch (%q): %v", want, err)
+		}
+	}
+}
+
+// TestChangesRecordRejectsFilelessUnknownTask: an id the plan does not carry is
+// not a way past the guard — an unrecognised id is exactly the typo the check
+// was there to catch, so it must not read as "fileless".
+func TestChangesRecordRejectsFilelessUnknownTask(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", filelessTaskPlan)
+
+	err := runCmd(t, Changes(), "record", "01-test", "t-99")
+	if err == nil {
+		t.Fatal("expected an error recording no files for a task absent from plan.toml")
+	}
+	for _, want := range []string{"at least one", "not in plan.toml"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should name the absent task (%q): %v", want, err)
+		}
+	}
+}

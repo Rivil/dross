@@ -1,0 +1,14 @@
+{
+  "version": "1.2.3.0",
+  "current_milestone": "v1.1",
+  "current_phase": "p1",
+  "current_phase_status": "planned",
+  "last_activity": "2026-01-02T03:04:05Z",
+  "last_action": "plan locked: p1",
+  "history": [
+    {
+      "at": "2026-01-02T03:04:05Z",
+      "action": "plan locked: p1"
+    }
+  ]
+}

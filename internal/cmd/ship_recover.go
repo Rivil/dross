@@ -3,13 +3,12 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -113,7 +112,7 @@ longer holds the pre-merge .dross/ tree:
 			}
 
 			// Refuse to run on the wrong branch — reset is destructive.
-			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+			cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				return fmt.Errorf("read current branch: %w", err)
 			}
@@ -122,7 +121,7 @@ longer holds the pre-merge .dross/ tree:
 			}
 
 			// Refuse to run on a dirty tree — reset would silently destroy work.
-			status, err := gitTrim(repoDir, "status", "--porcelain")
+			status, err := gitrun.Read(repoDir, "status", "--porcelain")
 			if err != nil {
 				return fmt.Errorf("git status: %w", err)
 			}
@@ -164,7 +163,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	sha := preMergeSHA
 	if sha == "" {
 		var err error
-		sha, err = gitTrim(repoDir, "rev-parse", "HEAD")
+		sha, err = gitrun.Trim(repoDir, "rev-parse", "HEAD")
 		if err != nil {
 			return fmt.Errorf("rev-parse HEAD: %w", err)
 		}
@@ -172,25 +171,24 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 
 	// Pre-check: SHA must actually contain a .dross/ tree, or the checkout
 	// step would fail with an unhelpful pathspec error.
-	if err := exec.Command("git", append([]string{"-C", repoDir},
-		gitRefArgs("rev-parse", []string{"--verify"}, sha+":.dross")...)...).Run(); err != nil {
+	if err := gitrun.Quiet(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, sha+":.dross")...); err != nil {
 		return fmt.Errorf("commit %s has no .dross/ tree — nothing to restore. "+
 			"If you've already reset main, pass "+
 			"--pre-merge-sha=$(git rev-parse HEAD@{1})", short(sha))
 	}
 
-	if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
-		return fmt.Errorf("git fetch: %w\n%s", err, out)
+	if err := gitrun.Run(repoDir, "fetch", "origin"); err != nil {
+		return fmt.Errorf("git fetch: %w", err)
 	}
-	if out, err := guardedResetHard(repoDir, "origin/"+baseBranch); err != nil {
-		return fmt.Errorf("git reset --hard origin/%s: %w\n%s", baseBranch, err, out)
+	if err := guardedResetHard(repoDir, "origin/"+baseBranch); err != nil {
+		return fmt.Errorf("git reset --hard origin/%s: %w", baseBranch, err)
 	}
 	// Exclude state.json from the restore. A pre-untrack commit still carries a
 	// copy, and restoring it would overwrite the live machine-local file with
 	// whatever history that commit happened to hold — the very clobber this
 	// milestone exists to end (locked state_tracking).
-	if out, err := gitCombined(repoDir, gitRefPathArgs("checkout", nil, []string{sha}, ".dross/", ":(exclude).dross/"+state.File)...); err != nil {
-		return fmt.Errorf("git checkout %s -- .dross/: %w\n%s", short(sha), err, out)
+	if err := gitrun.Run(repoDir, gitRefPathArgs("checkout", nil, []string{sha}, ".dross/", ":(exclude).dross/"+state.File)...); err != nil {
+		return fmt.Errorf("git checkout %s -- .dross/: %w", short(sha), err)
 	}
 
 	// Delta gate. Stage the restored .dross/ and check whether it actually
@@ -207,10 +205,10 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	// This gate used to be correct only because it ran before state.Touch, which
 	// always manufactured a delta. With state.json out of the tree the no-op is
 	// genuinely reachable, and it must exit 0 having written nothing.
-	if out, err := gitCombined(repoDir, "add", ".dross/"); err != nil {
-		return fmt.Errorf("git add: %w\n%s", err, out)
+	if err := gitrun.Run(repoDir, "add", ".dross/"); err != nil {
+		return fmt.Errorf("git add: %w", err)
 	}
-	staged, err := gitTrim(repoDir, "status", "--porcelain")
+	staged, err := gitrun.Read(repoDir, "status", "--porcelain")
 	if err != nil {
 		return fmt.Errorf("git status: %w", err)
 	}
@@ -230,12 +228,12 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	if err := s.Save(filepath.Join(root, state.File)); err != nil {
 		return fmt.Errorf("save state: %w", err)
 	}
-	if out, err := gitCombined(repoDir, "add", ".dross/"); err != nil {
-		return fmt.Errorf("git add: %w\n%s", err, out)
+	if err := gitrun.Run(repoDir, "add", ".dross/"); err != nil {
+		return fmt.Errorf("git add: %w", err)
 	}
 	msg := fmt.Sprintf("chore(dross): restore .dross/ after squash-merge for %s + merge", phaseID)
-	if out, err := gitCombined(repoDir, "commit", "-m", msg); err != nil {
-		return fmt.Errorf("git commit: %w\n%s", err, out)
+	if err := gitrun.Run(repoDir, "commit", "-m", msg); err != nil {
+		return fmt.Errorf("git commit: %w", err)
 	}
 
 	// Push the restore (c-2): recovery is already a network-bearing command
@@ -244,10 +242,15 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	// pusher's guards are all satisfied here — we just reset to origin and
 	// committed one .dross-only chore, a purely-ahead base — and its
 	// push-failure policy (hard error) applies unchanged.
-	if pushed, err := pushBaseIfAheadDrossOnly(repoDir, baseBranch); err != nil {
+	r, err := routeBaseChores(repoDir, baseBranch)
+	if err != nil {
 		return fmt.Errorf("push restored .dross/ on %s: %w", baseBranch, err)
-	} else if pushed {
+	}
+	switch {
+	case r.Pushed:
 		Printf("pushed restored .dross/ on %s to origin\n", baseBranch)
+	case r.ChorePR != nil:
+		Printf("restored .dross/: %s\n", r.ChorePR.narrate())
 	}
 
 	RecordOutcomeEvent("ship_recover",
@@ -257,23 +260,6 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	)
 	Printf("Restored .dross/ from %s and recorded merge for %s\n", short(sha), phaseID)
 	return nil
-}
-
-func gitTrim(repoDir string, args ...string) (string, error) {
-	gitArgvTap(args)
-	full := append([]string{"-C", repoDir}, args...)
-	out, err := exec.Command("git", full...).Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
-func gitCombined(repoDir string, args ...string) (string, error) {
-	gitArgvTap(args)
-	full := append([]string{"-C", repoDir}, args...)
-	out, err := exec.Command("git", full...).CombinedOutput()
-	return string(out), err
 }
 
 func short(sha string) string {

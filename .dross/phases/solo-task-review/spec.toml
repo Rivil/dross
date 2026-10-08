@@ -1,0 +1,130 @@
+[phase]
+  id = "solo-task-review"
+  title = "solo-task-review"
+  milestone = "v1.7"
+
+[[criteria]]
+  id = "c-1"
+  text = "In /dross-execute --solo, after a task's test gate goes green and before its commit, a fresh reviewer subagent reviews that task's diff against its task record and covered criteria; pair mode spawns no reviewer (the human stays the gate)."
+
+[[criteria]]
+  id = "c-2"
+  text = "The reviewer's verdict reports spec-compliance findings (a sub-surface of a covered criterion that the task's own record claims — in its description or test_contract — with no code or test in the diff; a criterion split across tasks is judged only on this task's slice) separately from code-quality findings, and every spec-compliance finding is blocking."
+
+[[criteria]]
+  id = "c-3"
+  text = "A blocking finding opens one fix round (edit, re-run the test gate, re-review); a task still blocked after it is marked failed with the finding as its reason and is not committed, and the loop moves to the next independent task."
+
+[[criteria]]
+  id = "c-4"
+  text = "While /dross-execute runs --solo, the commit gate refuses a code commit unless a passing review was recorded for exactly the tree being committed; a .dross/-only commit and pair mode stay ungated by it."
+
+[[criteria]]
+  id = "c-5"
+  text = "The reviewer's context excludes user and project CLAUDE.md, auto-memory, and the executing session's conversation — it sees only the task record, covered criteria text, the phase's locked decisions and hard rules, and the task's diff; a test fails if the shipped reviewer definition stops excluding them."
+
+[[criteria]]
+  id = "c-6"
+  text = "Each solo task's review verdict, its findings and how each was resolved (fixed in the fix round / non-blocking, left) are persisted with the task's change record, so /dross-verify and the PR body can show what the reviewer flagged."
+
+[[criteria]]
+  id = "c-7"
+  text = "`dross install` installs the reviewer definition and `dross doctor` fails (non-zero) when it is missing or stale."
+
+[[criteria]]
+  id = "c-8"
+  text = "In /dross-quick --solo, the same reviewer runs before the commit, checking spec compliance against the quick task's stated description, and the commit gate refuses a code commit without a recorded pass for that tree; pair-mode quick stays ungated by it."
+
+[[decisions]]
+  key = "quality_blocking"
+  choice = "The reviewer grades code-quality findings BLOCKING / FLAG / NOTE. BLOCKING (correctness bug, unmet test_contract, locked-decision or rule violation) blocks the commit; FLAG and NOTE are recorded only."
+  why = "Spec gaps always block (c-2); grading quality keeps real bugs blocking without failing solo tasks over style. Reuses plan-review's vocabulary."
+  locked = true
+
+[[decisions]]
+  key = "reviewer_model"
+  choice = "The reviewer definition inherits the executing session's model; it pins none."
+  why = "A reviewer weaker than the author misses what the author missed; cost follows the user's session choice."
+  locked = true
+
+[[decisions]]
+  key = "review_pass_signal"
+  choice = "A pass is recorded only by dross's hook recorders reading the reviewer agent's own verdict, bound to the tree fingerprint at review time: the Agent call's PostToolUse for a foreground spawn, or — for a background spawn — the SubagentStop event of the agent id its PostToolUse launch recorded. No CLI verb lets the executing agent record a pass."
+  why = "A pass the executing agent can record itself makes the gate advisory; same shape as tool-gate-hooks' pair_approval_signal. Amended 2026-10-04 by the user mid-execute: interactive sessions spawn every subagent in the background, whose PostToolUse carries only a launch acknowledgement (captured fixtures), so a PostToolUse-only recorder could never record a pass there; SubagentStop carries the same agent's final message."
+  locked = true
+
+[[decisions]]
+  key = "reviewer_isolation"
+  choice = "The reviewer is a dross-installed custom agent definition with `omitClaudeMd: true` and no `memory` field, spawned through the Agent tool; not `claude -p --bare`."
+  why = "omitClaudeMd (Claude Code 2.1.271+) drops user/project CLAUDE.md and subagents never inherit parent auto-memory; --bare requires an API key and does not work with subscription OAuth."
+  locked = true
+
+[[decisions]]
+  key = "review_input"
+  choice = "The reviewer gets the whole uncommitted diff against HEAD (staged, unstaged and untracked), not only the task.files paths — excluding .dross/ bookkeeping, the same domain as the gate's tree fingerprint."
+  why = "Filtering to task.files would hide an undeclared edit, the plan deviation a reviewer should flag. .dross/ is excluded because the pass binds to treefp's fingerprint (which omits it), .dross/-only commits are ungated (c-4), and the review context file itself lives under .dross/gate/ (plan-time clarification, 2026-10-04, panel D5)."
+  locked = true
+
+[[decisions]]
+  key = "review_unavailable"
+  choice = "When the reviewer cannot run or its verdict does not parse, no pass is recorded, the commit is refused, and the task is marked failed naming the cause."
+  why = "Carries tool-gate-hooks' gate_error_posture (closed in-domain); a missing review must not read as a passing one."
+  locked = true
+
+[[deferred]]
+  id = "5426fd8d7059547e"
+  text = "Board finalization belongs to phase completion: `dross phase complete` itself moves every task card of the phase to task-complete (closed) and the phase card to complete (closed), idempotently, so a phase merged outside /dross-ship's §6 merge branch (hold then forge-UI merge, a later `dross phase complete`, a recovered ship) never leaves task cards in task-in-review. ship.md §6 steps 4-5 shrink to whatever the CLI no longer does."
+  why = "feastahead (FEA board) reported shipped phases whose task cards still sit in Review; the only task-complete edge is a prompt step on one /dross-ship branch (2026-10-04). Historical drift is already handled by `dross issue reap`."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "488b08fefff076c8"
+  text = "Silence the 'youtrack does not know the label(s) …' warning on identity-label lookups (dross/task:, dross/phase:, dross/deferred: — resolveTaskIssue, resolvePhaseIssue and the backlog mirror lookup): an unknown identity label means no card exists yet, not a stale filter, so every first sync of a new task, phase or deferred item prints it as if something were wrong. Keep the warning for genuine filter queries."
+  why = "feastahead read it as a lookup failure on every task sync; reproduced on 7b33f38 only on first sync, and it also fires for dross/deferred: and dross/phase: when filing a routed deferred item (2026-10-04)."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "15ce26e96bf0a5da"
+  text = "plan.toml writes are lossy: `dross task status/add/edit` re-encode the whole plan and strip every comment (feastahead lost 123 header comment lines per write and restores them by hand). Give plan.toml the lossless-write treatment project.toml got in project-toml-lossless-writes."
+  why = "Reported by feastahead 2026-10-04 with the board issues; spec decides whether it stays in this phase or splits out."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "0a2f86a4677cc151"
+  text = "survivors.toml writes drop the load-bearing `# dross:allow-secret` trailing comments: survivor.Save re-encodes the whole store (toml.NewEncoder), so any `dross survivor accept/route` strips every marker and the next `dross validate` (and /dross-ship) fails the secret self-scan on the accepted entries' source-text values. Fix with the same lossless-write approach as plan.toml (or carry the marker as data the scanner honours), and pin it with a test: accept one survivor into a store holding a marked entry and assert validate stays green."
+  why = "Reported by feastahead 2026-10-04 on 7b33f38: 130 survivor accepts took survivors.toml from 2 allow-secret markers to 0, and validate went red until re-appended by hand. Same root cause as the plan.toml comment stripping, but it breaks ship, not just cosmetics."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "e1489451481fee30"
+  text = "Routed backlog items must resolve only on a disposition record, never on target-phase completion: reapBacklogVerdict (reap.go) strands a routed item when its target's changes.json is complete, and BacklogVerdictFor (backlog.go) resolves it when the target's issue is done. A route that lands on an already-finished phase, or a target rescoped away from the item, closes work nobody did. Close a routed item only on evidence it was disposed (survivor accepted/killed/covered, deferred item absorbed by the target's spec, dismissed)."
+  why = "feastahead 2026-10-04: reap closed 545 backlog cards, 527 without evidence (268 routed after the target shipped, 246 to a rescoped phase, 13 contradicted by the tree) — reverted from reap-log.json. backlog sync runs the same rule on every ship (ship.md §6 step 6). URGENT: data-corrupting."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "f998e138ba3b71a9"
+  text = "Refuse (or flag) `dross deferred route` / `dross survivor route` whose target phase is already complete — the item can no longer be in that phase's scope."
+  why = "feastahead 2026-10-04: 261 uat-session-15 survivors were routed on 2026-09-09 to mutation-run-cost-reduction, whose MR merged 2026-09-04."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "f655ef5fce125f23"
+  text = "Survivor routing must be idempotent per survivor key: re-routing the same survivor mints a new [[deferred]] entry (new id) and a new board card each time."
+  why = "feastahead 2026-10-04: 34 survivor keys carry 2-4 identical-text deferred entries each, 88 cards (e.g. FEA-520..523 = survivor bf499ceced23613e in ingredient-density-prod-seed/spec.toml)."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "21841dbf893e97db"
+  text = "A failed board call must not read as a no-op: the prompts say board sync is a 'no-op unless [remote].board_sync is on — safe to always run' (the key is actually [board].enabled), so an agent treats `$YOUTRACK_TOKEN is not set` (non-zero exit) as the no-op and the phase never gets its card. Fix the prompt wording (non-zero = surface it) and give a missed phase/task card a catch-up path."
+  why = "feastahead 2026-10-04: 18 merged phases never got a phase issue (tracker-hygiene, ci-supply-chain-hardening, test-env-hermeticity, uat-session-10/11-fixes/12, all 8 v2.1 phases)."
+  target = "board-finalize-on-complete"
+
+[[deferred]]
+  id = "573fa22f74becc03"
+  text = "A remote `dross test` from a git worktree must refuse (or sync real git metadata): the worktree's `.git` is a gitfile pointing at the main checkout's .git/worktrees/<name>, so rsyncing it to the remote workdir leaves a .git that resolves nowhere — every git call in the remote suite fails (exit 128), and the shared workdir's git state stays broken for anything else reading it until the next run from a real checkout."
+  why = "2026-10-04: the routed-backlog hotfix ran `dross test` from worktree /Users/rivil/Development/dross-hotfix; three git-dependent tests failed remotely, and feastahead's mutation leg (which reads /var/lib/buildcache/src/dross on helicon) saw a failed git merge-base during that window and aborted. Workaround used: `dross test --local` in the worktree."
+
+[[deferred]]
+  id = "366fb4244e1b525a"
+  text = "survivor.Derive places a NOT COVERED survivor by line only, so an empty `case X:` arm — which go-cover gives a 0-statement block starting at the colon on the same line — reads as in-block and is counted as a reachable test gap (mutants_test_gap) instead of the switch-case attribution ceiling (mutants_no_block). Ignore 0-statement blocks (or compare columns) when placing a line."
+  why = "solo-task-review verify round 2 (2026-10-04): mutants_test_gap = 4 but 3 were empty case arms (gate/commit.go:186 x2, treefp/treefp.go:253) whose tests do run them; the overcount misreports the efficacy line and would push an operator to chase unkillable mutants"

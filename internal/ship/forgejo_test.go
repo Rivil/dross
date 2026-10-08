@@ -349,3 +349,43 @@ func TestForgejoOpenPRsTargetingGiteaAlias(t *testing.T) {
 		t.Errorf("got %d handler calls, want 2 (gitea + Gitea)", calls)
 	}
 }
+
+// TestForgejoHeadLookupExactRef: phase/x and phase/x-2 are both open; only the
+// exact head is returned, so substring or prefix matching fails here.
+func TestForgejoHeadLookupExactRef(t *testing.T) {
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+	body, _ := json.Marshal([]map[string]any{forgejoItem(21, "phase/x-2"), forgejoItem(22, "phase/x")})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(server.Close)
+
+	res, err := FindOpenPRByHead(forgejoHeadOpts(server), "phase/x")
+	if err != nil {
+		t.Fatalf("FindOpenPRByHead: %v", err)
+	}
+	if res == nil || res.Number != 22 {
+		t.Fatalf("got %+v, want Number 22 (exact head.ref phase/x)", res)
+	}
+}
+
+// TestForgejoHeadLookupQueriesOpenOnly: a closed PR on the same head is not a
+// duplicate; the query must ask for open ones.
+func TestForgejoHeadLookupQueriesOpenOnly(t *testing.T) {
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+	var gotState string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotState = r.URL.Query().Get("state")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	t.Cleanup(server.Close)
+
+	if _, err := FindOpenPRByHead(forgejoHeadOpts(server), "phase/x"); err != nil {
+		t.Fatalf("FindOpenPRByHead: %v", err)
+	}
+	if gotState != "open" {
+		t.Errorf("query state = %q, want open", gotState)
+	}
+}

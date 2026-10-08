@@ -2,11 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"reflect"
-	"sort"
 	"strings"
 
-	"github.com/Rivil/dross/internal/board"
+	"github.com/Rivil/dross/internal/boardsync"
 
 	"github.com/spf13/cobra"
 )
@@ -27,7 +25,7 @@ func issueReap() *cobra.Command {
 	var apply, undo bool
 	c := &cobra.Command{
 		Use:   "reap",
-		Short: "Close board mirrors the forward lifecycle left stranded",
+		Short: "Close stranded board mirrors and create the cards completed phases are missing",
 		Long: `Classify every dross-authored board card against the record on disk and
 close the ones whose artefact provably finished.
 
@@ -36,7 +34,11 @@ record that justifies closing it — and writes nothing.
 
 Every close decision comes from the on-disk record, never from the card's own
 state. A card whose artefact is not complete is never closed; a card no record
-explains is named as unattributable and left open.`,
+explains is named as unattributable and left open.
+
+A completed phase whose own card or task cards no tracker lookup finds is listed
+as missing; --apply creates those cards at their terminal state, closed,
+through the same finalizer ` + "`dross phase complete`" + ` runs.`,
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			ctx, enabled, err := openBoard()
@@ -58,15 +60,20 @@ explains is named as unattributable and left open.`,
 				if len(namespaces) > 0 {
 					return fmt.Errorf("--undo replays the last recorded run verbatim and cannot be scoped by --namespace")
 				}
-				return undoReap(ctx)
+				return boardsync.Undo(ctx)
 			}
-			plan, unclassifiable, err := reapInventory(ctx, namespaces)
+			plan, unclassifiable, err := boardsync.Inventory(ctx, namespaces)
 			if err != nil {
+				return err
+			}
+			// Catch-up is reap's own: watch and doctor share Inventory and
+			// must not pay a tracker lookup per completed phase on every tick.
+			if plan.Missing, err = boardsync.FindMissing(ctx, namespaces); err != nil {
 				return err
 			}
 			printReapPlan(plan, unclassifiable)
 			if apply {
-				return applyReap(ctx, plan)
+				return boardsync.Apply(ctx, plan)
 			}
 			return nil
 		},
@@ -84,9 +91,9 @@ explains is named as unattributable and left open.`,
 // id. A plan that only lists ids asks the reader to take ninety closes on
 // trust; a plan that names `phases/03-auth/changes.json status=complete` beside
 // each one can be argued with.
-func printReapPlan(plan *reapPlan, unclassifiable []reapCard) {
-	byLane := map[string][]reapCard{}
-	unattributableByLane := map[string][]reapCard{}
+func printReapPlan(plan *boardsync.ReapPlan, unclassifiable []boardsync.ReapCard) {
+	byLane := map[string][]boardsync.ReapCard{}
+	unattributableByLane := map[string][]boardsync.ReapCard{}
 	for _, c := range plan.Cards {
 		byLane[c.Lane] = append(byLane[c.Lane], c)
 	}
@@ -95,7 +102,7 @@ func printReapPlan(plan *reapPlan, unclassifiable []reapCard) {
 	}
 
 	lanes := 0
-	for _, lane := range reapLanes {
+	for _, lane := range boardsync.ReapLanes {
 		stranded := byLane[lane.Name]
 		unattributable := unattributableByLane[lane.Name]
 		if len(stranded) == 0 && len(unattributable) == 0 {
@@ -122,7 +129,8 @@ func printReapPlan(plan *reapPlan, unclassifiable []reapCard) {
 		}
 	}
 
-	if len(plan.Cards) == 0 && len(plan.Unattributable) == 0 && len(unclassifiable) == 0 {
+	printMissing(plan.Missing)
+	if len(plan.Cards) == 0 && len(plan.Unattributable) == 0 && len(unclassifiable) == 0 && len(plan.Missing) == 0 {
 		Print("no stranded mirrors — every card matches its record")
 		return
 	}
@@ -130,44 +138,26 @@ func printReapPlan(plan *reapPlan, unclassifiable []reapCard) {
 		len(plan.Cards), lanes, plural(lanes, "lane", "lanes"), len(plan.Unattributable))
 }
 
-// boardNamespaceNames enumerates board.Board's map-typed fields — the mirror
-// namespaces themselves, read off the struct rather than transcribed.
-//
-// The flag validates against THIS, not against a literal list beside the flag
-// definition. A namespace added to board.Board becomes a legal --namespace
-// value in the same commit that adds it, and the error a typo produces names
-// the real set rather than a stale copy of it.
-func boardNamespaceNames() []string {
-	rt := reflect.TypeOf(board.Board{})
-	var out []string
-	for i := 0; i < rt.NumField(); i++ {
-		if f := rt.Field(i); f.Type.Kind() == reflect.Map {
-			out = append(out, f.Name)
+// printMissing lists the completed phases the board has no cards for — the
+// catch-up half of the plan.
+func printMissing(missing []boardsync.MissingPhase) {
+	if len(missing) == 0 {
+		return
+	}
+	Printf("Missing (%d completed %s) -> created at their terminal state, closed\n",
+		len(missing), plural(len(missing), "phase", "phases"))
+	for _, m := range missing {
+		if m.CannotCreate != "" {
+			Printf("  %-24s [cannot create] %s\n", m.Phase, m.CannotCreate)
+			continue
 		}
-	}
-	sort.Strings(out)
-	return out
-}
-
-// validateReapNamespaces refuses an unknown --namespace by name, listing the
-// namespaces that exist.
-func validateReapNamespaces(namespaces []string) error {
-	if len(namespaces) == 0 {
-		return nil
-	}
-	known := map[string]bool{}
-	for _, n := range boardNamespaceNames() {
-		known[strings.ToLower(n)] = true
-	}
-	var unknown []string
-	for _, n := range namespaces {
-		if !known[strings.ToLower(strings.TrimSpace(n))] {
-			unknown = append(unknown, n)
+		var parts []string
+		if m.PhaseCard {
+			parts = append(parts, "phase card")
 		}
+		if n := len(m.Tasks); n > 0 {
+			parts = append(parts, fmt.Sprintf("%d task %s: %s", n, plural(n, "card", "cards"), strings.Join(m.Tasks, ", ")))
+		}
+		Printf("  %-24s %s\n", m.Phase, strings.Join(parts, " + "))
 	}
-	if len(unknown) > 0 {
-		return fmt.Errorf("unknown --namespace %s; expected one of %s",
-			strings.Join(unknown, ", "), strings.Join(boardNamespaceNames(), ", "))
-	}
-	return nil
 }
