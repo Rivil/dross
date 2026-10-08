@@ -71,6 +71,16 @@ backlog is scope that leaked, not scope kept tight — a phase finishes its job
 rather than handing pieces of it on. Either way the candidate never evaporates:
 it is included or parked, never lost.
 
+## Context checkpoint
+
+A line starting `context checkpoint:` in context means the session is past its
+context threshold. At the next durable boundary, lead with "checkpoint + /clear":
+execute §1g even mid-wave (this overrides §1g's mid-wave `continue` lead) and
+every "safe to /clear" wrap-up. A gate before its artifact is written is not a
+durable boundary — leave it as it is. Under `--solo` the nudge is
+informational: keep going. Thread not on disk yet → `/dross-pause` first.
+Never run a command to check context.
+
 ## Anti-patterns
 
 - A single `AskUserQuestion` that bundles several unrelated decisions "to save
