@@ -8,10 +8,11 @@
   flow_start = "the human's answer `checkpoint` to the §1g AskUserQuestion after t-1's commit"
   flow_end = "the §1c AskUserQuestion for t-2 (`approve t-2 | steer | show me <X> | skip`), inclusive of that turn"
   flow_steps = ["fresh `claude` in the scratch repo", "/dross-execute (pair)", "approve t-1", "§1g → checkpoint", "/clear", "/dross-execute (bare)", "stop at t-2's §1c question"]
-  jq_method = "jq -cs -f <filter> <transcript.jsonl>, jq_checkpoint over the pre-/clear transcript and jq_resume over the post-/clear one. A turn is a distinct message.id among main-agent entries (type assistant, isSidechain false, model not <synthetic>); its tool entry is its tool_use names joined by +, or text when it has none. Agent wall-clock is answer→last assistant entry (checkpoint leg) plus /dross-execute prompt→§1c question (resume leg); the human's /clear and typing gap is excluded."
+  jq_method = "jq -cs -f <filter> <transcript.jsonl>, jq_checkpoint over the pre-/clear transcript and jq_resume over the post-/clear one. A turn is a distinct message.id among main-agent entries (type assistant, isSidechain false, model not <synthetic>); its tool entry is its tool_use names joined by +, or text when it has none. Agent wall-clock is answer→last assistant entry (checkpoint leg) plus /dross-execute prompt→§1c question (resume leg); the human's /clear and typing gap is excluded. Option labels match by prefix (the after run's §1g labels its lead \"checkpoint (Recommended)\"). dross_calls is the sorted set of `dross <verb> [<sub>]` invocations in the leg's Bash commands — the c-8 gate (rivil, 2026-10-08): turn counts vary with how the agent batches the same steps, so the gate is that the after legs invoke no dross call the before legs did not."
   jq_checkpoint = '''
 def ms: (.[0:19] + "Z" | fromdateiso8601) + (.[20:23] | tonumber / 1000);
-def asks($label): [.message.content[]? | select(.type == "tool_use" and .name == "AskUserQuestion") | .input.questions[].options[].label] | index($label);
+def asks($label): [.message.content[]? | select(.type == "tool_use" and .name == "AskUserQuestion") | .input.questions[].options[].label] | any(startswith($label));
+def dross_calls: [.[].message.content[]? | select(.type == "tool_use" and .name == "Bash") | .input.command | [scan("(?:^|[^/\\w-])dross ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?")] | .[] | "dross " + (map(select(. != null)) | join(" "))] | unique;
 def main: .type == "assistant" and .isSidechain == false and .message.model != "<synthetic>";
 [.[] | select(.timestamp)] as $e
 | ($e | map(select(main and asks("checkpoint"))) | last | .timestamp) as $q
@@ -19,11 +20,12 @@ def main: .type == "assistant" and .isSidechain == false and .message.model != "
 | ($e | map(select(main and .timestamp > $start))) as $a
 | ($a | group_by(.message.id) | sort_by(.[0].timestamp)
    | map([.[].message.content[]? | select(.type == "tool_use") | .name] | if length == 0 then "text" else join("+") end)) as $turns
-| {leg: "checkpoint", agent_turns: ($turns | length), turn_tools: $turns, wall_clock_s: (($a | last | .timestamp | ms) - ($start | ms))}
+| {leg: "checkpoint", dross_calls: ($a | dross_calls), agent_turns: ($turns | length), turn_tools: $turns, wall_clock_s: (($a | last | .timestamp | ms) - ($start | ms))}
 '''
   jq_resume = '''
 def ms: (.[0:19] + "Z" | fromdateiso8601) + (.[20:23] | tonumber / 1000);
-def asks($label): [.message.content[]? | select(.type == "tool_use" and .name == "AskUserQuestion") | .input.questions[].options[].label] | index($label);
+def asks($label): [.message.content[]? | select(.type == "tool_use" and .name == "AskUserQuestion") | .input.questions[].options[].label] | any(startswith($label));
+def dross_calls: [.[].message.content[]? | select(.type == "tool_use" and .name == "Bash") | .input.command | [scan("(?:^|[^/\\w-])dross ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?")] | .[] | "dross " + (map(select(. != null)) | join(" "))] | unique;
 def main: .type == "assistant" and .isSidechain == false and .message.model != "<synthetic>";
 [.[] | select(.timestamp)] as $e
 | ($e | map(select(.type == "user" and (.message.content | type == "string") and (.message.content | test("<command-name>/dross-execute</command-name>")))) | first | .timestamp) as $start
@@ -31,7 +33,7 @@ def main: .type == "assistant" and .isSidechain == false and .message.model != "
 | ($e | map(select(main and .timestamp >= $start and .timestamp <= $end))) as $a
 | ($a | group_by(.message.id) | sort_by(.[0].timestamp)
    | map([.[].message.content[]? | select(.type == "tool_use") | .name] | if length == 0 then "text" else join("+") end)) as $turns
-| {leg: "resume", agent_turns: ($turns | length), turn_tools: $turns, wall_clock_s: (($end | ms) - ($start | ms))}
+| {leg: "resume", dross_calls: ($a | dross_calls), agent_turns: ($turns | length), turn_tools: $turns, wall_clock_s: (($end | ms) - ($start | ms))}
 '''
 
 [before]
@@ -49,6 +51,44 @@ def main: .type == "assistant" and .isSidechain == false and .message.model != "
   checkpoint_wall_clock_s = 14.1
   resume_turns = 9
   resume_wall_clock_s = 27.5
+  dross_calls = ["dross execute begin", "dross interaction show", "dross issue phase", "dross issue task", "dross phase number", "dross rule show", "dross stack loadout", "dross task next", "dross task show", "dross task status", "dross validate"]
+
+# The same flow on the new binary, the nudge firing before the mid-wave §1g
+# ([context] threshold lowered to 40000 for the run, restored after).
+[after]
+  binary_version = "dross 0.1.0.0 (commit 9600d4d, built 2026-10-08T11:29:44Z)"
+  session_id = "0ea4870b-b898-45c8-aea6-51dbef18722a"
+  resume_session_id = "9ffbf7fc-b67b-450d-8da6-e88a9cb0ad4a"
+  measured_at = "2026-10-08T11:42:00Z"
+  model = "claude-opus-5-5"
+  claude_code_version = "2.1.294"
+  threshold = 40000
+  context_tokens_at_gate = 70914
+  nudge_fired = true
+  nudges_seen = 1
+  resume_nudges = 1
+  mid_wave = true
+  gate_lead = "checkpoint"
+  agent_turns = 17
+  turn_tools = ["Bash", "Bash", "Bash", "text", "Bash", "Bash", "Bash", "Bash", "Bash", "Bash", "Bash", "Bash", "Bash", "Bash", "Bash", "Bash", "AskUserQuestion"]
+  wall_clock_s = 60.0
+  checkpoint_turns = 4
+  checkpoint_wall_clock_s = 14.3
+  resume_turns = 13
+  resume_wall_clock_s = 45.6
+  dross_calls = ["dross execute begin", "dross interaction show", "dross issue phase", "dross issue task", "dross phase number", "dross rule show", "dross stack loadout", "dross task next", "dross task show", "dross task status", "dross validate"]
+  turn_delta = "+5 turns, +18.5 s, none from the change: the resume leg ran the identical step sequence one command per Bash call (12 calls) where the before leg chained them (9 calls, one parallel); the checkpoint leg added one discretionary git diff before the bookkeeping commit. dross_calls are identical in both legs. Single-sample batching variance, not a round-trip the nudge or the playbook rule added."
+  nudges_note = "nudges_seen counts the checkpointed (pre-/clear) session's hook_additional_context attachments carrying the marker; the fresh post-/clear session crossed 40k on its own and was nudged once (resume_nudges), its first crossing."
+
+# Below threshold on the new binary (threshold 0): §1g mid-wave still leads
+# with continue. Measured to the §1g question only.
+[control]
+  binary_version = "dross 0.1.0.0 (commit 9600d4d, built 2026-10-08T11:29:44Z)"
+  session_id = "ef454767-12ff-45f8-9bda-6b6a081edf9f"
+  threshold = 0
+  nudges_seen = 0
+  mid_wave = true
+  gate_lead = "continue"
 
 # Installed-hook latency (c-7, t-12): the installed `dross hooks nudge` fired as
 # a subprocess per call, timed from spawn to exit, against a 50 MB sparse
