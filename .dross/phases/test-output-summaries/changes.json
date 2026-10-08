@@ -1,0 +1,6 @@
+{
+  "phase": "test-output-summaries",
+  "base": "milestone/v1.8",
+  "base_commit": "54ad9064daa8ed7b5e0be257a67198567247d6ed",
+  "tasks": {}
+}

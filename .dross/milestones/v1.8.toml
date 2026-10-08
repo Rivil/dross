@@ -1,4 +1,4 @@
-phases = ["context-boundaries", "test-output-summaries", "prompt-partials", "solo-task-subagent", "memory-prune-advisor"]
+phases = ["context-boundaries", "test-output-summaries", "prompt-partials", "solo-task-subagent", "memory-prune-advisor", "test-summary-parsers"]
 
 [milestone]
   version = "v1.8"

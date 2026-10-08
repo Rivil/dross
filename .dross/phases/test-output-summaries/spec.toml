@@ -1,0 +1,71 @@
+[phase]
+  id = "test-output-summaries"
+  title = "test-output-summaries"
+  milestone = "v1.8"
+
+[[criteria]]
+  id = "c-1"
+  text = "Every `dross test` run (bare, selector or --files; local or remote) writes its full combined output to a gitignored log file and prints that file's path."
+
+[[criteria]]
+  id = "c-2"
+  text = "A green `dross test` prints a short summary: pass counts as the runner reports them (packages for plain go test, tests for vitest/jest), wall-clock time and the log path. No per-test or per-package lines."
+
+[[criteria]]
+  id = "c-3"
+  text = "A red `dross test` prints the counts plus each failing test's name and its own failure output, bounded per test. Build/compile errors count as failures and print their errors. The agent can act without opening the log."
+
+[[criteria]]
+  id = "c-4"
+  text = "Summarising never changes the exit status: it still reports the suite, including the 3/4 'run didn't happen' codes. Unparseable runner output prints the exit status, the last 40 lines and the log path. A non-zero exit never prints a green summary."
+
+[[criteria]]
+  id = "c-5"
+  text = "`dross verify` mutation legs (gremlins, stryker, stryker-net; local or remote, attached or collected from a detached run) print per-package counts (killed / survived / not covered / timed out), the score and each survivor's file:line. The full tool stream goes to the log file, and no per-mutant lines reach the conversation."
+
+[[criteria]]
+  id = "c-6"
+  text = "A repeat `dross rule show` in the same session context prints a one-line 'rules unchanged' marker when the merged rules are byte-identical to the last full print. A rules change, a /clear, a compaction, or a missing session id each print the full block."
+
+[[criteria]]
+  id = "c-7"
+  text = "`dross interaction show` gets the same marker under the same rules as c-6 ('playbook unchanged')."
+
+[[criteria]]
+  id = "c-8"
+  text = "The phase records before/after numbers in the phase dir: bytes printed by a green and a red `dross test` and by a verify mutation leg, plus turn count and wall-clock time for execute's test→commit step. The after-flow adds zero agent round-trips."
+
+[[decisions]]
+  key = "parser_coverage"
+  choice = "Built-in counting/failure parsers for plain `go test` and vitest/jest only. Every other runner takes c-4's fallback (exit status, last 40 lines, log path)."
+  why = "Covers this repo, chess-perft and the TS/Svelte stack the stryker leg already serves; the other parsers would have no live repo to prove them against in this phase."
+  locked = true
+
+[[decisions]]
+  key = "failure_bound"
+  choice = "A red run prints up to 30 lines per failing test or build-failed package, the first 10 failures in full, then '+N more failing — see <log>'."
+  why = "Tight enough to keep a mass break near ~300 lines, loose enough that a table-test diff or stack trace rarely forces a log re-read (milestone c-6 hot spot)."
+  locked = true
+
+[[decisions]]
+  key = "log_location"
+  choice = "Logs live in .dross/logs/, made self-ignoring by a .dross/logs/.gitignore containing `*` that dross writes on first use."
+  why = "Works in already-onboarded repos without editing their tracked .gitignore; an unignored log would count as a tree change and stale verify and the green record."
+  locked = true
+
+[[decisions]]
+  key = "log_retention"
+  choice = "One timestamped file per run (test-<ts>.log, verify-<phase>-<leg>-<ts>.log); each write prunes the dir to the newest 20."
+  why = "Concurrent runs (background verify + execute test) never clobber each other, and a red log survives its green re-run."
+  locked = true
+
+[[decisions]]
+  key = "tty_behaviour"
+  choice = "Summarise when stdout is not a terminal (agent Bash, `!` runs); stream live as today when it is. No flag to force streaming."
+  why = "The human shell keeps live progress on long remote runs; without an opt-out an agent can't habitually stream and undo the phase — it reads the log instead."
+  locked = true
+
+[[deferred]]
+  text = "Counting/failure parsers for gradle (Kotlin/Java), `dart test` and pytest; until then those repos get c-4's tail fallback."
+  why = "parser_coverage: no live repo to prove them against in this phase"
+  target = "test-summary-parsers"
