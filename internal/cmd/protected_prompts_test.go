@@ -61,6 +61,32 @@ func TestQuickPRRouteCommands(t *testing.T) {
 	}
 }
 
+// TestQuickClosesBoardIssueBeforeLeavingTheQuickBranch: the close resolves the
+// quick's issue through the link §6 writes into .dross/board.json, which on the
+// PR route is committed on quick/<NEW_VERSION> only. A close placed after
+// `dross checkout <base>` reads the base's board.json, finds no link, and fails
+// "no board issue linked to quick ref" on every PR-route quick (seen live on
+// quick 1.7.26.1). So: one close, after the issue is opened, before the switch.
+func TestQuickClosesBoardIssueBeforeLeavingTheQuickBranch(t *testing.T) {
+	quick := readPrompt(t, "quick.md")
+	const (
+		open   = `dross issue quick $NEW_VERSION "quick:`
+		close  = "dross issue quick $NEW_VERSION --close"
+		toBase = "dross checkout <base>"
+	)
+	if n := strings.Count(quick, close); n != 1 {
+		t.Fatalf("quick.md carries %d %q steps, want exactly one", n, close)
+	}
+	o, c, b := strings.Index(quick, open), strings.Index(quick, close), strings.Index(quick, toBase)
+	if o < 0 || b < 0 {
+		t.Fatalf("quick.md lost its issue-open (%t) or base-switch (%t) step", o >= 0, b >= 0)
+	}
+	if !(o < c && c < b) {
+		t.Errorf("quick.md must open the issue, close it, then switch to the base; "+
+			"got open@%d close@%d switch@%d — a close after the switch cannot see the link", o, c, b)
+	}
+}
+
 // directBasePush matches a prompt telling the agent to push a base branch.
 var directBasePush = regexp.MustCompile(`git push (?:-u )?origin (?:main|<base>|milestone/)`)
 
