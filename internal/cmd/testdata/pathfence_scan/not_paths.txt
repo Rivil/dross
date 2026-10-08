@@ -75,6 +75,9 @@ consent.Grants.TrustedReplayCommands trusted_replay_commands
 consent.Grants.TrustedRunCommands trusted_run_commands
 consent.Grants.TrustedTestCommand trusted_test_command
 
+# ---- ctxnudge — a transcript entry's kind ("assistant", "user", …), never a path
+ctxnudge.entry.Type type
+
 # ---- defaults — machine defaults: provider names, API base URLs, env-var names, reviewers, timestamps
 defaults.RemoteDefaults.APIBase api_base
 defaults.RemoteDefaults.AuthEnv auth_env
