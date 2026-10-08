@@ -226,6 +226,10 @@ var writers = []Writer{
 		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json", "gate/review.json", "gate/quick.json", "gate/review-context.md", "gate/reply.json"}, IgnoreSeed: GateIgnoreSeed,
 		Why: "tool-gate records (green tree, execute mode, task approval, solo review ledger, quick mode, reply approval) and the review context the reviewer reads; a committed copy would let a clone arrive pre-approved or pre-reviewed",
 	}},
+	{File: "internal/gatestate/nudge.go", MachineLocal: &MachineLocal{
+		Path: "gate/nudge/<name>", IgnoreSeed: GateIgnoreSeed,
+		Why: "empty per-session context-nudge claims (a hashed session key and a band, no content); machine-local because a session exists only on this machine",
+	}},
 	{File: "internal/debugsession/store.go", MachineLocal: &MachineLocal{
 		Path: "debug/<name>.md", Also: []string{"debug/.gitignore"}, IgnoreSeed: DebugIgnoreSeed,
 		Why: "/dross-debug sessions quote captured output, which must never reach a published artifact (locked session_tracking)",
