@@ -93,6 +93,8 @@ Show output of `dross defaults show`. Ask whether to:
 - **Save current project's [remote] as defaults** → `dross defaults save`
 - **Skip** — leave defaults untouched
 
+The context-checkpoint threshold lives in the same file and has no verb — the user hand-edits `~/.claude/dross/defaults.toml`: `[context] threshold = N` (tokens; unset = 150000, `0` turns the nudge off). `dross defaults save` and `dross stats opt-out` keep it. `dross doctor` shows the value in effect.
+
 ## 9. Rules
 
 Show `dross rule list --scope project` and `dross rule list --scope global`. Ask:
@@ -209,7 +211,7 @@ Per lane, not per repo, is the point: a one-character edit to a docs lane's comm
 
 ## 15. Claude Code hooks
 
-`dross hooks ensure` idempotently wires the four dross-owned hooks into user-level `settings.json`: `PreCompact` + `SessionStart`, and the tool-call gate pair — `PreToolUse` (`dross gate check`) and `PostToolUse` (`dross gate record`). The `SessionStart` hook is what prints the "you are here / next command" re-entry line at the top of a fresh session; without the gate pair the tool-call gates are off and `dross doctor` fails.
+`dross hooks ensure` idempotently wires every dross-owned hook into user-level `settings.json`: `PreCompact` → `dross pause --auto`, `SessionStart` → `dross reentry`, `PreToolUse` → `dross gate check`, `PostToolUse` → `dross gate record` and `dross hooks nudge`, and `SubagentStop` → `dross gate record`. The `SessionStart` hook is what prints the "you are here / next command" re-entry line at the top of a fresh session; without the gate hooks the tool-call gates are off and `dross doctor` fails. Without `dross hooks nudge` there is no context-checkpoint nudge — `dross doctor` warns.
 
 Offer to run it. It is safe to re-run — that is what idempotent means here — so the honest default when the user is unsure is to run it rather than to inspect `settings.json` by hand. If the re-entry line has stopped appearing at session start, this is the fix.
 
