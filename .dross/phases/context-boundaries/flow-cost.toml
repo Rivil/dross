@@ -1,0 +1,51 @@
+# Checkpoint-flow cost for context-boundaries (milestone v1.8 c-6, phase c-8).
+# Observed numbers only, counted structurally from the session transcripts with
+# the jq filters below — no transcript content is copied into this file.
+
+[scenario]
+  repo_shape = "fresh scratch dross repo (dross init; milestone v0.1 active, base main), one phase flow-probe on phase/flow-probe, one wave of two trivial tasks (t-1 add hello.txt, t-2 add world.txt), runtime.test_command = \"true\" (trusted), board disabled, no remote grant"
+  wave_position = "mid-wave: §1g after t-1's commit, with t-2 still pending in the same wave, so §1g offers continue | checkpoint | stop"
+  flow_start = "the human's answer `checkpoint` to the §1g AskUserQuestion after t-1's commit"
+  flow_end = "the §1c AskUserQuestion for t-2 (`approve t-2 | steer | show me <X> | skip`), inclusive of that turn"
+  flow_steps = ["fresh `claude` in the scratch repo", "/dross-execute (pair)", "approve t-1", "§1g → checkpoint", "/clear", "/dross-execute (bare)", "stop at t-2's §1c question"]
+  jq_method = "jq -cs -f <filter> <transcript.jsonl>, jq_checkpoint over the pre-/clear transcript and jq_resume over the post-/clear one. A turn is a distinct message.id among main-agent entries (type assistant, isSidechain false, model not <synthetic>); its tool entry is its tool_use names joined by +, or text when it has none. Agent wall-clock is answer→last assistant entry (checkpoint leg) plus /dross-execute prompt→§1c question (resume leg); the human's /clear and typing gap is excluded."
+  jq_checkpoint = '''
+def ms: (.[0:19] + "Z" | fromdateiso8601) + (.[20:23] | tonumber / 1000);
+def asks($label): [.message.content[]? | select(.type == "tool_use" and .name == "AskUserQuestion") | .input.questions[].options[].label] | index($label);
+def main: .type == "assistant" and .isSidechain == false and .message.model != "<synthetic>";
+[.[] | select(.timestamp)] as $e
+| ($e | map(select(main and asks("checkpoint"))) | last | .timestamp) as $q
+| ($e | map(select(.type == "user" and .timestamp > $q)) | first | .timestamp) as $start
+| ($e | map(select(main and .timestamp > $start))) as $a
+| ($a | group_by(.message.id) | sort_by(.[0].timestamp)
+   | map([.[].message.content[]? | select(.type == "tool_use") | .name] | if length == 0 then "text" else join("+") end)) as $turns
+| {leg: "checkpoint", agent_turns: ($turns | length), turn_tools: $turns, wall_clock_s: (($a | last | .timestamp | ms) - ($start | ms))}
+'''
+  jq_resume = '''
+def ms: (.[0:19] + "Z" | fromdateiso8601) + (.[20:23] | tonumber / 1000);
+def asks($label): [.message.content[]? | select(.type == "tool_use" and .name == "AskUserQuestion") | .input.questions[].options[].label] | index($label);
+def main: .type == "assistant" and .isSidechain == false and .message.model != "<synthetic>";
+[.[] | select(.timestamp)] as $e
+| ($e | map(select(.type == "user" and (.message.content | type == "string") and (.message.content | test("<command-name>/dross-execute</command-name>")))) | first | .timestamp) as $start
+| ($e | map(select(main and asks("approve t-2"))) | first | .timestamp) as $end
+| ($e | map(select(main and .timestamp >= $start and .timestamp <= $end))) as $a
+| ($a | group_by(.message.id) | sort_by(.[0].timestamp)
+   | map([.[].message.content[]? | select(.type == "tool_use") | .name] | if length == 0 then "text" else join("+") end)) as $turns
+| {leg: "resume", agent_turns: ($turns | length), turn_tools: $turns, wall_clock_s: (($end | ms) - ($start | ms))}
+'''
+
+[before]
+  binary_version = "dross 0.1.0.0 (commit e8a5fa4, built 2026-10-07T17:30:37Z)"
+  session_id = "057ad4f2-707d-4347-819d-5a2f0fec29a6"
+  resume_session_id = "e6850c84-5779-4203-a25c-2d24dfdff5b8"
+  measured_at = "2026-10-08T09:35:40Z"
+  model = "claude-opus-5-5"
+  claude_code_version = "2.1.294"
+  context_tokens_at_gate = 67089
+  agent_turns = 12
+  turn_tools = ["Bash", "Bash", "text", "Bash", "Bash", "Bash", "Bash+Bash", "Bash", "Bash", "Bash", "Bash", "AskUserQuestion"]
+  wall_clock_s = 41.5
+  checkpoint_turns = 3
+  checkpoint_wall_clock_s = 14.1
+  resume_turns = 9
+  resume_wall_clock_s = 27.5
