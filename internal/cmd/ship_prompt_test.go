@@ -521,3 +521,57 @@ func TestShipPromptReShipsBeforeMerge(t *testing.T) {
 		t.Error("neither §5 On failure nor §6 names /dross-verify as the answer to a stale refusal")
 	}
 }
+
+// prChecksWatch matches a `gh pr checks` invocation carrying --watch on the
+// same line, in any argument order.
+var prChecksWatch = regexp.MustCompile("gh pr checks[^\n`]*--watch")
+
+// TestShipPromptGitHubCIWatchWaitsForRuns: `gh pr checks --watch` exits 0 as
+// soon as the checks registered SO FAR pass, so with only a fast third-party
+// check registered and the Actions run still queued it reads green with CI
+// unrun (seen on #138, worked around by hand on every ship since). §5's GitHub
+// arm waits for the head SHA's runs to register, watches each run, and only
+// then reads the whole check set — in that order. No prompt may gate on the
+// --watch form, so a milestone or review flow cannot reintroduce it.
+func TestShipPromptGitHubCIWatchWaitsForRuns(t *testing.T) {
+	gate := rawShipSection(t, "## 5. CI gate")
+	steps := []string{"gh run list --commit <sha>", "gh run watch <run-id> --exit-status", "gh pr checks <pr-url>"}
+	last := -1
+	for _, step := range steps {
+		at := strings.Index(gate, step)
+		if at < 0 {
+			t.Errorf("ship.md §5 lost its GitHub step %q", step)
+			continue
+		}
+		if at < last {
+			t.Errorf("ship.md §5 runs %q out of order — register, watch each run, then read every check", step)
+		}
+		last = at
+	}
+
+	dir := filepath.Join(repoRootFromTest(t), "assets", "prompts")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := 0
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) != ".md" {
+			continue
+		}
+		seen++
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(string(b), "\n") {
+			// The one sanctioned mention is §5's own warning naming the form.
+			if m := prChecksWatch.FindString(line); m != "" && !strings.Contains(line, "never gate on `"+m) {
+				t.Errorf("%s gates CI on %q — it exits green before the Actions run registers", e.Name(), m)
+			}
+		}
+	}
+	if seen == 0 {
+		t.Fatal("no prompts found — the ban checked nothing")
+	}
+}
