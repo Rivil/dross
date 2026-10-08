@@ -43,6 +43,7 @@ Hooks:
   ✓ SessionStart → dross reentry
   ✓ PreToolUse → dross gate check
   ✓ PostToolUse → dross gate record
+  ✓ PostToolUse → dross hooks nudge
   ✓ SubagentStop → dross gate record
 
 Reviewer:
