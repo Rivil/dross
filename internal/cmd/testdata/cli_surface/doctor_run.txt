@@ -45,6 +45,7 @@ Hooks:
   ✓ PostToolUse → dross gate record
   ✓ PostToolUse → dross hooks nudge
   ✓ SubagentStop → dross gate record
+  ✓ context nudge: 150k (default)
 
 Reviewer:
   ✓ solo reviewer dross-task-reviewer is installed and current

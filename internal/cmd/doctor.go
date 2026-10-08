@@ -17,6 +17,7 @@ import (
 	"github.com/Rivil/dross/internal/architecture"
 	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/defaults"
 	"github.com/Rivil/dross/internal/diag"
 	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/hooks"
@@ -1158,6 +1159,8 @@ func hooksSection(repoDir string) diag.Section {
 		switch {
 		case !present && gate:
 			add(diag.Issue, "%s → `%s` is not wired, so the tool-call gates are off. Fix: `dross hooks ensure`", h.event, h.command)
+		case !present && h.command == NudgeHook:
+			add(diag.Warn, "%s → `%s` is not wired, so context-threshold nudges are off. Fix: `dross hooks ensure`", h.event, h.command)
 		case !present:
 			add(diag.Warn, "%s → `%s` is not wired. Fix: `dross hooks ensure`", h.event, h.command)
 		case gate && !matcherless(doc, h.event, h.command):
@@ -1166,6 +1169,7 @@ func hooksSection(repoDir string) diag.Section {
 			add(diag.OK, "%s → %s", h.event, h.command)
 		}
 	}
+	contextThresholdLine(add)
 	for _, rel := range projectSettingsFiles {
 		pdoc, err := hooks.ReadSettings(filepath.Join(repoDir, filepath.FromSlash(rel)))
 		if err != nil {
@@ -1177,6 +1181,47 @@ func hooksSection(repoDir string) diag.Section {
 		}
 	}
 	return sec
+}
+
+// contextThresholdLine reports the nudge's one knob, [context] threshold in
+// ~/.claude/dross/defaults.toml, as the value the hook will use. The hook
+// itself stays silent on a value it cannot use — it runs on every tool call —
+// so an undecodable or negative threshold is said here instead: the nudge is
+// off, and nothing else would tell the user.
+func contextThresholdLine(add func(diag.Level, string, ...any)) {
+	dir, err := GlobalDir()
+	if err != nil {
+		add(diag.Warn, "cannot locate ~/.claude/dross to read [context] threshold (%v), so the context nudge is silently off", err)
+		return
+	}
+	path := filepath.Join(dir, defaults.File)
+	d, err := defaults.LoadFile(path)
+	if err != nil {
+		add(diag.Warn, "the context nudge is silently off: %v. Fix: make [context] threshold in %s a token count, or 0 for off", err, path)
+		return
+	}
+	n, err := d.Context.EffectiveThreshold()
+	if err != nil {
+		add(diag.Warn, "the context nudge is silently off: %v in %s. Fix: a token count, or 0 for off", err, path)
+		return
+	}
+	switch {
+	case n == 0:
+		add(diag.OK, "context nudge: off (threshold 0)")
+	case d.Context.Threshold == nil:
+		add(diag.OK, "context nudge: %s (default)", tokenCount(n))
+	default:
+		add(diag.OK, "context nudge: %s", tokenCount(n))
+	}
+}
+
+// tokenCount renders a token count the way the nudge line does: whole
+// thousands as "150k", anything else in full.
+func tokenCount(n int64) string {
+	if n%1000 == 0 {
+		return fmt.Sprintf("%dk", n/1000)
+	}
+	return fmt.Sprintf("%d tokens", n)
 }
 
 // reviewerSection reports the solo task reviewer definition: installed where
