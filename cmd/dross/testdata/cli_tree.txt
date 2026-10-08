@@ -60,6 +60,7 @@ dross gate record | use="record" short="PostToolUse/SubagentStop hook: record wh
 dross gate status | use="status" short="Show every gate: its scope, and whether it is on or lifted until when"
 dross hooks | use="hooks" short="Manage the dross-owned Claude Code hooks"
 dross hooks ensure | use="ensure" short="Idempotently wire the dross hooks (PreCompact, SessionStart, and the PreToolUse/PostToolUse/SubagentStop tool-call gates) into user-level settings.json"
+dross hooks nudge | use="nudge" short="PostToolUse hook: inject a context-checkpoint line once the session passes [context] threshold"
 dross init | use="init" short="Bootstrap .dross/ in the current repo (greenfield)"
 dross init flag --force (bool) default="false" noopt="true" usage="remove existing .dross/ before init"
 dross install | use="install" short="Install dross slash commands + prompts into ~/.claude"

@@ -49,6 +49,7 @@ func Hooks() *cobra.Command {
 			return nil
 		},
 	})
+	root.AddCommand(hooksNudge())
 	return root
 }
 
