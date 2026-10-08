@@ -49,3 +49,39 @@ def main: .type == "assistant" and .isSidechain == false and .message.model != "
   checkpoint_wall_clock_s = 14.1
   resume_turns = 9
   resume_wall_clock_s = 27.5
+
+# Installed-hook latency (c-7, t-12): the installed `dross hooks nudge` fired as
+# a subprocess per call, timed from spawn to exit, against a 50 MB sparse
+# transcript whose newest main-agent entry sits ~200 KiB from EOF. Every fire
+# was checked to take its labelled path (0 mismatches on each).
+[hook_latency]
+  binary_version = "dross 0.1.0.0 (commit 9470e18, built 2026-10-08T11:20:20Z)"
+  measured_at = "2026-10-08T11:21:00Z"
+  fires = 50
+  transcript_mb = 50
+  payload_bytes = 569
+  method = "python3 driver: subprocess.run(['dross','hooks','nudge']) with perf_counter around it; cwd a scratch dross repo; below = 100k-token transcript, fresh session per fire; claimed = 175k transcript, one session whose band was claimed by an uncounted first fire; emit = 175k transcript, fresh session per fire, real re-entry lookup (git) in the scratch repo"
+
+  [hook_latency.below]
+    p50_ms = 6.4
+    p95_ms = 7.5
+    max_ms = 8.1
+
+  [hook_latency.claimed]
+    p50_ms = 6.4
+    p95_ms = 7.5
+    max_ms = 7.6
+
+  [hook_latency.emit]
+    p50_ms = 13.0
+    p95_ms = 14.8
+    max_ms = 15.9
+
+  # Observed only, never gated: c-7 scopes the budget to the 50 MB transcript.
+  [hook_latency.stress]
+    path = "emit"
+    payload_mb = 10
+    fires = 20
+    p50_ms = 57.2
+    p95_ms = 64.4
+    max_ms = 64.4
