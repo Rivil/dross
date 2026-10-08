@@ -429,27 +429,33 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Task paths are translated into each lane runner's selector form, and a selector matching nothing is reported as a miss rather than a failing gate
 - [x] A lane may declare a `prepare` command between sync and test, so remote build prerequisites are dross's job rather than hidden in each repo's test command
 
-### Milestone v1.7 — symmetric controls: every path to a dangerous operation goes through the gate (active)
+### Milestone v1.7 — symmetric controls: every path to a dangerous operation goes through the gate (complete)
 
-- [ ] Every command that spawns the repository's own code goes through the exec-consent gate, proven by a test that enumerates spawn sites rather than a hand-maintained list
-- [ ] A path loaded from a tracked artifact is containment-checked before any file I/O, on the read path as well as the write path, through one shared implementation
-- [ ] No raw subprocess output is persisted to `verify.toml` or rendered into a PR body — a failed leg records its exit status and a pointer, and the live diagnostic stays on stderr
-- [ ] A failed push is retried on the next run because its gate compares local against origin rather than against the local index
-- [ ] Running dross's own scans against dross reports zero self-referential findings — no testdata languages, no identity hashes read as secrets, no scanner flagging its own marker definitions
-- [ ] No reachable stdlib vulnerability ships, and the release build measures the dependency graph it actually ships
-- [ ] Mutation ranges are AST-aware: a range covers the enclosing syntactic construct, so no mutant covering a changed line goes ungenerated
-- [ ] No persisted artifact or published PR body carries recognisable secret material — captured output is not persisted, and what is persisted is scanned
-- [ ] `internal/cmd` holds cobra wiring only; every domain it carries today lives in a package of its own, provable by import direction
+- [x] Every command that spawns the repository's own code goes through the exec-consent gate, proven by a test that enumerates spawn sites rather than a hand-maintained list
+- [x] A path loaded from a tracked artifact is containment-checked before any file I/O, on the read path as well as the write path, through one shared implementation
+- [x] No raw subprocess output is persisted to `verify.toml` or rendered into a PR body — a failed leg records its exit status and a pointer, and the live diagnostic stays on stderr
+- [x] A failed push is retried on the next run because its gate compares local against origin rather than against the local index
+- [x] Running dross's own scans against dross reports zero self-referential findings — no testdata languages, no identity hashes read as secrets, no scanner flagging its own marker definitions
+- [x] No reachable stdlib vulnerability ships, and the release build measures the dependency graph it actually ships
+- [x] Mutation ranges are AST-aware: a range covers the enclosing syntactic construct, so no mutant covering a changed line goes ungenerated
+- [x] No persisted artifact or published PR body carries recognisable secret material — captured output is not persisted, and what is persisted is scanned
+- [x] `internal/cmd` holds cobra wiring only; every domain it carries today lives in a package of its own, provable by import direction
 - [x] Review-comment ingest — `/dross-respond <pr>` triages a phase PR's review comments across all four providers: `dross pr comments` lists them fenced as untrusted data, `dross pr resolve` records one evidenced verdict each (accept → task, reject → reason, route → deferred) in a tracked `pr-triage.toml` that never stores a comment body, `dross pr reply` posts the rejections once on a recorded human approval, `dross ship` refuses while an accepted comment's task is undone, and `/dross-watch` shows each ship PR's untriaged count
 - [x] Debug sessions — `/dross-debug` keeps a systematic investigation in a gitignored `.dross/debug/<slug>.md` (one hypothesis per probe, evidence before the next, hard stop after three failed fixes, two independent signals to close), `dross debug {new,list,close}` gates it, and `dross status` plus the SessionStart line name any open session
 
-### Milestone v1.8 — Azure DevOps provider: ship and board sync reach a fifth forge (planning)
+### Milestone v1.8 — context economy: shrink what every turn re-reads (active)
 
-- [ ] Azure DevOps works as a ship/PR provider alongside GitHub, GitLab, Forgejo/Gitea and Bitbucket
+- [ ] Past a configurable context threshold (default 150k tokens) a hook nudges "checkpoint + /clear", and the next durable gate leads with it
+- [ ] `dross test`, verify and mutation print counts plus failures and write the full log to a gitignored file; a green run prints no per-test lines
+- [ ] A repeat `dross rule show` in the same session prints a one-line "rules unchanged" marker instead of the full block
+- [ ] `execute.md` and `verify.md` each load at ≤15 KB, with rare branches fetched on demand and a test that fails over budget
+- [ ] `/dross-status` suggests memory prunes with a $/month estimate each, never deletes, and never suggests a memory that carries a guard phrase
+- [ ] Time is a constraint, not a trade: no change adds agent round-trips to a command's common path, and each phase records before/after turn counts and wall-clock
 
 ### Milestone v1.9 — workflow depth: ideas ported from superpowers, GSD and gsd-core (planning)
 
 - [ ] Success criteria not yet written — scope with `/dross-milestone v1.9`
+- [ ] Azure DevOps works as a ship/PR provider alongside GitHub, GitLab, Forgejo/Gitea and Bitbucket
 
 ## Telemetry
 
