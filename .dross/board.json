@@ -154,6 +154,7 @@
     "someday:id:211fd3040434016d": "DRO-645",
     "someday:id:215d2ae2e7799d69": "DRO-102",
     "someday:id:21841dbf893e97db": "DRO-834",
+    "someday:id:232957ce515ebfcd": "DRO-958",
     "someday:id:2385fc70268180d1": "DRO-83",
     "someday:id:23cd8142a6ba122b": "DRO-687",
     "someday:id:245f4ad61d9e038a": "DRO-372",
@@ -878,6 +879,71 @@
     },
     "completion-record-truth/t-6": {
       "issue": "DRO-138",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "context-boundaries/t-1": {
+      "issue": "DRO-945",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "context-boundaries/t-10": {
+      "issue": "DRO-956",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "context-boundaries/t-11": {
+      "issue": "DRO-957",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "context-boundaries/t-12": {
+      "issue": "DRO-955",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "context-boundaries/t-13": {
+      "issue": "DRO-947",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "context-boundaries/t-2": {
+      "issue": "DRO-946",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "context-boundaries/t-3": {
+      "issue": "DRO-948",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "context-boundaries/t-4": {
+      "issue": "DRO-949",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "context-boundaries/t-5": {
+      "issue": "DRO-950",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "context-boundaries/t-6": {
+      "issue": "DRO-951",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "context-boundaries/t-7": {
+      "issue": "DRO-952",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "context-boundaries/t-8": {
+      "issue": "DRO-953",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "context-boundaries/t-9": {
+      "issue": "DRO-954",
       "plan_status": "done",
       "board_state": "task-in-review"
     },

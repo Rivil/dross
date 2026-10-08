@@ -68,3 +68,8 @@
   choice = "One line: usage vs threshold, 'checkpoint at your next durable boundary → /clear', the re-entry command SessionStart will print, and 'mid-thought? /dross-pause first'."
   why = "At a durable boundary the SessionStart reentry line re-orients for free; /dross-pause only earns its turns when the thread isn't on disk."
   locked = true
+
+[[deferred]]
+  id = "232957ce515ebfcd"
+  text = "boardsync.Disposed ignores absorption for survivor-keyed routes: a route absorbed by a completed destination's criterion (e.g. the 118 cmd-package-decomposition routes absorbed into extracted-package-test-parity c-1) still reads open to board sync/reap, while the repo audit (routeClosed) calls it closed"
+  why = "Found by t-13's solo review; changing board reap semantics is outside context-boundaries' scope"
