@@ -1,0 +1,75 @@
+[phase]
+  id = "context-boundaries"
+  title = "context-boundaries"
+  milestone = "v1.8"
+
+[[criteria]]
+  id = "c-1"
+  text = "The context threshold is a user-level setting in ~/.claude/dross/defaults.toml, default 150k tokens; 0 turns the feature off."
+
+[[criteria]]
+  id = "c-2"
+  text = "A session is over threshold when its latest main-agent turn's context (input + cache-read + cache-creation tokens, read from the hook payload's transcript) is at or above it; subagent turns don't count."
+
+[[criteria]]
+  id = "c-3"
+  text = "On crossing the threshold, a dross hook injects one 'checkpoint + /clear' line naming the re-entry command, visible to both the model and the user; it does not repeat on every tool call."
+
+[[criteria]]
+  id = "c-4"
+  text = "Past the threshold, /dross-execute's post-commit gate (§1g) leads with `checkpoint` even mid-wave; below it, today's wave-boundary order is unchanged."
+
+[[criteria]]
+  id = "c-5"
+  text = "Outside a dross repo, or with a missing or unreadable transcript, the hook exits 0 silently; it never blocks a tool call or prompt."
+
+[[criteria]]
+  id = "c-6"
+  text = "`dross hooks ensure` wires the nudge hook idempotently, and `dross doctor` flags it when missing."
+
+[[criteria]]
+  id = "c-7"
+  text = "The hook adds ≤50 ms per fire on a 50 MB transcript (it reads the tail, not the whole file)."
+
+[[criteria]]
+  id = "c-8"
+  text = "checkpoint → /clear → resume adds zero agent round-trips versus today; the phase records before/after turn counts and wall-clock time for that flow in the phase dir."
+
+[[criteria]]
+  id = "c-9"
+  text = "With a threshold nudge in context, every command's durable-boundary wrap-up leads with 'checkpoint + /clear'; a test fails if _interaction.md loses that rule."
+
+[[decisions]]
+  key = "nudge_cadence"
+  choice = "Nudge on first crossing the threshold, then again at each further +50k (200k, 250k, …) in the same session. The 50k step is fixed, not configurable."
+  why = "Reminders escalate as cost grows without per-tool-call noise; a fixed step keeps the config surface to one knob (c-1)."
+  locked = true
+
+[[decisions]]
+  key = "gate_scope"
+  choice = "One rule in _interaction.md: with a nudge in context, lead with checkpoint + /clear at the next durable boundary — execute §1g and every command's 'safe to /clear' wrap-up. Mid-command gates (spec/plan before their artifact is written) are not durable boundaries and don't change."
+  why = "One shared rule covers every command with no per-prompt edits and no new turns; a /clear before the artifact is on disk loses work."
+  locked = true
+
+[[decisions]]
+  key = "solo_behaviour"
+  choice = "--solo keeps going past the threshold; the nudge is informational only."
+  why = "Milestone c-6: time is a constraint, not a trade. The agent can't /clear itself, so stopping only idles an unattended run until the user returns."
+  locked = true
+
+[[decisions]]
+  key = "signal_path"
+  choice = "The over-threshold signal reaches the agent only through the hook's injected line; no `dross context`-style call at gates."
+  why = "A per-gate tool call adds a round-trip to every gate's common path, which c-8 forbids."
+  locked = true
+
+[[decisions]]
+  key = "nudge_content"
+  choice = "One line: usage vs threshold, 'checkpoint at your next durable boundary → /clear', the re-entry command SessionStart will print, and 'mid-thought? /dross-pause first'."
+  why = "At a durable boundary the SessionStart reentry line re-orients for free; /dross-pause only earns its turns when the thread isn't on disk."
+  locked = true
+
+[[deferred]]
+  id = "232957ce515ebfcd"
+  text = "boardsync.Disposed ignores absorption for survivor-keyed routes: a route absorbed by a completed destination's criterion (e.g. the 118 cmd-package-decomposition routes absorbed into extracted-package-test-parity c-1) still reads open to board sync/reap, while the repo audit (routeClosed) calls it closed"
+  why = "Found by t-13's solo review; changing board reap semantics is outside context-boundaries' scope"

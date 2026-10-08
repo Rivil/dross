@@ -20,10 +20,37 @@ const File = "defaults.toml"
 
 // Defaults is the schema of the global defaults file. Holds both
 // cross-project pre-fills (remote_defaults) and global runtime
-// toggles (telemetry).
+// toggles (telemetry, context).
 type Defaults struct {
 	Remote    RemoteDefaults    `toml:"remote_defaults,omitempty" json:"remote_defaults,omitempty"`
 	Telemetry TelemetryDefaults `toml:"telemetry,omitempty" json:"telemetry,omitempty"`
+	Context   ContextDefaults   `toml:"context,omitempty" json:"context,omitempty"`
+}
+
+// DefaultContextThreshold is the context size, in tokens, at which the
+// checkpoint nudge first fires when [context] threshold is unset.
+const DefaultContextThreshold int64 = 150_000
+
+// ContextDefaults holds the one knob for the context-checkpoint nudge. The
+// step between repeat nudges is fixed in code, not configured here.
+// Threshold is a pointer so an explicit 0 (off) survives a load/save round
+// trip by another writer and stays distinct from unset (the default).
+type ContextDefaults struct {
+	Threshold *int64 `toml:"threshold,omitempty" json:"threshold,omitempty"`
+}
+
+// EffectiveThreshold returns the threshold in tokens: unset is the default,
+// 0 turns the nudge off, and a negative value is an error. LoadFile accepts a
+// negative value so the file's other readers keep working; only the nudge's
+// readers see the error.
+func (c ContextDefaults) EffectiveThreshold() (int64, error) {
+	if c.Threshold == nil {
+		return DefaultContextThreshold, nil
+	}
+	if *c.Threshold < 0 {
+		return 0, fmt.Errorf("[context] threshold = %d: must be 0 (off) or a positive token count", *c.Threshold)
+	}
+	return *c.Threshold, nil
 }
 
 // TelemetryDefaults controls the local-only event recorder. Default ON;

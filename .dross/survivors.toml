@@ -4585,3 +4585,30 @@
   line = 171
   accepted_in = "review-comment-ingest"
   category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "774dd92e98503b96"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !present && h.command == NudgeHook:"
+  line = 1162
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test drives that arm — go-cover gives the condition's columns no block (dross_gremlins_switchcase_ceiling). hooksSection's missing-nudge arm is asserted by the \"no nudge\" row of TestDoctorMissingConvenienceHooksWarnOnly, which requires the exact ⚠ \"context-threshold nudges are off\" line and a zero exit."
+  accepted_in = "context-boundaries"
+
+[[accepted]]
+  key = "928c1940e2ae8d55"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case n == 0:"
+  line = 1209
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test drives that arm — go-cover gives the condition's columns no block (dross_gremlins_switchcase_ceiling). contextThresholdLine's off arm is asserted by TestDoctorContextThreshold's \"off\" row (threshold = 0 → \"✓ context nudge: off (threshold 0)\")."
+  accepted_in = "context-boundaries"
+
+[[accepted]]
+  key = "4e34f76031ada531"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d.Context.Threshold == nil:"
+  line = 1211
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test drives that arm — go-cover gives the condition's columns no block (dross_gremlins_switchcase_ceiling). contextThresholdLine's unset arm is asserted by TestDoctorContextThreshold's \"absent\" row (\"✓ context nudge: 150k (default)\"), and its default arm by the \"explicit\" row (\"90k\")."
+  accepted_in = "context-boundaries"

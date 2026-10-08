@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -96,7 +97,10 @@ func TestExecutePromptCheckpointConsistencyBeforeReentry(t *testing.T) {
 
 // TestExecutePromptCheckpointWaveLead proves the checkpoint_posture locked
 // decision: at wave boundaries the gate leads with checkpoint as the
-// recommended option.
+// recommended option. Below the context threshold that order is unchanged
+// (context-boundaries c-4): mid-wave still leads with continue, and the
+// checkpoint bullet calls exactly the two consistency commands — the context
+// rule adds no call to it (signal_path).
 func TestExecutePromptCheckpointWaveLead(t *testing.T) {
 	section := executeGateSection(t)
 	if !strings.Contains(section, "wave") {
@@ -104,6 +108,22 @@ func TestExecutePromptCheckpointWaveLead(t *testing.T) {
 	}
 	if !strings.Contains(section, "lead with checkpoint") {
 		t.Error("wave-boundary branch must mark checkpoint as the lead/recommended option")
+	}
+	if !strings.Contains(section, "mid-wave, lead with continue") {
+		t.Error("mid-wave must still lead with continue below the context threshold")
+	}
+
+	_, bullet, ok := strings.Cut(section, "\n- checkpoint —")
+	if !ok {
+		t.Fatal("post-commit gate has no `checkpoint` bullet")
+	}
+	bullet, _, _ = strings.Cut(bullet, "\n- stop")
+	calls := map[string]bool{}
+	for _, m := range regexp.MustCompile(`dross ([a-z]+)( next)?`).FindAllStringSubmatch(bullet, -1) {
+		calls[m[1]+m[2]] = true
+	}
+	if len(calls) != 2 || !calls["validate"] || !calls["task next"] {
+		t.Errorf("checkpoint bullet calls %v; want exactly dross validate and dross task next", calls)
 	}
 }
 

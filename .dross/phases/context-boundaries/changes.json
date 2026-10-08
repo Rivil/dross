@@ -1,0 +1,702 @@
+{
+  "phase": "context-boundaries",
+  "pr": 176,
+  "base": "milestone/v1.8",
+  "base_commit": "f0a12a5d13267d205df40790def610482427826a",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        ".dross/phases/context-boundaries/flow-cost.toml"
+      ],
+      "commit": "77ed972",
+      "completed_at": "2026-10-08T09:38:45.963324Z",
+      "landmarks": [
+        {
+          "feature": "context checkpoint flow cost",
+          "symbol": "before",
+          "loc": ".dross/phases/context-boundaries/flow-cost.toml:39",
+          "what": "baseline turn count and agent wall-clock for checkpoint → /clear → resume on the pre-phase binary"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_hooks_test.go",
+        "internal/cmd/testdata/cli_surface/doctor_run.txt"
+      ],
+      "commit": "9600d4d",
+      "completed_at": "2026-10-08T11:29:26.057763Z",
+      "landmarks": [
+        {
+          "feature": "context checkpoint nudge",
+          "symbol": "contextThresholdLine",
+          "loc": "internal/cmd/doctor.go:1191",
+          "what": "doctor shows the nudge threshold in effect and warns when the nudge is missing or silently off"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        ".dross/phases/context-boundaries/flow-cost.toml",
+        "internal/cmd/flowcost_record_test.go"
+      ],
+      "commit": "925b558",
+      "completed_at": "2026-10-08T11:58:38.344342Z",
+      "landmarks": [
+        {
+          "feature": "context checkpoint flow cost",
+          "symbol": "TestFlowCostRecords",
+          "loc": "internal/cmd/flowcost_record_test.go:43",
+          "what": "every phase's flow-cost record is complete and its after leg adds no dross call; context-boundaries' nudge led §1g with checkpoint"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        ".dross/phases/context-boundaries/flow-cost.toml",
+        "internal/cmd/hooklatency_record_test.go"
+      ],
+      "commit": "143e6be",
+      "completed_at": "2026-10-08T11:24:41.887705Z",
+      "landmarks": [
+        {
+          "feature": "context checkpoint nudge",
+          "symbol": "TestHookLatencyRecord",
+          "loc": "internal/cmd/hooklatency_record_test.go:17",
+          "what": "installed nudge hook p95 ≤ 50 ms per path on a 50 MB transcript, recorded and guarded"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "README.md",
+        "internal/cmd/survivor_backlog_repo_test.go",
+        ".dross/phases/extracted-package-test-parity/spec.toml"
+      ],
+      "commit": "5cf1d8b",
+      "completed_at": "2026-10-08T10:01:13.789588Z",
+      "landmarks": [
+        {
+          "feature": "survivor backlog audit",
+          "symbol": "routeClosed",
+          "loc": "internal/cmd/survivor_backlog_repo_test.go:340",
+          "what": "repo audit skips routes closed by Disposed evidence or absorption in a completed destination"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/defaults/defaults.go",
+        "internal/defaults/defaults_test.go",
+        "internal/cmd/testdata/cli_surface/output/defaults_show_json.txt"
+      ],
+      "commit": "afb2468",
+      "completed_at": "2026-10-08T10:14:13.682095Z",
+      "landmarks": [
+        {
+          "feature": "context checkpoint nudge",
+          "symbol": "ContextDefaults.EffectiveThreshold",
+          "loc": "internal/defaults/defaults.go:46",
+          "what": "[context] threshold in defaults.toml: unset 150k, 0 off, negative an error"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/ctxnudge/transcript.go",
+        "internal/ctxnudge/transcript_test.go",
+        "internal/ctxnudge/testdata/main_tail.jsonl",
+        "internal/ctxnudge/testdata/subagent_tail.jsonl",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "c762287",
+      "completed_at": "2026-10-08T10:32:02.946712Z",
+      "landmarks": [
+        {
+          "feature": "context checkpoint nudge",
+          "symbol": "LatestMainContext",
+          "loc": "internal/ctxnudge/transcript.go:35",
+          "what": "bounded backwards transcript read returning the newest main-agent turn's context tokens"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/ctxnudge/nudge.go",
+        "internal/ctxnudge/nudge_test.go",
+        "internal/gatestate/nudge.go",
+        "internal/gatestate/nudge_test.go",
+        "internal/secretscan/writers.go"
+      ],
+      "commit": "bf3aa61",
+      "completed_at": "2026-10-08T10:36:39.662539Z",
+      "landmarks": [
+        {
+          "feature": "context checkpoint nudge",
+          "symbol": "ClaimNudge",
+          "loc": "internal/gatestate/nudge.go:69",
+          "what": "once-per-band per-session nudge claim under .dross/gate/nudge (O_EXCL, high-water, 7-day prune)"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "README.md",
+        "docs/dross.1",
+        "assets/prompts/options.md",
+        "internal/cmd/readme_doc_test.go"
+      ],
+      "commit": "9336ad3",
+      "completed_at": "2026-10-08T10:46:10.133534Z",
+      "landmarks": [
+        {
+          "feature": "context checkpoint nudge",
+          "symbol": "dross hooks {ensure,nudge}",
+          "loc": "README.md:235",
+          "what": "README, man page and /dross-options document the nudge hook and the [context] threshold key"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "assets/prompts/_interaction.md",
+        "internal/cmd/interaction_snippet_test.go",
+        "internal/cmd/execute_prompt_test.go"
+      ],
+      "commit": "31a2295",
+      "completed_at": "2026-10-08T10:50:40.252802Z",
+      "landmarks": [
+        {
+          "feature": "context checkpoint nudge",
+          "symbol": "Context checkpoint",
+          "loc": "assets/prompts/_interaction.md:74",
+          "what": "playbook rule: a nudge line makes the next durable boundary lead with checkpoint + /clear"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/ctxnudge/run.go",
+        "internal/ctxnudge/run_test.go",
+        "internal/ctxnudge/testdata/posttooluse_main.json",
+        "internal/ctxnudge/testdata/posttooluse_subagent.json",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "06a4feb",
+      "completed_at": "2026-10-08T10:58:58.995227Z",
+      "landmarks": [
+        {
+          "feature": "context checkpoint nudge",
+          "symbol": "Run",
+          "loc": "internal/ctxnudge/run.go:34",
+          "what": "PostToolUse payload to nudge envelope: silent unless a main-agent fire crosses an unclaimed band"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/hooks_nudge.go",
+        "internal/cmd/hooks_nudge_test.go",
+        "internal/cmd/hooks.go",
+        "internal/cmd/telemetry.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "ce93a78",
+      "completed_at": "2026-10-08T11:09:45.209476Z",
+      "landmarks": [
+        {
+          "feature": "context checkpoint nudge",
+          "symbol": "hooksNudge",
+          "loc": "internal/cmd/hooks_nudge.go:27",
+          "what": "dross hooks nudge: never-failing PostToolUse verb that writes the nudge envelope"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/hooks.go",
+        "internal/cmd/hooks_test.go",
+        "internal/cmd/testdata/cli_surface/doctor_run.txt",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "9470e18",
+      "completed_at": "2026-10-08T11:20:17.045518Z",
+      "landmarks": [
+        {
+          "feature": "context checkpoint nudge",
+          "symbol": "userHooks",
+          "loc": "internal/cmd/hooks.go:73",
+          "what": "dross hooks ensure wires PostToolUse → dross hooks nudge after the gate record"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "contextThresholdLine's LoadFile branch fires for any defaults.toml decode error (e.g. a broken [telemetry] key), yet its Fix text says to make [context] threshold a token count; the nudge really is off in that case and the wrapped decode error names the real fault, so only the fix hint is narrow",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "tokenCount's comment says it renders counts 'the way the nudge line does', but ctxnudge.Line always prints threshold/1000 with a k suffix, while tokenCount prints 'N tokens' for counts that are not whole thousands",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "hooksSection's doc comment still lists only PreCompact/SessionStart as warnings and does not mention the missing-nudge warning or the new context-threshold line",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-11": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "The round-trip check only asks whether each after-leg dross call also appears somewhere in the before leg (slices.Contains). An after leg that repeats a call the before leg made once adds a round-trip but still passes. Comparing call counts would catch this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "The [control] check asserts only gate_lead == \"continue\". It does not assert control.mid_wave or !control.nudge_fired, although the error message says it guards a below-threshold mid-wave gate. A control taken at a different point, or one where the nudge fired, would still pass.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The scenario keys are read with a string type assertion, so a scenario value stored as a number (for example wave_position = 2) is reported as missing rather than as having the wrong type. This is harmless if the record stores strings.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The doc comment calls this a guard on milestone v1.8's c-6 record, but the task covers c-8. The two may be the same criterion under different ids; worth checking that the reference is intended.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "The round-trip gate uses slices.Contains, so it only checks whether a call appears. An after leg that runs a dross call the before leg also ran, but runs it twice, passes. This matches the contract's wording ('a call the before leg's do not'), but a repeated round-trip would go uncaught.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "The [control] leg is checked for gate_lead, mid_wave and nudge state, but not for agent_turns, wall_clock_s, binary_version or session_id. The contract doesn't require that, but the control is a less complete measurement than the before and after legs.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "Scenario keys are type-asserted to string. A non-string value (e.g. an integer wave_position) is reported as missing rather than as the wrong type, which makes the error message misleading.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-12": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-7",
+          "text": "TestHookLatencyRecord is the only test in internal/ that reads a real phase artifact from the repo (.dross/phases/context-boundaries/flow-cost.toml). If that phase directory is ever renamed, pruned or regenerated, the main test suite breaks for a reason unrelated to code; consider skipping when the phase is gone, or treat this file as a permanent fixture.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-7",
+          "text": "fires is one top-level number, but the description asks for 50 fires per path. The test cannot tell whether each of below/claimed/emit actually got 50 fires; a per-path fires field would make that checkable.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the test checks that p95_ms is positive, which stops a zero-filled or placeholder section from passing; p50_ms is decoded but never checked, which the test_contract does not require.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-13": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "routeClosed counts absorption as closure for survivor-keyed routes, but production boardsync.Disposed never does: for a non-empty Survivor it only takes the survivors.toml/verify arm. The repo audit and board sync/reap now disagree on whether the 118 absorbed parity routes are closed, so their board mirrors stay open while the audit calls them closed. The absorbed check is also a verbatim copy of boardsync.absorbedDisposed, so the two can drift apart.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "The 'no id to match' case in TestRouteClosedNeedsAbsorptionInACompleteDestination is weak. No criterion in the fixture lists an empty id, so deleting the e.ID == \"\" guard would still return false and the case would pass. Adding \"\" to the drained criterion's deferred list would make it bite.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The new subtest comment says every real survivor route is keyed ('A keyed entry, as every real survivor route is'). The file's header comment on survivorIdentityPattern still says every routed entry in this repo carries an empty Survivor field. One of the two is now stale.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "EffectiveThreshold's negative-value error names the key but not the defaults.toml path; the sibling task that reads it (the hook) will need to wrap it with the path so the user knows which file to fix",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "TestContextThresholdSurvivesOtherWriters is the only test in the package that round-trips a non-nil pointer to a zero value through SaveFile, so it also pins BurntSushi/toml's omitempty-on-pointer behaviour against a future library bump",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "TestSyntheticEntrySkipped only uses a \u003csynthetic\u003e entry with zero usage, which the non-zero-sum rule already rejects. Deleting the `Model == \"\u003csynthetic\u003e\"` check in mainContext leaves every test green. A synthetic entry with non-zero usage would actually test that filter.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "internal/cmd/testdata/pathfence_scan/not_paths.txt is changed but not listed in the task's files. The row (ctxnudge.entry.Type type) is needed because pathfence_fields_test requires every json-tagged string field to be declared, and it is correct.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "If the 8 MiB cap stops exactly at the start of a line, that line stays in frags and is never checked, so the result is ok=false. This is conservative and matches the 'unknown, never zero' rule.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "internal/cmd/testdata/pathfence_scan/not_paths.txt is modified but not in the task's files list; the row (ctxnudge.entry.Type type) is required by the repo-wide pathfence field guard because entry.Type is a json-tagged string field, so the change is justified but undeclared",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "TestSpecialFilesAreSilent silently skips the FIFO case when mkfifo is not on PATH; syscall.Mkfifo would remove the shell-out and the silent skip",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-7",
+          "text": "TestTailRead50MBUnder50ms is a wall-clock assertion; min-of-5 mitigates noise, and the actual work (about 4 chunk reads and one small JSON decode) is far under budget",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "ClaimNudge's high-water check (highestClaim \u003e= band) runs before the O_EXCL create, so it is a check-then-act across bands: concurrent ClaimNudge(s,2) and ClaimNudge(s,3) can both win and the session nudges twice. Exactly-once holds per band only. This is a rare path; the contract only pins the same-band race.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "internal/secretscan/writers.go is not in the task's files list. The edit is required: TestEveryDrossWriterIsDeclared fails on the new os.OpenFile(O_CREATE) writer in gatestate/nudge.go, and the MachineLocal entry's gate/nudge/\u003cname\u003e path is covered by GateIgnoreSeed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "Line normalises reentry with strings.Join(strings.Fields(...)), so runs of whitespace inside the reentry collapse; it is only reproduced word-for-word when single-spaced. An empty reentry renders 'then  ·' with a double space.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "Docs get ahead of the code: README marks the `dross hooks {ensure,nudge}` row done and options.md §15 says ensure wires PostToolUse -\u003e `dross hooks nudge` and doctor warns without it, but hooks.go has no `nudge` subcommand and userHooks does not wire it yet. options.md §8 also says `dross doctor` shows the threshold in effect, but doctor.go never reads it, and the task description does not ask for that claim. This is only accurate if sibling tasks deliver it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestOptionsNamesContextThreshold's `~/.claude/dross/defaults.toml` check is satisfied by the §8 heading itself ('## 8. Global defaults (~/.claude/dross/defaults.toml)'), so removing the hand-edit path from the new paragraph would not fail the test.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestReadmeDocumentsContextNudge's bare \"threshold\" check is vacuous: README.md already contains \"threshold\" at lines 222, 318 and 449, unrelated to this feature. Checking \"[context] threshold\" as one string, as the man-page half does, would actually guard the new text.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "options.md §8's claims that `dross defaults save` and `dross stats opt-out` keep the key hold: both load the file and re-save it, and ContextDefaults.Threshold is a pointer, so an explicit 0 survives the round trip.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "Docs get ahead of the code. The README row is marked as shipped, and README, dross.1 and options.md §15 say `dross hooks ensure` wires PostToolUse -\u003e `dross hooks nudge` and that doctor flags it when missing. In the current tree, Hooks() registers only `ensure` and userHooks has no nudge entry. The docs are only true if a sibling task adds the verb and the userHooks entry.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "options.md §8 says '`dross doctor` shows the value in effect', but no doctor code reads [context] threshold. EffectiveThreshold is only called from tests. Unless a sibling task adds a doctor row, this prompt tells the user something false.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestOptionsHooksSectionNamesAllHooks hard-codes 'dross hooks nudge' alongside userHooks. Once the nudge joins userHooks the hard-coded entry is redundant but harmless. The count-word regex also catches 'two'/'three' used as ordinary prose, which could trip on a future unrelated edit to §15.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "optionsSection drops the heading line on purpose, so the §8 heading '(~/.claude/dross/defaults.toml)' cannot satisfy the path check by itself.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestInteractionShowCarriesContextRule calls t.Fatalf inside the captureStdout closure; on that error path os.Stdout is never restored and the pipe-reader goroutine leaks, which can garble later tests' output",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestInteractionSnippetHasContextNudgeRule lowercases both the section and the marker, so a capitalisation drift in the section would pass that test. The case-sensitive embed test (TestInteractionShowCarriesContextRule) still catches it, because the section heading has no colon",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestFooterPromptsLoadPlaybook checks for the substring `dross interaction show` anywhere in the prompt, not that it runs as a pre-flight step. That meets the contract as written but is a loose check",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "The threshold-0 FIFO case in TestSilentPaths cannot detect the off switch opening the transcript: LatestMainContext opens with O_NONBLOCK and rejects non-regular files, so moving the transcript read ahead of the threshold check would still return at once and pass. A probe that records whether the path was opened (or a check the test can observe) would make the parenthetical in the contract meaningful.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "internal/cmd/testdata/pathfence_scan/not_paths.txt is modified but not listed in the task's files; the rows are needed for TestEveryPathShapedFieldIsDeclared and follow the ledger's lowercased-tag convention, but the edit is outside the declared scope.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Env is an interface with Threshold()/Reentry() methods rather than the struct the record's notation Env{Threshold, Reentry} suggests; behaviour matches and the choice is documented, but the sibling hook-verb task must implement the interface.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In TestSilentPaths the claim check inspects the per-row droot, which for the 'cwd outside a dross repo' and 'half-built .dross' rows is not the payload's cwd, so the no-claim assertion is vacuous for those rows; the nil-output assertion the contract asks for still holds.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestRunUnder50ms uses the small captured fixture (well under 64 KiB) rather than a payload near the 64 KiB bound, so the decode cost of a large tool_response is not exercised; a wall-clock budget test may also be sensitive to -race or loaded CI despite min-of-5.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "posttooluse_subagent.json keeps what looks like a real captured agent_id (a0c5663575ca8f3f3); it is not a session id or home path and passes the scrub test, but it was not anonymised like the other ids.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "TestNudgeHookNeverFails: setThreshold in the 'undecodable'/'negative threshold' subtests is never cleaned up and HOME is shared across subtests, so 'incomplete .dross' runs with threshold = -5 and stays silent whether or not incomplete-root detection works; it still catches a surfaced error but not a wrongly emitted nudge",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "NudgeHook doc comment says `dross hooks ensure` wires it, but userHooks does not include it in this tree (presumably a sibling task)",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "adding root.AddCommand(hooksNudge()) shifts var userHooks from hooks.go:65 to :66; ARCHITECTURE.md anchors at lines 1147 and 1233 still say hooks.go:65 (doctor-only drift, file not in this task's list)",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "TestNudgeOffSwitch stats only .dross/gate/nudge while the contract says nothing is created under .dross/gate; the stdout assertion and ClaimNudge's mkdir of the nudge dir still catch a broken off switch, so the narrower check is sufficient in practice",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "nudgeEnv.Reentry loads state.json read-only and falls back to /dross-status when it is absent, while `dross reentry` would create state.json through FindRoot and print suggestNext; the SessionStart hook normally creates the file before any nudge, so the two can only disagree in a rare path",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the 'negative threshold' never-fails subtest proves nothing on its own, because Run already treats threshold \u003c= 0 as off; it is harmless as an extra case",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "TestHookWordingNamesAllFour's Short check only asserts each event name appears in ensure's Short; 'PostToolUse' was already there, so dropping 'the PostToolUse context nudge' from the Short would not fail this test. Only TestCLITreeGolden guards that wording.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "No test asserts the nudge's PostToolUse group is matcher-less (TestEnsureWiresSubagentStop does this for SubagentStop only); MergeHook always appends a matcher-less group, so the behaviour holds today.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "userHooksSummary's doc comment still says it is 'for the line init and onboard print'; `hooks ensure` now prints it too. The test name TestHookWordingNamesAllFour now covers six hooks.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
+}

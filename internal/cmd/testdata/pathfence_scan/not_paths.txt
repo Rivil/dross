@@ -75,6 +75,12 @@ consent.Grants.TrustedReplayCommands trusted_replay_commands
 consent.Grants.TrustedRunCommands trusted_run_commands
 consent.Grants.TrustedTestCommand trusted_test_command
 
+# ---- ctxnudge — a transcript entry's kind ("assistant", "user", …) and the hook envelope's event name and nudge line, never paths
+ctxnudge.entry.Type type
+ctxnudge.envelope.SystemMessage systemmessage
+ctxnudge.hookOutput.AdditionalContext additionalcontext
+ctxnudge.hookOutput.HookEventName hookeventname
+
 # ---- defaults — machine defaults: provider names, API base URLs, env-var names, reviewers, timestamps
 defaults.RemoteDefaults.APIBase api_base
 defaults.RemoteDefaults.AuthEnv auth_env

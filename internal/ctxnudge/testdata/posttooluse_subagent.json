@@ -1,0 +1,27 @@
+{
+  "session_id": "fixture-session",
+  "transcript_path": "/tmp/ctxnudge-fixture/session.jsonl",
+  "cwd": "/tmp/ctxnudge-fixture/repo",
+  "prompt_id": "fixture-prompt",
+  "permission_mode": "bypassPermissions",
+  "agent_id": "a0c5663575ca8f3f3",
+  "agent_type": "general-purpose",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "echo sub-call",
+    "description": "Echo sub-call text"
+  },
+  "tool_response": {
+    "stdout": "sub-call",
+    "stderr": "",
+    "interrupted": false,
+    "isImage": false,
+    "noOutputExpected": false
+  },
+  "tool_use_id": "toolu_fixture_Bash",
+  "duration_ms": 25
+}
