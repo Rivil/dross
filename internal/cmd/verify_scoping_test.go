@@ -549,10 +549,18 @@ func TestVerifyRefusesEscapingRecordedPathEndToEnd(t *testing.T) {
 	mustSetBase(t, "01-escape", "base")
 	seedEscapingChanges(t, dir, "01-escape")
 
-	useStubAdapter(t, &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
-		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})})
+	stub := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}
+	useStubAdapter(t, stub)
 
 	err := runCmd(t, Verify(), "01-escape")
+	// c-2's "not dispatched to a mutation adapter", asserted rather than
+	// inferred from the missing artefacts: a run that dispatched and THEN
+	// refused would write nothing either. Checked before the refusal itself so
+	// an ungated run reports this too, not only the missing error.
+	if len(stub.got) != 0 {
+		t.Errorf("the mutation adapter was handed %v for a refused scope", stub.got)
+	}
 	assertEscapeRefusal(t, dir, err)
 
 	// Nothing was written: the refusal lands before RunScoped, so neither

@@ -97,6 +97,24 @@ func TestContainAbsoluteIsItsOwnSentinel(t *testing.T) {
 	}
 }
 
+// TestContainAbsoluteNamesPathArtifactAndRoot is c-5 for the absolute arm: the
+// sentinel test above pins WHICH refusal it is, not whether the message lets a
+// hand-edited changes.json be fixed. Three separate Contains, as for the
+// escape arm, so a reword passes and a message that drops a fact fails.
+func TestContainAbsoluteNamesPathArtifactAndRoot(t *testing.T) {
+	root := t.TempDir()
+
+	_, err := pathfence.Contain(root, "changes.json", "/etc/passwd")
+	if err == nil {
+		t.Fatal("Contain accepted an absolute path")
+	}
+	for _, want := range []string{"/etc/passwd", "changes.json", root} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q", err, want)
+		}
+	}
+}
+
 func TestContainInteriorDotDotLandingInsideIsNotAnEscape(t *testing.T) {
 	root := t.TempDir()
 

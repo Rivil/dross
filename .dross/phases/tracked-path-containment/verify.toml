@@ -1,106 +1,3199 @@
 [verify]
   phase = "tracked-path-containment"
-  generated_at = 2026-09-07T15:08:04.598321Z
+  generated_at = 2026-10-07T16:38:03.567749Z
   verdict = "partial"
   finalized = true
-  finalized_at = 2026-09-09T07:50:40.082823Z
+  finalized_at = 2026-10-07T16:41:30.580026Z
+  measured_commit = "7ab55265d6ac18d14dae46630b169f4efaa4912f"
+  measured_tree = "2270096c270e4762910623c7cdd3a3d6d154679c"
 
 [summary]
-  mutation_status = "measured"
-  measured_on = "helicon"
-  mutation_score = 0.9372384937238494
-  mutants_killed = 896
-  mutants_survived = 60
-  mutants_not_covered = 60
-  mutants_in_scope = 956
+  mutation_status = "skipped"
+  measured_on = "local"
+  mutation_score = 0.0
+  mutants_killed = 0
+  mutants_survived = 0
+  mutants_not_covered = 0
+  mutants_no_block = 0
+  mutants_test_gap = 0
+  mutants_in_scope = 0
   unclassified_in_scope = 0
   criteria_total = 6
-  criteria_covered = 3
-  criteria_uncovered = 3
-
-  [[summary.leg]]
-    language = "go"
-    tool = "gremlins"
-    killed = 896
-    survived = 60
-    timeout = 0
-    in_scope = 956
-    score = 0.9372384937238494
-    file_count = 56
-    measured_on = "helicon"
+  criteria_covered = 6
+  criteria_uncovered = 0
 
 [[criterion]]
   id = "c-1"
-  status = "weak"
-  tests = ["internal/cmd/security_test.go:438:TestContainedPathIsGone", "internal/cmd/redproof_set_test.go:418:TestCheckRedProofDocDelegatesContainment", "internal/cmd/redproof_set_test.go:452:TestCheckRedProofDocKeepsItsOwnRefusals", "internal/cmd/redproof_set_test.go:492:TestCheckRedProofDocReturnsRepoRelativeSlashForm", "internal/cmd/security_test.go:472:TestRunDirSitesPassContainedThrough", "internal/cmd/pathfence_enum_test.go:339:TestNoSecondDotDotImplementation"]
-  notes = "Three of four clauses are solidly covered. containedPath is deleted (only a non-compiled .go.txt fixture retains the name) and TestCheckRedProofDocDelegatesContainment asserts on the ErrAbsolute/ErrEscapes SENTINELS, so a reworded inline reimplementation fails rather than passes. All eight run-dir sites plus redproof.go:160 and verifyscope.go:125 route through pathfence.Contain.\n\nWEAK on the clause 'no second ..-prefix test remains in non-test code'. The state is correct today — grepped every non-test .go in all 36 internal packages and cmd/, no \"..\" literal outside the scanned set — but TestNoSecondDotDotImplementation has three regression holes, verified against the source:\n  1. scannedPackages (pathfence_enum_test.go:44) covers 8 of 36 internal packages. The sibling fence packages argfence and hostallow are NOT scanned, and unlike the unwrap scan there is no per-directory vacuity guard on the literal ban.\n  2. pathMarkers (pathfence_enum_test.go:53) omits filepath.Join, path.Join, filepath.Dir and filepath.Split, so `p := filepath.Join(root, n); return !strings.HasPrefix(p, \"..\")` has no marker and the whole function is skipped. Join is the most common way to build the path, making this the most plausible escaping shape.\n  3. findPathDotDot (pathfence_enum_test.go:326) reports only lit.Value == `\"..\"`. A check written solely as HasPrefix(clean, \"../\") reports nothing. Lower severity than 1 and 2: a verbatim copy of pathfence.go:217 carries both arms and does trip the scan; only an incomplete copy escapes, and that copy is buggy on its own terms.\n"
+  status = "covered"
+  tests = ["internal/cmd/security_test.go:568:TestContainedPathIsGone", "internal/cmd/redproof_set_test.go:418:TestCheckRedProofDocDelegatesContainment", "internal/cmd/redproof_set_test.go:452:TestCheckRedProofDocKeepsItsOwnRefusals", "internal/cmd/redproof_set_test.go:494:TestCheckRedProofDocReturnsRepoRelativeSlashForm", "internal/cmd/security_test.go:604:TestRunDirSitesPassContainedThrough", "internal/cmd/pathfence_enum_test.go:325:TestNoSecondDotDotImplementation", "internal/cmd/pathfence_enum_test.go:338:TestDotDotScanTripsOnItsFixtures", "internal/cmd/pathfence_enum_test.go:374:TestDotDotScanSeesTheRealLiterals"]
+  notes = "Was weak (2026-09-09) on three holes in the no-second-..-test ban; all three are closed. (1) Package scope: exec-taint-enumeration (#134) replaced scannedPackages (8 of 36) with the shared whole-module load, and assertWalkCovers fails on any visited package with zero files and names argfence/hostallow explicitly. (2) Join/Dir/Split were not markers, so a Join-built path with a .. prefix test skipped its whole function: added to pathMarkers in quick 1.7.26.1 (7010590), must-trip fixture joinEscape. (3) Only the exact \"..\" literal was reported, so a HasPrefix(clean, \"../\")-only check escaped: \"../\" is reported too, must-trip fixture slashOnly, and two Join-carrying must-not-trip cases exercise the + rule itself. TestDotDotScanTripsOnItsFixtures now counts per function; with the old marker/literal sets it reports 3 of 6 and fails (observed 2026-10-07). TestContainedPathIsGone is still name-only, but a renamed reimplementation is now caught by the literal ban, which no longer has the gaps that made the name check carry the clause."
 
 [[criterion]]
   id = "c-2"
   status = "covered"
-  tests = ["internal/verify/scope_test.go:417:TestValidateRecordedRefusesEscape", "internal/cmd/verifyscope_test.go:255:TestPhaseScopeRefusesEscapingRecordedPath", "internal/cmd/verify_scoping_test.go:521:TestVerifyRefusesEscapingRecordedPathEndToEnd", "internal/cmd/verify_scoping_test.go:549:TestVerifyResultsRefusesEscapingRecordedPath", "internal/verify/scope_test.go:463:TestGitLaneStillDegradesOnEscape"]
-  notes = "The gate is genuinely upstream of all file I/O: verify.ValidateRecorded is the FIRST statement of phaseScope (internal/cmd/verifyscope.go:33), ahead of the first git subprocess and of NewScope; ValidateRecorded is pure and calls only pathfence.Contain, which never touches the filesystem (pinned by TestContainNeverTouchesTheFilesystem). The only stat on a scope path is pathfence.Stat at internal/cmd/verify.go:1224, reached strictly after the gate on both the attached (verify.go:83->94->98) and detached (595->599->603) chains.\n\nThe escape_failure_mode lock — hard error, not the soft 'gone' lane — is tested in BOTH directions, which is what makes this covered rather than weak: assertEscapeRefusal (verify_scoping_test.go:499) forbids \"ignored out-of-repo path\"/\"gone\"/\"skipped\" in the message, while TestGitLaneStillDegradesOnEscape pins that the git lane still soft-degrades. A blanket abort cannot satisfy both. The e2e fixture seedEscapingChanges (:476) CREATES the outside ../x.go on disk, so the gone lane cannot be what makes the test pass — it is a real must-trip, not a tautology.\n"
+  tests = ["internal/verify/scope_test.go:458:TestValidateRecordedRefusesEscape", "internal/cmd/verifyscope_test.go:350:TestPhaseScopeRefusesEscapingRecordedPath", "internal/cmd/verify_scoping_test.go:544:TestVerifyRefusesEscapingRecordedPathEndToEnd", "internal/cmd/verify_scoping_test.go:572:TestVerifyResultsRefusesEscapingRecordedPath", "internal/verify/scope_test.go:504:TestGitLaneStillDegradesOnEscape"]
+  notes = "Unchanged since 2026-09-09: ValidateRecorded is the first statement of phaseScope, ahead of any git subprocess or NewScope, and pure (only pathfence.Contain). The end-to-end test installs a stub adapter so an ungated run would succeed and write both artefacts; it asserts the refusal and that neither artefact exists, for both the attached run and the detached collect. Residual (FLAG below): the 'not dispatched' clause rests on no-artefacts-written, not on the stub's recorded files."
 
 [[criterion]]
   id = "c-3"
-  status = "weak"
-  tests = ["internal/cmd/security_test.go:472:TestRunDirSitesPassContainedThrough", "internal/cmd/security_test.go:536:TestRunDirSitesCannotUnwrap", "internal/security/findings_test.go:94:TestLoadAndSaveRequireContainedPath", "internal/quality/findings_test.go:136:TestLoadAndSaveRequireContainedPath", "internal/security/scaffold_test.go:88:TestWriteScaffoldSpecWritesIntoRunDirNotCwd", "internal/cmd/redproof_repoint_test.go:479:TestRepointRefusesAnEscapingDocAndWritesNothing"]
-  notes = "The structural guarantee is real and well guarded — the compile fences make a skipped check a build failure, TestRunDirSitesPassContainedThrough is the ONLY thing that fails if a site reverts to filepath.Join(runDir, ...) (no behavioural test can see that), and TestWriteScaffoldSpecWritesIntoRunDirNotCwd chdirs away before writing to catch a Rel()-for- String() unwrap.\n\nWEAK because the criterion as worded is unfalsifiable. All eight run-dir sites pass COMPILE-TIME STRING LITERALS as p (\"findings.toml\" x2, \"spec.toml\", \"report.md\"); verified directly. The only variable is runDir, which is the containment ROOT, and for scaffold it is args[0] (operator CLI input) while for run it is <timestamp>-<shortSHA>. No finding-derived name reaches a filename anywhere: Finding.File feeds only Fingerprint() and state.toml content, and Finding.ID/Title reach only spec CONTENT. The '../main.go' phrasing is inherited verbatim from the deleted containedPath doc comment (git show b8ad0ef^:internal/cmd/security.go:184), whose four call sites were also all literals — so the scenario was never reachable, before or after.\n\nTwo scan-side assertions are dead weight and should not be counted: assertRunDirContainment (security_test.go:303) exercises pathfence.Contain in ISOLATION with no write involved, and the filepath.Walk prefix checks in TestSecurityRunReadOnly/TestQualityRunReadOnly are vacuous — Walk cannot yield a path outside its own root.\n\nWhat keeps this weak rather than uncovered: the genuinely behavioural traversal-refusal-on- write lives on the red-proof side, TestRepointRefusesAnEscapingDocAndWritesNothing, which asserts the outside file's hash is unchanged in both dry-run and --apply. The plan maps that to c-3 via t-4/t-8.\n"
+  status = "covered"
+  tests = ["internal/cmd/security_test.go:392:TestHostileFindingNamesStayInsideRunDir", "internal/cmd/security_test.go:604:TestRunDirSitesPassContainedThrough", "internal/cmd/security_test.go:720:TestRunDirSitesCannotUnwrap", "internal/security/scaffold_test.go:88:TestWriteScaffoldSpecWritesIntoRunDirNotCwd", "internal/quality/scaffold_test.go:88:TestWriteScaffoldSpecWritesIntoRunDirNotCwd", "internal/cmd/redproof_repoint_test.go:479:TestRepointRefusesAnEscapingDocAndWritesNothing"]
+  notes = "Was weak (2026-09-09) as unfalsifiable: every run-dir site passes a literal filename, and no test drove a finding-derived name anywhere. TestHostileFindingNamesStayInsideRunDir (quick 1.7.26.1, 7010590) now does, for security and quality: a finding whose id, title and file read ../main.go goes through the real scaffold and findings-reconcile write paths, with the run dir and repo sharing a parent that holds a sentinel main.go, so the name hits the sentinel whether resolved against the run dir or the cwd. It asserts the sentinel is byte-identical, nothing outside the run dir and the tool's .dross dir is written or removed, and — against vacuity — spec.toml carries the hostile text and reconcile reports it new. Red-proven 2026-10-07: an os.WriteFile(filepath.Join(runDir, finding.File)) inserted into security scaffold fails it on the sentinel."
 
 [[criterion]]
   id = "c-4"
   status = "covered"
-  tests = ["internal/pathfence/pathfence_test.go:23:TestContainedCannotBeConstructedOutsidePackage", "internal/cmd/security_test.go:536:TestRunDirSitesCannotUnwrap", "internal/security/findings_test.go:94:TestLoadAndSaveRequireContainedPath", "internal/pathfence/pathfence_test.go:48:TestSeamRefusesZeroContained", "internal/cmd/pathfence_enum_test.go:69:TestNoUnwrappedPathReachesAnOSCall", "internal/cmd/pathfence_enum_test.go:92:TestUnwrapScanTripsOnItsFixtures", "internal/cmd/pathfence_enum_test.go:134:TestUnwrapScanSkipsTestFiles", "internal/compilefence/compilefence_test.go:49:TestPositiveControl"]
-  notes = "Best-covered criterion in the phase, and honest about where the guarantee stops. Contain is the only function returning a Contained; TestContainedCannotBeConstructedOutsidePackage runs a real go build over a temp module and requires the failure to name 'cannot refer to unexported field' rather than accepting any build error. TestRunDirSitesCannotUnwrap is the strongest of the set because it pins the BOUNDARY, not the type: inserting .String() between Contain and security.Load must fail to build.\n\nThe zero-value hole is disclosed rather than papered over — compilefence_test.go:105 asserts Contained{} MUST remain legal, and it is closed at runtime by check() at the seam (TestSeamRefusesZeroContained over ReadFile/WriteFile/Stat). So c-4's 'fails to build' is precisely true of SETTING a field, not of Contained{}, and the tests say so.\n\ncompilefence guards two false-green mechanics of its own: the temp module must sit under github.com/Rivil/dross/ or internal-package visibility would fail every build and make every negative assertion vacuous, and AssertDoesNotCompile requires an expected message so unknown-field and unexported-field failures stay distinguishable.\n\nThe residual scan flags an accessor ANYWHERE inside an os.* argument subtree (unwrapAccessor:279), so os.ReadFile(filepath.Join(c.String(), \"x\")) trips too. It is fixture-self-tested with exact finding counts, has a per-directory vacuity guard (pathfence_enum_test.go:82), and TestUnwrapScanSkipsTestFiles runs identical source under both filenames to isolate the filter. It inherits c-1's 8-of-36-package scan scope, but that matters less here: the type fence covers every package and the scan only backstops direct os.* residue.\n"
+  tests = ["internal/pathfence/pathfence_test.go:23:TestContainedCannotBeConstructedOutsidePackage", "internal/cmd/security_test.go:720:TestRunDirSitesCannotUnwrap", "internal/security/findings_test.go:94:TestLoadAndSaveRequireContainedPath", "internal/quality/findings_test.go:136:TestLoadAndSaveRequireContainedPath", "internal/pathfence/pathfence_test.go:48:TestSeamRefusesZeroContained", "internal/cmd/pathfence_enum_test.go:167:TestNoUnwrappedPathReachesAnOSCall", "internal/cmd/pathfence_enum_test.go:227:TestUnwrapScanTripsOnItsFixtures", "internal/cmd/pathfence_enum_test.go:275:TestUnwrapScanSkipsTestFiles", "internal/compilefence/compilefence_test.go:52:TestPositiveControl"]
+  notes = "Unchanged since 2026-09-09 and still the best-covered criterion: Contain is the only constructor of a Contained, TestContainedCannotBeConstructedOutsidePackage runs a real go build and requires the unexported-field failure, and the unwrap ban (now over the whole-module load with per-package floors, #134) catches a .String() reaching os.*. The containedVar name list the 2026-09-09 FLAG named in TestRunDirSitesPassContainedThrough is gone."
 
 [[criterion]]
   id = "c-5"
   status = "covered"
-  tests = ["internal/pathfence/pathfence_test.go:68:TestContainEscapeNamesPathArtifactAndRoot", "internal/verify/scope_test.go:417:TestValidateRecordedRefusesEscape", "internal/cmd/verifyscope_test.go:266:TestPhaseScopeRefusesEscapingRecordedPath", "internal/cmd/verify_scoping_test.go:503:assertEscapeRefusal"]
-  notes = "Not errors.Is theatre. Four tests assert message CONTENT as three independent strings.Contains checks over {offending path, artifact, root} — at the pathfence, verify, cmd and end-to-end layers. That shape is what lets a reworded message stay green while a message that drops a fact fails; a single full-message equality would not. Source: pathfence.go:110-113, \"%s: %q resolves outside %s: %w\".\n\nThe artifact label is meaningfully threaded at all nine live call sites (\"changes.json\", \"changes.json red_proof.doc\", \"--doc\", \"plan.toml\", \"run directory\" x2, runDirArtifact x2, \"verify scope\"), not a generic constant.\n\nScoped to the escape branch, which is what the criterion names ('the root it escaped'). See the two FLAG findings for the absolute-path branch and the double-prefix defect.\n"
+  tests = ["internal/pathfence/pathfence_test.go:68:TestContainEscapeNamesPathArtifactAndRoot", "internal/verify/scope_test.go:458:TestValidateRecordedRefusesEscape", "internal/cmd/verifyscope_test.go:350:TestPhaseScopeRefusesEscapingRecordedPath", "internal/cmd/verify_scoping_test.go:503:assertEscapeRefusal"]
+  notes = "Unchanged since 2026-09-09: the escape refusal is asserted as three independent Contains checks (offending path, artifact, root) at the pathfence, verify, cmd and end-to-end layers, so a reworded message stays green and a message that drops a fact fails. Residuals (FLAGs below): the absolute-path refusal's message content is still unasserted, and containScope still prints its artifact twice."
 
 [[criterion]]
   id = "c-6"
-  status = "weak"
-  tests = ["internal/cmd/pathfence_fields_test.go:50:TestEveryPathShapedFieldIsDeclared", "internal/cmd/pathfence_fields_test.go:82:TestWalkerFindsANonEmptySet", "internal/cmd/pathfence_fields_test.go:110:TestWalkerSelfTest", "internal/cmd/pathfence_carrier_test.go:49:TestDeclaredCarriersAreContained", "internal/cmd/pathfence_carrier_test.go:68:TestEveryConsumedCarrierIsBound", "internal/pathfence/fields_test.go:*:Validate suite"]
-  notes = "The walker is genuine, not a hand-written list: pathShapedFieldsInSrc (pathfence_fields_test.go:170) parses go/ast over real *ast.TypeSpec -> *ast.StructType declarations, and the check is two-way — an undeclared path-shaped field fails, and a stale entry naming a struct/field that no longer exists fails at :68, with a tag mismatch failing at :73. Vacuity-guarded by TestWalkerFindsANonEmptySet (fails under 10 found). Falsified live in a scratch copy: adding `Doc string `toml:\"doc\"`` to phase.Task produced 'undeclared path-shaped field phase.Task.Doc'.\n\nWEAK because c-6's claim is 'adding a path-shaped field without declaring it fails the enumerating test', and that is disproven by experiment on two axes, both hand-maintained:\n  1. TAG VOCABULARY. pathShapedTags (pathfence_fields_test.go:43) is a closed 11-word map {files, doc, path, source, tests, e2e, migrations, schemas, i18n, public, match}. Adding string fields tagged `workdir`, `output_dir` and `spec` to phase.Task — a struct in a SCANNED dir — left the full suite green.\n  2. SCAN SCOPE. schemaDirs (:35) is exactly four dirs: ../project, ../phase, ../changes, ../verify. internal/cmd, remote, testlane, security, quality and every other package are invisible, with no completeness guard on the list.\n\nLive demonstration of both: detachedRun.RunDir (internal/cmd/local.go:287, `toml:\"run_dir\"`) is a path-shaped string field in a .dross schema and is absent from pathfence.Fields(). The walker misses it twice over — wrong package AND a tag outside the vocabulary. Severity is limited because .dross/local.toml is gitignored and machine-local, so RunDir is not a repo-supplied tracked artifact and sits outside this phase's threat model; the value is also Segment-validated at mint time by remote.RunDir. But it proves the scope gap on a field that exists today.\n\nThe SECOND clause of c-6 is genuinely covered: TestDeclaredCarriersAreContained uses REAL types via reflect.TypeOf(containScope).Out(0) vs reflect.SliceOf(Contained) and reflect.TypeOf(redProofPin{}).FieldByName(\"Doc\"), so a carrier reverted to string fails on type identity, and TestEveryConsumedCarrierIsBound iterates the registry with a seen==0 vacuity guard. Residual hole: the check is per-carrier-NAME, not per-field — declaring a field Consumed with a real but unrelated carrier passes green (confirmed by experiment).\n"
+  status = "covered"
+  tests = ["internal/cmd/pathfence_fields_test.go:224:TestEveryPathShapedFieldIsDeclared", "internal/cmd/pathfence_fields_test.go:238:TestWalkerFindsANonEmptySet", "internal/cmd/pathfence_fields_test.go:274:TestWalkerSelfTest", "internal/cmd/pathfence_carrier_test.go:75:TestDeclaredCarriersAreContained", "internal/cmd/pathfence_carrier_test.go:94:TestEveryConsumedCarrierIsBound", "internal/pathfence/fields_test.go:*:Validate suite"]
+  notes = "Was weak (2026-09-09): the walker decided what was path-shaped from an 11-word tag vocabulary and four schema dirs, and three new fields under unlisted tags passed silently. exec-taint-enumeration (#134) replaced both lists: EVERY toml/json-tagged field bottoming out in a string, in every package of the shared load, must be declared in pathfence.Fields() or the not_paths.txt ledger, checked both ways (undeclared fails with the row to paste; stale fails), with a field-count floor. The disproving experiment re-run 2026-10-07: a `workdir`-tagged string field added to phase.Task fails TestEveryPathShapedFieldIsDeclared naming phase.Task.Workdir. The live example the old note cited, the detached run's RunDir, is now declared (pathfence/fields.go:291)."
 
 [[finding]]
   severity = "NOTE"
-  text = "All four BLOCKING findings raised by this verify run are RESOLVED; the verdict was amended from \"fail\" to \"partial\" on 2026-09-09 to reflect that. (1) The root blocker — `dross survivor route --target` refusing an unscaffolded roadmap phase because internal/cmd/survivor.go:167 validated the destination with os.Stat(phase.Dir(...)) — was fixed in aa2be1b. It was a locked-decision violation rather than a missing feature: validDeferredTarget already existed as the shared gate for `deferred add`, `deferred route` and `validate`, and survivor route was a fourth call site carrying its own stat. The fix swaps in that shared gate and adds a regression test plus a drift guard, both proven red against pre-fix code. (2)(3)(4) The three undispositioned survivors at internal/compilefence/compilefence.go:61, :80 and :81 were routed to mutation-range-provenance in d8e4c53, which the fixed gate now permits. They are an ordinary coverage gap, not a mutation ceiling — their coverage blocks read count=0 because AssertDoesNotCompile and AssertCompiles are exercised only from other packages' tests while compilefence_test.go calls build() directly, and gremlins scopes per-package. No measurement was re-run for this amendment: the mutation numbers above are the original helicon run r-20260907-132210 over an unchanged tree. The verdict is `partial` rather than `pass` on the criteria mapping alone — c-1, c-3 and c-6 remain weak, for the reasons recorded against each and in the hand-maintained-list FLAG below."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-1/c-4/c-6: three separate guards each rest on a HAND-MAINTAINED list — scannedPackages (8 of 36 packages), pathShapedTags (11 tags), schemaDirs (4 dirs) — plus the containedVar name list in TestRunDirSitesPassContainedThrough (security_test.go:526), where renaming a local silences the .String() arm. The phase's stated goal was containment enforced 'by the type system, not by a hand-maintained list'. The type fence delivers that; the three AST scans backstopping it reintroduce exactly the maintenance burden the spec set out to avoid. Each list is a silent-failure surface: none fails when it falls out of date, it simply stops finding things."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-5: the absolute-path refusal has no message-content test anywhere. TestContainAbsoluteIsItsOwnSentinel (pathfence_test.go:85) and TestValidateRecordedRefusesAbsolute (scope_test.go:437) assert only the ErrAbsolute sentinel. The message at pathfence.go:105-107 does carry path, artifact and root, but nothing guards it, so a reword dropping the root ships undetected — the exact failure c-5 exists to prevent, on the sibling branch."
-
-[[finding]]
-  severity = "FLAG"
-  text = "containScope double-prefixes its error: internal/cmd/verifyscope.go:125 passes artifact \"verify scope\" into pathfence.Contain, then :127 wraps it again with fmt.Errorf(\"verify scope: %w\", err), producing `verify scope: verify scope: \"...\" resolves outside ...`. User-facing and invisible to the strings.Contains-based assertions."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-2: nothing asserts the ABSENCE of a stat. 'Refused before any file I/O' is established by reading call ordering plus 'no artifacts written', not by instrumenting the filesystem — a future refactor that stat-ed inside NewScope would pass every current assertion. Relatedly, stubMutationAdapter.got records the files handed to the adapter but is never asserted empty in the refusal tests, so c-2's 'or dispatched to a mutation adapter' clause is inferred from err != nil rather than checked."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-1: TestContainedPathIsGone (security_test.go:438) is name-only — it fails on a FuncDecl literally named containedPath, so a duplicate implementation resurrected under any other name is invisible to it."
+  text = "skipped .github/actions/goreleaser/action.yml: no mutation adapter for .yml"
 
 [[finding]]
   severity = "NOTE"
-  text = "Mutation: score 0.94 over 956 in-scope mutants (killed=896, survived=60, timeout=0, errors=0), measured on helicon via detached run r-20260907-132210. All 60 survivors are NOT COVERED by construction; efficacy over the 896 reachable mutants is 1.00. A further 96 out-of-scope survivors were filtered as belonging to files this phase did not touch."
+  text = "skipped .github/actions/govulncheck/action.yml: no mutation adapter for .yml"
 
 [[finding]]
   severity = "NOTE"
-  text = "12 in-hunk survivors were accepted this run against two pre-existing categories, each proven by an observed `go test -coverprofile` run on 2026-09-07 rather than asserted. Switch-case conditions (fields.go:97,99,101,105): all four arms of Validate's disposition switch report count=1, but each coverage block begins at the column AFTER the case colon, so the condition's own columns belong to no block — gremlins-attribution-ceiling. String-concat '+' inside the package-level var fields literal (fields.go:141,142,153,163,191,192,200,208): the profile jumps straight from 119.2,119.13 to 216.42,225.2, leaving lines ~135-214 with no block at all — const-initializer-arithmetic."
+  text = "skipped .github/dependabot.yml: no mutation adapter for .yml"
 
 [[finding]]
   severity = "NOTE"
-  text = "The 3 compilefence survivors are NOT a ceiling and must not be accepted: their coverage blocks read count=0, an ordinary gap. AssertDoesNotCompile (58-67) and AssertCompiles (78-84) are exercised only from other packages' tests (pathfence, security, quality, cmd) while compilefence_test.go calls build() directly in every test, and gremlins scopes per-package. A recording testing.TB stub in compilefence_test.go would exercise both wrappers and kill all three."
+  text = "skipped .github/workflows/ci.yml: no mutation adapter for .yml"
 
 [[finding]]
   severity = "NOTE"
-  text = "Deferred at spec time and still open, both targeted at secret-detection: the raw-string reader scan (a consumer that loads a declared path field and calls os.* on the raw string, never touching Contained — needs go/types dataflow, not reachable from go/parser) and symlink-resolving containment. The lexical-only limit is documented on pathfence.Contain per the symlink_resolution lock."
+  text = "skipped .github/workflows/dependabot-automerge.yml: no mutation adapter for .yml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .github/workflows/pin-currency.yml: no mutation adapter for .yml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .github/workflows/release.yml: no mutation adapter for .yml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .goreleaser.yaml: no mutation adapter for .yaml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped ARCHITECTURE.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped Makefile: no mutation adapter for "
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/agents/dross-task-reviewer.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/commands/dross-debug.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/commands/dross-respond.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/commands/dross-watch.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/embed.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/embed_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/_interaction.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/debug.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/execute.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/init.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/milestone.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/options.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/pause.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/plan.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/quick.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/respond.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/resume.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/secure.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/ship.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/spec.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/verify.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/watch.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/coverfloor/ci_wiring_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/coverfloor/fixture_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/coverfloor/floor.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/coverfloor/floor_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/coverfloor/main.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/dross/gate_remedy_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/dross/main.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/dross/main_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/dross/surface_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/dross/testdata/cli_tree.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/pincheck/coverage_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/pincheck/main.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/pincheck/parity_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/testsummary/fixture_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/testsummary/main.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/testsummary/stream.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/testsummary/stream_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/testsummary/table.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped cmd/testsummary/table_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/dross.1: no mutation adapter for .1"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/footer-audit.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/interaction-audit.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/subagent-offload-audit.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped go.mod: no mutation adapter for .mod"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped go.sum: no mutation adapter for .sum"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/argfence/argfence_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/argfence/policy.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/backlog.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/backlog_push_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/backlog_reconcile_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/board_lifecycle_divergence_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/config_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/ctx.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/disposition.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/disposition_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/doubles_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/finalize.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/finalize_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/identity_label_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/inbound.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/inbound_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/lifecycle.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/lifecycle_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/milestone.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/milestone_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/phase.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/reap.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/reap_apply.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/reap_apply_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/reap_catchup.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/reap_catchup_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/reap_classify_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/reap_discover.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/reap_discover_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/reap_undo.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/reap_undo_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/sync_paths_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/sync_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/task.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/task_pull.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/task_pull_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/task_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/testdata/toolfence_composer/leaky_body.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/boardsync/toolfence_composer_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/changes/changes.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/changes/changes_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/action_pins_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/backfill_durability_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/basebranch.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/basebranch_chores_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/basebranch_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/board_switch_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/boundary_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/changes.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/changes_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/chorepr.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/chorepr_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/ci_concurrency_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/ci_go_test_step_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/ci_required_checks_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/cleantree.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/cli_surface_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/cmd_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/consent_shim_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/debug.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/debug_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/debug_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/defaults.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/deferred.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/deferred_absorb.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/deferred_absorb_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/deferred_add.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/deferred_add_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/deferred_board_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/deferred_store_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/deferred_target.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/dependabot_automerge_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/dependabot_config_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/directive_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/doctor.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/doctor_hooks_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/doctor_lane_toolchain_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/doctor_pins_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/doctor_protection.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/doctor_protection_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/doctor_remote_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/doctor_reviewer_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/doctor_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/dotget.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/env.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/env_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/execconsent_audit_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/execute.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/execute_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/execute_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/exempt_budget_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/forkpoint.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/friction_window_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/gate.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/gate_override_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/gate_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/git_shim_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/gitignore.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/gitignore_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/gitseparator_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/hermetic_dross_read_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/hermetic_env_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/hooks.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/hooks_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/hostile_config_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/hostpolicy_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/incompleteroot_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/init.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/init_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/install.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/install_agent_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/interaction_snippet_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_backlog_close_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_close_truth_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_quick_close_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap_apply_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap_classify_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap_cmd.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap_cmd_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap_undo_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_task.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_task_close_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_task_pull.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_task_pull_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_task_state_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_task_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_verb_shape_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/jsonout.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/lane_install.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/lane_install_spawn_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/lane_plan.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/lane_preview.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/lane_preview_locality.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/local.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/local_remote_alias_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/local_shim_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/local_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/lossless_docs_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/milestone.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/milestone_dispatch_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/milestone_merged.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/milestone_progress.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/milestone_progress_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/milestone_protected_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/milestone_stale.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/mutation_remote_wiring_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/mutationcfg_shim_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/node_version_source_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/onboard.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/options_docs_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/originpush.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/originpush_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/output_golden_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pad_residue_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pathfence_carrier_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pathfence_enum_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pathfence_fields_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pathtaint_audit_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pause.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pause_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/phase.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/phase_backfill.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/phase_backfill_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/phase_checkout.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/phase_complete_board_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/phase_finalize.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/phase_lifecycle.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/phase_reconcile.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/phase_reconcile_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pin_currency_workflow_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/plan_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pr.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pr_reply.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pr_reply_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pr_resolve.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pr_resolve_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/pr_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/profile.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/project.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/project_lossless_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/project_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/project_writer_pin_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/prompt_commit_gate_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/prompt_test_command_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/protect.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/protect_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/protected_base_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/protected_prompts_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/quality.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/quality_findings_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/quality_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/quick.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/quick_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/readme_board_finalize_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/readme_doc_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/redproof.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/redproof_lifecycle.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/redproof_lifecycle_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/redproof_replay.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/redproof_repoint.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/redproof_repoint_cmd.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/redproof_repoint_cmd_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/redproof_repoint_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/redproof_set.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/redproof_set_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/redproof_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/reentry.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/refguard_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/release_pipeline_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/remote_bootstrap.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/remote_bootstrap_cmd.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/remote_bootstrap_lane_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/remote_bootstrap_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/remote_grant.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/remote_pool.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/repair.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/repair_files.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/repair_phasedirs.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/repair_state.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/respond_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/resume_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/review.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/review_attach.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/review_attach_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/review_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/reviewer_agent.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/route_complete_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/run.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/score_surface_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/secretscan.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/secretscan_gate_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/secretscan_scope_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/secretscan_selfscan_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/secretscan_transport_enum_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/secretscan_writer_enum_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/secure_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/security.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/security_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/ship.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/ship_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/ship_recover.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/ship_stale_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/ship_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/ship_triage_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/solo_begin_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/spec_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/srccorpus_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/srcfinding_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/srcprog_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/srcscope_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/ssafixture_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/stack.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/state.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/status.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/status_debug_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/status_stale_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/status_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/statusline.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/statusline_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/subprocargs_audit_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/survivor.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/survivor_backlog_repo_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/survivor_drain.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/survivor_drain_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/survivor_lossless_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/survivor_route_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/survivor_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/switchbranch.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/switchbranch_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/taint_audit_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/taint_engine_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/taint_flow_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/taint_gitdirect_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/taint_gitplumbing_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/taint_marker_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/taint_scanners_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/taint_schedule_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/taint_ship_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/taint_stryker_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/taint_toolstreams_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/taint_usercmds_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/task.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/task_lifecycle_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/task_lossless_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/task_reason_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/task_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/techdebt.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/techdebt_selfscan_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/techdebt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/telemetry.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/test_full_lanes_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/test_green_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/test_lane.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/test_lane_install.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/test_remote_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/test_wait_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/doctor.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/doctor_run.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/issue.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/changes_show_json.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/defaults_show.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/defaults_show_json.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/deferred_list_json.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/milestone_show.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/milestone_show_json.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/profile_show.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/profile_show_json.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/project_get_multi.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/project_show.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/project_show_json.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/reentry.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/ship_json.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/stack_loadout.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/stack_show.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/stack_show_json.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/state_get_multi.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/state_show.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/task_list_json.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/task_show_json.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/verify_scope_json.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/output/watch_json.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/tests_before.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/trust.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/cli_surface/verify.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/exec_consent/dispatch.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/exec_consent/unresolved.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/pad_residue/fixture.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/pathfence_scan/dotdot_path.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/pathfence_scan/dotdot_revrange.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/pathfence_scan/not_paths.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/pathfence_scan/rundir_revert.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/pathfence_scan/seam_ok.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/pathfence_scan/task_experiment.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/pathfence_scan/unwrap_os.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/pathfence_scan/unwrap_renamed.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/pathtaint/contained_ok.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/pathtaint/one_violation.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/pathtaint/raw_os.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/secretscan/leaky_transport.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/secretscan/unregistered_writer.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/ssa_fixture/badimport.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/ssa_fixture/helper.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/ssa_fixture/root.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/ssa_fixture/typeerror.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/ssa_fixture/want_mismatch.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/subprocargs_audit/snippets.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/taint/channels_field.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/taint/channels_return.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/taint/channels_writer.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/taint/gitread.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/taint/markers.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/taint/one_violation.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/taint/sinks.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/taint/sources.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/taint/stale_diff.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/taint/stryker_prephase.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/toolfence/undeclared_sink.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/toolfence/writer_ok.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/toolfence/writer_raw.go.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/toolchain_source_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/toolfence_carrier_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/toolfence_enum_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/topology.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/trust.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/trust_lane_install_cmd_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/trust_lane_install_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/trust_lane_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/trust_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/update.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/update_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/validate.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/validate_absorb_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/validate_triage_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verdict_fresh.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verify.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verify_detach_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verify_detach_tree_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verify_lock_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verify_measured_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verify_notcovered_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verify_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verify_range_e2e_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verify_results_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verify_reuse_report_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verify_scoping_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verify_status_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verify_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verifyscope.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/verifyscope_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/watch.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/watch_prompt_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/watch_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/workflow_run_expressions_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/worktree_files.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/codex/ast_grep.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/codex/git.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/compilefence/compilefence.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/compilefence/compilefence_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/consent/consent.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/consent/consent_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/consent/lane.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/consent/lane_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/consent/store.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/consent/store_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/debugsession/close.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/debugsession/close_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/debugsession/parse.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/debugsession/parse_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/debugsession/store.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/debugsession/store_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/deferred/deferred.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/deferred/deferred_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/diag/combinations.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/diag/diag.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/diag/diag_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/diag/redproof.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/diag/redproof_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/diag/roadmap.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/diag/toolchain.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/diag/toolchain_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/diag/trust.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/diag/trust_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/forge/forge.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/forge/forge_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/forge/github.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/forge/hostallow_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/forge/hostile_config_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/forge/identity_label_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/forge/jira.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/forge/secretscan_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/forge/youtrack.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/forge/youtrack_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/commit.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/commit_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/downgrade_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/drossfiles.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/drossfiles_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/engine.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/engine_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/fixture_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/lists.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/override.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/override_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/pair.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/pair_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/payload.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/reply_confirm.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/reply_confirm_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/review.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/review_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/scope.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/scope_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/secrets.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/secrets_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/selfguard.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/selfguard_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/soloreview.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/soloreview_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/testdata/agent_background_post.json: no mutation adapter for .json"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/testdata/agent_default_async_post.json: no mutation adapter for .json"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/testdata/agent_reviewer_bg_launch_post.json: no mutation adapter for .json"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/testdata/agent_reviewer_post.json: no mutation adapter for .json"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/testdata/askuserquestion_post.json: no mutation adapter for .json"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gate/testdata/reviewer_subagent_stop.json: no mutation adapter for .json"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gatestate/store.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gatestate/store_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gitrun/gitrun.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/gitrun/gitrun_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/hooks/settings.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/hooks/settings_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/localstore/detached_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/localstore/readers_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/localstore/store.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/localstore/store_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/milestone/milestone.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/milestone/milestone_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/adapter.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/adapter_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/argv_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/astspan.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/ceiling_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/construct.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/construct_e2e_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/construct_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/gremlins.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/gremlins_failure_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/gremlins_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/inapplicable.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/launcher.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/launcher_lock_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/launcher_scratch_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/launcher_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/range_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/remote_env_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/remote_failure_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/restore_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/reuse_report_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/scratch_space_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/stryker.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/stryker_failure_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/stryker_net.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/stryker_net_failure_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/stryker_net_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/stryker_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/testdata/ts-project/.node-version: no mutation adapter for .node-version"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/testdata/ts-project/package-lock.json: no mutation adapter for .json"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/testdata/ts-project/package.json: no mutation adapter for .json"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/testdata/ts-project/src/long.test.ts: no mutation adapter for .ts"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/testdata/ts-project/src/long.ts: no mutation adapter for .ts"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/toolfail.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/toolfail_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/toolfence_residual_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/ts_fixture_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutationcfg/mutationcfg.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutationcfg/mutationcfg_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutationcfg/toolchain.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutationcfg/toolchain_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pathfence/fields.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pathfence/fields_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pathfence/pathfence.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pathfence/pathfence_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/phase/done.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/phase/done_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/phase/phase.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/phase/phase_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/phase/plan_edit.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/phase/plan_edit_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/phase/plan_lossless_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pincheck/bump.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pincheck/bump_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pincheck/check.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pincheck/check_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pincheck/classify.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pincheck/classify_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pincheck/sites.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pincheck/sites_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pincheck/upstream.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/pincheck/upstream_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/export_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/patch.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/patch_diff.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/patch_diff_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/patch_keyed_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/patch_save.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/patch_save_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/patch_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/patch_value.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/plan_verify_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/project.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/project_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/release.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/release_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/remote.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/remote_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/save_lossless_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/project/testdata/lossless.toml: no mutation adapter for .toml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/protect/assess.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/protect/assess_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/protect/ruleset.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/protect/ruleset_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/protect/workflows.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/protect/workflows_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/evidence.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/evidence_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/fence.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/fence_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/items.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/items_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/record.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/record_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/refload.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/refload_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/reply.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/reply_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/split.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/prtriage/split_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/quality/findings.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/quality/findings_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/quality/lifecycle.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/quality/run.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/quality/run_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/quality/scaffold.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/quality/scaffold_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/remote/hold.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/remote/hold_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/remote/lock.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/remote/lock_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/remote/remote.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/remote/remote_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/render/render.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/render/render_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/review/agentdef_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/review/context.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/review/context_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/review/ledger.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/review/ledger_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/review/verdict.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/review/verdict_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretpath/secretpath.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretpath/secretpath_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretscan/export_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretscan/payload.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretscan/prefilter_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretscan/redact.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretscan/redact_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretscan/rules.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretscan/secretscan.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretscan/secretscan_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretscan/sinks.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretscan/sinks_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretscan/writers.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/secretscan/writers_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/security/findings.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/security/findings_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/security/gitleaks.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/security/gitleaks_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/security/lifecycle.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/security/recon.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/security/recon_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/security/run.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/security/run_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/security/scaffold.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/security/scaffold_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/shellscan/scan.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/shellscan/scan_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/automerge.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/automerge_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/basepr.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/bitbucket.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/bitbucket_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/body.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/body_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/comment.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/comment_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/forgejo.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/forgejo_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/gh_failure_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/gitlab.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/gitlab_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/headpr.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/headpr_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/merged.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/open.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/openprs.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/openprs_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/prcomments.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/prcomments_bitbucket.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/prcomments_bitbucket_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/prcomments_forgejo.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/prcomments_forgejo_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/prcomments_gitlab.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/prcomments_gitlab_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/prcomments_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/rulesets.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/rulesets_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/ship/secretscan_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/detect.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/detect_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/runtime.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/statusline/settings.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/statusline/settings_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/survivor/drain.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/survivor/drain_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/survivor/evidence.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/survivor/identity.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/survivor/identity_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/survivor/stale.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/survivor/stale_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/survivor/store.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/survivor/store_lossless_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/techdebt/filter.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/techdebt/filter_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/techdebt/run.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/techdebt/run_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/techdebt/scan.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/techdebt/scan_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/testlane/match.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/testlane/match_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/testlane/spawn.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/testlane/spawn_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/toolfence/fields.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/toolfence/fields_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/treefp/treefp.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/treefp/treefp_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/update/apply.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/update/apply_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/detach.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/detach_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/freshness.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/freshness_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/legerror_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/notcovered_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/persist_toolfence_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/range_dispatch_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/range_expand.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/range_expand_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/range_provenance.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/range_provenance_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/range_record_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/range_summary_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/scope.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/scope_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/verify.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/verify/verify_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/watch/drift_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/watch/prs.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/watch/prs_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped scripts/pin-bump-pr.sh: no mutation adapter for .sh"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/board_lifecycle_divergence_test.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/deferred_store.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap_apply.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap_discover.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap_discover_test.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/issue_reap_undo.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/local_detached_test.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/phasedone.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/task_lifecycle.go: file no longer exists in the working tree"
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation scope is degraded (source: git+changes) — phase already merged: diffing recorded fork point c71c6ae..HEAD, which may include sibling work merged since"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-5: the absolute-path refusal has no message-content test. TestContainAbsoluteIsItsOwnSentinel (internal/pathfence/pathfence_test.go:85) and TestValidateRecordedRefusesAbsolute (internal/verify/scope_test.go:478) assert only the ErrAbsolute sentinel; the message at internal/pathfence/pathfence.go:107 carries path, artifact and root, but a reword dropping the root ships undetected. Open since 2026-09-09 (deferred to secret-detection, which re-deferred it to someday)."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-5: containScope double-prefixes its error: internal/cmd/verifyscope.go:196 passes artifact \"verify scope\" into pathfence.Contain, then :198 wraps it again with fmt.Errorf(\"verify scope: %w\", err), so the user reads `verify scope: verify scope: \"...\" resolves outside ...`. Invisible to the strings.Contains assertions. Open since 2026-09-09 (deferred, someday)."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-2: the 'not dispatched to a mutation adapter' clause is inferred, not asserted. TestVerifyRefusesEscapingRecordedPathEndToEnd (internal/cmd/verify_scoping_test.go:544) asserts the refusal and that no artefact was written, but never that the stub adapter's recorded files (stubMutationAdapter.got) are empty, and nothing instruments the absence of a stat — a refactor that stat-ed or dispatched before refusing would pass. Open since 2026-09-09 (deferred, someday)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Re-verify 2026-10-07 with --skip-mutation, to re-map criteria after the weaknesses were closed; the verdict rests on criterion coverage alone. The phase's measured run (r-20260907-132210, helicon) scored 0.94 over 956 in-scope mutants (896 killed, 60 survived, all NOT COVERED by construction; efficacy 1.00 over the reachable 896) with 0 unclassified — that measurement predates later phases' edits to these files and is not re-run here."
+
+[[finding]]
+  severity = "NOTE"
+  text = "All three weak criteria from 2026-09-09 are now covered: c-1 hole 1 and c-6 by exec-taint-enumeration (#134, whole-module load and full tagged-field enumeration), c-1 holes 2-3 and c-3 by quick 1.7.26.1 (7010590, #163). Each was re-checked by experiment on 2026-10-07: the old scanner fails the new fixture test (3 of 6 reported), an escaping write in security scaffold fails the c-3 test, and an undeclared `workdir` field on phase.Task fails the c-6 enumeration."
