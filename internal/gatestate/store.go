@@ -342,7 +342,7 @@ func saveBytes(root, name string, b []byte) error {
 		return err
 	}
 	dst := Path(root, name)
-	tmp, err := os.CreateTemp(filepath.Dir(dst), "."+name+".*.tmp")
+	tmp, err := os.CreateTemp(filepath.Dir(dst), "."+filepath.Base(dst)+".*.tmp")
 	if err != nil {
 		return fmt.Errorf("write %s: %w", rel(name), err)
 	}
