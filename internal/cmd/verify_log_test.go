@@ -240,4 +240,3 @@ func TestVerifyExitCodesWithLogs(t *testing.T) {
 		}
 	})
 }
-
