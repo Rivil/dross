@@ -66,6 +66,7 @@
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10",
     "test-lane-config": "DRO-191",
+    "test-output-summaries": "DRO-963",
     "tool-gate-hooks": "DRO-787",
     "tool-output-not-persisted": "DRO-378",
     "tracked-path-containment": "DRO-355",

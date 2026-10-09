@@ -21,7 +21,7 @@
 
 [[criteria]]
   id = "c-5"
-  text = "`dross verify` mutation legs (gremlins, stryker, stryker-net; local or remote, attached or collected from a detached run) print per-package counts (killed / survived / not covered / timed out), the score and each survivor's file:line. The full tool stream goes to the log file, and no per-mutant lines reach the conversation."
+  text = "`dross verify` mutation legs (gremlins, stryker, stryker-net; local or remote, attached or collected from a detached run) print per-package counts (killed / survived / not covered / timed out), the score and each survivor's file:line. The full tool stream goes to the log file, and no per-mutant lines reach the conversation. `dross survivor drain` runs route their tool stream to a log file the same way and print its path."
 
 [[criteria]]
   id = "c-6"
