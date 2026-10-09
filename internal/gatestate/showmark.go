@@ -3,6 +3,7 @@ package gatestate
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -70,6 +71,25 @@ func BumpContext(root, sessionID string) error {
 		return err
 	}
 	return showWrite(root, nudgeKey(sessionID)+showSeenExt, nil)
+}
+
+// BumpForHook reads a SessionStart hook payload and bumps the context for the
+// session it names. Decoded key by key, like gate.Decode: the shape is Claude
+// Code's, and a key this version does not know costs nothing. A payload that
+// is not a JSON object naming a session_id is an error the hook swallows.
+func BumpForHook(root string, payload []byte) error {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &top); err != nil {
+		return fmt.Errorf("unparseable SessionStart payload: %w", err)
+	}
+	var sid string
+	if raw, ok := top["session_id"]; ok {
+		_ = json.Unmarshal(raw, &sid)
+	}
+	if sid == "" {
+		return errors.New("SessionStart payload names no session_id")
+	}
+	return BumpContext(root, sid)
 }
 
 // ShownCurrent reports whether sessionID's last full print of kind is still in

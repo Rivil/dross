@@ -190,3 +190,22 @@ func TestShownCurrentReadOnly(t *testing.T) {
 		t.Fatalf("ShownCurrent created .dross/ (stat err = %v)", err)
 	}
 }
+
+func TestBumpForHook(t *testing.T) {
+	root := t.TempDir()
+	for _, bad := range []string{"not json", `["a"]`, `{"source":"clear"}`, `{"session_id":7}`} {
+		if err := BumpForHook(root, []byte(bad)); err == nil {
+			t.Errorf("BumpForHook(%q) accepted a payload naming no session", bad)
+		}
+	}
+	if _, err := os.Stat(showPath(root)); !os.IsNotExist(err) {
+		t.Fatalf("a rejected payload wrote show records (stat err = %v)", err)
+	}
+	if err := BumpForHook(root, []byte(`{"session_id":"s","source":"compact","extra":{"k":1}}`)); err != nil {
+		t.Fatal(err)
+	}
+	record(t, root, "s", ShowRules, "h")
+	if !ShownCurrent(root, "s", ShowRules, "h") {
+		t.Fatal("the payload's session was not marked seen")
+	}
+}

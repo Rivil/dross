@@ -2,10 +2,15 @@ package cmd
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Rivil/dross/assets"
+	"github.com/Rivil/dross/internal/gatestate"
 )
 
 func TestReentryNoopOutsideRepo(t *testing.T) {
@@ -256,6 +261,186 @@ func TestReentryLineTerminalRegionMatchesStatus(t *testing.T) {
 			want := decodeReentry(t, reentryOut)
 			if last != want {
 				t.Errorf("status's last line != reentry envelope line:\nstatus last: %q\nreentry:     %q", last, want)
+			}
+		})
+	}
+}
+
+// reentryWith runs `dross reentry` with payload on stdin, the hook's way,
+// and returns its stdout.
+func reentryWith(t *testing.T, stdin io.Reader) string {
+	t.Helper()
+	orig := reentryStdinIsTTY
+	t.Cleanup(func() { reentryStdinIsTTY = orig })
+	reentryStdinIsTTY = func() bool { return false }
+	return captureStdout(t, func() {
+		c := Reentry()
+		c.SetIn(stdin)
+		c.SetArgs(nil)
+		if err := c.Execute(); err != nil {
+			t.Fatalf("reentry: %v", err)
+		}
+	})
+}
+
+func payload(sid, source string) io.Reader {
+	return strings.NewReader(`{"session_id":"` + sid + `","hook_event_name":"SessionStart","source":"` + source + `"}`)
+}
+
+// showEpoch is the repo's current show epoch, "" when none.
+func showEpoch(t *testing.T, repo string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(repo, ".dross", "gate", gatestate.ShowDir, "epoch"))
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func TestClearThenShowPrintsFull(t *testing.T) {
+	showRepoFixture(t)
+	ruleShowOut(t)
+	if out := ruleShowOut(t); out != RulesUnchanged+"\n" {
+		t.Fatalf("the repeat before /clear printed %q, want the marker", out)
+	}
+	// /clear hands the hook a NEW session id while the environment still
+	// carries the old one.
+	reentryWith(t, payload("after-clear", "clear"))
+	if out := ruleShowOut(t); !strings.Contains(out, "<rules>") {
+		t.Fatalf("after /clear the show printed %q, want the full block", out)
+	}
+}
+
+func TestCompactThenShowPrintsFull(t *testing.T) {
+	showRepoFixture(t)
+	ruleShowOut(t)
+	interactionShowOut(t)
+	reentryWith(t, payload("s", "compact"))
+	if out := ruleShowOut(t); !strings.Contains(out, "<rules>") {
+		t.Fatalf("after compaction rule show printed %q, want the full block", out)
+	}
+	if out := interactionShowOut(t); out != assets.InteractionPlaybook {
+		t.Fatalf("after compaction interaction show printed %q, want the playbook", out[:min(len(out), 80)])
+	}
+}
+
+func TestReentryBumpsEverySource(t *testing.T) {
+	dir := showRepoFixture(t)
+	for _, source := range []string{"startup", "resume", "clear", "compact"} {
+		before := showEpoch(t, dir)
+		sid := "sid-" + source
+		reentryWith(t, payload(sid, source))
+		if after := showEpoch(t, dir); after == "" || after == before {
+			t.Errorf("source %s left the epoch at %q", source, after)
+		}
+		if err := gatestate.RecordShown(dir, sid, gatestate.ShowRules, "h"); err != nil {
+			t.Fatal(err)
+		}
+		if !gatestate.ShownCurrent(dir, sid, gatestate.ShowRules, "h") {
+			t.Errorf("source %s did not mark %s seen", source, sid)
+		}
+	}
+}
+
+// readCounter records whether stdin was read at all.
+type readCounter struct{ reads int }
+
+func (r *readCounter) Read([]byte) (int, error) { r.reads++; return 0, io.EOF }
+
+func TestReentryOpenPipeReturns(t *testing.T) {
+	dir := showRepoFixture(t)
+	want := captureStdout(t, func() {
+		if err := runCmd(t, Reentry()); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if err := os.RemoveAll(filepath.Join(dir, ".dross", "gate", gatestate.ShowDir)); err != nil {
+		t.Fatal(err)
+	}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	defer w.Close() // never written, closed only after the hook returned
+	start := time.Now()
+	got := reentryWith(t, r)
+	if d := time.Since(start); d >= 500*time.Millisecond {
+		t.Fatalf("reentry with a stdin that never closes took %s, want < 500ms", d)
+	}
+	if got != want {
+		t.Fatalf("the envelope moved:\n got %s\nwant %s", got, want)
+	}
+	if showEpoch(t, dir) != "" {
+		t.Fatal("a payload that never arrived bumped the epoch")
+	}
+
+	// A terminal on stdin is a human, not a hook: it is not read at all.
+	orig := reentryStdinIsTTY
+	t.Cleanup(func() { reentryStdinIsTTY = orig })
+	reentryStdinIsTTY = func() bool { return true }
+	rc := &readCounter{}
+	captureStdout(t, func() {
+		c := Reentry()
+		c.SetIn(rc)
+		c.SetArgs(nil)
+		if err := c.Execute(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if rc.reads != 0 {
+		t.Fatalf("a terminal stdin was read %d times", rc.reads)
+	}
+}
+
+// TestReentryGoldenWithPayload: the envelope is byte-identical to the pinned
+// golden when the hook hands it a payload.
+func TestReentryGoldenWithPayload(t *testing.T) {
+	pkgDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	norm := outputFixture(t)
+	out := reentryWith(t, payload("golden", "startup"))
+	checkOutputGolden(t, pkgDir, "reentry", norm(out))
+}
+
+func TestReentryBadPayload(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		stdin func() io.Reader
+		setup func(t *testing.T, dir string)
+	}{
+		{"not json", func() io.Reader { return strings.NewReader("not json at all") }, nil},
+		{"10 MiB", func() io.Reader {
+			return strings.NewReader(`{"session_id":"big","pad":"` + strings.Repeat("x", 10<<20) + `"}`)
+		}, nil},
+		{"unwritable gate", func() io.Reader { return payload("s2", "startup") }, func(t *testing.T, dir string) {
+			gate := filepath.Join(dir, ".dross", "gate")
+			if err := os.RemoveAll(gate); err != nil {
+				t.Fatal(err)
+			}
+			mustWrite(t, gate, "not a directory\n")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := showRepoFixture(t)
+			if err := os.RemoveAll(filepath.Join(dir, ".dross", "gate", gatestate.ShowDir)); err != nil {
+				t.Fatal(err)
+			}
+			want := captureStdout(t, func() {
+				if err := runCmd(t, Reentry()); err != nil {
+					t.Fatal(err)
+				}
+			})
+			if tc.setup != nil {
+				tc.setup(t, dir)
+			}
+			if got := reentryWith(t, tc.stdin()); got != want {
+				t.Fatalf("the envelope moved:\n got %s\nwant %s", got, want)
+			}
+			if showEpoch(t, dir) != "" {
+				t.Fatal("a bad payload bumped the epoch")
 			}
 		})
 	}
