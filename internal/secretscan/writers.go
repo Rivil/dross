@@ -174,6 +174,10 @@ const GateIgnoreSeed = "gatestate.ensureDir (.dross/gate/.gitignore)"
 // first session.
 const DebugIgnoreSeed = "debugsession.Create (.dross/debug/.gitignore)"
 
+// RunlogIgnoreSeed is the self-ignoring .dross/logs/.gitignore that a run log
+// writes before its own file on the first Write.
+const RunlogIgnoreSeed = "runlog.Log.Write (.dross/logs/.gitignore)"
+
 // userSettings is the Claude user-level settings file several writers merge
 // into.
 const userSettings = "~/.claude/settings.json"
@@ -233,6 +237,10 @@ var writers = []Writer{
 	{File: "internal/debugsession/store.go", MachineLocal: &MachineLocal{
 		Path: "debug/<name>.md", Also: []string{"debug/.gitignore"}, IgnoreSeed: DebugIgnoreSeed,
 		Why: "/dross-debug sessions quote captured output, which must never reach a published artifact (locked session_tracking)",
+	}},
+	{File: "internal/runlog/runlog.go", MachineLocal: &MachineLocal{
+		Path: "logs/<name>.log", Also: []string{"logs/.gitignore"}, IgnoreSeed: RunlogIgnoreSeed,
+		Why: "full output of `dross test` runs and mutation legs; an unignored log would count as a tree change and stale verify and the green record (locked log_location)",
 	}},
 
 	// ---- OutsideDross: not a .dross artifact ------------------------------
