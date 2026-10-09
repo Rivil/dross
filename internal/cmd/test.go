@@ -462,7 +462,7 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 	// The tools go with it: the union of every runnable lane's toolchain,
 	// deduped, asked as part of THIS probe. Two lanes needing `go` cost one
 	// `command -v`, and no lane opens a connection of its own.
-	_, pool, err := resolveTestTarget(root, repoDir, local, laneToolUnion(runnableLanes(matched)))
+	_, pool, err := resolveTestTarget(tr, root, repoDir, local, laneToolUnion(runnableLanes(matched)))
 	if err != nil {
 		return err
 	}
@@ -607,6 +607,7 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 				// where every prepare failed would report as having measured
 				// nothing rather than as the bootstrap failure it is.
 				worst = worseOutcome(worst, err)
+				tr.laneDone(err)
 				continue
 			}
 		}
@@ -614,11 +615,13 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 		sites.add(laneTarget)
 		err := runOneLane(tr, laneTarget, repoDir, pl.lane, pl.Line)
 		if code, miss := selectorMissCode(err, pl.lane.EmptyExit); miss {
+			tr.dropLane()
 			tr.say("selector miss: lane %q collected no tests for %s (exit %d)\n",
 				pl.lane.Name, strings.Join(pl.Selector, " "), code)
 			misses++
 			continue
 		}
+		tr.laneDone(err)
 		worst = worseOutcome(worst, err)
 	}
 
@@ -693,13 +696,13 @@ func laneField(name string) string {
 // against and the string a refusal names (locked selector_consent).
 func runOneLane(tr *testRun, target *remote.Target, repoDir string, lane project.TestLane, line string) error {
 	if target == nil {
-		tr.header(line)
+		tr.spawn(line, false)
 		if err := spawnLocal(repoDir, line, tr.out, tr.out); err != nil {
 			return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test lane %q failed: %w", lane.Name, err)}
 		}
 		return nil
 	}
-	if err := runRemoteLine(tr, *target, line); err != nil {
+	if err := runRemoteLine(tr, *target, line, false); err != nil {
 		return err
 	}
 	return nil
@@ -717,13 +720,13 @@ func runOneLane(tr *testRun, target *remote.Target, repoDir string, lane project
 // answers by going to look for a bug in code that never ran.
 func runLanePrepare(tr *testRun, target *remote.Target, repoDir string, lane project.TestLane) error {
 	if target == nil {
-		tr.header(lane.Prepare)
+		tr.spawn(lane.Prepare, true)
 		if err := spawnLocal(repoDir, lane.Prepare, tr.out, tr.out); err != nil {
 			return prepareFailure(lane, err)
 		}
 		return nil
 	}
-	if err := runRemoteLine(tr, *target, lane.Prepare); err != nil {
+	if err := runRemoteLine(tr, *target, lane.Prepare, true); err != nil {
 		// Only a command-exit failure is re-tagged. An unreachable host and an
 		// incomplete transfer are facts about the run rather than about the
 		// prepare, and a transport failure relabelled as a bootstrap failure
@@ -809,7 +812,7 @@ func testTarget(root, repoDir string, local bool) ([]*remote.Target, error) {
 // on this machine, which is the routing c-1 removes. It is empty whenever the
 // target is nil: a host that was never reached told us nothing about its
 // toolchain, and an empty Missing must never be read as "it has everything".
-func resolveTestTarget(root, repoDir string, local bool, tools []string) (*remote.Target, remotePool, error) {
+func resolveTestTarget(tr *testRun, root, repoDir string, local bool, tools []string) (*remote.Target, remotePool, error) {
 	targets, err := testTarget(root, repoDir, local)
 	if err != nil {
 		return nil, remotePool{}, err
@@ -837,7 +840,7 @@ func resolveTestTarget(root, repoDir string, local bool, tools []string) (*remot
 		// This is the TRANSPORT half of the c-5 split, and it keeps its wording
 		// unchanged: the whole run comes home, once, and no lane prints a
 		// toolchain line for a host that never answered.
-		Printf("remote: %s\n", pool.Why)
+		tr.say("remote: %s\n", pool.Why)
 		return nil, remotePool{}, nil
 	}
 	return chosen, pool, nil
@@ -848,13 +851,13 @@ func runTest(tr *testRun, root, repoDir, projectName, line string, local bool, w
 	// nil tools: a whole-suite run has no lanes to derive a toolchain from, so
 	// the probe asks exactly what it asked before this feature existed and the
 	// lane-less transcript is unchanged.
-	target, _, err := resolveTestTarget(root, repoDir, local, nil)
+	target, _, err := resolveTestTarget(tr, root, repoDir, local, nil)
 	if err != nil {
 		return err
 	}
 	sites.add(target)
 	if target == nil {
-		tr.header(line)
+		tr.spawn(line, false)
 		if err := spawnLocal(repoDir, line, tr.out, tr.out); err != nil {
 			return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test suite failed: %w", err)}
 		}
@@ -891,7 +894,7 @@ func runTestRemotely(tr *testRun, root, repoDir, projectName string, t remote.Ta
 	if err := syncTreeTo(tr, t, repoDir); err != nil {
 		return err
 	}
-	return runRemoteLine(tr, t, line)
+	return runRemoteLine(tr, t, line, false)
 }
 
 // defaultTestWait is how long `dross test` waits for a host a mutation leg
@@ -1014,7 +1017,7 @@ func syncTreeTo(tr *testRun, t remote.Target, repoDir string) error {
 	// The exclude list is a temp file rsync reads; it must outlive the spawn
 	// and not outlive this call.
 	defer cleanup()
-	tr.header(strings.Join(sync, " "))
+	tr.spawn(strings.Join(sync, " "), true)
 	if err := spawnRemote(sync, "", tr.out, tr.out); err != nil {
 		return remoteFailure("rsync", t.Host, err)
 	}
@@ -1057,7 +1060,7 @@ func stateWord(r localstore.DetachedRun) string {
 }
 
 // runRemoteLine runs one command line on the already-synced target.
-func runRemoteLine(tr *testRun, t remote.Target, line string) error {
+func runRemoteLine(tr *testRun, t remote.Target, line string, aux bool) error {
 	ssh, err := remote.SSHArgs(t)
 	if err != nil {
 		return err
@@ -1068,7 +1071,7 @@ func runRemoteLine(tr *testRun, t remote.Target, line string) error {
 	if err != nil {
 		return err
 	}
-	tr.header(line + "  (on " + t.Host + ")")
+	tr.spawn(line+"  (on "+t.Host+")", aux)
 	if err := spawnRemote(ssh, script, tr.out, tr.out); err != nil {
 		return remoteFailure("ssh", t.Host, err)
 	}
