@@ -60,7 +60,7 @@ func TestFailedLegReachesDiskClean(t *testing.T) {
 	for _, want := range []string{
 		fmt.Sprintf("exit status %d", exit),
 		fmt.Sprintf("%d bytes of tool output observed", observed),
-		"went to this run's stderr",
+		mutation.StderrPointer,
 	} {
 		if !strings.Contains(testsRaw, want) {
 			t.Errorf("%s does not record %q:\n%s", TestsFile, want, testsRaw)
