@@ -14,6 +14,7 @@ import (
 
 	"github.com/Rivil/dross/internal/argfence"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/runlog"
 )
 
 // StrykerNet adapter for C# / .NET mutation testing via stryker-mutator/stryker-net.
@@ -54,7 +55,15 @@ type StrykerNet struct {
 	// at a scratch copy and the scratch is wiped when the run ends; empty leaves
 	// the run exactly as it was.
 	CacheVars []string
+
+	// stream receives the tool's output; nil sends it to stderr, as before
+	// run logs existed.
+	stream *runlog.Log
 }
+
+// SetStream routes the tool's stream to l (nil: back to stderr). The bounded
+// failure head stays on stderr either way.
+func (s *StrykerNet) SetStream(l *runlog.Log) { s.stream = l }
 
 // strykerNetRoot picks out the one top-level field ParseStrykerJSON ignores.
 //
@@ -152,7 +161,11 @@ func (s *StrykerNet) Run(files []string) (*Report, error) {
 	// retained a prefix, so a failure could say nothing about what the tool
 	// printed.
 	head := &headBuffer{limit: strykerHeadBytes}
-	sink := io.MultiWriter(os.Stderr, head)
+	var out io.Writer = os.Stderr
+	if s.stream != nil {
+		out = s.stream
+	}
+	sink := io.MultiWriter(out, head)
 	cmd.Stdout = sink
 	cmd.Stderr = sink
 	// Retained past the branch: the exit status is what tells a reportless run
@@ -167,7 +180,7 @@ func (s *StrykerNet) Run(files []string) (*Report, error) {
 			head.printHead(os.Stderr, "stryker.net", strykerHeadLines)
 			fmt.Fprintln(os.Stderr)
 			return nil, fmt.Errorf("stryker.net invocation failed: %w (is stryker-net installed? `dotnet tool install -g dotnet-stryker`)",
-				RecordToolFailure("stryker.net", exitDidNotStart, Observed(head.observed())).wrapping(err))
+				RecordToolFailure("stryker.net", exitDidNotStart, Observed(head.observed())).toLog(s.stream != nil).wrapping(err))
 		}
 		exitStatus = exitErr.ExitCode()
 	}
@@ -194,7 +207,7 @@ func (s *StrykerNet) Run(files []string) (*Report, error) {
 		head.printHead(os.Stderr, "stryker.net", strykerHeadLines)
 		fmt.Fprintln(os.Stderr)
 		return nil, fmt.Errorf("stryker.net wrote no mutation-report.json under %s: %w", outDir,
-			RecordToolFailure("stryker.net", exitStatus, Observed(head.observed())))
+			RecordToolFailure("stryker.net", exitStatus, Observed(head.observed())).toLog(s.stream != nil))
 	}
 	b, err := os.ReadFile(reportPath)
 	if err != nil {
