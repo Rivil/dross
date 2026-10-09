@@ -1536,6 +1536,9 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 		m := lr.Mutation
 		Printf("  %s (%s): %d files — killed=%d survived=%d (not_covered=%d) timeout=%d errors=%d score=%.2f\n",
 			lr.Name, lr.Tool, len(lr.Files), m.Killed, m.Survived, m.NotCovered, m.Timeout, m.Errors, m.Score)
+		for _, l := range verify.LegLines(lr) {
+			Print(l)
+		}
 		// No per-leg efficacy. It used to drop every NOT COVERED mutant from its
 		// denominator, count-0 test gaps included, and printed 1.00 beside
 		// printOverallScore's split. That split is the only efficacy figure.

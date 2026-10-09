@@ -779,7 +779,7 @@ func adapterLanguage(name string) string {
 	switch name {
 	case "stryker":
 		return "typescript"
-	case "stryker.net":
+	case "stryker-net":
 		return "csharp"
 	case "gremlins":
 		return "go"
