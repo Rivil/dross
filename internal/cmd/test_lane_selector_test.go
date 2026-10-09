@@ -107,13 +107,18 @@ func TestSelectorHeaderStillPrecedesLaneOutput(t *testing.T) {
 	if err := runCmdCapturing(t, &out, Test(), "--files", "internal/cmd/test.go"); err != nil {
 		t.Fatal(err)
 	}
-	header := strings.Index(out, "lane go: "+spawned)
-	sentinel := strings.Index(out, "LANE-OUTPUT-SENTINEL")
-	if header < 0 {
-		t.Fatalf("no derived-line header in the transcript:\n%s", out)
+	if !strings.Contains(out, "lane go: "+spawned) {
+		t.Fatalf("no derived-line header on stdout:\n%s", out)
+	}
+	// The lane's output lives in the run log; the order is read there.
+	log := onlyLog(t)
+	header := strings.Index(log, "lane go: "+spawned)
+	sentinel := strings.Index(log, "LANE-OUTPUT-SENTINEL")
+	if header < 0 || sentinel < 0 {
+		t.Fatalf("the run log lacks the derived-line header or the lane output:\n%s", log)
 	}
 	if header >= sentinel {
-		t.Errorf("the header trails the lane's output:\n%s", out)
+		t.Errorf("the header trails the lane's output:\n%s", log)
 	}
 }
 

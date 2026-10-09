@@ -239,8 +239,10 @@ func Test() *cobra.Command {
 			"A repo with no lanes ignores it and runs the whole suite, unchanged.\n\n" +
 			"In a repo with lanes but no runtime.test_command, a bare `dross test` runs\n" +
 			"every lane's own command, unscoped — that repo's whole suite.\n\n" +
-			"Output streams as it arrives and the exit status reports the suite, not\n" +
-			"the runner.",
+			"Every run's full output goes to a log under .dross/logs/, whose path is\n" +
+			"printed before the first spawn and again at the end. On a terminal the\n" +
+			"output also arrives live; anywhere else a summary prints at the end. The\n" +
+			"exit status reports the suite, not the runner.",
 		SilenceUsage: true,
 		// Stated explicitly because this command has a subcommand now.
 		// cobra's default arg policy refuses any positional on a command with
@@ -267,6 +269,9 @@ func Test() *cobra.Command {
 				return err
 			}
 			repoDir := filepath.Dir(root)
+			// Opened here, written lazily: nothing reaches disk until the first
+			// spawn's header, so every refusal below leaves no log behind.
+			tr := openTestRun(repoDir)
 			// Lanes are opt-in, and this is where that is enforced (locked
 			// bare_test_run): with none declared, --files changes nothing and
 			// the command runs runtime.test_command exactly as it always did.
@@ -285,7 +290,9 @@ func Test() *cobra.Command {
 				return err
 			}
 			if len(files) > 0 && len(proj.Runtime.TestLane) > 0 {
-				return runTestLanes(root, repoDir, proj, files, local, wait)
+				err := runTestLanes(tr, root, repoDir, proj, files, local, wait)
+				tr.finish(err)
+				return err
 			}
 			// A lanes-only repo has no runtime.test_command for a bare run to
 			// run, so its bare run is every declared lane, unscoped (locked
@@ -294,7 +301,8 @@ func Test() *cobra.Command {
 			// (locked bare_test_run): it already is the whole suite.
 			if len(files) == 0 && len(args) == 0 && strings.TrimSpace(proj.Runtime.TestCommand) == "" && len(proj.Runtime.TestLane) > 0 {
 				green := startGreen(repoDir, true)
-				err := runPlannedLanes(root, repoDir, proj, fullLanePlan(proj), local, wait, green.sites)
+				err := runPlannedLanes(tr, root, repoDir, proj, fullLanePlan(proj), local, wait, green.sites)
+				tr.finish(err)
 				green.finish(err)
 				return err
 			}
@@ -308,7 +316,8 @@ func Test() *cobra.Command {
 			// is the whole suite too. Only those runs vouch for a tree.
 			green := startGreen(repoDir, len(args) == 0)
 			line := testCommandLine(proj.Runtime.TestCommand, args)
-			err = runTest(root, repoDir, proj.Project.Name, line, local, wait, green.sites)
+			err = runTest(tr, root, repoDir, proj.Project.Name, line, local, wait, green.sites)
+			tr.finish(err)
 			green.finish(err)
 			return err
 		},
@@ -353,7 +362,7 @@ func refuseFilesWithSelector(files, args []string) error {
 // finding on the plan becomes an exit status here and a printed line there,
 // from the same facts, which is the only arrangement in which the two cannot
 // disagree about what would run.
-func runTestLanes(root, repoDir string, proj *project.Project, files []string, local bool, wait time.Duration) error {
+func runTestLanes(tr *testRun, root, repoDir string, proj *project.Project, files []string, local bool, wait time.Duration) error {
 	plan := lanePlan(repoDir, proj, files)
 
 	// Checked FIRST, and it poisons the whole set. Resolving the in-tree half
@@ -385,15 +394,15 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	// in the full suite, but the README must not vanish from the transcript
 	// either, or the run silently covers less than the caller listed.
 	if len(plan.Unmatched) > 0 {
-		Printf("no lane matches: %s\n", strings.Join(plan.Unmatched, " "))
+		tr.say("no lane matches: %s\n", strings.Join(plan.Unmatched, " "))
 	}
-	return runPlannedLanes(root, repoDir, proj, plan.Lanes, local, wait, nil)
+	return runPlannedLanes(tr, root, repoDir, proj, plan.Lanes, local, wait, nil)
 }
 
 // runPlannedLanes runs a set of planned lanes — the ones a --files set hit, or
 // every lane unscoped for a lanes-only repo's bare run — each through its own
 // grant, prepare, toolchain and locality path, and reports the worst outcome.
-func runPlannedLanes(root, repoDir string, proj *project.Project, lanes []plannedLane, local bool, wait time.Duration, sites ranOn) error {
+func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, lanes []plannedLane, local bool, wait time.Duration, sites ranOn) error {
 	// The fence ran inside the planner, over every lane, before any line was
 	// derived. Its verdicts are read here in declaration order and the first
 	// one refuses the whole run — which is exactly the property an in-loop
@@ -424,7 +433,7 @@ func runPlannedLanes(root, repoDir string, proj *project.Project, lanes []planne
 			// lose it whenever another lane goes red and outranks it, and a
 			// consent problem the user never sees is one they never fix.
 			refusal := consent.LaneRefusal(pl.lane, state, cerr)
-			Printf("%v\n\n", refusal)
+			tr.say("%v\n\n", refusal)
 			worst = worseOutcome(worst, &ExitCodeError{Code: exitLaneRefused, Err: refusal})
 			continue
 		}
@@ -473,7 +482,7 @@ func runPlannedLanes(root, repoDir string, proj *project.Project, lanes []planne
 	// single-host run, and two such runs' numbers are not comparable — the
 	// hosts differ in cores and toolchain versions (c-4).
 	if line := splitRunLine(runnable, verdicts); line != "" {
-		Printf("remote: %s\n", line)
+		tr.say("remote: %s\n", line)
 	}
 
 	// One target per host, looked up by the name the verdict carries. The map
@@ -510,7 +519,7 @@ func runPlannedLanes(root, repoDir string, proj *project.Project, lanes []planne
 		if h != nil {
 			holds = append(holds, h)
 		}
-		if err := syncTreeTo(target, repoDir); err != nil {
+		if err := syncTreeTo(tr, target, repoDir); err != nil {
 			return err
 		}
 	}
@@ -533,12 +542,12 @@ func runPlannedLanes(root, repoDir string, proj *project.Project, lanes []planne
 			// NOT counted as a miss — a miss folds into exitNothingMeasured,
 			// which ranks last, so a lane that could not run anywhere would sink
 			// below the red it must outrank.
-			Printf("%v\n\n", verdicts[i].Err)
+			tr.say("%v\n\n", verdicts[i].Err)
 			worst = worseOutcome(worst, verdicts[i].Err)
 			continue
 		}
 		if verdicts[i].Announce != "" {
-			Printf("%s\n", verdicts[i].Announce)
+			tr.say("%s\n", verdicts[i].Announce)
 		}
 		// nil is "here". Per lane, not per run: in one invocation a lane whose
 		// tools one host has goes over ssh to THAT host while its neighbour
@@ -554,7 +563,7 @@ func runPlannedLanes(root, repoDir string, proj *project.Project, lanes []planne
 			// to (locked missing_paths). It does not spawn: `go test
 			// ./gone/...` is a hard runner error, which would read as a
 			// failing gate for code the task deliberately removed.
-			Printf("selector miss: lane %q — every path matching it is gone, so its %s selector scoped to nothing\n",
+			tr.say("selector miss: lane %q — every path matching it is gone, so its %s selector scoped to nothing\n",
 				pl.lane.Name, pl.lane.Selector)
 			misses++
 			continue
@@ -577,7 +586,7 @@ func runPlannedLanes(root, repoDir string, proj *project.Project, lanes []planne
 		// the no-op the user promised, while a dedup cache would make a lane's
 		// spawn set depend on which neighbours happened to match.
 		if pl.lane.Prepare != "" {
-			Printf("lane %s prepare: %s\n", pl.lane.Name, pl.lane.Prepare)
+			tr.say("lane %s prepare: %s\n", pl.lane.Name, pl.lane.Prepare)
 			// Spawned through the same seams as the command, so it lands on
 			// the same host and the same transport as the command it precedes
 			// (locked prepare_locality). A lane that bootstrapped only on the
@@ -587,7 +596,7 @@ func runPlannedLanes(root, repoDir string, proj *project.Project, lanes []planne
 			// No selector is appended: the derived paths scope the suite, and
 			// a bootstrap handed this file set's paths would be a different
 			// command on every run.
-			if err := runLanePrepare(laneTarget, repoDir, pl.lane); err != nil {
+			if err := runLanePrepare(tr, laneTarget, repoDir, pl.lane); err != nil {
 				// The lane's own command does NOT run. A bootstrap that failed
 				// measured nothing about the code, and running the suite
 				// anyway would report the consequence as a verdict.
@@ -601,11 +610,11 @@ func runPlannedLanes(root, repoDir string, proj *project.Project, lanes []planne
 				continue
 			}
 		}
-		Printf("lane %s: %s\n", pl.lane.Name, pl.Line)
+		tr.say("lane %s: %s\n", pl.lane.Name, pl.Line)
 		sites.add(laneTarget)
-		err := runOneLane(laneTarget, repoDir, pl.lane, pl.Line)
+		err := runOneLane(tr, laneTarget, repoDir, pl.lane, pl.Line)
 		if code, miss := selectorMissCode(err, pl.lane.EmptyExit); miss {
-			Printf("selector miss: lane %q collected no tests for %s (exit %d)\n",
+			tr.say("selector miss: lane %q collected no tests for %s (exit %d)\n",
 				pl.lane.Name, strings.Join(pl.Selector, " "), code)
 			misses++
 			continue
@@ -682,14 +691,15 @@ func laneField(name string) string {
 // shell-quoted — never a rewrite of the command itself. The consent
 // fingerprint covers lane.Command, which is the string the grant was issued
 // against and the string a refusal names (locked selector_consent).
-func runOneLane(target *remote.Target, repoDir string, lane project.TestLane, line string) error {
+func runOneLane(tr *testRun, target *remote.Target, repoDir string, lane project.TestLane, line string) error {
 	if target == nil {
-		if err := spawnLocal(repoDir, line, os.Stdout, os.Stderr); err != nil {
+		tr.header(line)
+		if err := spawnLocal(repoDir, line, tr.out, tr.out); err != nil {
 			return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test lane %q failed: %w", lane.Name, err)}
 		}
 		return nil
 	}
-	if err := runRemoteLine(*target, line); err != nil {
+	if err := runRemoteLine(tr, *target, line); err != nil {
 		return err
 	}
 	return nil
@@ -705,14 +715,15 @@ func runOneLane(target *remote.Target, repoDir string, lane project.TestLane, li
 // back non-zero. Left alone, a prepare that failed would exit 1 on both — the
 // exact collision the exit taxonomy exists to prevent, and the one a caller
 // answers by going to look for a bug in code that never ran.
-func runLanePrepare(target *remote.Target, repoDir string, lane project.TestLane) error {
+func runLanePrepare(tr *testRun, target *remote.Target, repoDir string, lane project.TestLane) error {
 	if target == nil {
-		if err := spawnLocal(repoDir, lane.Prepare, os.Stdout, os.Stderr); err != nil {
+		tr.header(lane.Prepare)
+		if err := spawnLocal(repoDir, lane.Prepare, tr.out, tr.out); err != nil {
 			return prepareFailure(lane, err)
 		}
 		return nil
 	}
-	if err := runRemoteLine(*target, lane.Prepare); err != nil {
+	if err := runRemoteLine(tr, *target, lane.Prepare); err != nil {
 		// Only a command-exit failure is re-tagged. An unreachable host and an
 		// incomplete transfer are facts about the run rather than about the
 		// prepare, and a transport failure relabelled as a bootstrap failure
@@ -833,7 +844,7 @@ func resolveTestTarget(root, repoDir string, local bool, tools []string) (*remot
 }
 
 // runTest executes one test run, here or on the granted host.
-func runTest(root, repoDir, projectName, line string, local bool, wait time.Duration, sites ranOn) error {
+func runTest(tr *testRun, root, repoDir, projectName, line string, local bool, wait time.Duration, sites ranOn) error {
 	// nil tools: a whole-suite run has no lanes to derive a toolchain from, so
 	// the probe asks exactly what it asked before this feature existed and the
 	// lane-less transcript is unchanged.
@@ -843,12 +854,13 @@ func runTest(root, repoDir, projectName, line string, local bool, wait time.Dura
 	}
 	sites.add(target)
 	if target == nil {
-		if err := spawnLocal(repoDir, line, os.Stdout, os.Stderr); err != nil {
+		tr.header(line)
+		if err := spawnLocal(repoDir, line, tr.out, tr.out); err != nil {
 			return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test suite failed: %w", err)}
 		}
 		return nil
 	}
-	return runTestRemotely(root, repoDir, projectName, *target, line, wait)
+	return runTestRemotely(tr, root, repoDir, projectName, *target, line, wait)
 }
 
 // runTestRemotely pushes the tree, then runs the suite over ssh.
@@ -864,7 +876,7 @@ func runTest(root, repoDir, projectName, line string, local bool, wait time.Dura
 //
 // The host lock comes first — before the sync, because the sync is already
 // work on the host — and is released after the suite, whatever it returned.
-func runTestRemotely(root, repoDir, projectName string, t remote.Target, line string, wait time.Duration) error {
+func runTestRemotely(tr *testRun, root, repoDir, projectName string, t remote.Target, line string, wait time.Duration) error {
 	h, err := holdHostForSuite(root, repoDir, projectName, t, wait)
 	if err != nil {
 		return err
@@ -876,10 +888,10 @@ func runTestRemotely(root, repoDir, projectName string, t remote.Target, line st
 			}
 		}()
 	}
-	if err := syncTreeTo(t, repoDir); err != nil {
+	if err := syncTreeTo(tr, t, repoDir); err != nil {
 		return err
 	}
-	return runRemoteLine(t, line)
+	return runRemoteLine(tr, t, line)
 }
 
 // defaultTestWait is how long `dross test` waits for a host a mutation leg
@@ -987,7 +999,7 @@ func alongsideLine(host string, wait time.Duration, other remote.Holder) string 
 // syncTreeTo pushes the working tree to the target. The argv builder validates
 // the target and returns an error INSTEAD of an argv, so an unsafe host never
 // reaches a shell.
-func syncTreeTo(t remote.Target, repoDir string) error {
+func syncTreeTo(tr *testRun, t remote.Target, repoDir string) error {
 	root, err := filepath.Abs(repoDir)
 	if err != nil {
 		return err
@@ -1002,7 +1014,8 @@ func syncTreeTo(t remote.Target, repoDir string) error {
 	// The exclude list is a temp file rsync reads; it must outlive the spawn
 	// and not outlive this call.
 	defer cleanup()
-	if err := spawnRemote(sync, "", os.Stdout, os.Stderr); err != nil {
+	tr.header(strings.Join(sync, " "))
+	if err := spawnRemote(sync, "", tr.out, tr.out); err != nil {
 		return remoteFailure("rsync", t.Host, err)
 	}
 	return nil
@@ -1044,7 +1057,7 @@ func stateWord(r localstore.DetachedRun) string {
 }
 
 // runRemoteLine runs one command line on the already-synced target.
-func runRemoteLine(t remote.Target, line string) error {
+func runRemoteLine(tr *testRun, t remote.Target, line string) error {
 	ssh, err := remote.SSHArgs(t)
 	if err != nil {
 		return err
@@ -1055,7 +1068,8 @@ func runRemoteLine(t remote.Target, line string) error {
 	if err != nil {
 		return err
 	}
-	if err := spawnRemote(ssh, script, os.Stdout, os.Stderr); err != nil {
+	tr.header(line + "  (on " + t.Host + ")")
+	if err := spawnRemote(ssh, script, tr.out, tr.out); err != nil {
 		return remoteFailure("ssh", t.Host, err)
 	}
 	return nil
