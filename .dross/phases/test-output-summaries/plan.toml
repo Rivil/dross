@@ -1,4 +1,4 @@
-task_seq = 17
+task_seq = 18
 
 [phase]
   id = "test-output-summaries"
@@ -17,144 +17,78 @@ verify_leg_bytes and rule_show_repeat_bytes as `dross … >f 2>&1; wc -c <f`. Th
 over the transcript (the context-boundaries method, structural only). Write [scenario] and [before] to flow-cost-before.toml — never
 flow-cost.toml, which TestFlowCostRecords globs and fails without an [after] leg."""
   covers = ["c-8"]
-  test_contract = [
-    "if the half record is globbed, TestFlowCostRecords fails on every later commit gate: after t-1 no phases/test-output-summaries/flow-cost.toml exists, and the phases/*/flow-cost.toml glob (flowcost_record_test.go) does not match flow-cost-before.toml",
-    "if before ran on a rebuilt or stale binary, t-16's TestFlowCostRecords fails: before.binary_version is the base-commit build's and must differ from after.binary_version",
-    "if a field is missing, t-16's merge fails TestFlowCostRecords: [scenario] carries repo_shape, wave_position, flow_start, flow_end and jq_method; [before] has agent_turns > 0, len(turn_tools) == agent_turns, non-empty dross_calls and every *_bytes > 0",
-  ]
+  test_contract = ["if the half record is globbed, TestFlowCostRecords fails on every later commit gate: after t-1 no phases/test-output-summaries/flow-cost.toml exists, and the phases/*/flow-cost.toml glob (flowcost_record_test.go) does not match flow-cost-before.toml", "if before ran on a rebuilt or stale binary, t-16's TestFlowCostRecords fails: before.binary_version is the base-commit build's and must differ from after.binary_version", "if a field is missing, t-16's merge fails TestFlowCostRecords: [scenario] carries repo_shape, wave_position, flow_start, flow_end and jq_method; [before] has agent_turns > 0, wall_clock_s > 0, non-empty session_id and binary_version, len(turn_tools) == agent_turns, non-empty dross_calls and every *_bytes > 0"]
   status = "pending"
 
 [[task]]
   id = "t-2"
   wave = 1
-  title = "Add run-log sink, TTY seam, taint terminal class"
-  files = ["internal/runlog/runlog.go", "internal/runlog/runlog_test.go", "internal/cmd/taint_engine_test.go", ".dross/phases/exec-taint-enumeration/spec.toml"]
-  description = """
-Open(root, Name{Kind test|verify, Phase, Leg}) returns a *Log created lazily on the first Write. Before the file exists, write or
-rewrite .dross/logs/.gitignore to `*`; refuse a .gitignore that is not a regular file. Names test-<ts>.log / verify-<phase>-<leg>-<ts>.log,
-ts in UTC to the nanosecond, O_EXCL plus a -N suffix on collision; Phase and Leg pass pathfence.Segment. Prune `^(test|verify)-.*[.]log$`
-to the newest 20 by mtime, never the file just created, ENOENT ignored. Write is mutex-guarded and always returns (len(p), nil); Err()
-reports the first failure (io.MultiWriter would otherwise stop the child's pipe copy). Path() is absolute and "" until the first write.
-StdoutIsTerminal over golang.org/x/term, with a seam, for t-10/t-12/t-17. Taint policy (D1): the concrete runlog.Log file sink joins
-the exec-taint engine's terminal set — one named type, never a generic io.Writer — and exec-taint-enumeration's terminal_definition
-decision gains a why naming it. No //dross:taint-cleared marker anywhere."""
+  title = "Add run-log sink and TTY seam"
+  files = ["internal/runlog/runlog.go", "internal/runlog/runlog_test.go", "internal/secretscan/writers.go", "internal/cmd/secretscan_writer_enum_test.go"]
+  description = "Open(root, Name{Kind test|verify, Phase, Leg}, Options{Terminal runlog.Stdout|runlog.Stderr, Echo bool}) returns a *Log created lazily on the first Write. Before the file exists, write or\nrewrite .dross/logs/.gitignore to `*`; refuse a .gitignore that is not a regular file. Names test-<ts>.log / verify-<phase>-<leg>-<ts>.log,\nts in UTC to the nanosecond, O_EXCL plus a -N suffix on collision; Phase and Leg pass pathfence.Segment. Prune `^(test|verify)-.*[.]log$`\nto the newest 20 by mtime, never the file just created, ENOENT ignored. Write is mutex-guarded and always returns (len(p), nil); Err()\nreports the first failure (io.MultiWriter would otherwise stop the child's pipe copy). Path() is absolute and \"\" until the first write.\nThe one shared sink for t-10/t-12/t-17 (not three copies): with Echo set (a TTY) every byte also goes to the chosen terminal; if\nthe log can't be opened, bytes go to that terminal with one warning. Terminal is an enum, never an io.Writer, so nothing can be\nlaundered through the sink. StdoutIsTerminal over golang.org/x/term, with a seam. Declared in secretscan/writers.go as MachineLocal\nunder a new RunlogIgnoreSeed, with a seed preparer in the enum test (debugsession's DebugIgnoreSeed is the precedent). The taint\nterminal class is t-18's."
   covers = ["c-1", "c-5"]
-  test_contract = [
-    "if logs dirty the tree, TestLogDirIgnored fails: in a git temp repo with .dross/ tracked, Open+Write leaves `git status --porcelain -uall` empty and `git check-ignore -q` matches the log",
-    "if an edited ignore file is trusted, TestLogDirIgnored fails: a pre-existing .dross/logs/.gitignore holding `foo` is rewritten to `*` before the log exists",
-    "if a non-file ignore is accepted, TestGitignoreDirRefused fails: a .gitignore that is a directory makes the first Write's Err() non-nil",
-    "if the log precedes its ignore file, TestIgnoreBeforeLog fails: the create-order seam records .gitignore before the log",
-    "if an unwritten log leaves debris, TestUnwrittenLogCreatesNothing fails: Open + Close with no Write leaves no .dross/logs/",
-    "if same-instant runs clobber, TestSameInstantDistinctFiles fails: two Opens under a frozen clock seam yield two distinct paths, each holding only its own bytes",
-    "if pruning is wrong, TestPruneNewest20 fails: 25 mixed test-/verify- logs with distinct mtimes plus .gitignore and notes.txt → after one Open+Write the 20 newest by mtime survive (including the new one, and an old-named log whose mtime is newest), .gitignore and notes.txt remain, and a log deleted mid-prune (ENOENT) is not an error",
-    "if a log error can kill the child, TestWriteNeverFails fails: with the file seam failing after 1 KiB, every Write returns (len(p), nil) and Err() names the first failure",
-    "if a name escapes, TestNameStaysInDir fails: Phase \"../../etc\" or Leg \"go/x\" is refused or yields a separator-free base name inside .dross/logs/",
-    "if logs cross the wire, TestLogsOffTheWire fails: after a log is written in a git temp repo, the exclude list remote.SyncArgs builds (from `ls-files --others --ignored`) excludes /.dross/logs/",
-    "if writes race, `go test -race` TestConcurrentWrites fails: 8 goroutines × 1,000 writes → no race, and file length == bytes written",
-    "if TTY detection inverts, TestPipeIsNotTerminal fails: with an os.Pipe swapped into os.Stdout, StdoutIsTerminal() is false",
-    "if the runlog terminal class is missing, TestRunlogSinkIsTerminal fails: a synthetic program writing a spawn's Cmd.Stdout stream through a runlog.Log yields no exec-taint finding",
-    "if the terminal class widens, TestRunlogSinkIsTerminal fails: the same stream written to a plain *os.File, a bytes.Buffer, or a generic io.Writer parameter is still reported as an escape",
-  ]
+  test_contract = ["if logs dirty the tree, TestLogDirIgnored fails: in a git temp repo with .dross/ tracked, Open+Write leaves `git status --porcelain -uall` empty and `git check-ignore -q` matches the log", "if an edited ignore file is trusted, TestLogDirIgnored fails: a pre-existing .dross/logs/.gitignore holding `foo` is rewritten to `*` before the log exists", "if a non-file ignore is accepted, TestGitignoreDirRefused fails: a .gitignore that is a directory makes the first Write's Err() non-nil", "if the log precedes its ignore file, TestIgnoreBeforeLog fails: the create-order seam records .gitignore before the log", "if an unwritten log leaves debris, TestUnwrittenLogCreatesNothing fails: Open + Close with no Write leaves no .dross/logs/", "if same-instant runs clobber, TestSameInstantDistinctFiles fails: two Opens under a frozen clock seam yield two distinct paths, each holding only its own bytes", "if pruning is wrong, TestPruneNewest20 fails: 25 mixed test-/verify- logs with distinct mtimes plus .gitignore and notes.txt → after one Open+Write the 20 newest by mtime survive (including the new one, and an old-named log whose mtime is newest), .gitignore and notes.txt remain, and a log deleted mid-prune (ENOENT) is not an error", "if a log error can kill the child, TestWriteNeverFails fails: with the file seam failing after 1 KiB, every Write returns (len(p), nil) and Err() names the first failure", "if a name escapes, TestNameStaysInDir fails: Phase \"../../etc\" or Leg \"go/x\" is refused or yields a separator-free base name inside .dross/logs/", "if logs cross the wire, TestLogsOffTheWire fails: after a log is written in a git temp repo, the exclude list remote.SyncArgs builds (from `ls-files --others --ignored`) excludes /.dross/logs/", "if writes race, `go test -race` TestConcurrentWrites fails: 8 goroutines × 1,000 writes → no race, and file length == bytes written", "if TTY detection inverts, TestPipeIsNotTerminal fails: with an os.Pipe swapped into os.Stdout, StdoutIsTerminal() is false", "if the sink is triplicated or the echo is lost, TestEchoTeesTerminal fails: Open with Terminal=Stderr and echo on → every byte reaches both the log and the stderr seam; echo off → only the log", "if a broken log dir drops output, TestUnavailableLogFallsBack fails: with .dross/logs a regular file, Writes reach the chosen terminal seam, exactly one warning is printed across 3 writes, and Err() is non-nil", "if the sink can launder, TestTerminalIsAnEnum fails: Options.Terminal is runlog.Stdout or runlog.Stderr, and neither Options nor Log has an io.Writer field a caller can set", "if the writer is undeclared, TestEveryDrossWriterIsDeclared and TestMachineLocalWritersAreReallyIgnored (existing) fail: runlog.go's O_CREATE|O_EXCL open and its .gitignore write are declared MachineLocal under RunlogIgnoreSeed, and the enum test's seeds map prepares that seed"]
   status = "pending"
+
+[[task]]
+  id = "t-18"
+  wave = 2
+  title = "Add runlog terminal class to taint gate"
+  files = ["internal/cmd/taint_engine_test.go", ".dross/phases/exec-taint-enumeration/spec.toml"]
+  description = "Taint policy (D1): values of type *runlog.Log (parameter, field or local) join the exec-taint engine's terminal set by type: one\nnamed type, never a generic io.Writer. Safe because a runlog.Log's only outputs are its gitignored file and a terminal chosen by\nenum (t-2). Amend exec-taint-enumeration's terminal_definition: the choice names *runlog.Log, and the why gains 'Amended 2026-10-09\nby test-output-summaries: …'. No //dross:taint-cleared marker anywhere. Its own commit, so the gate policy change is reviewable and\nrevertable apart from the runlog package."
+  covers = ["c-1", "c-5"]
+  test_contract = ["if the runlog terminal class is missing, TestRunlogSinkIsTerminal fails: a synthetic program writing a spawn's Cmd.Stdout stream through a runlog.Log yields no exec-taint finding", "if a setter breaks the class, TestRunlogSinkIsTerminal fails: a struct field of type *runlog.Log set only through a SetStream(*runlog.Log) parameter, then teed with io.MultiWriter(field, head), yields no finding", "if the terminal class widens, TestRunlogSinkIsTerminal fails: the same stream written to a plain *os.File, a bytes.Buffer, or a generic io.Writer parameter is still reported as an escape", "if the live gate breaks, TestNoSpawnOutputEscapes and TestLiveTreeHasNoUnresolvedDispatch (existing) fail with the class added"]
+  status = "pending"
+  depends_on = ["t-2"]
 
 [[task]]
   id = "t-3"
   wave = 1
   title = "Add bounded summary core and renderer"
   files = ["internal/runsummary/summary.go", "internal/runsummary/render.go", "internal/runsummary/summary_test.go"]
-  description = """
-A streaming line splitter that cuts lines at 64 KiB (no ErrTooLong stop) and strips CR and ANSI SGR. A Parser interface
-(Claims/Feed/Result) with an init()-registered list, a 40-line tail ring and a per-run Budget. Render(outcome{exit, ran}, results,
-budget, logPath, wall) prints green only when exit == 0, a parser claimed the output and failures == 0; otherwise red (counts and
-failures, failure_bound: 30 lines per failure, first 10 in full, then '+N more failing — see <log>') or the fallback (exit status,
-last 40 lines, log path). Printed lines are cut at 240 chars. The '+N more failing — see' prefix is an exported constant t-15 quotes."""
+  description = "A streaming line splitter that cuts lines at 64 KiB (no ErrTooLong stop) and strips CR and ANSI SGR. A Parser interface\n(Claims/Feed/Result) with an init()-registered list, a 40-line tail ring and a per-run Budget. Render(outcome{exit, ran}, results,\nbudget, logPath, wall) prints green only when exit == 0, a parser claimed the output and failures == 0; otherwise red (counts and\nfailures, failure_bound: first 10 failures as blocks, then '+N more failing — see <log>'). A block is the failure's name line, up to 30 output\nlines or ~2,800 bytes of them, whichever comes first, then '… N more lines — see <log>' when cut; the name and marker lines sit\noutside the 30, so 10 blocks always fit the ~30,000-char Bash window) or the fallback (exit status,\nlast 40 lines, log path). Printed lines are cut at 240 chars. The '+N more failing — see' prefix is an exported constant t-15 quotes."
   covers = ["c-2", "c-3", "c-4"]
-  test_contract = [
-    "if a non-zero exit can read green, TestNonZeroNeverGreen fails: a fake parser reporting 12 ok / 0 failures with exit 1 renders the fallback (exit 1, last 40 lines, log path) and no green line",
-    "if a run that didn't happen shows counts, TestRunDidNotHappenNeverCounts fails: exit 3 and exit 4 over output that parses green print the exit status and the tail, never counts",
-    "if unparseable output is mishandled, TestUnparseableFallback fails: 100 unclaimed lines at exit 2 → an `exit 2` line, lines 61-100 verbatim (line 60 absent) and the log path; at exit 0 the same shape and no counts",
-    "if the bound slips, TestFailureBound fails: 14 failures × 50 lines → 10 blocks of 30 lines, each ending `… 20 more lines — see <log>`, then exactly `+4 more failing — see <log>`",
-    "if a mass break overflows the Bash window, TestMassBreakSize fails: 500 failures × 100 lines of 2,000 chars render ≤ 320 lines and ≤ 30,000 bytes",
-    "if a long line stops parsing, TestLongLineKeepsParsing fails: a 10 MiB line with no newline, then `SENTINEL` → the fake parser still receives SENTINEL",
-    "if memory is unbounded, TestBoundedRetention fails: 2,000,000 fed lines retain ≤ 1 MiB (Retained()), and the tail ring holds exactly the last 40",
-    "if colour or CRLF breaks matching, TestStripsANSIAndCR fails: an SGR-red `FAIL` line ending in CRLF reaches Feed as exactly \"FAIL\"",
-    "if dross guesses between runners, TestAmbiguousClaimFallsBack fails: two fake parsers both claiming one segment → fallback render",
-    "if the budget isn't shared, TestBudgetSpansSegments fails: two segments × 8 failures through one Budget → 10 full blocks in total, then `+6 more failing`",
-    "if green is chatty, TestGreenIsShort fails: a fake 60-package green over 72s → ≤ 3 lines (counts, \"1m12s\", log path) and no package name",
-  ]
+  test_contract = ["if a non-zero exit can read green, TestNonZeroNeverGreen fails: a fake parser reporting 12 ok / 0 failures with exit 1 renders the fallback (exit 1, last 40 lines, log path) and no green line", "if a run that didn't happen shows counts, TestRunDidNotHappenNeverCounts fails: exit 3 and exit 4 over output that parses green print the exit status and the tail, never counts", "if unparseable output is mishandled, TestUnparseableFallback fails: 100 unclaimed lines at exit 2 → an `exit 2` line, lines 61-100 verbatim (line 60 absent) and the log path; at exit 0 the same shape and no counts", "if the bound slips, TestFailureBound fails: 14 failures × 50 lines of 40 chars → 10 blocks, each a name line + 30 output lines + `… 20 more lines — see <log>`, then exactly `+4 more failing — see <log>`", "if a mass break overflows the Bash window, TestMassBreakSize fails: 500 failures × 100 lines of 2,000 chars render exactly 10 failure blocks, ≤ 330 lines and ≤ 30,000 bytes", "if long lines starve the window, TestBlockByteShare fails: a failure of 30 lines × 240 chars prints its name line, the whole lines that fit in 2,800 bytes, then `… N more lines — see <log>` with N counting the rest; a failure of 30 lines × 60 chars prints all 30", "if a long line stops parsing, TestLongLineKeepsParsing fails: a 10 MiB line with no newline, then `SENTINEL` → the fake parser still receives SENTINEL", "if memory is unbounded, TestBoundedRetention fails: 2,000,000 fed lines retain ≤ 1 MiB (Retained()), and the tail ring holds exactly the last 40", "if colour or CRLF breaks matching, TestStripsANSIAndCR fails: an SGR-red `FAIL` line ending in CRLF reaches Feed as exactly \"FAIL\"", "if dross guesses between runners, TestAmbiguousClaimFallsBack fails: two fake parsers both claiming one segment → fallback render", "if the budget isn't shared, TestBudgetSpansSegments fails: two segments × 8 failures through one Budget → 10 full blocks in total, then `+6 more failing`", "if green is chatty, TestGreenIsShort fails: a fake 60-package green over 72s → ≤ 3 lines (counts, \"1m12s\", log path) and no package name"]
   status = "pending"
 
 [[task]]
   id = "t-4"
   wave = 1
   title = "Add show-marker store; make cmd tests session-hermetic"
-  files = ["internal/gatestate/showmark.go", "internal/gatestate/showmark_test.go", "internal/cmd/hermetic_env_test.go"]
-  description = """
-Under .dross/gate/show/ (already self-ignored by gatestate's ensureDir), BumpContext(root, sid) replaces a repo-wide epoch nonce and
-marks sid as seen. ShownCurrent(root, sid, kind, sha) is read-only and true only when sid is non-empty, sid is seen, and sid's kind
-record holds {current epoch, sha}. RecordShown writes that record by atomic rename. Session keys are hashed the way nudgeKey hashes
-them. Records and seen-marks older than 7 days are pruned on write, inside show/ only. The hermetic TestMain also unsets
-CLAUDE_CODE_SESSION_ID and CLAUDE_CODE_CHILD_SESSION (today it clears only HOME and CLAUDE_CONFIG_DIR)."""
+  files = ["internal/gatestate/showmark.go", "internal/gatestate/showmark_test.go", "internal/cmd/hermetic_env_test.go", "internal/secretscan/writers.go"]
+  description = "Under .dross/gate/show/ (already self-ignored by gatestate's ensureDir), BumpContext(root, sid) replaces a repo-wide epoch nonce and\nmarks sid as seen. ShownCurrent(root, sid, kind, sha) is read-only and true only when sid is non-empty, sid is seen, and sid's kind\nrecord holds {current epoch, sha}. RecordShown writes that record through store.go's saveBytes (no new writer site); store.go's writers.go entry gains gate/show/<name> in Also. Session keys are hashed the way nudgeKey hashes\nthem. Records and seen-marks older than 7 days are pruned on write, inside show/ only. The hermetic TestMain also unsets\nCLAUDE_CODE_SESSION_ID and CLAUDE_CODE_CHILD_SESSION (today it clears only HOME and CLAUDE_CONFIG_DIR)."
   covers = ["c-6", "c-7"]
-  test_contract = [
-    "if an unhooked session gets the marker, TestUnseenSessionNeverCurrent fails: RecordShown(s, rules, h) with no BumpContext(s) → ShownCurrent false",
-    "if one session's start doesn't reset the others, TestAnyBumpInvalidates fails: Bump(s1); Record(s1, rules, h); Bump(s2) → ShownCurrent(s1, rules, h) false",
-    "if content isn't compared, TestShaMismatch fails: Record(s, rules, h1) → ShownCurrent(s, rules, h2) false",
-    "if kinds clobber, TestKindsIndependent fails: Record(s, rules, h) leaves ShownCurrent(s, playbook, h) false; 32 goroutines recording both kinds leave both readable",
-    "if an id escapes, TestShowKeyContained fails: sids \"../../x\" and \"a/b\" land in .dross/gate/show/; an empty sid → ShownCurrent false and RecordShown errors",
-    "if records dirty the tree, TestShowRecordsIgnored fails: `git status --porcelain` is empty after Bump+Record in a git temp repo",
-    "if prune overreaches, TestShowPrune fails: an 8-day-old record is pruned on the next write, while nudge claims and green.json are untouched",
-    "if the read path writes, TestShownCurrentReadOnly fails: a fresh root gets no .dross/gate/show/",
-    "if tests read the developer's store, TestHermeticSessionEnv fails: CLAUDE_CODE_SESSION_ID and CLAUDE_CODE_CHILD_SESSION are empty inside the cmd package",
-  ]
+  test_contract = ["if an unhooked session gets the marker, TestUnseenSessionNeverCurrent fails: RecordShown(s, rules, h) with no BumpContext(s) → ShownCurrent false", "if one session's start doesn't reset the others, TestAnyBumpInvalidates fails: Bump(s1); Record(s1, rules, h); Bump(s2) → ShownCurrent(s1, rules, h) false", "if content isn't compared, TestShaMismatch fails: Record(s, rules, h1) → ShownCurrent(s, rules, h2) false", "if kinds clobber, TestKindsIndependent fails: Record(s, rules, h) leaves ShownCurrent(s, playbook, h) false; 32 goroutines recording both kinds leave both readable", "if an id escapes, TestShowKeyContained fails: sids \"../../x\" and \"a/b\" land in .dross/gate/show/; an empty sid → ShownCurrent false and RecordShown errors", "if records dirty the tree, TestShowRecordsIgnored fails: `git status --porcelain` is empty after Bump+Record in a git temp repo", "if prune overreaches, TestShowPrune fails: an 8-day-old record is pruned on the next write, while nudge claims and green.json are untouched", "if the read path writes, TestShownCurrentReadOnly fails: a fresh root gets no .dross/gate/show/", "if tests read the developer's store, TestHermeticSessionEnv fails: CLAUDE_CODE_SESSION_ID and CLAUDE_CODE_CHILD_SESSION are empty inside the cmd package", "if showmark grows its own write site, TestEveryDrossWriterIsDeclared (existing) fails: showmark.go has no write verb, and store.go's entry lists gate/show/<name>"]
   status = "pending"
 
 [[task]]
   id = "t-5"
-  wave = 1
-  title = "Route gremlins tool stream through a Streamer sink"
-  files = ["internal/mutation/adapter.go", "internal/mutation/gremlins.go", "internal/mutation/gremlins_stream_test.go"]
-  description = """
-Add `Streamer interface{ SetStream(io.Writer) }` to adapter.go, plus Gremlins.SetStream (nil → os.Stderr, today's behaviour). The
-gremlins tee becomes MultiWriter(stream, head), and the per-package invocation echo goes to the stream. printHead and the 'skipped'
-lines stay on os.Stderr. No taint-cleared marker in gremlins.go."""
+  wave = 3
+  title = "Route gremlins stream to a run-log sink"
+  files = ["internal/mutation/adapter.go", "internal/mutation/gremlins.go", "internal/mutation/gremlins_stream_test.go", "internal/mutation/toolfail.go", "internal/mutation/toolfail_test.go", "internal/verify/persist_toolfence_test.go", "internal/boardsync/toolfence_composer_test.go", ".dross/phases/tool-output-not-persisted/spec.toml"]
+  description = "Add `Streamer interface{ SetStream(*runlog.Log) }` to adapter.go, plus Gremlins.SetStream (nil → os.Stderr, today's behaviour). The\nparameter is the concrete type, never io.Writer: a setter storing an io.Writer parameter makes the field non-terminal\n(precomputeTerminal), and t-18's class keys on the type. The gremlins tee becomes MultiWriter(stream, head), and the per-package\ninvocation echo goes to the stream. printHead and the 'skipped' lines stay on os.Stderr. No taint-cleared marker in gremlins.go.\nstderr_pointer amendment: toolFailure records whether a stream was set; set → 'the full output of <tool> went to this run's log in\n.dross/logs (machine-local, not committed)', unset → today's stderr prose; never a file name (pruning makes it stale, a timestamp\nchurns tracked tests.json/verify.toml, an absolute path leaks a home dir into PR bodies). Exported constants hold both forms; the two\npinning tests assert through them. Amend tool-output-not-persisted's stderr_pointer choice and why ('Amended 2026-10-09 by\ntest-output-summaries: …'). Granularity exception: the pinning tests are assertion updates."
   covers = ["c-5"]
-  test_contract = [
-    "if the stream still leaks, TestGremlinsStreamToSink fails: the gremlinsBuildCmd seam prints 300 KILLED/LIVED lines and writes a valid report; with SetStream(buf), captured os.Stderr holds none of them, buf holds all 300, the Report counts are unchanged, and headBuffer still holds them so the failure re-print is not starved",
-    "if the remote arm leaks, TestGremlinsRemoteArmStreamToSink fails: the same split via scriptRemote with g.Remote set",
-    "if diagnosis is lost, TestGremlinsFailureHeadStaysOnStderr fails: a reportless exit 2 → os.Stderr holds the bounded head (≤ strykerHeadLines lines), and the error keeps its RecordToolFailure kind",
-    "if the default moves, TestGremlinsNilStreamKeepsStderr fails, and gremlins_failure_test.go and remote_failure_test.go go red unmodified",
-    "if a marker sneaks in, TestToolRunnersCarryNoMarker (existing) fails",
-  ]
+  test_contract = ["if the stream still leaks, TestGremlinsStreamToSink fails: the gremlinsBuildCmd seam prints 300 KILLED/LIVED lines and writes a valid report; with SetStream(buf), captured os.Stderr holds none of them, buf holds all 300, the Report counts are unchanged, and headBuffer still holds them so the failure re-print is not starved", "if the remote arm leaks, TestGremlinsRemoteArmStreamToSink fails: the same split via scriptRemote with g.Remote set", "if diagnosis is lost, TestGremlinsFailureHeadStaysOnStderr fails: a reportless exit 2 → os.Stderr holds the bounded head (≤ strykerHeadLines lines), and the error keeps its RecordToolFailure kind", "if the default moves, TestGremlinsNilStreamKeepsStderr fails, and gremlins_failure_test.go and remote_failure_test.go go red unmodified", "if a marker sneaks in, TestToolRunnersCarryNoMarker (existing) fails", "if the pointer lies, TestRecordErrorClauses fails: RecordToolFailure with no stream says \"went to this run's stderr\"; with a stream set it says \"went to this run's log in .dross/logs\" and not \"stderr\"; neither form contains \".log\" as a file suffix or an absolute path (the old \"/\" guard narrows to those)", "if a persisted record drops the pointer, the persist_toolfence_test.go and toolfence_composer_test.go pins fail: they assert through toolfail's exported pointer constants and still find the pointer in tests.json, verify.toml and the composed body", "if the taint gate breaks at this task's own gate, TestNoSpawnOutputEscapes and TestLiveTreeHasNoUnresolvedDispatch (existing) fail"]
   status = "pending"
+  depends_on = ["t-2", "t-18"]
 
 [[task]]
   id = "t-6"
-  wave = 1
+  wave = 4
   title = "Route stryker and stryker-net streams to the sink"
   files = ["internal/mutation/stryker.go", "internal/mutation/stryker_net.go", "internal/mutation/stryker_stream_test.go"]
-  description = """
-SetStream on Stryker and StrykerNet (nil → os.Stderr). The stryker.go and stryker_net.go tees write to the stream; printHead stays on
-os.Stderr. Streamer conformance is asserted in t-12."""
+  description = "SetStream(*runlog.Log) on Stryker and StrykerNet (nil → os.Stderr). The stryker.go and stryker_net.go tees write to the stream;\nprintHead stays on os.Stderr; a reportless failure with a stream set records t-5's log pointer. Streamer conformance is asserted in t-12."
   covers = ["c-5"]
-  test_contract = [
-    "if the stream still leaks, TestStrykerStreamToSink and TestStrykerNetStreamToSink fail: with the strykerBuildCmd / strykerNetBuildCmd seam printing `[Survived] …` lines and writing a report, captured stderr has no `[Survived]`, the sink has every line, the Report is unchanged, and headBuffer still holds the lines",
-    "if diagnosis is lost, TestStrykerFailureHeadStaysOnStderr fails: a reportless non-zero exit prints the bounded head on stderr",
-    "if the default moves, TestStrykerNilStreamKeepsStderr fails, and stryker_failure_test.go and stryker_net_failure_test.go go red unmodified",
-    "if a marker sneaks in, TestToolRunnersCarryNoMarker (existing) fails",
-  ]
+  test_contract = ["if the stream still leaks, TestStrykerStreamToSink and TestStrykerNetStreamToSink fail: with the strykerBuildCmd / strykerNetBuildCmd seam printing `[Survived] …` lines and writing a report, captured stderr has no `[Survived]`, the sink has every line, the Report is unchanged, and headBuffer still holds the lines", "if diagnosis is lost, TestStrykerFailureHeadStaysOnStderr fails: a reportless non-zero exit prints the bounded head on stderr", "if the default moves, TestStrykerNilStreamKeepsStderr fails, and stryker_failure_test.go and stryker_net_failure_test.go go red unmodified", "if a marker sneaks in, TestToolRunnersCarryNoMarker (existing) fails", "if the stryker pointer lies, TestStrykerFailureRecordsLogPointer fails: a reportless stryker or stryker-net exit with SetStream(log) records \"went to this run's log in .dross/logs\"; without SetStream it records the stderr form", "if the taint gate breaks at this task's own gate, TestNoSpawnOutputEscapes and TestLiveTreeHasNoUnresolvedDispatch (existing) fail"]
   status = "pending"
+  depends_on = ["t-2", "t-5", "t-18"]
 
 [[task]]
   id = "t-7"
   wave = 1
   title = "Print per-package counts and survivor lines"
-  files = ["internal/verify/legsummary.go", "internal/verify/legsummary_test.go", "internal/verify/verify.go", "internal/cmd/verify.go"]
-  description = """
-LegLines(LanguageRun) groups Mutation.Files by directory for all three tools. Columns killed / survived / not covered / timed out, with
-survived inclusive of not covered, as the leg line and tests.json count it (D11). Each in-scope survivor follows as file:line, grouped
-per file, NOT COVERED marked. printVerifySummary prints the rows under each leg's existing counts line, so attached and collected runs
-share them through finishVerify. Fix adapterLanguage's "stryker.net" key to the adapter's real Name() "stryker-net" → csharp."""
+  files = ["internal/verify/legsummary.go", "internal/verify/legsummary_test.go", "internal/verify/verify.go", "internal/cmd/verify.go", "internal/cmd/verify_summary_test.go"]
+  description = "LegLines(LanguageRun) groups Mutation.Files by directory for all three tools. Columns killed / survived / not covered / timed out, with\nsurvived inclusive of not covered, as the leg line and tests.json count it (D11). Each in-scope survivor follows as file:line, grouped\nper file, NOT COVERED marked. printVerifySummary prints the rows under each leg's existing counts line, so attached and collected runs\nshare them through finishVerify. Fix adapterLanguage's \"stryker.net\" key to the adapter's real Name() \"stryker-net\" → csharp; the commit body states that tests.json's\nLanguageRun.Name and OutOfScopeMutant.Language change from \"stryker-net\" to \"csharp\" for C# repos (no in-repo consumer keys on either)."
   covers = ["c-5"]
   test_contract = [
     "if rows don't sum, TestPackageRowsSumToLeg fails: a report over internal/a/x.go, internal/a/y.go and internal/b/z.go gives exactly one row each for internal/a (x+y summed) and internal/b, no per-file row, and each column sums to the leg's Killed, Survived, NotCovered and Timeout",
@@ -171,23 +105,9 @@ share them through finishVerify. Fix adapterLanguage's "stryker.net" key to the 
   wave = 2
   title = "Parse plain go test output"
   files = ["internal/runsummary/gotest.go", "internal/runsummary/gotest_test.go", "internal/runsummary/testdata/gotest/green.txt", "internal/runsummary/testdata/gotest/red_subtests.txt", "internal/runsummary/testdata/gotest/panic.txt", "internal/runsummary/testdata/gotest/timeout.txt", "internal/runsummary/testdata/gotest/build_failed.txt", "internal/runsummary/testdata/gotest/setup_and_vet.txt"]
-  description = """
-Fixtures captured from a scratch module with a real `go test -count=1 ./...` (go1.26.1), stdout and stderr on one fd, each starting
-with a `# captured:` header naming the go version and command. Counts are ok / FAIL / no test files / no tests to run packages. A
-failure is a LEAF `--- FAIL` with its indented output (D7). A FAIL package with no test failure (build failed, setup failed, timeout
-panic, TestMain exit) becomes a package-named failure; each `# pkg` block is one build failure. Granularity: fixtures are one artifact."""
+  description = "Fixtures captured from a scratch module with a real `go test -count=1 ./...` (go1.27.1, the go.mod toolchain), stdout and stderr on one fd, each starting\nwith a `# captured:` header naming the go version and command. Counts are ok / FAIL / no test files / no tests to run packages. A\nfailure is a LEAF `--- FAIL` with its indented output (D7). A FAIL package with no test failure (build failed, setup failed, timeout\npanic, TestMain exit) becomes a package-named failure; each `# pkg` block is one build failure. Granularity: fixtures are one artifact."
   covers = ["c-2", "c-3"]
-  test_contract = [
-    "if counts drift, TestGoGreenCounts fails: green.txt → 4 ok, 2 no test files, 1 no tests to run, 0 failures",
-    "if subtests double-count, TestGoSubtestsAreLeaves fails: red_subtests.txt → TestTable/a, /b, /c and not TestTable",
-    "if failure output bleeds, TestGoRedNamesOwnLines fails: TestAdd's block holds its `_test.go:` assertion line and none of TestTable's lines",
-    "if panic text is lost, TestGoPanicAttributed fails: panic.txt → TestBoom's block holds \"panic: boom\" and its first stack frame",
-    "if a timeout reads as unparseable, TestGoTimeout fails: timeout.txt (-timeout 2s) → a package failure starting \"panic: test timed out after 2s\" that names the running test",
-    "if build errors vanish, TestGoBuildFailed fails: build_failed.txt → the `# dep` block's \"undefined: foo\" printed once, and every `[build failed]` package counted as failed",
-    "if setup/vet/test-file compile errors are missed, TestGoSetupAndVet fails: a `[setup failed]` package and a `# pkg [pkg.test]` block each become a failure carrying their error line",
-    "if go claims foreign text, TestGoClaimsOnlyGo fails: a make transcript with \"ok  done\" and t-9's vitest fixtures are not claimed",
-    "if a fixture is invented, TestGoFixturesCaptured fails: any testdata/gotest file lacks the `# captured: go1.` header",
-  ]
+  test_contract = ["if counts drift, TestGoGreenCounts fails: green.txt → 4 ok, 2 no test files, 1 no tests to run, 0 failures", "if subtests double-count, TestGoSubtestsAreLeaves fails: red_subtests.txt → TestTable/a, /b, /c and not TestTable", "if failure output bleeds, TestGoRedNamesOwnLines fails: TestAdd's block holds its `_test.go:` assertion line and none of TestTable's lines", "if panic text is lost, TestGoPanicAttributed fails: panic.txt → TestBoom's block holds \"panic: boom\" and its first stack frame", "if a timeout reads as unparseable, TestGoTimeout fails: timeout.txt (-timeout 2s) → a package failure starting \"panic: test timed out after 2s\" that names the running test", "if build errors vanish, TestGoBuildFailed fails: build_failed.txt → the `# dep` block's \"undefined: foo\" printed once, and every `[build failed]` package counted as failed", "if setup/vet/test-file compile errors are missed, TestGoSetupAndVet fails: a `[setup failed]` package and a `# pkg [pkg.test]` block each become a failure carrying their error line", "if go claims foreign text, TestGoClaimsOnlyGo fails: a make transcript with \"ok  done\" and t-9's vitest fixtures are not claimed", "if a fixture is invented or mislabelled, TestGoFixturesCaptured fails: any testdata/gotest file lacks the exact `# captured: go1.27.1 go test -count=1 ` header"]
   depends_on = ["t-3"]
   status = "pending"
 
@@ -196,37 +116,18 @@ panic, TestMain exit) becomes a package-named failure; each `# pkg` block is one
   wave = 2
   title = "Parse vitest and jest output"
   files = ["internal/runsummary/jsrunner.go", "internal/runsummary/jsrunner_test.go", "internal/runsummary/testdata/js/vitest_green.txt", "internal/runsummary/testdata/js/vitest_red.txt", "internal/runsummary/testdata/js/vitest_red_color.txt", "internal/runsummary/testdata/js/vitest_load_error.txt", "internal/runsummary/testdata/js/jest_red.txt", "internal/runsummary/testdata/js/jest_suite_failed.txt"]
-  description = """
-vitest fixtures captured with the vitest 4.1.11 pinned in internal/mutation/testdata/ts-project, from a scratch copy, plain and with
-FORCE_COLOR=1; jest fixtures from an exact-pinned jest in a scratch dir outside the repo, installed with --ignore-scripts. Each fixture
-carries a `# captured:` header. Counts are the runner's own summary lines; failures are FAIL and ● blocks. Load errors, 'Test suite
-failed to run' and 'Unhandled Errors' count as failures. Granularity: fixtures are one artifact."""
+  description = "vitest fixtures captured from a scratch copy of internal/mutation/testdata/ts-project WITHOUT node_modules, after `npm ci\n--ignore-scripts` from its lockfile, with `npx vitest --version` confirmed as 4.1.11 before capture (the on-disk node_modules is 3.2.7), plain and with\nFORCE_COLOR=1; jest fixtures from an exact-pinned jest in a scratch dir outside the repo, installed with --ignore-scripts. Each fixture\ncarries a `# captured:` header. Counts are the runner's own summary lines; failures are FAIL and ● blocks. Load errors, 'Test suite\nfailed to run' and 'Unhandled Errors' count as failures. Granularity: fixtures are one artifact."
   covers = ["c-2", "c-3"]
-  test_contract = [
-    "if counts aren't the runner's, TestVitestCounts fails: vitest_red.txt → \"Tests 1 failed | 4 passed (5)\" and \"Test Files 1 failed | 1 passed (2)\", plus a failure named \"src/math.test.ts > add > negatives\" carrying its AssertionError and diff; vitest_green.txt → Passed equals its \"Tests N passed\"",
-    "if a load error is lost, TestVitestLoadError fails: vitest_load_error.txt → a failure carrying the transform/syntax error line",
-    "if jest is wrong, TestJestCounts and TestJestSuiteFailed fail: jest_red.txt → \"Tests: 1 failed, 3 passed, 4 total\" and the ● block as one failure; jest_suite_failed.txt → a failure carrying \"Test suite failed to run\"",
-    "if colour breaks parsing, TestJSForcedColour fails: vitest_red_color.txt parses to a Result equal to vitest_red.txt's",
-    "if truncated output is claimed, TestJSTruncatedFallsBack fails: vitest_red cut before its \"Tests\" line is not claimed",
-    "if runners cross, TestJSDoesNotClaimGo fails: t-8's go fixtures are not claimed",
-    "if a fixture is invented, TestJSFixturesCaptured fails: a fixture lacks the `# captured: vitest@` or `# captured: jest@` header",
-  ]
+  test_contract = ["if counts aren't the runner's, TestVitestCounts fails: vitest_red.txt → \"Tests 1 failed | 4 passed (5)\" and \"Test Files 1 failed | 1 passed (2)\", plus a failure named \"src/math.test.ts > add > negatives\" carrying its AssertionError and diff; vitest_green.txt → Passed equals its \"Tests N passed\"", "if a load error is lost, TestVitestLoadError fails: vitest_load_error.txt → a failure carrying the transform/syntax error line", "if jest is wrong, TestJestCounts and TestJestSuiteFailed fail: jest_red.txt → \"Tests: 1 failed, 3 passed, 4 total\" and the ● block as one failure; jest_suite_failed.txt → a failure carrying \"Test suite failed to run\"", "if colour breaks parsing, TestJSForcedColour fails: vitest_red_color.txt parses to a Result equal to vitest_red.txt's", "if truncated output is claimed, TestJSTruncatedFallsBack fails: vitest_red cut before its \"Tests\" line is not claimed", "if runners cross, TestJSDoesNotClaimGo fails: t-8's go fixtures are not claimed", "if a fixture is invented or mislabelled, TestJSFixturesCaptured fails: a vitest fixture lacks the exact `# captured: vitest@4.1.11` header, or a jest fixture lacks `# captured: jest@<pin>` where <pin> is the exact version constant in the test"]
   depends_on = ["t-3"]
   status = "pending"
 
 [[task]]
   id = "t-10"
-  wave = 2
+  wave = 3
   title = "Route dross test output through the run log"
   files = ["internal/cmd/test.go", "internal/cmd/test_output.go", "internal/cmd/test_output_test.go", "internal/cmd/test_lane_consent_test.go", "internal/cmd/test_lane_prepare_test.go", "internal/cmd/test_lane_selector_test.go"]
-  description = """
-test_output.go opens a per-invocation runlog sink after FindRoot. dross writes a `$ <line>` header before each spawn, so a silent
-command still logs; that first write creates the file (D8: lazy — refusals write nothing), and `log: <abs path>` prints before the
-first spawn and again at the end (D9). TTY: one writer = log + os.Stdout. Non-TTY: one writer = log + segment feed. The same writer
-value goes to every spawn's stdout and stderr (runTest, runOneLane, runLanePrepare, syncTreeTo, runRemoteLine); dross's own lines
-still reach stdout and are copied to the log. Until t-14 lands, every non-TTY run prints t-3's fallback. If the log can't be opened,
-the run streams live with one warning. The Long help drops 'streams'. No new flag. Granularity exception: the three lane-ordering
-tests read lane output from captured (non-TTY) stdout and go red the moment non-TTY runs stop streaming, so they ride this commit."""
+  description = "test_output.go opens a per-invocation runlog sink after FindRoot. dross writes a `$ <line>` header before each spawn, so a silent\ncommand still logs; that first write creates the file (D8: lazy — refusals write nothing), and `log: <abs path>` prints before the\nfirst spawn and again at the end (D9). TTY: t-2's runlog.Log with Terminal=Stdout and Echo on. Non-TTY: one writer = log + segment feed. The same writer\nvalue goes to every spawn's stdout and stderr (runTest, runOneLane, runLanePrepare, syncTreeTo, runRemoteLine); dross's own lines\nstill reach stdout and are copied to the log. Until t-14 lands, every non-TTY run prints t-3's fallback. An unopenable log falls back through t-2's sink: live stream, one warning. The Long help drops 'streams'. No new flag. Granularity exception: the three lane-ordering\ntests read lane output from captured (non-TTY) stdout and go red the moment non-TTY runs stop streaming, so they ride this commit."
   covers = ["c-1", "c-4"]
   test_contract = [
     "if a killed run leaves no path, TestLogPathBeforeSpawn fails: the fake spawn sees stdout already holding \"log: /…/.dross/logs/test-\"",
@@ -239,50 +140,26 @@ tests read lane output from captured (non-TTY) stdout and go red the moment non-
     "if the taint gate breaks, TestNoSpawnOutputEscapes fails: every spawn stream reaches only os.Stdout or a runlog.Log (t-2's terminal class), with no new //dross:taint-cleared marker",
     "if a streaming flag appears, TestNoStreamingFlag fails: Test().Flags() defines exactly local, files and wait",
   ]
-  depends_on = ["t-2", "t-3"]
+  depends_on = ["t-2", "t-3", "t-18"]
   status = "pending"
 
 [[task]]
   id = "t-11"
   wave = 2
   title = "Print unchanged marker on repeat rule/interaction show"
-  files = ["internal/cmd/showmark.go", "internal/cmd/rule.go", "internal/cmd/interaction.go", "internal/cmd/showmark_test.go", "assets/prompts/rule.md"]
-  description = """
-showOnce(kind, rendered) digests the bytes it would print. The identity is CLAUDE_CODE_SESSION_ID, treated as empty when
-CLAUDE_CODE_CHILD_SESSION is set. One line prints when the root resolves, the identity is set, --full is unset and ShownCurrent is
-true: `rules unchanged — identical to the full block printed earlier in this session; still MUST-FOLLOW (dross rule show --full
-reprints)`, and the same for the playbook. Otherwise print in full, then RecordShown, only after the write returned nil. Store errors
-never fail the command. `rule list --merged` never marks; rule.md's 'show what claude sees' row moves to it (D3). Granularity
-exception: interaction.go is a 3-line mirror and rule.md a one-row edit."""
+  files = ["internal/cmd/showmark.go", "internal/cmd/rule.go", "internal/cmd/interaction.go", "internal/cmd/showmark_test.go", "assets/prompts/rule.md", "cmd/dross/testdata/cli_tree.txt"]
+  description = "showOnce(kind, rendered) digests the bytes it would print. The identity is CLAUDE_CODE_SESSION_ID alone. CLAUDE_CODE_CHILD_SESSION\nis not consulted: on 2026-10-09 it was set in a background-job main session and in its subagent alike, with the same session id\n(names and a hash checked, no values), so it discriminates nothing. The marker self-heals instead. One line prints when the root resolves, the identity is set, --full is unset and ShownCurrent is\ntrue: the exported RulesUnchanged constant, `rules unchanged since this session's full print — still\nMUST-FOLLOW; not in your context? run: dross rule show --full` (120 bytes), and PlaybookUnchanged, the same with `playbook` and\n`dross interaction show --full` (130 bytes). Otherwise print in full, then RecordShown, only after the write returned nil. Store errors\nnever fail the command. `rule list --merged` never marks; rule.md's 'show what claude sees' row moves to it (D3). Granularity\nexception: interaction.go is a 3-line mirror, rule.md a one-row edit and cli_tree.txt a golden refresh."
   covers = ["c-6", "c-7"]
-  test_contract = [
-    "if repeats don't shrink, TestRuleShowRepeatPrintsMarker fails: with BumpContext(root, \"s\") and env \"s\", the 1st call prints the full block and the 2nd exactly one line starting \"rules unchanged\", under 120 bytes",
-    "if a change hides, TestRuleShowChangeReprints fails: `rule add` between the calls, or a changed global rules.toml under the fake HOME, makes the 2nd call print the full block containing the change",
-    "if the id is missing, TestRuleShowNoSessionFull fails: env unset → full both times, and nothing is created under .dross/gate/show/",
-    "if a subagent is short-changed, TestShowChildSessionFull fails: CLAUDE_CODE_CHILD_SESSION=1 with a current record for \"s\" → the full block, for both kinds",
-    "if a record precedes the print, TestShowRecordsOnlyAfterPrint fails: a print seam returning EPIPE → no record, and the next call prints full",
-    "if the store can fail the command, TestShowStoreFailureStillPrints fails: with .dross/gate a regular file → full block, exit 0",
-    "if the kinds tangle, TestInteractionShowMarker fails: a repeat prints \"playbook unchanged\", and a rules-only change leaves the playbook marker in place",
-    "if there is no way back, TestShowFullFlag fails: --full after a current record prints the full block, and the marker line names --full and MUST-FOLLOW",
-    "if the inspection path marks, TestRuleListMergedNeverMarks fails: `rule list --merged` after a show prints the full block",
-    "if /dross-rule shows a marker to a human, TestRulePromptShowUsesListMerged fails: rule.md's 'show what claude sees' row names `dross rule list --merged`",
-    "if the flag drifts, TestShowFlags fails: rule show and interaction show each define exactly `full`",
-    "if hermeticity regresses, TestInteractionShowEmitsPlaybook (existing) fails when the suite runs from inside a Claude Code session",
-  ]
+  test_contract = ["if repeats don't shrink, TestRuleShowRepeatPrintsMarker fails: with BumpContext(root, \"s\") and env \"s\", the 1st call prints the full block and the 2nd exactly the RulesUnchanged constant line, ≤ 160 bytes, containing MUST-FOLLOW and `dross rule show --full`", "if a change hides, TestRuleShowChangeReprints fails: `rule add` between the calls, or a changed global rules.toml under the fake HOME, makes the 2nd call print the full block containing the change", "if the id is missing, TestRuleShowNoSessionFull fails: env unset → full both times, and nothing is created under .dross/gate/show/", "if a context that never saw the block can't recover, TestMarkerNamesFullCommand fails: both marker constants contain \"not in your context?\" and their kind's exact --full command; and CLAUDE_CODE_CHILD_SESSION=1 with a current record for \"s\" still prints the marker (the variable is set in background-job main sessions and their subagents alike, so it discriminates nothing)", "if a record precedes the print, TestShowRecordsOnlyAfterPrint fails: a print seam returning EPIPE → no record, and the next call prints full", "if the store can fail the command, TestShowStoreFailureStillPrints fails: with .dross/gate a regular file → full block, exit 0", "if the kinds tangle, TestInteractionShowMarker fails: a repeat prints exactly the PlaybookUnchanged constant line (≤ 160 bytes, naming `dross interaction show --full`), and a rules-only change leaves the playbook marker in place", "if there is no way back, TestShowFullFlag fails: --full after a current record prints the full block, and the marker line names --full and MUST-FOLLOW", "if the inspection path marks, TestRuleListMergedNeverMarks fails: `rule list --merged` after a show prints the full block", "if /dross-rule shows a marker to a human, TestRulePromptShowUsesListMerged fails: rule.md's 'show what claude sees' row names `dross rule list --merged`", "if the flag drifts, TestShowFlags fails: rule show and interaction show each define exactly `full`", "if hermeticity regresses, TestInteractionShowEmitsPlaybook (existing) fails when the suite runs from inside a Claude Code session", "if the CLI tree drifts, TestCLITreeGolden (existing, ./cmd/dross) fails until cmd/dross/testdata/cli_tree.txt lists `--full` on rule show and interaction show"]
   depends_on = ["t-4"]
   status = "pending"
 
 [[task]]
   id = "t-12"
-  wave = 2
+  wave = 5
   title = "Write verify leg streams to run logs"
   files = ["internal/cmd/verify.go", "internal/cmd/verify_log_test.go"]
-  description = """
-Attached runs: before RunScoped, every adapter implementing mutation.Streamer gets a lazy runlog writer for
-verify-<phase>-<adapter.Name()>-<ts>.log (TTY: log + os.Stderr; non-TTY: log only), and each leg prints its absolute log path.
-Collected runs: a detachFetchLog seam built on remote.FetchArgs + runDetachArgv pulls <runDir>/log (written on the host) into a fresh
-verify log. A fetch failure prints 'log unavailable: <why>' and the collect carries on. If a log can't be opened, that leg streams to
-stderr with one warning. Runlog writes pass the taint gate through t-2's terminal class — no marker."""
+  description = "Attached runs: before RunScoped, every adapter implementing mutation.Streamer gets t-2's runlog.Log for\nverify-<phase>-<adapter.Name()>-<ts>.log (Terminal=Stderr, Echo on a TTY), and each leg prints its absolute log path.\nCollected runs: a detachFetchLog seam built on remote.FetchArgs + runDetachArgv pulls <runDir>/log (written on the host) into a fresh\nverify log. A fetch failure prints 'log unavailable: <why>' and the collect carries on. An unopenable log falls back through t-2's sink\n(stderr, one warning). Runlog writes pass the taint gate through t-2's terminal class — no marker."
   covers = ["c-5"]
   test_contract = [
     "if mutant lines reach the conversation, TestAttachedLegLogsStream fails: verify with a fake Streamer adapter (configuredAdaptersFn) printing 300 mutant lines, non-TTY → stdout and stderr hold none of them, verify-<phase>-<name>-*.log holds all, and its absolute path is printed",
@@ -295,18 +172,15 @@ stderr with one warning. Runlog writes pass the taint gate through t-2's termina
     "if the taint gate breaks, TestNoSpawnOutputEscapes fails: the leg streams reach only os.Stderr or a runlog.Log, with no new //dross:taint-cleared marker",
     "if codes move, TestVerifyExitCodesWithLogs fails: --no-wait on a held host still exits 15, and an unwritable .dross/logs still yields the same verdict",
   ]
-  depends_on = ["t-2", "t-5", "t-6"]
+  depends_on = ["t-2", "t-5", "t-6", "t-18"]
   status = "pending"
 
 [[task]]
   id = "t-17"
-  wave = 2
+  wave = 4
   title = "Route survivor drain tool stream to a run log"
   files = ["internal/cmd/survivor_drain.go", "internal/cmd/survivor_drain_log_test.go"]
-  description = """
-runGremlinsOverPackages sets the gremlins adapter's stream (mutation.Streamer) to a lazy runlog writer named
-verify-<phase|drain>-gremlins-<ts>.log (TTY: log + os.Stderr; non-TTY: log only) and prints its absolute path. If the log can't be
-opened, the drain streams to stderr with one warning. --report mode spawns no gremlins, so it opens no log (lazy, D8)."""
+  description = "runGremlinsOverPackages sets the gremlins adapter's stream (mutation.Streamer) to t-2's runlog.Log named\nverify-<phase|drain>-gremlins-<ts>.log (Terminal=Stderr, Echo on a TTY) and prints its absolute path. An unopenable log falls back through t-2's sink (stderr, one warning). --report mode spawns no gremlins, so it opens no log (lazy, D8)."
   covers = ["c-5"]
   test_contract = [
     "if mutant lines reach the conversation, TestDrainLogsGremlinsStream fails: drain over a fake gremlins seam printing 300 KILLED/LIVED lines, non-TTY → stdout and stderr hold none of them, one verify-drain-gremlins-*.log (verify-<phase>-gremlins-*.log with --phase) holds all, and its absolute path is printed",
@@ -314,7 +188,7 @@ opened, the drain streams to stderr with one warning. --report mode spawns no gr
     "if the log changes the verdict, TestDrainVerdictUnchangedWithLog fails: the same fake report yields the same undisposed-survivor list and exit code with the log on, and with .dross/logs a regular file (one warning, stream to stderr)",
     "if --report mode opens a log, TestDrainReportModeNoMutationLog fails: --report runs no gremlins and leaves no verify-*.log",
   ]
-  depends_on = ["t-2", "t-5"]
+  depends_on = ["t-2", "t-5", "t-18"]
   status = "pending"
 
 [[task]]
@@ -340,7 +214,7 @@ isn't a terminal, capped at 1 MiB, behind a 300 ms deadline goroutine. Any paylo
 
 [[task]]
   id = "t-14"
-  wave = 3
+  wave = 4
   title = "Print per-lane summaries and outcome tails"
   files = ["internal/cmd/test.go", "internal/cmd/test_output.go", "internal/cmd/test_summary_wiring_test.go"]
   description = """
@@ -349,33 +223,16 @@ from the classified outcome (the exit code from ExitCodeError and the exitCoder)
 a selector miss prints only its miss line. Summaries go to stdout and never into a returned error. Wall-clock comes from a testNow seam
 and covers the whole run."""
   covers = ["c-2", "c-3", "c-4"]
-  test_contract = [
-    "if green leaks lines, TestGreenRunPrintsSummaryOnly fails: a fake writing gotest/green.txt → stdout holds the log line, one counts line and the wall-clock, no fixture package path, and ≤ 300 bytes",
-    "if red is incomplete, TestRedRunPrintsFailures fails: red_subtests.txt + exit 1 → the three leaf names and their lines on stdout, exit 1",
-    "if a failed spawn reads green, TestNonZeroAllOkFallsBack fails: green.txt written but exit 1 → the fallback (exit 1, last 40 lines), no green line, exit code 1",
-    "if transport loses its why, TestTransportTailShown fails: a remote fake writing \"ssh: connect to host h port 22: Connection refused\" and exiting 255 → exit 3 with that line and the log path on stdout; the same for exit 4, and for exit 7 with \"make: *** [build] Error 2\"",
-    "if lanes blur, TestTwoLanesEachParsed fails: a go lane (red_subtests.txt) and a vitest lane (vitest_green.txt) → two lane summaries, overall red, exit 1",
-    "if a parsed lane masks an unparsed one, TestParsedLaneCannotMaskUnparsed fails: a go-green lane and an unrecognised-output lane, both exit 0 → go package counts and the other lane's exit status + tail",
-    "if the budget resets per lane, TestBudgetAcrossLanes fails: two lanes × 8 failures → 10 blocks, then \"+6 more failing\"",
-    "if a miss dumps output, TestSelectorMissNoTail fails: an EmptyExit miss prints only its miss line",
-    "if summarising leaks into exit classification, TestOutputIsNeverScraped (existing, test_lane_miss_test.go) fails",
-    "if failures escape into errors, TestSummaryNotInError fails: the returned error's text holds no fixture line",
-    "if the clock is wrong, TestWallClockFromSeam fails: testNow advancing 75s prints \"1m15s\"",
-    "if exit codes move, TestExitCodesUnchanged fails: fakes for 0, 1, 3, 4, 5, 6, 7 and 8 exit as before, and a green full run in summary mode still writes .dross/gate/green.json",
-  ]
+  test_contract = ["if green leaks lines, TestGreenRunPrintsSummaryOnly fails: a fake writing gotest/green.txt → stdout holds exactly two `log: ` lines (D9), each under .dross/logs/; with those removed, one counts line and the wall-clock, no fixture package path, ≤ 200 bytes", "if red is incomplete, TestRedRunPrintsFailures fails: red_subtests.txt + exit 1 → the three leaf names and their lines on stdout, exit 1", "if a failed spawn reads green, TestNonZeroAllOkFallsBack fails: green.txt written but exit 1 → the fallback (exit 1, last 40 lines), no green line, exit code 1", "if transport loses its why, TestTransportTailShown fails: a remote fake writing \"ssh: connect to host h port 22: Connection refused\" and exiting 255 → exit 3 with that line and the log path on stdout; the same for exit 4, and for exit 7 with \"make: *** [build] Error 2\"", "if lanes blur, TestTwoLanesEachParsed fails: a go lane (red_subtests.txt) and a vitest lane (vitest_green.txt) → two lane summaries, overall red, exit 1", "if a parsed lane masks an unparsed one, TestParsedLaneCannotMaskUnparsed fails: a go-green lane and an unrecognised-output lane, both exit 0 → go package counts and the other lane's exit status + tail", "if the budget resets per lane, TestBudgetAcrossLanes fails: two lanes × 8 failures → 10 blocks, then \"+6 more failing\"", "if a miss dumps output, TestSelectorMissNoTail fails: an EmptyExit miss prints only its miss line", "if summarising leaks into exit classification, TestOutputIsNeverScraped (existing, test_lane_miss_test.go) fails", "if failures escape into errors, TestSummaryNotInError fails: the returned error's text holds no fixture line", "if the clock is wrong, TestWallClockFromSeam fails: testNow advancing 75s prints \"1m15s\"", "if exit codes move, TestExitCodesUnchanged fails: fakes for 0, 1, 3, 4, 5, 6, 7 and 8 exit as before, and a green full run in summary mode still writes .dross/gate/green.json"]
   depends_on = ["t-8", "t-9", "t-10"]
   status = "pending"
 
 [[task]]
   id = "t-15"
-  wave = 4
+  wave = 5
   title = "Rewrite execute/quick test-step guidance"
   files = ["assets/prompts/execute.md", "assets/prompts/quick.md", "README.md", "internal/cmd/execute_prompt_test.go", "internal/cmd/quick_prompt_test.go"]
-  description = """
-§1e tells the agent `dross test` prints a summary (counts, failing tests with their output, the log path); on red, act on the
-summary's failures and open the log only when a block says it was cut. 'streaming output as it arrives' and 'surface the failure tail
-(last 30-40 lines)' are replaced with no net growth. README's dross test row gains the log and summary; its rule show row gains the
-marker and --full. Then `make install` (r-01). Granularity exception: README is a two-row edit."""
+  description = "§1e tells the agent `dross test` prints a summary (counts, failing tests with their output, the log path); on red, act on the\nsummary's failures and open the log only when a block says it was cut. 'streaming output as it arrives' and 'surface the failure tail\n(last 30-40 lines)' are replaced with no net growth. README sync: the dross test (231), verify (222), verify results (224) and survivor drain (253) rows gain the log path and\nsummary shape; the rule row (217) gains the marker and --full; a short .dross/logs/ note (gitignored, newest 20); roadmap lines\n450-451 ticked; footprint rows refreshed only if a prompt moves > ~50 bytes. Then `make install` (r-01). Granularity exception: README is one-file doc sync."
   covers = ["c-3", "c-8"]
   test_contract = [
     "if the agent is still told to tail or stream, TestExecuteTestStepDescribesSummary and TestQuickTestStepDescribesSummary fail: after whitespace-normalising the prompt, neither \"streaming output as it arrives\" nor \"last 30-40 lines\" appears, and §1e names .dross/logs/ and quotes t-3's more-failing prefix constant (execute.md wraps the phrase across lines today, so a raw-substring check would pass vacuously)",
@@ -387,24 +244,11 @@ marker and --full. Then `make install` (r-01). Granularity exception: README is 
 
 [[task]]
   id = "t-16"
-  wave = 5
+  wave = 6
   title = "Record after-numbers and gate them"
   files = [".dross/phases/test-output-summaries/flow-cost.toml", ".dross/phases/test-output-summaries/flow-cost-before.toml", "internal/cmd/flowcost_record_test.go"]
-  description = """
-Run `make install` and `dross hooks ensure`; confirm `dross doctor` shows SessionStart → dross reentry and `dross version` matches HEAD.
-Replay t-1's scenario exactly. Live-check the marker in a real session: a repeat, a /clear, a /compact and a subagent's call (this also
-settles whether CLAUDE_CODE_CHILD_SESSION is unset in a main session — if it is set there, c-6 never fires). Move [before] into
-flow-cost.toml beside [after] and [marker_live], then delete flow-cost-before.toml. Extend flowLeg with the *_bytes fields and
-log_reads, and add a test-output-summaries block to TestFlowCostRecords. Observed numbers only."""
+  description = "Run `make install` and `dross hooks ensure`; confirm `dross doctor` shows SessionStart → dross reentry and `dross version` matches HEAD.\nReplay t-1's scenario exactly. Live-check the marker in a real session: a repeat, a /clear, a /compact and a subagent's repeat (its marker\nline must name the --full command; CLAUDE_CODE_CHILD_SESSION is not used, see t-11). Move [before] into\nflow-cost.toml beside [after] and [marker_live], then delete flow-cost-before.toml. Extend flowLeg with the *_bytes fields and\nlog_reads, and add a test-output-summaries block to TestFlowCostRecords. Observed numbers only."
   covers = ["c-8"]
-  test_contract = [
-    "if output didn't shrink, TestFlowCostRecords/test-output-summaries fails: green_test_bytes and verify_leg_bytes are after < before, and after.green_test_bytes ≤ 1024; red_test_bytes is > 0 on both legs and recorded, not gated (D6)",
-    "if the red step needed the log, TestFlowCostRecords fails: after.log_reads == 0",
-    "if a round-trip was added, the existing TestFlowCostRecords gate fails: after.dross_calls ⊆ before.dross_calls",
-    "if the marker is inert in production, TestFlowCostRecords fails: after.rule_show_repeat_bytes < 300, and [marker_live] clear_full, compact_full and subagent_full are all true",
-    "if the after leg used the old binary, the existing binary_version check in TestFlowCostRecords fails",
-    "if the record is missing, the extended `found` check fails: no test-output-summaries flow-cost.toml fails the suite",
-    "if the before file lingers, TestFlowCostRecords fails: flow-cost-before.toml no longer exists",
-  ]
+  test_contract = ["if output didn't shrink, TestFlowCostRecords/test-output-summaries fails: green_test_bytes and verify_leg_bytes are after < before, and after.green_test_bytes ≤ 1024; red_test_bytes is > 0 on both legs and recorded, not gated (D6)", "if the red step needed the log, TestFlowCostRecords fails: after.log_reads == 0", "if a round-trip was added, the existing TestFlowCostRecords gate fails: after.dross_calls ⊆ before.dross_calls", "if the marker is inert in production, TestFlowCostRecords fails: after.rule_show_repeat_bytes < 300, [marker_live] clear_full and compact_full are true, and subagent_marker_names_full is true (a subagent's repeat shows the --full instruction)", "if the after leg used the old binary, the existing binary_version check in TestFlowCostRecords fails", "if the record is missing, the extended `found` check fails: no test-output-summaries flow-cost.toml fails the suite", "if the before file lingers, TestFlowCostRecords fails: flow-cost-before.toml no longer exists"]
   depends_on = ["t-1", "t-7", "t-12", "t-13", "t-15", "t-17"]
   status = "pending"
