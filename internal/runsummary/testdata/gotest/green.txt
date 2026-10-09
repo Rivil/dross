@@ -1,0 +1,8 @@
+# captured: go1.27.1 go test -count=1 ./...
+ok  	example.com/green/a	0.169s
+ok  	example.com/green/b	0.182s
+ok  	example.com/green/c	0.167s
+ok  	example.com/green/d	0.164s
+?   	example.com/green/e	[no test files]
+?   	example.com/green/f	[no test files]
+ok  	example.com/green/g	0.166s [no tests to run]

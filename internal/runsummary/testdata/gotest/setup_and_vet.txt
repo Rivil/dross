@@ -1,0 +1,14 @@
+# captured: go1.27.1 go test -count=1 ./...
+# example.com/setup/s
+s/s_test.go:6:2: no required module provides package example.com/setup/nope; to add it:
+	go get example.com/setup/nope
+FAIL	example.com/setup/s [setup failed]
+# example.com/setup/c [example.com/setup/c.test]
+c/c_test.go:6:14: undefined: missing
+FAIL	example.com/setup/c [build failed]
+# example.com/setup/v
+# [example.com/setup/v]
+v/v_test.go:9:14: fmt.Printf format %d has arg "x" of wrong type string
+ok  	example.com/setup/ok	0.221s
+FAIL	example.com/setup/v [build failed]
+FAIL

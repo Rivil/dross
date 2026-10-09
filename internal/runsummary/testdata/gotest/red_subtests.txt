@@ -1,0 +1,17 @@
+# captured: go1.27.1 go test -count=1 ./...
+--- FAIL: TestAdd (0.00s)
+    m_test.go:7: Add(1, 2) = 4, want 3
+--- FAIL: TestTable (0.00s)
+    --- FAIL: TestTable/a (0.00s)
+        m_test.go:17: checking a
+        m_test.go:19: Add(1, 1) = 3, want 2
+    --- FAIL: TestTable/b (0.00s)
+        m_test.go:17: checking b
+        m_test.go:19: Add(2, 2) = 5, want 4
+    --- FAIL: TestTable/c (0.00s)
+        m_test.go:17: checking c
+        m_test.go:19: Add(0, 0) = 1, want 0
+FAIL
+FAIL	example.com/red/m	0.166s
+ok  	example.com/red/ok	0.165s
+FAIL
