@@ -2482,6 +2482,31 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "test-output-summaries/t-1": {
+      "issue": "DRO-968",
+      "plan_status": "in_progress",
+      "board_state": "task-in-progress"
+    },
+    "test-output-summaries/t-2": {
+      "issue": "DRO-964",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-output-summaries/t-3": {
+      "issue": "DRO-965",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-output-summaries/t-4": {
+      "issue": "DRO-966",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-output-summaries/t-7": {
+      "issue": "DRO-967",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "tool-gate-hooks/t-1": {
       "issue": "DRO-789",
       "plan_status": "done",

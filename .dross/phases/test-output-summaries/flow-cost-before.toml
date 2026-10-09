@@ -1,0 +1,41 @@
+# Test→commit flow cost for test-output-summaries (milestone v1.8 c-6, phase c-8):
+# the before leg, on a dross built from base commit 54ad9064. t-16 moves [before]
+# into flow-cost.toml beside [after] and deletes this file. Observed numbers only;
+# the transcript fields are counted structurally with jq_flow, no content copied.
+
+[scenario]
+  repo_shape = "two fixed scratch repos built by setup.sh (steps below, each followed by a commit in that repo; the commit gate needs a trusted, green `dross test` once .dross/ exists). flow: Go module example.com/flow, 60 packages p1..p60, each Add(a, b) with a 3-case TestAdd; p3 also pins its exported funcs in p3/testdata/api.txt (TestExportedAPI). dross init (stack go: test_command go test -count=1 ./..., runtime.mode native), milestone v0.1 created, phase flow-probe on phase/flow-probe with spec c-1 and one task t-1 'Add Sub to p3' (files p3/p3.go, p3/p3_test.go). mut: module example.com/mut, packages q1 and q2 each with Clamp and a 2-case TestClamp, [mutation] adapters = [gremlins] (local gremlins v0.6.0), phase mut-probe on phase/mut-probe whose one commit adds an `if lo > hi { return lo }` arm to both Clamps. Board disabled, no remote grant: every run is local."
+  setup_steps = ["files flow → commit init", "dross flow → human: dross trust → dross test → commit 'dross scaffold'", "phase flow → dross test → commit 'flow-probe: spec and plan'", "files mut → commit init", "dross mut → human: dross trust → dross test → commit 'dross scaffold'", "phase mut → dross test → commit 'mut-probe: Clamp handles an inverted range'"]
+  byte_method = "`<cmd> >f 2>&1; wc -c <f` with the binary under test first on PATH and stdout not a terminal. green_test_bytes: `dross test` in flow on its committed tree. red_test_bytes: the same after setup.sh's seed-red step (p5's Add off by one in the work tree only; one failing TestAdd with 3 assertion lines; restored with git checkout afterwards). verify_leg_bytes: `dross verify mut-probe` in mut, once, on its committed tree. rule_show_repeat_bytes: the second of two back-to-back `dross rule show` runs in flow, in a session whose SessionStart hook has fired."
+  wave_position = "t-1 is flow-probe's only task (wave 1); the flow runs inside it, from §1e to its commit"
+  flow_start = "the agent's first Bash call running `dross test` for t-1 (§1e), after the human answered `approve t-1` at §1c"
+  flow_end = "the agent's Bash call that runs t-1's `git commit`, inclusive of that turn"
+  flow_steps = ["fresh `claude` in flow with the binary under test first on PATH", "/dross-execute (pair)", "approve t-1", "§1e: dross test is red — TestExportedAPI (p3/testdata/api.txt lacks Sub)", "fix here", "approve touching p3/testdata/api.txt (a file outside t-1's files)", "green", "§1f: no lanes, so §1e's run is the full suite", "commit", "stop at §1g"]
+  jq_method = "jq -cs -f <filter> <transcript.jsonl> with jq_flow. A turn is a distinct message.id among main-agent entries (type assistant, isSidechain false, model not <synthetic>); its tool entry is its tool_use names joined by +, or text when it has none. wall_clock_s is flow_end − flow_start minus human_wait_s, the sum over every AskUserQuestion in the window of tool_use → its tool_result. log_reads counts Read calls on a .dross/logs/ path and Bash calls naming .dross/logs. dross_calls is the sorted set of `dross <verb> [<sub>]` invocations in the window's Bash commands; per the context-boundaries gate (rivil, 2026-10-08) turns and wall-clock are recorded, not gated."
+  jq_flow = '''
+def ms: (.[0:19] + "Z" | fromdateiso8601) + (.[20:23] | tonumber / 1000);
+def main: .type == "assistant" and .isSidechain == false and .message.model != "<synthetic>";
+def uses: [.message.content[]? | select(type == "object" and .type == "tool_use")];
+def bash($re): uses | any(.name == "Bash" and (.input.command | test($re)));
+def dross_calls: [.[] | uses[] | select(.name == "Bash") | .input.command | [scan("(?:^|[^/\\w-])dross ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?")] | .[] | "dross " + (map(select(. != null)) | join(" "))] | unique;
+[.[] | select(.timestamp)] as $e
+| ($e | map(select(main and bash("(?:^|[^/\\w-])dross test"))) | first | .timestamp) as $start
+| ($e | map(select(main and .timestamp >= $start and bash("git commit"))) | first | .timestamp) as $end
+| ($e | map(select(.timestamp >= $start and .timestamp <= $end))) as $w
+| ($w | map(select(main))) as $a
+| ($a | group_by(.message.id) | sort_by(.[0].timestamp) | map([.[] | uses[] | .name] | if length == 0 then "text" else join("+") end)) as $turns
+| ([$a[] | . as $m | uses[] | select(.name == "AskUserQuestion") | {id, t: ($m.timestamp | ms)}]) as $asks
+| ([$e[] | select(.type == "user") | . as $u | .message.content[]? | select(type == "object" and .type == "tool_result") | {id: .tool_use_id, t: ($u.timestamp | ms)}]) as $results
+| ([$asks[] as $q | $results[] | select(.id == $q.id) | .t - $q.t] | add // 0) as $wait
+| {dross_calls: ($a | dross_calls), agent_turns: ($turns | length), turn_tools: $turns, human_wait_s: $wait,
+   wall_clock_s: ((($end | ms) - ($start | ms)) - $wait),
+   log_reads: ([$a[] | uses[] | select((.name == "Read" and ((.input.file_path // "") | test("/[.]dross/logs/"))) or (.name == "Bash" and (.input.command | test("[.]dross/logs"))))] | length)}
+'''
+
+[before]
+  binary_version = "dross 0.1.0.0 (commit 54ad9064, built 2026-10-09T10:46:44Z)"
+  bytes_measured_at = "2026-10-09T12:49:25Z"
+  green_test_bytes = 1971
+  red_test_bytes = 2208
+  verify_leg_bytes = 1917
+  rule_show_repeat_bytes = 2013
