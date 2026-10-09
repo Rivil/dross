@@ -4,23 +4,6 @@ task_seq = 18
   id = "test-output-summaries"
 
 [[task]]
-  id = "t-1"
-  wave = 1
-  title = "Record before-numbers on the base-commit binary"
-  files = [".dross/phases/test-output-summaries/flow-cost-before.toml"]
-  description = """
-Run FIRST, before any `make install` in this phase (r-01: t-15's install re-links the edited prompts). Build dross from changes.json
-base_commit 54ad9064 into a temp dir, put it first on PATH and record `dross version`. Fixed scratch repos: a Go module with 6 packages
-and one seeded failing test; a gremlins phase on a 2-package module (local gremlins v0.6.0). Record green_test_bytes, red_test_bytes,
-verify_leg_bytes and rule_show_repeat_bytes as `dross … >f 2>&1; wc -c <f`. The human drives one pair-mode /dross-execute task over
-§1e red → fix → green → §1f full `dross test` → commit; count agent_turns, turn_tools, wall_clock_s, dross_calls and log_reads with jq
-over the transcript (the context-boundaries method, structural only). Write [scenario] and [before] to flow-cost-before.toml — never
-flow-cost.toml, which TestFlowCostRecords globs and fails without an [after] leg."""
-  covers = ["c-8"]
-  test_contract = ["if the half record is globbed, TestFlowCostRecords fails on every later commit gate: after t-1 no phases/test-output-summaries/flow-cost.toml exists, and the phases/*/flow-cost.toml glob (flowcost_record_test.go) does not match flow-cost-before.toml", "if before ran on a rebuilt or stale binary, t-16's TestFlowCostRecords fails: before.binary_version is the base-commit build's and must differ from after.binary_version", "if a field is missing, t-16's merge fails TestFlowCostRecords: [scenario] carries repo_shape, wave_position, flow_start, flow_end and jq_method; [before] has agent_turns > 0, wall_clock_s > 0, non-empty session_id and binary_version, len(turn_tools) == agent_turns, non-empty dross_calls and every *_bytes > 0"]
-  status = "pending"
-
-[[task]]
   id = "t-2"
   wave = 1
   title = "Add run-log sink and TTY seam"
@@ -98,6 +81,23 @@ flow-cost.toml, which TestFlowCostRecords globs and fails without an [after] leg
     "if the C# leg keeps its raw adapter name, TestAdapterLanguageMatchesAdapterNames fails: adapterLanguage over the Name() of Gremlins, Stryker and StrykerNet returns go, typescript and csharp",
     "if the wiring is missing, TestVerifySummaryPrintsPackagesAndSurvivors (internal/cmd) fails: finishVerify on seeded Tests prints the rows and every survivor's file:line",
   ]
+  status = "pending"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Record before-numbers on the base-commit binary"
+  files = [".dross/phases/test-output-summaries/flow-cost-before.toml"]
+  description = """
+Run FIRST, before any `make install` in this phase (r-01: t-15's install re-links the edited prompts). Build dross from changes.json
+base_commit 54ad9064 into a temp dir, put it first on PATH and record `dross version`. Fixed scratch repos: a Go module with 6 packages
+and one seeded failing test; a gremlins phase on a 2-package module (local gremlins v0.6.0). Record green_test_bytes, red_test_bytes,
+verify_leg_bytes and rule_show_repeat_bytes as `dross … >f 2>&1; wc -c <f`. The human drives one pair-mode /dross-execute task over
+§1e red → fix → green → §1f full `dross test` → commit; count agent_turns, turn_tools, wall_clock_s, dross_calls and log_reads with jq
+over the transcript (the context-boundaries method, structural only). Write [scenario] and [before] to flow-cost-before.toml — never
+flow-cost.toml, which TestFlowCostRecords globs and fails without an [after] leg."""
+  covers = ["c-8"]
+  test_contract = ["if the half record is globbed, TestFlowCostRecords fails on every later commit gate: after t-1 no phases/test-output-summaries/flow-cost.toml exists, and the phases/*/flow-cost.toml glob (flowcost_record_test.go) does not match flow-cost-before.toml", "if before ran on a rebuilt or stale binary, t-16's TestFlowCostRecords fails: before.binary_version is the base-commit build's and must differ from after.binary_version", "if a field is missing, t-16's merge fails TestFlowCostRecords: [scenario] carries repo_shape, wave_position, flow_start, flow_end and jq_method; [before] has agent_turns > 0, wall_clock_s > 0, non-empty session_id and binary_version, len(turn_tools) == agent_turns, non-empty dross_calls and every *_bytes > 0"]
   status = "pending"
 
 [[task]]
