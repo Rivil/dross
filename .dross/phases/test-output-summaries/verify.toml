@@ -1,23 +1,23 @@
 [verify]
   phase = "test-output-summaries"
-  generated_at = 2026-10-26T12:45:44.066351Z
-  verdict = "fail"
+  generated_at = 2026-10-26T16:11:08.791055Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-10-26T12:52:08.312837Z
-  measured_commit = "529b0c4d08065a38f89def29cfbae3ee9a61c35f"
-  measured_tree = "8add9f2c568bb093653a7fd155390a662b1e1d24"
+  finalized_at = 2026-10-26T16:12:36.493871Z
+  measured_commit = "27483a9716a5a0b0bba5cd932d0450967002ef1b"
+  measured_tree = "cba67273269ed701a03e31c740e84a14da38f6b8"
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9727699530516432
-  mutants_killed = 1036
-  mutants_survived = 29
-  mutants_not_covered = 29
+  mutation_score = 0.9764816556914393
+  mutants_killed = 1038
+  mutants_survived = 25
+  mutants_not_covered = 25
   mutants_no_block = 21
-  mutants_test_gap = 8
-  mutants_in_scope = 1065
-  unclassified_in_scope = 9
+  mutants_test_gap = 4
+  mutants_in_scope = 1063
+  unclassified_in_scope = 0
   criteria_total = 8
   criteria_covered = 8
   criteria_uncovered = 0
@@ -25,11 +25,11 @@
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 1036
-    survived = 29
+    killed = 1038
+    survived = 25
     timeout = 0
-    in_scope = 1065
-    score = 0.9727699530516432
+    in_scope = 1063
+    score = 0.9764816556914393
     file_count = 51
     measured_on = "helicon"
     whole_file = ["internal/boardsync/toolfence_composer_test.go — adapter-lacks-range-runner", "internal/cmd/execute_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/flowcost_record_test.go — adapter-lacks-range-runner", "internal/cmd/hermetic_env_test.go — adapter-lacks-range-runner", "internal/cmd/interaction.go — adapter-lacks-range-runner", "internal/cmd/quick_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/reentry.go — adapter-lacks-range-runner", "internal/cmd/reentry_test.go — adapter-lacks-range-runner", "internal/cmd/rule.go — adapter-lacks-range-runner", "internal/cmd/secretscan_writer_enum_test.go — adapter-lacks-range-runner", "internal/cmd/showmark.go — adapter-lacks-range-runner", "internal/cmd/showmark_test.go — adapter-lacks-range-runner", "internal/cmd/survivor_drain.go — adapter-lacks-range-runner", "internal/cmd/survivor_drain_log_test.go — adapter-lacks-range-runner", "internal/cmd/taint_engine_test.go — adapter-lacks-range-runner", "internal/cmd/test.go — adapter-lacks-range-runner", "internal/cmd/test_lane_consent_test.go — adapter-lacks-range-runner", "internal/cmd/test_lane_prepare_test.go — adapter-lacks-range-runner", "internal/cmd/test_lane_selector_test.go — adapter-lacks-range-runner", "internal/cmd/test_output.go — adapter-lacks-range-runner", "internal/cmd/test_output_test.go — adapter-lacks-range-runner", "internal/cmd/test_summary_wiring_test.go — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_log_test.go — adapter-lacks-range-runner", "internal/cmd/verify_results_test.go — adapter-lacks-range-runner", "internal/cmd/verify_summary_test.go — adapter-lacks-range-runner", "internal/gatestate/showmark.go — adapter-lacks-range-runner", "internal/gatestate/showmark_test.go — adapter-lacks-range-runner", "internal/gatestate/store.go — adapter-lacks-range-runner", "internal/mutation/adapter.go — adapter-lacks-range-runner", "internal/mutation/gremlins.go — adapter-lacks-range-runner", "internal/mutation/gremlins_stream_test.go — adapter-lacks-range-runner", "internal/mutation/stryker.go — adapter-lacks-range-runner", "internal/mutation/stryker_net.go — adapter-lacks-range-runner", "internal/mutation/stryker_stream_test.go — adapter-lacks-range-runner", "internal/mutation/toolfail.go — adapter-lacks-range-runner", "internal/mutation/toolfail_test.go — adapter-lacks-range-runner", "internal/runlog/runlog.go — adapter-lacks-range-runner", "internal/runlog/runlog_test.go — adapter-lacks-range-runner", "internal/runsummary/gotest.go — adapter-lacks-range-runner", "internal/runsummary/gotest_test.go — adapter-lacks-range-runner", "internal/runsummary/jsrunner.go — adapter-lacks-range-runner", "internal/runsummary/jsrunner_test.go — adapter-lacks-range-runner", "internal/runsummary/render.go — adapter-lacks-range-runner", "internal/runsummary/summary.go — adapter-lacks-range-runner", "internal/runsummary/summary_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/verify/legsummary.go — adapter-lacks-range-runner", "internal/verify/legsummary_test.go — adapter-lacks-range-runner", "internal/verify/persist_toolfence_test.go — adapter-lacks-range-runner", "internal/verify/verify.go — adapter-lacks-range-runner"]
@@ -37,8 +37,8 @@
 [[criterion]]
   id = "c-1"
   status = "covered"
-  tests = ["internal/cmd/test_output_test.go:TestEveryRunWritesLog", "internal/cmd/test_output_test.go:TestLogPathBeforeSpawn", "internal/runlog/runlog_test.go:TestLogDirIgnored"]
-  notes = "bare/selector/files/lanes-only/remote each leave one log holding stdout+stderr marks; path printed before first spawn and at end"
+  tests = ["internal/cmd/test_output_test.go:TestEveryRunWritesLog", "internal/cmd/test_output_test.go:TestLogPathBeforeSpawn", "internal/runlog/runlog_test.go:TestLogDirIgnored", "internal/runlog/runlog_test.go:TestPruneEqualMtimeTiebreak", "internal/runlog/runlog_test.go:TestDefaultTerminalFollowsOSStreams"]
+  notes = "bare/selector/files/lanes-only/remote each leave one log holding stdout+stderr marks; path printed before first spawn and at end; t-19 tests now kill runlog.go:114 and :337 (prune tiebreak, terminal default)"
 
 [[criterion]]
   id = "c-2"
@@ -49,8 +49,8 @@
 [[criterion]]
   id = "c-3"
   status = "covered"
-  tests = ["internal/cmd/test_summary_wiring_test.go:TestRedRunPrintsFailures", "internal/runsummary/summary_test.go:TestFailureBound", "internal/runsummary/summary_test.go:TestMassBreakSize", "internal/runsummary/gotest_test.go:TestGoBuildFailed"]
-  notes = "leaf names + own lines on stdout; 30-line/10-failure bound; build errors counted"
+  tests = ["internal/cmd/test_summary_wiring_test.go:TestRedRunPrintsFailures", "internal/runsummary/summary_test.go:TestFailureBound", "internal/runsummary/summary_test.go:TestMassBreakSize", "internal/runsummary/gotest_test.go:TestGoBuildFailed", "internal/runsummary/summary_test.go:TestStripsANSIAndCR"]
+  notes = "leaf names + own lines on stdout; 30-line/10-failure bound; build errors counted; CR-redraw case now kills summary.go:235"
 
 [[criterion]]
   id = "c-4"
@@ -62,7 +62,7 @@
   id = "c-5"
   status = "covered"
   tests = ["internal/cmd/verify_log_test.go:TestAttachedLegLogsStream", "internal/cmd/verify_summary_test.go:TestVerifySummaryPrintsPackagesAndSurvivors", "internal/cmd/verify_log_test.go:TestCollectFetchesHostLog", "internal/cmd/survivor_drain_log_test.go:TestDrainLogsGremlinsStream", "internal/mutation/stryker_stream_test.go:TestStrykerStreamToSink"]
-  notes = "no per-mutant lines on stdout/stderr, all in the leg log, path printed; package rows + survivor file:line; collect and drain paths too. Production detachFetchLog untested (deferred, routed)"
+  notes = "no per-mutant lines on stdout/stderr, all in the leg log, path printed; package rows + survivor file:line; collect and drain paths too (this run's collect printed exactly that shape). Production detachFetchLog untested (deferred, routed to test-summary-parsers)"
 
 [[criterion]]
   id = "c-6"
@@ -80,48 +80,16 @@
   id = "c-8"
   status = "covered"
   tests = ["internal/cmd/flowcost_record_test.go:TestFlowCostRecords"]
-  notes = "flow-cost.toml before/after: green 2009->249 B, verify leg 1917->796 B, rule repeat 2013->120 B, 14->9 turns, log_reads 0; round-trip gate is dross_calls subset, turn count recorded not gated"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/runlog/runlog.go:114 (CONDITIONALS_NEGATION)"
+  notes = "flow-cost.toml before/after: green 2009->249 B, red 2246->495 B, verify leg 1917->796 B, rule repeat 2013->120 B, 14->9 turns, log_reads 0; round-trip gate is dross_calls subset, turn count recorded not gated"
 
 [[finding]]
   severity = "NOTE"
-  text = "gremlins mutant survived: internal/runlog/runlog.go:287 (CONDITIONALS_NEGATION) — accepted after collect (switch-case attribution ceiling, no go-cover block)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/runlog/runlog.go:337 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/runlog/runlog.go:337 (CONDITIONALS_NEGATION)"
+  text = "All 25 in-scope survivors carry an accepted disposition (unclassified_in_scope = 0). The 4 in-hunk ones (runlog.go:289, gotest.go:84 x2, jsrunner.go:106/108) are the gremlins switch-case attribution ceiling; the 4 the tool counts as test gaps (in a cover block no test ran) are among the inherited survivors, each accepted earlier with a recorded reason. Efficacy over the 1042 reachable mutants = 1.00."
 
 [[finding]]
   severity = "NOTE"
-  text = "gremlins mutant survived: internal/runsummary/gotest.go:84 (CONDITIONALS_NEGATION) — accepted after collect (switch-case attribution ceiling, no go-cover block)"
+  text = "The previous run's 4 BLOCKING in-hunk survivors (runlog.go:114, runlog.go:337 x2, summary.go:235) are killed by t-19 (b2799db8)."
 
 [[finding]]
   severity = "NOTE"
-  text = "gremlins mutant survived: internal/runsummary/gotest.go:84 (CONDITIONALS_NEGATION) — accepted after collect (switch-case attribution ceiling, no go-cover block)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: internal/runsummary/jsrunner.go:106 (CONDITIONALS_NEGATION) — accepted after collect (switch-case attribution ceiling, no go-cover block)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: internal/runsummary/jsrunner.go:108 (CONDITIONALS_NEGATION) — accepted after collect (switch-case attribution ceiling, no go-cover block)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/runsummary/summary.go:235 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "unclassified_in_scope = 9 is as collected; 5 of those (4 sites) were accepted after collect as the gremlins switch-case ceiling. 4 remain BLOCKING: real in-hunk test gaps (cover block count=0) — summary.go:235 mid-line CR in clean(), runlog.go:337 x2 equal-mtime prune tiebreak, runlog.go:114 default terminal resolver. User chose to fix them in this phase."
-
-[[finding]]
-  severity = "NOTE"
-  text = "7 solo-review deferred items (spec deferred[1..7]) routed to test-summary-parsers during this verify."
+  text = "7 solo-review deferred items stay routed to test-summary-parsers (spec [[deferred]]); 205 out-of-scope survivors filtered."
