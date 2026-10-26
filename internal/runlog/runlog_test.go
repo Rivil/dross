@@ -295,6 +295,78 @@ func keys(m map[string]bool) []string {
 	return out
 }
 
+func TestPruneEqualMtimeTiebreak(t *testing.T) {
+	quiet(t)
+	dir := t.TempDir()
+	logs := logsDir(dir)
+	if err := os.MkdirAll(logs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Keep+1 old logs on one mtime: the cut falls inside the tie, so the
+	// names alone decide it — the two earliest go.
+	mod := time.Now().Add(-time.Hour)
+	var names []string
+	for i := 0; i < Keep+1; i++ {
+		name := fmt.Sprintf("test-202601%02dT000000.000000000Z.log", i+1)
+		p := filepath.Join(logs, name)
+		if err := os.WriteFile(p, []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, mod, mod); err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, name)
+	}
+
+	l := Open(dir, Name{Kind: KindTest}, Options{})
+	mustWrite(t, l, "new\n")
+	l.Close()
+
+	want := map[string]bool{filepath.Base(l.Path()): true, ".gitignore": true}
+	for _, n := range names[2:] {
+		want[n] = true
+	}
+	des, err := os.ReadDir(logs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, d := range des {
+		got[d.Name()] = true
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("after prune:\n got %v\nwant %v", keys(got), keys(want))
+	}
+}
+
+// The production resolver, not quiet()'s: it reads os.Stdout and os.Stderr
+// at call time, each Terminal to its own stream.
+func TestDefaultTerminalFollowsOSStreams(t *testing.T) {
+	dir := t.TempDir()
+	out, err := os.Create(filepath.Join(dir, "out"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Close()
+	errF, err := os.Create(filepath.Join(dir, "err"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer errF.Close()
+
+	prevOut, prevErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = out, errF
+	gotOut, gotErr := terminal(Stdout), terminal(Stderr)
+	os.Stdout, os.Stderr = prevOut, prevErr
+
+	if gotOut != io.Writer(out) {
+		t.Errorf("terminal(Stdout) = %v, want the current os.Stdout", gotOut)
+	}
+	if gotErr != io.Writer(errF) {
+		t.Errorf("terminal(Stderr) = %v, want the current os.Stderr", gotErr)
+	}
+}
+
 // failAfter is a log file that fails once limit bytes have been written.
 type failAfter struct {
 	f     *os.File

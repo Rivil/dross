@@ -14,6 +14,7 @@
 package runlog
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -21,8 +22,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -330,11 +332,9 @@ func prune(dir, keep string) {
 		}
 		logs = append(logs, entry{p, info.ModTime()})
 	}
-	sort.Slice(logs, func(i, j int) bool {
-		if !logs[i].mod.Equal(logs[j].mod) {
-			return logs[i].mod.After(logs[j].mod)
-		}
-		return logs[i].path > logs[j].path
+	// Newest first; an mtime tie keeps the later name, so the cut is stable.
+	slices.SortFunc(logs, func(a, b entry) int {
+		return cmp.Or(b.mod.Compare(a.mod), strings.Compare(b.path, a.path))
 	})
 	for i := Keep - 1; i < len(logs); i++ {
 		removeFile(logs[i].path) // ENOENT: someone else pruned it first

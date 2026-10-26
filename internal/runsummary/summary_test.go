@@ -313,6 +313,12 @@ func TestStripsANSIAndCR(t *testing.T) {
 	if len(fed) != 1 || fed[0] != "FAIL" {
 		t.Fatalf("fed %q, want exactly \"FAIL\"", fed)
 	}
+	// A progress redraw: only what follows the last CR is what the terminal showed.
+	fed = nil
+	segment("50%\r100% done\r\n")
+	if len(fed) != 1 || fed[0] != "100% done" {
+		t.Fatalf("fed %q, want exactly %q", fed, "100% done")
+	}
 }
 
 func TestAmbiguousClaimFallsBack(t *testing.T) {
