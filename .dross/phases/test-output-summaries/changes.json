@@ -180,6 +180,23 @@
         }
       ]
     },
+    "t-19": {
+      "files": [
+        "internal/runsummary/summary_test.go",
+        "internal/runlog/runlog.go",
+        "internal/runlog/runlog_test.go"
+      ],
+      "commit": "b2799db8",
+      "completed_at": "2026-10-26T13:07:41.213679Z",
+      "landmarks": [
+        {
+          "feature": "run log retention",
+          "symbol": "prune",
+          "loc": "internal/runlog/runlog.go:336",
+          "what": "prune orders newest-first with a cmp.Or name tiebreak; equal-mtime cut, default terminal resolver and mid-line CR now pinned by tests"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/runlog/runlog.go",

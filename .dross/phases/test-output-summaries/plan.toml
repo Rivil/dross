@@ -1,4 +1,4 @@
-task_seq = 18
+task_seq = 19
 
 [phase]
   id = "test-output-summaries"
@@ -244,4 +244,14 @@ and covers the whole run."""
   covers = ["c-8"]
   test_contract = ["if output didn't shrink, TestFlowCostRecords/test-output-summaries fails: green_test_bytes and verify_leg_bytes are after < before, and after.green_test_bytes ≤ 1024; red_test_bytes is > 0 on both legs and recorded, not gated (D6)", "if the red step needed the log, TestFlowCostRecords fails: after.log_reads == 0", "if a round-trip was added, the existing TestFlowCostRecords gate fails: after.dross_calls ⊆ before.dross_calls", "if the marker is inert in production, TestFlowCostRecords fails: after.rule_show_repeat_bytes < 300, [marker_live] clear_full and compact_full are true, and subagent_marker_names_full is true (a subagent's repeat shows the --full instruction)", "if the after leg used the old binary, the existing binary_version check in TestFlowCostRecords fails", "if the record is missing, the extended `found` check fails: no test-output-summaries flow-cost.toml fails the suite", "if the before file lingers, TestFlowCostRecords fails: flow-cost-before.toml no longer exists"]
   depends_on = ["t-1", "t-7", "t-12", "t-13", "t-15", "t-17"]
+  status = "done"
+
+[[task]]
+  id = "t-19"
+  wave = 7
+  title = "Close verify's in-hunk mutation gaps"
+  files = ["internal/runsummary/summary_test.go", "internal/runlog/runlog.go", "internal/runlog/runlog_test.go"]
+  description = "Verify (529b0c4) left 4 BLOCKING NOT-COVERED survivors: summary.go:235 mid-line CR in clean(), runlog.go:337 x2 equal-mtime prune tiebreak, runlog.go:114 default terminal resolver. Cover each with a test that fails if the line breaks."
+  covers = ["c-1", "c-3"]
+  test_contract = ["if clean() keeps anything before a mid-line CR, TestStripsANSIAndCR fails", "if prune's equal-mtime tiebreak flips, TestPruneEqualMtimeTiebreak fails", "if the default terminal resolver swaps stdout and stderr, TestDefaultTerminalFollowsOSStreams fails"]
   status = "done"

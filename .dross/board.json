@@ -2539,6 +2539,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "test-output-summaries/t-19": {
+      "issue": "DRO-989",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "test-output-summaries/t-2": {
       "issue": "DRO-964",
       "plan_status": "done",
