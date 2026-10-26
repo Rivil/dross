@@ -69,3 +69,38 @@
   text = "Counting/failure parsers for gradle (Kotlin/Java), `dart test` and pytest; until then those repos get c-4's tail fallback."
   why = "parser_coverage: no live repo to prove them against in this phase"
   target = "test-summary-parsers"
+
+[[deferred]]
+  id = "4f63f8cf3b9a0893"
+  text = "runsummary: 10 failure blocks can exceed ~30 KB when test names and output lines are both long (name + marker lines sit outside BlockBytes)"
+  why = "t-3 solo review FLAG: worst case ~3,280 bytes/block; TestMassBreakSize only uses 240-byte lines"
+
+[[deferred]]
+  id = "21f5280517ba81a9"
+  text = "go test parser: an open '# pkg' block absorbs a following package's orphan lines (TestMain exit), and any one-word '# Heading' a test prints opens a phantom build block"
+  why = "t-8 solo review FLAGs on gotest.go block handling"
+
+[[deferred]]
+  id = "0e261a713497e7b9"
+  text = "vitest parser: a 'FAIL ' line in console output opens a phantom failure outside the Failed Tests banner, and the ' [ ' suite-suffix strip clips it.each test names containing ' [ '"
+  why = "t-9 solo review FLAGs on jsrunner.go"
+
+[[deferred]]
+  id = "4955d6f05f232771"
+  text = "stryker-net: no test runs it with SetStream set and checks the bounded head still reaches stderr"
+  why = "t-6 solo review FLAG: dropping head from stryker_net.go's MultiWriter with a stream set would go undetected"
+
+[[deferred]]
+  id = "c399397a540354c7"
+  text = "verify collect: production detachFetchLog (remote.FetchArgs <runDir>/log + classifyFetch) has no test; an empty host log prints neither a path nor 'log unavailable'"
+  why = "t-12 solo review FLAG/NOTE"
+
+[[deferred]]
+  id = "3ca181849c7911df"
+  text = "dross test summaries: a 3/4/7 tail shows the last segment, which is the wrong spawn when the error came from a non-spawn step (host-2 lock after host-1 rsync)"
+  why = "t-14 solo review FLAG on testRun.summarise"
+
+[[deferred]]
+  id = "ce3cc16364f40a8c"
+  text = "dross test run log: on a terminal, dross's pre-spawn lines are not copied into the log; with an unavailable log off a terminal, pending lines print twice"
+  why = "t-10 solo review FLAGs on testRun.say/spawn"
