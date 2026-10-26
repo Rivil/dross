@@ -1,7 +1,7 @@
-# Test→commit flow cost for test-output-summaries (milestone v1.8 c-6, phase c-8):
-# the before leg, on a dross built from base commit 54ad9064. t-16 moves [before]
-# into flow-cost.toml beside [after] and deletes this file. Observed numbers only;
-# the transcript fields are counted structurally with jq_flow, no content copied.
+# Test→commit flow cost for test-output-summaries (milestone v1.8 c-6, phase c-8).
+# [before] ran on a dross built from base commit 54ad9064, [after] on the phase
+# head. Observed numbers only; the transcript fields are counted structurally
+# with jq_flow, no content copied.
 
 [scenario]
   repo_shape = "two fixed scratch repos built by setup.sh (steps below, each followed by a commit in that repo; the commit gate needs a trusted, green `dross test` once .dross/ exists). flow: Go module example.com/flow, 60 packages p1..p60, each Add(a, b) with a 3-case TestAdd, plus package apicheck whose TestP3API pins p3's exported funcs to apicheck/testdata/p3.txt — outside p3, so the agent's read of p3 never sees it (a first attempt with the pin inside p3 was read at §1b and pre-empted: no red). dross init (stack go: test_command go test -count=1 ./..., runtime.mode native), milestone v0.1 created, phase flow-probe on phase/flow-probe with spec c-1 and one task t-1 'Add Sub to p3' (files p3/p3.go, p3/p3_test.go). mut: module example.com/mut, packages q1 and q2 each with Clamp and a 2-case TestClamp, [mutation] adapters = [gremlins] (local gremlins v0.6.0), phase mut-probe on phase/mut-probe whose one commit adds an `if lo > hi { return lo }` arm to both Clamps. Board disabled, no remote grant: every run is local."
@@ -270,3 +270,34 @@ def dross_calls: [.[] | uses[] | select(.name == "Bash") | .input.command | [sca
   human_wait_s = 19.0
   log_reads = 0
   dross_calls = ["dross task", "dross task edit", "dross task show", "dross test", "dross validate"]
+
+# The same scenario on the phase head (run4 flow, run3 bytes). The flow was
+# re-driven after §1e's "only when lanes are configured" cue was restored in
+# execute.md: run3's flow ran `dross test lane list`, outside the before set.
+[after]
+  binary_version = "dross 0.1.0.0 (commit 4662ccc6, built 2026-10-10T15:42:06Z)"
+  bytes_measured_at = "2026-10-09T19:51:49Z"
+  bytes_note = "run3, on the build `make install` made after t-15 (commit 4662ccc6, the Go source binary_version names; the later rebuild only re-linked the edited execute.md). Log-path lines are absolute, so byte counts move with the scratch dir's path length."
+  green_test_bytes = 249
+  red_test_bytes = 495
+  verify_leg_bytes = 796
+  rule_show_repeat_bytes = 120
+  session_id = "d8858461-fdb2-4cb6-98a7-7f2e6fd6d633"
+  measured_at = "2026-10-26T09:54:01Z"
+  model = "claude-opus-5-5"
+  claude_code_version = "2.1.310"
+  agent_turns = 9
+  turn_tools = ["Bash", "Bash", "AskUserQuestion", "Bash", "Read", "Edit", "Bash", "Bash", "Bash"]
+  wall_clock_s = 42.5
+  human_wait_s = 5.2
+  log_reads = 0
+  dross_calls = ["dross test"]
+  turn_delta = "-5 turns, -8.1 s: the red step acted on the summary's TestP3API block (one Read of the golden, no log read), and the agent asked `fix here` with the p3.txt deviation folded into that one question, as the before leg did."
+
+# The repeat marker live in a real session (run3 nested session, 2026-10-10
+# ~09:10–09:12 UTC, on the phase-head binary with the SessionStart hook wired).
+[marker_live]
+  repeat = true
+  clear_full = true
+  compact_full = true
+  subagent_marker_names_full = true

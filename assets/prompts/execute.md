@@ -191,12 +191,13 @@ reason to widen the gate.
 Repeat the flag rather than comma-joining: a comma is legal in a path.
 
 A repo with **no** lanes ignores `--files` and runs `runtime.test_command`
-unchanged, so this form is safe everywhere.
+unchanged, so this form is safe everywhere — there is no "only when lanes are
+configured" branch to decide.
 
 `dross test` runs the command itself — gated on consent, on the granted remote
-host when there is one (`dross remote status`), full output kept in a log under
+host when there is one (`dross remote status`), full output logged under
 `.dross/logs/`. It prints a summary: counts on green; on red each failing test
-with its own output, then `+N more failing — see <log>` past ten.
+with its output, then `+N more failing — see <log>` past ten.
 Pass `--local` to force the run onto this machine. A bare `dross test` (no
 `--files`) still runs the whole suite; append a package/path selector to narrow
 that (`dross test ./internal/cmd/...`), which cannot be combined with `--files`.
