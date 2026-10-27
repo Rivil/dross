@@ -216,5 +216,5 @@ prompt_bytes, partial_fetches, verdict, fixture_tree; add checkPromptPartialsFlo
 wall-clock are recorded, not gated (user decision 2026-10-08)."""
   covers = ["c-6", "c-4"]
   test_contract = ["if the after prompt is over budget or not smaller, TestFlowCostRecords/prompt-partials fails: after.prompt_bytes > 15000, or after not below before", "if the common path fetched, the test fails: partial_fetches != 0 on [after] or [verify_after] (recorded as observed, never edited)", "if an after-leg ran `dross prompt partial`, the existing after-subset-of-before dross_calls gate fails", "if the verify after-leg didn't reach a clean attached pass, the test fails: [verify_after].verdict != pass or detached = true", "if legs aren't comparable, the test fails: [after].fixture_tree != [before].fixture_tree, or the same binary_version on both legs", "if the before file lingers, the test fails: flow-cost-before.toml still present", "if the before legs ran on edited prompts, the test fails: [before].prompt_bytes != 25853 or [verify_before].prompt_bytes != 25864", "if the before-legs ran on a binary with t-3 absorbed, TestFlowCostRecords/prompt-partials fails: [before].binary_version and [verify_before].binary_version must name the 3ee0fe71 base build"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-1", "t-13", "t-15"]
