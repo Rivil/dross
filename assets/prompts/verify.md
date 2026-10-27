@@ -47,15 +47,12 @@ Don't hold the session through a long mutation leg — dispatch it detached.
 
 **Read both files before continuing.** They're the inputs for the LLM judgement step.
 
-Move the board issue to the UAT state (it exits 0 and does nothing when `[board].enabled` is false; a non-zero exit is a board failure — surface it, never read it as the disabled no-op). A phase awaiting a verdict is neither being worked nor delivered, so it gets its own state rather than sharing in-progress or shipped:
+`dross verify` also moves the board issue to the UAT state and prints a `board:` line: `off` when `[board].enabled` is false. On `board: FAILED` — a non-zero exit is a board failure — the artefacts are still written: surface it, never read it as the off no-op, and retry:
 ```
 dross issue phase sync <phase> --status uat
 ```
 
-If mutation testing fails to run (e.g. Stryker not installed), surface the error to the user and ask:
-- `install Stryker` — guide them through `pnpm add -D @stryker-mutator/core` (or equivalent for their package manager from `project.toml`)
-- `skip mutation` — re-run with `--skip-mutation`; verdict will note that mutation efficacy is unverified
-- `abort`
+**When** `mutation=failed` — mutation testing failed to run (e.g. Stryker not installed): `dross prompt partial verify mutation-error`
 
 ## 2. Criterion-to-test mapping (the LLM judgement step)
 
@@ -87,23 +84,9 @@ For each surviving mutant under `languages[].mutation.surviving` in `tests.json`
 - `in-hunk` — the mutated line is inside a hunk this phase changed. This is the phase's own new or edited logic escaping its tests; treat it as strong evidence and downgrade the criterion.
 - `inherited` — the phase touched the file but not that line. Still in scope and still counted, but the weaker signal: it is pre-existing code the phase inherited responsibility for by editing around it. Prefer a FLAG over a `covered` → `weak` downgrade unless the line is genuinely part of what a criterion claims.
 
-**Close out every survivor in this run — the backlog only ever shrinks.** Each survivor in `tests.json` carries exactly one `Lifecycle` state, and each state has one job:
+**Close out every survivor in this run — the backlog only ever shrinks.** Each survivor in `tests.json` carries one `Lifecycle` state; `in-diff` ones you judge as above, `routed` and `accepted` ones you leave.
 
-| state | what it means | what you do |
-| --- | --- | --- |
-| `in-diff` | in a file this phase touched | judge it as above — downgrade the criterion, or FLAG it |
-| `routed` | a deferred item carries its key plus a destination | leave it; the skeleton NOTEs it with its target |
-| `accepted` | recorded in `.dross/survivors.toml` with a reason | leave it; it is already silent, by decision |
-| `unclassified` | no state applies — out of the diff, unrouted, unaccepted, or its identity would not resolve | **drain it this run** |
-
-Drain an `unclassified` survivor with one of exactly two verbs, then re-run `dross verify`:
-```
-dross survivor accept <file>:<line> --op <OP> --reason "<why it is permanently acceptable>"
-dross survivor route  <file>:<line> --op <OP> --target <phase-slug>
-```
-`accept` is for a survivor that is genuinely unkillable (e.g. gremlins' switch-case / const-initializer attribution ceiling) — it is the only state that earns silence, and the reason is mandatory. `route` is for real debt with a home: it stays visible, labelled with where it went.
-
-Leaving `unclassified` rows to be re-listed by the next run is the standing-backlog failure the `dross-survivor-drain` builtin rule forbids. Do not re-state them as extra findings either — the skeleton already FLAGs each one; your job is to clear them, not to copy them.
+**When** `unclassified=nonzero` — a survivor is `unclassified`: `dross prompt partial verify drain`
 
 ## 3. Update `verify.toml`
 
@@ -212,11 +195,7 @@ dross verify finalize <phase-id>
 ```
 This is only valid after the verdict in `verify.toml` is one of `pass | partial | fail`. If you skipped step 3 or left `verdict = "pending"`, this command will refuse — go back and finalize the file first. Finalize is idempotent (a re-run reports "already recorded"), and it writes a `finalized = true` marker into `verify.toml` — include that change in the verify-artefacts commit below. Safety net: if this step is skipped, `dross ship` and `dross phase complete` auto-finalize a resolved verdict themselves — but run it here anyway so telemetry reflects when the verdict was actually decided.
 
-Update state:
-```
-dross state set current_phase_status verified
-dross state touch "verified <phase-id>: <verdict> (<criteria-covered>/<total>, mutation <score>)"
-```
+Finalize also sets `current_phase_status` to verified and records the verdict in state history — don't repeat either by hand.
 
 Commit the verify artefacts so `.dross/` doesn't sit dirty (CLI writes the files but doesn't auto-commit):
 ```

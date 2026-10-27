@@ -386,6 +386,21 @@ func TestVerifyPromptReadsRangeProvenance(t *testing.T) {
 	}
 }
 
+// TestVerifyPromptNoDoubleBookkeeping: `dross verify finalize` sets
+// current_phase_status=verified and appends the verified history entry, so §5
+// must not have the agent write either again by hand.
+func TestVerifyPromptNoDoubleBookkeeping(t *testing.T) {
+	wrap := sectionOf(verifyPromptBody(t), "## 5. Wrap", "## ")
+	if !strings.Contains(wrap, "dross verify finalize <phase-id>") {
+		t.Fatal("verify.md §5 lost `dross verify finalize`")
+	}
+	for _, gone := range []string{"dross state set current_phase_status verified", "dross state touch \"verified"} {
+		if strings.Contains(wrap, gone) {
+			t.Errorf("verify.md §5 still instructs %q, which finalize already does", gone)
+		}
+	}
+}
+
 // TestVerifyDetachedKeepsTheNoVerdictExits: the detached partial is where an
 // agent learns that a run that did not report is not a red suite, so the
 // expanded prompt must keep each of `verify results`' exit codes 10–14 with its
