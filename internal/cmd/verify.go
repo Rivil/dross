@@ -1217,8 +1217,18 @@ func verifyFinalize() *cobra.Command {
 				return err
 			}
 			if !recorded {
-				Printf("verify finalize: %s — verdict=%s already recorded\n", phaseID, verdict)
-				return nil
+				// A markVerified that failed after the marker landed leaves the
+				// phase at complete; heal it here, never past complete.
+				s, err := state.Load(filepath.Join(root, state.File))
+				if err != nil {
+					return err
+				}
+				if s.CurrentPhase != phaseID || s.CurrentPhaseStatus != "complete" {
+					Printf("verify finalize: %s — verdict=%s already recorded\n", phaseID, verdict)
+					return nil
+				}
+				Printf("verify finalize: %s — verdict=%s already recorded; status not verified — healing\n", phaseID, verdict)
+				return markVerified(root, phaseID, verdict)
 			}
 			Printf("verify finalize: %s — verdict=%s recorded\n", phaseID, verdict)
 			// Here and not in finalizeVerify: ship and phase complete heal

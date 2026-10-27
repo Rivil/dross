@@ -240,6 +240,48 @@ func TestVerifyFinalizeOwnsTheVerifiedStatus(t *testing.T) {
 	}
 }
 
+// TestVerifyFinalizeHealsAMissedVerifiedStatus: a markVerified that failed
+// after finalizeVerify wrote the marker must not strand the phase at complete
+// — a re-run heals it once — and the heal never walks a shipped phase back.
+func TestVerifyFinalizeHealsAMissedVerifiedStatus(t *testing.T) {
+	const id = "p"
+	root := finishFixture(t, id)
+	statePath := filepath.Join(root, state.File)
+	mustRunState(t, "current_phase", id)
+	mustRunState(t, "current_phase_status", "complete")
+	writeFinalVerdict(t, root, id, "pass")
+	if recorded, _, err := finalizeVerify(root, id); err != nil || !recorded {
+		t.Fatalf("finalizeVerify = %v, %v", recorded, err)
+	}
+	s, err := state.Load(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := len(s.History)
+
+	if err := runCmd(t, Verify(), "finalize", id); err != nil {
+		t.Fatal(err)
+	}
+	s, err = state.Load(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.CurrentPhaseStatus != "verified" {
+		t.Errorf("current_phase_status = %q after re-run finalize, want verified", s.CurrentPhaseStatus)
+	}
+	if len(s.History) != n+1 || s.History[len(s.History)-1].Action != "verified p: pass (2/2, mutation 0.97)" {
+		t.Errorf("history after heal = %d entries (was %d), last %q; want one verified entry", len(s.History), n, s.History[len(s.History)-1].Action)
+	}
+
+	mustRunState(t, "current_phase_status", "shipped")
+	if err := runCmd(t, Verify(), "finalize", id); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := state.Load(statePath); s.CurrentPhaseStatus != "shipped" {
+		t.Errorf("re-run finalize moved a shipped phase to %q", s.CurrentPhaseStatus)
+	}
+}
+
 // TestAutoFinalizeLeavesStatusAlone: ship and phase complete heal through
 // finalizeVerify, which must never walk a shipped phase back to verified.
 func TestAutoFinalizeLeavesStatusAlone(t *testing.T) {
