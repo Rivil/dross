@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/assets"
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/verify"
 )
@@ -382,6 +383,70 @@ func TestVerifyPromptReadsRangeProvenance(t *testing.T) {
 		if !strings.Contains(prompt, phrase) {
 			t.Errorf("verify.md lost its range-provenance phrase %q", phrase)
 		}
+	}
+}
+
+// TestVerifyDetachedKeepsTheNoVerdictExits: the detached partial is where an
+// agent learns that a run that did not report is not a red suite, so the
+// expanded prompt must keep each of `verify results`' exit codes 10–14 with its
+// meaning, and the sentence that says none of them is a verdict.
+func TestVerifyDetachedKeepsTheNoVerdictExits(t *testing.T) {
+	prompt := strings.Join(strings.Fields(expandedPrompt(t, "verify.md")), " ")
+	for _, want := range []string{
+		"**A non-finished result is not a verdict about the code.**",
+		"`10` scheduled",
+		"`11` running",
+		"`12` the run produced nothing measurable",
+		"`13` the host was unreachable",
+		"`14` the run is gone",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("expanded verify.md lost the detached exit text %q", want)
+		}
+	}
+	base, err := assets.FS.ReadFile("prompts/verify.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(base), "`14` the run is gone") {
+		t.Error("the detached exits are back in base verify.md; they belong to the detached partial")
+	}
+}
+
+// TestVerifyScopeTriggerIsTheDegradedLine: the scope partial is fetched on
+// the line `dross verify` prints for a degraded scope, so the fetch prose must
+// quote that line's literal prefix — and printScopeSummary must still print it.
+func TestVerifyScopeTriggerIsTheDegradedLine(t *testing.T) {
+	const literal = "scope degraded:"
+	points, err := assets.FetchPoints(assets.FS, "verify.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := assets.FS.ReadFile("prompts/verify.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(raw), "\n")
+	found := false
+	for _, p := range points {
+		if p.Partial != "scope" || p.Refetch {
+			continue
+		}
+		found = true
+		if p.Key != "scope" || p.Value != "degraded" {
+			t.Errorf("verify.md:%d fetches scope on %s=%s, want scope=degraded", p.Line, p.Key, p.Value)
+		}
+		if !strings.Contains(lines[p.Line-1], "`"+literal+"`") {
+			t.Errorf("verify.md:%d does not name the literal `%s` line:\n%s", p.Line, literal, lines[p.Line-1])
+		}
+	}
+	if !found {
+		t.Fatal("verify.md has no When line fetching the scope partial")
+	}
+	tests, v := scopeSummaryFixture(1)
+	tests.Scope.Degraded = []string{"internal/f00.go: ast-unavailable"}
+	if out := captureStdout(t, func() { printScopeSummary(tests, v) }); !strings.Contains(out, "  "+literal+" ") {
+		t.Errorf("printScopeSummary no longer prints %q for a degraded scope:\n%s", literal, out)
 	}
 }
 
