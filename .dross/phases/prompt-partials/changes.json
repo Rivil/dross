@@ -3,6 +3,15 @@
   "base": "milestone/v1.8",
   "base_commit": "3ee0fe71267a812460e644eaad7bbca63b0d659a",
   "tasks": {
+    "quick-1": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_absorb_test.go"
+      ],
+      "commit": "f4453f04",
+      "completed_at": "2026-10-27T20:16:28.805468Z",
+      "notes": "quick: verify finalize heals a verified status a failed markVerified left at complete"
+    },
     "t-1": {
       "files": [
         ".dross/phases/prompt-partials/flow-cost-before.toml"
