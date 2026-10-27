@@ -30,8 +30,9 @@ import (
 // entry fails; a state map keyed on a status nothing emits fails.
 //
 // **"Emits" means call sites only** — the `--status <literal>` occurrences in
-// assets/prompts/*.md, the values DerivePhaseStatus can return, and the status
-// every close call FinalizePhase reaches carries. Declared Go
+// assets/prompts/*.md, the values DerivePhaseStatus can return, the status
+// every close call FinalizePhase reaches carries, and the literal statuses
+// internal/cmd passes to SyncPhase. Declared Go
 // constants are deliberately NOT counted: ctx.go's constants are defined *as*
 // members of configenum.LifecycleStatuses (cmd's issue_test.go asserts exactly that),
 // so folding them in would make the emit-set equal the Set by construction and
@@ -88,6 +89,50 @@ func emittedStatuses(t *testing.T) map[string]string {
 	// complete` runs, so the binary is now their only call site.
 	for _, s := range finalizerCloses(t) {
 		out[s] = finalizerFile + ":FinalizePhase"
+	}
+
+	// 4. Literal statuses the CLI passes to SyncPhase itself. `dross execute
+	// begin` absorbed the prompt's in-progress sync, so that status's call site
+	// moved from execute.md into internal/cmd.
+	for s, where := range cliSyncPhaseLiterals(t, filepath.Join(root, "internal", "cmd")) {
+		out[s] = where
+	}
+	return out
+}
+
+// cliSyncPhaseLiterals maps each string-literal status passed as SyncPhase's
+// status argument in dir's non-test files to the file:line passing it.
+func cliSyncPhaseLiterals(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", dir, err)
+	}
+	out := map[string]string{}
+	for _, pkg := range pkgs {
+		for _, f := range pkg.Files {
+			ast.Inspect(f, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok || len(call.Args) < 3 {
+					return true
+				}
+				sel, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || sel.Sel.Name != "SyncPhase" {
+					return true
+				}
+				if x, ok := sel.X.(*ast.Ident); !ok || x.Name != "boardsync" {
+					return true
+				}
+				if lit, ok := call.Args[2].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+					if v, err := strconv.Unquote(lit.Value); err == nil {
+						pos := fset.Position(lit.Pos())
+						out[v] = filepath.ToSlash(filepath.Join("internal", "cmd", filepath.Base(pos.Filename))) + ":" + strconv.Itoa(pos.Line)
+					}
+				}
+				return true
+			})
+		}
 	}
 	return out
 }
@@ -388,6 +433,15 @@ func TestEmittedStatusesAreTheLifecycleSet(t *testing.T) {
 			t.Errorf("lifecycle status %q is in the Set but nothing emits it — a state-map key nothing will ever reach (emitted: %s)",
 				want, strings.Join(sortedSet(emitted), ", "))
 		}
+	}
+}
+
+// TestCLISyncPhaseLiteralsSeeExecuteBegin keeps source 4 from going vacuous:
+// it must find the in-progress status `dross execute begin` passes.
+func TestCLISyncPhaseLiteralsSeeExecuteBegin(t *testing.T) {
+	got := cliSyncPhaseLiterals(t, filepath.Join(repoRootFromTest(t), "internal", "cmd"))
+	if where := got["in-progress"]; !strings.HasPrefix(where, "internal/cmd/execute.go:") {
+		t.Errorf("in-progress SyncPhase literal found at %q, want internal/cmd/execute.go (all: %v)", where, got)
 	}
 }
 
