@@ -131,7 +131,7 @@ auto-heal through) sets current_phase_status=verified and touches \"verified <id
   description = "Precondition: `make install` with t-3 live (r-01), so begin prints its version/board/pull lines. Section 0 drops the version, sync and pull mechanics (deleted, not moved: the CLI owns them) and keeps how to read begin three lines; a missing `version:` line means a stale binary: stop and ask for `make install`. Pull reactions (--apply, conflicts, refused provider) move to _execute.board-moves.md (board_pull=reported). Retarget TestExecutePromptWiresPhaseNumber (same name) to drive `execute begin` on a milestone fixture. Runs before t-9 so the deletion frees the bytes t-9 fetch lines need. Post-commit: `make install`. Expected raw execute.md after: ~24,000 B; report the measured figure."
   covers = ["c-1", "c-3", "c-4", "c-5"]
   test_contract = ["if section 0 loses the stale-binary stop, TestExecutePromptStaleBinaryStop fails: section 0 must name the missing-`version:`-line stop", "if the apply path is lost, TestExecutePromptPullsBoardTaskMoves (expanded) fails without `dross issue task pull <phase> --apply` in the board-moves partial", "if a verb is mistyped in the partial, TestEveryPromptIssueInvocationResolves fails: it walks _execute.board-moves.md via the top-level glob", "if absorbed rows lose their claim, TestPromptInstructionsConserved fails: version/sync/pull rows pass only via the reconciled absorbs markers", "if begin stops deriving the patch from the phase ordinal, TestExecutePromptWiresPhaseNumber fails", "if the absorbed prose is moved instead of deleted, the headroom check fails: expanded execute.md must be <= 25,500 B after this task (TestTestStepPromptsNotGrown cap stays 25854)"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-1", "t-3", "t-5", "t-6", "t-7"]
 
 [[task]]
@@ -142,7 +142,7 @@ auto-heal through) sets current_phase_status=verified and touches \"verified <id
   description = "Move section 1c/1e/1f/1g solo text and the solo retry rule into _execute.solo.md, fetched once right after the `begin --solo` fence (mode=solo). Section 1f keeps a one-line `**Re-fetch** if context was compacted:` line (t-2 grammar: a reference, not a fetch point, never inlined) between the bare `dross test` and `git add <task.files>`. Refused-solo-begin text stays inline. Wrong-branch, dirty-tree and in_progress resume handling move to _execute.recovery.md (preflight=recovery). Retarget solo tests to the partial, keeping their names. Post-commit: `make install` so both partials are embedded before the next task. Expected raw execute.md after: ~19,500 B; report the measured figure."
   covers = ["c-1", "c-3", "c-4", "c-5"]
   test_contract = ["if the solo fetch moves out of section 0 (locked solo_branch), the test fails: the `execute solo` fetch line must be the first fetch after the `dross execute begin <id> --solo` fence", "if solo review ordering breaks, TestExecuteSoloReviewPlacement fails: base section 1f re-fetch line must sit between the bare `dross test` and `git add <task.files>`, and inside the partial re-run `dross test` < `dross review context` < spawn < `dross review status`", "if the solo red path reorders, TestExecuteSoloRedStashes (retargeted) fails when `failed` precedes `git stash push`", "if the solo-begin refusal moves into the partial, TestExecutePromptSoloBeginNeedsReviewer fails: it reads raw section 0 via assets.FS (the sanctioned raw path), not the expansion", "if board edges leave execute.md, TestTaskEdgesPairTheBoardStatusWithThePlanStatus fails on the task-in-progress/task-in-review edges", "if a footer moves into a partial, the footer coverage gate (footer_coverage.go reads execute.md alone) fails on a missing \"state is on disk\" footer", "if the fetch lines push the expansion over its base size, TestTestStepPromptsNotGrown (expanded, cap 25854) fails", "if `dross phase checkout` is lost in the move, TestNoPromptPerformsRawBranchSwitch (expanded via t-7) fails"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-11"]
 
 [[task]]
@@ -168,7 +168,7 @@ auto-heal through) sets current_phase_status=verified and touches \"verified <id
     "if a whole_file reason is lost, TestVerifyPromptReadsRangeProvenance (expanded) fails",
     "if printScopeSummary's line is renamed, TestVerifyScopeTriggerIsTheDegradedLine fails: the scope fetch prose must name the literal `scope degraded:`",
   ]
-  status = "pending"
+  status = "done"
   depends_on = ["t-1", "t-5", "t-6", "t-8"]
 
 [[task]]
@@ -179,7 +179,7 @@ auto-heal through) sets current_phase_status=verified and touches \"verified <id
   description = "Exit codes 2-8 (\"the run did not happen\") move to _execute.test-not-run.md (test_exit=not-run); exit 1 (red) stays inline. Compress landmark, svelte, offload and section 1e prose to reach <= 14,500 B raw (expect ~4.5 KB of compression on top of the move, under the conservation guard). Create TestPromptByteBudget over embedded assets.FS with the execute.md row. Post-commit: `make install`."
   covers = ["c-1", "c-3", "c-4", "c-5"]
   test_contract = ["if execute.md regrows, TestPromptByteBudget fails at 15,001 B naming the file and the overage", "if the not-run partial drops code 8 or the \"2, 3, 4, 5, 6, 7 and 8 all mean the run did not happen\" line, lane_toolchain exit-code tests (expanded since t-10) fail", "if section 1f code `git add <task.files>` leaves base execute.md, TestCommonPathInline (raw via assets.FS) fails", "if pair facts fetch anything, TestCommonPathFetchesNothing fails: mode=pair, test_exit=0 fetch none of the four execute partials"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-9", "t-10"]
 
 [[task]]
@@ -190,7 +190,7 @@ auto-heal through) sets current_phase_status=verified and touches \"verified <id
   description = "Precondition: `make install` with t-4 live. Install/skip/abort menu moves to _verify.mutation-error.md (mutation=failed). Drain verbs, lifecycle table and unclassified-survivor detail move to _verify.drain.md (unclassified=nonzero). Section 1 uat sync block becomes the reaction to `board: FAILED`, which names the retry `dross issue phase sync <phase> --status uat` inline (keeps verify.md a board caller under the [board].enabled sentence). Section 5 drops `state set current_phase_status verified` and the touch. Post-commit: `make install`. Expected raw verify.md after: ~18,000 B; report the measured figure."
   covers = ["c-2", "c-3", "c-4", "c-5"]
   test_contract = ["if verify.md section 5 still instructs `dross state set current_phase_status verified`, TestVerifyPromptNoDoubleBookkeeping fails (t-4 finalize already writes it)", "if _verify.drain.md loses `dross survivor accept|route`, TestVerifyPromptNamesTheDrainVerbs / RestatesTheDrainPolicy (expanded) fail", "if t-4 absorbs markers go, TestPromptInstructionsConserved fails on the state-set and touch rows", "if the board-failure retry leaves verify.md, TestBoardCallingPromptsSurfaceFailure fails: fewer than 6 board-calling prompts, or verify.md calls the board without the `[board].enabled` sentence", "if a verify footer moves into a partial, the footer coverage gate fails"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-4", "t-12"]
 
 [[task]]
@@ -201,7 +201,7 @@ auto-heal through) sets current_phase_status=verified and touches \"verified <id
   description = "Fail/partial recommendations and their next block move to _verify.not-pass.md (verdict=partial and verdict=fail fetch lines; Expand inlines it once). Section 0 reviews note and section 4 Solo review block move to _verify.solo-review.md (reviews=present). Section 4 report block, section 5 next-phase resolution and footers stay inline. Add the verify.md row and the exact-set guard to TestPromptByteBudget (<= 14,500 B raw for headroom). Post-commit: `make install`."
   covers = ["c-2", "c-3", "c-4", "c-5"]
   test_contract = ["if verify.md regrows, TestPromptByteBudget fails at 15,001 B; it also fails if the budgeted set is not exactly {execute.md, verify.md}", "if _verify.solo-review.md drops \"UNRESOLVED\", TestVerifyShowsReviews (expanded) fails", "if the pass block or section 5 next-phase resolution leaves base verify.md, TestCommonPathInline (raw via assets.FS) fails", "if the verify common path fetches, TestCommonPathFetchesNothing fails: verdict=pass, unclassified=zero, leg=attached, mutation=ran fetch no verify partial"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-13", "t-14"]
 
 [[task]]

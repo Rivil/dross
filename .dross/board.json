@@ -1766,6 +1766,36 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "prompt-partials/t-11": {
+      "issue": "DRO-1002",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-partials/t-12": {
+      "issue": "DRO-1004",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-partials/t-13": {
+      "issue": "DRO-1005",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-partials/t-14": {
+      "issue": "DRO-1006",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-partials/t-15": {
+      "issue": "DRO-1007",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-partials/t-16": {
+      "issue": "DRO-1008",
+      "plan_status": "in_progress",
+      "board_state": "task-in-progress"
+    },
     "prompt-partials/t-2": {
       "issue": "DRO-993",
       "plan_status": "done",
@@ -1798,6 +1828,11 @@
     },
     "prompt-partials/t-8": {
       "issue": "DRO-998",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-partials/t-9": {
+      "issue": "DRO-1003",
       "plan_status": "done",
       "board_state": "task-in-review"
     },
