@@ -54,7 +54,6 @@ var rawPromptReadAllowlist = map[string]bool{
 	"internal/cmd/interaction_snippet_test.go#interactionSnippetContent":            true,
 	"internal/cmd/interaction_test.go#TestInteractionPlaybookSingleSource":          true,
 	"internal/cmd/milestone_dispatch_prompt_test.go#milestonePromptText":            true,
-	"internal/cmd/options_docs_test.go#TestVerifyPromptTeachesTheDetachedPath":      true,
 	"internal/cmd/options_docs_test.go#optionsPrompt":                               true,
 	"internal/cmd/pause_prompt_test.go#pausePromptContent":                          true,
 	"internal/cmd/phase_test.go#TestPhaseListPromptConsumersAreCurrent":             true,
@@ -70,9 +69,6 @@ var rawPromptReadAllowlist = map[string]bool{
 	"internal/cmd/ship_prompt_test.go#rawShipSection":                               true,
 	"internal/cmd/spec_prompt_test.go#specPromptContent":                            true,
 	"internal/cmd/squash_claim_guard_test.go#TestQuickPromptHandlesShippedWindow":   true,
-	"internal/cmd/verify_prompt_test.go#TestVerifyPromptOffloadGuidance":            true,
-	"internal/cmd/verify_prompt_test.go#TestVerifyPromptReadsRangeProvenance":       true,
-	"internal/cmd/verify_prompt_test.go#verifyPromptBody":                           true,
 	"internal/cmd/watch_prompt_test.go#watchPromptContent":                          true,
 	"internal/cmd/watch_test.go#TestWatchPromptNamesEveryDigestField":               true,
 	"internal/prtriage/split_test.go#reviewTemplate":                                true,
@@ -81,7 +77,7 @@ var rawPromptReadAllowlist = map[string]bool{
 	"internal/rules/rules_test.go#TestSpecPromptDefersToSnippet":                    true,
 }
 
-const rawPromptReadAllowlistSize = 40
+const rawPromptReadAllowlistSize = 36
 
 // rawPromptReads finds every os.ReadFile or readRepoFile call in internal/
 // test files whose path argument names assets and prompts — as one literal,

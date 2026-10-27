@@ -18,11 +18,7 @@ import (
 // (judgement/cross-check/verdict stay in the main loop; fan-out agents
 // never fill in verify.toml).
 func TestVerifyPromptOffloadGuidance(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "verify.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	prompt := string(b)
+	prompt := expandedPrompt(t, "verify.md")
 
 	for _, phrase := range []string{
 		// the guidance itself
@@ -41,14 +37,10 @@ func TestVerifyPromptOffloadGuidance(t *testing.T) {
 	}
 }
 
-// verifyPromptBody reads assets/prompts/verify.md.
+// verifyPromptBody reads verify.md as the agent loads it, partials inlined.
 func verifyPromptBody(t *testing.T) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "verify.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
+	return expandedPrompt(t, "verify.md")
 }
 
 // TestVerifyPromptNamesEveryMutationStatus is the ONLY gate keeping the prompt
@@ -380,11 +372,7 @@ func TestReadmeVerifyRowDescribesLifecycle(t *testing.T) {
 // record says which lines were instrumented and where it fell back, and the
 // command that reads it.
 func TestVerifyPromptReadsRangeProvenance(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "verify.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	prompt := string(b)
+	prompt := expandedPrompt(t, "verify.md")
 	for _, phrase := range []string{
 		"`whole_file`",
 		"`ranges`",

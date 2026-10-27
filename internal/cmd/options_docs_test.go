@@ -501,12 +501,7 @@ func TestReadmeDocumentsLaneHostAffinity(t *testing.T) {
 // the entire problem this phase exists to remove — the feature would ship and
 // never be used.
 func TestVerifyPromptTeachesTheDetachedPath(t *testing.T) {
-	root := repoRootForDocs(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "verify.md"))
-	if err != nil {
-		t.Fatalf("read assets/prompts/verify.md: %v", err)
-	}
-	prompt := string(b)
+	prompt := expandedPrompt(t, "verify.md")
 	for _, want := range []string{
 		"--detach",
 		"dross verify results",
