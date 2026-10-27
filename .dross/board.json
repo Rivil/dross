@@ -1756,6 +1756,11 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "prompt-partials/t-1": {
+      "issue": "DRO-1001",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "prompt-partials/t-10": {
       "issue": "DRO-1000",
       "plan_status": "done",

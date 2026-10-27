@@ -15,7 +15,7 @@ task_seq = 16
     "if the verify fixture cannot reach pass (e.g. an equivalent mutant like Clamp's `x < lo` -> `x <= lo`), the check fails: [verify_before].verdict must be pass with unclassified_in_scope = 0",
     "if the fixture is non-deterministic, the check fails: running fixture setup twice gives the same `git rev-parse HEAD^{tree}`, recorded as fixture_tree",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-2"

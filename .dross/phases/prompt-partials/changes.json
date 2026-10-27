@@ -3,6 +3,21 @@
   "base": "milestone/v1.8",
   "base_commit": "3ee0fe71267a812460e644eaad7bbca63b0d659a",
   "tasks": {
+    "t-1": {
+      "files": [
+        ".dross/phases/prompt-partials/flow-cost-before.toml"
+      ],
+      "commit": "6ae6cb1b",
+      "completed_at": "2026-10-27T15:00:49.855591Z",
+      "landmarks": [
+        {
+          "feature": "prompt flow cost",
+          "symbol": "verify_before",
+          "loc": ".dross/phases/prompt-partials/flow-cost-before.toml:302",
+          "what": "before-leg turns, wall-clock and prompt bytes for pair execute + attached verify on base 3ee0fe71"
+        }
+      ]
+    },
     "t-10": {
       "files": [
         "internal/cmd/lane_toolchain_docs_test.go",
