@@ -96,7 +96,7 @@ func TestOptionsNamesToolchainAndTheSplit(t *testing.T) {
 // agent driving the loop has no rule for, and the default reading of a
 // non-zero exit is "your code is broken".
 func TestExecuteListsEveryExitCode(t *testing.T) {
-	prompt := readDoc(t, "assets", "prompts", "execute.md")
+	prompt := expandedPrompt(t, "execute.md")
 	for _, code := range declaredExitValues(t) {
 		if code == 0 {
 			continue
@@ -111,7 +111,7 @@ func TestExecuteListsEveryExitCode(t *testing.T) {
 // alone, and the sentence that follows it is the one an agent skims. Left
 // stale, it says in so many words that 8 IS a red suite.
 func TestExecuteSummaryNamesEveryNonRedCode(t *testing.T) {
-	prompt := readDoc(t, "assets", "prompts", "execute.md")
+	prompt := expandedPrompt(t, "execute.md")
 	idx := strings.Index(prompt, " all mean the run did not happen")
 	if idx < 0 {
 		t.Fatal("execute.md no longer carries the run-did-not-happen sentence")
@@ -135,7 +135,7 @@ func TestExecuteSummaryNamesEveryNonRedCode(t *testing.T) {
 // the agent to install it would have it do something dross has no verb for and
 // the user never authorized.
 func TestExecuteEightRemedyDoesNotOverstep(t *testing.T) {
-	prompt := readDoc(t, "assets", "prompts", "execute.md")
+	prompt := expandedPrompt(t, "execute.md")
 	start := strings.Index(prompt, "- **8** — ")
 	if start < 0 {
 		t.Fatal("execute.md has no entry for exit 8")

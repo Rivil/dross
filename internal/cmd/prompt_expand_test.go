@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"io/fs"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -41,7 +42,6 @@ func normalisePrompt(s string) string {
 var rawPromptReadAllowlist = map[string]bool{
 	"internal/boardsync/board_lifecycle_divergence_test.go#rawPrompt":               true,
 	"internal/cmd/architecture_prompt_test.go#architecturePromptContent":            true,
-	"internal/cmd/execconsent_docs_test.go#TestPromptsDescribeTheGateAsEnumerated":  true,
 	"internal/cmd/inbox_prompt_test.go#inboxPromptContent":                          true,
 	"internal/cmd/install_symlink_test.go#TestMakeInstallLinksInteractionSnippet":   true,
 	"internal/cmd/interaction_coreloop_test.go#TestPlanPromptNoArtifactDump":        true,
@@ -77,7 +77,7 @@ var rawPromptReadAllowlist = map[string]bool{
 	"internal/rules/rules_test.go#TestSpecPromptDefersToSnippet":                    true,
 }
 
-const rawPromptReadAllowlistSize = 36
+const rawPromptReadAllowlistSize = 35
 
 // rawPromptReads finds every os.ReadFile or readRepoFile call in internal/
 // test files whose path argument names assets and prompts — as one literal,
@@ -253,5 +253,103 @@ func TestPromptLoadersSeePartials(t *testing.T) {
 	}
 	if !strings.Contains(promptContent(t, "execute.md"), "bannedphrase") || !strings.Contains(executePromptContent(t), "bannedphrase") {
 		t.Error("the normalised loaders missed text that lives only in a partial")
+	}
+}
+
+// splitPrompts are the prompts that have partials: no allowlisted raw reader
+// may read them, directly or through a helper called with their names.
+var splitPrompts = []string{"execute.md", "verify.md"}
+
+// expandingLoaders read the expanded prompt; a split-prompt name passed to one
+// is a sanctioned read, not a raw one.
+var expandingLoaders = map[string]bool{"expandedPrompt": true, "promptBody": true, "rawPrompt": true, "readPrompt": true, "promptContent": true}
+
+// namesSplitPrompt reports whether expr carries a string literal naming one of
+// splitPrompts, outside any call to an expanding loader.
+func namesSplitPrompt(expr ast.Node) bool {
+	found := false
+	ast.Inspect(expr, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok {
+			if id, ok := call.Fun.(*ast.Ident); ok && expandingLoaders[id.Name] {
+				return false
+			}
+		}
+		lit, ok := n.(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+		v, err := strconv.Unquote(lit.Value)
+		if err != nil {
+			return true
+		}
+		for _, p := range splitPrompts {
+			if strings.HasSuffix(v, p) {
+				found = true
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// allowlistedSplitReads lists each allowlist entry that reads a split prompt:
+// a function holding a raw read names one anywhere in its body, or a call to it
+// (it being a helper) passes one as a literal.
+func allowlistedSplitReads(t *testing.T) []string {
+	t.Helper()
+	root := repoRootFromTest(t)
+	var out []string
+	err := filepath.WalkDir(filepath.Join(root, "internal"), func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(p, "_test.go") {
+			return err
+		}
+		fset := token.NewFileSet()
+		f, err := parser.ParseFile(fset, p, nil, 0)
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(root, p)
+		rel = filepath.ToSlash(rel)
+		dir := filepath.ToSlash(filepath.Dir(rel))
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				pos := rel + ":" + strconv.Itoa(fset.Position(call.Pos()).Line)
+				// The whole body, not just the call: a loop over prompt names
+				// passes them through a variable.
+				if isRawPromptRead(call) && rawPromptReadAllowlist[rel+"#"+fn.Name.Name] && namesSplitPrompt(fn.Body) {
+					out = append(out, pos+": allowlisted "+rel+"#"+fn.Name.Name+" reads a split prompt raw")
+				}
+				// A call to an allowlisted helper in the same package.
+				if id, ok := call.Fun.(*ast.Ident); ok && namesSplitPrompt(call) {
+					for key := range rawPromptReadAllowlist {
+						file, name, _ := strings.Cut(key, "#")
+						if name == id.Name && filepath.ToSlash(filepath.Dir(file)) == dir {
+							out = append(out, pos+": calls allowlisted helper "+key+" with a split prompt")
+						}
+					}
+				}
+				return true
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func TestNoAllowlistedReaderReadsASplitPrompt(t *testing.T) {
+	for _, p := range allowlistedSplitReads(t) {
+		t.Error(p + " — read it through expandedPrompt, or assets.FS for the bare base prompt")
 	}
 }

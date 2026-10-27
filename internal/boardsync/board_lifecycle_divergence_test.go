@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/assets"
 	"github.com/Rivil/dross/internal/board"
 	"github.com/Rivil/dross/internal/configenum"
 )
@@ -520,9 +521,10 @@ var taskEdges = map[string]string{
 // pins the pairing to something that cannot be relabelled without changing what
 // the loop does.
 func TestTaskEdgesPairTheBoardStatusWithThePlanStatus(t *testing.T) {
-	root := repoRootFromTest(t)
-	path := filepath.Join(root, "assets", "prompts", "execute.md")
-	b, err := os.ReadFile(path)
+	// The bare base prompt, deliberately: these edges are the common path and
+	// must stay in execute.md itself, never move into a partial.
+	path := "prompts/execute.md"
+	b, err := assets.FS.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
