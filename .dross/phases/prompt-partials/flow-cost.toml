@@ -1,11 +1,13 @@
-# Flow cost before prompt-partials (milestone v1.8 c-6, phase c-6): one pair
-# /dross-execute task and one attached /dross-verify, on a dross built from base
-# commit 3ee0fe71 with the prompts still unedited. t-16 re-drives both on the
-# phase head, merges these tables into flow-cost.toml and deletes this file.
-# Observed numbers only; transcript fields are counted structurally with jq_flow.
+# Flow cost for prompt-partials (milestone v1.8 c-6, phase c-6): one pair
+# /dross-execute task and one attached /dross-verify. [before]/[verify_before]
+# ran on a dross built from base commit 3ee0fe71 with the prompts unedited (t-1);
+# [after]/[verify_after] on the phase head, on fixtures rebuilt by setup_sh to
+# the same HEAD^{tree} (t-16). Observed numbers only; transcript fields are
+# counted structurally with jq_flow, no content copied.
 
 [scenario]
   repo_shape = "two scratch repos built by setup_sh with a fixed git identity and dates, and every .dross timestamp pinned, so HEAD^{tree} reproduces (checked: a second build matched both trees and commit SHAs). flow: Go module example.com/flow, 60 packages p1..p60 each with Add and TestAdd, plus apicheck whose TestP3API pins p3's exported funcs to apicheck/testdata/p3.txt (outside the task's files); phase flow-probe with one task t-1 'Add Sub to p3'. mut: module example.com/mut, q1 and q2 each with Over(x, limit) tested on its boundary; phase mut-probe whose one done task adds Under to both, tested on its boundary, so gremlins kills all 8 mutants (Clamp's `x < lo` -> `x <= lo` is equivalent, so it was dropped). Board disabled, no remote grant: every run is local."
+  wave_position = "t-1 is flow-probe's only task (wave 1): the execute flow runs inside it, from the command to its code commit; verify runs on mut-probe after its one task is done"
   setup_steps = ["files flow -> commit init", "dross flow -> human: dross trust -> dross test -> commit 'dross scaffold'", "phase flow -> dross test -> commit 'flow-probe: spec and plan'", "files mut -> commit init", "dross mut -> human: dross trust -> dross test -> commit 'dross scaffold'", "phase mut -> dross test -> commit 'mut-probe: Under in q1 and q2'", "done mut -> commit 'mut-probe: bookkeeping'"]
   commit_ident = "every setup commit runs with the env `setup.sh x ident` prints (fixture identity, 2026-01-01T00:00:00Z); setup.sh exports the same env so dross's own auto-commits match"
   session = "fresh `claude --permission-mode auto` in the fixture repo, in tmux, launched under env -i with HOME, USER, TERM, LANG and PATH=<binary under test dir>:~/go/src/bin:~/.local/bin:/opt/homebrew/bin:/usr/bin:/bin; prompts are ~/.claude/dross/prompts (symlinked to the repo's assets)"
@@ -318,6 +320,54 @@ def dross_calls: [.[] | uses[] | select(.name == "Bash") | .input.command | [sca
   human_wait_s = 0
   log_reads = 0
   dross_calls = ["dross interaction show","dross issue phase","dross rule show","dross state set","dross state touch","dross trust","dross verify finalize","dross verify mut-probe"]
+  verdict = "pass"
+  detached = false
+  unclassified_in_scope = 0
+  mutants_killed = 8
+  mutants_survived = 0
+
+# The same two scenarios on the phase head (binary from cd91958c, prompts at
+# 12,589 and 14,336 bytes). Execute: past flow_end, the single task's commit
+# led to a §1g checkpoint question where the before leg went straight to §2;
+# it falls outside the window. Verify: one grep of the gremlins log
+# (log_reads = 1), recorded, not gated; Claude Code auto-updated to 2.1.312
+# between the two after legs.
+[after]
+  binary_version = "dross 0.1.0.0 (commit cd91958c, built 2026-10-27T18:46:53Z)"
+  session_id = "4d685f68-3910-47f6-8ed8-56c16d2a39ea"
+  fixture_tree = "bb520a794fffe81aa73a10fe9e46b81dcd971e13"
+  model = "claude-opus-5-5"
+  effort = "high"
+  claude_code_version = "2.1.311"
+  flow_start = "2026-10-27T19:20:08.766Z"
+  flow_end = "2026-10-27T19:21:21.972Z"
+  prompt_bytes = 12589
+  partial_fetches = 0
+  agent_turns = 18
+  turn_tools = ["Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash","AskUserQuestion","Edit+Edit","Bash","Bash","Bash","AskUserQuestion","Bash","Bash","Bash","Bash"]
+  wall_clock_s = 65.7
+  human_wait_s = 7.5
+  log_reads = 0
+  dross_calls = ["dross execute begin","dross interaction show","dross issue task","dross rule show","dross stack loadout","dross task next","dross task show","dross task status","dross test","dross trust","dross validate"]
+  verdict = "committed"
+
+[verify_after]
+  binary_version = "dross 0.1.0.0 (commit cd91958c, built 2026-10-27T18:46:53Z)"
+  session_id = "c291a337-890a-4840-9487-b34fcda2a993"
+  fixture_tree = "cde0e4be716503bc498b1b112a44b945cd86ad94"
+  model = "claude-opus-5-5"
+  effort = "high"
+  claude_code_version = "2.1.312"
+  flow_start = "2026-10-27T19:21:55.206Z"
+  flow_end = "2026-10-27T19:22:42.850Z"
+  prompt_bytes = 14336
+  partial_fetches = 0
+  agent_turns = 12
+  turn_tools = ["Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash"]
+  wall_clock_s = 47.6
+  human_wait_s = 0
+  log_reads = 1
+  dross_calls = ["dross interaction show","dross rule show","dross trust","dross verify finalize","dross verify mut-probe"]
   verdict = "pass"
   detached = false
   unclassified_in_scope = 0
