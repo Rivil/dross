@@ -1,51 +1,46 @@
 # /dross-verify
 
-Decide whether a phase actually delivered what its `spec.toml` promised — not by counting tasks, by checking that **tests catch breakage** and **every acceptance criterion has a real test that would fail when it broke**.
+Decide whether a phase delivered what its `spec.toml` promised — not by counting tasks, but by checking that **tests catch breakage** and **every acceptance criterion has a real test that would fail when it broke**. Three checks, in order: mutation efficacy (mechanical), criterion-to-test mapping (LLM judgement), final verdict.
 
-Three checks, in order: mutation efficacy (mechanical), criterion-to-test mapping (LLM judgement), final verdict.
-
-**Surface results as a report, not a raw artifact.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): §4 emits the verdict plus a compact criterion→test/status mapping — the judgement the user must trust — and never pastes the raw `verify.toml` back.
+**Surface results as a report, not a raw artifact.** Follow the interaction playbook (`_interaction.md`, printed by `dross interaction show` below): §4 emits the verdict plus a compact criterion→test/status mapping and never pastes the raw `verify.toml` back.
 
 ## 0. Pre-flight
 
-1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for this command.
-2. Resolve target phase from `$ARGUMENTS` or `state.json`'s `current_phase`. Fail if neither resolves.
-3. Read `.dross/phases/<id>/spec.toml` and `plan.toml`. If either is missing, route to `/dross-spec` or `/dross-plan` first.
-4. Read `.dross/phases/<id>/changes.json`. If missing or empty: `/dross-execute` hasn't touched anything for this phase yet — stop and route there. Keep its `reviews` key for §4: in a `--solo` run, each task's reviewer outcome (`outcome`, `rounds`, `cause`) and every finding with its `resolution`. Note any task `plan.toml` marks `failed` too, with the reason `dross task show <id> <task-id>` prints.
-5. Parse `--skip-mutation` flag. Default OFF (run mutation testing). Skip if user explicitly asked.
-6. Check exec consent before §1 — `dross verify` shells out to mutation tools that run this repo's test suite, and it refuses without it:
+1. Run `dross rule show` and `dross interaction show`; the rules are MUST-FOLLOW and the playbook governs this command.
+2. Resolve the phase from `$ARGUMENTS` or `state.json`'s `current_phase`; fail if neither resolves.
+3. Read `.dross/phases/<id>/spec.toml` and `plan.toml`; if either is missing, route to `/dross-spec` or `/dross-plan` first.
+4. Read `.dross/phases/<id>/changes.json`; missing or empty → route to `/dross-execute`. Keep its `reviews` key for §4 (a `--solo` run's per-task reviewer outcomes and findings), and note any task `plan.toml` marks `failed`, with the reason `dross task show <id> <task-id>` prints.
+5. Parse `--skip-mutation` (default off; skip only if the user asked).
+6. Check exec consent — `dross verify` runs this repo's test suite through mutation tools, and every dross command that spawns a process refuses without it:
    ```
    dross trust --check
    ```
-   Exit 0 means trusted; continue. Non-zero means untrusted or stale — **stop and show the user the exact `runtime.test_command` line** from project.toml, then let them run `dross trust`. Never run `dross trust` on their behalf: the gate exists so a human reads the line the repo supplied.
+   Non-zero means untrusted or stale: **stop and show the user the exact `runtime.test_command` line** from project.toml, then let them run `dross trust`. Never run `dross trust` on their behalf: the gate exists so a human reads the line.
 
-   When you need to run the suite directly at any point in this command, use `dross test` rather than interpolating `runtime.test_command` — it is a consent-gated execution site, and it uses the granted remote host when there is one (`--local` forces this machine). A **3** or **4** exit means the run did not happen; do not read it as a verdict.
-
-   The gate is not a fixed list of verbs. Every dross command that spawns a process is covered, enumerated from the source by `TestEverySpawnSiteGatedOrExempt`, so `dross survivor drain` refuses in an untrusted tree exactly as `dross verify` does. `dross doctor` prints the current state and what the grant authorizes.
+   To run the suite directly, use `dross test`, never the raw command (`--local` forces this machine). A **3** or **4** exit means the run did not happen — not a verdict.
 
 ## 1. Mechanical pass — `dross verify`
 
-Run:
 ```
 dross verify <phase> [--skip-mutation]
 ```
 
-This shells out to mutation tools (currently Stryker for TS/JS/Svelte; other languages skip with a reason), parses the JSON reports, and writes:
+It runs the mutation tools (other languages skip with a reason) and writes:
 
-- `.dross/phases/<id>/tests.json` — raw machine output, killed/survived counts per language, plus the `scope` block (what the run scoped to) and the `out_of_scope` list (survivors in files this phase never touched)
-- `.dross/phases/<id>/verify.toml` — skeleton verdict with `verdict = "pending"`, per-criterion `status = "unknown"`, and `[summary].mutation_status` of `measured | unmeasurable | skipped | out-of-scope` (use this — not the raw score — to decide whether the mutation leg gates at all in §3), plus `[summary].unclassified_in_scope`, the mutation leg's fail lever
+- `.dross/phases/<id>/tests.json` — raw output, killed/survived per language, the `scope` block and the `out_of_scope` list (survivors in files this phase never touched)
+- `.dross/phases/<id>/verify.toml` — a skeleton with `verdict = "pending"`, per-criterion `status = "unknown"`, `[summary].mutation_status` (`measured | unmeasurable | skipped | out-of-scope` — this, not the raw score, decides whether the mutation leg gates in §3) and `[summary].unclassified_in_scope`, the mutation leg's fail lever
 
 Don't hold the session through a long mutation leg — dispatch it detached.
 
 **When** `leg=detached` — the mutation leg is long (estimate it from the mutant-site count, never a past duration), or a detached run is in flight to collect: `dross prompt partial verify detached`
 
-**Read the score with its denominator, over this phase's changed files only.** `dross verify` prints it that way — `score: 0.90 over 191 in-scope mutant(s)` (`[summary].mutants_in_scope`), plus a line naming how many are uncoverable by construction and the efficacy over the rest. Carry both into your report: 0.90 over 10 mutants and 0.90 over 400 are the same number and not the same evidence, and a survivor the tooling cannot reach is a different fact from one the tests missed. Mutation tools attribute coarser than a phase — gremlins mutates a whole Go package — so every report is filtered to the phase's change set first: a survivor in an untouched sibling is real, but not this phase's, and is neither scored nor flagged here.
+**Read the score with its denominator, over this phase's changed files only.** `dross verify` prints `score: 0.90 over 191 in-scope mutant(s)` (`[summary].mutants_in_scope`) and a line naming how many are uncoverable by construction, with the efficacy over the rest. Carry both into the report: 0.90 over 10 and over 400 are not the same evidence, and a survivor the tooling cannot reach is not one the tests missed. Reports are filtered to the phase's change set, so a survivor in an untouched sibling is real but not this phase's.
 
-**A run says which lines it measured, and where it fell back to whole files.** A leg with no `ranges` is a whole-file leg and is never called ranged: gremlins always is, and a stryker leg that fell back says why. Judge the score against what was actually instrumented, not against the phase's diff.
+**A run says which lines it measured.** A leg with no `ranges` is a whole-file leg and is never called ranged: gremlins always is, and a stryker leg that fell back says why. Judge the score against what was actually instrumented, not against the phase's diff.
 
 **When** `scope=degraded` — verify printed a `scope degraded:` line: `dross prompt partial verify scope`
 
-**Read both files before continuing.** They're the inputs for the LLM judgement step.
+**Read both files before continuing.**
 
 `dross verify` also moves the board issue to the UAT state and prints a `board:` line: `off` when `[board].enabled` is false. On `board: FAILED` — a non-zero exit is a board failure — the artefacts are still written: surface it, never read it as the off no-op, and retry:
 ```
@@ -56,33 +51,21 @@ dross issue phase sync <phase> --status uat
 
 ## 2. Criterion-to-test mapping (the LLM judgement step)
 
-For each criterion in `spec.toml`, find the test(s) that would fail if that criterion broke. This is where you actually *do* the verify work.
+**Offload the reading when the surface is large** (many criteria × many test files, or a long survivor list): fan out read-only subagents, one per criterion or test area, that read `tests.json`, grep the tests and return **candidate** mappings (test, file:line, what it asserts, relevant survivors). Classification, cross-check and verdict stay here — per `dross-agent-gate`, fan-out agents never fill in verify.toml or decide the verdict. For a small phase, stay inline (docs/subagent-offload-audit.md).
 
-**Offload the reading when the surface is large.** When this phase's surface is large — many criteria × many test files, or a long surviving-mutant list in `tests.json` — don't drag it all into the main context: fan out read-only subagents (one per criterion or per test area) that read `tests.json` and grep the test files, and return per-criterion **candidate** mappings (test name, file:line, what its assertion exercises, relevant surviving mutants). The classification judgement (§ step 4), the mutation cross-check, and the verdict stay in the main loop — per the `dross-agent-gate` rule, fan-out agents are read-only and never fill in verify.toml or decide the verdict. For a small phase, stay inline — the subagent hop isn't worth it (see docs/subagent-offload-audit.md).
+For each criterion `c-N`: restate it in your own words, name its breaking surface ("11th tag should be rejected"), search the tests (`paths.tests` from `project.toml`, or colocated tests under `paths.source`) for an assertion that exercises it, and classify:
+- **`covered`** — ≥1 test would clearly fail if it broke. Record `file:test name`.
+- **`weak`** — a test touches the area but asserts too generically (200 OK, not the rejection). Record + FLAG.
+- **`uncovered`** — no test maps to it. BLOCKING.
+- **`unknown`** — no confident call (e.g. an unfamiliar framework). Record honestly + flag for review.
 
-For each criterion `c-N`:
-
-1. Restate the criterion in your own words. ("c-1: user can attach up to 10 tags per meal.")
-2. Identify what the breaking surface looks like. ("11th tag should be rejected; over-limit case.")
-3. Search the test files (use `Grep`/`Glob` on `paths.tests` from `project.toml`, or scan `paths.source` for colocated tests) for a test whose assertion exercises that surface.
-4. Classify:
-   - **`covered`** — found ≥1 test that would clearly fail if the criterion broke. Record file path + test name (e.g. `src/api/tags.test.ts:test('rejects 11th tag')`).
-   - **`weak`** — found a test that touches the area but its assertions are too generic (e.g. checks for 200 OK, not for the actual rejection). Record + add a FLAG finding.
-   - **`uncovered`** — no test maps to this criterion. Add a BLOCKING finding.
-   - **`unknown`** — couldn't reach a confident classification (e.g. test framework you don't recognise). Record honestly + flag for user review.
-
-Show your reasoning per criterion in 1-3 lines. Don't be silent — the user needs to see the audit trail.
+Show 1-3 lines of reasoning per criterion — the user needs the audit trail.
 
 ### Cross-check with mutation results
 
-For each surviving mutant under `languages[].mutation.surviving` in `tests.json` — the **in-scope** survivors, the ones in files this phase touched:
-- Does the mutated line participate in any criterion's covering test?
-- If yes: the test exists but doesn't catch this kind of breakage → downgrade that criterion from `covered` to `weak`.
-- If no: less concerning, but still surface as a FLAG finding ("survived mutant in <file>:<line>").
+For each in-scope survivor under `languages[].mutation.surviving` in `tests.json`: if the mutated line is in a criterion's covering test's path, the test misses that breakage — downgrade `covered` → `weak`; if not, FLAG it ("survived mutant in <file>:<line>").
 
-**Weight each survivor by its `origin` tag.** Every in-scope survivor carries one:
-- `in-hunk` — the mutated line is inside a hunk this phase changed. This is the phase's own new or edited logic escaping its tests; treat it as strong evidence and downgrade the criterion.
-- `inherited` — the phase touched the file but not that line. Still in scope and still counted, but the weaker signal: it is pre-existing code the phase inherited responsibility for by editing around it. Prefer a FLAG over a `covered` → `weak` downgrade unless the line is genuinely part of what a criterion claims.
+**Weight each survivor by its `origin` tag.** `in-hunk` — inside a hunk this phase changed: its own logic escaping its tests, strong evidence; downgrade. `inherited` — the file was touched but not that line: still counted, a weaker signal; prefer a FLAG unless the line is part of what a criterion claims.
 
 **Close out every survivor in this run — the backlog only ever shrinks.** Each survivor in `tests.json` carries one `Lifecycle` state; `in-diff` ones you judge as above, `routed` and `accepted` ones you leave.
 
@@ -90,9 +73,7 @@ For each surviving mutant under `languages[].mutation.surviving` in `tests.json`
 
 ## 3. Update `verify.toml`
 
-Edit the skeleton dross wrote in step 1. Specifically:
-
-For each `[[criterion]]` block, fill in:
+Fill in each `[[criterion]]` of the skeleton:
 ```toml
 [[criterion]]
 id     = "c-1"
@@ -114,13 +95,9 @@ criteria_covered   = <count where status=covered>
 criteria_uncovered = <count where status=uncovered or weak>
 ```
 
-Leave `[verify].measured_commit` and `[verify].measured_tree` exactly as `dross verify` wrote them. They record the tree this verdict was measured at, and `dross ship` refuses a pass whose tree has since moved; drop them and that refusal quietly becomes a freshness-unknown warning.
+Leave `[verify].measured_commit` and `[verify].measured_tree` exactly as `dross verify` wrote them — `dross ship` refuses a pass whose tree has moved since; without them that refusal degrades to a warning. Leave every `[[summary.leg]]` as written too, and **never** recompute `mutation_score` from them (averaging legs gives a small leg a large one's vote). A leg carrying an `error` measured nothing.
 
-Leave every `[[summary.leg]]` table exactly as `dross verify` wrote it — one per language leg, carrying that leg's own killed/survived/timeout/score. **Never** recompute `mutation_score` from them: the pooled score sums raw counts across legs, which is already weighted by leg size, and averaging the legs' percentages hands a small leg the same vote as a large one. A leg carrying an `error` measured nothing; its zeroes are not a result. Read the legs when a pooled score looks fine but one leg is carrying the failure — that is what they are for.
-
-Compute `[verify].verdict`. **Read `mutation_status` first** — when status is not `measured`, the score is a 0/0 artifact and the mutation leg has nothing to say. This is the dogfood-surfaced bug from FeastAhead phase 04/05: Stryker scoped to `src/lib/utils` only, phase touched server/Svelte files, mutation_score landed at 0.0, verdict heuristic falsely flagged `fail` despite 5/5 criteria covered.
-
-**The mutation leg gates on a count, not a ratio.** `[summary].unclassified_in_scope` is the number of survivors inside this phase's own diff carrying no disposition — neither accepted with a reason nor routed to a destination. The bar is zero, with no tolerance band. `mutation_score` is still reported and still worth reading as evidence of how thorough the suite is, but it is **not** a verdict lever: a phase that adds a pile of killed mutants can bury a live one and still clear any cutoff, and a cutoff re-opens the arbitrary-number argument every phase.
+Compute `[verify].verdict`. **Read `mutation_status` first** — when it is not `measured`, the score is a 0/0 artifact and the mutation leg has nothing to say. **The mutation leg gates on a count, not a ratio:** `[summary].unclassified_in_scope` (survivors in this phase's diff with no disposition) must be zero. `mutation_score` is reported as evidence, never a verdict lever — a cutoff lets killed mutants bury a live one.
 
 If `mutation_status == "measured"`:
 - **`pass`** if all criteria are `covered`, `unclassified_in_scope` is 0, and there are no BLOCKING findings.
@@ -128,14 +105,11 @@ If `mutation_status == "measured"`:
 - **`fail`** if any criterion is `uncovered`, OR `unclassified_in_scope` > 0, OR any BLOCKING findings exist.
 
 If `mutation_status` is `unmeasurable`, `skipped` or `out-of-scope`, base verdict on criterion coverage alone — nothing was measured, so the mutation leg neither passes nor fails the phase:
-- **`pass`** if all criteria are `covered` and no BLOCKING findings. Add a NOTE finding recording why mutation didn't apply (e.g. "mutation unmeasurable: project scope excludes all touched files", "mutation skipped: --skip-mutation passed", or "mutation out-of-scope: every mutant landed in files this phase did not touch").
+- **`pass`** if all criteria are `covered` and no BLOCKING findings; add a NOTE saying why mutation didn't apply (e.g. "mutation out-of-scope: every mutant landed in files this phase did not touch").
 - **`partial`** if at least one criterion is `weak` OR there are FLAG findings but no BLOCKING.
 - **`fail`** if any criterion is `uncovered` OR any BLOCKING findings exist.
 
-Each unclassified in-scope survivor is seeded as its own BLOCKING finding naming `file:line (op)`, so clearing the leg means clearing them individually — kill it with a test, accept it with `dross survivor accept --reason`, or route it with `dross survivor route --target`. Do not clear one by re-routing it to the phase you are verifying.
-
-Add findings as needed (preserve the ones the skeleton seeded from surviving mutants):
-
+Each unclassified in-scope survivor is seeded as its own BLOCKING finding naming `file:line (op)`: clear it by killing it with a test, `dross survivor accept --reason`, or `dross survivor route --target` — never by routing it to the phase you are verifying. Keep the seeded findings and add your own:
 ```toml
 [[finding]]
 severity = "BLOCKING"     # BLOCKING | FLAG | NOTE
@@ -144,7 +118,7 @@ text     = "criterion c-2 (case-insensitive lookup) has no covering test"
 
 ## 4. Surface to user
 
-Surface the verdict plus a **compact criterion→test/status mapping** — the judgement the user is being asked to trust. Print this report, never the raw `verify.toml` (per the `verify_surface` decision; the file is the artifact, this is the report):
+Print this report, never the raw `verify.toml` (`verify_surface`: the file is the artifact, this is the report):
 
 ```
 verify <phase-id> — <verdict>
@@ -167,54 +141,34 @@ verify <phase-id> — <verdict>
       - <one-line per flag>
     NOTE (<count> — see verify.toml)
 
-  Solo review:  <only when changes.json has `reviews` or a task failed>
-    t-3  pass after 2 rounds
-      - BLOCKING spec c-1: <finding> — fixed in the fix round
-      - FLAG quality: <finding> — non-blocking, left
-    t-5  exhausted after 2 rounds — UNRESOLVED
-      - BLOCKING spec c-3: <finding> — unresolved — task failed
-    failed: t-5 — <reason from `dross task show`>
-
   Verdict: <pass | partial | fail>
 ```
+One line per criterion; for survivor detail behind a row, point at `verify.toml`.
 
-The **Solo review** block shows what the per-task reviewer flagged in a `--solo` run, one line per finding with its resolution. Mark every unresolved finding and every failed task: a task the reviewer failed was never committed, so no criterion's coverage may lean on it.
+**When** `reviews=present` — changes.json has `reviews`, or a task failed: `dross prompt partial verify solo-review`
 
-Keep the map to one line per criterion; if the user wants the surviving-mutant detail behind a `weak`/`uncovered` row, point them at `verify.toml` rather than dumping it.
-
-If verdict is `fail` or `partial`, recommend next steps:
-- For `uncovered` criteria: "add tests that exercise <criterion> and re-run /dross-verify"
-- For `weak` criteria: "tighten assertions in <test> — currently doesn't catch <surviving mutant> kind of breakage"
-- For low mutation score: "look at REVIEW.md-style surviving mutants in verify.toml to see what the tests miss"
+**When** `verdict=partial` — the verdict is `partial`: `dross prompt partial verify not-pass`
+**When** `verdict=fail` — the verdict is `fail`: `dross prompt partial verify not-pass`
 
 ## 5. Wrap
 
-Record the resolved verdict in telemetry so `dross stats` and downstream gates can see the outcome:
+Record the resolved verdict:
 ```
 dross verify finalize <phase-id>
 ```
-This is only valid after the verdict in `verify.toml` is one of `pass | partial | fail`. If you skipped step 3 or left `verdict = "pending"`, this command will refuse — go back and finalize the file first. Finalize is idempotent (a re-run reports "already recorded"), and it writes a `finalized = true` marker into `verify.toml` — include that change in the verify-artefacts commit below. Safety net: if this step is skipped, `dross ship` and `dross phase complete` auto-finalize a resolved verdict themselves — but run it here anyway so telemetry reflects when the verdict was actually decided.
+It refuses while `verdict = "pending"` — finish §3 first. It is idempotent, writes `finalized = true` into `verify.toml` (commit it below), sets `current_phase_status` to verified and records the verdict in state history — don't repeat either by hand. Ship and `dross phase complete` auto-finalize as a safety net; run it here anyway so telemetry dates the decision.
 
-Finalize also sets `current_phase_status` to verified and records the verdict in state history — don't repeat either by hand.
-
-Commit the verify artefacts so `.dross/` doesn't sit dirty (CLI writes the files but doesn't auto-commit):
+Commit the verify artefacts (`repo.commit_convention`; drop `tests.json` if `--skip-mutation` left it unwritten):
 ```
 git add .dross/phases/<phase-id>/verify.toml .dross/phases/<phase-id>/tests.json
 git commit -m "chore(dross): record verify for <phase-id> (<verdict>)"
 ```
-Use `repo.commit_convention` from project.toml. Skip `tests.json` from the `add` if mutation was skipped (`--skip-mutation`) and the file wasn't written.
 
 If verdict is `pass`:
 
-1. Resolve `<next-id>` from the **milestone's `phases` array** — `dross milestone show` (or `.dross/milestones/<version>.toml`) — taking the entry immediately after `<id>`. That array is the ordering truth: it lists the whole roadmap, including phases nobody has started.
+1. Resolve `<next-id>` from the **milestone's `phases` array** — `dross milestone show` (or `.dross/milestones/<version>.toml`) — the entry right after `<id>`. That array is the ordering truth, unstarted phases included.
 
-   **Do not use a bare `dross phase list` for this.** Bare, it is a directory listing of every phase in the repo — it prints only phases that have been *scaffolded*, and a phase is scaffolded only once someone begins it. Using it as the ordering source makes every unstarted successor invisible, which is how verifying phase 9 of 14 announced the milestone feature-complete on 2026-08-13 and sent the user to the wrong next command.
-
-   `dross phase list --milestone <version>` is a different question and a safe second reading of the array: it walks that milestone's roadmap in array order, marks entries with no phase directory `(not scaffolded)`, and closes with an `N/M done` footer.
-
-   Only when there is no active milestone (`state.current_milestone` unset) fall back to the bare `dross phase list`, which is then the only ordering there is.
-
-   `<id>` is the last phase in the milestone only when it is the last entry of that array.
+   **Do not use a bare `dross phase list` for this.** It lists only phases someone has scaffolded, so every unstarted successor is invisible — that is how phase 9 of 14 once announced the milestone complete. `dross phase list --milestone <version>` is a safe second reading: it walks the array, marks `(not scaffolded)` entries and ends with `N/M done`. Only with no active milestone (`state.current_milestone` unset) fall back to the bare `dross phase list`. `<id>` is last only when it is the last entry of that array.
 
 2. If `<next-id>` exists, print:
 ```
@@ -243,23 +197,11 @@ Next:
 state is on disk — safe to /clear · fresh session: /dross-ship
 ```
 
-If `partial` or `fail`:
-```
-Phase <id> verdict: <verdict>. Open .dross/phases/<id>/verify.toml for full detail.
-
-Next:
-  /dross-execute <id>      — amend the failing task (add tests / fix code)
-      ↳ --from <task-id>   — resume at the failing task, skipping earlier done tasks
-  /dross-verify            — re-run after addressing blocking findings
-
-state is on disk — safe to /clear · fresh session: /dross-execute <id>
-```
-
 ## Hard rules
 
-- **Follow the interaction playbook (`_interaction.md`); verify.toml is never a review medium.** §4 surfaces the verdict plus a compact criterion→test/status mapping — the report the user must trust — and never pastes the raw `verify.toml` back. Point the user at the file for surviving-mutant detail rather than dumping it.
-- **Don't fake coverage.** If you can't find a test that maps to a criterion, mark it `uncovered`. Better to have an honest `fail` verdict than a false `pass`.
-- **Capture a stated preference as a rule, don't apply it ad hoc.** If the user pushes back on how the verdict is decided — including asking for a score threshold this project should hold itself to — capture that as a project-scope rule via `/dross-rule` so future verifies inherit it consistently rather than it being re-litigated per run. A rule the user wrote is not a verdict lever this prompt invented.
-- **Don't write tests yourself.** /dross-verify is a check, not a fix. If criteria are uncovered, point the user back to /dross-execute (which can amend the failing task) or /dross-plan (to add a test-writing task).
-- **Don't skip the cross-check.** Surviving mutants in covered code is the whole point of mutation testing — failing to downgrade `covered` → `weak` when a mutant in the touched file survives is the exact theatrical-coverage problem dross exists to catch.
-- **Single pass, no checker loop.** /dross-verify writes a verdict; the user decides what to do. Don't auto-rerun after fixes.
+- **Follow the interaction playbook (`_interaction.md`); verify.toml is never a review medium.** §4 surfaces the verdict and a compact criterion map; point at the file for survivor detail.
+- **Don't fake coverage.** No test maps to a criterion → `uncovered`. An honest `fail` beats a false `pass`.
+- **Capture a stated preference as a rule, don't apply it ad hoc.** If the user pushes back on how the verdict is decided — including asking for a score threshold — capture it as a project-scope rule via `/dross-rule` so future verifies inherit it.
+- **Don't write tests yourself.** Verify is a check, not a fix: route uncovered criteria to /dross-execute or /dross-plan.
+- **Don't skip the cross-check.** A survivor in covered code that doesn't downgrade `covered` → `weak` is the theatrical coverage dross exists to catch.
+- **Single pass, no checker loop.** Write the verdict; the user decides what next.
