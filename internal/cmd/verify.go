@@ -8,11 +8,13 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/localstore"
@@ -24,6 +26,7 @@ import (
 	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/runlog"
 	"github.com/Rivil/dross/internal/stack"
+	"github.com/Rivil/dross/internal/state"
 	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/telemetry"
 	"github.com/Rivil/dross/internal/testlane"
@@ -816,14 +819,19 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 	if rec.MeasuredTree == "" {
 		Print("verify: this run was dispatched before trees were recorded — no measured tree, so this verdict's freshness will read as unknown")
 	}
-	if err := finishVerify(root, phaseID, spec, t, verify.MeasuredOnHost(rec.Host), gone); err != nil {
-		return err
+	// A board failure comes back after the artefacts are written: the run is
+	// collected all the same, so its record is cleared before the failure is
+	// returned — otherwise a 500 on the tracker would strand the run.
+	finishErr := finishVerify(root, phaseID, spec, t, verify.MeasuredOnHost(rec.Host), gone)
+	var ec *ExitCodeError
+	if finishErr != nil && !(errors.As(finishErr, &ec) && ec.Code == exitVerifyBoardFailed) {
+		return finishErr
 	}
 	if _, err := localstore.ClearDetachedRun(root, repoDir, phaseID); err != nil {
 		return err
 	}
 	Printf("collected run %s from %s\n", rec.RunID, rec.Host)
-	return nil
+	return finishErr
 }
 
 // detachCancel tears a run down on its host. Swapped in tests.
@@ -1076,6 +1084,32 @@ func finishVerify(root, phaseID string, spec *phase.Spec, t *verify.Tests, measu
 		reportTreeDrift(repoRoot, t.MeasuredTree)
 	}
 	recordVerifyOutcome(t, v)
+	// absorbs: dross issue phase sync <phase> --status uat
+	return verifyBoardUAT(phaseID)
+}
+
+// exitVerifyBoardFailed is a verify whose artefacts were written but whose
+// board could not be moved to uat: the measurement stands, so it must not
+// read as a mutation-tool failure (1) or as any results or host state.
+const exitVerifyBoardFailed = 16
+
+// verifyBoardUAT moves the phase's board issue to uat once tests.json and
+// verify.toml are on disk, narrating on a `board:` line. A failure is
+// reported after the artefacts, never instead of them; board sync off says so.
+func verifyBoardUAT(phaseID string) error {
+	ctx, enabled, err := openBoard()
+	if err == nil && !enabled {
+		Printf("board: off\n")
+		return nil
+	}
+	if err == nil {
+		ctx.Out = &labelWriter{label: "board: "}
+		err = boardsync.SyncPhase(ctx, phaseID, "uat", false)
+	}
+	if err != nil {
+		Printf("board: FAILED: %v — the verify artefacts are written; retry with `dross issue phase sync %s --status uat`\n", err, phaseID)
+		return &ExitCodeError{Code: exitVerifyBoardFailed, Err: fmt.Errorf("board uat sync: %w", err)}
+	}
 	return nil
 }
 
@@ -1182,14 +1216,52 @@ func verifyFinalize() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if recorded {
-				Printf("verify finalize: %s — verdict=%s recorded\n", phaseID, verdict)
-			} else {
+			if !recorded {
 				Printf("verify finalize: %s — verdict=%s already recorded\n", phaseID, verdict)
+				return nil
 			}
-			return nil
+			Printf("verify finalize: %s — verdict=%s recorded\n", phaseID, verdict)
+			// Here and not in finalizeVerify: ship and phase complete heal
+			// through that, and must not walk a shipped phase back.
+			// absorbs: dross state set current_phase_status verified
+			// absorbs: dross state touch "verified <phase-id>: <verdict> (<criteria-covered>/<total>, mutation <score>)"
+			return markVerified(root, phaseID, verdict)
 		},
 	}
+}
+
+// markVerified sets current_phase_status=verified and appends the verified
+// history entry: "verified <id>: <verdict> (<covered>/<total>, mutation <score>)".
+func markVerified(root, phaseID, verdict string) error {
+	_, verifyPath := verify.FilePaths(root, phaseID)
+	v, err := verify.LoadVerify(verifyPath)
+	if err != nil {
+		return fmt.Errorf("read verify.toml: %w", err)
+	}
+	if v == nil {
+		return fmt.Errorf("verify.toml not found at %s", verifyPath)
+	}
+	covered, total := v.Summary.CriteriaCovered, v.Summary.CriteriaTotal
+	if len(v.Criteria) > 0 {
+		covered, total = 0, len(v.Criteria)
+		for _, c := range v.Criteria {
+			if c.Status == "covered" {
+				covered++
+			}
+		}
+	}
+	score := v.Summary.MutationStatus
+	if score == "measured" {
+		score = strconv.FormatFloat(v.Summary.MutationScore, 'f', 2, 64)
+	}
+	path := filepath.Join(root, state.File)
+	s, err := state.Load(path)
+	if err != nil {
+		return err
+	}
+	s.CurrentPhaseStatus = "verified"
+	s.Touch(fmt.Sprintf("verified %s: %s (%d/%d, mutation %s)", phaseID, verdict, covered, total, score))
+	return s.Save(path)
 }
 
 // finalizeVerify records the resolved verdict from a phase's
