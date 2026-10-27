@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -22,13 +23,30 @@ type flowLeg struct {
 	MidWave       bool     `toml:"mid_wave"`
 	GateLead      string   `toml:"gate_lead"`
 	DrossCalls    []string `toml:"dross_calls"`
+
+	GreenTestBytes      int `toml:"green_test_bytes"`
+	RedTestBytes        int `toml:"red_test_bytes"`
+	VerifyLegBytes      int `toml:"verify_leg_bytes"`
+	RuleShowRepeatBytes int `toml:"rule_show_repeat_bytes"`
+	LogReads            int `toml:"log_reads"`
+}
+
+// markerLive records the show-repeat marker observed in a real session: a
+// repeat in one context, a full block after /clear and after /compact, and a
+// subagent's repeat naming the --full command.
+type markerLive struct {
+	Repeat                  bool `toml:"repeat"`
+	ClearFull               bool `toml:"clear_full"`
+	CompactFull             bool `toml:"compact_full"`
+	SubagentMarkerNamesFull bool `toml:"subagent_marker_names_full"`
 }
 
 type flowCost struct {
-	Scenario map[string]any `toml:"scenario"`
-	Before   *flowLeg       `toml:"before"`
-	After    *flowLeg       `toml:"after"`
-	Control  *flowLeg       `toml:"control"`
+	Scenario   map[string]any `toml:"scenario"`
+	Before     *flowLeg       `toml:"before"`
+	After      *flowLeg       `toml:"after"`
+	Control    *flowLeg       `toml:"control"`
+	MarkerLive *markerLive    `toml:"marker_live"`
 }
 
 // TestFlowCostRecords guards milestone v1.8's c-6 record: every phase's
@@ -39,17 +57,20 @@ type flowCost struct {
 // move them from run to run (rivil, 2026-10-08). For
 // context-boundaries (c-8) it also pins what the after leg exists to show:
 // the nudge fired once on the new binary and turned the mid-wave §1g lead into
-// checkpoint, while a below-threshold control kept continue.
+// checkpoint, while a below-threshold control kept continue. For
+// test-output-summaries (c-8) it pins the shrink: smaller green and verify
+// output, a red step that never opened the log, a repeat rule show under 300
+// bytes, and the marker live across /clear, /compact and a subagent.
 func TestFlowCostRecords(t *testing.T) {
 	root := filepath.Join(repoRootFromTest(t), RootDirName)
 	paths, err := filepath.Glob(filepath.Join(root, "phases", "*", "flow-cost.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
+	found := map[string]bool{}
 	for _, path := range paths {
 		phase := filepath.Base(filepath.Dir(path))
-		found = found || phase == "context-boundaries"
+		found[phase] = true
 		t.Run(phase, func(t *testing.T) {
 			var fc flowCost
 			if _, err := toml.DecodeFile(path, &fc); err != nil {
@@ -89,25 +110,69 @@ func TestFlowCostRecords(t *testing.T) {
 			if fc.After.BinaryVersion == fc.Before.BinaryVersion {
 				t.Errorf("both legs ran on %q — the after leg did not measure the new binary", fc.After.BinaryVersion)
 			}
-			if phase != "context-boundaries" {
-				return
-			}
-			a := fc.After
-			if !a.NudgeFired || a.NudgesSeen != 1 {
-				t.Errorf("after: nudge_fired = %v, nudges_seen = %d; want one nudge, fired once", a.NudgeFired, a.NudgesSeen)
-			}
-			if !a.MidWave || a.GateLead != "checkpoint" {
-				t.Errorf("after: mid_wave = %v, gate_lead = %q; want a mid-wave §1g that led with checkpoint", a.MidWave, a.GateLead)
-			}
-			if fc.Control == nil {
-				t.Error("[control] is missing — nothing shows a below-threshold mid-wave §1g still leads with continue")
-			} else if c := fc.Control; c.GateLead != "continue" || !c.MidWave || c.NudgesSeen != 0 || c.NudgeFired {
-				t.Errorf("[control] gate_lead = %q, mid_wave = %v, nudges_seen = %d, nudge_fired = %v; want a nudge-free mid-wave §1g that still led with continue",
-					c.GateLead, c.MidWave, c.NudgesSeen, c.NudgeFired)
+			switch phase {
+			case "context-boundaries":
+				checkContextBoundariesFlow(t, fc)
+			case "test-output-summaries":
+				checkTestOutputSummariesFlow(t, fc, filepath.Dir(path))
 			}
 		})
 	}
-	if !found {
-		t.Fatal("context-boundaries has no flow-cost.toml — the c-8 record is missing")
+	for _, want := range []string{"context-boundaries", "test-output-summaries"} {
+		if !found[want] {
+			t.Errorf("%s has no flow-cost.toml — the c-8 record is missing", want)
+		}
+	}
+}
+
+func checkContextBoundariesFlow(t *testing.T, fc flowCost) {
+	t.Helper()
+	a := fc.After
+	if !a.NudgeFired || a.NudgesSeen != 1 {
+		t.Errorf("after: nudge_fired = %v, nudges_seen = %d; want one nudge, fired once", a.NudgeFired, a.NudgesSeen)
+	}
+	if !a.MidWave || a.GateLead != "checkpoint" {
+		t.Errorf("after: mid_wave = %v, gate_lead = %q; want a mid-wave §1g that led with checkpoint", a.MidWave, a.GateLead)
+	}
+	if fc.Control == nil {
+		t.Error("[control] is missing — nothing shows a below-threshold mid-wave §1g still leads with continue")
+	} else if c := fc.Control; c.GateLead != "continue" || !c.MidWave || c.NudgesSeen != 0 || c.NudgeFired {
+		t.Errorf("[control] gate_lead = %q, mid_wave = %v, nudges_seen = %d, nudge_fired = %v; want a nudge-free mid-wave §1g that still led with continue",
+			c.GateLead, c.MidWave, c.NudgesSeen, c.NudgeFired)
+	}
+}
+
+// checkTestOutputSummariesFlow pins test-output-summaries' c-8 numbers. Red
+// output is recorded on both legs but not gated (D6): a failing test's own
+// lines are the summary's payload.
+func checkTestOutputSummariesFlow(t *testing.T, fc flowCost, dir string) {
+	t.Helper()
+	b, a := fc.Before, fc.After
+	for name, leg := range map[string]*flowLeg{"before": b, "after": a} {
+		if leg.GreenTestBytes <= 0 || leg.RedTestBytes <= 0 || leg.VerifyLegBytes <= 0 || leg.RuleShowRepeatBytes <= 0 {
+			t.Errorf("[%s] green %d, red %d, verify %d, rule-repeat %d bytes — every *_bytes must be measured",
+				name, leg.GreenTestBytes, leg.RedTestBytes, leg.VerifyLegBytes, leg.RuleShowRepeatBytes)
+		}
+	}
+	if a.GreenTestBytes >= b.GreenTestBytes || a.GreenTestBytes > 1024 {
+		t.Errorf("green dross test printed %d bytes after, %d before; want fewer, and at most 1024", a.GreenTestBytes, b.GreenTestBytes)
+	}
+	if a.VerifyLegBytes >= b.VerifyLegBytes {
+		t.Errorf("a verify leg printed %d bytes after, %d before; want fewer", a.VerifyLegBytes, b.VerifyLegBytes)
+	}
+	if a.LogReads != 0 {
+		t.Errorf("after: log_reads = %d; the red step should act on the summary without opening the log", a.LogReads)
+	}
+	if a.RuleShowRepeatBytes >= 300 {
+		t.Errorf("after: a repeat rule show printed %d bytes; want the marker line, under 300", a.RuleShowRepeatBytes)
+	}
+	if m := fc.MarkerLive; m == nil {
+		t.Error("[marker_live] is missing — nothing shows the marker works in a real session")
+	} else if !m.Repeat || !m.ClearFull || !m.CompactFull || !m.SubagentMarkerNamesFull {
+		t.Errorf("[marker_live] repeat = %v, clear_full = %v, compact_full = %v, subagent_marker_names_full = %v; want all true",
+			m.Repeat, m.ClearFull, m.CompactFull, m.SubagentMarkerNamesFull)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "flow-cost-before.toml")); err == nil {
+		t.Error("flow-cost-before.toml still exists — t-16 moves its [before] into flow-cost.toml and deletes it")
 	}
 }

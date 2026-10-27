@@ -9,6 +9,7 @@ import (
 
 	"github.com/Rivil/dross/internal/gate"
 	"github.com/Rivil/dross/internal/review"
+	"github.com/Rivil/dross/internal/runsummary"
 )
 
 // executePromptContent loads assets/prompts/execute.md and normalises it
@@ -390,5 +391,83 @@ func TestExecutePromptSoloBeginNeedsReviewer(t *testing.T) {
 	pre := sectionOf(promptBody(t, "execute.md"), "## 0. Pre-flight", "## 1.")
 	if !strings.Contains(pre, "A `--solo` begin refuses unless the solo task reviewer") || !strings.Contains(pre, "`dross install`") {
 		t.Error("§0 no longer routes a refused solo begin to `dross install`")
+	}
+}
+
+// rawPrompt reads assets/prompts/<name> unnormalised.
+func rawPrompt(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// testStepSection is the text from the line starting with from up to the next line
+// starting with to, whitespace-normalised so a phrase wrapped across lines
+// still matches.
+func testStepSection(t *testing.T, s, from, to string) string {
+	t.Helper()
+	i := strings.Index(s, "\n"+from)
+	if i < 0 {
+		t.Fatalf("no %q heading", from)
+	}
+	rest := s[i+1:]
+	if j := strings.Index(rest, "\n"+to); j >= 0 {
+		rest = rest[:j]
+	}
+	return strings.Join(strings.Fields(rest), " ")
+}
+
+// assertTestStepDescribesSummary is the shared c-3 check: the test step tells
+// the agent `dross test` prints a summary and keeps the log, quotes the marker
+// a cut failure list ends with, and no longer promises streaming or a tail.
+func assertTestStepDescribesSummary(t *testing.T, name, step string) {
+	t.Helper()
+	whole := strings.Join(strings.Fields(rawPrompt(t, name)), " ")
+	for _, gone := range []string{"streaming output as it arrives", "last 30-40 lines"} {
+		if strings.Contains(whole, gone) {
+			t.Errorf("%s still says %q", name, gone)
+		}
+	}
+	for _, want := range []string{".dross/logs/", runsummary.MoreFailingPrefix} {
+		if !strings.Contains(step, want) {
+			t.Errorf("%s's test step does not name %q", name, want)
+		}
+	}
+}
+
+func TestExecuteTestStepDescribesSummary(t *testing.T) {
+	assertTestStepDescribesSummary(t, "execute.md", testStepSection(t, rawPrompt(t, "execute.md"), "### 1e.", "### 1f."))
+}
+
+// TestGreenPathNeverReadsLog: a green run's summary is the whole story — no
+// prompt sends the agent to read the run log on green.
+func TestGreenPathNeverReadsLog(t *testing.T) {
+	read := regexp.MustCompile(`(?i)\b(cat|read|open)\b`)
+	for _, name := range []string{"execute.md", "quick.md"} {
+		raw := rawPrompt(t, name)
+		i := strings.Index(raw, "\n**Green**")
+		if i < 0 {
+			t.Fatalf("%s has no Green branch", name)
+		}
+		green := raw[i+1:]
+		if j := strings.Index(green, "\n**Red"); j >= 0 {
+			green = green[:j]
+		}
+		if strings.Contains(green, ".dross/logs") && read.MatchString(green) {
+			t.Errorf("%s's Green branch sends the agent to read the run log:\n%s", name, green)
+		}
+	}
+}
+
+// TestTestStepPromptsNotGrown: the rewrite costs no context — both prompts are
+// no larger than at the phase's base commit 54ad9064.
+func TestTestStepPromptsNotGrown(t *testing.T) {
+	for name, limit := range map[string]int{"execute.md": 25854, "quick.md": 18102} {
+		if n := len(rawPrompt(t, name)); n > limit {
+			t.Errorf("%s is %d bytes, over its %d-byte base size", name, n, limit)
+		}
 	}
 }

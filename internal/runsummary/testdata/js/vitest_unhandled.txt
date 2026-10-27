@@ -1,0 +1,36 @@
+# captured: vitest@4.1.11 npx vitest run
+
+ RUN  v4.1.11 /Users/rivil/.claude/jobs/df272921/tmp/jsfx/vitest
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+Error: leaked rejection
+ ❯ src/leak.test.ts:4:18
+      2|
+      3| it("leaks", () => {
+      4|   Promise.reject(new Error("leaked rejection"));
+       |                  ^
+      5|   expect(1).toBe(1);
+      6| });
+ ❯ node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+ ❯ node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+ ❯ node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+ ❯ runWithCancel node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10
+ ❯ node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+ ❯ runWithTimeout node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10
+ ❯ node_modules/@vitest/runner/dist/chunk-artifact.js:2956:64
+
+This error originated in "src/leak.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  3 passed (3)
+      Tests  6 passed (6)
+     Errors  1 error
+   Start at  14:42:20
+   Duration  89ms (transform 27ms, setup 0ms, import 42ms, tests 4ms, environment 0ms)
+

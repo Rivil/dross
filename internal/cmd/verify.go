@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/runlog"
 	"github.com/Rivil/dross/internal/stack"
 	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/telemetry"
@@ -174,7 +176,9 @@ func Verify() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			legsDone := streamLegs(filepath.Dir(root), phaseID, adapters)
 			t, err := verify.RunScoped(phaseID, files, adapters, scope)
+			legsDone()
 			if err != nil {
 				if errors.Is(err, remote.ErrHostBusy) {
 					// The host is held and --no-wait said not to wait: a
@@ -755,6 +759,7 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 		return &ExitCodeError{Code: exitResultsUnreachable, Err: fmt.Errorf(
 			"could not fetch run %s's reports from %s: %w", rec.RunID, rec.Host, err)}
 	}
+	collectHostLog(repoDir, phaseID, g.Name(), target, rec.RunDir)
 
 	// rec.Host, not the grant: Collect names the machine that MEASURED these
 	// reports when it refuses one, and c-5 turns on that being the recorded
@@ -1261,6 +1266,81 @@ func refuseOrphanedAcceptances(root string) error {
 	return errors.New(b.String())
 }
 
+// verifyStdoutIsTTY decides whether a leg's tool stream also reaches the
+// terminal live (a human) or only its run log (an agent). A test swaps it.
+var verifyStdoutIsTTY = runlog.StdoutIsTerminal
+
+// streamLegs gives every adapter that can stream (mutation.Streamer) its own
+// run log, verify-<phase>-<adapter>-<ts>.log, so the per-mutant stream lands
+// there rather than in the conversation; a human on a terminal still watches
+// it live. The returned func closes the logs and prints each kept one's path.
+// A leg that never ran never wrote, so it leaves no log (the file is lazy).
+func streamLegs(repoDir, phaseID string, adapters []mutation.Adapter) func() {
+	type leg struct {
+		name string
+		log  *runlog.Log
+	}
+	var legs []leg
+	for _, a := range adapters {
+		s, ok := a.(mutation.Streamer)
+		if !ok {
+			continue
+		}
+		l := runlog.Open(repoDir, runlog.Name{Kind: runlog.KindVerify, Phase: phaseID, Leg: a.Name()},
+			runlog.Options{Terminal: runlog.Stderr, Echo: verifyStdoutIsTTY()})
+		s.SetStream(l)
+		legs = append(legs, leg{a.Name(), l})
+	}
+	return func() {
+		for _, lg := range legs {
+			lg.log.Close()
+			if p := lg.log.Path(); p != "" {
+				Printf("verify log (%s): %s\n", lg.name, p)
+			}
+		}
+	}
+}
+
+// detachFetchLog pulls a detached run's host-side stream (<runDir>/log, which
+// the run's script writes) to local, through the same audited fetch the
+// reports take.
+var detachFetchLog = func(t remote.Target, runDir, local string) error {
+	argv, err := remote.FetchArgs(t, path.Join(runDir, "log"), local)
+	if err != nil {
+		return err
+	}
+	return classifyFetch(t.Host, runDetachArgv(argv))
+}
+
+// collectHostLog copies a detached run's host-side stream into a fresh verify
+// run log and prints its path. The log is a convenience, never evidence: a
+// fetch that fails is a note, and the collect carries on.
+func collectHostLog(repoDir, phaseID, leg string, t remote.Target, runDir string) {
+	dir, err := os.MkdirTemp("", "dross-host-log-")
+	if err != nil {
+		Printf("log unavailable: %v\n", err)
+		return
+	}
+	defer os.RemoveAll(dir)
+	local := filepath.Join(dir, "log")
+	if err := detachFetchLog(t, runDir, local); err != nil {
+		Printf("log unavailable: %v\n", err)
+		return
+	}
+	f, err := os.Open(local)
+	if err != nil {
+		Printf("log unavailable: %v\n", err)
+		return
+	}
+	defer f.Close()
+	l := runlog.Open(repoDir, runlog.Name{Kind: runlog.KindVerify, Phase: phaseID, Leg: leg}, runlog.Options{Terminal: runlog.Stderr})
+	io.Copy(l, f)
+	l.Close()
+	if p := l.Path(); p != "" {
+		Printf("verify log (%s, from %s): %s\n", leg, t.Host, p)
+	}
+}
+
 // configuredAdaptersFn is the seam a refusal test substitutes to prove verify
 // did not shell out. It is what makes "refused" different from "refused after
 // spawning gremlins" — and gremlins runs the untrusted repo's Go tests, which is
@@ -1536,6 +1616,9 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 		m := lr.Mutation
 		Printf("  %s (%s): %d files — killed=%d survived=%d (not_covered=%d) timeout=%d errors=%d score=%.2f\n",
 			lr.Name, lr.Tool, len(lr.Files), m.Killed, m.Survived, m.NotCovered, m.Timeout, m.Errors, m.Score)
+		for _, l := range verify.LegLines(lr) {
+			Print(l)
+		}
 		// No per-leg efficacy. It used to drop every NOT COVERED mutant from its
 		// denominator, count-0 test gaps included, and printed 1.00 beside
 		// printOverallScore's split. That split is the only efficacy figure.

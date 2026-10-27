@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -109,6 +110,13 @@ func TestRecordCarriesNoToolOutput(t *testing.T) {
 // TestRecordErrorClauses pins every clause the record must carry. Each arm
 // fails on a rewording that drops one, which is the only way a downstream
 // reader silently loses the fact.
+// fileSuffix and absPath are what the pointer must never hold: a log file's
+// name, or a path from the filesystem root.
+var (
+	fileSuffix = regexp.MustCompile(`\.log\b`)
+	absPath    = regexp.MustCompile(`(^|[\s(])/[A-Za-z]`)
+)
+
 func TestRecordErrorClauses(t *testing.T) {
 	got := RecordToolFailure("stryker", 3, Observed(1234)).Error()
 
@@ -118,14 +126,23 @@ func TestRecordErrorClauses(t *testing.T) {
 	if !strings.Contains(got, "1234") {
 		t.Errorf("record drops the capture clause: %q", got)
 	}
-	if !strings.Contains(got, "stderr") {
-		t.Errorf("record drops the stderr-pointer sentence: %q", got)
+	if !strings.HasSuffix(got, "the full output of stryker "+StderrPointer) || !strings.Contains(got, "went to this run's stderr") {
+		t.Errorf("record with no stream drops the stderr pointer: %q", got)
 	}
-	// Fixed prose, no path: dross cannot know where its own stderr was
-	// redirected, so a recorded path would often be wrong (spec decision
-	// stderr_pointer).
-	if strings.Contains(got, "/") {
-		t.Errorf("record names a path; the stderr pointer is fixed prose: %q", got)
+	logged := RecordToolFailure("stryker", 3, Observed(1234)).toLog(true).Error()
+	if !strings.HasSuffix(logged, "the full output of stryker "+LogPointer) || !strings.Contains(logged, "went to this run's log in .dross/logs") {
+		t.Errorf("record with a stream set does not point at the run log: %q", logged)
+	}
+	if strings.Contains(logged, "stderr") {
+		t.Errorf("record with a stream set still says stderr: %q", logged)
+	}
+	// Fixed prose, no file name and no path: dross cannot know where its own
+	// stderr was redirected, and run logs are pruned and machine-local, so a
+	// recorded name would go stale (spec decision stderr_pointer).
+	for _, r := range []string{got, logged} {
+		if fileSuffix.MatchString(r) || absPath.MatchString(r) {
+			t.Errorf("record names a file or an absolute path; the pointer is fixed prose: %q", r)
+		}
 	}
 	// OBSERVED, not retained. c-1 and c-2 word this as `captured`; the tee is
 	// capped at 64 KiB, so reporting the retained figure would understate the

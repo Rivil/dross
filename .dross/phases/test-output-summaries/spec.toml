@@ -1,0 +1,113 @@
+[phase]
+  id = "test-output-summaries"
+  title = "test-output-summaries"
+  milestone = "v1.8"
+
+[[criteria]]
+  id = "c-1"
+  text = "Every `dross test` run (bare, selector or --files; local or remote) writes its full combined output to a gitignored log file and prints that file's path."
+
+[[criteria]]
+  id = "c-2"
+  text = "A green `dross test` prints a short summary: pass counts as the runner reports them (packages for plain go test, tests for vitest/jest), wall-clock time and the log path. No per-test or per-package lines."
+
+[[criteria]]
+  id = "c-3"
+  text = "A red `dross test` prints the counts plus each failing test's name and its own failure output, bounded per test. Build/compile errors count as failures and print their errors. The agent can act without opening the log."
+
+[[criteria]]
+  id = "c-4"
+  text = "Summarising never changes the exit status: it still reports the suite, including the 3/4 'run didn't happen' codes. Unparseable runner output prints the exit status, the last 40 lines and the log path. A non-zero exit never prints a green summary."
+
+[[criteria]]
+  id = "c-5"
+  text = "`dross verify` mutation legs (gremlins, stryker, stryker-net; local or remote, attached or collected from a detached run) print per-package counts (killed / survived / not covered / timed out), the score and each survivor's file:line. The full tool stream goes to the log file, and no per-mutant lines reach the conversation. `dross survivor drain` runs route their tool stream to a log file the same way and print its path."
+
+[[criteria]]
+  id = "c-6"
+  text = "A repeat `dross rule show` in the same session context prints a one-line 'rules unchanged' marker when the merged rules are byte-identical to the last full print. A rules change, a /clear, a compaction, or a missing session id each print the full block."
+
+[[criteria]]
+  id = "c-7"
+  text = "`dross interaction show` gets the same marker under the same rules as c-6 ('playbook unchanged')."
+
+[[criteria]]
+  id = "c-8"
+  text = "The phase records before/after numbers in the phase dir: bytes printed by a green and a red `dross test` and by a verify mutation leg, plus turn count and wall-clock time for execute's test→commit step. The after-flow adds zero agent round-trips."
+
+[[decisions]]
+  key = "parser_coverage"
+  choice = "Built-in counting/failure parsers for plain `go test` and vitest/jest only. Every other runner takes c-4's fallback (exit status, last 40 lines, log path)."
+  why = "Covers this repo, chess-perft and the TS/Svelte stack the stryker leg already serves; the other parsers would have no live repo to prove them against in this phase."
+  locked = true
+
+[[decisions]]
+  key = "failure_bound"
+  choice = "A red run prints up to 30 lines per failing test or build-failed package, the first 10 failures in full, then '+N more failing — see <log>'."
+  why = "Tight enough to keep a mass break near ~300 lines, loose enough that a table-test diff or stack trace rarely forces a log re-read (milestone c-6 hot spot)."
+  locked = true
+
+[[decisions]]
+  key = "log_location"
+  choice = "Logs live in .dross/logs/, made self-ignoring by a .dross/logs/.gitignore containing `*` that dross writes on first use."
+  why = "Works in already-onboarded repos without editing their tracked .gitignore; an unignored log would count as a tree change and stale verify and the green record."
+  locked = true
+
+[[decisions]]
+  key = "log_retention"
+  choice = "One timestamped file per run (test-<ts>.log, verify-<phase>-<leg>-<ts>.log); each write prunes the dir to the newest 20."
+  why = "Concurrent runs (background verify + execute test) never clobber each other, and a red log survives its green re-run."
+  locked = true
+
+[[decisions]]
+  key = "tty_behaviour"
+  choice = "Summarise when stdout is not a terminal (agent Bash, `!` runs); stream live as today when it is. No flag to force streaming."
+  why = "The human shell keeps live progress on long remote runs; without an opt-out an agent can't habitually stream and undo the phase — it reads the log instead."
+  locked = true
+
+[[deferred]]
+  text = "Counting/failure parsers for gradle (Kotlin/Java), `dart test` and pytest; until then those repos get c-4's tail fallback."
+  why = "parser_coverage: no live repo to prove them against in this phase"
+  target = "test-summary-parsers"
+
+[[deferred]]
+  id = "4f63f8cf3b9a0893"
+  text = "runsummary: 10 failure blocks can exceed ~30 KB when test names and output lines are both long (name + marker lines sit outside BlockBytes)"
+  why = "t-3 solo review FLAG: worst case ~3,280 bytes/block; TestMassBreakSize only uses 240-byte lines"
+  target = "test-summary-parsers"
+
+[[deferred]]
+  id = "21f5280517ba81a9"
+  text = "go test parser: an open '# pkg' block absorbs a following package's orphan lines (TestMain exit), and any one-word '# Heading' a test prints opens a phantom build block"
+  why = "t-8 solo review FLAGs on gotest.go block handling"
+  target = "test-summary-parsers"
+
+[[deferred]]
+  id = "0e261a713497e7b9"
+  text = "vitest parser: a 'FAIL ' line in console output opens a phantom failure outside the Failed Tests banner, and the ' [ ' suite-suffix strip clips it.each test names containing ' [ '"
+  why = "t-9 solo review FLAGs on jsrunner.go"
+  target = "test-summary-parsers"
+
+[[deferred]]
+  id = "4955d6f05f232771"
+  text = "stryker-net: no test runs it with SetStream set and checks the bounded head still reaches stderr"
+  why = "t-6 solo review FLAG: dropping head from stryker_net.go's MultiWriter with a stream set would go undetected"
+  target = "test-summary-parsers"
+
+[[deferred]]
+  id = "c399397a540354c7"
+  text = "verify collect: production detachFetchLog (remote.FetchArgs <runDir>/log + classifyFetch) has no test; an empty host log prints neither a path nor 'log unavailable'"
+  why = "t-12 solo review FLAG/NOTE"
+  target = "test-summary-parsers"
+
+[[deferred]]
+  id = "3ca181849c7911df"
+  text = "dross test summaries: a 3/4/7 tail shows the last segment, which is the wrong spawn when the error came from a non-spawn step (host-2 lock after host-1 rsync)"
+  why = "t-14 solo review FLAG on testRun.summarise"
+  target = "test-summary-parsers"
+
+[[deferred]]
+  id = "ce3cc16364f40a8c"
+  text = "dross test run log: on a terminal, dross's pre-spawn lines are not copied into the log; with an unavailable log off a terminal, pending lines print twice"
+  why = "t-10 solo review FLAGs on testRun.say/spawn"
+  target = "test-summary-parsers"

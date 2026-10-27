@@ -177,3 +177,7 @@ func TestReviewerSpawnWaitsForVerdict(t *testing.T) {
 		}
 	}
 }
+
+func TestQuickTestStepDescribesSummary(t *testing.T) {
+	assertTestStepDescribesSummary(t, "quick.md", testStepSection(t, rawPrompt(t, "quick.md"), "## 4.", "## 5."))
+}

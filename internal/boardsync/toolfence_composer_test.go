@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/toolfence"
@@ -57,7 +58,7 @@ func TestNoComposerRendersARecordedField(t *testing.T) {
 	// What Finding.Text really holds: the recorder's line under the prefix
 	// verify composes. It is Renderable, so seeing it in a body is CORRECT.
 	const findingText = "mutation adapter stryker failed: stryker failed with exit status 1; " +
-		"320 bytes of tool output observed; the full output of stryker went to this run's stderr"
+		"320 bytes of tool output observed; the full output of stryker " + mutation.StderrPointer
 
 	v := &verify.Verify{
 		Verify: verify.VerifyMeta{Phase: "p", Verdict: "partial"},

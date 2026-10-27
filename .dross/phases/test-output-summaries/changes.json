@@ -1,0 +1,1141 @@
+{
+  "phase": "test-output-summaries",
+  "pr": 184,
+  "base": "milestone/v1.8",
+  "base_commit": "54ad9064daa8ed7b5e0be257a67198567247d6ed",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        ".dross/phases/test-output-summaries/flow-cost-before.toml"
+      ],
+      "commit": "e2b657bb",
+      "completed_at": "2026-10-09T17:01:38.9343Z",
+      "landmarks": [
+        {
+          "feature": "context-economy flow cost record",
+          "symbol": "flow-cost-before.toml",
+          "loc": ".dross/phases/test-output-summaries/flow-cost-before.toml:1",
+          "what": "base-commit byte and pair-flow turn baseline for test-output-summaries' c-8 gate, with a replayable scenario"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_output.go",
+        "internal/cmd/test_output_test.go",
+        "internal/cmd/test_lane_consent_test.go",
+        "internal/cmd/test_lane_prepare_test.go",
+        "internal/cmd/test_lane_selector_test.go"
+      ],
+      "commit": "1ee3a4f4",
+      "completed_at": "2026-10-09T14:40:38.047841Z",
+      "landmarks": [
+        {
+          "feature": "run output logs",
+          "symbol": "openTestRun",
+          "loc": "internal/cmd/test_output.go:38",
+          "what": "every dross test run writes its full combined output to .dross/logs/test-\u003cts\u003e.log and names it before the first spawn and at the end"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/showmark.go",
+        "internal/cmd/rule.go",
+        "internal/cmd/interaction.go",
+        "internal/cmd/showmark_test.go",
+        "assets/prompts/rule.md",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "580852e9",
+      "completed_at": "2026-10-09T14:14:54.193087Z",
+      "landmarks": [
+        {
+          "feature": "show-once rule and playbook marker",
+          "symbol": "showOnce",
+          "loc": "internal/cmd/showmark.go:38",
+          "what": "repeat rule/interaction show in the same session context prints a one-line MUST-FOLLOW marker naming --full"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_log_test.go",
+        "internal/cmd/verify_results_test.go"
+      ],
+      "commit": "75743e4f",
+      "completed_at": "2026-10-09T17:18:25.764864Z",
+      "landmarks": [
+        {
+          "feature": "mutation leg run logs",
+          "symbol": "streamLegs",
+          "loc": "internal/cmd/verify.go:1278",
+          "what": "verify routes each streaming leg to verify-\u003cphase\u003e-\u003cleg\u003e run log and pulls a detached run's host log into one on collect"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/cmd/reentry.go",
+        "internal/cmd/reentry_test.go",
+        "internal/gatestate/showmark.go",
+        "internal/gatestate/showmark_test.go"
+      ],
+      "commit": "ef42b559",
+      "completed_at": "2026-10-09T14:50:42.930003Z",
+      "landmarks": [
+        {
+          "feature": "show-once rule and playbook marker",
+          "symbol": "bumpFromHook",
+          "loc": "internal/cmd/reentry.go:122",
+          "what": "SessionStart hook bumps the show epoch for every source so /clear and compaction reprint rules and playbook in full"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_output.go",
+        "internal/cmd/test_summary_wiring_test.go"
+      ],
+      "commit": "489909f1",
+      "completed_at": "2026-10-09T15:16:31.240313Z",
+      "landmarks": [
+        {
+          "feature": "test run summaries",
+          "symbol": "testRun.summarise",
+          "loc": "internal/cmd/test_output.go:117",
+          "what": "dross test prints a per-lane summary (counts, failures, or the failing spawn's tail) off a terminal; the full output stays in the run log"
+        }
+      ]
+    },
+    "t-15": {
+      "files": [
+        "assets/prompts/execute.md",
+        "assets/prompts/quick.md",
+        "README.md",
+        "internal/cmd/execute_prompt_test.go",
+        "internal/cmd/quick_prompt_test.go",
+        "internal/cmd/verify_log_test.go"
+      ],
+      "commit": "4662ccc6",
+      "completed_at": "2026-10-09T17:26:51.083611Z",
+      "landmarks": [
+        {
+          "feature": "test run summaries",
+          "symbol": "execute.md §1e",
+          "loc": "assets/prompts/execute.md:198",
+          "what": "execute and quick test steps read dross test's summary and open the run log only where a failure block was cut"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        ".dross/phases/test-output-summaries/flow-cost.toml",
+        ".dross/phases/test-output-summaries/flow-cost-before.toml",
+        "internal/cmd/flowcost_record_test.go",
+        "assets/prompts/execute.md"
+      ],
+      "commit": "cf58e4c3",
+      "completed_at": "2026-10-26T10:05:07.459249Z",
+      "landmarks": [
+        {
+          "feature": "context-economy flow cost record",
+          "symbol": "checkTestOutputSummariesFlow",
+          "loc": "internal/cmd/flowcost_record_test.go:148",
+          "what": "gates test-output-summaries' c-8 after leg: smaller green/verify output, no log reads, sub-300-byte repeat rule show, marker live across /clear, /compact and a subagent"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "internal/cmd/survivor_drain.go",
+        "internal/cmd/survivor_drain_log_test.go"
+      ],
+      "commit": "8d1c83d8",
+      "completed_at": "2026-10-09T15:05:46.672059Z",
+      "landmarks": [
+        {
+          "feature": "mutation leg run logs",
+          "symbol": "runGremlinsOverPackages",
+          "loc": "internal/cmd/survivor_drain.go:129",
+          "what": "survivor drain writes gremlins' per-mutant stream to verify-\u003cphase|drain\u003e-gremlins log and prints its path"
+        }
+      ]
+    },
+    "t-18": {
+      "files": [
+        "internal/cmd/taint_engine_test.go",
+        ".dross/phases/exec-taint-enumeration/spec.toml"
+      ],
+      "commit": "62e6c014",
+      "completed_at": "2026-10-09T13:06:09.812045Z",
+      "landmarks": [
+        {
+          "feature": "exec-taint gate",
+          "symbol": "taintEngine.isRunlogSink",
+          "loc": "internal/cmd/taint_engine_test.go:1332",
+          "what": "*runlog.Log joins the terminal set by named-type identity; generic io.Writer stays an escape"
+        }
+      ]
+    },
+    "t-19": {
+      "files": [
+        "internal/runsummary/summary_test.go",
+        "internal/runlog/runlog.go",
+        "internal/runlog/runlog_test.go"
+      ],
+      "commit": "b2799db8",
+      "completed_at": "2026-10-26T13:07:41.213679Z",
+      "landmarks": [
+        {
+          "feature": "run log retention",
+          "symbol": "prune",
+          "loc": "internal/runlog/runlog.go:336",
+          "what": "prune orders newest-first with a cmp.Or name tiebreak; equal-mtime cut, default terminal resolver and mid-line CR now pinned by tests"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/runlog/runlog.go",
+        "internal/runlog/runlog_test.go",
+        "internal/secretscan/writers.go",
+        "internal/cmd/secretscan_writer_enum_test.go"
+      ],
+      "commit": "05dcd444",
+      "completed_at": "2026-10-09T09:30:06.334353Z",
+      "landmarks": [
+        {
+          "feature": "run output logs",
+          "symbol": "runlog.Open",
+          "loc": "internal/runlog/runlog.go:131",
+          "what": "lazily-created self-ignored .dross/logs/ sink with enum terminal echo/fallback and newest-20 pruning"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/runsummary/summary.go",
+        "internal/runsummary/render.go",
+        "internal/runsummary/summary_test.go"
+      ],
+      "commit": "d4f18e51",
+      "completed_at": "2026-10-09T10:02:17.209613Z",
+      "landmarks": [
+        {
+          "feature": "test run summaries",
+          "symbol": "runsummary.Render",
+          "loc": "internal/runsummary/render.go:30",
+          "what": "bounded line splitter + parser registry + budgeted red/green/fallback renderer that never reads green on a non-zero exit"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/gatestate/showmark.go",
+        "internal/gatestate/showmark_test.go",
+        "internal/cmd/hermetic_env_test.go",
+        "internal/secretscan/writers.go",
+        "internal/gatestate/store.go"
+      ],
+      "commit": "edde899a",
+      "completed_at": "2026-10-09T10:17:44.716214Z",
+      "landmarks": [
+        {
+          "feature": "show-once rule and playbook marker",
+          "symbol": "gatestate.ShownCurrent",
+          "loc": "internal/gatestate/showmark.go:78",
+          "what": "per-session epoch+digest records under .dross/gate/show/ that say whether a full print is still in context"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/mutation/adapter.go",
+        "internal/mutation/gremlins.go",
+        "internal/mutation/gremlins_stream_test.go",
+        "internal/mutation/toolfail.go",
+        "internal/mutation/toolfail_test.go",
+        "internal/verify/persist_toolfence_test.go",
+        "internal/boardsync/toolfence_composer_test.go",
+        ".dross/phases/tool-output-not-persisted/spec.toml"
+      ],
+      "commit": "311ce9e8",
+      "completed_at": "2026-10-09T14:22:44.60169Z",
+      "landmarks": [
+        {
+          "feature": "mutation leg run logs",
+          "symbol": "Gremlins.SetStream",
+          "loc": "internal/mutation/gremlins.go:99",
+          "what": "gremlins' per-mutant stream tees to a *runlog.Log instead of stderr; failure records point at the log without naming it"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/mutation/stryker.go",
+        "internal/mutation/stryker_net.go",
+        "internal/mutation/stryker_stream_test.go"
+      ],
+      "commit": "71b94819",
+      "completed_at": "2026-10-09T14:59:18.613121Z",
+      "landmarks": [
+        {
+          "feature": "mutation leg run logs",
+          "symbol": "Stryker.SetStream",
+          "loc": "internal/mutation/stryker.go:73",
+          "what": "stryker and stryker-net streams tee to a *runlog.Log; the failure head stays on stderr"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/verify/legsummary.go",
+        "internal/verify/legsummary_test.go",
+        "internal/verify/verify.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_summary_test.go"
+      ],
+      "commit": "c5561abd",
+      "completed_at": "2026-10-09T10:46:24.255682Z",
+      "landmarks": [
+        {
+          "feature": "verify mutation leg summary",
+          "symbol": "verify.LegLines",
+          "loc": "internal/verify/legsummary.go:21",
+          "what": "per-package killed/survived/not-covered/timeout rows plus each in-scope survivor's file:line under a leg's counts line"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/runsummary/gotest.go",
+        "internal/runsummary/gotest_test.go",
+        "internal/runsummary/testdata/gotest/green.txt",
+        "internal/runsummary/testdata/gotest/red_subtests.txt",
+        "internal/runsummary/testdata/gotest/panic.txt",
+        "internal/runsummary/testdata/gotest/timeout.txt",
+        "internal/runsummary/testdata/gotest/build_failed.txt",
+        "internal/runsummary/testdata/gotest/setup_and_vet.txt"
+      ],
+      "commit": "d80b7712",
+      "completed_at": "2026-10-09T13:31:20.318509Z",
+      "landmarks": [
+        {
+          "feature": "test run summaries",
+          "symbol": "runsummary.goTest",
+          "loc": "internal/runsummary/gotest.go:21",
+          "what": "plain go test parser: package counts, leaf --- FAIL blocks, panics, timeouts and # pkg build/vet/setup failures"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/runsummary/jsrunner.go",
+        "internal/runsummary/jsrunner_test.go",
+        "internal/runsummary/testdata/js/vitest_green.txt",
+        "internal/runsummary/testdata/js/vitest_red.txt",
+        "internal/runsummary/testdata/js/vitest_red_color.txt",
+        "internal/runsummary/testdata/js/vitest_load_error.txt",
+        "internal/runsummary/testdata/js/jest_red.txt",
+        "internal/runsummary/testdata/js/jest_suite_failed.txt",
+        "internal/runsummary/testdata/js/jest_console.txt",
+        "internal/runsummary/testdata/js/vitest_unhandled.txt",
+        "internal/runsummary/testdata/js/vitest_merged.txt",
+        "internal/runsummary/testdata/js/vitest_no_tests.txt"
+      ],
+      "commit": "ca8940c0",
+      "completed_at": "2026-10-09T14:05:05.699092Z",
+      "landmarks": [
+        {
+          "feature": "test run summaries",
+          "symbol": "runsummary.vitest",
+          "loc": "internal/runsummary/jsrunner.go:69",
+          "what": "vitest and jest parsers: runner's own count lines, FAIL/● blocks, load errors, unhandled errors; claim only after the Tests line"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "On a TTY, testRun.header discards r.pending without writing it to the log, so every dross line said before the first spawn (the first lane's 'lane X prepare:'/'lane X:' line, 'no lane matches', the split-run 'remote:' line, lane refusals) is on the terminal but missing from the run log, contrary to the description's 'dross's own lines ... are copied to the log'. Only the non-TTY path is tested.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "resolveTestTarget's transport-fallback line (test.go:840, Printf(\"remote: %s\\n\", pool.Why)) still bypasses tr.say, so a run that fell back from an unreachable host never records why in its log.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "Non-TTY with an unavailable log: say() prints each pre-spawn line to stdout and queues it; header() then flushes the queue through r.log.Write, which falls back to stdout, so those lines (e.g. every lane run's first 'lane X:' header) print twice. TestLogUnavailableStreams uses a bare run with no queued lines, so it does not cover this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "The description says every non-TTY run prints t-3's fallback until t-14 lands, but finish() already renders a parsed PASS/FAIL summary, and TestTTYStreamsNonTTYSummarises asserts PASS. It feeds every spawn (rsync, prepare, each lane) into one run-wide Segment, against runsummary's one-segment-per-spawn model, so whether a parser claims the output depends on what the other spawns printed. c-4's exit-code guarantees still hold through Render.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "tempStdout restores os.Stdout and closes the file inline rather than in t.Cleanup, so a t.Fatal inside fn (TestLogPathBeforeSpawn) leaves os.Stdout pointing at the temp file for the rest of the package run.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-11": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-6",
+          "text": "TestShowRecordsOnlyAfterPrint registers its t.Cleanup restore of showPrint only after the swapped call. If that call ever Fatals, the EPIPE seam stays installed for the rest of the package. Registering the cleanup before the swap would be safer.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-7",
+          "text": "showRepo now makes `interaction show` resolve the root through FindRoot, so ensureState runs there. In a fresh clone that writes state.json, a side effect this command did not have before. This is harmless and matches what `rule show` already does.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-12": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "No test runs the production detachFetchLog: TestCollectFetchesHostLog and TestCollectLogFetchFailureIsANote both replace the seam. Nothing checks that the argv is remote.FetchArgs(target, path.Join(runDir, \"log\"), local) or that it goes through classifyFetch. TestEverySpawnSiteGatedOrExempt only checks that the spawn is reachable from the gated `verify results`, so a wrong source path or a bypassed classifyFetch would still pass.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "In TestVerifyExitCodesWithLogs, the 'held host' subtest uses busyAdapter, which does not implement mutation.Streamer. streamLegs therefore opens no log, and the subtest only repeats TestBusyRefusalExitsFifteenAndWritesNothing. A Streamer adapter that returns a BusyError would actually test exit 15 with logs wired.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In collectHostLog, an empty host log (0 bytes) makes io.Copy call Write zero times, so no log file is created. The collect then prints neither a path nor 'log unavailable'. The read error from io.Copy is also discarded.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestCollectFetchesHostLog and TestCollectLogFetchFailureIsANote change detachFetchLog without registering their own cleanup. They rely on the restore that collectRepo registers. That works, but it is implicit.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-13": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestReentryOpenPipeReturns allows 500 ms for a 300 ms read deadline plus FindRoot, project/state load and stdout capture. The 200 ms margin may be tight under -race or a loaded CI runner. The bound comes from the test_contract itself.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "reentryStdinIsTTY checks os.Stdin.Fd(), but the read uses c.InOrStdin(). These are the same stream in production. If the command is ever driven with SetIn outside tests, the TTY check would look at a different stream than the one being read.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Existing tests that run Reentry() through runCmd, without SetIn, now read the test binary's real stdin. If go test is given an open pipe, each such test waits 300 ms and leaves a reader goroutine behind. They pass either way, since no payload can arrive.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-6",
+          "text": "TestReentryOpenPipeReturns and TestReentryBadPayload compare against a no-payload run on the same fixture, not against output/reentry.txt. The golden file is pinned with a payload separately, in TestReentryGoldenWithPayload.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-14": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "summarise's 3/4/7 branch shows segs[len(segs)-1] as 'the failing spawn', but the error can come from a step that is not a spawn: in a multi-host lane run, holdHostForSuite returning exitTransport for host 2 after host 1's rsync succeeded makes finish show host 1's successful rsync tail as 'the run did not happen'. Likewise, a runRemoteLine error before tr.spawn (SSHArgs/script build) leaves an aux-only segment set, which the default branch then renders as 'output not recognised' using the previous spawn's output.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestTransportTailShown's \"log: \" assertion cannot fail on its own because the log line is always printed before the first spawn; the failing-line assertion is what carries the test.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestTwoLanesEachParsed's 'vitest lane' is the docs/markdownlint lane emitting vitest_green.txt. This is equivalent because parsers claim by output, not by command.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-15": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "rawPrompt duplicates readPrompt (consent_surface_test.go) and testStepSection duplicates sectionOf (prompt_test_command_test.go) apart from whitespace normalisation; existing helpers could have been reused",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "neither prompt's test step mentions the unrecognised-runner fallback (exit status + last 40 lines + log path); 'surface the summary's failures' maps onto that output only loosely",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestGreenPathNeverReadsLog requires both '.dross/logs' and a cat/read/open word anywhere in the Green block, matching the contract but a fairly loose detector",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-16": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The assets/prompts/execute.md edit only rewords prose (it adds a 'no lanes-configured branch to decide' clause and tightens two phrases). It is a declared file, but the task description gives no reason for it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The flow-cost-before.toml absence check runs only inside the test-output-summaries subtest. That matches the contract, which is scoped to this phase.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-17": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "TestDrainReportModeNoMutationLog ignores runDrain's return values, so a --report drain that errored before classifying anything would still pass; asserting the expected survivor appears in stdout would make the guard non-vacuous",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "drainLogPhase is a package-level variable written by RunE and read by runGremlinsOverPackages; it keeps drainRunner's signature but is hidden coupling between the command and the runner",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the new tests leave coverageProfileFn unstubbed, so each drain run (two in TestDrainVerdictUnchangedWithLog) spawns a real `go test -coverprofile` in the fixture repo; this matches existing drain tests but slows the suite",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-18": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "The new static-Write short-circuit in call() (a body-bearing Write on a terminal receiver) has no test. In the fixture, internal/runlog has no function bodies, so the 'captured output written to a run log' case already ends via external() -\u003e terminalCall() -\u003e isTerminal(). Deleting the branch would leave TestRunlogSinkIsTerminal green. It only matters in the live tree, where (*runlog.Log).Write has a body, and no live code calls it directly yet. Consider a fixture-local type with a body, or a live-tree assertion, so the branch is pinned.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "The setter/MultiWriter case tees the field with os.Stderr, not a head buffer like the real mutation legs' headBuffer. It still isolates the runlog leg and fails if the setter breaks the class, but it does not reproduce the production tee shape exactly.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "The amendment to exec-taint-enumeration's terminal_definition (spec.toml) is under .dross/ and left out of the reviewed diff, so this review could not check its wording. git status shows the file as modified. The diff adds no //dross:taint-cleared marker.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "runlog_test.go is an internal test (package runlog) that imports internal/remote; if a later task makes internal/remote import runlog (e.g. for c-1's remote dross test leg), the test build fails with an import cycle. Moving TestLogsOffTheWire to an external runlog_test package would remove the risk.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Path() returns \"\" once a mid-run write fails, so a partial log left on disk is never reported to the caller; this matches the doc comment but callers lose the pointer to the partial output.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "IgnoreContent carries a comment line in addition to `*`; this is consistent with the locked log_location decision (\"containing `*`\").",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "Segment.Close's doc comment says 'Writes after Close are dropped', but Write never checks s.closed. A late write after Close (for example a stderr copy goroutine still draining) is still split, fed to the parsers and put in the tail. Either add the guard in Write or fix the comment.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "The tail ring (s.tail[s.next] = Cut(line)) and Failure.Line both store Cut() substrings. Each one shares the backing array of the full cleaned line, which can be up to 64 KiB. So the tail can pin about 40 x 64 KiB and each kept failure about 11 x 64 KiB, while Retained() reports only len() of the 240-byte cuts. Memory stays bounded, but Retained() understates it; strings.Clone on the cut would fix both.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "TestRunDidNotHappenNeverCounts uses green output, so the exit != 0 / zero-failure fallback also rejects it. Deleting the !o.Ran branch in Render would still pass. A Ran=false case whose output carries FAIL lines would pin the 'run didn't happen' path.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "BlockBytes bounds only the output lines. The name line, the marker line (which includes the log path), the header and the more-failing line are all outside it. With long subtest names (around 100 bytes or more) and output lines that fill the 2,800 bytes, 10 blocks can pass 30,000 bytes (worst case about 33 KB). The record's 'always fit' claim holds only for typical names, which is what TestMassBreakSize exercises.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Render takes []*Segment rather than the results the description names, and resolves claims itself. Behaviour matches the description. MoreFailingPrefix leaves out the '+N ' part, which makes sense because N varies; t-15 should quote it that way.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "When one segment is unclaimed, the whole render falls back to that segment's tail, and any counts from sibling segments are dropped. This matches 'dross never guesses' but is worth knowing for multi-lane runs.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "The description claims 10 blocks 'always fit' the ~30,000-char Bash window, but BlockBytes (2,800) bounds only the output lines. The name line (up to 240 bytes) and the marker line (about 95 bytes with a typical log path) are added on top, so the worst case is about 3,280 bytes per block. 10 blocks plus header and footer can then exceed 30,000 bytes with long subtest names and output lines of about 90 bytes. TestMassBreakSize only uses 240-byte lines, which leave about 150 bytes of each block's share unused, so it never hits this case.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "For a run that didn't happen, and for a non-zero exit with zero reported failures, Render uses lastOf(segs). With several lanes or segments, only the last segment's tail is printed, so an error that appeared in an earlier segment is not shown.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Retained() is self-reported and counts only the partial-line buffer and the tail ring, not parser state. TestBoundedRetention matches the contract as written, but it bounds the splitter, not the whole pipeline.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "clean strips only SGR sequences (ESC[...m). Other CSI codes such as ESC[2K or ESC[1A pass through to the parsers. That is acceptable because summaries only run when stdout is not a terminal.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Cut steps back over UTF-8 continuation bytes, so on binary or invalid UTF-8 output it can shorten a line well below LineCut, in the extreme case to an empty string.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "TestHermeticSessionEnv only catches a regression when the suite is launched with CLAUDE_CODE_SESSION_ID or CLAUDE_CODE_CHILD_SESSION already set. In CI or a plain shell it passes whatever TestMain does. The contract's design makes this unavoidable, but it is a weak guard.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-6",
+          "text": "pruneShow's skip for the epoch file is never tested: in TestShowPrune the bump that triggers the prune also rewrites the epoch, so its mtime is always fresh. Removing the guard would only make that session print in full again, which is the safe direction.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestShowKeyContained ignores the error returned by filepath.WalkDir. That is harmless here because the root is a fresh TempDir.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "saveBytes now names its temp file from filepath.Base(dst), which makes nested names like show/epoch work. Existing flat records behave exactly as before, and store_test's .*.tmp leftover glob still matches.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "TestGremlinsStreamToSink does not itself check the headBuffer-not-starved clause its test_contract line names. It is covered only indirectly: TestGremlinsFailureHeadStaysOnStderr fails if the head is dropped from the MultiWriter when a stream is set.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "The did-not-start path in gremlins.go also calls .toLog(g.stream != nil), but no test drives it with a stream set. Dropping that call would go unnoticed. And when the process never started, saying the full output 'went to this run's log' is a slight overstatement.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "There is no compile-time assertion `var _ Streamer = (*Gremlins)(nil)`. A caller that finds the setter by type-asserting to mutation.Streamer would silently stop routing if SetStream were renamed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The comment above the tee in gremlins.go Run ('TEED, not captured. The stream still reaches the terminal as it arrives') is now out of date when a stream is set.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In toolfail_test.go the new fileSuffix/absPath var block sits between TestRecordErrorClauses's doc comment and the function, so that doc comment now attaches to the var block.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The tool-output-not-persisted spec.toml stderr_pointer amendment is in the task's files but left out of the reviewed diff (.dross/ bookkeeping), so the reviewer could not check its wording.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "test_contract says TestStrykerStreamToSink / TestStrykerNetStreamToSink assert headBuffer still holds the lines; neither does. Stryker is covered indirectly by TestStrykerFailureHeadStaysOnStderr, but no test runs stryker-net with SetStream and checks the head, so dropping head from the stryker_net.go MultiWriter when a stream is set would go undetected.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestStrykerNetStreamToSink's report-unchanged check compares only Killed and Survived; the stryker variant also compares Score.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "TestVerifySummaryPrintsPackagesAndSurvivors seeds a NotCovered survivor but does not stub notCoveredProfileFn, so finishVerify execs a real `go test -count=1 -coverprofile=... -run=^$ ./internal/cmd` in the temp dir; it fails fast without a go.mod but makes the test depend on the go toolchain and spawn a subprocess. stubNotCoveredProfile in verify_notcovered_test.go already exists for this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "survivorLines ORs NotCovered across mutants sharing a file:line, so a line with one LIVED and one NOT COVERED survivor (possible under stryker's per-mutant coverage) is printed NOT COVERED, contrary to its doc comment ('a line whose survivors no test ever executed').",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The 'survivors (N):' header counts deduplicated sites, not mutants, so it can disagree with the leg's survived= figure (TestSurvivorLines: 5 survivors print 'survivors (4)'), and the Op the gate message's `--op` needs is dropped from the line.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSurvivorLines' out-of-scope check works by passing the report through FilterReport; LegLines has no scope input, so this is the only sensible way to test it, but it checks FilterReport's filtering rather than anything in LegLines.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The record requires the commit body to state that tests.json LanguageRun.Name and OutOfScopeMutant.Language change from 'stryker-net' to 'csharp'; this cannot be verified from the diff and must be honoured at commit time.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "the 'survivors (N):' header counts distinct file:line sites, not mutants, so it can read lower than the leg line's survived= when two mutants share a line",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "survivors the lifecycle pass marks accepted or routed stay in Mutation.Surviving and are listed with no marker; consistent with 'each in-scope survivor', but an accepted survivor is not silenced in this list",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "a file at the repo root groups under path.Dir's '.' and prints as a '    .: killed=...' row",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the out-of-scope assertion in TestSurvivorLines depends on FilterReport dropping survivors; LegLines itself does no scope filtering, which is correct because both the attached and collected paths filter before finishVerify",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "gotest.go text(): a `panic: ` line at column 0 sets g.panic and is attached to whatever `--- FAIL` frame is still open, so a package where TestA fails and a later test hangs puts 'panic: test timed out after ...' and its stack into TestA's block, and the package-named failure is suppressed because sinceResult \u003e 0. In the same way, a `# pkg` block stays open until the next result or header line, so another package's orphan output (timeout or TestMain exit) printed between that block and its FAIL line is absorbed into the build failure. Consider sending 'panic: test timed out' to the package failure regardless of open frames.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "goTest claims `go test -v` output (it has the same `ok  \\t`/`FAIL\\t` result lines), but in -v a test's log lines come before its `--- FAIL` line and `=== RUN` at column 0 closes the frame, so failure blocks come out empty. The type comment says 'no -v' and the locked parser_coverage decision sends other formats to the fallback; consider declining to claim once `=== RUN` is seen.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestGoClaimsOnlyGo globs testdata/js/*.txt, which does not exist yet, and never asserts that any file matched, so the 't-9's vitest fixtures are not claimed' check is vacuous today and stays silently vacuous if t-9 picks a different directory. Only the inline vitest sample is exercised.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "setup_and_vet.txt has no vet diagnostic (the `# pkg` followed by `# [pkg]` shape). The `[pkg.test]` block is a test-file compile error, so TestGoSetupAndVet would not fail if vet errors were mishandled, despite the contract naming vet.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The TestMain-exit path in the description (package FAIL with no test failure) shares the orphan path that TestGoTimeout exercises, but has no fixture of its own.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "TestGoClaimsOnlyGo globs testdata/js/*.txt, which does not exist yet; that part of the test runs on zero files and passes silently, leaving only the inline vitest snippet. If t-9 puts its fixtures under another directory, the check stays empty forever. Consider failing when the glob finds nothing once t-9 lands.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "An open `# pkg` block takes every following line until a result, `--- FAIL`, FAIL/PASS or timeout line. If a build error prints just before a package that fails with no failing test (for example `exit status 1` from a TestMain exit), that line goes into the build block, and the FAIL line then skips the orphan because sinceResult\u003e0. The package is counted but gets no failure of its own, and its text is attributed to the wrong package. This is a rare interleaving path.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "goBlock `^# ([^\\s\\[]+)(?: \\[[^\\]]+\\])?$` also matches any one-word markdown heading such as `# Summary`. A failing test that prints one to stdout would open a fake build block and add a phantom failure. Requiring a '.' or '/' in the package path, or anchoring on the build-error line shape, would make this tighter.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "The description lists TestMain exit as a package-named failure. That path relies on cmd/go printing `exit status N` when the binary printed nothing, and no fixture covers it. If no line is printed, the run safely falls back to 'no failing test reported'.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 3,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "BLOCKING",
+          "criterion": "c-2",
+          "text": "jest parser counts every indented '● ' line as a failure, but jest's default non-verbose multi-file reporter prints each file's buffered console output under a '  ● Console' header (DefaultReporter.printTestFileHeader, TITLE_BULLET + 'Console'). Any green jest run whose tests log would get a failure 'file › Console', and Render prints 'FAIL (exit 0) … 1 failing'. Red runs are overcounted and the console blocks use up the 10-block budget. No fixture covers console output; jsrunner.go Feed needs to skip that header.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "Vitest Unhandled Errors handling is broken and untested, though the description says they count as failures. printUnhandledErrors prints each error under its own errorBanner(type) ('Unhandled Rejection', 'Uncaught Exception', 'Unhandled Error'). The '⎯' case closes the outer 'Unhandled Errors' block on that inner banner, so the failure holds only the 'Vitest caught N unhandled error' preamble. For rejections and uncaught exceptions the real error and stack are dropped (cur is nil); for type 'Unhandled Error' the preamble becomes an extra failure. No fixture or test drives this path.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "vitest printTaskErrors merges identical errors: it prints several consecutive ' FAIL ' headers and then one error. Each FAIL closes the previous block, so every merged failure except the last has no output lines.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "When every vitest file fails to load (e.g. a syntax error in a module all tests import), vitest prints 'Tests  no tests' (getStateString returns 'no tests' for an empty task list). vitestTests needs a digit, so the run is unclaimed and falls back instead of reporting the load errors as failures.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "vitest.passed is set in Feed but only the test reads it; Result has no passed count.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "jest_red.txt and jest_suite_failed.txt report passing suites but have no 'PASS ./file' header line, which jest's default reporter normally prints for every file. If these lines were trimmed, the fixtures are not verbatim captures, and the PASS branch of jestFile is untested either way.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "With colour forced (FORCE_COLOR or a CI-detected colour level), jest's header strips to ' FAIL  ./x.test.js' with a leading space. jestFile is anchored at '^(?:FAIL|PASS)', so failure names lose the file prefix.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "vitestFail (and jest's jestFile/jestBullet) match anywhere in the output, not only after a 'Failed Tests'/'Failed Suites' banner as the vitest doc comment claims. A test's console output during the run that holds a line like ' FAIL x' (or '      ● x' inside a jest Console block) opens a made-up failure, so a green exit-0 run would print as 'FAIL (exit 0)'. Rare, but the comment describes gating the code doesn't do.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "blockLines.names grows by one entry per FAIL header that shares an error, with no cap, and each entry is a substring that keeps its whole source line in memory (up to MaxLine). A throwing beforeEach merges every test in the file under one error, so memory grows with the number of failures. That breaks the package's stated rule that nothing grows with output size. Failures.Add only needs a count past MaxBlocks, so names could be cut with keep() and capped.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestJSFixturesCaptured checks the vitest header with HasPrefix and no terminator, so '# captured: vitest@4.1.110' would pass. The jest check adds a trailing space to make the match exact; the vitest check should do the same, since the contract asks for the exact header.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "vitest.passed is computed but never put into Result. Only TestVitestCounts reads it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Cutting the name at ' [ ' (meant to drop the '[ file ]' suffix on failed suites) also clips any test name that contains ' [ '. And with jest projects/displayName, jestFile's first token is the project label, so failures would be named after the project instead of the file.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The fixtures cover merged errors, unhandled errors, 'no tests', Console blocks and forced colour, and TestJSForcedColour guards against a fixture with no ANSI codes in it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "vitest.Feed opens a failure block on any line matching ^\\s*FAIL\\s+ anywhere in the output, not only after a 'Failed Tests'/'Failed Suites' banner as the type's doc comment states; a test's stdout line beginning 'FAIL ' becomes a bogus failure, and Render then prints a red 'FAIL (exit 0)' summary for a green run",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "the suite-suffix strip (strings.Index(name, \" [ \")) cuts legitimate test names containing ' [ ' — e.g. it.each with array arguments formatted as '[ 1, 2 ]' — so distinct parametrised failures collapse to one truncated name; only a trailing '[ \u003csame path\u003e ]' should be stripped",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "vitest.passed is computed but never surfaced in Result; only TestVitestCounts reads it",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "vitest.unhandled is never reset, so any titled ⎯ banner after the 'Unhandled Errors' section would open a failure; harmless while vitest prints that section last",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 3,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the vitest fixtures use purpose-written src/math.test.ts and src/strings.test.ts rather than ts-project's own tests; the vitest@4.1.11 header matches the ts-project lockfile",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
+}

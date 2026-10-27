@@ -1,0 +1,303 @@
+# Test→commit flow cost for test-output-summaries (milestone v1.8 c-6, phase c-8).
+# [before] ran on a dross built from base commit 54ad9064, [after] on the phase
+# head. Observed numbers only; the transcript fields are counted structurally
+# with jq_flow, no content copied.
+
+[scenario]
+  repo_shape = "two fixed scratch repos built by setup.sh (steps below, each followed by a commit in that repo; the commit gate needs a trusted, green `dross test` once .dross/ exists). flow: Go module example.com/flow, 60 packages p1..p60, each Add(a, b) with a 3-case TestAdd, plus package apicheck whose TestP3API pins p3's exported funcs to apicheck/testdata/p3.txt — outside p3, so the agent's read of p3 never sees it (a first attempt with the pin inside p3 was read at §1b and pre-empted: no red). dross init (stack go: test_command go test -count=1 ./..., runtime.mode native), milestone v0.1 created, phase flow-probe on phase/flow-probe with spec c-1 and one task t-1 'Add Sub to p3' (files p3/p3.go, p3/p3_test.go). mut: module example.com/mut, packages q1 and q2 each with Clamp and a 2-case TestClamp, [mutation] adapters = [gremlins] (local gremlins v0.6.0), phase mut-probe on phase/mut-probe whose one commit adds an `if lo > hi { return lo }` arm to both Clamps. Board disabled, no remote grant: every run is local."
+  setup_steps = ["files flow → commit init", "dross flow → human: dross trust → dross test → commit 'dross scaffold'", "phase flow → dross test → commit 'flow-probe: spec and plan'", "files mut → commit init", "dross mut → human: dross trust → dross test → commit 'dross scaffold'", "phase mut → dross test → commit 'mut-probe: Clamp handles an inverted range'"]
+  byte_method = "`<cmd> >f 2>&1; wc -c <f` with the binary under test first on PATH and stdout not a terminal. green_test_bytes: `dross test` in flow on its committed tree. red_test_bytes: the same after setup.sh's seed-red step (p5's Add off by one in the work tree only; one failing TestAdd with 3 assertion lines; restored with git checkout afterwards). verify_leg_bytes: `dross verify mut-probe` in mut, once, on its committed tree. rule_show_repeat_bytes: the second of two back-to-back `dross rule show` runs in flow, in a session whose SessionStart hook has fired."
+  wave_position = "t-1 is flow-probe's only task (wave 1); the flow runs inside it, from §1e to its commit"
+  flow_start = "the agent's first Bash call running `dross test` for t-1 (§1e), after the human answered `approve t-1` at §1c"
+  flow_end = "the agent's Bash call that runs t-1's `git commit`, inclusive of that turn"
+  flow_steps = ["fresh `claude` in flow with the binary under test first on PATH", "/dross-execute (pair)", "approve t-1", "§1e: dross test is red — TestP3API (apicheck/testdata/p3.txt lacks Sub)", "fix here", "approve touching apicheck/testdata/p3.txt (a file outside t-1's files)", "green", "§1f: no lanes, so §1e's run is the full suite", "commit", "stop at §1g"]
+  setup_sh = '''
+#!/bin/sh
+# Scratch repos for test-output-summaries' flow-cost record (t-1 before, t-16 after).
+# Usage: DROSS=<binary> setup.sh <out-dir> <step> [repo]
+# Steps, in order, each followed by a commit in the named repo (the dross
+# commit gate needs a trusted, green `dross test` once .dross/ exists):
+#   files <flow|mut>  write the Go module and git-init it      -> commit "init"
+#   dross <flow|mut>  dross init, name, runtime.mode native    -> human: dross trust;
+#                                                                 dross test; commit "dross scaffold"
+#   phase <flow|mut>  milestone v0.1 + phase + spec (+ task / code change)
+#                                                              -> dross test; commit
+#   seed-red          p5 off by one in flow work tree only (red_test_bytes)
+set -eu
+DROSS=${DROSS:?set DROSS to the dross binary under test}
+OUT=${1:?out dir}
+STEP=${2:?files or dross}
+
+pkg() { # dir name body-of-Add
+	mkdir -p "$1"
+	cat >"$1/$2.go" <<EOF
+package $2
+
+// Add returns the sum of a and b.
+func Add(a, b int) int { return $3 }
+EOF
+	cat >"$1/$2_test.go" <<EOF
+package $2
+
+import "testing"
+
+func TestAdd(t *testing.T) {
+	for _, c := range []struct{ a, b, want int }{{1, 2, 3}, {-1, 1, 0}, {0, 0, 0}} {
+		if got := Add(c.a, c.b); got != c.want {
+			t.Errorf("Add(%d, %d) = %d, want %d", c.a, c.b, got, c.want)
+		}
+	}
+}
+EOF
+}
+
+case "$STEP" in
+files)
+	REPO=${3:?flow or mut}
+	rm -rf "$OUT/$REPO"
+	mkdir -p "$OUT/$REPO"
+	# flow: sixty green packages. p3 pins its exported API in a golden file
+	# outside the flow task's files, so adding Sub turns §1e red.
+	# red_test_bytes seeds its failure in the work tree only: see seed-red.
+	if [ "$REPO" = flow ]; then
+	cd "$OUT/flow"
+	printf 'module example.com/flow\n\ngo 1.27\n' >go.mod
+	for i in $(seq 1 60); do pkg "p$i" "p$i" "a + b"; done
+	# The exported-API pin lives in its own package, outside p3 and outside
+	# the flow task's files, so a read of p3 never sees it and adding Sub
+	# turns the test gate red (a pin inside p3 was read and pre-empted).
+	mkdir -p apicheck/testdata
+	printf 'Add\n' >apicheck/testdata/p3.txt
+	cat >apicheck/apicheck.go <<'EOF'
+// Package apicheck pins other packages' exported APIs.
+package apicheck
+EOF
+	cat >apicheck/api_test.go <<'EOF'
+package apicheck
+
+import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"sort"
+	"strings"
+	"testing"
+)
+
+// TestP3API pins p3's exported functions to testdata/p3.txt.
+func TestP3API(t *testing.T) {
+	fs := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fs, "../p3", func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, p := range pkgs {
+		for _, f := range p.Files {
+			for _, d := range f.Decls {
+				if fd, ok := d.(*ast.FuncDecl); ok && fd.Name.IsExported() {
+					got = append(got, fd.Name.Name)
+				}
+			}
+		}
+	}
+	sort.Strings(got)
+	b, err := os.ReadFile("testdata/p3.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Fields(string(b))
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("p3's exported API changed: got %v, want %v (apicheck/testdata/p3.txt)", got, want)
+	}
+}
+EOF
+	git init -q -b main
+	fi
+	if [ "$REPO" = mut ]; then
+	# mut: two packages with branches for gremlins to mutate.
+	cd "$OUT/mut"
+	printf 'module example.com/mut\n\ngo 1.27\n' >go.mod
+	for q in q1 q2; do
+		mkdir -p "$q"
+		cat >"$q/$q.go" <<EOF
+package $q
+
+// Clamp limits x to [lo, hi].
+func Clamp(x, lo, hi int) int {
+	if x < lo {
+		return lo
+	}
+	if x > hi {
+		return hi
+	}
+	return x
+}
+EOF
+		cat >"$q/${q}_test.go" <<EOF
+package $q
+
+import "testing"
+
+func TestClamp(t *testing.T) {
+	if got := Clamp(5, 0, 10); got != 5 {
+		t.Errorf("Clamp(5, 0, 10) = %d", got)
+	}
+	if got := Clamp(-3, 0, 10); got != 0 {
+		t.Errorf("Clamp(-3, 0, 10) = %d", got)
+	}
+}
+EOF
+	done
+	git init -q -b main
+	fi
+	;;
+dross)
+	for r in ${3:?flow or mut}; do
+		cd "$OUT/$r"
+		"$DROSS" init >/dev/null
+		# init detects the Go stack and fills [runtime] (go test -count=1 ./...).
+		NAME=$r perl -0pi -e 's/^  name = ""/  name = "$ENV{NAME}"/m; s/^  mode = ""/  mode = "native"/m' .dross/project.toml
+		printf '\n[mutation]\n  adapters = ["gremlins"]\n' >>.dross/project.toml
+	done
+	;;
+phase)
+	REPO=${3:?flow or mut}
+	if [ "$REPO" = flow ]; then
+	# flow: one pair-mode task; adding Sub reddens apicheck/api_test.go (golden
+	# outside the task files) at §1e.
+	cd "$OUT/flow"
+	"$DROSS" milestone create v0.1 >/dev/null
+	"$DROSS" phase create flow-probe >/dev/null
+	cat >.dross/phases/flow-probe/spec.toml <<'EOF'
+[phase]
+  id = "flow-probe"
+  title = "flow-probe"
+  milestone = "v0.1"
+
+[[criteria]]
+  id = "c-1"
+  text = "p3 exposes Sub(a, b) returning a - b."
+EOF
+	printf 'task_seq = 0\n\n[phase]\n  id = "flow-probe"\n' >.dross/phases/flow-probe/plan.toml
+	"$DROSS" task add flow-probe --title "Add Sub to p3" --files p3/p3.go,p3/p3_test.go --covers c-1 \
+		--description "Add Sub(a, b int) int returning a - b to p3, with a table test beside TestAdd." \
+		--test-contract "if Sub is wrong, TestSub fails" >/dev/null
+	fi
+	if [ "$REPO" = mut ]; then
+	# mut: one phase that changes both packages.
+	cd "$OUT/mut"
+	"$DROSS" milestone create v0.1 >/dev/null
+	"$DROSS" phase create mut-probe >/dev/null
+	cat >.dross/phases/mut-probe/spec.toml <<'EOF'
+[phase]
+  id = "mut-probe"
+  title = "mut-probe"
+  milestone = "v0.1"
+
+[[criteria]]
+  id = "c-1"
+  text = "Clamp limits x to [lo, hi] in q1 and q2."
+EOF
+	for q in q1 q2; do
+		cat >"$q/$q.go" <<EOF
+package $q
+
+// Clamp limits x to [lo, hi]; an inverted range (lo > hi) yields lo.
+func Clamp(x, lo, hi int) int {
+	if lo > hi {
+		return lo
+	}
+	if x < lo {
+		return lo
+	}
+	if x > hi {
+		return hi
+	}
+	return x
+}
+EOF
+	done
+	fi
+	;;
+seed-red)
+	# The one seeded failing test for red_test_bytes: p5's Add off by one, in
+	# the work tree only. Undo with: git -C "$OUT/flow" checkout -- p5/p5.go
+	sed -i '' 's/return a + b }/return a + b + 1 }/' "$OUT/flow/p5/p5.go"
+	;;
+*)
+	echo "unknown step $STEP" >&2
+	exit 2
+	;;
+esac
+'''
+  jq_method = "jq -cs -f <filter> <transcript.jsonl> with jq_flow. A turn is a distinct message.id among main-agent entries (type assistant, isSidechain false, model not <synthetic>); its tool entry is its tool_use names joined by +, or text when it has none. wall_clock_s is flow_end − flow_start minus human_wait_s, the sum over every AskUserQuestion in the window of tool_use → its tool_result. log_reads counts Read calls on a .dross/logs/ path and Bash calls naming .dross/logs. dross_calls is the sorted set of `dross <verb> [<sub>]` invocations in the window's Bash commands; per the context-boundaries gate (rivil, 2026-10-08) turns and wall-clock are recorded, not gated."
+  jq_flow = '''
+def ms: (.[0:19] + "Z" | fromdateiso8601) + (.[20:23] | tonumber / 1000);
+def main: .type == "assistant" and .isSidechain == false and .message.model != "<synthetic>";
+def uses: [.message.content[]? | select(type == "object" and .type == "tool_use")];
+def bash($re): uses | any(.name == "Bash" and (.input.command | test($re)));
+def dross_calls: [.[] | uses[] | select(.name == "Bash") | .input.command | [scan("(?:^|[^/\\w-])dross ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?")] | .[] | "dross " + (map(select(. != null)) | join(" "))] | unique;
+[.[] | select(.timestamp)] as $e
+| ($e | map(select(main and bash("(?:^|[^/\\w-])dross test"))) | first | .timestamp) as $start
+| ($e | map(select(main and .timestamp >= $start and bash("git commit"))) | first | .timestamp) as $end
+| ($e | map(select(.timestamp >= $start and .timestamp <= $end))) as $w
+| ($w | map(select(main))) as $a
+| ($a | group_by(.message.id) | sort_by(.[0].timestamp) | map([.[] | uses[] | .name] | if length == 0 then "text" else join("+") end)) as $turns
+| ([$a[] | . as $m | uses[] | select(.name == "AskUserQuestion") | {id, t: ($m.timestamp | ms)}]) as $asks
+| ([$e[] | select(.type == "user") | . as $u | .message.content[]? | select(type == "object" and .type == "tool_result") | {id: .tool_use_id, t: ($u.timestamp | ms)}]) as $results
+| ([$asks[] as $q | $results[] | select(.id == $q.id) | .t - $q.t] | add // 0) as $wait
+| {dross_calls: ($a | dross_calls), agent_turns: ($turns | length), turn_tools: $turns, human_wait_s: $wait,
+   wall_clock_s: ((($end | ms) - ($start | ms)) - $wait),
+   log_reads: ([$a[] | uses[] | select((.name == "Read" and ((.input.file_path // "") | test("/[.]dross/logs/"))) or (.name == "Bash" and (.input.command | test("[.]dross/logs"))))] | length)}
+'''
+
+[before]
+  binary_version = "dross 0.1.0.0 (commit 54ad9064, built 2026-10-09T10:46:44Z)"
+  bytes_measured_at = "2026-10-09T16:54:13Z"
+  green_test_bytes = 2009
+  red_test_bytes = 2246
+  verify_leg_bytes = 1917
+  rule_show_repeat_bytes = 2013
+  session_id = "11d1a225-24be-4b0b-8459-942577e74902"
+  measured_at = "2026-10-09T17:00:26Z"
+  model = "claude-opus-5-5"
+  claude_code_version = "2.1.295"
+  agent_turns = 14
+  turn_tools = ["Bash", "Bash", "AskUserQuestion", "Bash", "Bash", "Bash", "Bash", "Read", "Write", "Bash", "Bash", "Bash", "Bash", "Bash"]
+  wall_clock_s = 50.6
+  human_wait_s = 19.0
+  log_reads = 0
+  dross_calls = ["dross task", "dross task edit", "dross task show", "dross test", "dross validate"]
+
+# The same scenario on the phase head (run4 flow, run3 bytes). The flow was
+# re-driven after §1e's "only when lanes are configured" cue was restored in
+# execute.md: run3's flow ran `dross test lane list`, outside the before set.
+[after]
+  binary_version = "dross 0.1.0.0 (commit 4662ccc6, built 2026-10-10T15:42:06Z)"
+  bytes_measured_at = "2026-10-09T19:51:49Z"
+  bytes_note = "run3, on the build `make install` made after t-15 (commit 4662ccc6, the Go source binary_version names; the later rebuild only re-linked the edited execute.md). Log-path lines are absolute, so byte counts move with the scratch dir's path length."
+  green_test_bytes = 249
+  red_test_bytes = 495
+  verify_leg_bytes = 796
+  rule_show_repeat_bytes = 120
+  session_id = "d8858461-fdb2-4cb6-98a7-7f2e6fd6d633"
+  measured_at = "2026-10-26T09:54:01Z"
+  model = "claude-opus-5-5"
+  claude_code_version = "2.1.310"
+  agent_turns = 9
+  turn_tools = ["Bash", "Bash", "AskUserQuestion", "Bash", "Read", "Edit", "Bash", "Bash", "Bash"]
+  wall_clock_s = 42.5
+  human_wait_s = 5.2
+  log_reads = 0
+  dross_calls = ["dross test"]
+  turn_delta = "-5 turns, -8.1 s: the red step acted on the summary's TestP3API block (one Read of the golden, no log read), and the agent asked `fix here` with the p3.txt deviation folded into that one question, as the before leg did."
+
+# The repeat marker live in a real session (run3 nested session, 2026-10-10
+# ~09:10–09:12 UTC, on the phase-head binary with the SessionStart hook wired).
+[marker_live]
+  repeat = true
+  clear_full = true
+  compact_full = true
+  subagent_marker_names_full = true

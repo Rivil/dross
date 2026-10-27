@@ -1,0 +1,33 @@
+# captured: jest@30.5.2 npx jest (env -i: no agent variables)
+PASS ./strings.test.js
+PASS ./logs.test.js
+  ● Console
+
+    console.log
+      hello from a test
+
+      at Object.log (logs.test.js:2:11)
+
+FAIL ./math.test.js
+  ● add › negatives
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: -3
+    Received: 1
+
+       6 |   });
+       7 |   test("negatives", () => {
+    >  8 |     expect(add(-1, -2)).toBe(-3);
+         |                         ^
+       9 |   });
+      10 |   test("zero", () => {
+      11 |     expect(add(0, 0)).toBe(0);
+
+      at Object.toBe (math.test.js:8:25)
+
+Test Suites: 1 failed, 2 passed, 3 total
+Tests:       1 failed, 4 passed, 5 total
+Snapshots:   0 total
+Time:        0.238 s
+Ran all test suites.

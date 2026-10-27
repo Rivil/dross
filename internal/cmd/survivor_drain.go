@@ -14,6 +14,7 @@ import (
 	"github.com/Rivil/dross/internal/mutationcfg"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/runlog"
 	"github.com/Rivil/dross/internal/state"
 	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/verify"
@@ -39,6 +40,15 @@ var goListDirs = survivor.GoListDirs
 // the packages it could not measure. Overridable so the classify path is
 // testable against recorded reports rather than a live gremlins run.
 var drainRunner = runGremlinsOverPackages
+
+// drainLogPhase names the drain's run log: verify-<phase>-gremlins-<ts>.log
+// when --phase was given, verify-drain-gremlins-<ts>.log otherwise. Set by
+// the command before the runner runs; drainRunner's shape stays a seam.
+var drainLogPhase = "drain"
+
+// drainStdoutIsTTY decides whether the drain's tool stream also reaches the
+// terminal live (a human) or only the run log (an agent). A test swaps it.
+var drainStdoutIsTTY = runlog.StdoutIsTerminal
 
 // allGoPackages returns every package in the repo as a gremlins package path
 // ("." for the module root, "./internal/cmd" otherwise).
@@ -145,7 +155,18 @@ func runGremlinsOverPackages(repoRoot string, pkgs []string) ([]mutation.Unmeasu
 		}
 		files = append(files, filepath.Join(dir, "drain.go"))
 	}
-	if _, err := g.Run(files); err != nil {
+	// The per-mutant stream goes to a run log, not the conversation; a human
+	// on a terminal still watches it live. --report mode never gets here, so
+	// it opens no log.
+	l := runlog.Open(repoRoot, runlog.Name{Kind: runlog.KindVerify, Phase: drainLogPhase, Leg: g.Name()},
+		runlog.Options{Terminal: runlog.Stderr, Echo: drainStdoutIsTTY()})
+	g.SetStream(l)
+	_, err = g.Run(files)
+	l.Close()
+	if p := l.Path(); p != "" {
+		Printf("drain log: %s\n", p)
+	}
+	if err != nil {
 		return nil, err
 	}
 	return g.Unmeasured, nil
@@ -245,6 +266,10 @@ func survivorDrain() *cobra.Command {
 			}
 			repoRoot := filepath.Dir(root)
 
+			drainLogPhase = "drain"
+			if phaseID != "" {
+				drainLogPhase = phaseID
+			}
 			if phaseID == "" {
 				s, err := state.Load(filepath.Join(root, state.File))
 				if err != nil {

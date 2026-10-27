@@ -1,0 +1,8 @@
+# captured: go1.27.1 go test -count=1 ./...
+# example.com/build/dep
+dep/dep.go:3:25: undefined: foo
+FAIL	example.com/build/a [build failed]
+FAIL	example.com/build/b [build failed]
+FAIL	example.com/build/dep [build failed]
+ok  	example.com/build/ok	0.166s
+FAIL

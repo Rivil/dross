@@ -185,19 +185,19 @@ dross test --files <task.files[0]> --files <task.files[1]> ...
 `--files` resolves those paths against the repo's `[[runtime.test_lane]]` blocks
 and runs only the lanes they hit, so the gate costs the code this task touched
 rather than the whole suite. The paths come from the plan, never from the git
-diff — a task that touched a file it did not declare is a plan deviation you
-already had to surface at §1d, and quietly widening the gate to cover it would
-hide exactly that.
+diff — an undeclared file is a plan deviation to surface at §1d, never a
+reason to widen the gate.
 
 Repeat the flag rather than comma-joining: a comma is legal in a path.
 
-A repo that declares **no** lanes ignores `--files` entirely and runs
-`runtime.test_command` unchanged, so this form is safe everywhere — there is no
-"only when lanes are configured" branch to decide.
+A repo with **no** lanes ignores `--files` and runs `runtime.test_command`
+unchanged, so this form is safe everywhere — there is no "only when lanes are
+configured" branch to decide.
 
-`dross test` runs the command itself — gated on consent, streaming output as it
-arrives, and on the granted remote host when there is one (`dross remote
-status`), so a run leaves the laptop without you doing anything differently.
+`dross test` runs the command itself — gated on consent, on the granted remote
+host when there is one (`dross remote status`), full output logged under
+`.dross/logs/`. It prints a summary: counts on green; on red each failing test
+with its output, then `+N more failing — see <log>` past ten.
 Pass `--local` to force the run onto this machine. A bare `dross test` (no
 `--files`) still runs the whole suite; append a package/path selector to narrow
 that (`dross test ./internal/cmd/...`), which cannot be combined with `--files`.
@@ -236,7 +236,7 @@ Three outcomes:
 
 **Green** → continue to commit step.
 
-**Red, pair mode** → surface the failure tail (last 30-40 lines). Ask via `AskUserQuestion`:
+**Red, pair mode** → surface the summary's failures; open the log only where a block was cut. Ask via `AskUserQuestion`:
 - `fix here` — address the failure inline, re-run
 - `mark failed` — set status to `failed`, advance (later tasks that don't depend on this one keep going)
 - `abort phase` — stop the loop entirely; current state is preserved

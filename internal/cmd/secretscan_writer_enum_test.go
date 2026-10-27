@@ -14,6 +14,7 @@ import (
 
 	"github.com/Rivil/dross/internal/debugsession"
 	"github.com/Rivil/dross/internal/gatestate"
+	"github.com/Rivil/dross/internal/runlog"
 	"github.com/Rivil/dross/internal/secretscan"
 )
 
@@ -219,6 +220,16 @@ func TestMachineLocalWritersAreReallyIgnored(t *testing.T) {
 		secretscan.DebugIgnoreSeed: func(dir string) error {
 			_, err := debugsession.Create(dir, "seed", time.Now())
 			return err
+		},
+		// The run log's seed is the .gitignore its first Write lays down
+		// before the log itself.
+		secretscan.RunlogIgnoreSeed: func(dir string) error {
+			l := runlog.Open(dir, runlog.Name{Kind: runlog.KindTest}, runlog.Options{})
+			l.Write([]byte("seed\n"))
+			if err := l.Close(); err != nil {
+				return err
+			}
+			return l.Err()
 		},
 	}
 	seeded := func(seed string) string {

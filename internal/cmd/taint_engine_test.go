@@ -366,6 +366,8 @@ type taintIDs struct {
 	cmdStdout, cmdStderr, exitErrStderr            *types.Var
 	osStdout, osStderr                             *types.Var
 	cobraOut, cobraErr                             *types.Func
+	// runlogLog is runlog.Log: a *runlog.Log is terminal by type.
+	runlogLog *types.TypeName
 }
 
 func resolveTaintIDs(prog *ssa.Program) taintIDs {
@@ -384,6 +386,10 @@ func resolveTaintIDs(prog *ssa.Program) taintIDs {
 		case "os":
 			ids.osStdout, _ = p.Pkg.Scope().Lookup("Stdout").(*types.Var)
 			ids.osStderr, _ = p.Pkg.Scope().Lookup("Stderr").(*types.Var)
+		case "github.com/Rivil/dross/internal/runlog":
+			if n := namedIn(p.Pkg, "Log"); n != nil {
+				ids.runlogLog = n.Obj()
+			}
 		case "github.com/spf13/cobra":
 			cmd := namedIn(p.Pkg, "Command")
 			ids.cobraOut = methodOf(cmd, "OutOrStdout")
@@ -1269,13 +1275,16 @@ func (e *taintEngine) precomputeTerminal() {
 }
 
 // isTerminal reports whether v is a terminal writer: os.Stdout or os.Stderr,
-// cobra's OutOrStdout/ErrOrStderr, or a variable or field that only ever holds
-// one, through any conversion or merge.
+// cobra's OutOrStdout/ErrOrStderr, a *runlog.Log, or a variable or field that
+// only ever holds one, through any conversion or merge.
 func (e *taintEngine) isTerminal(v ssa.Value, seen map[ssa.Value]bool) bool {
 	if seen[v] {
 		return true
 	}
 	seen[v] = true
+	if e.isRunlogSink(v.Type()) {
+		return true
+	}
 	switch x := v.(type) {
 	case *ssa.Global:
 		return e.isTerminalGlobal(x)
@@ -1313,6 +1322,23 @@ func (e *taintEngine) isTerminal(v ssa.Value, seen map[ssa.Value]bool) bool {
 		return len(x.Edges) > 0
 	}
 	return false
+}
+
+// isRunlogSink reports whether t is *runlog.Log — the one named type in the
+// terminal class (terminal_definition, amended by test-output-summaries): a
+// run log writes only its gitignored file under .dross/logs/ and os.Stdout or
+// os.Stderr, chosen by an enum, never an io.Writer a caller supplies. A
+// generic io.Writer is never matched here, whatever it holds.
+func (e *taintEngine) isRunlogSink(t types.Type) bool {
+	if e.ids.runlogLog == nil {
+		return false
+	}
+	p, ok := t.(*types.Pointer)
+	if !ok {
+		return false
+	}
+	n, ok := p.Elem().(*types.Named)
+	return ok && n.Obj() == e.ids.runlogLog
 }
 
 func (e *taintEngine) isTerminalGlobal(g *ssa.Global) bool {
@@ -1384,6 +1410,12 @@ func (e *taintEngine) call(instr ssa.CallInstruction, v ssa.Value, from tset) {
 	// A write to a terminal writer ends the stream on the user's screen,
 	// whatever sits behind the interface.
 	if common.IsInvoke() && !isRecv && isWriteMethod(common.Method.Name()) && e.isTerminal(common.Value, map[ssa.Value]bool{}) {
+		return
+	}
+	// The same for a static Write on a terminal receiver, whose body is in the
+	// program (a *runlog.Log's): the stream ends there, not in that body.
+	if fn := common.StaticCallee(); fn != nil && !common.IsInvoke() && fn.Signature.Recv() != nil && isWriteMethod(fn.Name()) &&
+		len(common.Args) > 1 && common.Args[0] != v && e.isTerminal(common.Args[0], map[ssa.Value]bool{}) {
 		return
 	}
 
@@ -2063,5 +2095,50 @@ func TestTaintedReturnFailsClosed(t *testing.T) {
 	got := runTaint(fx.srcView, execTaintPolicy())
 	if len(got) != 1 || got[0].Escape.Line != 10 || !strings.Contains(got[0].What, "returned") {
 		t.Errorf("findings = %v, want one at ret.go:10 naming the return", got)
+	}
+}
+
+// TestRunlogSinkIsTerminal: a *runlog.Log is terminal by type (the
+// terminal_definition amendment of test-output-summaries). Its only outputs are
+// its gitignored file and os.Stdout or os.Stderr, picked by an enum — so a spawn
+// stream plugged into one, teed beside one, or written to one ends on the user's
+// screen. The class is that one named type: the same stream into an *os.File, a
+// bytes.Buffer or a generic io.Writer parameter is still an escape.
+func TestRunlogSinkIsTerminal(t *testing.T) {
+	const header = "package main\n\nimport (\n\t\"bytes\"\n\t\"errors\"\n\t\"io\"\n\t\"os\"\n\t\"os/exec\"\n\n\t\"github.com/Rivil/dross/internal/runlog\"\n)\n\n" +
+		"var _, _, _, _ = bytes.MinRead, errors.New, io.EOF, os.Stdout\n\n" +
+		"func open() *runlog.Log { return runlog.Open(\".\", runlog.Name{}, runlog.Options{}) }\n\n"
+	run := func(t *testing.T, body string) []taintFinding {
+		t.Helper()
+		fx, err := typecheckFixture(liveImportable(t), []fixtureSource{{Name: "rl.go", Src: []byte(header + body)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return runTaint(fx.srcView, execTaintPolicy())
+	}
+	for _, tc := range []struct {
+		name, body string
+		escapes    bool
+	}{
+		{"Cmd.Stdout is a run log", "func main() {\n\tl := open()\n\tc := exec.Command(\"git\", \"status\")\n\tc.Stdout, c.Stderr = l, l\n\t_ = c.Run()\n}\n", false},
+		{"a setter-held field teed with MultiWriter", "type g struct{ stream *runlog.Log }\n\n" +
+			"func (x *g) SetStream(l *runlog.Log) { x.stream = l }\n\n" +
+			"func (x *g) run() error {\n\tc := exec.Command(\"gremlins\")\n\tw := io.MultiWriter(x.stream, os.Stderr)\n\tc.Stdout, c.Stderr = w, w\n\treturn c.Run()\n}\n\n" +
+			"func main() {\n\tx := &g{}\n\tx.SetStream(open())\n\t_ = x.run()\n}\n", false},
+		{"captured output written to a run log", "func main() {\n\tout, _ := exec.Command(\"git\", \"log\").Output()\n\topen().Write(out)\n}\n", false},
+		{"Cmd.Stdout is a plain file", "func main() {\n\tf, _ := os.Create(\"x\")\n\tc := exec.Command(\"git\", \"status\")\n\tc.Stdout = f\n\t_ = c.Run()\n}\n", true},
+		{"captured output in a bytes.Buffer", "func main() {\n\tvar b bytes.Buffer\n\tc := exec.Command(\"git\", \"status\")\n\tc.Stdout = &b\n\t_ = c.Run()\n\tpanic(errors.New(b.String()))\n}\n", true},
+		{"a generic io.Writer parameter", "func run(w io.Writer) error {\n\tc := exec.Command(\"git\", \"status\")\n\tc.Stdout = w\n\treturn c.Run()\n}\n\n" +
+			"func main() {\n\tf, _ := os.Create(\"x\")\n\t_ = run(f)\n}\n", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := run(t, tc.body)
+			if tc.escapes && len(got) == 0 {
+				t.Errorf("no finding: the terminal class has widened past *runlog.Log")
+			}
+			if !tc.escapes && len(got) != 0 {
+				t.Errorf("findings %v: a *runlog.Log is not terminal", got)
+			}
+		})
 	}
 }

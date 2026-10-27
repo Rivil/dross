@@ -174,6 +174,10 @@ const GateIgnoreSeed = "gatestate.ensureDir (.dross/gate/.gitignore)"
 // first session.
 const DebugIgnoreSeed = "debugsession.Create (.dross/debug/.gitignore)"
 
+// RunlogIgnoreSeed is the self-ignoring .dross/logs/.gitignore that a run log
+// writes before its own file on the first Write.
+const RunlogIgnoreSeed = "runlog.Log.Write (.dross/logs/.gitignore)"
+
 // userSettings is the Claude user-level settings file several writers merge
 // into.
 const userSettings = "~/.claude/settings.json"
@@ -223,8 +227,8 @@ var writers = []Writer{
 		Why: "host allowlist additions and quick_base; a committed copy would let a repo authorize its own API host",
 	}},
 	{File: "internal/gatestate/store.go", MachineLocal: &MachineLocal{
-		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json", "gate/review.json", "gate/quick.json", "gate/review-context.md", "gate/reply.json"}, IgnoreSeed: GateIgnoreSeed,
-		Why: "tool-gate records (green tree, execute mode, task approval, solo review ledger, quick mode, reply approval) and the review context the reviewer reads; a committed copy would let a clone arrive pre-approved or pre-reviewed",
+		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json", "gate/review.json", "gate/quick.json", "gate/review-context.md", "gate/reply.json", "gate/show/<name>"}, IgnoreSeed: GateIgnoreSeed,
+		Why: "tool-gate records (green tree, execute mode, task approval, solo review ledger, quick mode, reply approval, the show-once records of rule/interaction show) and the review context the reviewer reads; a committed copy would let a clone arrive pre-approved or pre-reviewed",
 	}},
 	{File: "internal/gatestate/nudge.go", MachineLocal: &MachineLocal{
 		Path: "gate/nudge/<name>", IgnoreSeed: GateIgnoreSeed,
@@ -233,6 +237,10 @@ var writers = []Writer{
 	{File: "internal/debugsession/store.go", MachineLocal: &MachineLocal{
 		Path: "debug/<name>.md", Also: []string{"debug/.gitignore"}, IgnoreSeed: DebugIgnoreSeed,
 		Why: "/dross-debug sessions quote captured output, which must never reach a published artifact (locked session_tracking)",
+	}},
+	{File: "internal/runlog/runlog.go", MachineLocal: &MachineLocal{
+		Path: "logs/<name>.log", Also: []string{"logs/.gitignore"}, IgnoreSeed: RunlogIgnoreSeed,
+		Why: "full output of `dross test` runs and mutation legs; an unignored log would count as a tree change and stale verify and the green record (locked log_location)",
 	}},
 
 	// ---- OutsideDross: not a .dross artifact ------------------------------

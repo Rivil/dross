@@ -64,11 +64,22 @@ func (c capture) clause() string {
 // one is a new constructor parameter — which the reflect pin in
 // toolfail_test.go fails on.
 type toolFailure struct {
-	tool string
-	exit int
-	cap  capture
-	err  error
+	tool   string
+	exit   int
+	cap    capture
+	err    error
+	logged bool // the tool's stream went to a run log, not the terminal
 }
+
+// The record's closing pointer: where the tool's full output went. Fixed
+// prose, never a file name — logs are pruned, so a name goes stale; a
+// timestamp would churn tracked tests.json and verify.toml; an absolute path
+// would carry a home directory into a PR body (stderr_pointer, amended by
+// test-output-summaries).
+const (
+	StderrPointer = "went to this run's stderr, not to any file dross writes"
+	LogPointer    = "went to this run's log in .dross/logs (machine-local, not committed)"
+)
 
 // RecordToolFailure builds the record for a tool that ran and failed.
 //
@@ -88,6 +99,12 @@ func (f *toolFailure) wrapping(err error) *toolFailure {
 	return f
 }
 
+// toLog marks that the tool's stream went to a run log, so the pointer says so.
+func (f *toolFailure) toLog(on bool) *toolFailure {
+	f.logged = on
+	return f
+}
+
 // Error is fixed prose. Every clause is asserted in toolfail_test.go:
 //
 //   - the tool name as a bare token, because telemetry's `mutation` bucket
@@ -96,11 +113,11 @@ func (f *toolFailure) wrapping(err error) *toolFailure {
 //     every adapter failure into `other`.
 //   - the exit status, which is the one number that says what the tool did.
 //   - the capture clause.
-//   - the stderr pointer: fixed prose, no path. dross cannot know where its own
-//     stderr went — nohup, CI capture, a detached remote run — so a recorded
-//     path would often be wrong, and writing a log file would re-persist
-//     exactly what this phase exists to stop persisting (spec decision
-//     stderr_pointer).
+//   - the pointer (StderrPointer, or LogPointer when the stream went to a run
+//     log): fixed prose, no file name. dross cannot know where its own stderr
+//     went — nohup, CI capture, a detached remote run — so a recorded path
+//     would often be wrong; a run log is machine-local and pruned, so naming
+//     one would go stale (spec decision stderr_pointer).
 func (f *toolFailure) Error() string {
 	var b strings.Builder
 	b.WriteString(f.tool)
@@ -115,7 +132,12 @@ func (f *toolFailure) Error() string {
 	b.WriteString(f.cap.clause())
 	b.WriteString("; the full output of ")
 	b.WriteString(f.tool)
-	b.WriteString(" went to this run's stderr, not to any file dross writes")
+	b.WriteString(" ")
+	if f.logged {
+		b.WriteString(LogPointer)
+	} else {
+		b.WriteString(StderrPointer)
+	}
 	return b.String()
 }
 

@@ -15,6 +15,7 @@ import (
 
 	"github.com/Rivil/dross/internal/argfence"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/runlog"
 )
 
 // DefaultTimeoutCoefficient is the dross-chosen override for gremlins'
@@ -87,7 +88,15 @@ type Gremlins struct {
 	// or "never measured" cannot read stderr — and the two are the opposite
 	// of each other, so the distinction has to survive the call.
 	Unmeasured []Unmeasured
+
+	// stream receives gremlins' per-mutant output and the per-package
+	// invocation echo; nil sends them to stderr, as before run logs existed.
+	stream *runlog.Log
 }
+
+// SetStream routes the tool stream to l (nil: back to stderr). The bounded
+// failure head and the skipped-package lines stay on stderr either way.
+func (g *Gremlins) SetStream(l *runlog.Log) { g.stream = l }
 
 // UnmeasuredKind is why a package contributed nothing to the merged score.
 // The kinds are deliberately distinguishable as data rather than by matching
@@ -219,14 +228,18 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		// Gremlins had no tee at all before this — a reportless exit named a
 		// code and nothing else.
 		head := &headBuffer{limit: strykerHeadBytes}
-		sink := io.MultiWriter(os.Stderr, head)
+		var out io.Writer = os.Stderr
+		if g.stream != nil {
+			out = g.stream
+		}
+		sink := io.MultiWriter(out, head)
 		cmd.Stdout = sink
 		cmd.Stderr = sink
 
 		// Echo the exact invocation before running — cheap diagnostic for
-		// copy-paste re-runs.
+		// copy-paste re-runs. It goes with the stream it heads.
 		invocation := strings.Join(cmd.Args, " ")
-		fmt.Fprintf(os.Stderr, "gremlins: %s\n", invocation)
+		fmt.Fprintf(out, "gremlins: %s\n", invocation)
 
 		// Remembered so the report-absent branch below can tell "gremlins found
 		// nothing to cover" (exit 0) from "gremlins failed before writing"
@@ -249,7 +262,7 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 				head.printHead(os.Stderr, "gremlins", strykerHeadLines)
 				fmt.Fprintln(os.Stderr)
 				return nil, fmt.Errorf("gremlins invocation failed: %w\n  invocation: %s\n  (is gremlins installed? `go install github.com/go-gremlins/gremlins/cmd/gremlins@latest`)",
-					RecordToolFailure("gremlins", exitDidNotStart, Observed(head.observed())).wrapping(err), invocation)
+					RecordToolFailure("gremlins", exitDidNotStart, Observed(head.observed())).toLog(g.stream != nil).wrapping(err), invocation)
 			}
 			// Over ssh the SAME exit channel carries the remote program's code
 			// and ssh's own transport failures, so the tolerance above has to be
@@ -288,7 +301,7 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 				head.printHead(os.Stderr, "gremlins", strykerHeadLines)
 				fmt.Fprintln(os.Stderr)
 				return nil, fmt.Errorf("%w: %w\n  invocation: %s",
-					fatal, RecordToolFailure("gremlins", toolExit, Observed(head.observed())), invocation)
+					fatal, RecordToolFailure("gremlins", toolExit, Observed(head.observed())).toLog(g.stream != nil), invocation)
 			}
 			// No report — gremlins gathered no covered mutants for this
 			// package and exited without writing. Exclude, don't fail: only

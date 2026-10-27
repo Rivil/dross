@@ -91,9 +91,8 @@ If `runtime.test_command` is set and the change is behavioural, **write/update t
 Show `git diff` (filtered to the touched files). Run `dross validate` if any `.dross/` files changed.
 
 Before running it, check consent — dross will not run a repo's test command
-until this machine has explicitly trusted it. The gate covers every dross
-command that spawns a process, enumerated from the source rather than kept as a
-list of names, so assume a command that runs something refuses without it:
+until this machine has explicitly trusted it. It gates every dross command
+that spawns a process, so assume one that runs something refuses without it:
 ```
 dross trust --check
 ```
@@ -107,17 +106,18 @@ interpolating the raw command:
 ```
 dross test
 ```
-It runs `runtime.test_command` under the same consent gate, and on the granted
-remote host when there is one — add `--local` to force it onto this machine, or
-a package/path selector to narrow it. Exit **1** is a red suite; **3** and **4**
-mean the run did not happen (unreachable host, incomplete transfer) and are
-never a reason to commit.
+Same consent gate; it runs on the granted host when there is one (`--local`:
+this machine; a selector narrows it). Full output goes to a log under
+`.dross/logs/`; the summary is counts on green, each failing test with its own
+output on red, then `+N more failing — see <log>` past ten. Exit **1** is a red
+suite; **3**/**4** mean the run did not happen and are never a reason to
+commit.
 
 Three outcomes:
 
 **Green** → continue to commit.
 
-**Red, pair mode** → surface the failure tail (last 30-40 lines). Ask via `AskUserQuestion`:
+**Red, pair mode** → surface the summary's failures; open the log only where a block was cut. Ask via `AskUserQuestion`:
 - `fix here` — address inline, re-run
 - `abort` — discard the working changes (`git checkout -- <files>` for tracked, `rm` for newly-written files), then `dross quick end`; state stays untouched
 

@@ -4612,3 +4612,39 @@
   line = 1211
   reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test drives that arm — go-cover gives the condition's columns no block (dross_gremlins_switchcase_ceiling). contextThresholdLine's unset arm is asserted by TestDoctorContextThreshold's \"absent\" row (\"✓ context nudge: 150k (default)\"), and its default arm by the \"explicit\" row (\"90k\")."
   accepted_in = "context-boundaries"
+
+[[accepted]]
+  key = "ee32013f36033e7f"
+  file = "internal/runsummary/gotest.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case line == \"FAIL\" || line == \"PASS\":"
+  line = 84
+  reason = "gremlins switch-case attribution ceiling: case condition sits in no go-cover block, so it reads NOT COVERED even though the case is exercised (see TestGoBuildFailed/TestVitestLoadError/TestGitignoreDirRefused)"
+  accepted_in = "test-output-summaries"
+
+[[accepted]]
+  key = "c1633fe75ec564fb"
+  file = "internal/runsummary/jsrunner.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case title == \"Unhandled Errors\":"
+  line = 106
+  reason = "gremlins switch-case attribution ceiling: case condition sits in no go-cover block, so it reads NOT COVERED even though the case is exercised (see TestGoBuildFailed/TestVitestLoadError/TestGitignoreDirRefused)"
+  accepted_in = "test-output-summaries"
+
+[[accepted]]
+  key = "4105246fa4fa1f78"
+  file = "internal/runsummary/jsrunner.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v.unhandled && title != \"\" && !strings.HasPrefix(title, \"[\"):"
+  line = 108
+  reason = "gremlins switch-case attribution ceiling: case condition sits in no go-cover block, so it reads NOT COVERED even though the case is exercised (see TestGoBuildFailed/TestVitestLoadError/TestGitignoreDirRefused)"
+  accepted_in = "test-output-summaries"
+
+[[accepted]]
+  key = "75c7e03c898c507c"
+  file = "internal/runlog/runlog.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 287
+  reason = "gremlins switch-case attribution ceiling: case condition sits in no go-cover block, so it reads NOT COVERED even though the case is exercised (see TestGoBuildFailed/TestVitestLoadError/TestGitignoreDirRefused)"
+  accepted_in = "test-output-summaries"
