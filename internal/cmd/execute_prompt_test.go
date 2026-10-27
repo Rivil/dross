@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/assets"
 	"github.com/Rivil/dross/internal/gate"
 	"github.com/Rivil/dross/internal/review"
 	"github.com/Rivil/dross/internal/runsummary"
@@ -19,13 +20,45 @@ func executePromptContent(t *testing.T) string {
 }
 
 // TestExecutePromptWiresPhaseNumber proves pc-3's "the version patch digit uses
-// DisplayNumber" clause: the execute orchestration sets the patch digit from
-// `dross phase number` rather than counting by hand. Removing that wiring fails
-// this. (r-01: the prompt edit is only live after `make install`.)
+// DisplayNumber" clause: `dross execute begin`, which absorbed the prompt's
+// version step, sets the patch digit to what `dross phase number` prints for
+// the phase rather than counting by hand.
 func TestExecutePromptWiresPhaseNumber(t *testing.T) {
-	content := executePromptContent(t)
-	if !strings.Contains(content, "dross phase number") {
-		t.Error("execute.md must derive the version patch digit from `dross phase number`")
+	executeFixture(t)
+	writeBeginMilestone(t, repoDirHere(t), "v1.8", "a", "b", "p")
+	mustRunState(t, "current_milestone", "v1.8")
+	mustRunState(t, "version", "1.8.1.4")
+	var num string
+	if err := runCmdCapturing(t, &num, Phase(), "number", "p"); err != nil {
+		t.Fatal(err)
+	}
+	want := "1.8." + strings.TrimSpace(num) + ".0"
+	if want != "1.8.3.0" {
+		t.Fatalf("phase number p = %q, want 3 — the fixture's array is a, b, p", num)
+	}
+	out, err := beginOut(t, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "version: 1.8.1.4 -> "+want+"\n") {
+		t.Errorf("begin printed %q, want the patch from `dross phase number` (%s)", out, want)
+	}
+}
+
+// TestExecutePromptStaleBinaryStop: begin's version line is how the prompt
+// knows the binary absorbed the steps §0 no longer spells out, so §0 must say a
+// missing `version:` line is a stale binary to reinstall, not a skipped step.
+func TestExecutePromptStaleBinaryStop(t *testing.T) {
+	pre := strings.Join(strings.Fields(sectionOf(promptBody(t, "execute.md"), "## 0. Pre-flight", "## 1.")), " ")
+	for _, want := range []string{"No `version:` line means a stale binary", "stop", "`make install`"} {
+		if !strings.Contains(pre, want) {
+			t.Errorf("§0 lost the stale-binary stop: missing %q", want)
+		}
+	}
+	for _, gone := range []string{"dross state set version", "dross issue phase sync <id> --status in-progress"} {
+		if strings.Contains(pre, gone) {
+			t.Errorf("§0 still spells out %q, which `execute begin` now does", gone)
+		}
 	}
 }
 
@@ -200,6 +233,20 @@ func TestExecutePromptPullsBoardTaskMoves(t *testing.T) {
 		if !strings.Contains(content, needle) {
 			t.Errorf("execute.md must wire the inbound board task pull: missing %q", needle)
 		}
+	}
+	// The apply path is fetched only when begin's pull: line reports a move.
+	common, err := assets.Fetched(promptFS, "execute", assets.CommonPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := assets.CommonPath()
+	facts["board_pull"] = "reported"
+	reported, err := assets.Fetched(promptFS, "execute", facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contains(common, "board-moves") || !contains(reported, "board-moves") {
+		t.Errorf("board-moves fetched %v on the common path and %v on board_pull=reported; want only the latter", common, reported)
 	}
 }
 
@@ -457,5 +504,15 @@ func TestTestStepPromptsNotGrown(t *testing.T) {
 		if n := len(rawPrompt(t, name)); n > limit {
 			t.Errorf("%s is %d bytes, over its %d-byte base size", name, n, limit)
 		}
+	}
+}
+
+// TestExecuteAbsorbedProseDeleted: §0's version, sync and pull mechanics went
+// to `execute begin`, so they were deleted rather than moved — expanded
+// execute.md keeps that room for the fetch lines later splits add.
+func TestExecuteAbsorbedProseDeleted(t *testing.T) {
+	const limit = 25500
+	if n := len(rawPrompt(t, "execute.md")); n > limit {
+		t.Errorf("expanded execute.md is %d bytes, over %d — was absorbed §0 prose moved instead of deleted?", n, limit)
 	}
 }

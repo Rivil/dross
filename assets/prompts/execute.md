@@ -41,48 +41,19 @@ Mode: <pair | solo>
 Test command: <runtime.test_command or "(none — verify will catch this later)">
 ```
 
-Set the version patch digit to this phase's ordinal within its milestone (the
-global versioning rule: patch = phase ordinal, internal resets to 0). Derive the
-ordinal from `dross phase number` — the single source for phase order — rather
-than counting by hand:
-```
-PATCH=$(dross phase number <id>)
-# major.minor from the current milestone; internal resets to 0
-dross state set version <major>.<minor>.$PATCH.0
-```
-Skip this when the phase has no milestone (`PATCH` is `0` — there's no ordinal to
-assign). `dross phase number` recomputes from the milestone's `phases` array, so
-it stays correct even after a phase is inserted or reordered.
+`dross execute begin` also does the run's mechanical start — the version patch
+from the phase's ordinal (`dross phase number`), the board issue to in-progress,
+and a report-only pull of board-side task moves — one labelled line each:
 
-Mark the board issue in-progress (it exits 0 and does nothing when `[board].enabled` is false; a non-zero exit is a board failure — surface it, never read it as the disabled no-op):
-```
-dross issue phase sync <id> --status in-progress
-```
+- `version:` — a bump, `unchanged` on a resume, or `skipped (<why>)` when there
+  is no milestone ordinal. **No `version:` line means a stale binary**: stop and
+  ask the user to run `make install` (`dross update` outside a dross checkout),
+  then re-run begin.
+- `board:` — `off` when `[board].enabled` is false. `FAILED` (begin exits
+  non-zero) is a board failure: surface it, never read it as the off no-op.
+- **No moves** — `pull:` says no task moves, `off` or `n/a`: say nothing and carry on.
 
-**Pull any board-side task moves back into the plan** (same board rule: silent only when `[board].enabled` is false, a non-zero exit is a failure to surface). The outbound direction is wired throughout this prompt (`dross issue
-task sync`, below); this is the inbound half, and without it a card someone moved
-on the board never reaches `plan.toml`, so `dross task next` picks from a stale
-plan:
-```
-dross issue task pull <phase>
-```
-This **reports without writing** — that is its default. Read the report, then:
-
-- **No moves** → say nothing and carry on.
-- **Moves reported** → surface them in one line each (task id, plan status → board
-  status) and ask whether to apply. On acceptance:
-  ```
-  dross issue task pull <phase> --apply
-  ```
-  Applying rewrites task statuses in `plan.toml`, which changes what `dross task
-  next` returns — so it is the user's call, not an automatic one.
-- **A task changed on both sides** → dross refuses it by name and prints both
-  values. It does not pick a winner and neither do you: surface the conflict and
-  let the user say which side is right.
-- **`--apply` refused for the provider** → boards that are open/closed only
-  (Forgejo, Gitea, GitLab) carry no workflow state to read, and the command says
-  so by name. That is a configuration fact, not an error — note it once and move
-  on to the task loop.
+**When** `board_pull=reported` — `pull:` names a task move or a CONFLICT: `dross prompt partial execute board-moves`
 
 Load the stack loadout once and keep it in working context for the whole phase:
 ```
