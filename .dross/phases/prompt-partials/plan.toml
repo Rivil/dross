@@ -30,7 +30,7 @@ scope{ranged,degraded}, unclassified{zero,nonzero}, reviews{none,present}, verdi
 Registry, grammar, common-path and common-path-inline tests run over the real assets.FS and land green (no partials yet)."""
   covers = ["c-3", "c-4", "c-5"]
   test_contract = ["if partial lookup escapes, TestPartialRejectsBadNames fails: Partial(execute, ../verify), Partial(execute, Solo) and Partial(interaction, x) each error and never read outside prompts/", "if _interaction.md is mistaken for a partial, the registry test fails: it is never listed as a partial and never reported as an orphan", "if a fetch line names a missing partial, the registry check fails on a MapFS naming execute.md:<line>; a _execute.ghost.md no fetch line names fails as an orphan", "if a fetch line lacks **When** `k=v` or uses an unknown key (colour=red), the grammar check fails", "if a common-path trigger fetches, TestCommonPathFetchesNothing fails: a synthetic trigger mode=pair or test_exit=0 is rejected", "if a trigger fires on gremlins' always-whole-file path, the trigger check fails: prose naming whole_file, adapter-lacks-range-runner or gremlins is rejected", "if a prompt tells the agent to Read a partial instead of fetching it, the check fails: naming _execute.solo.md or a ~/.claude/dross/prompts/_ path is rejected", "if Expand alters fetch-free prompts, TestExpandIdentity fails: Expand(quick) is byte-identical to quick.md; on a MapFS index(fetch) < index(body) < index(next base line)", "if common-path text leaves the base prompt, TestCommonPathInline fails: raw execute.md must keep `git add <task.files>`, `dross changes record`, `dross test --files`, `approve <task-id>`, `### 1g`; raw verify.md must keep `dross verify <phase>`, `dross verify finalize`, covered/weak/uncovered and \"If verdict is `pass`:\"", "if a compaction re-fetch line is mis-handled, TestRefetchLineIsAReference fails: a `**Re-fetch** if context was compacted: `dross prompt partial execute solo`` line counts as a registry reference, is not inlined by Expand, and must name a partial that also has a When fetch point", "if a twice-referenced partial is double-inlined, TestExpandInlinesOnce fails: on a MapFS with two fetch lines naming one partial, Expand contains its body exactly once, after the first fetch line", "if walkers break on partial files, TestExpandPartialPassThrough fails: Expand(_execute.solo) and Expand(_interaction) return the file bytes unchanged", "if .md-suffixed names diverge, TestExpandStripsMdSuffix fails: Expand(verify.md) == Expand(verify)", "if the pass-path next-phase block leaves base verify.md, TestCommonPathInline fails: raw verify.md must keep the section 5 milestone-array next-phase resolution and the no-milestone fallback", "if always-on gremlins guidance leaves base verify.md, TestCommonPathInline fails: raw verify.md must keep that gremlins is always whole-file and the instruction to judge the score against what was actually instrumented"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-3"
@@ -55,7 +55,7 @@ emittedStatuses gains a 4th source: literal statuses passed to boardsync.SyncPha
     "if the stale-binary signal disappears, the test fails: every non-refused begin prints exactly one `version:` line",
     "if the SyncPhase call is removed from begin, TestEmittedStatusesAreTheLifecycleSet reports in-progress missing once execute.md stops emitting it",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-5"
@@ -73,7 +73,7 @@ Wire into newRoot and regenerate the CLI tree golden (DROSS_UPDATE_GOLDEN)."""
     "if bad names are accepted, the test fails: `execute ../verify`, `interaction x` and `execute.md solo` are each refused",
     "if the command isn't registered in the golden, TestCLITreeGolden fails until cli_tree.txt names `dross prompt partial`",
   ]
-  status = "pending"
+  status = "done"
   depends_on = ["t-2"]
 
 [[task]]
@@ -84,7 +84,7 @@ Wire into newRoot and regenerate the CLI tree golden (DROSS_UPDATE_GOLDEN)."""
   description = "Extract into the manifest every line inside a fenced block of todays execute.md and verify.md that starts with `dross ` or `git ` (comment lines and other fence content excluded), plus every `- **...**` hard-rule lead-in. Each row must appear in Expand(prompt) or be claimed by an exactly matching `// absorbs: <row>` marker in non-test internal/cmd source. Reconcile t-3 markers in execute.go to the manifest rows (one marker per absorbed row, not per call). Lands green."
   covers = ["c-5"]
   test_contract = ["if an instruction is dropped in the move, TestPromptInstructionsConserved fails naming the row: removing `dross verify finalize <phase-id>` from verify.md and every partial", "if an absorbed row loses its claim, the test fails: a row claimed only by an absorbs marker fails once that marker is deleted", "if the manifest goes vacuous, the test fails: the extractor finding < 40 rows in execute.md or < 25 in verify.md", "if t-3 markers drift from the manifest, TestPromptInstructionsConserved fails: each of the version, phase sync and task pull rows from execute.md section 0 has exactly one matching absorbs marker in execute.go"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-2", "t-3"]
 
 [[task]]
@@ -95,7 +95,7 @@ Wire into newRoot and regenerate the CLI tree golden (DROSS_UPDATE_GOLDEN)."""
   description = "Add expandedPrompt(t, name). promptBody, rawPrompt, readPrompt, executePromptContent and ship_prompt_test promptContent compose over Expand(name) (keeping each helper own normalisation). A test that genuinely needs the raw base prompt reads assets.FS directly; that is the sanctioned raw path. Add meta-guard TestPromptReadsGoThroughExpansion. Detection rule: any os.ReadFile or readRepoFile call in an internal/ test whose path argument joins \"assets\" and \"prompts\" (literal or via filepath.Join). Its ratchet allowlist is seeded from a grep of every such reader at t-7 time (including install_test.go, which compares install bytes on purpose) and may only shrink."
   covers = ["c-5"]
   test_contract = ["if a raw prompt read sneaks in, TestPromptReadsGoThroughExpansion fails naming file:line: a new os.ReadFile(filepath.Join(root, \"assets\", \"prompts\", \"verify.md\")) or readRepoFile of an assets/prompts path in an internal/ test outside the allowlist", "if the allowlist grows, the meta-guard fails: its seeded entry count is pinned and adding an entry fails", "if a helper stops composing over Expand, TestPromptLoadersCompose fails: promptBody/rawPrompt/readPrompt == Expand(name), and promptContent/executePromptContent == that helper normalisation applied to Expand(name), for every prompt", "if negative checks skip partials, the test fails: a banned phrase in a MapFS partial is seen by a negative assertion over promptBody", "if the split grows total instructions, TestTestStepPromptsNotGrown fails: it measures the expanded prompt against 25854", "if promptContent stays raw, TestNoPromptPerformsRawBranchSwitch fails once t-9 moves `dross phase checkout` into _execute.recovery.md", "if the sanctioned raw path is banned, the meta-guard fails: an assets.FS.ReadFile of a prompt is allowed, os.ReadFile of the same path outside the allowlist is not"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-2"]
 
 [[task]]
@@ -109,18 +109,18 @@ t-3's helper and prints a `board:` line; never on --detach dispatch. The RunE of
 auto-heal through) sets current_phase_status=verified and touches \"verified <id>: <verdict> (<covered>/<total>, mutation <score>)\". Absorbs markers on each."""
   covers = ["c-2", "c-4"]
   test_contract = ["if a board failure loses the verdict, TestVerifyBoardFailureKeepsResults fails: board 500 after an attached run leaves tests.json and verify.toml with measured counts, output names `board: FAILED`, exit differs from a mutation-tool failure's", "if a mutation tool error syncs the board, the test fails: an error before the skeleton exists makes 0 board requests", "if detached flow syncs at the wrong time, the test fails: `verify --detach` dispatch makes 0 board requests and `verify results` makes exactly one uat sync", "if the remote leg syncs, the test fails: the shared leg runner called directly makes 0 board requests", "if finalize doesn't own the status write, the test fails: finalize on a pass verify.toml sets current_phase_status=verified and the last history entry starts \"verified p: pass\"; finalize refused on verdict pending leaves state.json byte-identical; a second finalize appends no second entry", "if the state write lands in finalizeVerify, the test fails: a `dross ship` / `phase complete` auto-finalize with current_phase_status=shipped leaves it shipped", "if uat drops from the emit set, TestEmittedStatusesAreTheLifecycleSet fails: with `--status uat` deleted from verify.md it still sees uat via the CLI source", "if verify absorbs markers do not match manifest rows, TestPromptInstructionsConserved fails once t-14 removes the rows from verify.md: the state-set and touch rows must be claimed by exactly matching markers in verify.go"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-3", "t-6"]
 
 [[task]]
   id = "t-8"
   wave = 3
   title = "Migrate verify-side prompt readers to Expand"
-  files = ["internal/cmd/verify_prompt_test.go", "internal/cmd/options_docs_test.go", "internal/cmd/phase_test.go", "internal/cmd/pad_residue_test.go"]
+  files = ["internal/cmd/verify_prompt_test.go", "internal/cmd/options_docs_test.go", "internal/cmd/phase_test.go", "internal/cmd/pad_residue_test.go", "internal/cmd/prompt_expand_test.go"]
   description = "verifyPromptBody, verify_prompt_test inline reads (:21, :47) and TestVerifyPromptReadsRangeProvenance raw read (:383), options_docs_test verify.md read (:505), phase_test readRepoFile(verify.md) (:657), and pad_residue_test verify.md read (:123) plus its padResidueDocs scan (:35, used at :109) all read the expanded verify.md. README.md stays a raw read in pad_residue."
   covers = ["c-5"]
   test_contract = ["if a loader stays on the bare prompt, options_docs_test's detached-path tests (:516-533) fail as soon as t-12 moves those phrases into _verify.detached.md", "if _verify.scope.md drops a whole-file reason, pad_residue's \"names every whole-file reason\" check fails", "if text is duplicated into a partial, the verify threshold-count test (\"exactly 1\") fails: it counts across prompt and partials", "if the pad-residue scan misses partials, the padResidueDocs scan fails: a retired pad-heuristic needle placed only in a MapFS _verify.scope.md is reported", "if TestVerifyPromptReadsRangeProvenance stays raw, it fails as soon as t-12 moves range-provenance text into _verify.scope.md"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-7"]
 
 [[task]]
@@ -153,7 +153,7 @@ auto-heal through) sets current_phase_status=verified and touches \"verified <id
   description = "lane_toolchain readDoc(execute.md) and the verify/execute/quick loop in TestPromptsDescribeTheGateAsEnumerated become expanded reads. TaskEdges (boardsync) switches its os.ReadFile to a raw assets.FS read: its edges are common-path and must stay in base execute.md. Drop every allowlist entry that reads execute.md or verify.md; add a stale-exemption check."
   covers = ["c-5"]
   test_contract = ["if an execute/verify raw reader remains, TestPromptReadsGoThroughExpansion fails: no allowlisted entry reads execute.md or verify.md, directly or through a helper called with those names", "if an exemption goes stale, the meta-guard fails: an allowlist entry matching no read is reported", "if the task edges leave base execute.md or the done/task-in-review pair is transposed, TestTaskEdgesPairTheBoardStatusWithThePlanStatus (raw via assets.FS) fails", "if a banned consent phrase lives only in a partial, TestPromptsDescribeTheGateAsEnumerated fails"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-3", "t-8"]
 
 [[task]]
