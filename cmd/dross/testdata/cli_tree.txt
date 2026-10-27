@@ -202,6 +202,8 @@ dross project set | use="set <dotted.path> <value>" short="Write a single field 
 dross project set flag --unset (bool) default="false" noopt="true" usage="clear the field at <dotted.path> instead of writing a value"
 dross project show | use="show" short="Print project.toml"
 dross project show flag --json (bool) default="false" noopt="true" usage="emit the bare JSON document instead of toml (no `# <path>` header)"
+dross prompt | use="prompt" short="Slash-command prompt text the binary carries"
+dross prompt partial | use="partial <prompt> <name>" short="Print a prompt partial verbatim (a branch fetched only when its trigger holds)"
 dross protect | use="protect" short="Preview, apply or check the branch-protection rulesets for main and milestone/*"
 dross protect flag --apply (bool) default="false" noopt="true" usage="write both rulesets and turn on allow_auto_merge (default: preview only)"
 dross protect flag --check (string) default="" usage="print whether direct pushes to `branch` are refused: protected, unprotected, unknown or not checked (<provider>)"
