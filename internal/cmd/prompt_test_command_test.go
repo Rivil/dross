@@ -25,12 +25,7 @@ var rawInterpolationRE = regexp.MustCompile(`(?m)^\s*<runtime\.test_command>\s*$
 
 func promptBody(t *testing.T, name string) string {
 	t.Helper()
-	root := repoRootForHybridTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", name))
-	if err != nil {
-		t.Fatalf("read %s: %v", name, err)
-	}
-	return string(b)
+	return expandedPrompt(t, name)
 }
 
 // TestPromptsRunDrossTest is c-6, in both directions.

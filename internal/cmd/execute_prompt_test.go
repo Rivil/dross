@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -17,13 +15,7 @@ import (
 // of an instruction rather than its exact formatting.
 func executePromptContent(t *testing.T) string {
 	t.Helper()
-	root := repoRootFromTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "execute.md"))
-	if err != nil {
-		t.Fatalf("read execute.md: %v", err)
-	}
-	s := strings.ToLower(string(b))
-	return strings.NewReplacer("`", "", "*", "", "_", "").Replace(s)
+	return normalisePrompt(expandedPrompt(t, "execute.md"))
 }
 
 // TestExecutePromptWiresPhaseNumber proves pc-3's "the version patch digit uses
@@ -397,11 +389,7 @@ func TestExecutePromptSoloBeginNeedsReviewer(t *testing.T) {
 // rawPrompt reads assets/prompts/<name> unnormalised.
 func rawPrompt(t *testing.T, name string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
+	return expandedPrompt(t, name)
 }
 
 // testStepSection is the text from the line starting with from up to the next line

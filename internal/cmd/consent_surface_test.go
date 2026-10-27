@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -114,11 +113,7 @@ func doctorSection(t *testing.T, out, header string) string {
 
 func readPrompt(t *testing.T, name string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
+	return expandedPrompt(t, name)
 }
 
 // TestExecutePromptChecksConsent: a prompt that tells the agent to run the
