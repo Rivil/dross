@@ -10,17 +10,15 @@ Run a phase plan to completion. **Pair-mode by default**: propose, pause, steer,
 2. Resolve target phase from `$ARGUMENTS` or `state.json`'s `current_phase`. Fail if neither is set.
 3. Read `.dross/phases/<id>/spec.toml` and `plan.toml`. If `plan.toml` is missing, route the user to `/dross-plan` and stop.
 4. Read `.dross/project.toml` — specifically `runtime.*` (test/typecheck/lint commands), `paths.*`, `repo.commit_convention`, `repo.git_main_branch`, `stack.locked`.
-5. **Verify current branch is `phase/<id>`** with `git symbolic-ref --short HEAD`. Phase work must never land on the main branch — that's the divergence pattern the phase-branch model is designed to prevent. If on a wrong branch:
-   - Switch with `dross phase checkout <id>` and proceed. It goes through dross's guarded checkout, and refuses rather than creating the branch if it doesn't exist locally.
-   - Otherwise: stop. The phase wasn't created with `dross phase create` (which auto-checks out). Have the user run `dross phase create` or migrate existing work to a branch before executing.
-6. Check git state with `git status --porcelain`. If working tree is dirty:
-   - Surface the diff to the user
-   - Ask: "Commit existing work first / stash / abort"
-   - Do not proceed with execute on a dirty tree — atomic commits per task require a clean baseline.
+5. **Verify current branch is `phase/<id>`** with `git symbolic-ref --short HEAD`. Phase work must never land on the main branch.
+6. Check the tree is clean with `git status --porcelain`.
 7. Parse flags from `$ARGUMENTS`:
    - `--solo` → autonomous mode
    - `--from <task-id>` → start at this task (skip earlier-wave done tasks; resume mid-phase)
-8. Detect resume state: if any task has `status = "in_progress"`, ask user "continue task X / reset to pending and pick fresh".
+8. Detect resume state: does any task have `status = "in_progress"`?
+
+**When** `preflight=recovery` — wrong branch, dirty tree, or a task left `in_progress`: `dross prompt partial execute recovery`
+
 9. Record the run's mode for the tool gates, once, before the per-task loop:
    ```
    dross execute begin <id>
@@ -32,6 +30,8 @@ Run a phase plan to completion. **Pair-mode by default**: propose, pause, steer,
    In pair mode the pair-approval gate then refuses `Edit`/`Write` outside `.dross/` until the user approves the task in progress (§1c). The mode is chosen here and nowhere else: while a task is in progress the gate refuses a switch to `--solo`.
 
    A `--solo` begin refuses unless the solo task reviewer (§1f) is installed and current — it names the problem and the fix. **Stop and ask the user to run `dross install`** (or remove the repo-level definition it names); never start a solo run without the reviewer, since every task would fail its review.
+
+**When** `mode=solo` — begin recorded solo: `dross prompt partial execute solo`
 
 Print one orientation block:
 ```
@@ -117,8 +117,6 @@ Then in **pair mode** (the default), use `AskUserQuestion` with options:
 - `show me <X>` — user requests more context (treat as steer with `<X>` as the ask)
 - `skip` — mark task as `failed` with reason "skipped by user", advance to next
 
-In **solo mode** (`--solo`): skip the pause, proceed directly. Note in the resulting commit body that the task was executed without explicit user approval ("solo: yes").
-
 ### 1d. Implement
 
 Write code via `Edit`/`Write`. In pair mode the pair-approval gate refuses either one outside `.dross/` until the user's `approve <task-id>` is recorded; that refusal means go back to §1c and ask, never work around it. Constraints:
@@ -203,7 +201,7 @@ measured and passed:
 None of them is a reason to commit, and none of them is a red suite: treating
 one as a test failure sends you hunting a bug in code that was never executed.
 
-Three outcomes:
+Outcomes:
 
 **Green** → continue to commit step.
 
@@ -211,13 +209,6 @@ Three outcomes:
 - `fix here` — address the failure inline, re-run
 - `mark failed` — set status to `failed`, advance (later tasks that don't depend on this one keep going)
 - `abort phase` — stop the loop entirely; current state is preserved
-
-**Red, solo mode** → try one bounded fix (max one Edit pass). If still red, set the task's code aside **first**, then mark it failed and continue — a failed task is never committed, and `failed` refuses in a solo run while code is uncommitted:
-```
-git stash push -u -- . ':(exclude).dross'
-dross task status <phase> <task-id> failed --reason "<the failing test, one line>"
-dross task next <phase>
-```
 
 **No test command configured** → warn once at the start of the phase: "no `runtime.test_command` set, skipping per-task test gate. /dross-verify will catch unverified work later." Don't repeat the warning per task.
 
@@ -229,30 +220,8 @@ dross test
 ```
 Read its exit status the same way as in §1e; only **0** lets you commit. If anything outside `.dross/` changed since a green run, run it again. A refused `git commit` is a hard stop, never something to route around.
 
-**Solo review (`--solo` only).** In solo mode no human approves the task, so a cold reviewer does — after the full green run, before the commit. In **pair mode skip this entirely**: the human is the gate. A task that changed only `.dross/` (no code) also skips it: a `.dross/`-only commit is ungated.
-
-1. Build the review context:
-   ```
-   dross review context
-   ```
-   It prints the reviewer's `subagent_type` and a `prompt:` line. It never prints the diff — don't paste it either.
-2. Spawn the reviewer with the Agent tool: `subagent_type: "dross-task-reviewer"`, and the printed prompt line **verbatim** as the whole prompt. Add nothing to it — the reviewer sees only the context, and a widened prompt makes the review unavailable. It may run in the background (an interactive session runs every subagent there): **wait for its completion notice** before reading the status — its verdict reaches dross only when it finishes.
-3. Read where it stands:
-   ```
-   dross review status
-   ```
-   - `pass` → commit (below).
-   - `blocked` → **one fix round**, never more: address every blocking finding it lists, re-run `dross test` (bare), then `dross review context` and the reviewer again, and re-read `dross review status`. A second block exhausts the review.
-   - `pass-stale` → the tree moved after the review: re-run `dross test`, `dross review context` and the reviewer.
-   - `exhausted` or `unavailable`, **or the spawn itself errored** (unknown agent, API failure, interrupt — the recorder never sees an errored call, so status still reads `none`) → the task fails. Set its code aside first, then mark it:
-     ```
-     git stash push -u -- . ':(exclude).dross'
-     dross task status <phase> <task-id> failed
-     dross task next <phase>
-     ```
-     For a spawn error add `--reason "<the error>"` to the `failed` line; otherwise the reason comes from the review record. The loop moves on to the next independent task.
-
-The commit gate checks this too: in a solo run it refuses a code commit unless a passing review was recorded for exactly the tree being committed.
+A solo run reviews here, before the commit.
+**Re-fetch** if context was compacted: `dross prompt partial execute solo`
 
 Atomic commit, one task per commit. Use specific files, never `git add -A`:
 ```
@@ -332,8 +301,6 @@ In **pair mode**, one `AskUserQuestion` with options:
 
 **Option order follows the wave boundary (checkpoint_posture).** When the just-committed task closes its wave — `dross task next` names a task in a *higher* wave, or nothing — lead with `checkpoint` as the recommended option: wave edges are the natural durable boundary. Mid-wave, lead with `continue` and keep `checkpoint` as a passive option.
 
-In **solo mode**: skip the gate, loop back to 1a.
-
 ## 2. Phase completion
 
 When `dross task next` returns empty, print a wrap-up block:
@@ -387,4 +354,3 @@ and update state status to `partial` instead.
 - **No `git add -A`.** Always specify files explicitly.
 - **No `--no-verify`** unless the user asks. If a hook fails, fix the underlying issue.
 - **No commit amending.** Failed pre-commit → new commit after fix, not amend.
-- **Don't auto-retry test failures more than once in solo mode.** Bounded automation; failures need eyes.

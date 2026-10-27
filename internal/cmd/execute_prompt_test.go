@@ -317,16 +317,24 @@ func TestExecutePromptLaneCommitRunsFullSuite(t *testing.T) {
 // soloReview is execute.md §1f, and the solo review block inside it.
 func soloReview(t *testing.T) (string, string) {
 	t.Helper()
-	f := sectionOf(promptBody(t, "execute.md"), "### 1f.", "### ")
-	if f == "" {
-		t.Fatal("execute.md has no §1f section")
-	}
+	f := expandedPrompt(t, "_execute.solo.md")
 	i := strings.Index(f, "**Solo review (`--solo` only).**")
 	j := strings.Index(f, "The commit gate checks this too")
 	if i < 0 || j < i {
-		t.Fatal("§1f has no solo review block")
+		t.Fatal("the solo partial has no solo review block")
 	}
 	return f, f[i:j]
+}
+
+// rawExecuteBase is execute.md without its partials, read through assets.FS:
+// the text every run loads, solo or pair.
+func rawExecuteBase(t *testing.T) string {
+	t.Helper()
+	b, err := assets.FS.ReadFile("prompts/execute.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
 
 func mustIdx(t *testing.T, s, sub string) int {
@@ -341,14 +349,19 @@ func mustIdx(t *testing.T, s, sub string) int {
 // TestExecuteSoloReviewPlacement (c-1): in a solo run the reviewer runs after
 // the full green `dross test` and before the commit; pair mode spawns none.
 func TestExecuteSoloReviewPlacement(t *testing.T) {
-	f, block := soloReview(t)
+	f := sectionOf(rawExecuteBase(t), "### 1f.", "### ")
 	test := bareDrossTestRE.FindStringIndex(f)
 	if test == nil {
 		t.Fatal("§1f lost its bare `dross test`")
 	}
-	ctx, spawn, status, add := mustIdx(t, f, "dross review context"), mustIdx(t, f, `subagent_type: "`+review.ReviewerAgent+`"`), mustIdx(t, f, "dross review status"), mustIdx(t, f, "git add <task.files>")
-	if !(test[0] < ctx && ctx < spawn && spawn < status && status < add) {
-		t.Errorf("solo review order: dross test %d, review context %d, spawn %d, review status %d, git add %d — want that order", test[0], ctx, spawn, status, add)
+	refetch, add := mustIdx(t, f, "**Re-fetch** if context was compacted: `dross prompt partial execute solo`"), mustIdx(t, f, "git add <task.files>")
+	if !(test[0] < refetch && refetch < add) {
+		t.Errorf("§1f order: dross test %d, solo re-fetch %d, git add %d — want that order", test[0], refetch, add)
+	}
+	_, block := soloReview(t)
+	run, ctx, spawn, status := mustIdx(t, block, "`dross test`"), mustIdx(t, block, "dross review context"), mustIdx(t, block, `subagent_type: "`+review.ReviewerAgent+`"`), mustIdx(t, block, "dross review status")
+	if !(run < ctx && ctx < spawn && spawn < status) {
+		t.Errorf("solo review order: dross test %d, review context %d, spawn %d, review status %d — want that order", run, ctx, spawn, status)
 	}
 	if !strings.Contains(block, "In **pair mode skip this entirely**: the human is the gate.") {
 		t.Error("the solo review block no longer says pair mode skips it")
@@ -356,6 +369,42 @@ func TestExecuteSoloReviewPlacement(t *testing.T) {
 	c := sectionOf(promptBody(t, "execute.md"), "### 1c.", "### ")
 	if strings.Contains(c, "dross review") || strings.Contains(c, review.ReviewerAgent) {
 		t.Error("§1c (the pair approval step) spawns or prepares the reviewer")
+	}
+}
+
+// TestExecuteSoloFetchedOnceAfterBegin (locked solo_branch): the solo partial
+// is fetched once per run, in §0, and the first fetch after the solo begin
+// fence is that one — so a pair run never pays for it.
+func TestExecuteSoloFetchedOnceAfterBegin(t *testing.T) {
+	base := rawExecuteBase(t)
+	fence := strings.Index(base, "dross execute begin <id> --solo\n")
+	loop := strings.Index(base, "## 1. Per-task loop")
+	if fence < 0 || loop < fence {
+		t.Fatal("execute.md lost the solo begin fence before the loop")
+	}
+	fenceLine := strings.Count(base[:fence], "\n") + 1
+	points, err := assets.FetchPoints(assets.FS, "execute.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var first *assets.FetchPoint
+	solo := 0
+	for i, p := range points {
+		if p.Partial == "solo" && !p.Refetch {
+			solo++
+		}
+		if first == nil && !p.Refetch && p.Line > fenceLine {
+			first = &points[i]
+		}
+	}
+	if first == nil || first.Partial != "solo" || first.Key != "mode" || first.Value != "solo" {
+		t.Errorf("first fetch after the solo begin fence is %+v, want `mode=solo` → solo", first)
+	}
+	if first != nil && first.Line > strings.Count(base[:loop], "\n") {
+		t.Errorf("the solo fetch (line %d) sits past §0", first.Line)
+	}
+	if solo != 1 {
+		t.Errorf("execute.md has %d When lines fetching solo, want exactly 1", solo)
 	}
 }
 
@@ -419,15 +468,15 @@ func TestExecuteNoCodeSkipsReview(t *testing.T) {
 // TestExecuteSoloRedStashes: the red-test solo path must stash before
 // marking failed — `failed` refuses while a solo task's code is uncommitted.
 func TestExecuteSoloRedStashes(t *testing.T) {
-	e := sectionOf(promptBody(t, "execute.md"), "### 1e.", "### ")
-	red := e[mustIdx(t, e, "**Red, solo mode**"):]
+	solo := expandedPrompt(t, "_execute.solo.md")
+	red := solo[mustIdx(t, solo, "**Red, solo mode**"):]
 	if mustIdx(t, red, "git stash push -u -- . ':(exclude).dross'") > mustIdx(t, red, "dross task status <phase> <task-id> failed") {
-		t.Error("§1e's solo red path marks failed before stashing")
+		t.Error("the solo red path marks failed before stashing")
 	}
 }
 
 func TestExecutePromptSoloBeginNeedsReviewer(t *testing.T) {
-	pre := sectionOf(promptBody(t, "execute.md"), "## 0. Pre-flight", "## 1.")
+	pre := sectionOf(rawExecuteBase(t), "## 0. Pre-flight", "## 1.")
 	if !strings.Contains(pre, "A `--solo` begin refuses unless the solo task reviewer") || !strings.Contains(pre, "`dross install`") {
 		t.Error("§0 no longer routes a refused solo begin to `dross install`")
 	}
