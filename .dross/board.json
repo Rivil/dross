@@ -2492,97 +2492,97 @@
     "test-output-summaries/t-1": {
       "issue": "DRO-968",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-10": {
       "issue": "DRO-974",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-11": {
       "issue": "DRO-972",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-12": {
       "issue": "DRO-979",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-13": {
       "issue": "DRO-975",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-14": {
       "issue": "DRO-978",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-15": {
       "issue": "DRO-980",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-16": {
       "issue": "DRO-981",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-17": {
       "issue": "DRO-977",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-18": {
       "issue": "DRO-969",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-19": {
       "issue": "DRO-989",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-2": {
       "issue": "DRO-964",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-3": {
       "issue": "DRO-965",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-4": {
       "issue": "DRO-966",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-5": {
       "issue": "DRO-973",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-6": {
       "issue": "DRO-976",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-7": {
       "issue": "DRO-967",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-8": {
       "issue": "DRO-970",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-output-summaries/t-9": {
       "issue": "DRO-971",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "tool-gate-hooks/t-1": {
       "issue": "DRO-789",
