@@ -1,0 +1,57 @@
+[phase]
+  id = "prompt-partials"
+  title = "prompt-partials"
+  milestone = "v1.8"
+
+[[criteria]]
+  id = "c-1"
+  text = "execute.md loads at ≤15 KB (from 25.9 KB); a test fails if it goes back over budget."
+
+[[criteria]]
+  id = "c-2"
+  text = "verify.md loads at ≤15 KB (from 25.9 KB); the same budget test covers it."
+
+[[criteria]]
+  id = "c-3"
+  text = "Moved branches are fetched through one dross command; each fetch point in the prompt names its trigger condition, and a test fails if a prompt references a missing partial or a partial is referenced by no prompt."
+
+[[criteria]]
+  id = "c-4"
+  text = "The common pair-mode path fetches zero partials: an execute task from green test to commit, and a verify run with no detached leg reaching pass."
+
+[[criteria]]
+  id = "c-5"
+  text = "Existing prompt-content tests keep passing, run against prompt + partials, so no instruction is lost in the move."
+
+[[criteria]]
+  id = "c-6"
+  text = "The phase dir records before/after loaded bytes, turn count and wall-clock time for one pair execute task and one verify run."
+
+[[decisions]]
+  key = "fetch_command"
+  choice = "One generic fetch command (shape like `dross prompt partial <prompt> <name>`), not a new per-branch subcommand."
+  why = "One registry and one test cover every partial; per-branch subcommands would grow the CLI tree with each split."
+  locked = true
+
+[[decisions]]
+  key = "budget_cap"
+  choice = "Fixed cap of 15,000 bytes per file for execute.md and verify.md, checked on the embedded asset."
+  why = "Matches the milestone criterion literally; a fixed number is unambiguous where 'KB' is not."
+  locked = true
+
+[[decisions]]
+  key = "solo_branch"
+  choice = "Solo-only execute text (solo review, solo red-path) moves to one partial, fetched once in §0 right after `dross execute begin --solo`."
+  why = "Pair runs never pay for it; solo runs pay one Bash call per run, not one per task (milestone c-6)."
+  locked = true
+
+[[decisions]]
+  key = "cli_absorb"
+  choice = "Where a dross command already runs at that point, mechanical steps move into the CLI: `execute begin` (and verify's equivalent) does the version bump, board in-progress sync and inbound task pull; the prompt keeps only how to react to what the CLI reports."
+  why = "Removes prose with zero fetch cost and zero added round-trips; makes the 15 KB cap reachable without pushing common-path text into partials."
+  locked = true
+
+[[deferred]]
+  text = "Give options.md, ship.md and plan.md the same partials + byte-budget treatment."
+  why = "Milestone criterion names only execute.md and verify.md; worth judging after this phase's before/after numbers."
+  target = "prompt-budgets-rest"

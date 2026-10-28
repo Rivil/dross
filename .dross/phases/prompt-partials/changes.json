@@ -1,0 +1,853 @@
+{
+  "phase": "prompt-partials",
+  "pr": 190,
+  "base": "milestone/v1.8",
+  "base_commit": "3ee0fe71267a812460e644eaad7bbca63b0d659a",
+  "status": "shipped",
+  "tasks": {
+    "quick-1": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_absorb_test.go"
+      ],
+      "commit": "f4453f04",
+      "completed_at": "2026-10-27T20:16:28.805468Z",
+      "notes": "quick: verify finalize heals a verified status a failed markVerified left at complete"
+    },
+    "t-1": {
+      "files": [
+        ".dross/phases/prompt-partials/flow-cost-before.toml"
+      ],
+      "commit": "6ae6cb1b",
+      "completed_at": "2026-10-27T15:00:49.855591Z",
+      "landmarks": [
+        {
+          "feature": "prompt flow cost",
+          "symbol": "verify_before",
+          "loc": ".dross/phases/prompt-partials/flow-cost-before.toml:302",
+          "what": "before-leg turns, wall-clock and prompt bytes for pair execute + attached verify on base 3ee0fe71"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/lane_toolchain_docs_test.go",
+        "internal/cmd/execconsent_docs_test.go",
+        "internal/boardsync/board_lifecycle_divergence_test.go",
+        "internal/cmd/prompt_expand_test.go"
+      ],
+      "commit": "e4b22d9f",
+      "completed_at": "2026-10-27T11:24:49.527852Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "TestNoAllowlistedReaderReadsASplitPrompt",
+          "loc": "internal/cmd/prompt_expand_test.go:351",
+          "what": "execute-side prompt tests read the expanded prompt, task edges read base execute.md via assets.FS, and no allowlisted raw reader may read a split prompt"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "assets/prompts/execute.md",
+        "assets/prompts/_execute.board-moves.md",
+        "internal/cmd/execute_prompt_test.go"
+      ],
+      "commit": "12900f2e",
+      "completed_at": "2026-10-27T15:14:10.422504Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "execute.md §0 begin-line reading",
+          "loc": "assets/prompts/execute.md:44",
+          "what": "§0 reads execute begin's version/board/pull lines (missing version: = stale binary) and fetches board-moves only on board_pull=reported"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "assets/prompts/verify.md",
+        "assets/prompts/_verify.detached.md",
+        "assets/prompts/_verify.scope.md",
+        "internal/cmd/verify_prompt_test.go"
+      ],
+      "commit": "76a3674e",
+      "completed_at": "2026-10-27T15:54:04.347609Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "verify detached/scope fetch lines",
+          "loc": "assets/prompts/verify.md:40",
+          "what": "detached-leg text fetched on leg=detached and degraded-scope provenance on scope=degraded (the scope degraded: line); attached ranged runs fetch nothing"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "assets/prompts/execute.md",
+        "assets/prompts/_execute.test-not-run.md",
+        "assets/budget_test.go"
+      ],
+      "commit": "5fb5cfbd",
+      "completed_at": "2026-10-27T16:27:44.146911Z",
+      "landmarks": [
+        {
+          "feature": "prompt byte budget",
+          "symbol": "TestPromptByteBudget",
+          "loc": "assets/budget_test.go:33",
+          "what": "embedded execute.md capped at 15,000 B; dross test exits 2-8 fetched only on test_exit=not-run"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "assets/prompts/verify.md",
+        "assets/prompts/_verify.mutation-error.md",
+        "assets/prompts/_verify.drain.md",
+        "internal/cmd/verify_prompt_test.go"
+      ],
+      "commit": "34ac219c",
+      "completed_at": "2026-10-27T16:37:02.354492Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "verify mutation-error/drain fetch lines",
+          "loc": "assets/prompts/verify.md:89",
+          "what": "mutation-error menu fetched on mutation=failed, survivor drain on unclassified=nonzero; §5 leaves verified status to finalize"
+        }
+      ]
+    },
+    "t-15": {
+      "files": [
+        "assets/prompts/verify.md",
+        "assets/prompts/_verify.not-pass.md",
+        "assets/prompts/_verify.solo-review.md",
+        "assets/budget_test.go"
+      ],
+      "commit": "8059b3e5",
+      "completed_at": "2026-10-27T17:12:48.294778Z",
+      "landmarks": [
+        {
+          "feature": "prompt byte budget",
+          "symbol": "promptByteBudget",
+          "loc": "assets/budget_test.go:14",
+          "what": "verify.md capped at 15,000 B alongside execute.md; not-pass and solo-review branches fetched only off the pass path"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        ".dross/phases/prompt-partials/flow-cost.toml",
+        ".dross/phases/prompt-partials/flow-cost-before.toml",
+        "internal/cmd/flowcost_record_test.go"
+      ],
+      "commit": "10db3c7e",
+      "completed_at": "2026-10-27T19:45:57.842923Z",
+      "landmarks": [
+        {
+          "feature": "flow-cost record",
+          "symbol": "checkPromptPartialsFlow",
+          "loc": "internal/cmd/flowcost_record_test.go:217",
+          "what": "pins prompt-partials' before/after execute+verify legs: base prompts under 15000 B and smaller, zero partial fetches, attached verify pass, same fixture trees"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "assets/partials.go",
+        "assets/partials_test.go"
+      ],
+      "commit": "763ba35e",
+      "completed_at": "2026-10-27T09:05:35.365473Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "Expand",
+          "loc": "assets/partials.go:155",
+          "what": "filename-rule partial registry with closed-vocabulary When fetch lines, registry checks and in-place expansion"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/execute.go",
+        "internal/cmd/execute_test.go",
+        "internal/boardsync/board_lifecycle_divergence_test.go"
+      ],
+      "commit": "80f22d9e",
+      "completed_at": "2026-10-27T09:35:32.613487Z",
+      "landmarks": [
+        {
+          "feature": "execute begin",
+          "symbol": "beginBoard",
+          "loc": "internal/cmd/execute.go:151",
+          "what": "begin bumps the version patch from the phase ordinal, syncs the board in-progress and reports inbound task moves on labelled lines"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_absorb_test.go"
+      ],
+      "commit": "c188719d",
+      "completed_at": "2026-10-27T11:18:32.439991Z",
+      "landmarks": [
+        {
+          "feature": "verify board and status bookkeeping",
+          "symbol": "verifyBoardUAT",
+          "loc": "internal/cmd/verify.go:1099",
+          "what": "verify syncs the board to uat after its artefacts (exit 16 on board failure) and verify finalize sets the verified status and history entry"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/prompt.go",
+        "internal/cmd/prompt_test.go",
+        "cmd/dross/main.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "b8417460",
+      "completed_at": "2026-10-27T09:48:59.956591Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "promptPartial",
+          "loc": "internal/cmd/prompt.go:29",
+          "what": "dross prompt partial \u003cprompt\u003e \u003cname\u003e prints a partial verbatim with no session dedupe"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "assets/testdata/prompt_instructions.txt",
+        "assets/conservation_test.go",
+        "internal/cmd/execute.go"
+      ],
+      "commit": "2a313ba5",
+      "completed_at": "2026-10-27T10:15:01.227203Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "conservationProblems",
+          "loc": "assets/conservation_test.go:133",
+          "what": "every pre-split fenced command and hard-rule lead-in must survive in the expanded prompt or be claimed by one absorbs marker"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/prompt_expand_test.go",
+        "internal/cmd/prompt_test_command_test.go",
+        "internal/cmd/consent_surface_test.go",
+        "internal/cmd/execute_prompt_test.go",
+        "internal/cmd/ship_prompt_test.go"
+      ],
+      "commit": "05d0d20b",
+      "completed_at": "2026-10-27T10:29:49.500338Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "TestPromptReadsGoThroughExpansion",
+          "loc": "internal/cmd/prompt_expand_test.go:175",
+          "what": "prompt-content test loaders read the expanded prompt and a shrink-only allowlist ratchets raw prompt reads"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/verify_prompt_test.go",
+        "internal/cmd/options_docs_test.go",
+        "internal/cmd/phase_test.go",
+        "internal/cmd/pad_residue_test.go",
+        "internal/cmd/prompt_expand_test.go"
+      ],
+      "commit": "9bffb6b8",
+      "completed_at": "2026-10-27T10:48:32.059686Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "scanPadResidueText",
+          "loc": "internal/cmd/pad_residue_test.go:70",
+          "what": "verify-side prompt tests and the pad-residue scan read the expanded verify.md"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "assets/prompts/execute.md",
+        "assets/prompts/_execute.solo.md",
+        "assets/prompts/_execute.recovery.md",
+        "internal/cmd/execute_prompt_test.go"
+      ],
+      "commit": "f2974363",
+      "completed_at": "2026-10-27T15:32:21.271913Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "execute solo/recovery fetch lines",
+          "loc": "assets/prompts/execute.md:34",
+          "what": "solo-only text fetched once in §0 on mode=solo (re-fetch ref in §1f); pre-flight recovery fetched on preflight=recovery"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "Raw execute.md/verify.md readers remain undetected: TestCoreLoopPromptsWireEmitter and TestCoreLoopPromptsReferenceContract (internal/cmd/interaction_coreloop_test.go) loop coreLoopPrompts {\"execute\",\"verify\",...} and call os.ReadFile(path) through a variable, so isRawPromptRead sees no literal and neither guard fires. The wire-emitter test also makes a negative assertion (deadIncludeLine absent) that misses partial content. The task's literal claim (no allowlisted entry) holds, but 'if an execute/verify raw reader remains, the guard fails' does not.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "allowlistedSplitReads checks only the call expression for a helper call (namesSplitPrompt(call)), not the enclosing body. A loop that passes split-prompt names to an allowlisted helper through a variable escapes, the same gap the direct-read branch handles with namesSplitPrompt(fn.Body). Names without the .md suffix (e.g. \"execute\" + \".md\" built inside the helper) also escape the HasSuffix match.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The description says 'add a stale-exemption check', but the diff adds none. The existing loop in TestPromptReadsGoThroughExpansion (entry matching no read) already satisfies the contract line.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The test_contract names TestPromptReadsGoThroughExpansion as the test that fails, but the split-prompt check lives in a new test, TestNoAllowlistedReaderReadsASplitPrompt.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-11": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "TestExecutePromptStaleBinaryStop's \"stop\" needle is a bare substring that nearly any §0 text satisfies; the stop instruction is really pinned only by the \"No `version:` line means a stale binary\" and \"`make install`\" needles",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "TestExecutePromptPullsBoardTaskMoves checks \"dross issue task pull\" and \"--apply\" as separate substrings, so a partial that drops `--apply` from the command line but still mentions it in prose would pass. Asserting the whole `dross issue task pull \u003cphase\u003e --apply` line would be tighter",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The fetch line matches the partials.go grammar with a vocabulary trigger off the common path, and the expanded-size cap (25,500 B) does catch prose moved into the partial instead of deleted, because Expand inlines the partial",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-12": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "spec",
+          "severity": "BLOCKING",
+          "criterion": "c-5",
+          "text": "test_contract line 1 is unmet: no test fails when _verify.detached.md loses the exit 10/11/12/13/14 text (TestVerifyPromptTeachesTheDetachedPath never checks exit codes), and losing 'A non-finished result is not a verdict' alone also passes because the check is an OR with 'did not report'. options_docs_test.go is not changed in the diff.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "test_contract line 2 names TestVerifyPromptReadsRangeProvenance, but that test only checks for `whole_file`/`ranges`, not the individual reasons. A lost reason is in fact caught by TestNoPadHeuristicResidue (expanded verify.md against wholeFileReasonNames), so the behaviour is guarded but the named test is wrong.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestVerifyScopeTriggerIsTheDegradedLine pins both ends: the fetch line quotes `scope degraded:` and printScopeSummary still prints it, using assets.FS for the bare prompt as prompt_expand_test sanctions.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "test_contract says TestVerifyPromptReadsRangeProvenance (expanded) fails if a whole_file reason is lost, but that test was not extended: it still checks only `whole_file`, `ranges`, `dross verify scope \u003cphase\u003e` and 'never called ranged', so dropping e.g. `scope-has-no-hunks` from _verify.scope.md passes it. The protection does exist: TestNoPadHeuristicResidue (internal/cmd/pad_residue_test.go) checks all five reason names in the expanded verify.md. Consider adding wholeFileReasonNames to the named test so the contract line holds as written.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The detach exit-code assertions went into a new test in verify_prompt_test.go instead of extending TestVerifyPromptTeachesTheDetachedPath in options_docs_test.go. That file is not in the task's file list, so this is reasonable, and the new test is stricter (each exit code checked separately, plus a check that the text is gone from base verify.md).",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The merged denominator paragraph drops the second '0.50 over 2 vs 200' example but keeps the `[summary].mutants_in_scope` reference and the changed-files-only filtering. No existing prompt test depended on the dropped wording.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-13": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Compression dropped the §1e note that a bare `dross test` can be narrowed with a package/path selector (e.g. `dross test ./internal/cmd/...`) that cannot be combined with `--files`, and the `dross remote status` pointer; no test or manifest row tracked them, so the loss is silent.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Trailer guidance now reads 'a Co-Authored-By trailer only if it already uses one', dropping the explicit 'don't strip it from a repo that does' half; slightly weaker but the intent survives.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "budgetProblems takes a ReadFile interface rather than fs.FS so fstest.MapFS and embed.FS both satisfy it; TestPromptByteBudgetBites pins both the at-cap pass and the exact overage message, so the budget test is not vacuous.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-14": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "verify.md is not yet in promptByteBudget (assets/budget_test.go); the task expects ~18,000 B, so the c-2 cap is left to a sibling task",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "§1's board-failure prose does not name verify's dedicated exit code 16 (exitVerifyBoardFailed); the agent has to rely on the `board: FAILED` line to tell it apart from a mutation-tool failure (exit 1)",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-15": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "spec",
+          "severity": "BLOCKING",
+          "criterion": "c-5",
+          "text": "test_contract says TestVerifyShowsReviews fails if _verify.solo-review.md drops \"UNRESOLVED\", but the test's needle list (verify_prompt_test.go:490-497) never checks \"UNRESOLVED\"; only the lowercase \"— unresolved — task failed\" is checked, so deleting the uppercase word from the partial leaves the test green",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "_verify.not-pass.md is fetched and inlined in §4 but tells the agent what to print in §5; the wording ('In §5, after the verify-artefacts commit') covers it, but the fetch point and the action it governs are a section apart",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the 15,001-byte bite is exercised only for execute.md in TestPromptByteBudgetBites; verify.md relies on the same generic budgetProblems path via its map row, which is adequate",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "test_contract says TestVerifyShowsReviews fails if _verify.solo-review.md drops \"UNRESOLVED\", but that test (internal/cmd/verify_prompt_test.go:480) only checks lowercase \"— unresolved — task failed\" and was not changed. The guard lives in a new test, TestVerifySoloReviewMarksUnresolved, in assets/budget_test.go. The behaviour is pinned, but under a different name and in a file about byte budgets.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "The description says the §0 reviews note moves to _verify.solo-review.md, but it stays inline in §0 item 4, only shortened. Moving it would break TestVerifyShowsReviews' §0 checks, so keeping it looks right, but it departs from the task record.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "The exact-set guard in TestPromptByteBudget checks the promptByteBudget literal in the same file, so it only catches someone editing that map. That is what the contract asks for. The 15,001-byte bite is still exercised only for execute.md, through the shared budgetProblems path.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "§1 now reads \"It runs the mutation tools (other languages skip with a reason)\" after dropping \"currently Stryker for TS/JS/Svelte\", so \"other languages\" no longer refers to anything.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Besides moving the two blocks, the diff compresses prose throughout §0-§3 and the hard rules. Dropped detail includes the dross doctor pointer, the survivor-drain consent example and \"Exit 0 means trusted\". The conservation manifest's rows and the content tests' needles look preserved. Whether verify.md meets the 14,500 B headroom target could not be measured here; the 15,000 B cap test gates it.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "Expand inlines Partial(fsys, name, p.Partial) and dedupes on p.Partial alone, ignoring p.Prompt; a foreign reference such as `dross prompt partial verify solo` inside execute.md would silently inline _execute.solo.md. Only CheckPartials guards this; Expand could reject p.Prompt != name itself.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "readPathRe is unanchored, so any underscore-containing token of the form x_a.b.md in a base prompt is reported as a partial-file read; no current prompt trips it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "invocationRe makes any mention of `dross prompt partial` in a base prompt subject to the strict fetch-line grammar, so prose documenting the command shape would fail the registry check.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "beginBoard's report loop prints only TaskBoardMoved and TaskConflict; TaskPlanMoved and TaskUnsynced verdicts are silently dropped, so a task with no recorded agreement point yields `pull: no task moves on the board` where `dross issue task pull` would tell the user to run task-sync. Reusing ReportTaskMoves(…, apply=false) through the labelWriter would keep the two reports from drifting.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "beginBoard returns the loadPhasePlanAndSpec error without printing a `pull:` line, breaking the one-labelled-line-per-step report on that (rare) path.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "labelWriter never flushes a trailing fragment without a newline; any unterminated narration from SyncPhase is dropped, and multi-line narration (e.g. state-map warnings, if routed through ctx.Out) yields more than one `board:` line.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The provider-refusal contract names Forgejo/Gitea/GitLab; only Forgejo is exercised. The code path is provider-agnostic via ProviderHasWorkflowState, so this is adequate.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The resume check compares version segments as strings (cur[0] == mv[1]), so a zero-padded version like 1.08.2.1 would be rewritten rather than reported unchanged; harmless in practice.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "spec",
+          "severity": "BLOCKING",
+          "criterion": "c-4",
+          "text": "test_contract line 'if the remote leg syncs, the test fails: the shared leg runner called directly makes 0 board requests' has no test in the diff; no test calls the leg runner (verify.RunScoped / remote leg) directly against a counting board",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "verify finalize writes the `finalized` marker (finalizeVerify) before markVerified updates state.json; if the state load or save fails, every later finalize prints 'already recorded' and returns early, so current_phase_status=verified and the history entry are never written and cannot be recovered by re-running finalize",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "collectDetachedFrom returns as soon as finishVerify returns the board-failure error, so localstore.ClearDetachedRun and the 'collected run' line are skipped: a board 500 during `verify results` leaves the detached record in place even though the artefacts are written, while the printed retry hint only mentions `issue phase sync`",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestAutoFinalizeLeavesStatusAlone calls finalizeVerify directly instead of driving `dross ship` / `phase complete` as the test_contract words it; it does catch the state write moving into finalizeVerify, but not a ship-side regression",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestVerifyResultsSyncsUATOnce counts `board:` output lines rather than board requests to show 'exactly one uat sync'; this is a reasonable proxy",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In TestVerifyBoardFailureKeepsResults, `code == 1` in the exit check is always false once code == 16; and in markVerified, the `v == nil \u0026\u0026 err == nil` branch would produce the message 'read verify.toml: \u003cnil\u003e'",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "verify finalize calls finalizeVerify (which sets the verify.toml finalized marker) before markVerified; if the state.json load/save then fails, a re-run sees recorded=false, prints 'already recorded' and returns nil, so current_phase_status=verified and the history entry are never written and cannot be retried through finalize",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "TestVerifyLegRunnerMakesNoBoardRequests is close to vacuous: it calls verify.RunScoped with a stub adapter, and the verify package has no path to the board, so the test cannot fail whatever finishVerify does. Moving the uat sync into the leg runner would make it meaningful, but the sync lives in cmd",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestVerifyResultsSyncsUATOnce counts printed `board: phase ... -\u003e board` lines, not board requests, to check 'exactly one uat sync'; this holds only while SyncPhase prints one line per sync",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestAutoFinalizeLeavesStatusAlone calls finalizeVerify directly instead of going through `dross ship` / `phase complete`; it would still catch the state write moving into finalizeVerify",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "TestPromptPartialRefusesBadNames only asserts err != nil; it does not check that stdout stayed empty or that the error is a name refusal, so a refusal for an unrelated reason would also pass",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the verbatim test seeds a partial with no trailing newline and an inner blank line, so it fails if a newline is added or stripped",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "TestConservationCatchesALostRow builds a fstest.MapFS with only prompts/execute.md and prompts/verify.md. It works now because neither prompt has a `dross prompt partial` line yet. Once later tasks add one, Expand on that MapFS will fail with a missing-partial error instead of reporting 'instruction lost', so the test breaks for an unrelated reason. Its contract says 'removed from verify.md and every partial', but it never removes the row from any partial. Copy the whole embedded prompts tree into the MapFS and strip the row from every file.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "The vacuity guard counts rows in the stored manifest, not what the extractor finds in today's prompts, so a broken extractor only fails it after someone re-records. TestExtractInstructions partly covers this. verify.md sits at exactly the 25-row minimum.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "With DROSS_RECORD_PROMPT_INSTRUCTIONS set, the test rewrites the manifest from the current expanded prompts and then checks against it, so a row that was dropped can be silenced. The risk is written in the comment, but nothing in code prevents it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Rows are matched as exact substrings, including inline comments and column padding (e.g. the `dross verify ... --detach            # returns ...` rows). Reflowing that whitespace in a partial will show up as a lost instruction. This is strict but deliberate.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The manifest also records numbered lead-ins `- **1**` through `- **8**` and short ones like `- **what**`. These only weakly identify an instruction.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "Conservation is checked with strings.Contains on the whole expanded prompt, so short rows that are prefixes or substrings of other rows (`dross test` vs `dross test --files ...`, `dross issue phase sync \u003cid\u003e` vs its `--status in-progress` form, `dross task status \u003cphase\u003e \u003ctask-id\u003e failed` vs its `--reason` form, `- **1**`..`- **8**`) still pass after their own line is removed. Matching whole trimmed lines would close this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "The vacuity guard counts rows in the static manifest file, not what extractInstructions finds in today's prompts. Outside record mode, a broken extractor would not trip the minRows check; only the small TestExtractInstructions fixture guards it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "internal/cmd/execute.go is in task.files but unchanged; its three t-3 absorbs markers already match the manifest rows exactly, so nothing needed reconciling.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The hand-rolled itoa duplicates strconv.Itoa for no clear reason.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "The meta-guard only detects direct os.ReadFile/readRepoFile calls with assets/prompts literals in the argument. Raw prompt reads through readDoc/docText/docsBody wrappers or a path stored in a variable first are invisible to it. For example, lane_toolchain_docs_test.go:99 and :114 read the raw execute.md through readDoc, and board_lifecycle_divergence_test.go:524 reads execute.md through a path variable. These tests will not see instructions moved into execute partials, and the guard will not report them.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestPromptLoadersCompose compares each helper with expandedPrompt, the function the helpers now call, so it only catches a helper being rewired away. TestPromptLoadersSeePartials, which seeds a MapFS partial, does the real behavioural check.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The description expects install_test.go in the seeded allowlist, but install_test.go reads prompts through assets.FS.ReadFile (the sanctioned raw path). It is correctly absent: the guard rejects allowlist entries that match no raw read.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The verifyPromptBody and other verify.md readers stay on raw reads through the allowlist. verify.md is also due to gain partials, so moving those readers to the expanded prompt is still pending (outside this task's claimed helpers).",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "TestPadResidueScanSeesPartials calls scanPadResidueText(expandedPrompt(...)) itself instead of going through TestNoPadHeuristicResidue's padResiduePrompts loop. If that loop went back to a raw disk read, this test would still pass, so the 'scan misses partials' contract is only partly guarded.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "phase_test.go#TestPhaseListPromptConsumersAreCurrent correctly stays on the raw-read allowlist: it still reads spec.md and milestone.md raw, and only its verify.md read was migrated.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "TestExecuteSoloReviewPlacement's partial-side order check takes the first \"`dross test`\" in the block, which is the intro prose ('after the full green bare `dross test`'), not the blocked-branch re-run the test_contract names; the run \u003c context leg holds trivially and would not catch a reordered re-run (TestExecuteReviewFailurePath covers that ordering separately).",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "The move trimmed wording rather than moving it verbatim: dropped 'unknown agent, API failure, interrupt' (examples of a spawn error), 'The loop moves on to the next independent task', 'a failed task is never committed', and 'the reviewer sees only the context'. Each is minor, but c-5 is about losing no instruction in the move.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "execute.md now ends without a trailing newline (the last hard-rule line); assets.Expand handles this, so it is cosmetic.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
+}

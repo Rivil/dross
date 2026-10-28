@@ -1,0 +1,220 @@
+task_seq = 16
+
+[phase]
+  id = "prompt-partials"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Capture before-leg flow cost on base prompts"
+  files = [".dross/phases/prompt-partials/flow-cost-before.toml"]
+  description = "Build the base binary from a scratch worktree at 3ee0fe71 (`git worktree add <scratchpad>/base 3ee0fe71`, `go build` there; never run `dross test` from it) so binary_version names 3ee0fe71. Build two scratch fixtures with test-output-summaries flow-cost.toml inline setup_sh pattern (fixed GIT_*_DATE so the tree is reproducible): a pair execute task, and a verify run whose gremlins legs kill every mutant. Human-driven: one pair /dross-execute task and one attached /dross-verify on that base binary, prompts still unedited. Record [before]/[verify_before]: prompt_bytes, partial_fetches, agent_turns, turn_tools, wall_clock_s (human waits excluded), human_wait_s, dross_calls, verdict, binary_version, session_id, fixture_tree. The filename is outside the flow-cost.toml glob, so it is ungated until t-16 merges it."
+  covers = ["c-6"]
+  test_contract = [
+    "if a leg ran on already-edited (symlinked) prompts, t-16's TestFlowCostRecords/prompt-partials fails: [before].prompt_bytes != 25853 or [verify_before].prompt_bytes != 25864",
+    "if the verify fixture cannot reach pass (e.g. an equivalent mutant like Clamp's `x < lo` -> `x <= lo`), the check fails: [verify_before].verdict must be pass with unclassified_in_scope = 0",
+    "if the fixture is non-deterministic, the check fails: running fixture setup twice gives the same `git rev-parse HEAD^{tree}`, recorded as fixture_tree",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Add partial registry, fetch grammar, in-place Expand"
+  files = ["assets/partials.go", "assets/partials_test.go"]
+  description = """
+Registry is the filename rule prompts/_<prompt>.<name>.md (name [a-z][a-z0-9-]*), no Go map. Partial, PartialNames, FetchPoints, Expand (inlines each
+partial right after its fetch line), all over fs.FS. Fetch-line grammar: **When** `<key>=<value>` — <prose>: `dross prompt partial <p> <n>`. Closed
+vocabulary: mode{pair,solo}, preflight{ok,recovery}, board_pull{none,reported}, test_exit{0,1,not-run}, leg{attached,detached}, mutation{ran,failed},
+scope{ranged,degraded}, unclassified{zero,nonzero}, reviews{none,present}, verdict{pass,partial,fail}; common path = every first value plus verdict=pass.
+Registry, grammar, common-path and common-path-inline tests run over the real assets.FS and land green (no partials yet)."""
+  covers = ["c-3", "c-4", "c-5"]
+  test_contract = ["if partial lookup escapes, TestPartialRejectsBadNames fails: Partial(execute, ../verify), Partial(execute, Solo) and Partial(interaction, x) each error and never read outside prompts/", "if _interaction.md is mistaken for a partial, the registry test fails: it is never listed as a partial and never reported as an orphan", "if a fetch line names a missing partial, the registry check fails on a MapFS naming execute.md:<line>; a _execute.ghost.md no fetch line names fails as an orphan", "if a fetch line lacks **When** `k=v` or uses an unknown key (colour=red), the grammar check fails", "if a common-path trigger fetches, TestCommonPathFetchesNothing fails: a synthetic trigger mode=pair or test_exit=0 is rejected", "if a trigger fires on gremlins' always-whole-file path, the trigger check fails: prose naming whole_file, adapter-lacks-range-runner or gremlins is rejected", "if a prompt tells the agent to Read a partial instead of fetching it, the check fails: naming _execute.solo.md or a ~/.claude/dross/prompts/_ path is rejected", "if Expand alters fetch-free prompts, TestExpandIdentity fails: Expand(quick) is byte-identical to quick.md; on a MapFS index(fetch) < index(body) < index(next base line)", "if common-path text leaves the base prompt, TestCommonPathInline fails: raw execute.md must keep `git add <task.files>`, `dross changes record`, `dross test --files`, `approve <task-id>`, `### 1g`; raw verify.md must keep `dross verify <phase>`, `dross verify finalize`, covered/weak/uncovered and \"If verdict is `pass`:\"", "if a compaction re-fetch line is mis-handled, TestRefetchLineIsAReference fails: a `**Re-fetch** if context was compacted: `dross prompt partial execute solo`` line counts as a registry reference, is not inlined by Expand, and must name a partial that also has a When fetch point", "if a twice-referenced partial is double-inlined, TestExpandInlinesOnce fails: on a MapFS with two fetch lines naming one partial, Expand contains its body exactly once, after the first fetch line", "if walkers break on partial files, TestExpandPartialPassThrough fails: Expand(_execute.solo) and Expand(_interaction) return the file bytes unchanged", "if .md-suffixed names diverge, TestExpandStripsMdSuffix fails: Expand(verify.md) == Expand(verify)", "if the pass-path next-phase block leaves base verify.md, TestCommonPathInline fails: raw verify.md must keep the section 5 milestone-array next-phase resolution and the no-milestone fallback", "if always-on gremlins guidance leaves base verify.md, TestCommonPathInline fails: raw verify.md must keep that gremlins is always whole-file and the instruction to judge the score against what was actually instrumented"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Absorb version, board sync, pull into execute begin"
+  files = ["internal/cmd/execute.go", "internal/cmd/execute_test.go", "internal/boardsync/board_lifecycle_divergence_test.go"]
+  description = """
+After the mode record, begin sets the version patch from phase.DisplayNumber (same source as `dross phase number`), writing only when major.minor or
+patch differ (internal survives a resume); runs board phase sync in-progress; runs a report-only task pull (never --apply). Each prints one labelled line:
+version:, board:, pull:. A board HTTP failure is recorded first, then exits non-zero with `board: FAILED`. `// absorbs: <command>` marker at each call.
+emittedStatuses gains a 4th source: literal statuses passed to boardsync.SyncPhase in internal/cmd."""
+  covers = ["c-1", "c-4"]
+  test_contract = [
+    "if the patch isn't derived from the ordinal, TestBeginBumpsVersion fails: milestone v1.8, phases [a,p], version 1.8.1.3 -> `begin p` writes 1.8.2.0 to state.json and project.toml",
+    "if a resume resets internal, TestBeginResumeKeepsInternal fails: with 1.8.2.1 set, begin prints `version: ... unchanged` and project.toml is byte-identical",
+    "if begin guesses without a milestone, the test fails: no current milestone, phase missing from the array, or non-vX.Y version -> `version: skipped (<reason>)` and nothing written",
+    "if a refused begin has side effects, the test fails: no plan, `../p`, or --solo with no reviewer leave project.toml and state.json byte-identical and the httptest board sees 0 requests",
+    "if begin applies board moves, the test fails: on a youtrack httptest board begin sends in-progress for p; a moved card lists \"t-2 pending -> done\" with plan.toml byte-identical (also for a both-sides conflict)",
+    "if a board failure is swallowed, the test fails: board 500 on phase sync -> execute.json still records the mode, exit is non-zero, output has `board: FAILED`; board off -> `board: off` and 0 HTTP requests",
+    "if a provider refusal is treated as failure, the test fails: on a Forgejo/Gitea/GitLab board the pull prints `pull: n/a ...` and exits 0",
+    "if the state guard is deleted instead of narrowed, TestExecuteBeginLeavesStateAlone fails: current_phase, current_phase_status, current_milestone unchanged; only version may differ",
+    "if the stale-binary signal disappears, the test fails: every non-refused begin prints exactly one `version:` line",
+    "if the SyncPhase call is removed from begin, TestEmittedStatusesAreTheLifecycleSet reports in-progress missing once execute.md stops emitting it",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Add dross prompt partial fetch command"
+  files = ["internal/cmd/prompt.go", "internal/cmd/prompt_test.go", "cmd/dross/main.go", "cmd/dross/testdata/cli_tree.txt"]
+  description = """
+`dross prompt partial <prompt> <name>` prints assets.Partial verbatim. No session dedupe (no showOnce), so a re-fetch after compaction prints in full.
+Wire into newRoot and regenerate the CLI tree golden (DROSS_UPDATE_GOLDEN)."""
+  covers = ["c-3"]
+  test_contract = [
+    "if output is altered, TestPromptPartialVerbatim fails: stdout is byte-equal to a MapFS-seeded partial, no trailing newline added or stripped",
+    "if fetches are deduped, the test fails: two calls under one CLAUDE_CODE_SESSION_ID both print the full bytes",
+    "if an unknown name prints empty, the test fails: it exits non-zero and the error lists that prompt's valid partial names",
+    "if bad names are accepted, the test fails: `execute ../verify`, `interaction x` and `execute.md solo` are each refused",
+    "if the command isn't registered in the golden, TestCLITreeGolden fails until cli_tree.txt names `dross prompt partial`",
+  ]
+  status = "done"
+  depends_on = ["t-2"]
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Record instruction-conservation manifest and guard"
+  files = ["assets/testdata/prompt_instructions.txt", "assets/conservation_test.go", "internal/cmd/execute.go"]
+  description = "Extract into the manifest every line inside a fenced block of todays execute.md and verify.md that starts with `dross ` or `git ` (comment lines and other fence content excluded), plus every `- **...**` hard-rule lead-in. Each row must appear in Expand(prompt) or be claimed by an exactly matching `// absorbs: <row>` marker in non-test internal/cmd source. Reconcile t-3 markers in execute.go to the manifest rows (one marker per absorbed row, not per call). Lands green."
+  covers = ["c-5"]
+  test_contract = ["if an instruction is dropped in the move, TestPromptInstructionsConserved fails naming the row: removing `dross verify finalize <phase-id>` from verify.md and every partial", "if an absorbed row loses its claim, the test fails: a row claimed only by an absorbs marker fails once that marker is deleted", "if the manifest goes vacuous, the test fails: the extractor finding < 40 rows in execute.md or < 25 in verify.md", "if t-3 markers drift from the manifest, TestPromptInstructionsConserved fails: each of the version, phase sync and task pull rows from execute.md section 0 has exactly one matching absorbs marker in execute.go"]
+  status = "done"
+  depends_on = ["t-2", "t-3"]
+
+[[task]]
+  id = "t-7"
+  wave = 2
+  title = "Route prompt test helpers through Expand"
+  files = ["internal/cmd/prompt_expand_test.go", "internal/cmd/prompt_test_command_test.go", "internal/cmd/consent_surface_test.go", "internal/cmd/execute_prompt_test.go", "internal/cmd/ship_prompt_test.go"]
+  description = "Add expandedPrompt(t, name). promptBody, rawPrompt, readPrompt, executePromptContent and ship_prompt_test promptContent compose over Expand(name) (keeping each helper own normalisation). A test that genuinely needs the raw base prompt reads assets.FS directly; that is the sanctioned raw path. Add meta-guard TestPromptReadsGoThroughExpansion. Detection rule: any os.ReadFile or readRepoFile call in an internal/ test whose path argument joins \"assets\" and \"prompts\" (literal or via filepath.Join). Its ratchet allowlist is seeded from a grep of every such reader at t-7 time (including install_test.go, which compares install bytes on purpose) and may only shrink."
+  covers = ["c-5"]
+  test_contract = ["if a raw prompt read sneaks in, TestPromptReadsGoThroughExpansion fails naming file:line: a new os.ReadFile(filepath.Join(root, \"assets\", \"prompts\", \"verify.md\")) or readRepoFile of an assets/prompts path in an internal/ test outside the allowlist", "if the allowlist grows, the meta-guard fails: its seeded entry count is pinned and adding an entry fails", "if a helper stops composing over Expand, TestPromptLoadersCompose fails: promptBody/rawPrompt/readPrompt == Expand(name), and promptContent/executePromptContent == that helper normalisation applied to Expand(name), for every prompt", "if negative checks skip partials, the test fails: a banned phrase in a MapFS partial is seen by a negative assertion over promptBody", "if the split grows total instructions, TestTestStepPromptsNotGrown fails: it measures the expanded prompt against 25854", "if promptContent stays raw, TestNoPromptPerformsRawBranchSwitch fails once t-9 moves `dross phase checkout` into _execute.recovery.md", "if the sanctioned raw path is banned, the meta-guard fails: an assets.FS.ReadFile of a prompt is allowed, os.ReadFile of the same path outside the allowlist is not"]
+  status = "done"
+  depends_on = ["t-2"]
+
+[[task]]
+  id = "t-4"
+  wave = 3
+  title = "Absorb uat sync, verified status into verify"
+  files = ["internal/cmd/verify.go", "internal/cmd/verify_absorb_test.go"]
+  description = """
+After tests.json and verify.toml are written, finishVerify (attached `dross verify <phase>`, --skip-mutation, `verify results`) syncs the board to uat via
+t-3's helper and prints a `board:` line; never on --detach dispatch. The RunE of `verify finalize` (NOT finalizeVerify, which ship.go and phase.go
+auto-heal through) sets current_phase_status=verified and touches \"verified <id>: <verdict> (<covered>/<total>, mutation <score>)\". Absorbs markers on each."""
+  covers = ["c-2", "c-4"]
+  test_contract = ["if a board failure loses the verdict, TestVerifyBoardFailureKeepsResults fails: board 500 after an attached run leaves tests.json and verify.toml with measured counts, output names `board: FAILED`, exit differs from a mutation-tool failure's", "if a mutation tool error syncs the board, the test fails: an error before the skeleton exists makes 0 board requests", "if detached flow syncs at the wrong time, the test fails: `verify --detach` dispatch makes 0 board requests and `verify results` makes exactly one uat sync", "if the remote leg syncs, the test fails: the shared leg runner called directly makes 0 board requests", "if finalize doesn't own the status write, the test fails: finalize on a pass verify.toml sets current_phase_status=verified and the last history entry starts \"verified p: pass\"; finalize refused on verdict pending leaves state.json byte-identical; a second finalize appends no second entry", "if the state write lands in finalizeVerify, the test fails: a `dross ship` / `phase complete` auto-finalize with current_phase_status=shipped leaves it shipped", "if uat drops from the emit set, TestEmittedStatusesAreTheLifecycleSet fails: with `--status uat` deleted from verify.md it still sees uat via the CLI source", "if verify absorbs markers do not match manifest rows, TestPromptInstructionsConserved fails once t-14 removes the rows from verify.md: the state-set and touch rows must be claimed by exactly matching markers in verify.go"]
+  status = "done"
+  depends_on = ["t-3", "t-6"]
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  title = "Migrate verify-side prompt readers to Expand"
+  files = ["internal/cmd/verify_prompt_test.go", "internal/cmd/options_docs_test.go", "internal/cmd/phase_test.go", "internal/cmd/pad_residue_test.go", "internal/cmd/prompt_expand_test.go"]
+  description = "verifyPromptBody, verify_prompt_test inline reads (:21, :47) and TestVerifyPromptReadsRangeProvenance raw read (:383), options_docs_test verify.md read (:505), phase_test readRepoFile(verify.md) (:657), and pad_residue_test verify.md read (:123) plus its padResidueDocs scan (:35, used at :109) all read the expanded verify.md. README.md stays a raw read in pad_residue."
+  covers = ["c-5"]
+  test_contract = ["if a loader stays on the bare prompt, options_docs_test's detached-path tests (:516-533) fail as soon as t-12 moves those phrases into _verify.detached.md", "if _verify.scope.md drops a whole-file reason, pad_residue's \"names every whole-file reason\" check fails", "if text is duplicated into a partial, the verify threshold-count test (\"exactly 1\") fails: it counts across prompt and partials", "if the pad-residue scan misses partials, the padResidueDocs scan fails: a retired pad-heuristic needle placed only in a MapFS _verify.scope.md is reported", "if TestVerifyPromptReadsRangeProvenance stays raw, it fails as soon as t-12 moves range-provenance text into _verify.scope.md"]
+  status = "done"
+  depends_on = ["t-7"]
+
+[[task]]
+  id = "t-11"
+  wave = 3
+  title = "Replace absorbed §0 prose; board-moves partial"
+  files = ["assets/prompts/execute.md", "assets/prompts/_execute.board-moves.md", "internal/cmd/execute_prompt_test.go"]
+  description = "Precondition: `make install` with t-3 live (r-01), so begin prints its version/board/pull lines. Section 0 drops the version, sync and pull mechanics (deleted, not moved: the CLI owns them) and keeps how to read begin three lines; a missing `version:` line means a stale binary: stop and ask for `make install`. Pull reactions (--apply, conflicts, refused provider) move to _execute.board-moves.md (board_pull=reported). Retarget TestExecutePromptWiresPhaseNumber (same name) to drive `execute begin` on a milestone fixture. Runs before t-9 so the deletion frees the bytes t-9 fetch lines need. Post-commit: `make install`. Expected raw execute.md after: ~24,000 B; report the measured figure."
+  covers = ["c-1", "c-3", "c-4", "c-5"]
+  test_contract = ["if section 0 loses the stale-binary stop, TestExecutePromptStaleBinaryStop fails: section 0 must name the missing-`version:`-line stop", "if the apply path is lost, TestExecutePromptPullsBoardTaskMoves (expanded) fails without `dross issue task pull <phase> --apply` in the board-moves partial", "if a verb is mistyped in the partial, TestEveryPromptIssueInvocationResolves fails: it walks _execute.board-moves.md via the top-level glob", "if absorbed rows lose their claim, TestPromptInstructionsConserved fails: version/sync/pull rows pass only via the reconciled absorbs markers", "if begin stops deriving the patch from the phase ordinal, TestExecutePromptWiresPhaseNumber fails", "if the absorbed prose is moved instead of deleted, the headroom check fails: expanded execute.md must be <= 25,500 B after this task (TestTestStepPromptsNotGrown cap stays 25854)"]
+  status = "done"
+  depends_on = ["t-1", "t-3", "t-5", "t-6", "t-7"]
+
+[[task]]
+  id = "t-9"
+  wave = 4
+  title = "Move solo and recovery branches to partials"
+  files = ["assets/prompts/execute.md", "assets/prompts/_execute.solo.md", "assets/prompts/_execute.recovery.md", "internal/cmd/execute_prompt_test.go"]
+  description = "Move section 1c/1e/1f/1g solo text and the solo retry rule into _execute.solo.md, fetched once right after the `begin --solo` fence (mode=solo). Section 1f keeps a one-line `**Re-fetch** if context was compacted:` line (t-2 grammar: a reference, not a fetch point, never inlined) between the bare `dross test` and `git add <task.files>`. Refused-solo-begin text stays inline. Wrong-branch, dirty-tree and in_progress resume handling move to _execute.recovery.md (preflight=recovery). Retarget solo tests to the partial, keeping their names. Post-commit: `make install` so both partials are embedded before the next task. Expected raw execute.md after: ~19,500 B; report the measured figure."
+  covers = ["c-1", "c-3", "c-4", "c-5"]
+  test_contract = ["if the solo fetch moves out of section 0 (locked solo_branch), the test fails: the `execute solo` fetch line must be the first fetch after the `dross execute begin <id> --solo` fence", "if solo review ordering breaks, TestExecuteSoloReviewPlacement fails: base section 1f re-fetch line must sit between the bare `dross test` and `git add <task.files>`, and inside the partial re-run `dross test` < `dross review context` < spawn < `dross review status`", "if the solo red path reorders, TestExecuteSoloRedStashes (retargeted) fails when `failed` precedes `git stash push`", "if the solo-begin refusal moves into the partial, TestExecutePromptSoloBeginNeedsReviewer fails: it reads raw section 0 via assets.FS (the sanctioned raw path), not the expansion", "if board edges leave execute.md, TestTaskEdgesPairTheBoardStatusWithThePlanStatus fails on the task-in-progress/task-in-review edges", "if a footer moves into a partial, the footer coverage gate (footer_coverage.go reads execute.md alone) fails on a missing \"state is on disk\" footer", "if the fetch lines push the expansion over its base size, TestTestStepPromptsNotGrown (expanded, cap 25854) fails", "if `dross phase checkout` is lost in the move, TestNoPromptPerformsRawBranchSwitch (expanded via t-7) fails"]
+  status = "done"
+  depends_on = ["t-11"]
+
+[[task]]
+  id = "t-10"
+  wave = 4
+  title = "Migrate execute-side readers; empty allowlist"
+  files = ["internal/cmd/lane_toolchain_docs_test.go", "internal/cmd/execconsent_docs_test.go", "internal/boardsync/board_lifecycle_divergence_test.go", "internal/cmd/prompt_expand_test.go"]
+  description = "lane_toolchain readDoc(execute.md) and the verify/execute/quick loop in TestPromptsDescribeTheGateAsEnumerated become expanded reads. TaskEdges (boardsync) switches its os.ReadFile to a raw assets.FS read: its edges are common-path and must stay in base execute.md. Drop every allowlist entry that reads execute.md or verify.md; add a stale-exemption check."
+  covers = ["c-5"]
+  test_contract = ["if an execute/verify raw reader remains, TestPromptReadsGoThroughExpansion fails: no allowlisted entry reads execute.md or verify.md, directly or through a helper called with those names", "if an exemption goes stale, the meta-guard fails: an allowlist entry matching no read is reported", "if the task edges leave base execute.md or the done/task-in-review pair is transposed, TestTaskEdgesPairTheBoardStatusWithThePlanStatus (raw via assets.FS) fails", "if a banned consent phrase lives only in a partial, TestPromptsDescribeTheGateAsEnumerated fails"]
+  status = "done"
+  depends_on = ["t-3", "t-8"]
+
+[[task]]
+  id = "t-12"
+  wave = 4
+  title = "Move verify detached-leg and scope branches"
+  files = ["assets/prompts/verify.md", "assets/prompts/_verify.detached.md", "assets/prompts/_verify.scope.md", "internal/cmd/verify_prompt_test.go"]
+  description = "Precondition: `make install` with t-5 live (r-01). Long-leg, detach, collect, exit 10-15 and host-lock text move to _verify.detached.md (leg=detached); verify.md keeps a one-line \"go detached when...\" trigger estimated from the mutant-site count. Only the degraded-scope part of the range-provenance paragraph moves to _verify.scope.md (scope=degraded, i.e. verify printed a `scope degraded:` line); the always-on lines (gremlins is always whole-file; judge the score against what was actually instrumented) stay inline. Merge the two duplicate denominator paragraphs. Post-commit: `make install`. Expected raw verify.md after: ~21,500 B; report the measured figure."
+  covers = ["c-2", "c-3", "c-4", "c-5"]
+  test_contract = [
+    "if detached text is lost, options_docs detach tests (expanded) fail when _verify.detached.md loses exit 10/11/12/13/14 or \"A non-finished result is not a verdict\"",
+    "if a whole_file reason is lost, TestVerifyPromptReadsRangeProvenance (expanded) fails",
+    "if printScopeSummary's line is renamed, TestVerifyScopeTriggerIsTheDegradedLine fails: the scope fetch prose must name the literal `scope degraded:`",
+  ]
+  status = "done"
+  depends_on = ["t-1", "t-5", "t-6", "t-8"]
+
+[[task]]
+  id = "t-13"
+  wave = 5
+  title = "Move test-not-run exits; pin execute budget"
+  files = ["assets/prompts/execute.md", "assets/prompts/_execute.test-not-run.md", "assets/budget_test.go"]
+  description = "Exit codes 2-8 (\"the run did not happen\") move to _execute.test-not-run.md (test_exit=not-run); exit 1 (red) stays inline. Compress landmark, svelte, offload and section 1e prose to reach <= 14,500 B raw (expect ~4.5 KB of compression on top of the move, under the conservation guard). Create TestPromptByteBudget over embedded assets.FS with the execute.md row. Post-commit: `make install`."
+  covers = ["c-1", "c-3", "c-4", "c-5"]
+  test_contract = ["if execute.md regrows, TestPromptByteBudget fails at 15,001 B naming the file and the overage", "if the not-run partial drops code 8 or the \"2, 3, 4, 5, 6, 7 and 8 all mean the run did not happen\" line, lane_toolchain exit-code tests (expanded since t-10) fail", "if section 1f code `git add <task.files>` leaves base execute.md, TestCommonPathInline (raw via assets.FS) fails", "if pair facts fetch anything, TestCommonPathFetchesNothing fails: mode=pair, test_exit=0 fetch none of the four execute partials"]
+  status = "done"
+  depends_on = ["t-9", "t-10"]
+
+[[task]]
+  id = "t-14"
+  wave = 5
+  title = "Move mutation-error, drain; drop absorbed prose"
+  files = ["assets/prompts/verify.md", "assets/prompts/_verify.mutation-error.md", "assets/prompts/_verify.drain.md", "internal/cmd/verify_prompt_test.go"]
+  description = "Precondition: `make install` with t-4 live. Install/skip/abort menu moves to _verify.mutation-error.md (mutation=failed). Drain verbs, lifecycle table and unclassified-survivor detail move to _verify.drain.md (unclassified=nonzero). Section 1 uat sync block becomes the reaction to `board: FAILED`, which names the retry `dross issue phase sync <phase> --status uat` inline (keeps verify.md a board caller under the [board].enabled sentence). Section 5 drops `state set current_phase_status verified` and the touch. Post-commit: `make install`. Expected raw verify.md after: ~18,000 B; report the measured figure."
+  covers = ["c-2", "c-3", "c-4", "c-5"]
+  test_contract = ["if verify.md section 5 still instructs `dross state set current_phase_status verified`, TestVerifyPromptNoDoubleBookkeeping fails (t-4 finalize already writes it)", "if _verify.drain.md loses `dross survivor accept|route`, TestVerifyPromptNamesTheDrainVerbs / RestatesTheDrainPolicy (expanded) fail", "if t-4 absorbs markers go, TestPromptInstructionsConserved fails on the state-set and touch rows", "if the board-failure retry leaves verify.md, TestBoardCallingPromptsSurfaceFailure fails: fewer than 6 board-calling prompts, or verify.md calls the board without the `[board].enabled` sentence", "if a verify footer moves into a partial, the footer coverage gate fails"]
+  status = "done"
+  depends_on = ["t-4", "t-12"]
+
+[[task]]
+  id = "t-15"
+  wave = 6
+  title = "Move not-pass, solo-review; pin verify budget"
+  files = ["assets/prompts/verify.md", "assets/prompts/_verify.not-pass.md", "assets/prompts/_verify.solo-review.md", "assets/budget_test.go"]
+  description = "Fail/partial recommendations and their next block move to _verify.not-pass.md (verdict=partial and verdict=fail fetch lines; Expand inlines it once). Section 0 reviews note and section 4 Solo review block move to _verify.solo-review.md (reviews=present). Section 4 report block, section 5 next-phase resolution and footers stay inline. Add the verify.md row and the exact-set guard to TestPromptByteBudget (<= 14,500 B raw for headroom). Post-commit: `make install`."
+  covers = ["c-2", "c-3", "c-4", "c-5"]
+  test_contract = ["if verify.md regrows, TestPromptByteBudget fails at 15,001 B; it also fails if the budgeted set is not exactly {execute.md, verify.md}", "if _verify.solo-review.md drops \"UNRESOLVED\", TestVerifyShowsReviews (expanded) fails", "if the pass block or section 5 next-phase resolution leaves base verify.md, TestCommonPathInline (raw via assets.FS) fails", "if the verify common path fetches, TestCommonPathFetchesNothing fails: verdict=pass, unclassified=zero, leg=attached, mutation=ran fetch no verify partial"]
+  status = "done"
+  depends_on = ["t-13", "t-14"]
+
+[[task]]
+  id = "t-16"
+  wave = 7
+  title = "Record after-legs; gate flow cost"
+  files = [".dross/phases/prompt-partials/flow-cost.toml", ".dross/phases/prompt-partials/flow-cost-before.toml", "internal/cmd/flowcost_record_test.go"]
+  description = """
+`make install` at phase head. Rebuild t-1's fixtures and re-drive both scenarios identically. Merge [before]/[verify_before] into flow-cost.toml with
+[after]/[verify_after], loaded_bytes = prompt bytes + fetched partial bytes; delete flow-cost-before.toml. Extend flowCost with verify legs plus
+prompt_bytes, partial_fetches, verdict, fixture_tree; add checkPromptPartialsFlow and add prompt-partials to the required-phase list. Turns and
+wall-clock are recorded, not gated (user decision 2026-10-08)."""
+  covers = ["c-6", "c-4"]
+  test_contract = ["if the after prompt is over budget or not smaller, TestFlowCostRecords/prompt-partials fails: after.prompt_bytes > 15000, or after not below before", "if the common path fetched, the test fails: partial_fetches != 0 on [after] or [verify_after] (recorded as observed, never edited)", "if an after-leg ran `dross prompt partial`, the existing after-subset-of-before dross_calls gate fails", "if the verify after-leg didn't reach a clean attached pass, the test fails: [verify_after].verdict != pass or detached = true", "if legs aren't comparable, the test fails: [after].fixture_tree != [before].fixture_tree, or the same binary_version on both legs", "if the before file lingers, the test fails: flow-cost-before.toml still present", "if the before legs ran on edited prompts, the test fails: [before].prompt_bytes != 25853 or [verify_before].prompt_bytes != 25864", "if the before-legs ran on a binary with t-3 absorbed, TestFlowCostRecords/prompt-partials fails: [before].binary_version and [verify_before].binary_version must name the 3ee0fe71 base build"]
+  status = "done"
+  depends_on = ["t-1", "t-13", "t-15"]

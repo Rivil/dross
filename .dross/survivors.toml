@@ -4648,3 +4648,21 @@
   line = 287
   reason = "gremlins switch-case attribution ceiling: case condition sits in no go-cover block, so it reads NOT COVERED even though the case is exercised (see TestGoBuildFailed/TestVitestLoadError/TestGitignoreDirRefused)"
   accepted_in = "test-output-summaries"
+
+[[accepted]]
+  key = "9c3b14361e3d02b4"
+  file = "assets/partials.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case value == values[0]:"
+  line = 315
+  reason = "gremlins switch-case attribution ceiling: a bare switch{} case condition gets no go-cover block; the common-path rejection it guards is asserted by assets/partials_test.go TestCommonPathFetchesNothing (\"is the common path\")"
+  accepted_in = "prompt-partials"
+
+[[accepted]]
+  key = "642c11f3ced7acab"
+  file = "assets/partials.go"
+  op = "ARITHMETIC_BASE"
+  text = "return nil, fmt.Errorf(\"%s.md:%d: %w\", name, i+1, err)"
+  line = 195
+  reason = "line number inside Expand's missing-partial error message; unreachable for the embedded assets because CheckPartials (TestPartialRegistryRealAssets) rejects a missing partial first, and the value is diagnostic only"
+  accepted_in = "prompt-partials"

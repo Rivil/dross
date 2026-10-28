@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/BurntSushi/toml"
@@ -29,6 +30,12 @@ type flowLeg struct {
 	VerifyLegBytes      int `toml:"verify_leg_bytes"`
 	RuleShowRepeatBytes int `toml:"rule_show_repeat_bytes"`
 	LogReads            int `toml:"log_reads"`
+
+	PromptBytes    int    `toml:"prompt_bytes"`
+	PartialFetches int    `toml:"partial_fetches"`
+	Verdict        string `toml:"verdict"`
+	Detached       bool   `toml:"detached"`
+	FixtureTree    string `toml:"fixture_tree"`
 }
 
 // markerLive records the show-repeat marker observed in a real session: a
@@ -42,11 +49,13 @@ type markerLive struct {
 }
 
 type flowCost struct {
-	Scenario   map[string]any `toml:"scenario"`
-	Before     *flowLeg       `toml:"before"`
-	After      *flowLeg       `toml:"after"`
-	Control    *flowLeg       `toml:"control"`
-	MarkerLive *markerLive    `toml:"marker_live"`
+	Scenario     map[string]any `toml:"scenario"`
+	Before       *flowLeg       `toml:"before"`
+	After        *flowLeg       `toml:"after"`
+	VerifyBefore *flowLeg       `toml:"verify_before"`
+	VerifyAfter  *flowLeg       `toml:"verify_after"`
+	Control      *flowLeg       `toml:"control"`
+	MarkerLive   *markerLive    `toml:"marker_live"`
 }
 
 // TestFlowCostRecords guards milestone v1.8's c-6 record: every phase's
@@ -60,7 +69,9 @@ type flowCost struct {
 // checkpoint, while a below-threshold control kept continue. For
 // test-output-summaries (c-8) it pins the shrink: smaller green and verify
 // output, a red step that never opened the log, a repeat rule show under 300
-// bytes, and the marker live across /clear, /compact and a subagent.
+// bytes, and the marker live across /clear, /compact and a subagent. For
+// prompt-partials (c-6) it adds a verify pair under the same gates and pins
+// the base prompts' bytes, the budget and the zero-fetch common path.
 func TestFlowCostRecords(t *testing.T) {
 	root := filepath.Join(repoRootFromTest(t), RootDirName)
 	paths, err := filepath.Glob(filepath.Join(root, "phases", "*", "flow-cost.toml"))
@@ -81,48 +92,65 @@ func TestFlowCostRecords(t *testing.T) {
 					t.Errorf("[scenario] has no %s — the flow cannot be replayed identically", key)
 				}
 			}
-			for name, leg := range map[string]*flowLeg{"before": fc.Before, "after": fc.After} {
-				if leg == nil {
-					t.Errorf("[%s] is missing", name)
-					continue
-				}
-				if leg.AgentTurns <= 0 || leg.WallClockS <= 0 {
-					t.Errorf("[%s] agent_turns = %d, wall_clock_s = %v — not a measurement", name, leg.AgentTurns, leg.WallClockS)
-				}
-				if leg.BinaryVersion == "" || leg.SessionID == "" {
-					t.Errorf("[%s] lacks binary_version or session_id", name)
-				}
-				if len(leg.TurnTools) != leg.AgentTurns {
-					t.Errorf("[%s] turn_tools has %d entries for %d turns — a turn-count difference cannot be attributed", name, len(leg.TurnTools), leg.AgentTurns)
-				}
-				if len(leg.DrossCalls) == 0 {
-					t.Errorf("[%s] records no dross_calls — the round-trip gate has nothing to compare", name)
-				}
-			}
-			if fc.Before == nil || fc.After == nil {
+			if !checkLegPair(t, "before", fc.Before, "after", fc.After) {
 				return
-			}
-			for _, call := range fc.After.DrossCalls {
-				if !slices.Contains(fc.Before.DrossCalls, call) {
-					t.Errorf("the after leg runs %q, which the before leg did not — the change added a round-trip", call)
-				}
-			}
-			if fc.After.BinaryVersion == fc.Before.BinaryVersion {
-				t.Errorf("both legs ran on %q — the after leg did not measure the new binary", fc.After.BinaryVersion)
 			}
 			switch phase {
 			case "context-boundaries":
 				checkContextBoundariesFlow(t, fc)
 			case "test-output-summaries":
 				checkTestOutputSummariesFlow(t, fc, filepath.Dir(path))
+			case "prompt-partials":
+				checkPromptPartialsFlow(t, fc, filepath.Dir(path))
 			}
 		})
 	}
-	for _, want := range []string{"context-boundaries", "test-output-summaries"} {
+	for _, want := range []string{"context-boundaries", "test-output-summaries", "prompt-partials"} {
 		if !found[want] {
 			t.Errorf("%s has no flow-cost.toml — the c-8 record is missing", want)
 		}
 	}
+}
+
+// checkLegPair checks that both legs are complete measurements and that the
+// after leg ran a new binary with no dross call the before leg lacked. It
+// reports whether both legs exist, so a caller can stop short of nil legs.
+func checkLegPair(t *testing.T, beforeName string, before *flowLeg, afterName string, after *flowLeg) bool {
+	t.Helper()
+	for _, l := range []struct {
+		name string
+		leg  *flowLeg
+	}{{beforeName, before}, {afterName, after}} {
+		name, leg := l.name, l.leg
+		if leg == nil {
+			t.Errorf("[%s] is missing", name)
+			continue
+		}
+		if leg.AgentTurns <= 0 || leg.WallClockS <= 0 {
+			t.Errorf("[%s] agent_turns = %d, wall_clock_s = %v — not a measurement", name, leg.AgentTurns, leg.WallClockS)
+		}
+		if leg.BinaryVersion == "" || leg.SessionID == "" {
+			t.Errorf("[%s] lacks binary_version or session_id", name)
+		}
+		if len(leg.TurnTools) != leg.AgentTurns {
+			t.Errorf("[%s] turn_tools has %d entries for %d turns — a turn-count difference cannot be attributed", name, len(leg.TurnTools), leg.AgentTurns)
+		}
+		if len(leg.DrossCalls) == 0 {
+			t.Errorf("[%s] records no dross_calls — the round-trip gate has nothing to compare", name)
+		}
+	}
+	if before == nil || after == nil {
+		return false
+	}
+	for _, call := range after.DrossCalls {
+		if !slices.Contains(before.DrossCalls, call) {
+			t.Errorf("[%s] runs %q, which [%s] did not — the change added a round-trip", afterName, call, beforeName)
+		}
+	}
+	if after.BinaryVersion == before.BinaryVersion {
+		t.Errorf("[%s] and [%s] both ran on %q — the after leg did not measure the new binary", beforeName, afterName, after.BinaryVersion)
+	}
+	return true
 }
 
 func checkContextBoundariesFlow(t *testing.T, fc flowCost) {
@@ -174,5 +202,52 @@ func checkTestOutputSummariesFlow(t *testing.T, fc flowCost, dir string) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "flow-cost-before.toml")); err == nil {
 		t.Error("flow-cost-before.toml still exists — t-16 moves its [before] into flow-cost.toml and deletes it")
+	}
+}
+
+// promptPartialsBase is the build the before legs ran: the phase's base
+// commit, prompts unedited, before any of the phase's tasks landed.
+const promptPartialsBase = "commit 3ee0fe71"
+
+// checkPromptPartialsFlow pins prompt-partials' c-6 numbers: on the same
+// fixture trees, a pair execute task and an attached verify load base prompts
+// under the 15,000-byte cap and smaller than before, fetch no partial on the
+// common path, and the verify still reaches a clean pass. The before legs are
+// pinned to the unedited prompts on the base build, so they cannot drift.
+func checkPromptPartialsFlow(t *testing.T, fc flowCost, dir string) {
+	t.Helper()
+	if !checkLegPair(t, "verify_before", fc.VerifyBefore, "verify_after", fc.VerifyAfter) {
+		return
+	}
+	const budget = 15000
+	for _, p := range []struct {
+		before, after   string
+		b, a            *flowLeg
+		basePromptBytes int
+	}{
+		{"before", "after", fc.Before, fc.After, 25853},
+		{"verify_before", "verify_after", fc.VerifyBefore, fc.VerifyAfter, 25864},
+	} {
+		if p.b.PromptBytes != p.basePromptBytes {
+			t.Errorf("[%s] prompt_bytes = %d, want %d — the before leg did not load the unedited prompt", p.before, p.b.PromptBytes, p.basePromptBytes)
+		}
+		if !strings.Contains(p.b.BinaryVersion, promptPartialsBase) {
+			t.Errorf("[%s] ran on %q, want the %s base build", p.before, p.b.BinaryVersion, promptPartialsBase)
+		}
+		if p.a.PromptBytes <= 0 || p.a.PromptBytes > budget || p.a.PromptBytes >= p.b.PromptBytes {
+			t.Errorf("[%s] prompt_bytes = %d, [%s] %d; want measured, at most %d, and below before", p.after, p.a.PromptBytes, p.before, p.b.PromptBytes, budget)
+		}
+		if p.a.PartialFetches != 0 {
+			t.Errorf("[%s] partial_fetches = %d; the common path should fetch no partial", p.after, p.a.PartialFetches)
+		}
+		if p.a.FixtureTree == "" || p.a.FixtureTree != p.b.FixtureTree {
+			t.Errorf("[%s] fixture_tree = %q, [%s] %q — the legs did not start from the same tree", p.after, p.a.FixtureTree, p.before, p.b.FixtureTree)
+		}
+	}
+	if v := fc.VerifyAfter; v.Verdict != "pass" || v.Detached {
+		t.Errorf("[verify_after] verdict = %q, detached = %v; want an attached pass", v.Verdict, v.Detached)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "flow-cost-before.toml")); err == nil {
+		t.Error("flow-cost-before.toml still exists — t-16 moves its legs into flow-cost.toml and deletes it")
 	}
 }

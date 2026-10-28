@@ -1,12 +1,11 @@
 package cmd
 
 import (
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/assets"
 	"github.com/Rivil/dross/internal/gate"
 	"github.com/Rivil/dross/internal/review"
 	"github.com/Rivil/dross/internal/runsummary"
@@ -17,23 +16,49 @@ import (
 // of an instruction rather than its exact formatting.
 func executePromptContent(t *testing.T) string {
 	t.Helper()
-	root := repoRootFromTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "execute.md"))
-	if err != nil {
-		t.Fatalf("read execute.md: %v", err)
-	}
-	s := strings.ToLower(string(b))
-	return strings.NewReplacer("`", "", "*", "", "_", "").Replace(s)
+	return normalisePrompt(expandedPrompt(t, "execute.md"))
 }
 
 // TestExecutePromptWiresPhaseNumber proves pc-3's "the version patch digit uses
-// DisplayNumber" clause: the execute orchestration sets the patch digit from
-// `dross phase number` rather than counting by hand. Removing that wiring fails
-// this. (r-01: the prompt edit is only live after `make install`.)
+// DisplayNumber" clause: `dross execute begin`, which absorbed the prompt's
+// version step, sets the patch digit to what `dross phase number` prints for
+// the phase rather than counting by hand.
 func TestExecutePromptWiresPhaseNumber(t *testing.T) {
-	content := executePromptContent(t)
-	if !strings.Contains(content, "dross phase number") {
-		t.Error("execute.md must derive the version patch digit from `dross phase number`")
+	executeFixture(t)
+	writeBeginMilestone(t, repoDirHere(t), "v1.8", "a", "b", "p")
+	mustRunState(t, "current_milestone", "v1.8")
+	mustRunState(t, "version", "1.8.1.4")
+	var num string
+	if err := runCmdCapturing(t, &num, Phase(), "number", "p"); err != nil {
+		t.Fatal(err)
+	}
+	want := "1.8." + strings.TrimSpace(num) + ".0"
+	if want != "1.8.3.0" {
+		t.Fatalf("phase number p = %q, want 3 — the fixture's array is a, b, p", num)
+	}
+	out, err := beginOut(t, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "version: 1.8.1.4 -> "+want+"\n") {
+		t.Errorf("begin printed %q, want the patch from `dross phase number` (%s)", out, want)
+	}
+}
+
+// TestExecutePromptStaleBinaryStop: begin's version line is how the prompt
+// knows the binary absorbed the steps §0 no longer spells out, so §0 must say a
+// missing `version:` line is a stale binary to reinstall, not a skipped step.
+func TestExecutePromptStaleBinaryStop(t *testing.T) {
+	pre := strings.Join(strings.Fields(sectionOf(promptBody(t, "execute.md"), "## 0. Pre-flight", "## 1.")), " ")
+	for _, want := range []string{"No `version:` line means a stale binary", "stop", "`make install`"} {
+		if !strings.Contains(pre, want) {
+			t.Errorf("§0 lost the stale-binary stop: missing %q", want)
+		}
+	}
+	for _, gone := range []string{"dross state set version", "dross issue phase sync <id> --status in-progress"} {
+		if strings.Contains(pre, gone) {
+			t.Errorf("§0 still spells out %q, which `execute begin` now does", gone)
+		}
 	}
 }
 
@@ -209,6 +234,20 @@ func TestExecutePromptPullsBoardTaskMoves(t *testing.T) {
 			t.Errorf("execute.md must wire the inbound board task pull: missing %q", needle)
 		}
 	}
+	// The apply path is fetched only when begin's pull: line reports a move.
+	common, err := assets.Fetched(promptFS, "execute", assets.CommonPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := assets.CommonPath()
+	facts["board_pull"] = "reported"
+	reported, err := assets.Fetched(promptFS, "execute", facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contains(common, "board-moves") || !contains(reported, "board-moves") {
+		t.Errorf("board-moves fetched %v on the common path and %v on board_pull=reported; want only the latter", common, reported)
+	}
 }
 
 // TestExecutePromptOffersApproveLabel: the pair-approval gate records an
@@ -278,16 +317,24 @@ func TestExecutePromptLaneCommitRunsFullSuite(t *testing.T) {
 // soloReview is execute.md §1f, and the solo review block inside it.
 func soloReview(t *testing.T) (string, string) {
 	t.Helper()
-	f := sectionOf(promptBody(t, "execute.md"), "### 1f.", "### ")
-	if f == "" {
-		t.Fatal("execute.md has no §1f section")
-	}
+	f := expandedPrompt(t, "_execute.solo.md")
 	i := strings.Index(f, "**Solo review (`--solo` only).**")
 	j := strings.Index(f, "The commit gate checks this too")
 	if i < 0 || j < i {
-		t.Fatal("§1f has no solo review block")
+		t.Fatal("the solo partial has no solo review block")
 	}
 	return f, f[i:j]
+}
+
+// rawExecuteBase is execute.md without its partials, read through assets.FS:
+// the text every run loads, solo or pair.
+func rawExecuteBase(t *testing.T) string {
+	t.Helper()
+	b, err := assets.FS.ReadFile("prompts/execute.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
 
 func mustIdx(t *testing.T, s, sub string) int {
@@ -302,14 +349,19 @@ func mustIdx(t *testing.T, s, sub string) int {
 // TestExecuteSoloReviewPlacement (c-1): in a solo run the reviewer runs after
 // the full green `dross test` and before the commit; pair mode spawns none.
 func TestExecuteSoloReviewPlacement(t *testing.T) {
-	f, block := soloReview(t)
+	f := sectionOf(rawExecuteBase(t), "### 1f.", "### ")
 	test := bareDrossTestRE.FindStringIndex(f)
 	if test == nil {
 		t.Fatal("§1f lost its bare `dross test`")
 	}
-	ctx, spawn, status, add := mustIdx(t, f, "dross review context"), mustIdx(t, f, `subagent_type: "`+review.ReviewerAgent+`"`), mustIdx(t, f, "dross review status"), mustIdx(t, f, "git add <task.files>")
-	if !(test[0] < ctx && ctx < spawn && spawn < status && status < add) {
-		t.Errorf("solo review order: dross test %d, review context %d, spawn %d, review status %d, git add %d — want that order", test[0], ctx, spawn, status, add)
+	refetch, add := mustIdx(t, f, "**Re-fetch** if context was compacted: `dross prompt partial execute solo`"), mustIdx(t, f, "git add <task.files>")
+	if !(test[0] < refetch && refetch < add) {
+		t.Errorf("§1f order: dross test %d, solo re-fetch %d, git add %d — want that order", test[0], refetch, add)
+	}
+	_, block := soloReview(t)
+	run, ctx, spawn, status := mustIdx(t, block, "`dross test`"), mustIdx(t, block, "dross review context"), mustIdx(t, block, `subagent_type: "`+review.ReviewerAgent+`"`), mustIdx(t, block, "dross review status")
+	if !(run < ctx && ctx < spawn && spawn < status) {
+		t.Errorf("solo review order: dross test %d, review context %d, spawn %d, review status %d — want that order", run, ctx, spawn, status)
 	}
 	if !strings.Contains(block, "In **pair mode skip this entirely**: the human is the gate.") {
 		t.Error("the solo review block no longer says pair mode skips it")
@@ -317,6 +369,42 @@ func TestExecuteSoloReviewPlacement(t *testing.T) {
 	c := sectionOf(promptBody(t, "execute.md"), "### 1c.", "### ")
 	if strings.Contains(c, "dross review") || strings.Contains(c, review.ReviewerAgent) {
 		t.Error("§1c (the pair approval step) spawns or prepares the reviewer")
+	}
+}
+
+// TestExecuteSoloFetchedOnceAfterBegin (locked solo_branch): the solo partial
+// is fetched once per run, in §0, and the first fetch after the solo begin
+// fence is that one — so a pair run never pays for it.
+func TestExecuteSoloFetchedOnceAfterBegin(t *testing.T) {
+	base := rawExecuteBase(t)
+	fence := strings.Index(base, "dross execute begin <id> --solo\n")
+	loop := strings.Index(base, "## 1. Per-task loop")
+	if fence < 0 || loop < fence {
+		t.Fatal("execute.md lost the solo begin fence before the loop")
+	}
+	fenceLine := strings.Count(base[:fence], "\n") + 1
+	points, err := assets.FetchPoints(assets.FS, "execute.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var first *assets.FetchPoint
+	solo := 0
+	for i, p := range points {
+		if p.Partial == "solo" && !p.Refetch {
+			solo++
+		}
+		if first == nil && !p.Refetch && p.Line > fenceLine {
+			first = &points[i]
+		}
+	}
+	if first == nil || first.Partial != "solo" || first.Key != "mode" || first.Value != "solo" {
+		t.Errorf("first fetch after the solo begin fence is %+v, want `mode=solo` → solo", first)
+	}
+	if first != nil && first.Line > strings.Count(base[:loop], "\n") {
+		t.Errorf("the solo fetch (line %d) sits past §0", first.Line)
+	}
+	if solo != 1 {
+		t.Errorf("execute.md has %d When lines fetching solo, want exactly 1", solo)
 	}
 }
 
@@ -380,15 +468,15 @@ func TestExecuteNoCodeSkipsReview(t *testing.T) {
 // TestExecuteSoloRedStashes: the red-test solo path must stash before
 // marking failed — `failed` refuses while a solo task's code is uncommitted.
 func TestExecuteSoloRedStashes(t *testing.T) {
-	e := sectionOf(promptBody(t, "execute.md"), "### 1e.", "### ")
-	red := e[mustIdx(t, e, "**Red, solo mode**"):]
+	solo := expandedPrompt(t, "_execute.solo.md")
+	red := solo[mustIdx(t, solo, "**Red, solo mode**"):]
 	if mustIdx(t, red, "git stash push -u -- . ':(exclude).dross'") > mustIdx(t, red, "dross task status <phase> <task-id> failed") {
-		t.Error("§1e's solo red path marks failed before stashing")
+		t.Error("the solo red path marks failed before stashing")
 	}
 }
 
 func TestExecutePromptSoloBeginNeedsReviewer(t *testing.T) {
-	pre := sectionOf(promptBody(t, "execute.md"), "## 0. Pre-flight", "## 1.")
+	pre := sectionOf(rawExecuteBase(t), "## 0. Pre-flight", "## 1.")
 	if !strings.Contains(pre, "A `--solo` begin refuses unless the solo task reviewer") || !strings.Contains(pre, "`dross install`") {
 		t.Error("§0 no longer routes a refused solo begin to `dross install`")
 	}
@@ -397,11 +485,7 @@ func TestExecutePromptSoloBeginNeedsReviewer(t *testing.T) {
 // rawPrompt reads assets/prompts/<name> unnormalised.
 func rawPrompt(t *testing.T, name string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
+	return expandedPrompt(t, name)
 }
 
 // testStepSection is the text from the line starting with from up to the next line
@@ -469,5 +553,15 @@ func TestTestStepPromptsNotGrown(t *testing.T) {
 		if n := len(rawPrompt(t, name)); n > limit {
 			t.Errorf("%s is %d bytes, over its %d-byte base size", name, n, limit)
 		}
+	}
+}
+
+// TestExecuteAbsorbedProseDeleted: §0's version, sync and pull mechanics went
+// to `execute begin`, so they were deleted rather than moved — expanded
+// execute.md keeps that room for the fetch lines later splits add.
+func TestExecuteAbsorbedProseDeleted(t *testing.T) {
+	const limit = 25500
+	if n := len(rawPrompt(t, "execute.md")); n > limit {
+		t.Errorf("expanded execute.md is %d bytes, over %d — was absorbed §0 prose moved instead of deleted?", n, limit)
 	}
 }

@@ -654,7 +654,7 @@ func TestPhaseListPromptConsumersAreCurrent(t *testing.T) {
 		t.Error("spec.md's create flow should read the roadmap through `dross phase list --milestone`")
 	}
 
-	verify := readRepoFile(t, filepath.Join("assets", "prompts", "verify.md"))
+	verify := expandedPrompt(t, "verify.md")
 	// The claim was true of the bare listing and false of --milestone, which
 	// walks the whole roadmap including unscaffolded entries.
 	if strings.Contains(verify, "It is a directory listing — it prints only phases") {

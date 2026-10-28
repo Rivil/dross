@@ -13,13 +13,7 @@ import (
 // test the presence of a rule, not its exact formatting.
 func promptContent(t *testing.T, name string) string {
 	t.Helper()
-	root := repoRootFromTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", name))
-	if err != nil {
-		t.Fatalf("read %s: %v", name, err)
-	}
-	s := strings.ToLower(string(b))
-	return strings.NewReplacer("`", "", "*", "", "_", "").Replace(s)
+	return normalisePrompt(expandedPrompt(t, name))
 }
 
 // shipPromptContent is promptContent pinned to ship.md, the prompt most of this

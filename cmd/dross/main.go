@@ -36,6 +36,7 @@ func newRoot() *cobra.Command {
 		cmd.Mutation(),
 		cmd.Rule(),
 		cmd.Interaction(),
+		cmd.Prompt(),
 		cmd.Validate(),
 		cmd.Phase(),
 		cmd.Checkout(),
