@@ -66,6 +66,7 @@
   locked = true
 
 [[deferred]]
+  id = "b165077ad5b1be4c"
   text = "Counting/failure parsers for gradle (Kotlin/Java), `dart test` and pytest; until then those repos get c-4's tail fallback."
   why = "parser_coverage: no live repo to prove them against in this phase"
   target = "test-summary-parsers"
