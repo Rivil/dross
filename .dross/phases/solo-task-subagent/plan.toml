@@ -160,4 +160,4 @@ task). Recovery partial: a writer record still launched on resume → stash + fa
     "if the recovery partial lacks the writer-in-flight arm (stash + failed), TestRecoveryWriterInFlight fails",
     "if execute.md changes or exceeds its byte budget, TestPromptByteBudget fails",
   ]
-  status = "pending"
+  status = "done"

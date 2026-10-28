@@ -150,6 +150,24 @@
           "what": "fences the writer to its task files and read-only commands, refuses zombie writers, and keeps the main loop off a writer-owned task"
         }
       ]
+    },
+    "t-9": {
+      "files": [
+        "assets/prompts/_execute.solo.md",
+        "assets/prompts/_execute.recovery.md",
+        "internal/cmd/execute_prompt_test.go",
+        "internal/cmd/quick_prompt_test.go"
+      ],
+      "commit": "25814efc",
+      "completed_at": "2026-10-28T14:50:26.418958Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer",
+          "symbol": "_execute.solo.md Writer dispatch",
+          "loc": "assets/prompts/_execute.solo.md:7",
+          "what": "solo runs ask dross task dispatch and hand large tasks to a background writer, keeping test/review/commit in the main loop"
+        }
+      ]
     }
   },
   "reviews": {
@@ -389,6 +407,34 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "`git -c alias.x='!…' \u003cread-sub\u003e` and `git -c core.pager=…` with an allowed read subcommand can run arbitrary commands. Low risk, but the fence doesn't account for them.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "_execute.recovery.md is fetched on preflight=recovery in pair runs too, so pair mode now loads the writer-in-flight arm (more bytes, though a launched writer.json cannot exist without --solo). TestPairPromptHasNoWriter passes only because the arm avoids the literal 'dross-task-writer' / 'task dispatch' strings; it does not literally prove c-4's byte-for-byte pair behaviour.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The TestPromptByteBudget contract line ('if execute.md changes') is only enforced as a size cap; a small edit to execute.md that stays under budget would not fail it. Nothing in this diff edits execute.md.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "All the prompt tests check for exact phrases, so rewording the prose will break them even if the meaning is kept. That is the house style in execute_prompt_test.go.",
           "resolution": "non-blocking, left"
         }
       ]
