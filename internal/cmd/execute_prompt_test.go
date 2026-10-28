@@ -565,3 +565,147 @@ func TestExecuteAbsorbedProseDeleted(t *testing.T) {
 		t.Errorf("expanded execute.md is %d bytes, over %d — was absorbed §0 prose moved instead of deleted?", n, limit)
 	}
 }
+
+// soloWriterBranch is the solo partial's writer dispatch block: from its
+// lead-in up to the solo red path.
+func soloWriterBranch(t *testing.T) string {
+	t.Helper()
+	solo := expandedPrompt(t, "_execute.solo.md")
+	i := strings.Index(solo, "**Writer dispatch (`--solo` only).**")
+	j := strings.Index(solo, "**Red, solo mode**")
+	if i < 0 || j < i {
+		t.Fatal("the solo partial has no writer dispatch block before its red path")
+	}
+	return solo[i:j]
+}
+
+// TestSoloWriterDispatch (c-2): the main loop asks `dross task dispatch` before
+// it spawns anything, and spawns the writer with the printed prompt verbatim,
+// in the background.
+func TestSoloWriterDispatch(t *testing.T) {
+	w := soloWriterBranch(t)
+	dispatch, spawn := mustIdx(t, w, "dross task dispatch <phase> <task-id>"), mustIdx(t, w, "the printed `subagent_type`")
+	if dispatch > spawn {
+		t.Errorf("the writer is spawned (%d) before `dross task dispatch` runs (%d)", spawn, dispatch)
+	}
+	for _, want := range []string{"`dispatch: inline (…)` → §1b–§1e as written", "the printed `prompt:` line **verbatim** as the whole prompt", "`run_in_background: true`", "no `model`", "**Wait for its completion notice**"} {
+		if !strings.Contains(w, want) {
+			t.Errorf("the writer branch lost %q", want)
+		}
+	}
+}
+
+// TestSoloWriterGatesStayInMainLoop (c-3): a green writer is followed, in the
+// main loop and in order, by the bare suite, the cold review and the commit;
+// its own green is never the gate.
+func TestSoloWriterGatesStayInMainLoop(t *testing.T) {
+	w := soloWriterBranch(t)
+	green := w[mustIdx(t, w, "- `test: green`"):mustIdx(t, w, "**Writer failed**")]
+	test, ctx, commit := mustIdx(t, green, "bare `dross test`"), mustIdx(t, green, "`dross review context`"), mustIdx(t, green, "the commit")
+	if !(test < ctx && ctx < commit) {
+		t.Errorf("writer-green order: dross test %d, review context %d, commit %d — want that order", test, ctx, commit)
+	}
+	for _, want := range []string{"§1f in the main loop", "The writer's green certifies nothing."} {
+		if !strings.Contains(green, want) {
+			t.Errorf("the writer-green arm lost %q", want)
+		}
+	}
+}
+
+// TestSoloWriterReportOnly (c-2): the main loop reads the writer's report and
+// nothing else — no task file, no diff, none of the inline steps.
+func TestSoloWriterReportOnly(t *testing.T) {
+	w := soloWriterBranch(t)
+	for _, want := range []string{"skip §1b–§1e", "read only its `dross-writer-report` block", "never Read the task's files, never `git diff`"} {
+		if !strings.Contains(w, want) {
+			t.Errorf("the writer branch lost %q", want)
+		}
+	}
+	writer := w[mustIdx(t, w, "- `dispatch: writer`"):]
+	// What is left once the allowed, negated mentions are cut must never send
+	// the main loop into the code.
+	rest := strings.NewReplacer("skip §1b–§1e", "", "never Read the task's files, never `git diff`", "").Replace(writer)
+	for _, gone := range []string{"git diff", "Read the task", "task.files", "§1b", "§1d"} {
+		if strings.Contains(rest, gone) {
+			t.Errorf("the writer branch sends the main loop to %q", gone)
+		}
+	}
+}
+
+// TestSoloWriterFailurePath (c-5): every way a writer fails — spawn error, red,
+// no report, a red suite after it, a failed fix round — fails the task by
+// stashing and then marking it failed with a writer reason; none is fixed
+// inline.
+func TestSoloWriterFailurePath(t *testing.T) {
+	w := soloWriterBranch(t)
+	fail := w[mustIdx(t, w, "**Writer failed**"):mustIdx(t, w, "- A `blocked` review")]
+	for _, want := range []string{"the spawn errored", "the report says `test: red`", "there is no report", "the bare `dross test` after it is red", "never fix it inline"} {
+		if !strings.Contains(fail, want) {
+			t.Errorf("the writer failure arm lost %q", want)
+		}
+	}
+	stash, failed, next := mustIdx(t, fail, "git stash push -u -- . ':(exclude).dross'"), mustIdx(t, fail, `dross task status <phase> <task-id> failed --reason "writer: `), mustIdx(t, fail, "dross task next <phase>")
+	if !(stash < failed && failed < next) {
+		t.Errorf("writer failure order: stash %d, failed %d, task next %d — want that order", stash, failed, next)
+	}
+	round := w[mustIdx(t, w, "- A `blocked` review"):]
+	for _, want := range []string{"goes to the same writer, never inline", "load `SendMessage` via ToolSearch", "SendMessage unavailable, a red report or no reply → **Writer failed**"} {
+		if !strings.Contains(round, want) {
+			t.Errorf("the writer fix round lost %q", want)
+		}
+	}
+	for _, inline := range []string{"one bounded fix", "fix here", "Edit pass"} {
+		if strings.Contains(w, inline) {
+			t.Errorf("the writer branch offers an inline fix: %q", inline)
+		}
+	}
+}
+
+// TestPairPromptHasNoWriter (c-4): pair mode never meets the writer — not in
+// base execute.md, not in any partial a pair run can fetch.
+func TestPairPromptHasNoWriter(t *testing.T) {
+	texts := map[string]string{"execute.md": rawExecuteBase(t)}
+	points, err := assets.FetchPoints(promptFS, "execute.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair := 0
+	for _, p := range points {
+		if p.Refetch || (p.Key == "mode" && p.Value != "pair") {
+			continue
+		}
+		b, err := assets.Partial(promptFS, "execute", p.Partial)
+		if err != nil {
+			t.Fatal(err)
+		}
+		texts["_execute."+p.Partial+".md"] = string(b)
+		pair++
+	}
+	if pair == 0 {
+		t.Fatal("no execute partial is reachable in pair mode — the check went vacuous")
+	}
+	for name, s := range texts {
+		for _, gone := range []string{review.WriterAgent, "task dispatch"} {
+			if strings.Contains(s, gone) {
+				t.Errorf("%s, loaded in pair mode, mentions %q", name, gone)
+			}
+		}
+	}
+}
+
+// TestRecoveryWriterInFlight (c-5): a resumed run whose task still has a
+// launched writer fails it — stash, then failed — and never takes it over.
+func TestRecoveryWriterInFlight(t *testing.T) {
+	r := expandedPrompt(t, "_execute.recovery.md")
+	arm := r[mustIdx(t, r, "- **A writer still in flight**"):]
+	arm = arm[:mustIdx(t, arm, "- **Dirty tree**")]
+	for _, want := range []string{".dross/gate/writer.json", `"state": "launched"`, "Never resume the task inline"} {
+		if !strings.Contains(arm, want) {
+			t.Errorf("the writer-in-flight arm lost %q", want)
+		}
+	}
+	stash, failed := mustIdx(t, arm, "git stash push -u -- . ':(exclude).dross'"), mustIdx(t, arm, `dross task status <phase> <task-id> failed --reason "writer: `)
+	if stash > failed {
+		t.Error("the writer-in-flight arm marks failed before stashing")
+	}
+}

@@ -4,6 +4,21 @@ Solo run: these replace the pair-mode pauses for the whole run.
 
 **§1c, solo** → skip the approval pause and proceed directly. Note "solo: yes" in the commit body: no user approved it.
 
+**Writer dispatch (`--solo` only).** After §1a, before §1b, ask dross whether the task's code goes to a writer:
+```
+dross task dispatch <phase> <task-id>
+```
+- `dispatch: inline (…)` → §1b–§1e as written.
+- `dispatch: writer` → skip §1b–§1e. Spawn with the Agent tool: the printed `subagent_type`, the printed `prompt:` line **verbatim** as the whole prompt, `run_in_background: true`, no `model`. **Wait for its completion notice**, then read only its `dross-writer-report` block: never Read the task's files, never `git diff` — the review reads the code.
+  - `test: green` → §1f in the main loop, in order: bare `dross test`, then `dross review context` and the reviewer, then the commit. The writer's green certifies nothing.
+  - **Writer failed** — the spawn errored, the report says `test: red`, there is no report, or the bare `dross test` after it is red → the task fails; never fix it inline. Set its code aside first:
+    ```
+    git stash push -u -- . ':(exclude).dross'
+    dross task status <phase> <task-id> failed --reason "writer: <the error, the red test, or no report>"
+    dross task next <phase>
+    ```
+  - A `blocked` review's one fix round goes to the same writer, never inline: load `SendMessage` via ToolSearch and send the writer's agent the blocking findings. Wait for its reply and read only its new report. SendMessage unavailable, a red report or no reply → **Writer failed**; green → re-run bare `dross test`, then `dross review context` and the reviewer, as the `blocked` branch below says.
+
 **Red, solo mode** (§1e) → try one bounded fix (max one Edit pass). If still red, set the task's code aside **first**, then mark it failed and continue — `failed` refuses while a solo task's code is uncommitted:
 ```
 git stash push -u -- . ':(exclude).dross'
