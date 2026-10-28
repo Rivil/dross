@@ -1760,82 +1760,82 @@
     "prompt-partials/t-1": {
       "issue": "DRO-1001",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-10": {
       "issue": "DRO-1000",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-11": {
       "issue": "DRO-1002",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-12": {
       "issue": "DRO-1004",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-13": {
       "issue": "DRO-1005",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-14": {
       "issue": "DRO-1006",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-15": {
       "issue": "DRO-1007",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-16": {
       "issue": "DRO-1008",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-2": {
       "issue": "DRO-993",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-3": {
       "issue": "DRO-994",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-4": {
       "issue": "DRO-999",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-5": {
       "issue": "DRO-995",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-6": {
       "issue": "DRO-996",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-7": {
       "issue": "DRO-997",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-8": {
       "issue": "DRO-998",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "prompt-partials/t-9": {
       "issue": "DRO-1003",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "push-gates-on-origin/t-1": {
       "issue": "DRO-393",
