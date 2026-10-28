@@ -21,11 +21,14 @@ import (
 // fix round) marks it launched again, and its SubagentStop marks it stopped
 // and clears green.json — the writer's own `dross test` green is never the
 // green a commit is gated on (c-3). Events of any other agent change nothing.
+//
+// The same gate fences the hand-off itself (writerfence.go): the writer's own
+// calls, and the main loop's on a writer-owned task.
 func init() {
 	Register(Gate{
 		Name: "solo-writer", Scope: Workflow, Liftable: true,
-		Claims: isWriterSpawn,
-		Judge:  judgeWriterSpawn,
+		Claims: claimsSoloWriter,
+		Judge:  judgeSoloWriter,
 	})
 	RegisterRecorder(Recorder{
 		Name: "solo-writer", Scope: Workflow,
