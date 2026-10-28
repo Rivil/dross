@@ -2,5 +2,378 @@
   "phase": "solo-task-subagent",
   "base": "milestone/v1.8",
   "base_commit": "a2ed95678a75782427dc3b7184ed013e6a88c601",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/gate/testdata/writer_pre_edit.json",
+        "internal/gate/testdata/writer_pre_bash.json",
+        "internal/gate/testdata/writer_spawn_pre.json",
+        "internal/gate/testdata/writer_subagent_stop.json",
+        "internal/gate/testdata/writer_resume_post.json",
+        "internal/gate/testdata/main_pre_edit.json",
+        "internal/gate/fixture_test.go"
+      ],
+      "commit": "d7cae885",
+      "completed_at": "2026-10-28T12:11:30.005743Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer",
+          "symbol": "TestCapturedWriterPreToolUse",
+          "loc": "internal/gate/fixture_test.go:340",
+          "what": "pins captured writer hook payloads: subagent calls carry agent_type+agent_id, main loop none, resume keeps agent_id"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        ".dross/phases/solo-task-subagent/kill-switch.toml",
+        "internal/cmd/killswitch_record_test.go"
+      ],
+      "commit": "09b411f9",
+      "completed_at": "2026-10-28T12:22:58.332685Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer",
+          "symbol": "TestThresholdCalibrated",
+          "loc": "internal/cmd/killswitch_record_test.go:126",
+          "what": "kill-switch.toml baseline of 86 v1.7 solo task rows and the 40,000-byte writer size gate it calibrates"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "assets/agents/dross-task-writer.md",
+        "internal/review/writer.go",
+        "internal/review/writer_test.go",
+        "internal/cmd/install_agent_test.go"
+      ],
+      "commit": "bb27c7fb",
+      "completed_at": "2026-10-28T12:26:19.473651Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer",
+          "symbol": "WriterPromptLine",
+          "loc": "internal/review/writer.go:15",
+          "what": "dross-task-writer agent definition (edit task files, scoped tests, bounded dross-writer-report) and its one-line spawn prompt"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/rules/rules.go",
+        "internal/rules/rules_test.go",
+        "docs/subagent-offload-audit.md",
+        "internal/cmd/subagent_offload_audit_test.go"
+      ],
+      "commit": "9dc7e752",
+      "completed_at": "2026-10-28T12:29:09.77578Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer",
+          "symbol": "dross-agent-gate",
+          "loc": "internal/rules/rules.go:131",
+          "what": "builtin agent-gate lets one dross-task-writer per task edit under /dross-execute --solo only; quick excluded"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/gatestate/store.go",
+        "internal/gatestate/store_test.go",
+        "internal/gate/override.go",
+        "internal/gate/override_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/cmd/task.go",
+        "internal/cmd/task_writer_record_test.go",
+        "internal/secretscan/writers.go"
+      ],
+      "commit": "1346cadb",
+      "completed_at": "2026-10-28T12:36:01.057477Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer",
+          "symbol": "gatestate.Writer",
+          "loc": "internal/gatestate/store.go:129",
+          "what": "machine-local .dross/gate/writer.json record (task, agent id, launched/stopped) under tamper-guard; a pending reset clears it"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/gate/writer.go",
+        "internal/gate/writer_test.go",
+        "README.md",
+        "internal/cmd/gate_override_test.go"
+      ],
+      "commit": "38d4be3c",
+      "completed_at": "2026-10-28T12:59:10.439632Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer",
+          "symbol": "judgeWriterSpawn",
+          "loc": "internal/gate/writer.go:78",
+          "what": "solo-writer gate admits one background writer per solo execute task with its exact prompt line; recorder binds launch, marks stops and clears green"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/gate/writer.go",
+        "internal/gate/writerfence.go",
+        "internal/gate/writerfence_test.go"
+      ],
+      "commit": "831b2890",
+      "completed_at": "2026-10-28T13:37:07.02997Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer",
+          "symbol": "judgeSoloWriter",
+          "loc": "internal/gate/writerfence.go:62",
+          "what": "fences the writer to its task files and read-only commands, refuses zombie writers, and keeps the main loop off a writer-owned task"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "writer_resume_post.json holds a SubagentStop, not a PostToolUse; the name comes from the task record, but it may mislead later readers",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In the capture (headless, permission_mode acceptEdits) the writer's Bash was denied, so both writer reports say 'test: not run'. PreToolUse still fired, so the go/no-go holds. A real solo writer needs Bash to run tests, or every writer report comes back not-green; worth checking before t-8/t-9 rely on it",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "No canary or isolation test covers the writer fixtures the way TestCapturedStopIsolation covers the reviewer stop. The description's grep for CLAUDE.md lines is a manual step that this diff cannot show was done",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestKillSwitchCopiesNoContent accepts the allowed key names (method, filter, status, phase, task) at any depth, so transcript text stored under one of those names inside a [[before.task]] row or any other table would still pass. Tying each allowed key to the table it belongs in would close that gap.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-6",
+          "text": "kill-switch.toml is excluded from the review diff as .dross/ bookkeeping, so its rows, jq filter and calibration values (provisional 50,000 bytes) could not be checked here. The five tests are the only guard on its content.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "v17SoloPhases hardcodes five phases as the solo-task-review to review-comment-ingest range. If a v1.7 solo phase is missing from the list, the baseline check will not catch it.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestWriterDefinitionShape's banned-tool loop can never fire independently: the exact slices.Equal against the six-tool list already rejects any addition",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the frontmatter parser in writerDef skips indented lines, so a YAML block-list tools: value parses as empty; the test still fails in that case (Fatal on empty tools), so coverage holds",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the body's 'If the suite is red' means the scoped `dross test --files` run, not the full suite, which the same section forbids; the wording could be tightened to 'scoped tests'",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "TestAgentGatePairSentenceStable matches the pair text followed by a space, so it depends on the exception sentence (or something) following the pair text. If the amendment were removed, the pair-stability test would also fail, even though the pair text itself would be unchanged.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The existing line in the audit doc's execute section, 'implementation, edits and commits stay in the main loop', is now qualified only by the next paragraph ('Under --solo ... goes further'). It reads correctly, but a reader skimming only that sentence could miss the solo exception.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "releaseTaskWriter clears writer.json before plan.Save; if the plan save then fails, the record is gone while the task is not pending, so the zombie-writer fence is lost for a task that was never actually reset. Clearing after a successful Save would close this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A corrupt or tracked writer.json makes every `task status ... pending` fail, even for tasks the record does not name, because LoadWriter's error is returned before the phase/task comparison. This fails closed, which fits the guard's intent, but it blocks unrelated resets until the file is repaired.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The tamper-guard doc comment in internal/gate/override.go now has one line well past the surrounding wrap width.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "judgeWriterSpawn and the launch recorder compare strings.TrimSpace(prompt) to WriterPromptLine, so leading or trailing whitespace is admitted despite the 'exactly' wording; this is harmless, and appended text is still refused as the contract requires",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the recorder also re-arms the record to launched on a SendMessage to the bound agent, which the task description does not mention; TestWriterStopClearsGreen and TestWriterStopIgnoresUnbound cover it, so it is tested, not dead",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "writerTask's last reason, 'HEAD is not on phase/\u003cid\u003e', is reached by ruling out the other causes rather than by checking the branch itself; it is correct for every path ArmedScope currently has, but a new nil-return cause added to ArmedScope later would be misreported as off-branch",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "writerCommandRefusal admits `dross task …`/`dross rule …` whenever any arg equals \"show\" (slices.Contains(args, \"show\")), so `dross task status p t-1 failed --reason show` passes the writer fence and sets task status; check the verb right after task/rule instead",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "solo-writer is Workflow-scoped and the root comes from the file's directory, so a writer Edit/Write to a path outside any dross repo (e.g. under ~/.claude) gets root \"\" and is let through before judgeWriterEdit runs; the intended 'not one of the task's files' refusal never fires and no test covers it",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "judgeMainLoop does not refuse a partially-read script while the writer is launched, so a main-loop `sh -c 'git commit -m x'` or `eval \"dross test\"` gets past the wait-for-completion fence; the writer side fails closed on the same input",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "the gate now claims every main-loop Bash/Edit call; any load error (damaged writer.json/execute.json, or ArmedScope's ambiguous multiple-in-progress error while a writer record exists) refuses all of them, including the commands that would repair state, until a human lifts the gate",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "tests use the captured writer/main-loop fixtures and run only the solo-writer gate, so admits/refusals are attributable to this fence; TestNoInlineTakeover covers both launched and stopped states",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "The writer's Bash fence blocks a list of known commands and lets everything else through. Wrapper commands get past it. shellscan only unwraps env/command/sudo/nohup/time, and it deliberately leaves `env -S` as written, so `env -S 'git commit -m x'`, `timeout 5 git commit -m x`, `nice git commit -m x` and `stdbuf -o0 git commit` all reach a program name the fence doesn't list and are admitted. So are interpreters and build tools that can run anything (`python3 -c`, `perl -e` without -i, `awk 'BEGIN{system(...)}'`, `make`). Adding env/timeout/nice/stdbuf to writerOpaque would close the cheapest of these.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "claimsSoloWriter claims every Bash, Edit and Write the main loop makes. When a solo writer record exists, any load error is returned to the engine: a damaged writer.json, an undecodable plan.toml, or ArmedScope's ambiguous-tasks error. If the engine refuses on judge errors (fail closed), that also blocks the escape route this task promises always passes: the stash and `dross task status … failed`. The gate can be lifted, so a human can recover.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "The inline-takeover fence covers only the Edit and Write family of tools. The main loop can still change a writer-owned task's code through Bash, for example `sed -i … a.go`, `cp`, `echo \u003e a.go` or `git checkout -- a.go`. That is within what the description claims, but it leaves an easy way round c-5.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Two checks find the dross verb differently. The main-loop wait check reads args[0] (`args[0] == \"test\"`, `args[1] == \"context\"`). The writer check takes the first word that isn't a flag. If dross ever accepts a global flag before the verb, `dross --flag test` would get past the main-loop wait.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "`git -c alias.x='!…' \u003cread-sub\u003e` and `git -c core.pager=…` with an allowed read subcommand can run arbitrary commands. Low risk, but the fence doesn't account for them.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
 }
