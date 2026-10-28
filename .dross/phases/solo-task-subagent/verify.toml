@@ -1,0 +1,179 @@
+[verify]
+  phase = "solo-task-subagent"
+  generated_at = 2026-10-28T18:20:32.53333Z
+  verdict = "fail"
+  finalized = true
+  finalized_at = 2026-10-28T19:45:39.596102Z
+  measured_commit = "8f6bbcb2e5c7af49627414104a91cbf51fe4c0e0"
+  measured_tree = "40f9b96f4ac5bd5466f1d3b0038499fb71a5ae15"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.8265060240963855
+  mutants_killed = 343
+  mutants_survived = 72
+  mutants_not_covered = 72
+  mutants_no_block = 53
+  mutants_test_gap = 19
+  mutants_in_scope = 415
+  unclassified_in_scope = 17
+  criteria_total = 6
+  criteria_covered = 4
+  criteria_uncovered = 2
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 343
+    survived = 72
+    timeout = 0
+    in_scope = 415
+    score = 0.8265060240963855
+    file_count = 24
+    measured_on = "helicon"
+    whole_file = ["internal/cmd/execute_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/gate_override_test.go — adapter-lacks-range-runner", "internal/cmd/install_agent_test.go — adapter-lacks-range-runner", "internal/cmd/killswitch_record_test.go — adapter-lacks-range-runner", "internal/cmd/quick_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/subagent_offload_audit_test.go — adapter-lacks-range-runner", "internal/cmd/task.go — adapter-lacks-range-runner", "internal/cmd/task_dispatch.go — adapter-lacks-range-runner", "internal/cmd/task_dispatch_test.go — adapter-lacks-range-runner", "internal/cmd/task_writer_record_test.go — adapter-lacks-range-runner", "internal/gate/fixture_test.go — adapter-lacks-range-runner", "internal/gate/override.go — adapter-lacks-range-runner", "internal/gate/override_test.go — adapter-lacks-range-runner", "internal/gate/writer.go — adapter-lacks-range-runner", "internal/gate/writer_test.go — adapter-lacks-range-runner", "internal/gate/writerfence.go — adapter-lacks-range-runner", "internal/gate/writerfence_test.go — adapter-lacks-range-runner", "internal/gatestate/store.go — adapter-lacks-range-runner", "internal/gatestate/store_test.go — adapter-lacks-range-runner", "internal/review/writer.go — adapter-lacks-range-runner", "internal/review/writer_test.go — adapter-lacks-range-runner", "internal/rules/rules.go — adapter-lacks-range-runner", "internal/rules/rules_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "weak"
+  tests = ["internal/rules/rules_test.go:TestAgentGateAllowsSoloWriter", "internal/review/writer_test.go:TestWriterNeverCommitsOrDecides", "internal/gate/writer_test.go:TestOneWriterPerTask", "internal/gate/writerfence_test.go:TestWriterBashAllowlist", "internal/gate/writerfence_test.go:TestWriterEditScope"]
+  notes = "Rule text, agent definition and one-writer-per-task are pinned, but the fence that enforces 'never commits' has untested arms: writer Agent/Task spawn (writerfence.go:118), partial-script refusal (:183), sed -i/perl -i (:235), find -exec (:237-238) all survive in TestWriterBashAllowlist's path; wrapper programs (timeout/nice/stdbuf/env -S) bypass it. -> t-10, t-11"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/task_dispatch_test.go:TestDispatchSizeGate", "internal/gate/writer_test.go:TestWriterSpawnBoundToArmedTask", "internal/cmd/execute_prompt_test.go:TestSoloWriterReportOnly", "internal/review/writer_test.go:TestWriterReportBounded"]
+  notes = "Size gate boundary, exact prompt-line binding, report-only main loop and bounded report shape each fail on breakage; task_dispatch.go:89 survivor is a case-line attribution ceiling (accepted), the arm is driven by TestDispatchSizeGate."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/gate/writer_test.go:TestWriterStopClearsGreen", "internal/gate/writerfence_test.go:TestMainLoopWaitsForWriter", "internal/cmd/execute_prompt_test.go:TestSoloWriterGatesStayInMainLoop"]
+  notes = "Writer green is cleared on its SubagentStop, main-loop dross test/review context/git commit refused while launched, prompt orders bare test -> reviewer -> commit. Survivors at writerfence.go:320-327 are case-line ceiling (arms tested). Wrapper bypass of the wait fence is a FLAG (t-11)."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/gate/writer_test.go:TestWriterSpawnRefusedOutsideSolo", "internal/cmd/task_dispatch_test.go:TestDispatchRefusesOutsideSolo", "internal/gate/writerfence_test.go:TestFenceSilentUnarmed", "internal/gate/writer_test.go:TestWriterRecorderPairSilent", "internal/cmd/execute_prompt_test.go:TestPairPromptHasNoWriter"]
+  notes = "Spawn, dispatch, fence and recorder are each refused/silent outside solo; pair prompts carry no writer text. writer.go:69-75 survivors are case-line ceiling with every refusal reason driven by TestWriterSpawnRefusedOutsideSolo."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/execute_prompt_test.go:TestSoloWriterFailurePath", "internal/gate/writerfence_test.go:TestNoInlineTakeover", "internal/gate/writerfence_test.go:TestZombieWriterFenced", "internal/cmd/execute_prompt_test.go:TestRecoveryWriterInFlight", "internal/cmd/task_writer_record_test.go:TestWriterRecordClearedOnRetry"]
+  notes = "Every failure arm routes to stash + failed, inline Edit/Write takeover refused, zombie writer fenced, recovery arm present. Bash-route takeover, record-cleared-before-Save and escape-route deadlock are FLAGs (t-11, t-12)."
+
+[[criterion]]
+  id = "c-6"
+  status = "weak"
+  tests = ["internal/cmd/task_dispatch_test.go:TestCompareThresholds", "internal/cmd/task_dispatch_test.go:TestCompareUsesAboveGateMedians", "internal/cmd/task_dispatch_test.go:TestKillSwitchVerdictHolds", "internal/cmd/killswitch_record_test.go:TestKillSwitchBaselineRecorded"]
+  notes = "Thresholds, medians-over-above-gate and writerEnabled==Compare.Pass are pinned, but the even-count median (task_dispatch.go:190, 6 survivors) is never run though the real [before] leg has 48 above-gate rows; and nothing triggers recording [after], so the switch never decides. -> t-10, t-13"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/task_dispatch.go:190 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/task_dispatch.go:190 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/task_dispatch.go:190 (INVERT_NEGATIVES)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/task_dispatch.go:190 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/task_dispatch.go:190 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/task_dispatch.go:190 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/writerfence.go:118 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/writerfence.go:118 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/writerfence.go:183 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/writerfence.go:183 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/writerfence.go:235 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/writerfence.go:235 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/writerfence.go:237 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/writerfence.go:238 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/writerfence.go:238 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/writerfence.go:238 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/writerfence.go:238 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-1/c-3: writer and main-loop wait fences admit wrapper programs shellscan does not unwrap (timeout 5 git commit, nice, stdbuf, env -S) -> t-11"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-1: a writer Edit/Write whose path resolves to no repo root (root \"\") skips judgeWriterEdit -> t-11"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-5: inline-takeover fence covers Edit/Write only; main-loop Bash (sed -i, cp, >, git checkout --) can still change a writer-owned task's files -> t-11"
+
+[[finding]]
+  severity = "FLAG"
+  text = "a load error (corrupt writer.json/execute.json, ambiguous ArmedScope) refuses every main-loop Bash/Edit, including the stash and task status failed escape route -> t-11"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-5: releaseTaskWriter clears writer.json before plan.Save; a failed save drops the zombie fence -> t-12"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-6: nothing prompts recording kill-switch.toml [after]; writerEnabled ships true and stays true -> t-13"
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-4: _execute.recovery.md is fetched in pair runs too and gained the 5-line writer-in-flight arm; it cannot fire without a solo writer record, so pair behaviour is unchanged but pair prompt bytes are not"
+
+[[finding]]
+  severity = "NOTE"
+  text = "41 in-diff survivors (35 keys) accepted: switch-case / multi-line-if condition lines whose arms the named tests drive (gremlins-attribution-ceiling)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "t-2 review FLAG: TestKillSwitchCopiesNoContent allows the declared string keys at any depth; low risk, left"
+
+[[finding]]
+  severity = "NOTE"
+  text = "verify run collected from helicon r-20261028-152340: score 0.83 over 415 in-scope mutants, 0.95 over the 362 reachable"

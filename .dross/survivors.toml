@@ -4666,3 +4666,318 @@
   line = 195
   reason = "line number inside Expand's missing-partial error message; unreachable for the embedded assets because CheckPartials (TestPartialRegistryRealAssets) rejects a missing partial first, and the value is diagnostic only"
   accepted_in = "prompt-partials"
+
+[[accepted]]
+  key = "3b71a93ed10f964a"
+  file = "internal/cmd/task_dispatch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case surface < writerSurfaceBytes:"
+  line = 89
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "cbd135fb4a0c4d60"
+  file = "internal/cmd/task_dispatch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case surface < writerSurfaceBytes:"
+  line = 89
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "32d8d36ff642319d"
+  file = "internal/cmd/task_dispatch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case v.ContextDrop < killSwitchContextDrop-eps:"
+  line = 160
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "d86257d361b4923c"
+  file = "internal/cmd/task_dispatch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v.ContextDrop < killSwitchContextDrop-eps:"
+  line = 160
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "21b7a9dd0081fa4d"
+  file = "internal/cmd/task_dispatch.go"
+  op = "INVERT_NEGATIVES"
+  text = "case v.ContextDrop < killSwitchContextDrop-eps:"
+  line = 160
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "141fe6d068facf76"
+  file = "internal/cmd/task_dispatch.go"
+  op = "ARITHMETIC_BASE"
+  text = "case v.ContextDrop < killSwitchContextDrop-eps:"
+  line = 160
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "283c38e37bd0f063"
+  file = "internal/cmd/task_dispatch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case v.WallClockRise > killSwitchWallClockRise+eps:"
+  line = 162
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "260fec370d6f8325"
+  file = "internal/cmd/task_dispatch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v.WallClockRise > killSwitchWallClockRise+eps:"
+  line = 162
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "5c8dad200ab448f8"
+  file = "internal/cmd/task_dispatch.go"
+  op = "ARITHMETIC_BASE"
+  text = "case v.WallClockRise > killSwitchWallClockRise+eps:"
+  line = 162
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "a92ed87a9d9b787a"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case isWriterSpawn(c), c.AgentType == review.WriterAgent:"
+  line = 54
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "b68709b57bea8da4"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.AgentType != \"\":"
+  line = 56
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "928ca7aac854a491"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.AgentType == review.WriterAgent:"
+  line = 64
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "a99c98e1a29c8845"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.ToolName == \"Bash\":"
+  line = 122
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "008c0fea3880b3e3"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "}); why != \"\" {"
+  line = 210
+  reason = "Condition on the closing line of a multi-line if-with-init (writerCommandRefusal's call spans 207-210). go-cover attributes the statement to the block starting at the if line, so gremlins marks the condition columns NOT COVERED; the branch provably runs and refuses in TestWriterBashAllowlist (git commit, dross task status, gh pr create...). Same attribution limit as gremlins-attribution-ceiling."
+  accepted_in = "solo-task-subagent"
+
+[[accepted]]
+  key = "75d524a5ea03dd5f"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"\":"
+  line = 229
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "23cba9c80d01c0e9"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"gh\" || name == \"glab\":"
+  line = 241
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "80e59f94531e7ad9"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"git\":"
+  line = 243
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "8d2ab4c7fbec213c"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"dross\":"
+  line = 248
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "e644682d4395481d"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case (first == \"rule\" || first == \"task\") && nextWord(args, first) != \"show\":"
+  line = 252
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "bee82d47cb989a78"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case first == \"test\" && !slices.ContainsFunc(args, func(a string) bool { return a == \"--files\" || strings.HasPrefix(a, \"--files=\") }):"
+  line = 254
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "f8d8ec9e568e3837"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"go\":"
+  line = 257
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "b50cf870208410b3"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"gofmt\":"
+  line = 261
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "95b0806029650b49"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !seen && a == after:"
+  line = 275
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "7d6d1374877afe70"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"dross\":"
+  line = 320
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "c4a03af6ccce8b26"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(args) > 0 && args[0] == \"test\" && !slices.ContainsFunc(args, func(a string) bool { return a == \"--files\" || strings.HasPrefix(a, \"--files=\") }):"
+  line = 322
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "ea713ee79ba49ad3"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(args) > 0 && args[0] == \"test\" && !slices.ContainsFunc(args, func(a string) bool { return a == \"--files\" || strings.HasPrefix(a, \"--files=\") }):"
+  line = 322
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "481d1439f7aac486"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(args) > 1 && args[0] == \"review\" && args[1] == \"context\":"
+  line = 324
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "513e0d0a85f875bb"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(args) > 1 && args[0] == \"review\" && args[1] == \"context\":"
+  line = 324
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "1d7c013f53794371"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"git\":"
+  line = 327
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "8708e802bf5cffcb"
+  file = "internal/gate/writer.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ex == nil:"
+  line = 69
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "7635936d9ee0ab64"
+  file = "internal/gate/writer.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ex.Mode != \"solo\":"
+  line = 71
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "2dc1522710b21e60"
+  file = "internal/gate/writer.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ex.Phase != id:"
+  line = 73
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "2c4a9785fb824f98"
+  file = "internal/gate/writer.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(tasks) == 0:"
+  line = 75
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "7ce86477e6694759"
+  file = "internal/gate/writer.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.Event == EventSubagentStop:"
+  line = 121
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "0c1720f279e3396d"
+  file = "internal/gate/writer.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.ToolName == \"SendMessage\":"
+  line = 123
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
