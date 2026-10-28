@@ -873,12 +873,13 @@ Create, list, number, migrate, complete, and reorder/insert/rename phases on ded
 - `changes.SetStatus` (monotonic per-phase shipped/complete marker written into changes.json — now the sole record, the 50-entry state history having been dropped) — `internal/changes/changes.go:308`
 - `changes.SetBackfilled` (writes `complete` plus a `backfill_evidence` SHA together, so a reconstructed marker is provenanced rather than a third status) — `internal/changes/changes.go:329`
 - `phase.CreateSlug` (create resolves a title to free / adopt / occupied, never a coined suffix) — `internal/phase/phase.go:244`
+- `beginBoard` (`dross execute begin` bumps the version patch from the phase ordinal, syncs the board in-progress and reports inbound task moves on labelled lines) — `internal/cmd/execute.go:151`
 
 The completion statement it prints at the end of a run — landing branch, per-side teardown, commits-not-yet-on-main — is covered in [Branch topology reporting](#branch-topology-reporting).
 
 Completion is recorded in two places with different lifetimes. `state.json` carries the machine-local transition (cleared `current_phase` plus the `completed <id>` history entry) and rides no commit; `changes.json` carries a **monotonic per-phase status marker** that is committed with the phase. Only the marker answers "is this phase done?": the history is capped at 50 entries and machine-local, so a phase completed long enough ago — or on another machine — drops out of it entirely, and consumers no longer consult it at all. The marker only ever advances, so a re-run, a backfill or an out-of-order write cannot walk a phase backwards.
 
-_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · extended ship-clean-tree · extended verify-auto-finalize · extended complete-base-truth · extended completion-state-truth · extended provider-merge-parity · extended milestone-lifecycle-close · 6b00db6 · extended guard-remedy-ordering · f1d3c2f · extended phase-create-adoption · 8279f5b · extended completion-record-truth · extended legacy-phase-backfill · c82cd02 · extended board-finalize-on-complete · 9eefd06_
+_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · extended ship-clean-tree · extended verify-auto-finalize · extended complete-base-truth · extended completion-state-truth · extended provider-merge-parity · extended milestone-lifecycle-close · 6b00db6 · extended guard-remedy-ordering · f1d3c2f · extended phase-create-adoption · 8279f5b · extended completion-record-truth · extended legacy-phase-backfill · c82cd02 · extended board-finalize-on-complete · 9eefd06 · extended prompt-partials · 80f22d9e_
 
 ### Pin currency
 
@@ -929,6 +930,20 @@ Pull a phase PR's review comments — conversation, inline (with file:line) and 
 Ship refuses while an accepted comment's task is still open (see [Shipping / pull requests](#shipping--pull-requests)); `dross validate` checks the record against the plan and spec (see [Artefact validation](#artefact-validation)); the reply approval is a [tool-call gate](#tool-call-gates); and `/dross-watch` shows each ship PR's untriaged count (see [Watch heartbeat](#watch-heartbeat-dross-watch)).
 
 _introduced review-comment-ingest · 414cfcc_
+
+### Prompt partials & byte budgets
+
+Keep the always-loaded execute and verify prompts under a fixed 15,000-byte budget: off-path branches (solo review, recovery, detached legs, mutation errors, survivor drain, non-pass wrap-up) live in `_<prompt>.<name>.md` partials fetched with one `dross prompt partial <prompt> <name>` command, each fetch line naming a closed-vocabulary trigger (**When** `key=value`) that is never the common path, and mechanical steps a dross command already runs at that point (version bump, board sync, inbound task pull, uat sync, verified status) moved into the CLI so the prompt only reacts to what it reports. A registry check fails the build on a missing, orphan, foreign or nested partial; prompt-content tests read the expanded prompt (base + partials inlined in place) so no instruction is lost in the move, guarded by a recorded instruction manifest.
+
+- `Expand` (inlines each fetched partial right after its fetch line, once; identity for prompts with none) — `assets/partials.go:155`
+- `CheckPartials` (registry: missing / orphan / foreign / nested partials and direct partial-file reads fail) — `assets/partials.go:212`
+- `FetchPoints` / `TriggerVocabulary` / `CommonPath` (fetch-line grammar over a closed trigger vocabulary; a common-path value is rejected) — `assets/partials.go:124`
+- `promptPartial` (`dross prompt partial <prompt> <name>` prints the partial verbatim, never deduped) — `internal/cmd/prompt.go:29`
+- `promptByteBudget` / `TestPromptByteBudget` (embedded execute.md and verify.md each capped at 15,000 B; the budgeted set is pinned) — `assets/budget_test.go:14`
+- `conservationProblems` (every pre-split fenced command and hard-rule lead-in survives in the expansion or is claimed by one `absorbs:` marker in the CLI) — `assets/conservation_test.go:133`
+- `expandedPrompt` / `TestNoAllowlistedReaderReadsASplitPrompt` (prompt-content tests read the expansion; a shrink-only allowlist ratchets raw reads and no allowlisted reader may read a split prompt) — `internal/cmd/prompt_expand_test.go:23`
+
+_introduced prompt-partials · 763ba35e_
 
 ### README accuracy guard
 
@@ -1156,12 +1171,13 @@ Survive `/clear` and compaction without losing the workflow thread: every durabl
 - `hooksNudge` (`dross hooks nudge`: the never-failing PostToolUse verb that writes the envelope) — `internal/cmd/hooks_nudge.go:27`
 - `contextThresholdLine` (doctor shows the threshold in effect and warns when the nudge hook is missing or silently off) — `internal/cmd/doctor.go:1191`
 - `_interaction.md` Context checkpoint rule (a nudge line in context makes the next durable boundary — execute §1g even mid-wave, every "safe to /clear" wrap-up — lead with checkpoint + /clear) — `assets/prompts/_interaction.md:74`
-- `TestFlowCostRecords` (each phase's `flow-cost.toml` has complete before/after legs and the after leg adds no dross call) — `internal/cmd/flowcost_record_test.go:64`
+- `TestFlowCostRecords` (each phase's `flow-cost.toml` has complete before/after legs and the after leg adds no dross call) — `internal/cmd/flowcost_record_test.go:75`
 - `TestHookLatencyRecord` (installed nudge hook p95 ≤ 50 ms per path on a 50 MB transcript, recorded in context-boundaries' `flow-cost.toml`) — `internal/cmd/hooklatency_record_test.go:17`
 - `showOnce` (a repeat rule/interaction show prints a one-line MUST-FOLLOW marker naming `--full` when the merged text is byte-identical to the last full print) — `internal/cmd/showmark.go:38`
 - `gatestate.ShownCurrent` (per-session epoch + digest records under `.dross/gate/show/` that say whether a full print is still in context) — `internal/gatestate/showmark.go:98`
 - `bumpFromHook` (SessionStart bumps the show epoch for every source, so `/clear` and compaction reprint rules and playbook in full) — `internal/cmd/reentry.go:122`
-- `checkTestOutputSummariesFlow` (test-output-summaries' after-leg gate: smaller green and verify output, no log reads, a sub-300-byte repeat rule show, the marker live across /clear, /compact and a subagent) — `internal/cmd/flowcost_record_test.go:148`
+- `checkTestOutputSummariesFlow` (test-output-summaries' after-leg gate: smaller green and verify output, no log reads, a sub-300-byte repeat rule show, the marker live across /clear, /compact and a subagent) — `internal/cmd/flowcost_record_test.go:176`
+- `checkPromptPartialsFlow` (prompt-partials' execute and verify pairs: base prompts under 15,000 B and smaller than before, zero partial fetches on the common path, an attached verify pass, same fixture trees) — `internal/cmd/flowcost_record_test.go:217`
 - test-output-summaries' `flow-cost-before.toml` (the base-commit byte and pair-flow turn baseline, with a replayable scenario) — `.dross/phases/test-output-summaries/flow-cost-before.toml`
 - `Reentry` / `reentryLine` ("you are here + next", byte-equal to status's last line; appends ` · debug: <slug> <state> — /dross-debug <slug>` for the newest open [debug session](#debug-sessions)) — `internal/cmd/reentry.go:39`
 - `Pause` (`dross pause --auto` mechanical snapshot merge) — `internal/cmd/pause.go:24`
@@ -1177,7 +1193,7 @@ Pause refuses rather than scaffolds. `/dross-pause` in a repo with no initialise
 
 Pause files rather than parks. A finding surfaced at a pause is written into the [deferred backlog](#deferred-item-routing) with `dross deferred add` instead of becoming an "Open loops" bullet nothing re-reads, so it leaves the handoff as a tracked, addressable item.
 
-_introduced context-hygiene · extended root-robustness · 6d33d3b · extended deferred-add-command · fb07ed1 · extended cmd-exec-baseline-drain · bf2af4e · extended tool-gate-hooks · c854daf · extended debug-sessions · 3300fbe · extended context-boundaries · ce93a78 · extended test-output-summaries · 580852e_
+_introduced context-hygiene · extended root-robustness · 6d33d3b · extended deferred-add-command · fb07ed1 · extended cmd-exec-baseline-drain · bf2af4e · extended tool-gate-hooks · c854daf · extended debug-sessions · 3300fbe · extended context-boundaries · ce93a78 · extended test-output-summaries · 580852e · extended prompt-partials · 10db3c7e_
 
 ### Ship recovery
 
@@ -1571,7 +1587,7 @@ Claude Code's PreToolUse/PostToolUse hooks run `dross gate check` / `dross gate 
 - `treefp.Candidate` (tree-object fingerprints from a scratch copy of the git index via GIT_INDEX_FILE, `.dross/` excluded; the real index is never touched) — `internal/treefp/treefp.go:125`
 - `greenRecorder.finish` (a full `dross test` records `.dross/gate/green.json` only for a tree unchanged across a green run; red on that tree clears it, a run that never happened leaves it) — `internal/cmd/test.go:1189`
 - `judgePair` (pair-approval: in pair mode an in-repo write outside `.dross/` refuses until the exact `approve t-N` AskUserQuestion answer is recorded at the current HEAD) — `internal/gate/pair.go:102`
-- `executeBegin` (`dross execute begin <phase> [--solo]` records the run's mode the pair gate reads) — `internal/cmd/execute.go:31`
+- `executeBegin` (`dross execute begin <phase> [--solo]` records the run's mode the pair gate reads) — `internal/cmd/execute.go:44`
 - `TestCapturedAskUserQuestionFixture` (pins the live AskUserQuestion PostToolUse shape the approval reader parses) — `internal/gate/fixture_test.go:18`
 - `ReplyApproveLabel` (reply-approval: a human picking exactly `post reply #<pr> <digest>` in AskUserQuestion is the only way a PR reply approval is recorded; `dross pr reply --post` reads it) — `internal/gate/reply_confirm.go:32`
 - `gatestate.save` (machine-local `.dross/gate/` records behind a self-ignoring .gitignore, written atomically; a corrupt record is an error naming the path) — `internal/gatestate/store.go:331`
@@ -1627,24 +1643,26 @@ _introduced tracked-path-containment · fcc36fe · extended mutation-range-prove
 
 Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail. The mutation leg is scoped to the phase's own diff (see **Mutation diff scoping**), so the score and verdict rest only on files the phase touched, survivors are weighted by their in-hunk/inherited origin tag, and an all-filtered run resolves through the non-threshold branch as `out-of-scope` rather than a bare 0.00. One formula computes the score everywhere — `mutation.PooledScore`, killed/(killed+survived+timeout), pooled across language legs. Three used to disagree: verify.toml took the MEAN across legs, telemetry pooled with timeouts excluded, and the adapter doc claimed a fourth thing none of them did, so a phase's judgement depended on which surface you read. Pooling because a mean over legs of unequal size hands the smaller leg the louder vote (1/1 beside 0/9 is a 0.10 suite the mean called 0.50); timeouts in the denominator because a mutant that timed out was not killed, and excluding it let a suite that hangs on its hardest mutants outscore one that fails them. The score is printed **with the count it was computed over**, plus the uncoverable share when non-zero — 0.90 over 10 mutants and over 400 are the same number and not the same evidence, and a survivor the tooling cannot reach is a different fact from one the tests missed. "Cannot reach" is decided, not assumed: gremlins' NOT COVERED also holds lines in a count-0 block — reachable code no test ran — so `SplitNotCovered` places each NOT COVERED survivor with the drain's own `survivor.Derive` over a `-run=^$` block profile (compiled, no tests run). Only a line no go-cover block holds is uncoverable; a count-0 line is named a test gap and stays in the reachable denominator, and so does one no profile placed. That split is the only efficacy figure printed — the per-leg line carries raw counts — because a second, unsplit per-leg figure printed 1.00 beside it. The mutation verdict gates on an **absolute count** of undisposed in-scope survivors, not a score ratio: `UnclassifiedInScope` counts only survivors carrying no disposition, out-of-scope ones never reach it, and any single unclassified survivor inside the phase's own diff fails the phase — there is no tolerance band and the prompt carries no score cutoff. An adapter failure records `LanguageRun.Error` plus a FLAG finding and continues — other language legs' reports are never discarded — and a `[mutation] adapters` allowlist filters adapters by name, with filtered files falling to Skipped rather than silently passing. Verify's own wrap-up resolves "the next phase" from the **milestone's `phases` array**, not from `dross phase list`: that command is a directory listing of SCAFFOLDED phases, so using it made every unstarted successor invisible and narrated a phase 9 of 14 as the last in its milestone (2026-08-13), sending the user to the wrong next command. `phase list` remains the fallback only when no milestone is active. A resolved verdict is recorded to telemetry exactly once: `finalizeVerify` writes a `finalized = true` marker back into verify.toml as the idempotency guard (works under telemetry opt-out and log rotation; a re-run reports "already recorded", exit 0), stamps verify pending/outcome events with the phase id, and backs the auto-heal in the ship / phase-complete gates so a resolved-but-unrecorded verdict can't sit unfinalized.
 
-- `Verify` (CLI) — `internal/cmd/verify.go:43`
+- `Verify` (CLI) — `internal/cmd/verify.go:46`
 - `verify.Run` — `internal/verify/verify.go:590`
 - `VerifySummary.UnclassifiedInScope` (absolute undisposed-in-scope gate, not a ratio) — `internal/verify/verify.go:285`
 - `LanguageRun.Error` (record-and-continue adapter failure) — `internal/verify/verify.go:83`
-- `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:1467`
-- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:1205`
-- `refuseOrphanedAcceptances` (finalize refuses verdict=pass while the LIVE store holds a structural orphan, naming each key and `dross survivor retire <key>`; re-derived from the tree, not verify.toml's findings; partial/fail never gated) — `internal/cmd/verify.go:1251`
+- `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:1549`
+- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:1287`
+- `verifyBoardUAT` (verify and `verify results` sync the board to uat after the artefacts are written; a board failure exits 16 and never loses them) — `internal/cmd/verify.go:1099`
+- `markVerified` (`verify finalize` alone sets current_phase_status=verified and the `verified <id>: <verdict>` history entry; a re-run heals a status a failed write left at complete, never past it) — `internal/cmd/verify.go:1245`
+- `refuseOrphanedAcceptances` (finalize refuses verdict=pass while the LIVE store holds a structural orphan, naming each key and `dross survivor retire <key>`; re-derived from the tree, not verify.toml's findings; partial/fail never gated) — `internal/cmd/verify.go:1333`
 - verify.md §2 verdict rules (diff-scoping guarantee, out-of-scope status, origin-weighted survivors) — `assets/prompts/verify.md:34`
 - `TestVerifyPromptOffloadGuidance` (verify.md §2 size-gated offload — large criterion-mapping reads fan to read-only subagents; judgement + verdict stay main-loop) — `internal/cmd/verify_prompt_test.go:20`
 - survivor lifecycle wiring (loads the acceptance store + cross-phase routed map, persists key/state into tests.json, prints the four counts, reports structural orphans (file or text gone) as BLOCKING findings naming `dross survivor retire <key>`, keeps uncheckable entries as NOTEs — see **Survivor lifecycle**) — `internal/cmd/verify.go:122`
 - `mutation.PooledScore` (the one formula: pooled across legs, timeouts in the denominator) — `internal/mutation/score.go:31`
-- `printOverallScore` (score printed with its in-scope denominator; no-block uncoverable, count-0 test-gap and unplaced shares named, the reachable efficacy the only one) — `internal/cmd/verify.go:1659`
+- `printOverallScore` (score printed with its in-scope denominator; no-block uncoverable, count-0 test-gap and unplaced shares named, the reachable efficacy the only one) — `internal/cmd/verify.go:1741`
 - `verify.SplitNotCovered` (NOT COVERED split through a fakeable `CoverageClassifier`; `NotCoveredPackages` feeds the profile only repo-local, `./`-rooted Go packages) — `internal/verify/verify.go:1092`
 - `profileClassifier` (verify's classifier IS the drain's `survivor.Derive`, so the two cannot disagree on what is uncoverable) — `internal/cmd/verify.go:1701`
-- `streamLegs` (each streaming mutation leg writes its tool stream to its own `verify-<phase>-<leg>-<ts>.log`; collecting a detached run pulls the host's log into one) — `internal/cmd/verify.go:1278`
+- `streamLegs` (each streaming mutation leg writes its tool stream to its own `verify-<phase>-<leg>-<ts>.log`; collecting a detached run pulls the host's log into one) — `internal/cmd/verify.go:1360`
 - `verify.LegLines` (per-package killed / survived / not covered / timed out rows and each in-scope survivor's file:line under a leg's counts line — no per-mutant lines reach the conversation) — `internal/verify/legsummary.go:21`
 
-_e31bdbd · extended context-hygiene · extended verify-auto-finalize · extended subagent-offload-audit · 5c21b79 · extended mutation-diff-scope · cd0b5f6 · extended survivor-lifecycle · a6b366d · extended survivor-drain · e22b16b · extended guard-remedy-ordering · a07a56e · extended mutation-score-truth · 4fad274 · extended extracted-package-test-parity · 80c3ecc · extended test-output-summaries · 75743e4_
+_e31bdbd · extended context-hygiene · extended verify-auto-finalize · extended subagent-offload-audit · 5c21b79 · extended mutation-diff-scope · cd0b5f6 · extended survivor-lifecycle · a6b366d · extended survivor-drain · e22b16b · extended guard-remedy-ordering · a07a56e · extended mutation-score-truth · 4fad274 · extended extracted-package-test-parity · 80c3ecc · extended test-output-summaries · 75743e4 · extended prompt-partials · c188719d_
 
 ### Verify freshness
 
