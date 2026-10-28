@@ -116,6 +116,24 @@
         }
       ]
     },
+    "t-7": {
+      "files": [
+        "internal/cmd/task_dispatch.go",
+        "internal/cmd/task.go",
+        "internal/cmd/task_dispatch_test.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "73012b67",
+      "completed_at": "2026-10-28T14:33:32.209672Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer dispatch",
+          "symbol": "taskDispatch",
+          "loc": "internal/cmd/task_dispatch.go:42",
+          "what": "dross task dispatch sums task.files bytes at HEAD and routes solo tasks at or above writerSurfaceBytes to dross-task-writer unless the writerEnabled kill switch is off; compareKillSwitch judges the trial on above-gate medians"
+        }
+      ]
+    },
     "t-8": {
       "files": [
         "internal/gate/writer.go",
