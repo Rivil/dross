@@ -47,6 +47,18 @@ func TestSubagentOffloadAuditCoversEveryPrompt(t *testing.T) {
 	for _, name := range gaps {
 		t.Errorf("prompt %q has no `### %s` section in docs/subagent-offload-audit.md", name, name)
 	}
+
+	// execute's section names the solo writer: the one subagent the
+	// agent-gate lets edit, so the audit's boundary must account for it.
+	doc, err := os.ReadFile(filepath.Join(root, "docs", "subagent-offload-audit.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, section, _ := strings.Cut(string(doc), "\n### execute\n")
+	section, _, _ = strings.Cut(section, "\n### ")
+	if !strings.Contains(section, "dross-task-writer") {
+		t.Error("the `### execute` section of docs/subagent-offload-audit.md does not name the dross-task-writer")
+	}
 }
 
 // TestSubagentOffloadAuditFailsOnMissingSection drives the checker over a

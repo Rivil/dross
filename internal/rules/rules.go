@@ -128,7 +128,7 @@ var Builtins = []Resolved{
 		Rule: Rule{
 			ID:       "dross-agent-gate",
 			Severity: Hard,
-			Text:     "Subagents may fan out freely for read-only work — search, code-mapping, analysis, independent verification — and you should when it widens coverage or saves wall-clock. But writing and deciding stay gated: in pair mode, get explicit user approval before writing code or finalizing; only `--solo` authorizes unattended writes. A fan-out agent returns findings to the main loop and never silently edits, commits, or finalizes on the user's behalf.",
+			Text:     "Subagents may fan out freely for read-only work — search, code-mapping, analysis, independent verification — and you should when it widens coverage or saves wall-clock. But writing and deciding stay gated: in pair mode, get explicit user approval before writing code or finalizing; only `--solo` authorizes unattended writes. A fan-out agent returns findings to the main loop and never silently edits, commits, or finalizes on the user's behalf. The one exception: under `/dross-execute --solo`, one `dross-task-writer` per task may edit that task's files; it never commits, sets task status or finalizes, and never writes `.dross/`. `/dross-quick --solo` gets no writer.",
 		},
 	},
 	{
