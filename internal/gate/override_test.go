@@ -150,7 +150,7 @@ func TestTamperGuardReviewRecords(t *testing.T) {
 	home := t.TempDir()
 	repo := droot(t)
 	e := Env{Home: home, Gates: []Gate{mustGate(t, "tamper-guard")}, Lifted: func(Gate, string) bool { return true }}
-	for _, name := range []string{"review.json", "quick.json", "review-context.md"} {
+	for _, name := range []string{"review.json", "quick.json", "review-context.md", "writer.json"} {
 		p := filepath.Join(repo, ".dross", "gate", name)
 		for _, tool := range []string{"Write", "Edit"} {
 			res := Check(payload(t, tool, map[string]any{"file_path": p, "content": "{}", "old_string": "a", "new_string": "b"}, repo), e)
@@ -163,6 +163,7 @@ func TestTamperGuardReviewRecords(t *testing.T) {
 		"echo x > .dross/gate/review.json",
 		"cp /tmp/r .dross/gate/review-context.md",
 		"printf '{}' | tee .dross/gate/quick.json",
+		"echo x > .dross/gate/writer.json",
 	} {
 		if res := Check(bash(t, line, repo), e); res.Allowed() {
 			t.Errorf("%q passed", line)
@@ -182,6 +183,8 @@ func TestReviewRecordDeleteRefused(t *testing.T) {
 		"rm -f .dross/gate/quick.json",
 		"unlink .dross/gate/review.json",
 		"mv .dross/gate/review.json /tmp/x",
+		"rm .dross/gate/writer.json",
+		"mv .dross/gate/writer.json /tmp/w",
 		"rm -rf .dross",
 		"git clean -fX .dross",
 		"git clean -xdf",

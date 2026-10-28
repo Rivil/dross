@@ -171,10 +171,11 @@ func LiftedBy(home string, now time.Time) func(Gate, string) bool {
 // .dross/gate/ record or the override store, and the Bash writes that reach
 // them — a redirect, tee, cp or mv. Deletion is refused too: review.json is
 // the first record whose absence is MORE lenient (a deleted ledger resets the
-// one-fix-round cap and an unavailable verdict), so rm, unlink, mv with a
-// record as its source, and the ignored-file sweeps (`git clean -x/-X`,
-// `git stash -a`) over .dross/gate/ are refused alongside the writes. Reads
-// pass. Like gate-off-guard it cannot be lifted, and it fires everywhere: a
+// one-fix-round cap and an unavailable verdict) and writer.json the second (a
+// deleted writer record admits a second writer and lifts the main loop's
+// takeover refusal), so rm, unlink, mv with a record as its source, and the
+// ignored-file sweeps (`git clean -x/-X`, `git stash -a`) over .dross/gate/
+// are refused alongside the writes. Reads pass. Like gate-off-guard it cannot be lifted, and it fires everywhere: a
 // .dross/gate/ is the same record whichever repo it sits in.
 func init() {
 	Register(Gate{

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gatestate"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/state"
@@ -239,6 +240,14 @@ func taskStatus() *cobra.Command {
 					reason = reviewFailureReason(tr)
 				}
 			}
+			// A reset to pending is a retry: it releases the task's writer record
+			// so the retried task may get a writer again. `failed` keeps it — the
+			// record is what fences a zombie writer out of the failed task.
+			if status == phase.StatusPending {
+				if err := releaseTaskWriter(args[0], args[1]); err != nil {
+					return err
+				}
+			}
 			plan.SetTaskStatus(args[1], status)
 			if reason != "" {
 				plan.FindTask(args[1]).Reason = reason
@@ -257,6 +266,21 @@ func taskStatus() *cobra.Command {
 	}
 	c.Flags().StringVar(&reason, "reason", "", "why the task failed (only with failed; any other status clears a recorded reason)")
 	return c
+}
+
+// releaseTaskWriter clears .dross/gate/writer.json when it names this task;
+// a record naming another task, or none, is left alone.
+func releaseTaskWriter(phaseID, taskID string) error {
+	root, err := FindRoot()
+	if err != nil {
+		return err
+	}
+	repoDir := filepath.Dir(root)
+	w, err := gatestate.LoadWriter(repoDir)
+	if err != nil || w == nil || w.Phase != phaseID || w.Task != taskID {
+		return err
+	}
+	return gatestate.ClearWriter(repoDir)
 }
 
 // taskAdd wires `dross task add`: build a task from flags and splice it into
