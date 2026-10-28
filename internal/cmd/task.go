@@ -16,13 +16,13 @@ import (
 	"github.com/Rivil/dross/internal/state"
 )
 
-// Task registers `dross task {next,list,show,status,add,remove,edit,move}`.
+// Task registers `dross task {next,list,show,status,add,remove,edit,move,dispatch}`.
 func Task() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "task",
 		Short: "Inspect and update tasks within a phase plan",
 	}
-	c.AddCommand(taskNext(), taskList(), taskShow(), taskStatus(), taskAdd(), taskRemove(), taskEdit(), taskMove())
+	c.AddCommand(taskNext(), taskList(), taskShow(), taskStatus(), taskAdd(), taskRemove(), taskEdit(), taskMove(), taskDispatch())
 	return c
 }
 

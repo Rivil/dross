@@ -333,6 +333,7 @@ dross task add flag --files (stringSlice) default="[]" usage="files this task to
 dross task add flag --test-contract (stringArray) default="[]" usage="one \"if X breaks, TestY fails\" statement (repeatable; not split on commas)"
 dross task add flag --title (string) default="" usage="task title (required)"
 dross task add flag --wave (int) default="0" usage="explicit wave (default: derived from --depends-on)"
+dross task dispatch | use="dispatch <phase-id> <task-id>" short="Decide whether a solo task's code goes to a dross-task-writer or stays inline"
 dross task edit | use="edit <phase-id> <task-id>" short="Update an existing task's fields (partial; status not editable)"
 dross task edit flag --add-test-contract (stringArray) default="[]" usage="append one statement to the existing test contract (repeatable; not split on commas)"
 dross task edit flag --covers (stringSlice) default="[]" usage="replace covered criterion ids (comma-separated)"
