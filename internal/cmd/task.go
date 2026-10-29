@@ -242,9 +242,12 @@ func taskStatus() *cobra.Command {
 			}
 			// A reset to pending is a retry: it releases the task's writer record
 			// so the retried task may get a writer again. `failed` keeps it — the
-			// record is what fences a zombie writer out of the failed task.
+			// record is what fences a zombie writer out of the failed task. The
+			// record goes only once the plan has saved: a failed save leaves the
+			// task where it was, and its zombie fence with it.
+			var writerRepo string
 			if status == phase.StatusPending {
-				if err := releaseTaskWriter(args[0], args[1]); err != nil {
+				if writerRepo, err = taskWriterRepo(args[0], args[1]); err != nil {
 					return err
 				}
 			}
@@ -252,8 +255,13 @@ func taskStatus() *cobra.Command {
 			if reason != "" {
 				plan.FindTask(args[1]).Reason = reason
 			}
-			if err := plan.Save(planPath); err != nil {
+			if err := savePlan(plan, planPath); err != nil {
 				return err
+			}
+			if writerRepo != "" {
+				if err := gatestate.ClearWriter(writerRepo); err != nil {
+					return fmt.Errorf("%s/%s is pending, but its writer record was not released: %w", args[0], args[1], err)
+				}
 			}
 			if tr != nil {
 				if err := changes.SetReview(root, args[0], args[1], *tr); err != nil {
@@ -268,19 +276,22 @@ func taskStatus() *cobra.Command {
 	return c
 }
 
-// releaseTaskWriter clears .dross/gate/writer.json when it names this task;
-// a record naming another task, or none, is left alone.
-func releaseTaskWriter(phaseID, taskID string) error {
+// savePlan is plan.Save, a seam for the status command's save-failure test.
+var savePlan = (*phase.Plan).Save
+
+// taskWriterRepo is the repo dir whose .dross/gate/writer.json names this
+// task, or "" when the record names another task or there is none.
+func taskWriterRepo(phaseID, taskID string) (string, error) {
 	root, err := FindRoot()
 	if err != nil {
-		return err
+		return "", err
 	}
 	repoDir := filepath.Dir(root)
 	w, err := gatestate.LoadWriter(repoDir)
 	if err != nil || w == nil || w.Phase != phaseID || w.Task != taskID {
-		return err
+		return "", err
 	}
-	return gatestate.ClearWriter(repoDir)
+	return repoDir, nil
 }
 
 // taskAdd wires `dross task add`: build a task from flags and splice it into
