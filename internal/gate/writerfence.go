@@ -339,7 +339,7 @@ func judgeMainLoop(c *Call) (*Refusal, error) {
 		}
 	}
 	if w.State != gatestate.WriterLaunched {
-		return nil, nil
+		return unreadableTakeover(s, w)
 	}
 	if s.Partial {
 		return NewRefusal(fmt.Sprintf("%s's writer is still working, and this command line could not be read with confidence (%s), so it may run a gate that judges a tree the writer is still changing", w.Task, s.Problem),
@@ -371,6 +371,18 @@ func judgeMainLoop(c *Call) (*Refusal, error) {
 	return nil, nil
 }
 
+// unreadableTakeover fails closed once the writer has stopped: a line the
+// fence cannot read, or one that runs a nested or wrapped command, may write a
+// writer-owned file that takeoverWrite never sees.
+func unreadableTakeover(s shellscan.Script, w *gatestate.Writer) (*Refusal, error) {
+	hidden := s.Partial || slices.ContainsFunc(s.Commands, func(cmd shellscan.Command) bool { return fenceUnreadable(cmd.Name()) })
+	if !hidden {
+		return nil, nil
+	}
+	return NewRefusal(fmt.Sprintf("%s %s was handed to a writer, and this command line hides what it runs, so it may take the task over inline (c-5)", w.Phase, w.Task),
+		"run plain commands, one per line, with no nested shells or wrappers, until the task is committed or failed")
+}
+
 func takeoverRefusal(w *gatestate.Writer) (*Refusal, error) {
 	return NewRefusal(fmt.Sprintf("%s %s was handed to a writer, and the main loop never takes it over inline (c-5)", w.Phase, w.Task),
 		fmt.Sprintf("if the writer failed, set its code aside and fail the task: `git stash push -u -- . ':(exclude).dross'`, then `dross task status %s %s failed --reason \"writer: …\"`; a blocking review's fix round goes to the writer via SendMessage", w.Phase, w.Task))
@@ -383,6 +395,12 @@ func takeoverWrite(cmd shellscan.Command, root string, files []string) (bool, er
 	targets := cmd.Outputs()
 	name, args := cmd.Name(), cmd.Args()
 	switch {
+	case name == "dd":
+		for _, a := range args {
+			if of, ok := strings.CutPrefix(a, "of="); ok {
+				targets = append(targets, of)
+			}
+		}
 	case slices.Contains(writerMutators, name), inPlaceEdit(name, args):
 		targets = append(targets, operands(args)...)
 	case name == "git":
@@ -425,12 +443,16 @@ func operands(args []string) []string {
 }
 
 // isEscapeRoute reports whether a line only sets a failed writer's task
-// aside: `git stash push` and `dross task status <phase> <task> failed`.
+// aside: `git stash push` and `dross task status <phase> <task> failed`, with
+// no output but /dev/null — a redirection could write a writer-owned file.
 func isEscapeRoute(s shellscan.Script) bool {
 	if s.Partial || len(s.Commands) == 0 {
 		return false
 	}
 	for _, cmd := range s.Commands {
+		if slices.ContainsFunc(cmd.Outputs(), func(o string) bool { return o != "/dev/null" }) {
+			return false
+		}
 		switch cmd.Name() {
 		case "git":
 			if g, _ := cmd.Git(); g.Sub != "stash" || len(g.Args) == 0 || g.Args[0] != "push" {

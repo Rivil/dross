@@ -175,10 +175,11 @@ func TestNoInlineTakeover(t *testing.T) {
 func TestMainLoopWaitsForWriter(t *testing.T) {
 	launched := fencedRepo(t, gatestate.WriterLaunched)
 	stopped := fencedRepo(t, gatestate.WriterStopped)
-	for _, line := range []string{"dross test", "dross review context", "git commit -m x", "sh -c 'git commit -m x'"} {
+	for _, line := range []string{"dross test", "dross review context", "git commit -m x"} {
 		refusedWith(t, line, writerCheck(t, bash(t, line, launched)), "wait for the writer's completion notice")
 		admits(t, "stopped: "+line, writerCheck(t, bash(t, line, stopped)))
 	}
+	refusedWith(t, "sh -c commit", writerCheck(t, bash(t, "sh -c 'git commit -m x'", launched)), "wait for the writer's completion notice")
 }
 
 // TestFenceSilentUnarmed pins c-4: with no writer record, or in pair mode,
@@ -233,12 +234,46 @@ func TestNoInlineTakeoverViaBash(t *testing.T) {
 			"git checkout -- a.go",
 			"git restore a.go",
 			"git checkout .",
+			"dd if=b.go of=a.go",
 		} {
 			refusedWith(t, state+" "+line, writerCheck(t, bash(t, line, dir)), "never takes it over inline")
 		}
-		for _, line := range []string{"cat a.go", "echo x > b.go", "sed -n 1p a.go", "git checkout main"} {
+		for _, line := range []string{"cat a.go", "echo x > b.go", "sed -n 1p a.go", "git checkout main", "dd if=a.go of=b.go"} {
 			admits(t, state+" "+line, writerCheck(t, bash(t, line, dir)))
 		}
+	}
+}
+
+// TestNoInlineTakeoverViaWrapper: once the writer has stopped, a main-loop
+// line that hides what it runs — a nested shell, a wrapper, a partial scan —
+// may write a writer-owned file, so it is refused; a plain line is not.
+func TestNoInlineTakeoverViaWrapper(t *testing.T) {
+	dir := fencedRepo(t, gatestate.WriterStopped)
+	for _, line := range []string{
+		"timeout 5 sed -i s/a/b/ a.go",
+		"sh -c 'echo x > a.go'",
+		"nice cp b.go a.go",
+		"env -S 'cp b.go a.go'",
+		"echo 'x > a.go",
+	} {
+		refusedWith(t, line, writerCheck(t, bash(t, line, dir)), "hides what it runs")
+	}
+	admits(t, "plain dross test", writerCheck(t, bash(t, "dross test", dir)))
+}
+
+// TestEscapeRouteRedirectRefused: an escape line that also writes a file is
+// no escape route; one that writes a writer-owned file is the takeover, and
+// one whose output goes to /dev/null still sets the task aside.
+func TestEscapeRouteRedirectRefused(t *testing.T) {
+	for _, state := range []string{gatestate.WriterLaunched, gatestate.WriterStopped} {
+		dir := fencedRepo(t, state)
+		for _, line := range []string{
+			"git stash push > a.go",
+			`dross task status p t-1 failed --reason x > a.go`,
+		} {
+			refusedWith(t, state+" "+line, writerCheck(t, bash(t, line, dir)), "never takes it over inline")
+		}
+		admits(t, state+" /dev/null", writerCheck(t, bash(t, "git stash push -u -- . ':(exclude).dross' > /dev/null", dir)))
 	}
 }
 
