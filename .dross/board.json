@@ -2504,6 +2504,26 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "solo-task-subagent/t-10": {
+      "issue": "DRO-1022",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-subagent/t-11": {
+      "issue": "DRO-1025",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-subagent/t-12": {
+      "issue": "DRO-1023",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "solo-task-subagent/t-13": {
+      "issue": "DRO-1024",
+      "plan_status": "in_progress",
+      "board_state": "task-in-progress"
+    },
     "solo-task-subagent/t-2": {
       "issue": "DRO-1014",
       "plan_status": "done",

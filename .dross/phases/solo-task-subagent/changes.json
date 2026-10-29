@@ -24,6 +24,56 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/gate/writerfence_test.go",
+        "internal/cmd/task_dispatch_test.go"
+      ],
+      "commit": "dfbf7542",
+      "completed_at": "2026-10-29T07:39:41.262393Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer",
+          "symbol": "TestWriterSpawnsNoAgent",
+          "loc": "internal/gate/writerfence_test.go:112",
+          "what": "tests pin the writer fence's spawn, partial-line, in-place-edit and find-exec refusals and the even-count kill-switch median"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/gate/writerfence.go",
+        "internal/gate/writerfence_test.go",
+        "internal/gate/engine.go",
+        "internal/gate/engine_test.go"
+      ],
+      "commit": "8262fab2",
+      "completed_at": "2026-10-29T08:05:25.867374Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer",
+          "symbol": "takeoverWrite",
+          "loc": "internal/gate/writerfence.go:382",
+          "what": "main-loop Bash writes to a writer-owned task's files are refused; wrappers fail closed; the stash/failed escape passes before any load; subagent file calls fall back to their session repo"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/task.go",
+        "internal/cmd/task_writer_record_test.go"
+      ],
+      "commit": "0948ec5a",
+      "completed_at": "2026-10-29T07:47:39.017568Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer",
+          "symbol": "taskWriterRepo",
+          "loc": "internal/cmd/task.go:284",
+          "what": "a reset to pending releases the task's writer record only after plan.Save succeeds, so a failed save keeps the zombie fence"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         ".dross/phases/solo-task-subagent/kill-switch.toml",
@@ -194,6 +244,90 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "No canary or isolation test covers the writer fixtures the way TestCapturedStopIsolation covers the reviewer stop. The description's grep for CLAUDE.md lines is a manual step that this diff cannot show was done",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestWriterBashAllowlist now also admits 'sed -n 1p a.go' and plain 'find', which guards the in-place and exec arms against over-refusal as well as removal",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestCompareEvenMedian checks the median two ways: directly on median() and through compareKillSwitch at the exact 25% edges, so either middle value used alone fails the test",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-11": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "takeoverWrite judges only the outer command name, so once the writer is stopped a wrapped or nested main-loop write (`timeout 5 sed -i s/a/b/ a.go`, `sh -c 'echo x \u003e a.go'`) or a partial scan is admitted; fenceUnreadable/Partial fail closed only in the launched-state wait fence",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "isEscapeRoute returns before takeoverWrite runs, so a redirection on the escape line (`git stash push \u003e a.go`, `dross task status p t-1 failed --reason x \u003e a.go`) bypasses the main-loop takeover fence",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "operands() does not parse dd's `of=FILE` form, so `dd of=a.go` onto a writer-owned file is not caught by takeoverWrite",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "takeoverWrite counts mutator sources as targets and treats a root-resolving target as hitting every file, so `cp a.go /tmp/bak`, `git restore --staged a.go` and `chmod -R u+w .` are refused: over-broad, but fails closed",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the Targets subagent fallback brings every subagent's out-of-repo file call into scope for all gates; the other gates bail out through ContainIn's !ok, so this looks harmless. A writer edit into a different dross repo is still judged against that repo, which has no writer record",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-12": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "If ClearWriter fails after a successful save, the plan is pending but the record stays; the command returns a clear error naming that state rather than hiding it, which is an acceptable trade-off",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "savePlan is a package-level mutable seam; it is safe here because no test in internal/cmd calls t.Parallel, but a future parallel test that swaps it would race",
           "resolution": "non-blocking, left"
         }
       ]

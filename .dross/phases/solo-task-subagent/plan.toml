@@ -170,17 +170,17 @@ task). Recovery partial: a writer record still launched on resume → stash + fa
   description = "Verify remediation (r-20261028-152340): 17 in-hunk survivors sat on code no test ran. Add writer-fence cases for an Agent/Task spawn from the writer (writerfence.go:118), a partially-parsed command line (s.Partial, :183), sed -i / perl -i (:235) and find -exec/-execdir/-delete/-ok (:237-238); add a Compare/median case with an even above-gate row count (task_dispatch.go:190 — the real [before] leg has 48 above-gate rows). After re-verify, :118/:235/:237/:238 stay NOT COVERED by the case-line attribution ceiling and are accepted then; :183 and :190 must be killed."
   covers = ["c-1", "c-6"]
   test_contract = ["if the writer's Agent or Task spawn refusal is removed, TestWriterSpawnsNoAgent fails", "if the s.Partial refusal is removed so a half-parsed writer line is judged on its readable part, TestWriterPartialLineRefused fails", "if the sed -i / perl -i arm or the find -exec/-execdir/-delete/-ok arm is removed, TestWriterBashAllowlist fails", "if median returns either middle element instead of their mean for an even count, TestCompareEvenMedian fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-11"
   wave = 2
   title = "Close the writer fence holes and the escape-route deadlock"
-  files = ["internal/gate/writerfence.go", "internal/gate/writerfence_test.go"]
+  files = ["internal/gate/writerfence.go", "internal/gate/writerfence_test.go", "internal/gate/engine.go", "internal/gate/engine_test.go"]
   description = "Verify FLAGs carried from t-8 review. (1) Wrapper programs the shellscan unwrap misses — timeout, nice, ionice, stdbuf, setsid, chrt, env -S — reach an unlisted program name and are admitted (timeout 5 git commit): fail closed on them in the writer fence and in the main-loop wait fence. (2) Main-loop Bash writes to a writer-owned task's files (sed -i, perl -i, cp/mv/tee onto them, redirection, git checkout/restore --) bypass the Edit/Write-only takeover fence: refuse them, keeping the stash and task status failed passing. (3) A writer Edit/Write whose path resolves to no repo root (root \"\") is let through: refuse it. (4) A load error (corrupt writer.json/execute.json, ambiguous ArmedScope) currently refuses every main-loop call, including the escape route: always admit git stash push -u -- . ':(exclude).dross' and dross task status … failed before loading."
   covers = ["c-1", "c-3", "c-5"]
   test_contract = ["if timeout/nice/stdbuf/env -S wrapping git commit is admitted for the writer, or wrapping dross test / git commit is admitted in the main loop while the writer is launched, TestFenceRefusesWrappers fails", "if a main-loop sed -i, cp onto, redirection into, or git checkout -- of a writer-owned file is admitted, TestNoInlineTakeoverViaBash fails", "if a writer Edit of a path outside any repo is admitted, TestWriterEditOutsideRepo fails", "if, with a corrupt writer.json or execute.json, the stash or task status failed is refused, TestEscapeRouteSurvivesLoadError fails"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-10"]
 
 [[task]]
@@ -191,7 +191,7 @@ task). Recovery partial: a writer record still launched on resume → stash + fa
   description = "Verify FLAG carried from t-5 review: releaseTaskWriter clears .dross/gate/writer.json before plan.Save, so a failed save drops the zombie-writer fence for a task that was never reset. Clear it after a successful Save."
   covers = ["c-5"]
   test_contract = ["if a plan.Save failure during task status pending leaves writer.json deleted, TestWriterRecordKeptOnSaveFailure fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-13"
@@ -201,4 +201,5 @@ task). Recovery partial: a writer record still launched on resume → stash + fa
   description = "Verify FLAG: nothing prompts recording kill-switch.toml [after], so writerEnabled stays true indefinitely and c-6's 'ships only if the thresholds hold' never bites. Add a dross doctor check: when a kill-switch.toml has [trial].status pending and a later solo execute run has completed (a phase executed after it with mode solo and at least one dispatch: writer task), warn naming the phase dir and the mining step; silent while no such run exists."
   covers = ["c-6"]
   test_contract = ["if doctor stays silent with [trial] pending after a later solo run with a writer-dispatched task, TestDoctorKillSwitchAfterDue fails", "if doctor warns with no later solo run, or once [after] is recorded, TestDoctorKillSwitchQuiet fails"]
-  status = "pending"
+  status = "failed"
+  reason = "writer: spawn refused by solo-writer gate (writer_spawn) — this harness's Agent tool has no run_in_background input, so the key the gate requires never reaches the hook"
