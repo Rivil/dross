@@ -96,8 +96,11 @@ func judgeWriterSpawn(c *Call) (*Refusal, error) {
 		return NewRefusal("the writer's prompt must be exactly the writer prompt line for "+scope.Name()+", with nothing added",
 			"spawn it with the prompt `"+want+"` verbatim")
 	}
-	if bg, _ := c.Input["run_in_background"].(bool); !bg {
-		return NewRefusal("the writer runs in the background (writer_spawn)", "spawn it with run_in_background: true")
+	// An absent key is a background spawn: Claude Code's Agent tool runs every
+	// subagent in the background and has dropped the parameter. Only an
+	// explicit foreground request is refused.
+	if bg, set := c.Input["run_in_background"]; set && bg != true {
+		return NewRefusal("the writer runs in the background (writer_spawn)", "spawn it with run_in_background: true, or without the key")
 	}
 	if _, set := c.Input["model"]; set {
 		return NewRefusal("the writer inherits the session's model (writer_spawn) — another model would confound the kill-switch measurement",

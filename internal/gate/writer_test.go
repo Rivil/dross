@@ -143,10 +143,15 @@ func TestWriterSpawnShape(t *testing.T) {
 	dir := soloRepo(t, "in_progress")
 	prompt := review.WriterPromptLine("p", "t-1")
 	for name, change := range map[string]func(map[string]any){
-		"foreground":  func(in map[string]any) { in["run_in_background"] = false },
-		"flag absent": func(in map[string]any) { delete(in, "run_in_background") },
+		"foreground":     func(in map[string]any) { in["run_in_background"] = false },
+		"non-bool value": func(in map[string]any) { in["run_in_background"] = "true" },
 	} {
 		refusedWith(t, name, writerCheck(t, writerSpawn(t, dir, prompt, change)), "background")
+	}
+	// The current Agent tool has no run_in_background input — every subagent
+	// runs in the background — so a spawn without the key is admitted.
+	if res := writerCheck(t, writerSpawn(t, dir, prompt, func(in map[string]any) { delete(in, "run_in_background") })); !res.Allowed() {
+		t.Errorf("a spawn with no run_in_background key was refused: %s", res.Text())
 	}
 	refusedWith(t, "model override", writerCheck(t, writerSpawn(t, dir, prompt, func(in map[string]any) { in["model"] = "sonnet" })), "model")
 }
