@@ -2529,6 +2529,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "solo-task-subagent/t-15": {
+      "issue": "DRO-1027",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "solo-task-subagent/t-2": {
       "issue": "DRO-1014",
       "plan_status": "done",

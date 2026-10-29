@@ -110,6 +110,22 @@
         }
       ]
     },
+    "t-15": {
+      "files": [
+        "internal/gate/writerfence.go",
+        "internal/gate/writerfence_test.go"
+      ],
+      "commit": "3336e1c8",
+      "completed_at": "2026-10-29T18:32:48.455773Z",
+      "landmarks": [
+        {
+          "feature": "solo writer fence",
+          "symbol": "unreadableTakeover",
+          "loc": "internal/gate/writerfence.go:377",
+          "what": "after the writer stops the main loop is refused unreadable/wrapped lines, redirecting escape lines and dd of= onto writer-owned files"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         ".dross/phases/solo-task-subagent/kill-switch.toml",
