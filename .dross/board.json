@@ -2521,8 +2521,8 @@
     },
     "solo-task-subagent/t-13": {
       "issue": "DRO-1024",
-      "plan_status": "in_progress",
-      "board_state": "task-in-progress"
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "solo-task-subagent/t-14": {
       "issue": "DRO-1026",

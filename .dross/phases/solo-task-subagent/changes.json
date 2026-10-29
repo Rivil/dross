@@ -74,6 +74,26 @@
         }
       ]
     },
+    "t-13": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_killswitch.go",
+        "internal/cmd/doctor_killswitch_test.go",
+        "internal/killswitch/killswitch.go",
+        "internal/killswitch/killswitch_test.go",
+        "internal/secretscan/writers.go"
+      ],
+      "commit": "0c2d4b5f",
+      "completed_at": "2026-10-29T09:12:31.449766Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer",
+          "symbol": "laterWriterRun",
+          "loc": "internal/cmd/doctor_killswitch.go:101",
+          "what": "dross doctor warns when a pending kill-switch trial has a later finished solo run with a writer-dispatched task, naming the [after] mining step"
+        }
+      ]
+    },
     "t-14": {
       "files": [
         "internal/gate/writer.go",
@@ -344,6 +364,33 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "savePlan is a package-level mutable seam; it is safe here because no test in internal/cmd calls t.Parallel, but a future parallel test that swaps it would race",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-13": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "laterWriterRun works out whether a writer was used by running `git ls-tree` on the task commit's parent. If that commit is gone (squash-merge, branch deleted, then gc), the check returns false. The reminder then never fires, which is the silent failure this check was added to catch. A note in the warning path or a fallback would make this visible.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "laterWriterRun passes in today's writerEnabled value, not the one in force during the past run. That is harmless now, because writerEnabled only flips once the trial is decided and by then AwaitingAfter is false.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A run counts as solo only if its changes.json has a review. That is a guess from leftover files, not a durable record; the doc comment says so openly.",
           "resolution": "non-blocking, left"
         }
       ]
