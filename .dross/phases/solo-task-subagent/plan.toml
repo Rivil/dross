@@ -207,10 +207,9 @@ task). Recovery partial: a writer record still launched on resume → stash + fa
   id = "t-13"
   wave = 1
   title = "Surface the pending kill-switch [after] leg"
-  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_killswitch.go", "internal/cmd/doctor_killswitch_test.go"]
-  description = "Verify FLAG: nothing prompts recording kill-switch.toml [after], so writerEnabled stays true indefinitely and c-6's 'ships only if the thresholds hold' never bites. Add a dross doctor check: when a kill-switch.toml has [trial].status pending and a later solo execute run has completed (a phase executed after it with mode solo and at least one dispatch: writer task), warn naming the phase dir and the mining step; silent while no such run exists."
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_killswitch.go", "internal/cmd/doctor_killswitch_test.go", "internal/killswitch/killswitch.go", "internal/killswitch/killswitch_test.go", "internal/secretscan/writers.go"]
+  description = "Verify FLAG: nothing prompts recording kill-switch.toml [after], so writerEnabled stays true indefinitely and c-6's 'ships only if the thresholds hold' never bites. Add a dross doctor check: when a kill-switch.toml has [trial].status pending and a later solo execute run has completed (a phase executed after it with mode solo and at least one dispatch: writer task), warn naming the phase dir and the mining step; silent while no such run exists. Boundary (first writer run, 2026-10-29, red): internal/cmd may not import BurntSushi/toml or declare toml-tagged structs — a new internal/killswitch package owns the kill-switch.toml filename const and a decoder (trial status, [after] row count); internal/secretscan/writers.go declares phases/<id>/kill-switch.toml under AgentAuthored; doctor_killswitch.go calls the package. Resume from the writer's stash (t-13 writer: red)."
   covers = ["c-6"]
   test_contract = ["if doctor stays silent with [trial] pending after a later solo run with a writer-dispatched task, TestDoctorKillSwitchAfterDue fails", "if doctor warns with no later solo run, or once [after] is recorded, TestDoctorKillSwitchQuiet fails"]
-  status = "failed"
+  status = "pending"
   depends_on = ["t-14"]
-  reason = "writer: red — TestCmdBoundaryByImportDirection (internal/cmd may not import BurntSushi/toml or declare toml structs); kill-switch.toml const not in secretscan.Writers(); fix needs a domain package + internal/secretscan/writers.go outside task.files"
