@@ -73,6 +73,7 @@ func Doctor() *cobra.Command {
 			pinWarnings := 0
 			protectionWarnings := 0
 			hookWarnings := 0
+			killSwitchWarningCount := 0
 
 			// --- Foundational files ---
 			//
@@ -596,6 +597,22 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
+			// --- Kill switch ---
+			//
+			// A pending writer trial whose [after] leg has a solo run waiting
+			// to be mined (killSwitchWarnings). Advisory: the trial is
+			// unfinished bookkeeping, not a broken repo, so the exit code is
+			// unchanged.
+			if ks := killSwitchWarnings(root, repoDir); len(ks) > 0 {
+				Print("Kill switch:")
+				for _, w := range ks {
+					Printf("  ⚠ %s\n", w)
+					killSwitchWarningCount++
+				}
+				Print("    Advisory only — this never changes doctor's exit code.")
+				Print("")
+			}
+
 			// --- Cross-field combinations ---
 			//
 			// Collected above, reported here as one advisory block. Each value
@@ -610,7 +627,7 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
-			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings+backfillResidueWarnings+pinWarnings+protectionWarnings+hookWarnings)
+			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings+backfillResidueWarnings+pinWarnings+protectionWarnings+hookWarnings+killSwitchWarningCount)
 		},
 	}
 }

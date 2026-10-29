@@ -32,7 +32,7 @@ import (
 //     them resolves under .dross/.
 //
 // Artifacts written by an agent rather than by Go code (panel notes, REVIEW.md,
-// pr-body.md, the criterion notes in verify.toml) are declared under the
+// pr-body.md, the criterion notes in verify.toml, kill-switch.toml) are declared under the
 // AgentAuthored sentinel: they are in the scanner's reach like any other
 // UnderDross artifact, and the stale-declaration arm skips resolving them to a
 // Go file.
@@ -215,6 +215,9 @@ var writers = []Writer{
 	{File: "internal/findings/state.go", UnderDross: &UnderDross{Artifacts: []string{"security/state.toml", "quality/state.toml", "techdebt/state.toml"}}},
 	{File: AgentAuthored, UnderDross: &UnderDross{Artifacts: []string{
 		"phases/<id>/panel/<name>.md", "phases/<id>/REVIEW.md", "phases/<id>/pr-body.md", "phases/<id>/notes.md",
+		// The writer trial's record: mined and written by the agent,
+		// only read by dross (internal/killswitch).
+		"phases/<id>/kill-switch.toml",
 	}}},
 
 	// ---- MachineLocal: under .dross, kept out of git by the dross seed -----
