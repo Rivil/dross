@@ -70,7 +70,14 @@ type ksRun struct {
 	at         time.Time
 	pair       bool // no review recorded
 	unfinished bool // a second task still pending
+	gone       bool // the task's commit is no longer in git
+	noCommit   bool // the task recorded no commit
+	alsoGone   bool // a reviewed t-0, listed first, whose commit is gone
 }
+
+// ksGoneSHA names a commit no fixture repo has: what a squash-merged, deleted
+// and gc'd phase branch leaves behind in changes.json.
+const ksGoneSHA = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 
 func ksLaterRun(t *testing.T, dir string, r ksRun) {
 	t.Helper()
@@ -84,16 +91,32 @@ func ksLaterRun(t *testing.T, dir string, r ksRun) {
 		r.at = ksLater
 	}
 	sha := ksTaskCommit(t, dir, r.file, r.size)
+	switch {
+	case r.gone:
+		sha = ksGoneSHA
+	case r.noCommit:
+		sha = ""
+	}
 	root := filepath.Join(dir, ".dross")
-	plan := "[phase]\n  id = \"later\"\n\n[[task]]\n  id = \"t-1\"\n  wave = 1\n  title = \"one\"\n  files = [\"" + r.file + "\"]\n  status = \"done\"\n"
+	plan := "[phase]\n  id = \"later\"\n"
+	if r.alsoGone {
+		plan += "\n[[task]]\n  id = \"t-0\"\n  wave = 1\n  title = \"zero\"\n  files = [\"gone.go\"]\n  status = \"done\"\n"
+	}
+	plan += "\n[[task]]\n  id = \"t-1\"\n  wave = 1\n  title = \"one\"\n  files = [\"" + r.file + "\"]\n  status = \"done\"\n"
 	if r.unfinished {
 		plan += "\n[[task]]\n  id = \"t-2\"\n  wave = 1\n  title = \"two\"\n  files = [\"other.go\"]\n  status = \"pending\"\n"
 	}
 	mustWrite(t, filepath.Join(root, "phases", "later", "plan.toml"), plan)
 	c := changes.New("later")
 	c.Tasks["t-1"] = changes.TaskRecord{Files: []string{r.file}, Commit: sha, CompletedAt: r.at}
+	if r.alsoGone {
+		c.Tasks["t-0"] = changes.TaskRecord{Files: []string{"gone.go"}, Commit: ksGoneSHA, CompletedAt: r.at}
+	}
 	if !r.pair {
 		c.SetReview("t-1", changes.TaskReview{Outcome: "pass", Rounds: 1})
+		if r.alsoGone {
+			c.SetReview("t-0", changes.TaskReview{Outcome: "pass", Rounds: 1})
+		}
 	}
 	if err := c.Save(changes.FilePath(root, "later")); err != nil {
 		t.Fatal(err)
@@ -180,6 +203,56 @@ func TestDoctorKillSwitchAfterDue(t *testing.T) {
 	})
 }
 
+// TestDoctorKillSwitchCommitGone: once a later solo run ships, its task
+// commits are squash-merged away and its writer use can no longer be sized.
+// That is the normal post-ship state, so it must read as "may be due", never
+// as no run at all.
+func TestDoctorKillSwitchCommitGone(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		run  ksRun
+	}{
+		{name: "commit gone", run: ksRun{gone: true}},
+		{name: "commit gone, under the size gate", run: ksRun{gone: true, file: "small.go", size: writerSurfaceBytes - 1}},
+		{name: "no commit recorded", run: ksRun{noCommit: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := ksRepo(t)
+			ksTrial(t, dir, ksPending)
+			ksLaterRun(t, dir, tc.run)
+			got := killSwitchWarnings(filepath.Join(dir, ".dross"), dir)
+			if len(got) != 1 {
+				t.Fatalf("warnings = %q, want exactly one", got)
+			}
+			for _, want := range []string{".dross/phases/trial", "later", "could not be confirmed", "may be due", "[[after.task]]"} {
+				if !strings.Contains(got[0], want) {
+					t.Errorf("warning %q does not name %q", got[0], want)
+				}
+			}
+		})
+	}
+
+	t.Run("a proven writer task outranks a gone one", func(t *testing.T) {
+		dir := ksRepo(t)
+		ksTrial(t, dir, ksPending)
+		ksLaterRun(t, dir, ksRun{alsoGone: true})
+		got := killSwitchWarnings(filepath.Join(dir, ".dross"), dir)
+		if len(got) != 1 || strings.Contains(got[0], "could not be confirmed") || !strings.Contains(got[0], "with a writer") {
+			t.Errorf("warnings = %q, want only the confirmed-writer warning", got)
+		}
+	})
+
+	t.Run("a gone commit under an unproven run stays unknown", func(t *testing.T) {
+		dir := ksRepo(t)
+		ksTrial(t, dir, ksPending)
+		ksLaterRun(t, dir, ksRun{alsoGone: true, file: "small.go", size: writerSurfaceBytes - 1})
+		got := killSwitchWarnings(filepath.Join(dir, ".dross"), dir)
+		if len(got) != 1 || !strings.Contains(got[0], "could not be confirmed") {
+			t.Errorf("warnings = %q, want one unconfirmed-run warning", got)
+		}
+	})
+}
+
 // TestDoctorKillSwitchQuiet: each case flips one thing from the due fixture,
 // and none of them is a mined-and-waiting [after] leg. A warning here would
 // nag a trial that has nothing to measure yet, or one already measured.
@@ -197,6 +270,11 @@ func TestDoctorKillSwitchQuiet(t *testing.T) {
 		{name: "solo run before the trial", ks: ksPending, run: &ksRun{at: ksBefore}},
 		{name: "solo run at the anchor", ks: ksPending, run: &ksRun{at: ksAnchor}},
 		{name: "solo run unfinished", ks: ksPending, run: &ksRun{unfinished: true}},
+		{name: "commit gone, after recorded", ks: ksAfterRecorded, run: &ksRun{gone: true}},
+		{name: "commit gone, trial decided", ks: ksDecided, run: &ksRun{gone: true}},
+		{name: "commit gone, pair run", ks: ksPending, run: &ksRun{gone: true, pair: true}},
+		{name: "commit gone, before the trial", ks: ksPending, run: &ksRun{gone: true, at: ksBefore}},
+		{name: "commit gone, run unfinished", ks: ksPending, run: &ksRun{gone: true, unfinished: true}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

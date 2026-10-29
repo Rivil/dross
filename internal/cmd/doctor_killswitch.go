@@ -22,8 +22,10 @@ import (
 // thresholds hold" never happens. So a record whose [trial] is still pending,
 // with no [after] rows, is named once a later solo run has completed with at
 // least one task a writer took (laterWriterRun) — that run is the leg waiting
-// to be mined. Silent while no such run exists: a trial with nothing to
-// measure yet is not a fault.
+// to be mined. A completed solo run whose writer use cannot be confirmed
+// because a reviewed task's commit is gone is named too, as possibly due.
+// Silent while no such run exists: a trial with nothing to measure yet is not
+// a fault.
 //
 // A kill-switch.toml that does not read or decode is named too; a record
 // doctor cannot read is one the trial cannot be judged from.
@@ -49,21 +51,47 @@ func killSwitchWarnings(root string, repoDir string) []string {
 		if !ok {
 			continue
 		}
-		var runs []string
+		var runs, unconfirmed []string
 		for _, other := range ids {
-			if other != id && laterWriterRun(root, repoDir, other, since) {
+			if other == id {
+				continue
+			}
+			switch laterWriterRun(root, repoDir, other, since) {
+			case writerRunYes:
 				runs = append(runs, other)
+			case writerRunUnknown:
+				unconfirmed = append(unconfirmed, other)
 			}
 		}
-		if len(runs) == 0 {
-			continue
+		dir := RootDirName + "/phases/" + id
+		if len(runs) > 0 {
+			out = append(out, fmt.Sprintf(
+				"%s: [trial] is still pending, but %s has since run solo with a writer — mine its main-loop transcript with the [before] filter into [[after.task]] rows, then set [trial].status and writerEnabled from compareKillSwitch's verdict",
+				dir, strings.Join(runs, ", ")))
 		}
-		out = append(out, fmt.Sprintf(
-			"%s: [trial] is still pending, but %s has since run solo with a writer — mine its main-loop transcript with the [before] filter into [[after.task]] rows, then set [trial].status and writerEnabled from compareKillSwitch's verdict",
-			RootDirName+"/phases/"+id, strings.Join(runs, ", ")))
+		if len(unconfirmed) > 0 {
+			out = append(out, fmt.Sprintf(
+				"%s: [trial] is still pending, and %s has since run solo, but its writer use could not be confirmed (a reviewed task's files could not be sized at its commit — usually a commit gone from git after a squash-merge, or none recorded) — the [after] leg may be due: if its main-loop transcript shows a writer spawn, mine it with the [before] filter into [[after.task]] rows, then set [trial].status and writerEnabled from compareKillSwitch's verdict",
+				dir, strings.Join(unconfirmed, ", ")))
+		}
 	}
 	return out
 }
+
+// writerRun is what a later phase's run says about the writer trial.
+type writerRun int
+
+const (
+	// writerRunNone: no completed solo run after the trial, or one whose
+	// reviewed tasks all stayed under the dispatch gate.
+	writerRunNone writerRun = iota
+	// writerRunUnknown: a completed solo run after the trial with a reviewed
+	// task whose commit cannot be read, and no task proven to be a writer's.
+	writerRunUnknown
+	// writerRunYes: a completed solo run after the trial in which a writer
+	// took at least one task.
+	writerRunYes
+)
 
 // trialAnchor is when the trialling phase's last recorded task completed: a
 // run counts as "later" only after it, so the solo runs the [before] leg was
@@ -85,7 +113,8 @@ func trialAnchor(root, id string) (time.Time, bool) {
 }
 
 // laterWriterRun reports whether phase id is a completed solo execute run with
-// at least one task a writer took, finished after since.
+// at least one task a writer took, finished after since — or, when a reviewed
+// task's writer use cannot be measured, that it is unknown.
 //
 // No record names a run's mode or a task's dispatch durably — execute.json and
 // writer.json are machine-local and cleared — so both are read back from what
@@ -96,39 +125,48 @@ func trialAnchor(root, id string) (time.Time, bool) {
 //   - writer: its plan files, sized at its commit's parent (the HEAD dispatch
 //     measured), clear the same dispatchDecision `dross task dispatch` applies.
 //
-// Anything that cannot be read — a plan or record that does not load, a
-// commit git no longer has — is not proof of a writer run, so it is false.
-func laterWriterRun(root, repoDir, id string, since time.Time) bool {
+// A plan or record that does not load is not a completed solo run, so it is
+// writerRunNone. A reviewed task whose commit git no longer has — squash-merge,
+// a deleted branch, gc: the normal path once a phase ships — or that recorded
+// none is writerRunUnknown unless another task proves a writer: staying silent
+// there would hide exactly the run the [after] leg waits on.
+func laterWriterRun(root, repoDir, id string, since time.Time) writerRun {
 	plan, err := phase.LoadPlan(filepath.Join(phase.Dir(root, id), "plan.toml"))
 	if err != nil || len(plan.Task) == 0 {
-		return false
+		return writerRunNone
 	}
 	for _, t := range plan.Task {
 		if t.Status != "done" && t.Status != "failed" {
-			return false
+			return writerRunNone
 		}
 	}
 	c, err := changes.Load(changes.FilePath(root, id), id)
 	if err != nil {
-		return false
+		return writerRunNone
 	}
+	result := writerRunNone
 	for _, t := range plan.Task {
 		rec, done := c.Tasks[t.ID]
 		if _, reviewed := c.Reviews[t.ID]; !done || !reviewed {
 			continue
 		}
-		if rec.Commit == "" || !rec.CompletedAt.After(since) {
+		if !rec.CompletedAt.After(since) {
+			continue
+		}
+		if rec.Commit == "" {
+			result = writerRunUnknown
 			continue
 		}
 		surface, err := surfaceAt(repoDir, rec.Commit+"^", t.Files)
 		if err != nil {
+			result = writerRunUnknown
 			continue
 		}
 		if writer, _ := dispatchDecision(surface, writerEnabled); writer {
-			return true
+			return writerRunYes
 		}
 	}
-	return false
+	return result
 }
 
 // surfaceAt sums the committed size of files at rev, as taskSurface does at
