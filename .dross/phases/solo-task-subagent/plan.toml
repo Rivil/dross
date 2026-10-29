@@ -232,4 +232,4 @@ task). Recovery partial: a writer record still launched on resume → stash + fa
   description = "Verify FLAG carried from t-13 review (verify r-20261029-104618). laterWriterRun sizes a reviewed solo task's files at its commit's parent with git ls-tree; when that commit is gone (squash-merge, branch deleted, gc — the normal post-ship path) surfaceAt errors, the task is skipped and the check returns false, so the [after] reminder never fires: the silent failure t-13 exists to catch. Make the result tri-state: a completed solo run after the trial with a reviewed task whose commit cannot be read is 'unknown', and doctor warns that the kill-switch [after] leg may be due (naming the phase and that its writer use could not be confirmed) instead of staying silent. A run with no reviewed task, or [after] already recorded, stays quiet."
   covers = ["c-6"]
   test_contract = ["if doctor stays silent when a later completed solo run's reviewed task commit is missing from git, TestDoctorKillSwitchCommitGone fails", "if doctor warns with no later solo run, or once [after] is recorded, TestDoctorKillSwitchQuiet fails"]
-  status = "pending"
+  status = "done"

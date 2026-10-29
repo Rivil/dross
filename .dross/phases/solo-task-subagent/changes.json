@@ -126,6 +126,22 @@
         }
       ]
     },
+    "t-16": {
+      "files": [
+        "internal/cmd/doctor_killswitch.go",
+        "internal/cmd/doctor_killswitch_test.go"
+      ],
+      "commit": "bfdf8d9d",
+      "completed_at": "2026-10-29T20:13:50.124818Z",
+      "landmarks": [
+        {
+          "feature": "writer kill switch",
+          "symbol": "laterWriterRun",
+          "loc": "internal/cmd/doctor_killswitch.go:133",
+          "what": "tri-state writer-run check: a later solo run whose task commit is gone warns the [after] leg may be due instead of staying silent"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         ".dross/phases/solo-task-subagent/kill-switch.toml",
@@ -427,6 +443,56 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The new non-bool case (\"true\" as a string) covers the type check that the old .(bool) assertion did implicitly.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-16": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "Any surfaceAt error now makes the run 'unknown', not just a commit git no longer has. That includes a plan path the path fence rejects (pathfence.Contain) and any other git ls-tree failure. Each of these produces the 'commit is gone from git, as after a squash-merge' warning, which wrongly names the cause in those cases.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A reviewed task that recorded no commit (Commit == \"\") is also treated as 'unknown' and gets the same 'commit is gone from git' wording. That is defensible under 'commit cannot be read', but the message describes a different situation.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The unknown path is only tested through killSwitchWarnings. No Doctor()-level subtest drives it, though it feeds the same Kill switch block as the confirmed-writer path, which is tested end to end.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-6",
+          "text": "Once a later solo run ships and its commits are squash-merged, even a run whose tasks were all under the dispatch gate (silent while the commits existed) now raises the 'may be due' warning until [after] is recorded. This is what the task description asks for, but expect the warning to keep appearing after every later solo phase ships.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "surfaceAt also errors on a task file path that escapes the repo (pathfence), and that case is also reported as unknown. The warning text ('could not be sized') covers it well enough.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The test 'a proven writer task outranks a gone one' lists the missing-commit t-0 before t-1, so it fails if the code ever returns early on an unknown result. It is a useful ordering check.",
           "resolution": "non-blocking, left"
         }
       ]
