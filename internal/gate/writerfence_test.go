@@ -64,6 +64,13 @@ func TestWriterBashAllowlist(t *testing.T) {
 		"echo x > b.go",
 		`dross task status p t-1 failed --reason show`,
 		"dross rule add x --text show",
+		"sed -i s/a/b/ a.go",
+		"sed -i.bak s/a/b/ a.go",
+		"perl -i -pe s/a/b/ a.go",
+		"find . -name '*.go' -exec cat {} +",
+		"find . -execdir cat {} +",
+		"find . -name x -delete",
+		"find . -ok cat {} +",
 	} {
 		if res := writerCheck(t, writerBash(t, dir, line)); res.Allowed() {
 			t.Errorf("the writer ran %q", line)
@@ -77,6 +84,8 @@ func TestWriterBashAllowlist(t *testing.T) {
 		"gofmt -l .",
 		"dross task show p t-1",
 		"ls internal && grep -n Foo a.go",
+		"sed -n 1p a.go",
+		"find . -name '*.go'",
 	} {
 		admits(t, line, writerCheck(t, writerBash(t, dir, line)))
 	}
@@ -95,6 +104,31 @@ func TestFenceFailsClosedOnOpaqueShell(t *testing.T) {
 		if res := writerCheck(t, writerBash(t, dir, line)); res.Allowed() {
 			t.Errorf("the writer ran %q", line)
 		}
+	}
+}
+
+// TestWriterSpawnsNoAgent pins c-1: a writer does its task itself, so any
+// Agent or Task spawn it makes — another writer included — is refused.
+func TestWriterSpawnsNoAgent(t *testing.T) {
+	dir := fencedRepo(t, gatestate.WriterLaunched)
+	for _, tool := range []string{"Agent", "Task"} {
+		for _, sub := range []string{"Explore", "dross-task-writer"} {
+			in := bgPost(t, "writer_pre_bash.json", dir, func(m map[string]any) {
+				m["tool_name"] = tool
+				m["tool_input"] = map[string]any{"subagent_type": sub, "prompt": "x", "run_in_background": true}
+			})
+			refusedWith(t, tool+" "+sub, writerCheck(t, in), "never spawns another agent")
+		}
+	}
+}
+
+// TestWriterPartialLineRefused: a writer line the scanner reads only in part
+// is refused whole, never judged on its readable prefix — past an
+// unterminated quote the scanner sees only a harmless `echo`.
+func TestWriterPartialLineRefused(t *testing.T) {
+	dir := fencedRepo(t, gatestate.WriterLaunched)
+	for _, line := range []string{`echo "unterminated`, `echo "oops; git commit -m x`} {
+		refusedWith(t, line, writerCheck(t, writerBash(t, dir, line)), "could not be read with confidence")
 	}
 }
 

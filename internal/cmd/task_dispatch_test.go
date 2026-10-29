@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"math"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -170,6 +171,25 @@ func TestCompareUsesAboveGateMedians(t *testing.T) {
 	}
 	if !v.Pass || v.ContextDrop < 0.29 || v.ContextDrop > 0.31 || v.WallClockRise != 0 {
 		t.Fatalf("verdict %+v: want a 30%% median drop and no rise, the below-gate row ignored", v)
+	}
+}
+
+// TestCompareEvenMedian: an even above-gate count (the real [before] leg has
+// 48) takes the mean of the two middle values — the lower or upper middle
+// alone would move both measures off the 25% edges.
+func TestCompareEvenMedian(t *testing.T) {
+	if m := median([]float64{100, 1, 4, 3}); m != 3.5 {
+		t.Errorf("median of 1,3,4,100 = %v, want 3.5", m)
+	}
+	before := rows(1000, 100, 1000, 100, 1000, 100, 1000, 100)
+	after := rows(5000, 150, 600, 100, 800, 140, 700, 110)
+	v, err := compareKillSwitch(before, after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const eps = 1e-9
+	if !v.Pass || math.Abs(v.ContextDrop-0.25) > eps || math.Abs(v.WallClockRise-0.25) > eps {
+		t.Fatalf("verdict %+v: want drop 25%% (median 750) and rise 25%% (median 125)", v)
 	}
 }
 
