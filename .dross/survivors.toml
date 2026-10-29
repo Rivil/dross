@@ -4981,3 +4981,39 @@
   line = 123
   accepted_in = "solo-task-subagent"
   category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "a02e881f45ad1166"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.ToolName == \"Agent\" || c.ToolName == \"Task\":"
+  line = 130
+  reason = "gremlins-attribution-ceiling: switch{} case-condition line (Agent/Task spawn arm); the arm is driven by writerfence_test.go:TestWriterSpawnsNoAgent"
+  accepted_in = "solo-task-subagent"
+
+[[accepted]]
+  key = "22e08a96f7fed133"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"find\" && slices.ContainsFunc(args, func(a string) bool {"
+  line = 249
+  reason = "gremlins-attribution-ceiling: switch{} case-condition line (find -exec/-execdir/-delete/-ok arm); driven by writerfence_test.go:TestWriterBashAllowlist"
+  accepted_in = "solo-task-subagent"
+
+[[accepted]]
+  key = "9fa7735c60da667f"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"git\":"
+  line = 388
+  reason = "gremlins-attribution-ceiling: switch{} case-condition line (takeoverWrite git checkout/restore arm); driven by writerfence_test.go:TestNoInlineTakeoverViaBash"
+  accepted_in = "solo-task-subagent"
+
+[[accepted]]
+  key = "cd47480c6ec79776"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--reason\":"
+  line = 444
+  reason = "gremlins-attribution-ceiling: switch{} case-condition line (escape-route --reason value skip); driven by writerfence_test.go:TestEscapeRouteSurvivesLoadError"
+  accepted_in = "solo-task-subagent"

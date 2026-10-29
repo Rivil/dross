@@ -1,4 +1,4 @@
-task_seq = 14
+task_seq = 16
 
 [phase]
   id = "solo-task-subagent"
@@ -213,3 +213,23 @@ task). Recovery partial: a writer record still launched on resume → stash + fa
   test_contract = ["if doctor stays silent with [trial] pending after a later solo run with a writer-dispatched task, TestDoctorKillSwitchAfterDue fails", "if doctor warns with no later solo run, or once [after] is recorded, TestDoctorKillSwitchQuiet fails"]
   status = "done"
   depends_on = ["t-14"]
+
+[[task]]
+  id = "t-15"
+  wave = 1
+  title = "Close the remaining main-loop takeover-fence holes"
+  files = ["internal/gate/writerfence.go", "internal/gate/writerfence_test.go"]
+  description = "Verify FLAGs carried from t-11 review (verify r-20261029-104618). (1) takeoverWrite judges only the outer command name, so once the writer is stopped a wrapped or nested main-loop write is admitted (timeout 5 sed -i s/a/b/ a.go, sh -c 'echo x > a.go'), and a partial scan is admitted too: apply the same unwrap / fenceUnreadable / Partial fail-closed handling the launched-state wait fence uses. (2) isEscapeRoute returns before takeoverWrite runs, so a redirection on the escape line (git stash push > a.go, dross task status p t-1 failed --reason x > a.go) bypasses the fence: an escape line must carry no output redirection onto a writer-owned file, or run takeoverWrite on it as well. (3) operands() does not parse dd's of=FILE form: treat dd of= as a target. Keep the plain stash and task status failed escape route admitted."
+  covers = ["c-5"]
+  test_contract = ["if a wrapped or nested main-loop write onto a writer-owned file (timeout 5 sed -i, sh -c with a redirection) is admitted after the writer stops, TestNoInlineTakeoverViaWrapper fails", "if an escape-route line carrying a redirection onto a writer-owned file is admitted, TestEscapeRouteRedirectRefused fails", "if dd of=<writer-owned file> is admitted, TestNoInlineTakeoverViaBash fails"]
+  status = "pending"
+
+[[task]]
+  id = "t-16"
+  wave = 1
+  title = "Make the kill-switch reminder loud when a run's commit is gone"
+  files = ["internal/cmd/doctor_killswitch.go", "internal/cmd/doctor_killswitch_test.go"]
+  description = "Verify FLAG carried from t-13 review (verify r-20261029-104618). laterWriterRun sizes a reviewed solo task's files at its commit's parent with git ls-tree; when that commit is gone (squash-merge, branch deleted, gc — the normal post-ship path) surfaceAt errors, the task is skipped and the check returns false, so the [after] reminder never fires: the silent failure t-13 exists to catch. Make the result tri-state: a completed solo run after the trial with a reviewed task whose commit cannot be read is 'unknown', and doctor warns that the kill-switch [after] leg may be due (naming the phase and that its writer use could not be confirmed) instead of staying silent. A run with no reviewed task, or [after] already recorded, stays quiet."
+  covers = ["c-6"]
+  test_contract = ["if doctor stays silent when a later completed solo run's reviewed task commit is missing from git, TestDoctorKillSwitchCommitGone fails", "if doctor warns with no later solo run, or once [after] is recorded, TestDoctorKillSwitchQuiet fails"]
+  status = "pending"
