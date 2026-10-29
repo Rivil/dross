@@ -194,3 +194,82 @@ func TestFenceSilentUnarmed(t *testing.T) {
 		admits(t, name+" main test", writerCheck(t, bash(t, "dross test", dir)))
 	}
 }
+
+// TestFenceRefusesWrappers: a wrapper the scan does not unwrap hides the
+// program it runs, so both the writer fence and the main-loop wait fence
+// fail closed on it instead of judging the wrapper's name.
+func TestFenceRefusesWrappers(t *testing.T) {
+	dir := fencedRepo(t, gatestate.WriterLaunched)
+	for _, line := range []string{
+		"timeout 5 git commit -m x",
+		"nice git commit -m x",
+		"ionice -c3 git commit -m x",
+		"stdbuf -oL git commit -m x",
+		"setsid git commit -m x",
+		"chrt -i 0 git commit -m x",
+		"env -S 'git commit -m x'",
+	} {
+		refusedWith(t, "writer "+line, writerCheck(t, writerBash(t, dir, line)), "cannot read")
+	}
+	for _, line := range []string{"timeout 600 dross test", "nice git commit -m x", "env -S 'dross test'"} {
+		refusedWith(t, "main "+line, writerCheck(t, bash(t, line, dir)), "wait for the writer's completion notice")
+	}
+}
+
+// TestNoInlineTakeoverViaBash pins c-5 past the Edit tool: a main-loop Bash
+// line that writes a writer-owned file is the same takeover, launched or
+// stopped; one that writes elsewhere, or only reads, is not.
+func TestNoInlineTakeoverViaBash(t *testing.T) {
+	for _, state := range []string{gatestate.WriterLaunched, gatestate.WriterStopped} {
+		dir := fencedRepo(t, state)
+		for _, line := range []string{
+			"sed -i s/a/b/ a.go",
+			"perl -i -pe s/a/b/ a.go",
+			"cp b.go a.go",
+			"mv b.go a.go",
+			"echo x | tee a.go",
+			"echo x > a.go",
+			"echo x >> " + filepath.Join(dir, "a.go"),
+			"git checkout -- a.go",
+			"git restore a.go",
+			"git checkout .",
+		} {
+			refusedWith(t, state+" "+line, writerCheck(t, bash(t, line, dir)), "never takes it over inline")
+		}
+		for _, line := range []string{"cat a.go", "echo x > b.go", "sed -n 1p a.go", "git checkout main"} {
+			admits(t, state+" "+line, writerCheck(t, bash(t, line, dir)))
+		}
+	}
+}
+
+// TestWriterEditOutsideRepo: a writer edit whose path lies in no dross repo
+// is judged against the writer's session repo (Targets' subagent fallback)
+// and refused as none of its task's files, not waved through unarmed.
+func TestWriterEditOutsideRepo(t *testing.T) {
+	dir := fencedRepo(t, gatestate.WriterLaunched)
+	outside := filepath.Join(t.TempDir(), "x.go")
+	in := bgPost(t, "writer_pre_edit.json", dir, func(m map[string]any) {
+		m["tool_input"].(map[string]any)["file_path"] = outside
+	})
+	refusedWith(t, outside, writerCheck(t, in), "is not one of t-1's files")
+}
+
+// TestEscapeRouteSurvivesLoadError: a corrupt gate record refuses the main
+// loop's calls, but never the stash and `task status … failed` that set a
+// failed writer's task aside.
+func TestEscapeRouteSurvivesLoadError(t *testing.T) {
+	for _, rec := range []string{".dross/gate/writer.json", ".dross/gate/execute.json"} {
+		dir := fencedRepo(t, gatestate.WriterLaunched)
+		put(t, dir, rec, "{")
+		if res := writerCheck(t, bash(t, "git status", dir)); res.Allowed() {
+			t.Fatalf("%s corrupt: a plain call passed, so the load error never reached the fence", rec)
+		}
+		for _, line := range []string{
+			"git stash push -u -- . ':(exclude).dross'",
+			`dross task status p t-1 failed --reason "writer: red"`,
+			`git stash push -u -- . ':(exclude).dross' && dross task status p t-1 failed --reason "writer: red"`,
+		} {
+			admits(t, rec+" corrupt: "+line, writerCheck(t, bash(t, line, dir)))
+		}
+	}
+}
