@@ -74,6 +74,22 @@
         }
       ]
     },
+    "t-14": {
+      "files": [
+        "internal/gate/writer.go",
+        "internal/gate/writer_test.go"
+      ],
+      "commit": "407a7532",
+      "completed_at": "2026-10-29T08:23:41.57954Z",
+      "landmarks": [
+        {
+          "feature": "solo task writer",
+          "symbol": "judgeWriterSpawn",
+          "loc": "internal/gate/writer.go:102",
+          "what": "a writer spawn with no run_in_background key is admitted as background; only an explicit foreground or non-bool value is refused"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         ".dross/phases/solo-task-subagent/kill-switch.toml",
@@ -328,6 +344,26 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "savePlan is a package-level mutable seam; it is safe here because no test in internal/cmd calls t.Parallel, but a future parallel test that swaps it would race",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-14": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "internal/gate/fixture_test.go:205-217 notes an older harness where leaving out run_in_background might mean a foreground spawn. With this change the gate trusts the harness default rather than requiring proof of background. That matches the task's stated intent, and assets/prompts/_execute.solo.md still tells the spawner to pass run_in_background: true explicitly, which is still admitted.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The new non-bool case (\"true\" as a string) covers the type check that the old .(bool) assertion did implicitly.",
           "resolution": "non-blocking, left"
         }
       ]

@@ -1,4 +1,4 @@
-task_seq = 13
+task_seq = 14
 
 [phase]
   id = "solo-task-subagent"
@@ -194,6 +194,16 @@ task). Recovery partial: a writer record still launched on resume → stash + fa
   status = "done"
 
 [[task]]
+  id = "t-14"
+  wave = 1
+  title = "Admit writer spawns that carry no run_in_background key"
+  files = ["internal/gate/writer.go", "internal/gate/writer_test.go"]
+  description = "The first live writer spawn (t-13, 2026-10-29) was refused: writer.go requires tool_input run_in_background=true, but the current Claude Code Agent tool has no such parameter (every subagent runs in the background), so the key never reaches the hook. The t-1 capture came from an older harness that sent it. Admit a spawn whose run_in_background is absent; refuse only an explicit false (or a non-bool value)."
+  covers = ["c-1", "c-4"]
+  test_contract = ["if a writer spawn with no run_in_background key is refused, or one with run_in_background false is admitted, TestWriterSpawnShape fails"]
+  status = "done"
+
+[[task]]
   id = "t-13"
   wave = 1
   title = "Surface the pending kill-switch [after] leg"
@@ -202,4 +212,5 @@ task). Recovery partial: a writer record still launched on resume → stash + fa
   covers = ["c-6"]
   test_contract = ["if doctor stays silent with [trial] pending after a later solo run with a writer-dispatched task, TestDoctorKillSwitchAfterDue fails", "if doctor warns with no later solo run, or once [after] is recorded, TestDoctorKillSwitchQuiet fails"]
   status = "failed"
-  reason = "writer: spawn refused by solo-writer gate (writer_spawn) — this harness's Agent tool has no run_in_background input, so the key the gate requires never reaches the hook"
+  depends_on = ["t-14"]
+  reason = "writer: red — TestCmdBoundaryByImportDirection (internal/cmd may not import BurntSushi/toml or declare toml structs); kill-switch.toml const not in secretscan.Writers(); fix needs a domain package + internal/secretscan/writers.go outside task.files"
