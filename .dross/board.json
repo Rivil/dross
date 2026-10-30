@@ -1640,6 +1640,16 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "memory-prune-advisor/t-10": {
+      "issue": "DRO-1040",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-11": {
+      "issue": "DRO-1041",
+      "plan_status": "in_progress",
+      "board_state": "task-in-progress"
+    },
     "memory-prune-advisor/t-2": {
       "issue": "DRO-1032",
       "plan_status": "done",
@@ -1657,8 +1667,28 @@
     },
     "memory-prune-advisor/t-5": {
       "issue": "DRO-1035",
-      "plan_status": "in_progress",
-      "board_state": "task-in-progress"
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-6": {
+      "issue": "DRO-1036",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-7": {
+      "issue": "DRO-1037",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-8": {
+      "issue": "DRO-1038",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-9": {
+      "issue": "DRO-1039",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "milestone-push-failure-tests/t-1": {
       "issue": "DRO-264",

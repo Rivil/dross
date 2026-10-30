@@ -32,6 +32,24 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/cmd/memory.go",
+        "internal/cmd/memory_test.go",
+        "cmd/dross/main.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "c722d22d",
+      "completed_at": "2026-10-30T18:27:38.4829Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "memoryApply",
+          "loc": "internal/cmd/memory.go:63",
+          "what": "dross memory advise lists every suggestion read-only; dross memory apply \u003cid\u003e --yes re-gathers, refuses unknown/ambiguous/report-only ids, applies with a snapshot and prints the integrity recheck"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/memadvise/index.go",
@@ -82,6 +100,99 @@
           "what": "finds an expired deadline (until/by/due… YYYY-MM-DD \u003c today) or a next-phase clause naming a known phase and rewords it out of the hook, never to empty"
         }
       ]
+    },
+    "t-5": {
+      "files": [
+        "internal/memadvise/turns.go",
+        "internal/memadvise/turncache.go",
+        "internal/memadvise/turns_test.go",
+        "internal/memadvise/turncache_test.go",
+        "internal/cmd/gitignore.go",
+        "internal/cmd/gitignore_test.go",
+        ".gitignore",
+        "internal/secretscan/writers.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "5d4979d4",
+      "completed_at": "2026-10-30T17:00:26.777664Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Turns",
+          "loc": "internal/memadvise/turncache.go:43",
+          "what": "counts this repo's and all projects' main-agent assistant turns over 30d from Claude transcripts, cached incrementally in gitignored .dross/memory/turns.json (24h reuse)"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/memadvise/advise.go",
+        "internal/memadvise/cost.go",
+        "internal/memadvise/advise_test.go",
+        "internal/memadvise/cost_test.go"
+      ],
+      "commit": "8a69b2b3",
+      "completed_at": "2026-10-30T17:15:34.914946Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Advise",
+          "loc": "internal/memadvise/advise.go:65",
+          "what": "turns a memory dir into ranked prune suggestions (expired-hook reword beats duplicate delete, guarded never deleted, dead links and orphans) priced at index bytes x repo turns x $0.20/MTok cache read"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/memadvise/gather.go",
+        "internal/memadvise/render.go",
+        "internal/memadvise/render_test.go"
+      ],
+      "commit": "f12216ea",
+      "completed_at": "2026-10-30T17:37:10.834714Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Gather",
+          "loc": "internal/memadvise/gather.go:29",
+          "what": "resolves memory dir, tracked docs (git ls-files), known next-phases and turn counts into a Report; Render prints id/file/action/$X.XX/mo lines, +N more, integrity and share lines, never bodies"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/memadvise/apply.go",
+        "internal/memadvise/snapshot.go",
+        "internal/memadvise/apply_test.go",
+        "internal/secretscan/writers.go"
+      ],
+      "commit": "1f42b123",
+      "completed_at": "2026-10-30T17:44:21.390482Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Apply",
+          "loc": "internal/memadvise/apply.go:30",
+          "what": "carries out one delete/reword: refuses report-only, snapshots the memory dir to .dross/memory/snapshots first, re-checks the guard live, aborts on a concurrent MEMORY.md edit, rewrites the index atomically, re-runs integrity"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/status_memory_test.go",
+        "internal/cmd/status_prompt_test.go"
+      ],
+      "commit": "1baa5496",
+      "completed_at": "2026-10-30T18:03:01.088357Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "statusMemory",
+          "loc": "internal/cmd/status.go:503",
+          "what": "dross status prints a memory: section with the top 3 prune suggestions and +N more after the debug: line; silent on no dir, nothing to suggest or any error"
+        }
+      ]
     }
   },
   "reviews": {
@@ -109,6 +220,34 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The package doc mentions Apply as the one writer, but this diff does not add Apply. The doc assumes sibling tasks will.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "advise reports a partial turn count only on the run that recounts: Turns saves the cache even when Unreadable \u003e 0, and a cache hit within CacheTTL returns Unreadable=0, so for the next 24h advise prints the partial counts silently with exit 0. TestAdviseSurfacesCountError only covers the first, uncached run.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the apply prints the snapshot line before checking Apply's error, so a failure after the snapshot (guard refusal, index changed meanwhile) still tells the user where the copy is",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestApplyUnknownID uses typo-shaped ids only. A truly stale id (a suggestion that was valid and then went away) takes the same not-found path, so this covers it in effect",
           "resolution": "non-blocking, left"
         }
       ]
@@ -202,6 +341,169 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "Expired takes known map[string]bool, not the phaseKnown(slug) predicate the description names; a code comment gives the reason (exec-consent audit) and NextSlugs lets the caller build the set. The tested behaviour is the same.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "update() only treats a file as rewritten when size \u003c e.Offset. A transcript rewritten in place to the same or a larger size (e.g. compacted then grown past the old offset) is resumed from the stale offset, so its new head is never counted and its old day buckets stay. Resetting when mtime moved but the bytes before Offset changed, or at least when size \u003c e.Size, would narrow this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "saveCache's symlink refusal Lstat's only the final .dross/memory component. A symlinked .dross (or any parent) still lets MkdirAll and writeAtomic land turns.json wherever it points, including inside the memory dir, which TestCacheNeverInMemoryDir's intent rules out.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The window is day-granular: windowStart is the UTC date of now-30d, so a turn up to ~30d23h old can count while the mtime cutoff is exact. This meets the 31-day test_contract; it just runs slightly past 30 days.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "Advise iterates index lines, not memories: if a memory is indexed twice and the first line (no expired clause) yields a duplicate delete, the second line's expired clause is skipped via seen[], so that memory gets a delete instead of a reword.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "id() uses filepath.Base of the target, so two dead links to the same target, or a dead 'old/x.md' next to a live duplicate x.md, yield identical IDs (e.g. delete-x); ambiguous if Apply selects by ID.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "Adds a third Action, 'index', for guarded orphans, beyond the record's delete|reword hook; a reasonable resolution of the orphan-delete versus guard rule.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Line-byte pricing uses len(Raw)+1; it overcounts by 1 for a final line without a newline and undercounts by 1 for CRLF files, since Raw drops the \\r.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "Gather treats any Turns error as fatal and returns an empty Report, although Turns documents that a failed cache write still returns valid fresh counts alongside the error; a read-only checkout or a symlinked .dross/memory therefore silently suppresses all suggestions instead of just skipping the cache",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Gather calls Load(dir) and then Advise loads the same dir again; one read could serve both",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "knownPhases (DirExists || Done lookup per next-slug) has no direct test; not required by the test_contract",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "rewriteIndex picks one line ending for the whole file: if any CRLF is present, every line is rejoined with CRLF. So an index with mixed LF/CRLF endings gets bytes changed on lines other than the target, which the 'every other byte kept' promise rules out. Keeping each line's own ending would fix it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "Snapshot copies every direct-child regular file through readRegular, which refuses files over 1 MiB. One large file of any type in the memory dir (not only *.md) makes every apply fail with 'unreadable', and nothing tests it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "TestApplyDeleteRemovesFileAndLine compares only keep.md, other.md and MEMORY.md. It would not catch a leftover .MEMORY.md.*.tmp or any other new file in the memory dir. Comparing a dirHash of the expected tree would cover the 'any other byte changed' clause fully.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "If Snapshot fails partway, the partially written snapshot dir is left under .dross/memory/snapshots/. It is git-ignored, and the memory dir is not touched.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The record describes Apply(memDir, snapDir, s), but the code implements Apply(root, memDir, s, now) and derives the snapshot dir from root. The behaviour is the same.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "The 'unreadable MEMORY.md' subtest passes because memadvise.Load treats an unreadable index as no index (HasIndex false, so Advise returns nothing), not through a Gather error; the error branch is exercised by the 'unreadable memory dir' and 'turn cache cannot be written' subtests instead",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Turns returns fresh counts alongside a cache-write error, but Gather turns that into a hard error, so an unwritable .dross/memory silences the memory section entirely; this matches the task description and is pinned by a test",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Every dross status run now runs git ls-files, breaks tracked docs into word sequences for the duplicate check, and lists the memory dir; transcript recounts are limited by the 24h cache",
           "resolution": "non-blocking, left"
         }
       ]

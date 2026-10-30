@@ -86,13 +86,12 @@ and its separator removed."""
   id = "t-5"
   wave = 2
   title = "Count repo turns with 24h incremental cache"
-  files = ["internal/memadvise/turns.go", "internal/memadvise/turncache.go", "internal/memadvise/turns_test.go", "internal/memadvise/turncache_test.go", "internal/cmd/gitignore.go", "internal/cmd/gitignore_test.go", ".gitignore", "internal/secretscan/writers.go"]
+  files = ["internal/memadvise/turns.go", "internal/memadvise/turncache.go", "internal/memadvise/turns_test.go", "internal/memadvise/turncache_test.go", "internal/cmd/gitignore.go", "internal/cmd/gitignore_test.go", ".gitignore", "internal/secretscan/writers.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
   description = "Turns streams top-level <slug>/*.jsonl via bufio.Reader (no Scanner cap), skipping subagents/ and files with mtime >30d. A turn = distinct message.id\nper file, type=assistant, isSidechain=false, model≠\"<synthetic>\", within 30d; counts per project + all-projects total. Cache .dross/memory/turns.json\nkeeps per-file {size, mtime, offset, day buckets}: reused under 24h, after 24h only appended bytes rescanned, truncation recounts from 0, atomic\nwrites; returns counts + cache age. Before its first write it creates a self-ignoring .dross/memory/.gitignore (\"*\"), so repos onboarded before this\nphase never stage advisor state. Also seed .dross/memory/ in drossIgnoreEntries and .gitignore; register turncache.go as MachineLocal in secretscan."
   covers = ["c-2"]
   test_contract = ["if three lines sharing one message.id count more than 1, TestTurnsDedupeMessageID fails", "if isSidechain:true, \"<synthetic>\", user lines or subagents/ files add turns, TestTurnsMainAgentOnly fails", "if a turn dated 31 days ago is counted, TestTurnsWindow fails", "if a chmod-000 transcript with a 31-day-old mtime is opened, TestTurnsSkipsStaleFilesByMtime fails", "if a 5 MB single-line tool result between two assistant turns yields anything but 2, TestTurnsSurviveMultiMegabyteLine fails", "if a malformed line is fatal, TestTurnsSkipMalformedLine fails", "if RepoShare is not repo/all across two fixture project dirs, TestTurnsShareAcrossProjects fails", "if a 23h-old cache shows appended turns or age ≠ 23h, TestCacheReusedUnder24h fails; if at 25h they don't show or the cache isn't rewritten, TestCacheRecountedAt24h fails", "if a corrupt or future-dated cache is trusted, TestCacheRecountsOnCorruptOrFuture fails", "if a recount after one appended turn reads more than the appended bytes, or a truncated file is not recounted from 0, TestIncrementalRecountAndTruncation fails", "if the cache path is ever under the memory dir instead of <root>/.dross/memory/, TestCacheNeverInMemoryDir fails", "if .dross/memory/ is missing from drossIgnoreEntries or the repo .gitignore, TestEnsureGitignoreCoversMemoryState fails; if the ignore entry and the memadvise path constants drift, TestIgnoreEntriesMatchAdvisorPaths fails", "if turncache.go is left out of secretscan.Writers() or its IgnoreSeed is wrong, the existing writer enum test fails", "if turns.json is written in a repo whose root .gitignore lacks .dross/memory/ and `git check-ignore .dross/memory/turns.json` does not report it ignored, TestMemoryStateSelfIgnores fails"]
-  status = "failed"
+  status = "done"
   depends_on = ["t-1"]
-  reason = "writer: test red on TestEveryPathShapedFieldIsDeclared, needs 3 rows in internal/cmd/testdata/pathfence_scan/not_paths.txt (outside task files); code in stash@{0}"
 
 [[task]]
   id = "t-6"
@@ -120,7 +119,7 @@ repo turns × CacheReadUSDPerMTok / 1e6 (one constant); share = repo/all, displa
     "if an all-projects total of 0 gives NaN or panics instead of share \"n/a\", TestShareZeroTotal fails",
     "if a missing dir, missing MEMORY.md or empty dir yields anything but an empty slice and nil error, TestAdviseMissingDirOrIndexIsEmpty fails",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-7"
@@ -135,7 +134,7 @@ report-only marked), an integrity block, a share line (\"this repo: N of M assis
 \"+N more — dross memory advise\" when truncated. Never prints memory bodies."""
   covers = ["c-1", "c-2", "c-3", "c-7"]
   test_contract = ["if an item line lacks its ID, file, action word or \"$X.XX/mo\", TestRenderSuggestionLine fails", "if the share line lacks repo turns, all turns, the percent or the cache age, TestRenderShareAndCacheAge fails", "if limit 3 over 5 items does not render 3 plus \"+2 more — dross memory advise\", or 3 over 3 renders \"+0 more\", TestRenderTruncation fails", "if zero items or a missing dir renders any bytes, TestRenderEmptyIsSilent fails", "if a sentinel present only in a memory body appears in rendered output, TestRenderNeverPrintsBodies fails", "if an untracked docs/x.md identical to a memory produces a delete, TestGatherUsesTrackedDocsOnly fails", "if the sha256 over (path, mode, bytes) of the memory dir changes across Gather, even when a stale turn cache is rewritten, TestGatherNeverWritesMemoryDir fails", "if an item line omits its Reason text, TestRenderSuggestionReason fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-8"
@@ -150,7 +149,7 @@ re-checks Guarded on the live file before any delete; touches only direct-child 
 Register snapshot.go as MachineLocal and apply.go as OutsideDross (one disposition per file)."""
   covers = ["c-9", "c-3"]
   test_contract = ["if after a delete the file or its MEMORY.md line remains, or any other byte changed, TestApplyDeleteRemovesFileAndLine fails", "if after a reword any line other than that hook differs, or it does not equal NewHook, TestApplyRewordTouchesOneLine fails", "if the snapshot does not hash identical to the pre-apply dir, TestApplySnapshotsFirst fails", "if a snapshot failure does not abort with the dir untouched, TestApplyAbortsWhenSnapshotFails fails", "if a body that gained \"DECOY\" after advise is deleted or the dir hash changes, TestApplyRefusesGuardedDelete fails", "if a ReportOnly (orphan) suggestion is applied or the dir hash changes, TestApplyRefusesReportOnly fails", "if a dead-link target that is a symlink outside the dir is followed or deleted (only the index line may go), TestApplyNeverDeletesOutsideDir fails", "if MEMORY.md edited between plan and rename is overwritten, TestApplyAbortsOnConcurrentIndexEdit fails", "if deleting a memory linked via [[name]] does not return that dangling link, or a pre-existing orphan is not reported, TestApplyRechecksIntegrity fails", "if apply.go or snapshot.go is left out of secretscan.Writers(), or one file carries two dispositions, the writer enum test fails", "if a snapshot is written in a repo whose root .gitignore lacks .dross/memory/ and `git check-ignore` does not report every snapshot file ignored (the self-ignoring .dross/memory/.gitignore is created first), TestSnapshotSelfIgnores fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-9"
@@ -170,14 +169,14 @@ items prints nothing and status still exits 0. assets/prompts/status.md stays un
     "if the reentry line is not last with the block present, TestStatusFooterStillLast fails",
     "if status.md gains any `dross memory` invocation, TestStatusPromptAddsNoMemoryCall fails",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-10"
   wave = 5
   title = "Add dross memory advise/apply commands"
   depends_on = ["t-7", "t-8"]
-  files = ["internal/cmd/memory.go", "internal/cmd/memory_test.go", "cmd/dross/main.go"]
+  files = ["internal/cmd/memory.go", "internal/cmd/memory_test.go", "cmd/dross/main.go", "cmd/dross/testdata/cli_tree.txt"]
   description = """
 `dross memory advise` prints Render(report, all) with integrity block, share and cache age; missing dir is silent exit 0, a count/IO error is loud and
 non-zero. `dross memory apply <id> --yes` re-gathers, requires the id among current suggestions, refuses report-only ids (index or remove by hand),
@@ -194,7 +193,7 @@ applies via t-8 with snapshots under .dross/memory/snapshots/, prints the snapsh
     "if advise with an unreadable transcripts dir exits 0 or doesn't name the path, TestAdviseSurfacesCountError fails",
     "if `dross memory` is not registered in main.go, TestMemoryCommandRegistered fails",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-11"
@@ -208,4 +207,5 @@ Record agent_turns, turn_tools, wall_clock_s, dross_calls and a new status_bytes
 recorded. Add checkMemoryPruneAdvisorFlow + the required-list entry. Add README rows for `dross memory advise|apply` and the status memory: line."""
   covers = ["c-6"]
   test_contract = ["if [after] runs a dross call [before] did not, or both legs share a binary_version, the existing checkLegPair fails", "if status_bytes ≤ 0 on either leg, [scenario] lacks turn_cache = \"cold\", or agent_turns / wall_clock_s are zero, checkMemoryPruneAdvisorFlow fails (turns and wall-clock are recorded, not compared)", "if a string value appears outside the allowlist — binary_version, session_id, measured_at, filter, method, the scenario keys TestFlowCostRecords already requires (repo_shape, wave_position, flow_start, flow_end, jq_method) and turn_cache — or a dross_calls / turn_tools entry does not match the dross-verb / tool-name grammar, TestFlowCostCopiesNoContent fails", "if flow-cost.toml is deleted, TestFlowCostRecords fails with \"memory-prune-advisor has no flow-cost.toml\"", "if README.md lacks `dross memory apply` or `--yes`, a README grep test fails"]
-  status = "pending"
+  status = "failed"
+  reason = "writer: red on TestFlowCostRecords/TestFlowCostCopiesNoContent; flow-cost.toml needs two live /dross-status runs (base build vs phase head, cold cache) a writer cannot do; test+README code in stash@{0}"
