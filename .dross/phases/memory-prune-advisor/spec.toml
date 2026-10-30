@@ -1,0 +1,64 @@
+[phase]
+  id = "memory-prune-advisor"
+  title = "memory-prune-advisor"
+  milestone = "v1.8"
+
+[[criteria]]
+  id = "c-1"
+  text = "`/dross-status` shows memory-prune suggestions for the repo's Claude memory dir, each naming the file, the reason and the action (delete or reword hook). It prints nothing when the dir is missing or there's nothing to suggest."
+
+[[criteria]]
+  id = "c-2"
+  text = "Each suggestion shows a $/month estimate: tokens of index-line bytes saved × this repo's assistant turns in the last 30 days × the cache-read $/MTok rate. The repo's share of all turns is printed alongside."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross status` and `dross memory advise` never write to the memory dir (its contents hash the same before and after). Only a confirmed `dross memory apply` writes there."
+
+[[criteria]]
+  id = "c-4"
+  text = "A memory with a guard phrase in its body (NEVER, ASK, don't re-raise, don't revert, DECOY, REOPENED) is never suggested for deletion. Status words alone (DEAD, done, RESOLVED, DECLINED) never produce a suggestion."
+
+[[criteria]]
+  id = "c-5"
+  text = "It reports index integrity: dead MEMORY.md links, orphan memory files, and inbound [[links]] resolved by the frontmatter name: slug. A suggestion for a memory with inbound links says so."
+
+[[criteria]]
+  id = "c-6"
+  text = "/dross-status adds zero agent round-trips with the advisor on. The phase dir records before/after turn count, wall-clock time and bytes printed for one /dross-status run."
+
+[[criteria]]
+  id = "c-7"
+  text = "A memory whose body largely duplicates a tracked doc (CLAUDE.md, ARCHITECTURE.md, README, docs/**/*.md) is suggested for deletion, and the suggestion names that doc."
+
+[[criteria]]
+  id = "c-8"
+  text = "An index hook with an expired time-bound clause (a date before today, or a 'next: <phase>' naming a phase already scaffolded or shipped) gets a reword-hook suggestion, never a delete."
+
+[[criteria]]
+  id = "c-9"
+  text = "`dross memory apply <id>` carries out exactly one suggestion (delete or reword hook) and refuses without an explicit confirmation flag. It snapshots the memory dir first, refuses to delete a guard-phrase memory, then re-checks orphans and dead index links and reports them."
+
+[[decisions]]
+  key = "cost_model"
+  choice = "$/month = tokens(index-line bytes saved) × repo assistant turns over the last 30 days × cache-read $/MTok; the share of all turns is display only. File-recall cost is not estimated."
+  why = "MEMORY.md is what loads every turn; a delete removes only its index line from that cost. Leaving out recall keeps the figure defensible (infra heuristic 1: don't over-sell)."
+  locked = true
+
+[[decisions]]
+  key = "turn_counts"
+  choice = "Count turns once and cache them in gitignored .dross local state; recount when the cache is older than 24h, and status prints the cache age."
+  why = "Transcripts are 2.2 GB across 36 projects (309 MB for dross); scanning on every status run would break c-6's wall-clock constraint."
+  locked = true
+
+[[decisions]]
+  key = "dup_threshold"
+  choice = "A memory duplicates a doc when ≥50% of its body's normalised 8-word shingles appear in one tracked doc."
+  why = "Ignores passing mentions but catches reordered restatements; drift detection was rejected as fuzzy and hard to test."
+  locked = true
+
+[[decisions]]
+  key = "status_surface"
+  choice = "`dross status` prints a memory: section with the top 3 suggestions by $/month plus a '+N more — dross memory advise' line; integrity issues count toward the list."
+  why = "status.md prints dross status verbatim, so this adds no call (c-6), while still listing suggestions as the milestone criterion asks."
+  locked = true
