@@ -170,3 +170,24 @@ func TestPlanPromptNoArtifactDump(t *testing.T) {
 		}
 	}
 }
+
+// TestLockConfirmIsAskUserQuestion pins the lock gate on a written spec/plan to
+// an AskUserQuestion turn. The prompts used to script the gate as a trailing
+// prose line ("lock it? (y / edit <what>)"), so the model sometimes asked it as
+// a question and sometimes as text; a regression back to the prose form fails here.
+func TestLockConfirmIsAskUserQuestion(t *testing.T) {
+	for _, tc := range []struct{ file, heading string }{
+		{"spec.md", "## 5. Write spec.toml"},
+		{"plan.md", "## 5. Write plan.toml"},
+	} {
+		section := promptSection(t, expandedPrompt(t, tc.file), tc.heading)
+		for _, anchor := range []string{"AskUserQuestion", "lock it?"} {
+			if !strings.Contains(section, anchor) {
+				t.Errorf("%s %q must ask the lock gate as an AskUserQuestion; missing %q", tc.file, tc.heading, anchor)
+			}
+		}
+		if strings.Contains(section, "(y / edit") {
+			t.Errorf("%s %q must not script the lock gate as a prose \"(y / edit …)\" line", tc.file, tc.heading)
+		}
+	}
+}

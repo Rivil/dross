@@ -2,7 +2,7 @@
 
 Decompose a phase's `spec.toml` into a task graph with waves, dependencies, and per-task test contracts. Pair-mode: **propose → steer → write**. Never write `plan.toml` until the user has accepted the decomposition.
 
-**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): propose one point at a time and let the user react. For `/dross-plan` that means walking the §2P panel disagreements one at a time, steering the proposed decomposition in §3, and confirming the written `plan.toml` with a one-line summary — never dumping the toml back for review.
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): propose one point at a time and let the user react. For `/dross-plan` that means walking the §2P panel disagreements one at a time, steering the proposed decomposition in §3, and confirming the written `plan.toml` with a one-line summary asked as an `AskUserQuestion` — never dumping the toml back for review.
 
 ## 0. Pre-flight
 
@@ -237,7 +237,7 @@ depends_on = ["t-1"]
 ...
 ```
 
-Use the `Write` tool to save to `.dross/phases/<id>/plan.toml`. **Don't paste the toml back** — it's a build artifact, agreed task by task in §3, not a review medium. Confirm with a one-line summary instead: **"Plan written: N tasks across W waves — lock it? (y / edit \<what>)"**. Surface a specific task only if the user asks to see or change it.
+Use the `Write` tool to save to `.dross/phases/<id>/plan.toml`. **Don't paste the toml back** — it's a build artifact, agreed task by task in §3, not a review medium. Confirm with a one-line summary instead, asked as a single `AskUserQuestion` — never as a trailing prose line the user has to type an answer to: **"Plan written: N tasks across W waves — lock it?"** — lead option **lock**, other option **edit \<what>**. Surface a specific task only if the user asks to see or change it.
 
 ## 6. Validate + wrap
 
@@ -293,7 +293,7 @@ When the plan is trivial or purely mechanical, append the hint under the `Next:`
 
 ## Hard rules
 
-- **Follow the interaction playbook (`_interaction.md`); plan.toml is never a review medium.** Drive the command as a conversation — walk the §2G gray areas, the panel disagreements (§2P.3) and the §3 proposal as one-decision-per-turn `AskUserQuestion` turns, and confirm the written `plan.toml` with a one-line summary (§5) rather than pasting it back.
+- **Follow the interaction playbook (`_interaction.md`); plan.toml is never a review medium.** Drive the command as a conversation — walk the §2G gray areas, the panel disagreements (§2P.3) and the §3 proposal as one-decision-per-turn `AskUserQuestion` turns, and confirm the written `plan.toml` with a one-line summary asked as an `AskUserQuestion` (§5) rather than pasting it back or ending on a prose "(y / edit)" line.
 - **Walk every gray area (§2G); never pre-filter them.** There is no selection step and no pre-ticked checklist — the user's explicit off-ramp is the only thing that ends the walk early, and what you settled for them gets said out loud in §3. Zero areas is a valid, stated outcome; manufacturing them to look thorough is the failure this section was written against.
 - **Pair-mode default.** Never write `plan.toml` before the user accepts the proposed decomposition. If the user wants autonomous mode, they'll say so explicitly.
 - **Subagents: read-only fan-out is fine; authoring `plan.toml` is not.** Per the `dross-agent-gate` builtin, you may fan out subagents for read-only work — research, pattern-mapping, independent review — when it sharpens the plan, and should when it widens coverage or saves wall-clock. What stays gated is the decomposition itself: never let an unattended agent author or finalize `plan.toml` — it's agreed with the user (pair mode) or by you (`--solo`). The `--panel` flow (§2P) and the §6 plan-review are the worked examples: independent agents draft or critique, the user steers the result. For a small, pattern-following plan, staying inline is still the right call — fan out when it earns its keep, not by default.
