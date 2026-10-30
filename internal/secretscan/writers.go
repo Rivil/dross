@@ -247,6 +247,10 @@ var writers = []Writer{
 		Path: "memory/turns.json", Also: []string{"memory/.gitignore"}, IgnoreSeed: ignoreSeed,
 		Why: "the memory advisor's turn cache: per-transcript sizes and day counts read from this machine's ~/.claude (locked turn_counts)",
 	}},
+	{File: "internal/memadvise/snapshot.go", MachineLocal: &MachineLocal{
+		Path: "memory/snapshots/<name>/<name>", IgnoreSeed: ignoreSeed,
+		Why: "the copy of this machine's Claude memory dir `dross memory apply` takes before it changes anything; personal memories must never reach a commit (c-9)",
+	}},
 	{File: "internal/runlog/runlog.go", MachineLocal: &MachineLocal{
 		Path: "logs/<name>.log", Also: []string{"logs/.gitignore"}, IgnoreSeed: RunlogIgnoreSeed,
 		Why: "full output of `dross test` runs and mutation legs; an unignored log would count as a tree change and stale verify and the green record (locked log_location)",
@@ -269,6 +273,7 @@ var writers = []Writer{
 	{File: "internal/gate/override.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/dross/gate-overrides.json"}, Why: "the gates a human lifted with `dross gate off`, user-level and outside every repo so no repo can ship a lifted gate"}},
 	{File: "internal/treefp/treefp.go", OutsideDross: &OutsideDross{Paths: []string{"<tmp>/dross-treefp-*/index"}, Why: "a scratch byte copy of the git index in the OS temp dir, staged into for a tree fingerprint and removed after the call"}},
 	{File: "internal/compilefence/compilefence.go", OutsideDross: &OutsideDross{Paths: []string{"<tmp>/module/*.go"}, Why: "a throwaway build module in t.TempDir for must-not-compile fixtures"}},
+	{File: "internal/memadvise/apply.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/projects/<slug>/memory/MEMORY.md", "~/.claude/projects/<slug>/memory/<name>.md"}, Why: "`dross memory apply --yes` rewrites one MEMORY.md line and removes at most one memory file in the user's Claude memory dir — $CLAUDE_CONFIG_DIR when set"}},
 	{File: "internal/pincheck/bump.go", OutsideDross: &OutsideDross{Paths: []string{"go.mod", ".node-version", ".github/actions/<name>/action.yml"}, Why: "rewrites a stale pin's version in place in the repo's own pin files"}},
 	{File: "internal/cmd/root.go", OutsideDross: &OutsideDross{Why: "MustWriteFile is a generic parent-creating helper with no callers outside tests; it names no artifact of its own"}},
 	{File: "internal/pathfence/pathfence.go", OutsideDross: &OutsideDross{Why: "the contained-write primitive itself: it writes whatever contained path a caller hands it, and the caller's own entry names the artifact"}},
