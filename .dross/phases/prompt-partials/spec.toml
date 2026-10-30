@@ -52,6 +52,7 @@
   locked = true
 
 [[deferred]]
+  id = "e243058347bd37a3"
   text = "Give options.md, ship.md and plan.md the same partials + byte-budget treatment."
   why = "Milestone criterion names only execute.md and verify.md; worth judging after this phase's before/after numbers."
   target = "prompt-budgets-rest"
