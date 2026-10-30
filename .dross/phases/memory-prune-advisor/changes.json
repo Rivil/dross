@@ -2,5 +2,18 @@
   "phase": "memory-prune-advisor",
   "base": "milestone/v1.8",
   "base_commit": "024756792334f783ccd4e948d6e940badac65048",
-  "tasks": {}
+  "tasks": {
+    "quick-1": {
+      "files": [
+        "assets/prompts/spec.md",
+        "assets/prompts/plan.md",
+        "assets/prompts/_interaction.md",
+        "docs/interaction-audit.md",
+        "internal/cmd/interaction_coreloop_test.go"
+      ],
+      "commit": "73ad1afd",
+      "completed_at": "2026-10-30T15:04:48.84886Z",
+      "notes": "quick: ask the spec/plan lock gate as an AskUserQuestion"
+    }
+  }
 }
