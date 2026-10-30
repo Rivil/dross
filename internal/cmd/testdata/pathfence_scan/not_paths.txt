@@ -174,6 +174,11 @@ localstore.Store.MutationWorkers mutation_workers
 localstore.Store.QuickBase quick_base
 localstore.Store.RemoteHost remote_host
 
+# ---- memadvise — the turn cache's recent message ids, and a transcript line's kind ("assistant", "user", …) and timestamp, never paths
+memadvise.fileEntry.Tail tail
+memadvise.transcriptLine.Timestamp timestamp
+memadvise.transcriptLine.Type type
+
 # ---- milestone — milestone metadata: titles, versions, statuses, dates, phase ids, prose
 milestone.Meta.Base base
 milestone.Meta.Shipped shipped

@@ -20,7 +20,7 @@ import (
 //   - MachineLocal: the artifact lands under .dross/ but a seeded .gitignore
 //     line keeps it out of every commit, so it can never ride `git add .dross`
 //     into history. IgnoreSeed names the seed; the enum test proves the claim
-//     with `git check-ignore` in a repo that seed prepared. ONLY the two
+//     with `git check-ignore` in a repo that seed prepared. ONLY the
 //     paths ensureDrossGitignore seeds qualify: handoff.md, reap-log.json and
 //     the security/quality/techdebt run dirs are ignored by this repo's own
 //     hand-edited .gitignore, not by anything dross scaffolds, so in a fresh
@@ -240,6 +240,12 @@ var writers = []Writer{
 	{File: "internal/debugsession/store.go", MachineLocal: &MachineLocal{
 		Path: "debug/<name>.md", Also: []string{"debug/.gitignore"}, IgnoreSeed: DebugIgnoreSeed,
 		Why: "/dross-debug sessions quote captured output, which must never reach a published artifact (locked session_tracking)",
+	}},
+	// The dir also writes its own `*` .gitignore, for repos onboarded before
+	// the dross seed covered it; the claim here rests on the seed alone.
+	{File: "internal/memadvise/turncache.go", MachineLocal: &MachineLocal{
+		Path: "memory/turns.json", Also: []string{"memory/.gitignore"}, IgnoreSeed: ignoreSeed,
+		Why: "the memory advisor's turn cache: per-transcript sizes and day counts read from this machine's ~/.claude (locked turn_counts)",
 	}},
 	{File: "internal/runlog/runlog.go", MachineLocal: &MachineLocal{
 		Path: "logs/<name>.log", Also: []string{"logs/.gitignore"}, IgnoreSeed: RunlogIgnoreSeed,
