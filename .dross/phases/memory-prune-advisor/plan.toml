@@ -1,0 +1,252 @@
+task_seq = 11
+
+[phase]
+  id = "memory-prune-advisor"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Locate the repo's Claude memory dir"
+  files = ["internal/memadvise/locate.go", "internal/memadvise/paths.go", "internal/memadvise/locate_test.go"]
+  description = """
+New package internal/memadvise. ClaudeDir() = $CLAUDE_CONFIG_DIR else ~/.claude. Slug(repo) = EvalSymlinks'd repo top-level path with every
+non-[A-Za-z0-9] byte mapped to '-'. Locate returns (dir, ok); ok=false when the dir is missing, not a dir, or memory/ is a symlink.
+paths.go holds the .dross-relative advisor-state constants: .dross/memory/turns.json and .dross/memory/snapshots/."""
+  covers = ["c-1"]
+  test_contract = [
+    "if Slug(\"/Users/a/.claude/x\") is not \"-Users-a--claude-x\", or '_' / ' ' are not mapped to '-', TestSlugReplacesEveryNonAlnum fails",
+    "if a repo reached through /tmp → /private/tmp does not slug to \"-private-tmp-…\", TestSlugResolvesSymlinks fails",
+    "if with CLAUDE_CONFIG_DIR set the dir is not under it, or ~/.claude is stat'd, TestLocateHonorsClaudeConfigDir fails",
+    "if a missing dir, a regular file at that path, or a symlinked memory/ returns ok=true or a non-nil error, TestLocateMissingIsSilent fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Parse memory corpus and index integrity"
+  files = ["internal/memadvise/index.go", "internal/memadvise/index_test.go", "internal/memadvise/testdata/corpus/MEMORY.md"]
+  description = """
+Load(dir) reads MEMORY.md and direct-child *.md (regular files only, O_NONBLOCK, size-capped); parses index lines ([Title](file.md) — hook),
+frontmatter name:/description:, bodies, and [[slug]] links with inline code stripped. Integrity() returns DeadLinks (target missing, outside the
+dir, a symlink, or not .md), Orphans (unindexed *.md other than MEMORY.md), Inbound[slug] (distinct linkers, self-links excluded) and duplicate
+name: slugs. Fixture corpus lives under testdata/corpus/."""
+  covers = ["c-5"]
+  test_contract = [
+    "if an index line naming gone.md is not in DeadLinks, TestDeadIndexLink fails; if \"../../.ssh/id.md\" or \"/etc/x.md\" is opened or not reported dead, TestIndexLinkOutsideDirIsDead fails",
+    "if unindexed extra.md is not an orphan, or MEMORY.md is ever an orphan, TestOrphans fails",
+    "if [[a-thing]] does not resolve to a_thing_v2.md through its frontmatter `name: a-thing` (i.e. resolves by filename), TestInboundResolvesByFrontmatterName fails",
+    "if a [[x]] inside backticks or a self-link adds inbound, TestInboundIgnoresCodeSpansAndSelf fails",
+    "if two files declaring one name: slug are not both reported, or either gets inbound credit, TestDuplicateNameSlugReported fails",
+    "if a FIFO named foo.md is not skipped within 1s, TestCorpusSkipsFIFO fails; if files with no frontmatter or CRLF frontmatter fail to parse, TestCorpusToleratesMissingAndCRLFFrontmatter fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Guard phrases and doc-duplication shingles"
+  files = ["internal/memadvise/guard.go", "internal/memadvise/dup.go", "internal/memadvise/guard_test.go", "internal/memadvise/dup_test.go"]
+  description = """
+Guarded(file) checks the whole file, frontmatter included: NEVER/ASK/DECOY/REOPENED as case-sensitive whole words; \"don't re-raise\" / \"don't revert\"
+case-insensitive with ' or ’. DocCandidates(tracked) keeps CLAUDE.md, ARCHITECTURE.md, README*, docs/**/*.md. Duplicates(body, docs) normalises
+(lowercase, alnum-only, collapsed whitespace) and returns the single doc holding ≥50% of the body's 8-word shingle set."""
+  covers = ["c-4", "c-7"]
+  test_contract = [
+    "if any of the six guard phrases fails to guard, its row in TestGuardPhrases fails; if \"TASK\", \"asked\", \"I'll ask later\", \"NEVERTHELESS\" or \"Nevermind\" guard, TestGuardWholeWordOnly fails",
+    "if \"don’t revert\" (U+2019) or \"Don't re-raise\" fails to guard, TestGuardApostropheVariants fails",
+    "if exactly 50% shingle overlap with one doc is not a duplicate, or 49% is, TestDupThresholdBoundary fails",
+    "if 30% in docs/a.md + 30% in docs/b.md counts as a duplicate, TestDupNeedsOneDoc fails",
+    "if a paragraph-reordered restatement no longer matches, TestDupSurvivesReorder fails; if the result is not the doc's repo-relative path, TestDupNamesDoc fails",
+    "if a body under 8 words divides by zero or matches, TestDupShortBody fails",
+    "if docs/x.txt or src/foo.md survive DocCandidates, TestDocCandidates fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Expired hook clause detection and reword"
+  files = ["internal/memadvise/hook.go", "internal/memadvise/hook_test.go"]
+  description = """
+Expired(hook, today, phaseKnown) finds a time-bound clause: a YYYY-MM-DD directly after until/by/before/due/expires/till/deadline, or
+next[:] [phase |/dross-<verb> ]<slug>. Expired when the date is strictly before today or phaseKnown(slug). Returns the hook with only that clause
+and its separator removed."""
+  covers = ["c-8"]
+  test_contract = [
+    "if \"until 2026-10-29\" is not expired with today 2026-10-30, or \"until 2026-10-30\" is, TestExpiryBoundaryIsStrict fails",
+    "if \"RESOLVED 2026-09-19 (03983fe)\", \"shipped 2026-10-04\" or \"released 2026-01-01\" count as time-bound, TestHistoricalDateIsNotTimeBound fails",
+    "if \"next: foo\" expires when phaseKnown(\"foo\") is false or stays live when true, TestNextPhaseClause fails; if \"…; next /dross-spec memory-prune-advisor\" does not parse, TestNextSlashCommandForm fails",
+    "if \"X — done; next phase foo\" does not reword to exactly \"X — done\" (no dangling \"; \" / \" — \", no other byte changed), TestRewordRemovesOnlyClause fails",
+    "if a hook that is nothing but the clause rewords to empty, TestRewordNeverEmpty fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 1
+  title = "Count repo turns with 24h incremental cache"
+  files = ["internal/memadvise/turns.go", "internal/memadvise/turncache.go", "internal/memadvise/turns_test.go", "internal/memadvise/turncache_test.go", "internal/cmd/gitignore.go", "internal/cmd/gitignore_test.go", ".gitignore", "internal/secretscan/writers.go"]
+  description = """
+Turns streams top-level <slug>/*.jsonl via bufio.Reader (no Scanner cap), skipping subagents/ and files with mtime >30d. A turn = distinct message.id
+per file, type=assistant, isSidechain=false, model≠\"<synthetic>\", within 30d; counts per project + all-projects total. Cache .dross/memory/turns.json
+keeps per-file {size, mtime, offset, day buckets}: reused under 24h, after 24h only appended bytes rescanned, truncation recounts from 0, atomic
+writes; returns counts + cache age. Seed .dross/memory/ in drossIgnoreEntries and .gitignore; register turncache.go as MachineLocal in secretscan."""
+  covers = ["c-2"]
+  test_contract = [
+    "if three lines sharing one message.id count more than 1, TestTurnsDedupeMessageID fails",
+    "if isSidechain:true, \"<synthetic>\", user lines or subagents/ files add turns, TestTurnsMainAgentOnly fails",
+    "if a turn dated 31 days ago is counted, TestTurnsWindow fails",
+    "if a chmod-000 transcript with a 31-day-old mtime is opened, TestTurnsSkipsStaleFilesByMtime fails",
+    "if a 5 MB single-line tool result between two assistant turns yields anything but 2, TestTurnsSurviveMultiMegabyteLine fails",
+    "if a malformed line is fatal, TestTurnsSkipMalformedLine fails",
+    "if RepoShare is not repo/all across two fixture project dirs, TestTurnsShareAcrossProjects fails",
+    "if a 23h-old cache shows appended turns or age ≠ 23h, TestCacheReusedUnder24h fails; if at 25h they don't show or the cache isn't rewritten, TestCacheRecountedAt24h fails",
+    "if a corrupt or future-dated cache is trusted, TestCacheRecountsOnCorruptOrFuture fails",
+    "if a recount after one appended turn reads more than the appended bytes, or a truncated file is not recounted from 0, TestIncrementalRecountAndTruncation fails",
+    "if the cache path is ever under the memory dir instead of <root>/.dross/memory/, TestCacheNeverInMemoryDir fails",
+    "if .dross/memory/ is missing from drossIgnoreEntries or the repo .gitignore, TestEnsureGitignoreCoversMemoryState fails; if the ignore entry and the memadvise path constants drift, TestIgnoreEntriesMatchAdvisorPaths fails",
+    "if turncache.go is left out of secretscan.Writers() or its IgnoreSeed is wrong, the existing writer enum test fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Build suggestions: cost, ranking, stable ids"
+  depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5"]
+  files = ["internal/memadvise/advise.go", "internal/memadvise/cost.go", "internal/memadvise/advise_test.go", "internal/memadvise/cost_test.go"]
+  description = """
+Advise(...) returns []Suggestion{ID, File, Reason, Action (delete|reword hook), ReportOnly, NewHook, Doc, Inbound, BytesSaved, MonthlyUSD}, at most one
+per memory. Precedence: expired clause → reword, beating a duplicate delete; a guarded memory never gets a delete. Integrity: a dead link → delete of
+its index line only (appliable); an orphan → action delete, ReportOnly=true. ID = action + file stem. cost.go: tokens = ceil(bytes/4); USD = tokens ×
+repo turns × CacheReadUSDPerMTok / 1e6 (one constant); share = repo/all, display only. Sort by USD desc, then ID."""
+  covers = ["c-1", "c-2", "c-4", "c-5", "c-7", "c-8"]
+  test_contract = [
+    "if 400 bytes × 1000 turns × rate R is not exactly 100×1000×R/1e6, or 0 turns is not $0 (recall tokens added, all-project turns used, share divided in, 1e3/1e6 slip), TestMonthlyCostFormula fails",
+    "if a reword from 120 to 80 bytes is not priced on 40 bytes, TestRewordPricesOnlyDelta fails",
+    "if a guarded memory that duplicates README.md gets a delete, TestGuardBlocksEveryDeleteSource fails",
+    "if hooks/bodies holding only DEAD/done/RESOLVED 2026-09-19/DECLINED/SHIPPED yield any suggestion, TestStatusWordsAloneSuggestNothing fails",
+    "if an expired-hook memory (duplicate or not) gets anything but exactly one reword-hook suggestion, TestExpiredHookNeverDeletes fails",
+    "if a memory with two inbound [[links]] does not name both in Inbound and say \"linked from\" in Reason, TestSuggestionNamesInboundLinks fails",
+    "if a duplicate delete's Doc is not the duplicated doc's path, TestDeleteNamesDoc fails",
+    "if a dead index link is missing from the list, is not an appliable delete of only its index line, or is priced on anything but that line's bytes, TestDeadLinkDeletesIndexLineOnly fails",
+    "if an orphan is missing from the list or is not ReportOnly, TestOrphanIsReportOnly fails",
+    "if IDs differ across runs or change when an unrelated memory is added to the top of MEMORY.md, TestSuggestionIDsStable fails",
+    "if an all-projects total of 0 gives NaN or panics instead of share \"n/a\", TestShareZeroTotal fails",
+    "if a missing dir, missing MEMORY.md or empty dir yields anything but an empty slice and nil error, TestAdviseMissingDirOrIndexIsEmpty fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Gather inputs and render advice lines"
+  depends_on = ["t-6"]
+  files = ["internal/memadvise/gather.go", "internal/memadvise/render.go", "internal/memadvise/render_test.go"]
+  description = """
+Gather(root, now) resolves the memory dir, lists tracked docs via gitrun.Raw(\"ls-files\", \"-z\", …) (non-git root → no docs, no error), builds
+phaseKnown from phase.DirExists || phase.Done, loads turns. Render(report, limit) prints one line per item (id, file, action, reason, $X.XX/mo;
+report-only marked), an integrity block, a share line (\"this repo: N of M assistant turns (P%) in 30d · turns counted <age> ago\") and
+\"+N more — dross memory advise\" when truncated. Never prints memory bodies."""
+  covers = ["c-1", "c-2", "c-3", "c-7"]
+  test_contract = [
+    "if an item line lacks its ID, file, action word or \"$X.XX/mo\", TestRenderSuggestionLine fails",
+    "if the share line lacks repo turns, all turns, the percent or the cache age, TestRenderShareAndCacheAge fails",
+    "if limit 3 over 5 items does not render 3 plus \"+2 more — dross memory advise\", or 3 over 3 renders \"+0 more\", TestRenderTruncation fails",
+    "if zero items or a missing dir renders any bytes, TestRenderEmptyIsSilent fails",
+    "if a sentinel present only in a memory body appears in rendered output, TestRenderNeverPrintsBodies fails",
+    "if an untracked docs/x.md identical to a memory produces a delete, TestGatherUsesTrackedDocsOnly fails",
+    "if the sha256 over (path, mode, bytes) of the memory dir changes across Gather, even when a stale turn cache is rewritten, TestGatherNeverWritesMemoryDir fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  title = "Apply one suggestion with snapshot and recheck"
+  depends_on = ["t-6"]
+  files = ["internal/memadvise/apply.go", "internal/memadvise/snapshot.go", "internal/memadvise/apply_test.go", "internal/secretscan/writers.go"]
+  description = """
+Apply(memDir, snapDir, s) refuses a ReportOnly suggestion; copies the whole memory dir to snapDir/<UTC ts>/ first (snapshot.go), aborting on failure;
+re-checks Guarded on the live file before any delete; touches only direct-child regular non-symlink *.md. MEMORY.md is rewritten atomically
+(temp + rename, CRLF/trailing newline kept), aborting if its hash changed since the plan. Re-runs Integrity and returns dead links + orphans.
+Register snapshot.go as MachineLocal and apply.go as OutsideDross (one disposition per file)."""
+  covers = ["c-9", "c-3"]
+  test_contract = [
+    "if after a delete the file or its MEMORY.md line remains, or any other byte changed, TestApplyDeleteRemovesFileAndLine fails",
+    "if after a reword any line other than that hook differs, or it does not equal NewHook, TestApplyRewordTouchesOneLine fails",
+    "if the snapshot does not hash identical to the pre-apply dir, TestApplySnapshotsFirst fails",
+    "if a snapshot failure does not abort with the dir untouched, TestApplyAbortsWhenSnapshotFails fails",
+    "if a body that gained \"DECOY\" after advise is deleted or the dir hash changes, TestApplyRefusesGuardedDelete fails",
+    "if a ReportOnly (orphan) suggestion is applied or the dir hash changes, TestApplyRefusesReportOnly fails",
+    "if a dead-link target that is a symlink outside the dir is followed or deleted (only the index line may go), TestApplyNeverDeletesOutsideDir fails",
+    "if MEMORY.md edited between plan and rename is overwritten, TestApplyAbortsOnConcurrentIndexEdit fails",
+    "if deleting a memory linked via [[name]] does not return that dangling link, or a pre-existing orphan is not reported, TestApplyRechecksIntegrity fails",
+    "if apply.go or snapshot.go is left out of secretscan.Writers(), or one file carries two dispositions, the writer enum test fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-9"
+  wave = 4
+  title = "Add memory: section to dross status"
+  depends_on = ["t-7"]
+  files = ["internal/cmd/status.go", "internal/cmd/status_memory_test.go", "internal/cmd/status_prompt_test.go"]
+  description = """
+After the debug: line and before the reentry footer, status prints `memory:` followed by Render(report, 3). A Gather error, missing dir or zero
+items prints nothing and status still exits 0. assets/prompts/status.md stays unchanged, pinned by a prompt test."""
+  covers = ["c-1", "c-2", "c-3"]
+  test_contract = [
+    "if with a 5-item fixture status does not show \"memory:\", the 3 highest-$ lines in order and \"+2 more — dross memory advise\", TestStatusMemoryTopThree fails",
+    "if no memory dir or nothing to suggest gives output not byte-identical to advisor-off output, TestStatusMemorySilentWhenNothing fails",
+    "if the memory dir sha256 changes across `dross status`, TestStatusNeverWritesMemoryDir fails",
+    "if an unreadable MEMORY.md or an Advise error exits non-zero or prints a memory: line, TestStatusMemoryErrorIsSilent fails",
+    "if the reentry line is not last with the block present, TestStatusFooterStillLast fails",
+    "if status.md gains any `dross memory` invocation, TestStatusPromptAddsNoMemoryCall fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-10"
+  wave = 4
+  title = "Add dross memory advise/apply commands"
+  depends_on = ["t-7", "t-8"]
+  files = ["internal/cmd/memory.go", "internal/cmd/memory_test.go", "cmd/dross/main.go"]
+  description = """
+`dross memory advise` prints Render(report, all) with integrity block, share and cache age; missing dir is silent exit 0, a count/IO error is loud and
+non-zero. `dross memory apply <id> --yes` re-gathers, requires the id among current suggestions, refuses report-only ids (index or remove by hand),
+applies via t-8 with snapshots under .dross/memory/snapshots/, prints the snapshot path and recheck. Register the group in main.go."""
+  covers = ["c-1", "c-2", "c-3", "c-5", "c-9"]
+  test_contract = [
+    "if `apply <id>` without --yes exits 0, does not name --yes, or changes the dir hash, TestApplyRefusesWithoutConfirm fails",
+    "if an id not among current suggestions (stale or typo) exits 0 or touches anything, TestApplyUnknownID fails",
+    "if `apply <orphan-id> --yes` exits 0, omits the index-or-remove-by-hand hint, or changes the dir hash, TestApplyOrphanRefused fails",
+    "if applying one of 3 suggestions touches the other two files or any other MEMORY.md byte, TestApplyChangesExactlyOne fails",
+    "if apply --yes on a delete does not remove exactly that file, print an existing snapshot path under .dross/memory/snapshots/, and print the recheck, TestApplyEndToEnd fails",
+    "if advise changes the dir hash or lists only 3 items, TestAdviseListsAllReadOnly fails",
+    "if advise with no memory dir prints anything or exits non-zero, TestAdviseMissingDirSilent fails",
+    "if advise with an unreadable transcripts dir exits 0 or doesn't name the path, TestAdviseSurfacesCountError fails",
+    "if `dross memory` is not registered in main.go, TestMemoryCommandRegistered fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-11"
+  wave = 5
+  title = "Record /dross-status flow cost; document memory"
+  depends_on = ["t-9", "t-10"]
+  files = [".dross/phases/memory-prune-advisor/flow-cost.toml", "internal/cmd/flowcost_record_test.go", "README.md"]
+  description = """
+After `make install` (r-01), measure one /dross-status on a base-commit build ([before]) and one on the phase head with a cold turn cache ([after]).
+Record agent_turns, turn_tools, wall_clock_s, dross_calls and a new status_bytes field, counted structurally from the transcript with the jq method
+recorded. Add checkMemoryPruneAdvisorFlow + the required-list entry. Add README rows for `dross memory advise|apply` and the status memory: line."""
+  covers = ["c-6"]
+  test_contract = [
+    "if [after] runs a dross call [before] did not, or both legs share a binary_version, the existing checkLegPair fails",
+    "if status_bytes ≤ 0 on either leg, [scenario] lacks turn_cache = \"cold\", or agent_turns / wall_clock_s are zero, checkMemoryPruneAdvisorFlow fails (turns and wall-clock are recorded, not compared)",
+    "if a string value appears outside the declared keys (binary_version, session_id, measured_at, filter, method), TestFlowCostCopiesNoContent fails",
+    "if flow-cost.toml is deleted, TestFlowCostRecords fails with \"memory-prune-advisor has no flow-cost.toml\"",
+    "if README.md lacks `dross memory apply` or `--yes`, a README grep test fails",
+  ]
+  status = "pending"
