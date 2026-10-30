@@ -109,7 +109,6 @@
     "slug:prompt-behaviour-evals": "DRO-704",
     "slug:prompt-budgets-rest": "DRO-1010",
     "slug:review-edge-lenses": "DRO-696",
-    "slug:solo-task-subagent": "DRO-961",
     "slug:spec-edge-probe": "DRO-695",
     "slug:spec-fact-drift": "DRO-698",
     "slug:task-preconditions": "DRO-699",
