@@ -50,6 +50,23 @@
         }
       ]
     },
+    "t-11": {
+      "files": [
+        ".dross/phases/memory-prune-advisor/flow-cost.toml",
+        "internal/cmd/flowcost_record_test.go",
+        "README.md"
+      ],
+      "commit": "22d95a3",
+      "completed_at": "2026-10-30T19:06:23.467725Z",
+      "landmarks": [
+        {
+          "feature": "memory-prune advisor",
+          "symbol": "checkMemoryPruneAdvisorFlow",
+          "loc": "internal/cmd/flowcost_record_test.go:269",
+          "what": "pins the /dross-status before/after flow-cost record (status_bytes, cold turn cache) and forbids copied memory content in it"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/memadvise/index.go",
@@ -248,6 +265,26 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "TestApplyUnknownID uses typo-shaped ids only. A truly stale id (a suggestion that was valid and then went away) takes the same not-found path, so this covers it in effect",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-11": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The measured flow-cost.toml itself sits under .dross/ and is excluded from the diff, so this review could not inspect the recorded numbers; their soundness rests on TestFlowCostRecords and TestFlowCostCopiesNoContent passing against the real file.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The walker's mutation tests assert exactly one problem per break and include a clean baseline, so a walker that stopped looking would fail rather than pass the real record vacuously.",
           "resolution": "non-blocking, left"
         }
       ]
