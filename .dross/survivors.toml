@@ -5017,3 +5017,12 @@
   line = 444
   reason = "gremlins-attribution-ceiling: switch{} case-condition line (escape-route --reason value skip); driven by writerfence_test.go:TestEscapeRouteSurvivesLoadError"
   accepted_in = "solo-task-subagent"
+
+[[accepted]]
+  key = "86267aed7899481b"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"dd\":"
+  line = 398
+  reason = "Switch-case condition (case name == \"dd\": in takeoverWrite). go-cover's case-arm block starts at the colon, so gremlins marks the condition NOT COVERED although it runs; negating it would stop dd's of= target being collected, and TestNoInlineTakeoverViaBash (refuses 'dd if=b.go of=a.go', admits 'dd if=a.go of=b.go', launched and stopped) would fail. Same attribution limit as gremlins-attribution-ceiling."
+  accepted_in = "solo-task-subagent"

@@ -1,22 +1,22 @@
 [verify]
   phase = "solo-task-subagent"
-  generated_at = 2026-10-29T13:42:18.798263Z
-  verdict = "partial"
+  generated_at = 2026-10-30T11:06:21.063555Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-10-29T18:11:11.715132Z
-  measured_commit = "31052a6ca25913578f904fb5e2a88fda27b4e4ae"
-  measured_tree = "08517f4b9c1de5e56f7f22ee96a0b36e0c451983"
+  finalized_at = 2026-10-30T11:07:58.512432Z
+  measured_commit = "678985144728df823228bc238c0a34664135df85"
+  measured_tree = "bd624f32fcdeeebbefb3753c5a958eb35e2aa035"
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.8825966850828729
-  mutants_killed = 639
-  mutants_survived = 85
-  mutants_not_covered = 85
-  mutants_no_block = 79
+  mutation_score = 0.8820301783264746
+  mutants_killed = 643
+  mutants_survived = 86
+  mutants_not_covered = 86
+  mutants_no_block = 80
   mutants_test_gap = 6
-  mutants_in_scope = 724
+  mutants_in_scope = 729
   unclassified_in_scope = 0
   criteria_total = 6
   criteria_covered = 6
@@ -25,11 +25,11 @@
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 639
-    survived = 85
+    killed = 643
+    survived = 86
     timeout = 0
-    in_scope = 724
-    score = 0.8825966850828729
+    in_scope = 729
+    score = 0.8820301783264746
     file_count = 31
     measured_on = "helicon"
     whole_file = ["internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/doctor_killswitch.go — adapter-lacks-range-runner", "internal/cmd/doctor_killswitch_test.go — adapter-lacks-range-runner", "internal/cmd/execute_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/gate_override_test.go — adapter-lacks-range-runner", "internal/cmd/install_agent_test.go — adapter-lacks-range-runner", "internal/cmd/killswitch_record_test.go — adapter-lacks-range-runner", "internal/cmd/quick_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/subagent_offload_audit_test.go — adapter-lacks-range-runner", "internal/cmd/task.go — adapter-lacks-range-runner", "internal/cmd/task_dispatch.go — adapter-lacks-range-runner", "internal/cmd/task_dispatch_test.go — adapter-lacks-range-runner", "internal/cmd/task_writer_record_test.go — adapter-lacks-range-runner", "internal/gate/engine.go — adapter-lacks-range-runner", "internal/gate/engine_test.go — adapter-lacks-range-runner", "internal/gate/fixture_test.go — adapter-lacks-range-runner", "internal/gate/override.go — adapter-lacks-range-runner", "internal/gate/override_test.go — adapter-lacks-range-runner", "internal/gate/writer.go — adapter-lacks-range-runner", "internal/gate/writer_test.go — adapter-lacks-range-runner", "internal/gate/writerfence.go — adapter-lacks-range-runner", "internal/gate/writerfence_test.go — adapter-lacks-range-runner", "internal/gatestate/store.go — adapter-lacks-range-runner", "internal/gatestate/store_test.go — adapter-lacks-range-runner", "internal/killswitch/killswitch.go — adapter-lacks-range-runner", "internal/killswitch/killswitch_test.go — adapter-lacks-range-runner", "internal/review/writer.go — adapter-lacks-range-runner", "internal/review/writer_test.go — adapter-lacks-range-runner", "internal/rules/rules.go — adapter-lacks-range-runner", "internal/rules/rules_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner"]
@@ -38,66 +38,54 @@
   id = "c-1"
   status = "covered"
   tests = ["internal/rules/rules_test.go:TestAgentGateAllowsSoloWriter", "internal/review/writer_test.go:TestWriterNeverCommitsOrDecides", "internal/gate/writer_test.go:TestOneWriterPerTask", "internal/gate/writer_test.go:TestWriterSpawnShape", "internal/gate/writerfence_test.go:TestWriterBashAllowlist", "internal/gate/writerfence_test.go:TestWriterSpawnsNoAgent", "internal/gate/writerfence_test.go:TestWriterPartialLineRefused", "internal/gate/writerfence_test.go:TestFenceRefusesWrappers", "internal/gate/writerfence_test.go:TestWriterEditOutsideRepo"]
-  notes = "t-10/t-11 closed the r-20261028 weak points: Agent/Task spawn, partial line, sed -i/perl -i, find -exec family each have a refusing case; wrappers (timeout/nice/stdbuf/env -S) refused; root-less Edit refused. writerfence.go:130/:249 survivors are case-line ceiling (accepted, arms driven by the tests named). t-14 spawn shape pinned both ways."
+  notes = "Unchanged since r-20261029: one writer per task, solo-only, never commits/sets status/finalizes; Bash allowlist, spawn, partial-line, wrapper and out-of-repo arms each refuse. writerfence.go survivors are accepted case-line ceiling."
 
 [[criterion]]
   id = "c-2"
   status = "covered"
   tests = ["internal/cmd/task_dispatch_test.go:TestDispatchSizeGate", "internal/gate/writer_test.go:TestWriterSpawnBoundToArmedTask", "internal/cmd/execute_prompt_test.go:TestSoloWriterReportOnly", "internal/review/writer_test.go:TestWriterReportBounded"]
-  notes = "Unchanged since r-20261028: size-gate boundary, prompt-line binding, report-only main loop and bounded report each fail on breakage; task_dispatch.go:89/:160/:162 are accepted case-line ceiling."
+  notes = "Size-gate boundary, prompt-line binding, report-only main loop and bounded report each fail on breakage; task_dispatch.go:89/:160/:162 accepted case-line ceiling."
 
 [[criterion]]
   id = "c-3"
   status = "covered"
   tests = ["internal/gate/writer_test.go:TestWriterStopClearsGreen", "internal/gate/writerfence_test.go:TestMainLoopWaitsForWriter", "internal/gate/writerfence_test.go:TestFenceRefusesWrappers", "internal/cmd/execute_prompt_test.go:TestSoloWriterGatesStayInMainLoop"]
-  notes = "Writer green cleared on SubagentStop; main-loop dross test/review/commit refused while launched, now including wrapped forms (t-11, the r-20261028 FLAG); prompt orders bare test -> reviewer -> commit."
+  notes = "Writer green cleared on SubagentStop; main-loop test/review/commit refused while launched, wrapped forms included (t-15 adds sh -c 'git commit'); prompt orders bare test -> reviewer -> commit."
 
 [[criterion]]
   id = "c-4"
   status = "covered"
   tests = ["internal/gate/writer_test.go:TestWriterSpawnRefusedOutsideSolo", "internal/cmd/task_dispatch_test.go:TestDispatchRefusesOutsideSolo", "internal/gate/writerfence_test.go:TestFenceSilentUnarmed", "internal/gate/writer_test.go:TestWriterRecorderPairSilent", "internal/cmd/execute_prompt_test.go:TestPairPromptHasNoWriter", "internal/gate/writer_test.go:TestWriterSpawnShape"]
-  notes = "Spawn, dispatch, fence and recorder refused/silent outside solo; pair prompts carry no writer text. t-14 relaxed only the run_in_background key, not the solo check. writer.go:69-75/:124-126 accepted case-line ceiling."
+  notes = "Spawn, dispatch, fence and recorder refused/silent outside solo; pair prompts carry no writer text. writer.go:69-75/:124-126 accepted case-line ceiling."
 
 [[criterion]]
   id = "c-5"
   status = "covered"
-  tests = ["internal/cmd/execute_prompt_test.go:TestSoloWriterFailurePath", "internal/gate/writerfence_test.go:TestNoInlineTakeover", "internal/gate/writerfence_test.go:TestNoInlineTakeoverViaBash", "internal/gate/writerfence_test.go:TestZombieWriterFenced", "internal/gate/writerfence_test.go:TestEscapeRouteSurvivesLoadError", "internal/cmd/task_writer_record_test.go:TestWriterRecordKeptOnSaveFailure", "internal/cmd/execute_prompt_test.go:TestRecoveryWriterInFlight"]
-  notes = "Failure arms route to stash + failed; Edit/Write and direct Bash takeover (sed -i, cp, >, git checkout/restore) refused; escape route survives load errors; record cleared only after save (t-12). Three remaining takeover-fence holes are FLAGs -> t-15; :388/:444 accepted case-line ceiling."
+  tests = ["internal/cmd/execute_prompt_test.go:TestSoloWriterFailurePath", "internal/gate/writerfence_test.go:TestNoInlineTakeover", "internal/gate/writerfence_test.go:TestNoInlineTakeoverViaBash", "internal/gate/writerfence_test.go:TestNoInlineTakeoverViaWrapper", "internal/gate/writerfence_test.go:TestEscapeRouteRedirectRefused", "internal/gate/writerfence_test.go:TestZombieWriterFenced", "internal/gate/writerfence_test.go:TestEscapeRouteSurvivesLoadError", "internal/cmd/task_writer_record_test.go:TestWriterRecordKeptOnSaveFailure", "internal/cmd/execute_prompt_test.go:TestRecoveryWriterInFlight"]
+  notes = "t-15 closed the three r-20261029 FLAGs: wrapped/nested/partial lines refused once stopped (TestNoInlineTakeoverViaWrapper), redirect on the escape line refused with /dev/null admitted (TestEscapeRouteRedirectRefused), dd of= onto a writer file refused and dd of= elsewhere admitted (TestNoInlineTakeoverViaBash). writerfence.go:398 (dd case line) accepted as case-line ceiling this run."
 
 [[criterion]]
   id = "c-6"
   status = "covered"
-  tests = ["internal/cmd/task_dispatch_test.go:TestCompareThresholds", "internal/cmd/task_dispatch_test.go:TestCompareUsesAboveGateMedians", "internal/cmd/task_dispatch_test.go:TestCompareEvenMedian", "internal/cmd/task_dispatch_test.go:TestKillSwitchVerdictHolds", "internal/cmd/killswitch_record_test.go:TestKillSwitchBaselineRecorded", "internal/cmd/doctor_killswitch_test.go:TestDoctorKillSwitchAfterDue", "internal/cmd/doctor_killswitch_test.go:TestDoctorKillSwitchQuiet"]
-  notes = "Even-count median now killed (task_dispatch.go:190 gone from survivors); doctor surfaces a pending [after] leg after a later solo writer run (t-13). Reminder goes silent when the run's commit is gc'd -> FLAG, t-16."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-5: takeoverWrite judges only the outer command name, so after the writer stops a wrapped/nested main-loop write (timeout 5 sed -i ... a.go, sh -c 'echo x > a.go') or a partial scan is admitted -> t-15"
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-5: isEscapeRoute returns before takeoverWrite (writerfence.go:305 vs :333), so a redirection on the escape line (git stash push > a.go) bypasses the takeover fence -> t-15"
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-5: operands() (writerfence.go:417) does not parse dd of=FILE, so dd of=a.go onto a writer-owned file is admitted -> t-15"
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-6: laterWriterRun returns false when a reviewed task's commit is gone (squash-merge + gc, the normal post-ship path), so the [after] reminder goes silent -> t-16"
+  tests = ["internal/cmd/task_dispatch_test.go:TestCompareThresholds", "internal/cmd/task_dispatch_test.go:TestCompareUsesAboveGateMedians", "internal/cmd/task_dispatch_test.go:TestCompareEvenMedian", "internal/cmd/task_dispatch_test.go:TestKillSwitchVerdictHolds", "internal/cmd/killswitch_record_test.go:TestKillSwitchBaselineRecorded", "internal/cmd/doctor_killswitch_test.go:TestDoctorKillSwitchAfterDue", "internal/cmd/doctor_killswitch_test.go:TestDoctorKillSwitchQuiet", "internal/cmd/doctor_killswitch_test.go:TestDoctorKillSwitchCommitGone"]
+  notes = "t-16 closed the r-20261029 FLAG: a gone or unrecorded commit now yields an 'could not be confirmed ... may be due' warning instead of silence, a proven writer task outranks a gone one; doctor_killswitch.go has no survivors. The [after] leg itself is unmeasured until the next real solo phase (locked baseline decision)."
 
 [[finding]]
   severity = "NOTE"
-  text = "r-20261028 FLAGs closed: wrapper bypass (t-11), root-less writer Edit (t-11), Bash takeover (t-11), load-error escape deadlock (t-11), record cleared before Save (t-12), nothing prompting [after] (t-13); :183 and :190 survivors killed (t-10)"
+  text = "r-20261029 FLAGs closed: c-5 wrapper/nested takeover, escape-line redirect, dd of= (t-15); c-6 silent reminder on a gone commit (t-16)"
 
 [[finding]]
   severity = "NOTE"
-  text = "5 in-hunk survivors accepted this run as gremlins switch-case ceiling: writerfence.go:130 x2, :249, :388, :444 — each arm driven by a named writerfence_test.go case"
+  text = "1 in-hunk survivor accepted this run as gremlins switch-case ceiling: writerfence.go:398 (case name == \"dd\"), driven by TestNoInlineTakeoverViaBash's dd refuse/admit pair; re-collected the same run to reclassify"
 
 [[finding]]
   severity = "NOTE"
-  text = "c-4: _execute.recovery.md is fetched in pair runs too and carries the writer-in-flight arm; it cannot fire without a solo writer record (carried from r-20261028)"
+  text = "t-15 has no solo-review record in changes.json; its three target holes were checked against the named tests in this verify instead"
 
 [[finding]]
   severity = "NOTE"
-  text = "verify run collected from helicon r-20261029-104618: score 0.88 over 724 in-scope mutants, 0.99 over the 645 reachable; 6 test-gap mutants all carry prior accepted dispositions"
+  text = "t-16 reviewer (round 2): once a later solo phase ships and squash-merges, the 'may be due' warning recurs until [after] is recorded - by design, expect it after every later solo phase"
+
+[[finding]]
+  severity = "NOTE"
+  text = "verify run collected from helicon r-20261030-070335: score 0.88 over 729 in-scope mutants, 0.99 over the 649 reachable; 6 test-gap mutants all carry prior accepted dispositions"
