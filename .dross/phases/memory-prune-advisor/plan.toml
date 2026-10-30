@@ -19,7 +19,7 @@ paths.go holds the .dross-relative advisor-state constants: .dross/memory/turns.
     "if with CLAUDE_CONFIG_DIR set the dir is not under it, or ~/.claude is stat'd, TestLocateHonorsClaudeConfigDir fails",
     "if a missing dir, a regular file at that path, or a symlinked memory/ returns ok=true or a non-nil error, TestLocateMissingIsSilent fails",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-2"
@@ -40,7 +40,7 @@ name: slugs. Fixture corpus lives under testdata/corpus/."""
     "if two files declaring one name: slug are not both reported, or either gets inbound credit, TestDuplicateNameSlugReported fails",
     "if a FIFO named foo.md is not skipped within 1s, TestCorpusSkipsFIFO fails; if files with no frontmatter or CRLF frontmatter fail to parse, TestCorpusToleratesMissingAndCRLFFrontmatter fails",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-3"
@@ -61,7 +61,7 @@ case-insensitive with ' or ’. DocCandidates(tracked) keeps CLAUDE.md, ARCHITEC
     "if a body under 8 words divides by zero or matches, TestDupShortBody fails",
     "if docs/x.txt or src/foo.md survive DocCandidates, TestDocCandidates fails",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-4"
@@ -80,7 +80,7 @@ and its separator removed."""
     "if \"X — done; next phase foo\" does not reword to exactly \"X — done\" (no dangling \"; \" / \" — \", no other byte changed), TestRewordRemovesOnlyClause fails",
     "if a hook that is nothing but the clause rewords to empty, TestRewordNeverEmpty fails",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-5"
@@ -90,8 +90,9 @@ and its separator removed."""
   description = "Turns streams top-level <slug>/*.jsonl via bufio.Reader (no Scanner cap), skipping subagents/ and files with mtime >30d. A turn = distinct message.id\nper file, type=assistant, isSidechain=false, model≠\"<synthetic>\", within 30d; counts per project + all-projects total. Cache .dross/memory/turns.json\nkeeps per-file {size, mtime, offset, day buckets}: reused under 24h, after 24h only appended bytes rescanned, truncation recounts from 0, atomic\nwrites; returns counts + cache age. Before its first write it creates a self-ignoring .dross/memory/.gitignore (\"*\"), so repos onboarded before this\nphase never stage advisor state. Also seed .dross/memory/ in drossIgnoreEntries and .gitignore; register turncache.go as MachineLocal in secretscan."
   covers = ["c-2"]
   test_contract = ["if three lines sharing one message.id count more than 1, TestTurnsDedupeMessageID fails", "if isSidechain:true, \"<synthetic>\", user lines or subagents/ files add turns, TestTurnsMainAgentOnly fails", "if a turn dated 31 days ago is counted, TestTurnsWindow fails", "if a chmod-000 transcript with a 31-day-old mtime is opened, TestTurnsSkipsStaleFilesByMtime fails", "if a 5 MB single-line tool result between two assistant turns yields anything but 2, TestTurnsSurviveMultiMegabyteLine fails", "if a malformed line is fatal, TestTurnsSkipMalformedLine fails", "if RepoShare is not repo/all across two fixture project dirs, TestTurnsShareAcrossProjects fails", "if a 23h-old cache shows appended turns or age ≠ 23h, TestCacheReusedUnder24h fails; if at 25h they don't show or the cache isn't rewritten, TestCacheRecountedAt24h fails", "if a corrupt or future-dated cache is trusted, TestCacheRecountsOnCorruptOrFuture fails", "if a recount after one appended turn reads more than the appended bytes, or a truncated file is not recounted from 0, TestIncrementalRecountAndTruncation fails", "if the cache path is ever under the memory dir instead of <root>/.dross/memory/, TestCacheNeverInMemoryDir fails", "if .dross/memory/ is missing from drossIgnoreEntries or the repo .gitignore, TestEnsureGitignoreCoversMemoryState fails; if the ignore entry and the memadvise path constants drift, TestIgnoreEntriesMatchAdvisorPaths fails", "if turncache.go is left out of secretscan.Writers() or its IgnoreSeed is wrong, the existing writer enum test fails", "if turns.json is written in a repo whose root .gitignore lacks .dross/memory/ and `git check-ignore .dross/memory/turns.json` does not report it ignored, TestMemoryStateSelfIgnores fails"]
-  status = "pending"
+  status = "failed"
   depends_on = ["t-1"]
+  reason = "writer: test red on TestEveryPathShapedFieldIsDeclared, needs 3 rows in internal/cmd/testdata/pathfence_scan/not_paths.txt (outside task files); code in stash@{0}"
 
 [[task]]
   id = "t-6"

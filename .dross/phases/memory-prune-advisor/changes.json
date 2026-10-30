@@ -14,6 +14,197 @@
       "commit": "73ad1afd",
       "completed_at": "2026-10-30T15:04:48.84886Z",
       "notes": "quick: ask the spec/plan lock gate as an AskUserQuestion"
+    },
+    "t-1": {
+      "files": [
+        "internal/memadvise/locate.go",
+        "internal/memadvise/paths.go",
+        "internal/memadvise/locate_test.go"
+      ],
+      "commit": "1efce234",
+      "completed_at": "2026-10-30T15:18:52.138541Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Locate",
+          "loc": "internal/memadvise/locate.go:57",
+          "what": "resolves the repo's Claude memory dir (CLAUDE_CONFIG_DIR-aware, symlink-resolved slug), silent when absent or symlinked"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/memadvise/index.go",
+        "internal/memadvise/index_test.go",
+        "internal/memadvise/testdata/corpus/MEMORY.md"
+      ],
+      "commit": "6091f65d",
+      "completed_at": "2026-10-30T15:39:39.477999Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Corpus.Integrity",
+          "loc": "internal/memadvise/index.go:255",
+          "what": "loads MEMORY.md + direct-child memories (no symlinks/FIFOs) and reports dead index links, orphans, inbound/dangling [[links]] by name: slug and duplicate slugs"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/memadvise/guard.go",
+        "internal/memadvise/dup.go",
+        "internal/memadvise/guard_test.go",
+        "internal/memadvise/dup_test.go"
+      ],
+      "commit": "1308825c",
+      "completed_at": "2026-10-30T15:42:42.517774Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Docs.Duplicates",
+          "loc": "internal/memadvise/dup.go:56",
+          "what": "flags a memory whose normalised 8-word shingles are \u003e=50% inside one tracked doc; Guarded blocks deletes on NEVER/ASK/DECOY/REOPENED/don't re-raise|revert"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/memadvise/hook.go",
+        "internal/memadvise/hook_test.go"
+      ],
+      "commit": "83c598c6",
+      "completed_at": "2026-10-30T16:02:45.528214Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Expired",
+          "loc": "internal/memadvise/hook.go:49",
+          "what": "finds an expired deadline (until/by/due… YYYY-MM-DD \u003c today) or a next-phase clause naming a known phase and rewords it out of the hook, never to empty"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "TestSlugResolvesSymlinks only runs the /tmp -\u003e /private/tmp check when /tmp is a symlink (macOS), so it is skipped on Linux CI. The link-vs-target check still enforces symlink resolution on every platform, so the contract holds.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "ClaudeDir returns CLAUDE_CONFIG_DIR as given: it does not expand '~' or make the path absolute, so a relative value resolves against the process cwd.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The package doc mentions Apply as the one writer, but this diff does not add Apply. The doc assumes sibling tasks will.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "Resolve looks targets up with an exact, case-sensitive match on the bare file name. './foo.md', 'foo.md#anchor', '%20'-encoded names and a case mismatch on a case-insensitive filesystem (darwin) are all reported as dead links even when the file exists. Also, indexLineRe's target class [^)\\s]* means a link whose target contains a space is not parsed as an index line at all, so its file is reported as an orphan rather than as indexed or dead.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Files over the 1 MiB cap, or ones that fail to read, are dropped from Memories without a trace. An index line pointing at one is then reported dead, as if the file were missing. The code comments say so, but a later display layer may want to tell the two cases apart.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestIndexLinkOutsideDirIsDead does not watch whether '../../.ssh/id.md' is opened. It infers it from Resolve returning nil and no 'secret' memory being loaded. That still catches any Resolve that reads the path, so it is adequate.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Only MEMORY.md is fixed under testdata/corpus/. corpusDir writes the memory files at test time, which matches the files the task declared.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-7",
+          "text": "shingles() runs one word stream across paragraph breaks, so TestDupSurvivesReorder passes partly on shingles shared inside a paragraph and partly on the a-\u003eb boundary the doc keeps. Lowercasing on its own doesn't decide the result (without it the overlap is still 33/53), so the test is real coverage of reordering but only weak coverage of case normalisation.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "Guarded only provides the guard check. This task doesn't wire it into suggestion generation, so 'never suggested for deletion' and 'status words alone produce no suggestion' depend on whichever sibling task builds suggestions.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-7",
+          "text": "Duplicates returns whatever path string the caller passed to NewDocs. The repo-relative guarantee depends on callers feeding it DocCandidates output from git ls-files.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "removeClause leaves a dangling separator when a clause opens a parenthetical but ends at a separator rather than ')': \"X (until 2026-01-01; note) Y\" rewords to \"X (; note) Y\". Only the prefix '(' + suffix ')' case is handled.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "nextClauseRe is case-insensitive, so the slug group captures mixed case ('Next: Foo' -\u003e 'Foo'); a lowercase known-phase set never matches it, so the clause silently stays live. Consider lowercasing the captured slug or making the slug group case-sensitive.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Expired takes known map[string]bool, not the phaseKnown(slug) predicate the description names; a code comment gives the reason (exec-consent audit) and NextSlugs lets the caller build the set. The tested behaviour is the same.",
+          "resolution": "non-blocking, left"
+        }
+      ]
     }
   }
 }

@@ -1635,6 +1635,31 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "memory-prune-advisor/t-1": {
+      "issue": "DRO-1031",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-2": {
+      "issue": "DRO-1032",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-3": {
+      "issue": "DRO-1033",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-4": {
+      "issue": "DRO-1034",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-5": {
+      "issue": "DRO-1035",
+      "plan_status": "in_progress",
+      "board_state": "task-in-progress"
+    },
     "milestone-push-failure-tests/t-1": {
       "issue": "DRO-264",
       "plan_status": "done",
