@@ -2502,82 +2502,82 @@
     "solo-task-subagent/t-1": {
       "issue": "DRO-1013",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-10": {
       "issue": "DRO-1022",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-11": {
       "issue": "DRO-1025",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-12": {
       "issue": "DRO-1023",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-13": {
       "issue": "DRO-1024",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-14": {
       "issue": "DRO-1026",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-15": {
       "issue": "DRO-1027",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-16": {
       "issue": "DRO-1028",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-2": {
       "issue": "DRO-1014",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-3": {
       "issue": "DRO-1015",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-4": {
       "issue": "DRO-1016",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-5": {
       "issue": "DRO-1017",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-6": {
       "issue": "DRO-1018",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-7": {
       "issue": "DRO-1019",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-8": {
       "issue": "DRO-1020",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "solo-task-subagent/t-9": {
       "issue": "DRO-1021",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "supply-chain-currency/t-1": {
       "issue": "DRO-424",
