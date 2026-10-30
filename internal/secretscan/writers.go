@@ -32,7 +32,7 @@ import (
 //     them resolves under .dross/.
 //
 // Artifacts written by an agent rather than by Go code (panel notes, REVIEW.md,
-// pr-body.md, the criterion notes in verify.toml) are declared under the
+// pr-body.md, the criterion notes in verify.toml, kill-switch.toml) are declared under the
 // AgentAuthored sentinel: they are in the scanner's reach like any other
 // UnderDross artifact, and the stale-declaration arm skips resolving them to a
 // Go file.
@@ -215,6 +215,9 @@ var writers = []Writer{
 	{File: "internal/findings/state.go", UnderDross: &UnderDross{Artifacts: []string{"security/state.toml", "quality/state.toml", "techdebt/state.toml"}}},
 	{File: AgentAuthored, UnderDross: &UnderDross{Artifacts: []string{
 		"phases/<id>/panel/<name>.md", "phases/<id>/REVIEW.md", "phases/<id>/pr-body.md", "phases/<id>/notes.md",
+		// The writer trial's record: mined and written by the agent,
+		// only read by dross (internal/killswitch).
+		"phases/<id>/kill-switch.toml",
 	}}},
 
 	// ---- MachineLocal: under .dross, kept out of git by the dross seed -----
@@ -227,8 +230,8 @@ var writers = []Writer{
 		Why: "host allowlist additions and quick_base; a committed copy would let a repo authorize its own API host",
 	}},
 	{File: "internal/gatestate/store.go", MachineLocal: &MachineLocal{
-		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json", "gate/review.json", "gate/quick.json", "gate/review-context.md", "gate/reply.json", "gate/show/<name>"}, IgnoreSeed: GateIgnoreSeed,
-		Why: "tool-gate records (green tree, execute mode, task approval, solo review ledger, quick mode, reply approval, the show-once records of rule/interaction show) and the review context the reviewer reads; a committed copy would let a clone arrive pre-approved or pre-reviewed",
+		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json", "gate/review.json", "gate/quick.json", "gate/review-context.md", "gate/reply.json", "gate/writer.json", "gate/show/<name>"}, IgnoreSeed: GateIgnoreSeed,
+		Why: "tool-gate records (green tree, execute mode, task approval, solo review ledger, quick mode, reply approval, solo writer record, the show-once records of rule/interaction show) and the review context the reviewer reads; a committed copy would let a clone arrive pre-approved or pre-reviewed",
 	}},
 	{File: "internal/gatestate/nudge.go", MachineLocal: &MachineLocal{
 		Path: "gate/nudge/<name>", IgnoreSeed: GateIgnoreSeed,

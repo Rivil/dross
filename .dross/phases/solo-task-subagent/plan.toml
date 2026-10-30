@@ -1,0 +1,235 @@
+task_seq = 16
+
+[phase]
+  id = "solo-task-subagent"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Capture writer hook payloads"
+  files = ["internal/gate/testdata/writer_pre_edit.json", "internal/gate/testdata/writer_pre_bash.json", "internal/gate/testdata/writer_spawn_pre.json", "internal/gate/testdata/writer_subagent_stop.json", "internal/gate/testdata/writer_resume_post.json", "internal/gate/testdata/main_pre_edit.json", "internal/gate/fixture_test.go"]
+  description = """
+Go/no-go capture via headless `claude -p` in a scratch repo, with a temporary stdin-dump hook in the scratch repo's .claude/settings.local.json
+(never ~/.claude) — the solo-task-review t-1 method. A background scratch dross-task-writer does one Edit and one Bash, then is resumed once via
+SendMessage. Grep the fixtures for every non-trivial ~/.claude/CLAUDE.md line before committing (count must be 0).
+STOP before t-8 and drop it (prose fallback) if the writer's PreToolUse payloads lack agent_type."""
+  covers = ["c-1", "c-5"]
+  test_contract = [
+    "if writer_pre_edit.json / writer_pre_bash.json stop being real PreToolUse captures (session_id, transcript_path, toolu_ id) carrying agent_type \"dross-task-writer\" and a non-empty agent_id, TestCapturedWriterPreToolUse fails (the NO-GO signal for t-8)",
+    "if main_pre_edit.json carries any agent_type or agent_id key, TestCapturedMainLoopHasNoAgentType fails",
+    "if the resumed writer's stop carries a different agent_id from its launch, TestCapturedWriterResume fails (decides whether t-9's SendMessage fix round binds to the same writer; else the fix round becomes fail-the-task)",
+    "if writer_subagent_stop.json's last_assistant_message holds no dross-writer-report fence, TestCapturedWriterStop fails",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Record the v1.7 baseline and calibrate the gate"
+  files = [".dross/phases/solo-task-subagent/kill-switch.toml", "internal/cmd/killswitch_record_test.go"]
+  description = """
+Mine the archived v1.7 solo transcripts (~/.local/share/dross/baseline-v1.7/; solo-task-review → review-comment-ingest) with a jq filter recorded in
+the file, per the flow-cost.toml pattern: main-loop entries only (isSidechain false, model not <synthetic>), split per task from `task status … in_progress`
+to done|failed, message.id deduped. [[before.task]] rows: peak_context, context_growth, wall_clock_s, turns, surface_bytes (task.files at the task commit's
+parent via `git cat-file -s`). [thresholds] context_drop = 0.25, wall_clock_rise = 0.25. [calibration] threshold + method (provisional 50,000 bytes).
+[trial] status = "pending". Counts only — no transcript text."""
+  covers = ["c-6"]
+  test_contract = [
+    "if a v1.7 solo phase has no [[before.task]] row, or a row has zero peak_context / wall_clock_s / turns, or a negative context_growth (a compaction segment counted raw), TestKillSwitchBaselineRecorded fails",
+    "if [thresholds] differ from 0.25 drop / 0.25 rise, or any turn-count threshold appears, TestKillSwitchThresholdsLocked fails",
+    "if the median growth of [before] rows at or above [calibration].threshold is not greater than that of rows below it, TestThresholdCalibrated fails",
+    "if an [after] table exists while [trial].status is \"pending\", or status is anything but pending with no [after], TestKillSwitchTrialPending fails",
+    "if any string value appears outside the declared keys (phase, task, method, filter, status), TestKillSwitchCopiesNoContent fails, so no transcript text leaks into a tracked file",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Ship the dross-task-writer definition"
+  files = ["assets/agents/dross-task-writer.md", "internal/review/writer.go", "internal/review/writer_test.go", "internal/cmd/install_agent_test.go"]
+  description = """
+Frontmatter: name dross-task-writer, tools exactly Read, Grep, Glob, Edit, Write, Bash; no model key (inherits the session model), no memory key, no
+omitClaudeMd. Body: read the task via `dross task show` + the spec; edit only task.files, never .dross/; test only with `dross test --files`; never git
+add/commit/stash, `dross task status`, `changes record`, `phase`, `ship`, `issue`. End with one fenced dross-writer-report (files touched,
+`test: green|red` + first failing test, notes ≤5 lines, no code, no diff). writer.go: WriterAgent const + WriterPromptLine(phase, task).
+syncAgents installs it with no code change."""
+  covers = ["c-1", "c-2"]
+  test_contract = [
+    "if the frontmatter gains a model: or memory: key, loses Edit/Write, or tools gain Agent, Task, WebFetch, WebSearch or NotebookEdit (or drop to inherit-all), TestWriterDefinitionShape fails",
+    "if the frontmatter name drifts from WriterAgent, TestWriterNameMatchesConst fails",
+    "if the body stops forbidding git commit/stash, `dross task status`, `changes record`, the finalize verbs, or edits under .dross/, TestWriterNeverCommitsOrDecides fails",
+    "if the report spec drops files/test/notes or permits pasting code or the diff, TestWriterReportBounded fails",
+    "if WriterPromptLine is not a single line naming both phase and task, TestWriterPromptLineShape fails",
+    "if syncAgents does not write dross-task-writer.md beside the reviewer, TestSyncAgentsInstallsWriter fails",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Amend the dross-agent-gate builtin"
+  files = ["internal/rules/rules.go", "internal/rules/rules_test.go", "docs/subagent-offload-audit.md", "internal/cmd/subagent_offload_audit_test.go"]
+  description = """
+The builtin gains a solo-only exception: under /dross-execute --solo, one dross-task-writer per task may edit that task's files; it never commits, sets
+task status, writes .dross/ or finalizes. /dross-quick --solo is named as excluded. The read-only fan-out clause and the pair clause stay byte-identical.
+The audit doc's boundary paragraph and its `### execute` section name the writer."""
+  covers = ["c-1", "c-4"]
+  test_contract = [
+    "if the rendered rule loses \"writing and deciding stay gated\", \"--solo\", \"one\", dross-task-writer, \"per task\", or \"never commits, sets task status or finalizes\", TestAgentGateAllowsSoloWriter fails",
+    "if the pair-mode sentence changes by a byte, TestAgentGatePairSentenceStable fails (c-4)",
+    "if the /dross-quick --solo exclusion is dropped, TestAgentGateQuickExcluded fails (quick_solo)",
+    "if the audit doc's execute section stops naming the writer, TestSubagentOffloadAuditCoversEveryPrompt fails",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 1
+  title = "Store the writer record behind tamper-guard"
+  files = ["internal/gatestate/store.go", "internal/gatestate/store_test.go", "internal/gate/override.go", "internal/gate/override_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/cmd/task.go", "internal/cmd/task_writer_record_test.go", "internal/secretscan/writers.go"]
+  description = ".dross/gate/writer.json {phase, task, agent_id, state launched|stopped, stopped_at}, written with the store's atomic temp+rename. Missing reads as none;\ncorrupt is an error naming the path; a git-tracked one is refused unread. Tamper-guard covers it (a deleted record would re-allow a second writer and\nlift the takeover refusal). `dross task status <p> <t> pending` clears the record when it names that task, so a failed writer task can be retried; a\n`failed` transition keeps it. No ledger, no report field."
+  covers = ["c-1", "c-5"]
+  test_contract = ["if a truncated writer.json decodes to a zero record instead of an error naming .dross/gate/writer.json, or a missing one returns other than (nil, nil), TestWriterRecordDecode fails", "if Write/Edit of writer.json, or Bash `echo x >`, `rm`, `mv` on it, gets past tamper-guard, the tamper table test fails", "if a force-added (tracked) writer.json is read instead of refused, TestTrackedRecordRefused fails", "if a json-tagged field is left unfiled, TestEveryPathShapedFieldIsDeclared fails", "if `dross task status <p> <t> pending` (a retry) on the task named by writer.json leaves the record in place — so the retried task's writer spawn is refused as a second writer and t-8 refuses the main loop forever — TestWriterRecordClearedOnRetry fails; a `failed` transition must keep the record (the zombie fence relies on it), and a reset of a different task must leave it untouched"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  depends_on = ["t-1", "t-3", "t-5"]
+  title = "Gate writer spawns; record launch and stop"
+  files = ["internal/gate/writer.go", "internal/gate/writer_test.go", "README.md", "internal/cmd/gate_override_test.go"]
+  description = """
+A Workflow, liftable gate \"solo-writer\" claims Agent/Task calls with subagent_type dross-task-writer. It admits a spawn only when ArmedScope is a solo
+execute task (not quick) on phase/<id>, the prompt is exactly WriterPromptLine(phase, task) for that task, run_in_background is true, no `model` input
+is given, and no writer record exists for the task. PostToolUse binds the launch's agentId; the bound writer's SubagentStop sets stopped + stopped_at
+and calls gatestate.ClearGreen, so the writer's own `dross test` green never reaches a commit. Unbound agent_ids change nothing. README gets a gate row."""
+  covers = ["c-1", "c-3", "c-4"]
+  test_contract = ["if a writer spawn is admitted with no execute mode, in pair mode, with a solo quick armed, with no task in_progress, or with HEAD off phase/<id> (each must be refused naming why), TestWriterSpawnRefusedOutsideSolo fails (c-4)", "if, with solo t-3 in progress, WriterPromptLine(p,\"t-3\") is refused, or a prompt naming t-4 or with appended text is admitted, TestWriterSpawnBoundToArmedTask fails (c-2)", "if a spawn with run_in_background false/absent or any `model` key is admitted, TestWriterSpawnShape fails (writer_spawn)", "if a second spawn for the same (phase, task) after a launched/stopped record is admitted instead of refused naming \"one writer per task\", TestOneWriterPerTask fails (c-1)", "if green.json written before the bound writer's SubagentStop survives that stop (also on the resumed writer's second stop, from writer_resume_post.json), TestWriterStopClearsGreen fails (c-3)", "if a stop whose agent_id is not the bound one writes anything, TestWriterStopIgnoresUnbound fails", "if launch/stop payloads record anything with execute.json in pair mode, TestWriterRecorderPairSilent fails (c-4)", "if an Explore, general-purpose or dross-task-reviewer spawn is claimed by the gate, TestWriterGateIgnoresOtherAgents fails", "if the solo-writer gate is registered but missing from TestGateRegistryNames' expected set (internal/cmd/gate_override_test.go), that test fails — the registry list is updated in this task"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 2
+  depends_on = ["t-2", "t-3"]
+  title = "Add the task dispatch size gate and kill switch"
+  files = ["internal/cmd/task_dispatch.go", "internal/cmd/task.go", "internal/cmd/task_dispatch_test.go", "cmd/dross/testdata/cli_tree.txt"]
+  description = "`dross task dispatch <phase> <task-id>` sums the bytes of task.files at HEAD (new/missing files count 0; paths go through pathfence). If surface ≥\nwriterSurfaceBytes and writerEnabled holds, it prints `dispatch: writer`, `subagent_type: dross-task-writer` and `prompt: <WriterPromptLine>`; otherwise\n`dispatch: inline (<why>)` and no prompt. Exits non-zero unless a solo execute run has that task in progress. writerEnabled is the compile-time kill\nswitch and ships true for the trial. Compare(before, after) filters both legs to above-gate rows and compares medians: context drop = 1 − median\nafter.peak_context / median before.peak_context (≥0.25), wall-clock rise = median after.wall_clock_s / median before.wall_clock_s − 1 (≤0.25)."
+  covers = ["c-2", "c-4", "c-6"]
+  test_contract = ["if threshold−1 bytes does not dispatch inline with no prompt line, or threshold bytes does not dispatch writer with the exact WriterPromptLine, or a dirty working-tree edit changes the surface, TestDispatchSizeGate fails", "if a \"../x\" or absolute path is counted (as 0 or otherwise) instead of erroring, TestSurfaceFencesPaths fails", "if pair mode, a solo quick, or a task not in_progress gets a zero exit or a prompt line, TestDispatchRefusesOutsideSolo fails (c-4)", "if writerEnabled = false still dispatches a 10 MB task to the writer, TestDispatchKillSwitchForcesInline fails", "if writerSurfaceBytes differs from kill-switch.toml [calibration].threshold, TestDispatchThresholdMatchesBaseline fails", "Compare table: drop 25.0% + rise 25.0% → pass; drop 24.9% → fail naming context; rise 25.1% → fail naming wall-clock; turns tripled → still pass; no above-gate after rows → error, never pass — any drift fails TestCompareThresholds", "if, once [after] exists, writerEnabled differs from Compare(before, after).Pass, TestKillSwitchVerdictHolds fails (c-6)", "if writerEnabled ships false while kill-switch.toml [trial].status is \"pending\", TestWriterShipsEnabledForTrial fails", "if Compare uses means instead of medians, context_growth instead of peak_context, or includes below-gate rows (a below-gate row with a huge peak must not move the verdict), TestCompareUsesAboveGateMedians fails"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  depends_on = ["t-1", "t-5", "t-6"]
+  title = "Fence the writer; refuse inline takeover"
+  files = ["internal/gate/writer.go", "internal/gate/writerfence.go", "internal/gate/writerfence_test.go"]
+  description = "Requires t-1's GO. Extends the solo-writer gate from t-6 (no new gate registration — writerfence.go holds the judges, writer.go's Claims/Judge\nroute to them). Calls carrying agent_type dross-task-writer are confined: Edit/Write only the bound task's files, never .dross/; Bash on an allowlist\n(git status/diff/log/show; dross test --files, validate, rule show, task show; go vet/build, gofmt -l; non-git/non-dross commands); Agent/Task spawns\nrefused; calls from a non-bound agent_id refused. Main-loop calls (no agent_type) on a writer-owned task: Edit/Write outside .dross/ refused; while the\nrecord is launched, bare `dross test`, `dross review context` and `git commit` refused. The stash and `task status … failed` always pass."
+  covers = ["c-1", "c-3", "c-5"]
+  test_contract = [
+    "from writer_pre_bash.json: if any of `git commit -m x`, `git stash`, `git reset --hard`, `git push`, `dross task status p t-3 done`, `dross changes record …`, `dross phase complete p`, `gh pr create` is admitted, or `dross test --files a.go`, `git diff`, `go vet ./...` is refused, TestWriterBashAllowlist fails (c-1)",
+    "if `git commit` hidden behind `sh -c` or `eval` is admitted, TestFenceFailsClosedOnOpaqueShell fails",
+    "from writer_pre_edit.json: if an Edit of .dross/phases/p/plan.toml or of a file outside task.files is admitted, or an Edit of a task.files path is refused, TestWriterEditScope fails",
+    "if a writer call carrying a stale agent_id (task failed, or not the bound one) is admitted, TestZombieWriterFenced fails",
+    "from main_pre_edit.json on a writer-owned task: if Edit a.go is admitted (it must be refused naming `git stash push -u -- . ':(exclude).dross'` and `failed --reason`), or Edit .dross/x, the stash or `failed` is refused, TestNoInlineTakeover fails (c-5)",
+    "if, with the record launched, a main-loop bare `dross test`, `dross review context` or `git commit` is admitted instead of refused naming \"wait for the writer's completion notice\", TestMainLoopWaitsForWriter fails (c-3)",
+    "if any claimed call is refused with no writer record or in pair mode, TestFenceSilentUnarmed fails (c-4)",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 4
+  depends_on = ["t-3", "t-6", "t-7", "t-8"]
+  title = "Route large solo tasks to the writer"
+  files = ["assets/prompts/_execute.solo.md", "assets/prompts/_execute.recovery.md", "internal/cmd/execute_prompt_test.go", "internal/cmd/quick_prompt_test.go"]
+  description = """
+Solo partial: after §1a run `dross task dispatch`. Inline → today's §1b–§1e unchanged. Writer → skip §1b–§1e, spawn with the printed subagent_type and
+prompt verbatim, run_in_background; wait for the completion notice; read only the dross-writer-report (never Read task.files, never `git diff`). Spawn
+error, `test: red` or no report → stash then `failed --reason "writer: …"`, never fix inline. Green → §1f in the main loop: bare `dross test`, reviewer,
+commit. A blocking review's one fix round goes to the same writer via SendMessage (load via ToolSearch; unavailable, red or missing reply → fail the
+task). Recovery partial: a writer record still launched on resume → stash + failed, never resume inline. `make install` before relying on it (r-01)."""
+  covers = ["c-2", "c-3", "c-4", "c-5"]
+  test_contract = [
+    "if the writer branch spawns without first calling `dross task dispatch`, or drops the verbatim-prompt or background rule, TestSoloWriterDispatch fails (c-2)",
+    "if writer-green is not followed in order by bare `dross test` → `dross review context` → commit, or the writer's report is called sufficient, TestSoloWriterGatesStayInMainLoop fails (c-3)",
+    "if the writer branch tells the main loop to Read task.files, run `git diff`, or do §1b/§1d, TestSoloWriterReportOnly fails (c-2)",
+    "if any failure arm (error, red, empty, spawn error, fix round red/missing) offers anything but stash then `failed --reason`, or offers an inline fix, TestSoloWriterFailurePath fails (c-5)",
+    "if execute.md, any partial fetched with mode=pair, quick.md or a _quick*.md mentions dross-task-writer or `task dispatch`, TestPairPromptHasNoWriter / TestQuickHasNoWriter fail (c-4, quick_solo)",
+    "if the recovery partial lacks the writer-in-flight arm (stash + failed), TestRecoveryWriterInFlight fails",
+    "if execute.md changes or exceeds its byte budget, TestPromptByteBudget fails",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 1
+  title = "Cover the writer fence's untested arms and the even-count median"
+  files = ["internal/gate/writerfence_test.go", "internal/cmd/task_dispatch_test.go"]
+  description = "Verify remediation (r-20261028-152340): 17 in-hunk survivors sat on code no test ran. Add writer-fence cases for an Agent/Task spawn from the writer (writerfence.go:118), a partially-parsed command line (s.Partial, :183), sed -i / perl -i (:235) and find -exec/-execdir/-delete/-ok (:237-238); add a Compare/median case with an even above-gate row count (task_dispatch.go:190 — the real [before] leg has 48 above-gate rows). After re-verify, :118/:235/:237/:238 stay NOT COVERED by the case-line attribution ceiling and are accepted then; :183 and :190 must be killed."
+  covers = ["c-1", "c-6"]
+  test_contract = ["if the writer's Agent or Task spawn refusal is removed, TestWriterSpawnsNoAgent fails", "if the s.Partial refusal is removed so a half-parsed writer line is judged on its readable part, TestWriterPartialLineRefused fails", "if the sed -i / perl -i arm or the find -exec/-execdir/-delete/-ok arm is removed, TestWriterBashAllowlist fails", "if median returns either middle element instead of their mean for an even count, TestCompareEvenMedian fails"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 2
+  title = "Close the writer fence holes and the escape-route deadlock"
+  files = ["internal/gate/writerfence.go", "internal/gate/writerfence_test.go", "internal/gate/engine.go", "internal/gate/engine_test.go"]
+  description = "Verify FLAGs carried from t-8 review. (1) Wrapper programs the shellscan unwrap misses — timeout, nice, ionice, stdbuf, setsid, chrt, env -S — reach an unlisted program name and are admitted (timeout 5 git commit): fail closed on them in the writer fence and in the main-loop wait fence. (2) Main-loop Bash writes to a writer-owned task's files (sed -i, perl -i, cp/mv/tee onto them, redirection, git checkout/restore --) bypass the Edit/Write-only takeover fence: refuse them, keeping the stash and task status failed passing. (3) A writer Edit/Write whose path resolves to no repo root (root \"\") is let through: refuse it. (4) A load error (corrupt writer.json/execute.json, ambiguous ArmedScope) currently refuses every main-loop call, including the escape route: always admit git stash push -u -- . ':(exclude).dross' and dross task status … failed before loading."
+  covers = ["c-1", "c-3", "c-5"]
+  test_contract = ["if timeout/nice/stdbuf/env -S wrapping git commit is admitted for the writer, or wrapping dross test / git commit is admitted in the main loop while the writer is launched, TestFenceRefusesWrappers fails", "if a main-loop sed -i, cp onto, redirection into, or git checkout -- of a writer-owned file is admitted, TestNoInlineTakeoverViaBash fails", "if a writer Edit of a path outside any repo is admitted, TestWriterEditOutsideRepo fails", "if, with a corrupt writer.json or execute.json, the stash or task status failed is refused, TestEscapeRouteSurvivesLoadError fails"]
+  status = "done"
+  depends_on = ["t-10"]
+
+[[task]]
+  id = "t-12"
+  wave = 1
+  title = "Clear the writer record only after the plan saves"
+  files = ["internal/cmd/task.go", "internal/cmd/task_writer_record_test.go"]
+  description = "Verify FLAG carried from t-5 review: releaseTaskWriter clears .dross/gate/writer.json before plan.Save, so a failed save drops the zombie-writer fence for a task that was never reset. Clear it after a successful Save."
+  covers = ["c-5"]
+  test_contract = ["if a plan.Save failure during task status pending leaves writer.json deleted, TestWriterRecordKeptOnSaveFailure fails"]
+  status = "done"
+
+[[task]]
+  id = "t-14"
+  wave = 1
+  title = "Admit writer spawns that carry no run_in_background key"
+  files = ["internal/gate/writer.go", "internal/gate/writer_test.go"]
+  description = "The first live writer spawn (t-13, 2026-10-29) was refused: writer.go requires tool_input run_in_background=true, but the current Claude Code Agent tool has no such parameter (every subagent runs in the background), so the key never reaches the hook. The t-1 capture came from an older harness that sent it. Admit a spawn whose run_in_background is absent; refuse only an explicit false (or a non-bool value)."
+  covers = ["c-1", "c-4"]
+  test_contract = ["if a writer spawn with no run_in_background key is refused, or one with run_in_background false is admitted, TestWriterSpawnShape fails"]
+  status = "done"
+
+[[task]]
+  id = "t-13"
+  wave = 1
+  title = "Surface the pending kill-switch [after] leg"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_killswitch.go", "internal/cmd/doctor_killswitch_test.go", "internal/killswitch/killswitch.go", "internal/killswitch/killswitch_test.go", "internal/secretscan/writers.go"]
+  description = "Verify FLAG: nothing prompts recording kill-switch.toml [after], so writerEnabled stays true indefinitely and c-6's 'ships only if the thresholds hold' never bites. Add a dross doctor check: when a kill-switch.toml has [trial].status pending and a later solo execute run has completed (a phase executed after it with mode solo and at least one dispatch: writer task), warn naming the phase dir and the mining step; silent while no such run exists. Boundary (first writer run, 2026-10-29, red): internal/cmd may not import BurntSushi/toml or declare toml-tagged structs — a new internal/killswitch package owns the kill-switch.toml filename const and a decoder (trial status, [after] row count); internal/secretscan/writers.go declares phases/<id>/kill-switch.toml under AgentAuthored; doctor_killswitch.go calls the package. Resume from the writer's stash (t-13 writer: red)."
+  covers = ["c-6"]
+  test_contract = ["if doctor stays silent with [trial] pending after a later solo run with a writer-dispatched task, TestDoctorKillSwitchAfterDue fails", "if doctor warns with no later solo run, or once [after] is recorded, TestDoctorKillSwitchQuiet fails"]
+  status = "done"
+  depends_on = ["t-14"]
+
+[[task]]
+  id = "t-15"
+  wave = 1
+  title = "Close the remaining main-loop takeover-fence holes"
+  files = ["internal/gate/writerfence.go", "internal/gate/writerfence_test.go"]
+  description = "Verify FLAGs carried from t-11 review (verify r-20261029-104618). (1) takeoverWrite judges only the outer command name, so once the writer is stopped a wrapped or nested main-loop write is admitted (timeout 5 sed -i s/a/b/ a.go, sh -c 'echo x > a.go'), and a partial scan is admitted too: apply the same unwrap / fenceUnreadable / Partial fail-closed handling the launched-state wait fence uses. (2) isEscapeRoute returns before takeoverWrite runs, so a redirection on the escape line (git stash push > a.go, dross task status p t-1 failed --reason x > a.go) bypasses the fence: an escape line must carry no output redirection onto a writer-owned file, or run takeoverWrite on it as well. (3) operands() does not parse dd's of=FILE form: treat dd of= as a target. Keep the plain stash and task status failed escape route admitted."
+  covers = ["c-5"]
+  test_contract = ["if a wrapped or nested main-loop write onto a writer-owned file (timeout 5 sed -i, sh -c with a redirection) is admitted after the writer stops, TestNoInlineTakeoverViaWrapper fails", "if an escape-route line carrying a redirection onto a writer-owned file is admitted, TestEscapeRouteRedirectRefused fails", "if dd of=<writer-owned file> is admitted, TestNoInlineTakeoverViaBash fails"]
+  status = "done"
+
+[[task]]
+  id = "t-16"
+  wave = 1
+  title = "Make the kill-switch reminder loud when a run's commit is gone"
+  files = ["internal/cmd/doctor_killswitch.go", "internal/cmd/doctor_killswitch_test.go"]
+  description = "Verify FLAG carried from t-13 review (verify r-20261029-104618). laterWriterRun sizes a reviewed solo task's files at its commit's parent with git ls-tree; when that commit is gone (squash-merge, branch deleted, gc — the normal post-ship path) surfaceAt errors, the task is skipped and the check returns false, so the [after] reminder never fires: the silent failure t-13 exists to catch. Make the result tri-state: a completed solo run after the trial with a reviewed task whose commit cannot be read is 'unknown', and doctor warns that the kill-switch [after] leg may be due (naming the phase and that its writer use could not be confirmed) instead of staying silent. A run with no reviewed task, or [after] already recorded, stays quiet."
+  covers = ["c-6"]
+  test_contract = ["if doctor stays silent when a later completed solo run's reviewed task commit is missing from git, TestDoctorKillSwitchCommitGone fails", "if doctor warns with no later solo run, or once [after] is recorded, TestDoctorKillSwitchQuiet fails"]
+  status = "done"

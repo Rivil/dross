@@ -294,3 +294,138 @@ func TestCapturedStopIsolation(t *testing.T) {
 		t.Error("the stop capture carries the scratch CLAUDE.md canary")
 	}
 }
+
+// The writer fixtures below were captured byte for byte from one headless
+// `claude -p` session (Claude Code 2.1.312, subscription OAuth) in a scratch
+// repo carrying a scratch dross-task-writer definition (tools Read, Grep,
+// Glob, Edit, Write, Bash) and a temporary stdin-dump hook on PreToolUse,
+// PostToolUse and SubagentStop. The main loop edited a file, spawned the
+// writer in the background, waited, then resumed it once via SendMessage.
+// They are the go/no-go for the solo-writer fence: it can only confine the
+// writer if the writer's own tool calls say who is making them.
+
+// loadRaw decodes a captured payload and checks it carries the envelope only
+// a real Claude Code hook call has.
+func loadRaw(t *testing.T, name string) (Payload, map[string]json.RawMessage) {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := Decode(b)
+	if err != nil {
+		t.Fatalf("Decode(%s): %v", name, err)
+	}
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(b, &top); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"session_id", "transcript_path"} {
+		if str(top, key) == "" {
+			t.Errorf("%s lacks %s: not a real captured payload", name, key)
+		}
+	}
+	if p.Event != EventSubagentStop {
+		if id := str(top, "tool_use_id"); !strings.HasPrefix(id, "toolu_") {
+			t.Errorf("%s tool_use_id %q is not a Claude Code tool-use id: not a real captured payload", name, id)
+		}
+	}
+	return p, top
+}
+
+// TestCapturedWriterPreToolUse is the go/no-go for the writer fence: a
+// subagent's PreToolUse names the agent making the call. Without agent_type
+// and agent_id the fence cannot tell the writer from the main loop — stop and
+// drop the fence for the prose fallback.
+func TestCapturedWriterPreToolUse(t *testing.T) {
+	for name, tool := range map[string]string{"writer_pre_edit.json": "Edit", "writer_pre_bash.json": "Bash"} {
+		p, _ := loadRaw(t, name)
+		if p.Event != "PreToolUse" || p.ToolName != tool {
+			t.Fatalf("%s is %q/%q, want PreToolUse/%s", name, p.Event, p.ToolName, tool)
+		}
+		if p.AgentType != "dross-task-writer" {
+			t.Errorf("%s agent_type = %q, want dross-task-writer — the fence cannot recognise the writer (NO-GO)", name, p.AgentType)
+		}
+		if p.AgentID == "" {
+			t.Errorf("%s carries no agent_id — the fence cannot bind the writer (NO-GO)", name)
+		}
+	}
+	edit, _ := loadRaw(t, "writer_pre_edit.json")
+	bash, _ := loadRaw(t, "writer_pre_bash.json")
+	if edit.AgentID != bash.AgentID {
+		t.Errorf("one writer's Edit and Bash carry agent_ids %q and %q", edit.AgentID, bash.AgentID)
+	}
+	if edit.Field("file_path") == "" || bash.Command() == "" {
+		t.Error("the writer captures lack the file_path / command the fence judges")
+	}
+}
+
+// TestCapturedMainLoopHasNoAgentType pins the other half of the signal: the
+// main loop's own calls carry no agent keys at all, so "no agent_type" is
+// what marks a main-loop call.
+func TestCapturedMainLoopHasNoAgentType(t *testing.T) {
+	p, top := loadRaw(t, "main_pre_edit.json")
+	if p.Event != "PreToolUse" || p.ToolName != "Edit" {
+		t.Fatalf("main_pre_edit.json is %q/%q, want PreToolUse/Edit", p.Event, p.ToolName)
+	}
+	for _, key := range []string{"agent_type", "agent_id"} {
+		if _, ok := top[key]; ok {
+			t.Errorf("the main loop's Edit carries %s: a missing agent_type no longer marks the main loop", key)
+		}
+	}
+}
+
+// TestCapturedWriterSpawn pins the spawn the solo-writer gate judges: a
+// main-loop PreToolUse Agent call naming the writer, in the background.
+func TestCapturedWriterSpawn(t *testing.T) {
+	p, top := loadRaw(t, "writer_spawn_pre.json")
+	if p.Event != "PreToolUse" || (p.ToolName != "Agent" && p.ToolName != "Task") {
+		t.Fatalf("writer_spawn_pre.json is %q/%q, want PreToolUse/Agent", p.Event, p.ToolName)
+	}
+	if p.Field("subagent_type") != "dross-task-writer" || p.Field("prompt") == "" {
+		t.Fatalf("spawn names subagent_type %q with prompt %q", p.Field("subagent_type"), p.Field("prompt"))
+	}
+	if bg, _ := p.Input["run_in_background"].(bool); !bg {
+		t.Error("the captured spawn is not a background spawn")
+	}
+	if _, ok := top["agent_type"]; ok {
+		t.Error("the spawn carries agent_type: it was not made by the main loop")
+	}
+}
+
+// TestCapturedWriterStop pins where the writer's bounded report arrives: its
+// SubagentStop's last_assistant_message, fenced.
+func TestCapturedWriterStop(t *testing.T) {
+	stop, top := loadRaw(t, "writer_subagent_stop.json")
+	if stop.Event != EventSubagentStop || stop.AgentType != "dross-task-writer" {
+		t.Fatalf("writer_subagent_stop.json is %q/%q", stop.Event, stop.AgentType)
+	}
+	if str(top, "agent_transcript_path") == "" {
+		t.Error("the stop lacks agent_transcript_path: not a real captured payload")
+	}
+	if n := strings.Count(stop.LastMessage, "```dross-writer-report"); n != 1 {
+		t.Fatalf("last_assistant_message carries %d dross-writer-report fences, want 1", n)
+	}
+}
+
+// TestCapturedWriterResume decides the review fix round: a writer resumed via
+// SendMessage keeps the agent_id it launched with, so its second stop binds to
+// the same writer record. Were the id to change, a fix round could not be
+// told from a second writer — the fix round would have to fail the task.
+func TestCapturedWriterResume(t *testing.T) {
+	launch, _ := loadRaw(t, "writer_pre_edit.json")
+	first, _ := loadRaw(t, "writer_subagent_stop.json")
+	resumed, _ := loadRaw(t, "writer_resume_post.json")
+	if resumed.Event != EventSubagentStop || resumed.AgentType != "dross-task-writer" {
+		t.Fatalf("writer_resume_post.json is %q/%q, want the resumed writer's SubagentStop", resumed.Event, resumed.AgentType)
+	}
+	if first.AgentID != launch.AgentID || resumed.AgentID != launch.AgentID {
+		t.Fatalf("launch %q, first stop %q, resumed stop %q: the resumed writer is not the same agent", launch.AgentID, first.AgentID, resumed.AgentID)
+	}
+	if resumed.LastMessage == first.LastMessage {
+		t.Fatal("the resumed stop repeats the first stop's reply: not a second capture")
+	}
+	if n := strings.Count(resumed.LastMessage, "```dross-writer-report"); n != 1 {
+		t.Fatalf("the resumed reply carries %d dross-writer-report fences, want 1", n)
+	}
+}

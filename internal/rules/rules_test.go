@@ -267,6 +267,37 @@ func TestRenderEmitsAgentGateBuiltin(t *testing.T) {
 	}
 }
 
+// TestAgentGateAllowsSoloWriter pins c-1's amendment: under --solo exactly
+// one writer per task may edit, and it still never commits or decides.
+func TestAgentGateAllowsSoloWriter(t *testing.T) {
+	out := Render(nil)
+	for _, want := range []string{
+		"writing and deciding stay gated",
+		"under `/dross-execute --solo`, one `dross-task-writer` per task may edit that task's files",
+		"it never commits, sets task status or finalizes",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("agent-gate rule no longer says %q", want)
+		}
+	}
+}
+
+// TestAgentGatePairSentenceStable pins c-4: pair mode reads byte for byte as
+// it did before the writer existed.
+func TestAgentGatePairSentenceStable(t *testing.T) {
+	const pair = "Subagents may fan out freely for read-only work — search, code-mapping, analysis, independent verification — and you should when it widens coverage or saves wall-clock. But writing and deciding stay gated: in pair mode, get explicit user approval before writing code or finalizing; only `--solo` authorizes unattended writes. A fan-out agent returns findings to the main loop and never silently edits, commits, or finalizes on the user's behalf."
+	if !strings.Contains(Render(nil), "[builtin/hard/dross-agent-gate] "+pair+" ") {
+		t.Error("the agent-gate rule's fan-out and pair-mode sentences changed")
+	}
+}
+
+// TestAgentGateQuickExcluded pins quick_solo: a solo quick gets no writer.
+func TestAgentGateQuickExcluded(t *testing.T) {
+	if !strings.Contains(Render(nil), "`/dross-quick --solo` gets no writer.") {
+		t.Error("agent-gate rule no longer excludes /dross-quick --solo from the writer")
+	}
+}
+
 func TestRenderEmitsInteractionContractBuiltin(t *testing.T) {
 	out := Render(nil)
 	if !strings.Contains(out, "[builtin/hard/dross-interaction-contract]") {

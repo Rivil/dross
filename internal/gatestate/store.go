@@ -1,8 +1,9 @@
 // Package gatestate is the machine-local record the tool gates judge against:
 // the tree the last full green `dross test` ran on, the mode /dross-execute
 // is running in, the approval a human gave the current task, the solo review
-// ledger, the mode a /dross-quick run is in, the review context file, and the
-// approval a human gave to post one drafted PR reply.
+// ledger, the mode a /dross-quick run is in, the review context file, the
+// approval a human gave to post one drafted PR reply, and the solo writer a
+// task was handed to.
 //
 // Records live in .dross/gate/, which carries its own `*` .gitignore: a green
 // or an approval is a fact about THIS machine, and a copy committed to the repo
@@ -41,6 +42,7 @@ const (
 	ReviewFile   = "review.json"
 	QuickFile    = "quick.json"
 	ReplyFile    = "reply.json"
+	WriterFile   = "writer.json"
 	// ContextFile is the rendered review context the reviewer reads. It is
 	// written by `dross review context` and never read back by a gate: the
 	// recorder regenerates the context and compares digests.
@@ -110,6 +112,26 @@ type Quick struct {
 	Description string    `json:"description"`
 	Head        string    `json:"head"`
 	At          time.Time `json:"at"`
+}
+
+// Writer states: a launched writer is still working; a stopped one has
+// returned its report (a SendMessage fix round relaunches the same agent).
+const (
+	WriterLaunched = "launched"
+	WriterStopped  = "stopped"
+)
+
+// Writer is the one dross-task-writer a solo execute task was handed to: the
+// task, the agent's id from its launch, and whether it has stopped. Its
+// absence is more lenient than its presence — a deleted record would admit a
+// second writer and lift the main loop's takeover refusal — so tamper-guard
+// covers it like every other record here.
+type Writer struct {
+	Phase     string     `json:"phase"`
+	Task      string     `json:"task"`
+	AgentID   string     `json:"agent_id"`
+	State     string     `json:"state"`
+	StoppedAt *time.Time `json:"stopped_at,omitempty"`
 }
 
 // Path is the absolute path of a record under root.
@@ -271,6 +293,42 @@ func SaveQuick(root string, q Quick) error { return save(root, QuickFile, q) }
 
 // RemoveQuick removes the quick-mode record; none is not an error.
 func RemoveQuick(root string) error { return remove(root, QuickFile) }
+
+// LoadWriter returns the writer record, or nil when there is none.
+func LoadWriter(root string) (*Writer, error) {
+	var w Writer
+	ok, err := load(root, WriterFile, &w)
+	if err != nil || !ok {
+		return nil, err
+	}
+	if err := w.check(); err != nil {
+		return nil, err
+	}
+	return &w, nil
+}
+
+// SaveWriter records the task's writer, replacing any earlier record.
+func SaveWriter(root string, w Writer) error {
+	if err := w.check(); err != nil {
+		return fmt.Errorf("refusing to record it: %w", err)
+	}
+	return save(root, WriterFile, w)
+}
+
+// ClearWriter removes the writer record; none is not an error.
+func ClearWriter(root string) error { return remove(root, WriterFile) }
+
+// check refuses a record a gate could misread: one naming no task or agent,
+// or in an unknown state.
+func (w Writer) check() error {
+	if strings.TrimSpace(w.Phase) == "" || strings.TrimSpace(w.Task) == "" || strings.TrimSpace(w.AgentID) == "" {
+		return fmt.Errorf("%s: writer record lacks its phase, task or agent id", rel(WriterFile))
+	}
+	if w.State != WriterLaunched && w.State != WriterStopped {
+		return fmt.Errorf("%s: unknown writer state %q", rel(WriterFile), w.State)
+	}
+	return nil
+}
 
 // SaveContext writes the review context file the reviewer reads.
 func SaveContext(root string, b []byte) error { return saveBytes(root, ContextFile, b) }

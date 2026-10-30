@@ -10,18 +10,19 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gatestate"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/state"
 )
 
-// Task registers `dross task {next,list,show,status,add,remove,edit,move}`.
+// Task registers `dross task {next,list,show,status,add,remove,edit,move,dispatch}`.
 func Task() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "task",
 		Short: "Inspect and update tasks within a phase plan",
 	}
-	c.AddCommand(taskNext(), taskList(), taskShow(), taskStatus(), taskAdd(), taskRemove(), taskEdit(), taskMove())
+	c.AddCommand(taskNext(), taskList(), taskShow(), taskStatus(), taskAdd(), taskRemove(), taskEdit(), taskMove(), taskDispatch())
 	return c
 }
 
@@ -239,12 +240,28 @@ func taskStatus() *cobra.Command {
 					reason = reviewFailureReason(tr)
 				}
 			}
+			// A reset to pending is a retry: it releases the task's writer record
+			// so the retried task may get a writer again. `failed` keeps it — the
+			// record is what fences a zombie writer out of the failed task. The
+			// record goes only once the plan has saved: a failed save leaves the
+			// task where it was, and its zombie fence with it.
+			var writerRepo string
+			if status == phase.StatusPending {
+				if writerRepo, err = taskWriterRepo(args[0], args[1]); err != nil {
+					return err
+				}
+			}
 			plan.SetTaskStatus(args[1], status)
 			if reason != "" {
 				plan.FindTask(args[1]).Reason = reason
 			}
-			if err := plan.Save(planPath); err != nil {
+			if err := savePlan(plan, planPath); err != nil {
 				return err
+			}
+			if writerRepo != "" {
+				if err := gatestate.ClearWriter(writerRepo); err != nil {
+					return fmt.Errorf("%s/%s is pending, but its writer record was not released: %w", args[0], args[1], err)
+				}
 			}
 			if tr != nil {
 				if err := changes.SetReview(root, args[0], args[1], *tr); err != nil {
@@ -257,6 +274,24 @@ func taskStatus() *cobra.Command {
 	}
 	c.Flags().StringVar(&reason, "reason", "", "why the task failed (only with failed; any other status clears a recorded reason)")
 	return c
+}
+
+// savePlan is plan.Save, a seam for the status command's save-failure test.
+var savePlan = (*phase.Plan).Save
+
+// taskWriterRepo is the repo dir whose .dross/gate/writer.json names this
+// task, or "" when the record names another task or there is none.
+func taskWriterRepo(phaseID, taskID string) (string, error) {
+	root, err := FindRoot()
+	if err != nil {
+		return "", err
+	}
+	repoDir := filepath.Dir(root)
+	w, err := gatestate.LoadWriter(repoDir)
+	if err != nil || w == nil || w.Phase != phaseID || w.Task != taskID {
+		return "", err
+	}
+	return repoDir, nil
 }
 
 // taskAdd wires `dross task add`: build a task from flags and splice it into

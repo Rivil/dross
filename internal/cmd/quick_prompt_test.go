@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -180,4 +181,28 @@ func TestReviewerSpawnWaitsForVerdict(t *testing.T) {
 
 func TestQuickTestStepDescribesSummary(t *testing.T) {
 	assertTestStepDescribesSummary(t, "quick.md", testStepSection(t, rawPrompt(t, "quick.md"), "## 4.", "## 5."))
+}
+
+// TestQuickHasNoWriter (quick_solo): a quick stays inline, solo or not — no
+// quick prompt or quick partial names the writer or its dispatch.
+func TestQuickHasNoWriter(t *testing.T) {
+	texts := map[string]string{"quick.md": expandedPrompt(t, "quick.md")}
+	partials, err := fs.Glob(promptFS, "prompts/_quick*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range partials {
+		b, err := fs.ReadFile(promptFS, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		texts[p] = string(b)
+	}
+	for name, s := range texts {
+		for _, gone := range []string{review.WriterAgent, "task dispatch"} {
+			if strings.Contains(s, gone) {
+				t.Errorf("%s mentions %q", name, gone)
+			}
+		}
+	}
 }

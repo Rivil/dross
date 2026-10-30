@@ -12,6 +12,10 @@ if a prompt has no `### <name>` section here — the same convention as
 **The boundary (non-negotiable).** Offload never moves authority: per the
 `dross-agent-gate` builtin, fan-out agents are read-only — they return findings
 to the main loop and never edit, commit, decide a verdict, or finalize anything.
+The rule's one exception is the solo writer: under `/dross-execute --solo`, one
+`dross-task-writer` per task may edit that task's files — it still never
+commits, sets task status, writes `.dross/` or finalizes, and `/dross-quick
+--solo` gets none.
 And per the locked `offload_posture` decision, offload is a **size-gated
 conditional preference, never mandatory** — a small phase stays inline; the
 prompt names the gate heuristically ("when the surface is large"), not as a hard
@@ -45,6 +49,12 @@ patterns before proposing an approach. Disposition: **offload-worthy (done,
 this phase)** — when the task touches many or large files, read-only subagents
 return the 3-5 key observations; implementation, edits and commits stay in the
 main loop. See §1b's offload paragraph.
+
+Under `--solo`, a task above the `dross task dispatch` size gate goes further:
+one `dross-task-writer` subagent does §1b–§1e itself and returns only a bounded
+report, so the task's files and diff never enter the main loop. The full suite,
+the cold review and the commit stay in the main loop. Pair mode never spawns a
+writer.
 
 ### inbox
 

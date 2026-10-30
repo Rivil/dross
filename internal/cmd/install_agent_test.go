@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/assets"
+	"github.com/Rivil/dross/internal/review"
 )
 
 func embeddedReviewer(t *testing.T) []byte {
@@ -74,6 +75,25 @@ func TestInstallReviewerIdempotent(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(filepath.Join(dir, reviewerFile)); !bytes.Equal(got, embeddedReviewer(t)) {
 		t.Fatal("a second install changed the definition's bytes")
+	}
+}
+
+// TestSyncAgentsInstallsWriter: the writer ships beside the reviewer through
+// the same embedded-agents sync, byte for byte, with no install code of its own.
+func TestSyncAgentsInstallsWriter(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "agents")
+	if err := syncAgents(dir, false, "", func(string, ...any) {}); err != nil {
+		t.Fatal(err)
+	}
+	want, err := assets.FS.ReadFile("agents/" + review.WriterAgent + ".md")
+	if err != nil {
+		t.Fatalf("the writer definition is not embedded: %v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(dir, review.WriterAgent+".md")); err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("syncAgents did not install %s.md with the embedded bytes (err %v)", review.WriterAgent, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, reviewerFile)); err != nil {
+		t.Fatalf("the reviewer is no longer installed beside the writer: %v", err)
 	}
 }
 
