@@ -217,5 +217,5 @@ recorded. Add checkMemoryPruneAdvisorFlow + the required-list entry. Add README 
   description = "Verify r-20261030-194159 left 5 killable in-hunk gremlins survivors. Add four tests in internal/memadvise (same package, so gremlins attributes coverage): hook.go:69 NEG — Expired on a hook with two expired clauses removes the first (\"next: foo; X; until 2026-01-01\" with phase foo shipped -> \"X; until 2026-01-01\"); turns.go:98 — <claude>/projects is a regular file (ENOTDIR) -> Unreadable==1; turns.go:111 — a chmod 000 sibling project dir -> Unreadable==1 (skip as root, as TestAdviseSurfacesCountError does); turns.go:225 ARITH_BASE+INVERT_NEG — one transcript with 33 distinct message ids -> Repo==33. Test-only: no source change."
   covers = ["c-2", "c-8"]
   test_contract = ["if Expired's earliest-clause pick at hook.go:69 is negated, the two-expired-clause test in hook_test.go fails", "if recount's unreadable++ at turns.go:98 or :111 becomes --, the ENOTDIR / chmod-000 tests in turns_test.go fail on Unreadable==1", "if the tail trim at turns.go:225 changes sign or operator, the 33-distinct-id transcript test in turns_test.go fails (panic or Repo!=33)"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-11"]

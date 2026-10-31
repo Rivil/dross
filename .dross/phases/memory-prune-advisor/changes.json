@@ -67,6 +67,22 @@
         }
       ]
     },
+    "t-12": {
+      "files": [
+        "internal/memadvise/hook_test.go",
+        "internal/memadvise/turns_test.go"
+      ],
+      "commit": "34122732",
+      "completed_at": "2026-10-31T08:51:52.234479Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "TestTurnsPastTailCap",
+          "loc": "internal/memadvise/turns_test.go:246",
+          "what": "pins earliest-clause pick, unreadable counts and the tail-cap trim against verify survivors"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/memadvise/index.go",
@@ -285,6 +301,19 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The walker's mutation tests assert exactly one problem per break and include a clean baseline, so a walker that stopped looking would fail rather than pass the real record vacuously.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-12": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestTurnsPastTailCap uses tailIDs+1 rather than a literal 33, so it keeps exercising the trim if the cap constant changes",
           "resolution": "non-blocking, left"
         }
       ]

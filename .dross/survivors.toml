@@ -5033,7 +5033,7 @@
   op = "ARITHMETIC_BASE"
   text = "comment: \"# dross memory-advisor state — the turn cache, and the memory-dir snapshot taken\\n\" +"
   line = 83
-  reason = "gremlins attribution ceiling: package-level var initializer string concat, read by TestRepoGitignoreCoversState/TestEnsureDrossGitignore*; string + to - does not compile"
+  reason = "gremlins attribution ceiling: package-level var initializer string concat, read by TestRepoGitignoreCoversState and TestEnsureDrossGitignoreIsIdempotent; string + to - does not compile"
   accepted_in = "memory-prune-advisor"
 
 [[accepted]]
@@ -5042,7 +5042,7 @@
   op = "ARITHMETIC_BASE"
   text = "\"# before each applied prune. Machine-local: it mirrors this machine's\\n\" +"
   line = 84
-  reason = "gremlins attribution ceiling: package-level var initializer string concat, read by TestRepoGitignoreCoversState/TestEnsureDrossGitignore*; string + to - does not compile"
+  reason = "gremlins attribution ceiling: package-level var initializer string concat, read by TestRepoGitignoreCoversState and TestEnsureDrossGitignoreIsIdempotent; string + to - does not compile"
   accepted_in = "memory-prune-advisor"
 
 [[accepted]]
@@ -5114,7 +5114,7 @@
   op = "CONDITIONALS_BOUNDARY"
   text = "if h.start < first.start {"
   line = 69
-  reason = "equivalent mutant: matches from one regex never overlap and date/next clauses cannot start at the same index, so < vs <= cannot change the earliest pick"
+  reason = "equivalent mutant: matches from one regex never overlap and date/next clauses cannot start at the same index, so < vs <= cannot change the earliest pick; the pick itself is pinned by TestExpiredRemovesEarliestClause"
   accepted_in = "memory-prune-advisor"
 
 [[accepted]]
@@ -5123,7 +5123,7 @@
   op = "CONDITIONALS_BOUNDARY"
   text = "case !had || size < e.Offset:"
   line = 148
-  reason = "equivalent mutant: size == Offset under <= rescans from 0 to the same count on an append-only transcript; only extra bytes are read"
+  reason = "equivalent mutant: size == Offset under <= rescans from 0 to the same count on an append-only transcript; only extra bytes are read — both arms pinned by TestIncrementalRecountAndTruncation"
   accepted_in = "memory-prune-advisor"
 
 [[accepted]]
@@ -5132,5 +5132,5 @@
   op = "INCREMENT_DECREMENT"
   text = "unreadable++"
   line = 120
-  reason = "unkillable: f.Info() fails only if the file vanishes between ReadDir and Info, a race with no deterministic seam"
+  reason = "unkillable: f.Info() fails only if the file vanishes between ReadDir and Info, a race with no deterministic seam; the sibling unreadable++ arms are pinned by TestTurnsProjectsNotADir and TestTurnsUnreadableProjectDir"
   accepted_in = "memory-prune-advisor"
