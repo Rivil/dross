@@ -126,7 +126,7 @@ func readRegular(path string) ([]byte, bool) {
 }
 
 // SplitLines splits on \n, dropping a \r before it, and reports whether the
-// text ended with a newline. Apply uses the same split to rewrite one line.
+// text ended with a newline. Apply's rewriteIndex numbers lines the same way.
 func SplitLines(b []byte) (lines []string, trailingNL bool) {
 	s := string(b)
 	trailingNL = strings.HasSuffix(s, "\n")

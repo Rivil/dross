@@ -146,16 +146,22 @@ func checkDeletable(memDir, file string) error {
 }
 
 // rewriteIndex returns index with line removed (a delete) or its hook replaced
-// (a reword), every other byte kept: CRLF endings and a trailing newline
-// survive as they were.
+// (a reword), every other byte kept: each line keeps its own ending, so a
+// mixed LF/CRLF index changes only on the target line, and a missing trailing
+// newline stays missing. Lines are counted as SplitLines counts them.
 func rewriteIndex(index []byte, line IndexLine, s Suggestion) ([]byte, error) {
-	lines, trailingNL := SplitLines(index)
-	if line.LineNo >= len(lines) || lines[line.LineNo] != line.Raw {
+	segs := strings.SplitAfter(string(index), "\n")
+	if line.LineNo >= len(segs) {
+		return nil, errors.New("index line moved since it was read")
+	}
+	seg := segs[line.LineNo]
+	body := strings.TrimSuffix(strings.TrimSuffix(seg, "\n"), "\r")
+	if body != line.Raw {
 		return nil, errors.New("index line moved since it was read")
 	}
 	switch s.Action {
 	case ActionDelete:
-		lines = append(lines[:line.LineNo:line.LineNo], lines[line.LineNo+1:]...)
+		segs[line.LineNo] = ""
 	case ActionReword:
 		if strings.TrimSpace(s.NewHook) == "" {
 			return nil, fmt.Errorf("%s: refusing to reword a hook to nothing", s.ID)
@@ -164,17 +170,9 @@ func rewriteIndex(index []byte, line IndexLine, s Suggestion) ([]byte, error) {
 		if line.Hook == "" || i < 0 {
 			return nil, fmt.Errorf("%s: its index line has no hook to reword", s.ID)
 		}
-		lines[line.LineNo] = line.Raw[:i] + s.NewHook + line.Raw[i+len(line.Hook):]
+		segs[line.LineNo] = line.Raw[:i] + s.NewHook + line.Raw[i+len(line.Hook):] + seg[len(body):]
 	}
-	eol := "\n"
-	if bytes.Contains(index, []byte("\r\n")) {
-		eol = "\r\n"
-	}
-	out := strings.Join(lines, eol)
-	if trailingNL && len(lines) > 0 {
-		out += eol
-	}
-	return []byte(out), nil
+	return []byte(strings.Join(segs, "")), nil
 }
 
 // replaceIndex writes MEMORY.md through a temp file in the memory dir and a
@@ -187,6 +185,14 @@ func replaceIndex(path string, data []byte) error {
 		return fmt.Errorf("write %s: %w", IndexName, err)
 	}
 	name := tmp.Name()
+	// CreateTemp makes the file 0600; the index keeps the mode it had.
+	if info, err := os.Lstat(path); err == nil {
+		if err := tmp.Chmod(info.Mode().Perm()); err != nil {
+			tmp.Close()
+			os.Remove(name)
+			return fmt.Errorf("write %s: %w", IndexName, err)
+		}
+	}
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		os.Remove(name)

@@ -1,9 +1,12 @@
 package memadvise
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 )
 
@@ -49,17 +52,38 @@ func Snapshot(root, memDir string, now time.Time) (string, error) {
 		if !e.Type().IsRegular() {
 			continue
 		}
-		data, ok := readRegular(filepath.Join(memDir, e.Name()))
-		if !ok {
-			return "", fmt.Errorf("snapshot %s: unreadable", e.Name())
-		}
-		info, err := e.Info()
-		if err != nil {
-			return "", fmt.Errorf("snapshot %s: %w", e.Name(), err)
-		}
-		if err := os.WriteFile(filepath.Join(dest, e.Name()), data, info.Mode().Perm()); err != nil {
+		if err := copyRegular(filepath.Join(memDir, e.Name()), filepath.Join(dest, e.Name())); err != nil {
 			return "", fmt.Errorf("snapshot %s: %w", e.Name(), err)
 		}
 	}
 	return dest, nil
+}
+
+// copyRegular streams src to a new dst with src's permissions, when src is
+// still a regular file once opened. There is no size cap: readRegular's cap
+// keeps the advisor from reading a dump, but the snapshot is the undo for
+// everything in the dir, so a large file is copied, never a reason to abort.
+// The open is non-blocking so a FIFO swapped in after the listing returns.
+func copyRegular(src, dst string) error {
+	in, err := os.OpenFile(src, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	info, err := in.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("not a regular file")
+	}
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }

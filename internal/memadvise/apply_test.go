@@ -57,8 +57,11 @@ func TestApplyDeleteRemovesFileAndLine(t *testing.T) {
 	if got := readFile(t, filepath.Join(mem, IndexName)); got != want {
 		t.Errorf("MEMORY.md = %q, want %q", got, want)
 	}
-	if readFile(t, filepath.Join(mem, "keep.md")) != keepBefore || readFile(t, filepath.Join(mem, "other.md")) != otherBefore {
-		t.Error("another memory changed")
+	// The whole tree, not just the named files: a stray temp file fails this.
+	expected := memFixture(t, map[string]string{IndexName: want, "keep.md": keepBefore, "other.md": otherBefore})
+	if dirHash(t, mem) != dirHash(t, expected) {
+		entries, _ := os.ReadDir(mem)
+		t.Errorf("memory dir after apply differs from the expected tree: %v", entries)
 	}
 }
 
@@ -87,6 +90,45 @@ func TestApplyRewordTouchesOneLine(t *testing.T) {
 	}
 	if got := readFile(t, filepath.Join(crlf, IndexName)); got != "- [A](a.md) — a\r\n- [B](b.md) — b" {
 		t.Errorf("CRLF MEMORY.md = %q", got)
+	}
+}
+
+func TestApplyKeepsEachLineEnding(t *testing.T) {
+	a, b, c := "- [A](a.md) — a", "- [B](b.md) — b; until 2026-01-01", "- [Dup](dup.md) — c"
+	for _, tc := range []struct{ id, want string }{
+		{"reword-b", a + "\r\n- [B](b.md) — b\n" + c + "\r\n"},
+		{"delete-dup", a + "\r\n" + b + "\n"},
+	} {
+		mem := memFixture(t, map[string]string{
+			IndexName: a + "\r\n" + b + "\n" + c + "\r\n",
+			"a.md":    "a\n",
+			"b.md":    "b\n",
+			"dup.md":  readme,
+		})
+		if _, err := Apply(t.TempDir(), mem, suggestion(t, mem, tc.id, nil), adviseToday); err != nil {
+			t.Fatal(err)
+		}
+		if got := readFile(t, filepath.Join(mem, IndexName)); got != tc.want {
+			t.Errorf("%s on a mixed LF/CRLF index: MEMORY.md = %q, want %q", tc.id, got, tc.want)
+		}
+	}
+}
+
+func TestApplySnapshotsLargeFiles(t *testing.T) {
+	mem := threeMemories(t)
+	big := strings.Repeat("x", maxFileBytes+1)
+	for _, name := range []string{"big.md", "big.log"} {
+		if err := os.WriteFile(filepath.Join(mem, name), []byte(big), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := dirHash(t, mem)
+	res, err := Apply(t.TempDir(), mem, suggestion(t, mem, "delete-dup", nil), adviseToday)
+	if err != nil {
+		t.Fatalf("Apply with a file over %d bytes in the dir: %v", maxFileBytes, err)
+	}
+	if dirHash(t, res.Snapshot) != before {
+		t.Error("the snapshot does not hold the large files byte for byte")
 	}
 }
 
