@@ -228,7 +228,7 @@ recorded. Add checkMemoryPruneAdvisorFlow + the required-list entry. Add README 
   description = "Verify FLAGs from t-2/t-6 reviews. (1) Corpus.Resolve normalises an index target before lookup: strip a leading './', drop a '#fragment', percent-decode, and match case-insensitively when the memory dir's filesystem is case-insensitive — so a valid entry is never reported dead and offered a delete-index-line. (2) Suggestion ids stay unique when two suggestions share a target base name (two dead links to one target, or dead old/x.md beside a live x.md), so apply-by-id is unambiguous. (3) Advise considers every index line of a memory: an expired clause on any of its lines yields the reword, never a delete, even when an earlier line produced a duplicate delete."
   covers = ["c-5", "c-8", "c-9"]
   test_contract = ["if Resolve stops normalising './foo.md', 'foo.md#x' or 'foo%20bar.md', TestDeadIndexLink-style cases report a live memory dead and fail", "if two suggestions can share an id, a uniqueness test over a fixture with dead links to one target fails", "if a doubly-indexed memory with an expired clause on its second line gets a delete, TestExpiredHookNeverDeletes's double-index case fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-14"
@@ -238,7 +238,7 @@ recorded. Add checkMemoryPruneAdvisorFlow + the required-list entry. Add README 
   description = "Verify FLAGs from t-4 review. nextClauseRe captures the slug case-insensitively, so lowercase the captured slug before matching the known-phase set ('Next: Foo' expires when foo is scaffolded). removeClause handles a clause that opens a parenthetical and ends at a separator: 'X (until 2026-01-01; note) Y' rewords to 'X (note) Y', never 'X (; note) Y'."
   covers = ["c-8"]
   test_contract = ["if the captured next: slug is not lowercased, TestNextPhaseClause's 'Next: Foo' case fails", "if removeClause leaves '(; ' behind, TestRewordRemovesOnlyClause's parenthetical-separator case fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-15"
@@ -248,7 +248,8 @@ recorded. Add checkMemoryPruneAdvisorFlow + the required-list entry. Add README 
   description = "Verify FLAGs from t-5/t-7/t-10 reviews. (1) update() detects a transcript rewritten in place to the same or larger size (e.g. compare a head fingerprint recorded with the offset) and recounts from 0 instead of resuming from a stale offset. (2) saveCache refuses when .dross or any parent component of the cache path is a symlink, not only the final .dross/memory, so turns.json can never land in the memory dir. (3) A count with Unreadable > 0 is not cached as complete: either skip the save or persist Unreadable so a cache hit still surfaces it. (4) Gather keeps valid counts when Turns returns them alongside a cache-write error, so a read-only checkout still prints the memory section (and advise still reports the write failure)."
   covers = ["c-2", "c-3"]
   test_contract = ["if a same-size in-place rewrite resumes from the old offset, an update() rewrite test counting the new head fails", "if a symlinked .dross lets saveCache write through it, TestCacheNeverInMemoryDir's parent-symlink case fails", "if a cache hit hides a partial count, TestAdviseSurfacesCountError's second-run case fails", "if Gather drops valid counts on a cache-write error, a read-only-state Gather test expecting a non-empty Report fails"]
-  status = "pending"
+  status = "failed"
+  reason = "writer: red on TestStatusMemoryErrorIsSilent/turn_cache_cannot_be_written in internal/cmd/status_memory_test.go (not in task files), which asserts the silent-status behaviour part 4 replaces; code in stash@{0}"
 
 [[task]]
   id = "t-16"
@@ -258,5 +259,5 @@ recorded. Add checkMemoryPruneAdvisorFlow + the required-list entry. Add README 
   description = "Verify FLAGs from t-8 review. rewriteIndex keeps each line's own ending, so a mixed LF/CRLF index changes bytes only on the target line. Snapshot no longer fails the whole apply on a direct-child file over readRegular's 1 MiB cap (copy it without the cap, or skip non-memory files explicitly and say so). Tighten TestApplyDeleteRemovesFileAndLine to compare a dirHash of the expected tree so stray temp files fail it."
   covers = ["c-9"]
   test_contract = ["if rewriteIndex normalises line endings, a mixed LF/CRLF reword test comparing every non-target byte fails", "if a >1 MiB file in the memory dir makes apply fail, a large-file snapshot test fails", "if apply leaves a stray file in the memory dir, TestApplyDeleteRemovesFileAndLine's dirHash comparison fails"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-13"]

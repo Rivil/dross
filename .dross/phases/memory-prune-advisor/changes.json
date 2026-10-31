@@ -83,6 +83,58 @@
         }
       ]
     },
+    "t-13": {
+      "files": [
+        "internal/memadvise/index.go",
+        "internal/memadvise/index_test.go",
+        "internal/memadvise/advise.go",
+        "internal/memadvise/advise_test.go"
+      ],
+      "commit": "61f04ea6",
+      "completed_at": "2026-10-31T15:40:51.420046Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Corpus.Resolve",
+          "loc": "internal/memadvise/index.go:237",
+          "what": "normalises index link targets (./, #frag, %-escapes, case fold) so live memories are never reported dead"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/memadvise/hook.go",
+        "internal/memadvise/hook_test.go"
+      ],
+      "commit": "7088d1f2",
+      "completed_at": "2026-10-31T15:54:18.344569Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "removeClause",
+          "loc": "internal/memadvise/hook.go:83",
+          "what": "rewords an expired clause out of a parenthetical without leaving a dangling separator; next: slugs match case-insensitively"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        "internal/memadvise/apply.go",
+        "internal/memadvise/apply_test.go",
+        "internal/memadvise/snapshot.go",
+        "internal/memadvise/index.go"
+      ],
+      "commit": "47a64156",
+      "completed_at": "2026-10-31T17:56:25.604176Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "rewriteIndex",
+          "loc": "internal/memadvise/apply.go:152",
+          "what": "rewrites one index line keeping every other line's ending; snapshot copies files of any size; index mode preserved"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/memadvise/index.go",
@@ -314,6 +366,85 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "TestTurnsPastTailCap uses tailIDs+1 rather than a literal 33, so it keeps exercising the trim if the cap constant changes",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-13": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "Dead-link ids with a -N suffix (delete-gone-2, delete-x-3) depend on the order of index lines, which contradicts the id() doc comment that reordering index lines never renames a suggestion; an id taken from an advise run can name a different line after the index is reordered",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A duplicate delete for a memory with several index lines removes only lines[0] and the memory file, so its other index lines become dead links after apply. Unchanged from the old behaviour, and Apply's post-apply integrity check reports them",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "The double-index contract case is a separate test, TestExpiredHookOnSecondIndexLineNeverDeletes, rather than a case inside TestExpiredHookNeverDeletes; it covers the same behaviour",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-14": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "removeClause on an unclosed parenthetical clause at the end of a hook (e.g. 'X (until 2026-01-01') still returns 'X (' with a dangling open paren; this predates the change and is outside t-14's contract",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "NextSlugs now lowercases its output, so gather.go builds the known set from lowercased slugs, which matches Expired's lowercased lookup",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-16": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "rewriteIndex's comment says 'a missing trailing newline stays missing', but deleting the last line of an index with no trailing newline (\"a\\nb\" -\u003e \"a\\n\") now leaves the previous line's newline in place; the old code returned \"a\". This path has no test.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "copyRegular leaves a partial copy in the snapshot dir if io.Copy fails midway; Snapshot then returns an error and apply aborts, so the memory dir itself is unharmed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The Chmod added in replaceIndex is what lets the new dirHash comparison pass: CreateTemp's 0600 would otherwise change MEMORY.md's mode.",
           "resolution": "non-blocking, left"
         }
       ]
