@@ -1,4 +1,4 @@
-task_seq = 11
+task_seq = 12
 
 [phase]
   id = "memory-prune-advisor"
@@ -208,3 +208,14 @@ recorded. Add checkMemoryPruneAdvisorFlow + the required-list entry. Add README 
   covers = ["c-6"]
   test_contract = ["if [after] runs a dross call [before] did not, or both legs share a binary_version, the existing checkLegPair fails", "if status_bytes ≤ 0 on either leg, [scenario] lacks turn_cache = \"cold\", or agent_turns / wall_clock_s are zero, checkMemoryPruneAdvisorFlow fails (turns and wall-clock are recorded, not compared)", "if a string value appears outside the allowlist — binary_version, session_id, measured_at, filter, method, the scenario keys TestFlowCostRecords already requires (repo_shape, wave_position, flow_start, flow_end, jq_method) and turn_cache — or a dross_calls / turn_tools entry does not match the dross-verb / tool-name grammar, TestFlowCostCopiesNoContent fails", "if flow-cost.toml is deleted, TestFlowCostRecords fails with \"memory-prune-advisor has no flow-cost.toml\"", "if README.md lacks `dross memory apply` or `--yes`, a README grep test fails"]
   status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 7
+  title = "Kill verify survivors in hook.go and turns.go"
+  files = ["internal/memadvise/hook_test.go", "internal/memadvise/turns_test.go"]
+  description = "Verify r-20261030-194159 left 5 killable in-hunk gremlins survivors. Add four tests in internal/memadvise (same package, so gremlins attributes coverage): hook.go:69 NEG — Expired on a hook with two expired clauses removes the first (\"next: foo; X; until 2026-01-01\" with phase foo shipped -> \"X; until 2026-01-01\"); turns.go:98 — <claude>/projects is a regular file (ENOTDIR) -> Unreadable==1; turns.go:111 — a chmod 000 sibling project dir -> Unreadable==1 (skip as root, as TestAdviseSurfacesCountError does); turns.go:225 ARITH_BASE+INVERT_NEG — one transcript with 33 distinct message ids -> Repo==33. Test-only: no source change."
+  covers = ["c-2", "c-8"]
+  test_contract = ["if Expired's earliest-clause pick at hook.go:69 is negated, the two-expired-clause test in hook_test.go fails", "if recount's unreadable++ at turns.go:98 or :111 becomes --, the ENOTDIR / chmod-000 tests in turns_test.go fail on Unreadable==1", "if the tail trim at turns.go:225 changes sign or operator, the 33-distinct-id transcript test in turns_test.go fails (panic or Repo!=33)"]
+  status = "pending"
+  depends_on = ["t-11"]

@@ -5026,3 +5026,111 @@
   line = 398
   reason = "Switch-case condition (case name == \"dd\": in takeoverWrite). go-cover's case-arm block starts at the colon, so gremlins marks the condition NOT COVERED although it runs; negating it would stop dd's of= target being collected, and TestNoInlineTakeoverViaBash (refuses 'dd if=b.go of=a.go', admits 'dd if=a.go of=b.go', launched and stopped) would fail. Same attribution limit as gremlins-attribution-ceiling."
   accepted_in = "solo-task-subagent"
+
+[[accepted]]
+  key = "1ebea3e14fc2fe5c"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "comment: \"# dross memory-advisor state — the turn cache, and the memory-dir snapshot taken\\n\" +"
+  line = 83
+  reason = "gremlins attribution ceiling: package-level var initializer string concat, read by TestRepoGitignoreCoversState/TestEnsureDrossGitignore*; string + to - does not compile"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "d36354f618251058"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# before each applied prune. Machine-local: it mirrors this machine's\\n\" +"
+  line = 84
+  reason = "gremlins attribution ceiling: package-level var initializer string concat, read by TestRepoGitignoreCoversState/TestEnsureDrossGitignore*; string + to - does not compile"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "930ffb1a6741127b"
+  file = "internal/memadvise/dup.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case p == \"CLAUDE.md\", p == \"ARCHITECTURE.md\","
+  line = 21
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestDocCandidates asserts the exact slice"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "f051f930cf9d2658"
+  file = "internal/memadvise/dup.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "strings.HasPrefix(p, \"docs/\") && path.Ext(p) == \".md\":"
+  line = 23
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestDocCandidates asserts the exact slice"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "df93f008adb94f0a"
+  file = "internal/memadvise/hook.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case prefix != \"\":"
+  line = 96
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestRewordRemovesOnlyClause exercises both arms"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "433876fcfe18c0b4"
+  file = "internal/memadvise/turncache.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 131
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestIncrementalRecountAndTruncation reaches it with .gitignore present"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "813ad615b6415870"
+  file = "internal/memadvise/turns.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !had || size < e.Offset:"
+  line = 148
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestIncrementalRecountAndTruncation evaluates new, appended and truncated files"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "90579aa1cef3554e"
+  file = "internal/memadvise/turns.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case size == e.Size && mtime == e.ModTime:"
+  line = 150
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestIncrementalRecountAndTruncation reaches it on the appended-turn recount"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "9b37ca7505c56e5d"
+  file = "internal/memadvise/locate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 68
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestLocateHonorsClaudeConfigDir reaches it with an existing memory dir"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "1d9b3f7d9cc238c1"
+  file = "internal/memadvise/hook.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "if h.start < first.start {"
+  line = 69
+  reason = "equivalent mutant: matches from one regex never overlap and date/next clauses cannot start at the same index, so < vs <= cannot change the earliest pick"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "6e2b0539e88222c4"
+  file = "internal/memadvise/turns.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case !had || size < e.Offset:"
+  line = 148
+  reason = "equivalent mutant: size == Offset under <= rescans from 0 to the same count on an append-only transcript; only extra bytes are read"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "e524475e33e04935"
+  file = "internal/memadvise/turns.go"
+  op = "INCREMENT_DECREMENT"
+  text = "unreadable++"
+  line = 120
+  reason = "unkillable: f.Info() fails only if the file vanishes between ReadDir and Info, a race with no deterministic seam"
+  accepted_in = "memory-prune-advisor"

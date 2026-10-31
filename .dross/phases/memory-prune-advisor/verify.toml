@@ -1,0 +1,145 @@
+[verify]
+  phase = "memory-prune-advisor"
+  generated_at = 2026-10-30T22:49:26.314485Z
+  verdict = "pending"
+  measured_commit = "b4877fa1fc8603aaaa030fe75e63bbf40356c703"
+  measured_tree = "cc27cf715e3179c304339157478dcf5bec6e8780"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9037037037037037
+  mutants_killed = 488
+  mutants_survived = 52
+  mutants_not_covered = 52
+  mutants_no_block = 42
+  mutants_test_gap = 10
+  mutants_in_scope = 540
+  unclassified_in_scope = 19
+  criteria_total = 9
+  criteria_covered = 0
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 488
+    survived = 52
+    timeout = 0
+    in_scope = 540
+    score = 0.9037037037037037
+    file_count = 36
+    measured_on = "helicon"
+    whole_file = ["cmd/dross/main.go — adapter-lacks-range-runner", "internal/cmd/flowcost_record_test.go — adapter-lacks-range-runner", "internal/cmd/gitignore.go — adapter-lacks-range-runner", "internal/cmd/gitignore_test.go — adapter-lacks-range-runner", "internal/cmd/interaction_coreloop_test.go — adapter-lacks-range-runner", "internal/cmd/memory.go — adapter-lacks-range-runner", "internal/cmd/memory_test.go — adapter-lacks-range-runner", "internal/cmd/status.go — adapter-lacks-range-runner", "internal/cmd/status_memory_test.go — adapter-lacks-range-runner", "internal/cmd/status_prompt_test.go — adapter-lacks-range-runner", "internal/memadvise/advise.go — adapter-lacks-range-runner", "internal/memadvise/advise_test.go — adapter-lacks-range-runner", "internal/memadvise/apply.go — adapter-lacks-range-runner", "internal/memadvise/apply_test.go — adapter-lacks-range-runner", "internal/memadvise/cost.go — adapter-lacks-range-runner", "internal/memadvise/cost_test.go — adapter-lacks-range-runner", "internal/memadvise/dup.go — adapter-lacks-range-runner", "internal/memadvise/dup_test.go — adapter-lacks-range-runner", "internal/memadvise/gather.go — adapter-lacks-range-runner", "internal/memadvise/guard.go — adapter-lacks-range-runner", "internal/memadvise/guard_test.go — adapter-lacks-range-runner", "internal/memadvise/hook.go — adapter-lacks-range-runner", "internal/memadvise/hook_test.go — adapter-lacks-range-runner", "internal/memadvise/index.go — adapter-lacks-range-runner", "internal/memadvise/index_test.go — adapter-lacks-range-runner", "internal/memadvise/locate.go — adapter-lacks-range-runner", "internal/memadvise/locate_test.go — adapter-lacks-range-runner", "internal/memadvise/paths.go — adapter-lacks-range-runner", "internal/memadvise/render.go — adapter-lacks-range-runner", "internal/memadvise/render_test.go — adapter-lacks-range-runner", "internal/memadvise/snapshot.go — adapter-lacks-range-runner", "internal/memadvise/turncache.go — adapter-lacks-range-runner", "internal/memadvise/turncache_test.go — adapter-lacks-range-runner", "internal/memadvise/turns.go — adapter-lacks-range-runner", "internal/memadvise/turns_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-2"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-3"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-4"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-5"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-6"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-7"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-8"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-9"
+  status = "unknown"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/gitignore.go:84 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/gitignore.go:83 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/dup.go:21 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/dup.go:21 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/dup.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/hook.go:69 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/hook.go:69 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/hook.go:96 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/turncache.go:131 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/turns.go:98 (INCREMENT_DECREMENT)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/turns.go:111 (INCREMENT_DECREMENT)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/turns.go:120 (INCREMENT_DECREMENT)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/turns.go:148 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/turns.go:148 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/turns.go:150 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/turns.go:150 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/turns.go:225 (INVERT_NEGATIVES)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/turns.go:225 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/memadvise/locate.go:68 (CONDITIONALS_NEGATION)"
