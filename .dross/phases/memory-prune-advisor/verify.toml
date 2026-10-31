@@ -1,145 +1,149 @@
 [verify]
   phase = "memory-prune-advisor"
-  generated_at = 2026-10-30T22:49:26.314485Z
-  verdict = "pending"
-  measured_commit = "b4877fa1fc8603aaaa030fe75e63bbf40356c703"
-  measured_tree = "cc27cf715e3179c304339157478dcf5bec6e8780"
+  generated_at = 2026-10-31T12:11:08.248965Z
+  verdict = "partial"
+  finalized = true
+  finalized_at = 2026-10-31T14:28:39.689052Z
+  measured_commit = "688e254d94556f6a7c70b6ed35320e048808c3ea"
+  measured_tree = "6da498a1b5a1952d51c8d407429f4af930e74d61"
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9037037037037037
-  mutants_killed = 488
-  mutants_survived = 52
-  mutants_not_covered = 52
+  mutation_score = 0.9148148148148149
+  mutants_killed = 494
+  mutants_survived = 46
+  mutants_not_covered = 46
   mutants_no_block = 42
-  mutants_test_gap = 10
+  mutants_test_gap = 4
   mutants_in_scope = 540
-  unclassified_in_scope = 19
+  unclassified_in_scope = 0
   criteria_total = 9
-  criteria_covered = 0
+  criteria_covered = 9
   criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 488
-    survived = 52
+    killed = 494
+    survived = 46
     timeout = 0
     in_scope = 540
-    score = 0.9037037037037037
+    score = 0.9148148148148149
     file_count = 36
     measured_on = "helicon"
     whole_file = ["cmd/dross/main.go — adapter-lacks-range-runner", "internal/cmd/flowcost_record_test.go — adapter-lacks-range-runner", "internal/cmd/gitignore.go — adapter-lacks-range-runner", "internal/cmd/gitignore_test.go — adapter-lacks-range-runner", "internal/cmd/interaction_coreloop_test.go — adapter-lacks-range-runner", "internal/cmd/memory.go — adapter-lacks-range-runner", "internal/cmd/memory_test.go — adapter-lacks-range-runner", "internal/cmd/status.go — adapter-lacks-range-runner", "internal/cmd/status_memory_test.go — adapter-lacks-range-runner", "internal/cmd/status_prompt_test.go — adapter-lacks-range-runner", "internal/memadvise/advise.go — adapter-lacks-range-runner", "internal/memadvise/advise_test.go — adapter-lacks-range-runner", "internal/memadvise/apply.go — adapter-lacks-range-runner", "internal/memadvise/apply_test.go — adapter-lacks-range-runner", "internal/memadvise/cost.go — adapter-lacks-range-runner", "internal/memadvise/cost_test.go — adapter-lacks-range-runner", "internal/memadvise/dup.go — adapter-lacks-range-runner", "internal/memadvise/dup_test.go — adapter-lacks-range-runner", "internal/memadvise/gather.go — adapter-lacks-range-runner", "internal/memadvise/guard.go — adapter-lacks-range-runner", "internal/memadvise/guard_test.go — adapter-lacks-range-runner", "internal/memadvise/hook.go — adapter-lacks-range-runner", "internal/memadvise/hook_test.go — adapter-lacks-range-runner", "internal/memadvise/index.go — adapter-lacks-range-runner", "internal/memadvise/index_test.go — adapter-lacks-range-runner", "internal/memadvise/locate.go — adapter-lacks-range-runner", "internal/memadvise/locate_test.go — adapter-lacks-range-runner", "internal/memadvise/paths.go — adapter-lacks-range-runner", "internal/memadvise/render.go — adapter-lacks-range-runner", "internal/memadvise/render_test.go — adapter-lacks-range-runner", "internal/memadvise/snapshot.go — adapter-lacks-range-runner", "internal/memadvise/turncache.go — adapter-lacks-range-runner", "internal/memadvise/turncache_test.go — adapter-lacks-range-runner", "internal/memadvise/turns.go — adapter-lacks-range-runner", "internal/memadvise/turns_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner"]
 
 [[criterion]]
   id = "c-1"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/status_memory_test.go:TestStatusMemoryTopThree", "internal/cmd/status_memory_test.go:TestStatusMemorySilentWhenNothing", "internal/memadvise/render_test.go:TestRenderSuggestionLine", "internal/memadvise/render_test.go:TestRenderSuggestionReason", "internal/memadvise/locate_test.go:TestLocateMissingIsSilent"]
+  notes = "status output pins id/file/action/$ per line and reason; byte-identical to advisor-off when dir missing, empty, or nothing to suggest"
 
 [[criterion]]
   id = "c-2"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/memadvise/cost_test.go:TestMonthlyCostFormula", "internal/memadvise/advise_test.go:TestRewordPricesOnlyDelta", "internal/memadvise/render_test.go:TestRenderShareAndCacheAge", "internal/cmd/status_memory_test.go:TestStatusMemoryTopThree", "internal/memadvise/turns_test.go:TestTurnsWindow", "internal/memadvise/turns_test.go:TestTurnsShareAcrossProjects"]
+  notes = "exact ceil(bytes/4) x turns x 0.20/MTok, reword priced on delta, 30-day window, share line '300 of 1200 assistant turns (25%)'; turns.go:148 <= is an accepted equivalent mutant"
 
 [[criterion]]
   id = "c-3"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/status_memory_test.go:TestStatusNeverWritesMemoryDir", "internal/cmd/memory_test.go:TestAdviseListsAllReadOnly", "internal/memadvise/render_test.go:TestGatherNeverWritesMemoryDir", "internal/memadvise/turncache_test.go:TestCacheNeverInMemoryDir", "internal/cmd/memory_test.go:TestApplyRefusesWithoutConfirm"]
+  notes = "sha256 over path+mode+bytes of the memory dir before/after status (cold, warm, recount) and advise; apply without --yes leaves the hash unchanged"
 
 [[criterion]]
   id = "c-4"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/memadvise/guard_test.go:TestGuardPhrases", "internal/memadvise/guard_test.go:TestGuardWholeWordOnly", "internal/memadvise/advise_test.go:TestGuardBlocksEveryDeleteSource", "internal/memadvise/advise_test.go:TestStatusWordsAloneSuggestNothing"]
+  notes = "each guard phrase guards (frontmatter included); guarded dup and orphan get no delete; DEAD/done/RESOLVED/DECLINED/SHIPPED alone yield zero suggestions"
 
 [[criterion]]
   id = "c-5"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/memadvise/index_test.go:TestDeadIndexLink", "internal/memadvise/index_test.go:TestOrphans", "internal/memadvise/index_test.go:TestInboundResolvesByFrontmatterName", "internal/memadvise/index_test.go:TestIndexLinkOutsideDirIsDead", "internal/memadvise/advise_test.go:TestSuggestionNamesInboundLinks"]
+  notes = "dead links, orphans and inbound keyed by name: slug (not stem) asserted exactly; suggestion reason names the linking files"
 
 [[criterion]]
   id = "c-6"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/status_prompt_test.go:TestStatusPromptAddsNoMemoryCall", "internal/cmd/flowcost_record_test.go:TestFlowCostRecords", "internal/cmd/flowcost_record_test.go:TestMemoryPruneAdvisorFlowProblems"]
+  notes = "status.md may invoke no memory command; flow-cost.toml records before/after turns, wall-clock and status_bytes with identical dross_calls sets; record soundness gated, turns/wall-clock recorded not compared (rivil, 2026-10-08)"
 
 [[criterion]]
   id = "c-7"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/memadvise/dup_test.go:TestDupThresholdBoundary", "internal/memadvise/dup_test.go:TestDupNeedsOneDoc", "internal/memadvise/dup_test.go:TestDupSurvivesReorder", "internal/memadvise/dup_test.go:TestDocCandidates", "internal/memadvise/advise_test.go:TestDeleteNamesDoc", "internal/memadvise/render_test.go:TestGatherUsesTrackedDocsOnly"]
+  notes = "50% shingle boundary both sides, single-doc rule, tracked-only doc set; delete suggestion names docs/state.md; dup.go:21/23 survivors are accepted switch-case ceiling"
 
 [[criterion]]
   id = "c-8"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/memadvise/hook_test.go:TestExpiryBoundaryIsStrict", "internal/memadvise/hook_test.go:TestHistoricalDateIsNotTimeBound", "internal/memadvise/hook_test.go:TestNextPhaseClause", "internal/memadvise/advise_test.go:TestExpiredHookNeverDeletes", "internal/memadvise/hook_test.go:TestRewordRemovesOnlyClause"]
+  notes = "strict date boundary, historical dates ignored, next: only when the phase is known; an expired-hook memory that also duplicates a doc still gets a reword; hook.go:69 killed by t-12"
 
 [[criterion]]
   id = "c-9"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/memory_test.go:TestApplyRefusesWithoutConfirm", "internal/cmd/memory_test.go:TestApplyChangesExactlyOne", "internal/cmd/memory_test.go:TestApplyEndToEnd", "internal/memadvise/apply_test.go:TestApplySnapshotsFirst", "internal/memadvise/apply_test.go:TestApplyAbortsWhenSnapshotFails", "internal/memadvise/apply_test.go:TestApplyRefusesGuardedDelete", "internal/memadvise/apply_test.go:TestApplyRechecksIntegrity"]
+  notes = "refusal naming --yes, one-line reword byte-exact, snapshot hash equals pre-apply dir and abort without it, guard refusal leaves dir unchanged, recheck reports dangling/orphans"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/gitignore.go:84 (ARITHMETIC_BASE)"
+  severity = "FLAG"
+  text = "t-2 review (c-5): index.Resolve exact-matches the bare target, so './foo.md', 'foo.md#anchor', %-encoded names and a case mismatch on darwin are reported dead — a false dead link yields a delete-index-line suggestion for a valid entry"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/gitignore.go:83 (ARITHMETIC_BASE)"
+  severity = "FLAG"
+  text = "t-4 review (c-8): nextClauseRe is case-insensitive but keeps the slug's case, so 'Next: Foo' never matches the lowercase known-phase set and the expired clause stays live"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/dup.go:21 (CONDITIONALS_NEGATION)"
+  severity = "FLAG"
+  text = "t-4 review (c-8): removeClause leaves a dangling separator when a clause opens a parenthetical and ends at a separator: 'X (until 2026-01-01; note) Y' rewords to 'X (; note) Y'"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/dup.go:21 (CONDITIONALS_NEGATION)"
+  severity = "FLAG"
+  text = "t-5 review (c-2): turn-cache update() treats a transcript as rewritten only when size < offset; a rewrite to the same or larger size resumes from the stale offset and miscounts"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/dup.go:23 (CONDITIONALS_NEGATION)"
+  severity = "FLAG"
+  text = "t-5 review (c-3): saveCache's symlink refusal Lstats only the final .dross/memory component; a symlinked .dross or parent still lets turns.json land wherever it points, including the memory dir"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/hook.go:69 (CONDITIONALS_BOUNDARY)"
+  severity = "FLAG"
+  text = "t-6 review (c-8): Advise iterates index lines with a seen[] set, so a memory indexed twice whose first line yields a duplicate delete skips the second line's expired clause and gets a delete instead of a reword"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/hook.go:69 (CONDITIONALS_NEGATION)"
+  severity = "FLAG"
+  text = "t-6 review (c-9): suggestion ids use filepath.Base of the target, so two dead links to one target, or a dead old/x.md beside a live duplicate x.md, share an id (delete-x) and apply-by-id is ambiguous"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/hook.go:96 (CONDITIONALS_NEGATION)"
+  severity = "FLAG"
+  text = "t-7 review: Gather treats any Turns error as fatal and returns an empty Report, though Turns returns valid counts alongside a failed cache write — a read-only checkout silently loses the memory section"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/turncache.go:131 (CONDITIONALS_NEGATION)"
+  severity = "FLAG"
+  text = "t-8 review (c-9): rewriteIndex rejoins every line with CRLF if any CRLF is present, so a mixed-ending index changes bytes on lines other than the target"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/turns.go:98 (INCREMENT_DECREMENT)"
+  severity = "FLAG"
+  text = "t-8 review (c-9): Snapshot reads every direct-child regular file through readRegular's 1 MiB cap, so one large non-memory file makes every apply fail as unreadable; untested"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/turns.go:111 (INCREMENT_DECREMENT)"
+  severity = "FLAG"
+  text = "t-10 review (c-2): Turns caches counts even when Unreadable > 0 and a cache hit returns Unreadable=0, so advise prints partial counts silently with exit 0 for the next 24h"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/turns.go:120 (INCREMENT_DECREMENT)"
+  severity = "NOTE"
+  text = "t-8 review (c-9): TestApplyDeleteRemovesFileAndLine compares only keep.md, other.md and MEMORY.md; a dirHash of the expected tree would also catch stray temp files — fold into the apply remediation task"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/turns.go:148 (CONDITIONALS_BOUNDARY)"
+  severity = "NOTE"
+  text = "mutation: 0.91 over 540 in-scope mutants (494 killed, 46 survived, all NOT COVERED); 42 sit in no go-cover block; efficacy over the 498 reachable = 0.99; the 4 test-gap mutants all carry accepted dispositions. Collected from helicon r-20261031-091349 at 688e254d"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/turns.go:148 (CONDITIONALS_NEGATION)"
+  severity = "NOTE"
+  text = "t-12 killed the previous run's in-hunk survivors hook.go:69 (x2), turns.go:98/111/225; all 13 remaining in-hunk survivors are accepted (switch-case attribution ceiling, turns.go:148 equivalent, turns.go:120 ReadDir/Info race)"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/turns.go:150 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/turns.go:150 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/turns.go:225 (INVERT_NEGATIVES)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/turns.go:225 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/memadvise/locate.go:68 (CONDITIONALS_NEGATION)"
+  severity = "NOTE"
+  text = "verdict partial by user decision 2026-10-31: reviewer FLAGs are in-phase defects and v1.8 has no later phase to absorb them (include-first) — remediation tasks added to this plan"
