@@ -27,12 +27,13 @@ var clauseEnds = []string{";", ",", " — ", " – ", " · ", ")"}
 // remaining text never ends or starts on a dangling one.
 var joinSeps = []string{";", ",", "—", "–", "·"}
 
-// NextSlugs returns the phase slugs hook's "next" clauses name, so a caller
-// can build Expired's known set by asking only about those.
+// NextSlugs returns the phase slugs hook's "next" clauses name, lowercased as
+// slugs are, so a caller can build Expired's known set by asking only about
+// those.
 func NextSlugs(hook string) []string {
 	var out []string
 	for _, m := range nextClauseRe.FindAllStringSubmatch(hook, -1) {
-		out = append(out, m[1])
+		out = append(out, strings.ToLower(m[1]))
 	}
 	return out
 }
@@ -57,7 +58,7 @@ func Expired(hook string, today time.Time, known map[string]bool) (reworded stri
 		}
 	}
 	for _, m := range nextClauseRe.FindAllStringSubmatchIndex(hook, -1) {
-		if known[hook[m[2]:m[3]]] {
+		if known[strings.ToLower(hook[m[2]:m[3]])] {
 			hits = append(hits, span{m[0], m[1]})
 		}
 	}
@@ -93,18 +94,19 @@ func removeClause(hook string, start, end int) string {
 	case strings.HasSuffix(prefix, "(") && strings.HasPrefix(suffix, ")"):
 		prefix = strings.TrimRight(strings.TrimSuffix(prefix, "("), " ")
 		suffix = suffix[1:]
-	case prefix != "":
-		for _, sep := range joinSeps {
-			if strings.HasSuffix(prefix, sep) {
-				prefix = strings.TrimRight(strings.TrimSuffix(prefix, sep), " ")
-				break
-			}
-		}
-	default:
+	case prefix == "" || strings.HasSuffix(prefix, "("):
+		// Nothing before the clause to join to: the separator after it goes.
 		suffix = strings.TrimLeft(suffix, " ")
 		for _, sep := range joinSeps {
 			if strings.HasPrefix(suffix, sep) {
 				suffix = strings.TrimLeft(strings.TrimPrefix(suffix, sep), " ")
+				break
+			}
+		}
+	default:
+		for _, sep := range joinSeps {
+			if strings.HasSuffix(prefix, sep) {
+				prefix = strings.TrimRight(strings.TrimSuffix(prefix, sep), " ")
 				break
 			}
 		}

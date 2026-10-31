@@ -59,10 +59,13 @@ func TestNextPhaseClause(t *testing.T) {
 	if !ok || got != "context-boundaries SHIPPED — complete" {
 		t.Errorf("known next phase: (%q, %v)", got, ok)
 	}
+	if got, ok := Expired("complete; Next: Foo", hookToday, phases("foo")); !ok || got != "complete" {
+		t.Errorf("Next: Foo with foo scaffolded: (%q, %v)", got, ok)
+	}
 	if _, ok := Expired("done; next phase foo-bar", hookToday, phases("foo")); ok {
 		t.Error("next phase foo-bar matched the slug foo")
 	}
-	got2 := NextSlugs("a; next: foo — b, next /dross-plan-review bar-baz")
+	got2 := NextSlugs("a; next: foo — b, next /dross-plan-review Bar-Baz")
 	if len(got2) != 2 || got2[0] != "foo" || got2[1] != "bar-baz" {
 		t.Errorf("NextSlugs = %v, want [foo bar-baz]", got2)
 	}
@@ -85,6 +88,8 @@ func TestRewordRemovesOnlyClause(t *testing.T) {
 		"X (next: foo) still open":        "X still open",
 		"X, until 2026-01-01, then Y":     "X, then Y",
 		"keep it · until 2026-01-01 · ok": "keep it · ok",
+		"X (until 2026-01-01; note) Y":    "X (note) Y",
+		"X ( next: foo, note) Y":          "X (note) Y",
 	}
 	for in, want := range cases {
 		got, ok := Expired(in, hookToday, phases("foo"))
