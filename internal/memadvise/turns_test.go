@@ -2,6 +2,7 @@ package memadvise
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -212,5 +213,46 @@ func TestTurnsShareAcrossProjects(t *testing.T) {
 	}
 	if got := (TurnCounts{}).RepoShare(); got != 0 {
 		t.Errorf("RepoShare with no turns = %v, want 0", got)
+	}
+}
+
+func TestTurnsProjectsNotADir(t *testing.T) {
+	claude, root := turnsEnv(t)
+	if err := os.WriteFile(filepath.Join(claude, "projects"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if c := countTurns(t, root, time.Now()); c.Unreadable != 1 {
+		t.Errorf("a projects file reported Unreadable=%d, want 1", c.Unreadable)
+	}
+}
+
+func TestTurnsUnreadableProjectDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a mode-000 dir, so a failed read cannot be detected")
+	}
+	claude, root := turnsEnv(t)
+	now := time.Now()
+	writeTranscript(t, filepath.Join(projectDir(t, claude, Slug(root)), "s.jsonl"), turn(t, "msg_a", now.Add(-time.Hour)))
+	locked := projectDir(t, claude, "-srv-locked")
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+	if c := countTurns(t, root, now); c.Unreadable != 1 || c.Repo != 1 {
+		t.Errorf("a mode-000 sibling project reported Unreadable=%d Repo=%d, want 1 and 1", c.Unreadable, c.Repo)
+	}
+}
+
+func TestTurnsPastTailCap(t *testing.T) {
+	claude, root := turnsEnv(t)
+	now := time.Now()
+	at := now.Add(-time.Hour)
+	var lines []string
+	for i := range tailIDs + 1 {
+		lines = append(lines, turn(t, fmt.Sprintf("msg_%d", i), at))
+	}
+	writeTranscript(t, filepath.Join(projectDir(t, claude, Slug(root)), "s.jsonl"), lines...)
+	if c := countTurns(t, root, now); c.Repo != tailIDs+1 {
+		t.Errorf("Repo=%d, want %d distinct turns past the tail cap", c.Repo, tailIDs+1)
 	}
 }

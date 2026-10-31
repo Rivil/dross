@@ -105,3 +105,12 @@ func TestRewordNeverEmpty(t *testing.T) {
 		}
 	}
 }
+
+func TestExpiredRemovesEarliestClause(t *testing.T) {
+	// The date clause is found first but sits later in the hook; the next
+	// clause before it is the one removed.
+	got, ok := Expired("next: foo; X; until 2026-01-01", hookToday, phases("foo"))
+	if want := "X; until 2026-01-01"; !ok || got != want {
+		t.Errorf("Expired = (%q, %v), want (%q, true)", got, ok, want)
+	}
+}
