@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -230,14 +231,52 @@ func links(body string) []string {
 }
 
 // Resolve returns the memory an index target names, or nil when the target is
-// dead. Only a bare direct-child *.md that Load read counts: a path with a
-// separator, "..", or an absolute path is dead without being opened.
+// dead. The target is normalised first (see normTarget); then only a bare
+// direct-child *.md that Load read counts: a path with a separator, "..", or
+// an absolute path is dead without being opened.
 func (c *Corpus) Resolve(target string) *Memory {
-	if target == "" || strings.ContainsAny(target, `/\`) || filepath.IsAbs(target) ||
-		filepath.Ext(target) != ".md" || target == IndexName {
+	name, ok := normTarget(target)
+	if !ok {
 		return nil
 	}
-	return c.Memories[target]
+	if m := c.Memories[name]; m != nil {
+		return m
+	}
+	return c.foldMatch(name)
+}
+
+// normTarget reads an index link target the way a markdown renderer does: a
+// leading "./" and a "#fragment" go and %-escapes are decoded. ok is false
+// unless the result is a bare direct-child *.md other than the index.
+func normTarget(target string) (string, bool) {
+	name, _, _ := strings.Cut(target, "#")
+	for strings.HasPrefix(name, "./") {
+		name = name[2:]
+	}
+	name, err := url.PathUnescape(name)
+	if err != nil || name == "" || strings.ContainsAny(name, `/\`) || filepath.IsAbs(name) ||
+		filepath.Ext(name) != ".md" || name == IndexName {
+		return "", false
+	}
+	return name, true
+}
+
+// foldMatch is the memory name names on a case-insensitive filesystem: one
+// equal to it under case folding that is the same file on disk. On a
+// case-sensitive filesystem name does not exist, so the target stays dead.
+// Lstat never follows a link, and name is already a bare direct child.
+func (c *Corpus) foldMatch(name string) *Memory {
+	for f, m := range c.Memories {
+		if !strings.EqualFold(f, name) {
+			continue
+		}
+		want, err1 := os.Lstat(filepath.Join(c.Dir, name))
+		have, err2 := os.Lstat(filepath.Join(c.Dir, f))
+		if err1 == nil && err2 == nil && os.SameFile(want, have) {
+			return m
+		}
+	}
+	return nil
 }
 
 // Files returns the memory file names in sorted order.

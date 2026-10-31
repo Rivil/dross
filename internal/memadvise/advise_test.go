@@ -120,6 +120,49 @@ func TestExpiredHookNeverDeletes(t *testing.T) {
 	}
 }
 
+func TestExpiredHookOnSecondIndexLineNeverDeletes(t *testing.T) {
+	second := "- [Dup again](dup.md) — also here; until 2026-01-01"
+	dir := memFixture(t, map[string]string{
+		IndexName: "- [Dup](dup.md) — restates the readme\n" + second + "\n",
+		"dup.md":  readme,
+	})
+	got := advise(t, dir, docsWithReadme(), nil, 100)
+	if len(got) != 1 {
+		t.Fatalf("want one suggestion for the doubly-indexed memory, got %+v", got)
+	}
+	if s := got[0]; s.ID != "reword-dup" || s.Action != ActionReword || s.IndexLine != second || s.NewHook != "also here" {
+		t.Errorf("doubly-indexed expired memory got %+v, want a reword of its second line", s)
+	}
+}
+
+func TestSuggestionIDsUnique(t *testing.T) {
+	for name, index := range map[string]string{
+		"live first": "- [X](x.md) — d\n- [G1](gone.md) — a\n- [G2](gone.md) — b\n- [Old](old/x.md) — c\n",
+		"dead first": "- [Old](old/x.md) — c\n- [G1](gone.md) — a\n- [G2](gone.md) — b\n- [X](x.md) — d\n",
+	} {
+		dir := memFixture(t, map[string]string{IndexName: index, "x.md": readme, "x-2.md": "taken\n"})
+		got := advise(t, dir, docsWithReadme(), nil, 100)
+		ids := byID(got)
+		if len(ids) != len(got) {
+			t.Errorf("%s: suggestion IDs repeat: %+v", name, got)
+		}
+		if s := ids["delete-x"]; s.File != "x.md" || s.Doc == "" {
+			t.Errorf("%s: delete-x = %+v, want the live x.md's duplicate delete", name, s)
+		}
+		if ids["delete-gone"].File != "gone.md" || ids["delete-gone-2"].File != "gone.md" || ids["delete-x-3"].File != "old/x.md" {
+			t.Errorf("%s: dead-link IDs = %v", name, sortedCopy(keys(ids)))
+		}
+	}
+}
+
+func keys(m map[string]Suggestion) []string {
+	var out []string
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
 func TestSuggestionNamesInboundLinks(t *testing.T) {
 	dir := memFixture(t, map[string]string{
 		IndexName: "- [Dup](dup.md) — x\n- [L1](l1.md) — y\n- [L2](l2.md) — z\n",

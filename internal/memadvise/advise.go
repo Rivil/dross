@@ -2,6 +2,7 @@ package memadvise
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"path/filepath"
 	"sort"
@@ -77,59 +78,23 @@ func Advise(in Inputs) ([]Suggestion, error) {
 	turns := in.Turns.Repo
 
 	out := []Suggestion{}
-	seen := map[string]bool{}
+	var dead []IndexLine
+	var order []*Memory
+	linesOf := map[string][]IndexLine{}
 	for _, l := range c.Lines {
 		m := c.Resolve(l.Target)
 		if m == nil {
-			lineBytes := len(l.Raw) + 1 // the line and its newline go together
-			out = append(out, Suggestion{
-				ID:         id(ActionDelete, l.Target),
-				File:       l.Target,
-				Reason:     "dead index link: " + l.Target + " is not a memory in this dir",
-				Action:     ActionDelete,
-				IndexLine:  l.Raw,
-				BytesSaved: lineBytes,
-				MonthlyUSD: MonthlyUSD(lineBytes, turns),
-			})
+			dead = append(dead, l)
 			continue
 		}
-		if seen[m.File] {
-			continue
+		if linesOf[m.File] == nil {
+			order = append(order, m)
 		}
-		inbound := inboundOf(m, integ)
-		if reworded, ok := Expired(l.Hook, in.Today, in.Known); ok {
-			seen[m.File] = true
-			saved := len(l.Hook) - len(reworded)
-			out = append(out, Suggestion{
-				ID:         id(ActionReword, m.File),
-				File:       m.File,
-				Reason:     withInbound("a time-bound clause in its hook has expired", inbound),
-				Action:     ActionReword,
-				NewHook:    reworded,
-				Inbound:    inbound,
-				IndexLine:  l.Raw,
-				BytesSaved: saved,
-				MonthlyUSD: MonthlyUSD(saved, turns),
-			})
-			continue
-		}
-		if Guarded(m.Raw) {
-			continue
-		}
-		if doc, ok := in.Docs.Duplicates(m.Body); ok {
-			seen[m.File] = true
-			lineBytes := len(l.Raw) + 1
-			out = append(out, Suggestion{
-				ID:         id(ActionDelete, m.File),
-				File:       m.File,
-				Reason:     withInbound("duplicates "+doc, inbound),
-				Action:     ActionDelete,
-				Doc:        doc,
-				Inbound:    inbound,
-				IndexLine:  l.Raw,
-				BytesSaved: lineBytes,
-				MonthlyUSD: MonthlyUSD(lineBytes, turns),
-			})
+		linesOf[m.File] = append(linesOf[m.File], l)
+	}
+	for _, m := range order {
+		if s, ok := adviseIndexed(m, linesOf[m.File], in, integ, turns); ok {
+			out = append(out, s)
 		}
 	}
 
@@ -150,6 +115,31 @@ func Advise(in Inputs) ([]Suggestion, error) {
 		})
 	}
 
+	// Memory suggestions are unique already — one per memory, and file stems
+	// are unique — so a clash is always a dead link's to give way: two dead
+	// links to one target, or a dead old/x.md beside a live x.md.
+	taken := map[string]bool{}
+	for _, s := range out {
+		taken[s.ID] = true
+	}
+	for _, l := range dead {
+		sid := id(ActionDelete, l.Target)
+		for n := 2; taken[sid]; n++ {
+			sid = fmt.Sprintf("%s-%d", id(ActionDelete, l.Target), n)
+		}
+		taken[sid] = true
+		lineBytes := len(l.Raw) + 1 // the line and its newline go together
+		out = append(out, Suggestion{
+			ID:         sid,
+			File:       l.Target,
+			Reason:     "dead index link: " + l.Target + " is not a memory in this dir",
+			Action:     ActionDelete,
+			IndexLine:  l.Raw,
+			BytesSaved: lineBytes,
+			MonthlyUSD: MonthlyUSD(lineBytes, turns),
+		})
+	}
+
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].MonthlyUSD != out[j].MonthlyUSD {
 			return out[i].MonthlyUSD > out[j].MonthlyUSD
@@ -157,6 +147,48 @@ func Advise(in Inputs) ([]Suggestion, error) {
 		return out[i].ID < out[j].ID
 	})
 	return out, nil
+}
+
+// adviseIndexed is the one suggestion for an indexed memory, if any. Every
+// index line of it is checked for an expired clause before a delete is
+// considered, so a reword on any of its lines wins.
+func adviseIndexed(m *Memory, lines []IndexLine, in Inputs, integ Integrity, turns int) (Suggestion, bool) {
+	inbound := inboundOf(m, integ)
+	for _, l := range lines {
+		if reworded, ok := Expired(l.Hook, in.Today, in.Known); ok {
+			saved := len(l.Hook) - len(reworded)
+			return Suggestion{
+				ID:         id(ActionReword, m.File),
+				File:       m.File,
+				Reason:     withInbound("a time-bound clause in its hook has expired", inbound),
+				Action:     ActionReword,
+				NewHook:    reworded,
+				Inbound:    inbound,
+				IndexLine:  l.Raw,
+				BytesSaved: saved,
+				MonthlyUSD: MonthlyUSD(saved, turns),
+			}, true
+		}
+	}
+	if Guarded(m.Raw) {
+		return Suggestion{}, false
+	}
+	doc, ok := in.Docs.Duplicates(m.Body)
+	if !ok {
+		return Suggestion{}, false
+	}
+	lineBytes := len(lines[0].Raw) + 1
+	return Suggestion{
+		ID:         id(ActionDelete, m.File),
+		File:       m.File,
+		Reason:     withInbound("duplicates "+doc, inbound),
+		Action:     ActionDelete,
+		Doc:        doc,
+		Inbound:    inbound,
+		IndexLine:  lines[0].Raw,
+		BytesSaved: lineBytes,
+		MonthlyUSD: MonthlyUSD(lineBytes, turns),
+	}, true
 }
 
 // id is the action word and the file's stem: it names the memory, not its

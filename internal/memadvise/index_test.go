@@ -101,6 +101,42 @@ func TestIndexLinkOutsideDirIsDead(t *testing.T) {
 	}
 }
 
+func TestIndexTargetNormalised(t *testing.T) {
+	dir := memFixture(t, map[string]string{
+		IndexName: "- [A](./foo.md) — x\n- [B](foo.md#part) — y\n- [C](foo%20bar.md) — z\n" +
+			"- [D](case.md) — w\n- [E](%2Ffoo.md) — v\n- [F](foo%zz.md) — u\n- [G](.%2Ffoo.md) — t\n",
+		"foo.md":     "foo\n",
+		"foo bar.md": "foo bar\n",
+		"Case.md":    "case\n",
+	})
+	c := loadCorpus(t, dir)
+	for target, want := range map[string]string{"./foo.md": "foo.md", "foo.md#part": "foo.md", "foo%20bar.md": "foo bar.md"} {
+		if m := c.Resolve(target); m == nil || m.File != want {
+			t.Errorf("Resolve(%q) = %v, want %s", target, m, want)
+		}
+	}
+	in := c.Integrity()
+	dead := deadTargets(in)
+	for _, target := range []string{"%2Ffoo.md", "foo%zz.md", ".%2Ffoo.md"} {
+		if !slices.Contains(dead, target) {
+			t.Errorf("%s is not reported dead (dead: %v)", target, dead)
+		}
+	}
+	// case.md names Case.md only where the filesystem folds case.
+	_, err := os.Lstat(filepath.Join(dir, "case.md"))
+	if folds := err == nil; folds == slices.Contains(dead, "case.md") {
+		t.Errorf("case-folding fs = %v, but dead links are %v", folds, dead)
+	}
+	if err == nil {
+		if m := c.Resolve("CASE.md"); m == nil || m.File != "Case.md" {
+			t.Errorf("Resolve(CASE.md) = %v on a case-folding fs", m)
+		}
+	}
+	if slices.Contains(in.Orphans, "foo bar.md") || slices.Contains(in.Orphans, "foo.md") {
+		t.Errorf("a memory indexed by a normalised target is an orphan: %v", in.Orphans)
+	}
+}
+
 func TestOrphans(t *testing.T) {
 	in := loadCorpus(t, corpusDir(t)).Integrity()
 	if !reflect.DeepEqual(in.Orphans, []string{"extra.md"}) {
