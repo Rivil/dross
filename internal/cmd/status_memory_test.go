@@ -39,6 +39,17 @@ func memoryDir(t *testing.T, dir string) string {
 	return filepath.Join(cfg, "projects", memadvise.Slug(dir), "memory")
 }
 
+// memoryID is the suggestion id advise gives the fixture's dead link to
+// stem.md: dead-link ids carry their line's content address.
+func memoryID(stem string) string {
+	for _, f := range memoryFixtureTokens {
+		if f.stem == stem {
+			return memadvise.DeadLinkID(stem+".md", memoryIndexLine(stem, f.tokens))
+		}
+	}
+	panic("no fixture memory " + stem)
+}
+
 // memoryIndexLine is a dead index link to stem.md whose line, newline
 // included, is exactly tokens*4 bytes.
 func memoryIndexLine(stem string, tokens int) string {
@@ -128,8 +139,8 @@ func TestStatusMemoryTopThree(t *testing.T) {
 	}
 	for i, stem := range []string{"b", "d", "a"} {
 		line := block[1+i]
-		if !strings.HasPrefix(line, "  delete-"+stem+"  ") {
-			t.Errorf("item %d = %q, want delete-%s (the %s highest $/month)", i+1, line, stem, []string{"1st", "2nd", "3rd"}[i])
+		if !strings.HasPrefix(line, "  "+memoryID(stem)+"  ") {
+			t.Errorf("item %d = %q, want %s (the %s highest $/month)", i+1, line, memoryID(stem), []string{"1st", "2nd", "3rd"}[i])
 		}
 		usd := fmt.Sprintf("$%.2f/mo", memadvise.MonthlyUSD(byStem[stem]*4, memoryFixtureTurns))
 		if !strings.Contains(line, usd) {
@@ -141,7 +152,7 @@ func TestStatusMemoryTopThree(t *testing.T) {
 	}
 	for _, stem := range []string{"c", "e"} {
 		for _, l := range block {
-			if strings.HasPrefix(l, "  delete-"+stem+"  ") {
+			if strings.HasPrefix(l, "  "+memoryID(stem)+"  ") {
 				t.Errorf("status listed a fourth item %q; only the top three belong there", l)
 			}
 		}
@@ -297,7 +308,7 @@ func TestStatusMemoryOnCacheWriteError(t *testing.T) {
 		t.Fatalf("status exited with %v", err)
 	}
 	block := memorySection(out)
-	if len(block) < 2 || !strings.HasPrefix(block[1], "  delete-b  ") {
+	if len(block) < 2 || !strings.HasPrefix(block[1], "  "+memoryID("b")+"  ") {
 		t.Errorf("status on an unwritable turn cache lost its memory section:\n%s", out)
 	}
 	if strings.Contains(out, "could not be cached") {

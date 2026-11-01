@@ -238,7 +238,10 @@ func TestApplyNeverDeletesOutsideDir(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(mem, "link.md")); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"delete-link", "delete-x"} {
+	for _, id := range []string{
+		DeadLinkID("link.md", "- [Link](link.md) — a symlink out"),
+		DeadLinkID("../x.md", "- [Esc](../x.md) — escapes"),
+	} {
 		if _, err := Apply(t.TempDir(), mem, suggestion(t, mem, id, nil), adviseToday); err != nil {
 			t.Fatalf("%s: %v", id, err)
 		}

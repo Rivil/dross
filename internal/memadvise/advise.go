@@ -1,6 +1,8 @@
 package memadvise
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -115,17 +117,22 @@ func Advise(in Inputs) ([]Suggestion, error) {
 		})
 	}
 
-	// Memory suggestions are unique already — one per memory, and file stems
-	// are unique — so a clash is always a dead link's to give way: two dead
-	// links to one target, or a dead old/x.md beside a live x.md.
+	// A dead link's id carries its own line's content address on top of the
+	// stem, so it never names a memory: a live x.md that later turns up
+	// takes delete-x without inheriting a stale dead-link id, and reordering
+	// the index never moves an id to another line.
 	taken := map[string]bool{}
 	for _, s := range out {
 		taken[s.ID] = true
 	}
+	// Content order: the -N fallback below (byte-identical lines, whose
+	// deletes are indistinguishable, or a hash that collides) is then
+	// independent of where the lines sit.
+	sort.SliceStable(dead, func(i, j int) bool { return dead[i].Raw < dead[j].Raw })
 	for _, l := range dead {
-		sid := id(ActionDelete, l.Target)
-		for n := 2; taken[sid]; n++ {
-			sid = fmt.Sprintf("%s-%d", id(ActionDelete, l.Target), n)
+		sid := DeadLinkID(l.Target, l.Raw)
+		for n, first := 2, sid; taken[sid]; n++ {
+			sid = fmt.Sprintf("%s-%d", first, n)
 		}
 		taken[sid] = true
 		lineBytes := len(l.Raw) + 1 // the line and its newline go together
@@ -192,9 +199,26 @@ func adviseIndexed(m *Memory, lines []IndexLine, in Inputs, integ Integrity, tur
 }
 
 // id is the action word and the file's stem: it names the memory, not its
-// position, so adding or reordering index lines never renames a suggestion.
+// position, so adding or reordering index lines never renames a memory's
+// suggestion. Dead links take DeadLinkID instead.
 func id(a Action, file string) string {
 	return idPrefix[a] + "-" + strings.TrimSuffix(filepath.Base(file), ".md")
+}
+
+// DeadLinkID is the suggestion id for deleting the dead index line raw that
+// links target: delete-<stem>-<lineHash(raw)>. It names the line by content,
+// never by position, and can match a memory's id only if that memory's stem
+// itself ends in the same six hex digits (Advise's -N fallback still keeps
+// the two apart).
+func DeadLinkID(target, raw string) string {
+	return id(ActionDelete, target) + "-" + lineHash(raw)
+}
+
+// lineHash is a short content address for an index line: the first six hex
+// digits of its SHA-256.
+func lineHash(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:3])
 }
 
 func inboundOf(m *Memory, integ Integrity) []string {

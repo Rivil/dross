@@ -156,8 +156,8 @@ func TestAdviseListsAllReadOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, f := range memoryFixtureTokens {
-		if !strings.Contains(out, "  delete-"+f.stem+"  ") {
-			t.Errorf("advise lacks delete-%s:\n%s", f.stem, out)
+		if !strings.Contains(out, "  "+memoryID(f.stem)+"  ") {
+			t.Errorf("advise lacks %s:\n%s", memoryID(f.stem), out)
 		}
 	}
 	if strings.Contains(out, "more — dross memory advise") {
@@ -211,7 +211,7 @@ func TestAdviseReportsCacheWriteError(t *testing.T) {
 	fiveItemMemory(t, dir)
 	mustWrite(t, filepath.Join(dir, filepath.FromSlash(memadvise.StateDir)), "not a dir\n")
 	out, err := memoryRun(t, "advise")
-	if !strings.Contains(out, "  delete-"+memoryFixtureTokens[0].stem+"  ") {
+	if !strings.Contains(out, "  "+memoryID(memoryFixtureTokens[0].stem)+"  ") {
 		t.Errorf("advise printed no suggestions on an unwritable cache:\n%s", out)
 	}
 	if err == nil || !strings.Contains(err.Error(), "could not be cached") || !strings.Contains(err.Error(), memadvise.StateDir) {

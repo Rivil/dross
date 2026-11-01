@@ -149,9 +149,77 @@ func TestSuggestionIDsUnique(t *testing.T) {
 		if s := ids["delete-x"]; s.File != "x.md" || s.Doc == "" {
 			t.Errorf("%s: delete-x = %+v, want the live x.md's duplicate delete", name, s)
 		}
-		if ids["delete-gone"].File != "gone.md" || ids["delete-gone-2"].File != "gone.md" || ids["delete-x-3"].File != "old/x.md" {
-			t.Errorf("%s: dead-link IDs = %v", name, sortedCopy(keys(ids)))
+		// Every dead link takes its own line's content address, so two
+		// dead links to gone.md and a dead old/x.md beside a live x.md
+		// all stay apart.
+		for raw, want := range map[string]string{
+			"- [G1](gone.md) — a":   DeadLinkID("gone.md", "- [G1](gone.md) — a"),
+			"- [G2](gone.md) — b":   DeadLinkID("gone.md", "- [G2](gone.md) — b"),
+			"- [Old](old/x.md) — c": DeadLinkID("old/x.md", "- [Old](old/x.md) — c"),
+		} {
+			if s := ids[want]; s.IndexLine != raw {
+				t.Errorf("%s: %s names %q, want %q (IDs %v)", name, want, s.IndexLine, raw, sortedCopy(keys(ids)))
+			}
 		}
+	}
+}
+
+// A dead-link id names its line by content: reversing the index leaves every
+// id on the line it named, byte-identical duplicates included, and the
+// content address is six hex digits.
+func TestDeadLinkIDsSurviveReorder(t *testing.T) {
+	lines := []string{"- [G1](gone.md) — a", "- [G2](gone.md) — b", "- [G3](gone.md) — a", "- [G3](gone.md) — a", "- [Lone](lone.md) — d"}
+	idsByLine := func(order []string) map[string][]string {
+		got := advise(t, memFixture(t, map[string]string{IndexName: strings.Join(order, "\n") + "\n"}), nil, nil, 100)
+		out := map[string][]string{}
+		for _, s := range got {
+			out[s.IndexLine] = append(out[s.IndexLine], s.ID)
+		}
+		for _, v := range out {
+			slices.Sort(v)
+		}
+		return out
+	}
+	first := idsByLine(lines)
+	reversed := slices.Clone(lines)
+	slices.Reverse(reversed)
+	if again := idsByLine(reversed); !reflect.DeepEqual(first, again) {
+		t.Errorf("reordering the index moved dead-link IDs:\nbefore %v\nafter  %v", first, again)
+	}
+	if got, want := first["- [Lone](lone.md) — d"], DeadLinkID("lone.md", "- [Lone](lone.md) — d"); !reflect.DeepEqual(got, []string{want}) {
+		t.Errorf("a lone dead link's ID = %v, want its content address %s", got, want)
+	}
+	dup := DeadLinkID("gone.md", "- [G3](gone.md) — a")
+	if got := first["- [G3](gone.md) — a"]; !reflect.DeepEqual(got, []string{dup, dup + "-2"}) {
+		t.Errorf("byte-identical dead links got %v, want %s and %s-2", got, dup, dup)
+	}
+	if h := lineHash("x"); len(h) != 6 || strings.Trim(h, "0123456789abcdef") != "" {
+		t.Errorf("lineHash = %q, want six lowercase hex digits", h)
+	}
+}
+
+// A dead link never holds a memory's plain id, so the id advise printed for
+// it cannot later name a live memory: once x.md exists and duplicates a doc,
+// delete-x is that memory's and the dead old/x.md line keeps its own id.
+func TestDeadLinkIDNeverAMemoryID(t *testing.T) {
+	old := "- [Old](old/x.md) — c"
+	before := byID(advise(t, memFixture(t, map[string]string{IndexName: old + "\n"}), docsWithReadme(), nil, 100))
+	want := DeadLinkID("old/x.md", old)
+	if s, ok := before[want]; !ok || s.IndexLine != old || len(before) != 1 {
+		t.Fatalf("a lone dead link's suggestions = %v, want only %s", sortedCopy(keys(before)), want)
+	}
+	if _, ok := before["delete-x"]; ok {
+		t.Fatal("a dead link took the plain delete-x a live x.md would later hold")
+	}
+	after := byID(advise(t, memFixture(t, map[string]string{
+		IndexName: old + "\n- [X](x.md) — d\n",
+		"x.md":    readme,
+	}), docsWithReadme(), nil, 100))
+	if s := after["delete-x"]; s.File != "x.md" || s.Doc == "" {
+		t.Errorf("delete-x = %+v, want the live x.md's duplicate delete", s)
+	}
+	if s := after[want]; s.IndexLine != old {
+		t.Errorf("%s now names %q, want the dead line it named before", want, s.IndexLine)
 	}
 }
 
@@ -203,7 +271,7 @@ func TestDeadLinkDeletesIndexLineOnly(t *testing.T) {
 		t.Fatalf("suggestions = %+v", got)
 	}
 	s := got[0]
-	if s.ID != "delete-gone" || s.Action != ActionDelete || s.ReportOnly || s.IndexLine != line {
+	if s.ID != DeadLinkID("gone.md", line) || s.Action != ActionDelete || s.ReportOnly || s.IndexLine != line {
 		t.Errorf("dead link suggestion = %+v", s)
 	}
 	if s.BytesSaved != len(line)+1 || s.MonthlyUSD != MonthlyUSD(len(line)+1, 1000) {
@@ -247,7 +315,7 @@ func TestSuggestionIDsStable(t *testing.T) {
 	if !reflect.DeepEqual(first, moved) {
 		t.Errorf("an unrelated memory at the top changed IDs: %v vs %v", first, moved)
 	}
-	if want := []string{"delete-dup", "delete-gone", "reword-old"}; !reflect.DeepEqual(sortedCopy(first), want) {
+	if want := []string{"delete-dup", DeadLinkID("gone.md", "- [Gone](gone.md) — y"), "reword-old"}; !reflect.DeepEqual(sortedCopy(first), want) {
 		t.Errorf("IDs = %v, want %v", first, want)
 	}
 }
@@ -267,7 +335,12 @@ func TestSuggestionsSortByCostThenID(t *testing.T) {
 	for _, s := range got {
 		order = append(order, s.ID)
 	}
-	if want := []string{"delete-zz", "delete-a", "delete-b"}; !reflect.DeepEqual(order, want) {
+	want := []string{
+		DeadLinkID("zz.md", "- [A much longer index line](zz.md) — that costs more every turn"),
+		DeadLinkID("a.md", "- [Short](a.md) — x"),
+		DeadLinkID("b.md", "- [Short](b.md) — x"),
+	}
+	if !reflect.DeepEqual(order, want) {
 		t.Errorf("order = %v, want %v", order, want)
 	}
 }
