@@ -1668,8 +1668,8 @@
     },
     "memory-prune-advisor/t-15": {
       "issue": "DRO-1045",
-      "plan_status": "in_progress",
-      "board_state": "task-in-progress"
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "memory-prune-advisor/t-16": {
       "issue": "DRO-1046",

@@ -117,6 +117,29 @@
         }
       ]
     },
+    "t-15": {
+      "files": [
+        "internal/memadvise/turns.go",
+        "internal/memadvise/turns_test.go",
+        "internal/memadvise/turncache.go",
+        "internal/memadvise/turncache_test.go",
+        "internal/memadvise/gather.go",
+        "internal/memadvise/render_test.go",
+        "internal/cmd/memory.go",
+        "internal/cmd/memory_test.go",
+        "internal/cmd/status_memory_test.go"
+      ],
+      "commit": "7c459ef",
+      "completed_at": "2026-11-01T08:46:48.977074Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "update",
+          "loc": "internal/memadvise/turns.go:160",
+          "what": "turn counts recount on in-place transcript rewrites; cache refuses symlinked state dirs, persists Unreadable, and a cache-write error no longer drops counts"
+        }
+      ]
+    },
     "t-16": {
       "files": [
         "internal/memadvise/apply.go",
@@ -417,6 +440,36 @@
           "severity": "NOTE",
           "criterion": "c-8",
           "text": "NextSlugs now lowercases its output, so gather.go builds the known set from lowercased slugs, which matches Expired's lowercased lookup",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-15": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "A cached Unreadable count persists for the full 24h TTL, so advise keeps returning an error after the user fixes the permissions, until the cache expires. This is acceptable under the description's 'persist Unreadable' option.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "mark hashes only the first and last 4 KiB before Offset, so a rewrite that leaves both ends byte-identical is still resumed at the old offset. The doc comment says so, and it is a reasonable trade for the cost.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "TestStatusMemoryOnCacheWriteError's 'could not be cached' absence check is close to vacuous, because status never builds that string. The section-present and footer assertions carry the test.",
           "resolution": "non-blocking, left"
         }
       ]
