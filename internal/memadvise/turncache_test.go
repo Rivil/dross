@@ -1,6 +1,7 @@
 package memadvise
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -218,6 +219,74 @@ func TestCacheNeverInMemoryDir(t *testing.T) {
 	}
 	if after := memFingerprint(t, mem); after != before {
 		t.Errorf("a linked state dir let the cache into the memory dir:\nbefore %q\nafter  %q", before, after)
+	}
+
+	// A parent link: .dross itself points at the memory dir's parent, so a
+	// real-looking .dross/memory is the memory dir. Lstat of the last
+	// component alone passes that; every component must be checked.
+	root3 := t.TempDir()
+	if err := os.Symlink(filepath.Dir(mem), filepath.Join(root3, ".dross")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Turns(root3, now)
+	if err == nil || !strings.Contains(err.Error(), ".dross is not a directory") {
+		t.Errorf("Turns through a symlinked .dross = %v, want a refusal naming .dross", err)
+	}
+	if after := memFingerprint(t, mem); after != before {
+		t.Errorf("a linked .dross let the cache into the memory dir:\nbefore %q\nafter  %q", before, after)
+	}
+}
+
+// TestCacheWriteErrorKeepsCounts: a state dir that cannot be written costs
+// only the cache. The counts come back whole, beside an ErrCacheWrite.
+func TestCacheWriteErrorKeepsCounts(t *testing.T) {
+	claude, root := turnsEnv(t)
+	now := time.Now()
+	writeTranscript(t, filepath.Join(projectDir(t, claude, Slug(root)), "s.jsonl"),
+		turn(t, "msg_a", now.Add(-time.Hour)), turn(t, "msg_b", now.Add(-time.Hour)))
+	writeRepoFile(t, root, StateDir, "not a dir\n")
+	c, err := Turns(root, now)
+	if !errors.Is(err, ErrCacheWrite) {
+		t.Fatalf("Turns with a file at %s = %v, want an ErrCacheWrite", StateDir, err)
+	}
+	if c.Repo != 2 || c.All != 2 {
+		t.Errorf("a failed cache write returned Repo=%d All=%d, want the counted 2 and 2", c.Repo, c.All)
+	}
+
+	// Any other failure is not a cache write and must not pass for one.
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("HOME", "")
+	if _, err := ClaudeDir(); err == nil {
+		t.Skip("ClaudeDir resolves with HOME and CLAUDE_CONFIG_DIR unset")
+	}
+	if _, err := Turns(root, now); err == nil || errors.Is(err, ErrCacheWrite) {
+		t.Errorf("Turns with no Claude dir = %v, want an error that is not ErrCacheWrite", err)
+	}
+}
+
+// TestCacheKeepsUnreadable: a count that skipped an unreadable transcript is
+// saved with that number, so a cache hit is exactly as partial as the count.
+func TestCacheKeepsUnreadable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a mode-000 dir, so a failed read cannot be detected")
+	}
+	claude, root := turnsEnv(t)
+	now := time.Now()
+	writeTranscript(t, filepath.Join(projectDir(t, claude, Slug(root)), "s.jsonl"), turn(t, "msg_a", now.Add(-time.Hour)))
+	locked := projectDir(t, claude, "-srv-locked")
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+	if c := countTurns(t, root, now); c.Unreadable != 1 {
+		t.Fatalf("first count Unreadable=%d, want 1", c.Unreadable)
+	}
+	c := countTurns(t, root, now.Add(time.Hour))
+	if c.Age != time.Hour {
+		t.Fatalf("second count Age=%v, want a 1h cache hit", c.Age)
+	}
+	if c.Unreadable != 1 || c.Repo != 1 {
+		t.Errorf("a cache hit gave Unreadable=%d Repo=%d, want the saved 1 and 1", c.Unreadable, c.Repo)
 	}
 }
 

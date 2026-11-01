@@ -3,6 +3,8 @@ package memadvise
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"io"
@@ -26,6 +28,10 @@ const TurnWindow = 30 * 24 * time.Hour
 // resume point without the cache carrying every id a transcript ever held.
 const tailIDs = 32
 
+// markLen is how many bytes at each end of a file's read prefix its Mark
+// covers. Two 4 KiB reads per changed transcript are noise next to the scan.
+const markLen = 4 << 10
+
 // fileEntry is what the cache keeps per transcript: the stat it was last read
 // at, how far it was read, and the turns found so far bucketed by UTC day.
 type fileEntry struct {
@@ -34,9 +40,13 @@ type fileEntry struct {
 	// Offset is the byte just past the last complete line read. A trailing
 	// line with no newline yet is still being written: it may be counted, but
 	// the next scan re-reads it, and Tail keeps it from counting twice.
-	Offset int64          `json:"offset"`
-	Days   map[string]int `json:"days,omitempty"`
-	Tail   []string       `json:"tail,omitempty"`
+	Offset int64 `json:"offset"`
+	// Mark fingerprints the bytes before Offset (see mark). An append leaves
+	// them as they were; a transcript rewritten in place to the same or a
+	// larger size does not, and the stat alone cannot tell the two apart.
+	Mark uint64         `json:"mark,omitempty"`
+	Days map[string]int `json:"days,omitempty"`
+	Tail []string       `json:"tail,omitempty"`
 }
 
 // TurnCounts is the turn count the $/month estimate multiplies by.
@@ -46,11 +56,13 @@ type TurnCounts struct {
 	// Age is how old the counts are: zero when this call recounted, the
 	// cache's age when it reused one. Status prints it (locked turn_counts).
 	Age time.Duration
-	// Scanned is the transcript bytes this call read — zero on a cache hit,
-	// only the appended bytes on an incremental recount.
+	// Scanned is the transcript bytes this call scanned for turns — zero on
+	// a cache hit, only the appended bytes on an incremental recount. The
+	// few bytes read to check a Mark are not scanned and do not count.
 	Scanned int64
 	// Unreadable is how many transcripts or project dirs could not be read.
-	// They are skipped rather than failing the count.
+	// They are skipped rather than failing the count, and the cache keeps the
+	// number, so a reused count is as partial as the one it was saved from.
 	Unreadable int
 }
 
@@ -140,8 +152,11 @@ func recount(projectsDir string, prev map[string]fileEntry, now time.Time) (map[
 }
 
 // update brings one entry up to date with the file's current stat. A file the
-// cache has not seen is read from 0; an unchanged one is not opened; a grown
-// one is read from Offset; a shrunk one was rewritten and is recounted from 0.
+// cache has not seen is read from 0; an unchanged one is not opened; a shrunk
+// one was rewritten and is recounted from 0. Any other change is read from
+// Offset only when the bytes before it still match Mark — a file rewritten in
+// place to the same or a larger size fails that check and is recounted from 0
+// too, rather than resumed at an offset that no longer means anything.
 func update(path string, e fileEntry, had bool, info os.FileInfo, start string) (fileEntry, int64, error) {
 	size, mtime := info.Size(), info.ModTime().UnixNano()
 	switch {
@@ -150,20 +165,49 @@ func update(path string, e fileEntry, had bool, info os.FileInfo, start string) 
 	case size == e.Size && mtime == e.ModTime:
 		return prune(e, start), 0, nil
 	}
+	f, err := os.Open(path)
+	if err != nil {
+		return e, 0, err
+	}
+	defer f.Close()
+	if e.Offset > 0 {
+		m, err := mark(f, e.Offset)
+		if err != nil {
+			return e, 0, err
+		}
+		if m != e.Mark {
+			e = fileEntry{}
+		}
+	}
 	e.Size, e.ModTime = size, mtime
-	n, err := scan(path, &e, start)
+	n, err := scan(f, &e, start)
+	if err == nil {
+		e.Mark, err = mark(f, e.Offset)
+	}
 	return prune(e, start), n, err
 }
 
-// scan reads path from e.Offset up to e.Size, adding each new turn to e. It
+// mark fingerprints the first off bytes of f by hashing their first and last
+// markLen bytes; 64 bits of the hash are plenty to tell a rewrite from an
+// append. Appending to f never changes it; rewriting what was already read
+// almost always does, unless the rewrite leaves both ends byte-identical. It
+// reads with ReadAt, so f's own offset is left where it was.
+func mark(f *os.File, off int64) (uint64, error) {
+	h := sha256.New()
+	head := min(off, markLen)
+	tail := max(head, off-markLen)
+	for _, span := range [][2]int64{{0, head}, {tail, off}} {
+		if _, err := io.Copy(h, io.NewSectionReader(f, span[0], span[1]-span[0])); err != nil {
+			return 0, err
+		}
+	}
+	return binary.BigEndian.Uint64(h.Sum(nil)), nil
+}
+
+// scan reads f from e.Offset up to e.Size, adding each new turn to e. It
 // reads through a bufio.Reader rather than a Scanner: a tool result is one
 // line and can run to megabytes, past any Scanner's token cap.
-func scan(path string, e *fileEntry, start string) (int64, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
+func scan(f *os.File, e *fileEntry, start string) (int64, error) {
 	if _, err := f.Seek(e.Offset, io.SeekStart); err != nil {
 		return 0, err
 	}

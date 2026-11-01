@@ -256,3 +256,97 @@ func TestTurnsPastTailCap(t *testing.T) {
 		t.Errorf("Repo=%d, want %d distinct turns past the tail cap", c.Repo, tailIDs+1)
 	}
 }
+
+// TestUpdateRecountsInPlaceRewrite: a transcript rewritten in place to the
+// same or a larger size has a stat that only says "changed", like an append.
+// Resuming at the old offset would keep the old turns and count whatever
+// lies past it; the Mark check recounts the new content from byte 0 instead.
+func TestUpdateRecountsInPlaceRewrite(t *testing.T) {
+	start := windowStart(time.Now())
+	at := time.Now().Add(-time.Hour)
+	// counted reads path from scratch, as a first status run would.
+	counted := func(t *testing.T, path string) fileEntry {
+		t.Helper()
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		e, _, err := update(path, fileEntry{}, false, info, start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e
+	}
+	// rerun brings e up to date after the file changed, with an mtime the
+	// first stat cannot have had.
+	rerun := func(t *testing.T, path string, e fileEntry) (fileEntry, int64) {
+		t.Helper()
+		later := time.Now().Add(time.Minute)
+		if err := os.Chtimes(path, later, later); err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		e, n, err := update(path, e, true, info, start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e, n
+	}
+	total := func(e fileEntry) int {
+		n := 0
+		for _, c := range e.Days {
+			n += c
+		}
+		return n
+	}
+	oldA, oldB := turn(t, "msg_a", at), turn(t, "msg_b", at)
+	// pad is a line of len(oldB) bytes that holds no turn.
+	pad := strings.Repeat(" ", len(oldB)-1) + "\n"
+
+	t.Run("control: an append resumes", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "s.jsonl")
+		writeTranscript(t, path, oldA, oldB)
+		e := counted(t, path)
+		appended := turn(t, "msg_c", at)
+		appendTranscript(t, path, appended)
+		e, n := rerun(t, path, e)
+		if total(e) != 3 || n != int64(len(appended)) {
+			t.Fatalf("append: %d turns, %d bytes read; want 3 and only the %d appended", total(e), n, len(appended))
+		}
+	})
+	for _, tc := range []struct {
+		name  string
+		lines []string
+		want  int
+	}{
+		// Same size: a resume reads nothing and keeps msg_a and msg_b.
+		{"same size", []string{turn(t, "msg_x", at), pad}, 1},
+		// Larger: a resume lands at the end of pad and adds msg_y to the
+		// two stale turns, three in all.
+		{"larger", []string{turn(t, "msg_x", at), pad, turn(t, "msg_y", at)}, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "s.jsonl")
+			writeTranscript(t, path, oldA, oldB)
+			e := counted(t, path)
+			if total(e) != 2 {
+				t.Fatalf("first count = %d, want 2", total(e))
+			}
+			writeTranscript(t, path, tc.lines...)
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			e, n := rerun(t, path, e)
+			if total(e) != tc.want {
+				t.Errorf("after an in-place rewrite: %d turns, want the new content's %d", total(e), tc.want)
+			}
+			if n != info.Size() {
+				t.Errorf("the rewrite was read from byte %d, want a recount of all %d bytes", info.Size()-n, info.Size())
+			}
+		})
+	}
+}

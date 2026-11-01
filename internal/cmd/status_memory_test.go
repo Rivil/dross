@@ -256,15 +256,6 @@ func TestStatusMemoryErrorIsSilent(t *testing.T) {
 		}
 	}
 
-	t.Run("turn cache cannot be written", func(t *testing.T) {
-		dir := debugNudgeFixture(t)
-		fiveItemMemory(t, dir)
-		// A regular file where the advisor's state dir goes: the turn count
-		// cannot be cached, and Gather returns the error.
-		mustWrite(t, filepath.Join(dir, filepath.FromSlash(memadvise.StateDir)), "not a directory\n")
-		check(t)
-	})
-
 	if os.Geteuid() == 0 {
 		t.Skip("root reads chmod-000 files and dirs")
 	}
@@ -290,6 +281,31 @@ func TestStatusMemoryErrorIsSilent(t *testing.T) {
 		t.Cleanup(func() { os.Chmod(mem, 0o755) })
 		check(t)
 	})
+}
+
+// TestStatusMemoryOnCacheWriteError: a turn cache that cannot be written — a
+// read-only checkout — costs only the cache. The counts are sound, so status
+// still prints its memory section, stays quiet about the failed write (advise
+// reports it) and exits 0 with its footer last.
+func TestStatusMemoryOnCacheWriteError(t *testing.T) {
+	dir := debugNudgeFixture(t)
+	fiveItemMemory(t, dir)
+	// A regular file where the advisor's state dir goes.
+	mustWrite(t, filepath.Join(dir, filepath.FromSlash(memadvise.StateDir)), "not a directory\n")
+	out, err := runStatusErr(t)
+	if err != nil {
+		t.Fatalf("status exited with %v", err)
+	}
+	block := memorySection(out)
+	if len(block) < 2 || !strings.HasPrefix(block[1], "  delete-b  ") {
+		t.Errorf("status on an unwritable turn cache lost its memory section:\n%s", out)
+	}
+	if strings.Contains(out, "could not be cached") {
+		t.Errorf("status reported the cache write; only advise does:\n%s", out)
+	}
+	if !strings.HasPrefix(lastLine(out), "you are here: ") {
+		t.Errorf("status lost its footer: %q", lastLine(out))
+	}
 }
 
 func TestStatusFooterStillLast(t *testing.T) {

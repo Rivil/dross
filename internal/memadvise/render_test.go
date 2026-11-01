@@ -3,6 +3,7 @@ package memadvise
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -258,5 +259,54 @@ func TestRenderNeverPrintsBodies(t *testing.T) {
 	}
 	if out := Render(r, 0); strings.Contains(out, sentinel) {
 		t.Errorf("rendered output carries a memory body:\n%s", out)
+	}
+}
+
+// TestGatherKeepsCountsOnCacheWriteError: a checkout whose .dross cannot hold
+// the turn cache still gets its memory section. The counts Turns returned
+// beside the write error stay in the Report, and the error rides along in
+// CacheErr for advise to report.
+func TestGatherKeepsCountsOnCacheWriteError(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		block func(t *testing.T, root string)
+	}{
+		{"read-only .dross", func(t *testing.T, root string) {
+			if os.Geteuid() == 0 {
+				t.Skip("root writes into a mode-0555 dir")
+			}
+			drossDir := filepath.Join(root, ".dross")
+			if err := os.Mkdir(drossDir, 0o555); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(drossDir, 0o755) })
+		}},
+		{"state path is a file", func(t *testing.T, root string) {
+			writeRepoFile(t, root, StateDir, "not a dir\n")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, mem := gatherRepo(t, map[string]string{
+				IndexName: "- [Old](old.md) — y; until 2026-01-01\n",
+				"old.md":  "old body\n",
+			})
+			at := adviseToday.Add(-time.Hour)
+			writeTranscript(t, filepath.Join(filepath.Dir(mem), "s.jsonl"), turn(t, "msg_a", at), turn(t, "msg_b", at))
+			tc.block(t, root)
+			r, err := Gather(root, adviseToday)
+			if err != nil {
+				t.Fatalf("Gather failed on an unwritable turn cache: %v", err)
+			}
+			if !r.Found || len(r.Suggestions) == 0 || r.Turns.Repo != 2 {
+				t.Errorf("Gather dropped the report: Found=%v suggestions=%d Repo=%d, want true, ≥1 and 2",
+					r.Found, len(r.Suggestions), r.Turns.Repo)
+			}
+			if !errors.Is(r.CacheErr, ErrCacheWrite) {
+				t.Errorf("Report.CacheErr = %v, want the ErrCacheWrite advise reports", r.CacheErr)
+			}
+			if Render(r, 3) == "" {
+				t.Error("the report renders nothing; status would print no memory section")
+			}
+		})
 	}
 }

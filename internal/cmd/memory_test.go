@@ -196,6 +196,27 @@ func TestAdviseSurfacesCountError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), projects) {
 		t.Errorf("advise over an unreadable transcripts dir = %v, want an error naming %s", err, projects)
 	}
+	// The second run reuses the cache the first one saved; a cache hit must
+	// not pass the partial count off as complete.
+	_, err = memoryRun(t, "advise")
+	if err == nil || !strings.Contains(err.Error(), projects) {
+		t.Errorf("advise on a cached partial count = %v, want the same error naming %s", err, projects)
+	}
+}
+
+// TestAdviseReportsCacheWriteError: a turn cache that cannot be written still
+// prints the advice, and advise names the failure instead of exiting 0.
+func TestAdviseReportsCacheWriteError(t *testing.T) {
+	dir := debugNudgeFixture(t)
+	fiveItemMemory(t, dir)
+	mustWrite(t, filepath.Join(dir, filepath.FromSlash(memadvise.StateDir)), "not a dir\n")
+	out, err := memoryRun(t, "advise")
+	if !strings.Contains(out, "  delete-"+memoryFixtureTokens[0].stem+"  ") {
+		t.Errorf("advise printed no suggestions on an unwritable cache:\n%s", out)
+	}
+	if err == nil || !strings.Contains(err.Error(), "could not be cached") || !strings.Contains(err.Error(), memadvise.StateDir) {
+		t.Errorf("advise on an unwritable cache = %v, want an error naming the cache write and %s", err, memadvise.StateDir)
+	}
 }
 
 // TestMemoryCommandRegistered: Memory() must be on the real root, or `dross

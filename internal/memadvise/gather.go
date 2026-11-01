@@ -1,6 +1,7 @@
 package memadvise
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +18,10 @@ type Report struct {
 	Suggestions []Suggestion
 	Integrity   Integrity
 	Turns       TurnCounts
+	// CacheErr is why the turn counts could not be cached, nil when they
+	// were. The counts are still sound, so the report keeps them; status
+	// stays quiet about it and advise reports it.
+	CacheErr error
 }
 
 // Gather resolves everything the advisor reads for the repo at root — the
@@ -25,7 +30,9 @@ type Report struct {
 // one file it may write is the turn cache under <root>/.dross/memory/ (c-3).
 //
 // A repo with no memory dir is a zero Report and a nil error. A root that is
-// not a git checkout has no tracked docs, which only means no duplicates.
+// not a git checkout has no tracked docs, which only means no duplicates. A
+// turn cache that cannot be written — a read-only checkout — is not an error:
+// the Report carries it in CacheErr beside the counts it failed to save.
 func Gather(root string, now time.Time) (Report, error) {
 	dir, ok, err := Locate(root)
 	if err != nil || !ok {
@@ -35,9 +42,9 @@ func Gather(root string, now time.Time) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
-	turns, err := Turns(root, now)
-	if err != nil {
-		return Report{}, err
+	turns, cacheErr := Turns(root, now)
+	if cacheErr != nil && !errors.Is(cacheErr, ErrCacheWrite) {
+		return Report{}, cacheErr
 	}
 	sugg, err := Advise(Inputs{
 		Dir:   dir,
@@ -49,7 +56,7 @@ func Gather(root string, now time.Time) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
-	return Report{Found: true, Dir: dir, Suggestions: sugg, Integrity: c.Integrity(), Turns: turns}, nil
+	return Report{Found: true, Dir: dir, Suggestions: sugg, Integrity: c.Integrity(), Turns: turns, CacheErr: cacheErr}, nil
 }
 
 // trackedDocs shingles the doc candidates git tracks. An untracked doc is

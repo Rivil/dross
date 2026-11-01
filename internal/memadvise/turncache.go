@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -18,7 +19,12 @@ const CacheTTL = 24 * time.Hour
 
 // turnCacheVersion is bumped whenever turnCache changes shape; a cache from
 // another version is recounted rather than misread.
-const turnCacheVersion = 1
+const turnCacheVersion = 2
+
+// ErrCacheWrite marks a Turns error that came from saving the cache. The
+// counts returned beside it are sound — only the next run's reuse of them is
+// lost — so a caller can keep them and still report the failure.
+var ErrCacheWrite = errors.New("turn cache not saved")
 
 // stateIgnore is what .dross/memory/.gitignore holds. A repo onboarded before
 // the root .gitignore seed covered .dross/memory/ would otherwise stage the
@@ -30,6 +36,9 @@ type turnCache struct {
 	Version   int                  `json:"version"`
 	CountedAt time.Time            `json:"counted_at"`
 	Files     map[string]fileEntry `json:"files"`
+	// Unreadable is the count's TurnCounts.Unreadable. Files holds only what
+	// could be read, so without it a reused count would pass for complete.
+	Unreadable int `json:"unreadable,omitempty"`
 }
 
 // Turns returns the assistant-turn counts for the repo whose top level is
@@ -39,7 +48,7 @@ type turnCache struct {
 //
 // The cache lives at <root>/.dross/memory/turns.json, never under the Claude
 // memory dir (c-3). A failed cache write still returns the fresh counts, with
-// the error beside them.
+// an ErrCacheWrite error beside them; any other error comes with no counts.
 func Turns(root string, now time.Time) (TurnCounts, error) {
 	claude, err := ClaudeDir()
 	if err != nil {
@@ -49,7 +58,7 @@ func Turns(root string, now time.Time) (TurnCounts, error) {
 	cache, ok := loadCache(filepath.Join(root, filepath.FromSlash(TurnCachePath)), now)
 	if ok && now.Sub(cache.CountedAt) < CacheTTL {
 		repo, all := tally(cache.Files, slug, now)
-		return TurnCounts{Repo: repo, All: all, Age: now.Sub(cache.CountedAt)}, nil
+		return TurnCounts{Repo: repo, All: all, Age: now.Sub(cache.CountedAt), Unreadable: cache.Unreadable}, nil
 	}
 	var prev map[string]fileEntry
 	if ok {
@@ -58,7 +67,10 @@ func Turns(root string, now time.Time) (TurnCounts, error) {
 	files, scanned, unreadable := recount(filepath.Join(claude, "projects"), prev, now)
 	repo, all := tally(files, slug, now)
 	counts := TurnCounts{Repo: repo, All: all, Scanned: scanned, Unreadable: unreadable}
-	return counts, saveCache(root, turnCache{Version: turnCacheVersion, CountedAt: now, Files: files})
+	if err := saveCache(root, turnCache{Version: turnCacheVersion, CountedAt: now, Files: files, Unreadable: unreadable}); err != nil {
+		return counts, fmt.Errorf("%w: %w", ErrCacheWrite, err)
+	}
+	return counts, nil
 }
 
 // loadCache reads the cache at path. ok is false for anything not to be
@@ -75,7 +87,7 @@ func loadCache(path string, now time.Time) (turnCache, bool) {
 	if err := json.Unmarshal(b, &c); err != nil {
 		return turnCache{}, false
 	}
-	if c.Version != turnCacheVersion || c.CountedAt.IsZero() || c.CountedAt.After(now) {
+	if c.Version != turnCacheVersion || c.CountedAt.IsZero() || c.CountedAt.After(now) || c.Unreadable < 0 {
 		return turnCache{}, false
 	}
 	for _, e := range c.Files {
@@ -97,18 +109,9 @@ func loadCache(path string, now time.Time) (turnCache, bool) {
 // saveCache writes c to <root>/.dross/memory/turns.json atomically, after
 // making sure the dir ignores itself.
 func saveCache(root string, c turnCache) error {
-	dir := filepath.Join(root, filepath.FromSlash(StateDir))
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("create %s: %w", StateDir, err)
-	}
-	// MkdirAll is satisfied by a symlink to a dir; a linked state dir could
-	// land the cache anywhere — the memory dir included — so it is refused.
-	info, err := os.Lstat(dir)
+	dir, err := ensureStateDir(root)
 	if err != nil {
-		return fmt.Errorf("stat %s: %w", StateDir, err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("%s is not a directory; refusing to write advisor state through it", StateDir)
+		return err
 	}
 	if err := ensureStateIgnored(dir); err != nil {
 		return err
@@ -118,6 +121,31 @@ func saveCache(root string, c turnCache) error {
 		return fmt.Errorf("encode %s: %w", TurnCachePath, err)
 	}
 	return writeAtomic(filepath.Join(root, filepath.FromSlash(TurnCachePath)), data)
+}
+
+// ensureStateDir creates <root>/.dross/memory one component at a time and
+// returns it. Every component below root must be a real directory: MkdirAll
+// and a final-component Lstat are both satisfied by a symlinked .dross, and a
+// link at either level could land the cache anywhere — the memory dir
+// included — so a symlink or a non-dir at any level is refused.
+func ensureStateDir(root string) (string, error) {
+	dir, rel := root, ""
+	for _, part := range strings.Split(StateDir, "/") {
+		dir, rel = filepath.Join(dir, part), strings.TrimPrefix(rel+"/"+part, "/")
+		// Mkdir never follows a symlink: one already there is EEXIST, and the
+		// Lstat below refuses it.
+		if err := os.Mkdir(dir, 0o755); err != nil && !errors.Is(err, fs.ErrExist) {
+			return "", fmt.Errorf("create %s: %w", rel, err)
+		}
+		info, err := os.Lstat(dir)
+		if err != nil {
+			return "", fmt.Errorf("stat %s: %w", rel, err)
+		}
+		if !info.IsDir() {
+			return "", fmt.Errorf("%s is not a directory; refusing to write advisor state through it", rel)
+		}
+	}
+	return dir, nil
 }
 
 // ensureStateIgnored writes dir/.gitignore unless it already holds exactly

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -46,14 +47,24 @@ func memoryAdvise() *cobra.Command {
 				return fmt.Errorf("memory advise: %w", err)
 			}
 			Printf("%s", memadvise.Render(r, 0))
-			// Status stays quiet about a partial count; advise is where the
-			// user asked, so a figure resting on skipped transcripts says so.
-			if n := r.Turns.Unreadable; r.Found && n > 0 {
+			// Status stays quiet about a partial count and an unsaved cache;
+			// advise is where the user asked, so it names both.
+			if !r.Found {
+				return nil
+			}
+			var problems []string
+			if n := r.Turns.Unreadable; n > 0 {
 				projects := "<claude>/projects"
 				if claude, err := memadvise.ClaudeDir(); err == nil {
 					projects = filepath.Join(claude, "projects")
 				}
-				return fmt.Errorf("memory advise: %d transcript dir(s) or file(s) under %s could not be read; the turn counts above leave them out", n, projects)
+				problems = append(problems, fmt.Sprintf("%d transcript dir(s) or file(s) under %s could not be read; the turn counts above leave them out", n, projects))
+			}
+			if r.CacheErr != nil {
+				problems = append(problems, fmt.Sprintf("the turn counts above could not be cached, so every run recounts them: %v", r.CacheErr))
+			}
+			if len(problems) > 0 {
+				return fmt.Errorf("memory advise: %s", strings.Join(problems, "; "))
 			}
 			return nil
 		},
