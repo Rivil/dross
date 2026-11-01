@@ -62,3 +62,9 @@
   choice = "`dross status` prints a memory: section with the top 3 suggestions by $/month plus a '+N more — dross memory advise' line; integrity issues count toward the list."
   why = "status.md prints dross status verbatim, so this adds no call (c-6), while still listing suggestions as the milestone criterion asks."
   locked = true
+
+[[deferred]]
+  id = "c98784d0acad966c"
+  text = "snapshot.go Snapshot follows a symlinked .dross parent (same hole t-15 closes in saveCache)"
+  why = "t-15 writer found it; adopt ensureStateDir from turncache.go once t-15 lands"
+  target = "memory-prune-advisor"
