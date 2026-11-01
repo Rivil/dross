@@ -269,7 +269,7 @@ recorded. Add checkMemoryPruneAdvisorFlow + the required-list entry. Add README 
   description = "Verify FLAG + deferred c98784d0acad966c. Snapshot creates .dross/memory via MkdirAll and Lstats only the final component, so a symlinked .dross (or .dross/memory/snapshots) lets apply's snapshot land wherever it points, including the memory dir. Adopt turncache.go's ensureStateDir for .dross/memory, then create snapshots/ with Mkdir + Lstat (never MkdirAll) so no component is followed."
   covers = ["c-3", "c-9"]
   test_contract = ["if Snapshot follows a symlinked .dross, a parent-symlink Snapshot test that asserts refusal and an unchanged link target fails", "if Snapshot follows a symlinked .dross/memory/snapshots, a snapshots-symlink test fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-18"
@@ -279,14 +279,14 @@ recorded. Add checkMemoryPruneAdvisorFlow + the required-list entry. Add README 
   description = "Verify FLAG from t-16 review. rewriteIndex deleting the last line of an index with no trailing newline ('a\\nb') yields 'a\\n', contradicting its comment. When the deleted segment is the last and has no newline, drop the preceding line's ending (LF or CRLF) instead, so the result is 'a'; a sole line deletes to empty."
   covers = ["c-9"]
   test_contract = ["if deleting the last line of 'a\\nb' leaves a trailing newline, a no-trailing-newline delete test (LF and CRLF) fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-19"
   wave = 1
   title = "Make dead-link suggestion ids content-addressed"
-  files = ["internal/memadvise/advise.go", "internal/memadvise/advise_test.go"]
+  files = ["internal/memadvise/advise.go", "internal/memadvise/advise_test.go", "internal/cmd/status_memory_test.go", "internal/cmd/memory_test.go", "internal/memadvise/apply_test.go"]
   description = "Verify FLAG from t-13 review. Dead-link ids take -N suffixes in index line order, so a reorder can make an id from an earlier advise name a different line, and a later live x.md can take a dead link's plain id. Give every dead-link suggestion an id suffixed with a short hash of its raw index line (delete-<stem>-<hex>), falling back to -N only among byte-identical lines (whose deletes are indistinguishable), and fix id()'s doc comment to match."
   covers = ["c-9"]
-  test_contract = ["if a dead-link id depends on index line order, a reorder test asserting each id names the same raw line before and after fails", "if a dead-link id can equal a memory suggestion's id, TestSuggestionIDsUnique fails"]
-  status = "pending"
+  test_contract = ["if a dead-link id depends on index line order, a reorder test asserting each id names the same raw line before and after fails", "if a dead-link id can equal a memory suggestion's id, TestSuggestionIDsUnique fails", "if an uncontested dead link keeps a plain delete-<stem> id a later live memory can take, a dead-link id format test fails"]
+  status = "done"

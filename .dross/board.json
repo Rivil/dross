@@ -1676,6 +1676,21 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "memory-prune-advisor/t-17": {
+      "issue": "DRO-1048",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-18": {
+      "issue": "DRO-1049",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-19": {
+      "issue": "DRO-1050",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "memory-prune-advisor/t-2": {
       "issue": "DRO-1032",
       "plan_status": "done",

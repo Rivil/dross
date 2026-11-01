@@ -158,6 +158,57 @@
         }
       ]
     },
+    "t-17": {
+      "files": [
+        "internal/memadvise/snapshot.go",
+        "internal/memadvise/apply_test.go"
+      ],
+      "commit": "ff9cd13f",
+      "completed_at": "2026-11-01T13:00:32.68524Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Snapshot",
+          "loc": "internal/memadvise/snapshot.go:23",
+          "what": "snapshot path built component-by-component via ensureStateDir + Mkdir/Lstat; any symlinked .dross/memory/snapshots component is refused"
+        }
+      ]
+    },
+    "t-18": {
+      "files": [
+        "internal/memadvise/apply.go",
+        "internal/memadvise/apply_test.go"
+      ],
+      "commit": "65350a68",
+      "completed_at": "2026-11-01T13:13:58.021203Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "rewriteIndex",
+          "loc": "internal/memadvise/apply.go:152",
+          "what": "deleting a last index line with no newline drops the preceding LF/CRLF so the index still ends without one"
+        }
+      ]
+    },
+    "t-19": {
+      "files": [
+        "internal/memadvise/advise.go",
+        "internal/memadvise/advise_test.go",
+        "internal/memadvise/apply_test.go",
+        "internal/cmd/status_memory_test.go",
+        "internal/cmd/memory_test.go"
+      ],
+      "commit": "ad23fe1b",
+      "completed_at": "2026-11-01T14:00:11.429478Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "DeadLinkID",
+          "loc": "internal/memadvise/advise.go:213",
+          "what": "dead-link ids are delete-\u003cstem\u003e-\u003c6hex sha256 of the line\u003e, so reordering never re-points an id and a dead link never holds a memory's plain id"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/memadvise/index.go",
@@ -498,6 +549,88 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The Chmod added in replaceIndex is what lets the new dirHash comparison pass: CreateTemp's 0600 would otherwise change MEMORY.md's mode.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-17": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Snapshot now reuses turncache.go's ensureStateDir for .dross/memory, so the turn cache and snapshots refuse symlinks the same way and the old MkdirAll+final-Lstat path is gone",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the table test also covers a symlinked .dross/memory (beyond the two contract lines) and points the snapshots link at the memory dir itself, so the c-3 'memory dir unchanged' property is exercised directly",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-18": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "If the line before the deleted last line is blank (e.g. 'a\\n\\nb'), trimming its ending gives 'a\\n'. That is consistent: the now-empty last line has no newline. But the result still looks like it ends in a newline, and no test covers this case.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The table test now covers delete under LF, CRLF, a sole line and a final newline, which fills the gap TestApplyKeepsEachLineEnding left for indexes with no trailing newline.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-19": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "spec",
+          "severity": "BLOCKING",
+          "criterion": "c-9",
+          "text": "Description requires every dead-link suggestion to get an id suffixed with a short hash of its raw index line (delete-\u003cstem\u003e-\u003chex\u003e), with -N only among byte-identical lines; the code hashes only contested dead links and an uncontested one keeps the plain delete-\u003cstem\u003e (the new test asserts delete-lone). The named hazard is still there: a later live x.md (or a newly created gone.md) takes the dead link's earlier plain id, so a stale 'dross memory apply delete-x' now targets the live memory.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestDeadLinkIDsSurviveReorder is a real reorder check: it reverses the index and compares ids per raw line, including byte-identical duplicates, and would fail on any position-dependent numbering.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "id()'s doc comment matches the contested-only behaviour the code has, not the every-dead-link behaviour the task describes; it will need updating along with the fix.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "No test covers the case where two different lines' 6-hex hashes collide. If that happens, the line whose text sorts first keeps the plain id, so adding a later colliding line that sorts earlier would move an id to a different line. The chance is about 2^-24 per pair, so this is acceptable as documented in advise.go.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A dead link can only fall back to -2 against a memory if that memory's stem itself ends in the same six hex digits. The DeadLinkID comment says so, and the fallback keeps the two apart.",
           "resolution": "non-blocking, left"
         }
       ]

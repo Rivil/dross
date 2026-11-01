@@ -14,6 +14,7 @@
 [[criteria]]
   id = "c-3"
   text = "`dross status` and `dross memory advise` never write to the memory dir (its contents hash the same before and after). Only a confirmed `dross memory apply` writes there."
+  deferred = ["c98784d0acad966c"]
 
 [[criteria]]
   id = "c-4"
