@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -20,23 +21,28 @@ import (
 // someone's memories. Symlinks and anything that is not a regular file are
 // not copied — Apply never touches them either.
 func Snapshot(root, memDir string, now time.Time) (string, error) {
-	state := filepath.Join(root, filepath.FromSlash(StateDir))
-	if err := os.MkdirAll(state, 0o755); err != nil {
-		return "", fmt.Errorf("create %s: %w", StateDir, err)
-	}
-	info, err := os.Lstat(state)
+	// Every component is created and checked on its own: a symlinked .dross,
+	// .dross/memory or snapshots/ — even one pointing into the memory dir —
+	// is refused, never written through.
+	state, err := ensureStateDir(root)
 	if err != nil {
-		return "", fmt.Errorf("stat %s: %w", StateDir, err)
-	}
-	if !info.IsDir() {
-		return "", fmt.Errorf("%s is not a directory; refusing to snapshot through it", StateDir)
+		return "", err
 	}
 	if err := ensureStateIgnored(state); err != nil {
 		return "", err
 	}
 	snaps := filepath.Join(root, filepath.FromSlash(SnapshotsDir))
-	if err := os.MkdirAll(snaps, 0o755); err != nil {
+	// Mkdir never follows a symlink: one already there is EEXIST, and the
+	// Lstat below refuses it.
+	if err := os.Mkdir(snaps, 0o755); err != nil && !errors.Is(err, fs.ErrExist) {
 		return "", fmt.Errorf("create %s: %w", SnapshotsDir, err)
+	}
+	info, err := os.Lstat(snaps)
+	if err != nil {
+		return "", fmt.Errorf("stat %s: %w", SnapshotsDir, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s is not a directory; refusing to snapshot through it", SnapshotsDir)
 	}
 	dest := filepath.Join(snaps, now.UTC().Format("20060102T150405.000000000Z"))
 	// Mkdir, not MkdirAll: an existing dir means another apply in the same

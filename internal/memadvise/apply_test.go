@@ -298,3 +298,45 @@ func TestSnapshotSelfIgnores(t *testing.T) {
 		}
 	}
 }
+
+// A symlink at any component of the snapshot path — .dross, .dross/memory or
+// snapshots/ — is refused before anything is copied, so a link aimed at the
+// memory dir (or anywhere else) never receives a snapshot.
+func TestSnapshotRefusesLinkedStatePath(t *testing.T) {
+	for name, link := range map[string]string{
+		"dross":     ".dross",
+		"state":     ".dross/memory",
+		"snapshots": ".dross/memory/snapshots",
+	} {
+		t.Run(name, func(t *testing.T) {
+			mem := threeMemories(t)
+			out := t.TempDir()
+			root := t.TempDir()
+			at := filepath.Join(root, filepath.FromSlash(link))
+			if err := os.MkdirAll(filepath.Dir(at), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			// The deepest link aims at the memory dir itself; the parent
+			// links aim at a bystander dir.
+			target := out
+			if name == "snapshots" {
+				target = mem
+			}
+			if err := os.Symlink(target, at); err != nil {
+				t.Fatal(err)
+			}
+			memBefore, outBefore := memFingerprint(t, mem), memFingerprint(t, out)
+
+			_, err := Snapshot(root, mem, adviseToday)
+			if err == nil || !strings.Contains(err.Error(), "is not a directory") {
+				t.Fatalf("Snapshot through a linked %s: err = %v, want a not-a-directory refusal", link, err)
+			}
+			if after := memFingerprint(t, mem); after != memBefore {
+				t.Errorf("a linked %s let the snapshot into the memory dir:\nbefore %q\nafter  %q", link, memBefore, after)
+			}
+			if after := memFingerprint(t, out); after != outBefore {
+				t.Errorf("a linked %s let the snapshot write through it:\nbefore %q\nafter  %q", link, outBefore, after)
+			}
+		})
+	}
+}
