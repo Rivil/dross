@@ -114,6 +114,29 @@ func TestApplyKeepsEachLineEnding(t *testing.T) {
 	}
 }
 
+// Deleting the last line of an index that ends without a newline leaves it
+// ending without one: the line's preceding ending (LF or CRLF) goes with it.
+func TestApplyDeleteKeepsMissingTrailingNewline(t *testing.T) {
+	a, dup := "- [A](a.md) — a", "- [Dup](dup.md) — c"
+	for name, tc := range map[string]struct{ index, want string }{
+		"lf":           {a + "\n" + dup, a},
+		"crlf":         {a + "\r\n" + dup, a},
+		"sole line":    {dup, ""},
+		"with newline": {a + "\n" + dup + "\n", a + "\n"},
+		"crlf newline": {a + "\r\n" + dup + "\r\n", a + "\r\n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			mem := memFixture(t, map[string]string{IndexName: tc.index, "a.md": "a\n", "dup.md": readme})
+			if _, err := Apply(t.TempDir(), mem, suggestion(t, mem, "delete-dup", nil), adviseToday); err != nil {
+				t.Fatal(err)
+			}
+			if got := readFile(t, filepath.Join(mem, IndexName)); got != tc.want {
+				t.Errorf("delete-dup on %q: MEMORY.md = %q, want %q", tc.index, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestApplySnapshotsLargeFiles(t *testing.T) {
 	mem := threeMemories(t)
 	big := strings.Repeat("x", maxFileBytes+1)

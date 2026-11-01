@@ -162,6 +162,12 @@ func rewriteIndex(index []byte, line IndexLine, s Suggestion) ([]byte, error) {
 	switch s.Action {
 	case ActionDelete:
 		segs[line.LineNo] = ""
+		// A last line with no newline of its own takes the ending before it
+		// along, so an index that ended without a newline still does.
+		if !strings.HasSuffix(seg, "\n") && line.LineNo > 0 {
+			prev := segs[line.LineNo-1]
+			segs[line.LineNo-1] = strings.TrimSuffix(strings.TrimSuffix(prev, "\n"), "\r")
+		}
 	case ActionReword:
 		if strings.TrimSpace(s.NewHook) == "" {
 			return nil, fmt.Errorf("%s: refusing to reword a hook to nothing", s.ID)
