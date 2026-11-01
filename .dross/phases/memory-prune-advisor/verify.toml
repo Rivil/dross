@@ -1,22 +1,22 @@
 [verify]
   phase = "memory-prune-advisor"
-  generated_at = 2026-11-01T12:39:30.823927Z
-  verdict = "partial"
+  generated_at = 2026-11-01T20:41:26.915836Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-11-01T12:40:38.755079Z
-  measured_commit = "093ad9182a0f18e440d634e806d0b93eee9681c4"
-  measured_tree = "38bdb116762bd748c55d4618098c7f03ffeada4e"
+  finalized_at = 2026-11-01T20:42:46.675019Z
+  measured_commit = "15d6f8a7ad901282c5a2d3656ecb76675b3122d1"
+  measured_tree = "4728ac34a12e20d62270c75e5a8b32a7b44595e2"
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9190140845070423
-  mutants_killed = 522
+  mutation_score = 0.9204152249134948
+  mutants_killed = 532
   mutants_survived = 46
   mutants_not_covered = 46
   mutants_no_block = 42
   mutants_test_gap = 4
-  mutants_in_scope = 568
+  mutants_in_scope = 578
   unclassified_in_scope = 0
   criteria_total = 9
   criteria_covered = 9
@@ -25,11 +25,11 @@
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 522
+    killed = 532
     survived = 46
     timeout = 0
-    in_scope = 568
-    score = 0.9190140845070423
+    in_scope = 578
+    score = 0.9204152249134948
     file_count = 36
     measured_on = "helicon"
     whole_file = ["cmd/dross/main.go — adapter-lacks-range-runner", "internal/cmd/flowcost_record_test.go — adapter-lacks-range-runner", "internal/cmd/gitignore.go — adapter-lacks-range-runner", "internal/cmd/gitignore_test.go — adapter-lacks-range-runner", "internal/cmd/interaction_coreloop_test.go — adapter-lacks-range-runner", "internal/cmd/memory.go — adapter-lacks-range-runner", "internal/cmd/memory_test.go — adapter-lacks-range-runner", "internal/cmd/status.go — adapter-lacks-range-runner", "internal/cmd/status_memory_test.go — adapter-lacks-range-runner", "internal/cmd/status_prompt_test.go — adapter-lacks-range-runner", "internal/memadvise/advise.go — adapter-lacks-range-runner", "internal/memadvise/advise_test.go — adapter-lacks-range-runner", "internal/memadvise/apply.go — adapter-lacks-range-runner", "internal/memadvise/apply_test.go — adapter-lacks-range-runner", "internal/memadvise/cost.go — adapter-lacks-range-runner", "internal/memadvise/cost_test.go — adapter-lacks-range-runner", "internal/memadvise/dup.go — adapter-lacks-range-runner", "internal/memadvise/dup_test.go — adapter-lacks-range-runner", "internal/memadvise/gather.go — adapter-lacks-range-runner", "internal/memadvise/guard.go — adapter-lacks-range-runner", "internal/memadvise/guard_test.go — adapter-lacks-range-runner", "internal/memadvise/hook.go — adapter-lacks-range-runner", "internal/memadvise/hook_test.go — adapter-lacks-range-runner", "internal/memadvise/index.go — adapter-lacks-range-runner", "internal/memadvise/index_test.go — adapter-lacks-range-runner", "internal/memadvise/locate.go — adapter-lacks-range-runner", "internal/memadvise/locate_test.go — adapter-lacks-range-runner", "internal/memadvise/paths.go — adapter-lacks-range-runner", "internal/memadvise/render.go — adapter-lacks-range-runner", "internal/memadvise/render_test.go — adapter-lacks-range-runner", "internal/memadvise/snapshot.go — adapter-lacks-range-runner", "internal/memadvise/turncache.go — adapter-lacks-range-runner", "internal/memadvise/turncache_test.go — adapter-lacks-range-runner", "internal/memadvise/turns.go — adapter-lacks-range-runner", "internal/memadvise/turns_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner"]
@@ -38,19 +38,19 @@
   id = "c-1"
   status = "covered"
   tests = ["internal/cmd/status_memory_test.go:TestStatusMemoryTopThree", "internal/cmd/status_memory_test.go:TestStatusMemorySilentWhenNothing", "internal/memadvise/render_test.go:TestRenderSuggestionLine", "internal/memadvise/render_test.go:TestRenderSuggestionReason", "internal/memadvise/locate_test.go:TestLocateMissingIsSilent"]
-  notes = "status output pins id/file/action/$ per line and reason; byte-identical to advisor-off when dir missing, empty, or nothing to suggest"
+  notes = "status output pins id/file/action/$ per line and reason; byte-identical to advisor-off when dir missing, empty, or nothing to suggest; locate.go:68 survivor accepted (switch-case ceiling)"
 
 [[criterion]]
   id = "c-2"
   status = "covered"
   tests = ["internal/memadvise/cost_test.go:TestMonthlyCostFormula", "internal/memadvise/advise_test.go:TestRewordPricesOnlyDelta", "internal/memadvise/render_test.go:TestRenderShareAndCacheAge", "internal/memadvise/turns_test.go:TestTurnsWindow", "internal/memadvise/turns_test.go:TestTurnsShareAcrossProjects", "internal/memadvise/turns_test.go:TestUpdateRecountsInPlaceRewrite", "internal/memadvise/turncache_test.go:TestCacheKeepsUnreadable", "internal/cmd/memory_test.go:TestAdviseSurfacesCountError"]
-  notes = "exact formula + share line; t-15 adds in-place-rewrite recount and Unreadable persisted through a cache hit; turns.go:148/150 survivors are accepted (ceiling/equivalent)"
+  notes = "exact formula + share line; turns.go:132/163/165 and turncache.go:159 survivors accepted (unkillable race / equivalent / switch-case ceiling)"
 
 [[criterion]]
   id = "c-3"
   status = "covered"
-  tests = ["internal/cmd/status_memory_test.go:TestStatusNeverWritesMemoryDir", "internal/cmd/memory_test.go:TestAdviseListsAllReadOnly", "internal/memadvise/render_test.go:TestGatherNeverWritesMemoryDir", "internal/memadvise/turncache_test.go:TestCacheNeverInMemoryDir", "internal/memadvise/render_test.go:TestGatherKeepsCountsOnCacheWriteError", "internal/cmd/memory_test.go:TestApplyRefusesWithoutConfirm"]
-  notes = "dir hash unchanged across status/advise; TestCacheNeverInMemoryDir now refuses both a symlinked .dross/memory and a symlinked .dross (t-15); Snapshot's equivalent hole is a FLAG, not a status/advise path"
+  tests = ["internal/cmd/status_memory_test.go:TestStatusNeverWritesMemoryDir", "internal/cmd/memory_test.go:TestAdviseListsAllReadOnly", "internal/memadvise/render_test.go:TestGatherNeverWritesMemoryDir", "internal/memadvise/turncache_test.go:TestCacheNeverInMemoryDir", "internal/memadvise/apply_test.go:TestSnapshotRefusesLinkedStatePath", "internal/memadvise/render_test.go:TestGatherKeepsCountsOnCacheWriteError", "internal/cmd/memory_test.go:TestApplyRefusesWithoutConfirm"]
+  notes = "dir hash unchanged across status/advise; t-17 closes absorbed deferred c98784d0acad966c — Snapshot refuses a symlinked .dross / .dross/memory / snapshots dir, including one pointing at the memory dir"
 
 [[criterion]]
   id = "c-4"
@@ -62,7 +62,7 @@
   id = "c-5"
   status = "covered"
   tests = ["internal/memadvise/index_test.go:TestDeadIndexLink", "internal/memadvise/index_test.go:TestOrphans", "internal/memadvise/index_test.go:TestInboundResolvesByFrontmatterName", "internal/memadvise/index_test.go:TestIndexLinkOutsideDirIsDead", "internal/memadvise/index_test.go:TestIndexTargetNormalised", "internal/memadvise/advise_test.go:TestSuggestionNamesInboundLinks"]
-  notes = "dead/orphan/inbound-by-slug asserted exactly; t-13 normalises ./, #fragment, %-encoding and case so valid entries are not reported dead"
+  notes = "dead/orphan/inbound-by-slug asserted exactly; ./, #fragment, %-encoding and case normalised"
 
 [[criterion]]
   id = "c-6"
@@ -80,34 +80,26 @@
   id = "c-8"
   status = "covered"
   tests = ["internal/memadvise/hook_test.go:TestExpiryBoundaryIsStrict", "internal/memadvise/hook_test.go:TestHistoricalDateIsNotTimeBound", "internal/memadvise/hook_test.go:TestNextPhaseClause", "internal/memadvise/advise_test.go:TestExpiredHookNeverDeletes", "internal/memadvise/advise_test.go:TestExpiredHookOnSecondIndexLineNeverDeletes", "internal/memadvise/hook_test.go:TestRewordRemovesOnlyClause"]
-  notes = "t-14 'Next: Foo' and '(; note)' cases pinned; t-13 second-index-line expiry rewords, never deletes; hook.go:97 accepted this run (ceiling, killed by two TestRewordRemovesOnlyClause cases)"
+  notes = "expired date / next: clause rewords, never deletes; hook.go:97 accepted (switch-case ceiling, killed by TestRewordRemovesOnlyClause cases)"
 
 [[criterion]]
   id = "c-9"
   status = "covered"
-  tests = ["internal/cmd/memory_test.go:TestApplyRefusesWithoutConfirm", "internal/cmd/memory_test.go:TestApplyChangesExactlyOne", "internal/cmd/memory_test.go:TestApplyEndToEnd", "internal/memadvise/apply_test.go:TestApplySnapshotsFirst", "internal/memadvise/apply_test.go:TestApplyAbortsWhenSnapshotFails", "internal/memadvise/apply_test.go:TestApplyRefusesGuardedDelete", "internal/memadvise/apply_test.go:TestApplyRechecksIntegrity", "internal/memadvise/apply_test.go:TestApplyKeepsEachLineEnding", "internal/memadvise/apply_test.go:TestApplySnapshotsLargeFiles", "internal/memadvise/apply_test.go:TestApplyDeleteRemovesFileAndLine", "internal/memadvise/advise_test.go:TestSuggestionIDsUnique"]
-  notes = "refusal without --yes, snapshot-first + abort, guard refusal, recheck; t-16 mixed endings byte-exact, >1 MiB snapshot, dirHash of expected tree; t-13 ids unique"
-
-[[finding]]
-  severity = "FLAG"
-  text = "deferred c98784d0acad966c (targeted at this phase) still open: snapshot.go Snapshot uses MkdirAll + a final-component Lstat, so a symlinked .dross or parent lets apply's snapshot land wherever it points, including the memory dir; adopt ensureStateDir from turncache.go and add a parent-symlink Snapshot test"
-
-[[finding]]
-  severity = "FLAG"
-  text = "t-16 review (c-9): rewriteIndex's comment says a missing trailing newline stays missing, but deleting the last line of 'a\\nb' now yields 'a\\n' (old code: 'a'); the no-trailing-newline delete path has no test"
-
-[[finding]]
-  severity = "FLAG"
-  text = "t-13 review (c-9): dead-link ids with a -N suffix (delete-x-2) depend on index line order, contradicting id()'s doc comment that reordering never renames a suggestion; an id from an earlier advise can name a different line after a reorder"
+  tests = ["internal/cmd/memory_test.go:TestApplyRefusesWithoutConfirm", "internal/cmd/memory_test.go:TestApplyChangesExactlyOne", "internal/cmd/memory_test.go:TestApplyEndToEnd", "internal/memadvise/apply_test.go:TestApplySnapshotsFirst", "internal/memadvise/apply_test.go:TestApplyAbortsWhenSnapshotFails", "internal/memadvise/apply_test.go:TestSnapshotRefusesLinkedStatePath", "internal/memadvise/apply_test.go:TestApplyRefusesGuardedDelete", "internal/memadvise/apply_test.go:TestApplyRechecksIntegrity", "internal/memadvise/apply_test.go:TestApplyKeepsEachLineEnding", "internal/memadvise/apply_test.go:TestApplyDeleteKeepsMissingTrailingNewline", "internal/memadvise/apply_test.go:TestApplySnapshotsLargeFiles", "internal/memadvise/apply_test.go:TestApplyDeleteRemovesFileAndLine", "internal/memadvise/advise_test.go:TestSuggestionIDsUnique", "internal/memadvise/advise_test.go:TestDeadLinkIDsSurviveReorder", "internal/memadvise/advise_test.go:TestDeadLinkIDNeverAMemoryID"]
+  notes = "refusal without --yes, snapshot-first + abort, guard refusal, recheck; t-18 pins no-trailing-newline delete (LF/CRLF/sole line); t-19 pins content-addressed dead-link ids across reorder and never colliding with a live memory id"
 
 [[finding]]
   severity = "NOTE"
-  text = "mutation: 0.92 over 568 in-scope mutants (522 killed, 46 survived, all NOT COVERED); 42 sit in no go-cover block; efficacy over the 526 reachable = 0.99; the 4 test-gap mutants carry accepted dispositions. Collected from helicon r-20261101-092752 at 093ad918"
+  text = "mutation: 0.92 over 578 in-scope mutants (532 killed, 46 survived, all NOT COVERED); 42 sit in no go-cover block; efficacy over the 536 reachable = 0.99; the 4 test-gap mutants carry accepted dispositions; all 10 mutants added by t-17..t-19 killed. Collected from helicon r-20261101-173539 at 15d6f8a7"
 
 [[finding]]
   severity = "NOTE"
-  text = "this run: hook.go:97 (CONDITIONALS_NEGATION, t-14's rewritten removeClause switch) accepted as the switch-case attribution ceiling — negation fails TestRewordRemovesOnlyClause's 'next phase foo; X — done' and '(until …; note)' cases; stale acceptance df93f008adb94f0a (old line 96 case) retired"
+  text = "all 3 FLAGs from the 2026-11-01 12:39 verify closed: Snapshot symlink hole (t-17, TestSnapshotRefusesLinkedStatePath), last-line delete trailing newline (t-18, TestApplyDeleteKeepsMissingTrailingNewline), order-dependent dead-link ids (t-19, TestDeadLinkIDsSurviveReorder + TestDeadLinkIDNeverAMemoryID)"
 
 [[finding]]
   severity = "NOTE"
-  text = "all 11 FLAGs and the dirHash NOTE from the 2026-10-31 verify are closed by t-13..t-16, each with a named test"
+  text = "t-18/t-19 reviewer NOTEs left as-is: 'a\\n\\nb' last-line delete yields 'a\\n' (consistent, untested); 6-hex dead-link id hash collision (~2^-24/pair) documented in advise.go, untested"
+
+[[finding]]
+  severity = "NOTE"
+  text = "first dispatch r-20261101-141157 died when helicon rebooted (kernel update, 15:04 UTC) mid-leg; its record stayed 'running' — cancelled via verify status --cancel and re-dispatched from the same tree"
