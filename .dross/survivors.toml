@@ -5064,15 +5064,6 @@
   accepted_in = "memory-prune-advisor"
 
 [[accepted]]
-  key = "df93f008adb94f0a"
-  file = "internal/memadvise/hook.go"
-  op = "CONDITIONALS_NEGATION"
-  text = "case prefix != \"\":"
-  line = 96
-  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestRewordRemovesOnlyClause exercises both arms"
-  accepted_in = "memory-prune-advisor"
-
-[[accepted]]
   key = "433876fcfe18c0b4"
   file = "internal/memadvise/turncache.go"
   op = "CONDITIONALS_NEGATION"
@@ -5133,4 +5124,13 @@
   text = "unreadable++"
   line = 120
   reason = "unkillable: f.Info() fails only if the file vanishes between ReadDir and Info, a race with no deterministic seam; the sibling unreadable++ arms are pinned by TestTurnsProjectsNotADir and TestTurnsUnreadableProjectDir"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "b2cdcebbb72fa67e"
+  file = "internal/memadvise/hook.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case prefix == \"\" || strings.HasSuffix(prefix, \"(\"):"
+  line = 97
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestRewordRemovesOnlyClause kills the negation via 'next phase foo; X — done' (prefix==\"\" arm) and 'X (until 2026-01-01; note) Y' (open-paren arm)"
   accepted_in = "memory-prune-advisor"
