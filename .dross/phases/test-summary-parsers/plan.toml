@@ -1,4 +1,4 @@
-task_seq = 14
+task_seq = 15
 [phase]
   id = "test-summary-parsers"
 
@@ -302,3 +302,14 @@ with several runners prints each runner's counts under the shared ten-block budg
   test_contract = ["if a teardown exception is misattributed, TestDartPendingNotMisattributed fails: an EXCEPTION CAUGHT block after test A's [E] and before test B's [E] is in neither B's block nor dropped silently from A's", "if FAILED and teardown ERROR of one test swap sections, TestPytestFailAndTeardownErrorOwnSections fails: the FAILED failure holds its assertion E line and the teardown ERROR its fixture E line", "if a deep traceback loses its E lines, TestPytestDeepTracebackKeepsELines fails: a section with > BlockLines frame lines still prints its final E line", "if nested classes mangle the name, TestGradleNestedClassName fails: 'Outer > Inner > method() FAILED' is named Outer.Inner.method()", "if suiteName clips a dotted it.each value, TestVitestEachBracketNameWhole fails on 'src/a.test.ts > rounds 1.5 [ 1.5 ]'", "if a one-word vet block is not a build block, TestGoOneWordVetBlock fails: '# oneword' + '# [oneword]' + a vet diagnostic is one build failure named oneword", "if the 3/4/7 fallback still picks the last segment, TestFallbackTailFromFailingSpawn and TestFallbackTailNoSpawnArgvInvalid each fail against base ea72a2cb's selection (observed red before green)", "if mixed claims a wrong pair, TestNoCrossClaims fails: testdata/mixed claimers != {*runsummary.dart, *runsummary.vitest}, and Result() read twice on a mixed claimer differs", "if a parser is registered without a README mention, TestReadmeNamesSummaryRunners fails: its runner list comes from runsummary's registry", "if the skip arm of dartProgress breaks, TestDartGreenCounts fails: a '+N ~K' run keeps '~K' verbatim", "if header's last resort drops lead or tail, TestHeaderLastResort fails: a tail long enough that keep=0 still exceeds LineCut returns lead + runner names + tail (kills render.go:147)", "if counts() mishandles an empty Runner or empty Counts, TestCountsEmptyRunnerAndCounts fails: an empty-Runner result adds an empty part, an empty-Counts result prints its runner name alone", "if collect's run-log error is silent, TestCollectRunLogErrorSaysSo fails: with .dross/logs a file, stdout has exactly one 'log unavailable:' line carrying the error and tests/verify toml are still written"]
   status = "done"
   depends_on = ["t-13"]
+
+[[task]]
+  id = "t-15"
+  wave = 5
+  title = "Keep a held dart exception across same-test clock ticks"
+  files = ["internal/runsummary/dart.go", "internal/runsummary/dart_test.go"]
+  description = "t-14 review FLAG: dart.go discards a held EXCEPTION CAUGHT block at any non-[E] progress line, including the same test's progress line reprinted as the compact reporter's clock ticks (testdata/dart/compact_red.txt:13 shows one test at 00:03 and 00:04). Drop the held block only when the progress line names a different test; a same-test tick keeps it pending for that test's [E]. The t-14 teardown case (exception after A's [E], before B's) must still not attach to B."
+  covers = ["c-2"]
+  test_contract = ["if a same-test clock tick drops the held block, TestDartExceptionSurvivesClockTick fails: an EXCEPTION CAUGHT block, then the same test's progress line at a later time, then its [E] line keeps the exception's lines in that test's failure", "if the fix lets a stale block reach the next test, TestDartPendingNotMisattributed still fails: the teardown block stays out of B's failure"]
+  status = "pending"
+  depends_on = ["t-14"]
