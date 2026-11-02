@@ -255,7 +255,7 @@ dross_calls, log_reads. Write [scenario] + [before]; revert every repo."""
     "if a field is missing, TestFlowCostRecords (t-13) fails: agent_turns > 0, wall_clock_s > 0, session_id, len(turn_tools) == agent_turns, non-empty dross_calls, every *_red_bytes > 0",
   ]
   depends_on = ["t-1", "t-2", "t-3"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-12"
@@ -274,7 +274,7 @@ with several runners prints each runner's counts under the shared ten-block budg
     "if the merge goes undocumented, TestReadmeNamesSummaryRunners fails: no mention of several runners in one run",
   ]
   depends_on = ["t-10"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-13"
@@ -289,4 +289,4 @@ with several runners prints each runner's counts under the shared ten-block budg
   covers = ["c-11"]
   test_contract = ["if a round-trip was added, checkLegPair fails: after.dross_calls ⊄ before.dross_calls", "if the red summary still needs the log, checkTestSummaryParsersFlow fails: after.log_reads != 0", "if a parser went unmeasured, checkTestSummaryParsersFlow fails: any gradle/dart/pytest_red_bytes ≤ 0 on either leg", "if an after-run was really a fallback, checkTestSummaryParsersFlow fails: any of gradle_red_summarised, dart_red_summarised, pytest_red_summarised is not true on [after]", "if before drifted off base, checkTestSummaryParsersFlow fails: before.binary_version lacks \"commit ea72a2cb\"; if after used the old binary, checkLegPair's binary_version inequality fails", "if the half file lingers, checkTestSummaryParsersFlow fails: flow-cost-before.toml still exists", "if the record is deleted, TestFlowCostRecords' found check fails for \"test-summary-parsers\"", "if the after leg replays a different break than before, the byte comparison is void: every t-11 patch passes `git apply --check` at its repo's HEAD before replay, or the re-created patch is committed with a note in flow-cost.toml's [scenario]"]
   depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5", "t-6", "t-7", "t-8", "t-9", "t-10", "t-11"]
-  status = "pending"
+  status = "done"

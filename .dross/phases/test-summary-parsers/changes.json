@@ -42,6 +42,57 @@
         }
       ]
     },
+    "t-11": {
+      "files": [
+        ".dross/phases/test-summary-parsers/flow-cost-before.toml",
+        ".dross/phases/test-summary-parsers/flow/equerry-red.patch",
+        ".dross/phases/test-summary-parsers/flow/feastahead-red.patch",
+        ".dross/phases/test-summary-parsers/flow/sunday-rider-red.patch"
+      ],
+      "commit": "90f749f8",
+      "completed_at": "2026-11-02T15:05:34.531797Z",
+      "landmarks": [
+        {
+          "feature": "flow-cost records",
+          "symbol": "flow-cost-before.toml",
+          "loc": ".dross/phases/test-summary-parsers/flow-cost-before.toml:1",
+          "what": "base-binary red bytes per new parser plus a /dross-quick red-flow leg, with replayable break patches"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "README.md",
+        "internal/cmd/readme_doc_test.go"
+      ],
+      "commit": "b1618805",
+      "completed_at": "2026-11-02T15:14:17.731222Z",
+      "landmarks": [
+        {
+          "feature": "test output summaries",
+          "symbol": "TestReadmeNamesSummaryRunners",
+          "loc": "README.md:232",
+          "what": "README dross test row names gradle, dart test and pytest and the shared ten-block budget for multi-runner runs"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        ".dross/phases/test-summary-parsers/flow-cost.toml",
+        ".dross/phases/test-summary-parsers/flow-cost-before.toml",
+        "internal/cmd/flowcost_record_test.go"
+      ],
+      "commit": "1419d05f",
+      "completed_at": "2026-11-02T16:15:13.173505Z",
+      "landmarks": [
+        {
+          "feature": "flow-cost records",
+          "symbol": "checkTestSummaryParsersFlow",
+          "loc": "internal/cmd/flowcost_record_test.go:440",
+          "what": "gates test-summary-parsers' before/after red bytes per new parser, after-leg parsing, base build, zero log reads"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/runsummary/dart.go",
@@ -265,6 +316,57 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The edited doc comments on Render (render.go) and the package comment (summary.go) were extended in place without rewrapping, leaving one overlong comment line in each.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-12": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-12",
+          "text": "TestReadmeNamesSummaryRunners hard-codes the runner list instead of deriving it from runsummary's parsers, so a seventh parser added later would not make the test fail; the 'tracks the registry' comment only holds while someone updates the list by hand",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the test scopes its checks to the passage between the unrecognised-output fallback and 'A summary never changes the exit status', so a runner named elsewhere in the long row cannot satisfy it",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-13": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-11",
+          "text": "The record data (flow-cost.toml, the deleted flow-cost-before.toml, any re-created patch note in [scenario]) is .dross/ bookkeeping outside the reviewed diff, so this review could not check whether the real record passes checkTestSummaryParsersFlow. That rests on TestFlowCostRecords being run.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-11",
+          "text": "The test_contract line on `git apply --check` before replay is a process step with no code surface. It can only be confirmed by a note in flow-cost.toml's [scenario], which this review cannot see.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-11",
+          "text": "TestTestSummaryParsersFlowProblems breaks each gated field one at a time with an exact-count assertion, and confirms that before-leg summarised flags and turns/wall-clock stay ungated.",
           "resolution": "non-blocking, left"
         }
       ]
