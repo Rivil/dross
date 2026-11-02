@@ -1,0 +1,187 @@
+[verify]
+  phase = "test-summary-parsers"
+  generated_at = 2026-11-02T19:57:34.672409Z
+  verdict = "fail"
+  finalized = true
+  finalized_at = 2026-11-02T20:00:19.86854Z
+  measured_commit = "92cbe88465f6341fe3158abb162bfc74a0b81cd5"
+  measured_tree = "2a08c6fec907afd0ce362b72752a1e0aca499224"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9674074074074074
+  mutants_killed = 653
+  mutants_survived = 22
+  mutants_not_covered = 22
+  mutants_no_block = 15
+  mutants_test_gap = 7
+  mutants_in_scope = 675
+  unclassified_in_scope = 5
+  criteria_total = 12
+  criteria_covered = 10
+  criteria_uncovered = 2
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 653
+    survived = 22
+    timeout = 0
+    in_scope = 675
+    score = 0.9674074074074074
+    file_count = 25
+    measured_on = "helicon"
+    whole_file = ["internal/cmd/flowcost_record_test.go — adapter-lacks-range-runner", "internal/cmd/readme_doc_test.go — adapter-lacks-range-runner", "internal/cmd/test.go — adapter-lacks-range-runner", "internal/cmd/test_output.go — adapter-lacks-range-runner", "internal/cmd/test_output_test.go — adapter-lacks-range-runner", "internal/cmd/test_summary_wiring_test.go — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_log_test.go — adapter-lacks-range-runner", "internal/mutation/stryker_stream_test.go — adapter-lacks-range-runner", "internal/runlog/runlog.go — adapter-lacks-range-runner", "internal/runlog/runlog_test.go — adapter-lacks-range-runner", "internal/runsummary/dart.go — adapter-lacks-range-runner", "internal/runsummary/dart_test.go — adapter-lacks-range-runner", "internal/runsummary/gotest.go — adapter-lacks-range-runner", "internal/runsummary/gotest_test.go — adapter-lacks-range-runner", "internal/runsummary/gradle.go — adapter-lacks-range-runner", "internal/runsummary/gradle_test.go — adapter-lacks-range-runner", "internal/runsummary/jsrunner.go — adapter-lacks-range-runner", "internal/runsummary/jsrunner_test.go — adapter-lacks-range-runner", "internal/runsummary/merge_test.go — adapter-lacks-range-runner", "internal/runsummary/pytest.go — adapter-lacks-range-runner", "internal/runsummary/pytest_test.go — adapter-lacks-range-runner", "internal/runsummary/render.go — adapter-lacks-range-runner", "internal/runsummary/summary.go — adapter-lacks-range-runner", "internal/runsummary/summary_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/runsummary/gradle_test.go:TestGradleRedNames", "internal/runsummary/gradle_test.go:TestGradleRedOwnLines", "internal/runsummary/gradle_test.go:TestGradleRedCounts", "internal/runsummary/gradle_test.go:TestGradleGreenCounts"]
+  notes = "live equerry fixtures; names, own lines, gradle's own counts"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/runsummary/dart_test.go:TestDartRedNames", "internal/runsummary/dart_test.go:TestDartRedOwnLines", "internal/runsummary/dart_test.go:TestDartGreenCounts", "internal/runsummary/dart_test.go:TestDartReportersAgree"]
+  notes = "both reporters; pending-exception misattribution and ~K counter are FLAGs routed to t-14"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/runsummary/pytest_test.go:TestPytestRedNodeIDs", "internal/runsummary/pytest_test.go:TestPytestRedOwnLines", "internal/runsummary/pytest_test.go:TestPytestGreenCounts", "internal/runsummary/pytest_test.go:TestPytestFormatsAgree"]
+  notes = "default + -q; teardown-section and deep-traceback gaps are FLAGs routed to t-14"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/runsummary/summary_test.go:TestWorstCaseBlockBytes", "internal/runsummary/summary_test.go:TestBlockNameCounts", "internal/runsummary/summary_test.go:TestBlockMarkerCounts", "internal/runsummary/summary_test.go:TestSharedHeaderCopyBounded"]
+  notes = "14 max-length failures + 200-byte log path: 10 blocks each ≤ BlockBytes, ≤ 30,000 bytes"
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/runsummary/gotest_test.go:TestGoBlockDoesNotAbsorbNextPackage", "internal/runsummary/gotest_test.go:TestGoHashHeadingNotABuildBlock", "internal/runsummary/gotest_test.go:TestGoOneWordBuildStillReported"]
+  notes = "orphan TestMain lines and '# Results' both asserted; one-word vet block FLAG routed to t-14"
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/runsummary/jsrunner_test.go:TestVitestConsoleFailNotAFailure", "internal/runsummary/jsrunner_test.go:TestVitestEachBracketNameWhole"]
+  notes = "console FAIL opens nothing, exit-0 variant PASS; dotted it.each clip FLAG routed to t-14"
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/mutation/stryker_stream_test.go:TestStrykerNetHeadReachesStderrWithStream"]
+  notes = "canary must reach stderr with SetStream set; head bounded; log holds all 300 lines"
+
+[[criterion]]
+  id = "c-8"
+  status = "weak"
+  tests = ["internal/cmd/verify_log_test.go:TestDetachFetchLogProduction", "internal/cmd/verify_log_test.go:TestCollectEmptyHostLogSaysSo"]
+  notes = "production FetchArgs + classifyFetch tested; empty-log arm tested; the run-log error arm (verify.go:1425, in-hunk) has coverprofile count 0 — routed to t-14"
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/test_summary_wiring_test.go:TestFallbackTailFromFailingStep"]
+  notes = "host-2 lock after host-1 rsync: no RSYNC-MARK, names host-2's lock; two sibling tests pass on base too (FLAG, t-14)"
+
+[[criterion]]
+  id = "c-10"
+  status = "covered"
+  tests = ["internal/cmd/test_output_test.go:TestPendingLinesReachLogOnTerminal", "internal/cmd/test_output_test.go:TestPendingLinesPrintOnceWithoutLog", "internal/runlog/runlog_test.go:TestRecordNeverReachesTerminal"]
+  notes = "PRE-MARK before first $ header, once; unavailable log prints once with one warning"
+
+[[criterion]]
+  id = "c-11"
+  status = "covered"
+  tests = ["internal/cmd/flowcost_record_test.go:TestFlowCostRecords", "internal/cmd/flowcost_record_test.go:checkTestSummaryParsersFlow", "internal/cmd/flowcost_record_test.go:checkLegPair"]
+  notes = "bytes per parser both legs, after summarised, dross_calls subset (no round-trip added); turns 11→12 recorded, ungated, attributed to one git log"
+
+[[criterion]]
+  id = "c-12"
+  status = "weak"
+  tests = ["internal/runsummary/merge_test.go:TestMixedGreen", "internal/runsummary/merge_test.go:TestMixedRedBothRunners", "internal/runsummary/merge_test.go:TestMixedSharesMaxBlocks", "internal/runsummary/merge_test.go:TestMixedHeaderFits"]
+  notes = "merge behaviour asserted, but in-hunk survivors in the merged header path: render.go:147 last resort and render.go:161/162 counts() arms never run (count 0); TestNoCrossClaims accepts any pair — t-14"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/verify.go:1425 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/runsummary/render.go:147 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/runsummary/render.go:147 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/runsummary/render.go:161 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/runsummary/render.go:162 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "5 in-scope mutants unclassified (render.go:147 x2, render.go:161, render.go:162, verify.go:1425): coverprofile 2026-11-02 shows count 0 on each arm — real test gaps, routed to remediation task t-14"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-8 weak: collect's run-log error arm (verify.go:1425) runs in no test"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-12 weak: merged header last resort (render.go:147) and counts() empty-Runner/empty-Counts arms (render.go:161/162) run in no test; TestNoCrossClaims accepts any two mixed claimers and skips the Result()-twice check on mixed"
+
+[[finding]]
+  severity = "FLAG"
+  text = "dart: an EXCEPTION CAUGHT block not followed by [E] is attributed to the next failing test (t-2 reviewer, live) — t-14"
+
+[[finding]]
+  severity = "FLAG"
+  text = "dart: no fixture has skipped tests, so the '~K' counter arm is untested (t-2 reviewer) — t-14"
+
+[[finding]]
+  severity = "FLAG"
+  text = "pytest: FAILED + teardown ERROR of one test can take each other's sections; deep tracebacks can push E lines past BlockLines (t-3 reviewer round 2, live) — t-14"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gradle: JUnit 5 nested 'Outer > Inner > method() FAILED' is misnamed (t-1 reviewer) — t-14"
+
+[[finding]]
+  severity = "FLAG"
+  text = "vitest: suiteName still clips a dotted it.each value 'rounds 1.5 [ 1.5 ]' (t-6 reviewer round 2, live) — t-14"
+
+[[finding]]
+  severity = "FLAG"
+  text = "go: a one-word module's vet block is reported only via the orphan path (t-5 reviewer round 2, live) — t-14"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-9: TestFallbackTailFromFailingSpawn and TestFallbackTailNoSpawnArgvInvalid pass on base too (t-8 reviewer) — t-14"
+
+[[finding]]
+  severity = "FLAG"
+  text = "TestReadmeNamesSummaryRunners hard-codes the runner list instead of reading the registry (t-12 reviewer) — t-14"
+
+[[finding]]
+  severity = "NOTE"
+  text = "accepted 2 switch-case ceiling survivors with coverprofile proof (count 1 on each arm): dart.go:71 (34f06047d8b36064), verify.go:1427 (61ea2f8e845f2683); unclassified_in_scope 7 → 5 without a re-run"
+
+[[finding]]
+  severity = "NOTE"
+  text = "15 of 22 survivors are uncoverable by construction; efficacy over the 660 reachable mutants = 0.99; whole-file gremlins on all 25 files (adapter-lacks-range-runner)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-11: agent_turns 11 → 12, +5.1 s, both before the fix (one extra git log); dross_calls identical; turns/wall-clock recorded, not gated (rivil, 2026-10-08)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "t-10 reviewer FLAG (mixed fixtures are scoped runs of scripts/dross-test.sh, not the bare run) is documented in the capture header; left"
