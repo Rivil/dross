@@ -524,6 +524,7 @@ func TestBlockBoundKeepsSmallBlock(t *testing.T) {
 func TestSharedHeaderCopyBounded(t *testing.T) {
 	v := &vitest{}
 	v.Feed(" Tests  3 failed (3)")
+	v.Feed("⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯")
 	for i := 0; i < 3; i++ {
 		v.Feed(fmt.Sprintf(" FAIL  src/x.test.ts > case %d %s", i, strings.Repeat("n", 240)))
 	}
