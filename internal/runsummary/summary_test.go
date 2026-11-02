@@ -331,11 +331,19 @@ func TestStripsANSIAndCR(t *testing.T) {
 	}
 }
 
+// TestAmbiguousClaimFallsBack: a segment two runners claim is merged, not
+// guessed between — but the merged result keeps the fallback rules: no
+// failure under a non-zero exit is still the fallback, exit 0 is PASS with
+// both runners' counts.
 func TestAmbiguousClaimFallsBack(t *testing.T) {
 	withParsers(t, newFake, newFake)
-	out := Render(Outcome{Exit: 0, Ran: true}, []*Segment{segment("ok a\nok b\n")}, &Budget{}, logPath, time.Second)
-	if !strings.HasPrefix(out, "exit 0 ") || strings.Contains(out, "PASS") || strings.Contains(out, "2 ok") {
-		t.Fatalf("two claims did not fall back:\n%s", out)
+	out := Render(Outcome{Exit: 1, Ran: true}, []*Segment{segment("ok a\nok b\n")}, &Budget{}, logPath, time.Second)
+	if !strings.HasPrefix(out, "exit 1 · no failing test reported") || strings.Contains(out, "PASS") {
+		t.Fatalf("two claims, no failure, exit 1 did not fall back:\n%s", out)
+	}
+	out = Render(Outcome{Exit: 0, Ran: true}, []*Segment{segment("ok a\nok b\n")}, &Budget{}, logPath, time.Second)
+	if !strings.HasPrefix(out, "PASS · fake: 2 ok · fake: 2 ok · ") {
+		t.Fatalf("two claims at exit 0 did not print both counts:\n%s", out)
 	}
 }
 

@@ -23,8 +23,8 @@ type Outcome struct {
 }
 
 // Render summarises segs. It prints green only when the run happened, exited
-// 0, every segment was claimed by exactly one parser and none reported a
-// failure. Reported failures print red, at most b's remaining full blocks.
+// 0, every segment was claimed by at least one parser and none reported a
+// failure; a segment several runners claimed contributes each one's counts. Reported failures print red, at most b's remaining full blocks.
 // Anything else prints the fallback: the exit status, the last TailLines
 // lines and the log path. Every printed line is cut to LineCut bytes.
 func Render(o Outcome, segs []*Segment, b *Budget, logPath string, wall time.Duration) string {
@@ -36,17 +36,15 @@ func Render(o Outcome, segs []*Segment, b *Budget, logPath string, wall time.Dur
 	results := make([]Result, 0, len(segs))
 	failing := 0
 	for _, s := range segs {
-		r, c := s.result()
-		switch c {
-		case unclaimed:
+		rs := s.results()
+		if len(rs) == 0 {
 			fallback(&w, o, "output not recognised", s, logPath)
 			return w.String()
-		case ambiguous:
-			fallback(&w, o, "output claimed by more than one runner", s, logPath)
-			return w.String()
 		}
-		results = append(results, r)
-		failing += r.Failures.Total
+		for _, r := range rs {
+			results = append(results, r)
+			failing += r.Failures.Total
+		}
 	}
 	if len(results) == 0 {
 		fallback(&w, o, "no output", nil, logPath)
@@ -57,12 +55,12 @@ func Render(o Outcome, segs []*Segment, b *Budget, logPath string, wall time.Dur
 			fallback(&w, o, "no failing test reported", lastOf(segs), logPath)
 			return w.String()
 		}
-		w.add("PASS · " + counts(results) + " · " + clock(wall))
+		w.add(header("PASS · ", results, " · "+clock(wall)))
 		w.add("log: " + logPath)
 		return w.String()
 	}
 
-	w.add(fmt.Sprintf("FAIL (exit %d) · %s · %d failing · %s", o.Exit, counts(results), failing, clock(wall)))
+	w.add(header(fmt.Sprintf("FAIL (exit %d) · ", o.Exit), results, fmt.Sprintf(" · %d failing · %s", failing, clock(wall))))
 	more := 0
 	for _, r := range results {
 		more += r.Failures.Total - len(r.Failures.Kept)
@@ -136,12 +134,34 @@ func lastOf(segs []*Segment) *Segment {
 	return segs[len(segs)-1]
 }
 
-// counts joins each segment's runner and count phrases.
-func counts(rs []Result) string {
+// header is the summary line: lead, each runner's counts, tail. When every
+// count phrase would push it past LineCut, it keeps each runner's first
+// phrase, then the runner names alone — never a runner cut off the end.
+func header(lead string, rs []Result, tail string) string {
+	for _, keep := range []int{-1, 1, 0} {
+		h := lead + counts(rs, keep) + tail
+		if len(h) <= LineCut {
+			return h
+		}
+	}
+	return lead + counts(rs, 0) + tail
+}
+
+// counts joins each result's runner and its count phrases: all of them when
+// keep < 0, else the first keep.
+func counts(rs []Result, keep int) string {
 	parts := make([]string, 0, len(rs))
 	for _, r := range rs {
-		c := strings.Join(r.Counts, ", ")
-		if r.Runner != "" {
+		cs := r.Counts
+		if keep >= 0 && len(cs) > keep {
+			cs = cs[:keep]
+		}
+		c := strings.Join(cs, ", ")
+		switch {
+		case r.Runner == "":
+		case c == "":
+			c = r.Runner
+		default:
 			c = r.Runner + ": " + c
 		}
 		parts = append(parts, c)

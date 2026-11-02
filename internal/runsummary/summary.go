@@ -4,8 +4,8 @@
 //
 // Every spawn of a run is its own Segment. A Segment splits what it is fed
 // into lines, keeps a bounded tail, and feeds every line to one instance of
-// each registered Parser; afterwards the single parser that claims the output
-// supplies the Result. Nothing here grows with the size of the output: lines
+// each registered Parser; afterwards every parser that claims the output
+// supplies its Result — one spawn may run several runners. Nothing here grows with the size of the output: lines
 // are cut, the tail is a ring, and a parser keeps at most MaxBlocks failures in
 // full and only counts the rest.
 package runsummary
@@ -263,33 +263,20 @@ func (s *Segment) Retained() int {
 	return n
 }
 
-// claim is how a segment's output was recognised.
-type claim int
-
-const (
-	claimed claim = iota
-	unclaimed
-	ambiguous
-)
-
-// result is the one claiming parser's Result. Two claims are as good as none:
-// dross never guesses between runners.
-func (s *Segment) result() (Result, claim) {
+// results is every claiming parser's Result, in registry order: one spawn
+// can run several runners — feastahead's bare run is flutter test then
+// vitest — and each claims only on its own terminal summary line
+// (mixed_runner_segments). None claiming means the output was not recognised.
+func (s *Segment) results() []Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var got []Parser
+	var out []Result
 	for _, p := range s.parsers {
 		if p.Claims() {
-			got = append(got, p)
+			out = append(out, p.Result())
 		}
 	}
-	switch len(got) {
-	case 0:
-		return Result{}, unclaimed
-	case 1:
-		return got[0].Result(), claimed
-	}
-	return Result{}, ambiguous
+	return out
 }
 
 // Budget spreads MaxBlocks full failure blocks across every render of one run,
