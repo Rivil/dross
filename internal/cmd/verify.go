@@ -1418,7 +1418,15 @@ func collectHostLog(repoDir, phaseID, leg string, t remote.Target, runDir string
 	l := runlog.Open(repoDir, runlog.Name{Kind: runlog.KindVerify, Phase: phaseID, Leg: leg}, runlog.Options{Terminal: runlog.Stderr})
 	io.Copy(l, f)
 	l.Close()
-	if p := l.Path(); p != "" {
+	// The log file is created on its first Write, so a fetch that copied an
+	// empty host log leaves no path — and printing nothing would read as a
+	// collect that never tried. Exactly one of the two lines prints, always.
+	switch p := l.Path(); {
+	case l.Err() != nil:
+		Printf("log unavailable: %v\n", l.Err())
+	case p == "":
+		Printf("log unavailable: the host log was empty\n")
+	default:
 		Printf("verify log (%s, from %s): %s\n", leg, t.Host, p)
 	}
 }

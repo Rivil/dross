@@ -116,6 +116,36 @@ func TestStrykerFailureHeadStaysOnStderr(t *testing.T) {
 	}
 }
 
+// TestStrykerNetHeadReachesStderrWithStream is the stryker.net mirror of the
+// test above. With a stream set the live output goes to the run log, so the
+// bounded head is the ONLY thing a failing run puts in front of the reader —
+// and it reaches stderr only if the head buffer still sits in the MultiWriter
+// beside the stream. The canary opens the output, so it is in any head at all.
+func TestStrykerNetHeadReachesStderrWithStream(t *testing.T) {
+	const canary = "CANARY-N-2e5c"
+	s := &StrykerNet{ProjectRoot: t.TempDir(), OutputDir: "StrykerOutput"}
+	defer noisyStrykerNet(t, canary+" dotnet stryker: starting\n"+survivedLines(), 5)()
+	l := streamLog(t)
+	s.SetStream(l)
+	stderr, _, err := captureStderr(t, func() (*Report, error) { return s.Run([]string{"src/A.cs"}) })
+	if err == nil {
+		t.Fatal("a reportless non-zero exit returned nil error")
+	}
+	if !strings.Contains(stderr, canary) {
+		t.Errorf("the failure head did not reach stderr with a stream set:\n%.600s", stderr)
+	}
+	if n := strings.Count(stderr, canary) + countSurvived(stderr); n > strykerHeadLines {
+		t.Errorf("stderr carries %d tool lines, want the bounded head (at most %d)", n, strykerHeadLines)
+	}
+	logged := logText(t, l)
+	if n := countSurvived(logged); n != 300 {
+		t.Errorf("the run log holds %d of the 300 [Survived] lines", n)
+	}
+	if !strings.Contains(logged, canary) {
+		t.Error("the run log lost the line the head also holds")
+	}
+}
+
 func TestStrykerNilStreamKeepsStderr(t *testing.T) {
 	s := &Stryker{ProjectRoot: t.TempDir()}
 	defer noisyStryker(t, s, survivedLines(), 0, func(p string) { writeReport(t, p, "src/a.ts") })()

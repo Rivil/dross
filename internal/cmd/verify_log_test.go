@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -184,6 +185,96 @@ func TestCollectFetchesHostLog(t *testing.T) {
 	if !strings.Contains(out, filepath.Base(logs[0])) {
 		t.Errorf("the collected log's path was not printed:\n%s", out)
 	}
+	assertCollectArtefacts(t, dir, id)
+}
+
+// assertCollectArtefacts fails unless the collect wrote both tests.json and
+// verify.toml: the host log is a convenience, and no outcome of its fetch may
+// cost the phase its verdict.
+func assertCollectArtefacts(t *testing.T, dir, id string) {
+	t.Helper()
+	testsPath, verifyPath := verify.FilePaths(filepath.Join(dir, RootDirName), id)
+	for _, p := range []string{testsPath, verifyPath} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%s was not written: %v", filepath.Base(p), err)
+		}
+	}
+}
+
+// productionLogFetch puts the REAL detachFetchLog back after collectRepo
+// stubbed it, and replaces only the spawn beneath it. Every other host-log
+// test swaps detachFetchLog wholesale, so the FetchArgs operand and the
+// classifyFetch judgement it returns ran in no test at all. spawn sees each
+// argv the fetch would have executed; the recorded argvs come back. Call it
+// after collectRepo, whose cleanup restores the same production value.
+func productionLogFetch(t *testing.T, prod func(remote.Target, string, string) error, spawn func([]string) error) *[][]string {
+	t.Helper()
+	detachFetchLog = prod
+	orig := runDetachArgv
+	t.Cleanup(func() { runDetachArgv = orig })
+	var argvs [][]string
+	runDetachArgv = func(argv []string) error {
+		argvs = append(argvs, argv)
+		return spawn(argv)
+	}
+	return &argvs
+}
+
+// TestDetachFetchLogProduction runs the production fetch with a spawn that
+// exits 23 the way rsync does for an absent source — an UNCLASSIFIED exit
+// status, so the ErrPartial verdict can only come from classifyFetch.
+func TestDetachFetchLogProduction(t *testing.T) {
+	const id = "collect-log-prod"
+	prod := detachFetchLog
+	collectRepo(t, id)
+	argvs := productionLogFetch(t, prod, func([]string) error { return fakeExit{code: 23} })
+
+	direct := filepath.Join(t.TempDir(), "log")
+	ferr := detachFetchLog(remote.Target{Host: "anachryon", Workdir: "/srv/x"}, ".dross-runs/r-1", direct)
+	if !errors.Is(ferr, remote.ErrPartial) {
+		t.Errorf("rsync exit 23 came back as %v, want remote.ErrPartial", ferr)
+	}
+	if len(*argvs) != 1 {
+		t.Fatalf("the fetch spawned %d argvs, want one: %v", len(*argvs), *argvs)
+	}
+	argv := (*argvs)[0]
+	if len(argv) < 3 || argv[0] != "rsync" || argv[len(argv)-1] != direct {
+		t.Fatalf("argv %q is not an rsync into %s", argv, direct)
+	}
+	if src := argv[len(argv)-2]; !strings.HasPrefix(src, "anachryon:") || !strings.HasSuffix(src, "/srv/x/.dross-runs/r-1/log") {
+		t.Errorf("remote operand %q, want anachryon:<workdir>/.dross-runs/r-1/log", src)
+	}
+
+	var err error
+	out := captureStdout(t, func() { err = collectDetached(id) })
+	if err != nil {
+		t.Fatalf("a partial log fetch failed the collect: %v", err)
+	}
+	if !strings.Contains(out, "log unavailable") || !strings.Contains(out, remote.ErrPartial.Error()) {
+		t.Errorf("the partial transfer was not noted as one:\n%s", out)
+	}
+}
+
+// TestCollectEmptyHostLogSaysSo: an empty host log copies cleanly and writes
+// nothing, so the run log is never created and has no path to print. The
+// collect must still say which way the log went — silence is the one wrong
+// answer.
+func TestCollectEmptyHostLogSaysSo(t *testing.T) {
+	const id = "collect-log-empty"
+	prod := detachFetchLog
+	dir := collectRepo(t, id)
+	productionLogFetch(t, prod, func(argv []string) error {
+		return os.WriteFile(argv[len(argv)-1], nil, 0o644)
+	})
+	var err error
+	out := captureStdout(t, func() { err = collectDetached(id) })
+	if err != nil {
+		t.Fatalf("an empty host log failed the collect: %v", err)
+	}
+	if n := strings.Count(out, "verify log (") + strings.Count(out, "log unavailable"); n != 1 {
+		t.Errorf("stdout carries %d log lines, want exactly one of the path or 'log unavailable':\n%s", n, out)
+	}
+	assertCollectArtefacts(t, dir, id)
 }
 
 func TestCollectLogFetchFailureIsANote(t *testing.T) {
@@ -200,12 +291,7 @@ func TestCollectLogFetchFailureIsANote(t *testing.T) {
 	if !strings.Contains(out, "log unavailable") {
 		t.Errorf("the failed fetch was not noted:\n%s", out)
 	}
-	testsPath, verifyPath := verify.FilePaths(filepath.Join(dir, RootDirName), id)
-	for _, p := range []string{testsPath, verifyPath} {
-		if _, err := os.Stat(p); err != nil {
-			t.Errorf("%s was not written: %v", filepath.Base(p), err)
-		}
-	}
+	assertCollectArtefacts(t, dir, id)
 }
 
 func TestVerifyExitCodesWithLogs(t *testing.T) {
