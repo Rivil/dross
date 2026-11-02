@@ -21,15 +21,19 @@ func init() {
 // of the next failure — if the next progress line is that [E] line; any other
 // progress line drops it, so it never lands on a later test's failure. A
 // block printed under an open failure, before the next progress line — a
-// teardown exception after the test's [E] — is that failure's. It claims
-// a segment only on the runner's terminal line — "All tests passed!", "Some
-// tests failed." or "No tests ran." — never on a running counter.
+// teardown exception after the test's [E] — is that failure's. A progress
+// line that repeats the last one apart from its clock is the runner redrawing
+// as a second ticks over, not a new event: it changes nothing, so a held or
+// open block survives it. It claims a segment only on the runner's terminal
+// line — "All tests passed!", "Some tests failed." or "No tests ran." — never
+// on a running counter.
 type dart struct {
 	counter string // the terminal line's counter, once printed
 	fs      Failures
 	cur     *blockLines
 	pending *blockLines // an exception block waiting for its [E] line
 	exc     *blockLines // the block an open "══╡ EXCEPTION CAUGHT" block goes to
+	last    string      // the last progress line's counter and text, clock dropped
 }
 
 var (
@@ -39,6 +43,11 @@ var (
 
 func (d *dart) Feed(line string) {
 	if m := dartProgress.FindStringSubmatch(line); m != nil {
+		event := m[1] + ": " + m[2]
+		if event == d.last {
+			return // a clock tick redrawing the same line
+		}
+		d.last = event
 		d.close()
 		d.exc = nil
 		rest := m[2]

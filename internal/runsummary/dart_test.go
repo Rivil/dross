@@ -147,6 +147,44 @@ func TestDartPendingNotMisattributed(t *testing.T) {
 	}
 }
 
+// TestDartExceptionSurvivesClockTick: the compact reporter redraws its
+// progress line as a second ticks over. A redraw that repeats the last line
+// apart from its clock is no event: a widget test's exception block held
+// before its [E] line stays that test's, and a redrawn [E] line is still one
+// failure.
+func TestDartExceptionSurvivesClockTick(t *testing.T) {
+	d := &dart{}
+	for _, l := range []string{
+		"00:03 +12 -1: /repo/test/a_test.dart: earlier test",
+		"══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════",
+		"The following TestFailure was thrown running a test:",
+		"00:04 +12 -1: /repo/test/a_test.dart: earlier test",
+		"TICK-MARK",
+		"════════════════════════════════════════════════════════════════════════════════════════════════════",
+		"00:05 +12 -1: /repo/test/a_test.dart: earlier test",
+		"00:05 +12 -2: /repo/test/w_test.dart: widget [E]",
+		"  Test failed. See exception logs above.",
+		"00:06 +12 -2: /repo/test/w_test.dart: widget [E]",
+		"  W-OWN",
+		"00:06 +12 -2: Some tests failed.",
+	} {
+		d.Feed(l)
+	}
+	if !d.Claims() {
+		t.Fatal("the run is not claimed")
+	}
+	r := d.Result()
+	w := strings.Join(failureNamed(t, r, "/repo/test/w_test.dart: widget").Lines, "\n")
+	for _, want := range []string{"EXCEPTION CAUGHT", "The following TestFailure", "TICK-MARK", "Test failed.", "W-OWN"} {
+		if !strings.Contains(w, want) {
+			t.Errorf("widget lost %q across a clock tick:\n%s", want, w)
+		}
+	}
+	if r.Failures.Total != 1 {
+		t.Errorf("total %d, want 1: a redrawn [E] line is the same failure", r.Failures.Total)
+	}
+}
+
 // TestDartRedNames: names carry neither the counter nor the [E] marker.
 func TestDartRedNames(t *testing.T) {
 	for _, f := range []string{"compact_red.txt", "expanded_red.txt"} {
