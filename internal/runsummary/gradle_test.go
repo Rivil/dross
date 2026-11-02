@@ -76,6 +76,35 @@ func TestGradleRedNames(t *testing.T) {
 	}
 }
 
+// TestGradleNestedClassName: a JUnit 5 @Nested class prints one more " > "
+// per level; every level joins the name with a dot, as a plain class's does.
+func TestGradleNestedClassName(t *testing.T) {
+	g := &gradle{}
+	for _, l := range []string{
+		"OuterTest > Inner > method() FAILED",
+		"    org.opentest4j.AssertionFailedError at OuterTest.kt:12",
+		"",
+		"OuterTest > Inner > Deeper > other() FAILED",
+		"    org.opentest4j.AssertionFailedError at OuterTest.kt:20",
+		"",
+		"2 tests completed, 2 failed",
+		"",
+		"BUILD FAILED in 2s",
+	} {
+		g.Feed(l)
+	}
+	if !g.Claims() {
+		t.Fatal("the run is not claimed")
+	}
+	r := g.Result()
+	if got, want := names(r), []string{"OuterTest.Inner.method()", "OuterTest.Inner.Deeper.other()"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("names %q, want %q", got, want)
+	}
+	if !strings.Contains(strings.Join(failureNamed(t, r, "OuterTest.Inner.method()").Lines, "\n"), "OuterTest.kt:12") {
+		t.Fatalf("the nested failure lost its own lines: %q", r.Failures.Kept[0].Lines)
+	}
+}
+
 // TestGradleRedOwnLines: a block holds its own assertion line and none of the
 // other test's, nor the console noise printed between them.
 func TestGradleRedOwnLines(t *testing.T) {

@@ -132,10 +132,12 @@ func (v *vitest) Feed(line string) {
 
 // suiteName strips a failed suite's " [ <path> ]" suffix — "src/x.test.ts [
 // src/x.test.ts ]" — only when it repeats the path before it, so an it.each
-// title holding " [ " ("adds [ 1, 2 ]") prints whole.
+// title holding " [ " ("adds [ 1, 2 ]") prints whole. A suite header names a
+// file alone: a name holding " > " is a test's, whose bracket is its own
+// ("rounds 1.5 [ 1.5 ]").
 func suiteName(name string) string {
 	i := strings.LastIndex(name, " [ ")
-	if i <= 0 || !strings.HasSuffix(name, " ]") {
+	if i <= 0 || !strings.HasSuffix(name, " ]") || strings.Contains(name, " > ") {
 		return name
 	}
 	// The repeated text must be a whole path: the prefix is it, or ends " "+it.

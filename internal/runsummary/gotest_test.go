@@ -272,6 +272,28 @@ func TestGoOneWordBuildStillReported(t *testing.T) {
 	}
 }
 
+// TestGoOneWordVetBlock: a one-word module's vet failure prints "# oneword"
+// then vet's own "# [oneword]" — the shape setup_and_vet.txt captured for a
+// dotted path — and is one build failure named oneword, even with another
+// package's result line before its [build failed] one.
+func TestGoOneWordVetBlock(t *testing.T) {
+	g, r := feedGo(
+		"# oneword",
+		"# [oneword]",
+		"./x_test.go:9:14: fmt.Printf format %d has arg \"x\" of wrong type string",
+		"ok  \toneword/ok\t0.221s",
+		"FAIL\toneword [build failed]",
+		"FAIL",
+	)
+	if r.Failures.Total != 1 || g.failed != 1 || g.ok != 1 {
+		t.Fatalf("failures %q, FAIL=%d ok=%d; want the one vet failure", names(r), g.failed, g.ok)
+	}
+	f := r.Failures.Kept[0]
+	if f.Name != "oneword" || !strings.Contains(strings.Join(f.Lines, "\n"), "wrong type string") {
+		t.Fatalf("failure %q = %q, want oneword with its vet diagnostic", f.Name, f.Lines)
+	}
+}
+
 // feedGo runs lines through a fresh go test parser.
 func feedGo(lines ...string) (*goTest, Result) {
 	g := &goTest{}

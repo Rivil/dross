@@ -402,6 +402,32 @@ func TestClockFormat(t *testing.T) {
 	}
 }
 
+// TestHeaderLastResort: a tail so long that even runner names alone overflow
+// LineCut still gets lead, every runner's name and the tail — the printer cuts
+// the line, the header drops nothing.
+func TestHeaderLastResort(t *testing.T) {
+	rs := []Result{{Runner: "dart test", Counts: []string{"+20 -2"}}, {Runner: "vitest", Counts: []string{"Tests 1 failed (1)"}}}
+	lead, tail := "FAIL (exit 1) · ", " · "+strings.Repeat("t", LineCut)
+	if got, want := header(lead, rs, tail), lead+"dart test · vitest"+tail; got != want {
+		t.Fatalf("header = %q, want %q", got, want)
+	}
+}
+
+// TestCountsEmptyRunnerAndCounts: a result with no Runner adds its counts
+// unlabelled — an empty part when it has none — and a result with no counts
+// prints its runner name alone.
+func TestCountsEmptyRunnerAndCounts(t *testing.T) {
+	rs := []Result{
+		{Runner: "go test", Counts: []string{"1 ok"}},
+		{Runner: ""},
+		{Runner: "", Counts: []string{"3 ok"}},
+		{Runner: "pytest"},
+	}
+	if got, want := counts(rs, -1), "go test: 1 ok ·  · 3 ok · pytest"; got != want {
+		t.Fatalf("counts = %q, want %q", got, want)
+	}
+}
+
 func TestCutKeepsRunes(t *testing.T) {
 	s := strings.Repeat("a", LineCut-1) + "é"
 	if got := Cut(s); got != strings.Repeat("a", LineCut-1) {

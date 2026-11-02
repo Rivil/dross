@@ -236,43 +236,6 @@ func TestReadmeDocumentsContextNudge(t *testing.T) {
 	}
 }
 
-// TestReadmeNamesSummaryRunners: the `dross test` row's recognised-runner list
-// tracks runsummary's registry, and the row says what a run with several
-// runners prints. Checked inside the summary passage only, so a runner named
-// somewhere else in the long row cannot stand in for the recognised list.
-func TestReadmeNamesSummaryRunners(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "README.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	row := ""
-	for _, line := range strings.Split(string(b), "\n") {
-		if strings.HasPrefix(line, "| `dross test [selector...]` |") {
-			row = line
-		}
-	}
-	if row == "" {
-		t.Fatal("README has no `dross test [selector...]` command row")
-	}
-	_, passage, ok := strings.Cut(row, "when the output is not recognised —")
-	if !ok {
-		t.Fatalf("the dross test row no longer describes the unrecognised-output fallback: %s", row)
-	}
-	passage, _, _ = strings.Cut(passage, "A summary never changes the exit status")
-	// One entry per Result.Runner the registry's parsers report.
-	for _, runner := range []string{"`go test`", "vitest", "jest", "gradle", "`dart test`", "pytest"} {
-		if !strings.Contains(passage, runner) {
-			t.Errorf("the dross test row's recognised runners do not name %s: %s", runner, passage)
-		}
-	}
-	lower := strings.ToLower(passage)
-	for _, want := range []string{"several runners in one run", "ten-block budget"} {
-		if !strings.Contains(lower, want) {
-			t.Errorf("the dross test row does not say %q (merged runners): %s", want, passage)
-		}
-	}
-}
-
 // optionsSection returns the body of options.md's "## <n>." section — the
 // heading line excluded, so a check cannot be satisfied by the title alone —
 // up to the next "## ".

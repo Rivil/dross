@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -87,8 +88,9 @@ func TestMixedHeaderFits(t *testing.T) {
 
 // TestNoCrossClaims: every runner's fixtures are claimed by exactly its own
 // parser — strict claims are what makes merging safe — and only the mixed
-// fixtures by two. Result() is read twice on every claimer and must not
-// change: a merged segment reads each claiming parser once more.
+// fixtures by two: flutter test's and vitest's. Result() is read twice on
+// every claimer, the mixed ones included, and must not change: a merged
+// segment reads each claiming parser once more.
 func TestNoCrossClaims(t *testing.T) {
 	own := map[string]map[string]bool{
 		"gotest": {"*runsummary.goTest": true},
@@ -108,17 +110,32 @@ func TestNoCrossClaims(t *testing.T) {
 			if len(got) != 1 || !mine[got[0]] {
 				t.Errorf("%s is claimed by %q, want exactly one of %v", p, got, keys(mine))
 			}
-			for _, pr := range s.parsers {
-				if pr.Claims() && !reflect.DeepEqual(pr.Result(), pr.Result()) {
-					t.Errorf("%T.Result() changes when read twice on %s", pr, p)
-				}
-			}
+			resultTwice(t, s, p)
 		}
 	}
 	mixed, _ := filepath.Glob(filepath.Join("testdata", "mixed", "*.txt"))
+	if len(mixed) == 0 {
+		t.Fatal("no mixed fixtures")
+	}
+	want := []string{"*runsummary.dart", "*runsummary.vitest"}
 	for _, p := range mixed {
-		if got := claimers(fixtureSegment(t, p)); len(got) != 2 {
-			t.Errorf("%s is claimed by %q, want two runners", p, got)
+		s := fixtureSegment(t, p)
+		got := claimers(s)
+		sort.Strings(got)
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s is claimed by %q, want exactly %q", p, got, want)
+		}
+		resultTwice(t, s, p)
+	}
+}
+
+// resultTwice fails when a claiming parser's Result() changes on a second
+// read.
+func resultTwice(t *testing.T, s *Segment, path string) {
+	t.Helper()
+	for _, pr := range s.parsers {
+		if pr.Claims() && !reflect.DeepEqual(pr.Result(), pr.Result()) {
+			t.Errorf("%T.Result() changes when read twice on %s", pr, path)
 		}
 	}
 }
@@ -192,5 +209,46 @@ func TestMixedWebRed(t *testing.T) {
 	}
 	if !hasLine(out, "✗ |default| src/lib/zz-dross-fixture.test.ts > dross mixed red") {
 		t.Fatalf("the vitest failure is missing:\n%s", out)
+	}
+}
+
+// TestReadmeNamesSummaryRunners: the README's `dross test` row names every
+// runner runsummary's registry recognises — the list is the registry's, so a
+// parser registered without a README mention fails here — and says what a run
+// with several runners prints. Checked inside the summary passage only, so a
+// runner named somewhere else in the long row cannot stand in for the list.
+func TestReadmeNamesSummaryRunners(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := ""
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(line, "| `dross test [selector...]` |") {
+			row = line
+		}
+	}
+	if row == "" {
+		t.Fatal("README has no `dross test [selector...]` command row")
+	}
+	_, passage, ok := strings.Cut(row, "when the output is not recognised —")
+	if !ok {
+		t.Fatalf("the dross test row no longer describes the unrecognised-output fallback: %s", row)
+	}
+	passage, _, _ = strings.Cut(passage, "A summary never changes the exit status")
+	runners := registryRunners()
+	if len(runners) < 6 {
+		t.Fatalf("the registry holds %d runners %q, want at least the six this phase ships", len(runners), runners)
+	}
+	for _, runner := range runners {
+		if runner == "" || !strings.Contains(passage, runner) {
+			t.Errorf("the dross test row's recognised runners do not name %q: %s", runner, passage)
+		}
+	}
+	lower := strings.ToLower(passage)
+	for _, want := range []string{"several runners in one run", "ten-block budget"} {
+		if !strings.Contains(lower, want) {
+			t.Errorf("the dross test row does not say %q (merged runners): %s", want, passage)
+		}
 	}
 }

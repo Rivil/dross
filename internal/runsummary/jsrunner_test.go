@@ -295,7 +295,8 @@ func TestVitestConsoleFailNotAFailure(t *testing.T) {
 	}
 }
 
-// TestVitestEachBracketNameWhole: an it.each title holding " [ " prints whole.
+// TestVitestEachBracketNameWhole: an it.each title holding " [ " prints whole,
+// a dotted value repeated in its bracket ("rounds 1.5 [ 1.5 ]") included.
 func TestVitestEachBracketNameWhole(t *testing.T) {
 	r := feedJS(t, "vitest_each_bracket.txt", &vitest{}).Result()
 	f := failureNamed(t, r, "default  src/lib/zz-dross-fixture.test.ts > dross fixture > adds [ 1, 2 ]")
@@ -306,6 +307,7 @@ func TestVitestEachBracketNameWhole(t *testing.T) {
 		"src/a.test.ts > adds [ 1, 2 ]":            "src/a.test.ts > adds [ 1, 2 ]",
 		"src/a.test.ts > adds [ s ]":               "src/a.test.ts > adds [ s ]",
 		"case 1 [ 1 ]":                             "case 1 [ 1 ]",
+		"src/a.test.ts > rounds 1.5 [ 1.5 ]":       "src/a.test.ts > rounds 1.5 [ 1.5 ]",
 		"src/x.test.ts [ src/x.test.ts ]":          "src/x.test.ts",
 		"default  src/x.test.ts [ src/x.test.ts ]": "default  src/x.test.ts",
 	} {

@@ -277,6 +277,38 @@ func TestCollectEmptyHostLogSaysSo(t *testing.T) {
 	assertCollectArtefacts(t, dir, id)
 }
 
+// TestCollectRunLogErrorSaysSo: a host log that arrives but cannot be kept —
+// .dross/logs is a file — is noted with the run log's own error, once, and
+// the collect still writes its verdict.
+func TestCollectRunLogErrorSaysSo(t *testing.T) {
+	const id = "collect-log-unkept"
+	dir := collectRepo(t, id)
+	mustWrite(t, filepath.Join(dir, ".dross", "logs"), "not a directory\n")
+	detachFetchLog = func(_ remote.Target, _, local string) error {
+		return os.WriteFile(local, []byte("HOST-LOG-MARK\n"), 0o644)
+	}
+	var err error
+	out := captureStdout(t, func() {
+		captureStderr(t, func() { err = collectDetached(id) })
+	})
+	if err != nil {
+		t.Fatalf("an unkept run log failed the collect: %v", err)
+	}
+	var notes []string
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(l, "log unavailable:") {
+			notes = append(notes, l)
+		}
+	}
+	if len(notes) != 1 || !strings.Contains(notes[0], "create "+runlog.Dir) || !strings.Contains(notes[0], "not a directory") {
+		t.Fatalf("want exactly one 'log unavailable:' line carrying the run log's error, got %q:\n%s", notes, out)
+	}
+	if strings.Contains(out, "verify log (") {
+		t.Errorf("a log path printed for a log that was never kept:\n%s", out)
+	}
+	assertCollectArtefacts(t, dir, id)
+}
+
 func TestCollectLogFetchFailureIsANote(t *testing.T) {
 	const id = "collect-log-gone"
 	dir := collectRepo(t, id)

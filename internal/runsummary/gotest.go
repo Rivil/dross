@@ -51,17 +51,18 @@ var (
 	// an indented continuation, vet's own "# [pkg]" header, or the compiler's
 	// cut-off note. Any other line is the next package's, never the block's.
 	goCompiler = regexp.MustCompile(`^(?:\S+\.go:\d+(?::\d+)?: |[ \t]|# \[|vet: |too many errors)`)
-	// goDiag is a compiler diagnostic, the only line that proves a one-word
-	// "# X" heads a build block.
+	// goDiag is a compiler diagnostic, one of the two lines that prove a
+	// one-word "# X" heads a build block (vet's "# [X]" is the other).
 	goDiag = regexp.MustCompile(`^\S+\.go:\d+`)
 )
 
 func (g *goTest) Feed(line string) {
 	// A one-word "# X" is a build block only where one can be: when a
-	// compiler line follows it. A test printing "# Results" is text.
+	// compiler line follows it, or vet's own "# [X]" header for the same
+	// package. A test printing "# Results" is text.
 	if h := g.heading; h != "" {
 		g.heading = ""
-		if goDiag.MatchString(line) {
+		if goDiag.MatchString(line) || line == "# ["+goBlock.FindStringSubmatch(h)[1]+"]" {
 			g.openBlock(h)
 		} else {
 			g.text(h)

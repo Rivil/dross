@@ -15,11 +15,12 @@ func init() {
 // "N tests completed, M failed". Without testLogging gradle prints no count on
 // green, and none is made up: no JUnit XML is read and no init script injected
 // (gradle_green_counts). Each unindented "Class > method FAILED" header is one
-// failure named Class.method, holding the indented lines under it; the
-// "> Task … FAILED" line and the "* What went wrong:" epilogue open none. It
-// claims a segment only once a "BUILD … in" line has printed: a run cut short
-// is not summarised. A compile break prints BUILD FAILED with no failing test,
-// which Render turns into the fallback tail.
+// failure named Class.method — a JUnit 5 nested class's "Outer > Inner >
+// method() FAILED" is Outer.Inner.method() — holding the indented lines under
+// it; the "> Task … FAILED" line and the "* What went wrong:" epilogue open
+// none. It claims a segment only once a "BUILD … in" line has printed: a run
+// cut short is not summarised. A compile break prints BUILD FAILED with no
+// failing test, which Render turns into the fallback tail.
 type gradle struct {
 	outcome string
 	tasks   string
@@ -58,7 +59,7 @@ func (g *gradle) Feed(line string) {
 		// "> Task :app:testDebugUnitTest FAILED", "> There were failing tests".
 	case gradleFailed.MatchString(line):
 		m := gradleFailed.FindStringSubmatch(line)
-		g.cur = &blockLines{f: Failure{Name: m[1] + "." + m[2]}}
+		g.cur = &blockLines{f: Failure{Name: m[1] + "." + strings.ReplaceAll(m[2], " > ", ".")}}
 	}
 }
 

@@ -1,6 +1,7 @@
 package runsummary
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -280,5 +281,116 @@ func TestPytestSubtestCounts(t *testing.T) {
 	p.Feed("============== 1 failed, 3 passed, 2 subtests passed in 0.12s ===============")
 	if !p.Claims() || p.counts != "1 failed, 3 passed, 2 subtests passed in 0.12s" {
 		t.Fatalf("claimed=%v counts=%q", p.Claims(), p.counts)
+	}
+}
+
+// TestPytestFailAndTeardownErrorOwnSections: a test that FAILED and then
+// ERRORed at teardown has two sections, the ERRORS one printed first; the
+// FAILED line takes the plain section and the ERROR line the teardown one.
+func TestPytestFailAndTeardownErrorOwnSections(t *testing.T) {
+	p := &pytest{}
+	for _, l := range []string{
+		"==================================== ERRORS ====================================",
+		"_________________________ ERROR at teardown of test_x __________________________",
+		"    @pytest.fixture",
+		"    def res():",
+		"        yield",
+		">       raise RuntimeError(\"fixture teardown\")",
+		"E       RuntimeError: fixture teardown",
+		"",
+		"tests/test_a.py:8: RuntimeError",
+		"=================================== FAILURES ===================================",
+		"____________________________________ test_x ____________________________________",
+		"",
+		"    def test_x(res):",
+		">       assert 1 == 2",
+		"E       assert 1 == 2",
+		"",
+		"tests/test_a.py:12: AssertionError",
+		"=========================== short test summary info ============================",
+		"FAILED tests/test_a.py::test_x - assert 1 == 2",
+		"ERROR tests/test_a.py::test_x - RuntimeError: fixture teardown",
+		"========================== 1 failed, 1 error in 0.02s ==========================",
+	} {
+		p.Feed(l)
+	}
+	r := p.Result()
+	if !p.Claims() || r.Failures.Total != 2 || len(r.Failures.Kept) != 2 {
+		t.Fatalf("claimed=%v failures %q, want the FAILED and the ERROR", p.Claims(), names(r))
+	}
+	for i, want := range []struct{ own, other string }{
+		{"E       assert 1 == 2", "RuntimeError"},
+		{"E       RuntimeError: fixture teardown", "assert 1 == 2"},
+	} {
+		f := r.Failures.Kept[i]
+		joined := strings.Join(f.Lines, "\n")
+		if f.Name != "tests/test_a.py::test_x" || !strings.Contains(joined, want.own) || strings.Contains(joined, want.other) {
+			t.Errorf("failure %d %s = %q, want its own %q and no %q", i, f.Name, joined, want.own, want.other)
+		}
+	}
+}
+
+// TestPytestDeepTracebackKeepsELines: a traceback whose frames run past
+// BlockLines still prints its "E   " lines — the test's own failing line,
+// then the innermost frame, a statement marked on two ">" lines included —
+// and counts every line between them in More. A single frame past the bound
+// is cut as it is, never with its ">" line twice.
+func TestPytestDeepTracebackKeepsELines(t *testing.T) {
+	section := []string{
+		"    def test_deep():",
+		">       helper()",
+		"",
+		"tests/test_a.py:5: ",
+		"_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _",
+		"",
+		"    def helper():",
+	}
+	for i := 0; i < BlockLines+10; i++ {
+		section = append(section, fmt.Sprintf("        step_%02d()", i))
+	}
+	section = append(section,
+		">       raise ValueError(",
+		">           \"DEEP-MARK\")",
+		"E       ValueError: DEEP-MARK",
+		"",
+		"tests/test_a.py:50: ValueError",
+	)
+	run := func(section []string) Failure {
+		t.Helper()
+		p := &pytest{}
+		p.Feed("=================================== FAILURES ===================================")
+		p.Feed("_________________________________ test_deep __________________________________")
+		for _, l := range section {
+			p.Feed(l)
+		}
+		p.Feed("=========================== short test summary info ============================")
+		p.Feed("FAILED tests/test_a.py::test_deep - ValueError: DEEP-MARK")
+		p.Feed("============================== 1 failed in 0.01s ===============================")
+		if !p.Claims() {
+			t.Fatal("the run is not claimed")
+		}
+		return failureNamed(t, p.Result(), "tests/test_a.py::test_deep")
+	}
+	f := run(section)
+	want := []string{">       helper()", ">       raise ValueError(", ">           \"DEEP-MARK\")", "E       ValueError: DEEP-MARK", "", "tests/test_a.py:50: ValueError"}
+	if !reflect.DeepEqual(f.Lines, want) {
+		t.Fatalf("lines %q, want the test's line then the innermost frame %q", f.Lines, want)
+	}
+	if total := len(section) - 1; len(f.Lines)+f.More != total {
+		t.Fatalf("%d kept + %d more, want every one of the section's %d lines from its first \">\" accounted for", len(f.Lines), f.More, total)
+	}
+
+	short := append(append([]string{}, section[:7]...), section[len(section)-5:]...)
+	if f := run(short); !reflect.DeepEqual(f.Lines, short[1:]) || f.More != 0 {
+		t.Fatalf("a traceback inside the bound = %q (more %d), want it whole: %q", f.Lines, f.More, short[1:])
+	}
+
+	single := []string{">       assert check()"}
+	for i := 0; i < BlockLines+5; i++ {
+		single = append(single, fmt.Sprintf("E       line %02d", i))
+	}
+	f = run(single)
+	if len(f.Lines) != BlockLines || f.Lines[0] != single[0] || f.Lines[1] != single[1] || f.More != len(single)-BlockLines {
+		t.Fatalf("one frame past the bound: %d lines (first %q), more %d; want it cut as printed", len(f.Lines), f.Lines[:2], f.More)
 	}
 }

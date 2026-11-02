@@ -66,6 +66,85 @@ func TestDartGreenCounts(t *testing.T) {
 	if r := parseDart(t, "expanded_red.txt"); !reflect.DeepEqual(r.Counts, []string{"+20 -2"}) {
 		t.Fatalf("red counts %q, want the final counter +20 -2", r.Counts)
 	}
+	// No feastahead run skips a test, so the skip counter is fed inline, in
+	// the live fixtures' progress-line shape.
+	for _, tc := range []struct{ terminal, want string }{
+		{"00:05 +21 ~1: All tests passed!", "+21 ~1"},
+		{"00:05 +20 ~1 -2: Some tests failed.", "+20 ~1 -2"},
+	} {
+		d := &dart{}
+		d.Feed("00:05 +20 ~1: /repo/test/a_test.dart: skipped case")
+		d.Feed(tc.terminal)
+		if r := d.Result(); !d.Claims() || !reflect.DeepEqual(r.Counts, []string{tc.want}) {
+			t.Errorf("%q: claimed=%v counts %q, want [%q] with ~K verbatim", tc.terminal, d.Claims(), r.Counts, tc.want)
+		}
+	}
+}
+
+// TestDartPendingNotMisattributed: an exception block a test prints after its
+// own [E] line — a teardown exception — stays that test's and never becomes
+// the start of the next failure; a held block whose [E] line never came is
+// dropped at the next progress line, not carried onto a later test.
+func TestDartPendingNotMisattributed(t *testing.T) {
+	feedDart := func(lines ...string) Result {
+		t.Helper()
+		d := &dart{}
+		for _, l := range lines {
+			d.Feed(l)
+		}
+		if !d.Claims() {
+			t.Fatal("the run is not claimed")
+		}
+		return d.Result()
+	}
+	excBlock := func(mark string) []string {
+		return []string{
+			"══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════",
+			"The following assertion was thrown during a tearDown callback:",
+			mark,
+			"════════════════════════════════════════════════════════════════════════════════════════════════════",
+		}
+	}
+	lines := []string{
+		"00:01 +0: /repo/test/a_test.dart: A",
+		"00:01 +0 -1: /repo/test/a_test.dart: A [E]",
+		"  Expected: 'A-OWN'",
+	}
+	lines = append(lines, excBlock("TEARDOWN-MARK")...)
+	lines = append(lines,
+		"00:02 +0 -1: /repo/test/a_test.dart: B",
+		"00:02 +0 -2: /repo/test/a_test.dart: B [E]",
+		"  Expected: 'B-OWN'",
+		"00:02 +0 -2: Some tests failed.",
+	)
+	r := feedDart(lines...)
+	a := strings.Join(failureNamed(t, r, "/repo/test/a_test.dart: A").Lines, "\n")
+	b := strings.Join(failureNamed(t, r, "/repo/test/a_test.dart: B").Lines, "\n")
+	if strings.Contains(b, "TEARDOWN-MARK") || strings.Contains(b, "EXCEPTION CAUGHT") {
+		t.Errorf("B carries A's teardown exception:\n%s", b)
+	}
+	if !strings.Contains(a, "A-OWN") || !strings.Contains(a, "EXCEPTION CAUGHT") || !strings.Contains(a, "TEARDOWN-MARK") {
+		t.Errorf("A lost its teardown exception:\n%s", a)
+	}
+	if !strings.Contains(b, "B-OWN") || r.Failures.Total != 2 {
+		t.Errorf("B = %q, total %d; want B's own line and two failures", b, r.Failures.Total)
+	}
+
+	// Held with no failure open, cut before its closing rule, then a progress
+	// line that is not its [E]: the progress line ends the block too.
+	lines = []string{"00:01 +0: /repo/test/a_test.dart: A"}
+	lines = append(lines, excBlock("ORPHAN-MARK")[:3]...)
+	lines = append(lines,
+		"00:02 +1: /repo/test/a_test.dart: C",
+		"00:02 +1 -1: /repo/test/a_test.dart: C [E]",
+		"  Expected: 'C-OWN'",
+		"00:02 +1 -1: Some tests failed.",
+	)
+	r = feedDart(lines...)
+	c := strings.Join(failureNamed(t, r, "/repo/test/a_test.dart: C").Lines, "\n")
+	if strings.Contains(c, "ORPHAN-MARK") || !strings.Contains(c, "C-OWN") || r.Failures.Total != 1 {
+		t.Errorf("C = %q, total %d; want only C's own line and one failure", c, r.Failures.Total)
+	}
 }
 
 // TestDartRedNames: names carry neither the counter nor the [E] marker.
