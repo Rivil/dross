@@ -36,7 +36,7 @@ Counts = outcome + `N actionable tasks` (+ `N tests completed, M failed` when pr
     "if JUnit XML reads are added, TestGradleReadsNoFiles fails: gradle.go imports none of os, io/fs, path/filepath, encoding/xml",
     "if a fixture is synthesized, TestGradleFixturesCaptured fails: every file starts \"# captured: gradle@<ver> ./gradlew testDebugUnitTest (equerry@<sha>)\", red files name their break",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-2"
@@ -66,7 +66,7 @@ runner's own +N ~S -F. Each `[E]` header starts a block. Runner label is "dart t
     "if a running counter forges a claim, TestDartTruncatedNotClaimed fails: either red fixture cut before its terminal line is not claimed",
     "if a fixture is synthesized, TestDartFixturesCaptured fails: every file starts \"# captured: flutter@<ver> flutter test --reporter <r> (feastahead@<sha>)\"",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-3"
@@ -98,7 +98,7 @@ matching `____ name ____` section."""
     "if a collection error is lost, TestPytestCollectError fails: `ERROR collecting tests/x.py` is one failure named by its path and the counts keep pytest's `error` phrase",
     "if a fixture is synthesized, TestPytestFixturesCaptured fails: every file starts \"# captured: pytest@<ver> <command> (sunday-rider@<sha>)\"",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-4"
@@ -115,7 +115,7 @@ trailing lines move into the marker's count. Applied per printed copy (covers vi
 Update the BlockBytes doc and TestBlockByteShare's arithmetic."""
   covers = ["c-4"]
   test_contract = ["if name/marker escape the bound, TestWorstCaseBlockBytes fails: 14 failures with names past LineCut, 40 LineCut-byte lines each, a 200-byte logPath → every printed block (✗ through marker) ≤ BlockBytes, len(out) ≤ 30,000, exactly 10 ✗ blocks (TestMassBreakSize extended the same way)", "if the name is not counted, TestBlockNameCounts fails: a 240-byte name prints strictly fewer lines than a 10-byte name", "if the marker is not counted, TestBlockMarkerCounts fails: a 200-byte logPath prints fewer lines than a 10-byte one", "if dropped lines vanish from the count, TestBlockBoundCountsDropped fails: marker N = original More + lines dropped", "if the bound trims what fits, TestBlockBoundKeepsSmallBlock fails: a name + 3 lines block prints unchanged", "if a shared-header copy re-stamped with a 240-byte name exceeds BlockBytes in printed output, TestSharedHeaderCopyBounded (new, in summary_test.go — jsrunner_test.go is t-6's) fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-5"
@@ -131,13 +131,13 @@ Update the BlockBytes doc and TestBlockByteShare's arithmetic."""
     "if existing build/vet handling regresses, TestGoBuildFailed / TestGoSetupAndVet fail: exact names and counts kept; vet's second `# [pkg]` header stays inside its block",
     "if the toolchain pin is loosened, TestGoFixturesCaptured fails on any header that isn't \"# captured: go1.27.1 go test -count=1 \"",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-6"
   wave = 1
   title = "Confine vitest FAIL to banners; keep it.each names"
-  files = ["internal/runsummary/jsrunner.go", "internal/runsummary/jsrunner_test.go", "internal/runsummary/testdata/js/vitest_console_fail.txt", "internal/runsummary/testdata/js/vitest_console_fail_green.txt", "internal/runsummary/testdata/js/vitest_each_bracket.txt"]
+  files = ["internal/runsummary/jsrunner.go", "internal/runsummary/jsrunner_test.go", "internal/runsummary/testdata/js/vitest_console_fail.txt", "internal/runsummary/testdata/js/vitest_console_fail_green.txt", "internal/runsummary/testdata/js/vitest_each_bracket.txt", "internal/runsummary/summary_test.go"]
   description = "In feastahead/web capture runs from local uncommitted tests: one console.logs \"FAIL  phantom\" (red: vitest_console_fail.txt; exit-0:\nvitest_console_fail_green.txt, both live), one it.each title contains \" [ \". FAIL opens a failure only after a Failed Tests/Suites banner;\nstrip only a trailing \" [ <same path> ]\" suite suffix. vitestHeader becomes a recorded version set {4.1.11, 4.1.12} (panel D7)."
   covers = ["c-6"]
   test_contract = [
@@ -146,7 +146,7 @@ Update the BlockBytes doc and TestBlockByteShare's arithmetic."""
     "if the suite strip is lost, TestVitestLoadError fails: \"x.test.ts [ x.test.ts ]\" still named \"x.test.ts\"; every existing vitest_* fixture keeps its names and counts",
     "if the pin is loosened to anything, TestJSFixturesCaptured fails on a vitest version outside the recorded set {4.1.11, 4.1.12}",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-7"
@@ -170,7 +170,7 @@ by hand: drop `head` from stryker_net.go's MultiWriter, watch it fail, restore."
     "if head leaves the MultiWriter with a stream set, TestStrykerNetHeadReachesStderrWithStream fails: stderr lacks CANARY-N-2e5c (observed red before green)",
     "if the head bound or stream copy breaks, TestStrykerNetHeadReachesStderrWithStream fails: stderr carries > strykerHeadLines tool lines, or the stream log holds fewer than all filler lines",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-8"
@@ -186,7 +186,7 @@ testRun records the segment whose spawn returned the error (tr.failed(err) at ea
 shows that segment. When the failing step spawned nothing (host lock, argv validation), it shows no other spawn's tail and names the reason."""
   covers = ["c-9"]
   test_contract = ["if the tail still comes from the last spawn, TestFallbackTailFromFailingStep fails: two hosts, host-1 rsync prints RSYNC-MARK, testHold returns ErrTransport for host-2 → exit 3, stdout has no RSYNC-MARK", "if a failing spawn's own tail is lost, TestFallbackTailFromFailingSpawn fails: lane 1 ran, lane 2's prepare prints PREP-MARK and exits 1 → exit 7 fallback holds PREP-MARK, not lane 1's suite output", "if the 3/4/7 tail stops showing the failing spawn's line and the log path, TestTransportTailShown fails", "if exit codes or tty streaming change, TestExitCodesUnchanged / TestTTYStreamsNonTTYSummarises fail", "if an argv-validation refusal shows another spawn's tail, TestFallbackTailNoSpawnArgvInvalid fails: lane 1 ran and printed LANE1-MARK, lane 2 is refused at argv validation → the 3/4/7 fallback has no LANE1-MARK and names the validation reason"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-9"
@@ -209,7 +209,7 @@ through Record on a terminal and off one (say already printed them). Wave 2 only
     "if a refused run starts creating a log, TestRefusalWritesNoLog / TestLogPathBeforeSpawn fail",
   ]
   depends_on = ["t-8"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-10"
@@ -230,7 +230,7 @@ ambiguous fallback goes; TestAmbiguousClaimFallsBack is rewritten. Both-red case
   covers = ["c-12"]
   test_contract = ["if the merge falls back, TestMixedGreen fails: feastahead_green.txt at exit 0 → one \"PASS ·\" line with both the vitest and the dart test counts (registry order, not hardcoded)", "if one runner's failures vanish, TestMixedRedBothRunners fails: one segment fed testdata/dart/compact_red.txt (t-2) then testdata/js/vitest_console_fail.txt (t-6) → ✗ names are the union, FAIL line carries both runners' counts", "if the budget is per-runner, TestMixedSharesMaxBlocks fails: two fake parsers × 8 failures → exactly 10 ✗ blocks and \"+6 more failing\"", "if the live mixed red mis-renders, TestMixedWebRed fails: feastahead_web_red.txt → dart test counts and the vitest ✗ names", "if strict claims break now that nothing falls back, TestNoCrossClaims fails: every fixture under testdata/{gotest,js,gradle,dart,pytest} is claimed by exactly its own parser; only testdata/mixed by two", "if merging double-closes a parser, TestNoCrossClaims fails: Result() called twice on every claiming parser for every fixture returns equal Results", "if the merged fallback rules regress, the rewritten TestAmbiguousClaimFallsBack fails: two claims + zero failures + exit 1 prints the fallback; two claims + exit 0 → PASS with both counts", "if the mixed header overflows, TestMixedHeaderFits fails: the header stays under LineCut with both runner names intact"]
   depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5", "t-6"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-11"

@@ -2,5 +2,565 @@
   "phase": "test-summary-parsers",
   "base": "milestone/v1.8",
   "base_commit": "ea72a2cb53d1e5658d6c81f6b4c743f61a58db7f",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/runsummary/gradle.go",
+        "internal/runsummary/gradle_test.go",
+        "internal/runsummary/testdata/gradle/green.txt",
+        "internal/runsummary/testdata/gradle/red.txt",
+        "internal/runsummary/testdata/gradle/compile_failed.txt"
+      ],
+      "commit": "d0976938",
+      "completed_at": "2026-11-02T09:36:33.938221Z",
+      "landmarks": [
+        {
+          "feature": "test output summaries",
+          "symbol": "gradle",
+          "loc": "internal/runsummary/gradle.go:38",
+          "what": "gradle parser: BUILD outcome + task/test counts, Class.method failures from plain console"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/runsummary/summary.go",
+        "internal/runsummary/render.go",
+        "internal/runsummary/summary_test.go",
+        "internal/runsummary/merge_test.go",
+        "internal/runsummary/testdata/mixed/feastahead_green.txt",
+        "internal/runsummary/testdata/mixed/feastahead_web_red.txt"
+      ],
+      "commit": "2893d4d5",
+      "completed_at": "2026-11-02T12:06:43.390869Z",
+      "landmarks": [
+        {
+          "feature": "test output summaries",
+          "symbol": "Segment.results",
+          "loc": "internal/runsummary/summary.go:270",
+          "what": "every claiming runner's Result per segment, merged into one header and one MaxBlocks budget; ambiguous-claim fallback removed"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/runsummary/dart.go",
+        "internal/runsummary/dart_test.go",
+        "internal/runsummary/testdata/dart/compact_green.txt",
+        "internal/runsummary/testdata/dart/compact_red.txt",
+        "internal/runsummary/testdata/dart/expanded_green.txt",
+        "internal/runsummary/testdata/dart/expanded_red.txt",
+        "internal/runsummary/testdata/dart/load_error.txt"
+      ],
+      "commit": "028e871e",
+      "completed_at": "2026-11-02T09:53:17.313255Z",
+      "landmarks": [
+        {
+          "feature": "test output summaries",
+          "symbol": "dart",
+          "loc": "internal/runsummary/dart.go:36",
+          "what": "flutter/dart test parser: final +N ~S -F counter, [E] failures with held widget exception blocks, both reporters"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/runsummary/pytest.go",
+        "internal/runsummary/pytest_test.go",
+        "internal/runsummary/testdata/pytest/default_green.txt",
+        "internal/runsummary/testdata/pytest/default_red.txt",
+        "internal/runsummary/testdata/pytest/quiet_green.txt",
+        "internal/runsummary/testdata/pytest/quiet_red.txt",
+        "internal/runsummary/testdata/pytest/selftest_mypy_red.txt",
+        "internal/runsummary/testdata/pytest/collect_error.txt"
+      ],
+      "commit": "9f033b0f",
+      "completed_at": "2026-11-02T10:14:00.398929Z",
+      "landmarks": [
+        {
+          "feature": "test output summaries",
+          "symbol": "pytest",
+          "loc": "internal/runsummary/pytest.go:63",
+          "what": "pytest parser: terminal count line, FAILED/ERROR node ids matched to their sections in print order"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/runsummary/render.go",
+        "internal/runsummary/summary.go",
+        "internal/runsummary/summary_test.go"
+      ],
+      "commit": "549a3776",
+      "completed_at": "2026-11-02T10:19:33.802993Z",
+      "landmarks": [
+        {
+          "feature": "test output summaries",
+          "symbol": "block",
+          "loc": "internal/runsummary/render.go:88",
+          "what": "prints a failure block with name and marker counted toward BlockBytes, trimming trailing lines into the marker"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/runsummary/gotest.go",
+        "internal/runsummary/gotest_test.go",
+        "internal/runsummary/testdata/gotest/build_then_testmain.txt",
+        "internal/runsummary/testdata/gotest/hash_heading.txt",
+        "internal/runsummary/testdata/gotest/hash_heading_green.txt",
+        "internal/runsummary/testdata/gotest/build_failed_oneword.txt"
+      ],
+      "commit": "101de41b",
+      "completed_at": "2026-11-02T10:31:14.903965Z",
+      "landmarks": [
+        {
+          "feature": "test output summaries",
+          "symbol": "goTest.rejoin",
+          "loc": "internal/runsummary/gotest.go:113",
+          "what": "go build blocks close on the next package's line and rejoin cut lines on their own FAIL; one-word # headings need a diagnostic"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/runsummary/jsrunner.go",
+        "internal/runsummary/jsrunner_test.go",
+        "internal/runsummary/summary_test.go",
+        "internal/runsummary/testdata/js/vitest_console_fail.txt",
+        "internal/runsummary/testdata/js/vitest_console_fail_green.txt",
+        "internal/runsummary/testdata/js/vitest_each_bracket.txt"
+      ],
+      "commit": "f4b218f7",
+      "completed_at": "2026-11-02T10:40:46.843171Z",
+      "landmarks": [
+        {
+          "feature": "test output summaries",
+          "symbol": "suiteName",
+          "loc": "internal/runsummary/jsrunner.go:136",
+          "what": "vitest FAIL opens a failure only under a Failed Tests/Suites banner; suite suffix stripped only when it repeats the path"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_log_test.go",
+        "internal/mutation/stryker_stream_test.go"
+      ],
+      "commit": "e5450b00",
+      "completed_at": "2026-11-02T11:04:22.86116Z",
+      "landmarks": [
+        {
+          "feature": "verify detached runs",
+          "symbol": "collectHostLog",
+          "loc": "internal/cmd/verify.go:1400",
+          "what": "collect prints the host log path or 'log unavailable' — never neither; production fetch + stryker-net stream head under test"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/test_output.go",
+        "internal/cmd/test.go",
+        "internal/cmd/test_summary_wiring_test.go"
+      ],
+      "commit": "7b95dc34",
+      "completed_at": "2026-11-02T11:25:30.158045Z",
+      "landmarks": [
+        {
+          "feature": "test output summaries",
+          "symbol": "testRun.failedStep",
+          "loc": "internal/cmd/test_output.go:169",
+          "what": "on exit 3/4/7 the fallback tail comes from the spawn that failed, or names the reason when the failing step spawned nothing"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/runlog/runlog.go",
+        "internal/runlog/runlog_test.go",
+        "internal/cmd/test_output.go",
+        "internal/cmd/test_output_test.go"
+      ],
+      "commit": "6e49cb86",
+      "completed_at": "2026-11-02T11:51:11.682824Z",
+      "landmarks": [
+        {
+          "feature": "test run log",
+          "symbol": "Log.Record",
+          "loc": "internal/runlog/runlog.go:156",
+          "what": "file-only lazy-open log write; dross test copies its pre-spawn lines into the log once, on a terminal or off"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "gradleFailed `^(\\S.*?) \u003e (.+) FAILED` splits on the first \" \u003e \"; JUnit 5 nested classes (\"Outer \u003e Inner \u003e method() FAILED\") would be named \"Outer.Inner \u003e method()\" rather than a clean Class.method. Not exercised by the equerry fixtures.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "The description's 'one multi-line assertion' break is in place (SpeakChunkerTest expects a multi-line value), but gradle's default output prints only 'AssertionError at …:29', so no multi-line failure block is exercised. This is gradle's real behaviour, not a parser gap.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "red.txt interleaves '\u003e Task :app:testDebugUnitTest FAILED' between the two failure blocks (gradle's plain-console output grouping), which usefully proves the task FAILED header opens no failure and closes the prior block.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-12",
+          "text": "The description asks for feastahead's bare `bash scripts/dross-test.sh`, but both testdata/mixed fixtures are scoped runs of that script (args: phone/test/core/util web/src/lib/...). The capture header documents why (the bare run is not green locally), so it is honest, but it is a deviation and the fixtures are not the bare run.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-12",
+          "text": "TestNoCrossClaims only checks len(claimers)==2 for testdata/mixed. It does not check that the two are *runsummary.dart and *runsummary.vitest, so a wrong pair (e.g. jest+dart) would pass.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-12",
+          "text": "The 'Result() twice returns equal Results' check runs only on the gotest/js/gradle/dart/pytest fixtures, not on the testdata/mixed fixtures, which are the ones the merge actually re-reads.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "header's last resort, lead + counts(rs, 0) + tail, can still be longer than LineCut with many runners or a long tail. lines.add would then cut it and could clip a runner name. This is unreachable with today's runner count.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The edited doc comments on Render (render.go) and the package comment (summary.go) were extended in place without rewrapping, leaving one overlong comment line in each.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "dart.pending is only consumed by the next [E] line and never discarded on a non-[E] progress line; an EXCEPTION CAUGHT block printed after a test's [E] line (e.g. a teardown exception), or one not followed by [E], is attributed to whichever test fails next",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "test_contract mentions the final \"~K\" counter verbatim, but no fixture has skipped tests, so TestDartGreenCounts cannot fail if the ~ arm of dartProgress is broken",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the compact reporter shortens long test names with a leading '...' (visible in compact_red.txt progress frames); the two failing names fit, so TestDartReportersAgree passes, but a long failing name would differ between compact and expanded",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "BLOCKING",
+          "criterion": "c-3",
+          "text": "nodeID treats any summary line containing '[' as parametrized and only cuts at '] - ', so a non-parametrized failure whose short message contains a bracket (e.g. `FAILED tests/a.py::test_x - assert [1] == [2]`, which pytest prints untruncated when it fits the 80-column width) is named with the whole message tail and gets no section output. Both the node id and the failure's own output are lost. A message like `assert a[0] - 1 == 2` is cut at the wrong place. Only treat the id as parametrized when '[' comes right after the test name, before any ' - ' (or match against known section keys), and add a fixture or unit case that would fail on this.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "Sections are stored by pytest's header name, which leaves out the file path, so two failing tests with the same function or class name in different modules collide in the map: the second section overwrites the first and both failures show the second test's output. Matching sections in the order they print would avoid this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "pyCount has no phrase for pytest 9's subtest outcomes ('subtests passed/failed'), so such runs go unclaimed and fall back to the raw tail instead of a summary. Safe, but unsummarised.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A count-shaped line inside a section's captured output (e.g. pytester runs printing '1 passed in 0.01s') resets the current section and the summary flag; the real final count line still wins, but that section's output is cut short.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "pytest.section matches any of the plain, setup and teardown keys for every summary line, whatever its kind. If a test both fails and errors at teardown, pytest prints the ERRORS section ('ERROR at teardown of test_x') before FAILURES, so the 'FAILED ...::test_x' summary line takes the teardown section and the ERROR line takes the failure's. Choosing keys by the FAILED/ERROR kind would avoid this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "A section's output starts at its first '\u003e' line. In a multi-frame traceback that line is in the outermost frame, so the 'E   ' lines at the end can still fall past BlockLines=30. The doc comment's 'a long test body never crowds out its E lines' only holds for single-frame failures.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The [Class::] node-id form is covered only by the nodeID unit case 'tests/a.py::TestC::test_y'. No fixture or end-to-end test exercises the 'Class.test_y' section-key mapping.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPytestGreenUnderRedWrapper uses NewSegment, so all registered parsers see the selftest output. It therefore also guards against another runner falsely claiming the mypy/ruff wrapper lines.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "test_contract compares against a 10-byte name and a 10-byte logPath; TestBlockNameCounts uses a 1-byte name and TestBlockMarkerCounts a 2-byte path. The comparison still holds (13 vs 12 lines) and fails without the change, so this is only a mismatch with the contract's wording.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In TestBlockByteShare's long-lines case the render-time bound and Failure.Line's stored bound both come to 11 lines, so that subtest no longer tells the two bounds apart; the new dedicated tests cover the render-time bound.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The printedBlocks helper ends a block at any line starting with \"log: \" or containing the more-failing text, so a failure output line with that text would split a block early. That is harmless for the current inputs.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "goCompiler only accepts file.go:N diagnostics, indented lines, '# [', 'vet: ' and 'too many errors'. Real block bodies that start differently (an import-cycle setup error 'package example.com/a' + '\\timports ...', linker/cgo errors like '.../link: ...' or 'gcc: error: ...', the 'note: module requires Go ...' line) now close the block with no lines. Their text goes to the orphan buffer, which is discarded at the package's FAIL line because blocks[pkg] is set, so the failure shows a name with no message. No fixture covers this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "The pending-heading check accepts any indented next line through goCompiler's '[ \\t]' alternative, so a test printing '# Results' followed by an indented line (e.g. '  row 1 ok') still opens a phantom build block.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestGoHashHeadingNotABuildBlock's green half is meaningful: Render prints PASS only when failing == 0, so a phantom Results block would turn it into a FAIL line.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "TestGoBlockKeepsNonDiagnosticErrors is hand-typed, not captured, and its link-failure header '# example.com/cgo/c' may not match go's real shape. A test-binary link failure is typically headed '# \u003cpkg\u003e.test', so the cut name ('\u003cpkg\u003e.test') never equals the FAIL line's pkg. rejoin is then skipped and the trailing linker lines become a second failure named after the package instead of rejoining the block.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "goDiag only accepts a file:line line after a one-word '# X'. A one-word module's vet block ('# oneword' then '# [oneword]') or a non-file:line setup error is treated as text and reported only through the orphan path, named after the package, not as a build block.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "When the cut block was dropped by the MaxBlocks budget, rejoin finds no kept entry and discards the orphan lines; harmless because the block is not shown anyway.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "suiteName strips ' [ X ]' whenever name[:i] merely ends with X (strings.HasSuffix with no boundary), so an it.each title like 'src/a.test.ts \u003e adds [ s ]' or 'case 1 [ 1 ]' is still clipped; require a boundary (prefix == X or ends with ' '+X)",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the exit-0 console fixture check is meaningful: Render emits FAIL whenever any failure is counted, so a resurrected phantom would break the PASS prefix assertion",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the synthetic feeds in TestSharedErrorBounded and TestSharedHeaderCopyBounded were updated to emit a Failed Tests banner first, matching the new gating",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "suiteName can still clip an it.each title whose bracketed value contains '.' or '/' and also appears just before the bracket, e.g. 'src/a.test.ts \u003e rounds 1.5 [ 1.5 ]' becomes 'src/a.test.ts \u003e rounds 1.5'. Real suite headers never contain ' \u003e ', so also requiring that would close the gap.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "failedSection is reset only by the Test Files/Tests summary lines or an Unhandled Errors banner, not by the [n/m] footer. That is correct, because several FAIL blocks follow footers within one section.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestVitestConsoleFailNotAFailure hardcodes N=1 rather than reading it from the fixture's Tests line. It does check p.tests starts with 'Tests 1 failed', so the two stay in step.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestStrykerNetHeadReachesStderrWithStream declares a local const canary = \"CANARY-N-2e5c\" duplicating the package-level canaryN in stryker_net_failure_test.go; reusing canaryN would keep the two in step.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The red-before-green proof for the stryker.net head (dropping head from stryker_net.go's MultiWriter) was done by hand, so the diff cannot show it; the assertions as written would fail on that mutation.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "In TestFallbackTailFromFailingSpawn and TestFallbackTailNoSpawnArgvInvalid, the 'no LANE1-MARK in the fallback' checks would pass on the old code too: laneDone already summarises and clears segs after lane 1, so lane 1's segment was never a candidate for lane 2's 3/4/7 tail. TestFallbackTailFromFailingSpawn passes in full on the old code (the last spawn was the failing prepare), so it only guards against the failing spawn's tail being lost, which is what its contract line asks. The real 'another spawn's tail' guard is TestFallbackTailFromFailingStep.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "When no tail is available, failedStep builds its own 'exit N · the run did not happen — the failing step printed nothing' line instead of using runsummary's fallback renderer. For the host-lock case nothing was spawned at all, so 'printed nothing' is slightly loose wording; the reason line underneath makes it clear.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The description says tr.failed(err), but the code is tr.failed() with no argument. The error is passed to summarise instead, so nothing is lost.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "When Record is the call that trips the failure, the shared warning still says the run's output goes to the terminal instead. That holds for later Write calls, but the Record bytes themselves are dropped, so the wording is slightly loose for that path.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPendingLinesReachLogOnTerminal also covers the case with no terminal, which pins down the path where the log is healthy and stdout is not a terminal as well.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
 }

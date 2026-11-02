@@ -2845,6 +2845,56 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "test-summary-parsers/t-1": {
+      "issue": "DRO-1052",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-10": {
+      "issue": "DRO-1061",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-2": {
+      "issue": "DRO-1053",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-3": {
+      "issue": "DRO-1054",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-4": {
+      "issue": "DRO-1055",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-5": {
+      "issue": "DRO-1056",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-6": {
+      "issue": "DRO-1057",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-7": {
+      "issue": "DRO-1058",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-8": {
+      "issue": "DRO-1059",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-9": {
+      "issue": "DRO-1060",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "tool-gate-hooks/t-1": {
       "issue": "DRO-789",
       "plan_status": "done",
