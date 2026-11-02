@@ -1,0 +1,29 @@
+# captured: pytest@9.1.1 docker compose --profile test run --rm test pytest (sunday-rider@5720fae) break: appends `import sundayride_no_such_module` to tests/test_parsing_keywords.py
+ Container sundayride-test-run-34f3e69e1ebc Creating 
+ Container sundayride-test-run-34f3e69e1ebc Created 
+============================= test session starts ==============================
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
+rootdir: /repo/api
+configfile: pyproject.toml
+testpaths: tests
+plugins: asyncio-1.4.0, anyio-4.14.2
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1915 items / 1 error
+
+==================================== ERRORS ====================================
+_______________ ERROR collecting tests/test_parsing_keywords.py ________________
+ImportError while importing test module '/repo/api/tests/test_parsing_keywords.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_parsing_keywords.py:438: in <module>
+    import sundayride_no_such_module  # noqa: F401, E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ModuleNotFoundError: No module named 'sundayride_no_such_module'
+=========================== short test summary info ============================
+ERROR tests/test_parsing_keywords.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+=============================== 1 error in 2.33s ===============================
+

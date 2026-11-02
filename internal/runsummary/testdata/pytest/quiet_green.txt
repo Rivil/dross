@@ -1,0 +1,278 @@
+# captured: pytest@9.1.1 docker compose --profile test run --rm test /repo/scripts/selftest.sh (sunday-rider@5720fae) ruff → mypy → pytest -q
+ Image sundayride-test Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 552B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 30B 0.1s
+#2 transferring dockerfile: 7.95kB 0.1s done
+#2 DONE 0.1s
+
+#3 [internal] load metadata for docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+#3 ...
+
+#4 [auth] astral-sh/uv:pull token for ghcr.io
+#4 DONE 0.0s
+
+#5 [internal] load metadata for ghcr.io/astral-sh/uv:0.12.3@sha256:2d890623d310b57771ce840f0da5eed5fc6d657da05ffaa45d82797b53fa3abc
+#5 DONE 1.3s
+
+#3 [internal] load metadata for docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+#3 DONE 1.3s
+
+#6 [internal] load .dockerignore
+#6 transferring context: 1.59kB done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 859.79kB 0.0s done
+#7 DONE 0.1s
+
+#8 FROM ghcr.io/astral-sh/uv:0.12.3@sha256:2d890623d310b57771ce840f0da5eed5fc6d657da05ffaa45d82797b53fa3abc
+#8 resolve ghcr.io/astral-sh/uv:0.12.3@sha256:2d890623d310b57771ce840f0da5eed5fc6d657da05ffaa45d82797b53fa3abc 0.0s done
+#8 sha256:f8a6cbf1b73072d661dd29724c386bcde777136f4f297e60e85bc0e42f6f3d3c 0B / 98B 0.2s
+#8 sha256:f8a6cbf1b73072d661dd29724c386bcde777136f4f297e60e85bc0e42f6f3d3c 98B / 98B 0.2s done
+#8 sha256:a92ab5dd4845e4c20ab1120086de6517db17880c0c2f02bee7636a48efea390a 0B / 21.38MB 0.3s
+#8 sha256:a92ab5dd4845e4c20ab1120086de6517db17880c0c2f02bee7636a48efea390a 4.19MB / 21.38MB 0.5s
+#8 sha256:a92ab5dd4845e4c20ab1120086de6517db17880c0c2f02bee7636a48efea390a 8.39MB / 21.38MB 0.9s
+#8 sha256:a92ab5dd4845e4c20ab1120086de6517db17880c0c2f02bee7636a48efea390a 13.63MB / 21.38MB 1.8s
+#8 sha256:a92ab5dd4845e4c20ab1120086de6517db17880c0c2f02bee7636a48efea390a 19.92MB / 21.38MB 2.0s
+#8 sha256:a92ab5dd4845e4c20ab1120086de6517db17880c0c2f02bee7636a48efea390a 21.38MB / 21.38MB 2.0s done
+#8 extracting sha256:a92ab5dd4845e4c20ab1120086de6517db17880c0c2f02bee7636a48efea390a
+#8 extracting sha256:a92ab5dd4845e4c20ab1120086de6517db17880c0c2f02bee7636a48efea390a 0.2s done
+#8 DONE 2.2s
+
+#9 [base 1/4] FROM docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+#9 resolve docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea 0.0s done
+#9 sha256:3550292b2150d689c8a69849320a815d1d54883f6aecf670f098c1a16f2c5436 251B / 251B 0.1s done
+#9 sha256:8aff2d3a9af8ed70ae2aa065663f6a7b99d3cd41564528e8d5f039ec0faae595 12.05MB / 12.05MB 0.7s done
+#9 sha256:ab2cb3ee67af16dd0212f1564a3c1a7bfc96172b7c21c74895492bd87456fb24 4.61MB / 4.61MB 1.0s done
+#9 sha256:bf7af0229701decd1b9f42143504fc8f69e5664c37e57001d198e731e4f86c2e 30.16MB / 30.16MB 1.7s done
+#9 extracting sha256:bf7af0229701decd1b9f42143504fc8f69e5664c37e57001d198e731e4f86c2e
+#9 ...
+
+#8 FROM ghcr.io/astral-sh/uv:0.12.3@sha256:2d890623d310b57771ce840f0da5eed5fc6d657da05ffaa45d82797b53fa3abc
+#8 extracting sha256:f8a6cbf1b73072d661dd29724c386bcde777136f4f297e60e85bc0e42f6f3d3c 0.0s done
+#8 DONE 2.2s
+
+#9 [base 1/4] FROM docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+#9 extracting sha256:bf7af0229701decd1b9f42143504fc8f69e5664c37e57001d198e731e4f86c2e 0.4s done
+#9 extracting sha256:ab2cb3ee67af16dd0212f1564a3c1a7bfc96172b7c21c74895492bd87456fb24 0.1s done
+#9 extracting sha256:8aff2d3a9af8ed70ae2aa065663f6a7b99d3cd41564528e8d5f039ec0faae595
+#9 extracting sha256:8aff2d3a9af8ed70ae2aa065663f6a7b99d3cd41564528e8d5f039ec0faae595 0.2s done
+#9 DONE 2.5s
+
+#9 [base 1/4] FROM docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+#9 extracting sha256:3550292b2150d689c8a69849320a815d1d54883f6aecf670f098c1a16f2c5436 done
+#9 DONE 2.5s
+
+#10 [base 2/4] RUN apt-get update     && apt-get install -y --no-install-recommends libexpat1 osmium-tool     && rm -rf /var/lib/apt/lists/*
+#10 0.310 Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
+#10 0.329 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#10 0.338 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+#10 0.347 Get:4 http://deb.debian.org/debian trixie/main arm64 Packages [9614 kB]
+#10 0.601 Get:5 http://deb.debian.org/debian trixie-updates/main arm64 Packages [1108 B]
+#10 0.601 Get:6 http://deb.debian.org/debian-security trixie-security/main arm64 Packages [294 kB]
+#10 1.222 Fetched 10.1 MB in 1s (10.6 MB/s)
+#10 1.222 Reading package lists...
+#10 1.590 Reading package lists...
+#10 1.965 Building dependency tree...
+#10 2.059 Reading state information...
+#10 2.197 The following additional packages will be installed:
+#10 2.198   libboost-program-options1.83.0
+#10 2.220 The following NEW packages will be installed:
+#10 2.220   libboost-program-options1.83.0 libexpat1 osmium-tool
+#10 2.253 0 upgraded, 3 newly installed, 0 to remove and 17 not upgraded.
+#10 2.253 Need to get 1120 kB of archives.
+#10 2.253 After this operation, 5417 kB of additional disk space will be used.
+#10 2.253 Get:1 http://deb.debian.org/debian-security trixie-security/main arm64 libexpat1 arm64 2.9.0-1~deb13u1 [114 kB]
+#10 2.274 Get:2 http://deb.debian.org/debian trixie/main arm64 libboost-program-options1.83.0 arm64 1.83.0-4.2 [331 kB]
+#10 2.286 Get:3 http://deb.debian.org/debian trixie/main arm64 osmium-tool arm64 1.18.0-1 [675 kB]
+#10 2.385 debconf: unable to initialize frontend: Dialog
+#10 2.385 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#10 2.385 debconf: falling back to frontend: Readline
+#10 2.385 debconf: unable to initialize frontend: Readline
+#10 2.385 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/aarch64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/aarch64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/aarch64-linux-gnu/perl-base /usr/lib/aarch64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8, <STDIN> line 3.)
+#10 2.385 debconf: falling back to frontend: Teletype
+#10 2.387 debconf: unable to initialize frontend: Teletype
+#10 2.387 debconf: (This frontend requires a controlling tty.)
+#10 2.387 debconf: falling back to frontend: Noninteractive
+#10 2.789 Fetched 1120 kB in 0s (13.9 MB/s)
+#10 2.826 Selecting previously unselected package libexpat1:arm64.
+#10 2.826 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 5649 files and directories currently installed.)
+#10 2.830 Preparing to unpack .../libexpat1_2.9.0-1~deb13u1_arm64.deb ...
+#10 2.835 Unpacking libexpat1:arm64 (2.9.0-1~deb13u1) ...
+#10 2.869 Selecting previously unselected package libboost-program-options1.83.0:arm64.
+#10 2.870 Preparing to unpack .../libboost-program-options1.83.0_1.83.0-4.2_arm64.deb ...
+#10 2.871 Unpacking libboost-program-options1.83.0:arm64 (1.83.0-4.2) ...
+#10 2.901 Selecting previously unselected package osmium-tool.
+#10 2.902 Preparing to unpack .../osmium-tool_1.18.0-1_arm64.deb ...
+#10 2.904 Unpacking osmium-tool (1.18.0-1) ...
+#10 2.944 Setting up libexpat1:arm64 (2.9.0-1~deb13u1) ...
+#10 2.949 Setting up libboost-program-options1.83.0:arm64 (1.83.0-4.2) ...
+#10 2.951 Setting up osmium-tool (1.18.0-1) ...
+#10 2.955 Processing triggers for libc-bin (2.41-12+deb13u3) ...
+#10 DONE 3.3s
+
+#11 [base 3/4] WORKDIR /app
+#11 DONE 0.0s
+
+#12 [base 4/4] RUN useradd --create-home --uid 1000 app
+#12 DONE 0.1s
+
+#13 [deps 1/4] COPY --from=ghcr.io/astral-sh/uv:0.12.3@sha256:2d890623d310b57771ce840f0da5eed5fc6d657da05ffaa45d82797b53fa3abc /uv /usr/local/bin/uv
+#13 DONE 0.1s
+
+#14 [deps 2/4] COPY api/pyproject.toml api/uv.lock ./
+#14 DONE 0.0s
+
+#15 [deps 3/4] COPY api/sundayride ./sundayride
+#15 DONE 0.0s
+
+#16 [deps 4/4] RUN uv sync --locked --extra osm --no-dev --no-editable
+#16 0.196 Using CPython 3.12.14 interpreter at: /usr/local/bin/python3
+#16 0.196 Creating virtual environment at: /opt/venv
+#16 0.201 Resolved 54 packages in 1ms
+#16 0.203    Building sundayride @ file:///app
+#16 0.348 Downloading pydantic-core (1.9MiB)
+#16 0.356 Downloading uvloop (4.1MiB)
+#16 0.356 Downloading shapely (2.8MiB)
+#16 0.356 Downloading numpy (14.5MiB)
+#16 0.445 Downloading osmium (1.6MiB)
+#16 0.655  Downloaded osmium
+#16 0.672  Downloaded pydantic-core
+#16 0.745  Downloaded shapely
+#16 0.810  Downloaded uvloop
+#16 0.958       Built sundayride @ file:///app
+#16 1.061  Downloaded numpy
+#16 1.061 Prepared 36 packages in 859ms
+#16 1.086 Installed 36 packages in 24ms
+#16 1.086  + annotated-doc==0.0.4
+#16 1.086  + annotated-types==0.8.0
+#16 1.086  + anyio==4.14.2
+#16 1.086  + argon2-cffi==25.1.0
+#16 1.086  + argon2-cffi-bindings==25.1.0
+#16 1.086  + certifi==2026.7.22
+#16 1.086  + cffi==2.1.0
+#16 1.086  + charset-normalizer==3.4.9
+#16 1.086  + click==8.4.2
+#16 1.086  + fastapi==0.139.2
+#16 1.086  + fitdecode==0.11.0
+#16 1.086  + gpxpy==1.6.2
+#16 1.086  + h11==0.16.0
+#16 1.086  + httpcore==1.0.9
+#16 1.086  + httptools==0.8.0
+#16 1.086  + httpx==0.28.1
+#16 1.086  + idna==3.18
+#16 1.086  + itsdangerous==2.2.0
+#16 1.086  + numpy==2.5.1
+#16 1.086  + osmium==4.3.1
+#16 1.086  + pycparser==3.0
+#16 1.086  + pydantic==2.13.4
+#16 1.086  + pydantic-core==2.46.4
+#16 1.086  + python-dotenv==1.2.2
+#16 1.086  + pyyaml==6.0.3
+#16 1.086  + requests==2.34.2
+#16 1.086  + shapely==2.1.2
+#16 1.086  + starlette==1.3.1
+#16 1.086  + sundayride==0.1.0 (from file:///app)
+#16 1.086  + typing-extensions==4.16.0
+#16 1.086  + typing-inspection==0.4.2
+#16 1.086  + urllib3==2.7.0
+#16 1.086  + uvicorn==0.51.0
+#16 1.086  + uvloop==0.22.1
+#16 1.086  + watchfiles==1.2.0
+#16 1.086  + websockets==16.1.1
+#16 DONE 1.2s
+
+#17 [deps-test 1/1] RUN uv sync --locked --extra osm --no-editable
+#17 0.148 Resolved 54 packages in 0.59ms
+#17 0.237 Downloading pygments (1.2MiB)
+#17 0.256 Downloading mypy (13.5MiB)
+#17 0.256 Downloading ruff (11.4MiB)
+#17 0.257 Downloading ast-serialize (1.2MiB)
+#17 0.491  Downloaded pygments
+#17 0.505  Downloaded ast-serialize
+#17 1.013  Downloaded ruff
+#17 1.181  Downloaded mypy
+#17 1.181 Prepared 15 packages in 1.03s
+#17 1.262 Installed 17 packages in 80ms
+#17 1.262  + ast-serialize==0.6.0
+#17 1.262  + httpcore2==2.9.1
+#17 1.262  + httpx2==2.9.1
+#17 1.262  + iniconfig==2.3.0
+#17 1.262  + librt==0.13.0
+#17 1.262  + mypy==2.3.0
+#17 1.262  + mypy-extensions==1.1.0
+#17 1.262  + packaging==26.2
+#17 1.262  + pathspec==1.1.1
+#17 1.262  + pluggy==1.6.0
+#17 1.262  + pygments==2.20.0
+#17 1.262  + pytest==9.1.1
+#17 1.262  + pytest-asyncio==1.4.0
+#17 1.262  + ruff==0.12.7
+#17 1.262  + truststore==0.10.4
+#17 1.262  + types-pyyaml==6.0.12.20260724
+#17 1.262  + types-shapely==2.1.0.20260724
+#17 DONE 1.3s
+
+#18 [test 1/1] COPY --from=deps-test /opt/venv /opt/venv
+#18 DONE 0.6s
+
+#19 exporting to image
+#19 exporting layers
+#19 exporting layers 4.1s done
+#19 exporting manifest sha256:f3c4df854b85ece82c714ff815cc8118857cebdd9131cf235a8a785e7069c9b8 done
+#19 exporting config sha256:1f65e0aebdd472a05ad3d845efb259dc73c9dde5ea569f57a5e4070335b24d84 done
+#19 exporting attestation manifest sha256:fa22592ebb8c97eaa73549d8903cae1fed5db44cf0b964edbb287bde99621d6c done
+#19 exporting manifest list sha256:73a979d42ce62fc0da433cbaf3d5745ec27217081e5e4fb42f8ec97f5162720d done
+#19 naming to docker.io/library/sundayride-test:latest done
+#19 unpacking to docker.io/library/sundayride-test:latest
+#19 unpacking to docker.io/library/sundayride-test:latest 0.8s done
+#19 DONE 4.9s
+
+#20 resolving provenance for metadata file
+#20 DONE 0.0s
+ Image sundayride-test Built 
+ Container sundayride-test-run-f358265287dc Creating 
+ Container sundayride-test-run-f358265287dc Created 
+== ruff ==
+All checks passed!
+91 files already formatted
+
+== mypy --strict ==
+Success: no issues found in 88 source files
+
+== pytest ==
+........................................................................ [  3%]
+........................................................................ [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 14%]
+........................................................................ [ 18%]
+........................................................................ [ 21%]
+........................................................................ [ 25%]
+........................................................................ [ 29%]
+........................................................................ [ 32%]
+........................................................................ [ 36%]
+........................................................................ [ 39%]
+........................................................................ [ 43%]
+........................................................................ [ 47%]
+........................................................................ [ 50%]
+........................................................................ [ 54%]
+........................................................................ [ 58%]
+........................................................................ [ 61%]
+........................................................................ [ 65%]
+........................................................................ [ 69%]
+........................................................................ [ 72%]
+........................................................................ [ 76%]
+........................................................................ [ 79%]
+........................................................................ [ 83%]
+........................................................................ [ 87%]
+........................................................................ [ 90%]
+........................................................................ [ 94%]
+........................................................................ [ 98%]
+......................................                                   [100%]
+1982 passed in 62.91s (0:01:02)
+
+selftest passed
