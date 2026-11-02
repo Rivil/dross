@@ -1,0 +1,5 @@
+# captured: go1.27.1 go test -count=1 ./... (scratch module named oneword: x.go uses an undefined name)
+# oneword [oneword.test]
+./x.go:3:9: undefined: foo
+FAIL	oneword [build failed]
+FAIL
