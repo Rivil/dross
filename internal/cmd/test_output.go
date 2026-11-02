@@ -46,8 +46,10 @@ type spawnSeg struct {
 	seg *runsummary.Segment
 	// aux marks a spawn that is not the suite — the tree sync, a lane's
 	// prepare — whose output no parser should be asked to claim. Its tail is
-	// still what a 3, 4 or 7 shows.
+	// still what a 3, 4 or 7 shows when it is the spawn that failed.
 	aux bool
+	// failed marks the spawn that returned the error (see testRun.failed).
+	failed bool
 }
 
 func openTestRun(repoDir string) *testRun {
@@ -100,6 +102,18 @@ func (r *testRun) say(format string, a ...any) {
 	}
 }
 
+// failed marks the segment just spawned as the step whose spawn returned an
+// error. Each spawn site calls it before classifying the error, so a 3, 4 or 7
+// shows that spawn's tail rather than whichever spawned last: after host-1's
+// rsync, a host-2 lock that could not be taken spawned nothing, and rsync's
+// chatter is not why the run did not happen. On a terminal there are no
+// segments and nothing to mark.
+func (r *testRun) failed() {
+	if n := len(r.segs); n > 0 {
+		r.segs[n-1].failed = true
+	}
+}
+
 // laneDone prints the summary of what the lane just spawned, from the lane's
 // own outcome. Each lane is its own summary: one parsed lane cannot vouch for
 // another the parsers never recognised.
@@ -111,9 +125,10 @@ func (r *testRun) dropLane() { r.segs = nil }
 
 // summarise renders the segments spawned since the last summary, under err's
 // exit code, and prints it to stdout — never into an error. A run that did not
-// happen (3, 4) or whose bootstrap failed (7) shows the failing spawn's tail;
-// otherwise the suite's own spawns are parsed. On a terminal, or when the log
-// fell back to streaming, there is nothing to summarise: every byte was shown.
+// happen (3, 4) or whose bootstrap failed (7) shows the failing step (see
+// failedStep); otherwise the suite's own spawns are parsed. On a terminal, or
+// when the log fell back to streaming, there is nothing to summarise: every
+// byte was shown.
 func (r *testRun) summarise(err error) {
 	segs := r.segs
 	r.segs = nil
@@ -124,13 +139,13 @@ func (r *testRun) summarise(err error) {
 		s.seg.Close()
 	}
 	code := ExitCode(err)
-	outcome := runsummary.Outcome{Exit: code, Ran: true}
-	var show []*runsummary.Segment
+	path := r.log.Path()
+	var out string
 	switch code {
 	case exitTransport, exitPartial, exitPrepareFailed:
-		outcome.Ran = false
-		show = []*runsummary.Segment{segs[len(segs)-1].seg}
+		out = r.failedStep(err, code, segs, path)
 	default:
+		var show []*runsummary.Segment
 		for _, s := range segs {
 			if !s.aux {
 				show = append(show, s.seg)
@@ -139,11 +154,31 @@ func (r *testRun) summarise(err error) {
 		if len(show) == 0 {
 			show = []*runsummary.Segment{segs[len(segs)-1].seg}
 		}
+		out = runsummary.Render(runsummary.Outcome{Exit: code, Ran: true}, show, &r.budget, path, testNow().Sub(r.started))
 	}
-	path := r.log.Path()
-	out := runsummary.Render(outcome, show, &r.budget, path, testNow().Sub(r.started))
 	// The log line is printed once, at the very end, however many lanes ran.
 	fmt.Fprint(os.Stdout, strings.TrimSuffix(out, "log: "+path+"\n"))
+}
+
+// failedStep renders a run that did not happen from the step that failed: the
+// tail of the spawn that returned the error, never another spawn's. A failing
+// step with no output of its own — a host lock that could not be taken, an
+// argv refused before anything started, a spawn that printed nothing — shows
+// no tail at all and names the reason instead, which is the first line of err;
+// the full error still reaches stderr through the command's return.
+func (r *testRun) failedStep(err error, code int, segs []spawnSeg, path string) string {
+	var failing *runsummary.Segment
+	for _, s := range segs {
+		if s.failed {
+			failing = s.seg
+		}
+	}
+	outcome := runsummary.Outcome{Exit: code, Ran: false}
+	if failing != nil && len(failing.Tail()) > 0 {
+		return runsummary.Render(outcome, []*runsummary.Segment{failing}, &r.budget, path, testNow().Sub(r.started))
+	}
+	reason, _, _ := strings.Cut(strings.TrimSpace(err.Error()), "\n")
+	return fmt.Sprintf("exit %d · the run did not happen — the failing step printed nothing:\n%s\n", code, runsummary.Cut(reason))
 }
 
 // finish ends the run: whatever was spawned outside a lane is summarised, and

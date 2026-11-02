@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/gatestate"
+	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/testlane"
 )
 
 // summaryFixtureDir is runsummary's captured runner output, resolved while the
@@ -397,5 +399,114 @@ func TestExitCodesUnchanged(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// fallbackOf is stdout from the `exit <code> ·` fallback line on: the summary
+// of the step that failed, without the summaries printed before it.
+func fallbackOf(t *testing.T, out string, code int) string {
+	t.Helper()
+	i := strings.Index(out, fmt.Sprintf("exit %d · ", code))
+	if i < 0 {
+		t.Fatalf("no exit %d fallback on stdout:\n%s", code, out)
+	}
+	return out[i:]
+}
+
+func TestFallbackTailFromFailingStep(t *testing.T) {
+	twoHostLaneFixture(t)
+	origSpawn, origHold := spawnRemote, testHold
+	t.Cleanup(func() { spawnRemote, testHold = origSpawn, origHold })
+	spawnRemote = func(argv []string, _ string, stdout, _ io.Writer) error {
+		if argv[0] == "rsync" {
+			io.WriteString(stdout, "RSYNC-MARK\n")
+		}
+		return nil
+	}
+	var held []string
+	testHold = func(tg remote.Target, _ remote.HoldEvents) (*suiteHold, error) {
+		held = append(held, tg.Host)
+		if len(held) == 2 {
+			return nil, fmt.Errorf("ssh %s: connection refused: %w", tg.Host, remote.ErrTransport)
+		}
+		return &suiteHold{Outcome: remote.Held, Release: func() error { return nil }}, nil
+	}
+	out, err := runTestCapturing(t, "--files", "internal/a.go", "--files", "web/app.ts")
+	if ExitCode(err) != exitTransport {
+		t.Fatalf("exit %d, want %d (err %v)", ExitCode(err), exitTransport, err)
+	}
+	if len(held) != 2 || !strings.Contains(onlyLog(t), "RSYNC-MARK") {
+		t.Fatalf("want host-1 synced (RSYNC-MARK in the log) and host-2's lock refused; holds %v", held)
+	}
+	if strings.Contains(out, "RSYNC-MARK") {
+		t.Errorf("the 3 shows host-1's rsync tail, which is not why the run did not happen:\n%s", out)
+	}
+	fb := fallbackOf(t, out, exitTransport)
+	if !strings.Contains(fb, "the failing step printed nothing") || !strings.Contains(fb, "could not reach "+held[1]+" to take the host lock") {
+		t.Errorf("the 3 does not name host-2's lock as the reason:\n%s", out)
+	}
+	if !strings.Contains(out, "log: ") {
+		t.Errorf("no log path on stdout:\n%s", out)
+	}
+}
+
+// twoPreparedLanes runs the go lane green with LANE1-MARK as its output, then
+// the docs lane's prepare as prep says.
+func twoPreparedLanes(t *testing.T, prep struct {
+	out string
+	err error
+}) (string, error) {
+	t.Helper()
+	filesFixture(t, preparedTwoLanes)
+	grantEveryLane(t)
+	spawnByLine(t, map[string]struct {
+		out string
+		err error
+	}{
+		"make build": {"", nil},
+		"go test":    {"LANE1-MARK\n", nil},
+		"npm ci":     prep,
+	})
+	return runTestCapturing(t, "--files", "internal/a.go", "--files", "docs/x.md")
+}
+
+func TestFallbackTailFromFailingSpawn(t *testing.T) {
+	out, err := twoPreparedLanes(t, struct {
+		out string
+		err error
+	}{"PREP-MARK\n", fakeExit{code: 1}})
+	if ExitCode(err) != exitPrepareFailed {
+		t.Fatalf("exit %d, want %d (err %v)", ExitCode(err), exitPrepareFailed, err)
+	}
+	fb := fallbackOf(t, out, exitPrepareFailed)
+	if !strings.Contains(out[:len(out)-len(fb)], "LANE1-MARK") {
+		t.Fatalf("lane 1 did not run and summarise before lane 2:\n%s", out)
+	}
+	if !strings.Contains(fb, "PREP-MARK") || strings.Contains(fb, "LANE1-MARK") {
+		t.Errorf("the 7 must hold the failing prepare's own tail and not lane 1's output:\n%s", fb)
+	}
+}
+
+func TestFallbackTailNoSpawnArgvInvalid(t *testing.T) {
+	_, refusal := testlane.ShArgv("-npm ci")
+	if refusal == nil {
+		t.Fatal("the fence accepted a leading-dash line")
+	}
+	out, err := twoPreparedLanes(t, struct {
+		out string
+		err error
+	}{"", refusal})
+	if ExitCode(err) != exitPrepareFailed {
+		t.Fatalf("exit %d, want %d (err %v)", ExitCode(err), exitPrepareFailed, err)
+	}
+	fb := fallbackOf(t, out, exitPrepareFailed)
+	if !strings.Contains(out[:len(out)-len(fb)], "LANE1-MARK") {
+		t.Fatalf("lane 1 did not run and summarise before lane 2:\n%s", out)
+	}
+	if strings.Contains(fb, "LANE1-MARK") {
+		t.Errorf("the 7 shows lane 1's output for a prepare refused at argv validation:\n%s", fb)
+	}
+	if !strings.Contains(fb, "the failing step printed nothing") || !strings.Contains(fb, "begins with a dash") {
+		t.Errorf("the 7 does not name the validation reason:\n%s", fb)
 	}
 }
