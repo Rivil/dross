@@ -258,6 +258,70 @@ func TestLogUnavailableStreams(t *testing.T) {
 	}
 }
 
+// preambleRun says PRE-MARK before the first spawn of a run under dir, then
+// spawns and finishes, and returns stdout, stderr and the run's log path.
+func preambleRun(t *testing.T, dir string, tty bool) (stdout, stderr, path string) {
+	t.Helper()
+	origTTY := testStdoutIsTTY
+	t.Cleanup(func() { testStdoutIsTTY = origTTY })
+	testStdoutIsTTY = func() bool { return tty }
+	stdout = captureStdout(t, func() {
+		stderr = captureStderr(t, func() {
+			r := openTestRun(dir)
+			r.say("PRE-MARK\n")
+			r.spawn("go test ./...", false)
+			io.WriteString(r.out, "ok  \texample.com/x\t0.01s\n")
+			r.finish(nil)
+			path = r.log.Path()
+		})
+	})
+	return stdout, stderr, path
+}
+
+func TestPendingLinesReachLogOnTerminal(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		tty  bool
+	}{{"terminal", true}, {"off a terminal", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, stderr, path := preambleRun(t, t.TempDir(), tc.tty)
+			if path == "" {
+				t.Fatalf("no run log was kept\nstdout:\n%s\nstderr:\n%s", out, stderr)
+			}
+			b, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			log := string(b)
+			mark, header := strings.Index(log, "PRE-MARK"), strings.Index(log, "$ ")
+			if mark < 0 || header < 0 || mark > header {
+				t.Fatalf("the log must hold PRE-MARK before its first $ header:\n%s", log)
+			}
+			if n := strings.Count(log, "PRE-MARK"); n != 1 {
+				t.Fatalf("the log holds PRE-MARK %d times, want once:\n%s", n, log)
+			}
+			if n := strings.Count(out, "PRE-MARK"); n != 1 {
+				t.Fatalf("stdout holds PRE-MARK %d times, want once:\n%s", n, out)
+			}
+		})
+	}
+}
+
+func TestPendingLinesPrintOnceWithoutLog(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, ".dross", "logs"), "not a directory\n")
+	out, stderr, path := preambleRun(t, dir, false)
+	if path != "" {
+		t.Fatalf("Path() = %q with .dross/logs a file, want no log", path)
+	}
+	if n := strings.Count(out+stderr, "PRE-MARK"); n != 1 {
+		t.Fatalf("PRE-MARK printed %d times, want once:\nstdout:\n%s\nstderr:\n%s", n, out, stderr)
+	}
+	if n := strings.Count(out+stderr, "warning: dross could not keep this run's log"); n != 1 {
+		t.Fatalf("%d log warnings, want exactly one:\nstdout:\n%s\nstderr:\n%s", n, out, stderr)
+	}
+}
+
 func TestNoStreamingFlag(t *testing.T) {
 	var got []string
 	Test().Flags().VisitAll(func(f *pflag.Flag) { got = append(got, f.Name) })

@@ -2,11 +2,13 @@
 // through: a per-run log file under .dross/logs/, kept out of git by a
 // self-ignoring .gitignore, with an optional echo to the human's terminal.
 //
-// The file is created lazily on the first Write, so a run that is refused
-// before anything spawns leaves no log behind and does not churn the window of
-// kept logs. A log that cannot be opened or written never fails the run: Write
-// always reports success, the bytes go to the chosen terminal instead, one
-// warning says so, and Err names the first failure.
+// The file is created lazily on the first Write or Record, so a run that is
+// refused before anything spawns leaves no log behind and does not churn the
+// window of kept logs. A log that cannot be opened or written never fails the
+// run: Write always reports success, the bytes go to the chosen terminal
+// instead, one warning says so, and Err names the first failure. Record is the
+// file-only write for bytes already on the terminal: it never echoes and never
+// falls back.
 //
 // The terminal is an enum, never an io.Writer: a Log's only outputs are its
 // gitignored file and os.Stdout or os.Stderr, so nothing can be laundered
@@ -129,7 +131,7 @@ var (
 func StdoutIsTerminal() bool { return isTerminal(os.Stdout.Fd()) }
 
 // Open returns the log for one run under root. Nothing touches the disk until
-// the first Write.
+// the first Write or Record.
 func Open(root string, name Name, opts Options) *Log {
 	return &Log{root: root, name: name, opts: opts}
 }
@@ -140,28 +142,44 @@ func Open(root string, name Name, opts Options) *Log {
 func (l *Log) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if logged := l.toFile(p); l.opts.Echo || !logged {
+		l.toTerminal(p)
+	}
+	return len(p), nil
+}
+
+// Record sends p to the log file only. It is for bytes the caller has already
+// shown on the terminal, which Write would show a second time — by its echo, or
+// by its fallback when the file is unavailable. Like Write it creates the file
+// on first use and never fails the run; unlike Write, bytes the file cannot
+// take are dropped, and the one warning is all the terminal sees.
+func (l *Log) Record(p []byte) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.toFile(p)
+}
+
+// toFile creates the file on the first call and writes p to it, reporting
+// whether p landed there. Any failure marks the file unavailable.
+func (l *Log) toFile(p []byte) bool {
 	if !l.opened {
 		l.opened = true
 		if err := l.open(); err != nil {
 			l.fail(err)
 		}
 	}
-	logged := false
-	if l.f != nil {
-		if _, err := l.f.Write(p); err != nil {
-			l.fail(fmt.Errorf("write %s: %w", l.rel(), err))
-		} else {
-			logged = true
-		}
+	if l.f == nil {
+		return false
 	}
-	if l.opts.Echo || !logged {
-		l.toTerminal(p)
+	if _, err := l.f.Write(p); err != nil {
+		l.fail(fmt.Errorf("write %s: %w", l.rel(), err))
+		return false
 	}
-	return len(p), nil
+	return true
 }
 
-// Path is the log file's absolute path, or "" before the first Write and
-// whenever the file is unavailable.
+// Path is the log file's absolute path, or "" before the first Write or Record
+// and whenever the file is unavailable.
 func (l *Log) Path() string {
 	l.mu.Lock()
 	defer l.mu.Unlock()

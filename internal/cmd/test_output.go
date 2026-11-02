@@ -60,12 +60,13 @@ func openTestRun(repoDir string) *testRun {
 
 // spawn records the line about to spawn and gives it its own summary
 // segment. The first one creates the log, names it before anything runs, and
-// copies in the lines dross printed before there was a log — except on a
-// terminal, where the log's echo would print them a second time.
+// copies in the lines dross printed before there was a log. say already
+// printed those, so they go in by Record, on a terminal and off one: Write's
+// echo, or its fallback when the log is unavailable, would print them twice.
 func (r *testRun) spawn(line string, aux bool) {
-	if !r.named && !r.tty {
+	if !r.named {
 		for _, s := range r.pending {
-			r.log.Write([]byte(s))
+			r.log.Record([]byte(s))
 		}
 	}
 	r.pending = nil
