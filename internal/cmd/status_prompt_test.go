@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -48,5 +49,21 @@ func TestStatusPromptDropsTheSilentSkip(t *testing.T) {
 	}
 	if !strings.Contains(content, "board unreachable") {
 		t.Error("status.md must have wording for reporting the board as unreachable")
+	}
+}
+
+// memoryCallRe matches a `dross memory` invocation however it is spaced.
+var memoryCallRe = regexp.MustCompile(`dross\s+memory`)
+
+// TestStatusPromptAddsNoMemoryCall pins c-6: the memory advice rides on the
+// `dross status` output status.md already prints, so the prompt gains no call
+// of its own — a `dross memory` invocation there is an extra round-trip.
+func TestStatusPromptAddsNoMemoryCall(t *testing.T) {
+	content := promptContent(t, "status.md")
+	if m := memoryCallRe.FindString(content); m != "" {
+		t.Errorf("status.md invokes %q; the memory section must come from `dross status` alone", m)
+	}
+	if !strings.Contains(content, "dross status") {
+		t.Error("status.md no longer runs `dross status`, the call the memory section rides on")
 	}
 }

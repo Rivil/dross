@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/memadvise"
 	"github.com/Rivil/dross/internal/treefp"
 )
 
@@ -126,14 +127,14 @@ func TestEnsureDrossGitignoreIsIdempotent(t *testing.T) {
 // TestIgnoresLocalTomlViaBroaderPattern for the partial case, where a pattern
 // covering one path must not suppress the other.
 func TestEnsureDrossGitignoreRespectsBroaderPattern(t *testing.T) {
-	// Each also covers the mutation report dirs, in a different shape: the
-	// parent dir with and without its trailing slash, anchored, and the two
-	// dirs named one by one.
+	// Each also covers the mutation report dirs and the memory-advisor state
+	// dir, in a different shape: the parent dir with and without its trailing
+	// slash, anchored, and the dirs named one by one.
 	for _, existing := range []string{
 		".dross/\nreports/\nStrykerOutput/\n",
-		"# comment\n/.dross/state.json\n/.dross/local.toml\n/reports\n/StrykerOutput\n",
-		"node_modules/\n.dross/state.json\n.dross/local.toml\nreports/gremlins/\nreports/mutation/\nStrykerOutput/\n",
-		".dross/*.json\n.dross/*.toml\n/reports/\n/StrykerOutput/\n",
+		"# comment\n/.dross/state.json\n/.dross/local.toml\n/.dross/memory\n/reports\n/StrykerOutput\n",
+		"node_modules/\n.dross/state.json\n.dross/local.toml\n.dross/memory/\nreports/gremlins/\nreports/mutation/\nStrykerOutput/\n",
+		".dross/*.json\n.dross/*.toml\n/.dross/memory/\n/reports/\n/StrykerOutput/\n",
 	} {
 		t.Run(strings.TrimSpace(strings.ReplaceAll(existing, "\n", " ")), func(t *testing.T) {
 			dir := t.TempDir()
@@ -177,6 +178,55 @@ func TestEnsureGitignoreCoversLocalToml(t *testing.T) {
 	}
 	if second := readIfExists(t, path); second != first {
 		t.Errorf("a second call rewrote the file:\nwant %q\ngot  %q", first, second)
+	}
+}
+
+// TestEnsureGitignoreCoversMemoryState: the memory advisor's turn cache and
+// snapshots are ignored both in a repo the seed prepares and in this repo's
+// own .gitignore.
+func TestEnsureGitignoreCoversMemoryState(t *testing.T) {
+	found := false
+	for _, e := range drossIgnoreEntries {
+		found = found || e.path == drossMemoryIgnorePath
+	}
+	if !found {
+		t.Fatalf("drossIgnoreEntries has no %s entry", drossMemoryIgnorePath)
+	}
+	paths := []string{memadvise.TurnCachePath, memadvise.SnapshotsDir + "/2026-10-30T00-00-00Z/MEMORY.md"}
+
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	if err := ensureDrossGitignore(dir); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range paths {
+		if !checkIgnored(t, dir, p) {
+			t.Errorf("the seed does not ignore %s:\n%s", p, readIfExists(t, filepath.Join(dir, ".gitignore")))
+		}
+	}
+	root := repoRootFromTest(t)
+	for _, p := range paths {
+		if !checkIgnored(t, root, p) {
+			t.Errorf("this repo's .gitignore does not ignore %s", p)
+		}
+	}
+}
+
+// TestIgnoreEntriesMatchAdvisorPaths: the seeded entry is built from
+// memadvise's own constants and covers each path the advisor writes, so a
+// moved constant cannot leave its files outside the ignore.
+func TestIgnoreEntriesMatchAdvisorPaths(t *testing.T) {
+	if want := memadvise.StateDir + "/"; drossMemoryIgnorePath != want {
+		t.Errorf("drossMemoryIgnorePath = %q, want %q", drossMemoryIgnorePath, want)
+	}
+	for _, p := range []string{memadvise.TurnCachePath, memadvise.SnapshotsDir + "/x/MEMORY.md"} {
+		covered := false
+		for _, e := range drossIgnoreEntries {
+			covered = covered || ignoresPath(e.path, p)
+		}
+		if !covered {
+			t.Errorf("no drossIgnoreEntries path covers the advisor path %s", p)
+		}
 	}
 }
 

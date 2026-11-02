@@ -34,8 +34,10 @@ of the loop — each step is a short turn they answer, not a form they fill in.
 - **Confirm artifacts; don't broadcast them.** The TOML / config / plan you compose
   is a build artifact, not a review medium — never paste the build artifact back.
   Every line was agreed in prose first; confirm the written file with a one-line
-  summary, not by dumping its contents. Surface a specific field only if the user
-  asks to see or change it.
+  summary, not by dumping its contents. The lock / accept gate on a written
+  artifact is always an `AskUserQuestion` (lead option: lock), never a trailing
+  prose "(y / edit)" line. Surface a specific field only if the user asks to see
+  or change it.
 
 ## How to drive a turn
 

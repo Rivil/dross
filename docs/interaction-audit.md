@@ -91,7 +91,7 @@ retrofitted under Setup & config in phase 12.)
 | Each acceptance criterion | one criterion per turn, accept/reword/drop | ✅ | one-at-a-time |
 | Gray-area selection | multiSelect AskUserQuestion | ✅ | |
 | Each gray-area deep-dive | one focused exchange per area | ✅ | |
-| Lock spec | one-line summary, y/edit | ✅ | never pastes the TOML |
+| Lock spec | one-line summary asked as AskUserQuestion, lock/edit | ✅ | never pastes the TOML; never a prose (y / edit) line |
 
 ### dross-plan
 
@@ -101,7 +101,7 @@ retrofitted under Setup & config in phase 12.)
 | Panel disagreements | one propose-and-react turn per divergence, leads with judge's pick | ✅ | `panel_disagreement_walk`; no full-list wall |
 | Steer-or-proceed | single AskUserQuestion, leads with `proceed` | ✅ | |
 | Coverage gap resolution | add task / move to deferred | ✅ | |
-| Lock plan | one-line summary, y/edit — no toml dump | ✅ | c-4 |
+| Lock plan | one-line summary asked as AskUserQuestion, lock/edit — no toml dump | ✅ | c-4; never a prose (y / edit) line |
 
 ### dross-execute
 

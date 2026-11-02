@@ -37,6 +37,7 @@
     "lane-selector-translation": "DRO-210",
     "legacy-phase-backfill": "DRO-142",
     "main-branch-protection": "DRO-767",
+    "memory-prune-advisor": "DRO-1029",
     "milestone-lifecycle-close": "DRO-13",
     "milestone-push-failure-tests": "DRO-263",
     "mirror-terminal-state": "DRO-149",
@@ -98,6 +99,7 @@
     "1.7.7.3": "DRO-445",
     "1.7.7.4": "DRO-446",
     "1.8.3.1": "DRO-1009",
+    "1.8.4.1": "DRO-1030",
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
@@ -390,6 +392,7 @@
     "someday:id:c7348fe83200c482": "DRO-681",
     "someday:id:c7d43efe3667c110": "DRO-680",
     "someday:id:c893c64201724fe8": "DRO-564",
+    "someday:id:c98784d0acad966c": "DRO-1047",
     "someday:id:cca644b48f004e7c": "DRO-599",
     "someday:id:ccf2e24ffabb298f": "DRO-44",
     "someday:id:ce3cc16364f40a8c": "DRO-988",
@@ -1632,6 +1635,101 @@
       "issue": "DRO-776",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-1": {
+      "issue": "DRO-1031",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-10": {
+      "issue": "DRO-1040",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-11": {
+      "issue": "DRO-1041",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-12": {
+      "issue": "DRO-1042",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-13": {
+      "issue": "DRO-1043",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-14": {
+      "issue": "DRO-1044",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-15": {
+      "issue": "DRO-1045",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-16": {
+      "issue": "DRO-1046",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-17": {
+      "issue": "DRO-1048",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-18": {
+      "issue": "DRO-1049",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-19": {
+      "issue": "DRO-1050",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-2": {
+      "issue": "DRO-1032",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-3": {
+      "issue": "DRO-1033",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-4": {
+      "issue": "DRO-1034",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-5": {
+      "issue": "DRO-1035",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-6": {
+      "issue": "DRO-1036",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-7": {
+      "issue": "DRO-1037",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-8": {
+      "issue": "DRO-1038",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "memory-prune-advisor/t-9": {
+      "issue": "DRO-1039",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "milestone-push-failure-tests/t-1": {
       "issue": "DRO-264",
