@@ -93,6 +93,35 @@
         }
       ]
     },
+    "t-14": {
+      "files": [
+        "internal/runsummary/dart.go",
+        "internal/runsummary/dart_test.go",
+        "internal/runsummary/pytest.go",
+        "internal/runsummary/pytest_test.go",
+        "internal/runsummary/gradle.go",
+        "internal/runsummary/gradle_test.go",
+        "internal/runsummary/jsrunner.go",
+        "internal/runsummary/jsrunner_test.go",
+        "internal/runsummary/gotest.go",
+        "internal/runsummary/gotest_test.go",
+        "internal/runsummary/merge_test.go",
+        "internal/runsummary/summary_test.go",
+        "internal/cmd/readme_doc_test.go",
+        "internal/cmd/test_summary_wiring_test.go",
+        "internal/cmd/verify_log_test.go"
+      ],
+      "commit": "a169ce30",
+      "completed_at": "2026-11-02T20:56:33.331408Z",
+      "landmarks": [
+        {
+          "feature": "test output summaries",
+          "symbol": "dart.Feed",
+          "loc": "internal/runsummary/dart.go:45",
+          "what": "parsers attribute teardown/nested/bracketed failures to the right test and keep deep-traceback E lines"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/runsummary/dart.go",
@@ -367,6 +396,44 @@
           "severity": "NOTE",
           "criterion": "c-11",
           "text": "TestTestSummaryParsersFlowProblems breaks each gated field one at a time with an exact-count assertion, and confirms that before-leg summarised flags and turns/wall-clock stay ungated.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-14": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "dart.go now discards a held EXCEPTION CAUGHT block at any progress line that is not an [E] line, including the same test's progress line reprinted as the clock ticks (compact_red.txt line 13 shows one test reprinted at 00:03 and 00:04). If a second ticks over between a widget test's exception block and its [E] line, that test loses its own exception. Dropping the held block only when the progress line names a different test would avoid this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "gradle.go replaces every ' \u003e ' in the part after the class with '.', so a JUnit display name that itself contains ' \u003e ' (e.g. a @DisplayName or parameterized label) would also be split into dots.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-9",
+          "text": "summariseWindow in test_summary_wiring_test.go opens a testRun whose runlog is never closed (no finish/log.Close); it is harmless on a TempDir but leaves a file handle open for the test's lifetime.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-12",
+          "text": "TestReadmeNamesSummaryRunners moved from internal/cmd/readme_doc_test.go to internal/runsummary/merge_test.go so it can read the registry; both files are in the task's declared list.",
           "resolution": "non-blocking, left"
         }
       ]
