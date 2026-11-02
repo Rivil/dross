@@ -311,5 +311,5 @@ with several runners prints each runner's counts under the shared ten-block budg
   description = "t-14 review FLAG: dart.go discards a held EXCEPTION CAUGHT block at any non-[E] progress line, including the same test's progress line reprinted as the compact reporter's clock ticks (testdata/dart/compact_red.txt:13 shows one test at 00:03 and 00:04). Drop the held block only when the progress line names a different test; a same-test tick keeps it pending for that test's [E]. The t-14 teardown case (exception after A's [E], before B's) must still not attach to B."
   covers = ["c-2"]
   test_contract = ["if a same-test clock tick drops the held block, TestDartExceptionSurvivesClockTick fails: an EXCEPTION CAUGHT block, then the same test's progress line at a later time, then its [E] line keeps the exception's lines in that test's failure", "if the fix lets a stale block reach the next test, TestDartPendingNotMisattributed still fails: the teardown block stays out of B's failure"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-14"]

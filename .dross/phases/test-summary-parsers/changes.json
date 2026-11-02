@@ -122,6 +122,22 @@
         }
       ]
     },
+    "t-15": {
+      "files": [
+        "internal/runsummary/dart.go",
+        "internal/runsummary/dart_test.go"
+      ],
+      "commit": "17832fc1",
+      "completed_at": "2026-11-02T21:12:31.322995Z",
+      "landmarks": [
+        {
+          "feature": "test output summaries",
+          "symbol": "dart.Feed",
+          "loc": "internal/runsummary/dart.go:47",
+          "what": "dart parser ignores clock-tick redraws of the last progress line so a held exception block stays with its test"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/runsummary/dart.go",
@@ -434,6 +450,28 @@
           "severity": "NOTE",
           "criterion": "c-12",
           "text": "TestReadmeNamesSummaryRunners moved from internal/cmd/readme_doc_test.go to internal/runsummary/merge_test.go so it can read the registry; both files are in the task's declared list.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-15": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "TestDartExceptionSurvivesClockTick holds the block under 'earlier test' and attaches it to an [E] line for a differently named test ('widget'). In the live fixture (compact_red.txt:13-35) the ticks and the [E] line name the same test. The test still fails if a tick drops the held block, so it guards the regression, but it does not model the real sequence word for word.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "Deduplicating by counter plus text also stops a redrawn [E] line from opening a second failure with the same name. Before this change, a compact redraw of an [E] line split one failure into two. The new test checks this through Total == 1.",
           "resolution": "non-blocking, left"
         }
       ]
