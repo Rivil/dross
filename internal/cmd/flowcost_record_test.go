@@ -41,6 +41,13 @@ type flowLeg struct {
 	FixtureTree    string `toml:"fixture_tree"`
 
 	StatusBytes int `toml:"status_bytes"`
+
+	GradleRedBytes      int  `toml:"gradle_red_bytes"`
+	DartRedBytes        int  `toml:"dart_red_bytes"`
+	PytestRedBytes      int  `toml:"pytest_red_bytes"`
+	GradleRedSummarised bool `toml:"gradle_red_summarised"`
+	DartRedSummarised   bool `toml:"dart_red_summarised"`
+	PytestRedSummarised bool `toml:"pytest_red_summarised"`
 }
 
 // markerLive records the show-repeat marker observed in a real session: a
@@ -111,10 +118,12 @@ func TestFlowCostRecords(t *testing.T) {
 				checkPromptPartialsFlow(t, fc, filepath.Dir(path))
 			case "memory-prune-advisor":
 				checkMemoryPruneAdvisorFlow(t, fc)
+			case "test-summary-parsers":
+				checkTestSummaryParsersFlow(t, fc, filepath.Dir(path))
 			}
 		})
 	}
-	for _, want := range []string{"context-boundaries", "test-output-summaries", "prompt-partials", "memory-prune-advisor"} {
+	for _, want := range []string{"context-boundaries", "test-output-summaries", "prompt-partials", "memory-prune-advisor", "test-summary-parsers"} {
 		if !found[want] {
 			t.Errorf("%s has no flow-cost.toml — its before/after flow-cost record is missing", want)
 		}
@@ -416,6 +425,112 @@ func TestFlowCostContentProblemsCatches(t *testing.T) {
 				t.Errorf("reported %d problems, want 1: %v", len(got), got)
 			}
 		})
+	}
+}
+
+// testSummaryParsersBase is the build test-summary-parsers' before leg ran:
+// the phase's base commit, before any parser landed.
+const testSummaryParsersBase = "commit ea72a2cb"
+
+// checkTestSummaryParsersFlow pins test-summary-parsers' c-11 record: each new
+// parser's red run was measured on both legs, the after runs were real
+// summaries rather than the fallback, the before leg ran on the base build,
+// and the red step needed no log read. Turns and wall-clock stay ungated
+// (rivil, 2026-10-08).
+func checkTestSummaryParsersFlow(t *testing.T, fc flowCost, dir string) {
+	t.Helper()
+	for _, p := range testSummaryParsersFlowProblems(fc, dir) {
+		t.Error(p)
+	}
+}
+
+// testSummaryParsersFlowProblems is checkTestSummaryParsersFlow's body,
+// returning what it would report so a test can feed it a broken record.
+func testSummaryParsersFlowProblems(fc flowCost, dir string) []string {
+	var out []string
+	b, a := fc.Before, fc.After
+	if b == nil || a == nil {
+		return append(out, "[before] or [after] is missing")
+	}
+	for _, l := range []struct {
+		name string
+		leg  *flowLeg
+	}{{"before", b}, {"after", a}} {
+		for runner, n := range map[string]int{"gradle": l.leg.GradleRedBytes, "dart": l.leg.DartRedBytes, "pytest": l.leg.PytestRedBytes} {
+			if n <= 0 {
+				out = append(out, fmt.Sprintf("[%s] %s_red_bytes = %d — the %s parser's red run was not measured", l.name, runner, n, runner))
+			}
+		}
+	}
+	for runner, ok := range map[string]bool{"gradle": a.GradleRedSummarised, "dart": a.DartRedSummarised, "pytest": a.PytestRedSummarised} {
+		if !ok {
+			out = append(out, fmt.Sprintf("[after] %s_red_summarised is not true — the after run fell back instead of parsing", runner))
+		}
+	}
+	if !strings.Contains(b.BinaryVersion, testSummaryParsersBase) {
+		out = append(out, fmt.Sprintf("[before] ran on %q, want the %s base build", b.BinaryVersion, testSummaryParsersBase))
+	}
+	if a.LogReads != 0 {
+		out = append(out, fmt.Sprintf("[after] log_reads = %d; the red step should act on the summary without opening the log", a.LogReads))
+	}
+	if _, err := os.Stat(filepath.Join(dir, "flow-cost-before.toml")); err == nil {
+		out = append(out, "flow-cost-before.toml still exists — t-13 folds its [before] into flow-cost.toml and deletes it")
+	}
+	return out
+}
+
+// TestTestSummaryParsersFlowProblems breaks the c-11 record one field at a
+// time; each break must be reported once, and a sound record reports nothing.
+func TestTestSummaryParsersFlowProblems(t *testing.T) {
+	sound := func() flowCost {
+		return flowCost{
+			Before: &flowLeg{BinaryVersion: "dross 0.1.0.0 (commit ea72a2cb, built x)", GradleRedBytes: 1780, DartRedBytes: 4049, PytestRedBytes: 2317},
+			After: &flowLeg{BinaryVersion: "dross 0.1.0.0 (commit b1618805, built y)", GradleRedBytes: 684, DartRedBytes: 2531, PytestRedBytes: 1677,
+				GradleRedSummarised: true, DartRedSummarised: true, PytestRedSummarised: true},
+		}
+	}
+	dir := t.TempDir()
+	if got := testSummaryParsersFlowProblems(sound(), dir); len(got) != 0 {
+		t.Fatalf("sound record reported %v", got)
+	}
+	for name, mutate := range map[string]func(*flowCost){
+		"before gradle bytes zero":  func(fc *flowCost) { fc.Before.GradleRedBytes = 0 },
+		"before dart bytes zero":    func(fc *flowCost) { fc.Before.DartRedBytes = 0 },
+		"before pytest bytes zero":  func(fc *flowCost) { fc.Before.PytestRedBytes = 0 },
+		"after gradle bytes zero":   func(fc *flowCost) { fc.After.GradleRedBytes = 0 },
+		"after dart bytes negative": func(fc *flowCost) { fc.After.DartRedBytes = -1 },
+		"after pytest bytes zero":   func(fc *flowCost) { fc.After.PytestRedBytes = 0 },
+		"after gradle fell back":    func(fc *flowCost) { fc.After.GradleRedSummarised = false },
+		"after dart fell back":      func(fc *flowCost) { fc.After.DartRedSummarised = false },
+		"after pytest fell back":    func(fc *flowCost) { fc.After.PytestRedSummarised = false },
+		"before off base":           func(fc *flowCost) { fc.Before.BinaryVersion = "dross 0.1.0.0 (commit b1618805, built x)" },
+		"after read the log":        func(fc *flowCost) { fc.After.LogReads = 1 },
+		"after leg missing":         func(fc *flowCost) { fc.After = nil },
+	} {
+		t.Run(name, func(t *testing.T) {
+			fc := sound()
+			mutate(&fc)
+			if got := testSummaryParsersFlowProblems(fc, dir); len(got) != 1 {
+				t.Errorf("reported %d problems, want 1: %v", len(got), got)
+			}
+		})
+	}
+	t.Run("half file lingers", func(t *testing.T) {
+		d := t.TempDir()
+		if err := os.WriteFile(filepath.Join(d, "flow-cost-before.toml"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if got := testSummaryParsersFlowProblems(sound(), d); len(got) != 1 {
+			t.Errorf("reported %d problems, want 1: %v", len(got), got)
+		}
+	})
+	// A before leg that also summarised is not a problem: only [after] is
+	// gated on parsing, and turns and wall-clock are never compared.
+	fc := sound()
+	fc.Before.PytestRedSummarised = true
+	fc.After.AgentTurns, fc.After.WallClockS = 99, 999
+	if got := testSummaryParsersFlowProblems(fc, dir); len(got) != 0 {
+		t.Errorf("reported %v; only [after] parsing is gated", got)
 	}
 }
 
