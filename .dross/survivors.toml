@@ -5141,7 +5141,7 @@
   op = "CONDITIONALS_NEGATION"
   text = "case d.cur != nil:"
   line = 71
-  reason = "gremlins switch-case attribution ceiling: 'case d.cur != nil:' in dart.Feed sits in no go-cover block. A go test -coverprofile ./internal/runsummary run on 2026-11-02 reports count 1 for the arm body (dart.go:72.3,72.19), driven by TestDartRedOwnLines/TestDartBlockEnds, while gremlins marks the condition NOT COVERED and builds no mutant. Tests cannot kill it because tests already run it."
+  reason = "gremlins switch-case attribution ceiling: 'case d.cur != nil:' in dart.Feed sits in no go-cover block. A go test -coverprofile ./internal/runsummary run on 2026-11-02 reports count 1 for the arm body (dart.go:72.3,72.19), driven by TestDartRedOwnLines/TestDartBlockEnds, while gremlins marks the condition NOT COVERED and builds no mutant. No mutant exists to kill: the suite already runs the arm."
   accepted_in = "test-summary-parsers"
 
 [[accepted]]
@@ -5150,5 +5150,5 @@
   op = "CONDITIONALS_NEGATION"
   text = "case p == \"\":"
   line = 1427
-  reason = "gremlins switch-case attribution ceiling: 'case p == \"\":' in the collect host-log switch sits in no go-cover block. A go test -coverprofile ./internal/cmd -run Collect run on 2026-11-02 reports count 1 for the arm body (verify.go:1428.3,1428.54), driven by TestCollectEmptyHostLogSaysSo which asserts exactly one 'log unavailable' line, while gremlins marks the condition NOT COVERED. Tests cannot kill it because tests already run it."
+  reason = "gremlins switch-case attribution ceiling: 'case p == \"\":' in the collect host-log switch sits in no go-cover block. A go test -coverprofile ./internal/cmd -run Collect run on 2026-11-02 reports count 1 for the arm body (verify.go:1428.3,1428.54), driven by TestCollectEmptyHostLogSaysSo which asserts exactly one 'log unavailable' line, while gremlins marks the condition NOT COVERED. No mutant exists to kill: the suite already runs the arm."
   accepted_in = "test-summary-parsers"
