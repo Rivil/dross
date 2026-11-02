@@ -71,13 +71,7 @@ func Render(o Outcome, segs []*Segment, b *Budget, logPath string, wall time.Dur
 				more++
 				continue
 			}
-			w.add("✗ " + f.Name)
-			for _, l := range f.Lines {
-				w.add(l)
-			}
-			if f.More > 0 {
-				w.add(fmt.Sprintf("… %d %s %s", f.More, MoreLinesPrefix, logPath))
-			}
+			block(&w, f, logPath)
 		}
 	}
 	if more > 0 {
@@ -85,6 +79,41 @@ func Render(o Outcome, segs []*Segment, b *Budget, logPath string, wall time.Dur
 	}
 	w.add("log: " + logPath)
 	return w.String()
+}
+
+// block prints one failure: its "✗ name" line, its kept lines and, when any
+// are left out, the "… N more lines — see <log>" marker. All three count
+// toward BlockBytes as printed, so a long name or log path costs output lines:
+// trailing lines move into the marker's count until the block fits.
+func block(w *lines, f Failure, logPath string) {
+	name := Cut("✗ " + f.Name)
+	marker := func(more int) string {
+		if more == 0 {
+			return ""
+		}
+		return Cut(fmt.Sprintf("… %d %s %s", more, MoreLinesPrefix, logPath))
+	}
+	size := func(k int) int {
+		n := len(name) + 1
+		for _, l := range f.Lines[:k] {
+			n += len(Cut(l)) + 1
+		}
+		if m := marker(f.More + len(f.Lines) - k); m != "" {
+			n += len(m) + 1
+		}
+		return n
+	}
+	k := len(f.Lines)
+	for k > 0 && size(k) > BlockBytes {
+		k--
+	}
+	w.add(name)
+	for _, l := range f.Lines[:k] {
+		w.add(l)
+	}
+	if m := marker(f.More + len(f.Lines) - k); m != "" {
+		w.add(m)
+	}
 }
 
 // fallback prints the exit status, why there is no summary, and s's tail.

@@ -30,7 +30,9 @@ const (
 	// MaxBlocks is how many failures a run prints in full.
 	MaxBlocks = 10
 	// BlockLines and BlockBytes bound one failure's printed output, whichever
-	// is reached first. The name and marker lines sit outside both.
+	// is reached first. BlockLines counts output lines only; BlockBytes counts
+	// the whole printed block — the "✗ name" line and the "… N more lines"
+	// marker included — so ten blocks stay under ~30 KB whatever their names.
 	BlockLines = 30
 	BlockBytes = 2800
 )
