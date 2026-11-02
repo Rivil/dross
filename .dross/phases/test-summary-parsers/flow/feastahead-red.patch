@@ -1,0 +1,26 @@
+diff --git a/phone/test/core/util/text_fold_test.dart b/phone/test/core/util/text_fold_test.dart
+index 7ad8bfda..0aca9957 100644
+--- a/phone/test/core/util/text_fold_test.dart
++++ b/phone/test/core/util/text_fold_test.dart
+@@ -4,7 +4,7 @@ import 'package:feastahead/core/util/text_fold.dart';
+ void main() {
+   group('foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13)', () {
+     test('folds Latin accents and lowercases', () {
+-      expect(foldDiacritics('Sautéed'), 'sauteed');
++      expect(foldDiacritics('Sautéed'), 'sauteedX');
+     });
+ 
+     test('folds Vietnamese combining tone/horn marks and lowercases', () {
+diff --git a/phone/test/shared/widgets/app_shell_i18n_test.dart b/phone/test/shared/widgets/app_shell_i18n_test.dart
+index 69a4eb52..d266b41d 100644
+--- a/phone/test/shared/widgets/app_shell_i18n_test.dart
++++ b/phone/test/shared/widgets/app_shell_i18n_test.dart
+@@ -95,7 +95,7 @@ void main() {
+     // NavigationBar labels.
+     await tester.pump();
+ 
+-    expect(find.text('Home'), findsOneWidget);
++    expect(find.text('Homeward'), findsOneWidget);
+     expect(find.text('Recipes'), findsOneWidget);
+     expect(find.text('Meal Plan'), findsOneWidget);
+     // Shopping + Profile moved under the "More" tab (bottom-nav is 3 + More).

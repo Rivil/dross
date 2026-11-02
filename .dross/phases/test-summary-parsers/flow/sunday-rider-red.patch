@@ -1,0 +1,21 @@
+diff --git a/api/tests/test_parsing_keywords.py b/api/tests/test_parsing_keywords.py
+index 565a4d9..30d89c6 100644
+--- a/api/tests/test_parsing_keywords.py
++++ b/api/tests/test_parsing_keywords.py
+@@ -350,6 +350,7 @@ def test_unrecognised_names_the_ignored_clause(
+     f = parse_keywords(sentence)
+     assert f.unrecognised, sentence
+     assert any(ignored in clause for clause in f.unrecognised), f.unrecognised
++    assert "gravel" not in sentence, f.unrecognised
+ 
+ 
+ @pytest.mark.parametrize(("sentence", "comma_form", "ignored"), _IGNORED_CLAUSES)
+@@ -376,7 +377,7 @@ def test_a_comma_does_not_change_which_clause_is_reported(
+ 
+ 
+ def test_comma_form_is_pinned_exactly() -> None:
+-    assert parse_keywords("gravel, to the moon").unrecognised == ["to the moon"]
++    assert parse_keywords("gravel, to the moon").unrecognised == ["to the moon!"]
+ 
+ 
+ def test_understood_fields_survive_the_subtraction() -> None:
