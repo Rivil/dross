@@ -114,32 +114,15 @@ At Render, a block's printed bytes = "✗ name" + kept lines + the "… N more l
 trailing lines move into the marker's count. Applied per printed copy (covers vitest's re-stamped shared names, blockLines.addTo).
 Update the BlockBytes doc and TestBlockByteShare's arithmetic."""
   covers = ["c-4"]
-  test_contract = [
-    "if name/marker escape the bound, TestWorstCaseBlockBytes fails: 14 failures with names past LineCut, 40 LineCut-byte lines each, a 200-byte logPath → every printed block (✗ through marker) ≤ BlockBytes, len(out) ≤ 30,000, exactly 10 ✗ blocks (TestMassBreakSize extended the same way)",
-    "if the name is not counted, TestBlockNameCounts fails: a 240-byte name prints strictly fewer lines than a 10-byte name",
-    "if the marker is not counted, TestBlockMarkerCounts fails: a 200-byte logPath prints fewer lines than a 10-byte one",
-    "if dropped lines vanish from the count, TestBlockBoundCountsDropped fails: marker N = original More + lines dropped",
-    "if the bound trims what fits, TestBlockBoundKeepsSmallBlock fails: a name + 3 lines block prints unchanged",
-    "if a shared-header copy re-stamped with a 240-byte name exceeds BlockBytes in printed output, TestSharedErrorBounded fails",
-  ]
+  test_contract = ["if name/marker escape the bound, TestWorstCaseBlockBytes fails: 14 failures with names past LineCut, 40 LineCut-byte lines each, a 200-byte logPath → every printed block (✗ through marker) ≤ BlockBytes, len(out) ≤ 30,000, exactly 10 ✗ blocks (TestMassBreakSize extended the same way)", "if the name is not counted, TestBlockNameCounts fails: a 240-byte name prints strictly fewer lines than a 10-byte name", "if the marker is not counted, TestBlockMarkerCounts fails: a 200-byte logPath prints fewer lines than a 10-byte one", "if dropped lines vanish from the count, TestBlockBoundCountsDropped fails: marker N = original More + lines dropped", "if the bound trims what fits, TestBlockBoundKeepsSmallBlock fails: a name + 3 lines block prints unchanged", "if a shared-header copy re-stamped with a 240-byte name exceeds BlockBytes in printed output, TestSharedHeaderCopyBounded (new, in summary_test.go — jsrunner_test.go is t-6's) fails"]
   status = "pending"
 
 [[task]]
   id = "t-5"
   wave = 1
   title = "Stop go blocks absorbing orphans and phantom headings"
-  files = [
-    "internal/runsummary/gotest.go",
-    "internal/runsummary/gotest_test.go",
-    "internal/runsummary/testdata/gotest/build_then_testmain.txt",
-    "internal/runsummary/testdata/gotest/hash_heading.txt",
-    "internal/runsummary/testdata/gotest/build_failed_oneword.txt",
-  ]
-  description = """
-Capture from a scratch module with GOTOOLCHAIN=go1.27.1 (exact header pin kept, panel D7): (a) a build-failed pkg followed by a pkg
-whose TestMain prints and exits 1; (b) a test printing "# Results"; (c) a build error in a one-word module path. An open `# pkg`
-block closes on the next package's first non-compiler line; a one-word `# X` opens a block only where a build block can appear.
-Raise TestGoFixturesCaptured's minimum to 9."""
+  files = ["internal/runsummary/gotest.go", "internal/runsummary/gotest_test.go", "internal/runsummary/testdata/gotest/build_then_testmain.txt", "internal/runsummary/testdata/gotest/hash_heading.txt", "internal/runsummary/testdata/gotest/hash_heading_green.txt", "internal/runsummary/testdata/gotest/build_failed_oneword.txt"]
+  description = "Capture from a scratch module with GOTOOLCHAIN=go1.27.1 (exact header pin kept, panel D7): (a) a build-failed pkg followed by a pkg\nwhose TestMain prints and exits 1; (b) a test printing \"# Results\", red (hash_heading.txt) and green (hash_heading_green.txt), both live;\n(c) a build error in a one-word module path. An open `# pkg` block closes on the next package's first non-compiler line; a one-word `# X`\nopens a block only where a build block can appear. Raise TestGoFixturesCaptured's minimum (an at-least floor, not an exact count) to cover the new files."
   covers = ["c-5"]
   test_contract = [
     "if a block absorbs orphans, TestGoBlockDoesNotAbsorbNextPackage fails: the \"# <dep>\" failure holds only its compile lines; the TestMain package's failure holds its TestMain output",
@@ -154,16 +137,8 @@ Raise TestGoFixturesCaptured's minimum to 9."""
   id = "t-6"
   wave = 1
   title = "Confine vitest FAIL to banners; keep it.each names"
-  files = [
-    "internal/runsummary/jsrunner.go",
-    "internal/runsummary/jsrunner_test.go",
-    "internal/runsummary/testdata/js/vitest_console_fail.txt",
-    "internal/runsummary/testdata/js/vitest_each_bracket.txt",
-  ]
-  description = """
-In feastahead/web capture runs from local uncommitted tests: one console.logs "FAIL  phantom", one it.each title contains " [ ".
-FAIL opens a failure only after a Failed Tests/Suites banner; strip only a trailing " [ <same path> ]" suite suffix.
-vitestHeader becomes a recorded version set {4.1.11, 4.1.12} (panel D7)."""
+  files = ["internal/runsummary/jsrunner.go", "internal/runsummary/jsrunner_test.go", "internal/runsummary/testdata/js/vitest_console_fail.txt", "internal/runsummary/testdata/js/vitest_console_fail_green.txt", "internal/runsummary/testdata/js/vitest_each_bracket.txt"]
+  description = "In feastahead/web capture runs from local uncommitted tests: one console.logs \"FAIL  phantom\" (red: vitest_console_fail.txt; exit-0:\nvitest_console_fail_green.txt, both live), one it.each title contains \" [ \". FAIL opens a failure only after a Failed Tests/Suites banner;\nstrip only a trailing \" [ <same path> ]\" suite suffix. vitestHeader becomes a recorded version set {4.1.11, 4.1.12} (panel D7)."
   covers = ["c-6"]
   test_contract = [
     "if console output forges a failure, TestVitestConsoleFailNotAFailure fails: Failures.Total == the fixture's own \"Tests N failed\" N, no failure named \"phantom\"; the exit-0 variant renders PASS",
@@ -210,12 +185,7 @@ by hand: drop `head` from stryker_net.go's MultiWriter, watch it fail, restore."
 testRun records the segment whose spawn returned the error (tr.failed(err) at each spawnLocal/spawnRemote site); on 3/4/7 summarise
 shows that segment. When the failing step spawned nothing (host lock, argv validation), it shows no other spawn's tail and names the reason."""
   covers = ["c-9"]
-  test_contract = [
-    "if the tail still comes from the last spawn, TestFallbackTailFromFailingStep fails: two hosts, host-1 rsync prints RSYNC-MARK, testHold returns ErrTransport for host-2 → exit 3, stdout has no RSYNC-MARK",
-    "if a failing spawn's own tail is lost, TestFallbackTailFromFailingSpawn fails: lane 1 ran, lane 2's prepare prints PREP-MARK and exits 1 → exit 7 fallback holds PREP-MARK, not lane 1's suite output",
-    "if the 3/4/7 tail stops showing the failing spawn's line and the log path, TestTransportTailShown fails",
-    "if exit codes or tty streaming change, TestExitCodesUnchanged / TestTTYStreamsNonTTYSummarises fail",
-  ]
+  test_contract = ["if the tail still comes from the last spawn, TestFallbackTailFromFailingStep fails: two hosts, host-1 rsync prints RSYNC-MARK, testHold returns ErrTransport for host-2 → exit 3, stdout has no RSYNC-MARK", "if a failing spawn's own tail is lost, TestFallbackTailFromFailingSpawn fails: lane 1 ran, lane 2's prepare prints PREP-MARK and exits 1 → exit 7 fallback holds PREP-MARK, not lane 1's suite output", "if the 3/4/7 tail stops showing the failing spawn's line and the log path, TestTransportTailShown fails", "if exit codes or tty streaming change, TestExitCodesUnchanged / TestTTYStreamsNonTTYSummarises fail", "if an argv-validation refusal shows another spawn's tail, TestFallbackTailNoSpawnArgvInvalid fails: lane 1 ran and printed LANE1-MARK, lane 2 is refused at argv validation → the 3/4/7 fallback has no LANE1-MARK and names the validation reason"]
   status = "pending"
 
 [[task]]
@@ -258,16 +228,7 @@ Capture feastahead's bare `bash scripts/dross-test.sh` locally: green, and flutt
 parser's Result in registry order; Render prints each runner's counts on one line and spends one Budget on the union of failures; the
 ambiguous fallback goes; TestAmbiguousClaimFallsBack is rewritten. Both-red case = t-2's and t-6's live captures fed into one segment (D4)."""
   covers = ["c-12"]
-  test_contract = [
-    "if the merge falls back, TestMixedGreen fails: feastahead_green.txt at exit 0 → one \"PASS ·\" line with both the vitest and the dart test counts (registry order, not hardcoded)",
-    "if one runner's failures vanish, TestMixedRedBothRunners fails: one segment fed t-2's compact_red.txt then t-6's vitest red capture → ✗ names are the union, FAIL line carries both runners' counts",
-    "if the budget is per-runner, TestMixedSharesMaxBlocks fails: two fake parsers × 8 failures → exactly 10 ✗ blocks and \"+6 more failing\"",
-    "if the live mixed red mis-renders, TestMixedWebRed fails: feastahead_web_red.txt → dart test counts and the vitest ✗ names",
-    "if strict claims break now that nothing falls back, TestNoCrossClaims fails: every fixture under testdata/{gotest,js,gradle,dart,pytest} is claimed by exactly its own parser; only testdata/mixed by two",
-    "if merging double-closes a parser, TestNoCrossClaims fails: Result() called twice on every claiming parser for every fixture returns equal Results",
-    "if the merged fallback rules regress, the rewritten TestAmbiguousClaimFallsBack fails: two claims + zero failures + exit 1 prints the fallback; two claims + exit 0 → PASS with both counts",
-    "if the mixed header overflows, TestMixedHeaderFits fails: the header stays under LineCut with both runner names intact",
-  ]
+  test_contract = ["if the merge falls back, TestMixedGreen fails: feastahead_green.txt at exit 0 → one \"PASS ·\" line with both the vitest and the dart test counts (registry order, not hardcoded)", "if one runner's failures vanish, TestMixedRedBothRunners fails: one segment fed testdata/dart/compact_red.txt (t-2) then testdata/js/vitest_console_fail.txt (t-6) → ✗ names are the union, FAIL line carries both runners' counts", "if the budget is per-runner, TestMixedSharesMaxBlocks fails: two fake parsers × 8 failures → exactly 10 ✗ blocks and \"+6 more failing\"", "if the live mixed red mis-renders, TestMixedWebRed fails: feastahead_web_red.txt → dart test counts and the vitest ✗ names", "if strict claims break now that nothing falls back, TestNoCrossClaims fails: every fixture under testdata/{gotest,js,gradle,dart,pytest} is claimed by exactly its own parser; only testdata/mixed by two", "if merging double-closes a parser, TestNoCrossClaims fails: Result() called twice on every claiming parser for every fixture returns equal Results", "if the merged fallback rules regress, the rewritten TestAmbiguousClaimFallsBack fails: two claims + zero failures + exit 1 prints the fallback; two claims + exit 0 → PASS with both counts", "if the mixed header overflows, TestMixedHeaderFits fails: the header stays under LineCut with both runner names intact"]
   depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5", "t-6"]
   status = "pending"
 
@@ -324,19 +285,8 @@ with several runners prints each runner's counts under the shared ten-block budg
     ".dross/phases/test-summary-parsers/flow-cost-before.toml",
     "internal/cmd/flowcost_record_test.go",
   ]
-  description = """
-`make install` (r-01), confirm `dross version` names the phase build. Re-apply t-11's patches verbatim, replay its scenario, fold [before]
-next to [after] in flow-cost.toml, delete flow-cost-before.toml. Add gradle/dart/pytest_red_bytes + red_summarised to flowLeg, a
-testSummaryParsersBase const, checkTestSummaryParsersFlow, and "test-summary-parsers" to the required list. Turns/wall-clock stay ungated."""
+  description = "`make install` (r-01), confirm `dross version` names the phase build. First `git apply --check` each t-11 patch at its repo's current HEAD;\nif a repo moved and a patch no longer applies, re-create the same break, update the patch and note it. Replay the scenario, fold [before] next to\n[after] in flow-cost.toml, delete flow-cost-before.toml. Add gradle/dart/pytest_red_bytes and gradle/dart/pytest_red_summarised to flowLeg, a\ntestSummaryParsersBase const, checkTestSummaryParsersFlow, and \"test-summary-parsers\" to the required list. Turns/wall-clock stay ungated."
   covers = ["c-11"]
-  test_contract = [
-    "if a round-trip was added, checkLegPair fails: after.dross_calls ⊄ before.dross_calls",
-    "if the red summary still needs the log, checkTestSummaryParsersFlow fails: after.log_reads != 0",
-    "if a parser went unmeasured, checkTestSummaryParsersFlow fails: any gradle/dart/pytest_red_bytes ≤ 0 on either leg",
-    "if an after-run was really a fallback, checkTestSummaryParsersFlow fails: per-parser red_summarised = true on [after]",
-    "if before drifted off base, checkTestSummaryParsersFlow fails: before.binary_version lacks \"commit ea72a2cb\"; if after used the old binary, checkLegPair's binary_version inequality fails",
-    "if the half file lingers, checkTestSummaryParsersFlow fails: flow-cost-before.toml still exists",
-    "if the record is deleted, TestFlowCostRecords' found check fails for \"test-summary-parsers\"",
-  ]
+  test_contract = ["if a round-trip was added, checkLegPair fails: after.dross_calls ⊄ before.dross_calls", "if the red summary still needs the log, checkTestSummaryParsersFlow fails: after.log_reads != 0", "if a parser went unmeasured, checkTestSummaryParsersFlow fails: any gradle/dart/pytest_red_bytes ≤ 0 on either leg", "if an after-run was really a fallback, checkTestSummaryParsersFlow fails: any of gradle_red_summarised, dart_red_summarised, pytest_red_summarised is not true on [after]", "if before drifted off base, checkTestSummaryParsersFlow fails: before.binary_version lacks \"commit ea72a2cb\"; if after used the old binary, checkLegPair's binary_version inequality fails", "if the half file lingers, checkTestSummaryParsersFlow fails: flow-cost-before.toml still exists", "if the record is deleted, TestFlowCostRecords' found check fails for \"test-summary-parsers\"", "if the after leg replays a different break than before, the byte comparison is void: every t-11 patch passes `git apply --check` at its repo's HEAD before replay, or the re-created patch is committed with a note in flow-cost.toml's [scenario]"]
   depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5", "t-6", "t-7", "t-8", "t-9", "t-10", "t-11"]
   status = "pending"
