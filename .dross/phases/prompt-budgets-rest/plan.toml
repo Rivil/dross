@@ -134,7 +134,7 @@ quickPromptContent and TestQuickPromptHandlesShippedWindow read the expanded qui
   covers = ["c-1", "c-2", "c-3"]
   test_contract = ["if panel text loads on the plain path, TestPlanPanelFetchPoint fails: Fetched(plan, CommonPath()) is empty and Fetched(plan, {panel: on}) == [panel]", "if the fetch line moves, the test fails: it must be the last line before `## 2G` in raw plan.md, and Expand(plan) must keep heading order 2 → 2P → 2G", "if base plan.md still cites the moved section, the test fails: raw plan.md contains no `§2P` token at all (catches \"see §2P\", \"(§2P.3)\" and \"The `--panel` flow (§2P)\")", "if the lens planner brief is lost, plan_prompt panel tests (expanded) fail when _plan.panel.md drops `panel/synthesis.md` or one of risk/mvp/verification", "if the non-panel decomposition leaves base, TestCommonPathInline (raw) fails on `## 3. Propose` / `## 2G`", "if the clear-point footer leaves base plan.md, TestBoundaryPromptsCarryFooter fails (footer_coverage reads base raw)", "if a fenced row is dropped while compressing, TestPromptInstructionsConserved names it"]
   depends_on = ["t-1", "t-2", "t-3", "t-7"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-11"

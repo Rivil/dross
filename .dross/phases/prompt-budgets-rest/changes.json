@@ -18,6 +18,23 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "assets/prompts/plan.md",
+        "assets/prompts/_plan.panel.md",
+        "internal/cmd/plan_prompt_test.go"
+      ],
+      "commit": "bb3fb264",
+      "completed_at": "2026-11-03T20:33:44.999489Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "plan panel partial",
+          "loc": "assets/prompts/plan.md:57",
+          "what": "plan's --panel mode fetched on demand so the plain plan path loads 14,452 B and fetches nothing"
+        }
+      ]
+    },
     "t-11": {
       "files": [
         "assets/prompts/spec.md",
@@ -185,6 +202,56 @@
     }
   },
   "reviews": {
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "spec",
+          "severity": "BLOCKING",
+          "criterion": "c-3",
+          "text": "test_contract line 4 (plan_prompt panel tests on the expanded prompt fail when _plan.panel.md drops panel/synthesis.md or one of risk/mvp/verification) has no test: no test in the diff or the repo checks for synthesis.md or the lens names, and the conservation manifest records no row from the panel fences, so losing the lens-planner brief goes undetected",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The partial still opens with 'Replaces §2 when the flag is set', but it is now fetched after the agent has read §2. The wording still works, but 'instead of authoring §2 yourself' would match the new load order better.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The description's target of plain-path plan.md at or under 14,500 raw bytes is not checked by any test in this task. The enumerating budget test belongs to a sibling task under c-1, so the reported byte count is the only evidence.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "The description's \u003c=14,500 B raw target for plan.md is not pinned by any test in this task (the budget test still covers only execute/verify). A rough per-line estimate puts the file near the figure, so check the reported measured bytes rather than trusting the target.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPlanPanelFetchPoint reads raw plan.md from assets.FS but runs Fetched/Expand on promptFS. This is consistent today because promptFS defaults to assets.FS and seeded overrides restore it via t.Cleanup, but the two sources could diverge if the test were ever run with a seeded promptFS.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Expand inlines the partial straight after the fetch line, so the expanded prompt has '## 2P.' with no blank line before it. This is cosmetic only; the heading-order check still matches on '\\n## 2P. '.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
     "t-11": {
       "outcome": "pass",
       "rounds": 2,
