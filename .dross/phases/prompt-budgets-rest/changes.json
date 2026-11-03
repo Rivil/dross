@@ -3,6 +3,40 @@
   "base": "milestone/v1.8",
   "base_commit": "0c11a1da1a85c4b193cd7f8e83ded491a1f93cdb",
   "tasks": {
+    "t-1": {
+      "files": [
+        ".dross/phases/prompt-budgets-rest/flow-cost-before.toml"
+      ],
+      "commit": "a2709051",
+      "completed_at": "2026-11-03T19:39:10.97877Z",
+      "landmarks": [
+        {
+          "feature": "flow cost records",
+          "symbol": "flow-cost-before.toml",
+          "loc": ".dross/phases/prompt-budgets-rest/flow-cost-before.toml:1",
+          "what": "base-build before legs for plan/spec/quick plus ship/options bytes, with the rebuildable fixture and tmux driver"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "assets/prompts/spec.md",
+        "assets/prompts/_spec.no-target.md",
+        "assets/prompts/_spec.resume.md",
+        "assets/prompts/_spec.route.md",
+        "internal/cmd/spec_prompt_test.go"
+      ],
+      "commit": "4ee5a7b6",
+      "completed_at": "2026-11-03T20:13:27.692983Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "spec no-target/resume/route partials",
+          "loc": "assets/prompts/spec.md:15",
+          "what": "spec's rare branches fetched on demand so the target-given path loads 14,475 B and fetches nothing"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "assets/conservation_test.go",
@@ -52,6 +86,25 @@
           "symbol": "argsSpellPromptFile",
           "loc": "internal/cmd/prompt_expand_test.go:177",
           "what": "raw-read guard sees variadic read helpers and walks cmd/; split prompts derive from the partial registry"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/quick.go",
+        "internal/cmd/quick_test.go",
+        "assets/prompts/quick.md",
+        "internal/cmd/protected_prompts_test.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "31d75759",
+      "completed_at": "2026-11-03T20:01:30.270568Z",
+      "landmarks": [
+        {
+          "feature": "quick task lifecycle",
+          "symbol": "finishQuick",
+          "loc": "internal/cmd/quick.go:147",
+          "what": "quick end bumps internal, records changes, touches state and opens the board issue once HEAD moved past begin"
         }
       ]
     },
@@ -132,6 +185,78 @@
     }
   },
   "reviews": {
+    "t-11": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "The test_contract asks for a raw check that §4 contains 'already has a target'. The only raw check is TestCommonPathInline in assets/partials_test.go, and it searches the whole of spec.md, not §4. Moving the rule into the resume partial is caught, but moving it to another base section is not. A §4-scoped check, or a statement that the whole-file needle is enough, would match the contract.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "Nothing in this diff checks the task's ≤14,500 B raw target for assets/prompts/spec.md, and budget_test.go's fixed map only lists execute.md and verify.md. A rough count puts spec.md close to 14.5 KB, so the measured byte count the task asks to report is the only evidence of the target; check it before committing.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "_spec.resume.md changes behaviour as well as moving it: the old step 4 said 'Show the existing content'. The partial now shows a one-line summary ('not the TOML') and defines extend/replace. This is consistent with the interaction-contract rule, but it is new instruction text, not a verbatim move.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The three fetch lines sit at column 0 inside §0's numbered list and §4a. This follows the existing execute.md/verify.md pattern and Expand inlines correctly, but the indented 'Create flow' block now reads as detached from list item 2 in rendered markdown.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The scope note ('target given, no deferral' is spec's zero-fetch path; bare /dross-spec and 'defer it' each fetch one partial by design) is in the new test's comment. It still has to go into t-11's commit message, which this diff cannot show.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "The description's '≤14,500 B raw' target for base spec.md is not checked by anything in this diff. assets/budget_test.go still pins only execute.md and verify.md, and the reviewer could not measure the file. The size depends on the author's reported measurement until the sibling task's enumerating budget test lands.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Both §0 fetch lines sit at column 0 inside the numbered pre-flight list. The `target=empty` line comes between step 2's 'empty →' bullet and the indented Create flow, which breaks the list structure. The fetch-line regex trims whitespace, so indenting them would also have parsed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The resume partial changes behaviour as well as moving it. It now shows a one-line summary instead of 'Show the existing content', and it adds new extend and replace semantics (continue c-N numbering; overwrite only after agreement). This matches the interaction contract but goes beyond a pure move.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In the new table test, the {\"\", \"\", \"\"} common-path row repeats what TestCommonPathFetchesNothing already covers, and on failure it prints the label 'spec with = fetches'. Harmless.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
     "t-2": {
       "outcome": "pass",
       "rounds": 1,
@@ -197,6 +322,47 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "TestPromptLoadersCompose now checks promptDocText as well, so the new loader is pinned to the expanded prompt",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "finishQuick bumps the version and writes changes.json without calling requireExecConsent, but `state bump` and `changes record` (the two §6 commands it absorbs) are both in execGatedCommands. The quick flow's earlier gated `dross test` makes this mostly harmless, but the CLI now has a path that does those writes ungated.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "openQuickIssue in quick.go duplicates the CreateIssue/SetQuick/Save body of `dross issue quick` in issue.go (same title, body and labels). Sharing one helper would stop the end path and the printed retry command from drifting apart.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "quickVersion strips leading zeros (01.2.3.09 -\u003e 1.2.3.10) where bumpInternal keeps them (01.2.3.10). For a zero-padded version, the version end prints would not match a quick/\u003cpreview-version\u003e branch named from state.version.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A quick whose commit touched only .dross/ is recorded with an empty file list. The `changes record` CLI would have refused that unless the plan had a fileless task.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The prompt_commit_gate_test.go comment still says 'quick §6' for the .dross-only bookkeeping commit, which now sits in §5. That file is outside this task's list.",
           "resolution": "non-blocking, left"
         }
       ]

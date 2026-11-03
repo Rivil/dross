@@ -11,7 +11,7 @@ task_seq = 16
   description = "Build the base dross in a scratch worktree at 8eb38e9f with `make build` there (plain `go build` stamps `commit unknown` — Commit is only set by the Makefile LDFLAGS); before starting any leg, `./dross version` from the worktree must name 8eb38e9f. Never `dross test` or `make install` from the worktree (rsync clobbers helicon .git). Rebuild prompt-partials inline setup_sh fixtures plus one phase step per leg: plan leg = flow-probe phase with locked spec, no plan; spec leg = scaffolded spec-probe phase with no spec.toml (`/dross-spec <id>`, target given); quick leg = pair quick on the flow repo with no origin (direct route). Human-driven: /dross-plan <id> (no --panel) to its `state touch \"plan locked`; /dross-spec <id> to `state touch \"spec locked`; pair /dross-quick to the `chore(dross): record quick` bookkeeping commit (flow_end = bookkeeping commit so t-5 absorbed §6 falls inside the window). Must run while every prompt is unedited (~/.claude/dross/prompts is symlinked to this tree) — every prompt-editing task depends on t-1. Record [before] (plan), [quick_before], [spec_before] with prompt-partials leg fields (prompt_bytes, partial_fetches, agent_turns, turn_tools, wall_clock_s, human_wait_s, dross_calls, binary_version, session_id, fixture_tree), and [bytes_only] ship_before = 23006, options_before = 28231 from `git show 8eb38e9f:assets/prompts/<p>.md | wc -c` (no session, locked flow_set)."
   covers = ["c-4"]
   test_contract = ["if a leg ran on edited prompts, t-16's TestFlowCostRecords/prompt-budgets-rest fails: [before].prompt_bytes != 21154, [quick_before] != 18098, [spec_before] != 19075, or [bytes_only] ship_before != 23006 / options_before != 28231", "if a before leg ran on a phase-built binary (e.g. one carrying t-5's quick end absorption), the check fails: each before binary_version must contain \"commit 8eb38e9f\"", "if the fixture is non-deterministic, the check fails: each *_after.fixture_tree must equal its *_before.fixture_tree (`git rev-parse HEAD^{tree}` recorded per leg)", "if the base binary was built without the Makefile LDFLAGS, the pre-leg check fails before any session starts: `./dross version` reporting `commit unknown` (or any commit other than 8eb38e9f) stops t-1 — no leg is recorded on an unstamped binary", "if the fixture recipe lives only in a scratch script, t-16 cannot rebuild it and TestFlowCostRecords fails: flow-cost-before.toml must carry [scenario] (repo_shape, wave_position, flow_start, flow_end, jq_method) with setup_sh including the new per-leg phase steps, plus each leg's flow_end and jq end_re (plan locked / spec locked / record-quick commit)"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-2"
@@ -73,7 +73,7 @@ manifestPrompts gains options, ship, plan, spec, quick. For these five only, the
     "if the issue close drifts after the base switch, TestQuickClosesBoardIssueBeforeLeavingTheQuickBranch (retargeted) fails",
   ]
   depends_on = ["t-1", "t-2"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-6"
@@ -147,7 +147,7 @@ Move to partials: empty-$ARGUMENTS resolution (done-phase / unset asks) → _spe
   covers = ["c-1", "c-2", "c-3"]
   test_contract = ["if a spec branch fetches on the common path, TestCommonPathFetchesNothing fails; each key's non-common value fetches exactly its own partial (CheckPartials orphan check, plus a Fetched table in spec_prompt_test: {target: empty} == [no-target], {spec_file: present} == [resume], {deferral: chosen} == [route])", "if route verbs are lost, TestPromptInstructionsConserved fails on `dross deferred route <phase-id> <idx> --target \"<slug>\"`", "if routing or gray-area instructions are trimmed away, the expanded TestSpecPrompt* suite fails, e.g. TestSpecPromptRoutesFourDestinations and TestSpecPromptWalksEveryGrayArea", "if the resume skip rule leaves §4, a raw §4 check fails: base §4 must contain \"already has a target\"", "if the include-first gate or the create flow leaves base, TestCommonPathInline (raw) fails on `Step 1 — the entry gate`, `add to current phase`, `dross phase list --milestone` or `Describe a new phase`", "if the guarded checkout leaves the expansion, TestNoPromptPerformsRawBranchSwitch fails on spec", "if the `Spec locked` footer moves, TestBoundaryPromptsCarryFooter fails", "if the zero-fetch claim is overstated, the scope note is missing: t-11's commit and t-16's [spec_after] record that spec's zero-fetch path is \"target given, no deferral\", and that bare /dross-spec (target=empty) and choosing \"defer it\" (deferral=chosen) each fetch one partial by design"]
   depends_on = ["t-1", "t-2", "t-3", "t-6"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-12"

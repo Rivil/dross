@@ -1847,6 +1847,16 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "prompt-budgets-rest/t-1": {
+      "issue": "DRO-1075",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-11": {
+      "issue": "DRO-1077",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "prompt-budgets-rest/t-2": {
       "issue": "DRO-1068",
       "plan_status": "done",
@@ -1859,6 +1869,11 @@
     },
     "prompt-budgets-rest/t-4": {
       "issue": "DRO-1070",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-5": {
+      "issue": "DRO-1076",
       "plan_status": "done",
       "board_state": "task-in-review"
     },
