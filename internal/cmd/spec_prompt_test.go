@@ -1,25 +1,17 @@
 package cmd
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// specPromptContent loads assets/prompts/spec.md and normalises it (lowercased,
-// backticks/emphasis stripped) so assertions test for the presence of an
-// instruction rather than its exact formatting. (r-01: the prompt edit is only
-// live after `make install`; this reads the assets/ source directly.)
+// specPromptContent loads spec.md expanded with its partials and normalises it
+// (lowercased, backticks/emphasis stripped) so assertions test for the presence
+// of an instruction rather than its exact formatting. (r-01: the prompt edit is
+// only live after `make install`; this reads the embedded assets directly.)
 func specPromptContent(t *testing.T) string {
 	t.Helper()
-	root := repoRootFromTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "spec.md"))
-	if err != nil {
-		t.Fatalf("read spec.md: %v", err)
-	}
-	s := strings.ToLower(string(b))
-	return strings.NewReplacer("`", "", "*", "", "_", "").Replace(s)
+	return normalisePrompt(expandedPrompt(t, "spec.md"))
 }
 
 // TestSpecPromptRoutesFourDestinations proves c-2: §4 offers all four routing
