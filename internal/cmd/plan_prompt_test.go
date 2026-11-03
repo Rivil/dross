@@ -1,25 +1,17 @@
 package cmd
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// planPromptContent loads assets/prompts/plan.md and normalises it (lowercased,
-// backticks/emphasis stripped) so assertions test for the presence of an
-// instruction rather than its exact formatting. (r-01: the prompt edit is only
-// live after `make install`; this reads the assets/ source directly.)
+// planPromptContent loads plan.md expanded with its partials and normalises it
+// (lowercased, backticks/emphasis stripped) so assertions test for the presence
+// of an instruction rather than its exact formatting. (r-01: the prompt edit is
+// only live after `make install`; this reads the embedded assets directly.)
 func planPromptContent(t *testing.T) string {
 	t.Helper()
-	root := repoRootFromTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "plan.md"))
-	if err != nil {
-		t.Fatalf("read plan.md: %v", err)
-	}
-	s := strings.ToLower(string(b))
-	return strings.NewReplacer("`", "", "*", "", "_", "").Replace(s)
+	return normalisePrompt(expandedPrompt(t, "plan.md"))
 }
 
 // TestPlanPromptBorderlineTaskIncludeFirst proves c-2 as revised on 2026-09-29:

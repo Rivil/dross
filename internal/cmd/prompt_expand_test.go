@@ -43,40 +43,35 @@ func normalisePrompt(s string) string {
 // seeded from every such reader when prompts gained partials and may only
 // shrink: rawPromptReadAllowlistSize pins its size.
 var rawPromptReadAllowlist = map[string]bool{
-	"internal/boardsync/board_lifecycle_divergence_test.go#rawPrompt":               true,
-	"internal/cmd/architecture_prompt_test.go#architecturePromptContent":            true,
-	"internal/cmd/inbox_prompt_test.go#inboxPromptContent":                          true,
-	"internal/cmd/install_symlink_test.go#TestMakeInstallLinksInteractionSnippet":   true,
-	"internal/cmd/interaction_coreloop_test.go#TestPlanPromptNoArtifactDump":        true,
-	"internal/cmd/interaction_coreloop_test.go#TestShipPromptDecisionTurnsSeparate": true,
-	"internal/cmd/interaction_othercmds_test.go#otherCmdPromptBody":                 true,
-	"internal/cmd/interaction_setupcmds_test.go#setupPromptBody":                    true,
-	"internal/cmd/interaction_snippet_test.go#TestFooterPromptsLoadPlaybook":        true,
-	"internal/cmd/interaction_snippet_test.go#contextRuleSection":                   true,
-	"internal/cmd/interaction_snippet_test.go#interactionSnippetContent":            true,
-	"internal/cmd/interaction_test.go#TestInteractionPlaybookSingleSource":          true,
-	"internal/cmd/milestone_dispatch_prompt_test.go#milestonePromptText":            true,
-	"internal/cmd/options_docs_test.go#optionsPrompt":                               true,
-	"internal/cmd/pause_prompt_test.go#pausePromptContent":                          true,
-	"internal/cmd/plan_prompt_test.go#planPromptContent":                            true,
-	"internal/cmd/plan_review_tiers_test.go#TestPlanPromptDescribesEveryReviewTier": true,
-	"internal/cmd/pull_envelope_test.go#TestPromptsDescribeTheEnvelopeContract":     true,
-	"internal/cmd/quality_prompt_test.go#qualityPromptContent":                      true,
-	"internal/cmd/quick_prompt_test.go#quickPromptContent":                          true,
-	"internal/cmd/readme_doc_test.go#optionsSection":                                true,
-	"internal/cmd/respond_prompt_test.go#respondPrompt":                             true,
-	"internal/cmd/resume_prompt_test.go#resumePromptContent":                        true,
-	"internal/cmd/secure_prompt_test.go#securePromptContent":                        true,
-	"internal/cmd/ship_prompt_test.go#rawShipSection":                               true,
-	"internal/cmd/squash_claim_guard_test.go#TestQuickPromptHandlesShippedWindow":   true,
-	"internal/cmd/watch_prompt_test.go#watchPromptContent":                          true,
-	"internal/cmd/watch_test.go#TestWatchPromptNamesEveryDigestField":               true,
-	"internal/prtriage/split_test.go#reviewTemplate":                                true,
-	"internal/rules/rules_test.go#TestInteractionContractNoDrift":                   true,
-	"internal/rules/rules_test.go#TestInteractionRuleUsesEmitter":                   true,
+	"internal/boardsync/board_lifecycle_divergence_test.go#rawPrompt":             true,
+	"internal/cmd/architecture_prompt_test.go#architecturePromptContent":          true,
+	"internal/cmd/inbox_prompt_test.go#inboxPromptContent":                        true,
+	"internal/cmd/install_symlink_test.go#TestMakeInstallLinksInteractionSnippet": true,
+	"internal/cmd/interaction_othercmds_test.go#otherCmdPromptBody":               true,
+	"internal/cmd/interaction_setupcmds_test.go#setupPromptBody":                  true,
+	"internal/cmd/interaction_snippet_test.go#TestFooterPromptsLoadPlaybook":      true,
+	"internal/cmd/interaction_snippet_test.go#contextRuleSection":                 true,
+	"internal/cmd/interaction_snippet_test.go#interactionSnippetContent":          true,
+	"internal/cmd/interaction_test.go#TestInteractionPlaybookSingleSource":        true,
+	"internal/cmd/milestone_dispatch_prompt_test.go#milestonePromptText":          true,
+	"internal/cmd/options_docs_test.go#optionsPrompt":                             true,
+	"internal/cmd/pause_prompt_test.go#pausePromptContent":                        true,
+	"internal/cmd/pull_envelope_test.go#TestPromptsDescribeTheEnvelopeContract":   true,
+	"internal/cmd/quality_prompt_test.go#qualityPromptContent":                    true,
+	"internal/cmd/quick_prompt_test.go#quickPromptContent":                        true,
+	"internal/cmd/readme_doc_test.go#optionsSection":                              true,
+	"internal/cmd/respond_prompt_test.go#respondPrompt":                           true,
+	"internal/cmd/resume_prompt_test.go#resumePromptContent":                      true,
+	"internal/cmd/secure_prompt_test.go#securePromptContent":                      true,
+	"internal/cmd/squash_claim_guard_test.go#TestQuickPromptHandlesShippedWindow": true,
+	"internal/cmd/watch_prompt_test.go#watchPromptContent":                        true,
+	"internal/cmd/watch_test.go#TestWatchPromptNamesEveryDigestField":             true,
+	"internal/prtriage/split_test.go#reviewTemplate":                              true,
+	"internal/rules/rules_test.go#TestInteractionContractNoDrift":                 true,
+	"internal/rules/rules_test.go#TestInteractionRuleUsesEmitter":                 true,
 }
 
-const rawPromptReadAllowlistSize = 31
+const rawPromptReadAllowlistSize = 26
 
 // promptGuardRoots are the trees the raw-read guards walk, relative to the
 // repo root: internal/ holds the prompt-content tests, cmd/ the binaries'.
@@ -337,6 +332,9 @@ func TestPromptLoadersCompose(t *testing.T) {
 	if specPromptContent(t) != normalisePrompt(expandedPrompt(t, "spec.md")) {
 		t.Error("specPromptContent does not compose over the expanded spec.md")
 	}
+	if planPromptContent(t) != normalisePrompt(expandedPrompt(t, "plan.md")) {
+		t.Error("planPromptContent does not compose over the expanded plan.md")
+	}
 }
 
 // TestPromptLoadersSeePartials: text that lives only in a partial reaches the
@@ -347,6 +345,8 @@ func TestPromptLoadersSeePartials(t *testing.T) {
 		"prompts/_execute.solo.md": {Data: []byte("a BANNED_PHRASE only here\n")},
 		"prompts/spec.md":          {Data: []byte("# spec\n**When** `deferral=chosen` — a deferral is chosen: `dross prompt partial spec route`\nend\n")},
 		"prompts/_spec.route.md":   {Data: []byte("a BANNED_PHRASE only here\n")},
+		"prompts/plan.md":          {Data: []byte("# plan\n**When** `panel=on` — the panel is asked for: `dross prompt partial plan panel`\nend\n")},
+		"prompts/_plan.panel.md":   {Data: []byte("a BANNED_PHRASE only here\n")},
 	})
 	for loader, got := range map[string]string{
 		"promptBody": promptBody(t, "execute.md"),
@@ -357,7 +357,7 @@ func TestPromptLoadersSeePartials(t *testing.T) {
 			t.Errorf("%s missed text that lives only in a partial", loader)
 		}
 	}
-	if !strings.Contains(promptContent(t, "execute.md"), "bannedphrase") || !strings.Contains(executePromptContent(t), "bannedphrase") || !strings.Contains(specPromptContent(t), "bannedphrase") {
+	if !strings.Contains(promptContent(t, "execute.md"), "bannedphrase") || !strings.Contains(executePromptContent(t), "bannedphrase") || !strings.Contains(specPromptContent(t), "bannedphrase") || !strings.Contains(planPromptContent(t), "bannedphrase") {
 		t.Error("the normalised loaders missed text that lives only in a partial")
 	}
 }

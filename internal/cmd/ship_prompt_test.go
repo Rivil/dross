@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 // promptContent loads one prompt out of assets/prompts/ and normalises it —
@@ -448,16 +449,12 @@ func TestShipPromptTestsBeforeDocsCommit(t *testing.T) {
 	}
 }
 
-// rawShipSection returns ship.md's raw text from heading to the next "## "
-// heading. Raw, not normalised: the Forgejo body is matched as written,
-// capital D and all.
+// rawShipSection returns ship.md's text, expanded with its partials, from
+// heading to the next "## " heading. Not normalised: the Forgejo body is
+// matched as written, capital D and all.
 func rawShipSection(t *testing.T, heading string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "ship.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	doc := string(b)
+	doc := expandedPrompt(t, "ship.md")
 	at := strings.Index(doc, heading)
 	if at < 0 {
 		t.Fatalf("ship.md has no %q section", heading)
@@ -467,6 +464,27 @@ func rawShipSection(t *testing.T, heading string) string {
 		rest = rest[:next]
 	}
 	return rest
+}
+
+// TestRawShipSectionSeesPartials: §6 text that lives only in a _ship partial
+// reaches rawShipSection, Forgejo body as written. The seeded marker is in no
+// ship.md on disk, so a read off disk fails here.
+func TestRawShipSectionSeesPartials(t *testing.T) {
+	seedPromptFS(t, fstest.MapFS{
+		"prompts/ship.md": {Data: []byte("# ship\n" +
+			"## 6. Merge gate\n**When** `auto=on` — auto mode is on: `dross prompt partial ship merge`\n" +
+			"## 7. Done\nafter the gate\n")},
+		"prompts/_ship.merge.md": {Data: []byte("Forgejo: POST /pulls/<n>/merge with `{\"Do\":\"squash\"}` — SEEDED_MERGE_CALL\n")},
+	})
+	gate := rawShipSection(t, "## 6. Merge gate")
+	for _, want := range []string{`{"Do":"squash"}`, "SEEDED_MERGE_CALL"} {
+		if !strings.Contains(gate, want) {
+			t.Errorf("rawShipSection(§6) lacks %q, which lives only in the seeded partial", want)
+		}
+	}
+	if strings.Contains(gate, "after the gate") {
+		t.Error("rawShipSection(§6) ran past the next ## heading")
+	}
 }
 
 // TestShipPromptReShipsAfterEveryCIFix (c-7): a fix pushed after the PR opened

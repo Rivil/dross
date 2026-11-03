@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 // coreLoopPrompts are the five interactive prompts retrofitted in phase 11
@@ -119,13 +121,19 @@ func promptSection(t *testing.T, body, heading string) string {
 // into one turn, or reverts reviewers to a bare `dross project set`, fails here —
 // closing the gap that left c-3 weak (audit-doc proxy only) at first verify.
 func TestShipPromptDecisionTurnsSeparate(t *testing.T) {
-	root := repoRootFromTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "ship.md"))
-	if err != nil {
-		t.Fatalf("read ship.md: %v", err)
+	for _, p := range shipDecisionTurnProblems(t) {
+		t.Error(p)
 	}
-	ship := string(b)
+}
 
+// shipDecisionTurnProblems reads ship.md expanded with its partials — a
+// decision turn may live in a _ship partial inlined into its section — and
+// reports each decision point that is not its own single AskUserQuestion turn.
+func shipDecisionTurnProblems(t *testing.T) []string {
+	t.Helper()
+	ship := expandedPrompt(t, "ship.md")
+
+	var out []string
 	turns := []struct {
 		heading string // section heading anchor
 		anchor  string // the stable decision prompt inside that turn
@@ -137,17 +145,38 @@ func TestShipPromptDecisionTurnsSeparate(t *testing.T) {
 	for _, tn := range turns {
 		section := promptSection(t, ship, tn.heading)
 		if n := strings.Count(section, "AskUserQuestion"); n != 1 {
-			t.Errorf("ship.md %q must hold exactly one AskUserQuestion turn (c-3); found %d", tn.heading, n)
+			out = append(out, fmt.Sprintf("ship.md %q must hold exactly one AskUserQuestion turn (c-3); found %d", tn.heading, n))
 		}
 		if !strings.Contains(section, tn.anchor) {
-			t.Errorf("ship.md %q must key its turn on the stable anchor %q (c-3)", tn.heading, tn.anchor)
+			out = append(out, fmt.Sprintf("ship.md %q must key its turn on the stable anchor %q (c-3)", tn.heading, tn.anchor))
 		}
 	}
 
 	// Reviewers must be a propose-and-react turn, not a silent config-write.
 	reviewers := promptSection(t, ship, "## 3. Reviewers")
 	if !strings.Contains(reviewers, "rather than silently writing config") {
-		t.Error("ship.md §3 must drive reviewers as a propose-and-react turn ('rather than silently writing config'), not a silent config-write (c-3)")
+		out = append(out, "ship.md §3 must drive reviewers as a propose-and-react turn ('rather than silently writing config'), not a silent config-write (c-3)")
+	}
+	return out
+}
+
+// TestShipDecisionTurnsSeeTheMergeGatePartial: with §6's merge-gate turn moved
+// into a _ship partial, the decision-turn check still sees it. The seeded §3
+// drops its propose-and-react wording, so exactly that is reported — a read of
+// the bare base would also report §6's missing turn, and a read off disk would
+// report nothing.
+func TestShipDecisionTurnsSeeTheMergeGatePartial(t *testing.T) {
+	seedPromptFS(t, fstest.MapFS{
+		"prompts/ship.md": {Data: []byte("# ship\n" +
+			"## 2. Body override\nAskUserQuestion: Use generated body, or write your own?\n" +
+			"## 3. Reviewers\nAskUserQuestion: Request reviewers\n" +
+			"## 6. Merge gate\n**When** `auto=on` — auto mode is on: `dross prompt partial ship merge`\n" +
+			"## 7. Done\n")},
+		"prompts/_ship.merge.md": {Data: []byte("AskUserQuestion: Merge now?\n")},
+	})
+	got := shipDecisionTurnProblems(t)
+	if len(got) != 1 || !strings.Contains(got[0], "§3") {
+		t.Errorf("shipDecisionTurnProblems over the seeded split = %q, want only §3's propose-and-react wording reported", got)
 	}
 }
 
@@ -158,12 +187,7 @@ func TestShipPromptDecisionTurnsSeparate(t *testing.T) {
 // c-4 weak (audit-doc proxy only) at first verify. (No negative [[task]]
 // assertion: §5 legitimately documents the plan.toml schema with [[task]].)
 func TestPlanPromptNoArtifactDump(t *testing.T) {
-	root := repoRootFromTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "plan.md"))
-	if err != nil {
-		t.Fatalf("read plan.md: %v", err)
-	}
-	section := promptSection(t, string(b), "## 5. Write plan.toml")
+	section := promptSection(t, expandedPrompt(t, "plan.md"), "## 5. Write plan.toml")
 	for _, anchor := range []string{"Plan written: N tasks across W waves", "Don't paste the toml back"} {
 		if !strings.Contains(section, anchor) {
 			t.Errorf("plan.md §5 must carry %q so the plan is confirmed by summary, not by dumping the toml (c-4)", anchor)
