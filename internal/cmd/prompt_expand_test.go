@@ -47,17 +47,14 @@ var rawPromptReadAllowlist = map[string]bool{
 	"internal/cmd/inbox_prompt_test.go#inboxPromptContent":                        true,
 	"internal/cmd/install_symlink_test.go#TestMakeInstallLinksInteractionSnippet": true,
 	"internal/cmd/interaction_othercmds_test.go#otherCmdPromptBody":               true,
-	"internal/cmd/interaction_setupcmds_test.go#setupPromptBody":                  true,
 	"internal/cmd/interaction_snippet_test.go#TestFooterPromptsLoadPlaybook":      true,
 	"internal/cmd/interaction_snippet_test.go#contextRuleSection":                 true,
 	"internal/cmd/interaction_snippet_test.go#interactionSnippetContent":          true,
 	"internal/cmd/interaction_test.go#TestInteractionPlaybookSingleSource":        true,
 	"internal/cmd/milestone_dispatch_prompt_test.go#milestonePromptText":          true,
-	"internal/cmd/options_docs_test.go#optionsPrompt":                             true,
 	"internal/cmd/pause_prompt_test.go#pausePromptContent":                        true,
 	"internal/cmd/pull_envelope_test.go#TestPromptsDescribeTheEnvelopeContract":   true,
 	"internal/cmd/quality_prompt_test.go#qualityPromptContent":                    true,
-	"internal/cmd/readme_doc_test.go#optionsSection":                              true,
 	"internal/cmd/respond_prompt_test.go#respondPrompt":                           true,
 	"internal/cmd/resume_prompt_test.go#resumePromptContent":                      true,
 	"internal/cmd/secure_prompt_test.go#securePromptContent":                      true,
@@ -68,7 +65,7 @@ var rawPromptReadAllowlist = map[string]bool{
 	"internal/rules/rules_test.go#TestInteractionRuleUsesEmitter":                 true,
 }
 
-const rawPromptReadAllowlistSize = 23
+const rawPromptReadAllowlistSize = 20
 
 // promptGuardRoots are the trees the raw-read guards walk, relative to the
 // repo root: internal/ holds the prompt-content tests, cmd/ the binaries'.
@@ -335,20 +332,68 @@ func TestPromptLoadersCompose(t *testing.T) {
 	if quickPromptContent(t) != normaliseKeepUnderscores(expandedPrompt(t, "quick.md")) {
 		t.Error("quickPromptContent does not compose over the expanded quick.md")
 	}
+	if optionsPrompt(t) != expandedPrompt(t, "options.md") {
+		t.Error("optionsPrompt does not compose over the expanded options.md")
+	}
+	for _, name := range setupPrompts {
+		if setupPromptBody(t, name) != expandedPrompt(t, name+".md") {
+			t.Errorf("setupPromptBody(%s) does not compose over the expanded %s.md", name, name)
+		}
+	}
+}
+
+// TestFooterPlaybookReadStaysRaw: the footer check asks whether the base prompt
+// itself runs `dross interaction show` — a pre-flight a partial cannot carry —
+// so its raw read is by design and keeps its allowlist entry.
+func TestFooterPlaybookReadStaysRaw(t *testing.T) {
+	if !rawPromptReadAllowlist["internal/cmd/interaction_snippet_test.go#TestFooterPromptsLoadPlaybook"] {
+		t.Error("TestFooterPromptsLoadPlaybook left the raw-read allowlist; its base-prompt read is raw by design")
+	}
+}
+
+// TestOptionsSectionFindsEveryHeading: every numbered heading of the bare
+// options.md stays in the base prompt, so optionsSection, reading the expanded
+// prompt, finds a non-empty body for each one.
+func TestOptionsSectionFindsEveryHeading(t *testing.T) {
+	b, err := assets.FS.ReadFile("prompts/options.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := 0
+	for _, line := range strings.Split(string(b), "\n") {
+		rest, ok := strings.CutPrefix(line, "## ")
+		if !ok {
+			continue
+		}
+		num, _, ok := strings.Cut(rest, ".")
+		n, err := strconv.Atoi(num)
+		if !ok || err != nil {
+			continue
+		}
+		found++
+		if strings.TrimSpace(optionsSection(t, n)) == "" {
+			t.Errorf("optionsSection(%d) is empty for options.md heading %q", n, line)
+		}
+	}
+	if found == 0 {
+		t.Fatal("options.md has no numbered headings — the check would pass vacuously")
+	}
 }
 
 // TestPromptLoadersSeePartials: text that lives only in a partial reaches the
 // loaders, so a negative assertion over them cannot miss it.
 func TestPromptLoadersSeePartials(t *testing.T) {
 	seedPromptFS(t, fstest.MapFS{
-		"prompts/execute.md":       {Data: []byte("# execute\n**When** `mode=solo` — solo: `dross prompt partial execute solo`\nend\n")},
-		"prompts/_execute.solo.md": {Data: []byte("a BANNED_PHRASE only here\n")},
-		"prompts/spec.md":          {Data: []byte("# spec\n**When** `deferral=chosen` — a deferral is chosen: `dross prompt partial spec route`\nend\n")},
-		"prompts/_spec.route.md":   {Data: []byte("a BANNED_PHRASE only here\n")},
-		"prompts/plan.md":          {Data: []byte("# plan\n**When** `panel=on` — the panel is asked for: `dross prompt partial plan panel`\nend\n")},
-		"prompts/_plan.panel.md":   {Data: []byte("a BANNED_PHRASE only here\n")},
-		"prompts/quick.md":         {Data: []byte("# quick\n**When** `mode=solo` — solo: `dross prompt partial quick solo`\nend\n")},
-		"prompts/_quick.solo.md":   {Data: []byte("a BANNED_PHRASE only here\n")},
+		"prompts/execute.md":        {Data: []byte("# execute\n**When** `mode=solo` — solo: `dross prompt partial execute solo`\nend\n")},
+		"prompts/_execute.solo.md":  {Data: []byte("a BANNED_PHRASE only here\n")},
+		"prompts/spec.md":           {Data: []byte("# spec\n**When** `deferral=chosen` — a deferral is chosen: `dross prompt partial spec route`\nend\n")},
+		"prompts/_spec.route.md":    {Data: []byte("a BANNED_PHRASE only here\n")},
+		"prompts/plan.md":           {Data: []byte("# plan\n**When** `panel=on` — the panel is asked for: `dross prompt partial plan panel`\nend\n")},
+		"prompts/_plan.panel.md":    {Data: []byte("a BANNED_PHRASE only here\n")},
+		"prompts/quick.md":          {Data: []byte("# quick\n**When** `mode=solo` — solo: `dross prompt partial quick solo`\nend\n")},
+		"prompts/_quick.solo.md":    {Data: []byte("a BANNED_PHRASE only here\n")},
+		"prompts/options.md":        {Data: []byte("# options\n## 1. Lanes\n**When** `lanes=editing` — a lane is being edited: `dross prompt partial options lanes`\n## 2. Next\nend\n")},
+		"prompts/_options.lanes.md": {Data: []byte("a BANNED_PHRASE only here\n")},
 	})
 	for loader, got := range map[string]string{
 		"promptBody": promptBody(t, "execute.md"),
@@ -365,6 +410,16 @@ func TestPromptLoadersSeePartials(t *testing.T) {
 	// quickPromptContent keeps underscores.
 	if !strings.Contains(quickPromptContent(t), "banned_phrase") {
 		t.Error("quickPromptContent missed text that lives only in a partial")
+	}
+	for loader, got := range map[string]string{
+		"optionsPrompt":            optionsPrompt(t),
+		"optionsSection(1)":        optionsSection(t, 1),
+		"setupPromptBody(quick)":   setupPromptBody(t, "quick"),
+		"setupPromptBody(options)": setupPromptBody(t, "options"),
+	} {
+		if !strings.Contains(got, "BANNED_PHRASE") {
+			t.Errorf("%s missed text that lives only in a partial", loader)
+		}
 	}
 }
 

@@ -12,15 +12,11 @@ import (
 )
 
 // optionsPrompt reads the /dross-options prompt, which is the only surface that
-// claims to reach EVERY dross-managed setting.
+// claims to reach EVERY dross-managed setting, expanded with its partials so a
+// setting documented in one is still seen.
 func optionsPrompt(t *testing.T) string {
 	t.Helper()
-	root := repoRootForDocs(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "options.md"))
-	if err != nil {
-		t.Fatalf("read options.md: %v", err)
-	}
-	return string(b)
+	return expandedPrompt(t, "options.md")
 }
 
 // TestOptionsCoversEveryLocalKey walks localKeys itself rather than a hand-typed
