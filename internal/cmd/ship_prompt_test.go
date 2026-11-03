@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/Rivil/dross/assets"
 )
 
 // promptContent loads one prompt out of assets/prompts/ and normalises it —
@@ -24,10 +26,25 @@ func shipPromptContent(t *testing.T) string {
 	return promptContent(t, "ship.md")
 }
 
-// TestShipPromptRecoverySection (c-5) gates the recovery cookbook: all three
-// mid-merge failure states and both recovery commands must be present, and the
-// section must never instruct manual .dross/ surgery (the drift the cookbook
-// exists to prevent).
+// shipRecoveryFetch is the fetch line that ends §6 and loads the cookbook.
+const shipRecoveryFetch = "**When** `ship_result=failed` — `dross ship` or `dross phase complete` exited non-zero, or left the tree dirty: `dross prompt partial ship recovery`"
+
+// rawShipBase is ship.md as it sits on disk, no partial inlined.
+func rawShipBase(t *testing.T) string {
+	t.Helper()
+	b, err := assets.FS.ReadFile("prompts/ship.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// TestShipPromptRecoverySection (c-5) gates the recovery cookbook: all six
+// failure states and both recovery commands must be present, and the section
+// must never instruct manual .dross/ surgery (the drift the cookbook exists to
+// prevent). The cookbook lives in _ship.recovery.md behind ship_result=failed,
+// fetched by the last line of §6; §4 must point there, or a non-zero ship exit
+// (modes 3 and 4) never reaches it.
 func TestShipPromptRecoverySection(t *testing.T) {
 	content := shipPromptContent(t)
 
@@ -42,6 +59,32 @@ func TestShipPromptRecoverySection(t *testing.T) {
 		if !strings.Contains(content, n) {
 			t.Errorf("ship.md recovery section missing required phrase %q", n)
 		}
+	}
+
+	recovery := promptSection(t, content, "## recovery")
+	for i, mode := range []string{
+		"fast-forward abort",
+		"diverged main",
+		"dirty tree after push",
+		"record push failed",
+		"chore pr pending",
+		"board not finalized",
+	} {
+		if !strings.Contains(recovery, mode) {
+			t.Errorf("ship.md Recovery lost failure mode %d %q", i+1, mode)
+		}
+	}
+
+	base := rawShipBase(t)
+	if strings.Contains(base, "\n## Recovery") {
+		t.Error("base ship.md still carries ## Recovery; it is fetched under ship_result=failed")
+	}
+	if !strings.Contains(sectionOf(base, "## 4. Ship", "## 5."), "Recovery fetch at the end of §6") {
+		t.Error("base ship.md §4 no longer points a failed or dirty `dross ship` at the Recovery fetch at the end of §6")
+	}
+	six := strings.Split(strings.TrimRight(sectionOf(base, "## 6. Merge gate", "## 7."), "\n"), "\n")
+	if last := six[len(six)-1]; last != shipRecoveryFetch {
+		t.Errorf("last line of base §6 = %q; want the Recovery fetch line", last)
 	}
 
 	// Forbidden: manual .dross/ surgery presented as a user step. The whole
@@ -101,6 +144,53 @@ func TestShipPromptAutoFastPath(t *testing.T) {
 		if !strings.Contains(content, needle) {
 			t.Errorf("ship.md --auto fast-path must name skipped step %q", needle)
 		}
+	}
+}
+
+// TestShipCommonPathFetchesNothing (c-2): an interactive ship of a verified
+// phase to a merged PR fetches no partial; --auto, a failed check and a failed
+// or dirty ship each fetch exactly their own.
+func TestShipCommonPathFetchesNothing(t *testing.T) {
+	common, err := assets.Fetched(promptFS, "ship", assets.CommonPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(common) != 0 {
+		t.Errorf("an interactive ship fetches %v on the common path; want nothing", common)
+	}
+	for _, c := range []struct{ key, value, want string }{
+		{"auto", "on", "auto"},
+		{"ship_result", "failed", "recovery"},
+		{"ci", "failed", "ci-failure"},
+	} {
+		facts := assets.CommonPath()
+		facts[c.key] = c.value
+		got, err := assets.Fetched(promptFS, "ship", facts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Join(got, ",") != c.want {
+			t.Errorf("ship under %s=%s fetches %v; want [%s]", c.key, c.value, got, c.want)
+		}
+	}
+}
+
+// TestShipAutoFetchPoint: the --auto fetch sits where §0.5 was, the last line
+// before ## 1. Preview, so the expansion keeps heading order 0 -> 0.5 -> 1, and
+// base ship.md no longer cites a §0.5 that only the partial carries.
+func TestShipAutoFetchPoint(t *testing.T) {
+	base := rawShipBase(t)
+	if strings.Contains(base, "§0.5") {
+		t.Error("base ship.md still cites §0.5, which only the auto partial carries")
+	}
+	pre := strings.Split(strings.TrimRight(sectionOf(base, "## 0. Pre-flight", "## 1. Preview"), "\n"), "\n")
+	if last := pre[len(pre)-1]; last != "**When** `auto=on` — `--auto` is in this command's arguments: `dross prompt partial ship auto`" {
+		t.Errorf("last line before ## 1. Preview = %q; want the auto fetch line", last)
+	}
+	exp := expandedPrompt(t, "ship.md")
+	h0, h05, h1 := strings.Index(exp, "\n## 0. "), strings.Index(exp, "\n## 0.5 "), strings.Index(exp, "\n## 1. ")
+	if h0 < 0 || h05 < 0 || h1 < 0 || !(h0 < h05 && h05 < h1) {
+		t.Errorf("expanded ship.md headings 0 / 0.5 / 1 at %d / %d / %d; want that order", h0, h05, h1)
 	}
 }
 
@@ -503,6 +593,12 @@ func TestShipPromptReShipsAfterEveryCIFix(t *testing.T) {
 	}
 	if !(push < reship && reship < loop) {
 		t.Errorf("§5 On failure must push, then re-run dross ship <phase-id>, then loop back (at %d, %d, %d)", push, reship, loop)
+	}
+	// The fix loop starts from the failing logs and stops after three rounds.
+	for _, needle := range []string{"gh run view --log-failed", "cap at 3 fix iterations"} {
+		if !strings.Contains(onFailure, needle) {
+			t.Errorf("ship.md §5 On failure lost %q", needle)
+		}
 	}
 	if strings.Contains(content, "re-running dross ship is also safe") {
 		t.Error("ship.md still calls the re-ship optional ('also safe') — after a fix it is required")

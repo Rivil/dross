@@ -1,0 +1,17 @@
+## Recovery
+
+Most ships finish clean: §6's squash-merge plus `dross phase complete` fast-forwards the phase's recorded base from origin, tears down the branch, and finalizes the board. When the merge step goes sideways, recover with a dross command — **never hand-edit `.dross/` or re-commit it by hand.** That manual surgery is exactly what drifted in the past; a dross command owns the restore and the commit. The mid-flight failure states and their one-command fixes:
+
+1. **Fast-forward abort.** `dross phase complete` stops with a "fast-forward … failed" error — local main has diverged from origin/main (a stray commit on main, or a legacy completion chore). Fix: **`dross phase complete --recover`** — it resets main to origin and restores the cumulative `.dross/` tree in one shot, then finishes the completion. Pass `--recover` only after reading the abort: it is a destructive reset of local main.
+
+2. **Diverged main (legacy / strip-filter era).** Local main carries phase commits that origin/main lost to an old `.dross/`-stripping squash, so main holds a parallel history. Fix: **`dross ship recover`** — the standalone healer. Same reset-and-restore as `--recover`, usable outside the merge loop.
+
+3. **Dirty tree after push.** `dross ship` returned but `git status` is not clean — an older ship left its post-push `.dross/` write uncommitted, and `dross phase complete` refuses on a dirty tree. Fix: re-run **`dross ship`** — it is idempotent and commits its own post-push `.dross/` records, leaving a clean tree. You stage nothing yourself.
+
+4. **Record push failed.** `dross ship` opened the PR but the push carrying its record was refused — the error names the retry. `dross status` reads the phase as verified, not shipped, and prints `pending: … re-run dross ship <id>`. Fix: run **`dross ship <phase-id>`** again — it recognises the open PR, pushes the record, then flips the phase to shipped. A refusal naming `git pull --rebase` or `--force` means origin's `phase/<id>` moved under you; do that first. (The mirror case — the record landed but the shipped-marker push failed — reports the phase *as* shipped and names the same re-run.)
+
+5. **Chore PR pending** (protected base). `dross phase complete` refuses, naming a chore PR and saying to re-run once it merges: the base's `.dross` chores are still waiting in that PR while origin has moved on, so the base can't fast-forward yet. This is a wait, not a divergence — never `--recover` here. Once the chore PR merges (auto-merge lands it when the required checks pass; merge it by hand if ship said auto-merge is unavailable), re-run **`dross phase complete <phase-id>`**. On a protected base complete's own completion record goes out through a chore PR as well; it prints that URL, and nothing more is needed once it merges.
+
+6. **Board not finalized.** `dross phase complete` exits non-zero saying the phase is complete but its board was not finalized — the board was unreachable, a token was missing, or a card refused its close. The completion stands; only the cards lag. Fix: once the board is reachable, run **`dross issue phase finalize <phase-id>`** from the base the phase merged into. It is the same finalizer complete runs, resumes from the links the failed run recorded, and only reads cards already at their terminal state, so re-running it is safe.
+
+If you find yourself reaching for git plumbing against `.dross/`, stop — one of the commands above already covers it.
