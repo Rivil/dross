@@ -2,5 +2,299 @@
   "phase": "prompt-budgets-rest",
   "base": "milestone/v1.8",
   "base_commit": "0c11a1da1a85c4b193cd7f8e83ded491a1f93cdb",
-  "tasks": {}
+  "tasks": {
+    "t-2": {
+      "files": [
+        "assets/conservation_test.go",
+        "assets/testdata/prompt_instructions.txt"
+      ],
+      "commit": "bb83f668",
+      "completed_at": "2026-11-03T14:48:42.392797Z",
+      "landmarks": [
+        {
+          "feature": "prompt instruction conservation",
+          "symbol": "recordManifest",
+          "loc": "assets/conservation_test.go:88",
+          "what": "manifest covers options/ship/plan/spec/quick incl. inline dross spans; recording is append-only"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "assets/partials.go",
+        "assets/partials_test.go"
+      ],
+      "commit": "5ad93f91",
+      "completed_at": "2026-11-03T15:03:26.460806Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "TriggerVocabulary",
+          "loc": "assets/partials.go:55",
+          "what": "nine branch keys for plan/ship/spec/options (common value first); common-path landmarks, moved-not-copied and whole-section checks pinned"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/prompt_expand_test.go",
+        "internal/cmd/lane_install_docs_test.go",
+        "internal/cmd/lane_toolchain_docs_test.go",
+        "internal/cmd/milestone_narration_test.go",
+        "internal/cmd/status_test.go",
+        "cmd/dross/main_test.go"
+      ],
+      "commit": "7437854d",
+      "completed_at": "2026-11-03T15:27:27.049021Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "argsSpellPromptFile",
+          "loc": "internal/cmd/prompt_expand_test.go:177",
+          "what": "raw-read guard sees variadic read helpers and walks cmd/; split prompts derive from the partial registry"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/spec_prompt_test.go",
+        "internal/cmd/interaction_pilot_test.go",
+        "internal/cmd/phase_test.go",
+        "internal/rules/rules_test.go",
+        "internal/cmd/prompt_expand_test.go"
+      ],
+      "commit": "641f24df",
+      "completed_at": "2026-11-03T15:39:01.192053Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "specPromptContent",
+          "loc": "internal/cmd/spec_prompt_test.go:12",
+          "what": "spec prompt readers read the expanded spec.md; raw-read allowlist pin 35 -\u003e 31"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/plan_prompt_test.go",
+        "internal/cmd/plan_review_tiers_test.go",
+        "internal/cmd/interaction_coreloop_test.go",
+        "internal/cmd/ship_prompt_test.go",
+        "internal/cmd/prompt_expand_test.go"
+      ],
+      "commit": "9fe8878e",
+      "completed_at": "2026-11-03T16:00:02.132742Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "rawShipSection",
+          "loc": "internal/cmd/ship_prompt_test.go:455",
+          "what": "plan and ship prompt readers read the expanded prompt; raw-read allowlist pin 31 -\u003e 26"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/quick_prompt_test.go",
+        "internal/cmd/squash_claim_guard_test.go",
+        "internal/boardsync/board_lifecycle_divergence_test.go",
+        "internal/cmd/prompt_expand_test.go"
+      ],
+      "commit": "5b4c6021",
+      "completed_at": "2026-11-03T16:18:20.215009Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "promptEmittedStatuses",
+          "loc": "internal/boardsync/board_lifecycle_divergence_test.go:108",
+          "what": "quick and boardsync prompt readers read the expanded prompt; raw-read allowlist pin 26 -\u003e 23"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/options_docs_test.go",
+        "internal/cmd/readme_doc_test.go",
+        "internal/cmd/interaction_setupcmds_test.go",
+        "internal/cmd/interaction_snippet_test.go",
+        "internal/cmd/prompt_expand_test.go"
+      ],
+      "commit": "aa9a477f",
+      "completed_at": "2026-11-03T16:58:29.191005Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "setupPromptBody",
+          "loc": "internal/cmd/interaction_setupcmds_test.go:59",
+          "what": "options and setup-prompt readers read the expanded prompt; raw-read allowlist pin 23 -\u003e 20"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "conservationProblems matches rows by substring (strings.Contains), so many of the new inline-span rows are short prefixes of longer commands (e.g. options.md `dross X set`, `dross test`, `dross verify`, `dross local set`, `dross env set`; ship.md `dross ship`, `dross phase complete`; quick.md `dross ship`, `dross trust`). They count as present while any longer command in the prompt still contains them, so losing that specific prose step would go unnoticed; such rows add bulk toward minRows without protecting anything",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestManifestRecordIsAppendOnly drives recordManifest on a synthetic execute.md prefix (three absorbed rows plus a row no prompt carries) and checks it comes back byte-identical as the output's prefix and that re-recording returns the same manifest unchanged; it does not depend on the real manifest file",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPartialSectionsStayWhole passes on the real assets only trivially today: none of the 10 existing partials has a markdown heading, so only the synthetic MapFS cases exercise splitSections until the plan/spec/quick/ship/options partials land",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "itoa is borrowed from conservation_test.go in the same package; fine, but partials_test.go now depends on that file staying in the package",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "cmd/dross/main_test.go also migrates debug.md and respond.md readers, which the task description's enumerated list omitted (it named only ship.md); the cmd/ walk would have caught them, so migrating them was needed to keep the allowlist pinned at 35",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "argsSpellPromptFile only sees separate literal parts; a helper passed a single \"assets/prompts/x.md\" literal, or a Join expression (e.g. interaction_coverage_test.go mustRead(t, filepath.Join(...\"_interaction.md\"))), is still not detected. That gap is outside what this task claims",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPromptLoadersCompose now checks promptDocText as well, so the new loader is pinned to the expanded prompt",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPhaseListPromptConsumersAreCurrent also switches its milestone.md read to expandedPrompt; this is needed, since the allowlist key covers the whole function and any raw read left in it would trip the guard once the entry is removed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "rules_test's TestSpecPromptDefersToSnippet expands from the real assets.FS rather than a seedable FS, so no partial-only seed test covers it; the test_contract only asks for that check on specPromptContent, so this is acceptable.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestCoreLoopPromptsWireEmitter and TestCoreLoopPromptsReferenceContract (interaction_coreloop_test.go:28-29, :49-50) still read plan.md and ship.md raw via os.ReadFile(path), where path is a variable, so isRawPromptRead never sees them and they sit outside the allowlist. Both check base-only content, so this is harmless today, but they read neither through Expand nor through the sanctioned assets.FS, which is a blind spot in the guard t-7 relies on.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPlanPromptNoArtifactDump moved to expandedPrompt but has no seeded-split proof of its own; the test_contract does not ask for one, and TestPromptLoadersSeePartials now covers planPromptContent.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Refactoring the checks into problem-returning helpers (reviewTierProblems, shipDecisionTurnProblems) lets the seeded tests assert the exact problem set, which makes the base-only and off-disk regressions distinguishable rather than vacuous.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestCloseEmissionsCarryAValidStatus and TestTaskSyncEdgeRegexIsNotVacuous in internal/boardsync/board_lifecycle_divergence_test.go still read prompts off disk via a ReadDir/Glob-derived path, which the raw-read guard cannot see. They scan partial files directly, so no partial text is lost today, but they sit outside the guard.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "boardsync now has its own promptFS/seedPromptFS, copied from internal/cmd/prompt_test.go; the two must be kept in step by hand.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "TestContextRuleAddsNoCalls exempts only rel == \"assets/prompts/options.md\" from the `dross hooks nudge` check; commandPrompts globs partials too, so if t-14 moves §15's hook text into _options.\u003cname\u003e.md the check will fail on the partial rather than exempt it. The new comment says partials are still read here but does not cover this exemption.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSetupPromptsWireEmitter (interaction_setupcmds_test.go) still reads each setup prompt raw via a `path` variable, which isRawPromptRead cannot see (no literals at the call site). This is defensible as a base-prompt pre-flight check, but it is invisible to the guard rather than allowlisted. It predates this diff.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestFooterPlaybookReadStaysRaw only asserts a map key in rawPromptReadAllowlist; TestPromptReadsGoThroughExpansion's matches-no-raw-read check is what actually ties it to the footer test's raw read.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
 }

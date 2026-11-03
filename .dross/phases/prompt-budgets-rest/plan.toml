@@ -29,7 +29,7 @@ manifestPrompts gains options, ship, plan, spec, quick. For these five only, the
     "if the manifest was recorded after §6 moved, the pinned-row check fails: quick.md rows must include `dross state bump internal` and `dross issue quick $NEW_VERSION \"quick: <one-line summary>\"`",
     "if the manifest goes vacuous, the test fails: fewer rows than minRows for any of the five",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-3"
@@ -39,7 +39,7 @@ manifestPrompts gains options, ship, plan, spec, quick. For these five only, the
   description = "TriggerVocabulary gains nine keys, common-path value first: panel{off,on}, auto{off,on}, ci{passed,failed}, ship_result{clean,failed} (ship or complete returned non-zero / left the tree dirty — covers every Recovery mode, §4 and §6 alike), target{given,empty}, spec_file{absent,present}, deferral{none,chosen}, lanes{unchanged,editing}, remote{unchanged,changing}; quick reuses mode{pair,solo}. TestCommonPathInline gains raw-base needles (all exact strings present at 8eb38e9f) — plan: `## 2G`, `## 3. Propose`, `## 5. Write plan.toml`, `### 6.1 Auto review`, `dross state set current_phase_status \"planned\"`; spec: `Step 1 — the entry gate`, `dross phase create`, `dross phase list --milestone`, `Describe a new phase`, `### 3b.`, `[[criteria]]`, `dross state touch \"spec locked: <id>\"`, `Resume, don't overwrite`, `already has a target`; quick: `dross quick begin \"<description>\"`, `**Red, pair mode**`, `dross quick end`, `## 5. Commit`, `Pair mode by default`; ship: `## 1. Preview`, `## 3. Reviewers`, `## 3.5 Merge landmarks`, `dross ship <phase-id>`, `gh run watch`, `gh pr checks --watch`, `dross ship recover`, `All checks passed on PR #N. Merge now?`; options: `## Section pick`, `Keep · Change · Skip`, every `## N.` heading 1–17, `dross local set <key> \"<value>\"`, `dross local get`, `dross mutation remote status`, `dross trust --check`, `Never run it on their behalf`, `dross test lane list`. Retarget TestExpandIdentity from quick to techdebt.md. Add TestCommonPathVocabularyPinned, TestPartialTextMovedNotCopied (passes today: 0 shared 40+-char lines across the 10 existing partials), TestPartialSectionsStayWhole."
   covers = ["c-2", "c-3"]
   test_contract = ["if a new key's common value fetches, TestCommonPathFetchesNothing fails: synthetic panel=off, auto=off, ci=passed, ship_result=clean, target=given, spec_file=absent, deferral=none, lanes=unchanged and remote=unchanged fetch lines are each rejected as common path", "if a key's values are reordered (e.g. lanes → {editing, unchanged}), TestCommonPathVocabularyPinned fails: CommonPath() must equal the pinned map (mode:pair, preflight:ok, …, panel:off, ci:passed, ship_result:clean, lanes:unchanged, …)", "if a flow's landmark leaves its base prompt, TestCommonPathInline (raw, via assets.FS) fails naming the file and the needle; every needle is an exact literal, including ship's `All checks passed on PR #N. Merge now?`", "if the identity check targets a split prompt, TestExpandIdentity fails: it asserts FetchPoints(techdebt.md) is empty before comparing bytes", "if a partial copies text instead of moving it, TestPartialTextMovedNotCopied fails: any partial line of 40+ chars also present verbatim in its base prompt", "if an inlined partial's `## ` heading lands above remaining base text of the fetch line's section, TestPartialSectionsStayWhole fails (synthetic MapFS)"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-4"
@@ -49,7 +49,7 @@ manifestPrompts gains options, ship, plan, spec, quick. For these five only, the
   description = "splitPrompts is derived from assets.PartialNames (every prompt with ≥1 partial) instead of the fixed {execute, verify}. Raw-read detection also matches read-helper calls whose literal args spell \"assets\",\"prompts\",<file>.md (docsBody, readDoc, docText, variadic parts); path-building and directory calls — filepath.Join, os.ReadDir, filepath.Glob, os.Stat — are excluded, so the ~35 Join/walk sites in ship_prompt/protected_prompts/board_switch_prompt/inert_config tests are not detections. Today isRawPromptRead only sees os.ReadFile and readRepoFile. Walks extend from internal/ to cmd/. Every newly caught reader migrates in the same task so the allowlist does not grow: lane_install_docs_test#docsBody(options.md) and lane_toolchain_docs_test#readDoc(options.md) → expandedPrompt; milestone_narration_test docText(ship.md) and TestMilestonePromptDropsUnconditionalCutClaim docText(milestone.md) (:27) → expandedPrompt; status_test TestStatusPromptDoesNotAttributeBacklogSolelyToSpec docText(status.md) (:1395) → expandedPrompt; cmd/dross main_test ship.md → assets.Expand(assets.FS, \"ship\"). Before writing, enumerate the widened detector's hits on the real tree and confirm they are exactly this list."
   covers = ["c-3"]
   test_contract = ["if a variadic helper reads a prompt raw, TestRawPromptReadDetection fails: `docsBody(t, \"assets\", \"prompts\", \"options.md\")` and `readDoc(t, \"assets\", \"prompts\", \"ship.md\")` must be detected", "if path-building calls are counted as reads, TestRawPromptReadDetection fails: `filepath.Join(root, \"assets\", \"prompts\", \"ship.md\")`, `os.ReadDir(filepath.Join(root, \"assets\", \"prompts\"))` and `filepath.Glob(...prompts/*.md)` must NOT be detected", "if a newly caught reader is left raw, the meta-guard fails on the real tree: zero unallowlisted raw reads after t-4, including status_test.go:1395 and both milestone_narration_test.go readers", "if splitPrompts stays a fixed list, TestSplitPromptsFollowTheRegistry fails: on a MapFS adding _plan.panel.md, plan.md is a split prompt without any list edited", "if cmd/dross is outside the walk, the meta-guard fails: a raw os.ReadFile of \"../../assets/prompts/ship.md\" in cmd/dross/main_test.go is reported", "if the allowlist grows to absorb the new detections, the pin check fails: rawPromptReadAllowlistSize stays at 35"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-5"
@@ -86,7 +86,7 @@ specPromptContent, TestSpecPilotUsesEmitter, TestPhaseListPromptConsumersAreCurr
   covers = ["c-3"]
   test_contract = ["if a spec reader stays raw, TestNoAllowlistedReaderReadsASplitPrompt fails the moment t-11 lands spec's first partial (splitPrompts is registry-derived since t-4)", "if a loader skips partials, a TestPromptLoadersSeePartials-style check fails: a BANNED phrase only in a MapFS _spec.route.md is seen by specPromptContent", "if an entry is removed without lowering the pin (or vice versa), TestPromptReadsGoThroughExpansion fails", "if the pin and allowlist drift across the chain, TestPromptReadsGoThroughExpansion fails: after t-6 the pin is 31 (35 − 4)"]
   depends_on = ["t-4"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-7"
@@ -99,7 +99,7 @@ planPromptContent, TestPlanPromptDescribesEveryReviewTier, TestPlanPromptNoArtif
   covers = ["c-3"]
   test_contract = ["if a plan or ship reader stays raw, TestNoAllowlistedReaderReadsASplitPrompt fails once t-10 or t-12 adds the first partial", "if the tier test reads the base only, TestPlanPromptDescribesEveryReviewTier still finds the `--panel` tier row when §2P lives in _plan.panel.md (proven against a MapFS move)", "if rawShipSection stays raw, the Forgejo `{\"Do\":\"squash\"}` match in §6 must still pass when the seeded §6 text lives only in a _ship partial", "if ship's merge-gate decision-turn check loses the partial text, TestShipPromptDecisionTurnsSeparate (expanded) fails", "if the chain step is wrong, TestPromptReadsGoThroughExpansion fails: after t-7 the pin is 26 (31 − 5)"]
   depends_on = ["t-4", "t-6"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-8"
@@ -112,7 +112,7 @@ quickPromptContent and TestQuickPromptHandlesShippedWindow read the expanded qui
   covers = ["c-3"]
   test_contract = ["if a quick reader stays raw, TestNoAllowlistedReaderReadsASplitPrompt fails once t-13 adds _quick.solo.md", "if a loader skips partials, TestPromptLoadersSeePartials (extended) fails: a phrase seeded only in a MapFS _quick.solo.md must reach quickPromptContent", "if an emission lane's text moves into a partial unseen, TestEmittedStatusesAreTheLifecycleSet (expanded) still sees every status ship.md and quick.md emit: a MapFS partial holding the only `--status shipped` keeps it in the set", "if the chain step is wrong, TestPromptReadsGoThroughExpansion fails: after t-8 the pin is 23 (26 − 3)"]
   depends_on = ["t-4", "t-7"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-9"
@@ -123,7 +123,7 @@ quickPromptContent and TestQuickPromptHandlesShippedWindow read the expanded qui
   covers = ["c-3"]
   test_contract = ["if an options reader stays raw, TestNoAllowlistedReaderReadsASplitPrompt fails once t-14 adds _options.lanes.md", "if setupPromptBody stays raw, a phrase seeded only in _quick.solo.md or _options.lanes.md must reach it", "if lane docs leave the loader's view, options_docs lane/selector/toolchain tests (expanded) fail when _options.lanes.md loses `--selector-template`, `--empty-exit` or `trusted_lane_installs`", "if the README option rows drift, readme_doc optionsSection still matches every options.md section heading (raw headings stay in base per t-3)", "if the allowlist ends at the wrong size, TestPromptReadsGoThroughExpansion fails: rawPromptReadAllowlistSize == 20 exactly, with TestFooterPromptsLoadPlaybook still allowlisted"]
   depends_on = ["t-4", "t-8"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-10"
