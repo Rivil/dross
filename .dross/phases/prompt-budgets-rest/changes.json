@@ -54,6 +54,25 @@
         }
       ]
     },
+    "t-12": {
+      "files": [
+        "assets/prompts/ship.md",
+        "assets/prompts/_ship.auto.md",
+        "assets/prompts/_ship.recovery.md",
+        "assets/prompts/_ship.ci-failure.md",
+        "internal/cmd/ship_prompt_test.go"
+      ],
+      "commit": "1f69a564",
+      "completed_at": "2026-11-03T20:50:39.962346Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "ship auto/recovery/ci-failure partials",
+          "loc": "assets/prompts/ship.md:22",
+          "what": "ship's rare branches fetched on demand so a verified phase reaches PR open at 14,495 B with no fetch"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "assets/conservation_test.go",
@@ -320,6 +339,40 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "In the new table test, the {\"\", \"\", \"\"} common-path row repeats what TestCommonPathFetchesNothing already covers, and on failure it prints the label 'spec with = fetches'. Harmless.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-12": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "The --auto partial says not to drive §5 or §6, but the Recovery fetch now sits at the end of §6. An --auto run whose `dross ship --auto` exits non-zero can only reach the cookbook through the ship_result=failed trigger, not by reading on. Before the move, Recovery was a standalone trailing section any path could read.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Compression dropped some explanation that no test pins: 'There is no Go backfill engine' in §3.5, the disposition-record detail and the routed-after-ship rationale in §6.4, and the Forgejo/GitLab one-teardown-owner reasoning in §6.1. The instructions themselves survive.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestShipCommonPathFetchesNothing reads promptFS while rawShipBase reads assets.FS directly. Both are the embedded tree today, but the new raw-base tests ignore a seeded promptFS.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "No test in this diff pins ship.md's byte budget. assets/budget_test.go still lists only execute.md and verify.md, so the cap on ship.md depends on the sibling task's test that checks every prompt. My estimate from line-length counts is about 14.4-14.5 KB.",
           "resolution": "non-blocking, left"
         }
       ]

@@ -1862,6 +1862,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "prompt-budgets-rest/t-12": {
+      "issue": "DRO-1079",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "prompt-budgets-rest/t-2": {
       "issue": "DRO-1068",
       "plan_status": "done",
