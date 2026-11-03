@@ -2,12 +2,12 @@
 
 Decompose a phase's `spec.toml` into a task graph with waves, dependencies, and per-task test contracts. Pair-mode: **propose → steer → write**. Never write `plan.toml` until the user has accepted the decomposition.
 
-**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): propose one point at a time and let the user react. For `/dross-plan` that means walking the §2P panel disagreements one at a time, steering the proposed decomposition in §3, and confirming the written `plan.toml` with a one-line summary asked as an `AskUserQuestion` — never dumping the toml back for review.
+**Run this as a conversation, not a broadcast.** Follow the interaction playbook (`_interaction.md`, printed by `dross interaction show` below): walk any panel disagreements one at a time, steer the §3 decomposition, and confirm the written `plan.toml` with a one-line summary asked as an `AskUserQuestion` — never dump the toml back.
 
 ## 0. Pre-flight
 
 1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
-2. Parse flags from `$ARGUMENTS`: `--panel` switches decomposition to panel mode (see §2P); `--no-review` skips the automatic plan review in §6. Strip both before resolving the phase id.
+2. Parse flags from `$ARGUMENTS`: `--panel` switches decomposition to panel mode (its steps are fetched after §2 when `panel=on`); `--no-review` skips the automatic plan review in §6. Strip both before resolving the phase id.
 3. Resolve target phase: remaining `$ARGUMENTS` if provided, else `state.json`'s `current_phase`. If unset, list phases via `dross phase list` and ask.
 4. Read `.dross/phases/<id>/spec.toml`. If missing, route the user to `/dross-spec` first and stop.
 5. **Verify current branch is `phase/<id>`** (`git symbolic-ref --short HEAD`). On resume, switch with `dross phase checkout <id>` — the guarded checkout, which refuses rather than creating a branch that isn't there. If the phase branch is missing, stop — phase work belongs off main and `dross phase create` would have set this up.
@@ -54,96 +54,7 @@ Reject:
 - "covered by existing tests"
 - "integration test exists"
 
-## 2P. Panel mode (`--panel`)
-
-Replaces §2 when the flag is set: do **not** author the decomposition yourself. Three planners draft independently through deliberately different lenses, a cold judge merges them, and where they *disagree* becomes the steering agenda. Independence is the whole value — planners never see each other's drafts, and the judge authored none of them.
-
-**When it's worth it:** a new subsystem, multiple plausible architectures, an expected task graph of 4+ tasks. Skip it (and say so) for small or pattern-following phases — panel mode costs roughly 4-5× a single-pass plan. If the user passed `--panel` on a phase that looks too small, flag it once, then respect their call.
-
-### 2P.1 Fan out — three lens planners, one tool block
-
-Spawn three subagents via the `Task` tool **in a single tool block** (`subagent_type: "general-purpose"`). Each gets the prompt below with its lens row substituted and absolute paths filled in. Where marked, paste in the full text of §2 (field table, granularity rules, test-contract quality) and §3's display example — the planners read their instructions cold and cannot see this file.
-
-| lens | bias to substitute |
-|---|---|
-| `risk` | Failure modes drive the graph. Start from what can break — edge cases, concurrency, bad input, partial failure — and shape tasks so each risk is owned and tested by exactly one task. |
-| `mvp` | Smallest task set that satisfies every criterion. Resist speculative structure; merge aggressively; every task must be traceable to a criterion or it goes. |
-| `verification` | Design backward from the test contracts. Write each criterion's ideal test contract first, then derive the smallest task that makes that contract satisfiable. |
-
-```
-You are drafting a task decomposition for a phase, applying ONE deliberate bias:
-<lens-bias>
-
-Two other planners are drafting the same phase through different biases. You will
-never see their drafts. Commit to your lens — a hedged middle-of-the-road plan is
-useless to the judge who merges the three.
-
-Read:
-  <abs-path>/spec.toml          (criteria, locked decisions — NON-NEGOTIABLE)
-  <repo>/.dross/project.toml    (paths.*, runtime, stack)
-  <repo>/.dross/rules.toml      (MUST-FOLLOW)
-Read existing files under paths.source when uncertain about concrete paths —
-plans referencing files that don't exist are rejected.
-
-Decomposition rules:
-<full text of §2: field table, granularity rules, test-contract quality>
-
-Write your draft to <abs-path>/panel/<lens>.md:
-  1. The plan in this wave/task display format:
-     <paste §3's display example here>
-  2. "## Coverage" — criterion id → task ids, every criterion accounted for
-  3. "## Judgment calls" — decisions where you chose between real alternatives,
-     one line each: what you chose, what you rejected, why
-
-Hard rules: do not write plan.toml; do not modify any file other than your draft;
-locked decisions cannot be overridden; no task without a specific test_contract.
-
-Return one line: "<lens>: N tasks across W waves, criteria covered X/Y".
-```
-
-### 2P.2 Join — one cold judge
-
-After all three planners return (and only then — it reads their files), spawn a fourth subagent (`subagent_type: "general-purpose"`):
-
-```
-You are judging three task decompositions drafted independently through different
-lenses (risk / mvp / verification). You authored none of them. Merge the best
-plan out of them — and surface where they disagree instead of papering over it.
-
-Read:
-  <abs-path>/spec.toml, <repo>/.dross/project.toml, <repo>/.dross/rules.toml
-  <abs-path>/panel/risk.md
-  <abs-path>/panel/mvp.md
-  <abs-path>/panel/verification.md
-
-1. Score each draft — one line per draft per dimension: criteria coverage,
-   test-contract specificity, granularity, wave correctness.
-2. Pick the strongest as the skeleton.
-3. Graft concrete improvements from the runners-up: a sharper contract, a missed
-   file, a better wave split, a risk task the skeleton lacks. Never invent a task
-   that appears in no draft.
-4. Where the drafts genuinely diverge — different structure, different ordering,
-   a task one planner needs and another rejects — do NOT silently resolve. Pick a
-   provisional default for the merged plan and record the divergence.
-
-Write <abs-path>/panel/synthesis.md:
-  1. "## Scores" — the scoring table + one line naming the skeleton and why
-  2. "## Merged plan" — wave/task display format, each task tagged with origin
-     (e.g. "[risk]", "[mvp+verification]")
-  3. "## Disagreements" — one entry per divergence: what diverged, which lens
-     said what, the provisional default taken, why the choice matters
-
-Hard rules: do not write plan.toml; do not modify the drafts or spec; no new
-criteria; no tasks from outside the three drafts.
-
-Return one line: "synthesis: N tasks across W waves, D disagreements".
-```
-
-### 2P.3 Present
-
-Read `panel/synthesis.md`. Print the merged plan, then drive the disagreements as the steering agenda **one at a time** — never dump the full list as a wall. For each divergence, surface a single `AskUserQuestion` turn that leads with the judge's provisional pick and lets the user accept or steer (e.g. "`risk` split t-2 in two, `mvp` kept it merged; I took the merge — keep merged / split?"). Walk them in order, one turn each; `synthesis.md` stays the source list. Once the disagreements are resolved, continue with §3 steering as normal. From here the flow is identical: coverage check → write → validate.
-
-Leave `panel/` in place — it's the audit trail for why the plan looks the way it does.
+**When** `panel=on` — `--panel` was passed: `dross prompt partial plan panel`
 
 ## 2G. Gray areas — walk every one
 
@@ -261,16 +172,16 @@ This creates (or updates) the phase issue with the acceptance criteria and a tas
 
 | Rung | How you get it | Cost | Reach for it when |
 | --- | --- | --- | --- |
-| No independent read | `--no-review` | free | You are re-planning something you just reviewed, or the phase is a one-task edit. The plan gets no second opinion at all — say so rather than letting it pass unremarked. |
-| One cold reviewer | **the default — nothing to pass** | ~1 subagent | Every ordinary phase. A fresh subagent reads the artifacts with none of this conversation's context and reports BLOCKING / FLAG / NOTE. |
-| Three-lens panel + judge | `--panel` | ~4-5× a single-pass plan | A new subsystem, several plausible architectures, an expected graph of 4+ tasks. Note this rung is about **decomposition**, not critique: it drafts the plan three ways and merges them, and the cold reviewer below still runs afterwards. |
+| No independent read | `--no-review` | free | Re-planning something just reviewed, or a one-task edit. Say the plan got no second opinion. |
+| One cold reviewer | **the default — nothing to pass** | ~1 subagent | Every ordinary phase: a fresh subagent with none of this context reports BLOCKING / FLAG / NOTE. |
+| Three-lens panel + judge | `--panel` | ~4-5× a single-pass plan | A new subsystem, several plausible architectures, 4+ tasks. It is about **decomposition**, not critique: three drafts merged; the cold reviewer still runs after. |
 
-The middle rung is easy to miss because only the other two have flags. A plan gets an independent second opinion **unless you opt out** — so `--panel` is not "the way to get review", it is the way to get a plan drafted from three angles first.
+A plan gets an independent second opinion **unless you opt out**; `--panel` is not "the way to get review".
 
-Unless `--no-review` was passed, run the independent plan review now — don't wait to be asked. Read `~/.claude/dross/prompts/plan-review.md` and follow it from its §1 (the phase id is already resolved). It spawns its own cold subagent to read the artifacts, so the review context stays fully isolated from this conversation; you only relay findings.
+Unless `--no-review` was passed, run the independent plan review now — don't wait to be asked. Read `~/.claude/dross/prompts/plan-review.md` and follow it from its §1 (phase id already resolved). It spawns its own cold subagent; you only relay findings.
 
 On the outcome:
-- **BLOCKING findings** — don't end. Bring them back into §3 steering: propose amendments, steer, rewrite `plan.toml`, re-validate. Then re-run the reviewer **once**. If it still blocks, stop and surface — repeated author/reviewer ping-pong without the user is exactly what pair-mode forbids.
+- **BLOCKING findings** — don't end. Bring them back into §3 steering: propose amendments, steer, rewrite `plan.toml`, re-validate. Then re-run the reviewer **once**. If it still blocks, stop and surface — no author/reviewer ping-pong without the user.
 - **FLAG / NOTE only** — print the condensed list, let the user decide what's worth acting on.
 
 If `--no-review` was passed, mention `/dross-plan-review` is available manually.
@@ -293,9 +204,9 @@ When the plan is trivial or purely mechanical, append the hint under the `Next:`
 
 ## Hard rules
 
-- **Follow the interaction playbook (`_interaction.md`); plan.toml is never a review medium.** Drive the command as a conversation — walk the §2G gray areas, the panel disagreements (§2P.3) and the §3 proposal as one-decision-per-turn `AskUserQuestion` turns, and confirm the written `plan.toml` with a one-line summary asked as an `AskUserQuestion` (§5) rather than pasting it back or ending on a prose "(y / edit)" line.
-- **Walk every gray area (§2G); never pre-filter them.** There is no selection step and no pre-ticked checklist — the user's explicit off-ramp is the only thing that ends the walk early, and what you settled for them gets said out loud in §3. Zero areas is a valid, stated outcome; manufacturing them to look thorough is the failure this section was written against.
-- **Pair-mode default.** Never write `plan.toml` before the user accepts the proposed decomposition. If the user wants autonomous mode, they'll say so explicitly.
-- **Subagents: read-only fan-out is fine; authoring `plan.toml` is not.** Per the `dross-agent-gate` builtin, you may fan out subagents for read-only work — research, pattern-mapping, independent review — when it sharpens the plan, and should when it widens coverage or saves wall-clock. What stays gated is the decomposition itself: never let an unattended agent author or finalize `plan.toml` — it's agreed with the user (pair mode) or by you (`--solo`). The `--panel` flow (§2P) and the §6 plan-review are the worked examples: independent agents draft or critique, the user steers the result. For a small, pattern-following plan, staying inline is still the right call — fan out when it earns its keep, not by default.
-- **Test contracts are mandatory.** A task without a `test_contract` is a task verify can't check. Refuse to write the plan with empty contracts unless the user explicitly accepts the gap. A task added after the plan is written carries its contract the same way — `dross task add --test-contract "<statement>"`, repeatable, and `dross task edit --add-test-contract "<statement>"` to append one to a task that already has some. Never hand-edit `plan.toml` to fill the field.
+- **Follow the interaction playbook (`_interaction.md`); plan.toml is never a review medium.** The §2G gray areas, any panel disagreements and the §3 proposal are one-decision-per-turn `AskUserQuestion` turns; confirm the written `plan.toml` per §5, never by pasting it or a prose "(y / edit)" line.
+- **Walk every gray area (§2G); never pre-filter them.** No selection step, no pre-ticked checklist — only the user's explicit off-ramp ends the walk early, and what you settled for them is said out loud in §3. Zero areas is a valid, stated outcome; never manufacture them.
+- **Pair-mode default.** Never write `plan.toml` before the user accepts the proposed decomposition.
+- **Subagents: read-only fan-out is fine; authoring `plan.toml` is not.** Per `dross-agent-gate`, fan out subagents for read-only work (research, pattern-mapping, independent review) when it widens coverage or saves wall-clock. Never let an unattended agent author or finalize `plan.toml` — it's agreed with the user (pair mode) or by you (`--solo`). The `--panel` flow and the §6 review are the worked examples. A small, pattern-following plan stays inline.
+- **Test contracts are mandatory.** A task without a `test_contract` is a task verify can't check. Refuse to write the plan with empty contracts unless the user explicitly accepts the gap. A task added later carries its contract too — `dross task add --test-contract "<statement>"` (repeatable), or `dross task edit --add-test-contract "<statement>"` to append one. Never hand-edit `plan.toml` to fill the field.
 - **Locked decisions from spec.toml are NON-NEGOTIABLE.** If the user proposes a task that contradicts one, surface the conflict and ask them to either revise the task or unlock the decision in `spec.toml` (with a `why`).
