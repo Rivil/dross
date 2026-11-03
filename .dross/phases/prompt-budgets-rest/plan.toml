@@ -201,7 +201,7 @@ Two moves out of §14 (15,317 B): lane declaration, prepare, install, selector, 
     "if an inert key goes undocumented, inert_config_test's prompt walk (reads every prompts/*.md including partials) still finds each key's reason",
   ]
   depends_on = ["t-1", "t-2", "t-3", "t-9"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-15"

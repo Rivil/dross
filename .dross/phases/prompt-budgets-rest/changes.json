@@ -90,6 +90,24 @@
         }
       ]
     },
+    "t-14": {
+      "files": [
+        "assets/prompts/options.md",
+        "assets/prompts/_options.lanes.md",
+        "assets/prompts/_options.remote.md",
+        "internal/cmd/options_docs_test.go"
+      ],
+      "commit": "8a0be20f",
+      "completed_at": "2026-11-03T21:14:53.242939Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "options lanes/remote partials",
+          "loc": "assets/prompts/options.md:156",
+          "what": "options' lane and remote-grant lore fetched on demand so an options walk loads 14,494 B and fetches nothing"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "assets/conservation_test.go",
@@ -425,6 +443,28 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The base hard rule 'No retries on red tests' still names solo mode's abort behaviour; it covers both modes, so leaving it in the base is reasonable",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-14": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "No test in this diff pins options.md's raw byte count, and the budget test in assets/budget_test.go only lists execute.md and verify.md. By hand I estimate the new options.md at about 14.3-14.8 KB: under the 15,000 cap, but maybe over the task's 14,500 target. The measured size the task asks the author to report is the real check.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "The comment on TestOptionsNamesEveryLocalKeyInline says the three hand-listed keys are 'the ones it refuses', but dross local set also refuses trusted_lane_commands and trusted_lane_installs. Those two are named only in _options.lanes.md and are not checked in the bare §14. That matches the test_contract's list of keys, but the comment overstates what the test covers.",
           "resolution": "non-blocking, left"
         }
       ]
