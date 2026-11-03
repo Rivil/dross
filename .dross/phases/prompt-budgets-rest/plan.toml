@@ -162,7 +162,7 @@ Move to partials: empty-$ARGUMENTS resolution (done-phase / unset asks) → _spe
 
 [[task]]
   id = "t-13"
-  wave = 5
+  wave = 6
   title = "Move quick solo text to one partial"
   files = ["assets/prompts/quick.md", "assets/prompts/_quick.solo.md", "internal/cmd/quick_prompt_test.go", "internal/cmd/execute_prompt_test.go"]
   description = """
@@ -178,7 +178,7 @@ Precondition: `make install` with t-5 live. Move to _quick.solo.md: the §2 solo
     "if the shipped-phase window is lost, TestQuickPromptHandlesShippedWindow (expanded) fails",
     "if the PR route loses `git push -u origin quick/` or `gh pr create --base`, TestQuickPRRouteCommands (expanded) fails",
   ]
-  depends_on = ["t-1", "t-2", "t-3", "t-5", "t-8"]
+  depends_on = ["t-1", "t-2", "t-3", "t-5", "t-8", "t-9"]
   status = "pending"
 
 [[task]]
