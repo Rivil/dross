@@ -73,6 +73,23 @@
         }
       ]
     },
+    "t-13": {
+      "files": [
+        "assets/prompts/quick.md",
+        "assets/prompts/_quick.solo.md",
+        "internal/cmd/quick_prompt_test.go"
+      ],
+      "commit": "4853edcd",
+      "completed_at": "2026-11-03T21:01:09.581051Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "quick solo partial",
+          "loc": "assets/prompts/quick.md:40",
+          "what": "quick's solo-only text fetched once after a solo begin so a pair quick loads 14,820 B and fetches nothing"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "assets/conservation_test.go",
@@ -373,6 +390,41 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "No test in this diff pins ship.md's byte budget. assets/budget_test.go still lists only execute.md and verify.md, so the cap on ship.md depends on the sibling task's test that checks every prompt. My estimate from line-length counts is about 14.4-14.5 KB.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-13": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "TestQuickSoloReview anchors `run` on the first \"`dross test`\" in the block, which is the lead-in prose (\"after the green `dross test`\"), not a run step; it never checks the blocked arm's own re-run `dross test` \u003c `dross review context` \u003c `dross review status` order the test_contract wording describes",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestQuickSoloFetchPlacement skips re-fetch references when choosing the first fetch point after the solo begin fence, so a `**Re-fetch**` line placed between the fence and the When line would go unnoticed, though the contract asks for the first fetch point",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestQuickMarkerClosed's \"§4 red paths\" window now runs to `## 5.` and so checks only the pair abort's `dross quick end`; the solo red path's discard-then-end is still covered by TestQuickDiscardBeforeEnd over the expanded prompt",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The base hard rule 'No retries on red tests' still names solo mode's abort behaviour; it covers both modes, so leaving it in the base is reasonable",
           "resolution": "non-blocking, left"
         }
       ]
