@@ -48,6 +48,7 @@
     "phase-create-adoption": "DRO-31",
     "plan-gray-area-walkthrough": "DRO-29",
     "project-toml-lossless-writes": "DRO-412",
+    "prompt-budgets-rest": "DRO-1067",
     "prompt-partials": "DRO-992",
     "push-gates-on-origin": "DRO-392",
     "red-proof-reachability": "DRO-23",
