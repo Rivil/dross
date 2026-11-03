@@ -5152,3 +5152,39 @@
   line = 1427
   reason = "gremlins switch-case attribution ceiling: 'case p == \"\":' in the collect host-log switch sits in no go-cover block. A go test -coverprofile ./internal/cmd -run Collect run on 2026-11-02 reports count 1 for the arm body (verify.go:1428.3,1428.54), driven by TestCollectEmptyHostLogSaysSo which asserts exactly one 'log unavailable' line, while gremlins marks the condition NOT COVERED. No mutant exists to kill: the suite already runs the arm."
   accepted_in = "test-summary-parsers"
+
+[[accepted]]
+  key = "4fbaaf26ae024014"
+  file = "internal/cmd/verify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case l.Err() != nil:"
+  line = 1425
+  reason = "gremlins switch-case attribution ceiling: the case condition sits in no go-cover block, so it reads NOT COVERED though tested. go test -coverprofile on 2026-11-03 shows count 1 on the arm body (verify.go:1426, 'case l.Err() != nil:' in collect's host-log switch), run by internal/cmd/verify_log_test.go:TestCollectRunLogErrorSaysSo, which asserts exactly one 'log unavailable:' line carrying the run log's error."
+  accepted_in = "test-summary-parsers"
+
+[[accepted]]
+  key = "166c1d68ad6ac04e"
+  file = "internal/runsummary/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.Runner == \"\":"
+  line = 161
+  reason = "gremlins switch-case attribution ceiling: the case condition sits in no go-cover block, so it reads NOT COVERED though tested. go test -coverprofile on 2026-11-03 shows count 1 on the arm body (render.go:161.23, 'case r.Runner == \"\":' in counts()), run by internal/runsummary/summary_test.go:TestCountsEmptyRunnerAndCounts, which asserts the exact joined string for empty-Runner results."
+  accepted_in = "test-summary-parsers"
+
+[[accepted]]
+  key = "6a16ca214a2d1926"
+  file = "internal/runsummary/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == \"\":"
+  line = 162
+  reason = "gremlins switch-case attribution ceiling: the case condition sits in no go-cover block, so it reads NOT COVERED though tested. go test -coverprofile on 2026-11-03 shows count 1 on the arm body (render.go:163, 'case c == \"\":' in counts()), run by internal/runsummary/summary_test.go:TestCountsEmptyRunnerAndCounts, which asserts an empty-Counts result prints its runner name alone."
+  accepted_in = "test-summary-parsers"
+
+[[accepted]]
+  key = "94b27562d0e8887b"
+  file = "internal/runsummary/dart.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d.exc != nil:"
+  line = 82
+  reason = "gremlins switch-case attribution ceiling: the case condition sits in no go-cover block, so it reads NOT COVERED though tested. go test -coverprofile on 2026-11-03 shows count 1 on the arm body (dart.go:83-84, 'case d.exc != nil:' in dart.Feed), run by internal/runsummary/dart_test.go:TestDartExceptionSurvivesClockTick and TestDartPendingNotMisattributed, which assert where a held EXCEPTION CAUGHT block's lines land."
+  accepted_in = "test-summary-parsers"
