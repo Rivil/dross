@@ -77,3 +77,208 @@ verify.md	- **Capture a stated preference as a rule, don't apply it ad hoc.**
 verify.md	- **Don't write tests yourself.**
 verify.md	- **Don't skip the cross-check.**
 verify.md	- **Single pass, no checker loop.**
+options.md	dross X set
+options.md	dross interaction show
+options.md	dross rule show
+options.md	dross project show
+options.md	dross defaults show
+options.md	dross rule list
+options.md	dross env list
+options.md	dross X set ...
+options.md	dross project set <field> "<value>"
+options.md	dross stack
+options.md	dross stack detect
+options.md	dross defaults save
+options.md	- **Save current project's [remote] as defaults**
+options.md	- **Skip**
+options.md	dross stats opt-out
+options.md	dross doctor
+options.md	dross rule list --scope project
+options.md	dross rule list --scope global
+options.md	dross rule add --scope project "<text>"
+options.md	dross rule add --scope global "<text>"
+options.md	dross rule disable <id>
+options.md	dross rule promote <id>
+options.md	dross rule remove <id>
+options.md	dross profile show
+options.md	dross env set <KEY>
+options.md	dross env set
+options.md	dross env set FOO
+options.md	dross issue enable
+options.md	dross issue disable
+options.md	dross issue pull
+options.md	dross project set
+options.md	dross validate
+options.md	dross local get <key>
+options.md	dross local set <key> "<value>"
+options.md	dross verify
+options.md	dross mutation remote status
+options.md	dross local set
+options.md	- **Grant / change**
+options.md	dross mutation remote grant <host> <workdir>
+options.md	- **Revoke**
+options.md	dross mutation remote revoke
+options.md	- **Keep**
+options.md	dross trust --check
+options.md	dross trust
+options.md	dross test --files <paths>
+options.md	- **Show**
+options.md	dross test lane list
+options.md	- **Add**
+options.md	dross test lane add <name> --match <glob> --command "<cmd>"
+options.md	- **Edit any field**
+options.md	dross test lane edit <name> --match <glob> | --command "<cmd>" | --prepare "<cmd>" | --selector <style> | --selector-template "<tmpl>" | --selector-join <sep> | --empty-exit <code> | --toolchain <binary> | --install "<cmd>"
+options.md	- **Install a lane's toolchain**
+options.md	dross test lane install <name> [--apply] [--local]
+options.md	- **Remove**
+options.md	dross test lane remove <name>
+options.md	dross test lane edit
+options.md	dross trust --lane
+options.md	dross test lane add ... --prepare "<cmd>"
+options.md	dross trust --lane <name>
+options.md	dross test lane install <name>
+options.md	dross test
+options.md	dross remote bootstrap
+options.md	dross test lane add ... --selector <style>
+options.md	dross test lane add|edit --toolchain <binary>
+options.md	dross trust --lane <name> --check
+options.md	dross trust --lane-install <name>
+options.md	dross hooks ensure
+options.md	dross pause --auto
+options.md	dross reentry
+options.md	dross gate check
+options.md	dross gate record
+options.md	dross hooks nudge
+options.md	dross state touch "options reviewed"
+ship.md	dross interaction show
+ship.md	dross rule show
+ship.md	dross status
+ship.md	dross doctor
+ship.md	dross ship recover
+ship.md	dross ship
+ship.md	dross ship --force-unverified
+ship.md	dross phase checkout <phase-id>
+ship.md	dross phase create
+ship.md	- **§1 body-preview dump**
+ship.md	- **§2 body override**
+ship.md	- **§3 reviewers**
+ship.md	- **§3.5 landmark merge + ARCHITECTURE.md auto-backfill**
+ship.md	dross ship --auto <phase-id>
+ship.md	dross ship --auto --json <phase-id>
+ship.md	dross ship --no-push <phase-id>
+ship.md	dross ship --print-body <phase-id>
+ship.md	dross project get remote.reviewers
+ship.md	dross project set remote.reviewers "alice,bob"
+ship.md	dross changes show <phase-id>
+ship.md	dross test
+ship.md	git add ARCHITECTURE.md
+ship.md	git commit -m "docs(<phase-slug>): merge phase landmarks into ARCHITECTURE.md"
+ship.md	dross ship <phase-id>
+ship.md	dross protect --check <base>
+ship.md	dross ship --force
+ship.md	dross phase complete
+ship.md	dross issue phase sync <phase-id> --status shipped
+ship.md	dross phase complete <phase-id>
+ship.md	dross issue phase finalize <phase-id>
+ship.md	dross issue backlog sync --phase <phase-id>
+ship.md	dross milestone complete
+ship.md	dross phase complete --recover
+plan.md	dross interaction show
+plan.md	dross rule show
+plan.md	dross phase list
+plan.md	dross phase checkout <id>
+plan.md	dross phase create
+plan.md	- **Too small:**
+plan.md	- **Too large:**
+plan.md	- **Wave correctness:**
+plan.md	- **Upward — anything `spec.toml` already locked.**
+plan.md	- **Downward — anything the executor resolves.**
+plan.md	- **User off-ramp.**
+plan.md	dross validate
+plan.md	dross state set current_phase_status "planned"
+plan.md	dross state touch "plan locked: <id> (<task-count> tasks across <wave-count> waves)"
+plan.md	dross issue phase sync <id>
+plan.md	- **BLOCKING findings**
+plan.md	- **FLAG / NOTE only**
+plan.md	- **Follow the interaction playbook (`_interaction.md`); plan.toml is never a review medium.**
+plan.md	- **Walk every gray area (§2G); never pre-filter them.**
+plan.md	- **Pair-mode default.**
+plan.md	- **Subagents: read-only fan-out is fine; authoring `plan.toml` is not.**
+plan.md	- **Test contracts are mandatory.**
+plan.md	dross task add --test-contract "<statement>"
+plan.md	dross task edit --add-test-contract "<statement>"
+plan.md	- **Locked decisions from spec.toml are NON-NEGOTIABLE.**
+spec.md	dross interaction show
+spec.md	dross rule show
+spec.md	dross phase create "<title>"
+spec.md	dross phase list --milestone <milestone>
+spec.md	dross phase create
+spec.md	dross phase checkout <id>
+spec.md	dross deferred list --target <id> --json
+spec.md	- **Milestone scope**
+spec.md	- **CLI/context gap analysis**
+spec.md	- **Parked ideas**
+spec.md	dross deferred list
+spec.md	- **Keep it to the genuine ones — a soft ~3–4.**
+spec.md	- **Skip what's already decided.**
+spec.md	- **Stay inside the phase boundary.**
+spec.md	- **Don't batch**
+spec.md	- **User off-ramp.**
+spec.md	- **Genuinely borderline**
+spec.md	- **Clearly has a home elsewhere**
+spec.md	- **add to current phase**
+spec.md	- **defer it**
+spec.md	- **Park in the milestone backlog**
+spec.md	dross milestone add <version> phases "<slug>"
+spec.md	dross deferred route <phase-id> <idx> --target "<slug>"
+spec.md	- **Attach to a named future phase**
+spec.md	dross deferred route <phase-id> <idx> --target "<existing-slug>"
+spec.md	- **Someday**
+spec.md	dross deferred route
+spec.md	dross milestone add
+spec.md	dross validate
+spec.md	dross deferred absorb <source> <idx> --criterion <c-N> --phase <phase-id>
+spec.md	dross state set current_phase <id>
+spec.md	dross state touch "spec locked: <id>"
+spec.md	- **Follow the interaction playbook (`_interaction.md`); spec.toml is never a review medium.**
+spec.md	- **Never**
+spec.md	- **Gray areas (§3) must be phase-specific and inside the phase boundary.**
+spec.md	- **Always**
+spec.md	- **If the user pushes back on the quality bar**
+quick.md	dross interaction show
+quick.md	dross rule show
+quick.md	dross phase checkout <current_phase>
+quick.md	dross phase complete
+quick.md	dross ship
+quick.md	dross base-branch
+quick.md	dross protect --check <base>
+quick.md	dross local set quick_base <base>
+quick.md	dross checkout quick/<preview-version>
+quick.md	dross quick begin "<description>"
+quick.md	dross quick begin --solo "<description>"
+quick.md	dross install
+quick.md	dross quick end
+quick.md	dross validate
+quick.md	dross trust --check
+quick.md	dross trust
+quick.md	dross test
+quick.md	dross review context
+quick.md	dross review status
+quick.md	git add <touched-files>
+quick.md	dross state bump internal
+quick.md	dross changes record <phase> $QUICK_ID --files <touched-files (csv)> --commit $SHA --notes "quick: $ARGUMENTS"
+quick.md	dross state touch "quick: <one-line summary of the task>"
+quick.md	dross issue quick $NEW_VERSION "quick: <one-line summary>"
+quick.md	git add .dross/
+quick.md	git commit -m "chore(dross): record quick <NEW_VERSION>"
+quick.md	dross issue quick $NEW_VERSION --close
+quick.md	dross checkout <base>
+quick.md	git push -u origin quick/<NEW_VERSION>
+quick.md	dross checkout <base> && git pull --ff-only
+quick.md	- **Pair mode by default; `--solo` is opt-in.**
+quick.md	- **One commit per quick**
+quick.md	- **Touch only what you proposed.**
+quick.md	- **No `git add -A`.**
+quick.md	- **No `--no-verify`**
+quick.md	- **No retries on red tests.**
+quick.md	- **Internal counter bumps on success only.**

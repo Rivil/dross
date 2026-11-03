@@ -14,31 +14,41 @@ import (
 
 // Instruction conservation: moving prompt text into partials, or into the CLI,
 // must not lose an instruction. The manifest records, once, every command line
-// in a fenced block of execute.md and verify.md and every `- **...**` lead-in,
-// as they stood before the split. Each row must still appear in the expanded
-// prompt, or be claimed by exactly one `// absorbs: <row>` marker in the
-// internal/cmd source that now does the step.
+// in a fenced block of each manifest prompt and every `- **...**` lead-in, as
+// they stood before the split; for inlineSpanPrompts it also records every
+// inline backticked span starting with `dross `, since their prose carries
+// steps outside any fence. Each row must still appear in the expanded prompt,
+// or be claimed by exactly one `// absorbs: <row>` marker in the internal/cmd
+// source that now does the step.
 
 const manifestFile = "testdata/prompt_instructions.txt"
 
-// recordEnv rewrites the manifest from today's expanded prompts. Re-recording
-// after rows were absorbed would drop them, so it is for the first recording
-// and for adding a prompt, never for silencing a failure.
+// recordEnv appends rows for every manifest prompt that has none yet, from
+// today's expanded prompts. It never rewrites a prompt's existing rows: those
+// were recorded before a split, and rows absorbed into the CLI since are gone
+// from the prompt, so re-extracting them would drop them. It is for adding a
+// prompt, never for silencing a failure.
 const recordEnv = "DROSS_RECORD_PROMPT_INSTRUCTIONS"
 
-var manifestPrompts = []string{"execute.md", "verify.md"}
+var manifestPrompts = []string{"execute.md", "verify.md", "options.md", "ship.md", "plan.md", "spec.md", "quick.md"}
 
-// minRows keeps the manifest from going vacuous.
-var minRows = map[string]int{"execute.md": 40, "verify.md": 25}
+// inlineSpanPrompts also contribute inline `dross ...` spans outside fences.
+var inlineSpanPrompts = map[string]bool{"options.md": true, "ship.md": true, "plan.md": true, "spec.md": true, "quick.md": true}
+
+// minRows keeps the manifest from going vacuous: for the prompts added after
+// execute and verify, 80% of the rows first recorded.
+var minRows = map[string]int{"execute.md": 40, "verify.md": 25, "options.md": 58, "ship.md": 26, "plan.md": 20, "spec.md": 29, "quick.md": 29}
 
 var (
-	leadInRe = regexp.MustCompile(`^- (\*\*.+?\*\*)`)
-	absorbRe = regexp.MustCompile(`^\s*// absorbs: (.+?)\s*$`)
+	leadInRe     = regexp.MustCompile(`^- (\*\*.+?\*\*)`)
+	absorbRe     = regexp.MustCompile(`^\s*// absorbs: (.+?)\s*$`)
+	inlineSpanRe = regexp.MustCompile("`(dross [^`]+)`")
 )
 
 // extractInstructions returns body's fenced `dross `/`git ` lines and its
-// top-level `- **...**` lead-ins, deduplicated, in order.
-func extractInstructions(body string) []string {
+// top-level `- **...**` lead-ins, deduplicated, in order. With inline set it
+// also returns each inline `dross ...` span outside a fence, in line order.
+func extractInstructions(body string, inline bool) []string {
 	var out []string
 	seen := map[string]bool{}
 	add := func(r string) {
@@ -63,8 +73,43 @@ func extractInstructions(body string) []string {
 		if m := leadInRe.FindStringSubmatch(line); m != nil {
 			add("- " + m[1])
 		}
+		if inline {
+			for _, m := range inlineSpanRe.FindAllStringSubmatch(line, -1) {
+				add(strings.TrimSpace(m[1]))
+			}
+		}
 	}
 	return out
+}
+
+// recordManifest returns existing with rows appended for each manifest prompt
+// that has none in it, extracted from fsys's expanded prompts. existing comes
+// back byte-identical as the output's prefix.
+func recordManifest(fsys fs.FS, existing string) (string, error) {
+	have := map[string]bool{}
+	for _, line := range strings.Split(existing, "\n") {
+		if prompt, _, ok := strings.Cut(line, "\t"); ok {
+			have[prompt] = true
+		}
+	}
+	var b strings.Builder
+	b.WriteString(existing)
+	if existing != "" && !strings.HasSuffix(existing, "\n") {
+		b.WriteString("\n")
+	}
+	for _, prompt := range manifestPrompts {
+		if have[prompt] {
+			continue
+		}
+		exp, err := Expand(fsys, prompt)
+		if err != nil {
+			return "", err
+		}
+		for _, row := range extractInstructions(string(exp), inlineSpanPrompts[prompt]) {
+			b.WriteString(prompt + "\t" + row + "\n")
+		}
+	}
+	return b.String(), nil
 }
 
 // readManifest parses `<prompt>\t<row>` lines into rows per prompt.
@@ -164,17 +209,15 @@ func conservationProblems(fsys fs.FS, manifest, markers map[string][]string) []s
 
 func TestPromptInstructionsConserved(t *testing.T) {
 	if os.Getenv(recordEnv) != "" {
-		var b strings.Builder
-		for _, prompt := range manifestPrompts {
-			exp, err := Expand(FS, prompt)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, row := range extractInstructions(string(exp)) {
-				b.WriteString(prompt + "\t" + row + "\n")
-			}
+		existing, err := os.ReadFile(manifestFile)
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
 		}
-		if err := os.WriteFile(manifestFile, []byte(b.String()), 0o644); err != nil {
+		out, err := recordManifest(FS, string(existing))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(manifestFile, []byte(out), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -203,26 +246,71 @@ func TestPromptInstructionsConserved(t *testing.T) {
 			t.Errorf("row %q is claimed at %v, want exactly one absorbs marker in execute.go", row, at)
 		}
 	}
-}
-
-func TestExtractInstructions(t *testing.T) {
-	body := "# p\n- **Rule one.** text\n  - **nested** skipped\n```\ndross a b\n# dross comment\n  git add x\necho no\ndross a b\n```\ndross outside fence\n"
-	got := strings.Join(extractInstructions(body), "|")
-	if want := "- **Rule one.**|dross a b|git add x"; got != want {
-		t.Errorf("extractInstructions = %q, want %q", got, want)
+	// quick.md was recorded before quick end absorbed section 6's bookkeeping.
+	for _, row := range []string{
+		"dross state bump internal",
+		`dross issue quick $NEW_VERSION "quick: <one-line summary>"`,
+	} {
+		if !contains(manifest["quick.md"], row) {
+			t.Errorf("manifest lacks quick.md row %q — was it recorded after section 6 moved?", row)
+		}
 	}
 }
 
-func TestConservationCatchesALostRow(t *testing.T) {
-	const row = "dross verify finalize <phase-id>"
-	exp, err := Expand(FS, "verify")
+func TestManifestRecordIsAppendOnly(t *testing.T) {
+	absorbed := []string{
+		"dross state set version <major>.<minor>.$PATCH.0",
+		"dross issue phase sync <id> --status in-progress",
+		"dross issue task pull <phase>",
+	}
+	// execute.md rows as recorded, the absorbed three included, plus one that
+	// no prompt carries any more: re-extracting execute.md would drop it.
+	existing := "execute.md\tdross gone from every prompt\n"
+	for _, row := range absorbed {
+		existing += "execute.md\t" + row + "\n"
+	}
+	out, err := recordManifest(FS, existing)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(exp), row) {
-		t.Fatalf("expanded verify.md no longer carries %q; pick another row", row)
+	if !strings.HasPrefix(out, existing) {
+		t.Fatalf("recording rewrote existing rows; got prefix:\n%s", out[:min(len(out), len(existing))])
 	}
-	// The whole prompt tree, partials included, with the row gone from every file.
+	added := strings.TrimPrefix(out, existing)
+	if strings.Contains(added, "execute.md\t") {
+		t.Error("recording re-extracted execute.md, which already had rows")
+	}
+	for _, prompt := range manifestPrompts[1:] {
+		if !strings.Contains(added, "\n"+prompt+"\t") && !strings.HasPrefix(added, prompt+"\t") {
+			t.Errorf("recording added no rows for %s, which had none", prompt)
+		}
+	}
+	// A recorded manifest is a fixed point.
+	again, err := recordManifest(FS, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != out {
+		t.Error("re-recording a full manifest changed it")
+	}
+}
+
+func TestExtractInstructions(t *testing.T) {
+	body := "# p\n- **Rule one.** run `dross x y` then `git z`\n  - **nested** skipped\n```\ndross a b\n# dross comment\n  git add x\necho no `dross in fence`\ndross a b\n```\ndross outside fence, then **`dross c <id>`** and `dross a b`\n"
+	got := strings.Join(extractInstructions(body, false), "|")
+	if want := "- **Rule one.**|dross a b|git add x"; got != want {
+		t.Errorf("extractInstructions = %q, want %q", got, want)
+	}
+	got = strings.Join(extractInstructions(body, true), "|")
+	if want := "- **Rule one.**|dross x y|dross a b|git add x|dross c <id>"; got != want {
+		t.Errorf("extractInstructions(inline) = %q, want %q", got, want)
+	}
+}
+
+// withoutRow is the whole prompt tree, partials included, with row replaced
+// by stand-in in every file.
+func withoutRow(t *testing.T, row, stand string) fstest.MapFS {
+	t.Helper()
 	files, err := fs.Glob(FS, "prompts/*.md")
 	if err != nil {
 		t.Fatal(err)
@@ -233,13 +321,42 @@ func TestConservationCatchesALostRow(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		fsys[f] = &fstest.MapFile{Data: []byte(strings.ReplaceAll(string(b), row, "dross verify done"))}
+		fsys[f] = &fstest.MapFile{Data: []byte(strings.ReplaceAll(string(b), row, stand))}
 	}
+	return fsys
+}
+
+func TestConservationCatchesALostRow(t *testing.T) {
+	for _, c := range []struct {
+		prompt, row, stand string
+		inline             bool // the row sits in prose, not a fence
+	}{
+		{"verify.md", "dross verify finalize <phase-id>", "dross verify done", false},
+		{"ship.md", "dross ship <phase-id>", "dross ship it", false},
+		{"quick.md", "dross local set quick_base <base>", "dross local set", true},
+	} {
+		t.Run(c.prompt, func(t *testing.T) {
+			exp, err := Expand(FS, c.prompt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rows := extractInstructions(string(exp), inlineSpanPrompts[c.prompt])
+			if !contains(rows, c.row) {
+				t.Fatalf("today's %s does not yield row %q; pick another", c.prompt, c.row)
+			}
+			if c.inline && contains(extractInstructions(string(exp), false), c.row) {
+				t.Fatalf("%q is fenced in %s; it does not prove the inline extractor", c.row, c.prompt)
+			}
+			manifest := map[string][]string{c.prompt: {c.row}}
+			problems := strings.Join(conservationProblems(withoutRow(t, c.row, c.stand), manifest, nil), "\n")
+			if !strings.Contains(problems, c.prompt+": instruction lost: "+c.row) {
+				t.Errorf("a removed row went unreported; problems:\n%s", problems)
+			}
+		})
+	}
+	const row = "dross verify finalize <phase-id>"
+	fsys := withoutRow(t, row, "dross verify done")
 	manifest := map[string][]string{"verify.md": {row}}
-	problems := strings.Join(conservationProblems(fsys, manifest, nil), "\n")
-	if !strings.Contains(problems, "instruction lost: "+row) {
-		t.Errorf("a removed row went unreported; problems:\n%s", problems)
-	}
 	// Claimed by one marker, it passes; once that marker goes, it fails.
 	claimed := map[string][]string{row: {"verify.go:1"}}
 	if p := conservationProblems(fsys, manifest, claimed); len(p) != 0 {
