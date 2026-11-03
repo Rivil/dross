@@ -2,28 +2,26 @@ package cmd
 
 import (
 	"io/fs"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Rivil/dross/internal/review"
 )
 
-// quickPromptContent loads assets/prompts/quick.md and normalises it —
-// lowercased, with backticks and asterisk emphasis stripped — so assertions
-// test the presence of a rule, not its exact formatting. Unlike the ship.md
-// helper this does NOT strip underscores: the needles here are store keys
-// (quick_base) and stripping them would mangle the thing being asserted.
+// quickPromptContent loads quick.md expanded with its partials and normalises
+// it with normaliseKeepUnderscores, so assertions test the presence of a rule,
+// not its exact formatting.
 func quickPromptContent(t *testing.T) string {
 	t.Helper()
-	root := repoRootFromTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "quick.md"))
-	if err != nil {
-		t.Fatalf("read quick.md: %v", err)
-	}
-	s := strings.ToLower(string(b))
-	return strings.NewReplacer("`", "", "*", "").Replace(s)
+	return normaliseKeepUnderscores(expandedPrompt(t, "quick.md"))
+}
+
+// normaliseKeepUnderscores lowercases s and strips backticks and asterisk
+// emphasis. Unlike normalisePrompt it does NOT strip underscores: the quick
+// needles are store keys (quick_base, current_phase_status) and stripping them
+// would mangle the thing being asserted.
+func normaliseKeepUnderscores(s string) string {
+	return strings.NewReplacer("`", "", "*", "").Replace(strings.ToLower(s))
 }
 
 // TestQuickPromptRecordsStandaloneBase (c-7) gates the half of the quick base

@@ -43,7 +43,6 @@ func normalisePrompt(s string) string {
 // seeded from every such reader when prompts gained partials and may only
 // shrink: rawPromptReadAllowlistSize pins its size.
 var rawPromptReadAllowlist = map[string]bool{
-	"internal/boardsync/board_lifecycle_divergence_test.go#rawPrompt":             true,
 	"internal/cmd/architecture_prompt_test.go#architecturePromptContent":          true,
 	"internal/cmd/inbox_prompt_test.go#inboxPromptContent":                        true,
 	"internal/cmd/install_symlink_test.go#TestMakeInstallLinksInteractionSnippet": true,
@@ -58,12 +57,10 @@ var rawPromptReadAllowlist = map[string]bool{
 	"internal/cmd/pause_prompt_test.go#pausePromptContent":                        true,
 	"internal/cmd/pull_envelope_test.go#TestPromptsDescribeTheEnvelopeContract":   true,
 	"internal/cmd/quality_prompt_test.go#qualityPromptContent":                    true,
-	"internal/cmd/quick_prompt_test.go#quickPromptContent":                        true,
 	"internal/cmd/readme_doc_test.go#optionsSection":                              true,
 	"internal/cmd/respond_prompt_test.go#respondPrompt":                           true,
 	"internal/cmd/resume_prompt_test.go#resumePromptContent":                      true,
 	"internal/cmd/secure_prompt_test.go#securePromptContent":                      true,
-	"internal/cmd/squash_claim_guard_test.go#TestQuickPromptHandlesShippedWindow": true,
 	"internal/cmd/watch_prompt_test.go#watchPromptContent":                        true,
 	"internal/cmd/watch_test.go#TestWatchPromptNamesEveryDigestField":             true,
 	"internal/prtriage/split_test.go#reviewTemplate":                              true,
@@ -71,7 +68,7 @@ var rawPromptReadAllowlist = map[string]bool{
 	"internal/rules/rules_test.go#TestInteractionRuleUsesEmitter":                 true,
 }
 
-const rawPromptReadAllowlistSize = 26
+const rawPromptReadAllowlistSize = 23
 
 // promptGuardRoots are the trees the raw-read guards walk, relative to the
 // repo root: internal/ holds the prompt-content tests, cmd/ the binaries'.
@@ -335,6 +332,9 @@ func TestPromptLoadersCompose(t *testing.T) {
 	if planPromptContent(t) != normalisePrompt(expandedPrompt(t, "plan.md")) {
 		t.Error("planPromptContent does not compose over the expanded plan.md")
 	}
+	if quickPromptContent(t) != normaliseKeepUnderscores(expandedPrompt(t, "quick.md")) {
+		t.Error("quickPromptContent does not compose over the expanded quick.md")
+	}
 }
 
 // TestPromptLoadersSeePartials: text that lives only in a partial reaches the
@@ -347,6 +347,8 @@ func TestPromptLoadersSeePartials(t *testing.T) {
 		"prompts/_spec.route.md":   {Data: []byte("a BANNED_PHRASE only here\n")},
 		"prompts/plan.md":          {Data: []byte("# plan\n**When** `panel=on` — the panel is asked for: `dross prompt partial plan panel`\nend\n")},
 		"prompts/_plan.panel.md":   {Data: []byte("a BANNED_PHRASE only here\n")},
+		"prompts/quick.md":         {Data: []byte("# quick\n**When** `mode=solo` — solo: `dross prompt partial quick solo`\nend\n")},
+		"prompts/_quick.solo.md":   {Data: []byte("a BANNED_PHRASE only here\n")},
 	})
 	for loader, got := range map[string]string{
 		"promptBody": promptBody(t, "execute.md"),
@@ -359,6 +361,10 @@ func TestPromptLoadersSeePartials(t *testing.T) {
 	}
 	if !strings.Contains(promptContent(t, "execute.md"), "bannedphrase") || !strings.Contains(executePromptContent(t), "bannedphrase") || !strings.Contains(specPromptContent(t), "bannedphrase") || !strings.Contains(planPromptContent(t), "bannedphrase") {
 		t.Error("the normalised loaders missed text that lives only in a partial")
+	}
+	// quickPromptContent keeps underscores.
+	if !strings.Contains(quickPromptContent(t), "banned_phrase") {
+		t.Error("quickPromptContent missed text that lives only in a partial")
 	}
 }
 
