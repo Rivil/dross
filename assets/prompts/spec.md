@@ -2,7 +2,7 @@
 
 Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
 
-**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): propose one point at a time via `AskUserQuestion` and let the user react. For `/dross-spec` that means walking §2's criteria and §3's gray-areas individually, and confirming the composed `spec.toml` with a one-line summary asked as an `AskUserQuestion` — never dumping the orientation, criteria, and TOML into one block.
+**Run this as a conversation, not a broadcast.** Follow the interaction playbook (`_interaction.md`, printed by `dross interaction show` below): walk §2's criteria and §3's gray-areas one at a time via `AskUserQuestion`, and confirm the written `spec.toml` with a one-line summary — never dump orientation, criteria and TOML in one block.
 
 ## 0. Pre-flight
 
@@ -10,21 +10,22 @@ Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
 2. Resolve the target phase from `$ARGUMENTS`:
    - `--new "Phase Title"` → run `dross phase create "<title>"`, capture the new id (`NN-slug`).
    - `<phase-id>` → use it directly. Fail if `.dross/phases/<id>/` doesn't exist.
-   - empty → read `.dross/state.json`'s `current_phase` and decide:
-     - **set and in-progress** (spec.toml exists but no plan, OR plan exists but verify isn't `pass`) → use it directly (resume mode below). No question asked.
-     - **set, but the phase looks done** (i.e. `current_phase_status` is `verified` or `shipped`, OR `.dross/phases/<current>/verify.toml` exists with `verdict = "pass"`) → there's nothing to spec on `<current>`. `AskUserQuestion`: **"Phase `<current>` is `<status>` — nothing left to spec. Create a new phase?"** options: `new` / `resume <current>` / `cancel`. On `new`, jump to the create flow below. On `resume`, use `<current>` anyway (rare; user wants to amend a locked spec). On `cancel`, stop and exit cleanly.
-     - **unset** → there's nothing for this command to do. `AskUserQuestion`: **"No phase in progress. Create a new phase?"** options: `new` / `cancel`. On `cancel`, stop and exit cleanly. On `new`, jump to the create flow below.
+   - empty → resolve it from `state.json`:
+
+**When** `target=empty` — `$ARGUMENTS` is empty: `dross prompt partial spec no-target`
 
    **Create flow** (used by `--new`, the `new` answer above, or whenever scaffolding is needed):
-   - If `state.current_milestone` is set, run `dross phase list --milestone <milestone>`: it walks that milestone's `phases` array in roadmap order and marks every entry with no phase directory `(not scaffolded)`. Those are the **unscaffolded roadmap phases**. Read the slug out of the line — every line carries a two-character status prefix (`✓ ` when done) and the listing ends with an `N/M done` footer, so neither the prefix nor the last line is a slug.
+   - If `state.current_milestone` is set, run `dross phase list --milestone <milestone>`: entries marked `(not scaffolded)` are the **unscaffolded roadmap phases**. Read the slug out of the line: each line has a two-character status prefix (`✓ ` when done) and the last line is an `N/M done` footer — neither is a slug.
    - If there are unscaffolded entries, present them via `AskUserQuestion`: one option per entry (label `<id>`; description = the entry's one-line summary if a `Brief.md` at repo root contains a matching `### Phase <id>` section, otherwise the bare title). Last option is **"Describe a new phase"** (freeform).
    - If the user picks a roadmap entry, the title is the entry's slug (or its Brief.md title if present) — run `dross phase create "<title>"`.
    - If the user picks **Describe a new phase**, prompt for a freeform title, then run `dross phase create "<title>"`.
    - If milestone is unset, roadmap is empty, or all roadmap entries are already scaffolded, fall back to the freeform title prompt directly.
 
    In every case: capture the new id (`NN-slug`) and proceed. Do NOT tell the user to run `dross phase create` manually — this command runs it. `dross phase create` also checks out the `phase/<id>` branch.
-3. **Verify current branch is `phase/<id>`** for the resolved phase (`git symbolic-ref --short HEAD`). For a freshly-created phase this is already true. On resume, if you're not on the phase branch: `dross phase checkout <id>` — the guarded checkout. If it refuses because the branch doesn't exist locally, stop and surface the situation to the user (phase work belongs off main).
-4. Read `.dross/phases/<id>/spec.toml` if it exists. **Resume, don't overwrite.** Show the existing content and ask whether to extend or replace.
+3. **Verify current branch is `phase/<id>`** for the resolved phase (`git symbolic-ref --short HEAD`). On resume, if you're not on the phase branch: `dross phase checkout <id>` — the guarded checkout. If it refuses because the branch doesn't exist locally, stop and surface the situation to the user (phase work belongs off main).
+4. Read `.dross/phases/<id>/spec.toml` if it exists. **Resume, don't overwrite.**
+
+**When** `spec_file=present` — the phase already has a spec.toml: `dross prompt partial spec resume`
 
 ## 1. Read context
 
@@ -38,7 +39,7 @@ Read these and surface their relevant bits to the user before asking questions:
 ```
 dross deferred list --target <id> --json
 ```
-Each returned item is a candidate acceptance criterion — it joins the §2 candidate slate ("phase `<source>` parked this for you: …") and gets the same accept / reword / drop gate as any other slate item. This is the loop-closer: a punted idea reaches the planner instead of dying as a bare roadmap slug.
+Each returned item joins the §2 candidate slate ("phase `<source>` parked this for you: …") under the same accept / reword / drop gate.
 
 Print a short orientation block: "Working on phase X. Project core value: Y. Milestone success criteria: Z. Locked decisions you can't relitigate: ..."
 
@@ -65,36 +66,34 @@ Tighten each candidate into a one-liner and assign id `c-1`, `c-2`, … — a so
 
 ## 3. Locked decisions — gray-area walkthrough
 
-Don't just ask "any locked decisions?" and wait for the user to free-recall them. Surface this phase's **gray areas** — the contract-shaping choices you're *genuinely unsure how to resolve* — and walk the user through **every** one, one at a time. Each resolved area becomes a locked decision.
+Don't ask "any locked decisions?" and wait for free recall. Surface this phase's **gray areas** and walk **every** one, one at a time; each resolved area becomes a locked decision.
 
-A gray area is a contract-shaping choice you **cannot confidently resolve on your own**: it could go multiple ways, the outcome differs, and you don't have a clear best answer. The discriminator is *your* uncertainty — **not** merely that the user *might* have an opinion. If you're confident about the right call on a contract-shaping choice, make it and note it; don't ask.
+A gray area is a contract-shaping choice you **cannot confidently resolve on your own**: it could go several ways and you have no clear best answer. The discriminator is *your* uncertainty, **not** that the user *might* have an opinion. Confident on a contract-shaping call? Make it, note it, don't ask.
 
 ### 3a. Identify gray areas
 
-Using the context from §1 (project goals, milestone constraints, locked stack) and the acceptance criteria from §2, list the areas where you are **genuinely uncertain** how to proceed:
+From §1's context and §2's criteria, list the areas where you are **genuinely uncertain** how to proceed:
 
-- Use **concrete labels tied to this phase's domain** — never generic category names like "UI" / "Behaviour" / "Architecture".
-  - Phase "CLI for backups" → `Output format`, `Flag design`, `Progress reporting`, `Error recovery`
-  - Phase "Meal tagging" → `Tag storage`, `Duplicate handling`, `Tag input UX`, `Max tags per item`
+- Use **concrete labels tied to this phase's domain** (phase "Meal tagging" → `Tag storage`, `Duplicate handling`), never generic ones like "UI" / "Behaviour".
 - **Keep it to the genuine ones — a soft ~3–4.** Don't pad to hit a number, and don't truncate a real uncertainty to stay under one. Order them **most-impactful / most-uncertain first**, so if the user later hands you the rest (§3b off-ramp), the consequential ones are already settled.
 - **Skip what's already decided.** Don't re-ask anything settled by `stack.locked` in project.toml, a `[[decisions]]` carried in a prior phase's spec.toml, or a choice already implied by an acceptance criterion. If you skip an area for this reason, say so ("session handling is fixed by the locked auth library — not asking").
 - **Stay inside the phase boundary.** A gray area clarifies HOW to build what's already scoped — never WHETHER to add a new capability. If a candidate is really a new capability, it's a §4a candidate (sorted include-first), not a gray area.
 
-**What is NOT a gray area — decide these yourself, don't ask:** internal architecture, code patterns, performance tuning, anything the planner or executor resolves — **even when you're unsure about them**. Uncertainty alone doesn't earn a question; the choice must *also* be contract-shaping / user-observable. Ask only about user-facing and contract-shaping choices you can't confidently settle.
+**What is NOT a gray area — decide these yourself, don't ask:** internal architecture, code patterns, performance tuning, anything the planner or executor resolves — **even when you're unsure about them**. The choice must *also* be contract-shaping / user-observable.
 
-If no meaningful gray areas exist (pure infra, clear-cut implementation, all already decided, or you're confident on every call), say so plainly and skip to §4. Don't manufacture choices to fill space.
+No meaningful gray areas? Say so plainly and skip to §4. Don't manufacture choices.
 
 ### 3b. Walk every area, one at a time
 
-There is **no selection step** — do not ask the user which areas to discuss, and do not pre-filter the list down for them. Walk **every** identified gray area yourself, **one at a time** — a single decision each turn, in the propose-and-react shape the `_interaction.md` playbook defines:
+There is **no selection step** — don't ask which areas to discuss or pre-filter the list. Walk **every** gray area yourself, **one at a time**, propose-and-react:
 
-- For each area, offer concrete options via `AskUserQuestion` where a small set of choices exists; go freeform where it's open-ended. **Lead with the option you'd pick.** Keep going on an area until the decision is crisp enough to write down, then move to the next.
-- **Don't batch** areas into a single turn, and don't dump the whole list — surface one area, resolve it, advance. A short "decided: tag_storage" before the next is enough.
-- **User off-ramp.** If the user says "you decide the rest" / "that's enough" at any point, stop walking and settle the remaining areas yourself (recording them as decisions), per the playbook's *when-the-contract-bends* clause. **Never self-truncate without that signal** — walking all of them is the default.
+- Offer concrete options via `AskUserQuestion` where a small set exists, freeform otherwise. **Lead with the option you'd pick.** Stay on an area until the decision is crisp, then advance.
+- **Don't batch** areas or dump the list. A short "decided: tag_storage" before the next is enough.
+- **User off-ramp.** On "you decide the rest" / "that's enough", settle the remaining areas yourself as decisions. **Never self-truncate without that signal.**
 
 While discussing:
-- If the user references a doc/spec/file ("follow the schema in `X`"), read it and let it inform your follow-ups.
-- If the user raises something that isn't a gray area, don't defer it by reflex — note it as a §4a candidate and sort it there (include-first). Redirect only the discussion: **"noting `<that>` as a candidate — I'll sort it in §4. For now let's stay on `<area>`."**
+- If the user references a doc/file, read it and let it inform your follow-ups.
+- Something that isn't a gray area isn't deferred by reflex: note it as a §4a candidate (include-first) and redirect only the discussion — **"noting `<that>` as a candidate — I'll sort it in §4. For now let's stay on `<area>`."**
 
 ### 3c. Capture outcomes
 
@@ -104,7 +103,7 @@ Each resolved gray area becomes a locked decision:
 - `why` (the reason — short, but real)
 - `locked = true`
 
-If the user wants to leave an area open, don't force it — skip it (decisions can be added at plan time). **Never** mark `locked = true` without a `why`. Don't invent decisions to fill space.
+An area the user leaves open is skipped (plan time can add it). **Never** mark `locked = true` without a `why`.
 
 ## 4. Deferred ideas
 
@@ -120,7 +119,7 @@ When resuming/extending an existing spec, **skip any deferred item that already 
 
 ### 4a. Route every surfaced candidate — include-first, then destination
 
-A bare deferred item is write-only: it dies in this spec and never comes back. So every surfaced candidate — a §3 gray-area-adjacent proposal, an optional sub-feature, or an idea the user raised along the way — is sorted with the **include-first** rule from the interaction playbook (not open recording, not silent parking). An idea the user *explicitly* punted above is already a defer — skip step 1 and go straight to step 2.
+A bare deferred item dies in this spec. So every surfaced candidate — a gray-area-adjacent proposal, an optional sub-feature, an idea raised along the way — is sorted **include-first** (the playbook's rule). An idea the user *explicitly* punted is already a defer: skip to step 2.
 
 Sort each candidate first. **Belongs in this phase** → don't ask a defer question: **Pull into the current phase** — add it as a new `[[criteria]]` entry through §2's accept / reword / drop gate, with accept as the lead. Anything else is driven as a **two-step** `AskUserQuestion`, one item per turn:
 
@@ -130,22 +129,7 @@ Sort each candidate first. **Belongs in this phase** → don't ask a defer quest
 - **add to current phase** — it's in scope after all. This is the **Pull into the current phase** branch: add it as a new `[[criteria]]` entry (back to §2). It is not deferred. This is the *only* place the pull-in is offered.
 - **defer it** — it's not this phase. Keep it deferred and go to step 2 for a destination. Deferral is not the safe default: in-scope work parked in the backlog is scope that leaked.
 
-**Step 2 — the destination (only after "defer it").** Route the deferred item via `AskUserQuestion` (lead with the most likely). The entry gate already settled add-vs-defer, so this step **does not re-offer** the pull-in — only the parking destinations:
-- **Park in the milestone backlog** — relevant, but not this phase. Coin a short slug from the idea; after the spec is written (§5) run:
-  ```
-  dross milestone add <version> phases "<slug>"
-  dross deferred route <phase-id> <idx> --target "<slug>"
-  ```
-  It now re-surfaces 1:1 when `<slug>` is later scaffolded (§1's seed).
-- **Attach to a named future phase** — it belongs to a phase already on the roadmap. Stamp that existing slug (after §5):
-  ```
-  dross deferred route <phase-id> <idx> --target "<existing-slug>"
-  ```
-- **Someday** — genuinely no home yet. Leave it unrouted (no `target`); it gets triaged later via `/dross-inbox`. **Leave an item unrouted only on an explicit someday pick** — never as the silent default.
-
-`<idx>` is the item's 0-based position in this spec's `[[deferred]]` array. The `dross deferred route` / `dross milestone add` commands mutate on-disk artefacts, so **run them after §5 has written `spec.toml`** (a one-line confirm per item is enough — don't echo the array back). Re-run `dross validate` once after routing.
-
-This routing is gold for the planner and the backlog: parked ideas reach a real phase instead of evaporating.
+**When** `deferral=chosen` — an item is deferred (step 1's "defer it", or the user punted it): `dross prompt partial spec route`
 
 ## 5. Write spec.toml
 
@@ -176,7 +160,7 @@ text = "..."
 why  = "..."                       # optional
 ```
 
-Use the `Write` tool to save to `.dross/phases/<id>/spec.toml`. **Don't paste the TOML back** — it's a build artifact, not a review medium, and dumping it is exactly the ctrl+o wall this command avoids. Every line was already agreed point by point in §2–§4. Confirm with a one-line summary instead, asked as a single `AskUserQuestion` — never as a trailing prose line the user has to type an answer to:
+`Write` it to `.dross/phases/<id>/spec.toml`. **Don't paste the TOML back** — every line was agreed in §2–§4. Confirm with a one-line summary asked as one `AskUserQuestion`, never a trailing prose line:
 
 **"Spec written: N criteria, M locked decisions, K deferred — lock it?"** — lead option **lock**, other option **edit \<what>**.
 
@@ -186,7 +170,7 @@ Only surface a specific field if the user asks to see or change it.
 ```
 dross deferred absorb <source> <idx> --criterion <c-N> --phase <phase-id>
 ```
-Always pass `--phase <phase-id>` explicitly: `current_phase` is only set in §6, so the default could name another phase. The record is the evidence a routed item was taken in: its board card closes once this phase completes, while an item nobody absorbed stays open. A criterion that took in several parked items gets one call per item.
+Always pass `--phase <phase-id>`: `current_phase` is only set in §6. The record closes the item's board card when this phase completes; an unabsorbed item stays open. One call per parked item.
 
 ## 6. Validate + wrap
 
@@ -213,7 +197,7 @@ When the phase is a new subsystem, has multiple plausible architectures, or look
 
 ## Hard rules
 
-- **Follow the interaction playbook (`_interaction.md`); spec.toml is never a review medium.** Drive the command as short `AskUserQuestion`-gated turns — one criterion / one gray-area at a time — and confirm the composed `spec.toml` with a one-line summary asked as an `AskUserQuestion` (§5) rather than pasting it back or ending on a prose "(y / edit)" line. Content is agreed in prose first; the TOML is only where it lands.
+- **Follow the interaction playbook (`_interaction.md`); spec.toml is never a review medium.** One criterion / gray-area per `AskUserQuestion` turn; confirm the written file per §5, never by pasting it or a prose "(y / edit)" line.
 - **Never** invent criteria the user didn't explicitly approve. If you propose, say so and ask confirmation before writing.
 - **Gray areas (§3) must be phase-specific and inside the phase boundary.** Generic category labels ("UI", "Behaviour") and new-capability questions ("should we also add search?") are both bugs — the first is lazy, the second is scope creep. Skip areas already settled by `stack.locked` or a prior decision rather than re-asking them.
 - **Never** mark a decision `locked = true` without an explicit `why`. Locked decisions become non-negotiable in the planner.

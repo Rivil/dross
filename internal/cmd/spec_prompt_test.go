@@ -3,6 +3,8 @@ package cmd
 import (
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/assets"
 )
 
 // specPromptContent loads spec.md expanded with its partials and normalises it
@@ -240,5 +242,52 @@ func TestSpecPromptRecordsAbsorbedItems(t *testing.T) {
 	// would leave its board card open forever.
 	if !strings.Contains(content[section5:absorb], "seeded from a §1 parked item") || !strings.Contains(content[section5:absorb], "reworded") {
 		t.Error("spec.md's absorb instruction does not cover a reworded parked item")
+	}
+}
+
+// TestSpecPromptBranchesFetchTheirPartial proves t-11's split: spec's common
+// path ("target given, no deferral", no existing spec.toml) fetches nothing,
+// and each moved branch fetches exactly its own partial. Bare /dross-spec
+// (target=empty) and choosing "defer it" (deferral=chosen) each cost one fetch
+// by design.
+func TestSpecPromptBranchesFetchTheirPartial(t *testing.T) {
+	for _, c := range []struct {
+		key, value string
+		want       string
+	}{
+		{"", "", ""},
+		{"target", "empty", "no-target"},
+		{"spec_file", "present", "resume"},
+		{"deferral", "chosen", "route"},
+	} {
+		facts := assets.CommonPath()
+		if c.key != "" {
+			facts[c.key] = c.value
+		}
+		got, err := assets.Fetched(promptFS, "spec", facts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Join(got, ",") != c.want {
+			t.Errorf("spec with %s=%s fetches %v, want [%s]", c.key, c.value, got, c.want)
+		}
+	}
+}
+
+// TestSpecPromptSkipRuleStaysInBaseSection4: the resume skip rule is common to
+// every run that defers, so it must stay in base spec.md's §4 — not move into
+// the resume partial or another section. Reads the raw file, unexpanded.
+func TestSpecPromptSkipRuleStaysInBaseSection4(t *testing.T) {
+	raw, err := assets.FS.ReadFile("prompts/spec.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(raw)
+	start, end := strings.Index(s, "\n## 4. "), strings.Index(s, "\n## 5. ")
+	if start < 0 || end < start {
+		t.Fatalf("spec.md has no §4..§5 span (start %d, end %d)", start, end)
+	}
+	if !strings.Contains(s[start:end], "already has a target") {
+		t.Error("base spec.md §4 lost the skip rule \"already has a target\"")
 	}
 }
