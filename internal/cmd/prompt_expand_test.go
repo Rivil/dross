@@ -5,7 +5,10 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
+	"path"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,7 +38,7 @@ func normalisePrompt(s string) string {
 	return strings.NewReplacer("`", "", "*", "", "_", "").Replace(strings.ToLower(s))
 }
 
-// rawPromptReadAllowlist names, as <file>#<func>, the internal/ tests that may
+// rawPromptReadAllowlist names, as <file>#<func>, the internal/ and cmd/ tests that may
 // still read a prompt file off disk rather than through expandedPrompt. It was
 // seeded from every such reader when prompts gained partials and may only
 // shrink: rawPromptReadAllowlistSize pins its size.
@@ -79,67 +82,114 @@ var rawPromptReadAllowlist = map[string]bool{
 
 const rawPromptReadAllowlistSize = 35
 
-// rawPromptReads finds every os.ReadFile or readRepoFile call in internal/
-// test files whose path argument names assets and prompts — as one literal,
-// or as separate filepath.Join literals — keyed <file>#<func> with the
-// file:line of each call.
-func rawPromptReads(t *testing.T) map[string][]string {
+// promptGuardRoots are the trees the raw-read guards walk, relative to the
+// repo root: internal/ holds the prompt-content tests, cmd/ the binaries'.
+var promptGuardRoots = []string{"internal", "cmd"}
+
+// eachTestFunc parses every _test.go file under root's promptGuardRoots and
+// calls visit with the file's root-relative slash path, its file set and each
+// function declaration that has a body.
+func eachTestFunc(t *testing.T, root string, visit func(rel string, fset *token.FileSet, fn *ast.FuncDecl)) {
 	t.Helper()
-	root := repoRootFromTest(t)
-	out := map[string][]string{}
-	err := filepath.WalkDir(filepath.Join(root, "internal"), func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(p, "_test.go") {
-			return err
-		}
-		fset := token.NewFileSet()
-		f, err := parser.ParseFile(fset, p, nil, 0)
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(root, p)
-		rel = filepath.ToSlash(rel)
-		for _, decl := range f.Decls {
-			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Body == nil {
-				continue
+	for _, dir := range promptGuardRoots {
+		err := filepath.WalkDir(filepath.Join(root, dir), func(p string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(p, "_test.go") {
+				return err
 			}
-			ast.Inspect(fn.Body, func(n ast.Node) bool {
-				call, ok := n.(*ast.CallExpr)
-				if !ok {
-					return true
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, p, nil, 0)
+			if err != nil {
+				return err
+			}
+			rel, _ := filepath.Rel(root, p)
+			rel = filepath.ToSlash(rel)
+			for _, decl := range f.Decls {
+				if fn, ok := decl.(*ast.FuncDecl); ok && fn.Body != nil {
+					visit(rel, fset, fn)
 				}
-				if !isRawPromptRead(call) {
-					return true
-				}
-				key := rel + "#" + fn.Name.Name
-				out[key] = append(out[key], rel+":"+strconv.Itoa(fset.Position(call.Pos()).Line))
-				return true
-			})
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
+}
+
+// rawPromptReads finds every raw prompt read (see isRawPromptRead) in the test
+// files under root's promptGuardRoots, keyed <file>#<func> with the file:line
+// of each call.
+func rawPromptReads(t *testing.T, root string) map[string][]string {
+	t.Helper()
+	out := map[string][]string{}
+	eachTestFunc(t, root, func(rel string, fset *token.FileSet, fn *ast.FuncDecl) {
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || !isRawPromptRead(call) {
+				return true
+			}
+			key := rel + "#" + fn.Name.Name
+			out[key] = append(out[key], rel+":"+strconv.Itoa(fset.Position(call.Pos()).Line))
+			return true
+		})
+	})
 	return out
 }
 
-// isRawPromptRead reports whether call is os.ReadFile or readRepoFile of a
-// path under assets/prompts. assets.FS.ReadFile — the sanctioned raw path —
-// is neither.
+// pathCalls build, list or stat a path without reading a file, so prompt path
+// literals passed to one are not a read.
+var pathCalls = map[string]bool{"filepath.Join": true, "path.Join": true, "filepath.Glob": true, "os.ReadDir": true, "os.Stat": true}
+
+// isRawPromptRead reports whether call reads a file under assets/prompts off
+// disk: os.ReadFile or readRepoFile of such a path, or any other call — a read
+// helper like docsBody(t, "assets", "prompts", "options.md") — whose own
+// arguments are the literals "assets", "prompts" and a <file>.md. pathCalls
+// are never reads, and assets.FS.ReadFile — the sanctioned raw path — names no
+// assets literal.
 func isRawPromptRead(call *ast.CallExpr) bool {
-	arg := -1
-	switch fun := call.Fun.(type) {
-	case *ast.SelectorExpr:
-		if x, ok := fun.X.(*ast.Ident); ok && x.Name == "os" && fun.Sel.Name == "ReadFile" {
-			arg = 0
-		}
+	switch name := calleeName(call.Fun); {
+	case name == "os.ReadFile":
+		return len(call.Args) > 0 && namesPromptsDir(call.Args[0])
+	case name == "readRepoFile":
+		return len(call.Args) > 1 && namesPromptsDir(call.Args[1])
+	case pathCalls[name]:
+		return false
+	}
+	return argsSpellPromptFile(call.Args)
+}
+
+// calleeName is fun as written — "name" or "pkg.Name" — or "" for any other
+// callee expression.
+func calleeName(fun ast.Expr) string {
+	switch fun := fun.(type) {
 	case *ast.Ident:
-		if fun.Name == "readRepoFile" {
-			arg = 1
+		return fun.Name
+	case *ast.SelectorExpr:
+		if x, ok := fun.X.(*ast.Ident); ok {
+			return x.Name + "." + fun.Sel.Name
 		}
 	}
-	return arg >= 0 && len(call.Args) > arg && namesPromptsDir(call.Args[arg])
+	return ""
+}
+
+// argsSpellPromptFile reports whether args themselves — not literals nested in
+// them — include "assets", "prompts" and a <file>.md.
+func argsSpellPromptFile(args []ast.Expr) bool {
+	var assetsLit, promptsLit, mdLit bool
+	for _, arg := range args {
+		lit, ok := arg.(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			continue
+		}
+		v, err := strconv.Unquote(lit.Value)
+		if err != nil {
+			continue
+		}
+		assetsLit = assetsLit || v == "assets"
+		promptsLit = promptsLit || v == "prompts"
+		mdLit = mdLit || strings.HasSuffix(v, ".md")
+	}
+	return assetsLit && promptsLit && mdLit
 }
 
 // namesPromptsDir reports whether expr's string literals spell a path under
@@ -173,7 +223,7 @@ func TestPromptReadsGoThroughExpansion(t *testing.T) {
 		t.Errorf("rawPromptReadAllowlist has %d entries, pinned at %d — it may only shrink: lower the pin with the entry you removed, never add one",
 			len(rawPromptReadAllowlist), rawPromptReadAllowlistSize)
 	}
-	reads := rawPromptReads(t)
+	reads := rawPromptReads(t, repoRootFromTest(t))
 	for key, at := range reads {
 		if !rawPromptReadAllowlist[key] {
 			t.Errorf("%s (%s) reads a prompt off disk; read it through expandedPrompt (or assets.FS for the bare base prompt)", strings.Join(at, ", "), key)
@@ -194,14 +244,65 @@ func TestRawPromptReadDetection(t *testing.T) {
 		`assets.FS.ReadFile("prompts/verify.md")`:                            false,
 		`os.ReadFile(filepath.Join(root, "README.md"))`:                      false,
 		`os.ReadFile(filepath.Join(root, "assets", "commands", "x.md"))`:     false,
+		// A read helper taking the path as variadic parts is a read.
+		`docsBody(t, "assets", "prompts", "options.md")`:  true,
+		`readDoc(t, "assets", "prompts", "ship.md")`:      true,
+		`docText(t, "assets", "prompts", "status.md")`:    true,
+		`h.read("assets", "prompts", "ship.md")`:          true,
+		`docsBody(t, "README.md")`:                        false,
+		`docsBody(t, "assets", "commands", "options.md")`: false,
+		`expandedPrompt(t, "ship.md")`:                    false,
+		// Building, listing or statting a prompt path reads nothing.
+		`filepath.Join(root, "assets", "prompts", "ship.md")`:                   false,
+		`path.Join("assets", "prompts", "ship.md")`:                             false,
+		`os.ReadDir(filepath.Join(root, "assets", "prompts"))`:                  false,
+		`filepath.Glob(filepath.Join(root, "assets", "prompts", "*.md"))`:       false,
+		`os.Stat(filepath.Join(root, "assets", "prompts", "ship.md"))`:          false,
+		`fixture(t, filepath.Join(root, "assets", "prompts", "ship.md"), body)`: false,
 	} {
 		expr, err := parser.ParseExpr(src)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := isRawPromptRead(expr.(*ast.CallExpr)); got != want {
-			t.Errorf("isRawPromptRead(%s) = %v, want %v", src, got, want)
+		// Every call in the expression, as the walk sees it: the Join nested
+		// in os.ReadDir must not count on its own either.
+		got := false
+		ast.Inspect(expr, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok && isRawPromptRead(call) {
+				got = true
+			}
+			return true
+		})
+		if got != want {
+			t.Errorf("isRawPromptRead over %s = %v, want %v", src, got, want)
 		}
+	}
+}
+
+// TestRawPromptReadsWalkCmd: the guard walks cmd/ as well as internal/, so a
+// binary's test reading a prompt off disk is reported under its own key.
+func TestRawPromptReadsWalkCmd(t *testing.T) {
+	root := t.TempDir()
+	for rel, body := range map[string]string{
+		"cmd/dross/main_test.go":   "package main\n\nfunc TestShip(t *testing.T) {\n\tos.ReadFile(filepath.Join(\"..\", \"..\", \"assets\", \"prompts\", \"ship.md\"))\n}\n",
+		"internal/x/x_test.go":     "package x\n\nfunc TestOptions(t *testing.T) {\n\tdocsBody(t, \"assets\", \"prompts\", \"options.md\")\n}\n",
+		"internal/x/clean_test.go": "package x\n\nfunc TestClean(t *testing.T) {\n\texpandedPrompt(t, \"ship.md\")\n}\n",
+	} {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := rawPromptReads(t, root)
+	want := map[string][]string{
+		"cmd/dross/main_test.go#TestShip":  {"cmd/dross/main_test.go:4"},
+		"internal/x/x_test.go#TestOptions": {"internal/x/x_test.go:4"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("rawPromptReads = %v, want %v", got, want)
 	}
 }
 
@@ -220,10 +321,14 @@ func TestPromptLoadersCompose(t *testing.T) {
 			"rawPrompt":     rawPrompt(t, name),
 			"readPrompt":    readPrompt(t, name),
 			"promptContent": promptContent(t, name),
+			"promptDocText": promptDocText(t, name),
 		} {
 			w := want
-			if loader == "promptContent" {
+			switch loader {
+			case "promptContent":
 				w = normalisePrompt(want)
+			case "promptDocText":
+				w = normaliseDoc(want)
 			}
 			if got != w {
 				t.Errorf("%s(%s) does not compose over the expanded prompt", loader, name)
@@ -256,17 +361,59 @@ func TestPromptLoadersSeePartials(t *testing.T) {
 	}
 }
 
-// splitPrompts are the prompts that have partials: no allowlisted raw reader
-// may read them, directly or through a helper called with their names.
-var splitPrompts = []string{"execute.md", "verify.md"}
+// splitPrompts lists, as <name>.md, every base prompt in fsys with at least
+// one partial — the registry, not a hand-kept list, so a prompt that gains a
+// partial is covered the moment its file lands. No allowlisted raw reader may
+// read one, directly or through a helper called with its name.
+func splitPrompts(t *testing.T, fsys fs.FS) []string {
+	t.Helper()
+	files, err := fs.Glob(fsys, "prompts/[a-z]*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, f := range files {
+		name := strings.TrimSuffix(path.Base(f), ".md")
+		names, err := assets.PartialNames(fsys, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(names) > 0 {
+			out = append(out, name+".md")
+		}
+	}
+	return out
+}
+
+// TestSplitPromptsFollowTheRegistry: a partial file landing makes its prompt a
+// split prompt, with no list edited; _interaction.md is no partial.
+func TestSplitPromptsFollowTheRegistry(t *testing.T) {
+	fsys := fstest.MapFS{
+		"prompts/execute.md":       {Data: []byte("# execute\n")},
+		"prompts/_execute.solo.md": {Data: []byte("solo\n")},
+		"prompts/plan.md":          {Data: []byte("# plan\n")},
+		"prompts/ship.md":          {Data: []byte("# ship\n")},
+		"prompts/_interaction.md":  {Data: []byte("playbook\n")},
+	}
+	if got, want := splitPrompts(t, fsys), []string{"execute.md"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("splitPrompts = %v, want %v", got, want)
+	}
+	fsys["prompts/_plan.panel.md"] = &fstest.MapFile{Data: []byte("panel\n")}
+	if got, want := splitPrompts(t, fsys), []string{"execute.md", "plan.md"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("after _plan.panel.md lands, splitPrompts = %v, want %v", got, want)
+	}
+	if !namesSplitPrompt(&ast.BasicLit{Kind: token.STRING, Value: `"plan.md"`}, splitPrompts(t, fsys)) {
+		t.Error("namesSplitPrompt does not see plan.md once it has a partial")
+	}
+}
 
 // expandingLoaders read the expanded prompt; a split-prompt name passed to one
 // is a sanctioned read, not a raw one.
-var expandingLoaders = map[string]bool{"expandedPrompt": true, "promptBody": true, "rawPrompt": true, "readPrompt": true, "promptContent": true}
+var expandingLoaders = map[string]bool{"expandedPrompt": true, "promptBody": true, "rawPrompt": true, "readPrompt": true, "promptContent": true, "promptDocText": true}
 
 // namesSplitPrompt reports whether expr carries a string literal naming one of
-// splitPrompts, outside any call to an expanding loader.
-func namesSplitPrompt(expr ast.Node) bool {
+// split, outside any call to an expanding loader.
+func namesSplitPrompt(expr ast.Node, split []string) bool {
 	found := false
 	ast.Inspect(expr, func(n ast.Node) bool {
 		if call, ok := n.(*ast.CallExpr); ok {
@@ -282,7 +429,7 @@ func namesSplitPrompt(expr ast.Node) bool {
 		if err != nil {
 			return true
 		}
-		for _, p := range splitPrompts {
+		for _, p := range split {
 			if strings.HasSuffix(v, p) {
 				found = true
 			}
@@ -297,53 +444,33 @@ func namesSplitPrompt(expr ast.Node) bool {
 // (it being a helper) passes one as a literal.
 func allowlistedSplitReads(t *testing.T) []string {
 	t.Helper()
-	root := repoRootFromTest(t)
+	split := splitPrompts(t, assets.FS)
 	var out []string
-	err := filepath.WalkDir(filepath.Join(root, "internal"), func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(p, "_test.go") {
-			return err
-		}
-		fset := token.NewFileSet()
-		f, err := parser.ParseFile(fset, p, nil, 0)
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(root, p)
-		rel = filepath.ToSlash(rel)
-		dir := filepath.ToSlash(filepath.Dir(rel))
-		for _, decl := range f.Decls {
-			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Body == nil {
-				continue
+	eachTestFunc(t, repoRootFromTest(t), func(rel string, fset *token.FileSet, fn *ast.FuncDecl) {
+		dir := path.Dir(rel)
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
 			}
-			ast.Inspect(fn.Body, func(n ast.Node) bool {
-				call, ok := n.(*ast.CallExpr)
-				if !ok {
-					return true
-				}
-				pos := rel + ":" + strconv.Itoa(fset.Position(call.Pos()).Line)
-				// The whole body, not just the call: a loop over prompt names
-				// passes them through a variable.
-				if isRawPromptRead(call) && rawPromptReadAllowlist[rel+"#"+fn.Name.Name] && namesSplitPrompt(fn.Body) {
-					out = append(out, pos+": allowlisted "+rel+"#"+fn.Name.Name+" reads a split prompt raw")
-				}
-				// A call to an allowlisted helper in the same package.
-				if id, ok := call.Fun.(*ast.Ident); ok && namesSplitPrompt(call) {
-					for key := range rawPromptReadAllowlist {
-						file, name, _ := strings.Cut(key, "#")
-						if name == id.Name && filepath.ToSlash(filepath.Dir(file)) == dir {
-							out = append(out, pos+": calls allowlisted helper "+key+" with a split prompt")
-						}
+			pos := rel + ":" + strconv.Itoa(fset.Position(call.Pos()).Line)
+			// The whole body, not just the call: a loop over prompt names
+			// passes them through a variable.
+			if isRawPromptRead(call) && rawPromptReadAllowlist[rel+"#"+fn.Name.Name] && namesSplitPrompt(fn.Body, split) {
+				out = append(out, pos+": allowlisted "+rel+"#"+fn.Name.Name+" reads a split prompt raw")
+			}
+			// A call to an allowlisted helper in the same package.
+			if id, ok := call.Fun.(*ast.Ident); ok && namesSplitPrompt(call, split) {
+				for key := range rawPromptReadAllowlist {
+					file, name, _ := strings.Cut(key, "#")
+					if name == id.Name && path.Dir(file) == dir {
+						out = append(out, pos+": calls allowlisted helper "+key+" with a split prompt")
 					}
 				}
-				return true
-			})
-		}
-		return nil
+			}
+			return true
+		})
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	sort.Strings(out)
 	return out
 }

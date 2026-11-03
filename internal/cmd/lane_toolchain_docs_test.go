@@ -79,7 +79,7 @@ func TestReadmeLaneRowNamesToolchain(t *testing.T) {
 // about a line — a lane that fell back needs nothing, a host that never
 // answered needs looking at.
 func TestOptionsNamesToolchainAndTheSplit(t *testing.T) {
-	prompt := readDoc(t, "assets", "prompts", "options.md")
+	prompt := expandedPrompt(t, "options.md")
 	if !strings.Contains(prompt, "--toolchain") {
 		t.Error("options.md does not name `dross test lane add|edit --toolchain`")
 	}

@@ -18,6 +18,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/assets"
 	"github.com/Rivil/dross/internal/cmd"
 	"github.com/Rivil/dross/internal/gate"
 )
@@ -82,7 +83,7 @@ var promptCmdRef = regexp.MustCompile("`dross ([a-z][a-z0-9-]*)(?: ([a-z][a-z0-9
 func TestShipPromptCommandsExist(t *testing.T) {
 	top := topLevelIndex(newRoot())
 
-	b, err := os.ReadFile(filepath.Join("..", "..", "assets", "prompts", "ship.md"))
+	b, err := assets.Expand(assets.FS, "ship")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +120,7 @@ func debugPromptUnresolved(top map[string]*cobra.Command, body string) (refs int
 // mid-investigation.
 func TestDebugPromptCommandsExist(t *testing.T) {
 	top := topLevelIndex(newRoot())
-	b, err := os.ReadFile(filepath.Join("..", "..", "assets", "prompts", "debug.md"))
+	b, err := assets.Expand(assets.FS, "debug")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -784,7 +785,7 @@ func TestMainEntryPoint(t *testing.T) {
 // CLI lacks — a renamed `dross pr` verb would strand the triage mid-PR.
 func TestRespondPromptCommandsExist(t *testing.T) {
 	top := topLevelIndex(newRoot())
-	b, err := os.ReadFile(filepath.Join("..", "..", "assets", "prompts", "respond.md"))
+	b, err := assets.Expand(assets.FS, "respond")
 	if err != nil {
 		t.Fatal(err)
 	}
