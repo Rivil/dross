@@ -1,0 +1,390 @@
+# Flow cost for prompt-budgets-rest, before legs (milestone v1.8 c-6, phase
+# c-4): a pair /dross-plan, a pair /dross-spec and a pair /dross-quick, run on
+# a dross built from base commit 8eb38e9f (`make build` in a scratch worktree,
+# so the binary is LDFLAGS-stamped) while every prompt was unedited (t-1).
+# t-16 rebuilds the same fixtures from setup_sh, re-drives the legs on the
+# phase head, merges this file into flow-cost.toml and deletes it. ship and
+# options are bytes-only (locked flow_set). Observed numbers only; transcript
+# fields are counted structurally with jq_flow, no content copied.
+
+[scenario]
+  repo_shape = "one scratch repo per leg, each built by setup_sh with a fixed git identity and dates and every .dross timestamp (and the date-only created/started fields) pinned, so HEAD^{tree} reproduces: the init and dross-scaffold commits came out identical (0bd2ea81, 46692cdd) across the three independent leg builds. Each repo is prompt-partials' flow module: Go module example.com/flow, 60 packages p1..p60 each with Add and TestAdd, plus apicheck whose TestP3API pins p3's exported funcs to apicheck/testdata/p3.txt. plan leg: milestone v0.1 scoped to flow-probe (committed on milestone/v0.1), phase flow-probe with a locked two-criterion spec (p3 Sub + golden, p4 Mul) and no plan. spec leg: milestone v0.1 scoped to spec-probe (p7 Clamp), phase spec-probe scaffolded with no spec.toml. quick leg: no milestone, standalone on main with no origin, so `dross protect --check main` says `not checked (gitlab)` and quick takes the direct route. Board disabled, no remote grant: every run is local."
+  wave_position = "no execute wave: each leg is one whole command on its own fixture — /dross-plan flow-probe from command to plan lock, /dross-spec spec-probe from command to spec lock, /dross-quick from command to its record-quick bookkeeping commit"
+  setup_steps = ["files <leg> -> commit init", "dross <leg> -> human: dross trust -> dross test -> commit 'dross scaffold'", "plan: milestone plan -> dross test -> commit 'v0.1: scope' (on milestone/v0.1) -> phase plan -> dross test -> commit 'flow-probe: spec locked'", "spec: milestone spec -> dross test -> commit 'v0.1: scope' (on milestone/v0.1) -> phase spec -> dross test -> commit 'spec-probe: scaffold'", "quick: no further step (main at 'dross scaffold')"]
+  commit_ident = "every setup commit runs with the env `setup.sh x ident` prints (fixture identity, 2026-01-01T00:00:00Z) as a prefix on its own `git commit` call; setup.sh exports the same env so dross's own auto-commits match"
+  session = "fresh `claude --permission-mode auto` in the leg's fixture repo, started by launch_sh in a detached tmux session (socket -L flowcost) under env -i with HOME, USER, TERM, LANG and PATH=<binary under test dir>:~/go/src/bin:~/.local/bin:/opt/homebrew/bin:/usr/bin:/bin; prompts are ~/.claude/dross/prompts (symlinked to the repo's assets). Claude Code's folder-trust dialog is answered yes before the command is typed, outside the window."
+  driver = "the legs were driven by a Claude Code agent (at the user's request, 2026-11-03), not typed by a human: drive_sh sends the command, then at each AskUserQuestion waits for the pane to be idle (no 'esc to interrupt', unchanged for 6s) and presses Enter, taking option 1 — the proposed default — every time. human_wait_s is therefore driver latency (~6-12s per question), and it is subtracted from wall_clock_s as before. t-16 must drive its after legs the same way."
+  plan_steps = ["/dross-plan flow-probe (no --panel)", "decomposition: 2 tasks in wave 1 -> proceed", "plan.toml written -> lock", "flow_end at `dross state touch \"plan locked`; the plan review it then ran falls outside the window"]
+  spec_steps = ["/dross-spec spec-probe (target given)", "c-1 accept", "c-2 accept", "c-3 accept", "anything missing -> nothing missing", "gray area (inverted bounds) -> panic (Recommended)", "c-4 accept", "deferrals -> nothing to defer", "spec.toml written -> lock", "flow_end at `dross state touch \"spec locked`"]
+  quick_steps = ["/dross-quick add Mul(a, b int) int returning a * b to p5, with a table test beside TestAdd", "approach -> proceed (Recommended)", "green", "code commit", "flow_end at the `chore(dross): record quick` bookkeeping commit, so t-5's absorbed §6 falls inside the window"]
+  flow_start = "the user entry invoking the command (/dross-plan, /dross-spec or /dross-quick)"
+  flow_end = "per leg, the first main-agent Bash call matching that leg's end_re after flow_start, inclusive of that turn: plan `state touch \"plan locked`, spec `state touch \"spec locked`, quick `record quick` (the bookkeeping commit)"
+  prompt_bytes_method = "utf8 bytes of the @-included ~/.claude/dross/prompts/<cmd>.md file attachment in the transcript"
+  jq_method = "jq -cs --arg cmd <dross-plan|dross-spec|dross-quick> --arg end_re <leg end_re> -f <filter> <transcript.jsonl> with jq_flow (prompt-partials' filter, unchanged). A turn is a distinct message.id among main-agent entries (type assistant, isSidechain false, model not <synthetic>); its tool entry is its tool_use names joined by +, or text when it has none. wall_clock_s is flow_end - flow_start minus human_wait_s, the sum over every AskUserQuestion in the window of tool_use -> its tool_result. partial_fetches counts Bash calls running `dross prompt partial`. dross_calls is the sorted set of `dross <verb> [<sub>]` invocations in the window's Bash commands. Turns and wall-clock are recorded, not gated (locked flow_set)."
+  plan_end_re = 'state touch "plan locked'
+  spec_end_re = 'state touch "spec locked'
+  quick_end_re = 'record quick'
+  setup_sh = '''
+#!/bin/sh
+# Scratch repos for prompt-budgets-rest's flow-cost record (t-1 before, t-16
+# after). prompt-partials' flow repo (sixty green packages + apicheck), built
+# once per leg so each leg starts from its own reproducible tree.
+# Usage: DROSS=<binary> setup.sh <out-dir> <step> [leg]
+# Legs: plan, spec, quick. The repo for leg L is <out-dir>/L. Steps, in order.
+# Each is followed by a commit in that repo, made with the fixed identity and
+# dates `ident` prints (eval it first), so commit SHAs and HEAD^{tree} are
+# reproducible. The dross commit gate needs a trusted, green `dross test` once
+# .dross/ exists:
+#   files <leg>   write the Go module and git-init it         -> commit "init"
+#   dross <leg>   dross init, name, runtime.mode native       -> human: dross trust;
+#                                                                dross test; commit "dross scaffold"
+#   milestone <plan|spec>  milestone v0.1 scoped to the leg's phase, on
+#                 milestone/v0.1                              -> dross test; commit "v0.1: scope"
+#   phase plan    phase flow-probe with a locked spec, no plan
+#                                                             -> dross test; commit "flow-probe: spec locked"
+#   phase spec    phase spec-probe scaffolded, no spec.toml   -> dross test; commit "spec-probe: scaffold"
+#   (quick has no phase step: a standalone pair quick on main, no origin, so
+#    `dross protect --check main` sends it down the direct route)
+# dross writes wall-clock timestamps into .dross/; every dross step pins them
+# to one fixed instant so the tree does not depend on when it was built.
+set -eu
+STEP=${2:?files, dross, milestone, phase or ident}
+IDENT='export GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.com GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.com GIT_AUTHOR_DATE=2026-01-01T00:00:00Z GIT_COMMITTER_DATE=2026-01-01T00:00:00Z'
+if [ "$STEP" = ident ]; then
+	echo "$IDENT"
+	exit 0
+fi
+# dross commits on its own too (phase create auto-commits bookkeeping): give
+# those commits the same fixed identity and dates.
+eval "$IDENT"
+DROSS=${DROSS:?set DROSS to the dross binary under test}
+OUT=${1:?out dir}
+LEG=${3:?plan, spec or quick}
+case "$LEG" in plan | spec | quick) ;; *) echo "unknown leg $LEG" >&2; exit 2 ;; esac
+
+norm() { # pin dross's timestamps in the repo's tracked .dross files
+	find .dross -type f \( -name '*.toml' -o -name '*.json' -o -name '*.md' \) ! -name local.toml -exec \
+		perl -pi -e 's/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)/2026-01-01T00:00:00Z/g; s/^(\s*(?:created|started) = ")\d{4}-\d\d-\d\d"/${1}2026-01-01"/' {} +
+}
+
+pkg() { # dir name body-of-Add
+	mkdir -p "$1"
+	cat >"$1/$2.go" <<EOF
+package $2
+
+// Add returns the sum of a and b.
+func Add(a, b int) int { return $3 }
+EOF
+	cat >"$1/$2_test.go" <<EOF
+package $2
+
+import "testing"
+
+func TestAdd(t *testing.T) {
+	for _, c := range []struct{ a, b, want int }{{1, 2, 3}, {-1, 1, 0}, {0, 0, 0}} {
+		if got := Add(c.a, c.b); got != c.want {
+			t.Errorf("Add(%d, %d) = %d, want %d", c.a, c.b, got, c.want)
+		}
+	}
+}
+EOF
+}
+
+case "$STEP" in
+files)
+	# sixty green packages. p3's exported API is pinned in a golden file
+	# outside p3 (apicheck/testdata/p3.txt).
+	rm -rf "$OUT/$LEG"
+	mkdir -p "$OUT/$LEG"
+	cd "$OUT/$LEG"
+	printf 'module example.com/flow\n\ngo 1.27\n' >go.mod
+	for i in $(seq 1 60); do pkg "p$i" "p$i" "a + b"; done
+	mkdir -p apicheck/testdata
+	printf 'Add\n' >apicheck/testdata/p3.txt
+	cat >apicheck/apicheck.go <<'EOF'
+// Package apicheck pins other packages' exported APIs.
+package apicheck
+EOF
+	cat >apicheck/api_test.go <<'EOF'
+package apicheck
+
+import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"sort"
+	"strings"
+	"testing"
+)
+
+// TestP3API pins p3's exported functions to testdata/p3.txt.
+func TestP3API(t *testing.T) {
+	fs := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fs, "../p3", func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, p := range pkgs {
+		for _, f := range p.Files {
+			for _, d := range f.Decls {
+				if fd, ok := d.(*ast.FuncDecl); ok && fd.Name.IsExported() {
+					got = append(got, fd.Name.Name)
+				}
+			}
+		}
+	}
+	sort.Strings(got)
+	b, err := os.ReadFile("testdata/p3.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Fields(string(b))
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("p3's exported API changed: got %v, want %v (apicheck/testdata/p3.txt)", got, want)
+	}
+}
+EOF
+	git init -q -b main
+	;;
+dross)
+	cd "$OUT/$LEG"
+	"$DROSS" init >/dev/null
+	# init detects the Go stack and fills [runtime] (go test -count=1 ./...).
+	perl -0pi -e 's/^  name = ""/  name = "flow"/m; s/^  mode = ""/  mode = "native"/m' .dross/project.toml
+	norm
+	;;
+milestone)
+	# milestone create stamps today's date and cuts milestone/v0.1 from main;
+	# with current_milestone set, phase create cuts the phase branch from
+	# milestone/v0.1. So the milestone file is rewritten whole (pinned date,
+	# the leg's phase and scope) on milestone/v0.1 and committed there before
+	# the phase exists — the phase branch then carries it.
+	cd "$OUT/$LEG"
+	case "$LEG" in
+	plan) PH=flow-probe SC="p3 gains Sub and p4 gains Mul, each table-tested." ;;
+	spec) PH=spec-probe SC="p7 exposes Clamp(x, lo, hi int) int that returns x bounded to [lo, hi], tested on both bounds." ;;
+	*) echo "quick has no milestone step" >&2; exit 2 ;;
+	esac
+	"$DROSS" milestone create v0.1 >/dev/null
+	git checkout -q milestone/v0.1
+	cat >.dross/milestones/v0.1.toml <<EOF
+phases = ["$PH"]
+
+[milestone]
+  version = "v0.1"
+  title = "0.1 arithmetic helpers"
+  status = "active"
+  started = "2026-01-01"
+  base = "main"
+
+[scope]
+  success_criteria = ["$SC"]
+EOF
+	"$DROSS" state set current_milestone v0.1 >/dev/null
+	norm
+	;;
+phase)
+	cd "$OUT/$LEG"
+	case "$LEG" in
+	plan)
+		# a locked two-criterion spec and no plan: /dross-plan flow-probe
+		# decomposes it from scratch.
+		"$DROSS" phase create flow-probe >/dev/null
+		cat >.dross/phases/flow-probe/spec.toml <<'EOF'
+[phase]
+  id = "flow-probe"
+  title = "flow-probe"
+  milestone = "v0.1"
+
+[[criteria]]
+  id = "c-1"
+  text = "p3 exposes Sub(a, b) returning a - b, and apicheck's golden lists it."
+
+[[criteria]]
+  id = "c-2"
+  text = "p4 exposes Mul(a, b) returning a * b."
+
+[[decisions]]
+  key = "test_shape"
+  choice = "Table tests beside each package's TestAdd."
+  why = "Matches the existing tests."
+  locked = true
+EOF
+		"$DROSS" state set current_phase flow-probe >/dev/null
+		"$DROSS" state touch "spec locked: flow-probe" >/dev/null
+		;;
+	spec)
+		# a scaffolded phase with no spec.toml; the milestone's scope names
+		# what it delivers so /dross-spec spec-probe can propose a slate.
+		"$DROSS" phase create spec-probe >/dev/null
+		;;
+	quick)
+		echo "quick has no phase step" >&2
+		exit 2
+		;;
+	esac
+	norm
+	;;
+*)
+	echo "unknown step $STEP" >&2
+	exit 2
+	;;
+esac
+'''
+  launch_sh = '''
+#!/bin/sh
+# Launch one flow-cost leg: a fresh claude session in the leg's fixture repo,
+# under env -i with the binary under test first on PATH (prompt-partials' setup).
+# Usage: launch.sh <plan|spec|quick> [binary-dir]
+set -eu
+LEG=${1:?plan, spec or quick}
+HERE=$(cd "$(dirname "$0")" && pwd)
+BIN=${2:-$HERE/../base-8eb38e9f}
+cd "$HERE/out/$LEG"
+"$BIN/dross" version
+exec env -i HOME="$HOME" USER="$USER" TERM="${TERM:-xterm-256color}" LANG="${LANG:-en_GB.UTF-8}" \
+	PATH="$BIN:$HOME/go/src/bin:$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin" \
+	claude --permission-mode auto
+'''
+  drive_sh = '''
+#!/bin/sh
+# Drive a flow-cost leg's interactive claude session through tmux.
+#   drive.sh start <leg>          new detached session running launch.sh <leg>
+#   drive.sh send <leg> <text>    type text then Enter
+#   drive.sh key <leg> <keys...>  send raw tmux keys (Enter, Down, Escape, ...)
+#   drive.sh wait <leg> [max_s]   block until the agent is idle (no "esc to
+#                                 interrupt", pane stable 6s), then print the pane tail
+#   drive.sh show <leg> [lines]   print the pane tail
+set -eu
+HERE=$(cd "$(dirname "$0")" && pwd)
+T="tmux -L flowcost"
+CMD=$1 LEG=$2
+shift 2
+case "$CMD" in
+start)
+	$T new-session -d -s "$LEG" -x 160 -y 50 "$HERE/launch.sh $LEG"
+	;;
+send)
+	$T send-keys -t "$LEG" -l "$*"
+	sleep 0.5
+	$T send-keys -t "$LEG" Enter
+	;;
+key)
+	$T send-keys -t "$LEG" "$@"
+	;;
+wait)
+	MAX=${1:-600}
+	prev="" stable=0 i=0
+	while [ $i -lt "$MAX" ]; do
+		sleep 1
+		i=$((i + 1))
+		cur=$($T capture-pane -p -t "$LEG" 2>/dev/null || echo "<pane gone>")
+		if [ "$cur" = "$prev" ] && ! printf '%s' "$cur" | grep -q 'esc to interrupt'; then
+			stable=$((stable + 1))
+		else
+			stable=0
+		fi
+		prev=$cur
+		[ $stable -ge 6 ] && break
+	done
+	echo "--- waited ${i}s (stable=$stable)"
+	printf '%s\n' "$cur" | grep -v '^\s*$' | tail -n 40
+	;;
+show)
+	$T capture-pane -p -t "$LEG" | grep -v '^\s*$' | tail -n "${1:-40}"
+	;;
+esac
+'''
+  jq_flow = '''
+def ms: (.[0:19] + "Z" | fromdateiso8601) + (.[20:23] | tonumber / 1000);
+def main: .type == "assistant" and .isSidechain == false and .message.model != "<synthetic>";
+def uses: [.message.content[]? | select(type == "object" and .type == "tool_use")];
+def bash($re): uses | any(.name == "Bash" and (.input.command | test($re)));
+def text: .message.content | if type == "string" then . else ([.[]? | select(type == "object" and .type == "text") | .text] | join("")) end;
+def dross_calls: [.[] | uses[] | select(.name == "Bash") | .input.command | [scan("(?:^|[^/\\w-])dross ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?")] | .[] | "dross " + (map(select(. != null)) | join(" "))] | unique;
+[.[] | select(.timestamp)] as $e
+| ($e | map(select(.type == "user" and (text | test("^/" + $cmd + "($|[/ ])|<command-name>/" + $cmd + "</command-name>")))) | first | .timestamp) as $start
+| ($e | map(select(main and .timestamp >= $start and bash($end_re))) | first | .timestamp) as $end
+| ($e | map(select(.timestamp >= $start and .timestamp <= $end))) as $w
+| ($w | map(select(main))) as $a
+| ($a | group_by(.message.id) | sort_by(.[0].timestamp) | map([.[] | uses[] | .name] | if length == 0 then "text" else join("+") end)) as $turns
+| ([$a[] | . as $m | uses[] | select(.name == "AskUserQuestion") | {id, t: ($m.timestamp | ms)}]) as $asks
+| ([$e[] | select(.type == "user") | . as $u | .message.content[]? | select(type == "object" and .type == "tool_result") | {id: .tool_use_id, t: ($u.timestamp | ms)}]) as $results
+| ([$asks[] as $q | $results[] | select(.id == $q.id) | .t - $q.t] | add // 0) as $wait
+| ([$e[] | select(.type == "attachment" and .attachment.type == "file" and (.attachment.filename | test("/dross/prompts/" + $cmd[6:] + "[.]md$"))) | .attachment.content.file.content | utf8bytelength] | first) as $pb
+| {flow_start: $start, flow_end: $end, prompt_bytes: $pb,
+   model: ([$a[] | .message.model] | unique),
+   dross_calls: ($a | dross_calls), agent_turns: ($turns | length), turn_tools: $turns, human_wait_s: $wait,
+   wall_clock_s: ((($end | ms) - ($start | ms)) - $wait),
+   partial_fetches: ([$a[] | uses[] | select(.name == "Bash" and (.input.command | test("(?:^|[^/\\w-])dross prompt partial")))] | length),
+   log_reads: ([$a[] | uses[] | select((.name == "Read" and ((.input.file_path // "") | test("/[.]dross/logs/"))) or (.name == "Bash" and (.input.command | test("[.]dross/logs"))))] | length)}
+'''
+
+[before]
+  binary_version = "dross 0.1.0.0 (commit 8eb38e9f, built 2026-11-03T17:27:42Z)"
+  session_id = "854edbea-8e8e-4a85-8494-d9742a18a7bc"
+  fixture_tree = "07647ee26d0d42953b443fab62712e15f081a4ad"
+  model = "claude-opus-5-5"
+  effort = "high"
+  claude_code_version = "2.1.317"
+  flow_start = "2026-11-03T19:30:05.377Z"
+  flow_end = "2026-11-03T19:31:11.322Z"
+  prompt_bytes = 21154
+  partial_fetches = 0
+  agent_turns = 8
+  turn_tools = ["Bash","Bash","Bash","AskUserQuestion","Write","AskUserQuestion","Bash","Bash"]
+  wall_clock_s = 44
+  human_wait_s = 22
+  log_reads = 0
+  dross_calls = ["dross interaction show","dross issue phase","dross rule show","dross state set","dross state touch","dross validate"]
+  end_re = 'state touch "plan locked'
+  verdict = "plan locked"
+
+[quick_before]
+  binary_version = "dross 0.1.0.0 (commit 8eb38e9f, built 2026-11-03T17:27:42Z)"
+  session_id = "9bae0677-817c-46e3-be6d-76acca02d4db"
+  fixture_tree = "a0fdeec0eeec41ad38a9c78c3790b4505f92da08"
+  model = "claude-opus-5-5"
+  effort = "high"
+  claude_code_version = "2.1.317"
+  flow_start = "2026-11-03T19:36:17.673Z"
+  flow_end = "2026-11-03T19:37:39.957Z"
+  prompt_bytes = 18098
+  partial_fetches = 0
+  agent_turns = 18
+  turn_tools = ["Bash","Bash","Bash","Bash","Bash","Bash","AskUserQuestion","Read+Read","Edit+Edit","Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash"]
+  wall_clock_s = 70.9
+  human_wait_s = 11.4
+  log_reads = 0
+  dross_calls = ["dross base-branch","dross interaction show","dross issue quick","dross local set","dross protect","dross quick begin","dross quick end","dross rule show","dross state bump","dross state show","dross state touch","dross test","dross trust","dross validate"]
+  end_re = 'record quick'
+  verdict = "committed"
+
+[spec_before]
+  binary_version = "dross 0.1.0.0 (commit 8eb38e9f, built 2026-11-03T17:27:42Z)"
+  session_id = "a3003ea3-f1a1-4e0e-81ff-89ccc3d960c9"
+  fixture_tree = "ed90e26ac4c3e13116f4c9faa357e2c052c5d785"
+  model = "claude-opus-5-5"
+  effort = "high"
+  claude_code_version = "2.1.317"
+  flow_start = "2026-11-03T19:33:12.361Z"
+  flow_end = "2026-11-03T19:35:33.587Z"
+  prompt_bytes = 19075
+  partial_fetches = 0
+  agent_turns = 14
+  turn_tools = ["Bash","Bash","Bash","Bash","AskUserQuestion","AskUserQuestion","AskUserQuestion","AskUserQuestion","AskUserQuestion","AskUserQuestion","AskUserQuestion","Write+Bash","AskUserQuestion","Bash"]
+  wall_clock_s = 48.8
+  human_wait_s = 92.4
+  log_reads = 0
+  dross_calls = ["dross deferred list","dross interaction show","dross rule show","dross state set","dross state touch","dross validate"]
+  end_re = 'state touch "spec locked'
+  verdict = "spec locked"
+  scope = "target given, no deferral"
+
+# ship and options: loaded bytes only, no session (locked flow_set) —
+# `git show 8eb38e9f:assets/prompts/<p>.md | wc -c`.
+[bytes_only]
+  ship_before = 23006
+  options_before = 28231
