@@ -221,7 +221,7 @@ Replace the promptByteBudget map and the exact-set {execute, verify} guard with 
     "if the glob silently matches nothing, the test fails: the real-FS run must visit at least 24 base prompts, execute.md among them",
   ]
   depends_on = ["t-10", "t-11", "t-12", "t-13", "t-14"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-16"

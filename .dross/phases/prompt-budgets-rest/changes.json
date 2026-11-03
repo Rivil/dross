@@ -108,6 +108,21 @@
         }
       ]
     },
+    "t-15": {
+      "files": [
+        "assets/budget_test.go"
+      ],
+      "commit": "5a8363f1",
+      "completed_at": "2026-11-03T21:18:56.121892Z",
+      "landmarks": [
+        {
+          "feature": "prompt byte budget",
+          "symbol": "budgetProblems",
+          "loc": "assets/budget_test.go:23",
+          "what": "one 15,000-byte cap enforced on every base prompt by glob, partials exempt, no overrides"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "assets/conservation_test.go",
@@ -465,6 +480,33 @@
           "severity": "NOTE",
           "criterion": "c-2",
           "text": "The comment on TestOptionsNamesEveryLocalKeyInline says the three hand-listed keys are 'the ones it refuses', but dross local set also refuses trusted_lane_commands and trusted_lane_installs. Those two are named only in _options.lanes.md and are not checked in the bare §14. That matches the test_contract's list of keys, but the comment overstates what the test covers.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-15": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPromptByteBudgetEnumerates checks only the count of problems, not which files are named. Each visited file yields at most one problem, so a count equal to the number of files still proves every file was reported.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The real tree has exactly 24 base prompts, so the floor of 24 in TestPromptByteBudget has no slack: removing or merging any base prompt will trip it, which is intended as a guard but will need updating on purpose.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Per-file subtests pick their problems by prefix match on the file path. This is correct here, but a problem not tied to a file (a glob error) only shows up through the visited-count fatal, not a subtest.",
           "resolution": "non-blocking, left"
         }
       ]
