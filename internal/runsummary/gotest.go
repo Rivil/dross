@@ -29,6 +29,8 @@ type goTest struct {
 	verbose     bool     // -v output: a test's lines precede its --- FAIL
 	orphan      *Failure // lines since the last result line that belong to no test
 	block       *Failure // the `# pkg` block being read
+	heading     string   // a one-word "# X" waiting on its next line
+	cut         string   // the package whose block a foreign line closed
 	blocks      map[string]bool
 	sinceResult int // failures added since the last package result line
 }
@@ -45,9 +47,27 @@ var (
 	goFail     = regexp.MustCompile(`^FAIL\t(\S+)(?:\t| \[)`)
 	goTestFail = regexp.MustCompile(`^( *)--- FAIL: (\S+) \(`)
 	goBlock    = regexp.MustCompile(`^# ([^\s\[]+)(?: \[[^\]]+\])?$`)
+	// goCompiler is a line a `# pkg` block is made of: a file:line diagnostic,
+	// an indented continuation, vet's own "# [pkg]" header, or the compiler's
+	// cut-off note. Any other line is the next package's, never the block's.
+	goCompiler = regexp.MustCompile(`^(?:\S+\.go:\d+(?::\d+)?: |[ \t]|# \[|vet: |too many errors)`)
+	// goDiag is a compiler diagnostic, one of the two lines that prove a
+	// one-word "# X" heads a build block (vet's "# [X]" is the other).
+	goDiag = regexp.MustCompile(`^\S+\.go:\d+`)
 )
 
 func (g *goTest) Feed(line string) {
+	// A one-word "# X" is a build block only where one can be: when a
+	// compiler line follows it, or vet's own "# [X]" header for the same
+	// package. A test printing "# Results" is text.
+	if h := g.heading; h != "" {
+		g.heading = ""
+		if goDiag.MatchString(line) || line == "# ["+goBlock.FindStringSubmatch(h)[1]+"]" {
+			g.openBlock(h)
+		} else {
+			g.text(h)
+		}
+	}
 	switch {
 	case goOK.MatchString(line):
 		g.result()
@@ -63,6 +83,7 @@ func (g *goTest) Feed(line string) {
 		pkg := goFail.FindStringSubmatch(line)[1]
 		g.closeTests()
 		g.closeBlock()
+		g.rejoin(pkg)
 		if (g.sinceResult == 0 || g.timedOut) && !g.blocks[pkg] && g.orphan != nil && len(g.orphan.Lines) > 0 {
 			g.orphan.Name = pkg
 			g.add(*g.orphan)
@@ -70,13 +91,11 @@ func (g *goTest) Feed(line string) {
 		g.result()
 		g.failed++
 	case goBlock.MatchString(line):
-		g.closeTests()
-		g.closeBlock()
-		if g.blocks == nil {
-			g.blocks = map[string]bool{}
+		if !strings.ContainsAny(goBlock.FindStringSubmatch(line)[1], "./") {
+			g.heading = line
+			return
 		}
-		g.blocks[goBlock.FindStringSubmatch(line)[1]] = true
-		g.block = &Failure{Name: strings.TrimPrefix(line, "# ")}
+		g.openBlock(line)
 	case goTestFail.MatchString(line):
 		g.closeBlock()
 		m := goTestFail.FindStringSubmatch(line)
@@ -87,6 +106,39 @@ func (g *goTest) Feed(line string) {
 	default:
 		g.text(line)
 	}
+}
+
+// rejoin hands the lines after a cut block back to it when the next result
+// line is that block's own package failing: they were its error, not another
+// package's output.
+func (g *goTest) rejoin(pkg string) {
+	cut := g.cut
+	g.cut = ""
+	if cut != pkg || g.orphan == nil || len(g.orphan.Lines) == 0 {
+		return
+	}
+	for i := len(g.fs.Kept) - 1; i >= 0; i-- {
+		k := &g.fs.Kept[i]
+		if k.Name == pkg || strings.HasPrefix(k.Name, pkg+" [") {
+			for _, l := range g.orphan.Lines {
+				k.Line(l)
+			}
+			k.More += g.orphan.More
+			break
+		}
+	}
+	g.orphan = nil
+}
+
+// openBlock starts the `# pkg` block headed by line.
+func (g *goTest) openBlock(line string) {
+	g.closeTests()
+	g.closeBlock()
+	if g.blocks == nil {
+		g.blocks = map[string]bool{}
+	}
+	g.blocks[goBlock.FindStringSubmatch(line)[1]] = true
+	g.block = &Failure{Name: strings.TrimPrefix(line, "# ")}
 }
 
 // text places a line that is not a result or a header.
@@ -102,8 +154,18 @@ func (g *goTest) text(line string) {
 		g.orphan, g.timedOut = &Failure{}, true
 	}
 	if g.block != nil {
-		g.block.Line(line)
-		return
+		if goCompiler.MatchString(line) || (len(g.block.Lines) == 0 && g.block.More == 0) {
+			g.block.Line(line)
+			return
+		}
+		// The next package's first line — a TestMain's output — ends the
+		// block; it belongs to that package, which has failed nothing yet. If
+		// the block's own package fails next instead, rejoin takes the lines
+		// back: a linker or cgo error is not file:line shaped.
+		g.cut = goBlock.FindStringSubmatch("# " + g.block.Name)[1]
+		g.closeBlock()
+		g.sinceResult = 0
+		g.orphan = nil
 	}
 	if n := len(g.stack); n > 0 {
 		top := g.stack[n-1]
@@ -167,6 +229,7 @@ func (g *goTest) add(f Failure) {
 
 // result marks a package result line: what came before it is settled.
 func (g *goTest) result() {
+	g.cut = ""
 	g.closeTests()
 	g.closeBlock()
 	g.results++
@@ -181,6 +244,10 @@ func (g *goTest) result() {
 func (g *goTest) Claims() bool { return g.results > 0 && !g.verbose }
 
 func (g *goTest) Result() Result {
+	if h := g.heading; h != "" {
+		g.heading = ""
+		g.text(h)
+	}
 	g.closeTests()
 	g.closeBlock()
 	counts := []string{fmt.Sprintf("%d ok", g.ok)}

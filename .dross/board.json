@@ -70,6 +70,7 @@
     "survivor-lifecycle": "DRO-10",
     "test-lane-config": "DRO-191",
     "test-output-summaries": "DRO-963",
+    "test-summary-parsers": "DRO-1051",
     "tool-gate-hooks": "DRO-787",
     "tool-output-not-persisted": "DRO-378",
     "tracked-path-containment": "DRO-355",
@@ -2843,6 +2844,81 @@
       "issue": "DRO-971",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-1": {
+      "issue": "DRO-1052",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-10": {
+      "issue": "DRO-1061",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-11": {
+      "issue": "DRO-1062",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-12": {
+      "issue": "DRO-1063",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-13": {
+      "issue": "DRO-1064",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-14": {
+      "issue": "DRO-1065",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-15": {
+      "issue": "DRO-1066",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-2": {
+      "issue": "DRO-1053",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-3": {
+      "issue": "DRO-1054",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-4": {
+      "issue": "DRO-1055",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-5": {
+      "issue": "DRO-1056",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-6": {
+      "issue": "DRO-1057",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-7": {
+      "issue": "DRO-1058",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-8": {
+      "issue": "DRO-1059",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-summary-parsers/t-9": {
+      "issue": "DRO-1060",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "tool-gate-hooks/t-1": {
       "issue": "DRO-789",

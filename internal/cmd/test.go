@@ -698,6 +698,7 @@ func runOneLane(tr *testRun, target *remote.Target, repoDir string, lane project
 	if target == nil {
 		tr.spawn(line, false)
 		if err := spawnLocal(repoDir, line, tr.out, tr.out); err != nil {
+			tr.failed()
 			return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test lane %q failed: %w", lane.Name, err)}
 		}
 		return nil
@@ -722,6 +723,7 @@ func runLanePrepare(tr *testRun, target *remote.Target, repoDir string, lane pro
 	if target == nil {
 		tr.spawn(lane.Prepare, true)
 		if err := spawnLocal(repoDir, lane.Prepare, tr.out, tr.out); err != nil {
+			tr.failed()
 			return prepareFailure(lane, err)
 		}
 		return nil
@@ -859,6 +861,7 @@ func runTest(tr *testRun, root, repoDir, projectName, line string, local bool, w
 	if target == nil {
 		tr.spawn(line, false)
 		if err := spawnLocal(repoDir, line, tr.out, tr.out); err != nil {
+			tr.failed()
 			return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test suite failed: %w", err)}
 		}
 		return nil
@@ -1019,6 +1022,7 @@ func syncTreeTo(tr *testRun, t remote.Target, repoDir string) error {
 	defer cleanup()
 	tr.spawn(strings.Join(sync, " "), true)
 	if err := spawnRemote(sync, "", tr.out, tr.out); err != nil {
+		tr.failed()
 		return remoteFailure("rsync", t.Host, err)
 	}
 	return nil
@@ -1073,6 +1077,7 @@ func runRemoteLine(tr *testRun, t remote.Target, line string, aux bool) error {
 	}
 	tr.spawn(line+"  (on "+t.Host+")", aux)
 	if err := spawnRemote(ssh, script, tr.out, tr.out); err != nil {
+		tr.failed()
 		return remoteFailure("ssh", t.Host, err)
 	}
 	return nil

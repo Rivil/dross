@@ -1,0 +1,45 @@
+# captured: flutter@3.41.6+vitest@4.1.12 bash scripts/dross-test.sh (feastahead@34b34d20) args: phone/test/core/util web/src/lib/error-coerce.test.ts — scoped selectors, one spawn running both lanes: the bare run is not green on this machine (3.44 cannot compile lucide_icons; 3.41.6 fails 82 phone tests, and set -e stops before the web lane)
+── phone lane: flutter test test/core/util ──
+00:00 +0: loading /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart
+00:00 +0: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +1: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Vietnamese combining tone/horn marks and lowercases
+00:00 +2: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) leaves plain ASCII untouched (aside from case)
+00:00 +3: escapeLikePattern (uat-session-7-fixes t-5, S7-13) escapes % so it matches literally, not as a LIKE wildcard
+00:00 +4: escapeLikePattern (uat-session-7-fixes t-5, S7-13) escapes _ so it matches literally, not as a LIKE wildcard
+00:00 +5: escapeLikePattern (uat-session-7-fixes t-5, S7-13) escapes a literal backslash first, so it is not misread as an escape char
+00:00 +6: escapeLikePattern (uat-session-7-fixes t-5, S7-13) leaves a plain term with no wildcard characters unchanged
+00:00 +7: All tests passed!
+ WARN  Unsupported engine: wanted: {"node":">=24.22.1"} (current: {"node":"v24.14.0","pnpm":"10.33.4"})
+
+> feastahead@2.3.15 paraglide:compile /Users/rivil/Development/feastahead/web
+> paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
+ℹ [paraglide-js] Compiling inlang project ...
+✔ [paraglide-js] Successfully compiled inlang project.
+── web lane: vitest src/lib/error-coerce.test.ts ──
+ WARN  Unsupported engine: wanted: {"node":">=24.22.1"} (current: {"node":"v24.14.0","pnpm":"10.33.4"})
+
+> feastahead@2.3.15 test /Users/rivil/Development/feastahead/web
+> vitest run src/lib/error-coerce.test.ts
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/test-split/partition" without a file extension (vitest.config.ts:11:27). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/test-split/partition" without a file extension (vitest.config.ts:11:27). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/test-split/partition" without a file extension (vitest.config.ts:11:27). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/test-split/partition" without a file extension (vitest.config.ts:11:27). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.12 /Users/rivil/Development/feastahead/web
+
+
+ Test Files  1 passed (1)
+      Tests  13 passed (13)
+   Start at  11:53:07
+   Duration  150ms (transform 11ms, setup 12ms, import 7ms, tests 5ms, environment 0ms)
+

@@ -1,0 +1,152 @@
+# captured: pytest@9.1.1 docker compose --profile test run --rm test pytest (sunday-rider@5720fae) break: tests/test_parsing_keywords.py:352 adds `assert "gravel" not in sentence, f.unrecognised` (parametrized: 2 cases fail); :379 expects ["to the moon!"]
+ Container sundayride-test-run-7ecb06a10710 Creating 
+ Container sundayride-test-run-7ecb06a10710 Created 
+============================= test session starts ==============================
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
+rootdir: /repo/api
+configfile: pyproject.toml
+testpaths: tests
+plugins: asyncio-1.4.0, anyio-4.14.2
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1982 items
+
+tests/test_api.py ...................................................... [  2%]
+........................................................................ [  6%]
+........................................................................ [  9%]
+..............................................................           [ 13%]
+tests/test_auth.py .....................                                 [ 14%]
+tests/test_boot.py ............                                          [ 14%]
+tests/test_check_digests.py ..............                               [ 15%]
+tests/test_cli.py ...........                                            [ 16%]
+tests/test_config.py .................................................   [ 18%]
+tests/test_db.py ....................................................... [ 21%]
+............................................................             [ 24%]
+tests/test_deploy_bundle.py ............................................ [ 26%]
+............                                                             [ 27%]
+tests/test_deploy_rehearsal.py ......................................... [ 29%]
+.............................................                            [ 31%]
+tests/test_deploy_script.py ..................................           [ 33%]
+tests/test_describe.py .....................                             [ 34%]
+tests/test_distance_single_source.py .....                               [ 34%]
+tests/test_docs.py ..................................................... [ 37%]
+...................................                                      [ 38%]
+tests/test_emailchange.py ...........                                    [ 39%]
+tests/test_emails.py ..........................                          [ 40%]
+tests/test_env_example.py ........                                       [ 41%]
+tests/test_facts.py ...........................                          [ 42%]
+tests/test_fetch_bundle.py ............                                  [ 43%]
+tests/test_filters.py ................................                   [ 44%]
+tests/test_fitout.py ...........                                         [ 45%]
+tests/test_generate.py .................                                 [ 46%]
+tests/test_gh.py ................................                        [ 47%]
+tests/test_gpxout.py ...........                                         [ 48%]
+tests/test_history.py ...................................                [ 50%]
+tests/test_image_contents.py ..........................                  [ 51%]
+tests/test_image_pins.py .................                               [ 52%]
+tests/test_llm_boundary.py ...............................               [ 53%]
+tests/test_orchestrators.py .....                                        [ 54%]
+tests/test_osm_source_resolution.py .........................            [ 55%]
+tests/test_outbox.py ................................................... [ 57%]
+........................................................................ [ 61%]
+..                                                                       [ 61%]
+tests/test_parsing_keywords.py ........................................F [ 63%]
+...F.............F........                                               [ 65%]
+tests/test_parsing_llm.py ............................                   [ 66%]
+tests/test_parsing_resolve.py ............................               [ 67%]
+tests/test_passwords.py ................                                 [ 68%]
+tests/test_privacy_config.py .............                               [ 69%]
+tests/test_privacy_drift.py ......                                       [ 69%]
+tests/test_privacy_inventory.py .........................                [ 70%]
+tests/test_privacy_note.py .............                                 [ 71%]
+tests/test_privacy_render.py ...............                             [ 72%]
+tests/test_privacy_route.py ..........                                   [ 72%]
+tests/test_projection_sources.py .......                                 [ 73%]
+tests/test_provenance.py ............................                    [ 74%]
+tests/test_ratelimit.py ........                                         [ 75%]
+tests/test_rehearsal_seed.py .............................               [ 76%]
+tests/test_reimport_script.py .............                              [ 77%]
+tests/test_resend.py ................................................... [ 79%]
+.........                                                                [ 80%]
+tests/test_resets.py ...........................                         [ 81%]
+tests/test_scoring.py ..........................................         [ 83%]
+tests/test_strava.py .......................................             [ 85%]
+tests/test_timemodel.py ..............................                   [ 87%]
+tests/test_users.py .................................................... [ 89%]
+........................................................................ [ 93%]
+................................                                         [ 95%]
+tests/test_variety.py ..............                                     [ 95%]
+tests/test_verify_elevation.py ............                              [ 96%]
+tests/test_web.py ...................................................... [ 99%]
+...................                                                      [100%]
+
+=================================== FAILURES ===================================
+_ test_unrecognised_names_the_ignored_clause[2h gravel ride ending at the pub-2h gravel ride, ending at the pub-ending at the pub] _
+
+sentence = '2h gravel ride ending at the pub'
+comma_form = '2h gravel ride, ending at the pub', ignored = 'ending at the pub'
+
+    @pytest.mark.parametrize(("sentence", "comma_form", "ignored"), _IGNORED_CLAUSES)
+    def test_unrecognised_names_the_ignored_clause(
+        sentence: str, comma_form: str, ignored: str
+    ) -> None:
+        """Every one of these returned [] before span subtraction landed.
+    
+        Containment, not equality: the surviving run may carry leading words that
+        are not filler end-to-end ("ride ending at the pub"). Demanding equality
+        would force trimming filler off a run's edges, which eats real clauses.
+        """
+        f = parse_keywords(sentence)
+        assert f.unrecognised, sentence
+        assert any(ignored in clause for clause in f.unrecognised), f.unrecognised
+>       assert "gravel" not in sentence, f.unrecognised
+E       AssertionError: ['ride ending at the pub']
+E       assert 'gravel' not in '2h gravel r...g at the pub'
+E         
+E         'gravel' is contained here:
+E           2h gravel ride ending at the pub
+E         ?    ++++++
+
+tests/test_parsing_keywords.py:353: AssertionError
+_ test_unrecognised_names_the_ignored_clause[gravel 90 min in the rain-gravel 90 min, in the rain-in the rain] _
+
+sentence = 'gravel 90 min in the rain'
+comma_form = 'gravel 90 min, in the rain', ignored = 'in the rain'
+
+    @pytest.mark.parametrize(("sentence", "comma_form", "ignored"), _IGNORED_CLAUSES)
+    def test_unrecognised_names_the_ignored_clause(
+        sentence: str, comma_form: str, ignored: str
+    ) -> None:
+        """Every one of these returned [] before span subtraction landed.
+    
+        Containment, not equality: the surviving run may carry leading words that
+        are not filler end-to-end ("ride ending at the pub"). Demanding equality
+        would force trimming filler off a run's edges, which eats real clauses.
+        """
+        f = parse_keywords(sentence)
+        assert f.unrecognised, sentence
+        assert any(ignored in clause for clause in f.unrecognised), f.unrecognised
+>       assert "gravel" not in sentence, f.unrecognised
+E       AssertionError: ['in the rain']
+E       assert 'gravel' not in 'gravel 90 min in the rain'
+E         
+E         'gravel' is contained here:
+E           gravel 90 min in the rain
+E         ? ++++++
+
+tests/test_parsing_keywords.py:353: AssertionError
+______________________ test_comma_form_is_pinned_exactly _______________________
+
+    def test_comma_form_is_pinned_exactly() -> None:
+>       assert parse_keywords("gravel, to the moon").unrecognised == ["to the moon!"]
+E       AssertionError: assert ['to the moon'] == ['to the moon!']
+E         
+E         At index 0 diff: 'to the moon' != 'to the moon!'
+E         Use -v to get more diff
+
+tests/test_parsing_keywords.py:380: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_parsing_keywords.py::test_unrecognised_names_the_ignored_clause[2h gravel ride ending at the pub-2h gravel ride, ending at the pub-ending at the pub]
+FAILED tests/test_parsing_keywords.py::test_unrecognised_names_the_ignored_clause[gravel 90 min in the rain-gravel 90 min, in the rain-in the rain]
+FAILED tests/test_parsing_keywords.py::test_comma_form_is_pinned_exactly - As...
+======================= 3 failed, 1979 passed in 59.61s ========================
+

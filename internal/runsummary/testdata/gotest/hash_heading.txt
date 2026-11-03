@@ -1,0 +1,8 @@
+# captured: go1.27.1 go test -count=1 ./... (scratch module example.com/heading, HEADING_RED=1: TestReport prints "# Results" then fails)
+# Results
+all rows matched
+--- FAIL: TestReport (0.00s)
+    h_test.go:13: HEADING-MARK: row 3 mismatched
+FAIL
+FAIL	example.com/heading/h	0.052s
+FAIL

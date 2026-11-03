@@ -3,6 +3,7 @@ package runsummary
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -209,16 +210,22 @@ func TestMassBreakSize(t *testing.T) {
 	withParsers(t, newFake)
 	s := NewSegment()
 	line := []byte("\t" + strings.Repeat("y", 1999) + "\n")
+	longLog := "/" + strings.Repeat("l", 199)
 	for i := 0; i < 500; i++ {
-		fmt.Fprintf(s, "FAIL fail-%03d\n", i)
+		fmt.Fprintf(s, "FAIL fail-%03d-%s\n", i, strings.Repeat("n", 300))
 		for j := 0; j < 100; j++ {
 			s.Write(line)
 		}
 	}
 	s.Close()
-	out := Render(Outcome{Exit: 1, Ran: true}, []*Segment{s}, &Budget{}, logPath, time.Second)
+	out := Render(Outcome{Exit: 1, Ran: true}, []*Segment{s}, &Budget{}, longLog, time.Second)
 	if n := strings.Count(out, "\n✗ "); n != 10 {
 		t.Fatalf("%d failure blocks, want exactly 10", n)
+	}
+	for i, b := range printedBlocks(out) {
+		if len(b) > BlockBytes {
+			t.Errorf("block %d prints %d bytes, want ≤ %d", i, len(b), BlockBytes)
+		}
 	}
 	if n := len(outLines(out)); n > 330 {
 		t.Fatalf("%d lines, want ≤ 330", n)
@@ -226,7 +233,7 @@ func TestMassBreakSize(t *testing.T) {
 	if len(out) > 30000 {
 		t.Fatalf("%d bytes, want ≤ 30,000", len(out))
 	}
-	if !hasLine(out, "+490 "+MoreFailingPrefix+" "+logPath) {
+	if !hasLine(out, "+490 "+MoreFailingPrefix+" "+longLog) {
 		t.Fatalf("no +490 more-failing line:\n%s", out[len(out)-400:])
 	}
 }
@@ -236,7 +243,10 @@ func TestBlockByteShare(t *testing.T) {
 	t.Run("long lines stop at the byte share", func(t *testing.T) {
 		out := Render(Outcome{Exit: 1, Ran: true}, []*Segment{segment(failures(1, 30, 240))}, &Budget{}, logPath, time.Second)
 		ls := outLines(out)
-		fit := BlockBytes / 241
+		// The name and the marker count toward the block's bytes too.
+		name := len("✗ fail-000") + 1
+		marker := len(fmt.Sprintf("… %d %s %s", 30, MoreLinesPrefix, logPath)) + 1
+		fit := (BlockBytes - name - marker) / 241
 		if ls[1] != "✗ fail-000" {
 			t.Fatalf("name line %q", ls[1])
 		}
@@ -321,11 +331,19 @@ func TestStripsANSIAndCR(t *testing.T) {
 	}
 }
 
+// TestAmbiguousClaimFallsBack: a segment two runners claim is merged, not
+// guessed between — but the merged result keeps the fallback rules: no
+// failure under a non-zero exit is still the fallback, exit 0 is PASS with
+// both runners' counts.
 func TestAmbiguousClaimFallsBack(t *testing.T) {
 	withParsers(t, newFake, newFake)
-	out := Render(Outcome{Exit: 0, Ran: true}, []*Segment{segment("ok a\nok b\n")}, &Budget{}, logPath, time.Second)
-	if !strings.HasPrefix(out, "exit 0 ") || strings.Contains(out, "PASS") || strings.Contains(out, "2 ok") {
-		t.Fatalf("two claims did not fall back:\n%s", out)
+	out := Render(Outcome{Exit: 1, Ran: true}, []*Segment{segment("ok a\nok b\n")}, &Budget{}, logPath, time.Second)
+	if !strings.HasPrefix(out, "exit 1 · no failing test reported") || strings.Contains(out, "PASS") {
+		t.Fatalf("two claims, no failure, exit 1 did not fall back:\n%s", out)
+	}
+	out = Render(Outcome{Exit: 0, Ran: true}, []*Segment{segment("ok a\nok b\n")}, &Budget{}, logPath, time.Second)
+	if !strings.HasPrefix(out, "PASS · fake: 2 ok · fake: 2 ok · ") {
+		t.Fatalf("two claims at exit 0 did not print both counts:\n%s", out)
 	}
 }
 
@@ -384,9 +402,180 @@ func TestClockFormat(t *testing.T) {
 	}
 }
 
+// TestHeaderLastResort: a tail so long that even runner names alone overflow
+// LineCut still gets lead, every runner's name and the tail — the printer cuts
+// the line, the header drops nothing.
+func TestHeaderLastResort(t *testing.T) {
+	rs := []Result{{Runner: "dart test", Counts: []string{"+20 -2"}}, {Runner: "vitest", Counts: []string{"Tests 1 failed (1)"}}}
+	lead, tail := "FAIL (exit 1) · ", " · "+strings.Repeat("t", LineCut)
+	if got, want := header(lead, rs, tail), lead+"dart test · vitest"+tail; got != want {
+		t.Fatalf("header = %q, want %q", got, want)
+	}
+}
+
+// TestCountsEmptyRunnerAndCounts: a result with no Runner adds its counts
+// unlabelled — an empty part when it has none — and a result with no counts
+// prints its runner name alone.
+func TestCountsEmptyRunnerAndCounts(t *testing.T) {
+	rs := []Result{
+		{Runner: "go test", Counts: []string{"1 ok"}},
+		{Runner: ""},
+		{Runner: "", Counts: []string{"3 ok"}},
+		{Runner: "pytest"},
+	}
+	if got, want := counts(rs, -1), "go test: 1 ok ·  · 3 ok · pytest"; got != want {
+		t.Fatalf("counts = %q, want %q", got, want)
+	}
+}
+
 func TestCutKeepsRunes(t *testing.T) {
 	s := strings.Repeat("a", LineCut-1) + "é"
 	if got := Cut(s); got != strings.Repeat("a", LineCut-1) {
 		t.Fatalf("Cut split a rune: %q", got[len(got)-3:])
+	}
+}
+
+// printedBlocks splits rendered output into its failure blocks, each from its
+// "✗ " line through the line before the next block or the closing lines.
+func printedBlocks(out string) []string {
+	var blocks []string
+	var cur *strings.Builder
+	for _, l := range outLines(out) {
+		switch {
+		case strings.HasPrefix(l, "✗ "):
+			if cur != nil {
+				blocks = append(blocks, cur.String())
+			}
+			cur = &strings.Builder{}
+		case cur == nil:
+			continue
+		case strings.HasPrefix(l, "log: ") || strings.Contains(l, " "+MoreFailingPrefix+" "):
+			blocks = append(blocks, cur.String())
+			cur = nil
+			continue
+		}
+		cur.WriteString(l + "\n")
+	}
+	if cur != nil {
+		blocks = append(blocks, cur.String())
+	}
+	return blocks
+}
+
+// renderOne renders a single failure through Render.
+func renderOne(f Failure, log string) string {
+	p := &fake{claimed: true}
+	p.fs.Add(f)
+	s := &Segment{parsers: []Parser{p}}
+	s.Close()
+	return Render(Outcome{Exit: 1, Ran: true}, []*Segment{s}, &Budget{}, log, time.Second)
+}
+
+// fullLines is a failure holding n kept lines of width bytes each.
+func fullLines(name string, n, width int) Failure {
+	f := Failure{Name: name}
+	for i := 0; i < n; i++ {
+		f.Lines = append(f.Lines, strings.Repeat("z", width))
+	}
+	return f
+}
+
+// TestWorstCaseBlockBytes: names past LineCut, every line at LineCut and a
+// 200-byte log path still print every block, ✗ through marker, within
+// BlockBytes — and ten blocks stay under 30 KB.
+func TestWorstCaseBlockBytes(t *testing.T) {
+	withParsers(t, newFake)
+	longLog := "/" + strings.Repeat("l", 199)
+	var b strings.Builder
+	for i := 0; i < 14; i++ {
+		fmt.Fprintf(&b, "FAIL fail-%03d-%s\n", i, strings.Repeat("n", 400))
+		for j := 0; j < 40; j++ {
+			b.WriteString("\t" + strings.Repeat("x", LineCut-1) + "\n")
+		}
+	}
+	out := Render(Outcome{Exit: 1, Ran: true}, []*Segment{segment(b.String())}, &Budget{}, longLog, time.Second)
+	blocks := printedBlocks(out)
+	if len(blocks) != 10 || strings.Count(out, "\n✗ ") != 10 {
+		t.Fatalf("%d blocks, want exactly 10", len(blocks))
+	}
+	for i, blk := range blocks {
+		if len(blk) > BlockBytes {
+			t.Errorf("block %d prints %d bytes, want ≤ %d", i, len(blk), BlockBytes)
+		}
+	}
+	if len(out) > 30000 {
+		t.Fatalf("%d bytes, want ≤ 30,000", len(out))
+	}
+}
+
+// TestBlockNameCounts: a long name costs output lines.
+func TestBlockNameCounts(t *testing.T) {
+	short := renderOne(fullLines("n", 30, 200), logPath)
+	long := renderOne(fullLines(strings.Repeat("n", 240), 30, 200), logPath)
+	if a, b := len(outLines(long)), len(outLines(short)); a >= b {
+		t.Fatalf("a 240-byte name prints %d lines, a 1-byte one %d; want strictly fewer", a, b)
+	}
+}
+
+// TestBlockMarkerCounts: a long log path in the marker costs output lines.
+func TestBlockMarkerCounts(t *testing.T) {
+	short := renderOne(fullLines("n", 30, 200), "/l")
+	long := renderOne(fullLines("n", 30, 200), "/"+strings.Repeat("l", 199))
+	if a, b := len(outLines(long)), len(outLines(short)); a >= b {
+		t.Fatalf("a 200-byte log path prints %d lines, a 2-byte one %d; want strictly fewer", a, b)
+	}
+}
+
+// TestBlockBoundCountsDropped: lines the bound drops join the marker's count.
+func TestBlockBoundCountsDropped(t *testing.T) {
+	f := fullLines("n", 25, 200)
+	f.More = 7
+	out := renderOne(f, logPath)
+	kept := 0
+	for _, l := range outLines(out) {
+		if l == strings.Repeat("z", 200) {
+			kept++
+		}
+	}
+	want := fmt.Sprintf("… %d %s %s", 7+25-kept, MoreLinesPrefix, logPath)
+	if kept == 25 || !hasLine(out, want) {
+		t.Fatalf("kept %d of 25, want some dropped and the marker %q:\n%s", kept, want, out)
+	}
+}
+
+// TestBlockBoundKeepsSmallBlock: a block that fits prints unchanged.
+func TestBlockBoundKeepsSmallBlock(t *testing.T) {
+	out := renderOne(Failure{Name: "small", Lines: []string{"a", "b", "c"}}, logPath)
+	ls := outLines(out)
+	if !reflect.DeepEqual(ls[1:5], []string{"✗ small", "a", "b", "c"}) || strings.Contains(out, MoreLinesPrefix) {
+		t.Fatalf("small block changed:\n%s", out)
+	}
+}
+
+// TestSharedHeaderCopyBounded: vitest prints one shared error under several
+// FAIL headers; each printed copy, re-stamped with its own long name, stays
+// within BlockBytes.
+func TestSharedHeaderCopyBounded(t *testing.T) {
+	v := &vitest{}
+	v.Feed(" Tests  3 failed (3)")
+	v.Feed("⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯")
+	for i := 0; i < 3; i++ {
+		v.Feed(fmt.Sprintf(" FAIL  src/x.test.ts > case %d %s", i, strings.Repeat("n", 240)))
+	}
+	for i := 0; i < 40; i++ {
+		v.Feed(strings.Repeat("e", LineCut))
+	}
+	v.Feed("⎯⎯⎯⎯[1/3]⎯")
+	s := &Segment{parsers: []Parser{v}}
+	s.Close()
+	out := Render(Outcome{Exit: 1, Ran: true}, []*Segment{s}, &Budget{}, "/"+strings.Repeat("l", 199), time.Second)
+	blocks := printedBlocks(out)
+	if len(blocks) != 3 {
+		t.Fatalf("%d blocks, want the 3 shared copies:\n%s", len(blocks), out)
+	}
+	for i, b := range blocks {
+		if len(b) > BlockBytes {
+			t.Errorf("copy %d prints %d bytes, want ≤ %d", i, len(b), BlockBytes)
+		}
 	}
 }

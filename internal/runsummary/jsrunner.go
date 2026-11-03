@@ -70,6 +70,7 @@ type vitest struct {
 	files, tests, errors string
 	passed               int
 	unhandled            bool // inside the "Unhandled Errors" section
+	failedSection        bool // inside a "Failed Tests" or "Failed Suites" section
 	fs                   Failures
 	cur                  *blockLines
 }
@@ -86,9 +87,11 @@ func (v *vitest) Feed(line string) {
 	switch {
 	case vitestFiles.MatchString(line):
 		v.close()
+		v.failedSection = false
 		v.files = "Test Files " + vitestFiles.FindStringSubmatch(line)[1]
 	case vitestTests.MatchString(line):
 		v.close()
+		v.failedSection = false
 		v.tests = "Tests " + vitestTests.FindStringSubmatch(line)[1]
 		if m := passedRE.FindStringSubmatch(v.tests); m != nil {
 			v.passed, _ = strconv.Atoi(m[1])
@@ -103,16 +106,17 @@ func (v *vitest) Feed(line string) {
 		// section's preamble belongs to none.
 		v.close()
 		switch title := strings.TrimSpace(strings.Trim(line, "⎯ ")); {
+		case strings.HasPrefix(title, "Failed Tests") || strings.HasPrefix(title, "Failed Suites"):
+			v.failedSection, v.unhandled = true, false
 		case title == "Unhandled Errors":
-			v.unhandled = true
+			v.unhandled, v.failedSection = true, false
 		case v.unhandled && title != "" && !strings.HasPrefix(title, "["):
 			v.cur = &blockLines{f: Failure{Name: title}}
 		}
-	case vitestFail.MatchString(line):
-		name := vitestFail.FindStringSubmatch(line)[1]
-		if i := strings.Index(name, " [ "); i > 0 {
-			name = name[:i] // a suite: "src/x.test.ts [ src/x.test.ts ]"
-		}
+	case v.failedSection && vitestFail.MatchString(line):
+		// Only under a Failed Tests/Suites banner: a test's console output
+		// printing "FAIL  x" is not a failure.
+		name := suiteName(vitestFail.FindStringSubmatch(line)[1])
 		if v.cur != nil && v.cur.empty() {
 			v.cur.share(name) // one error, several headers
 			return
@@ -124,6 +128,23 @@ func (v *vitest) Feed(line string) {
 			v.cur.line(line)
 		}
 	}
+}
+
+// suiteName strips a failed suite's " [ <path> ]" suffix — "src/x.test.ts [
+// src/x.test.ts ]" — only when it repeats the path before it, so an it.each
+// title holding " [ " ("adds [ 1, 2 ]") prints whole. A suite header names a
+// file alone: a name holding " > " is a test's, whose bracket is its own
+// ("rounds 1.5 [ 1.5 ]").
+func suiteName(name string) string {
+	i := strings.LastIndex(name, " [ ")
+	if i <= 0 || !strings.HasSuffix(name, " ]") || strings.Contains(name, " > ") {
+		return name
+	}
+	// The repeated text must be a whole path: the prefix is it, or ends " "+it.
+	if inner, pre := name[i+3:len(name)-2], name[:i]; strings.ContainsAny(inner, "./") && (pre == inner || strings.HasSuffix(pre, " "+inner)) {
+		return pre
+	}
+	return name
 }
 
 func (v *vitest) close() {

@@ -553,6 +553,72 @@ func TestEchoTeesTerminal(t *testing.T) {
 	})
 }
 
+func TestRecordNeverReachesTerminal(t *testing.T) {
+	t.Run("an echoing log keeps Record's bytes to the file", func(t *testing.T) {
+		out, errOut, warn := quiet(t)
+		dir := t.TempDir()
+		l := Open(dir, Name{Kind: KindTest}, Options{Terminal: Stdout, Echo: true})
+		l.Record([]byte("recorded\n"))
+		if l.Path() == "" {
+			t.Fatal("Path() is empty after a Record; it must create the file as Write does")
+		}
+		mustWrite(t, l, "written\n")
+		l.Close()
+		if got := read(t, l.Path()); got != "recorded\nwritten\n" {
+			t.Fatalf("log = %q, want both lines in order", got)
+		}
+		if out.String() != "written\n" || errOut.Len() != 0 {
+			t.Fatalf("stdout = %q, stderr = %q; want only Write's bytes echoed", out.String(), errOut.String())
+		}
+		if warn.Len() != 0 {
+			t.Fatalf("warning on a healthy log: %q", warn.String())
+		}
+	})
+	t.Run("a failed log gets only the one warning", func(t *testing.T) {
+		out, errOut, warn := quiet(t)
+		prev := wrapFile
+		wrapFile = func(f *os.File) io.WriteCloser { return &failAfter{f: f, limit: 4} }
+		t.Cleanup(func() { wrapFile = prev })
+
+		l := Open(t.TempDir(), Name{Kind: KindTest}, Options{Terminal: Stdout, Echo: true})
+		l.Record([]byte("abc\n"))
+		l.Record([]byte("lost\n"))
+		l.Record([]byte("lost too\n"))
+		err := l.Err()
+		if err == nil || !strings.Contains(err.Error(), "disk full") {
+			t.Fatalf("Err() = %v, want the write failure", err)
+		}
+		if out.Len() != 0 || errOut.Len() != 0 {
+			t.Fatalf("stdout = %q, stderr = %q; Record must never fall back to the terminal", out.String(), errOut.String())
+		}
+		if n := strings.Count(warn.String(), "warning:"); n != 1 {
+			t.Fatalf("%d warnings, want exactly 1: %q", n, warn.String())
+		}
+	})
+	t.Run("an unopenable log gets only the one warning", func(t *testing.T) {
+		out, errOut, warn := quiet(t)
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, ".dross"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(logsDir(dir), []byte("not a dir\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		l := Open(dir, Name{Kind: KindTest}, Options{Terminal: Stdout})
+		l.Record([]byte("one\n"))
+		l.Record([]byte("two\n"))
+		if l.Err() == nil || l.Path() != "" {
+			t.Fatalf("Err() = %v, Path() = %q; want a failure and no path", l.Err(), l.Path())
+		}
+		if out.Len() != 0 || errOut.Len() != 0 {
+			t.Fatalf("stdout = %q, stderr = %q; Record must never fall back to the terminal", out.String(), errOut.String())
+		}
+		if n := strings.Count(warn.String(), "warning:"); n != 1 {
+			t.Fatalf("%d warnings, want exactly 1: %q", n, warn.String())
+		}
+	})
+}
+
 func TestUnavailableLogFallsBack(t *testing.T) {
 	out, errOut, warn := quiet(t)
 	dir := t.TempDir()

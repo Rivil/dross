@@ -405,6 +405,7 @@ A collect is **not a second-class verdict**: it goes through the same `finishVer
 - `cancelDetached` (lists what this machine dispatched without the network; tears down on the host that holds the run) — `internal/cmd/verify.go:965`
 - `cancelLine` (teardown text as a pure helper, so the process-group kill is assertable without a host) — `internal/cmd/verify.go:849`
 - `finishVerify` (the one seam turning a completed run into tests.json + the verify.toml skeleton, shared by both paths) — `internal/cmd/verify.go:1022`
+- `collectHostLog` (collect fetches `<runDir>/log` through the production `remote.FetchArgs` + `classifyFetch` and prints the log path or `log unavailable` — never neither, an empty host log included) — `internal/cmd/verify.go:1400`
 - `mutation.ReportlessExit` (one shared rule refusing a package that wrote no report and exited non-zero) — `internal/mutation/launcher.go:884`
 - `TestVerifyDetachDispatchesThroughTheCommand` (flags driven through `Verify`'s own RunE, not just the helpers) — `internal/cmd/verify_detach_test.go:532`
 - `TestCollectWritesTheSameArtefactsAnAttachedRunWould` (a detached collect rebuilds scope, filters out-of-scope survivors and stamps the recorded host) — `internal/cmd/verify_results_test.go:413`
@@ -412,7 +413,7 @@ A collect is **not a second-class verdict**: it goes through the same `finishVer
 - `TestExecScriptRefusesBeforeItReachesTheTransport` (the live transport's own guards, which every other test stubs away) — `internal/remote/remote_test.go:1094`
 - `TestReadmeDocumentsDetachedRuns` (README + verify prompt pin the five result states, so an agent never reads a still-running run as a red suite) — `internal/cmd/options_docs_test.go:401`
 
-_introduced remote-run-detach · 6ad6efa · extended cmd-exec-baseline-drain · 9043847_
+_introduced remote-run-detach · 6ad6efa · extended cmd-exec-baseline-drain · 9043847 · extended test-summary-parsers · d0976938_
 
 ### Doctor diagnostics
 
@@ -1201,6 +1202,7 @@ Survive `/clear` and compaction without losing the workflow thread: every durabl
 - `checkTestOutputSummariesFlow` (test-output-summaries' after-leg gate: smaller green and verify output, no log reads, a sub-300-byte repeat rule show, the marker live across /clear, /compact and a subagent) — `internal/cmd/flowcost_record_test.go:176`
 - `checkPromptPartialsFlow` (prompt-partials' execute and verify pairs: base prompts under 15,000 B and smaller than before, zero partial fetches on the common path, an attached verify pass, same fixture trees) — `internal/cmd/flowcost_record_test.go:217`
 - test-output-summaries' `flow-cost-before.toml` (the base-commit byte and pair-flow turn baseline, with a replayable scenario) — `.dross/phases/test-output-summaries/flow-cost-before.toml`
+- `checkTestSummaryParsersFlow` (test-summary-parsers' gate: red bytes per new parser (gradle, dart, pytest) before vs after, the after leg summarised from a base-built binary, zero log reads; turns and wall-clock recorded ungated, replayed from `flow/*-red.patch`) — `internal/cmd/flowcost_record_test.go:440`
 - `Reentry` / `reentryLine` ("you are here + next", byte-equal to status's last line; appends ` · debug: <slug> <state> — /dross-debug <slug>` for the newest open [debug session](#debug-sessions)) — `internal/cmd/reentry.go:39`
 - `Pause` (`dross pause --auto` mechanical snapshot merge) — `internal/cmd/pause.go:24`
 - `pauseAuto` / `autoSnapshot` (silent on a non-root, loud on a corrupt one, degrades without git) — `internal/cmd/pause.go:45`
@@ -1215,7 +1217,7 @@ Pause refuses rather than scaffolds. `/dross-pause` in a repo with no initialise
 
 Pause files rather than parks. A finding surfaced at a pause is written into the [deferred backlog](#deferred-item-routing) with `dross deferred add` instead of becoming an "Open loops" bullet nothing re-reads, so it leaves the handoff as a tracked, addressable item.
 
-_introduced context-hygiene · extended root-robustness · 6d33d3b · extended deferred-add-command · fb07ed1 · extended cmd-exec-baseline-drain · bf2af4e · extended tool-gate-hooks · c854daf · extended debug-sessions · 3300fbe · extended context-boundaries · ce93a78 · extended test-output-summaries · 580852e · extended prompt-partials · 10db3c7e_
+_introduced context-hygiene · extended root-robustness · 6d33d3b · extended deferred-add-command · fb07ed1 · extended cmd-exec-baseline-drain · bf2af4e · extended tool-gate-hooks · c854daf · extended debug-sessions · 3300fbe · extended context-boundaries · ce93a78 · extended test-output-summaries · 580852e · extended prompt-partials · 10db3c7e · extended test-summary-parsers · 1419d05f_
 
 ### Ship recovery
 
@@ -1607,12 +1609,18 @@ Stated limit, measured rather than assumed: this buys a **free laptop, not a fas
 - `testRun.summarise` (off a terminal, a per-lane summary — counts, failure blocks, or the failing spawn's tail; the exit code is never changed by it) — `internal/cmd/test_output.go:117`
 - `runlog.Open` (lazily created, self-ignoring `.dross/logs/` sink with terminal echo and fallback; shared by `dross test`, the verify legs and survivor drain) — `internal/runlog/runlog.go:133`
 - `prune` (each write keeps the newest 20, ordered newest-first with a name tiebreak on equal mtimes) — `internal/runlog/runlog.go:311`
-- `runsummary.Render` (bounded line splitter + parser registry + budgeted renderer: 30 lines per failure, the first 10 in full, then `+N more failing — see <log>`) — `internal/runsummary/render.go:30`
-- `runsummary.goTest` (plain `go test`: package counts, leaf `--- FAIL` blocks, panics, timeouts and `# pkg` build/vet/setup failures) — `internal/runsummary/gotest.go:21`
-- `runsummary.vitest` (vitest and jest: the runner's own count lines, FAIL/● blocks, load and unhandled errors; claims only after the Tests line) — `internal/runsummary/jsrunner.go:69`
+- `runsummary.Render` (bounded line splitter + parser registry + budgeted renderer: 30 lines per failure, the first 10 in full, then `+N more failing — see <log>`; name and marker lines count toward BlockBytes, so 10 max-length blocks stay under ~30 KB) — `internal/runsummary/render.go:30`
+- `Segment.results` (every runner that claims a segment on its own terminal line contributes: each runner's counts on one header, the union of failures under one MaxBlocks budget — feastahead's vitest + flutter test spawn summarises instead of falling back) — `internal/runsummary/summary.go:270`
+- `runsummary.goTest` (plain `go test`: package counts, leaf `--- FAIL` blocks, panics, timeouts and `# pkg` build/vet/setup failures; a build block closes on the next package's line and rejoins its cut lines at its own FAIL, and a one-word `# Heading` opens one only when a diagnostic follows) — `internal/runsummary/gotest.go:21`
+- `runsummary.vitest` (vitest and jest: the runner's own count lines, FAIL/● blocks, load and unhandled errors; claims only after the Tests line; FAIL opens a failure only under a Failed Tests/Suites banner, and it.each names keep their ` [ X ]`) — `internal/runsummary/jsrunner.go:69`
+- `runsummary.gradle` (plain-console gradle: `BUILD` outcome + actionable-task line, test counts only when gradle printed them, `Class.method` failures — nested JUnit 5 classes dotted — with their own lines; no JUnit XML) — `internal/runsummary/gradle.go:24`
+- `runsummary.dart` (`flutter test` / `dart test`, compact and expanded reporters: the final `+N ~S -F` counter, `[E]` failures, widget EXCEPTION CAUGHT blocks held for their own test, clock-tick redraws ignored) — `internal/runsummary/dart.go:30`
+- `runsummary.pytest` (default and `-q`: the terminal count line, FAILED/ERROR node ids matched to their own sections by kind in print order, E lines kept past a deep traceback) — `internal/runsummary/pytest.go:23`
+- `testRun.failedStep` (exit 3/4/7: the fallback tail comes from the step that failed, not the last spawn, or names the reason when that step spawned nothing) — `internal/cmd/test_output.go:170`
+- `runlog.Log.Record` (file-only write: dross test copies its pre-spawn lines into the run log once, on a terminal or off; an unavailable log prints them once) — `internal/runlog/runlog.go:156`
 - execute.md §1e test step (execute and quick read the summary and open the run log only where a failure block was cut) — `assets/prompts/execute.md:198`
 
-_introduced remote-test-runner · 3055f70 · extended test-lane-config · f01ece7 · extended lane-selector-translation · f7aeb0a · extended lane-prepare-step · c9cdc33 · extended lane-remote-locality · 7cfd0fc · extended remote-toolchain-install · 1fed76d · extended lane-selector-custom · 25d8534 · extended lane-selector-preview · 163be4d · extended lane-host-affinity · e52f843 · extended cmd-exec-baseline-drain · 03037d7 · extended tool-gate-hooks · ab5930c · extended test-output-summaries · 489909f_
+_introduced remote-test-runner · 3055f70 · extended test-lane-config · f01ece7 · extended lane-selector-translation · f7aeb0a · extended lane-prepare-step · c9cdc33 · extended lane-remote-locality · 7cfd0fc · extended remote-toolchain-install · 1fed76d · extended lane-selector-custom · 25d8534 · extended lane-selector-preview · 163be4d · extended lane-host-affinity · e52f843 · extended cmd-exec-baseline-drain · 03037d7 · extended tool-gate-hooks · ab5930c · extended test-output-summaries · 489909f · extended test-summary-parsers · d0976938_
 
 ### Tool-call gates
 

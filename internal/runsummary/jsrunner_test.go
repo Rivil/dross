@@ -13,9 +13,10 @@ import (
 // with --ignore-scripts in a scratch directory outside the repo.
 const jestPin = "30.5.2"
 
-// vitestHeader heads every vitest fixture: the ts-project lockfile's vitest,
-// installed with `npm ci --ignore-scripts` in a scratch copy.
-const vitestHeader = "# captured: vitest@4.1.11 "
+// vitestVersions is the recorded set of vitests the fixtures were captured
+// with: 4.1.11, the ts-project lockfile's, installed with `npm ci
+// --ignore-scripts` in a scratch copy; 4.1.12, feastahead/web's own.
+var vitestVersions = []string{"4.1.11", "4.1.12"}
 
 // feedJS runs a fixture through a Segment — splitter, ANSI and CR stripping —
 // into p alone, without the fixture's header line.
@@ -145,6 +146,7 @@ func TestVitestMergedErrors(t *testing.T) {
 // MaxBlocks names and still count every one.
 func TestSharedErrorBounded(t *testing.T) {
 	v := &vitest{}
+	v.Feed("⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1000 ⎯⎯⎯⎯⎯⎯⎯")
 	for i := 0; i < 1000; i++ {
 		v.Feed(" FAIL  src/x.test.ts > case " + strings.Repeat("n", 300))
 	}
@@ -256,12 +258,61 @@ func TestJSFixturesCaptured(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := vitestHeader
 		if strings.HasPrefix(filepath.Base(p), "jest_") {
-			want = "# captured: jest@" + jestPin + " "
+			if want := "# captured: jest@" + jestPin + " "; !strings.HasPrefix(string(b), want) {
+				t.Errorf("%s does not start with %q", p, want)
+			}
+			continue
 		}
-		if !strings.HasPrefix(string(b), want) {
-			t.Errorf("%s does not start with %q", p, want)
+		ok := false
+		for _, v := range vitestVersions {
+			ok = ok || strings.HasPrefix(string(b), "# captured: vitest@"+v+" ")
+		}
+		if !ok {
+			t.Errorf("%s was not captured with a recorded vitest %q", p, vitestVersions)
+		}
+	}
+}
+
+// TestVitestConsoleFailNotAFailure: a test's console output printing
+// " FAIL  phantom" opens no failure — FAIL counts only under a Failed
+// Tests/Suites banner.
+func TestVitestConsoleFailNotAFailure(t *testing.T) {
+	p := feedJS(t, "vitest_console_fail.txt", &vitest{}).(*vitest)
+	r := p.Result()
+	if !strings.HasPrefix(p.tests, "Tests 1 failed") || r.Failures.Total != 1 {
+		t.Fatalf("tests=%q failures=%q, want the fixture's own 1 failure", p.tests, names(r))
+	}
+	for _, n := range names(r) {
+		if strings.Contains(n, "phantom") {
+			t.Fatalf("console output became failure %q", n)
+		}
+	}
+	failureNamed(t, r, "default  src/lib/zz-dross-fixture.test.ts > dross fixture > plain check")
+	out := Render(Outcome{Exit: 0, Ran: true}, []*Segment{segmentOf(t, "vitest_console_fail_green.txt", &vitest{})}, &Budget{}, logPath, time.Second)
+	if !strings.HasPrefix(out, "PASS · vitest: ") {
+		t.Fatalf("the exit-0 console run rendered:\n%s", out)
+	}
+}
+
+// TestVitestEachBracketNameWhole: an it.each title holding " [ " prints whole,
+// a dotted value repeated in its bracket ("rounds 1.5 [ 1.5 ]") included.
+func TestVitestEachBracketNameWhole(t *testing.T) {
+	r := feedJS(t, "vitest_each_bracket.txt", &vitest{}).Result()
+	f := failureNamed(t, r, "default  src/lib/zz-dross-fixture.test.ts > dross fixture > adds [ 1, 2 ]")
+	if !strings.Contains(strings.Join(f.Lines, "\n"), "expected 3 to be 4") {
+		t.Fatalf("the it.each block lacks its error: %q", f.Lines)
+	}
+	for in, want := range map[string]string{
+		"src/a.test.ts > adds [ 1, 2 ]":            "src/a.test.ts > adds [ 1, 2 ]",
+		"src/a.test.ts > adds [ s ]":               "src/a.test.ts > adds [ s ]",
+		"case 1 [ 1 ]":                             "case 1 [ 1 ]",
+		"src/a.test.ts > rounds 1.5 [ 1.5 ]":       "src/a.test.ts > rounds 1.5 [ 1.5 ]",
+		"src/x.test.ts [ src/x.test.ts ]":          "src/x.test.ts",
+		"default  src/x.test.ts [ src/x.test.ts ]": "default  src/x.test.ts",
+	} {
+		if got := suiteName(in); got != want {
+			t.Errorf("suiteName(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

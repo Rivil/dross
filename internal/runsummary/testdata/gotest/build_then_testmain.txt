@@ -1,0 +1,8 @@
+# captured: go1.27.1 go test -count=1 ./... (scratch module example.com/orphan: dep fails to compile, a's TestMain prints and exits 1)
+# example.com/orphan/dep
+dep/dep.go:3:9: undefined: foo
+TESTMAIN-MARK: fixture database unreachable
+FAIL	example.com/orphan/a	2.048s
+FAIL	example.com/orphan/b [build failed]
+FAIL	example.com/orphan/dep [build failed]
+FAIL

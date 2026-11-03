@@ -205,8 +205,8 @@ func TestGoFixturesCaptured(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(paths) < 6 {
-		t.Fatalf("%d gotest fixtures, want the 6 this parser is tested against", len(paths))
+	if len(paths) < 10 {
+		t.Fatalf("%d gotest fixtures, want at least the 10 this parser is tested against", len(paths))
 	}
 	for _, p := range paths {
 		b, err := os.ReadFile(p)
@@ -216,5 +216,135 @@ func TestGoFixturesCaptured(t *testing.T) {
 		if !strings.HasPrefix(string(b), capturedHeader) {
 			t.Errorf("%s does not start with %q", p, capturedHeader)
 		}
+	}
+}
+
+// TestGoBlockDoesNotAbsorbNextPackage: a "# dep" build block printed before
+// another package's TestMain output keeps only its compile lines; the
+// TestMain package's failure holds its own output.
+func TestGoBlockDoesNotAbsorbNextPackage(t *testing.T) {
+	g, r := parseGo(t, "build_then_testmain.txt")
+	dep := failureNamed(t, r, "example.com/orphan/dep")
+	if got := strings.Join(dep.Lines, "\n"); got != "dep/dep.go:3:9: undefined: foo" {
+		t.Fatalf("the dep block = %q, want only its compile line", got)
+	}
+	a := failureNamed(t, r, "example.com/orphan/a")
+	if !strings.Contains(strings.Join(a.Lines, "\n"), "TESTMAIN-MARK: fixture database unreachable") {
+		t.Fatalf("the TestMain package's failure = %q, want its own output", a.Lines)
+	}
+	if r.Failures.Total != 2 || g.failed != 3 {
+		t.Fatalf("failures %q, FAIL=%d; want dep and a, and 3 FAIL packages", names(r), g.failed)
+	}
+}
+
+// TestGoHashHeadingNotABuildBlock: a test printing "# Results" opens no build
+// failure — red names only the failing test, green renders PASS.
+func TestGoHashHeadingNotABuildBlock(t *testing.T) {
+	_, r := parseGo(t, "hash_heading.txt")
+	if got := names(r); len(got) != 1 || got[0] != "TestReport" {
+		t.Fatalf("failures %q, want only TestReport", got)
+	}
+	if !strings.Contains(strings.Join(failureNamed(t, r, "TestReport").Lines, "\n"), "HEADING-MARK") {
+		t.Fatalf("TestReport lacks its own output: %q", failureNamed(t, r, "TestReport").Lines)
+	}
+	withParsers(t, func() Parser { return &goTest{} })
+	s := NewSegment()
+	for _, l := range fixtureLines(t, filepath.Join("testdata", "gotest", "hash_heading_green.txt")) {
+		s.Write([]byte(l + "\n"))
+	}
+	s.Close()
+	out := Render(Outcome{Exit: 0, Ran: true}, []*Segment{s}, &Budget{}, logPath, time.Second)
+	if !strings.HasPrefix(out, "PASS · go test: 1 ok") {
+		t.Fatalf("the green heading run rendered:\n%s", out)
+	}
+}
+
+// TestGoOneWordBuildStillReported: a real build error in a one-word module is
+// still one build failure, and its package is counted FAIL.
+func TestGoOneWordBuildStillReported(t *testing.T) {
+	g, r := parseGo(t, "build_failed_oneword.txt")
+	if r.Failures.Total != 1 || g.failed != 1 {
+		t.Fatalf("failures %q, FAIL=%d; want the one build failure", names(r), g.failed)
+	}
+	f := failureNamed(t, r, "oneword [oneword.test]")
+	if !strings.Contains(strings.Join(f.Lines, "\n"), "undefined: foo") {
+		t.Fatalf("the oneword block lacks its compile error: %q", f.Lines)
+	}
+}
+
+// TestGoOneWordVetBlock: a one-word module's vet failure prints "# oneword"
+// then vet's own "# [oneword]" — the shape setup_and_vet.txt captured for a
+// dotted path — and is one build failure named oneword, even with another
+// package's result line before its [build failed] one.
+func TestGoOneWordVetBlock(t *testing.T) {
+	g, r := feedGo(
+		"# oneword",
+		"# [oneword]",
+		"./x_test.go:9:14: fmt.Printf format %d has arg \"x\" of wrong type string",
+		"ok  \toneword/ok\t0.221s",
+		"FAIL\toneword [build failed]",
+		"FAIL",
+	)
+	if r.Failures.Total != 1 || g.failed != 1 || g.ok != 1 {
+		t.Fatalf("failures %q, FAIL=%d ok=%d; want the one vet failure", names(r), g.failed, g.ok)
+	}
+	f := r.Failures.Kept[0]
+	if f.Name != "oneword" || !strings.Contains(strings.Join(f.Lines, "\n"), "wrong type string") {
+		t.Fatalf("failure %q = %q, want oneword with its vet diagnostic", f.Name, f.Lines)
+	}
+}
+
+// feedGo runs lines through a fresh go test parser.
+func feedGo(lines ...string) (*goTest, Result) {
+	g := &goTest{}
+	for _, l := range lines {
+		g.Feed(l)
+	}
+	return g, g.Result()
+}
+
+// TestGoBlockKeepsNonDiagnosticErrors: a build or setup block whose lines are
+// not file:line shaped — an import cycle, a linker/cgo failure — keeps its
+// message rather than losing it at its package's FAIL line.
+func TestGoBlockKeepsNonDiagnosticErrors(t *testing.T) {
+	_, r := feedGo(
+		"# example.com/cyc/a",
+		"package example.com/cyc/a",
+		"\timports example.com/cyc/b",
+		"\timports example.com/cyc/a: import cycle not allowed",
+		"FAIL\texample.com/cyc/a [setup failed]",
+		"# example.com/cgo/c",
+		"/usr/local/go/pkg/tool/darwin_arm64/link: running clang failed: exit status 1",
+		"clang: error: linker command failed with exit code 1",
+		"FAIL\texample.com/cgo/c [build failed]",
+		"FAIL",
+	)
+	for name, want := range map[string]string{
+		"example.com/cyc/a": "import cycle not allowed",
+		"example.com/cgo/c": "clang: error: linker command failed",
+	} {
+		if got := strings.Join(failureNamed(t, r, name).Lines, "\n"); !strings.Contains(got, want) {
+			t.Errorf("%s = %q, want %q kept", name, got, want)
+		}
+	}
+	if r.Failures.Total != 2 {
+		t.Fatalf("failures %q, want the two blocks only", names(r))
+	}
+}
+
+// TestGoHeadingThenIndentedLine: "# Results" followed by an indented row is a
+// test's output, not a build block.
+func TestGoHeadingThenIndentedLine(t *testing.T) {
+	_, r := feedGo(
+		"# Results",
+		"  row 1 ok",
+		"--- FAIL: TestReport (0.00s)",
+		"    h_test.go:13: mismatch",
+		"FAIL",
+		"FAIL\texample.com/heading/h\t0.05s",
+		"FAIL",
+	)
+	if got := names(r); len(got) != 1 || got[0] != "TestReport" {
+		t.Fatalf("failures %q, want only TestReport", got)
 	}
 }

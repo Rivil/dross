@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/gatestate"
+	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/testlane"
 )
 
 // summaryFixtureDir is runsummary's captured runner output, resolved while the
@@ -397,5 +400,183 @@ func TestExitCodesUnchanged(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// fallbackOf is stdout from the `exit <code> ·` fallback line on: the summary
+// of the step that failed, without the summaries printed before it.
+func fallbackOf(t *testing.T, out string, code int) string {
+	t.Helper()
+	i := strings.Index(out, fmt.Sprintf("exit %d · ", code))
+	if i < 0 {
+		t.Fatalf("no exit %d fallback on stdout:\n%s", code, out)
+	}
+	return out[i:]
+}
+
+func TestFallbackTailFromFailingStep(t *testing.T) {
+	twoHostLaneFixture(t)
+	origSpawn, origHold := spawnRemote, testHold
+	t.Cleanup(func() { spawnRemote, testHold = origSpawn, origHold })
+	spawnRemote = func(argv []string, _ string, stdout, _ io.Writer) error {
+		if argv[0] == "rsync" {
+			io.WriteString(stdout, "RSYNC-MARK\n")
+		}
+		return nil
+	}
+	var held []string
+	testHold = func(tg remote.Target, _ remote.HoldEvents) (*suiteHold, error) {
+		held = append(held, tg.Host)
+		if len(held) == 2 {
+			return nil, fmt.Errorf("ssh %s: connection refused: %w", tg.Host, remote.ErrTransport)
+		}
+		return &suiteHold{Outcome: remote.Held, Release: func() error { return nil }}, nil
+	}
+	out, err := runTestCapturing(t, "--files", "internal/a.go", "--files", "web/app.ts")
+	if ExitCode(err) != exitTransport {
+		t.Fatalf("exit %d, want %d (err %v)", ExitCode(err), exitTransport, err)
+	}
+	if len(held) != 2 || !strings.Contains(onlyLog(t), "RSYNC-MARK") {
+		t.Fatalf("want host-1 synced (RSYNC-MARK in the log) and host-2's lock refused; holds %v", held)
+	}
+	if strings.Contains(out, "RSYNC-MARK") {
+		t.Errorf("the 3 shows host-1's rsync tail, which is not why the run did not happen:\n%s", out)
+	}
+	fb := fallbackOf(t, out, exitTransport)
+	if !strings.Contains(fb, "the failing step printed nothing") || !strings.Contains(fb, "could not reach "+held[1]+" to take the host lock") {
+		t.Errorf("the 3 does not name host-2's lock as the reason:\n%s", out)
+	}
+	if !strings.Contains(out, "log: ") {
+		t.Errorf("no log path on stdout:\n%s", out)
+	}
+}
+
+// twoPreparedLanes runs the go lane green with LANE1-MARK as its output, then
+// the docs lane's prepare as prep says.
+func twoPreparedLanes(t *testing.T, prep struct {
+	out string
+	err error
+}) (string, error) {
+	t.Helper()
+	filesFixture(t, preparedTwoLanes)
+	grantEveryLane(t)
+	spawnByLine(t, map[string]struct {
+		out string
+		err error
+	}{
+		"make build": {"", nil},
+		"go test":    {"LANE1-MARK\n", nil},
+		"npm ci":     prep,
+	})
+	return runTestCapturing(t, "--files", "internal/a.go", "--files", "docs/x.md")
+}
+
+// windowStep is one spawn a testRun window holds: its line, what it printed,
+// and whether it is the spawn that returned the run's error.
+type windowStep struct {
+	line, out string
+	failed    bool
+}
+
+// summariseWindow drives one testRun off a terminal through its real spawn,
+// failed and summarise: each step spawns and prints in order, then the window
+// is summarised under err. It isolates the 3/4/7 selection from the command's
+// sequencing, which today always ends a window on the spawn that failed — so
+// only a window where the failing spawn is not the last, or spawned nothing,
+// tells "the failing step" apart from "whichever spawned last".
+func summariseWindow(t *testing.T, err error, steps ...windowStep) string {
+	t.Helper()
+	orig := testStdoutIsTTY
+	t.Cleanup(func() { testStdoutIsTTY = orig })
+	testStdoutIsTTY = func() bool { return false }
+	dir := t.TempDir()
+	var out string
+	captureStderr(t, func() {
+		out = captureStdout(t, func() {
+			r := openTestRun(dir)
+			for _, s := range steps {
+				r.spawn(s.line, true)
+				io.WriteString(r.out, s.out)
+				if s.failed {
+					r.failed()
+				}
+			}
+			r.summarise(err)
+		})
+	})
+	return out
+}
+
+// TestFallbackTailFromFailingSpawn: a 7 shows the failing prepare's own tail.
+// End to end, lane 1's suite output stays out of lane 2's prepare failure;
+// and in a window where another spawn follows the failing one, its tail is
+// still the failing spawn's — the selection is the marked spawn, never the
+// last one.
+func TestFallbackTailFromFailingSpawn(t *testing.T) {
+	out, err := twoPreparedLanes(t, struct {
+		out string
+		err error
+	}{"PREP-MARK\n", fakeExit{code: 1}})
+	if ExitCode(err) != exitPrepareFailed {
+		t.Fatalf("exit %d, want %d (err %v)", ExitCode(err), exitPrepareFailed, err)
+	}
+	fb := fallbackOf(t, out, exitPrepareFailed)
+	if !strings.Contains(out[:len(out)-len(fb)], "LANE1-MARK") {
+		t.Fatalf("lane 1 did not run and summarise before lane 2:\n%s", out)
+	}
+	if !strings.Contains(fb, "PREP-MARK") || strings.Contains(fb, "LANE1-MARK") {
+		t.Errorf("the 7 must hold the failing prepare's own tail and not lane 1's output:\n%s", fb)
+	}
+
+	lane := project.TestLane{Name: "docs", Prepare: "npm ci"}
+	out = summariseWindow(t, prepareFailure(lane, fakeExit{code: 1}),
+		windowStep{line: "rsync (to host-1)", out: "RSYNC-MARK\n"},
+		windowStep{line: "npm ci", out: "PREP-MARK\n", failed: true},
+		windowStep{line: "make build", out: "LATER-MARK\n"},
+	)
+	fb = fallbackOf(t, out, exitPrepareFailed)
+	if !strings.Contains(fb, "PREP-MARK") || strings.Contains(fb, "LATER-MARK") || strings.Contains(fb, "RSYNC-MARK") {
+		t.Errorf("the 7 must hold the failing spawn's tail alone, not a later or earlier spawn's:\n%s", fb)
+	}
+}
+
+// TestFallbackTailNoSpawnArgvInvalid: a prepare refused at argv validation
+// shows no other spawn's tail and names the reason. End to end, lane 1's
+// output stays out of it; and in a window that holds an earlier spawn with
+// output — host-1's rsync — a refusal that spawned nothing still shows none
+// of it.
+func TestFallbackTailNoSpawnArgvInvalid(t *testing.T) {
+	_, refusal := testlane.ShArgv("-npm ci")
+	if refusal == nil {
+		t.Fatal("the fence accepted a leading-dash line")
+	}
+	out, err := twoPreparedLanes(t, struct {
+		out string
+		err error
+	}{"", refusal})
+	if ExitCode(err) != exitPrepareFailed {
+		t.Fatalf("exit %d, want %d (err %v)", ExitCode(err), exitPrepareFailed, err)
+	}
+	fb := fallbackOf(t, out, exitPrepareFailed)
+	if !strings.Contains(out[:len(out)-len(fb)], "LANE1-MARK") {
+		t.Fatalf("lane 1 did not run and summarise before lane 2:\n%s", out)
+	}
+	if strings.Contains(fb, "LANE1-MARK") {
+		t.Errorf("the 7 shows lane 1's output for a prepare refused at argv validation:\n%s", fb)
+	}
+	if !strings.Contains(fb, "the failing step printed nothing") || !strings.Contains(fb, "begins with a dash") {
+		t.Errorf("the 7 does not name the validation reason:\n%s", fb)
+	}
+
+	lane := project.TestLane{Name: "docs", Prepare: "-npm ci"}
+	out = summariseWindow(t, prepareFailure(lane, refusal),
+		windowStep{line: "rsync (to host-1)", out: "RSYNC-MARK\n"},
+	)
+	fb = fallbackOf(t, out, exitPrepareFailed)
+	if strings.Contains(fb, "RSYNC-MARK") {
+		t.Errorf("the 7 shows the rsync's tail for a prepare that never spawned:\n%s", fb)
+	}
+	if !strings.Contains(fb, "the failing step printed nothing") || !strings.Contains(fb, "begins with a dash") {
+		t.Errorf("the 7 does not name the validation reason:\n%s", fb)
 	}
 }

@@ -1,0 +1,84 @@
+[phase]
+  id = "test-summary-parsers"
+  title = "test-summary-parsers"
+  milestone = "v1.8"
+
+[[criteria]]
+  id = "c-1"
+  text = "A gradle test run (e.g. equerry's `./gradlew testDebugUnitTest`) prints gradle's own counts when it prints them, and on red each failing test's class.method plus its own failure output, within the existing failure_bound."
+  deferred = ["b165077ad5b1be4c"]
+
+[[criteria]]
+  id = "c-2"
+  text = "A `flutter test` / `dart test` run prints the runner's own counts on green, and on red each failing test's name plus its own failure output, within the existing failure_bound."
+
+[[criteria]]
+  id = "c-3"
+  text = "A pytest run prints pytest's own counts on green, and on red each failing test's node id plus its own failure output, within the existing failure_bound."
+
+[[criteria]]
+  id = "c-4"
+  text = "A red summary of 10 full failure blocks stays under ~30 KB even when test names and output lines are both at their length limits; name and marker lines count toward the bound."
+  deferred = ["4f63f8cf3b9a0893"]
+
+[[criteria]]
+  id = "c-5"
+  text = "go test parser: orphan lines from a following package (e.g. TestMain exit) are not absorbed into an open '# pkg' build block, and a one-word '# Heading' printed by a test does not open a phantom build failure."
+  deferred = ["21f5280517ba81a9"]
+
+[[criteria]]
+  id = "c-6"
+  text = "vitest parser: a 'FAIL ' line in console output outside the Failed Tests banner opens no failure, and it.each test names containing ' [ ' print whole."
+  deferred = ["0e261a713497e7b9"]
+
+[[criteria]]
+  id = "c-7"
+  text = "stryker-net: a test runs it with SetStream set and fails if the bounded head no longer reaches stderr."
+  deferred = ["4955d6f05f232771"]
+
+[[criteria]]
+  id = "c-8"
+  text = "verify collect: the production log fetch (remote.FetchArgs <runDir>/log + classifyFetch) is tested, and an empty host log prints either the log path or 'log unavailable', never neither."
+  deferred = ["c399397a540354c7"]
+
+[[criteria]]
+  id = "c-9"
+  text = "When `dross test` exits 3/4/7, the fallback tail comes from the step that failed (e.g. host-2 lock after host-1 rsync), not the last spawned segment."
+  deferred = ["3ca181849c7911df"]
+
+[[criteria]]
+  id = "c-10"
+  text = "`dross test` run log: on a terminal, dross's pre-spawn lines are copied into the log; with the log unavailable off a terminal, pending lines print once."
+  deferred = ["ce3cc16364f40a8c"]
+
+[[criteria]]
+  id = "c-11"
+  text = "The phase records before/after numbers in the phase dir: bytes printed by a red run per new parser vs today's fallback, plus turn count and wall-clock time for the touched flow. The after-flow adds zero agent round-trips."
+
+[[criteria]]
+  id = "c-12"
+  text = "When one segment is claimed by several runners (feastahead's bare run: vitest + flutter test), the summary shows each runner's counts and both runners' failures under the shared MaxBlocks budget, instead of the fallback."
+
+[[decisions]]
+  key = "gradle_green_counts"
+  choice = "A green gradle summary prints gradle's own outcome and task lines (`BUILD SUCCESSFUL · N actionable tasks`); no test count unless gradle printed one. No JUnit XML reads, no injected init script."
+  why = "Without testLogging gradle prints no green test counts; XML is stale-prone and stays on the remote host, and an init script would rewrite the repo's test_command."
+  locked = true
+
+[[decisions]]
+  key = "mixed_runner_segments"
+  choice = "When several parsers claim one segment, merge them: each runner's counts on the summary line, the union of failures under the one MaxBlocks budget. A parser claims only on its own terminal summary line."
+  why = "feastahead's bare run is vitest + flutter test in one spawn; today's ambiguous-claim fallback would deny it a summary. Strict claims keep console noise from forging a runner."
+  locked = true
+
+[[decisions]]
+  key = "reporter_formats"
+  choice = "dart/flutter: parse both the compact and expanded reporters. pytest: parse both default and -q output."
+  why = "The non-tty default differs from the interactive one, and wrapper scripts choose the flags; dross can't add them."
+  locked = true
+
+[[decisions]]
+  key = "fixture_provenance"
+  choice = "Parser fixtures are captured from live runs in equerry (gradle), feastahead (flutter + vitest) and sunday-rider (pytest); red fixtures come from a local, uncommitted test break."
+  why = "The original deferral reason was 'no live repo to prove them against'; synthesized fixtures would re-open that gap."
+  locked = true

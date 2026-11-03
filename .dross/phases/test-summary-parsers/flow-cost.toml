@@ -1,0 +1,86 @@
+# Red-run bytes and the touched flow's cost for test-summary-parsers (spec c-11).
+# [before] (t-11) ran on a dross built from base commit ea72a2cb (git archive
+# into scratch, `make build COMMIT=ea72a2cb`); [after] (t-13) on the phase head
+# after `make install`. Same breaks (the flow/*.patch files, unchanged) and the
+# same scratch-clone flow on both legs. Observed numbers only; the transcript
+# fields are counted structurally with jq_flow, no content copied.
+
+[scenario]
+  repo_shape = "Three real repos, each broken only in its work tree by a saved patch under flow/ and reverted with git checkout afterwards (each patch passes `git apply --check` at the HEAD named below). equerry@ab4f78a (gradle 8.13, ./gradlew testDebugUnitTest, JAVA_HOME=openjdk@21 — gradle 8.13 fails on Homebrew's default JDK 26): flow/equerry-red.patch makes DefaultAssistantDetectorTest:43 expect IS_DEFAULT and SpeakChunkerTest:29 expect listOf(\"Hi.\\nthere\", …) — 2 of 324 fail. feastahead@34b34d20 (flutter 3.41.6 from ~/fvm/versions/3.41.6/bin first on PATH — 3.44.0 cannot compile lucide_icons): flow/feastahead-red.patch makes text_fold_test.dart:7 expect 'sauteedX' and app_shell_i18n_test.dart:98 find 'Homeward' — 2 fail. sunday-rider@5720fae (docker compose --profile test run --rm test /repo/scripts/selftest.sh: ruff → mypy --strict → pytest -q, all three kept clean but pytest): flow/sunday-rider-red.patch adds `assert \"gravel\" not in sentence` after test_parsing_keywords.py:352 (2 parametrized cases fail) and pins :379 to [\"to the moon!\"] — 3 of 1982 fail. The agent flow runs in a scratch clone of sunday-rider, built by setup_steps, so no real repo or board is touched."
+  setup_steps = ["git clone sunday-rider into <scratch>/flow/sunday-rider; checkout phase/routing-coverage; reset --hard 5720fae; git remote remove origin", "set [board] enabled = false in .dross/project.toml → commit 'flow: board off'", "git apply flow/sunday-rider-red.patch → human commits it as 'flow: seed red (sunday-rider-red.patch)' (the agent's commit gate refuses a red tree, correctly) and runs the binary under test's `dross trust` in the clone", "human opens a fresh `claude` in the clone with the binary under test first on PATH"]
+  byte_method = "`dross test >f 2>&1; wc -c <f` with the binary under test first on PATH and stdout not a terminal, in each real repo with its patch applied. gradle_red_bytes: equerry, bare `dross test` (no lanes). dart_red_bytes: feastahead, `dross test --local phone/test/core/util phone/test/shared` (helicon has no flutter; positional selectors go straight to flutter test). pytest_red_bytes: sunday-rider, bare `dross test`. Log-path lines are absolute, so byte counts move with the repo path's length."
+  wave_position = "not a phase task: a standalone pair-mode /dross-quick in the scratch clone, the only work in that session"
+  flow_start = "the agent's first Bash call running `dross test` (the quick's first look at the red suite)"
+  flow_end = "the agent's Bash call that runs the quick's work `git commit`, inclusive of that turn"
+  flow_steps = ["fresh `claude` in the clone with the binary under test first on PATH", "/dross-quick the suite is red — fix it", "dross test is red (3 failing in test_parsing_keywords.py)", "AskUserQuestion: the clone has no .dross/state.json (gitignored), so quick reads it as standalone and asks where the fix lands → 'Fix on this branch'", "AskUserQuestion: revert the two seeded assertions, parser untouched → 'Proceed'", "edit, rebuild the test image (sunday-rider r-05), dross test green", "commit", "stop after quick's bookkeeping"]
+  flow_note = "Before its first `dross test` the agent ran `git show 675dd27` on the seed commit, so the break's location was known from history as well as from the test output; the after leg replays the same seed commit and inherits the same shortcut."
+  replay_note = "t-13 replayed every patch unchanged: each passed `git apply --check` at its repo's HEAD first. equerry and sunday-rider had not moved; feastahead had moved 34b34d20 → f4896818 (another session's .dross bookkeeping), which leaves the two phone test files untouched. The after flow reran in the same clone, reset --hard to the seed commit 675dd27 with the before session's .dross/state.json, .dross/logs and .dross/gate removed (gate by the human; the tamper guard refuses the agent), so both sessions started from the same tree and ignored-file set."
+  jq_method = "jq -cs -f <filter> <transcript.jsonl> with jq_flow, identical to test-output-summaries' filter. A turn is a distinct message.id among main-agent entries (type assistant, isSidechain false, model not <synthetic>); its tool entry is its tool_use names joined by +, or text when it has none. wall_clock_s is flow_end − flow_start minus human_wait_s, the sum over every AskUserQuestion in the window of tool_use → its tool_result. log_reads counts Read calls on a .dross/logs/ path and Bash calls naming .dross/logs. dross_calls is the sorted set of `dross <verb> [<sub>]` invocations in the window's Bash commands; per the context-boundaries gate (rivil, 2026-10-08) turns and wall-clock are recorded, not gated."
+  jq_flow = '''
+def ms: (.[0:19] + "Z" | fromdateiso8601) + (.[20:23] | tonumber / 1000);
+def main: .type == "assistant" and .isSidechain == false and .message.model != "<synthetic>";
+def uses: [.message.content[]? | select(type == "object" and .type == "tool_use")];
+def bash($re): uses | any(.name == "Bash" and (.input.command | test($re)));
+def dross_calls: [.[] | uses[] | select(.name == "Bash") | .input.command | [scan("(?:^|[^/\\w-])dross ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?")] | .[] | "dross " + (map(select(. != null)) | join(" "))] | unique;
+[.[] | select(.timestamp)] as $e
+| ($e | map(select(main and bash("(?:^|[^/\\w-])dross test"))) | first | .timestamp) as $start
+| ($e | map(select(main and .timestamp >= $start and bash("git commit"))) | first | .timestamp) as $end
+| ($e | map(select(.timestamp >= $start and .timestamp <= $end))) as $w
+| ($w | map(select(main))) as $a
+| ($a | group_by(.message.id) | sort_by(.[0].timestamp) | map([.[] | uses[] | .name] | if length == 0 then "text" else join("+") end)) as $turns
+| ([$a[] | . as $m | uses[] | select(.name == "AskUserQuestion") | {id, t: ($m.timestamp | ms)}]) as $asks
+| ([$e[] | select(.type == "user") | . as $u | .message.content[]? | select(type == "object" and .type == "tool_result") | {id: .tool_use_id, t: ($u.timestamp | ms)}]) as $results
+| ([$asks[] as $q | $results[] | select(.id == $q.id) | .t - $q.t] | add // 0) as $wait
+| {dross_calls: ($a | dross_calls), agent_turns: ($turns | length), turn_tools: $turns, human_wait_s: $wait,
+   wall_clock_s: ((($end | ms) - ($start | ms)) - $wait),
+   log_reads: ([$a[] | uses[] | select((.name == "Read" and ((.input.file_path // "") | test("/[.]dross/logs/"))) or (.name == "Bash" and (.input.command | test("[.]dross/logs"))))] | length)}
+'''
+
+[before]
+  binary_version = "dross 0.1.0.0 (commit ea72a2cb, built 2026-11-02T13:21:30Z)"
+  gradle_red_bytes = 1780
+  gradle_red_measured_at = "2026-11-02T14:41:42Z"
+  gradle_red_note = "fallback (`output not recognised — last 40 lines`). A first attempt at 13:39Z hung for an hour in a Robolectric worker at 0% CPU and was killed; the retry ran in 11 s on a warm configuration cache."
+  dart_red_bytes = 4049
+  dart_red_measured_at = "2026-11-02T13:26:24Z"
+  pytest_red_bytes = 2317
+  pytest_red_measured_at = "2026-11-02T13:25:30Z"
+  gradle_red_summarised = false
+  dart_red_summarised = false
+  pytest_red_summarised = false
+  session_id = "8fa5a0b0-b50f-475c-a77c-288cbdd35c49"
+  measured_at = "2026-11-02T15:03:06Z"
+  model = "claude-opus-5-5"
+  claude_code_version = "2.1.316"
+  agent_turns = 11
+  turn_tools = ["Bash", "AskUserQuestion", "Bash", "AskUserQuestion", "Read", "Edit+Edit", "Bash", "Bash", "Bash", "Bash", "Bash"]
+  wall_clock_s = 170.8
+  human_wait_s = 593.2
+  log_reads = 0
+  dross_calls = ["dross quick begin", "dross test"]
+
+# The same breaks and flow on the phase head. Every red run printed a parsed
+# summary (`FAIL (exit 1) · <runner>: …` plus one ✗ block per failing test), no
+# "output not recognised" fallback.
+[after]
+  binary_version = "dross 0.1.0.0 (commit b1618805, built 2026-11-02T15:14:32Z)"
+  gradle_red_bytes = 684
+  gradle_red_measured_at = "2026-11-02T15:16:01Z"
+  dart_red_bytes = 2531
+  dart_red_measured_at = "2026-11-02T15:16:14Z"
+  pytest_red_bytes = 1677
+  pytest_red_measured_at = "2026-11-02T15:15:45Z"
+  gradle_red_summarised = true
+  dart_red_summarised = true
+  pytest_red_summarised = true
+  session_id = "c6918769-7afe-4f95-8b80-6ff8488f4d18"
+  measured_at = "2026-11-02T15:54:31Z"
+  model = "claude-opus-5-5"
+  claude_code_version = "2.1.316"
+  agent_turns = 12
+  turn_tools = ["Bash", "Bash", "AskUserQuestion", "Bash", "AskUserQuestion", "Read", "Edit+Edit", "Bash", "Bash", "Bash", "Bash", "Bash"]
+  wall_clock_s = 175.9
+  human_wait_s = 1338.1
+  log_reads = 0
+  dross_calls = ["dross quick begin", "dross test"]
+  turn_delta = "+1 turn, +5.1 s, both before the fix: after the red `dross test` the agent ran one extra `git log` on .dross/state.json before asking where the fix lands. The red step itself matched — it acted on the run's output with no log read on either leg; the seed commit (`git show 675dd27`) gave both agents the break's location before the run."
