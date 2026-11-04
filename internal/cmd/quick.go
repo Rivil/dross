@@ -11,9 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/changes"
-	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/gatestate"
 	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/state"
@@ -274,22 +272,4 @@ func quickBoard(version, title string) error {
 	}
 	Printf("board: quick %s -> board %s\n", version, key)
 	return nil
-}
-
-// openQuickIssue opens ref's board issue and links it in board.json, which is
-// where `dross issue quick <ref> --close` finds it.
-func openQuickIssue(ctx *boardCtx, ref, title string) (string, error) {
-	iss, err := ctx.Client.CreateIssue(forge.IssueInput{
-		Title:  title,
-		Body:   fmt.Sprintf("Quick task `%s`.\n\n_Tracked by dross._", ref),
-		Labels: []string{boardsync.LabelMarker, boardsync.LabelQuick},
-	})
-	if err != nil {
-		return "", boardsync.Wrap(err)
-	}
-	ctx.Board.SetQuick(ref, iss.Key)
-	if err := ctx.Board.Save(ctx.BoardPath); err != nil {
-		return "", err
-	}
-	return iss.Key, nil
 }

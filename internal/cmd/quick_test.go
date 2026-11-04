@@ -1,10 +1,14 @@
 package cmd
 
 import (
+	"bytes"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Rivil/dross/internal/board"
@@ -292,6 +296,84 @@ func TestQuickEndOpensBoardIssue(t *testing.T) {
 	}
 	if f.creates != 1 || !slicesHas(f.tags["PROJ-100"], "dross/quick") {
 		t.Errorf("issue tags %v, want the quick label", f.tags["PROJ-100"])
+	}
+}
+
+// boardWrites runs a fresh YouTrack fake as the fixture's board and returns
+// a log of every write it receives, as "METHOD path body".
+func boardWrites(t *testing.T) *[]string {
+	t.Helper()
+	f := newYTPhaseFake()
+	var mu sync.Mutex
+	var writes []string
+	h := f.handler(t)
+	countingBoard(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			b, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Error(err)
+			}
+			r.Body = io.NopCloser(bytes.NewReader(b))
+			mu.Lock()
+			writes = append(writes, r.Method+" "+r.URL.Path+" "+string(b))
+			mu.Unlock()
+		}
+		h(w, r)
+	})
+	return &writes
+}
+
+// quickIssueLink is the board issue board.json links quick ref to.
+func quickIssueLink(t *testing.T, dir, ref string) string {
+	t.Helper()
+	b, err := board.Load(filepath.Join(dir, ".dross", board.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, _ := b.QuickIssue(ref)
+	return key
+}
+
+// `dross quick end` and `dross issue quick` open the quick issue through one
+// helper: the same ref and title against the same board send the same writes
+// (title, body, labels) and link the same key in board.json.
+func TestQuickEndAndIssueQuickOpenTheSameIssue(t *testing.T) {
+	// quick end titles the issue "quick: <summary>" of its begin description;
+	// the CLI is handed that same title.
+	const ref, title = "1.2.3.5", "quick: fix x"
+	var endLink, cliLink string
+	var endWrites, cliWrites []string
+	t.Run("quick end", func(t *testing.T) {
+		dir := quickEndFixture(t)
+		writes := boardWrites(t)
+		beginQuick(t, "fix x")
+		quickWork(t, dir)
+		if out, err := endQuick(t); err != nil {
+			t.Fatalf("quick end: %v\n%s", err, out)
+		}
+		endWrites, endLink = *writes, quickIssueLink(t, dir, ref)
+	})
+	t.Run("issue quick", func(t *testing.T) {
+		dir := quickEndFixture(t)
+		writes := boardWrites(t)
+		if err := runCmd(t, Issue(), "quick", ref, title); err != nil {
+			t.Fatal(err)
+		}
+		cliWrites, cliLink = *writes, quickIssueLink(t, dir, ref)
+	})
+	// The writes carry the title, body and labels, so comparing them compares
+	// the issues.
+	sent := strings.Join(endWrites, "\n")
+	for _, want := range []string{title, "Quick task `" + ref + "`", "dross/quick"} {
+		if !strings.Contains(sent, want) {
+			t.Fatalf("quick end's board writes lack %q:\n%s", want, sent)
+		}
+	}
+	if !reflect.DeepEqual(endWrites, cliWrites) {
+		t.Errorf("the two paths diverged on the board:\nquick end:   %q\nissue quick: %q", endWrites, cliWrites)
+	}
+	if endLink != "PROJ-100" || cliLink != endLink {
+		t.Errorf("board.json links quick %s to %q (quick end) and %q (issue quick), want PROJ-100 both", ref, endLink, cliLink)
 	}
 }
 
