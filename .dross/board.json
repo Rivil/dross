@@ -1884,8 +1884,13 @@
     },
     "prompt-budgets-rest/t-16": {
       "issue": "DRO-1083",
-      "plan_status": "in_progress",
-      "board_state": "task-in-progress"
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-17": {
+      "issue": "DRO-1084",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "prompt-budgets-rest/t-2": {
       "issue": "DRO-1068",

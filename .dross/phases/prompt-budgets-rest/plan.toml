@@ -1,4 +1,4 @@
-task_seq = 16
+task_seq = 17
 
 [phase]
   id = "prompt-budgets-rest"
@@ -224,6 +224,17 @@ Replace the promptByteBudget map and the exact-set {execute, verify} guard with 
   status = "done"
 
 [[task]]
+  id = "t-17"
+  wave = 4
+  title = "Move spec create flow to a partial"
+  files = ["assets/partials.go", "assets/partials_test.go", "assets/prompts/spec.md", "assets/prompts/_spec.create.md", "internal/cmd/spec_prompt_test.go"]
+  description = "t-16's spec after-leg ran `dross phase list` (absent from [spec_before]): with t-11's no-target branch gone, spec.md's Create flow sat under the <phase-id> bullet and read as main-path. Add \"new\" to TriggerVocabulary's target values; replace the Create flow block in spec.md with one fetch line (`**When** `target=new` — ...: `dross prompt partial spec create``) and move its text verbatim into _spec.create.md. The no-target partial's 'jump to the create flow' then resolves via that line. Move TestCommonPathInline's create-flow needles out of spec's raw list. Post-commit: make install; t-16 rebuilds the spec fixture and re-drives the spec leg."
+  covers = ["c-1", "c-2"]
+  test_contract = ["if the create flow stays on the common path, a raw spec.md check fails: base spec.md must not contain `dross phase list --milestone` or `Describe a new phase`", "if the create flow is lost, the spec_prompt_test Fetched table fails: {target: new} == [create], and TestPhaseListPromptConsumersAreCurrent (expanded) still finds --milestone", "if the new fact value breaks the common path, TestCommonPathFetchesNothing / TestCommonPath fail: target's first value stays given"]
+  status = "done"
+  depends_on = ["t-3", "t-11"]
+
+[[task]]
   id = "t-16"
   wave = 7
   title = "Record after legs; gate flow cost"
@@ -233,5 +244,5 @@ Preconditions: `make install` at the phase head, then `dross prompt partial plan
 """
   covers = ["c-2", "c-4"]
   test_contract = ["if an after prompt is over budget or not smaller, TestFlowCostRecords/prompt-budgets-rest fails: any after prompt_bytes (three legs plus ship/options bytes_only) > 15000 or >= its before", "if the common path fetched, the test fails: partial_fetches != 0 on [after], [quick_after] or [spec_after] (observed, never edited)", "if a split added a round-trip, checkLegPair fails: an after leg runs a dross call its before leg didn't, such as `dross prompt partial`", "if the before pins drift, the test fails: before bytes != 21154/18098/19075 and bytes_only before != 23006/28231", "if the legs aren't comparable, the test fails: unequal fixture_tree per pair, or the same binary_version on both legs", "if the checker goes soft, TestPromptBudgetsRestFlowProblems fails: a sound record reports nothing, and each one-field break reports exactly one problem (after over cap, fetch = 1, before off base, options_after missing, tree mismatch, before file lingering)", "if turns get gated by accident, the same table test fails: after agent_turns = 99 and wall_clock_s = 999 report nothing", "if a bytes-only leg is held to turns, the same test fails: [bytes_only] ship with no agent_turns reports zero problems, while a [spec_after] with agent_turns = 0 reports one", "if the record pins live sizes, the test fails: the check reads only recorded numbers, never assets.FS sizes, so a later ship.md edit cannot break this phase's record", "if the scenario is not carried over, TestFlowCostRecords fails: flow-cost.toml's [scenario] is t-1's block verbatim (same setup_sh, per-leg flow_end and end_re), and the after legs are rebuilt from it", "if the spec leg's scope is not recorded, TestPromptBudgetsRestFlowProblems fails: [spec_after] must carry scope = \"target given, no deferral\""]
-  depends_on = ["t-1", "t-10", "t-11", "t-12", "t-13", "t-14"]
-  status = "pending"
+  depends_on = ["t-1", "t-10", "t-11", "t-12", "t-13", "t-14", "t-17"]
+  status = "done"

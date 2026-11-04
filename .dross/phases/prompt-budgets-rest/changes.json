@@ -123,6 +123,42 @@
         }
       ]
     },
+    "t-16": {
+      "files": [
+        ".dross/phases/prompt-budgets-rest/flow-cost.toml",
+        ".dross/phases/prompt-budgets-rest/flow-cost-before.toml",
+        "internal/cmd/flowcost_record_test.go"
+      ],
+      "commit": "d62dd6dd",
+      "completed_at": "2026-11-04T07:58:08.044312Z",
+      "landmarks": [
+        {
+          "feature": "flow-cost records",
+          "symbol": "promptBudgetsRestFlowProblems",
+          "loc": "internal/cmd/flowcost_record_test.go:577",
+          "what": "gates plan/quick/spec after legs under 15 KB, smaller than before, zero fetches, same tree, no added dross call"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "assets/partials.go",
+        "assets/partials_test.go",
+        "assets/prompts/spec.md",
+        "assets/prompts/_spec.create.md",
+        "internal/cmd/spec_prompt_test.go"
+      ],
+      "commit": "b33c7c2a",
+      "completed_at": "2026-11-04T07:24:16.932443Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "TriggerVocabulary",
+          "loc": "assets/prompts/spec.md:17",
+          "what": "spec's create flow moves to _spec.create.md behind target=new so the target-given path never sees it"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "assets/conservation_test.go",
