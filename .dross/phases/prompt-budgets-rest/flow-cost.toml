@@ -1,11 +1,23 @@
-# Flow cost for prompt-budgets-rest, before legs (milestone v1.8 c-6, phase
-# c-4): a pair /dross-plan, a pair /dross-spec and a pair /dross-quick, run on
-# a dross built from base commit 8eb38e9f (`make build` in a scratch worktree,
-# so the binary is LDFLAGS-stamped) while every prompt was unedited (t-1).
-# t-16 rebuilds the same fixtures from setup_sh, re-drives the legs on the
-# phase head, merges this file into flow-cost.toml and deletes it. ship and
-# options are bytes-only (locked flow_set). Observed numbers only; transcript
-# fields are counted structurally with jq_flow, no content copied.
+# Flow cost for prompt-budgets-rest (milestone v1.8 c-6, phase c-4): a pair
+# /dross-plan, a pair /dross-spec and a pair /dross-quick, each run twice on
+# the same fixture tree. The before legs (t-1) ran on a dross built from base
+# commit 8eb38e9f while every prompt was unedited; the after legs (t-16) ran on
+# the phase head, on fixtures rebuilt from setup_sh with the head binary (each
+# HEAD^{tree} matched its before leg). ship and options are bytes-only (locked
+# flow_set). Observed numbers only; transcript fields are counted structurally
+# with jq_flow, no content copied. [scenario] and the before legs are t-1's
+# flow-cost-before.toml verbatim.
+#
+# After legs were started with `launch.sh <leg> <head-binary-dir>` in a tmux
+# session on the same socket and geometry as `drive.sh start` (which passes no
+# binary dir); every other step used drive_sh unchanged. Claude Code was
+# 2.1.318 (before: 2.1.317).
+#
+# The first spec after-leg (session 71ccdace, binary 2b71c953) ran `dross phase
+# list`, a call [spec_before] never made: t-11 had left the create flow under
+# the <phase-id> bullet, where it read as main-path. t-17 (b33c7c2a) moved it
+# to _spec.create.md behind target=new; [spec_after] is the re-driven leg on
+# that binary, from a rebuilt fixture.
 
 [scenario]
   repo_shape = "one scratch repo per leg, each built by setup_sh with a fixed git identity and dates and every .dross timestamp (and the date-only created/started fields) pinned, so HEAD^{tree} reproduces: the init and dross-scaffold commits came out identical (0bd2ea81, 46692cdd) across the three independent leg builds. Each repo is prompt-partials' flow module: Go module example.com/flow, 60 packages p1..p60 each with Add and TestAdd, plus apicheck whose TestP3API pins p3's exported funcs to apicheck/testdata/p3.txt. plan leg: milestone v0.1 scoped to flow-probe (committed on milestone/v0.1), phase flow-probe with a locked two-criterion spec (p3 Sub + golden, p4 Mul) and no plan. spec leg: milestone v0.1 scoped to spec-probe (p7 Clamp), phase spec-probe scaffolded with no spec.toml. quick leg: no milestone, standalone on main with no origin, so `dross protect --check main` says `not checked (gitlab)` and quick takes the direct route. Board disabled, no remote grant: every run is local."
@@ -383,8 +395,72 @@ def dross_calls: [.[] | uses[] | select(.name == "Bash") | .input.command | [sca
   verdict = "spec locked"
   scope = "target given, no deferral"
 
+[after]
+  binary_version = "dross 0.1.0.0 (commit 2b71c953, built 2026-11-04T06:50:57Z)"
+  session_id = "bdd14d02-ecec-4c6f-89a7-8143f18a2623"
+  fixture_tree = "07647ee26d0d42953b443fab62712e15f081a4ad"
+  model = "claude-opus-5-5"
+  effort = "high"
+  claude_code_version = "2.1.318"
+  flow_start = "2026-11-04T06:52:56.421Z"
+  flow_end = "2026-11-04T06:54:01.719Z"
+  prompt_bytes = 14452
+  partial_fetches = 0
+  agent_turns = 9
+  turn_tools = ["Bash+Bash","Bash","Bash","Bash","AskUserQuestion","Write","AskUserQuestion","Bash+Read","Bash"]
+  wall_clock_s = 47.3
+  human_wait_s = 18.0
+  log_reads = 0
+  dross_calls = ["dross interaction show","dross issue phase","dross rule show","dross state set","dross state touch","dross validate"]
+  end_re = 'state touch "plan locked'
+  verdict = "plan locked"
+
+[quick_after]
+  binary_version = "dross 0.1.0.0 (commit 2b71c953, built 2026-11-04T06:50:57Z)"
+  session_id = "74c3d006-916d-4114-9684-84e2c2a61ffd"
+  fixture_tree = "a0fdeec0eeec41ad38a9c78c3790b4505f92da08"
+  model = "claude-opus-5-5"
+  effort = "high"
+  claude_code_version = "2.1.318"
+  flow_start = "2026-11-04T07:00:17.422Z"
+  flow_end = "2026-11-04T07:01:11.820Z"
+  prompt_bytes = 14820
+  partial_fetches = 0
+  agent_turns = 14
+  turn_tools = ["Bash+Bash","Bash","Bash","Bash","Bash","Bash","Read+Read","AskUserQuestion","Edit+Edit","Bash","Bash","Bash","Bash","Bash"]
+  wall_clock_s = 47.2
+  human_wait_s = 7.2
+  log_reads = 0
+  dross_calls = ["dross base-branch","dross interaction show","dross local set","dross protect","dross quick begin","dross quick end","dross rule show","dross test","dross trust"]
+  end_re = 'record quick'
+  verdict = "committed"
+
+[spec_after]
+  binary_version = "dross 0.1.0.0 (commit b33c7c2a, built 2026-11-04T07:24:17Z)"
+  session_id = "2a43f752-198e-43d7-b01d-e885fdc3b3fd"
+  fixture_tree = "ed90e26ac4c3e13116f4c9faa357e2c052c5d785"
+  model = "claude-opus-5-5"
+  effort = "high"
+  claude_code_version = "2.1.318"
+  flow_start = "2026-11-04T07:44:24.991Z"
+  flow_end = "2026-11-04T07:46:02.902Z"
+  prompt_bytes = 13250
+  partial_fetches = 0
+  agent_turns = 14
+  turn_tools = ["Bash+Bash","Bash","Bash","Bash","AskUserQuestion","AskUserQuestion","AskUserQuestion","AskUserQuestion","AskUserQuestion","AskUserQuestion","Write","AskUserQuestion","Bash","Bash"]
+  wall_clock_s = 49.9
+  human_wait_s = 48.0
+  log_reads = 0
+  dross_calls = ["dross deferred list","dross interaction show","dross rule show","dross state set","dross state touch","dross validate"]
+  end_re = 'state touch "spec locked'
+  verdict = "spec locked"
+  scope = "target given, no deferral"
+
 # ship and options: loaded bytes only, no session (locked flow_set) —
-# `git show 8eb38e9f:assets/prompts/<p>.md | wc -c`.
+# before: `git show 8eb38e9f:assets/prompts/<p>.md | wc -c`; after: the same on
+# the phase head (raw base bytes; the common path fetches no partial).
 [bytes_only]
   ship_before = 23006
   options_before = 28231
+  ship_after = 14495
+  options_after = 14494
