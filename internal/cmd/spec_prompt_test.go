@@ -257,6 +257,7 @@ func TestSpecPromptBranchesFetchTheirPartial(t *testing.T) {
 	}{
 		{"", "", ""},
 		{"target", "empty", "no-target"},
+		{"target", "new", "create"},
 		{"spec_file", "present", "resume"},
 		{"deferral", "chosen", "route"},
 	} {
@@ -270,6 +271,22 @@ func TestSpecPromptBranchesFetchTheirPartial(t *testing.T) {
 		}
 		if strings.Join(got, ",") != c.want {
 			t.Errorf("spec with %s=%s fetches %v, want [%s]", c.key, c.value, got, c.want)
+		}
+	}
+}
+
+// TestSpecCreateFlowOffCommonPath: the create flow serves only --new and the
+// no-target `new` answer. Left inline under the <phase-id> bullet it read as a
+// main-path step, and t-16's target-given spec leg ran `dross phase list`, a
+// call its before leg never made. Reads the raw file, unexpanded.
+func TestSpecCreateFlowOffCommonPath(t *testing.T) {
+	raw, err := assets.FS.ReadFile("prompts/spec.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, needle := range []string{"dross phase list --milestone", "Describe a new phase"} {
+		if strings.Contains(string(raw), needle) {
+			t.Errorf("base spec.md still carries the create flow's %q — it belongs in _spec.create.md", needle)
 		}
 	}
 }

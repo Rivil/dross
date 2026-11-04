@@ -55,8 +55,8 @@ var TriggerVocabulary = map[string][]string{
 	"panel":       {"off", "on"},
 	"auto":        {"off", "on"},
 	"ci":          {"passed", "failed"},
-	"ship_result": {"clean", "failed"}, // failed: ship or complete exited non-zero, or left the tree dirty
-	"target":      {"given", "empty"},
+	"ship_result": {"clean", "failed"},       // failed: ship or complete exited non-zero, or left the tree dirty
+	"target":      {"given", "empty", "new"}, // new: --new, or the no-target `new` answer
 	"spec_file":   {"absent", "present"},
 	"deferral":    {"none", "chosen"},
 	"lanes":       {"unchanged", "editing"},

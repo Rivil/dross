@@ -14,14 +14,8 @@ Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
 
 **When** `target=empty` — `$ARGUMENTS` is empty: `dross prompt partial spec no-target`
 
-   **Create flow** (used by `--new`, the `new` answer above, or whenever scaffolding is needed):
-   - If `state.current_milestone` is set, run `dross phase list --milestone <milestone>`: entries marked `(not scaffolded)` are the **unscaffolded roadmap phases**. Read the slug out of the line: each line has a two-character status prefix (`✓ ` when done) and the last line is an `N/M done` footer — neither is a slug.
-   - If there are unscaffolded entries, present them via `AskUserQuestion`: one option per entry (label `<id>`; description = the entry's one-line summary if a `Brief.md` at repo root contains a matching `### Phase <id>` section, otherwise the bare title). Last option is **"Describe a new phase"** (freeform).
-   - If the user picks a roadmap entry, the title is the entry's slug (or its Brief.md title if present) — run `dross phase create "<title>"`.
-   - If the user picks **Describe a new phase**, prompt for a freeform title, then run `dross phase create "<title>"`.
-   - If milestone is unset, roadmap is empty, or all roadmap entries are already scaffolded, fall back to the freeform title prompt directly.
+**When** `target=new` — `--new`, the no-target `new` answer, or scaffolding needed: `dross prompt partial spec create`
 
-   In every case: capture the new id (`NN-slug`) and proceed. Do NOT tell the user to run `dross phase create` manually — this command runs it. `dross phase create` also checks out the `phase/<id>` branch.
 3. **Verify current branch is `phase/<id>`** for the resolved phase (`git symbolic-ref --short HEAD`). On resume, if you're not on the phase branch: `dross phase checkout <id>` — the guarded checkout. If it refuses because the branch doesn't exist locally, stop and surface the situation to the user (phase work belongs off main).
 4. Read `.dross/phases/<id>/spec.toml` if it exists. **Resume, don't overwrite.**
 
