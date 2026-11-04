@@ -255,5 +255,5 @@ Preconditions: `make install` at the phase head, then `dross prompt partial plan
   description = "Verify survivor internal/cmd/quick.go:111 (CONDITIONALS_NEGATION, in-hunk, NOT COVERED): no test reaches quick end's unreadable-record branch t-5 added. Add a quick_test.go case that writes a corrupt quick record, runs quick end, and asserts it returns the 'quick record unreadable, removed it; nothing was bumped' error, removes the record, and leaves the version unbumped. Test-only; no quick.go change."
   covers = ["c-1", "c-3"]
   test_contract = ["if quick end swallows an unreadable record (quick.go:111 rmErr check negated, returning nil), TestQuickEndUnreadableRecord fails"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-5"]

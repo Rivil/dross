@@ -159,6 +159,21 @@
         }
       ]
     },
+    "t-18": {
+      "files": [
+        "internal/cmd/quick_test.go"
+      ],
+      "commit": "3dc2fc17",
+      "completed_at": "2026-11-04T12:07:20.633133Z",
+      "landmarks": [
+        {
+          "feature": "quick lifecycle",
+          "symbol": "TestQuickEndUnreadableRecord",
+          "loc": "internal/cmd/quick_test.go:110",
+          "what": "pins quick end's unreadable-record branch: errors, clears the record, bumps nothing"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "assets/conservation_test.go",
