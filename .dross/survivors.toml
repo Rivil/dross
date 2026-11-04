@@ -5188,3 +5188,21 @@
   line = 82
   reason = "gremlins switch-case attribution ceiling: the case condition sits in no go-cover block, so it reads NOT COVERED though tested. go test -coverprofile on 2026-11-03 shows count 1 on the arm body (dart.go:83-84, 'case d.exc != nil:' in dart.Feed), run by internal/runsummary/dart_test.go:TestDartExceptionSurvivesClockTick and TestDartPendingNotMisattributed, which assert where a held EXCEPTION CAUGHT block's lines land."
   accepted_in = "test-summary-parsers"
+
+[[accepted]]
+  key = "6e0ce0e54c9ec2ca"
+  file = "internal/cmd/quick.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.CurrentPhase != \"\" && s.CurrentPhaseStatus != \"shipped\":"
+  line = 164
+  reason = "gremlins switch-case attribution ceiling: a bare switch{} case condition gets no go-cover block; the in-phase arm is asserted by internal/cmd/quick_test.go TestQuickEndRecordsInPhase and the shipped arm by TestQuickEndShippedIsStandalone"
+  accepted_in = "prompt-budgets-rest"
+
+[[accepted]]
+  key = "6dd427a46248a09b"
+  file = "internal/cmd/quick.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.CurrentPhase != \"\":"
+  line = 181
+  reason = "gremlins switch-case attribution ceiling: a bare switch{} case condition gets no go-cover block; the shipped-phase arm is asserted by internal/cmd/quick_test.go TestQuickEndShippedIsStandalone (\"phase p is shipped\") and the no-phase arm by TestQuickEndMatchesPRBranch (\"changes: none (standalone)\")"
+  accepted_in = "prompt-budgets-rest"

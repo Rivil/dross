@@ -1,4 +1,4 @@
-task_seq = 17
+task_seq = 18
 
 [phase]
   id = "prompt-budgets-rest"
@@ -246,3 +246,14 @@ Preconditions: `make install` at the phase head, then `dross prompt partial plan
   test_contract = ["if an after prompt is over budget or not smaller, TestFlowCostRecords/prompt-budgets-rest fails: any after prompt_bytes (three legs plus ship/options bytes_only) > 15000 or >= its before", "if the common path fetched, the test fails: partial_fetches != 0 on [after], [quick_after] or [spec_after] (observed, never edited)", "if a split added a round-trip, checkLegPair fails: an after leg runs a dross call its before leg didn't, such as `dross prompt partial`", "if the before pins drift, the test fails: before bytes != 21154/18098/19075 and bytes_only before != 23006/28231", "if the legs aren't comparable, the test fails: unequal fixture_tree per pair, or the same binary_version on both legs", "if the checker goes soft, TestPromptBudgetsRestFlowProblems fails: a sound record reports nothing, and each one-field break reports exactly one problem (after over cap, fetch = 1, before off base, options_after missing, tree mismatch, before file lingering)", "if turns get gated by accident, the same table test fails: after agent_turns = 99 and wall_clock_s = 999 report nothing", "if a bytes-only leg is held to turns, the same test fails: [bytes_only] ship with no agent_turns reports zero problems, while a [spec_after] with agent_turns = 0 reports one", "if the record pins live sizes, the test fails: the check reads only recorded numbers, never assets.FS sizes, so a later ship.md edit cannot break this phase's record", "if the scenario is not carried over, TestFlowCostRecords fails: flow-cost.toml's [scenario] is t-1's block verbatim (same setup_sh, per-leg flow_end and end_re), and the after legs are rebuilt from it", "if the spec leg's scope is not recorded, TestPromptBudgetsRestFlowProblems fails: [spec_after] must carry scope = \"target given, no deferral\""]
   depends_on = ["t-1", "t-10", "t-11", "t-12", "t-13", "t-14", "t-17"]
   status = "done"
+
+[[task]]
+  id = "t-18"
+  wave = 3
+  title = "Test quick end on an unreadable record"
+  files = ["internal/cmd/quick_test.go"]
+  description = "Verify survivor internal/cmd/quick.go:111 (CONDITIONALS_NEGATION, in-hunk, NOT COVERED): no test reaches quick end's unreadable-record branch t-5 added. Add a quick_test.go case that writes a corrupt quick record, runs quick end, and asserts it returns the 'quick record unreadable, removed it; nothing was bumped' error, removes the record, and leaves the version unbumped. Test-only; no quick.go change."
+  covers = ["c-1", "c-3"]
+  test_contract = ["if quick end swallows an unreadable record (quick.go:111 rmErr check negated, returning nil), TestQuickEndUnreadableRecord fails"]
+  status = "pending"
+  depends_on = ["t-5"]
