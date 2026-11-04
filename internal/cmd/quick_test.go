@@ -9,6 +9,7 @@ import (
 
 	"github.com/Rivil/dross/internal/board"
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/gatestate"
 )
 
 // `dross quick end` absorbed /dross-quick's old §6: after the work commit it
@@ -100,6 +101,35 @@ func TestQuickEndAbortNoBump(t *testing.T) {
 	}
 	if strings.Contains(out, "version:") || !strings.Contains(out, "nothing bumped") {
 		t.Errorf("abort output %q, want no version line and `nothing bumped`", out)
+	}
+}
+
+// TestQuickEndUnreadableRecord: a corrupt record still clears, as an abort
+// path needs, but end says so and bumps nothing — even after a work commit
+// that a readable record would have bumped for.
+func TestQuickEndUnreadableRecord(t *testing.T) {
+	dir := quickEndFixture(t)
+	setQuickPhase(t, "p", "")
+	hits := countingBoard(t, failingBoard)
+	beginQuick(t, "fix x")
+	quickWork(t, dir)
+	recPath := gatestate.Path(dir, gatestate.QuickFile)
+	if err := os.WriteFile(recPath, []byte(`{"mode":"pa`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := endQuick(t)
+	if err == nil || !strings.Contains(err.Error(), "quick record unreadable, removed it; nothing was bumped") {
+		t.Fatalf("quick end on an unreadable record = %v (out %q), want the unreadable-record error", err, out)
+	}
+	if _, err := os.Stat(recPath); !os.IsNotExist(err) {
+		t.Errorf("quick end left the unreadable record (stat err %v)", err)
+	}
+	assertVersionParity(t, dir, "1.2.3.4")
+	if _, err := os.Stat(changesPathAt(dir, "p")); !os.IsNotExist(err) {
+		t.Errorf("an unreadable record wrote changes.json (stat err %v)", err)
+	}
+	if *hits != 0 {
+		t.Errorf("an unreadable record called the board %d times, want none", *hits)
 	}
 }
 
