@@ -175,6 +175,38 @@ func TestShipCommonPathFetchesNothing(t *testing.T) {
 	}
 }
 
+// TestShipAutoFailureRoutesToRecovery: --auto stops before §6, whose end holds
+// the only recovery fetch, so the paragraph right after the `dross ship --auto`
+// block routes a failed run to that fetch by its own key=value. Partials do not
+// nest, so the partial names the fact, never the `dross prompt partial` call.
+func TestShipAutoFailureRoutesToRecovery(t *testing.T) {
+	points, err := assets.FetchPoints(promptFS, "ship.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fact string
+	for _, p := range points {
+		if p.Partial == "recovery" && !p.Refetch {
+			fact = "`" + p.Key + "=" + p.Value + "`"
+		}
+	}
+	if fact == "" {
+		t.Fatal("ship.md has no recovery fetch line")
+	}
+	exp := expandedPrompt(t, "ship.md")
+	const block = "dross ship --auto <phase-id>\n```\n"
+	i := strings.Index(exp, block)
+	if i < 0 {
+		t.Fatal("expanded ship.md lacks the `dross ship --auto <phase-id>` block")
+	}
+	para, _, _ := strings.Cut(strings.TrimLeft(exp[i+len(block):], "\n"), "\n\n")
+	for _, want := range []string{fact, "non-zero exit", "dirty tree", "without merging"} {
+		if !strings.Contains(para, want) {
+			t.Errorf("the paragraph after the --auto block lacks %q, so a failed --auto never reaches recovery; got:\n%s", want, para)
+		}
+	}
+}
+
 // TestShipAutoFetchPoint: the --auto fetch sits where §0.5 was, the last line
 // before ## 1. Preview, so the expansion keeps heading order 0 -> 0.5 -> 1, and
 // base ship.md no longer cites a §0.5 that only the partial carries.

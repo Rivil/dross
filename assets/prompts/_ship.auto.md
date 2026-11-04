@@ -13,6 +13,8 @@
 dross ship --auto <phase-id>
 ```
 
+A non-zero exit or a dirty tree after it is `ship_result=failed`: take ship's `ship_result=failed` fetch (end of §6) and follow that recovery, still without merging.
+
 Add `--json` for machine-readable output to capture in the caller: `dross ship --auto --json <phase-id>` prints a single `{url, number, result}` object on stdout and suppresses the narration.
 
 `--auto` opens the PR and **returns without merging** — do not drive the §5 CI-watch or §6 merge gate; the caller (or a later interactive `/dross-ship`) owns the merge. Report the PR URL and stop.
