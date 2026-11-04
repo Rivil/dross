@@ -75,7 +75,10 @@ type flowCost struct {
 	QuickAfter   *flowLeg       `toml:"quick_after"`
 	SpecBefore   *flowLeg       `toml:"spec_before"`
 	SpecAfter    *flowLeg       `toml:"spec_after"`
-	BytesOnly    map[string]int `toml:"bytes_only"`
+	// SpecRoadmapAfter is spec on an unscaffolded roadmap target: the
+	// fixture's milestone lists the id, no phase dir exists (t-19).
+	SpecRoadmapAfter *flowLeg       `toml:"spec_roadmap_after"`
+	BytesOnly        map[string]int `toml:"bytes_only"`
 }
 
 // TestFlowCostRecords guards milestone v1.8's c-6 record: every phase's
@@ -559,7 +562,9 @@ var promptBudgetsRestScripts = map[string]string{
 
 // checkPromptBudgetsRestFlow pins prompt-budgets-rest's c-4 record. The plan
 // pair goes through TestFlowCostRecords' checkLegPair; the quick and spec pairs
-// go through it here, so no after leg adds a dross call its before lacked.
+// go through it here, so no after leg adds a dross call its before lacked. The
+// roadmap-target spec leg has no before leg of its own; its round-trip gate
+// lives in promptBudgetsRestFlowProblems.
 func checkPromptBudgetsRestFlow(t *testing.T, fc flowCost, dir string) {
 	t.Helper()
 	checkLegPair(t, "quick_before", fc.QuickBefore, "quick_after", fc.QuickAfter)
@@ -627,6 +632,7 @@ func promptBudgetsRestFlowProblems(fc flowCost, dir string) []string {
 	if fc.SpecAfter != nil && fc.SpecAfter.Scope != "target given, no deferral" {
 		out = append(out, fmt.Sprintf("[spec_after] scope = %q; want \"target given, no deferral\" — the zero-fetch claim covers only that path", fc.SpecAfter.Scope))
 	}
+	out = append(out, specRoadmapAfterProblems(fc, budget)...)
 	for _, p := range []struct {
 		name string
 		base int
@@ -641,6 +647,59 @@ func promptBudgetsRestFlowProblems(fc flowCost, dir string) []string {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "flow-cost-before.toml")); err == nil {
 		out = append(out, "flow-cost-before.toml still exists — t-16 folds its legs into flow-cost.toml and deletes it")
+	}
+	return out
+}
+
+// specRoadmapScope is the path [spec_roadmap_after] measures: the exact
+// `/dross-spec <id>` verify prints as Next, for a roadmap phase not yet
+// scaffolded.
+const specRoadmapScope = "roadmap target, no phase dir, no deferral"
+
+// specRoadmapAfterProblems checks [spec_roadmap_after] (t-19): spec on a
+// roadmap id with no phase dir, measured on a post-base build, fetching no
+// partial, stopping at spec lock, and scaffolding inline — its only dross call
+// beyond [spec_before]'s is `dross phase create`, so the create flow's
+// `dross phase list` is out.
+func specRoadmapAfterProblems(fc flowCost, budget int) []string {
+	const name = "spec_roadmap_after"
+	l := fc.SpecRoadmapAfter
+	if l == nil {
+		return []string{fmt.Sprintf("[%s] is missing — spec on an unscaffolded roadmap target is unmeasured", name)}
+	}
+	var out []string
+	if l.BinaryVersion == "" || strings.Contains(l.BinaryVersion, promptBudgetsRestBase) || l.SessionID == "" {
+		out = append(out, fmt.Sprintf("[%s] ran on %q (session %q); want a measured post-base build", name, l.BinaryVersion, l.SessionID))
+	}
+	if l.PromptBytes <= 0 || l.PromptBytes > budget {
+		out = append(out, fmt.Sprintf("[%s] prompt_bytes = %d; want measured and at most %d", name, l.PromptBytes, budget))
+	}
+	if l.PartialFetches != 0 {
+		out = append(out, fmt.Sprintf("[%s] partial_fetches = %d; a roadmap target is scaffolded inline and should fetch no partial", name, l.PartialFetches))
+	}
+	if l.FixtureTree == "" {
+		out = append(out, fmt.Sprintf("[%s] has no fixture_tree — the leg cannot be replayed", name))
+	}
+	if l.AgentTurns <= 0 || l.WallClockS <= 0 {
+		out = append(out, fmt.Sprintf("[%s] agent_turns = %d, wall_clock_s = %v — recorded, not compared, but must be measured", name, l.AgentTurns, l.WallClockS))
+	}
+	if want, _ := fc.Scenario["spec_end_re"].(string); want == "" || l.EndRe != want {
+		out = append(out, fmt.Sprintf("[%s] end_re = %q, [scenario] spec_end_re = %q — the leg did not stop where the scenario says", name, l.EndRe, want))
+	}
+	if l.Scope != specRoadmapScope {
+		out = append(out, fmt.Sprintf("[%s] scope = %q; want %q", name, l.Scope, specRoadmapScope))
+	}
+	if !slices.Contains(l.DrossCalls, "dross phase create") {
+		out = append(out, fmt.Sprintf("[%s] never ran `dross phase create` — the roadmap target was not scaffolded inline", name))
+	}
+	var before []string
+	if fc.SpecBefore != nil {
+		before = fc.SpecBefore.DrossCalls
+	}
+	for _, call := range l.DrossCalls {
+		if call != "dross phase create" && !slices.Contains(before, call) {
+			out = append(out, fmt.Sprintf("[%s] runs %q, which [spec_before] did not — scaffolding added a round-trip beyond `dross phase create`", name, call))
+		}
 	}
 	return out
 }
@@ -672,6 +731,11 @@ func TestPromptBudgetsRestFlowProblems(t *testing.T) {
 			BytesOnly:   map[string]int{"ship_before": 23006, "options_before": 28231, "ship_after": 14495, "options_after": 14494},
 		}
 		fc.SpecAfter.Scope = "target given, no deferral"
+		fc.SpecBefore.DrossCalls = []string{"dross rule show", "dross state touch"}
+		fc.SpecRoadmapAfter = leg(head, 13445, "spec_end_re")
+		fc.SpecRoadmapAfter.SessionID = "s"
+		fc.SpecRoadmapAfter.Scope = specRoadmapScope
+		fc.SpecRoadmapAfter.DrossCalls = []string{"dross phase create", "dross rule show", "dross state touch"}
 		return fc
 	}
 	dir := t.TempDir()
@@ -699,6 +763,21 @@ func TestPromptBudgetsRestFlowProblems(t *testing.T) {
 		"after end_re drifted":    func(fc *flowCost) { fc.After.EndRe = "plan locked" },
 		"setup_sh edited":         func(fc *flowCost) { fc.Scenario["setup_sh"] = fc.Scenario["setup_sh"].(string) + "\n" },
 		"jq_flow missing":         func(fc *flowCost) { delete(fc.Scenario, "jq_flow") },
+		"roadmap leg missing":     func(fc *flowCost) { fc.SpecRoadmapAfter = nil },
+		"roadmap leg fetched":     func(fc *flowCost) { fc.SpecRoadmapAfter.PartialFetches = 1 },
+		"roadmap leg over cap":    func(fc *flowCost) { fc.SpecRoadmapAfter.PromptBytes = 15001 },
+		"roadmap leg on base":     func(fc *flowCost) { fc.SpecRoadmapAfter.BinaryVersion = base },
+		"roadmap leg no session":  func(fc *flowCost) { fc.SpecRoadmapAfter.SessionID = "" },
+		"roadmap leg no tree":     func(fc *flowCost) { fc.SpecRoadmapAfter.FixtureTree = "" },
+		"roadmap leg no turns":    func(fc *flowCost) { fc.SpecRoadmapAfter.WallClockS = 0 },
+		"roadmap leg end drifted": func(fc *flowCost) { fc.SpecRoadmapAfter.EndRe = "spec written" },
+		"roadmap leg scope":       func(fc *flowCost) { fc.SpecRoadmapAfter.Scope = "target given, no deferral" },
+		"roadmap leg no create": func(fc *flowCost) {
+			fc.SpecRoadmapAfter.DrossCalls = []string{"dross rule show", "dross state touch"}
+		},
+		"roadmap leg ran create flow": func(fc *flowCost) {
+			fc.SpecRoadmapAfter.DrossCalls = append(fc.SpecRoadmapAfter.DrossCalls, "dross phase list")
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			fc := sound()

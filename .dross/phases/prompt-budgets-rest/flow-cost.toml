@@ -456,6 +456,34 @@ def dross_calls: [.[] | uses[] | select(.name == "Bash") | .input.command | [sca
   verdict = "spec locked"
   scope = "target given, no deferral"
 
+# spec on an unscaffolded roadmap target (t-19): the spec fixture built by
+# setup_sh's files, dross and milestone steps only — the `phase spec` step is
+# skipped, so v0.1 lists spec-probe and no phase dir exists (tree = the spec
+# leg's "v0.1: scope" commit, reproduced exactly). The binary is f7a809c9's
+# working tree with t-19's spec.md edits applied, uncommitted (`make install`
+# before the leg); prompts are the same tree via the assets symlink. Same
+# driver, launch and filter as the other legs; no before leg of its own.
+[spec_roadmap_after]
+  binary_version = "dross 0.1.0.0 (commit f7a809c9, built 2026-11-04T20:06:53Z)"
+  session_id = "309d6820-81b8-4e4a-b6d0-fa16849b4767"
+  fixture_tree = "0a7a5ced352cd032e8c218e5c79abb9560a36648"
+  model = "claude-opus-5-5"
+  effort = "high"
+  claude_code_version = "2.1.318"
+  flow_start = "2026-11-04T20:07:52.602Z"
+  flow_end = "2026-11-04T20:09:56.373Z"
+  prompt_bytes = 13445
+  partial_fetches = 0
+  agent_turns = 15
+  turn_tools = ["Bash","Bash","Bash+Bash","Bash","AskUserQuestion","AskUserQuestion","AskUserQuestion","AskUserQuestion","AskUserQuestion","AskUserQuestion","AskUserQuestion","Write","AskUserQuestion","Bash","Bash"]
+  wall_clock_s = 60.2
+  human_wait_s = 63.6
+  log_reads = 0
+  dross_calls = ["dross deferred list","dross interaction show","dross phase create","dross rule show","dross state set","dross state touch","dross validate"]
+  end_re = 'state touch "spec locked'
+  verdict = "spec locked"
+  scope = "roadmap target, no phase dir, no deferral"
+
 # ship and options: loaded bytes only, no session (locked flow_set) —
 # before: `git show 8eb38e9f:assets/prompts/<p>.md | wc -c`; after: the same on
 # the phase head (raw base bytes; the common path fetches no partial).

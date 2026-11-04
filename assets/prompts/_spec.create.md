@@ -1,4 +1,4 @@
-**Create flow** (used by `--new`, the no-target `new` answer, or whenever scaffolding is needed):
+**Create flow** (used by `--new` and the no-target `new` answer; a roadmap id given as the target is scaffolded inline in §0):
 - If `state.current_milestone` is set, run `dross phase list --milestone <milestone>`: entries marked `(not scaffolded)` are the **unscaffolded roadmap phases**. Read the slug out of the line: each line has a two-character status prefix (`✓ ` when done) and the last line is an `N/M done` footer — neither is a slug.
 - If there are unscaffolded entries, present them via `AskUserQuestion`: one option per entry (label `<id>`; description = the entry's one-line summary if a `Brief.md` at repo root contains a matching `### Phase <id>` section, otherwise the bare title). Last option is **"Describe a new phase"** (freeform).
 - If the user picks a roadmap entry, the title is the entry's slug (or its Brief.md title if present) — run `dross phase create "<title>"`.

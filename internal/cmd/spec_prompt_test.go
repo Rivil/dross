@@ -249,13 +249,17 @@ func TestSpecPromptRecordsAbsorbedItems(t *testing.T) {
 // path ("target given, no deferral", no existing spec.toml) fetches nothing,
 // and each moved branch fetches exactly its own partial. Bare /dross-spec
 // (target=empty) and choosing "defer it" (deferral=chosen) each cost one fetch
-// by design.
+// by design. A roadmap id given as the target with no phase dir yet — the
+// exact `/dross-spec <id>` verify prints as Next — is target=given too: §0
+// scaffolds it inline, so it fetches nothing, and the target=new trigger's
+// own prose must not claim it (t-19).
 func TestSpecPromptBranchesFetchTheirPartial(t *testing.T) {
 	for _, c := range []struct {
 		key, value string
 		want       string
 	}{
 		{"", "", ""},
+		{"target", "given", ""}, // a roadmap id with no phase dir
 		{"target", "empty", "no-target"},
 		{"target", "new", "create"},
 		{"spec_file", "present", "resume"},
@@ -272,6 +276,62 @@ func TestSpecPromptBranchesFetchTheirPartial(t *testing.T) {
 		if strings.Join(got, ",") != c.want {
 			t.Errorf("spec with %s=%s fetches %v, want [%s]", c.key, c.value, got, c.want)
 		}
+	}
+	// target=new's trigger prose decides what the agent reads as "new": it
+	// must name only --new and the no-target answer, never a given id that
+	// still needs scaffolding — that read is what fetched the create partial
+	// on the roadmap-target path.
+	raw, err := assets.FS.ReadFile("prompts/spec.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(raw), "\n")
+	points, err := assets.FetchPoints(promptFS, "spec.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var newTrigger string
+	for _, p := range points {
+		if p.Key == "target" && p.Value == "new" {
+			newTrigger = lines[p.Line-1]
+		}
+	}
+	if newTrigger == "" {
+		t.Fatal("spec.md has no target=new fetch line")
+	}
+	if strings.Contains(strings.ToLower(newTrigger), "scaffold") || !strings.Contains(newTrigger, "`--new`") {
+		t.Errorf("target=new trigger %q must name --new and the no-target answer, not a target that needs scaffolding", newTrigger)
+	}
+}
+
+// TestSpecPromptScaffoldsRoadmapTargetInline: `/dross-spec <id>` for a roadmap
+// phase with no phase dir scaffolds it in §0's <phase-id> bullet and goes on —
+// it fails only when the id is neither a phase dir nor a milestone entry. The
+// create partial's opening line no longer claims that case. Reads the raw
+// files, unexpanded, so the step cannot hide in a partial.
+func TestSpecPromptScaffoldsRoadmapTargetInline(t *testing.T) {
+	raw, err := assets.FS.ReadFile("prompts/spec.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(raw)
+	start := strings.Index(s, "   - `<phase-id>` →")
+	if start < 0 {
+		t.Fatal("spec.md §0 has no <phase-id> bullet")
+	}
+	bullet := s[start : start+strings.Index(s[start:], "\n")]
+	for _, needle := range []string{"active milestone's `phases` array", `dross phase create "<id>"`, "Fail only if it is in neither"} {
+		if !strings.Contains(bullet, needle) {
+			t.Errorf("spec.md's <phase-id> bullet lost %q — a roadmap id with no phase dir must be scaffolded inline", needle)
+		}
+	}
+	create, err := assets.FS.ReadFile("prompts/_spec.create.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := strings.SplitN(string(create), "\n", 2)[0]
+	if strings.Contains(first, "scaffolding is needed") || strings.Contains(first, "scaffolding needed") {
+		t.Errorf("_spec.create.md's opening line %q still claims the scaffolding case", first)
 	}
 }
 

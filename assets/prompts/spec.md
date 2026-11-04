@@ -9,12 +9,12 @@ Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
 1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. Resolve the target phase from `$ARGUMENTS`:
    - `--new "Phase Title"` → run `dross phase create "<title>"`, capture the new id (`NN-slug`).
-   - `<phase-id>` → use it directly. Fail if `.dross/phases/<id>/` doesn't exist.
+   - `<phase-id>` → use it directly when `.dross/phases/<id>/` exists. If it doesn't but `<id>` is an entry in the active milestone's `phases` array, it is an unscaffolded roadmap phase: run `dross phase create "<id>"` (it also checks out `phase/<id>`) and continue. Fail only if it is in neither.
    - empty → resolve it from `state.json`:
 
 **When** `target=empty` — `$ARGUMENTS` is empty: `dross prompt partial spec no-target`
 
-**When** `target=new` — `--new`, the no-target `new` answer, or scaffolding needed: `dross prompt partial spec create`
+**When** `target=new` — `--new` or the no-target `new` answer: `dross prompt partial spec create`
 
 3. **Verify current branch is `phase/<id>`** for the resolved phase (`git symbolic-ref --short HEAD`). On resume, if you're not on the phase branch: `dross phase checkout <id>` — the guarded checkout. If it refuses because the branch doesn't exist locally, stop and surface the situation to the user (phase work belongs off main).
 4. Read `.dross/phases/<id>/spec.toml` if it exists. **Resume, don't overwrite.**

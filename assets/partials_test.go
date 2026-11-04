@@ -240,6 +240,7 @@ func TestCommonPathInline(t *testing.T) {
 		"prompts/plan.md": {"## 2G", "## 3. Propose", "## 5. Write plan.toml", "### 6.1 Auto review", `dross state set current_phase_status "planned"`},
 		"prompts/spec.md": {
 			"Step 1 — the entry gate", "dross phase create",
+			"active milestone's `phases` array", `dross phase create "<id>"`,
 			"### 3b.", "[[criteria]]", `dross state touch "spec locked: <id>"`, "Resume, don't overwrite", "already has a target",
 		},
 		"prompts/quick.md": {`dross quick begin "<description>"`, "**Red, pair mode**", "dross quick end", "## 5. Commit", "Pair mode by default"},
