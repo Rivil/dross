@@ -173,6 +173,36 @@ func itoa(n int) string {
 	return string(b)
 }
 
+var spanRe = regexp.MustCompile("`([^`]+)`")
+
+// promptUnits is every whole unit a command row can stand as in body: each
+// trimmed line, and each trimmed inline backticked span.
+func promptUnits(body string) map[string]bool {
+	units := map[string]bool{}
+	for _, line := range strings.Split(body, "\n") {
+		units[strings.TrimSpace(line)] = true
+		// Both pairings: inlineSpanRe is how rows were extracted, so a span it
+		// found (a `` `dross a` `` double-backtick, say) stays a unit.
+		for _, re := range []*regexp.Regexp{spanRe, inlineSpanRe} {
+			for _, m := range re.FindAllStringSubmatch(line, -1) {
+				units[strings.TrimSpace(m[1])] = true
+			}
+		}
+	}
+	return units
+}
+
+// rowPresent reports whether row still stands in an expanded prompt. A
+// `- **...**` lead-in is prose and matches as a substring; a command row must
+// be a whole line or a whole backticked span, so `dross x set` is not kept
+// alive by `dross x set-all` or `dross x set --force`.
+func rowPresent(body string, units map[string]bool, row string) bool {
+	if strings.HasPrefix(row, "- **") {
+		return strings.Contains(body, row)
+	}
+	return units[row]
+}
+
 // conservationProblems lists every manifest row neither in its expanded
 // prompt nor claimed by exactly one marker, and every marker claiming no row.
 func conservationProblems(fsys fs.FS, manifest, markers map[string][]string) []string {
@@ -184,9 +214,10 @@ func conservationProblems(fsys fs.FS, manifest, markers map[string][]string) []s
 			problems = append(problems, prompt+": "+err.Error())
 			continue
 		}
+		units := promptUnits(string(exp))
 		for _, row := range manifest[prompt] {
 			rows[row] = true
-			if strings.Contains(string(exp), row) {
+			if rowPresent(string(exp), units, row) {
 				continue
 			}
 			switch n := len(markers[row]); {
@@ -365,6 +396,26 @@ func TestConservationCatchesALostRow(t *testing.T) {
 	twice := map[string][]string{row: {"verify.go:1", "verify.go:9"}}
 	if p := strings.Join(conservationProblems(fsys, manifest, twice), "\n"); !strings.Contains(p, "want one") {
 		t.Errorf("a doubly claimed row passed: %q", p)
+	}
+	// A row that survives only as the prefix of a longer command is lost.
+	for _, longer := range []string{row + "-all", row + " --force"} {
+		fsys := withoutRow(t, row, longer)
+		if p := strings.Join(conservationProblems(fsys, manifest, nil), "\n"); !strings.Contains(p, "verify.md: instruction lost: "+row) {
+			t.Errorf("%q kept row %q alive; problems:\n%s", longer, row, p)
+		}
+	}
+	prefixOnly := withoutRow(t, row, row)
+	prefixOnly["prompts/verify.md"] = &fstest.MapFile{Data: []byte("```\ndross x set-all\n```\nthen run `dross x set-all`\n")}
+	setRow := map[string][]string{"verify.md": {"dross x set"}}
+	if p := strings.Join(conservationProblems(prefixOnly, setRow, nil), "\n"); !strings.Contains(p, "verify.md: instruction lost: dross x set") {
+		t.Errorf("`dross x set-all` kept `dross x set` alive; problems:\n%s", p)
+	}
+	// Whole lines and whole spans still count, and lead-ins stay on substring.
+	whole := withoutRow(t, row, row)
+	whole["prompts/verify.md"] = &fstest.MapFile{Data: []byte("```\n  dross x set\n```\nor `dross y get`, or `` `dross z put` ``\n- **Lead in.** more prose\n")}
+	kept := map[string][]string{"verify.md": {"dross x set", "dross y get", "dross z put", "- **Lead in.**"}}
+	if p := strings.Join(conservationProblems(whole, kept, nil), "\n"); strings.Contains(p, "verify.md: instruction lost") {
+		t.Errorf("a whole-line, whole-span or lead-in row was reported lost:\n%s", p)
 	}
 	stale := map[string][]string{"dross nothing here": {"x.go:3"}}
 	if p := strings.Join(conservationProblems(FS, map[string][]string{}, stale), "\n"); !strings.Contains(p, "matches no manifest row") {
