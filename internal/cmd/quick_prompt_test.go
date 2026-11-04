@@ -103,11 +103,19 @@ func quickSoloReview(t *testing.T) (string, string) {
 // test` and §5.
 func TestQuickSoloReview(t *testing.T) {
 	body, block := quickSoloReview(t)
-	run, ctx := mustIdx(t, block, "`dross test`"), mustIdx(t, block, "dross review context")
+	run, ctx := mustIdx(t, block, "after the green `dross test`, before the commit"), mustIdx(t, block, "dross review context")
 	spawn := mustIdx(t, block, `subagent_type: "`+review.ReviewerAgent+`"`)
 	status, commit := mustIdx(t, block, "dross review status"), mustIdx(t, block, "`pass` → commit (§5)")
 	if !(run < ctx && ctx < spawn && spawn < status && status < commit) {
 		t.Errorf("solo quick review order: dross test %d, review context %d, spawn %d, review status %d, commit %d — want that order", run, ctx, spawn, status, commit)
+	}
+	// Each fix-round arm re-runs the test before it rebuilds the review.
+	for _, arm := range []string{"- `blocked` →", "- `pass-stale` →"} {
+		line, _, _ := strings.Cut(block[mustIdx(t, block, arm):], "\n")
+		rerun, rebuild := strings.Index(line, "re-run `dross test`"), strings.Index(line, "`dross review context`")
+		if rerun < 0 || rebuild < rerun {
+			t.Errorf("the %s arm lost its `dross test` re-run ahead of the review context: %q", arm, line)
+		}
 	}
 	if !strings.Contains(block, "In **pair mode skip this entirely**") {
 		t.Error("the quick's solo review block no longer says pair mode skips it")
@@ -151,11 +159,13 @@ func TestQuickSoloFetchPlacement(t *testing.T) {
 		if p.Partial == "solo" && !p.Refetch {
 			solo++
 		}
-		if first == nil && !p.Refetch && p.Line > fenceLine {
+		// Re-fetch lines count too: any fetch between the fence and the
+		// solo When line is a stray one.
+		if first == nil && p.Line > fenceLine {
 			first = &points[i]
 		}
 	}
-	if first == nil || first.Partial != "solo" || first.Key != "mode" || first.Value != "solo" {
+	if first == nil || first.Refetch || first.Partial != "solo" || first.Key != "mode" || first.Value != "solo" {
 		t.Errorf("first fetch after the solo begin fence is %+v, want `mode=solo` → solo", first)
 	}
 	if first != nil && first.Line > strings.Count(base[:insight], "\n") {

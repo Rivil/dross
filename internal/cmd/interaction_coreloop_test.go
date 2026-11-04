@@ -23,14 +23,9 @@ const interactionRefPhrase = "interaction playbook"
 // @-include line. This is the grep-verification half of the retrofit — if a
 // prompt drops the emitter call, the live command stops delivering the playbook.
 func TestCoreLoopPromptsWireEmitter(t *testing.T) {
-	root := repoRootFromTest(t)
 	for _, name := range coreLoopPrompts {
-		path := filepath.Join(root, "assets", "prompts", name+".md")
-		b, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read %s.md: %v", name, err)
-		}
-		body := string(b)
+		// Expanded, so a line moved into a partial is still checked.
+		body := expandedPrompt(t, name+".md")
 		if !strings.Contains(body, "dross interaction show") {
 			t.Errorf("%s.md pre-flight must invoke `dross interaction show` to deliver the interaction playbook (c-1)", name)
 		}
@@ -44,14 +39,9 @@ func TestCoreLoopPromptsWireEmitter(t *testing.T) {
 // references the interaction contract in prose, so the binding interaction style
 // is visible to a reader, not just wired in pre-flight.
 func TestCoreLoopPromptsReferenceContract(t *testing.T) {
-	root := repoRootFromTest(t)
 	for _, name := range coreLoopPrompts {
-		path := filepath.Join(root, "assets", "prompts", name+".md")
-		b, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read %s.md: %v", name, err)
-		}
-		if !strings.Contains(string(b), interactionRefPhrase) {
+		// Expanded, so a line moved into a partial is still checked.
+		if !strings.Contains(expandedPrompt(t, name+".md"), interactionRefPhrase) {
 			t.Errorf("%s.md must reference the contract (%q) so the interaction style is visible (c-2)", name, interactionRefPhrase)
 		}
 	}
