@@ -1,4 +1,4 @@
-task_seq = 18
+task_seq = 24
 
 [phase]
   id = "prompt-budgets-rest"
@@ -256,4 +256,70 @@ Preconditions: `make install` at the phase head, then `dross prompt partial plan
   covers = ["c-1", "c-3"]
   test_contract = ["if quick end swallows an unreadable record (quick.go:111 rmErr check negated, returning nil), TestQuickEndUnreadableRecord fails"]
   status = "done"
+  depends_on = ["t-5"]
+
+[[task]]
+  id = "t-19"
+  wave = 5
+  title = "Scaffold a roadmap phase id inline in spec"
+  files = ["assets/prompts/spec.md", "assets/prompts/_spec.create.md", "assets/partials_test.go", "internal/cmd/spec_prompt_test.go", "internal/cmd/flowcost_record_test.go", ".dross/phases/prompt-budgets-rest/flow-cost.toml"]
+  description = "Verify FLAG (c-2): `/dross-spec <id>` for a roadmap phase with no phase dir — the exact Next line verify prints — reads as 'scaffolding needed' and fetches _spec.create.md, so spec's common path is not zero-fetch. In spec.md §0 step 2's <phase-id> bullet, inline the roadmap case: if .dross/phases/<id>/ is missing but <id> is an entry in the active milestone's phases array, run `dross phase create \"<id>\"` (which checks out phase/<id>) and continue; fail only if it is in neither. Narrow the target=new trigger (spec.md line 17 and _spec.create.md's opening line) to --new and the no-target 'new' answer — drop 'scaffolding needed'. spec.md must stay ≤15,000 B (13,250 B today). Add an after-leg for spec on an unscaffolded roadmap target (fixture milestone lists the id, no phase dir) to flow-cost.toml, alongside the existing pre-scaffolded leg, and extend TestPromptBudgetsRestFlowProblems to require it. Post-commit: make install before re-driving the leg."
+  covers = ["c-2", "c-4"]
+  test_contract = ["if the roadmap-id scaffolding step leaves base spec.md, a raw spec.md check (TestCommonPathInline needle) fails", "if target=new still triggers on an unscaffolded roadmap id, the spec_prompt_test Fetched table fails: a given roadmap id with no phase dir fetches nothing", "if the unscaffolded-target spec after-leg is missing from flow-cost.toml or fetched a partial, TestPromptBudgetsRestFlowProblems fails"]
+  status = "pending"
+  depends_on = ["t-17"]
+
+[[task]]
+  id = "t-20"
+  wave = 5
+  title = "Route a failed ship --auto to the recovery partial"
+  files = ["assets/prompts/_ship.auto.md", "internal/cmd/ship_prompt_test.go"]
+  description = "Verify FLAG (t-12 review): _ship.auto.md says 'Report the PR URL and stop' and not to drive §5/§6, but ship.md's only `ship_result=failed` fetch (`dross prompt partial ship recovery`) sits at the end of §6 (line 119), so a non-zero `dross ship --auto` never reaches the Recovery text. In _ship.auto.md, after the `dross ship --auto <phase-id>` block, add one line: on a non-zero exit or a dirty tree, fetch `dross prompt partial ship recovery` and follow it, still without merging. Partial-only edit; ship.md base bytes unchanged. Post-commit: make install."
+  covers = ["c-3"]
+  test_contract = ["if the --auto failure path loses its recovery fetch, a ship_prompt_test check fails: expanded _ship.auto.md names `dross prompt partial ship recovery` after the `dross ship --auto` block", "if the line breaks the common path, TestCommonPathFetchesNothing / TestShipCommonPathFetchesNothing fail"]
+  status = "pending"
+  depends_on = ["t-12"]
+
+[[task]]
+  id = "t-21"
+  wave = 3
+  title = "Gate quick end behind exec consent"
+  files = ["internal/cmd/quick.go", "internal/cmd/trust.go", "internal/cmd/quick_test.go", "internal/cmd/trust_test.go"]
+  description = "Verify FLAG (t-5 review): finishQuick (quick.go:147) absorbs `state bump` and `changes record` — both in execGatedCommands (trust.go) as step boundaries — but `dross quick end` never calls requireExecConsent, so the quick flow no longer refuses in an untrusted tree. Call requireExecConsent first in quick end's RunE, before any I/O, and add \"quick end\" to execGatedCommands."
+  covers = ["c-3"]
+  test_contract = ["if quick end runs in an untrusted tree, a quick_test case fails: quick end must refuse with the consent error and leave the quick record, version and changes.json untouched", "if quick end gates without joining the roster (or vice versa), TestExecGatedSetIsExplicit fails"]
+  status = "pending"
+  depends_on = ["t-5"]
+
+[[task]]
+  id = "t-22"
+  wave = 2
+  title = "Match conservation rows on token boundaries"
+  files = ["assets/conservation_test.go"]
+  description = "Verify FLAG (t-2 review): conservationProblems (assets/conservation_test.go:178) matches manifest rows with strings.Contains, so a short inline-span row like `dross X set` is satisfied by any longer command containing it and a lost instruction can hide. Require each row to match as a whole span: for backtick rows, the row must appear as a complete backticked span (or be bounded by non-word characters); keep plain-prose rows on substring. Fix any manifest rows that only passed by prefix."
+  covers = ["c-3"]
+  test_contract = ["if a row passes only as a prefix of a longer command, TestConservationCatchesALostRow (or a new prefix case) fails: a manifest row `dross x set` against text containing only `dross x set-all` is reported lost", "if the tightened match drops a real row, TestPromptInstructionsConserved fails"]
+  status = "pending"
+  depends_on = ["t-2"]
+
+[[task]]
+  id = "t-23"
+  wave = 7
+  title = "Tighten raw reads and loose prompt-test anchors"
+  files = ["internal/cmd/interaction_coreloop_test.go", "internal/cmd/quick_prompt_test.go"]
+  description = "Verify FLAGs (t-7, t-13 reviews): TestCoreLoopPromptsWireEmitter and TestCoreLoopPromptsReferenceContract (interaction_coreloop_test.go:25, :46) still os.ReadFile plan.md/ship.md through a path variable the raw-read guard cannot see, so text moved into a partial goes unchecked — read them through expandedPrompt. TestQuickSoloReview (quick_prompt_test.go:104) anchors `run` on the first \"`dross test`\" in the block, which is lead-in prose — anchor on the run step itself. TestQuickSoloFetchPlacement (:136) skips **Re-fetch** lines when choosing the first fetch after the solo-begin fence — stop skipping them so a stray fetch between the fence and the When line is caught."
+  covers = ["c-3"]
+  test_contract = ["if a core-loop contract line moves into a plan or ship partial and is dropped, TestCoreLoopPromptsReferenceContract fails (reads expanded text)", "if quick's solo review block loses its dross test run step, TestQuickSoloReview fails", "if any fetch line, Re-fetch included, sits between the solo-begin fence and the solo When line, TestQuickSoloFetchPlacement fails"]
+  status = "pending"
+  depends_on = ["t-7", "t-13"]
+
+[[task]]
+  id = "t-24"
+  wave = 3
+  title = "Share one quick-issue helper with dross issue quick"
+  files = ["internal/cmd/quick.go", "internal/cmd/issue.go", "internal/cmd/quick_test.go"]
+  description = "Verify FLAG (t-5 review): openQuickIssue (quick.go:281) duplicates the CreateIssue/SetQuick/Save body of `dross issue quick` (issue.go ~:383) — same title, body and labels. Extract one helper both call so quick end and the CLI cannot drift. No behaviour change."
+  covers = ["c-3"]
+  test_contract = ["if quick end and dross issue quick diverge on title, body, labels or the SetQuick mapping, a shared-helper test fails (both paths against one fake board produce identical issues)"]
+  status = "pending"
   depends_on = ["t-5"]
