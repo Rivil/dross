@@ -91,12 +91,21 @@ func quickBegin() *cobra.Command {
 // bookkeeping (finishQuick). An abort committed nothing, so it only clears the
 // record; no record at all is not an error and writes nothing, so every abort
 // path can run it unconditionally and a repeat end cannot bump twice.
+//
+// It is exec-gated because finishQuick absorbs `state bump` and `changes
+// record`, both loop-step boundaries: an ungated end would be the quick flow's
+// way around them. The refusal comes before the record is read, so an
+// untrusted tree keeps its record, version and changes.json as they were.
 func quickEnd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "end",
 		Short: "End a /dross-quick: clear its record and, after its commit, bump internal and record the quick",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
+			// A loop-step boundary — see execGatedCommands.
+			if err := requireExecConsent(); err != nil {
+				return err
+			}
 			root, err := FindRoot()
 			if err != nil {
 				return err

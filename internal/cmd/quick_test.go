@@ -14,6 +14,7 @@ import (
 	"github.com/Rivil/dross/internal/board"
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/gatestate"
+	"github.com/Rivil/dross/internal/localstore"
 )
 
 // `dross quick end` absorbed /dross-quick's old §6: after the work commit it
@@ -134,6 +135,48 @@ func TestQuickEndUnreadableRecord(t *testing.T) {
 	}
 	if *hits != 0 {
 		t.Errorf("an unreadable record called the board %d times, want none", *hits)
+	}
+}
+
+// TestQuickEndRefusesUntrusted: quick end does `state bump` and `changes
+// record`'s work, so a tree without consent must refuse it as they refuse —
+// before any I/O, with a committed quick that would otherwise bump and record.
+// The record survives so a `dross trust` and a re-run end can finish the job.
+func TestQuickEndRefusesUntrusted(t *testing.T) {
+	dir := quickEndFixture(t)
+	setQuickPhase(t, "p", "executing")
+	hits := countingBoard(t, failingBoard)
+	beginQuick(t, "fix x")
+	quickWork(t, dir)
+	// Revoke the fixture's grant: a clone carries none.
+	store := localstore.GrantStore(filepath.Join(dir, ".dross"))
+	g, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.TrustedTestCommand = ""
+	if err := store.Save(g); err != nil {
+		t.Fatal(err)
+	}
+	rec := loadQuick(t, dir)
+	before := treeSnapshot(t, dir)
+
+	out, err := endQuick(t)
+	if err == nil || !strings.Contains(err.Error(), "has not been trusted") || !strings.Contains(err.Error(), "dross trust") {
+		t.Fatalf("quick end in an untrusted tree = %v (out %q), want the consent refusal", err, out)
+	}
+	if q := loadQuick(t, dir); !reflect.DeepEqual(q, rec) {
+		t.Errorf("a refused end changed the quick record: %+v, want %+v", q, rec)
+	}
+	assertVersionParity(t, dir, "1.2.3.4")
+	if _, err := os.Stat(changesPathAt(dir, "p")); !os.IsNotExist(err) {
+		t.Errorf("a refused end wrote changes.json (stat err %v)", err)
+	}
+	if *hits != 0 {
+		t.Errorf("a refused end called the board %d times, want none", *hits)
+	}
+	if after := treeSnapshot(t, dir); after != before {
+		t.Errorf("a refused end wrote to the tree:\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 }
 
