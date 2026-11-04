@@ -1914,8 +1914,8 @@
     },
     "prompt-budgets-rest/t-21": {
       "issue": "DRO-1087",
-      "plan_status": "in_progress",
-      "board_state": "task-in-progress"
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "prompt-budgets-rest/t-22": {
       "issue": "DRO-1086",

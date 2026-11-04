@@ -206,6 +206,25 @@
         }
       ]
     },
+    "t-21": {
+      "files": [
+        "internal/cmd/quick.go",
+        "internal/cmd/trust.go",
+        "internal/cmd/quick_test.go",
+        "internal/cmd/trust_test.go",
+        "internal/cmd/testdata/cli_surface/doctor_run.txt"
+      ],
+      "commit": "87deb487",
+      "completed_at": "2026-11-04T18:50:54.595108Z",
+      "landmarks": [
+        {
+          "feature": "exec consent gate",
+          "symbol": "quickEnd",
+          "loc": "internal/cmd/quick.go:99",
+          "what": "quick end refuses in an untrusted tree before any I/O and joins execGatedCommands since it absorbs state bump + changes record"
+        }
+      ]
+    },
     "t-22": {
       "files": [
         "assets/conservation_test.go"

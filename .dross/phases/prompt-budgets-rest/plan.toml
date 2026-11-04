@@ -285,13 +285,12 @@ Preconditions: `make install` at the phase head, then `dross prompt partial plan
   id = "t-21"
   wave = 3
   title = "Gate quick end behind exec consent"
-  files = ["internal/cmd/quick.go", "internal/cmd/trust.go", "internal/cmd/quick_test.go", "internal/cmd/trust_test.go"]
+  files = ["internal/cmd/quick.go", "internal/cmd/trust.go", "internal/cmd/quick_test.go", "internal/cmd/trust_test.go", "internal/cmd/testdata/cli_surface/doctor_run.txt"]
   description = "Verify FLAG (t-5 review): finishQuick (quick.go:147) absorbs `state bump` and `changes record` — both in execGatedCommands (trust.go) as step boundaries — but `dross quick end` never calls requireExecConsent, so the quick flow no longer refuses in an untrusted tree. Call requireExecConsent first in quick end's RunE, before any I/O, and add \"quick end\" to execGatedCommands."
   covers = ["c-3"]
   test_contract = ["if quick end runs in an untrusted tree, a quick_test case fails: quick end must refuse with the consent error and leave the quick record, version and changes.json untouched", "if quick end gates without joining the roster (or vice versa), TestExecGatedSetIsExplicit fails"]
-  status = "failed"
+  status = "done"
   depends_on = ["t-5"]
-  reason = "writer: red TestDoctorRunGolden; internal/cmd/testdata/cli_surface/doctor_run.txt (outside task.files) must list quick end among exec-gated commands; code stashed as top stash"
 
 [[task]]
   id = "t-22"
