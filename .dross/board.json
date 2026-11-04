@@ -1897,8 +1897,38 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "prompt-budgets-rest/t-19": {
+      "issue": "DRO-1089",
+      "plan_status": "in_progress",
+      "board_state": "task-in-progress"
+    },
     "prompt-budgets-rest/t-2": {
       "issue": "DRO-1068",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-20": {
+      "issue": "DRO-1090",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-21": {
+      "issue": "DRO-1087",
+      "plan_status": "in_progress",
+      "board_state": "task-in-progress"
+    },
+    "prompt-budgets-rest/t-22": {
+      "issue": "DRO-1086",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-23": {
+      "issue": "DRO-1091",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-24": {
+      "issue": "DRO-1088",
       "plan_status": "done",
       "board_state": "task-in-review"
     },

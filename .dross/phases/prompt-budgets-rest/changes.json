@@ -190,6 +190,70 @@
         }
       ]
     },
+    "t-20": {
+      "files": [
+        "assets/prompts/_ship.auto.md",
+        "internal/cmd/ship_prompt_test.go"
+      ],
+      "commit": "6417300a",
+      "completed_at": "2026-11-04T17:07:46.966988Z",
+      "landmarks": [
+        {
+          "feature": "ship non-interactive fast-path",
+          "symbol": "ship auto partial",
+          "loc": "assets/prompts/_ship.auto.md:16",
+          "what": "a failed or dirty ship --auto routes to the ship_result=failed recovery fetch, still without merging"
+        }
+      ]
+    },
+    "t-22": {
+      "files": [
+        "assets/conservation_test.go"
+      ],
+      "commit": "99e3611f",
+      "completed_at": "2026-11-04T16:25:06.641512Z",
+      "landmarks": [
+        {
+          "feature": "prompt instruction conservation",
+          "symbol": "rowPresent",
+          "loc": "assets/conservation_test.go:199",
+          "what": "command rows must stand as a whole line or backticked span; lead-ins stay on substring"
+        }
+      ]
+    },
+    "t-23": {
+      "files": [
+        "internal/cmd/interaction_coreloop_test.go",
+        "internal/cmd/quick_prompt_test.go"
+      ],
+      "commit": "c413b091",
+      "completed_at": "2026-11-04T17:14:12.038326Z",
+      "landmarks": [
+        {
+          "feature": "prompt instruction conservation",
+          "symbol": "TestQuickSoloFetchPlacement",
+          "loc": "internal/cmd/quick_prompt_test.go:144",
+          "what": "prompt tests read expanded text, anchor on run steps and count Re-fetch lines as stray fetches"
+        }
+      ]
+    },
+    "t-24": {
+      "files": [
+        "internal/cmd/quick.go",
+        "internal/cmd/issue.go",
+        "internal/cmd/quick_test.go"
+      ],
+      "commit": "6e88787b",
+      "completed_at": "2026-11-04T16:43:32.983492Z",
+      "landmarks": [
+        {
+          "feature": "quick task board issues",
+          "symbol": "openQuickIssue",
+          "loc": "internal/cmd/issue.go:390",
+          "what": "one helper opens and links a quick's board issue for both quick end and dross issue quick"
+        }
+      ]
+    },
     "t-3": {
       "files": [
         "assets/partials.go",
@@ -579,6 +643,125 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "TestManifestRecordIsAppendOnly drives recordManifest on a synthetic execute.md prefix (three absorbed rows plus a row no prompt carries) and checks it comes back byte-identical as the output's prefix and that re-recording returns the same manifest unchanged; it does not depend on the real manifest file",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-20": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "test_contract and description say the line names `dross prompt partial ship recovery`, but the partial names the `ship_result=failed` fact and points at §6's fetch instead. This is forced by CheckPartials' no-nesting rule (assets/partials.go:243-249), and the new test still fails if the recovery route is lost. The task record's wording should be corrected so the next reader doesn't see a mismatch.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestShipAutoFailureRoutesToRecovery takes the key=value from ship.md's FetchPoints instead of hard-coding it, so renaming the recovery fact breaks this test too and the two cannot drift apart silently.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The common-path check in the second test_contract line is covered by the existing TestShipCommonPathFetchesNothing, which this diff leaves unchanged. The new line has no fetch call, so it cannot add a fetch on the common path.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-22": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "promptUnits pairs backticks with the generic spanRe, while extractInstructions finds rows with inlineSpanRe (anchored on `dross `). The two can pair backticks differently: in a double-backtick span like `` `dross a` `` or after a stray backtick on the line, inlineSpanRe yields `dross a` but spanRe never makes it a unit. A recorded row could then be reported lost even though the text is unchanged. No manifest prompt has that construct today, so it fails safe (a false 'lost', not a hidden loss).",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "No manifest rows changed, which suggests no row was passing only as a prefix; that depends on TestPromptInstructionsConserved passing on the current tree.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The positive case (indented fenced line, whole inline span, lead-in substring) guards against the stricter match turning into a reject-everything check.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "promptUnits also runs inlineSpanRe so that a double-backtick span like `` `dross z put` `` is still a unit when spanRe pairs the backticks wrongly; the new whole-span test covers this case.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "No manifest rows were changed. In a sample of the shorter rows, each still appears as a whole span or line, so it looks like none were passing only as a prefix. The full check is TestPromptInstructionsConserved, which was not run in this review.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-23": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "TestQuickSoloReview's `run` anchor (\"after the green `dross test`, before the commit\") is still the lead-in prose sentence on line 9 of _quick.solo.md, not a run step; the description asked to anchor on the run step itself. The run-step contract is carried by the new blocked/pass-stale arm loop instead.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "No seeded-FS test (like TestShipDecisionTurnsSeeTheMergeGatePartial) proves TestCoreLoopPromptsReferenceContract still passes when the contract phrase lives only in a plan/ship partial. Switching to expandedPrompt does make that true, but nothing pins it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestQuickSoloFetchPlacement now takes the first fetch point of any kind after the fence and rejects it if it is a Re-fetch, so a stray Re-fetch between the fence and the When line fails the test.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-24": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "Both paths already call one helper, so the new test guards only against future drift. It would fail if either path stopped using openQuickIssue or changed the title, body or labels, which is what the test_contract asks for.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The test compares every board write, not just the issue-creation calls. If quick end ever adds an unrelated board write, the test will fail even though the issue itself did not drift.",
           "resolution": "non-blocking, left"
         }
       ]
