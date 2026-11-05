@@ -1,0 +1,66 @@
+[phase]
+  id = "scoped-commit-gate"
+  title = "scoped-commit-gate"
+  milestone = "v1.9"
+
+[[criteria]]
+  id = "c-1"
+  text = "TestReadmeRoadmapMatchesRecordedMilestones passes, with the README showing v1.8 complete and its criteria ticked, v1.9 active with its 5 criteria, and no Azure DevOps line."
+  deferred = ["18096d91353ced67"]
+
+[[criteria]]
+  id = "c-2"
+  text = "After a green `dross test --files` run covering every changed non-.dross path, `git commit` of that exact tree is admitted, with no full-suite run."
+  deferred = ["1abbd5e4f20c7ef0"]
+
+[[criteria]]
+  id = "c-3"
+  text = "A `git commit` that touches a path the scoped green didn't cover is refused, and the refusal names the uncovered paths."
+
+[[criteria]]
+  id = "c-4"
+  text = "In a repo with no test lanes declared, commit-green behaves exactly as it does today: only a full green admits a code commit."
+
+[[criteria]]
+  id = "c-5"
+  text = "On barktime, a task commit passes commit-green on a `dross test --files` run that executes only the tests vitest relates to the changed files, including .svelte, with no `dross gate off commit-green`."
+
+[[criteria]]
+  id = "c-6"
+  text = "`dross verify` and `dross ship` refuse a phase whose HEAD tree has no full green, and a scoped green never satisfies them."
+
+[[criteria]]
+  id = "c-7"
+  text = "The execute, quick, solo and writer prompts no longer require a bare `dross test` before a commit where a scoped green is enough."
+
+[[criteria]]
+  id = "c-8"
+  text = "A .svelte change mutates only the constructs overlapping its hunks, and no longer falls back to whole-file ast-unavailable."
+
+[[criteria]]
+  id = "c-9"
+  text = "A scoped green covers only the paths that reached at least one collected test. A changed path with no related test stays uncovered, so c-3 refuses the commit even when other paths in the same run have tests."
+
+[[decisions]]
+  key = "scoped_gate_optin"
+  choice = "Scoped gating is opt-in per lane: a new [[runtime.test_lane]] field marks a lane as trusted to vouch for a commit. Undeclared lanes keep the full-green rule."
+  why = "A `path` selector can be a name filter that never measures a changed source file, so declaring a lane isn't enough. feastahead stays unchanged, per the v1.9 non-goal. Overturns tool-gate-hooks' green_run_definition and full_run_source for opted-in lanes only."
+  locked = true
+
+[[decisions]]
+  key = "uncovered_paths"
+  choice = "A path no opted-in lane covers needs a full green, unless it matches a glob the repo declares as needing no tests (e.g. docs/**, *.md). Build and dependency config stays refused."
+  why = "A package.json or vite.config change can affect every test, so admitting no-lane paths would be a false green. An exempt list keeps docs commits from costing a 15-26 min full run."
+  locked = true
+
+[[decisions]]
+  key = "zero_test_scoped_run"
+  choice = "A scoped run that collects no tests records no scoped green. It never auto-escalates to a full run, and never admits with a warning."
+  why = "Keeps the existing nothing-measured rule, so an untested file can't pass as covered, and a `--files` call never turns into a surprise full-suite wait."
+  locked = true
+
+[[decisions]]
+  key = "barktime_proof"
+  choice = "barktime's lane, opt-in and `vitest related` path land as a /dross-quick in barktime, built from this branch, before verify. c-5's evidence is one real task commit's SHA and run log."
+  why = "Proves the milestone criterion on the real repo before the phase closes, and keeps barktime code and per-framework selectors out of dross."
+  locked = true
