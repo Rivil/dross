@@ -348,6 +348,12 @@ var unguessedFields = []Field{
 		"the file a quality finding points at — compared across runs and printed.",
 		"internal/quality/lifecycle.go"),
 
+	// ---- gate records: the paths a scoped green vouches for ----------------
+	reportPath("gatestate.Scoped", "Covered", "covered", ".dross/gate/scoped.json",
+		"repo paths that reached a collected test in a scoped run, held as strings to compare "+
+			"against a commit's changed paths — never opened.",
+		"internal/gatestate/store.go (Scoped.check refuses a blank entry)"),
+
 	// ---- PR triage: the locator a resolution cites ------------------------
 	reportPath("prtriage.Evidence", "At", "at", "phases/<id>/pr-triage.toml",
 		"a file:line locator a triage resolution cites. ParseAt contains and line-checks the "+

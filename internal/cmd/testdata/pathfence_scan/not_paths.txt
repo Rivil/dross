@@ -130,7 +130,7 @@ gate.listFile.SecretTools secret_tools
 gate.Override.Name name
 gate.Override.Repo repo
 
-# ---- gatestate — machine-local gate records: tree object ids, phase/task ids, HEAD SHAs, modes, runner labels, review kinds and attempt keys, quick descriptions, reply digests, writer agent ids and states
+# ---- gatestate — machine-local gate records: tree object ids, phase/task ids, HEAD SHAs, modes, runner labels, lane fingerprints, review kinds and attempt keys, quick descriptions, reply digests, writer agent ids and states
 gatestate.Approval.Head head
 gatestate.Approval.Phase phase
 gatestate.Approval.Task task
@@ -149,6 +149,9 @@ gatestate.Review.Attempt attempt
 gatestate.Review.Kind kind
 gatestate.Review.Phase phase
 gatestate.Review.Task task
+gatestate.Scoped.Lanes lanes
+gatestate.Scoped.Runner runner
+gatestate.Scoped.Tree tree
 gatestate.Writer.AgentID agent_id
 gatestate.Writer.Phase phase
 gatestate.Writer.State state
