@@ -27,7 +27,7 @@
 
 [[criteria]]
   id = "c-6"
-  text = "`dross verify` and `dross ship` refuse a phase whose HEAD tree has no full green, and a scoped green never satisfies them."
+  text = "In a repo with a vouching lane, `dross verify` and `dross ship` refuse a phase whose HEAD tree has no full green, and a scoped green never satisfies them. A repo with no vouching lane keeps today's verify and ship behaviour."
 
 [[criteria]]
   id = "c-7"

@@ -63,6 +63,7 @@
     "review-comment-ingest": "DRO-903",
     "run-block-pin-currency": "DRO-746",
     "scanner-self-exclusion": "DRO-404",
+    "scoped-commit-gate": "DRO-1094",
     "secret-detection": "DRO-459",
     "solo-task-review": "DRO-814",
     "solo-task-subagent": "DRO-1012",
