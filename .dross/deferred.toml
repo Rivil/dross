@@ -77,3 +77,9 @@
   id = "85321d5a24e7736c"
   text = "dross milestone show/progress (and /dross-milestone's resume path) don't flag a recorded [milestone].base whose branch no longer exists. v1.8 carried base=milestone/v1.7 after v1.7 finalize deleted that branch, and the only fix was replace + deleting and re-cutting the milestone branch. v1.9 still has the same stale base."
   why = "Found 2026-10-08 scoping v1.8, and only because a memory note mentioned it; milestone complete would have targeted a deleted branch"
+
+[[deferred]]
+  id = "1abbd5e4f20c7ef0"
+  text = "Scoped commit gate: commit-green accepts a scoped green covering the changed paths instead of a full dross test per commit (overturns tool-gate-hooks' green_run_definition / full_run_source); full suite stays at verify/ship + CI. barktime needs auto-selection (vitest related) and a Svelte construct resolver for stryker ranges."
+  why = "Evidence: barktime 15-26 min full run x ~20 tasks/phase = 5-8h/phase, forcing a manual dross gate off commit-green. Asked for 2026-10-26, never inserted into v1.8; routed to head of v1.9 at v1.8 close, 2026-11-05."
+  target = "scoped-commit-gate"

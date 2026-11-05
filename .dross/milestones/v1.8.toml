@@ -3,7 +3,7 @@ phases = ["context-boundaries", "test-output-summaries", "prompt-partials", "sol
 [milestone]
   version = "v1.8"
   title = "1.8 context economy — shrink what every turn re-reads"
-  status = "active"
+  status = "complete"
   started = "2026-10-08"
   base = "main"
 
