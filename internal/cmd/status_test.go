@@ -1392,7 +1392,7 @@ verdict = "pending"
 // fed by `dross deferred add` and survivor routing too, so status.md's inbox
 // nudge must stop naming /dross-spec as its only source.
 func TestStatusPromptDoesNotAttributeBacklogSolelyToSpec(t *testing.T) {
-	content := docText(t, "assets", "prompts", "status.md")
+	content := promptDocText(t, "status.md")
 	if strings.Contains(content, "ideas punted in /dross-spec and never routed") {
 		t.Error("status.md still attributes the someday backlog solely to /dross-spec")
 	}

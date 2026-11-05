@@ -22,7 +22,7 @@ git version:
 Exec consent:
   ⚠ no runtime.test_command is configured, so the loop commands refuse.
     Fix: `dross project set runtime.test_command "<cmd>"`, then `dross trust`.
-  Authorizes the dross commands that spawn a process: changes record, state bump, survivor drain, task next, task status in_progress, test, verify, verify results.
+  Authorizes the dross commands that spawn a process: changes record, quick end, state bump, survivor drain, task next, task status in_progress, test, verify, verify results.
   The gated surface is enumerated from the source, not listed here; a spawn that
   cannot reach repo-authored code carries a //dross:exec-exempt <reason> marker.
 

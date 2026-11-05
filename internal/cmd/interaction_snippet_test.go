@@ -181,6 +181,8 @@ var drossVerb = regexp.MustCompile(`\bdross [a-z]`)
 // none checks context through a dross call, and the rule itself names none.
 func TestContextRuleAddsNoCalls(t *testing.T) {
 	root := repoRootFromTest(t)
+	// Raw by design: commandPrompts lists every partial file beside its base
+	// prompt, so text moved into _options.<name>.md is still read here.
 	for _, rel := range commandPrompts(t, root) {
 		b, err := os.ReadFile(filepath.Join(root, rel))
 		if err != nil {

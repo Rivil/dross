@@ -18,12 +18,7 @@ const deadIncludeLine = "@~/.claude/dross/prompts/_interaction.md"
 // nested @-include line. Phases 11-13 repeat this emitter call for every other
 // interactive prompt.
 func TestSpecPilotUsesEmitter(t *testing.T) {
-	root := repoRootFromTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "spec.md"))
-	if err != nil {
-		t.Fatalf("read spec.md: %v", err)
-	}
-	spec := string(b)
+	spec := expandedPrompt(t, "spec.md")
 	if strings.Contains(spec, deadIncludeLine) {
 		t.Errorf("spec.md still carries the dead nested @-include line %q — delivery is via `dross interaction show`", deadIncludeLine)
 	}

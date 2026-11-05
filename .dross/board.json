@@ -48,6 +48,7 @@
     "phase-create-adoption": "DRO-31",
     "plan-gray-area-walkthrough": "DRO-29",
     "project-toml-lossless-writes": "DRO-412",
+    "prompt-budgets-rest": "DRO-1067",
     "prompt-partials": "DRO-992",
     "push-gates-on-origin": "DRO-392",
     "red-proof-reachability": "DRO-23",
@@ -1845,6 +1846,126 @@
       "issue": "DRO-421",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-1": {
+      "issue": "DRO-1075",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-10": {
+      "issue": "DRO-1078",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-11": {
+      "issue": "DRO-1077",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-12": {
+      "issue": "DRO-1079",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-13": {
+      "issue": "DRO-1080",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-14": {
+      "issue": "DRO-1081",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-15": {
+      "issue": "DRO-1082",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-16": {
+      "issue": "DRO-1083",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-17": {
+      "issue": "DRO-1084",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-18": {
+      "issue": "DRO-1085",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-19": {
+      "issue": "DRO-1089",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-2": {
+      "issue": "DRO-1068",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-20": {
+      "issue": "DRO-1090",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-21": {
+      "issue": "DRO-1087",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-22": {
+      "issue": "DRO-1086",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-23": {
+      "issue": "DRO-1091",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-24": {
+      "issue": "DRO-1088",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-3": {
+      "issue": "DRO-1069",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-4": {
+      "issue": "DRO-1070",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-5": {
+      "issue": "DRO-1076",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-6": {
+      "issue": "DRO-1071",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-7": {
+      "issue": "DRO-1072",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-8": {
+      "issue": "DRO-1073",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "prompt-budgets-rest/t-9": {
+      "issue": "DRO-1074",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "prompt-partials/t-1": {
       "issue": "DRO-1001",

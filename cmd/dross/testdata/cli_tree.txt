@@ -224,7 +224,7 @@ dross quality scaffold flag --title (string) default="Remediate quality findings
 dross quick | use="quick" short="Bookkeeping /dross-quick keeps through the CLI"
 dross quick begin | use="begin <description>" short="Record the mode /dross-quick runs in (pair unless --solo) and what it sets out to do"
 dross quick begin flag --solo (bool) default="false" noopt="true" usage="record solo mode: the quick is reviewed by the solo reviewer before its commit"
-dross quick end | use="end" short="Clear the quick-mode record when a /dross-quick finishes or aborts"
+dross quick end | use="end" short="End a /dross-quick: clear its record and, after its commit, bump internal and record the quick"
 dross reentry | use="reentry" short="One-line 'you are here + next command' for a fresh session (SessionStart hook target)"
 dross remote | use="remote" short="Authorize (or inspect) a host that dross runs this repo's code on"
 dross remote bootstrap | use="bootstrap" short="Install the mutation and lane toolchains the granted host is missing"

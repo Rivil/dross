@@ -51,6 +51,16 @@ var TriggerVocabulary = map[string][]string{
 	"unclassified": {"zero", "nonzero"},
 	"reviews":      {"none", "present"},
 	"verdict":      {"pass", "partial", "fail"},
+	// plan, ship, spec and options branches; quick reuses mode.
+	"panel":       {"off", "on"},
+	"auto":        {"off", "on"},
+	"ci":          {"passed", "failed"},
+	"ship_result": {"clean", "failed"},       // failed: ship or complete exited non-zero, or left the tree dirty
+	"target":      {"given", "empty", "new"}, // new: --new, or the no-target `new` answer
+	"spec_file":   {"absent", "present"},
+	"deferral":    {"none", "chosen"},
+	"lanes":       {"unchanged", "editing"},
+	"remote":      {"unchanged", "changing"},
 }
 
 // alwaysWholeFile names gremlins' always-whole-file path. A trigger naming it

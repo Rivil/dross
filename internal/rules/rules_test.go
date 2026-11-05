@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/assets"
 )
 
 // repoRoot walks up from the test's working dir to the module root (the dir
@@ -108,9 +110,10 @@ func TestInteractionContractNoDrift(t *testing.T) {
 // carry its own divergent copy of the canonical phrasing; the playbook lives in
 // _interaction.md, not duplicated per-prompt.
 func TestSpecPromptDefersToSnippet(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join(repoRoot(t), "assets", "prompts", "spec.md"))
+	// Expanded: a canonical phrase copied into a spec partial is a copy too.
+	b, err := assets.Expand(assets.FS, "spec")
 	if err != nil {
-		t.Fatalf("read spec.md: %v", err)
+		t.Fatalf("expand spec.md: %v", err)
 	}
 	spec := string(b)
 	if !strings.Contains(spec, "_interaction.md") {

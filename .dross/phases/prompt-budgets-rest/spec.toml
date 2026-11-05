@@ -1,0 +1,45 @@
+[phase]
+  id = "prompt-budgets-rest"
+  title = "prompt-budgets-rest"
+  milestone = "v1.8"
+
+[[criteria]]
+  id = "c-1"
+  text = "Every base prompt in assets/prompts/*.md loads at ≤15,000 bytes, checked on the embedded asset; the budget test enumerates every prompt (not a fixed list), so a new or grown prompt over the cap fails. Partials (_*.md) are exempt."
+  deferred = ["e243058347bd37a3"]
+
+[[criteria]]
+  id = "c-2"
+  text = "The common pair-mode path of each split prompt fetches zero partials: spec to lock, plan (no --panel) to lock, ship of a verified phase to PR open, a pair quick task to commit, and an options walk."
+
+[[criteria]]
+  id = "c-3"
+  text = "Existing prompt-content tests keep passing, run against prompt + partials, so no instruction is lost in the move."
+
+[[criteria]]
+  id = "c-4"
+  text = "The phase dir records before/after loaded bytes, turn count and wall-clock time for the flows this phase touches (milestone c-6)."
+
+[[decisions]]
+  key = "budget_scope"
+  choice = "One global cap: every base prompt in assets/prompts/*.md at ≤15,000 bytes, so options, ship, plan, spec and quick are cut; partials exempt."
+  why = "The parked trio left spec and quick over the cap; a global cap also stops a new prompt from growing unbudgeted."
+  locked = true
+
+[[decisions]]
+  key = "no_exceptions"
+  choice = "No per-prompt overrides: one 15,000-byte number for every base prompt."
+  why = "A per-file override map is a loophole in a global cap."
+  locked = true
+
+[[decisions]]
+  key = "branch_placement"
+  choice = "Follow prompt-partials' pattern: solo-only quick text in one partial fetched once after the solo begin; plan --panel text in a partial fetched only under --panel; mechanical steps absorbed into a CLI call already running at that point."
+  why = "Keeps the common path at zero fetches and adds no round-trips (milestone c-6)."
+  locked = true
+
+[[decisions]]
+  key = "flow_set"
+  choice = "Full before/after runs (turns + wall-clock) for plan, quick and spec on local fixtures reusing prompt-partials' setup.sh; ship and options record loaded bytes only. Turns are recorded, not gated."
+  why = "plan, quick and spec are per-phase hot loops that fixture locally; ship needs a real remote + PR per leg; ungated turns per rivil 2026-10-08."
+  locked = true

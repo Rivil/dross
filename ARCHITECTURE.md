@@ -488,8 +488,9 @@ A lane's `install` line carries **its own** grant, disjoint from the one coverin
 - `consent.LaneInstallLine` (the install line framed in its own NUL-delimited namespace, so a lane can never re-split across its fields into a grant issued for neither) — `internal/consent/lane.go:214`
 - `trustLaneInstall` (`dross trust --lane-install <name>`; the shared helper refuses an ungranted declared line ahead of both the local and the remote seam) — `internal/cmd/trust.go:57`
 - `TestTrustLaneInstallWithNoLineRefuses` (a lane with no install line is nothing-to-trust, not an empty grant) — `internal/cmd/trust_lane_install_cmd_test.go:277`
+- `quickEnd` (`dross quick end` refuses in an untrusted tree before reading its record, and is on the gated roster because it absorbs `state bump` and `changes record`) — `internal/cmd/quick.go:99`
 
-_introduced exec-trust-followups · ca15bb2 · extended test-lane-config · 9ce037a · extended remote-toolchain-install · 1fed76d · extended exec-consent-completeness · a11a9e7 · extended cmd-package-decomposition · 989fea7_
+_introduced exec-trust-followups · ca15bb2 · extended test-lane-config · 9ce037a · extended remote-toolchain-install · 1fed76d · extended exec-consent-completeness · a11a9e7 · extended cmd-package-decomposition · 989fea7 · extended prompt-budgets-rest · 87deb487_
 
 ### Exec output containment
 
@@ -639,9 +640,10 @@ Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue 
 - `boardsync.FindMissing` / `ApplyMissing` (reap catch-up: completed phases the board has no cards for, one per-phase identity lookup; `--apply` creates them closed through `FinalizePhase`) — `internal/boardsync/reap_catchup.go:42`
 - `finalizerCloses` (the Phases and Tasks terminal emissions, parsed from every close call `FinalizePhase` reaches) — `internal/boardsync/board_lifecycle_divergence_test.go:147`
 - `TestBoardCallingPromptsSurfaceFailure` (every board-calling prompt names `[board].enabled` and treats a non-zero exit as a failure, never the disabled no-op) — `internal/cmd/board_switch_prompt_test.go:61`
+- `openQuickIssue` (one helper opens and links a quick's board issue for both `dross quick end` and `dross issue quick`) — `internal/cmd/issue.go:390`
 
 _a073ab7 · extended gitlab-ship-provider · 27e1a4f · extended youtrack-board-integration · extended prove-or-demote-board-sync · 50290f0_
-_extended additional-board-backends (GitHub Projects + Jira) · 9d60ea2 · extended board-state-map-truth · 3272339 · extended survivor-drain · 975870f · extended deferred-add-command · bcc8d5a · extended board-sync-truth · a587471 · extended board-task-mirror · c4b8b84 · extended mirror-terminal-state · dd76964 · extended board-mirror-reaper · 597cae4 · extended extracted-package-test-parity · 974edf0 · extended board-finalize-on-complete · 49291a6_
+_extended additional-board-backends (GitHub Projects + Jira) · 9d60ea2 · extended board-state-map-truth · 3272339 · extended survivor-drain · 975870f · extended deferred-add-command · bcc8d5a · extended board-sync-truth · a587471 · extended board-task-mirror · c4b8b84 · extended mirror-terminal-state · dd76964 · extended board-mirror-reaper · 597cae4 · extended extracted-package-test-parity · 974edf0 · extended board-finalize-on-complete · 49291a6 · extended prompt-budgets-rest · 6e88787b_
 
 ### Legacy phase backfill
 
@@ -956,17 +958,38 @@ _introduced review-comment-ingest · 414cfcc_
 
 ### Prompt partials & byte budgets
 
-Keep the always-loaded execute and verify prompts under a fixed 15,000-byte budget: off-path branches (solo review, recovery, detached legs, mutation errors, survivor drain, non-pass wrap-up) live in `_<prompt>.<name>.md` partials fetched with one `dross prompt partial <prompt> <name>` command, each fetch line naming a closed-vocabulary trigger (**When** `key=value`) that is never the common path, and mechanical steps a dross command already runs at that point (version bump, board sync, inbound task pull, uat sync, verified status) moved into the CLI so the prompt only reacts to what it reports. A registry check fails the build on a missing, orphan, foreign or nested partial; prompt-content tests read the expanded prompt (base + partials inlined in place) so no instruction is lost in the move, guarded by a recorded instruction manifest.
+Keep every base prompt under one fixed 15,000-byte budget with no per-prompt overrides: off-path branches (solo review, recovery, detached legs, mutation errors, survivor drain, non-pass wrap-up, plan's `--panel`, spec's create, resume and deferral flows, ship's `--auto` and CI-failure paths, options' lanes and remote grant) live in `_<prompt>.<name>.md` partials fetched with one `dross prompt partial <prompt> <name>` command, each fetch line naming a closed-vocabulary trigger (**When** `key=value`) that is never the common path, and mechanical steps a dross command already runs at that point (version bump, board sync, inbound task pull, uat sync, verified status) moved into the CLI so the prompt only reacts to what it reports. A registry check fails the build on a missing, orphan, foreign or nested partial; prompt-content tests read the expanded prompt (base + partials inlined in place) so no instruction is lost in the move, guarded by a recorded instruction manifest.
 
-- `Expand` (inlines each fetched partial right after its fetch line, once; identity for prompts with none) — `assets/partials.go:155`
-- `CheckPartials` (registry: missing / orphan / foreign / nested partials and direct partial-file reads fail) — `assets/partials.go:212`
-- `FetchPoints` / `TriggerVocabulary` / `CommonPath` (fetch-line grammar over a closed trigger vocabulary; a common-path value is rejected) — `assets/partials.go:124`
+- `Expand` (inlines each fetched partial right after its fetch line, once; identity for prompts with none) — `assets/partials.go:165`
+- `CheckPartials` (registry: missing / orphan / foreign / nested partials and direct partial-file reads fail) — `assets/partials.go:222`
+- `FetchPoints` / `TriggerVocabulary` / `CommonPath` (fetch-line grammar over a closed trigger vocabulary; a common-path value is rejected) — `assets/partials.go:134`
 - `promptPartial` (`dross prompt partial <prompt> <name>` prints the partial verbatim, never deduped) — `internal/cmd/prompt.go:29`
-- `promptByteBudget` / `TestPromptByteBudget` (embedded execute.md and verify.md each capped at 15,000 B; the budgeted set is pinned) — `assets/budget_test.go:14`
-- `conservationProblems` (every pre-split fenced command and hard-rule lead-in survives in the expansion or is claimed by one `absorbs:` marker in the CLI) — `assets/conservation_test.go:133`
-- `expandedPrompt` / `TestNoAllowlistedReaderReadsASplitPrompt` (prompt-content tests read the expansion; a shrink-only allowlist ratchets raw reads and no allowlisted reader may read a split prompt) — `internal/cmd/prompt_expand_test.go:23`
+- `budgetProblems` / `TestPromptByteBudget` (every embedded base prompt, found by glob so a new one is budgeted on arrival, capped at 15,000 B; partials exempt, no overrides) — `assets/budget_test.go:23`
+- `TestCommonPathFetchesNothing` / `TestCommonPathInline` (the common path of each split prompt fetches no partial, and the text it needs stays in the base) — `assets/partials_test.go:137`
+- plan panel partial (`--panel` fetched on demand; plain plan fetches nothing) — `assets/prompts/plan.md:57`
+- spec no-target / create / resume / route partials (spec's rare branches; the create flow sits behind `target=new`, so a given target never sees it) — `assets/prompts/spec.md:15`
+- spec.md §0 step 2 (a roadmap id with no phase dir is scaffolded inline with `dross phase create`, not through the create partial; the `spec_roadmap_after` flow-cost leg proves zero fetches) — `assets/prompts/spec.md:12`
+- ship auto / ci-failure / recovery partials (a verified phase reaches PR open with no fetch) — `assets/prompts/ship.md:22`
+- quick solo partial (solo-only text fetched once after a solo begin; a pair quick fetches nothing) — `assets/prompts/quick.md:40`
+- options lanes / remote partials (lane and remote-grant lore fetched on demand; an options walk fetches nothing) — `assets/prompts/options.md:156`
+- `conservationProblems` (every pre-split fenced command and hard-rule lead-in survives in the expansion or is claimed by one `absorbs:` marker in the CLI) — `assets/conservation_test.go:208`
+- `recordManifest` (the manifest covers execute, verify, options, ship, plan, spec and quick, inline `dross` spans included; recording is append-only) — `assets/conservation_test.go:88`
+- `rowPresent` (a command row must stand as a whole line or backticked span, so a longer command cannot vouch for a lost short one; lead-ins stay on substring) — `assets/conservation_test.go:199`
+- `expandedPrompt` / `TestNoAllowlistedReaderReadsASplitPrompt` (prompt-content tests read the expansion; a shrink-only allowlist ratchets raw reads and no allowlisted reader may read a split prompt) — `internal/cmd/prompt_expand_test.go:26`
+- `argsSpellPromptFile` (the raw-read guard sees variadic read helpers and walks `cmd/`; split prompts derive from the partial registry) — `internal/cmd/prompt_expand_test.go:162`
+- `specPromptContent` / `rawShipSection` / `promptEmittedStatuses` / `setupPromptBody` (spec, ship, boardsync and setup prompt readers on the expanded prompt; `rawShipSection` keeps the expanded text un-normalised for matches that are case-exact) — `internal/cmd/spec_prompt_test.go:14`, `internal/cmd/ship_prompt_test.go:577`, `internal/boardsync/board_lifecycle_divergence_test.go:108`, `internal/cmd/interaction_setupcmds_test.go:59`
+- `TestQuickSoloFetchPlacement` (prompt tests anchor on run steps and count a Re-fetch line as a stray fetch) — `internal/cmd/quick_prompt_test.go:144`
 
-_introduced prompt-partials · 763ba35e_
+_introduced prompt-partials · 763ba35e · extended prompt-budgets-rest · 5a8363f1_
+
+### Quick task lifecycle
+
+`dross quick end` closes a /dross-quick in one call: once HEAD has moved past the begin record it bumps the internal version, records the changes (standalone when the current phase is shipped), touches state and opens the board issue, in an order a failure can re-run; with no commit, or no record, it bumps nothing.
+
+- `finishQuick` (the committed quick's bookkeeping: changes record, then version, then the quick record whose removal makes a repeat end a no-op; the board comes last and its failure keeps the rest) — `internal/cmd/quick.go:154`
+- `TestQuickEndUnreadableRecord` (an unreadable record errors, is cleared, and bumps nothing) — `internal/cmd/quick_test.go:115`
+
+_introduced prompt-budgets-rest · 31d75759_
 
 ### README accuracy guard
 
@@ -1203,6 +1226,8 @@ Survive `/clear` and compaction without losing the workflow thread: every durabl
 - `checkPromptPartialsFlow` (prompt-partials' execute and verify pairs: base prompts under 15,000 B and smaller than before, zero partial fetches on the common path, an attached verify pass, same fixture trees) — `internal/cmd/flowcost_record_test.go:217`
 - test-output-summaries' `flow-cost-before.toml` (the base-commit byte and pair-flow turn baseline, with a replayable scenario) — `.dross/phases/test-output-summaries/flow-cost-before.toml`
 - `checkTestSummaryParsersFlow` (test-summary-parsers' gate: red bytes per new parser (gradle, dart, pytest) before vs after, the after leg summarised from a base-built binary, zero log reads; turns and wall-clock recorded ungated, replayed from `flow/*-red.patch`) — `internal/cmd/flowcost_record_test.go:440`
+- `promptBudgetsRestFlowProblems` (prompt-budgets-rest's gate: plan, quick and spec after legs under 15,000 B, smaller than before, zero fetches, same tree, no added dross call) — `internal/cmd/flowcost_record_test.go:582`
+- prompt-budgets-rest's `flow-cost.toml` (base-build before legs for plan, spec and quick, ship and options bytes, with the rebuildable fixture and tmux driver) — `.dross/phases/prompt-budgets-rest/flow-cost.toml`
 - `Reentry` / `reentryLine` ("you are here + next", byte-equal to status's last line; appends ` · debug: <slug> <state> — /dross-debug <slug>` for the newest open [debug session](#debug-sessions)) — `internal/cmd/reentry.go:39`
 - `Pause` (`dross pause --auto` mechanical snapshot merge) — `internal/cmd/pause.go:24`
 - `pauseAuto` / `autoSnapshot` (silent on a non-root, loud on a corrupt one, degrades without git) — `internal/cmd/pause.go:45`
@@ -1217,7 +1242,7 @@ Pause refuses rather than scaffolds. `/dross-pause` in a repo with no initialise
 
 Pause files rather than parks. A finding surfaced at a pause is written into the [deferred backlog](#deferred-item-routing) with `dross deferred add` instead of becoming an "Open loops" bullet nothing re-reads, so it leaves the handoff as a tracked, addressable item.
 
-_introduced context-hygiene · extended root-robustness · 6d33d3b · extended deferred-add-command · fb07ed1 · extended cmd-exec-baseline-drain · bf2af4e · extended tool-gate-hooks · c854daf · extended debug-sessions · 3300fbe · extended context-boundaries · ce93a78 · extended test-output-summaries · 580852e · extended prompt-partials · 10db3c7e · extended test-summary-parsers · 1419d05f_
+_introduced context-hygiene · extended root-robustness · 6d33d3b · extended deferred-add-command · fb07ed1 · extended cmd-exec-baseline-drain · bf2af4e · extended tool-gate-hooks · c854daf · extended debug-sessions · 3300fbe · extended context-boundaries · ce93a78 · extended test-output-summaries · 580852e · extended prompt-partials · 10db3c7e · extended test-summary-parsers · 1419d05f · extended prompt-budgets-rest · d62dd6dd_
 
 ### Ship recovery
 
@@ -1264,8 +1289,9 @@ Ship is an **ordered ladder gated on origin**, and the shipped flip is its last 
 - `TestShipRecoversPRAfterDeathBeforeRecord` (record without a number → provider hit recorded and pushed, no second PR) — `internal/cmd/ship_test.go:1994`
 - `TestBaseBranchCarriesNoOwnRevList` (shared_origin_gate: the base safety net carries no private origin comparison) — `internal/cmd/originpush_test.go:257`
 - `TestShipPromptReRunIsTheRetry` (ship.md names the re-run, never a second PR; §4 ladder order pinned) — `internal/cmd/ship_prompt_test.go:384`
+- ship auto partial (a failed or dirty `dross ship --auto` routes to the `ship_result=failed` recovery fetch, still without merging) — `assets/prompts/_ship.auto.md:16`
 
-_introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended gitlab-ship-provider · extended ship-auto-noninteractive · extended verify-merge-before-completion · extended ship-architecture-autogen · extended pr-record-reaches-base · extended verify-auto-finalize · extended validator-truth · extended completion-state-truth · extended provider-merge-parity · extended push-gates-on-origin · d136ae3 · extended review-comment-ingest · d60ff57_
+_introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended gitlab-ship-provider · extended ship-auto-noninteractive · extended verify-merge-before-completion · extended ship-architecture-autogen · extended pr-record-reaches-base · extended verify-auto-finalize · extended validator-truth · extended completion-state-truth · extended provider-merge-parity · extended push-gates-on-origin · d136ae3 · extended review-comment-ingest · d60ff57 · extended prompt-budgets-rest · 6417300a_
 
 ### Solo task review
 

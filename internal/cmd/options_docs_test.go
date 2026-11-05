@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -8,19 +9,75 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/assets"
 	"github.com/spf13/pflag"
 )
 
 // optionsPrompt reads the /dross-options prompt, which is the only surface that
-// claims to reach EVERY dross-managed setting.
+// claims to reach EVERY dross-managed setting, expanded with its partials so a
+// setting documented in one is still seen.
 func optionsPrompt(t *testing.T) string {
 	t.Helper()
-	root := repoRootForDocs(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "options.md"))
+	return expandedPrompt(t, "options.md")
+}
+
+// rawOptionsBase is base options.md alone, without its partials: what an
+// options walk loads before it fetches anything.
+func rawOptionsBase(t *testing.T) string {
+	t.Helper()
+	b, err := assets.FS.ReadFile("prompts/options.md")
 	if err != nil {
-		t.Fatalf("read options.md: %v", err)
+		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// TestOptionsNamesEveryLocalKeyInline (c-2): §14 of the BASE prompt names every
+// local.toml key, so a walk that only reads settings sees them all without a
+// fetch. The partials carry how to change a key; the base must still say it
+// exists. The consent keys are listed by hand because localKeys holds only the
+// keys `dross local set` writes, and those three are the ones it refuses.
+func TestOptionsNamesEveryLocalKeyInline(t *testing.T) {
+	section := sectionOf(rawOptionsBase(t), "## 14. ", "## 15. ")
+	if section == "" {
+		t.Fatal("base options.md has no §14 ending at §15")
+	}
+	keys := []string{"mutation_remote_host", "mutation_remote_workdir", "trusted_test_command"}
+	for key := range localKeys {
+		keys = append(keys, key)
+	}
+	for _, key := range keys {
+		if !strings.Contains(section, "`"+key+"`") {
+			t.Errorf("base options.md §14 does not name the local.toml key %q", key)
+		}
+	}
+}
+
+// TestOptionsCommonPathFetchesNothing (c-2): a walk that only reads settings
+// fetches no partial; editing test lanes and changing the remote grant or a
+// tuning knob each fetch exactly their own.
+func TestOptionsCommonPathFetchesNothing(t *testing.T) {
+	common, err := assets.Fetched(promptFS, "options", assets.CommonPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(common) != 0 {
+		t.Errorf("an options walk fetches %v on the common path; want nothing", common)
+	}
+	for _, c := range []struct{ key, value, want string }{
+		{"lanes", "editing", "lanes"},
+		{"remote", "changing", "remote"},
+	} {
+		facts := assets.CommonPath()
+		facts[c.key] = c.value
+		got, err := assets.Fetched(promptFS, "options", facts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Join(got, ",") != c.want {
+			t.Errorf("options under %s=%s fetches %v; want [%s]", c.key, c.value, got, c.want)
+		}
+	}
 }
 
 // TestOptionsCoversEveryLocalKey walks localKeys itself rather than a hand-typed
@@ -151,8 +208,25 @@ func TestOptionsSaysMutationIsNotSettableThroughProjectSet(t *testing.T) {
 // TestOptionsSectionNumbersAreContiguous keeps the numbering honest: the prompt
 // cross-references sections by number ("see §11", "see §14"), and a duplicated
 // or skipped heading silently points the reader at the wrong one.
+//
+// The base prompt is checked alone, because every heading must stay there for
+// the section-pick gate to offer it without a fetch; the expanded prompt is
+// checked too, so a partial cannot add a numbered heading that breaks the run.
 func TestOptionsSectionNumbersAreContiguous(t *testing.T) {
-	prompt := optionsPrompt(t)
+	for name, prompt := range map[string]string{
+		"base options.md":     rawOptionsBase(t),
+		"expanded options.md": optionsPrompt(t),
+	} {
+		for _, problem := range sectionNumberProblems(prompt) {
+			t.Errorf("%s: %s", name, problem)
+		}
+	}
+}
+
+// sectionNumberProblems reports each "## N." heading of prompt that breaks the
+// sequence 0, 1, 2, …, and a sequence that stops short of §17.
+func sectionNumberProblems(prompt string) []string {
+	var problems []string
 	seen := 0
 	for _, line := range strings.Split(prompt, "\n") {
 		if !strings.HasPrefix(line, "## ") {
@@ -168,13 +242,14 @@ func TestOptionsSectionNumbersAreContiguous(t *testing.T) {
 			continue
 		}
 		if n != seen {
-			t.Errorf("section heading %q breaks the sequence: expected %d", line, seen)
+			problems = append(problems, fmt.Sprintf("section heading %q breaks the sequence: expected %d", line, seen))
 		}
 		seen = n + 1
 	}
 	if seen < 17 {
-		t.Errorf("options.md has only %d numbered sections; the settings surface lost one", seen)
+		problems = append(problems, fmt.Sprintf("only %d numbered sections; the settings surface lost one", seen))
 	}
+	return problems
 }
 
 // TestReadmeDocumentsTestLanes is the documentation half of the lane surface,

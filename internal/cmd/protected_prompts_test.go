@@ -62,20 +62,25 @@ func TestQuickPRRouteCommands(t *testing.T) {
 }
 
 // TestQuickClosesBoardIssueBeforeLeavingTheQuickBranch: the close resolves the
-// quick's issue through the link §6 writes into .dross/board.json, which on the
-// PR route is committed on quick/<NEW_VERSION> only. A close placed after
-// `dross checkout <base>` reads the base's board.json, finds no link, and fails
-// "no board issue linked to quick ref" on every PR-route quick (seen live on
-// quick 1.7.26.1). So: one close, after the issue is opened, before the switch.
+// quick's issue through the link `dross quick end` writes into
+// .dross/board.json, which on the PR route is committed on quick/<NEW_VERSION>
+// only. A close placed after `dross checkout <base>` reads the base's
+// board.json, finds no link, and fails "no board issue linked to quick ref" on
+// every PR-route quick (seen live on quick 1.7.26.1). So: one close, after the
+// end that opens the issue, before the switch. The open is §5's fenced end; the
+// abort paths name `dross quick end` inline and open nothing.
 func TestQuickClosesBoardIssueBeforeLeavingTheQuickBranch(t *testing.T) {
 	quick := readPrompt(t, "quick.md")
 	const (
-		open   = `dross issue quick $NEW_VERSION "quick:`
+		open   = "```\ndross quick end\n```"
 		close  = "dross issue quick $NEW_VERSION --close"
 		toBase = "dross checkout <base>"
 	)
 	if n := strings.Count(quick, close); n != 1 {
 		t.Fatalf("quick.md carries %d %q steps, want exactly one", n, close)
+	}
+	if n := strings.Count(quick, open); n != 1 {
+		t.Fatalf("quick.md carries %d fenced `dross quick end` steps, want exactly one — §5's, which opens the issue", n)
 	}
 	o, c, b := strings.Index(quick, open), strings.Index(quick, close), strings.Index(quick, toBase)
 	if o < 0 || b < 0 {

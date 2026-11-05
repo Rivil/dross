@@ -68,7 +68,7 @@ func TestReadmeDocumentsBootstrapsLaneCoverage(t *testing.T) {
 // out of localKeys — so the sweep that keeps that enumeration honest cannot see
 // it.
 func TestOptionsDocumentsTheInstallGrant(t *testing.T) {
-	body := docsBody(t, "assets", "prompts", "options.md")
+	body := expandedPrompt(t, "options.md")
 	for _, want := range []string{"dross trust --lane-install", "trusted_lane_installs", "dross test lane install"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("options.md does not mention %q", want)
@@ -82,7 +82,7 @@ func TestOptionsDocumentsTheInstallGrant(t *testing.T) {
 // that, if it worked, would authorize changing a machine without showing the
 // line.
 func TestOptionsNeverTellsTheUserToSetTheGrantDirectly(t *testing.T) {
-	body := docsBody(t, "assets", "prompts", "options.md")
+	body := expandedPrompt(t, "options.md")
 	if strings.Contains(body, "local set trusted_lane_installs") {
 		t.Error("options.md tells the user to set the install grant through `dross local set`")
 	}

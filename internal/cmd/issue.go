@@ -372,24 +372,35 @@ func issueQuick() *cobra.Command {
 			if len(args) < 2 {
 				return fmt.Errorf("a title is required to open a quick issue")
 			}
-			iss, err := ctx.Client.CreateIssue(forge.IssueInput{
-				Title:  args[1],
-				Body:   fmt.Sprintf("Quick task `%s`.\n\n_Tracked by dross._", ref),
-				Labels: []string{boardsync.LabelMarker, boardsync.LabelQuick},
-			})
+			key, err := openQuickIssue(ctx, ref, args[1])
 			if err != nil {
-				return boardsync.Wrap(err)
-			}
-			ctx.Board.SetQuick(ref, iss.Key)
-			if err := ctx.Board.Save(ctx.BoardPath); err != nil {
 				return err
 			}
-			Printf("quick %s -> board %s\n", ref, iss.Key)
+			Printf("quick %s -> board %s\n", ref, key)
 			return nil
 		},
 	}
 	c.Flags().BoolVar(&doClose, "close", false, "close the quick issue linked to <ref>")
 	return c
+}
+
+// openQuickIssue opens ref's board issue and links it in board.json, which is
+// where `dross issue quick <ref> --close` finds it. `dross issue quick` and
+// `dross quick end` both open through it, so their issues cannot drift.
+func openQuickIssue(ctx *boardCtx, ref, title string) (string, error) {
+	iss, err := ctx.Client.CreateIssue(forge.IssueInput{
+		Title:  title,
+		Body:   fmt.Sprintf("Quick task `%s`.\n\n_Tracked by dross._", ref),
+		Labels: []string{boardsync.LabelMarker, boardsync.LabelQuick},
+	})
+	if err != nil {
+		return "", boardsync.Wrap(err)
+	}
+	ctx.Board.SetQuick(ref, iss.Key)
+	if err := ctx.Board.Save(ctx.BoardPath); err != nil {
+		return "", err
+	}
+	return iss.Key, nil
 }
 
 // --- pull (inbound triage feed) ---

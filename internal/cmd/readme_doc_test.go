@@ -238,14 +238,11 @@ func TestReadmeDocumentsContextNudge(t *testing.T) {
 
 // optionsSection returns the body of options.md's "## <n>." section — the
 // heading line excluded, so a check cannot be satisfied by the title alone —
-// up to the next "## ".
+// up to the next "## ", read from the expanded prompt so a section's partial
+// text is part of its body.
 func optionsSection(t *testing.T, n int) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "options.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, sec, ok := strings.Cut(string(b), "\n## "+strconv.Itoa(n)+". ")
+	_, sec, ok := strings.Cut(expandedPrompt(t, "options.md"), "\n## "+strconv.Itoa(n)+". ")
 	if !ok {
 		t.Fatalf("options.md has no §%d", n)
 	}
