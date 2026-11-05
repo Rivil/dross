@@ -1,0 +1,827 @@
+# Kill switch for solo-task-subagent (c-6): the writer ships only if, on tasks
+# above the size gate, median main-loop peak context drops by at least 25% and
+# median per-task wall-clock rises by at most 25% (turns recorded, not gated).
+# [before] is mined from the archived v1.7 solo transcripts
+# (~/.local/share/dross/baseline-v1.7/: solo-task-review, board-finalize-on-
+# complete, verify-staleness, debug-sessions, review-comment-ingest) with the
+# filter below; [after] is the next real solo phase, mined the same way.
+# Counts only — no transcript text is copied into this file.
+
+[thresholds]
+  context_drop = 0.25
+  wall_clock_rise = 0.25
+
+[calibration]
+  threshold = 40000
+  method = "Scanned thresholds 10,000–150,000 bytes in 5,000 steps over the [[before.task]] rows; kept those leaving at least 40% of rows on each side, and took the one with the largest ratio of median context_growth above the gate to median below it. 40,000: 48 above, 38 below, median growth 36,513.5 vs 20,679.5 (1.77×). The provisional 50,000 gave 1.43×."
+
+[trial]
+  status = "pending"
+
+[before]
+  method = "jq -cs -f <filter> <session>.jsonl per archived session that ran a v1.7 solo phase. A turn is a distinct message.id among main-loop entries (type assistant, isSidechain false, model not <synthetic>); its context is input_tokens + cache_creation_input_tokens + cache_read_input_tokens. A task's window runs from the turn whose Bash call sets it in_progress to the turn setting it done, inclusive; a $VAR task id resolves from that call's tool_result (<phase>/<task> -> <status>, or next=<task>). peak_context is the window's max context; context_growth sums only the positive turn-to-turn deltas, so a compaction inside the window never counts negative; wall_clock_s is done-turn minus in_progress-turn timestamp; turns counts the window's turns. Tasks that ended failed have no row. surface_bytes sums git cat-file -s <commit>^:<file> over the task's files and commit in that phase's changes.json; a file absent at the parent counts 0."
+  filter = '''
+def ts: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
+def text: if type == "string" then . else ([ .[]? | select(.type == "text") | .text ] | join("\n")) end;
+. as $all
+| ([ $all[] | select(.type == "user") | .message.content[]? | select(type == "object" and .type == "tool_result") | {key: .tool_use_id, value: (.content | text)} ] | from_entries) as $out
+| [ $all[] | select(.type == "assistant" and (.isSidechain | not) and .message.model != "<synthetic>") ]
+| reduce .[] as $e ({order: [], by: {}};
+    ($e.message.id) as $id
+    | (if .by[$id] == null then .order += [$id] | .by[$id] = {ts: ($e.timestamp | ts), ctx: 0, calls: []} else . end)
+    | .by[$id].ctx = ([.by[$id].ctx, (($e.message.usage // {}) | ((.input_tokens // 0) + (.cache_creation_input_tokens // 0) + (.cache_read_input_tokens // 0)))] | max)
+    | .by[$id].calls += [ $e.message.content[]? | select(.type == "tool_use" and .name == "Bash") | {cmd: (.input.command // ""), out: ($out[.id] // "")} ])
+| [ .order[] as $id | .by[$id] ] as $turns
+| [ range(0; $turns | length) as $i
+    | $turns[$i].calls[] as $c
+    | $c.cmd | [ scan("dross task status ([a-z0-9-]+) ([^ ]+) (in_progress|done|failed)") ][]
+    | . as [$p, $t, $st]
+    | (if ($t | test("^t-[0-9]+$")) then $t
+       else ([ $c.out | scan($p + "/(t-[0-9]+) -> " + $st) ][0][0] // [ $c.out | scan("next=(t-[0-9]+)") ][0][0]) end) as $task
+    | select($task != null)
+    | {i: $i, phase: $p, task: $task, st: $st} ] as $ev
+| [ $ev[] | select(.st == "done") as $d
+    | ([ $ev[] | select(.phase == $d.phase and .task == $d.task and .st == "in_progress" and .i <= $d.i) ] | last) as $s
+    | select($s != null)
+    | $turns[$s.i : $d.i + 1] as $w
+    | {phase: $d.phase, task: $d.task,
+       peak_context: ([ $w[].ctx ] | max),
+       context_growth: ([ range(1; $w | length) as $k | ($w[$k].ctx - $w[$k - 1].ctx) | select(. > 0) ] | add // 0),
+       wall_clock_s: ($turns[$d.i].ts - $turns[$s.i].ts),
+       turns: ($w | length)} ]
+| .[]
+'''
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-1"
+  peak_context = 223473
+  context_growth = 29048
+  wall_clock_s = 532
+  turns = 21
+  surface_bytes = 2914
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-2"
+  peak_context = 246454
+  context_growth = 21288
+  wall_clock_s = 209
+  turns = 13
+  surface_bytes = 15939
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-3"
+  peak_context = 299588
+  context_growth = 52524
+  wall_clock_s = 454
+  turns = 31
+  surface_bytes = 26664
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-4"
+  peak_context = 314789
+  context_growth = 14586
+  wall_clock_s = 157
+  turns = 16
+  surface_bytes = 95974
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-5"
+  peak_context = 326899
+  context_growth = 11536
+  wall_clock_s = 135
+  turns = 10
+  surface_bytes = 58899
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-6"
+  peak_context = 369968
+  context_growth = 42495
+  wall_clock_s = 448
+  turns = 31
+  surface_bytes = 58207
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-7"
+  peak_context = 382275
+  context_growth = 11707
+  wall_clock_s = 157
+  turns = 9
+  surface_bytes = 7136
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-8"
+  peak_context = 399498
+  context_growth = 16683
+  wall_clock_s = 250
+  turns = 14
+  surface_bytes = 135464
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-9"
+  peak_context = 406942
+  context_growth = 6876
+  wall_clock_s = 717
+  turns = 8
+  surface_bytes = 39678
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-10"
+  peak_context = 653107
+  context_growth = 20071
+  wall_clock_s = 883
+  turns = 11
+  surface_bytes = 0
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-11"
+  peak_context = 472658
+  context_growth = 65172
+  wall_clock_s = 1009
+  turns = 48
+  surface_bytes = 54578
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-12"
+  peak_context = 493191
+  context_growth = 19908
+  wall_clock_s = 277
+  turns = 16
+  surface_bytes = 22456
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-13"
+  peak_context = 598645
+  context_growth = 35747
+  wall_clock_s = 1414
+  turns = 38
+  surface_bytes = 62664
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-14"
+  peak_context = 618546
+  context_growth = 16889
+  wall_clock_s = 763
+  turns = 13
+  surface_bytes = 50222
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-15"
+  peak_context = 632431
+  context_growth = 13306
+  wall_clock_s = 494
+  turns = 13
+  surface_bytes = 79646
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-16"
+  peak_context = 688168
+  context_growth = 34514
+  wall_clock_s = 767
+  turns = 22
+  surface_bytes = 33877
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-17"
+  peak_context = 747162
+  context_growth = 17386
+  wall_clock_s = 722
+  turns = 10
+  surface_bytes = 59754
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-18"
+  peak_context = 771624
+  context_growth = 23890
+  wall_clock_s = 681
+  turns = 13
+  surface_bytes = 100047
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-19"
+  peak_context = 548135
+  context_growth = 54365
+  wall_clock_s = 777
+  turns = 37
+  surface_bytes = 0
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-20"
+  peak_context = 784193
+  context_growth = 12003
+  wall_clock_s = 218
+  turns = 8
+  surface_bytes = 3270
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-21"
+  peak_context = 698400
+  context_growth = 9698
+  wall_clock_s = 735
+  turns = 10
+  surface_bytes = 11944
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-22"
+  peak_context = 711969
+  context_growth = 12981
+  wall_clock_s = 240
+  turns = 10
+  surface_bytes = 56739
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-23"
+  peak_context = 729117
+  context_growth = 16568
+  wall_clock_s = 897
+  turns = 17
+  surface_bytes = 95854
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-24"
+  peak_context = 803456
+  context_growth = 7200
+  wall_clock_s = 205
+  turns = 13
+  surface_bytes = 14637
+
+[[before.task]]
+  phase = "solo-task-review"
+  task = "t-25"
+  peak_context = 845474
+  context_growth = 14125
+  wall_clock_s = 482
+  turns = 16
+  surface_bytes = 57253
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-1"
+  peak_context = 394736
+  context_growth = 41061
+  wall_clock_s = 938
+  turns = 40
+  surface_bytes = 119777
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-2"
+  peak_context = 458422
+  context_growth = 63111
+  wall_clock_s = 918
+  turns = 55
+  surface_bytes = 408359
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-3"
+  peak_context = 497984
+  context_growth = 38996
+  wall_clock_s = 734
+  turns = 41
+  surface_bytes = 59130
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-4"
+  peak_context = 528711
+  context_growth = 30727
+  wall_clock_s = 601
+  turns = 28
+  surface_bytes = 30169
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-5"
+  peak_context = 584108
+  context_growth = 55397
+  wall_clock_s = 1359
+  turns = 33
+  surface_bytes = 105495
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-6"
+  peak_context = 600683
+  context_growth = 16575
+  wall_clock_s = 674
+  turns = 16
+  surface_bytes = 124118
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-7"
+  peak_context = 663591
+  context_growth = 62184
+  wall_clock_s = 1294
+  turns = 40
+  surface_bytes = 381686
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-8"
+  peak_context = 702176
+  context_growth = 38585
+  wall_clock_s = 527
+  turns = 32
+  surface_bytes = 26104
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-9"
+  peak_context = 739256
+  context_growth = 37080
+  wall_clock_s = 1434
+  turns = 41
+  surface_bytes = 80165
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-10"
+  peak_context = 765956
+  context_growth = 26700
+  wall_clock_s = 569
+  turns = 27
+  surface_bytes = 22977
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-11"
+  peak_context = 792575
+  context_growth = 26619
+  wall_clock_s = 632
+  turns = 22
+  surface_bytes = 0
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-12"
+  peak_context = 866547
+  context_growth = 73972
+  wall_clock_s = 1661
+  turns = 54
+  surface_bytes = 119876
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-13"
+  peak_context = 915319
+  context_growth = 48772
+  wall_clock_s = 970
+  turns = 38
+  surface_bytes = 43104
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-14"
+  peak_context = 963886
+  context_growth = 48567
+  wall_clock_s = 2111
+  turns = 41
+  surface_bytes = 54561
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-15"
+  peak_context = 966365
+  context_growth = 97355
+  wall_clock_s = 544
+  turns = 56
+  surface_bytes = 73473
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-16"
+  peak_context = 218936
+  context_growth = 58841
+  wall_clock_s = 588
+  turns = 38
+  surface_bytes = 72308
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-17"
+  peak_context = 266985
+  context_growth = 47255
+  wall_clock_s = 411
+  turns = 39
+  surface_bytes = 513262
+
+[[before.task]]
+  phase = "board-finalize-on-complete"
+  task = "t-18"
+  peak_context = 385824
+  context_growth = 47106
+  wall_clock_s = 536
+  turns = 43
+  surface_bytes = 59999
+
+[[before.task]]
+  phase = "verify-staleness"
+  task = "t-1"
+  peak_context = 582899
+  context_growth = 35140
+  wall_clock_s = 516
+  turns = 23
+  surface_bytes = 28869
+
+[[before.task]]
+  phase = "verify-staleness"
+  task = "t-2"
+  peak_context = 617409
+  context_growth = 34510
+  wall_clock_s = 511
+  turns = 29
+  surface_bytes = 63930
+
+[[before.task]]
+  phase = "verify-staleness"
+  task = "t-3"
+  peak_context = 861458
+  context_growth = 4676
+  wall_clock_s = 180
+  turns = 8
+  surface_bytes = 166643
+
+[[before.task]]
+  phase = "verify-staleness"
+  task = "t-4"
+  peak_context = 683286
+  context_growth = 38072
+  wall_clock_s = 548
+  turns = 26
+  surface_bytes = 70195
+
+[[before.task]]
+  phase = "verify-staleness"
+  task = "t-5"
+  peak_context = 720960
+  context_growth = 37674
+  wall_clock_s = 538
+  turns = 20
+  surface_bytes = 74445
+
+[[before.task]]
+  phase = "verify-staleness"
+  task = "t-6"
+  peak_context = 768238
+  context_growth = 47278
+  wall_clock_s = 479
+  turns = 34
+  surface_bytes = 142568
+
+[[before.task]]
+  phase = "verify-staleness"
+  task = "t-7"
+  peak_context = 833387
+  context_growth = 38734
+  wall_clock_s = 491
+  turns = 27
+  surface_bytes = 44254
+
+[[before.task]]
+  phase = "verify-staleness"
+  task = "t-8"
+  peak_context = 794653
+  context_growth = 24369
+  wall_clock_s = 437
+  turns = 24
+  surface_bytes = 18494
+
+[[before.task]]
+  phase = "verify-staleness"
+  task = "t-9"
+  peak_context = 856083
+  context_growth = 10464
+  wall_clock_s = 244
+  turns = 13
+  surface_bytes = 8970
+
+[[before.task]]
+  phase = "debug-sessions"
+  task = "t-1"
+  peak_context = 181067
+  context_growth = 90706
+  wall_clock_s = 1859
+  turns = 49
+  surface_bytes = 0
+
+[[before.task]]
+  phase = "debug-sessions"
+  task = "t-2"
+  peak_context = 190916
+  context_growth = 9296
+  wall_clock_s = 343
+  turns = 14
+  surface_bytes = 9473
+
+[[before.task]]
+  phase = "debug-sessions"
+  task = "t-3"
+  peak_context = 248505
+  context_growth = 57078
+  wall_clock_s = 551
+  turns = 34
+  surface_bytes = 30142
+
+[[before.task]]
+  phase = "debug-sessions"
+  task = "t-4"
+  peak_context = 290216
+  context_growth = 41063
+  wall_clock_s = 946
+  turns = 32
+  surface_bytes = 0
+
+[[before.task]]
+  phase = "debug-sessions"
+  task = "t-5"
+  peak_context = 340570
+  context_growth = 49773
+  wall_clock_s = 789
+  turns = 39
+  surface_bytes = 49489
+
+[[before.task]]
+  phase = "debug-sessions"
+  task = "t-6"
+  peak_context = 372469
+  context_growth = 30673
+  wall_clock_s = 642
+  turns = 25
+  surface_bytes = 39430
+
+[[before.task]]
+  phase = "debug-sessions"
+  task = "t-7"
+  peak_context = 452952
+  context_growth = 79921
+  wall_clock_s = 2460
+  turns = 56
+  surface_bytes = 44680
+
+[[before.task]]
+  phase = "debug-sessions"
+  task = "t-8"
+  peak_context = 479561
+  context_growth = 24025
+  wall_clock_s = 308
+  turns = 24
+  surface_bytes = 109604
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-1"
+  peak_context = 488219
+  context_growth = 395863
+  wall_clock_s = 2383
+  turns = 195
+  surface_bytes = 47424
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-2"
+  peak_context = 513407
+  context_growth = 24616
+  wall_clock_s = 1710
+  turns = 29
+  surface_bytes = 0
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-3"
+  peak_context = 521193
+  context_growth = 7268
+  wall_clock_s = 206
+  turns = 13
+  surface_bytes = 0
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-4"
+  peak_context = 532675
+  context_growth = 11482
+  wall_clock_s = 178
+  turns = 15
+  surface_bytes = 0
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-5"
+  peak_context = 555824
+  context_growth = 23149
+  wall_clock_s = 584
+  turns = 34
+  surface_bytes = 48133
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-6"
+  peak_context = 564470
+  context_growth = 8646
+  wall_clock_s = 162
+  turns = 13
+  surface_bytes = 23441
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-7"
+  peak_context = 592237
+  context_growth = 10314
+  wall_clock_s = 922
+  turns = 17
+  surface_bytes = 32814
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-8"
+  peak_context = 608254
+  context_growth = 16017
+  wall_clock_s = 1706
+  turns = 21
+  surface_bytes = 60335
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-9"
+  peak_context = 707618
+  context_growth = 71061
+  wall_clock_s = 1723
+  turns = 50
+  surface_bytes = 10994
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-10"
+  peak_context = 769295
+  context_growth = 35947
+  wall_clock_s = 1931
+  turns = 31
+  surface_bytes = 71410
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-11"
+  peak_context = 812828
+  context_growth = 43533
+  wall_clock_s = 2529
+  turns = 36
+  surface_bytes = 0
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-12"
+  peak_context = 930518
+  context_growth = 117690
+  wall_clock_s = 1976
+  turns = 75
+  surface_bytes = 43250
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-13"
+  peak_context = 952356
+  context_growth = 21838
+  wall_clock_s = 2740
+  turns = 29
+  surface_bytes = 67810
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-14"
+  peak_context = 966447
+  context_growth = 17744
+  wall_clock_s = 1762
+  turns = 22
+  surface_bytes = 54870
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-15"
+  peak_context = 140344
+  context_growth = 68942
+  wall_clock_s = 1776
+  turns = 65
+  surface_bytes = 51159
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-16"
+  peak_context = 163704
+  context_growth = 22489
+  wall_clock_s = 896
+  turns = 25
+  surface_bytes = 110816
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-17"
+  peak_context = 719698
+  context_growth = 12080
+  wall_clock_s = 1584
+  turns = 20
+  surface_bytes = 28397
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-18"
+  peak_context = 581923
+  context_growth = 17453
+  wall_clock_s = 839
+  turns = 23
+  surface_bytes = 43670
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-19"
+  peak_context = 733348
+  context_growth = 13650
+  wall_clock_s = 1623
+  turns = 19
+  surface_bytes = 26478
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-20"
+  peak_context = 636557
+  context_growth = 19961
+  wall_clock_s = 1658
+  turns = 25
+  surface_bytes = 61722
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-21"
+  peak_context = 616596
+  context_growth = 8342
+  wall_clock_s = 860
+  turns = 12
+  surface_bytes = 61053
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-22"
+  peak_context = 142100
+  context_growth = 52297
+  wall_clock_s = 1985
+  turns = 49
+  surface_bytes = 12436
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-23"
+  peak_context = 152758
+  context_growth = 9373
+  wall_clock_s = 375
+  turns = 13
+  surface_bytes = 12253
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-24"
+  peak_context = 161388
+  context_growth = 7733
+  wall_clock_s = 730
+  turns = 12
+  surface_bytes = 8690
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-25"
+  peak_context = 179429
+  context_growth = 17120
+  wall_clock_s = 790
+  turns = 19
+  surface_bytes = 9514
+
+[[before.task]]
+  phase = "review-comment-ingest"
+  task = "t-26"
+  peak_context = 189302
+  context_growth = 8932
+  wall_clock_s = 761
+  turns = 11
+  surface_bytes = 18395

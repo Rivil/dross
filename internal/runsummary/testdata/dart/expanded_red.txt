@@ -1,0 +1,61 @@
+# captured: flutter@3.41.6 flutter test --reporter expanded (feastahead@04ce4ed2) phone$ test/core/util test/shared, FVM 3.41.6 (3.44.0 cannot compile lucide_icons) break: text_fold_test.dart:7 expects 'sauteedX'; app_shell_i18n_test.dart:98 finds text 'Homeward'
+00:00 +0: loading /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart
+00:00 +0: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +1: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +2: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +3: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +4: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +5: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +6: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +7: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +8: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +9: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +10: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +11: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +12: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases
+00:00 +12 -1: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Latin accents and lowercases [E]
+  Expected: 'sauteedX'
+    Actual: 'sauteed'
+     Which: is different. Both strings start the same, but the actual value is missing the following trailing characters: X
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18  expect
+  test/core/util/text_fold_test.dart 7:7              main.<fn>.<fn>
+  
+00:00 +12 -1: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) folds Vietnamese combining tone/horn marks and lowercases
+00:00 +13 -1: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: foldDiacritics (uat-session-7-fixes t-5, S7-02/S7-13) leaves plain ASCII untouched (aside from case)
+00:00 +14 -1: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: escapeLikePattern (uat-session-7-fixes t-5, S7-13) escapes % so it matches literally, not as a LIKE wildcard
+00:00 +15 -1: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: escapeLikePattern (uat-session-7-fixes t-5, S7-13) escapes _ so it matches literally, not as a LIKE wildcard
+00:00 +16 -1: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: escapeLikePattern (uat-session-7-fixes t-5, S7-13) escapes a literal backslash first, so it is not misread as an escape char
+00:00 +17 -1: /Users/rivil/Development/feastahead/phone/test/core/util/text_fold_test.dart: escapeLikePattern (uat-session-7-fixes t-5, S7-13) leaves a plain term with no wildcard characters unchanged
+00:00 +18 -1: /Users/rivil/Development/feastahead/phone/test/shared/widgets/app_shell_i18n_test.dart: (setUpAll)
+00:00 +18 -1: /Users/rivil/Development/feastahead/phone/test/shared/widgets/app_shell_i18n_test.dart: AppShell renders nav labels in English
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "Homeward": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///Users/rivil/Development/feastahead/phone/test/shared/widgets/app_shell_i18n_test.dart:98:5)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///Users/rivil/Development/feastahead/phone/test/shared/widgets/app_shell_i18n_test.dart line 98
+The test description was:
+  AppShell renders nav labels in English
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:00 +18 -2: /Users/rivil/Development/feastahead/phone/test/shared/widgets/app_shell_i18n_test.dart: AppShell renders nav labels in English [E]
+  Test failed. See exception logs above.
+  The test description was: AppShell renders nav labels in English
+  
+00:00 +18 -2: /Users/rivil/Development/feastahead/phone/test/shared/widgets/app_shell_i18n_test.dart: AppShell renders nav labels in Norwegian
+00:01 +19 -2: /Users/rivil/Development/feastahead/phone/test/shared/widgets/app_shell_i18n_test.dart: AppShell renders nav labels in Polish
+00:01 +20 -2: /Users/rivil/Development/feastahead/phone/test/shared/widgets/app_shell_i18n_test.dart: (tearDownAll)
+00:01 +20 -2: Some tests failed.

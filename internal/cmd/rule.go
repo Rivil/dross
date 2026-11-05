@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/gatestate"
 	"github.com/Rivil/dross/internal/rules"
 )
 
@@ -173,8 +174,13 @@ func toggleCmd(name string, disabled bool) *cobra.Command {
 }
 
 // ruleShow renders the merged rules block — what gets injected into prompt context.
+//
+// A repeat in the same session context, with the rules byte-identical, prints
+// the one-line RulesUnchanged marker instead (showOnce); --full always prints
+// the block. `rule list --merged` is the inspection path and never marks.
 func ruleShow() *cobra.Command {
-	return &cobra.Command{
+	var full bool
+	c := &cobra.Command{
 		Use:   "show",
 		Short: "Render merged rules as the <rules> prompt block",
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -182,10 +188,11 @@ func ruleShow() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			Print(rules.Render(m))
-			return nil
+			return showOnce(gatestate.ShowRules, rules.Render(m)+"\n", full)
 		},
 	}
+	c.Flags().BoolVar(&full, "full", false, "print the whole block even when this session already has it")
+	return c
 }
 
 // loadScope loads a single rules.toml. Project lookup walks up to find .dross/.

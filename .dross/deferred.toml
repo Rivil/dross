@@ -72,3 +72,8 @@
   id = "4c0e87a37bf9ac1e"
   text = "phase complete: when only the board.json chore publish fails, the error says the board was not finalized and to retry once the board is reachable, although every card closed; and arming auto-merge on the shared chore PR right after the board commit pushes races GitHub's mergeability recompute ('Pull Request is not mergeable')"
   why = "dogfooded on board-finalize-on-complete's own ship 2026-10-05: DRO-853 + 18 task cards closed, chore PR #150 left unarmed, complete exited 1; dross issue phase finalize recovered it. Fix: name the publish step in boardNotFinalized, and push both chore commits before one arm (or retry the arm on 'not mergeable')"
+
+[[deferred]]
+  id = "85321d5a24e7736c"
+  text = "dross milestone show/progress (and /dross-milestone's resume path) don't flag a recorded [milestone].base whose branch no longer exists. v1.8 carried base=milestone/v1.7 after v1.7 finalize deleted that branch, and the only fix was replace + deleting and re-cutting the milestone branch. v1.9 still has the same stale base."
+  why = "Found 2026-10-08 scoping v1.8, and only because a memory note mentioned it; milestone complete would have targeted a deleted branch"

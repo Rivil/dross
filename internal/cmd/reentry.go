@@ -3,9 +3,15 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
+
+	"github.com/Rivil/dross/internal/gatestate"
 
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/render"
@@ -34,7 +40,7 @@ func Reentry() *cobra.Command {
 	return &cobra.Command{
 		Use:   "reentry",
 		Short: "One-line 'you are here + next command' for a fresh session (SessionStart hook target)",
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(c *cobra.Command, _ []string) error {
 			root, err := FindRoot()
 			if errors.Is(err, ErrNoRoot) {
 				return nil
@@ -42,6 +48,7 @@ func Reentry() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			bumpFromHook(c.InOrStdin(), filepath.Dir(root))
 			proj, err := project.Load(filepath.Join(root, project.File))
 			if err != nil {
 				return err
@@ -92,4 +99,33 @@ func reentryLine(root string, proj *project.Project, st *state.State) string {
 		}
 	}
 	return line
+}
+
+// reentryStdinIsTTY reports whether stdin is a terminal — `dross reentry` run
+// by hand, with no hook payload to read. A test swaps it.
+var reentryStdinIsTTY = func() bool { return term.IsTerminal(int(os.Stdin.Fd())) }
+
+const (
+	// maxReentryPayload caps the SessionStart payload read; anything longer is
+	// not a payload this hook understands.
+	maxReentryPayload = 1 << 20
+	// reentryReadDeadline bounds the read so a hook whose stdin never closes
+	// cannot hold a session's start.
+	reentryReadDeadline = 300 * time.Millisecond
+)
+
+// bumpFromHook starts a new show epoch for the session the SessionStart
+// payload names. Every source bumps — startup, resume, clear and compact each
+// leave a context that has not seen the last full `rule show` or `interaction
+// show` — so a repeat after any of them prints in full. It is silent on every
+// failure: the hook's envelope and exit status never depend on it.
+func bumpFromHook(stdin io.Reader, repoDir string) {
+	if reentryStdinIsTTY() {
+		return
+	}
+	data, ok := readBounded(io.LimitReader(stdin, maxReentryPayload+1), reentryReadDeadline)
+	if !ok || len(data) > maxReentryPayload {
+		return
+	}
+	_ = gatestate.BumpForHook(repoDir, data)
 }

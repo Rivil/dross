@@ -15,6 +15,7 @@ import (
 	"github.com/Rivil/dross/internal/argfence"
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/runlog"
 )
 
 // Stryker adapter for TS/JS/Svelte mutation testing via stryker-mutator.
@@ -61,7 +62,15 @@ type Stryker struct {
 	// way to get it into tests.json is to run it again (7h48m on 2026-09-18).
 	// The path and mtime are printed so a stale report cannot pass as fresh.
 	ReuseReport bool
+
+	// stream receives the tool's output; nil sends it to stderr, as before
+	// run logs existed.
+	stream *runlog.Log
 }
+
+// SetStream routes the tool's stream to l (nil: back to stderr). The bounded
+// failure head stays on stderr either way.
+func (s *Stryker) SetStream(l *runlog.Log) { s.stream = l }
 
 func (s *Stryker) Name() string { return "stryker" }
 
@@ -152,7 +161,11 @@ func (s *Stryker) RunRanges(files []string, ranges map[string][]Range) (*Report,
 	// a bounded prefix is retained purely so a failure can quote the real cause
 	// instead of guessing at it.
 	head := &headBuffer{limit: strykerHeadBytes}
-	sink := io.MultiWriter(os.Stderr, head)
+	var out io.Writer = os.Stderr
+	if s.stream != nil {
+		out = s.stream
+	}
+	sink := io.MultiWriter(out, head)
 	cmd.Stdout = sink
 	cmd.Stderr = sink
 	// Retained past the branch below: the exit status is the one fact about a
@@ -193,7 +206,7 @@ func (s *Stryker) RunRanges(files []string, ranges map[string][]Range) (*Report,
 			head.printHead(os.Stderr, "stryker", strykerHeadLines)
 			fmt.Fprintln(os.Stderr)
 			err := fmt.Errorf("stryker did not write a report at %s: %w",
-				reportPath, RecordToolFailure("stryker", exitStatus, Observed(head.observed())))
+				reportPath, RecordToolFailure("stryker", exitStatus, Observed(head.observed())).toLog(s.stream != nil))
 			// Attached only on an initial-test-run abort. Unconditionally it
 			// would claim a truncated failure list on aborts that never
 			// printed one — a bad --mutate glob, a missing runner, a crash in

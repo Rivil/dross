@@ -191,6 +191,12 @@ func (c *Call) Script() shellscan.Script {
 // moves into (cd, git -C).
 func (c *Call) Targets() []string {
 	if f := c.FilePath(); f != "" {
+		// A subagent's file call falls back to its session's directory: a
+		// path outside every repo must not leave a writer's workflow fence
+		// unjudged. The main loop's keeps the path's own directory only.
+		if c.AgentType != "" && c.Cwd != "" {
+			return []string{filepath.Dir(f), c.Cwd}
+		}
 		return []string{filepath.Dir(f)}
 	}
 	var dirs []string

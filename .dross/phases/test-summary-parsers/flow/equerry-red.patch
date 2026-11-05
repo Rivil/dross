@@ -1,0 +1,26 @@
+diff --git a/app/src/test/java/dev/equerry/app/assistant/DefaultAssistantDetectorTest.kt b/app/src/test/java/dev/equerry/app/assistant/DefaultAssistantDetectorTest.kt
+index 972871f..6d54c95 100644
+--- a/app/src/test/java/dev/equerry/app/assistant/DefaultAssistantDetectorTest.kt
++++ b/app/src/test/java/dev/equerry/app/assistant/DefaultAssistantDetectorTest.kt
+@@ -40,7 +40,7 @@ class DefaultAssistantDetectorTest {
+     fun `not default when a different OEM component holds the slot`() {
+         setVoiceInteractionService("com.oem.assistant/.OemVoiceInteractionService")
+ 
+-        assertEquals(DefaultAssistantState.NOT_DEFAULT, detector.state())
++        assertEquals(DefaultAssistantState.IS_DEFAULT, detector.state())
+     }
+ 
+     @Test
+diff --git a/app/src/test/java/dev/equerry/app/voice/SpeakChunkerTest.kt b/app/src/test/java/dev/equerry/app/voice/SpeakChunkerTest.kt
+index 137556d..5010d74 100644
+--- a/app/src/test/java/dev/equerry/app/voice/SpeakChunkerTest.kt
++++ b/app/src/test/java/dev/equerry/app/voice/SpeakChunkerTest.kt
+@@ -26,7 +26,7 @@ class SpeakChunkerTest {
+             addAll(chunker.feed(" you? Bye."))
+             addAll(chunker.finish())
+         }
+-        assertEquals(listOf("Hi.", "How are you?", "Bye."), utterances)
++        assertEquals(listOf("Hi.\nthere", "How are you?", "Bye."), utterances)
+     }
+ 
+     @Test

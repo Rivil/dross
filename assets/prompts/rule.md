@@ -19,7 +19,7 @@ Read the user's freeform input. Recognise these intents:
 | "remove rule X" / "delete X" | `dross rule remove <id>` |
 | "promote X" / "make X global" | `dross rule promote <id>` |
 | "disable X" / "turn off X" | `dross rule disable <id>` |
-| "show what claude sees" | `dross rule show` |
+| "show what claude sees" | `dross rule list --merged` |
 
 ## Add — one decision per turn
 
@@ -51,7 +51,7 @@ Always ask the user to confirm the id before calling the destructive command.
 
 ## After any change
 
-Confirm with a **one-line summary** — e.g. `Rule added: [project/hard] "<short text>"` — never paste the full merged rules block back; point the user at `dross rule show` if they want to see it. End with a bottom-anchored `Next:` line:
+Confirm with a **one-line summary** — e.g. `Rule added: [project/hard] "<short text>"` — never paste the full merged rules block back; point the user at `dross rule list --merged` if they want to see it. End with a bottom-anchored `Next:` line:
 ```
 Rule <added | removed | promoted | toggled>. Next: /dross-status — back to where you were.
 ```

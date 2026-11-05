@@ -53,15 +53,12 @@ func TestSetupPromptsReferenceContract(t *testing.T) {
 	}
 }
 
-// setupPromptBody reads a setup prompt's markdown body, failing the test on a
-// read error. Shared by the c-3/c-4 structural tests below.
-func setupPromptBody(t *testing.T, root, name string) string {
+// setupPromptBody reads a setup prompt's markdown body expanded with its
+// partials, so a walk moved into one is still checked. Shared by the c-3/c-4
+// structural tests below.
+func setupPromptBody(t *testing.T, name string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", name+".md"))
-	if err != nil {
-		t.Fatalf("read %s.md: %v", name, err)
-	}
-	return string(b)
+	return expandedPrompt(t, name+".md")
 }
 
 // TestSetupPromptDecisionAnchors proves c-3 per prompt: each retrofitted decision
@@ -70,7 +67,6 @@ func setupPromptBody(t *testing.T, root, name string) string {
 // anchor and fails the owning prompt's case — pointing at exactly one owner,
 // closing phase 11's "audit-doc proxy only" gap for the setup family.
 func TestSetupPromptDecisionAnchors(t *testing.T) {
-	root := repoRootFromTest(t)
 	cases := []struct {
 		prompt  string
 		heading string
@@ -85,7 +81,7 @@ func TestSetupPromptDecisionAnchors(t *testing.T) {
 		{"inbox", "## 2. Triage each issue", []string{"one issue per turn"}},
 	}
 	for _, c := range cases {
-		section := promptSection(t, setupPromptBody(t, root, c.prompt), c.heading)
+		section := promptSection(t, setupPromptBody(t, c.prompt), c.heading)
 		for _, a := range c.anchors {
 			if !strings.Contains(section, a) {
 				t.Errorf("%s.md %q must carry the anchor %q proving its propose-and-react shape (c-3)", c.prompt, c.heading, a)
@@ -100,7 +96,6 @@ func TestSetupPromptDecisionAnchors(t *testing.T) {
 // intentional multi-turn walks (init §1, milestone §3, rule Add) are excluded —
 // they are guarded by TestSetupPromptDecisionAnchors instead.
 func TestSetupNoBundledTurns(t *testing.T) {
-	root := repoRootFromTest(t)
 	singles := []struct{ prompt, heading string }{
 		{"options", "## Section pick"},
 		{"options", "## How each section works"},
@@ -108,7 +103,7 @@ func TestSetupNoBundledTurns(t *testing.T) {
 		{"inbox", "## 2. Triage each issue"},
 	}
 	for _, s := range singles {
-		section := promptSection(t, setupPromptBody(t, root, s.prompt), s.heading)
+		section := promptSection(t, setupPromptBody(t, s.prompt), s.heading)
 		if n := strings.Count(section, "AskUserQuestion"); n != 1 {
 			t.Errorf("%s.md %q must hold exactly one AskUserQuestion turn (c-3); found %d", s.prompt, s.heading, n)
 		}
@@ -121,9 +116,8 @@ func TestSetupNoBundledTurns(t *testing.T) {
 // pattern) — the presence of the directive — not a fragile keyword scan for a bad
 // paste instruction.
 func TestSetupNoArtifactDump(t *testing.T) {
-	root := repoRootFromTest(t)
 	for _, name := range []string{"init", "onboard", "options", "rule", "milestone"} {
-		body := setupPromptBody(t, root, name)
+		body := setupPromptBody(t, name)
 		if !strings.Contains(body, "never paste") {
 			t.Errorf("%s.md must carry a 'never paste ... back' directive so the composed artifact is confirmed by summary, not dumped (c-4)", name)
 		}

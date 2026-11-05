@@ -1,0 +1,135 @@
+[verify]
+  phase = "test-summary-parsers"
+  generated_at = 2026-11-03T11:49:24.43265Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-11-03T11:50:23.219994Z
+  measured_commit = "b737ddb42900a8b3eba934fa0ae4c157e4897ece"
+  measured_tree = "e233b892ed2c46d3a5f13e0fc2695a6a1ba93a74"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9697406340057637
+  mutants_killed = 673
+  mutants_survived = 21
+  mutants_not_covered = 21
+  mutants_no_block = 16
+  mutants_test_gap = 5
+  mutants_in_scope = 694
+  unclassified_in_scope = 0
+  criteria_total = 12
+  criteria_covered = 12
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 673
+    survived = 21
+    timeout = 0
+    in_scope = 694
+    score = 0.9697406340057637
+    file_count = 25
+    measured_on = "helicon"
+    whole_file = ["internal/cmd/flowcost_record_test.go — adapter-lacks-range-runner", "internal/cmd/readme_doc_test.go — adapter-lacks-range-runner", "internal/cmd/test.go — adapter-lacks-range-runner", "internal/cmd/test_output.go — adapter-lacks-range-runner", "internal/cmd/test_output_test.go — adapter-lacks-range-runner", "internal/cmd/test_summary_wiring_test.go — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_log_test.go — adapter-lacks-range-runner", "internal/mutation/stryker_stream_test.go — adapter-lacks-range-runner", "internal/runlog/runlog.go — adapter-lacks-range-runner", "internal/runlog/runlog_test.go — adapter-lacks-range-runner", "internal/runsummary/dart.go — adapter-lacks-range-runner", "internal/runsummary/dart_test.go — adapter-lacks-range-runner", "internal/runsummary/gotest.go — adapter-lacks-range-runner", "internal/runsummary/gotest_test.go — adapter-lacks-range-runner", "internal/runsummary/gradle.go — adapter-lacks-range-runner", "internal/runsummary/gradle_test.go — adapter-lacks-range-runner", "internal/runsummary/jsrunner.go — adapter-lacks-range-runner", "internal/runsummary/jsrunner_test.go — adapter-lacks-range-runner", "internal/runsummary/merge_test.go — adapter-lacks-range-runner", "internal/runsummary/pytest.go — adapter-lacks-range-runner", "internal/runsummary/pytest_test.go — adapter-lacks-range-runner", "internal/runsummary/render.go — adapter-lacks-range-runner", "internal/runsummary/summary.go — adapter-lacks-range-runner", "internal/runsummary/summary_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/runsummary/gradle_test.go:TestGradleRedNames", "internal/runsummary/gradle_test.go:TestGradleRedOwnLines", "internal/runsummary/gradle_test.go:TestGradleRedCounts", "internal/runsummary/gradle_test.go:TestGradleGreenCounts", "internal/runsummary/gradle_test.go:TestGradleNestedClassName"]
+  notes = "live equerry fixtures; names, own lines, gradle's own counts; JUnit 5 nested Outer.Inner.method() now asserted"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/runsummary/dart_test.go:TestDartRedNames", "internal/runsummary/dart_test.go:TestDartRedOwnLines", "internal/runsummary/dart_test.go:TestDartGreenCounts", "internal/runsummary/dart_test.go:TestDartReportersAgree", "internal/runsummary/dart_test.go:TestDartPendingNotMisattributed", "internal/runsummary/dart_test.go:TestDartExceptionSurvivesClockTick"]
+  notes = "both reporters; teardown exception stays its test's, held block survives a clock tick, '~K' kept verbatim"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/runsummary/pytest_test.go:TestPytestRedNodeIDs", "internal/runsummary/pytest_test.go:TestPytestRedOwnLines", "internal/runsummary/pytest_test.go:TestPytestGreenCounts", "internal/runsummary/pytest_test.go:TestPytestFormatsAgree", "internal/runsummary/pytest_test.go:TestPytestFailAndTeardownErrorOwnSections", "internal/runsummary/pytest_test.go:TestPytestDeepTracebackKeepsELines"]
+  notes = "default + -q; FAILED/teardown ERROR keep own sections; deep traceback keeps its E line"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/runsummary/summary_test.go:TestWorstCaseBlockBytes", "internal/runsummary/summary_test.go:TestBlockNameCounts", "internal/runsummary/summary_test.go:TestBlockMarkerCounts", "internal/runsummary/summary_test.go:TestSharedHeaderCopyBounded"]
+  notes = "14 max-length failures + 200-byte log path: 10 blocks each <= BlockBytes, <= 30,000 bytes"
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/runsummary/gotest_test.go:TestGoBlockDoesNotAbsorbNextPackage", "internal/runsummary/gotest_test.go:TestGoHashHeadingNotABuildBlock", "internal/runsummary/gotest_test.go:TestGoOneWordBuildStillReported", "internal/runsummary/gotest_test.go:TestGoOneWordVetBlock"]
+  notes = "orphan TestMain lines and '# Results' asserted; one-word module vet block is a build failure named oneword"
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/runsummary/jsrunner_test.go:TestVitestConsoleFailNotAFailure", "internal/runsummary/jsrunner_test.go:TestVitestEachBracketNameWhole"]
+  notes = "console FAIL opens nothing; 'rounds 1.5 [ 1.5 ]' prints whole"
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/mutation/stryker_stream_test.go:TestStrykerNetHeadReachesStderrWithStream"]
+  notes = "canary must reach stderr with SetStream set; head bounded; log holds all 300 lines"
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/verify_log_test.go:TestDetachFetchLogProduction", "internal/cmd/verify_log_test.go:TestCollectEmptyHostLogSaysSo", "internal/cmd/verify_log_test.go:TestCollectRunLogErrorSaysSo"]
+  notes = "production FetchArgs + classifyFetch; empty log and run-log error each print exactly one 'log unavailable:' line; verify.go:1425 accepted with coverprofile count 1"
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/test_summary_wiring_test.go:TestFallbackTailFromFailingStep", "internal/cmd/test_summary_wiring_test.go:TestFallbackTailFromFailingSpawn", "internal/cmd/test_summary_wiring_test.go:TestFallbackTailNoSpawnArgvInvalid"]
+  notes = "host-2 lock after host-1 rsync names host-2's lock; sibling tests reworked to fail on base ea72a2cb (t-14)"
+
+[[criterion]]
+  id = "c-10"
+  status = "covered"
+  tests = ["internal/cmd/test_output_test.go:TestPendingLinesReachLogOnTerminal", "internal/cmd/test_output_test.go:TestPendingLinesPrintOnceWithoutLog", "internal/runlog/runlog_test.go:TestRecordNeverReachesTerminal"]
+  notes = "PRE-MARK before first $ header, once; unavailable log prints once with one warning"
+
+[[criterion]]
+  id = "c-11"
+  status = "covered"
+  tests = ["internal/cmd/flowcost_record_test.go:TestFlowCostRecords", "internal/cmd/flowcost_record_test.go:checkTestSummaryParsersFlow", "internal/cmd/flowcost_record_test.go:checkLegPair"]
+  notes = "bytes per parser both legs, after summarised, dross_calls subset (no round-trip added); turns/wall-clock recorded, ungated"
+
+[[criterion]]
+  id = "c-12"
+  status = "covered"
+  tests = ["internal/runsummary/merge_test.go:TestMixedGreen", "internal/runsummary/merge_test.go:TestMixedRedBothRunners", "internal/runsummary/merge_test.go:TestMixedSharesMaxBlocks", "internal/runsummary/merge_test.go:TestMixedHeaderFits", "internal/runsummary/merge_test.go:TestNoCrossClaims", "internal/runsummary/summary_test.go:TestHeaderLastResort", "internal/runsummary/summary_test.go:TestCountsEmptyRunnerAndCounts"]
+  notes = "merge asserted; claimers exactly {dart, vitest}, Result()-twice on mixed; render.go:147 now killed; 161/162 accepted with coverprofile count 1"
+
+[[finding]]
+  severity = "NOTE"
+  text = "accepted 4 in-diff switch-case ceiling survivors with coverprofile proof (2026-11-03, count 1 on each arm body): verify.go:1425, render.go:161, render.go:162, dart.go:82; re-collected, unclassified_in_scope 4 -> 0"
+
+[[finding]]
+  severity = "NOTE"
+  text = "16 of 21 survivors are uncoverable by construction; efficacy over the 678 reachable mutants = 0.99; every survivor outside the 4 in-diff ones is inherited and was already accepted; whole-file gremlins on all 25 files (adapter-lacks-range-runner)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "all 10 FLAGs from the 2026-11-02 verify closed by t-14/t-15 (dart pending + clock tick, ~K, pytest teardown/deep traceback, gradle nested, vitest dotted it.each, go one-word vet, c-9 base-red rework, mixed claimers pair, README from registry)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "t-14 reviewer NOTE: gradle.go dots every ' > ' after the class, so a @DisplayName containing ' > ' would split; not in any live fixture, left"
+
+[[finding]]
+  severity = "NOTE"
+  text = "t-15 reviewer NOTE: TestDartExceptionSurvivesClockTick ticks one test name and fails a differently named one; live fixture uses the same name; still fails if a tick drops the held block"
+
+[[finding]]
+  severity = "NOTE"
+  text = "t-10 reviewer FLAG (mixed fixtures are scoped runs of scripts/dross-test.sh, not the bare run) is documented in the capture header; left"
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-11: turns/wall-clock recorded, not gated (rivil, 2026-10-08)"

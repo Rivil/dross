@@ -1,0 +1,60 @@
+# Flow cost for memory-prune-advisor (c-6): one /dross-status run in this
+# repo, first turn after /clear, before and after the advisor. [before] ran on
+# a dross built from 220ca9d1, whose code matches base commit 02475679 (no diff
+# outside .dross/); [after] on the phase head 7526d478 with the turn cache cold
+# (dross status recounted it during the run: counted_at 0.16s after the call).
+# Observed numbers only; counted structurally from the two transcripts with the
+# filter below, no memory content copied (TestFlowCostCopiesNoContent).
+
+[scenario]
+  repo_shape = "the dross repo itself on phase/memory-prune-advisor, board sync on, Claude memory dir with 60+ memories, so the after leg has suggestions to print"
+  wave_position = "between waves: t-11 failed, every other task done; the flow is a standalone /dross-status, not inside a task"
+  flow_start = "the user entry invoking /dross-status (its command-name entry, right after /clear)"
+  flow_end = "the last main-agent entry before the next non-meta user entry that carries no tool_result"
+  turn_cache = "cold"
+  method = "status_bytes is the utf8 byte length of the tool_result of the Bash call running dross status; [before] printed rule show, an =====STATUS marker and status in one call, so only the bytes after the marker up to the next ===== marker count. [after] cross-checked against a live dross status | wc -c (1797, the transcript drops the trailing newline). The before binary is 220ca9d1 because it was what was installed; its code matches base 02475679. Turns and wall-clock are recorded, not gated (rivil, 2026-10-08): [before] spread its calls over three turns, [after] batched them into one."
+  jq_method = "jq -cs -f <filter> <session>.jsonl. A turn is a distinct message.id among main-agent entries (type assistant, isSidechain false, model not <synthetic>); its tool entry is its tool_use names joined by +, or text when it has none. wall_clock_s is flow_end - flow_start (no AskUserQuestion in either window, so no human wait to subtract). dross_calls is the sorted set of `dross <verb> [<sub>]` invocations in the window's Bash commands."
+  filter = '''
+def ms: (.[0:19] + "Z" | fromdateiso8601) + (.[20:23] | tonumber / 1000);
+def main: .type == "assistant" and .isSidechain == false and .message.model != "<synthetic>";
+def uses: [.message.content[]? | select(type == "object" and .type == "tool_use")];
+def results: [.message.content | if type == "array" then .[] else empty end | select(type == "object" and .type == "tool_result")];
+def rtext: .content | if type == "string" then . else ([.[]? | select(type == "object" and .type == "text") | .text] | join("")) end;
+def dross_calls: [.[] | uses[] | select(.name == "Bash") | .input.command | [scan("(?:^|[^/\\w-])dross ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?")] | .[] | "dross " + (map(select(. != null)) | join(" "))] | unique;
+[.[] | select(.timestamp)] as $e
+| ($e | map(select(.type == "user" and ((.message.content | type) == "string") and (.message.content | test("<command-name>/dross-status</command-name>")))) | first | .timestamp) as $start
+| ($e | map(select(.type == "user" and .timestamp > $start and (.isMeta // false) == false and (results | length) == 0)) | map(.timestamp) | min) as $next
+| ($e | map(select(main and .timestamp >= $start and ($next == null or .timestamp < $next)))) as $a
+| ($a | map(.timestamp) | max) as $end
+| ($a | group_by(.message.id) | sort_by(.[0].timestamp) | map([.[] | uses[] | .name] | if length == 0 then "text" else join("+") end)) as $turns
+| ([$a[] | uses[] | select(.name == "Bash" and (.input.command | test("(?:^|[^/\\w-])dross status(?:$|[^\\w-])"))) | .id]) as $sids
+| ([$e[] | select(.type == "user" and .timestamp >= $start and .timestamp <= $end) | results[] | select(.tool_use_id as $i | $sids | index($i)) | rtext | (if test("=====STATUS\n") then split("=====STATUS\n")[1] | split("\n=====")[0] else . end) | utf8bytelength] | add) as $sb
+| {flow_start: $start, flow_end: $end,
+   dross_calls: ($a | dross_calls), agent_turns: ($turns | length), turn_tools: $turns,
+   status_calls: ($sids | length), status_bytes: $sb,
+   wall_clock_s: ((($end | ms) - ($start | ms)) * 1000 | round / 1000)}
+'''
+
+[before]
+  binary_version = "dross 0.1.0.0 (commit 220ca9d1, built 2026-10-30T14:51:30Z)"
+  session_id = "4e5db293-0db0-4c34-aca1-10ac58a66272"
+  flow_start = "2026-10-30T18:47:45.654Z"
+  flow_end = "2026-10-30T18:47:57.032Z"
+  agent_turns = 4
+  turn_tools = ["Bash", "Bash", "Bash", "text"]
+  wall_clock_s = 11.378
+  status_bytes = 820
+  dross_calls = ["dross deferred list", "dross issue pull", "dross rule show", "dross status"]
+
+# The same flow on the phase head: same four dross calls, so no round-trip
+# added; status printed 976 more bytes, the memory: section.
+[after]
+  binary_version = "dross 0.1.0.0 (commit 7526d478, built 2026-10-30T18:50:02Z)"
+  session_id = "ff867b40-c9f0-4cbb-b5f0-6633cf72d883"
+  flow_start = "2026-10-30T18:50:30.841Z"
+  flow_end = "2026-10-30T18:50:46.361Z"
+  agent_turns = 2
+  turn_tools = ["Bash+Bash+Bash+Bash", "text"]
+  wall_clock_s = 15.52
+  status_bytes = 1796
+  dross_calls = ["dross deferred list", "dross issue pull", "dross rule show", "dross status"]

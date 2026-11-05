@@ -158,14 +158,9 @@ func TestNoCommandCountSurvivesAnywhere(t *testing.T) {
 // consent-gated execution site". Both stopped being true the moment the drain
 // joined, and an agent reading either would conclude a drain needs no grant.
 func TestPromptsDescribeTheGateAsEnumerated(t *testing.T) {
-	root := repoRootForDocs(t)
 	for _, name := range []string{"verify.md", "execute.md", "quick.md"} {
 		t.Run(name, func(t *testing.T) {
-			b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", name))
-			if err != nil {
-				t.Fatal(err)
-			}
-			body := string(b)
+			body := expandedPrompt(t, name)
 			for _, banned := range []string{
 				"the loop commands below refuse",
 				"the one consent-gated execution site",

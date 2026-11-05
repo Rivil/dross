@@ -1,0 +1,375 @@
+# Flow cost for prompt-partials (milestone v1.8 c-6, phase c-6): one pair
+# /dross-execute task and one attached /dross-verify. [before]/[verify_before]
+# ran on a dross built from base commit 3ee0fe71 with the prompts unedited (t-1);
+# [after]/[verify_after] on the phase head, on fixtures rebuilt by setup_sh to
+# the same HEAD^{tree} (t-16). Observed numbers only; transcript fields are
+# counted structurally with jq_flow, no content copied.
+
+[scenario]
+  repo_shape = "two scratch repos built by setup_sh with a fixed git identity and dates, and every .dross timestamp pinned, so HEAD^{tree} reproduces (checked: a second build matched both trees and commit SHAs). flow: Go module example.com/flow, 60 packages p1..p60 each with Add and TestAdd, plus apicheck whose TestP3API pins p3's exported funcs to apicheck/testdata/p3.txt (outside the task's files); phase flow-probe with one task t-1 'Add Sub to p3'. mut: module example.com/mut, q1 and q2 each with Over(x, limit) tested on its boundary; phase mut-probe whose one done task adds Under to both, tested on its boundary, so gremlins kills all 8 mutants (Clamp's `x < lo` -> `x <= lo` is equivalent, so it was dropped). Board disabled, no remote grant: every run is local."
+  wave_position = "t-1 is flow-probe's only task (wave 1): the execute flow runs inside it, from the command to its code commit; verify runs on mut-probe after its one task is done"
+  setup_steps = ["files flow -> commit init", "dross flow -> human: dross trust -> dross test -> commit 'dross scaffold'", "phase flow -> dross test -> commit 'flow-probe: spec and plan'", "files mut -> commit init", "dross mut -> human: dross trust -> dross test -> commit 'dross scaffold'", "phase mut -> dross test -> commit 'mut-probe: Under in q1 and q2'", "done mut -> commit 'mut-probe: bookkeeping'"]
+  commit_ident = "every setup commit runs with the env `setup.sh x ident` prints (fixture identity, 2026-01-01T00:00:00Z); setup.sh exports the same env so dross's own auto-commits match"
+  session = "fresh `claude --permission-mode auto` in the fixture repo, in tmux, launched under env -i with HOME, USER, TERM, LANG and PATH=<binary under test dir>:~/go/src/bin:~/.local/bin:/opt/homebrew/bin:/usr/bin:/bin; prompts are ~/.claude/dross/prompts (symlinked to the repo's assets)"
+  execute_steps = ["/dross-execute (pair)", "approve t-1", "§1e red: TestP3API (apicheck/testdata/p3.txt lacks Sub)", "fix here (the p3.txt deviation folded into the same question)", "green", "commit t-1", "single task, so no §1g: §2 wrap-up"]
+  verify_steps = ["/dross-verify mut-probe", "attached run, no questions", "verdict pass, verify.toml committed"]
+  flow_start = "the user entry invoking the command (/dross-execute or /dross-verify)"
+  flow_end = "the first main-agent Bash call running `git commit` after flow_start, inclusive of that turn: t-1's code commit (execute) or the verify.toml commit (verify)"
+  prompt_bytes_method = "utf8 bytes of the @-included ~/.claude/dross/prompts/<cmd>.md file attachment in the transcript"
+  jq_method = "jq -cs --arg cmd <dross-execute|dross-verify> --arg end_re 'git commit' -f <filter> <transcript.jsonl> with jq_flow. A turn is a distinct message.id among main-agent entries (type assistant, isSidechain false, model not <synthetic>); its tool entry is its tool_use names joined by +, or text when it has none. wall_clock_s is flow_end - flow_start minus human_wait_s, the sum over every AskUserQuestion in the window of tool_use -> its tool_result. partial_fetches counts Bash calls running `dross prompt partial`. dross_calls is the sorted set of `dross <verb> [<sub>]` invocations in the window's Bash commands. Turns and wall-clock are recorded, not gated (rivil, 2026-10-08)."
+  setup_sh = '''
+#!/bin/sh
+# Scratch repos for prompt-partials' flow-cost record (t-1 before, t-16 after).
+# Usage: DROSS=<binary> setup.sh <out-dir> <step> [repo]
+# Steps, in order. Each is followed by a commit in the named repo, made with
+# the fixed identity and dates `ident` prints (eval it first), so commit SHAs
+# and HEAD^{tree} are reproducible. The dross commit gate needs a trusted,
+# green `dross test` once .dross/ exists:
+#   files <flow|mut>  write the Go module and git-init it      -> commit "init"
+#   dross <flow|mut>  dross init, name, runtime.mode native    -> human: dross trust;
+#                                                                 dross test; commit "dross scaffold"
+#   phase <flow|mut>  milestone v0.1 + phase + spec + task (+ mut's code change)
+#                                                              -> dross test; commit
+#   done mut          record mut's task done against HEAD      -> commit "mut-probe: bookkeeping"
+# dross writes wall-clock timestamps into .dross/; every dross step pins them
+# to one fixed instant so the tree does not depend on when it was built.
+set -eu
+STEP=${2:?files, dross, phase, done or ident}
+IDENT='export GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.com GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.com GIT_AUTHOR_DATE=2026-01-01T00:00:00Z GIT_COMMITTER_DATE=2026-01-01T00:00:00Z'
+if [ "$STEP" = ident ]; then
+	echo "$IDENT"
+	exit 0
+fi
+# dross commits on its own too (phase create auto-commits bookkeeping): give
+# those commits the same fixed identity and dates.
+eval "$IDENT"
+DROSS=${DROSS:?set DROSS to the dross binary under test}
+OUT=${1:?out dir}
+
+norm() { # pin dross's timestamps in the repo's tracked .dross files
+	find .dross -type f \( -name '*.toml' -o -name '*.json' -o -name '*.md' \) ! -name local.toml -exec \
+		perl -pi -e 's/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)/2026-01-01T00:00:00Z/g' {} +
+}
+
+pkg() { # dir name body-of-Add
+	mkdir -p "$1"
+	cat >"$1/$2.go" <<EOF
+package $2
+
+// Add returns the sum of a and b.
+func Add(a, b int) int { return $3 }
+EOF
+	cat >"$1/$2_test.go" <<EOF
+package $2
+
+import "testing"
+
+func TestAdd(t *testing.T) {
+	for _, c := range []struct{ a, b, want int }{{1, 2, 3}, {-1, 1, 0}, {0, 0, 0}} {
+		if got := Add(c.a, c.b); got != c.want {
+			t.Errorf("Add(%d, %d) = %d, want %d", c.a, c.b, got, c.want)
+		}
+	}
+}
+EOF
+}
+
+case "$STEP" in
+files)
+	REPO=${3:?flow or mut}
+	rm -rf "$OUT/$REPO"
+	mkdir -p "$OUT/$REPO"
+	if [ "$REPO" = flow ]; then
+	# flow: sixty green packages. p3's exported API is pinned in a golden file
+	# outside p3 and outside the flow task's files, so a read of p3 never sees
+	# it and adding Sub turns §1e red.
+	cd "$OUT/flow"
+	printf 'module example.com/flow\n\ngo 1.27\n' >go.mod
+	for i in $(seq 1 60); do pkg "p$i" "p$i" "a + b"; done
+	mkdir -p apicheck/testdata
+	printf 'Add\n' >apicheck/testdata/p3.txt
+	cat >apicheck/apicheck.go <<'EOF'
+// Package apicheck pins other packages' exported APIs.
+package apicheck
+EOF
+	cat >apicheck/api_test.go <<'EOF'
+package apicheck
+
+import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"sort"
+	"strings"
+	"testing"
+)
+
+// TestP3API pins p3's exported functions to testdata/p3.txt.
+func TestP3API(t *testing.T) {
+	fs := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fs, "../p3", func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, p := range pkgs {
+		for _, f := range p.Files {
+			for _, d := range f.Decls {
+				if fd, ok := d.(*ast.FuncDecl); ok && fd.Name.IsExported() {
+					got = append(got, fd.Name.Name)
+				}
+			}
+		}
+	}
+	sort.Strings(got)
+	b, err := os.ReadFile("testdata/p3.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Fields(string(b))
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("p3's exported API changed: got %v, want %v (apicheck/testdata/p3.txt)", got, want)
+	}
+}
+EOF
+	git init -q -b main
+	fi
+	if [ "$REPO" = mut ]; then
+	# mut: two packages whose every gremlins mutant is killable. Clamp's
+	# `x < lo` -> `x <= lo` is equivalent (x == lo returns lo either way), so
+	# the probe uses strict comparisons tested on their boundary instead.
+	cd "$OUT/mut"
+	printf 'module example.com/mut\n\ngo 1.27\n' >go.mod
+	for q in q1 q2; do
+		mkdir -p "$q"
+		cat >"$q/$q.go" <<EOF
+package $q
+
+// Over reports whether x exceeds limit.
+func Over(x, limit int) bool { return x > limit }
+EOF
+		cat >"$q/${q}_test.go" <<EOF
+package $q
+
+import "testing"
+
+func TestOver(t *testing.T) {
+	if Over(5, 5) {
+		t.Error("Over(5, 5) = true")
+	}
+	if !Over(6, 5) {
+		t.Error("Over(6, 5) = false")
+	}
+}
+EOF
+	done
+	git init -q -b main
+	fi
+	;;
+dross)
+	for r in ${3:?flow or mut}; do
+		cd "$OUT/$r"
+		"$DROSS" init >/dev/null
+		# init detects the Go stack and fills [runtime] (go test -count=1 ./...).
+		NAME=$r perl -0pi -e 's/^  name = ""/  name = "$ENV{NAME}"/m; s/^  mode = ""/  mode = "native"/m' .dross/project.toml
+		printf '\n[mutation]\n  adapters = ["gremlins"]\n' >>.dross/project.toml
+		norm
+	done
+	;;
+phase)
+	REPO=${3:?flow or mut}
+	if [ "$REPO" = flow ]; then
+	# flow: one pair-mode task; adding Sub reddens apicheck/api_test.go
+	# (golden outside the task files) at §1e.
+	cd "$OUT/flow"
+	"$DROSS" milestone create v0.1 >/dev/null
+	"$DROSS" phase create flow-probe >/dev/null
+	cat >.dross/phases/flow-probe/spec.toml <<'EOF'
+[phase]
+  id = "flow-probe"
+  title = "flow-probe"
+  milestone = "v0.1"
+
+[[criteria]]
+  id = "c-1"
+  text = "p3 exposes Sub(a, b) returning a - b."
+EOF
+	printf 'task_seq = 0\n\n[phase]\n  id = "flow-probe"\n' >.dross/phases/flow-probe/plan.toml
+	"$DROSS" task add flow-probe --title "Add Sub to p3" --files p3/p3.go,p3/p3_test.go --covers c-1 \
+		--description "Add Sub(a, b int) int returning a - b to p3, with a table test beside TestAdd." \
+		--test-contract "if Sub is wrong, TestSub fails" >/dev/null
+	norm
+	fi
+	if [ "$REPO" = mut ]; then
+	# mut: one executed task that adds Under to both packages, tested on its
+	# boundary so every mutant dies.
+	cd "$OUT/mut"
+	"$DROSS" milestone create v0.1 >/dev/null
+	"$DROSS" phase create mut-probe >/dev/null
+	cat >.dross/phases/mut-probe/spec.toml <<'EOF'
+[phase]
+  id = "mut-probe"
+  title = "mut-probe"
+  milestone = "v0.1"
+
+[[criteria]]
+  id = "c-1"
+  text = "q1 and q2 expose Under(x, limit) reporting whether x is below limit."
+EOF
+	printf 'task_seq = 0\n\n[phase]\n  id = "mut-probe"\n' >.dross/phases/mut-probe/plan.toml
+	"$DROSS" task add mut-probe --title "Add Under to q1 and q2" \
+		--files q1/q1.go,q1/q1_test.go,q2/q2.go,q2/q2_test.go --covers c-1 \
+		--description "Add Under(x, limit int) bool to q1 and q2, tested on the boundary." \
+		--test-contract "if Under is wrong, TestUnder fails" >/dev/null
+	for q in q1 q2; do
+		cat >>"$q/$q.go" <<EOF
+
+// Under reports whether x is below limit.
+func Under(x, limit int) bool { return x < limit }
+EOF
+		cat >>"$q/${q}_test.go" <<EOF
+
+func TestUnder(t *testing.T) {
+	if Under(5, 5) {
+		t.Error("Under(5, 5) = true")
+	}
+	if !Under(4, 5) {
+		t.Error("Under(4, 5) = false")
+	}
+}
+EOF
+	done
+	norm
+	fi
+	;;
+done)
+	# mut's task, executed: record it against the code commit so verify has
+	# changes.json to read and a done task to map.
+	cd "$OUT/${3:?mut}"
+	"$DROSS" changes record mut-probe t-1 --files q1/q1.go,q1/q1_test.go,q2/q2.go,q2/q2_test.go \
+		--commit "$(git rev-parse --short HEAD)" \
+		--landmark "feature=range checks, symbol=Under, loc=q1/q1.go:7, what=Under reports x below limit" >/dev/null
+	"$DROSS" task status mut-probe t-1 done >/dev/null
+	norm
+	;;
+*)
+	echo "unknown step $STEP" >&2
+	exit 2
+	;;
+esac
+'''
+  jq_flow = '''
+def ms: (.[0:19] + "Z" | fromdateiso8601) + (.[20:23] | tonumber / 1000);
+def main: .type == "assistant" and .isSidechain == false and .message.model != "<synthetic>";
+def uses: [.message.content[]? | select(type == "object" and .type == "tool_use")];
+def bash($re): uses | any(.name == "Bash" and (.input.command | test($re)));
+def text: .message.content | if type == "string" then . else ([.[]? | select(type == "object" and .type == "text") | .text] | join("")) end;
+def dross_calls: [.[] | uses[] | select(.name == "Bash") | .input.command | [scan("(?:^|[^/\\w-])dross ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?")] | .[] | "dross " + (map(select(. != null)) | join(" "))] | unique;
+[.[] | select(.timestamp)] as $e
+| ($e | map(select(.type == "user" and (text | test("^/" + $cmd + "($|[/ ])|<command-name>/" + $cmd + "</command-name>")))) | first | .timestamp) as $start
+| ($e | map(select(main and .timestamp >= $start and bash($end_re))) | first | .timestamp) as $end
+| ($e | map(select(.timestamp >= $start and .timestamp <= $end))) as $w
+| ($w | map(select(main))) as $a
+| ($a | group_by(.message.id) | sort_by(.[0].timestamp) | map([.[] | uses[] | .name] | if length == 0 then "text" else join("+") end)) as $turns
+| ([$a[] | . as $m | uses[] | select(.name == "AskUserQuestion") | {id, t: ($m.timestamp | ms)}]) as $asks
+| ([$e[] | select(.type == "user") | . as $u | .message.content[]? | select(type == "object" and .type == "tool_result") | {id: .tool_use_id, t: ($u.timestamp | ms)}]) as $results
+| ([$asks[] as $q | $results[] | select(.id == $q.id) | .t - $q.t] | add // 0) as $wait
+| ([$e[] | select(.type == "attachment" and .attachment.type == "file" and (.attachment.filename | test("/dross/prompts/" + $cmd[6:] + "[.]md$"))) | .attachment.content.file.content | utf8bytelength] | first) as $pb
+| {flow_start: $start, flow_end: $end, prompt_bytes: $pb,
+   model: ([$a[] | .message.model] | unique),
+   dross_calls: ($a | dross_calls), agent_turns: ($turns | length), turn_tools: $turns, human_wait_s: $wait,
+   wall_clock_s: ((($end | ms) - ($start | ms)) - $wait),
+   partial_fetches: ([$a[] | uses[] | select(.name == "Bash" and (.input.command | test("(?:^|[^/\\w-])dross prompt partial")))] | length),
+   log_reads: ([$a[] | uses[] | select((.name == "Read" and ((.input.file_path // "") | test("/[.]dross/logs/"))) or (.name == "Bash" and (.input.command | test("[.]dross/logs"))))] | length)}
+'''
+
+[before]
+  binary_version = "dross 0.1.0.0 (commit 3ee0fe71, built 2026-10-27T11:27:11Z)"
+  session_id = "b6c0675d-d848-435b-8200-566d85254a6a"
+  fixture_tree = "bb520a794fffe81aa73a10fe9e46b81dcd971e13"
+  model = "claude-opus-5-5"
+  effort = "high"
+  claude_code_version = "2.1.311"
+  flow_start = "2026-10-27T11:34:36.359Z"
+  flow_end = "2026-10-27T11:36:30.701Z"
+  prompt_bytes = 25853
+  partial_fetches = 0
+  agent_turns = 24
+  turn_tools = ["Skill","Bash+Bash","Bash","Bash","Bash","Bash+Bash","Bash","Bash","Bash","Bash","AskUserQuestion","Edit","Edit","Bash","Bash","Bash","Bash","AskUserQuestion","Edit","Bash","Bash","Bash","Bash","Bash"]
+  wall_clock_s = 100.0
+  human_wait_s = 14.4
+  log_reads = 1
+  dross_calls = ["dross execute begin","dross interaction show","dross issue phase","dross issue task","dross phase number","dross rule show","dross stack loadout","dross task next","dross task show","dross task status","dross test","dross test lane","dross trust","dross validate"]
+  verdict = "committed"
+
+[verify_before]
+  binary_version = "dross 0.1.0.0 (commit 3ee0fe71, built 2026-10-27T11:27:11Z)"
+  session_id = "47044c78-4370-4ce3-a067-f7e30e0943fa"
+  fixture_tree = "cde0e4be716503bc498b1b112a44b945cd86ad94"
+  model = "claude-opus-5-5"
+  effort = "high"
+  claude_code_version = "2.1.311"
+  flow_start = "2026-10-27T14:58:25.281Z"
+  flow_end = "2026-10-27T14:59:40.890Z"
+  prompt_bytes = 25864
+  partial_fetches = 0
+  agent_turns = 13
+  turn_tools = ["Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash","Read+Bash","Edit+Edit+Edit","Bash","Bash","Bash"]
+  wall_clock_s = 75.6
+  human_wait_s = 0
+  log_reads = 0
+  dross_calls = ["dross interaction show","dross issue phase","dross rule show","dross state set","dross state touch","dross trust","dross verify finalize","dross verify mut-probe"]
+  verdict = "pass"
+  detached = false
+  unclassified_in_scope = 0
+  mutants_killed = 8
+  mutants_survived = 0
+
+# The same two scenarios on the phase head (binary from cd91958c, prompts at
+# 12,589 and 14,336 bytes). Execute: past flow_end, the single task's commit
+# led to a §1g checkpoint question where the before leg went straight to §2;
+# it falls outside the window. Verify: one grep of the gremlins log
+# (log_reads = 1), recorded, not gated; Claude Code auto-updated to 2.1.312
+# between the two after legs.
+[after]
+  binary_version = "dross 0.1.0.0 (commit cd91958c, built 2026-10-27T18:46:53Z)"
+  session_id = "4d685f68-3910-47f6-8ed8-56c16d2a39ea"
+  fixture_tree = "bb520a794fffe81aa73a10fe9e46b81dcd971e13"
+  model = "claude-opus-5-5"
+  effort = "high"
+  claude_code_version = "2.1.311"
+  flow_start = "2026-10-27T19:20:08.766Z"
+  flow_end = "2026-10-27T19:21:21.972Z"
+  prompt_bytes = 12589
+  partial_fetches = 0
+  agent_turns = 18
+  turn_tools = ["Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash","AskUserQuestion","Edit+Edit","Bash","Bash","Bash","AskUserQuestion","Bash","Bash","Bash","Bash"]
+  wall_clock_s = 65.7
+  human_wait_s = 7.5
+  log_reads = 0
+  dross_calls = ["dross execute begin","dross interaction show","dross issue task","dross rule show","dross stack loadout","dross task next","dross task show","dross task status","dross test","dross trust","dross validate"]
+  verdict = "committed"
+
+[verify_after]
+  binary_version = "dross 0.1.0.0 (commit cd91958c, built 2026-10-27T18:46:53Z)"
+  session_id = "c291a337-890a-4840-9487-b34fcda2a993"
+  fixture_tree = "cde0e4be716503bc498b1b112a44b945cd86ad94"
+  model = "claude-opus-5-5"
+  effort = "high"
+  claude_code_version = "2.1.312"
+  flow_start = "2026-10-27T19:21:55.206Z"
+  flow_end = "2026-10-27T19:22:42.850Z"
+  prompt_bytes = 14336
+  partial_fetches = 0
+  agent_turns = 12
+  turn_tools = ["Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash","Bash"]
+  wall_clock_s = 47.6
+  human_wait_s = 0
+  log_reads = 1
+  dross_calls = ["dross interaction show","dross rule show","dross trust","dross verify finalize","dross verify mut-probe"]
+  verdict = "pass"
+  detached = false
+  unclassified_in_scope = 0
+  mutants_killed = 8
+  mutants_survived = 0

@@ -1,0 +1,72 @@
+# captured: go1.27.1 go test -count=1 -timeout 2s ./...
+panic: test timed out after 2s
+	running tests:
+		TestSlow (2s)
+
+goroutine 17 [running]:
+testing.(*M).startAlarm.func1()
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2959 +0x2c4
+created by time.goFunc
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/time/sleep.go:182 +0x38
+
+goroutine 1 [chan receive]:
+testing.(*T).Run(0x268a5dac4008, {0x102771555?, 0x268a5da90a88?}, 0x1028df3e8)
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2266 +0x3cc
+testing.runTests.func1(0x268a5dac4008)
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2742 +0x38
+testing.tRunner(0x268a5dac4008, 0x268a5da90bb8)
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2193 +0xc4
+testing.runTests({0x1027746c6, 0x13}, {0x1027751b0, 0x15}, 0x268a5d98a090, {0x1028f9558, 0x1, 0x1}, {0x268a5da90c58?, 0x268a5d9fe1a0?, ...})
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2740 +0x400
+testing.(*M).Run(0x268a5da94140)
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2600 +0x578
+main.main()
+	_testmain.go:46 +0x80
+
+goroutine 7 [sleep]:
+time.Sleep(0x2540be400)
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/runtime/time.go:368 +0x150
+example.com/timeout/s.TestSlow(0x268a5dac4248?)
+	/Users/rivil/.claude/jobs/df272921/tmp/gofx/timeout/s/s_test.go:9 +0x28
+testing.tRunner(0x268a5dac4248, 0x1028df3e8)
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2193 +0xc4
+created by testing.(*T).Run in goroutine 1
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2258 +0x3b8
+FAIL	example.com/timeout/s	2.172s
+--- FAIL: TestEarly (0.00s)
+    u_test.go:9: early failure
+panic: test timed out after 2s
+	running tests:
+		TestHang (2s)
+
+goroutine 17 [running]:
+testing.(*M).startAlarm.func1()
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2959 +0x2c4
+created by time.goFunc
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/time/sleep.go:182 +0x38
+
+goroutine 1 [chan receive]:
+testing.(*T).Run(0x42a93a39e008, {0x1031095b5?, 0x42a93a2eaa88?}, 0x1032773f0)
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2266 +0x3cc
+testing.runTests.func1(0x42a93a39e008)
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2742 +0x38
+testing.tRunner(0x42a93a39e008, 0x42a93a2eabb8)
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2193 +0xc4
+testing.runTests({0x10310c73c, 0x13}, {0x10310d226, 0x15}, 0x42a93a25c090, {0x1032925d0, 0x2, 0x2}, {0x42a93a2eac58?, 0x42a93a2d81a0?, ...})
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2740 +0x400
+testing.(*M).Run(0x42a93a2ee140)
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2600 +0x578
+main.main()
+	_testmain.go:48 +0x80
+
+goroutine 8 [sleep]:
+time.Sleep(0x2540be400)
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/runtime/time.go:368 +0x150
+example.com/timeout/u.TestHang(0x42a93a39e488?)
+	/Users/rivil/.claude/jobs/df272921/tmp/gofx/timeout/u/u_test.go:13 +0x28
+testing.tRunner(0x42a93a39e488, 0x1032773f0)
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2193 +0xc4
+created by testing.(*T).Run in goroutine 1
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2258 +0x3b8
+FAIL	example.com/timeout/u	2.168s
+FAIL

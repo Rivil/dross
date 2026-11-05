@@ -118,14 +118,10 @@ func TestCompleteHelpNamesRecordOwner(t *testing.T) {
 // about to be deleted by `dross phase complete`. quick.md's in-phase rule would
 // otherwise route a quick fix straight onto that branch.
 func TestQuickPromptHandlesShippedWindow(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "quick.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Backticks and emphasis stripped, but NOT underscores: the field names
+	// quick.md as loaded, partials and all; whitespace runs collapsed, then
+	// backticks and emphasis stripped, but NOT underscores: the field names
 	// under test are `current_phase_status` and friends.
-	content := strings.ToLower(strings.Join(strings.Fields(string(b)), " "))
-	content = strings.NewReplacer("`", "", "*", "").Replace(content)
+	content := normaliseKeepUnderscores(strings.Join(strings.Fields(expandedPrompt(t, "quick.md")), " "))
 
 	for _, needle := range []string{
 		"current_phase_status",

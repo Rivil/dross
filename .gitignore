@@ -22,6 +22,11 @@ docs/dross.pdf
 # overwrites an *ignored* file without complaint.) Locked state_tracking.
 .dross/state.json
 
+# dross memory-advisor state — the turn cache, and the memory-dir snapshot taken
+# before each applied prune. Machine-local: it mirrors this machine's
+# ~/.claude, and a snapshot is a copy of private memory.
+.dross/memory/
+
 # dross security run artifacts — local audit output; never pre-disclose on a public repo
 .dross/security/
 

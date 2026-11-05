@@ -75,6 +75,12 @@ consent.Grants.TrustedReplayCommands trusted_replay_commands
 consent.Grants.TrustedRunCommands trusted_run_commands
 consent.Grants.TrustedTestCommand trusted_test_command
 
+# ---- ctxnudge — a transcript entry's kind ("assistant", "user", …) and the hook envelope's event name and nudge line, never paths
+ctxnudge.entry.Type type
+ctxnudge.envelope.SystemMessage systemmessage
+ctxnudge.hookOutput.AdditionalContext additionalcontext
+ctxnudge.hookOutput.HookEventName hookeventname
+
 # ---- defaults — machine defaults: provider names, API base URLs, env-var names, reviewers, timestamps
 defaults.RemoteDefaults.APIBase api_base
 defaults.RemoteDefaults.AuthEnv auth_env
@@ -124,7 +130,7 @@ gate.listFile.SecretTools secret_tools
 gate.Override.Name name
 gate.Override.Repo repo
 
-# ---- gatestate — machine-local gate records: tree object ids, phase/task ids, HEAD SHAs, modes, runner labels, review kinds and attempt keys, quick descriptions, reply digests
+# ---- gatestate — machine-local gate records: tree object ids, phase/task ids, HEAD SHAs, modes, runner labels, review kinds and attempt keys, quick descriptions, reply digests, writer agent ids and states
 gatestate.Approval.Head head
 gatestate.Approval.Phase phase
 gatestate.Approval.Task task
@@ -143,6 +149,10 @@ gatestate.Review.Attempt attempt
 gatestate.Review.Kind kind
 gatestate.Review.Phase phase
 gatestate.Review.Task task
+gatestate.Writer.AgentID agent_id
+gatestate.Writer.Phase phase
+gatestate.Writer.State state
+gatestate.Writer.Task task
 
 # ---- hooks — Claude Code hook entries: command lines and types
 hooks.hookCommand.Command command
@@ -163,6 +173,11 @@ localstore.Store.MutationTestCPU mutation_test_cpu
 localstore.Store.MutationWorkers mutation_workers
 localstore.Store.QuickBase quick_base
 localstore.Store.RemoteHost remote_host
+
+# ---- memadvise — the turn cache's recent message ids, and a transcript line's kind ("assistant", "user", …) and timestamp, never paths
+memadvise.fileEntry.Tail tail
+memadvise.transcriptLine.Timestamp timestamp
+memadvise.transcriptLine.Type type
 
 # ---- milestone — milestone metadata: titles, versions, statuses, dates, phase ids, prose
 milestone.Meta.Base base

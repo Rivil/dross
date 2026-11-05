@@ -16,6 +16,7 @@ import (
 	"github.com/Rivil/dross/internal/debugsession"
 	"github.com/Rivil/dross/internal/findings"
 	"github.com/Rivil/dross/internal/gitrun"
+	"github.com/Rivil/dross/internal/memadvise"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
@@ -136,6 +137,15 @@ func Status() *cobra.Command {
 			// is as easy to forget as a pause; name every open one on one line.
 			if line := debugNudge(openDebugSessions(root)); line != "" {
 				Printf("debug:     %s\n", line)
+			}
+
+			// Memory-prune advice for the repo's Claude memory dir: the top
+			// three suggestions by $/month and a pointer to the rest. It rides
+			// on this output rather than a call of its own, so /dross-status
+			// gains no round-trip (c-6). Nothing to say prints nothing.
+			if block := statusMemory(filepath.Dir(root), time.Now()); block != "" {
+				Print("memory:")
+				Printf("%s", block)
 			}
 
 			// Non-spine action areas — surfaced only when the spine is idle
@@ -484,6 +494,27 @@ func debugNudge(open []debugsession.Entry) string {
 		parts[i] = label + " — /dross-debug " + e.Slug
 	}
 	return strings.Join(parts, "; ")
+}
+
+// statusMemoryLimit is how many suggestions status lists before pointing at
+// `dross memory advise` for the rest (locked status_surface).
+const statusMemoryLimit = 3
+
+// statusMemory is the body of status's `memory:` section for the repo whose
+// top level is repo. A var so a test can turn the advisor off and compare.
+var statusMemory = memoryAdvice
+
+// memoryAdvice gathers and renders the memory-prune advice, capped at
+// statusMemoryLimit. It is best-effort like the debug nudge: a missing memory
+// dir, nothing to suggest and any failure to read the dir or count turns all
+// yield "", so status still prints the rest and exits 0. Gather only reads the
+// memory dir (c-3); its one write is the turn cache under .dross/memory/.
+func memoryAdvice(repo string, now time.Time) string {
+	r, err := memadvise.Gather(repo, now)
+	if err != nil {
+		return ""
+	}
+	return memadvise.Render(r, statusMemoryLimit)
 }
 
 // actionArea is one non-spine area of work surfaced when the spine is idle

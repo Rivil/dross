@@ -1,4 +1,4 @@
-phases = ["spec-edge-probe", "review-edge-lenses", "milestone-closeout-check", "spec-fact-drift", "task-preconditions", "one-way-door-decisions", "ci-timing-trend", "verify-eta", "handoff-staleness", "prompt-behaviour-evals"]
+phases = ["spec-edge-probe", "review-edge-lenses", "milestone-closeout-check", "spec-fact-drift", "task-preconditions", "one-way-door-decisions", "ci-timing-trend", "verify-eta", "handoff-staleness", "prompt-behaviour-evals", "azure-devops-provider"]
 
 [milestone]
   version = "v1.9"

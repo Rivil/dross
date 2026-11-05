@@ -377,6 +377,12 @@ func collectRepo(t *testing.T, phaseID string) string {
 	}
 	stubStatus(t, remote.RunStatus{DirExists: true, State: "finished", HasExit: true, ExitCode: 0}, nil)
 
+	// The host-side log fetch never leaves the machine in a test: a test about
+	// the log installs its own.
+	origLog := detachFetchLog
+	t.Cleanup(func() { detachFetchLog = origLog })
+	detachFetchLog = func(remote.Target, string, string) error { return errors.New("no host log in this test") }
+
 	// The fetch drops the payload where Collect reads it, standing in for the
 	// rsync without needing a host.
 	origFetch := detachFetchReports

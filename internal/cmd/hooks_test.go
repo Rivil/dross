@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -217,12 +218,14 @@ func TestEnsureUserHooksWiresGates(t *testing.T) {
 	if err := ensureUserHooks(); err != nil {
 		t.Fatal(err)
 	}
-	for event, want := range map[string]string{
-		"PreCompact": preCompactHookCommand, "SessionStart": sessionStartHookCommand,
-		"PreToolUse": GateCheckHook, "PostToolUse": GateRecordHook,
+	// PostToolUse carries the gate record and, after it, the context nudge
+	// (context-boundaries t-9) — a deliberate move from exactly [gate record].
+	for event, want := range map[string][]string{
+		"PreCompact": {preCompactHookCommand}, "SessionStart": {sessionStartHookCommand},
+		"PreToolUse": {GateCheckHook}, "PostToolUse": {GateRecordHook, NudgeHook},
 	} {
-		if got := readHookCommands(t, settings, event); len(got) != 1 || got[0] != want {
-			t.Errorf("hooks.%s = %q, want exactly [%q]", event, got, want)
+		if got := readHookCommands(t, settings, event); !slices.Equal(got, want) {
+			t.Errorf("hooks.%s = %q, want exactly %q", event, got, want)
 		}
 	}
 	before, err := os.Stat(settings)
@@ -284,7 +287,8 @@ func TestEnsureUserHooksUpgradesTwoHookInstall(t *testing.T) {
 	if err := ensureUserHooks(); err != nil {
 		t.Fatal(err)
 	}
-	for event, n := range map[string]int{"PreCompact": 1, "SessionStart": 1, "PreToolUse": 1, "PostToolUse": 1} {
+	// PostToolUse gains the gate record and the context nudge: 2, deliberately.
+	for event, n := range map[string]int{"PreCompact": 1, "SessionStart": 1, "PreToolUse": 1, "PostToolUse": 2} {
 		if got := readHookCommands(t, settings, event); len(got) != n {
 			t.Errorf("hooks.%s = %q after the upgrade, want %d entry", event, got, n)
 		}
@@ -354,10 +358,11 @@ func TestHookWordingNamesAllFour(t *testing.T) {
 		{"SessionStart", "dross reentry"},
 		{"PreToolUse", "dross gate check"},
 		{"PostToolUse", "dross gate record"},
+		{"PostToolUse", "dross hooks nudge"},
 		{"SubagentStop", "dross gate record"},
 	}
 	if len(userHooks) != len(want) {
-		t.Fatalf("userHooks = %v, want the five dross hooks", userHooks)
+		t.Fatalf("userHooks = %v, want the six dross hooks", userHooks)
 	}
 	for i, h := range userHooks {
 		if h.event != want[i].event || h.command != want[i].command {
@@ -374,6 +379,18 @@ func TestHookWordingNamesAllFour(t *testing.T) {
 	for _, h := range want {
 		if !strings.Contains(short, h.event) {
 			t.Errorf("`hooks ensure` Short %q does not name %s", short, h.event)
+		}
+	}
+
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	ensured := captureStdout(t, func() {
+		if err := runCmd(t, Hooks(), "ensure"); err != nil {
+			t.Fatalf("hooks ensure: %v", err)
+		}
+	})
+	for _, h := range want {
+		if pair := h.event + " → " + h.command; !strings.Contains(ensured, pair) {
+			t.Errorf("`hooks ensure`'s changed-file line does not name %q:\n%s", pair, ensured)
 		}
 	}
 
@@ -414,5 +431,78 @@ func TestEnsureWiresSubagentStop(t *testing.T) {
 	}
 	if again := mustRead(t, path); again != first {
 		t.Fatal("a second ensure changed settings.json")
+	}
+}
+
+// TestEnsureUpgradesFiveHookInstall: an install from before the nudge, with a
+// foreign PostToolUse group ahead of dross's, gains the nudge after the gate
+// record, keeps the foreign group first, and a second ensure writes nothing.
+func TestEnsureUpgradesFiveHookInstall(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	settings := filepath.Join(cfg, "settings.json")
+	mustWrite(t, settings, `{"hooks":{`+
+		`"PreCompact":[{"hooks":[{"type":"command","command":"dross pause --auto"}]}],`+
+		`"SessionStart":[{"hooks":[{"type":"command","command":"dross reentry"}]}],`+
+		`"PreToolUse":[{"hooks":[{"type":"command","command":"dross gate check"}]}],`+
+		`"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"/usr/local/bin/fmt.sh"}]},{"hooks":[{"type":"command","command":"dross gate record"}]}],`+
+		`"SubagentStop":[{"hooks":[{"type":"command","command":"dross gate record"}]}]}}`)
+	if err := ensureUserHooks(); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"/usr/local/bin/fmt.sh", GateRecordHook, NudgeHook}
+	if got := readHookCommands(t, settings, "PostToolUse"); !slices.Equal(got, want) {
+		t.Errorf("hooks.PostToolUse = %q, want %q", got, want)
+	}
+	first := mustRead(t, settings)
+	if err := ensureUserHooks(); err != nil {
+		t.Fatal(err)
+	}
+	if again := mustRead(t, settings); again != first {
+		t.Errorf("a second ensure changed settings.json:\n--- first ---\n%s\n--- second ---\n%s", first, again)
+	}
+}
+
+// TestUserHooksResolve: every wired command is a real command path — a typo
+// in a hook string would wire a hook that fails on every event.
+func TestUserHooksResolve(t *testing.T) {
+	root := &cobra.Command{Use: "dross"}
+	root.AddCommand(Pause(), Reentry(), Gate(), Hooks())
+	for _, h := range userHooks {
+		var path, flags []string
+		for _, f := range strings.Fields(h.command) {
+			if strings.HasPrefix(f, "--") {
+				flags = append(flags, strings.TrimPrefix(f, "--"))
+			} else {
+				path = append(path, f)
+			}
+		}
+		c, _, err := root.Find(path[1:])
+		if err != nil || c.CommandPath() != strings.Join(path, " ") {
+			t.Errorf("%s → %q resolves to %q (%v)", h.event, h.command, c.CommandPath(), err)
+			continue
+		}
+		for _, f := range flags {
+			if c.Flags().Lookup(f) == nil {
+				t.Errorf("%s → %q: %s has no --%s flag", h.event, h.command, c.CommandPath(), f)
+			}
+		}
+	}
+}
+
+// TestNudgeNotWiredOnUserPromptSubmit: the nudge runs on PostToolUse only. A
+// hook that misbehaves on UserPromptSubmit can erase the user's prompt.
+func TestNudgeNotWiredOnUserPromptSubmit(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	if err := ensureUserHooks(); err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(cfg, "settings.json")
+	if n := countIn(readHookCommands(t, settings, "UserPromptSubmit"), NudgeHook); n != 0 {
+		t.Errorf("UserPromptSubmit runs %q %d times", NudgeHook, n)
+	}
+	if n := countIn(readHookCommands(t, settings, "PostToolUse"), NudgeHook); n != 1 {
+		t.Errorf("PostToolUse runs %q %d times, want 1", NudgeHook, n)
 	}
 }

@@ -1,0 +1,27 @@
+# captured: vitest@4.1.12 npx vitest run src/lib/zz-dross-fixture.test.ts (feastahead@36805114 web/, env -i, a temporary uncommitted test file) DROSS_FX=green: the same console.log, every test passes
+npm warn Unknown project config "minimumReleaseAge". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/test-split/partition" without a file extension (vitest.config.ts:11:27). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/test-split/partition" without a file extension (vitest.config.ts:11:27). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/test-split/partition" without a file extension (vitest.config.ts:11:27). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./scripts/test-split/partition" without a file extension (vitest.config.ts:11:27). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.12 [39m[90m/Users/rivil/Development/feastahead/web[39m
+
+[90mstdout[2m | src/lib/zz-dross-fixture.test.ts[2m > [22m[2mdross fixture[2m > [22m[2mlogs a FAIL-shaped line
+[22m[39m FAIL  phantom
+
+ [32m✓[39m [30m[42m default [49m[39m src/lib/zz-dross-fixture.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m   Start at [22m 10:31:43
+[2m   Duration [22m 119ms[2m (transform 10ms, setup 9ms, import 6ms, tests 2ms, environment 0ms)[22m
+

@@ -96,16 +96,21 @@ func TestLaneHeaderPrecedesLaneOutput(t *testing.T) {
 	if err := runCmdCapturing(t, &out, Test(), "--files", "internal/cmd/test.go"); err != nil {
 		t.Fatal(err)
 	}
-	header := strings.Index(out, "lane go: "+goCmd)
-	sentinel := strings.Index(out, "LANE-OUTPUT-SENTINEL")
+	if !strings.Contains(out, "lane go: "+goCmd) {
+		t.Fatalf("no lane header on stdout:\n%s", out)
+	}
+	// The lane's output lives in the run log; the order is read there.
+	log := onlyLog(t)
+	header := strings.Index(log, "lane go: "+goCmd)
+	sentinel := strings.Index(log, "LANE-OUTPUT-SENTINEL")
 	if header < 0 {
-		t.Fatalf("no lane header in the transcript:\n%s", out)
+		t.Fatalf("no lane header in the run log:\n%s", log)
 	}
 	if sentinel < 0 {
-		t.Fatalf("the lane's output is missing:\n%s", out)
+		t.Fatalf("the lane's output is missing from the run log:\n%s", log)
 	}
 	if header >= sentinel {
-		t.Errorf("the header trails the lane's output — the transcript cannot attribute the result:\n%s", out)
+		t.Errorf("the header trails the lane's output — the log cannot attribute the result:\n%s", log)
 	}
 }
 

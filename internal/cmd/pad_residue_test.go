@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"bufio"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 // The line-pad heuristic is retired, and so is every description of it. This
@@ -32,7 +32,11 @@ var padResidueNeedles = []string{
 
 // padResidueDocs are the documents that describe range provenance. They must
 // carry the NEW closed reason set in full, not merely drop the pad.
-var padResidueDocs = []string{"ARCHITECTURE.md", "assets/prompts/verify.md", "README.md"}
+var padResidueDocs = []string{"ARCHITECTURE.md", "README.md"}
+
+// padResiduePrompts describe it too, and are scanned expanded: a partial is
+// as much the prompt as its base file.
+var padResiduePrompts = []string{"verify.md"}
 
 var wholeFileReasonNames = []string{
 	"adapter-lacks-range-runner",
@@ -53,25 +57,26 @@ type padResidueHit struct {
 func scanPadResidue(paths []string) ([]padResidueHit, error) {
 	var hits []padResidueHit
 	for _, p := range paths {
-		f, err := os.Open(p)
+		b, err := os.ReadFile(p)
 		if err != nil {
 			return nil, err
 		}
-		sc := bufio.NewScanner(f)
-		sc.Buffer(make([]byte, 1024*1024), 1024*1024)
-		for n := 1; sc.Scan(); n++ {
-			for _, needle := range padResidueNeedles {
-				if strings.Contains(sc.Text(), needle) {
-					hits = append(hits, padResidueHit{File: p, Line: n, Needle: needle})
-				}
-			}
-		}
-		f.Close()
-		if err := sc.Err(); err != nil {
-			return nil, err
-		}
+		hits = append(hits, scanPadResidueText(p, string(b))...)
 	}
 	return hits, nil
+}
+
+// scanPadResidueText scans one document's text, naming it file in each hit.
+func scanPadResidueText(file, body string) []padResidueHit {
+	var hits []padResidueHit
+	for n, line := range strings.Split(body, "\n") {
+		for _, needle := range padResidueNeedles {
+			if strings.Contains(line, needle) {
+				hits = append(hits, padResidueHit{File: file, Line: n + 1, Needle: needle})
+			}
+		}
+	}
+	return hits
 }
 
 // shippedGoFiles is every non-test .go file under internal/ and cmd/. This
@@ -113,6 +118,9 @@ func TestNoPadHeuristicResidue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, name := range padResiduePrompts {
+		hits = append(hits, scanPadResidueText(filepath.Join(root, "assets", "prompts", name), expandedPrompt(t, name))...)
+	}
 	for _, h := range hits {
 		rel, _ := filepath.Rel(root, h.File)
 		t.Errorf("%s:%d still carries the retired pad heuristic (%q)", rel, h.Line, h.Needle)
@@ -120,13 +128,13 @@ func TestNoPadHeuristicResidue(t *testing.T) {
 
 	// The docs must describe the new closed set, not just stop describing
 	// the old heuristic.
-	for _, doc := range []string{"assets/prompts/verify.md", "README.md"} {
-		body, err := os.ReadFile(filepath.Join(root, doc))
-		if err != nil {
-			t.Fatal(err)
-		}
+	readme, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for doc, body := range map[string]string{"assets/prompts/verify.md": expandedPrompt(t, "verify.md"), "README.md": string(readme)} {
 		for _, reason := range wholeFileReasonNames {
-			if !strings.Contains(string(body), reason) {
+			if !strings.Contains(body, reason) {
 				t.Errorf("%s does not name the whole-file reason %q", doc, reason)
 			}
 		}
@@ -162,5 +170,18 @@ func TestArchitectureDescribesConstructRanges(t *testing.T) {
 		if !strings.Contains(string(body), want) {
 			t.Errorf("ARCHITECTURE.md does not name %q", want)
 		}
+	}
+}
+
+// TestPadResidueScanSeesPartials: a retired needle that lives only in a verify
+// partial is still reported.
+func TestPadResidueScanSeesPartials(t *testing.T) {
+	seedPromptFS(t, fstest.MapFS{
+		"prompts/verify.md":        {Data: []byte("# verify\n**When** `scope=degraded` — verify printed a `scope degraded:` line: `dross prompt partial verify scope`\nend\n")},
+		"prompts/_verify.scope.md": {Data: []byte("the old hunkContextLines widening\n")},
+	})
+	hits := scanPadResidueText("verify.md", expandedPrompt(t, "verify.md"))
+	if len(hits) != 1 || hits[0].Needle != "hunkContextLines" || hits[0].Line != 3 {
+		t.Errorf("hits = %+v, want hunkContextLines on expanded line 3", hits)
 	}
 }

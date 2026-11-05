@@ -147,9 +147,12 @@ func findLane(p *project.Project, name string) (project.TestLane, error) {
 //   - The rest are in it as the loop's STEP BOUNDARIES: refusing there stops
 //     an execute run before it reaches the step that runs tests. The locked
 //     exec_consent_gate decision admits what this cannot do — nothing stops an
-//     agent typing `go test` directly. The CLI covers the CLI.
+//     agent typing `go test` directly. The CLI covers the CLI. `quick end` is
+//     one because it absorbs `state bump` and `changes record`: a command that
+//     does a gated step's work gates as that step does.
 var execGatedCommands = []string{
 	"changes record",
+	"quick end",
 	"state bump",
 	"survivor drain",
 	"task next",

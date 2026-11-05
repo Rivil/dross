@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Rivil/dross/internal/localstore"
+	"github.com/Rivil/dross/internal/memadvise"
 )
 
 // drossStateIgnorePath is the path the ignore rule has to cover. It is also
@@ -17,6 +18,10 @@ const drossStateIgnorePath = ".dross/state.json"
 
 // drossLocalIgnorePath is the second: the machine-local store.
 const drossLocalIgnorePath = ".dross/" + localstore.File
+
+// drossMemoryIgnorePath is the memory-prune advisor's state dir — its turn
+// cache and apply snapshots — named as a directory so one line covers both.
+const drossMemoryIgnorePath = memadvise.StateDir + "/"
 
 // ignoreEntry is one path the seeded block covers, with the reason it is
 // untracked kept next to it. The comment is not decoration — someone will find
@@ -67,6 +72,17 @@ var drossIgnoreEntries = []ignoreEntry{
 			"# base branch. MUST stay untracked: a committed copy would let a cloned repo\n" +
 			"# authorize its own API host, which is the loop the derived allowlist avoids.\n" +
 			"# dross refuses to read this file if git reports it tracked.",
+	},
+	{
+		path: drossMemoryIgnorePath,
+		// The advisor's turn cache records per-transcript sizes and day counts
+		// from this machine's ~/.claude, and its snapshots are copies of the
+		// user's private memory dir — neither belongs in a commit. The dir
+		// also writes its own `*` .gitignore before its first file, which is
+		// what covers repos onboarded before this line existed.
+		comment: "# dross memory-advisor state — the turn cache, and the memory-dir snapshot taken\n" +
+			"# before each applied prune. Machine-local: it mirrors this machine's\n" +
+			"# ~/.claude, and a snapshot is a copy of private memory.",
 	},
 	{
 		path: mutationReportDirs[0],

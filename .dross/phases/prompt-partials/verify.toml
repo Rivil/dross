@@ -1,0 +1,95 @@
+[verify]
+  phase = "prompt-partials"
+  generated_at = 2026-10-28T06:35:54.211962Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-10-28T06:36:21.687861Z
+  measured_commit = "aca6b48c16ca81fd05442d68e2fdcc2ecc7bcea0"
+  measured_tree = "5c21d71dac8ef6b46254895fae732f53b7194230"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.975
+  mutants_killed = 312
+  mutants_survived = 8
+  mutants_not_covered = 8
+  mutants_no_block = 4
+  mutants_test_gap = 4
+  mutants_in_scope = 320
+  unclassified_in_scope = 0
+  criteria_total = 6
+  criteria_covered = 6
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 312
+    survived = 8
+    timeout = 0
+    in_scope = 320
+    score = 0.975
+    file_count = 24
+    measured_on = "helicon"
+    whole_file = ["assets/budget_test.go — adapter-lacks-range-runner", "assets/conservation_test.go — adapter-lacks-range-runner", "assets/partials.go — adapter-lacks-range-runner", "assets/partials_test.go — adapter-lacks-range-runner", "cmd/dross/main.go — adapter-lacks-range-runner", "internal/boardsync/board_lifecycle_divergence_test.go — adapter-lacks-range-runner", "internal/cmd/consent_surface_test.go — adapter-lacks-range-runner", "internal/cmd/execconsent_docs_test.go — adapter-lacks-range-runner", "internal/cmd/execute.go — adapter-lacks-range-runner", "internal/cmd/execute_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/execute_test.go — adapter-lacks-range-runner", "internal/cmd/flowcost_record_test.go — adapter-lacks-range-runner", "internal/cmd/lane_toolchain_docs_test.go — adapter-lacks-range-runner", "internal/cmd/options_docs_test.go — adapter-lacks-range-runner", "internal/cmd/pad_residue_test.go — adapter-lacks-range-runner", "internal/cmd/phase_test.go — adapter-lacks-range-runner", "internal/cmd/prompt.go — adapter-lacks-range-runner", "internal/cmd/prompt_expand_test.go — adapter-lacks-range-runner", "internal/cmd/prompt_test.go — adapter-lacks-range-runner", "internal/cmd/prompt_test_command_test.go — adapter-lacks-range-runner", "internal/cmd/ship_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_absorb_test.go — adapter-lacks-range-runner", "internal/cmd/verify_prompt_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["assets/budget_test.go:TestPromptByteBudget", "assets/budget_test.go:TestPromptByteBudgetBites"]
+  notes = "embedded execute.md checked against a fixed 15000-byte cap (12,589 B now); the bite test pins 15001 failing and 15000 passing"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["assets/budget_test.go:TestPromptByteBudget"]
+  notes = "same budget map row for verify.md (14,336 B now); exact-set guard fails if either prompt is unbudgeted"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["assets/partials_test.go:TestPartialRegistryRealAssets", "assets/partials_test.go:TestPartialRegistryMissingAndOrphan", "assets/partials_test.go:TestFetchLineGrammar", "internal/cmd/prompt_test.go:TestPromptPartialVerbatim"]
+  notes = "one `dross prompt partial` command serves every partial verbatim; fetch lines must name a vocabulary trigger; missing, orphan, foreign and nested partials each fail the registry check"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["assets/partials_test.go:TestCommonPathFetchesNothing", "internal/cmd/flowcost_record_test.go:TestFlowCostRecords"]
+  notes = "static: no prompt fetches under CommonPath() and common-path triggers are rejected; live: both after legs record partial_fetches = 0"
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["assets/conservation_test.go:TestPromptInstructionsConserved", "assets/conservation_test.go:TestConservationCatchesALostRow", "internal/cmd/prompt_expand_test.go:TestPromptLoadersSeePartials", "internal/cmd/prompt_expand_test.go:TestPromptReadsGoThroughExpansion"]
+  notes = "instruction manifest must survive in prompt + partials expansion; prompt-content readers go through the expansion. Two coreloop raw readers remain (see NOTE)"
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/flowcost_record_test.go:TestFlowCostRecords"]
+  notes = "checkPromptPartialsFlow pins before/after prompt bytes, turns, wall-clock, fixture tree, binary and the no-new-round-trip gate for an execute and a verify pair"
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation: 0.97 over 320 in-scope mutants (312 killed, 8 survived, all NOT COVERED); 4 sit in no go-cover block; efficacy over the 316 reachable = 0.99. 6 inherited verify.go survivors were already accepted (detach seams, switch-case ceiling)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "partials.go:315 (switch-case ceiling, asserted by TestCommonPathFetchesNothing) and partials.go:195 (Expand error line number, unreachable for embedded assets behind CheckPartials) accepted 2026-10-28; run re-collected to apply them"
+
+[[finding]]
+  severity = "NOTE"
+  text = "first detached run r-20261027-195554 discarded: a remote `dross test` during it rsynced a quick fix into the shared helicon workdir, so the run measured mixed trees (78 shifted NOT COVERED survivors, 0.76). Re-run r-20261027-224311 is the measured one. dross bug, unfiled"
+
+[[finding]]
+  severity = "NOTE"
+  text = "t-4 review FLAG (finalize wrote the finalized marker before markVerified, so a state.json failure stranded the phase at complete) fixed in quick f4453f04 with TestVerifyFinalizeHealsAMissedVerifiedStatus"
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-5: TestCoreLoopPromptsWireEmitter/ReferenceContract still read execute.md/verify.md raw through a loop variable, which the raw-read guard cannot see; their positive assertions concern base pre-flight text, only the dead-include negative check misses partials (t-10 review)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "remaining solo-review FLAGs were test-strength nits left non-blocking by the reviewer (substring needles, conservation prefix collisions, manifest-count vacuity guard, beginBoard dropping TaskPlanMoved/TaskUnsynced lines, results skipping record clear on board 500); none undermines a criterion mapping"

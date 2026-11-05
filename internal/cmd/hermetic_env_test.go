@@ -61,6 +61,16 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "hermetic CLAUDE_CONFIG_DIR: unsetenv: %v\n", err)
 		os.Exit(1)
 	}
+	// A suite run from inside a Claude Code session inherits its session id,
+	// and the show-once marker keys on it: `dross rule show` would read the
+	// developer's own .dross/gate/show/ records, or write a test's into a temp
+	// repo under the developer's session. Tests that need an id set their own.
+	for _, k := range []string{"CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_CHILD_SESSION"} {
+		if err := os.Unsetenv(k); err != nil {
+			fmt.Fprintf(os.Stderr, "hermetic %s: unsetenv: %v\n", k, err)
+			os.Exit(1)
+		}
+	}
 	if err := pinGitConfig(home); err != nil {
 		fmt.Fprintf(os.Stderr, "hermetic git config: %v\n", err)
 		os.Exit(1)
@@ -235,6 +245,16 @@ func TestHermeticHome_IsIsolated(t *testing.T) {
 	path := filepath.Join(dir, defaults.File)
 	if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("%s must not exist under the test HOME (stat err = %v) — init would overlay it", path, err)
+	}
+}
+
+// TestHermeticSessionEnv: the package never sees the Claude Code session it
+// was launched from, so no show-once record is read or written under it.
+func TestHermeticSessionEnv(t *testing.T) {
+	for _, k := range []string{"CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_CHILD_SESSION"} {
+		if v, ok := os.LookupEnv(k); ok {
+			t.Errorf("%s is set (%d bytes) inside the cmd package — TestMain should have cleared it", k, len(v))
+		}
 	}
 }
 

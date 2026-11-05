@@ -34,8 +34,10 @@ of the loop — each step is a short turn they answer, not a form they fill in.
 - **Confirm artifacts; don't broadcast them.** The TOML / config / plan you compose
   is a build artifact, not a review medium — never paste the build artifact back.
   Every line was agreed in prose first; confirm the written file with a one-line
-  summary, not by dumping its contents. Surface a specific field only if the user
-  asks to see or change it.
+  summary, not by dumping its contents. The lock / accept gate on a written
+  artifact is always an `AskUserQuestion` (lead option: lock), never a trailing
+  prose "(y / edit)" line. Surface a specific field only if the user asks to see
+  or change it.
 
 ## How to drive a turn
 
@@ -70,6 +72,16 @@ Include-first: deferral is not the safe default. In-scope work parked in the
 backlog is scope that leaked, not scope kept tight — a phase finishes its job
 rather than handing pieces of it on. Either way the candidate never evaporates:
 it is included or parked, never lost.
+
+## Context checkpoint
+
+A line starting `context checkpoint:` in context means the session is past its
+context threshold. At the next durable boundary, lead with "checkpoint + /clear":
+execute §1g even mid-wave (this overrides §1g's mid-wave `continue` lead) and
+every "safe to /clear" wrap-up. A gate before its artifact is written is not a
+durable boundary — leave it as it is. Under `--solo` the nudge is
+informational: keep going. Thread not on disk yet → `/dross-pause` first.
+Never run a command to check context.
 
 ## Anti-patterns
 

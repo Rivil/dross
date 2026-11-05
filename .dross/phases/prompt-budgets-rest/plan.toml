@@ -1,0 +1,325 @@
+task_seq = 24
+
+[phase]
+  id = "prompt-budgets-rest"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Capture before legs on base build"
+  files = [".dross/phases/prompt-budgets-rest/flow-cost-before.toml"]
+  description = "Build the base dross in a scratch worktree at 8eb38e9f with `make build` there (plain `go build` stamps `commit unknown` — Commit is only set by the Makefile LDFLAGS); before starting any leg, `./dross version` from the worktree must name 8eb38e9f. Never `dross test` or `make install` from the worktree (rsync clobbers helicon .git). Rebuild prompt-partials inline setup_sh fixtures plus one phase step per leg: plan leg = flow-probe phase with locked spec, no plan; spec leg = scaffolded spec-probe phase with no spec.toml (`/dross-spec <id>`, target given); quick leg = pair quick on the flow repo with no origin (direct route). Human-driven: /dross-plan <id> (no --panel) to its `state touch \"plan locked`; /dross-spec <id> to `state touch \"spec locked`; pair /dross-quick to the `chore(dross): record quick` bookkeeping commit (flow_end = bookkeeping commit so t-5 absorbed §6 falls inside the window). Must run while every prompt is unedited (~/.claude/dross/prompts is symlinked to this tree) — every prompt-editing task depends on t-1. Record [before] (plan), [quick_before], [spec_before] with prompt-partials leg fields (prompt_bytes, partial_fetches, agent_turns, turn_tools, wall_clock_s, human_wait_s, dross_calls, binary_version, session_id, fixture_tree), and [bytes_only] ship_before = 23006, options_before = 28231 from `git show 8eb38e9f:assets/prompts/<p>.md | wc -c` (no session, locked flow_set)."
+  covers = ["c-4"]
+  test_contract = ["if a leg ran on edited prompts, t-16's TestFlowCostRecords/prompt-budgets-rest fails: [before].prompt_bytes != 21154, [quick_before] != 18098, [spec_before] != 19075, or [bytes_only] ship_before != 23006 / options_before != 28231", "if a before leg ran on a phase-built binary (e.g. one carrying t-5's quick end absorption), the check fails: each before binary_version must contain \"commit 8eb38e9f\"", "if the fixture is non-deterministic, the check fails: each *_after.fixture_tree must equal its *_before.fixture_tree (`git rev-parse HEAD^{tree}` recorded per leg)", "if the base binary was built without the Makefile LDFLAGS, the pre-leg check fails before any session starts: `./dross version` reporting `commit unknown` (or any commit other than 8eb38e9f) stops t-1 — no leg is recorded on an unstamped binary", "if the fixture recipe lives only in a scratch script, t-16 cannot rebuild it and TestFlowCostRecords fails: flow-cost-before.toml must carry [scenario] (repo_shape, wave_position, flow_start, flow_end, jq_method) with setup_sh including the new per-leg phase steps, plus each leg's flow_end and jq end_re (plan locked / spec locked / record-quick commit)"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Extend conservation manifest to five prompts"
+  files = ["assets/conservation_test.go", "assets/testdata/prompt_instructions.txt"]
+  description = """
+manifestPrompts gains options, ship, plan, spec, quick. For these five only, the extractor also takes inline backticked spans starting with `dross ` (prose-level steps like `dross protect --check <base>`, `dross local set quick_base <base>` sit outside fences). Recording becomes append-only: DROSS_RECORD_PROMPT_INSTRUCTIONS writes only prompts with no rows yet and never rewrites execute.md/verify.md rows (today's recorder rewrites the whole file and would drop the three rows `execute begin` absorbed). Record from today's unedited files; each new prompt gets a minRows floor at 80% of its recorded count. Lands green.
+"""
+  covers = ["c-3"]
+  test_contract = [
+    "if a moved instruction vanishes, TestPromptInstructionsConserved fails naming the row: remove `dross ship <phase-id>` from ship.md and every _ship partial in a MapFS copy, as TestConservationCatchesALostRow does for verify",
+    "if a prose-level step is lost, the test fails: deleting the inline `dross local set quick_base <base>` span from quick.md with no absorbs marker is reported as \"instruction lost\"",
+    "if re-recording rewrites existing rows, TestManifestRecordIsAppendOnly fails: recording with execute.md rows present leaves them byte-identical, including the three absorbed rows (`dross state set version <major>.<minor>.$PATCH.0`, `dross issue phase sync <id> --status in-progress`, `dross issue task pull <phase>`)",
+    "if the manifest was recorded after §6 moved, the pinned-row check fails: quick.md rows must include `dross state bump internal` and `dross issue quick $NEW_VERSION \"quick: <one-line summary>\"`",
+    "if the manifest goes vacuous, the test fails: fewer rows than minRows for any of the five",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Add branch facts; pin common paths and sections"
+  files = ["assets/partials.go", "assets/partials_test.go"]
+  description = "TriggerVocabulary gains nine keys, common-path value first: panel{off,on}, auto{off,on}, ci{passed,failed}, ship_result{clean,failed} (ship or complete returned non-zero / left the tree dirty — covers every Recovery mode, §4 and §6 alike), target{given,empty}, spec_file{absent,present}, deferral{none,chosen}, lanes{unchanged,editing}, remote{unchanged,changing}; quick reuses mode{pair,solo}. TestCommonPathInline gains raw-base needles (all exact strings present at 8eb38e9f) — plan: `## 2G`, `## 3. Propose`, `## 5. Write plan.toml`, `### 6.1 Auto review`, `dross state set current_phase_status \"planned\"`; spec: `Step 1 — the entry gate`, `dross phase create`, `dross phase list --milestone`, `Describe a new phase`, `### 3b.`, `[[criteria]]`, `dross state touch \"spec locked: <id>\"`, `Resume, don't overwrite`, `already has a target`; quick: `dross quick begin \"<description>\"`, `**Red, pair mode**`, `dross quick end`, `## 5. Commit`, `Pair mode by default`; ship: `## 1. Preview`, `## 3. Reviewers`, `## 3.5 Merge landmarks`, `dross ship <phase-id>`, `gh run watch`, `gh pr checks --watch`, `dross ship recover`, `All checks passed on PR #N. Merge now?`; options: `## Section pick`, `Keep · Change · Skip`, every `## N.` heading 1–17, `dross local set <key> \"<value>\"`, `dross local get`, `dross mutation remote status`, `dross trust --check`, `Never run it on their behalf`, `dross test lane list`. Retarget TestExpandIdentity from quick to techdebt.md. Add TestCommonPathVocabularyPinned, TestPartialTextMovedNotCopied (passes today: 0 shared 40+-char lines across the 10 existing partials), TestPartialSectionsStayWhole."
+  covers = ["c-2", "c-3"]
+  test_contract = ["if a new key's common value fetches, TestCommonPathFetchesNothing fails: synthetic panel=off, auto=off, ci=passed, ship_result=clean, target=given, spec_file=absent, deferral=none, lanes=unchanged and remote=unchanged fetch lines are each rejected as common path", "if a key's values are reordered (e.g. lanes → {editing, unchanged}), TestCommonPathVocabularyPinned fails: CommonPath() must equal the pinned map (mode:pair, preflight:ok, …, panel:off, ci:passed, ship_result:clean, lanes:unchanged, …)", "if a flow's landmark leaves its base prompt, TestCommonPathInline (raw, via assets.FS) fails naming the file and the needle; every needle is an exact literal, including ship's `All checks passed on PR #N. Merge now?`", "if the identity check targets a split prompt, TestExpandIdentity fails: it asserts FetchPoints(techdebt.md) is empty before comparing bytes", "if a partial copies text instead of moving it, TestPartialTextMovedNotCopied fails: any partial line of 40+ chars also present verbatim in its base prompt", "if an inlined partial's `## ` heading lands above remaining base text of the fetch line's section, TestPartialSectionsStayWhole fails (synthetic MapFS)"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Close raw-read guard blind spots"
+  files = ["internal/cmd/prompt_expand_test.go", "internal/cmd/lane_install_docs_test.go", "internal/cmd/lane_toolchain_docs_test.go", "internal/cmd/milestone_narration_test.go", "internal/cmd/status_test.go", "cmd/dross/main_test.go"]
+  description = "splitPrompts is derived from assets.PartialNames (every prompt with ≥1 partial) instead of the fixed {execute, verify}. Raw-read detection also matches read-helper calls whose literal args spell \"assets\",\"prompts\",<file>.md (docsBody, readDoc, docText, variadic parts); path-building and directory calls — filepath.Join, os.ReadDir, filepath.Glob, os.Stat — are excluded, so the ~35 Join/walk sites in ship_prompt/protected_prompts/board_switch_prompt/inert_config tests are not detections. Today isRawPromptRead only sees os.ReadFile and readRepoFile. Walks extend from internal/ to cmd/. Every newly caught reader migrates in the same task so the allowlist does not grow: lane_install_docs_test#docsBody(options.md) and lane_toolchain_docs_test#readDoc(options.md) → expandedPrompt; milestone_narration_test docText(ship.md) and TestMilestonePromptDropsUnconditionalCutClaim docText(milestone.md) (:27) → expandedPrompt; status_test TestStatusPromptDoesNotAttributeBacklogSolelyToSpec docText(status.md) (:1395) → expandedPrompt; cmd/dross main_test ship.md → assets.Expand(assets.FS, \"ship\"). Before writing, enumerate the widened detector's hits on the real tree and confirm they are exactly this list."
+  covers = ["c-3"]
+  test_contract = ["if a variadic helper reads a prompt raw, TestRawPromptReadDetection fails: `docsBody(t, \"assets\", \"prompts\", \"options.md\")` and `readDoc(t, \"assets\", \"prompts\", \"ship.md\")` must be detected", "if path-building calls are counted as reads, TestRawPromptReadDetection fails: `filepath.Join(root, \"assets\", \"prompts\", \"ship.md\")`, `os.ReadDir(filepath.Join(root, \"assets\", \"prompts\"))` and `filepath.Glob(...prompts/*.md)` must NOT be detected", "if a newly caught reader is left raw, the meta-guard fails on the real tree: zero unallowlisted raw reads after t-4, including status_test.go:1395 and both milestone_narration_test.go readers", "if splitPrompts stays a fixed list, TestSplitPromptsFollowTheRegistry fails: on a MapFS adding _plan.panel.md, plan.md is a split prompt without any list edited", "if cmd/dross is outside the walk, the meta-guard fails: a raw os.ReadFile of \"../../assets/prompts/ship.md\" in cmd/dross/main_test.go is reported", "if the allowlist grows to absorb the new detections, the pin check fails: rawPromptReadAllowlistSize stays at 35"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Absorb quick §6 bookkeeping into quick end"
+  files = ["internal/cmd/quick.go", "internal/cmd/quick_test.go", "assets/prompts/quick.md", "internal/cmd/protected_prompts_test.go", "cmd/dross/testdata/cli_tree.txt"]
+  description = """
+`quick end` already runs at the end of §5 (quick.md:177) — a CLI call already running at that point (locked branch_placement). When HEAD has moved past gatestate.Quick.Head, `quick end` bumps internal; records changes quick-<n> when in-phase and not shipped (files = begin..HEAD minus .dross/); runs state touch and issue quick on the description's first line; prints `version: <v>`. Delete the §6 prose in the same commit (no interim double bump). quick.md keeps the bookkeeping commit (`chore(dross): record quick <NEW_VERSION>`, NEW_VERSION from the `version:` line), the `board: FAILED` retry `dross issue quick <version> "<summary>"`, and "missing `version:` = stale binary, stop, ask for make install". Add one `// absorbs:` marker per moved t-2 manifest row. Retarget TestQuickClosesBoardIssueBeforeLeavingTheQuickBranch: its open-needle is deleted with §6; the open is now the `quick end` call, keeping open < close < `dross checkout <base>`. Post-commit: `make install` (r-01).
+"""
+  covers = ["c-1", "c-3"]
+  test_contract = [
+    "if an abort bumps, TestQuickEndAbortNoBump fails: HEAD == begin head → state.version unchanged, no changes.json write, zero board requests (httptest counter)",
+    "if a missing quick record bumps, the test fails: `quick end` with no record exits 0 and writes nothing",
+    "if a re-run double-bumps, TestQuickEndIdempotent fails: a second end after success leaves version +1 once",
+    "if the bump disagrees with the PR-route branch, the test fails: the new version must equal begin's state.version with internal+1 (the `quick/<preview-version>` name)",
+    "if a shipped phase records changes, TestQuickEndShippedIsStandalone fails: status=shipped → bump, no changes record",
+    "if a board 500 loses the bump, TestQuickEndBoardFailureKeepsBump fails: version and changes.json persisted, `board: FAILED` plus the retry command printed, non-zero exit distinct from a usage error, quick record removed",
+    "if .dross/ files leak into the record, the test fails: a commit touching .dross/state.json and a.go records only a.go",
+    "if a moved row loses its claim, TestPromptInstructionsConserved fails: deleting the `// absorbs: dross state bump internal` marker reports the row lost",
+    "if quick.md loses its board call, board_switch_prompt_test's 6-caller floor and TestBoardCallingPromptsSurfaceFailure's sentence check fail",
+    "if the issue close drifts after the base switch, TestQuickClosesBoardIssueBeforeLeavingTheQuickBranch (retargeted) fails",
+  ]
+  depends_on = ["t-1", "t-2"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Route spec prompt readers through Expand"
+  files = ["internal/cmd/spec_prompt_test.go", "internal/cmd/interaction_pilot_test.go", "internal/cmd/phase_test.go", "internal/rules/rules_test.go", "internal/cmd/prompt_expand_test.go"]
+  description = """
+specPromptContent, TestSpecPilotUsesEmitter, TestPhaseListPromptConsumersAreCurrent and internal/rules' TestSpecPromptDefersToSnippet read the expanded spec.md (rules uses assets.Expand(assets.FS, "spec")). Remove 4 allowlist entries and lower the pin by 4. Serialises with t-7..t-9 on the shared pin.
+"""
+  covers = ["c-3"]
+  test_contract = ["if a spec reader stays raw, TestNoAllowlistedReaderReadsASplitPrompt fails the moment t-11 lands spec's first partial (splitPrompts is registry-derived since t-4)", "if a loader skips partials, a TestPromptLoadersSeePartials-style check fails: a BANNED phrase only in a MapFS _spec.route.md is seen by specPromptContent", "if an entry is removed without lowering the pin (or vice versa), TestPromptReadsGoThroughExpansion fails", "if the pin and allowlist drift across the chain, TestPromptReadsGoThroughExpansion fails: after t-6 the pin is 31 (35 − 4)"]
+  depends_on = ["t-4"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Route plan and ship readers through Expand"
+  files = ["internal/cmd/plan_prompt_test.go", "internal/cmd/plan_review_tiers_test.go", "internal/cmd/interaction_coreloop_test.go", "internal/cmd/ship_prompt_test.go", "internal/cmd/prompt_expand_test.go"]
+  description = """
+planPromptContent, TestPlanPromptDescribesEveryReviewTier, TestPlanPromptNoArtifactDump, TestShipPromptDecisionTurnsSeparate and rawShipSection (keeps "not normalised" but reads Expand(ship)), plus its raw read at :456, read Expand. A check that genuinely needs the base only (footer, common path) switches to assets.FS. Remove matching allowlist entries and lower the pin.
+"""
+  covers = ["c-3"]
+  test_contract = ["if a plan or ship reader stays raw, TestNoAllowlistedReaderReadsASplitPrompt fails once t-10 or t-12 adds the first partial", "if the tier test reads the base only, TestPlanPromptDescribesEveryReviewTier still finds the `--panel` tier row when §2P lives in _plan.panel.md (proven against a MapFS move)", "if rawShipSection stays raw, the Forgejo `{\"Do\":\"squash\"}` match in §6 must still pass when the seeded §6 text lives only in a _ship partial", "if ship's merge-gate decision-turn check loses the partial text, TestShipPromptDecisionTurnsSeparate (expanded) fails", "if the chain step is wrong, TestPromptReadsGoThroughExpansion fails: after t-7 the pin is 26 (31 − 5)"]
+  depends_on = ["t-4", "t-6"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 4
+  title = "Route quick prompt readers through Expand"
+  files = ["internal/cmd/quick_prompt_test.go", "internal/cmd/squash_claim_guard_test.go", "internal/boardsync/board_lifecycle_divergence_test.go", "internal/cmd/prompt_expand_test.go"]
+  description = """
+quickPromptContent and TestQuickPromptHandlesShippedWindow read the expanded quick.md. boardsync rawPrompt (quick/milestone/ship emission lanes) reads assets.Expand, keeping its own normalisation. Remove matching entries and lower the pin.
+"""
+  covers = ["c-3"]
+  test_contract = ["if a quick reader stays raw, TestNoAllowlistedReaderReadsASplitPrompt fails once t-13 adds _quick.solo.md", "if a loader skips partials, TestPromptLoadersSeePartials (extended) fails: a phrase seeded only in a MapFS _quick.solo.md must reach quickPromptContent", "if an emission lane's text moves into a partial unseen, TestEmittedStatusesAreTheLifecycleSet (expanded) still sees every status ship.md and quick.md emit: a MapFS partial holding the only `--status shipped` keeps it in the set", "if the chain step is wrong, TestPromptReadsGoThroughExpansion fails: after t-8 the pin is 23 (26 − 3)"]
+  depends_on = ["t-4", "t-7"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 5
+  title = "Route options prompt readers through Expand"
+  files = ["internal/cmd/options_docs_test.go", "internal/cmd/readme_doc_test.go", "internal/cmd/interaction_setupcmds_test.go", "internal/cmd/interaction_snippet_test.go", "internal/cmd/prompt_expand_test.go"]
+  description = "optionsPrompt, readme_doc optionsSection (:244) and setupPromptBody (options/quick) read Expand. The interaction_snippet options.md literal (:191) stays a raw-by-design footer read via assets.FS; TestFooterPromptsLoadPlaybook stays allowlisted. Remove matching entries and lower the pin. After t-6..t-9 (chained, shared pin in prompt_expand_test.go) the pin is exactly 20 (35 − 15 migrated readers)."
+  covers = ["c-3"]
+  test_contract = ["if an options reader stays raw, TestNoAllowlistedReaderReadsASplitPrompt fails once t-14 adds _options.lanes.md", "if setupPromptBody stays raw, a phrase seeded only in _quick.solo.md or _options.lanes.md must reach it", "if lane docs leave the loader's view, options_docs lane/selector/toolchain tests (expanded) fail when _options.lanes.md loses `--selector-template`, `--empty-exit` or `trusted_lane_installs`", "if the README option rows drift, readme_doc optionsSection still matches every options.md section heading (raw headings stay in base per t-3)", "if the allowlist ends at the wrong size, TestPromptReadsGoThroughExpansion fails: rawPromptReadAllowlistSize == 20 exactly, with TestFooterPromptsLoadPlaybook still allowlisted"]
+  depends_on = ["t-4", "t-8"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 4
+  title = "Move plan panel mode to a partial"
+  files = ["assets/prompts/plan.md", "assets/prompts/_plan.panel.md", "internal/cmd/plan_prompt_test.go"]
+  description = "§2P, 2P.1, 2P.2, 2P.3 (5,596 B) move to _plan.panel.md. plan.md keeps a one-line stub at §2P's old position (after §2, before `## 2G`): **When** `panel=on` — --panel was passed: `dross prompt partial plan panel`. Every other §2P / §2P.3 citation in base plan.md (§0 flag parse \"see §2P\", Hard rules lines ~296 \"(§2P.3)\" and ~299 \"The `--panel` flow (§2P)\") is reworded to name the panel fetch condition instead of a section absent from the base. Compress Hard rules and §6.1 to ≤14,500 B raw under the conservation guard. Post-commit: `make install` (r-01). Report measured raw bytes."
+  covers = ["c-1", "c-2", "c-3"]
+  test_contract = ["if panel text loads on the plain path, TestPlanPanelFetchPoint fails: Fetched(plan, CommonPath()) is empty and Fetched(plan, {panel: on}) == [panel]", "if the fetch line moves, the test fails: it must be the last line before `## 2G` in raw plan.md, and Expand(plan) must keep heading order 2 → 2P → 2G", "if base plan.md still cites the moved section, the test fails: raw plan.md contains no `§2P` token at all (catches \"see §2P\", \"(§2P.3)\" and \"The `--panel` flow (§2P)\")", "if the lens planner brief is lost, plan_prompt panel tests (expanded) fail when _plan.panel.md drops `panel/synthesis.md` or one of risk/mvp/verification", "if the non-panel decomposition leaves base, TestCommonPathInline (raw) fails on `## 3. Propose` / `## 2G`", "if the clear-point footer leaves base plan.md, TestBoundaryPromptsCarryFooter fails (footer_coverage reads base raw)", "if a fenced row is dropped while compressing, TestPromptInstructionsConserved names it"]
+  depends_on = ["t-1", "t-2", "t-3", "t-7"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 3
+  title = "Move spec no-target, resume and route branches"
+  files = ["assets/prompts/spec.md", "assets/prompts/_spec.no-target.md", "assets/prompts/_spec.resume.md", "assets/prompts/_spec.route.md", "internal/cmd/spec_prompt_test.go"]
+  description = """
+Move to partials: empty-$ARGUMENTS resolution (done-phase / unset asks) → _spec.no-target.md behind `target=empty`; extend/replace of an existing spec.toml → _spec.resume.md behind `spec_file=present` (§0 step 4 keeps its lead sentence "Read … spec.toml if it exists. **Resume, don't overwrite.**" with the fetch line under it); §4a step 2 destinations (backlog / named phase / someday, the `dross milestone add` / `dross deferred route` fences and the <idx> rule) → _spec.route.md behind `deferral=chosen`. Stay inline: the Create flow (`--new`, roadmap picklist included), §3, the step-1 include-first gate, §4's "skip any deferred item that already has a target", the `Spec locked` footer. Compress ~1.3 KB under the conservation guard to ≤14,500 B raw. Post-commit: `make install`. Report measured raw bytes.
+"""
+  covers = ["c-1", "c-2", "c-3"]
+  test_contract = ["if a spec branch fetches on the common path, TestCommonPathFetchesNothing fails; each key's non-common value fetches exactly its own partial (CheckPartials orphan check, plus a Fetched table in spec_prompt_test: {target: empty} == [no-target], {spec_file: present} == [resume], {deferral: chosen} == [route])", "if route verbs are lost, TestPromptInstructionsConserved fails on `dross deferred route <phase-id> <idx> --target \"<slug>\"`", "if routing or gray-area instructions are trimmed away, the expanded TestSpecPrompt* suite fails, e.g. TestSpecPromptRoutesFourDestinations and TestSpecPromptWalksEveryGrayArea", "if the resume skip rule leaves §4, a raw §4 check fails: base §4 must contain \"already has a target\"", "if the include-first gate or the create flow leaves base, TestCommonPathInline (raw) fails on `Step 1 — the entry gate`, `add to current phase`, `dross phase list --milestone` or `Describe a new phase`", "if the guarded checkout leaves the expansion, TestNoPromptPerformsRawBranchSwitch fails on spec", "if the `Spec locked` footer moves, TestBoundaryPromptsCarryFooter fails", "if the zero-fetch claim is overstated, the scope note is missing: t-11's commit and t-16's [spec_after] record that spec's zero-fetch path is \"target given, no deferral\", and that bare /dross-spec (target=empty) and choosing \"defer it\" (deferral=chosen) each fetch one partial by design"]
+  depends_on = ["t-1", "t-2", "t-3", "t-6"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 4
+  title = "Move ship auto, recovery, CI-failure branches"
+  files = ["assets/prompts/ship.md", "assets/prompts/_ship.auto.md", "assets/prompts/_ship.recovery.md", "assets/prompts/_ship.ci-failure.md", "internal/cmd/ship_prompt_test.go"]
+  description = "§0.5 --auto (1,506 B) → _ship.auto.md behind `auto=on`, fetch right after the flag parse. `## Recovery` (3,487 B) → _ship.recovery.md behind `ship_result=failed` (dross ship or dross phase complete returned non-zero, or the tree is dirty after ship — all six modes); its fetch line is the last line of §6 so the inlined heading does not split a section, and §4 gains a one-line in-base pointer (\"non-zero `dross ship` exit or dirty tree after it → the Recovery fetch at the end of §6\") so modes 3–4 are reachable from §4. §5 \"On failure\" (~1,484 B, incl. `gh run view --log-failed` and the 3-iteration cap) → _ship.ci-failure.md behind `ci=failed`. Delete the DEFERRED subagent-panel stub (313 B). Those moves reach ~16,200 B; the remaining ~1.3–2 KB comes from compressing, under the conservation guard: the Forgejo/Gitea/GitLab CI-poll and squash prose in §5/§6, the two-merge-levels callout, §3.5 landmark prose, and §6 merge-gate narration. Stay inline: GitHub watch steps, the never-gate-on `gh pr checks --watch` rule, §6 merge gate and \"a non-zero exit is a board failure\", §0 `dross ship recover` hint, the footers, provider polling (compressed). Cap ≤15,000 B raw (aim ≤14,500). Post-commit: `make install`. Report measured raw bytes."
+  covers = ["c-1", "c-2", "c-3"]
+  test_contract = ["if an interactive ship fetches, TestShipCommonPathFetchesNothing fails: Fetched(ship, CommonPath()) is empty, and each of auto=on, ship_result=failed and ci=failed fetches exactly its own partial", "if recovery's heading splits §6, TestPartialSectionsStayWhole (t-3) fails: the fetch line must end §6", "if §4 loses its route to Recovery, TestShipPromptRecoverySection (expanded) fails: raw base §4 must name the end-of-§6 Recovery fetch, so mode 3 (dirty tree after push) and mode 4 (record push failed) are reachable from §4", "if recovery steps are lost, TestShipPromptRecoverySection (expanded) fails on any of the six named failure modes", "if CI fix guidance is lost, the expanded ship CI tests and TestShipPromptReShipsAfterEveryCIFix fail when _ship.ci-failure.md drops `gh run view --log-failed` or the \"re-run `dross ship <phase-id>`\" step", "if --auto starts merging, TestShipPromptAutoFastPath / TestShipPromptAutoBackfill (expanded) fail when _ship.auto.md loses \"returns without merging\"", "if a non-GitHub provider's CI poll or squash call is lost while compressing, TestShipPromptGitLabSections (expanded) fails, and TestPromptInstructionsConserved names any dropped fenced row", "if `dross ship recover` or the `gh pr checks --watch` rule leaves base, TestCommonPathInline (raw) fails", "if §6 loses \"a non-zero exit is a board failure\", TestBoardCallingPromptsSurfaceFailure fails", "if a raw branch switch sneaks in via a partial, TestNoPromptPerformsRawBranchSwitch (expanded, walks partials) fails", "if the `state is on disk` footer moves, TestBoundaryPromptsCarryFooter fails"]
+  depends_on = ["t-1", "t-2", "t-3", "t-7"]
+  status = "done"
+
+[[task]]
+  id = "t-13"
+  wave = 6
+  title = "Move quick solo text to one partial"
+  files = ["assets/prompts/quick.md", "assets/prompts/_quick.solo.md", "internal/cmd/quick_prompt_test.go", "internal/cmd/execute_prompt_test.go"]
+  description = """
+Precondition: `make install` with t-5 live. Move to _quick.solo.md: the §2 solo skip, the §4 solo red path and Solo review block, the no-test solo arm, the §5 `solo: yes` line and review-gated commit, the solo-only hard rules. Fetched once right after the `dross quick begin --solo` fence (`mode=solo`, locked branch_placement). The refused-solo-begin stop stays inline. §4 keeps a `**Re-fetch** if context was compacted:` line between the green `dross test` and `## 5. Commit`. "Pair mode by default" stays in base Hard rules. t-5's §6 deletions are the headroom for the fetch lines under TestTestStepPromptsNotGrown. Post-commit: `make install`. Report measured raw bytes (≤15,000).
+"""
+  covers = ["c-1", "c-2", "c-3"]
+  test_contract = [
+    "if the solo fetch drifts from the begin (locked branch_placement), TestQuickSoloFetchPlacement fails: the `quick solo` When line must be the first fetch point after the `dross quick begin --solo` fence in raw quick.md",
+    "if solo review order breaks, the test fails: inside the partial, re-run `dross test` < `dross review context` < spawn < `dross review status` < commit, and the base re-fetch line sits between green `dross test` and `## 5. Commit`; TestQuickSoloReview and TestQuickSoloReviewBlocked (expanded via t-8) keep passing",
+    "if the refusal stop moves into the partial, a raw assets.FS check (TestQuickSoloBeginNeedsReviewer, new) fails",
+    "if fetch lines push the expansion past its base size, TestTestStepPromptsNotGrown (expanded quick ≤ 18,102) fails",
+    "if pair runs fetch, Fetched(quick, CommonPath()) is empty",
+    "if the shipped-phase window is lost, TestQuickPromptHandlesShippedWindow (expanded) fails",
+    "if the PR route loses `git push -u origin quick/` or `gh pr create --base`, TestQuickPRRouteCommands (expanded) fails",
+  ]
+  depends_on = ["t-1", "t-2", "t-3", "t-5", "t-8", "t-9"]
+  status = "done"
+
+[[task]]
+  id = "t-14"
+  wave = 6
+  title = "Move options lane and remote lore out"
+  files = ["assets/prompts/options.md", "assets/prompts/_options.lanes.md", "assets/prompts/_options.remote.md", "internal/cmd/options_docs_test.go"]
+  description = """
+Two moves out of §14 (15,317 B): lane declaration, prepare, install, selector, template, empty-exit, toolchain and per-lane grant text (~10.3 KB) → _options.lanes.md behind **When** `lanes=editing` (user chose Change on test lanes); grant/revoke and tuning-knob text (~2.6 KB) → _options.remote.md behind `remote=changing`. §14 keeps every local.toml key name and the current-state reads inline: `dross local get`, `dross mutation remote status`, `dross trust --check` (the consent rule), `dross test lane list`. All 17 section headings stay. Compress to ≤14,500 B raw. Post-commit: `make install`. Report measured raw bytes.
+"""
+  covers = ["c-1", "c-2", "c-3"]
+  test_contract = [
+    "if the consent rule moves out, TestCommonPathInline (raw) fails on \"Never run it on their behalf\"",
+    "if a local.toml key name leaves base §14, TestOptionsNamesEveryLocalKeyInline (new) fails on a raw §14 read: quick_base, allow_hosts, mutation_workers, mutation_test_cpu, remote_scratch_base, mutation_remote_env, mutation_remote_host, mutation_remote_workdir, trusted_test_command",
+    "if a local key loses its docs, TestOptionsCoversEveryLocalKey (expanded) fails naming the key",
+    "if the §14 heading or numbering breaks, TestOptionsSectionNumbersAreContiguous fails on raw options.md",
+    "if lane lore is lost, lane_install_docs and lane_toolchain_docs tests (expanded since t-4) fail when _options.lanes.md drops `dross test lane install <name> [--apply] [--local]` or exit `8`",
+    "if lane verbs are lost, TestPromptInstructionsConserved fails on `dross test lane add <name> --match <glob> --command \"<cmd>\"`",
+    "if a walk that only reads settings fetches, TestOptionsCommonPathFetchesNothing fails: Fetched(options, CommonPath()) is empty, and lanes=editing and remote=changing each fetch exactly one",
+    "if an inert key goes undocumented, inert_config_test's prompt walk (reads every prompts/*.md including partials) still finds each key's reason",
+  ]
+  depends_on = ["t-1", "t-2", "t-3", "t-9"]
+  status = "done"
+
+[[task]]
+  id = "t-15"
+  wave = 7
+  title = "Enumerate every base prompt in budget test"
+  files = ["assets/budget_test.go"]
+  description = """
+Replace the promptByteBudget map and the exact-set {execute, verify} guard with one `const promptByteCap = 15000` and budgetProblems(fsys fs.FS), which globs prompts/*.md, skips `_`-prefixed names, and takes no per-file argument. TestPromptByteBudget runs it over assets.FS with t.Run per file. No exemption list at any point (locked no_exceptions).
+"""
+  covers = ["c-1"]
+  test_contract = [
+    "if a prompt is over the cap, TestPromptByteBudget/<file> fails at 15,001 B naming the file and the overage; exactly 15,000 B passes",
+    "if a new prompt slips in unbudgeted, TestPromptByteBudgetEnumerates fails: a MapFS-only prompts/brand-new.md at 15,001 B is reported",
+    "if any override exists, the test fails: a MapFS holding options, ship, plan, spec, quick, execute and verify each at 15,001 B reports all seven",
+    "if a non-cut prompt grows, the test fails: milestone.md (14,687 B today) at 15,001 B is reported",
+    "if partials get budgeted, the test fails: a 40,000-byte _options.lanes.md and a 40,000-byte _interaction.md report nothing",
+    "if the glob silently matches nothing, the test fails: the real-FS run must visit at least 24 base prompts, execute.md among them",
+  ]
+  depends_on = ["t-10", "t-11", "t-12", "t-13", "t-14"]
+  status = "done"
+
+[[task]]
+  id = "t-17"
+  wave = 4
+  title = "Move spec create flow to a partial"
+  files = ["assets/partials.go", "assets/partials_test.go", "assets/prompts/spec.md", "assets/prompts/_spec.create.md", "internal/cmd/spec_prompt_test.go"]
+  description = "t-16's spec after-leg ran `dross phase list` (absent from [spec_before]): with t-11's no-target branch gone, spec.md's Create flow sat under the <phase-id> bullet and read as main-path. Add \"new\" to TriggerVocabulary's target values; replace the Create flow block in spec.md with one fetch line (`**When** `target=new` — ...: `dross prompt partial spec create``) and move its text verbatim into _spec.create.md. The no-target partial's 'jump to the create flow' then resolves via that line. Move TestCommonPathInline's create-flow needles out of spec's raw list. Post-commit: make install; t-16 rebuilds the spec fixture and re-drives the spec leg."
+  covers = ["c-1", "c-2"]
+  test_contract = ["if the create flow stays on the common path, a raw spec.md check fails: base spec.md must not contain `dross phase list --milestone` or `Describe a new phase`", "if the create flow is lost, the spec_prompt_test Fetched table fails: {target: new} == [create], and TestPhaseListPromptConsumersAreCurrent (expanded) still finds --milestone", "if the new fact value breaks the common path, TestCommonPathFetchesNothing / TestCommonPath fail: target's first value stays given"]
+  status = "done"
+  depends_on = ["t-3", "t-11"]
+
+[[task]]
+  id = "t-16"
+  wave = 7
+  title = "Record after legs; gate flow cost"
+  files = [".dross/phases/prompt-budgets-rest/flow-cost.toml", ".dross/phases/prompt-budgets-rest/flow-cost-before.toml", "internal/cmd/flowcost_record_test.go"]
+  description = """
+Preconditions: `make install` at the phase head, then `dross prompt partial plan panel` must succeed on the installed binary (r-01). Rebuild t-1's fixtures and re-drive the three legs identically with the same flow_end points. Merge the before legs into flow-cost.toml; add [after], [quick_after], [spec_after], plus [bytes_only] ship_after and options_after (raw base bytes + zero fetched partial bytes); delete flow-cost-before.toml. flowCost gains QuickBefore/QuickAfter/SpecBefore/SpecAfter and BytesOnly. Add checkPromptBudgetsRestFlow (via checkLegPair per pair) with promptBudgetsRestFlowProblems returning problems, and promptBudgetsRestBase = "commit 8eb38e9f". Add the phase to TestFlowCostRecords' required-phase list. Turns and wall-clock recorded, not gated (locked flow_set).
+"""
+  covers = ["c-2", "c-4"]
+  test_contract = ["if an after prompt is over budget or not smaller, TestFlowCostRecords/prompt-budgets-rest fails: any after prompt_bytes (three legs plus ship/options bytes_only) > 15000 or >= its before", "if the common path fetched, the test fails: partial_fetches != 0 on [after], [quick_after] or [spec_after] (observed, never edited)", "if a split added a round-trip, checkLegPair fails: an after leg runs a dross call its before leg didn't, such as `dross prompt partial`", "if the before pins drift, the test fails: before bytes != 21154/18098/19075 and bytes_only before != 23006/28231", "if the legs aren't comparable, the test fails: unequal fixture_tree per pair, or the same binary_version on both legs", "if the checker goes soft, TestPromptBudgetsRestFlowProblems fails: a sound record reports nothing, and each one-field break reports exactly one problem (after over cap, fetch = 1, before off base, options_after missing, tree mismatch, before file lingering)", "if turns get gated by accident, the same table test fails: after agent_turns = 99 and wall_clock_s = 999 report nothing", "if a bytes-only leg is held to turns, the same test fails: [bytes_only] ship with no agent_turns reports zero problems, while a [spec_after] with agent_turns = 0 reports one", "if the record pins live sizes, the test fails: the check reads only recorded numbers, never assets.FS sizes, so a later ship.md edit cannot break this phase's record", "if the scenario is not carried over, TestFlowCostRecords fails: flow-cost.toml's [scenario] is t-1's block verbatim (same setup_sh, per-leg flow_end and end_re), and the after legs are rebuilt from it", "if the spec leg's scope is not recorded, TestPromptBudgetsRestFlowProblems fails: [spec_after] must carry scope = \"target given, no deferral\""]
+  depends_on = ["t-1", "t-10", "t-11", "t-12", "t-13", "t-14", "t-17"]
+  status = "done"
+
+[[task]]
+  id = "t-18"
+  wave = 3
+  title = "Test quick end on an unreadable record"
+  files = ["internal/cmd/quick_test.go"]
+  description = "Verify survivor internal/cmd/quick.go:111 (CONDITIONALS_NEGATION, in-hunk, NOT COVERED): no test reaches quick end's unreadable-record branch t-5 added. Add a quick_test.go case that writes a corrupt quick record, runs quick end, and asserts it returns the 'quick record unreadable, removed it; nothing was bumped' error, removes the record, and leaves the version unbumped. Test-only; no quick.go change."
+  covers = ["c-1", "c-3"]
+  test_contract = ["if quick end swallows an unreadable record (quick.go:111 rmErr check negated, returning nil), TestQuickEndUnreadableRecord fails"]
+  status = "done"
+  depends_on = ["t-5"]
+
+[[task]]
+  id = "t-19"
+  wave = 5
+  title = "Scaffold a roadmap phase id inline in spec"
+  files = ["assets/prompts/spec.md", "assets/prompts/_spec.create.md", "assets/partials_test.go", "internal/cmd/spec_prompt_test.go", "internal/cmd/flowcost_record_test.go", ".dross/phases/prompt-budgets-rest/flow-cost.toml"]
+  description = "Verify FLAG (c-2): `/dross-spec <id>` for a roadmap phase with no phase dir — the exact Next line verify prints — reads as 'scaffolding needed' and fetches _spec.create.md, so spec's common path is not zero-fetch. In spec.md §0 step 2's <phase-id> bullet, inline the roadmap case: if .dross/phases/<id>/ is missing but <id> is an entry in the active milestone's phases array, run `dross phase create \"<id>\"` (which checks out phase/<id>) and continue; fail only if it is in neither. Narrow the target=new trigger (spec.md line 17 and _spec.create.md's opening line) to --new and the no-target 'new' answer — drop 'scaffolding needed'. spec.md must stay ≤15,000 B (13,250 B today). Add an after-leg for spec on an unscaffolded roadmap target (fixture milestone lists the id, no phase dir) to flow-cost.toml, alongside the existing pre-scaffolded leg, and extend TestPromptBudgetsRestFlowProblems to require it. Post-commit: make install before re-driving the leg."
+  covers = ["c-2", "c-4"]
+  test_contract = ["if the roadmap-id scaffolding step leaves base spec.md, a raw spec.md check (TestCommonPathInline needle) fails", "if target=new still triggers on an unscaffolded roadmap id, the spec_prompt_test Fetched table fails: a given roadmap id with no phase dir fetches nothing", "if the unscaffolded-target spec after-leg is missing from flow-cost.toml or fetched a partial, TestPromptBudgetsRestFlowProblems fails"]
+  status = "done"
+  depends_on = ["t-17"]
+
+[[task]]
+  id = "t-20"
+  wave = 5
+  title = "Route a failed ship --auto to the recovery partial"
+  files = ["assets/prompts/_ship.auto.md", "internal/cmd/ship_prompt_test.go"]
+  description = "Verify FLAG (t-12 review): _ship.auto.md says 'Report the PR URL and stop' and not to drive §5/§6, but ship.md's only `ship_result=failed` fetch (`dross prompt partial ship recovery`) sits at the end of §6 (line 119), so a non-zero `dross ship --auto` never reaches the Recovery text. In _ship.auto.md, after the `dross ship --auto <phase-id>` block, add one line: on a non-zero exit or a dirty tree, fetch `dross prompt partial ship recovery` and follow it, still without merging. Partial-only edit; ship.md base bytes unchanged. Post-commit: make install."
+  covers = ["c-3"]
+  test_contract = ["if the --auto failure path loses its recovery route, TestShipAutoFailureRoutesToRecovery fails: the paragraph after the `dross ship --auto` block in expanded ship.md must name the recovery fetch fact (`ship_result=failed`, read from ship.md fetch points), since partials may not call `dross prompt partial`", "if the line breaks the common path, TestCommonPathFetchesNothing / TestShipCommonPathFetchesNothing fail"]
+  status = "done"
+  depends_on = ["t-12"]
+
+[[task]]
+  id = "t-21"
+  wave = 3
+  title = "Gate quick end behind exec consent"
+  files = ["internal/cmd/quick.go", "internal/cmd/trust.go", "internal/cmd/quick_test.go", "internal/cmd/trust_test.go", "internal/cmd/testdata/cli_surface/doctor_run.txt"]
+  description = "Verify FLAG (t-5 review): finishQuick (quick.go:147) absorbs `state bump` and `changes record` — both in execGatedCommands (trust.go) as step boundaries — but `dross quick end` never calls requireExecConsent, so the quick flow no longer refuses in an untrusted tree. Call requireExecConsent first in quick end's RunE, before any I/O, and add \"quick end\" to execGatedCommands."
+  covers = ["c-3"]
+  test_contract = ["if quick end runs in an untrusted tree, a quick_test case fails: quick end must refuse with the consent error and leave the quick record, version and changes.json untouched", "if quick end gates without joining the roster (or vice versa), TestExecGatedSetIsExplicit fails"]
+  status = "done"
+  depends_on = ["t-5"]
+
+[[task]]
+  id = "t-22"
+  wave = 2
+  title = "Match conservation rows on token boundaries"
+  files = ["assets/conservation_test.go"]
+  description = "Verify FLAG (t-2 review): conservationProblems (assets/conservation_test.go:178) matches manifest rows with strings.Contains, so a short inline-span row like `dross X set` is satisfied by any longer command containing it and a lost instruction can hide. Require each row to match as a whole span: for backtick rows, the row must appear as a complete backticked span (or be bounded by non-word characters); keep plain-prose rows on substring. Fix any manifest rows that only passed by prefix."
+  covers = ["c-3"]
+  test_contract = ["if a row passes only as a prefix of a longer command, TestConservationCatchesALostRow (or a new prefix case) fails: a manifest row `dross x set` against text containing only `dross x set-all` is reported lost", "if the tightened match drops a real row, TestPromptInstructionsConserved fails"]
+  status = "done"
+  depends_on = ["t-2"]
+
+[[task]]
+  id = "t-23"
+  wave = 7
+  title = "Tighten raw reads and loose prompt-test anchors"
+  files = ["internal/cmd/interaction_coreloop_test.go", "internal/cmd/quick_prompt_test.go"]
+  description = "Verify FLAGs (t-7, t-13 reviews): TestCoreLoopPromptsWireEmitter and TestCoreLoopPromptsReferenceContract (interaction_coreloop_test.go:25, :46) still os.ReadFile plan.md/ship.md through a path variable the raw-read guard cannot see, so text moved into a partial goes unchecked — read them through expandedPrompt. TestQuickSoloReview (quick_prompt_test.go:104) anchors `run` on the first \"`dross test`\" in the block, which is lead-in prose — anchor on the run step itself. TestQuickSoloFetchPlacement (:136) skips **Re-fetch** lines when choosing the first fetch after the solo-begin fence — stop skipping them so a stray fetch between the fence and the When line is caught."
+  covers = ["c-3"]
+  test_contract = ["if a core-loop contract line moves into a plan or ship partial and is dropped, TestCoreLoopPromptsReferenceContract fails (reads expanded text)", "if quick's solo review block loses its dross test run step, TestQuickSoloReview fails", "if any fetch line, Re-fetch included, sits between the solo-begin fence and the solo When line, TestQuickSoloFetchPlacement fails"]
+  status = "done"
+  depends_on = ["t-7", "t-13"]
+
+[[task]]
+  id = "t-24"
+  wave = 3
+  title = "Share one quick-issue helper with dross issue quick"
+  files = ["internal/cmd/quick.go", "internal/cmd/issue.go", "internal/cmd/quick_test.go"]
+  description = "Verify FLAG (t-5 review): openQuickIssue (quick.go:281) duplicates the CreateIssue/SetQuick/Save body of `dross issue quick` (issue.go ~:383) — same title, body and labels. Extract one helper both call so quick end and the CLI cannot drift. No behaviour change."
+  covers = ["c-3"]
+  test_contract = ["if quick end and dross issue quick diverge on title, body, labels or the SetQuick mapping, a shared-helper test fails (both paths against one fake board produce identical issues)"]
+  status = "done"
+  depends_on = ["t-5"]

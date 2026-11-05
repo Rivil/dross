@@ -24,6 +24,19 @@ func payload(t *testing.T, tool string, input map[string]any, cwd string) []byte
 	return b
 }
 
+// subagentEdit is an Edit of file made by a subagent whose session is in cwd.
+func subagentEdit(t *testing.T, file, cwd string) []byte {
+	t.Helper()
+	b, err := json.Marshal(map[string]any{
+		"hook_event_name": "PreToolUse", "session_id": "s", "tool_name": "Edit", "cwd": cwd,
+		"agent_type": "dross-task-writer", "agent_id": "a1", "tool_input": map[string]any{"file_path": file},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
 func bash(t *testing.T, cmd, cwd string) []byte {
 	return payload(t, "Bash", map[string]any{"command": cmd}, cwd)
 }
@@ -184,6 +197,8 @@ func TestScope(t *testing.T) {
 		{"bash git -C a root", bash(t, "git -C "+root+" status", outside), true},
 		{"edit inside a root from outside", payload(t, "Edit", map[string]any{"file_path": filepath.Join(root, "a.go")}, outside), true},
 		{"edit outside from a root", payload(t, "Edit", map[string]any{"file_path": filepath.Join(outside, "a.go")}, root), false},
+		{"a subagent's edit outside from a root", subagentEdit(t, filepath.Join(outside, "a.go"), root), true},
+		{"a subagent's edit outside from outside", subagentEdit(t, filepath.Join(outside, "a.go"), outside), false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

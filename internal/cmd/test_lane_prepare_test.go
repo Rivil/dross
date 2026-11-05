@@ -207,16 +207,24 @@ func TestPrepareLinePrecedesTheLaneHeaderAndItsOutput(t *testing.T) {
 	if err := runCmdCapturing(t, &out, Test(), "--files", "internal/a.go"); err != nil {
 		t.Fatal(err)
 	}
-	prepare := strings.Index(out, "lane go prepare: make build")
-	header := strings.Index(out, "lane go: go test -count=1 ./...")
-	sentinel := strings.Index(out, "LANE-OUTPUT-SENTINEL")
+	// The lane's own output lives in the run log; the order is read there,
+	// and dross's prepare and header lines must still reach stdout.
+	for _, line := range []string{"lane go prepare: make build", "lane go: go test -count=1 ./..."} {
+		if !strings.Contains(out, line) {
+			t.Fatalf("stdout lacks %q:\n%s", line, out)
+		}
+	}
+	log := onlyLog(t)
+	prepare := strings.Index(log, "lane go prepare: make build")
+	header := strings.Index(log, "lane go: go test -count=1 ./...")
+	sentinel := strings.Index(log, "LANE-OUTPUT-SENTINEL")
 	for name, idx := range map[string]int{"prepare line": prepare, "lane header": header, "lane output": sentinel} {
 		if idx < 0 {
-			t.Fatalf("the transcript has no %s:\n%s", name, out)
+			t.Fatalf("the run log has no %s:\n%s", name, log)
 		}
 	}
 	if !(prepare < header && header < sentinel) {
-		t.Errorf("transcript out of order (prepare=%d header=%d output=%d):\n%s", prepare, header, sentinel, out)
+		t.Errorf("run log out of order (prepare=%d header=%d output=%d):\n%s", prepare, header, sentinel, log)
 	}
 }
 

@@ -180,9 +180,15 @@ func TestTrackedRecordRefused(t *testing.T) {
 	if err := SaveApproval(dir, Approval{Phase: "p", Task: "t-1", Head: "h", At: at}); err != nil {
 		t.Fatal(err)
 	}
-	git(t, dir, "add", "-f", ".dross/gate/green.json", ".dross/gate/approval.json")
+	if err := SaveWriter(dir, sampleWriter()); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", "-f", ".dross/gate/green.json", ".dross/gate/approval.json", ".dross/gate/writer.json")
 	if g, err := LoadGreen(dir); err == nil || g != nil || !strings.Contains(err.Error(), "tracked") {
 		t.Errorf("tracked green = %+v, %v; want a refusal", g, err)
+	}
+	if w, err := LoadWriter(dir); err == nil || w != nil || !strings.Contains(err.Error(), "tracked") {
+		t.Errorf("tracked writer = %+v, %v; want a refusal", w, err)
 	}
 	if a, err := LoadApproval(dir); err == nil || a != nil || !strings.Contains(err.Error(), "tracked") {
 		t.Errorf("tracked approval = %+v, %v; want a refusal", a, err)
@@ -441,5 +447,55 @@ func TestLoadReplyApprovalRefusesBadFile(t *testing.T) {
 		if a, err := LoadReplyApproval(dir); err == nil || a != nil || !strings.Contains(err.Error(), ".dross/gate/reply.json") {
 			t.Errorf("%s reply.json = %+v, %v; want an error naming .dross/gate/reply.json", name, a, err)
 		}
+	}
+}
+
+func sampleWriter() Writer {
+	return Writer{Phase: "p", Task: "t-3", AgentID: "abd48e82da367fc86", State: WriterLaunched}
+}
+
+// TestWriterRecordDecode: missing is none, damaged is an error naming the
+// file — never a zero record a gate could read as "no writer yet".
+func TestWriterRecordDecode(t *testing.T) {
+	dir := t.TempDir()
+	if w, err := LoadWriter(dir); w != nil || err != nil {
+		t.Errorf("missing writer = %+v, %v; want nil, nil", w, err)
+	}
+	stopped := sampleWriter()
+	stopped.State, stopped.StoppedAt = WriterStopped, &at
+	if err := SaveWriter(dir, stopped); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadWriter(dir)
+	if err != nil || got == nil || got.AgentID != stopped.AgentID || got.State != WriterStopped || got.StoppedAt == nil || !got.StoppedAt.Equal(at) {
+		t.Fatalf("round trip = %+v, %v; want %+v", got, err, stopped)
+	}
+	if err := os.WriteFile(Path(dir, WriterFile), []byte(`{"phase":"p","ta`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if w, err := LoadWriter(dir); err == nil || w != nil || !strings.Contains(err.Error(), ".dross/gate/writer.json") {
+		t.Errorf("a truncated writer = %+v, %v; want an error naming .dross/gate/writer.json", w, err)
+	}
+	for _, body := range []string{`{}`, `{"phase":"p","task":"t-3","agent_id":"a","state":"running"}`, `{"phase":"p","task":"t-3","state":"launched"}`} {
+		if err := os.WriteFile(Path(dir, WriterFile), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if w, err := LoadWriter(dir); err == nil || w != nil {
+			t.Errorf("writer %s = %+v, %v; want an error", body, w, err)
+		}
+	}
+	bad := sampleWriter()
+	bad.AgentID = ""
+	if err := SaveWriter(dir, bad); err == nil {
+		t.Error("a writer with no agent id was saved")
+	}
+	if err := ClearWriter(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := ClearWriter(dir); err != nil {
+		t.Errorf("clearing an absent writer: %v", err)
+	}
+	if w, err := LoadWriter(dir); w != nil || err != nil {
+		t.Errorf("cleared writer = %+v, %v; want nil, nil", w, err)
 	}
 }

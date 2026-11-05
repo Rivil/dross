@@ -35,8 +35,8 @@
 
 [[decisions]]
   key = "stderr_pointer"
-  choice = "The recorded pointer is fixed prose naming the tool and stating that its full output went to this run's stderr. No log file is written and no path is recorded."
-  why = "dross cannot know where its own stderr was redirected — nohup, CI capture, a detached remote run — so a recorded path would often be wrong. Writing a log file would re-persist exactly what the milestone forbids."
+  choice = "The recorded pointer is fixed prose naming the tool and stating where its full output went: this run's stderr (mutation.StderrPointer), or, when the leg's stream was routed to a run log, this run's log in .dross/logs, machine-local and not committed (mutation.LogPointer). No file name and no path is ever recorded."
+  why = "dross cannot know where its own stderr was redirected — nohup, CI capture, a detached remote run — so a recorded path would often be wrong. Writing a log file would re-persist exactly what the milestone forbids. Amended 2026-10-09 by test-output-summaries: mutation legs now write their stream to a gitignored, machine-local run log under .dross/logs/ (never committed, so nothing is re-persisted into tracked artefacts), and the pointer says so without naming the file — pruning to the newest 20 makes a name stale, a timestamp would churn tracked tests.json and verify.toml, and an absolute path would leak a home directory into PR bodies."
   locked = true
 
 [[decisions]]

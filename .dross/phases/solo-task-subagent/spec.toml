@@ -1,0 +1,64 @@
+[phase]
+  id = "solo-task-subagent"
+  title = "solo-task-subagent"
+  milestone = "v1.8"
+
+[[criteria]]
+  id = "c-1"
+  text = "The dross-agent-gate builtin lets one writer subagent per task edit files, under --solo only; the writer still never commits, sets task status or finalizes."
+
+[[criteria]]
+  id = "c-2"
+  text = "A solo run hands each code task above the size gate to a dross-task-writer subagent, spawned from a dross-printed prompt line; the main loop receives only its bounded report (files touched, test outcome, notes), never the files or the diff."
+
+[[criteria]]
+  id = "c-3"
+  text = "Gates stay in the main loop: the full bare `dross test`, the cold reviewer and the commit all run there after the writer returns; the writer's own green certifies nothing."
+
+[[criteria]]
+  id = "c-4"
+  text = "A writer spawn is refused unless the run began with --solo; pair mode is byte-for-byte today's behaviour."
+
+[[criteria]]
+  id = "c-5"
+  text = "A writer that errors, returns red or returns nothing fails the task through today's solo red path (stash, then `failed --reason`); the main loop never takes the task over inline."
+
+[[criteria]]
+  id = "c-6"
+  text = "Kill switch: before/after main-loop peak context, per-task wall-clock and turn count are recorded in the phase dir; the writer ships only if the thresholds hold, else solo reverts to inline."
+
+[[decisions]]
+  key = "agent_gate"
+  choice = "Amend dross-agent-gate for --solo only: one writer subagent per task may edit; it never commits, sets task status or finalizes."
+  why = "Under --solo the context-boundaries checkpoint is informational, so a solo run has no other brake on main-loop context growth."
+  locked = true
+
+[[decisions]]
+  key = "dispatch"
+  choice = "Size-gated: only tasks above a deterministic file-surface threshold get a writer; small tasks stay inline. The planner calibrates the number from baseline data."
+  why = "Measured 2026-10-05: subagent start-up costs more than it saves on small reads; matches the offload_posture decision."
+  locked = true
+
+[[decisions]]
+  key = "baseline"
+  choice = "'Before' is mined from existing v1.7 solo-run transcripts (solo-task-review → review-comment-ingest); 'after' is the next real solo phase, compared per task."
+  why = "No extra runs; per-task normalisation absorbs most of the cross-phase noise."
+  locked = true
+
+[[decisions]]
+  key = "thresholds"
+  choice = "Ship only if main-loop peak context drops ≥25% AND median per-task wall-clock rises ≤25%; turn count is recorded, not gating."
+  why = "Milestone c-6 makes time a constraint; a bounded slowdown is tolerated only against a real context saving."
+  locked = true
+
+[[decisions]]
+  key = "quick_solo"
+  choice = "/dross-quick --solo stays inline; no writer."
+  why = "A single task's context ends with the command, so there is nothing to shed."
+  locked = true
+
+[[decisions]]
+  key = "writer_spawn"
+  choice = "The writer runs in the background and inherits the session model."
+  why = "Background spawns avoid disruptive panels; a weaker model would confound the kill-switch measurement."
+  locked = true

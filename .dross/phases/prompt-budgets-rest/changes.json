@@ -1,0 +1,995 @@
+{
+  "phase": "prompt-budgets-rest",
+  "pr": 206,
+  "base": "milestone/v1.8",
+  "base_commit": "0c11a1da1a85c4b193cd7f8e83ded491a1f93cdb",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        ".dross/phases/prompt-budgets-rest/flow-cost-before.toml"
+      ],
+      "commit": "a2709051",
+      "completed_at": "2026-11-03T19:39:10.97877Z",
+      "landmarks": [
+        {
+          "feature": "flow cost records",
+          "symbol": "flow-cost-before.toml",
+          "loc": ".dross/phases/prompt-budgets-rest/flow-cost-before.toml:1",
+          "what": "base-build before legs for plan/spec/quick plus ship/options bytes, with the rebuildable fixture and tmux driver"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "assets/prompts/plan.md",
+        "assets/prompts/_plan.panel.md",
+        "internal/cmd/plan_prompt_test.go"
+      ],
+      "commit": "bb3fb264",
+      "completed_at": "2026-11-03T20:33:44.999489Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "plan panel partial",
+          "loc": "assets/prompts/plan.md:57",
+          "what": "plan's --panel mode fetched on demand so the plain plan path loads 14,452 B and fetches nothing"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "assets/prompts/spec.md",
+        "assets/prompts/_spec.no-target.md",
+        "assets/prompts/_spec.resume.md",
+        "assets/prompts/_spec.route.md",
+        "internal/cmd/spec_prompt_test.go"
+      ],
+      "commit": "4ee5a7b6",
+      "completed_at": "2026-11-03T20:13:27.692983Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "spec no-target/resume/route partials",
+          "loc": "assets/prompts/spec.md:15",
+          "what": "spec's rare branches fetched on demand so the target-given path loads 14,475 B and fetches nothing"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "assets/prompts/ship.md",
+        "assets/prompts/_ship.auto.md",
+        "assets/prompts/_ship.recovery.md",
+        "assets/prompts/_ship.ci-failure.md",
+        "internal/cmd/ship_prompt_test.go"
+      ],
+      "commit": "1f69a564",
+      "completed_at": "2026-11-03T20:50:39.962346Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "ship auto/recovery/ci-failure partials",
+          "loc": "assets/prompts/ship.md:22",
+          "what": "ship's rare branches fetched on demand so a verified phase reaches PR open at 14,495 B with no fetch"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "assets/prompts/quick.md",
+        "assets/prompts/_quick.solo.md",
+        "internal/cmd/quick_prompt_test.go"
+      ],
+      "commit": "4853edcd",
+      "completed_at": "2026-11-03T21:01:09.581051Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "quick solo partial",
+          "loc": "assets/prompts/quick.md:40",
+          "what": "quick's solo-only text fetched once after a solo begin so a pair quick loads 14,820 B and fetches nothing"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "assets/prompts/options.md",
+        "assets/prompts/_options.lanes.md",
+        "assets/prompts/_options.remote.md",
+        "internal/cmd/options_docs_test.go"
+      ],
+      "commit": "8a0be20f",
+      "completed_at": "2026-11-03T21:14:53.242939Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "options lanes/remote partials",
+          "loc": "assets/prompts/options.md:156",
+          "what": "options' lane and remote-grant lore fetched on demand so an options walk loads 14,494 B and fetches nothing"
+        }
+      ]
+    },
+    "t-15": {
+      "files": [
+        "assets/budget_test.go"
+      ],
+      "commit": "5a8363f1",
+      "completed_at": "2026-11-03T21:18:56.121892Z",
+      "landmarks": [
+        {
+          "feature": "prompt byte budget",
+          "symbol": "budgetProblems",
+          "loc": "assets/budget_test.go:23",
+          "what": "one 15,000-byte cap enforced on every base prompt by glob, partials exempt, no overrides"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        ".dross/phases/prompt-budgets-rest/flow-cost.toml",
+        ".dross/phases/prompt-budgets-rest/flow-cost-before.toml",
+        "internal/cmd/flowcost_record_test.go"
+      ],
+      "commit": "d62dd6dd",
+      "completed_at": "2026-11-04T07:58:08.044312Z",
+      "landmarks": [
+        {
+          "feature": "flow-cost records",
+          "symbol": "promptBudgetsRestFlowProblems",
+          "loc": "internal/cmd/flowcost_record_test.go:577",
+          "what": "gates plan/quick/spec after legs under 15 KB, smaller than before, zero fetches, same tree, no added dross call"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "assets/partials.go",
+        "assets/partials_test.go",
+        "assets/prompts/spec.md",
+        "assets/prompts/_spec.create.md",
+        "internal/cmd/spec_prompt_test.go"
+      ],
+      "commit": "b33c7c2a",
+      "completed_at": "2026-11-04T07:24:16.932443Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "TriggerVocabulary",
+          "loc": "assets/prompts/spec.md:17",
+          "what": "spec's create flow moves to _spec.create.md behind target=new so the target-given path never sees it"
+        }
+      ]
+    },
+    "t-18": {
+      "files": [
+        "internal/cmd/quick_test.go"
+      ],
+      "commit": "3dc2fc17",
+      "completed_at": "2026-11-04T12:07:20.633133Z",
+      "landmarks": [
+        {
+          "feature": "quick lifecycle",
+          "symbol": "TestQuickEndUnreadableRecord",
+          "loc": "internal/cmd/quick_test.go:110",
+          "what": "pins quick end's unreadable-record branch: errors, clears the record, bumps nothing"
+        }
+      ]
+    },
+    "t-19": {
+      "files": [
+        "assets/prompts/spec.md",
+        "assets/prompts/_spec.create.md",
+        "assets/partials_test.go",
+        "internal/cmd/spec_prompt_test.go",
+        "internal/cmd/flowcost_record_test.go",
+        ".dross/phases/prompt-budgets-rest/flow-cost.toml"
+      ],
+      "commit": "4f0f17a2",
+      "completed_at": "2026-11-04T20:30:39.418789Z",
+      "landmarks": [
+        {
+          "feature": "spec target resolution",
+          "symbol": "spec.md §0 step 2",
+          "loc": "assets/prompts/spec.md:12",
+          "what": "a roadmap id with no phase dir is scaffolded inline via dross phase create instead of fetching the create partial; spec_roadmap_after flow-cost leg proves zero fetches"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "assets/conservation_test.go",
+        "assets/testdata/prompt_instructions.txt"
+      ],
+      "commit": "bb83f668",
+      "completed_at": "2026-11-03T14:48:42.392797Z",
+      "landmarks": [
+        {
+          "feature": "prompt instruction conservation",
+          "symbol": "recordManifest",
+          "loc": "assets/conservation_test.go:88",
+          "what": "manifest covers options/ship/plan/spec/quick incl. inline dross spans; recording is append-only"
+        }
+      ]
+    },
+    "t-20": {
+      "files": [
+        "assets/prompts/_ship.auto.md",
+        "internal/cmd/ship_prompt_test.go"
+      ],
+      "commit": "6417300a",
+      "completed_at": "2026-11-04T17:07:46.966988Z",
+      "landmarks": [
+        {
+          "feature": "ship non-interactive fast-path",
+          "symbol": "ship auto partial",
+          "loc": "assets/prompts/_ship.auto.md:16",
+          "what": "a failed or dirty ship --auto routes to the ship_result=failed recovery fetch, still without merging"
+        }
+      ]
+    },
+    "t-21": {
+      "files": [
+        "internal/cmd/quick.go",
+        "internal/cmd/trust.go",
+        "internal/cmd/quick_test.go",
+        "internal/cmd/trust_test.go",
+        "internal/cmd/testdata/cli_surface/doctor_run.txt"
+      ],
+      "commit": "87deb487",
+      "completed_at": "2026-11-04T18:50:54.595108Z",
+      "landmarks": [
+        {
+          "feature": "exec consent gate",
+          "symbol": "quickEnd",
+          "loc": "internal/cmd/quick.go:99",
+          "what": "quick end refuses in an untrusted tree before any I/O and joins execGatedCommands since it absorbs state bump + changes record"
+        }
+      ]
+    },
+    "t-22": {
+      "files": [
+        "assets/conservation_test.go"
+      ],
+      "commit": "99e3611f",
+      "completed_at": "2026-11-04T16:25:06.641512Z",
+      "landmarks": [
+        {
+          "feature": "prompt instruction conservation",
+          "symbol": "rowPresent",
+          "loc": "assets/conservation_test.go:199",
+          "what": "command rows must stand as a whole line or backticked span; lead-ins stay on substring"
+        }
+      ]
+    },
+    "t-23": {
+      "files": [
+        "internal/cmd/interaction_coreloop_test.go",
+        "internal/cmd/quick_prompt_test.go"
+      ],
+      "commit": "c413b091",
+      "completed_at": "2026-11-04T17:14:12.038326Z",
+      "landmarks": [
+        {
+          "feature": "prompt instruction conservation",
+          "symbol": "TestQuickSoloFetchPlacement",
+          "loc": "internal/cmd/quick_prompt_test.go:144",
+          "what": "prompt tests read expanded text, anchor on run steps and count Re-fetch lines as stray fetches"
+        }
+      ]
+    },
+    "t-24": {
+      "files": [
+        "internal/cmd/quick.go",
+        "internal/cmd/issue.go",
+        "internal/cmd/quick_test.go"
+      ],
+      "commit": "6e88787b",
+      "completed_at": "2026-11-04T16:43:32.983492Z",
+      "landmarks": [
+        {
+          "feature": "quick task board issues",
+          "symbol": "openQuickIssue",
+          "loc": "internal/cmd/issue.go:390",
+          "what": "one helper opens and links a quick's board issue for both quick end and dross issue quick"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "assets/partials.go",
+        "assets/partials_test.go"
+      ],
+      "commit": "5ad93f91",
+      "completed_at": "2026-11-03T15:03:26.460806Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "TriggerVocabulary",
+          "loc": "assets/partials.go:55",
+          "what": "nine branch keys for plan/ship/spec/options (common value first); common-path landmarks, moved-not-copied and whole-section checks pinned"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/prompt_expand_test.go",
+        "internal/cmd/lane_install_docs_test.go",
+        "internal/cmd/lane_toolchain_docs_test.go",
+        "internal/cmd/milestone_narration_test.go",
+        "internal/cmd/status_test.go",
+        "cmd/dross/main_test.go"
+      ],
+      "commit": "7437854d",
+      "completed_at": "2026-11-03T15:27:27.049021Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "argsSpellPromptFile",
+          "loc": "internal/cmd/prompt_expand_test.go:177",
+          "what": "raw-read guard sees variadic read helpers and walks cmd/; split prompts derive from the partial registry"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/quick.go",
+        "internal/cmd/quick_test.go",
+        "assets/prompts/quick.md",
+        "internal/cmd/protected_prompts_test.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "31d75759",
+      "completed_at": "2026-11-03T20:01:30.270568Z",
+      "landmarks": [
+        {
+          "feature": "quick task lifecycle",
+          "symbol": "finishQuick",
+          "loc": "internal/cmd/quick.go:147",
+          "what": "quick end bumps internal, records changes, touches state and opens the board issue once HEAD moved past begin"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/spec_prompt_test.go",
+        "internal/cmd/interaction_pilot_test.go",
+        "internal/cmd/phase_test.go",
+        "internal/rules/rules_test.go",
+        "internal/cmd/prompt_expand_test.go"
+      ],
+      "commit": "641f24df",
+      "completed_at": "2026-11-03T15:39:01.192053Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "specPromptContent",
+          "loc": "internal/cmd/spec_prompt_test.go:12",
+          "what": "spec prompt readers read the expanded spec.md; raw-read allowlist pin 35 -\u003e 31"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/plan_prompt_test.go",
+        "internal/cmd/plan_review_tiers_test.go",
+        "internal/cmd/interaction_coreloop_test.go",
+        "internal/cmd/ship_prompt_test.go",
+        "internal/cmd/prompt_expand_test.go"
+      ],
+      "commit": "9fe8878e",
+      "completed_at": "2026-11-03T16:00:02.132742Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "rawShipSection",
+          "loc": "internal/cmd/ship_prompt_test.go:455",
+          "what": "plan and ship prompt readers read the expanded prompt; raw-read allowlist pin 31 -\u003e 26"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/quick_prompt_test.go",
+        "internal/cmd/squash_claim_guard_test.go",
+        "internal/boardsync/board_lifecycle_divergence_test.go",
+        "internal/cmd/prompt_expand_test.go"
+      ],
+      "commit": "5b4c6021",
+      "completed_at": "2026-11-03T16:18:20.215009Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "promptEmittedStatuses",
+          "loc": "internal/boardsync/board_lifecycle_divergence_test.go:108",
+          "what": "quick and boardsync prompt readers read the expanded prompt; raw-read allowlist pin 26 -\u003e 23"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/options_docs_test.go",
+        "internal/cmd/readme_doc_test.go",
+        "internal/cmd/interaction_setupcmds_test.go",
+        "internal/cmd/interaction_snippet_test.go",
+        "internal/cmd/prompt_expand_test.go"
+      ],
+      "commit": "aa9a477f",
+      "completed_at": "2026-11-03T16:58:29.191005Z",
+      "landmarks": [
+        {
+          "feature": "prompt partials",
+          "symbol": "setupPromptBody",
+          "loc": "internal/cmd/interaction_setupcmds_test.go:59",
+          "what": "options and setup-prompt readers read the expanded prompt; raw-read allowlist pin 23 -\u003e 20"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "spec",
+          "severity": "BLOCKING",
+          "criterion": "c-3",
+          "text": "test_contract line 4 (plan_prompt panel tests on the expanded prompt fail when _plan.panel.md drops panel/synthesis.md or one of risk/mvp/verification) has no test: no test in the diff or the repo checks for synthesis.md or the lens names, and the conservation manifest records no row from the panel fences, so losing the lens-planner brief goes undetected",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The partial still opens with 'Replaces §2 when the flag is set', but it is now fetched after the agent has read §2. The wording still works, but 'instead of authoring §2 yourself' would match the new load order better.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The description's target of plain-path plan.md at or under 14,500 raw bytes is not checked by any test in this task. The enumerating budget test belongs to a sibling task under c-1, so the reported byte count is the only evidence.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "The description's \u003c=14,500 B raw target for plan.md is not pinned by any test in this task (the budget test still covers only execute/verify). A rough per-line estimate puts the file near the figure, so check the reported measured bytes rather than trusting the target.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPlanPanelFetchPoint reads raw plan.md from assets.FS but runs Fetched/Expand on promptFS. This is consistent today because promptFS defaults to assets.FS and seeded overrides restore it via t.Cleanup, but the two sources could diverge if the test were ever run with a seeded promptFS.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Expand inlines the partial straight after the fetch line, so the expanded prompt has '## 2P.' with no blank line before it. This is cosmetic only; the heading-order check still matches on '\\n## 2P. '.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-11": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "The test_contract asks for a raw check that §4 contains 'already has a target'. The only raw check is TestCommonPathInline in assets/partials_test.go, and it searches the whole of spec.md, not §4. Moving the rule into the resume partial is caught, but moving it to another base section is not. A §4-scoped check, or a statement that the whole-file needle is enough, would match the contract.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "Nothing in this diff checks the task's ≤14,500 B raw target for assets/prompts/spec.md, and budget_test.go's fixed map only lists execute.md and verify.md. A rough count puts spec.md close to 14.5 KB, so the measured byte count the task asks to report is the only evidence of the target; check it before committing.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "_spec.resume.md changes behaviour as well as moving it: the old step 4 said 'Show the existing content'. The partial now shows a one-line summary ('not the TOML') and defines extend/replace. This is consistent with the interaction-contract rule, but it is new instruction text, not a verbatim move.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The three fetch lines sit at column 0 inside §0's numbered list and §4a. This follows the existing execute.md/verify.md pattern and Expand inlines correctly, but the indented 'Create flow' block now reads as detached from list item 2 in rendered markdown.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The scope note ('target given, no deferral' is spec's zero-fetch path; bare /dross-spec and 'defer it' each fetch one partial by design) is in the new test's comment. It still has to go into t-11's commit message, which this diff cannot show.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "The description's '≤14,500 B raw' target for base spec.md is not checked by anything in this diff. assets/budget_test.go still pins only execute.md and verify.md, and the reviewer could not measure the file. The size depends on the author's reported measurement until the sibling task's enumerating budget test lands.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Both §0 fetch lines sit at column 0 inside the numbered pre-flight list. The `target=empty` line comes between step 2's 'empty →' bullet and the indented Create flow, which breaks the list structure. The fetch-line regex trims whitespace, so indenting them would also have parsed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The resume partial changes behaviour as well as moving it. It now shows a one-line summary instead of 'Show the existing content', and it adds new extend and replace semantics (continue c-N numbering; overwrite only after agreement). This matches the interaction contract but goes beyond a pure move.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In the new table test, the {\"\", \"\", \"\"} common-path row repeats what TestCommonPathFetchesNothing already covers, and on failure it prints the label 'spec with = fetches'. Harmless.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-12": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "The --auto partial says not to drive §5 or §6, but the Recovery fetch now sits at the end of §6. An --auto run whose `dross ship --auto` exits non-zero can only reach the cookbook through the ship_result=failed trigger, not by reading on. Before the move, Recovery was a standalone trailing section any path could read.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Compression dropped some explanation that no test pins: 'There is no Go backfill engine' in §3.5, the disposition-record detail and the routed-after-ship rationale in §6.4, and the Forgejo/GitLab one-teardown-owner reasoning in §6.1. The instructions themselves survive.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestShipCommonPathFetchesNothing reads promptFS while rawShipBase reads assets.FS directly. Both are the embedded tree today, but the new raw-base tests ignore a seeded promptFS.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "No test in this diff pins ship.md's byte budget. assets/budget_test.go still lists only execute.md and verify.md, so the cap on ship.md depends on the sibling task's test that checks every prompt. My estimate from line-length counts is about 14.4-14.5 KB.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-13": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "TestQuickSoloReview anchors `run` on the first \"`dross test`\" in the block, which is the lead-in prose (\"after the green `dross test`\"), not a run step; it never checks the blocked arm's own re-run `dross test` \u003c `dross review context` \u003c `dross review status` order the test_contract wording describes",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestQuickSoloFetchPlacement skips re-fetch references when choosing the first fetch point after the solo begin fence, so a `**Re-fetch**` line placed between the fence and the When line would go unnoticed, though the contract asks for the first fetch point",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestQuickMarkerClosed's \"§4 red paths\" window now runs to `## 5.` and so checks only the pair abort's `dross quick end`; the solo red path's discard-then-end is still covered by TestQuickDiscardBeforeEnd over the expanded prompt",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The base hard rule 'No retries on red tests' still names solo mode's abort behaviour; it covers both modes, so leaving it in the base is reasonable",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-14": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "No test in this diff pins options.md's raw byte count, and the budget test in assets/budget_test.go only lists execute.md and verify.md. By hand I estimate the new options.md at about 14.3-14.8 KB: under the 15,000 cap, but maybe over the task's 14,500 target. The measured size the task asks the author to report is the real check.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "The comment on TestOptionsNamesEveryLocalKeyInline says the three hand-listed keys are 'the ones it refuses', but dross local set also refuses trusted_lane_commands and trusted_lane_installs. Those two are named only in _options.lanes.md and are not checked in the bare §14. That matches the test_contract's list of keys, but the comment overstates what the test covers.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-15": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPromptByteBudgetEnumerates checks only the count of problems, not which files are named. Each visited file yields at most one problem, so a count equal to the number of files still proves every file was reported.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The real tree has exactly 24 base prompts, so the floor of 24 in TestPromptByteBudget has no slack: removing or merging any base prompt will trip it, which is intended as a guard but will need updating on purpose.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Per-file subtests pick their problems by prefix match on the file path. This is correct here, but a problem not tied to a file (a glob error) only shows up through the visited-count fatal, not a subtest.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "conservationProblems matches rows by substring (strings.Contains), so many of the new inline-span rows are short prefixes of longer commands (e.g. options.md `dross X set`, `dross test`, `dross verify`, `dross local set`, `dross env set`; ship.md `dross ship`, `dross phase complete`; quick.md `dross ship`, `dross trust`). They count as present while any longer command in the prompt still contains them, so losing that specific prose step would go unnoticed; such rows add bulk toward minRows without protecting anything",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestManifestRecordIsAppendOnly drives recordManifest on a synthetic execute.md prefix (three absorbed rows plus a row no prompt carries) and checks it comes back byte-identical as the output's prefix and that re-recording returns the same manifest unchanged; it does not depend on the real manifest file",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-20": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "test_contract and description say the line names `dross prompt partial ship recovery`, but the partial names the `ship_result=failed` fact and points at §6's fetch instead. This is forced by CheckPartials' no-nesting rule (assets/partials.go:243-249), and the new test still fails if the recovery route is lost. The task record's wording should be corrected so the next reader doesn't see a mismatch.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestShipAutoFailureRoutesToRecovery takes the key=value from ship.md's FetchPoints instead of hard-coding it, so renaming the recovery fact breaks this test too and the two cannot drift apart silently.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The common-path check in the second test_contract line is covered by the existing TestShipCommonPathFetchesNothing, which this diff leaves unchanged. The new line has no fetch call, so it cannot add a fetch on the common path.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-22": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "promptUnits pairs backticks with the generic spanRe, while extractInstructions finds rows with inlineSpanRe (anchored on `dross `). The two can pair backticks differently: in a double-backtick span like `` `dross a` `` or after a stray backtick on the line, inlineSpanRe yields `dross a` but spanRe never makes it a unit. A recorded row could then be reported lost even though the text is unchanged. No manifest prompt has that construct today, so it fails safe (a false 'lost', not a hidden loss).",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "No manifest rows changed, which suggests no row was passing only as a prefix; that depends on TestPromptInstructionsConserved passing on the current tree.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The positive case (indented fenced line, whole inline span, lead-in substring) guards against the stricter match turning into a reject-everything check.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "promptUnits also runs inlineSpanRe so that a double-backtick span like `` `dross z put` `` is still a unit when spanRe pairs the backticks wrongly; the new whole-span test covers this case.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "No manifest rows were changed. In a sample of the shorter rows, each still appears as a whole span or line, so it looks like none were passing only as a prefix. The full check is TestPromptInstructionsConserved, which was not run in this review.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-23": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "TestQuickSoloReview's `run` anchor (\"after the green `dross test`, before the commit\") is still the lead-in prose sentence on line 9 of _quick.solo.md, not a run step; the description asked to anchor on the run step itself. The run-step contract is carried by the new blocked/pass-stale arm loop instead.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "No seeded-FS test (like TestShipDecisionTurnsSeeTheMergeGatePartial) proves TestCoreLoopPromptsReferenceContract still passes when the contract phrase lives only in a plan/ship partial. Switching to expandedPrompt does make that true, but nothing pins it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestQuickSoloFetchPlacement now takes the first fetch point of any kind after the fence and rejects it if it is a Re-fetch, so a stray Re-fetch between the fence and the When line fails the test.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-24": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "Both paths already call one helper, so the new test guards only against future drift. It would fail if either path stopped using openQuickIssue or changed the title, body or labels, which is what the test_contract asks for.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The test compares every board write, not just the issue-creation calls. If quick end ever adds an unrelated board write, the test will fail even though the issue itself did not drift.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPartialSectionsStayWhole passes on the real assets only trivially today: none of the 10 existing partials has a markdown heading, so only the synthetic MapFS cases exercise splitSections until the plan/spec/quick/ship/options partials land",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "itoa is borrowed from conservation_test.go in the same package; fine, but partials_test.go now depends on that file staying in the package",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "cmd/dross/main_test.go also migrates debug.md and respond.md readers, which the task description's enumerated list omitted (it named only ship.md); the cmd/ walk would have caught them, so migrating them was needed to keep the allowlist pinned at 35",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "argsSpellPromptFile only sees separate literal parts; a helper passed a single \"assets/prompts/x.md\" literal, or a Join expression (e.g. interaction_coverage_test.go mustRead(t, filepath.Join(...\"_interaction.md\"))), is still not detected. That gap is outside what this task claims",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPromptLoadersCompose now checks promptDocText as well, so the new loader is pinned to the expanded prompt",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "finishQuick bumps the version and writes changes.json without calling requireExecConsent, but `state bump` and `changes record` (the two §6 commands it absorbs) are both in execGatedCommands. The quick flow's earlier gated `dross test` makes this mostly harmless, but the CLI now has a path that does those writes ungated.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "openQuickIssue in quick.go duplicates the CreateIssue/SetQuick/Save body of `dross issue quick` in issue.go (same title, body and labels). Sharing one helper would stop the end path and the printed retry command from drifting apart.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "quickVersion strips leading zeros (01.2.3.09 -\u003e 1.2.3.10) where bumpInternal keeps them (01.2.3.10). For a zero-padded version, the version end prints would not match a quick/\u003cpreview-version\u003e branch named from state.version.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A quick whose commit touched only .dross/ is recorded with an empty file list. The `changes record` CLI would have refused that unless the plan had a fileless task.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The prompt_commit_gate_test.go comment still says 'quick §6' for the .dross-only bookkeeping commit, which now sits in §5. That file is outside this task's list.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPhaseListPromptConsumersAreCurrent also switches its milestone.md read to expandedPrompt; this is needed, since the allowlist key covers the whole function and any raw read left in it would trip the guard once the entry is removed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "rules_test's TestSpecPromptDefersToSnippet expands from the real assets.FS rather than a seedable FS, so no partial-only seed test covers it; the test_contract only asks for that check on specPromptContent, so this is acceptable.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "TestCoreLoopPromptsWireEmitter and TestCoreLoopPromptsReferenceContract (interaction_coreloop_test.go:28-29, :49-50) still read plan.md and ship.md raw via os.ReadFile(path), where path is a variable, so isRawPromptRead never sees them and they sit outside the allowlist. Both check base-only content, so this is harmless today, but they read neither through Expand nor through the sanctioned assets.FS, which is a blind spot in the guard t-7 relies on.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPlanPromptNoArtifactDump moved to expandedPrompt but has no seeded-split proof of its own; the test_contract does not ask for one, and TestPromptLoadersSeePartials now covers planPromptContent.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Refactoring the checks into problem-returning helpers (reviewTierProblems, shipDecisionTurnProblems) lets the seeded tests assert the exact problem set, which makes the base-only and off-disk regressions distinguishable rather than vacuous.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestCloseEmissionsCarryAValidStatus and TestTaskSyncEdgeRegexIsNotVacuous in internal/boardsync/board_lifecycle_divergence_test.go still read prompts off disk via a ReadDir/Glob-derived path, which the raw-read guard cannot see. They scan partial files directly, so no partial text is lost today, but they sit outside the guard.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "boardsync now has its own promptFS/seedPromptFS, copied from internal/cmd/prompt_test.go; the two must be kept in step by hand.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "TestContextRuleAddsNoCalls exempts only rel == \"assets/prompts/options.md\" from the `dross hooks nudge` check; commandPrompts globs partials too, so if t-14 moves §15's hook text into _options.\u003cname\u003e.md the check will fail on the partial rather than exempt it. The new comment says partials are still read here but does not cover this exemption.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSetupPromptsWireEmitter (interaction_setupcmds_test.go) still reads each setup prompt raw via a `path` variable, which isRawPromptRead cannot see (no literals at the call site). This is defensible as a base-prompt pre-flight check, but it is invisible to the guard rather than allowlisted. It predates this diff.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestFooterPlaybookReadStaysRaw only asserts a map key in rawPromptReadAllowlist; TestPromptReadsGoThroughExpansion's matches-no-raw-read check is what actually ties it to the footer test's raw read.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
+}

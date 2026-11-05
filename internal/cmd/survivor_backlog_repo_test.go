@@ -1,15 +1,20 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/boardsync"
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/phase"
 )
 
 // This file audits THIS repo's own routed deferred backlog. survivor-drain
@@ -329,7 +334,85 @@ func TestSurvivorDrainBacklogClosed(t *testing.T) {
 		t.Fatalf("%s is in no milestone's phases array — the forward-routing half of this audit cannot be evaluated", selfPhase)
 	}
 
-	for _, p := range auditSurvivorBacklog(entries, rank, active, selfPhase) {
+	open := deferred.Filter(entries, func(e deferredEntry) bool { return !routeClosed(root, e) })
+	for _, p := range auditSurvivorBacklog(open, rank, active, selfPhase) {
 		t.Errorf("%s", p)
+	}
+}
+
+// routeClosed reports whether a routed entry was closed by evidence rather than
+// by dismissal, so it is no longer standing backlog: boardsync.Disposed's
+// record (a survivors.toml acceptance, or a later finalized verify of its
+// destination that no longer lists it), or a criterion of its completed
+// destination that absorbed it (locked absorption_record). The second is the
+// only record a whole-package `dross survivor drain` leaves — a diff-scoped
+// verify never measures the files such a drain covered.
+func routeClosed(root string, e deferredEntry) bool {
+	if ok, _ := boardsync.Disposed(root, e); ok {
+		return true
+	}
+	if e.ID == "" || e.Target == "" || !changes.Complete(root, e.Target) {
+		return false
+	}
+	spec, err := phase.LoadSpec(filepath.Join(phase.Dir(root, e.Target), "spec.toml"))
+	if err != nil {
+		return false
+	}
+	for _, c := range spec.Criteria {
+		if slices.Contains(c.Deferred, e.ID) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestRouteClosedNeedsAbsorptionInACompleteDestination pins the absorbed arm of
+// routeClosed: absorption closes a route only when the destination is complete
+// and one of its criteria lists the entry's own id. Each looser reading would
+// let the repo audit above pass over a survivor nobody drained.
+func TestRouteClosedNeedsAbsorptionInACompleteDestination(t *testing.T) {
+	root := filepath.Join(t.TempDir(), RootDirName)
+	const keyed = "survivor internal/boardsync/reap.go:472 (CONDITIONALS_NEGATION)"
+	writeDest := func(id, status string, absorbed ...string) {
+		t.Helper()
+		dir := filepath.Join(root, "phases", id)
+		quoted := make([]string, len(absorbed))
+		for i, a := range absorbed {
+			quoted[i] = strconv.Quote(a)
+		}
+		mustWrite(t, filepath.Join(dir, "spec.toml"), "[phase]\n  id = "+strconv.Quote(id)+"\n\n"+
+			"[[criteria]]\n  id = \"c-1\"\n  text = \"drained\"\n  deferred = ["+strings.Join(quoted, ", ")+"]\n")
+		if status != "" {
+			mustWrite(t, filepath.Join(dir, changes.File), `{"phase": `+strconv.Quote(id)+`, "status": `+strconv.Quote(status)+"}\n")
+		}
+	}
+	writeDest("drained", changes.StatusComplete, "d-keep")
+	writeDest("in-flight", "", "d-keep")
+	if err := os.MkdirAll(filepath.Join(root, "phases", "no-spec"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(root, "phases", "no-spec", changes.File), `{"phase": "no-spec", "status": "complete"}`+"\n")
+
+	for _, tc := range []struct {
+		name  string
+		entry deferredEntry
+		want  bool
+	}{
+		{"absorbed by a criterion of a complete destination", deferredEntry{ID: "d-keep", Target: "drained", Text: keyed}, true},
+		{"another id in the same criterion", deferredEntry{ID: "d-other", Target: "drained", Text: keyed}, false},
+		{"absorbed, but the destination is not complete", deferredEntry{ID: "d-keep", Target: "in-flight", Text: keyed}, false},
+		{"no id to match", deferredEntry{Target: "drained", Text: keyed}, false},
+		{"unrouted", deferredEntry{ID: "d-keep", Text: keyed}, false},
+		{"complete destination with no readable spec", deferredEntry{ID: "d-keep", Target: "no-spec", Text: keyed}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// A keyed entry, as every real survivor route is: boardsync.Disposed
+			// then takes its survivor arm, which finds no acceptance and no
+			// verify here, so the verdict is routeClosed's own absorbed arm.
+			tc.entry.Survivor = "0123456789abcdef"
+			if got := routeClosed(root, tc.entry); got != tc.want {
+				t.Errorf("routeClosed = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

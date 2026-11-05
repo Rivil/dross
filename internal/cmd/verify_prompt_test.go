@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/assets"
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/verify"
 )
@@ -18,11 +19,7 @@ import (
 // (judgement/cross-check/verdict stay in the main loop; fan-out agents
 // never fill in verify.toml).
 func TestVerifyPromptOffloadGuidance(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "verify.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	prompt := string(b)
+	prompt := expandedPrompt(t, "verify.md")
 
 	for _, phrase := range []string{
 		// the guidance itself
@@ -41,14 +38,10 @@ func TestVerifyPromptOffloadGuidance(t *testing.T) {
 	}
 }
 
-// verifyPromptBody reads assets/prompts/verify.md.
+// verifyPromptBody reads verify.md as the agent loads it, partials inlined.
 func verifyPromptBody(t *testing.T) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "verify.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
+	return expandedPrompt(t, "verify.md")
 }
 
 // TestVerifyPromptNamesEveryMutationStatus is the ONLY gate keeping the prompt
@@ -380,11 +373,7 @@ func TestReadmeVerifyRowDescribesLifecycle(t *testing.T) {
 // record says which lines were instrumented and where it fell back, and the
 // command that reads it.
 func TestVerifyPromptReadsRangeProvenance(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "verify.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	prompt := string(b)
+	prompt := expandedPrompt(t, "verify.md")
 	for _, phrase := range []string{
 		"`whole_file`",
 		"`ranges`",
@@ -394,6 +383,85 @@ func TestVerifyPromptReadsRangeProvenance(t *testing.T) {
 		if !strings.Contains(prompt, phrase) {
 			t.Errorf("verify.md lost its range-provenance phrase %q", phrase)
 		}
+	}
+}
+
+// TestVerifyPromptNoDoubleBookkeeping: `dross verify finalize` sets
+// current_phase_status=verified and appends the verified history entry, so §5
+// must not have the agent write either again by hand.
+func TestVerifyPromptNoDoubleBookkeeping(t *testing.T) {
+	wrap := sectionOf(verifyPromptBody(t), "## 5. Wrap", "## ")
+	if !strings.Contains(wrap, "dross verify finalize <phase-id>") {
+		t.Fatal("verify.md §5 lost `dross verify finalize`")
+	}
+	for _, gone := range []string{"dross state set current_phase_status verified", "dross state touch \"verified"} {
+		if strings.Contains(wrap, gone) {
+			t.Errorf("verify.md §5 still instructs %q, which finalize already does", gone)
+		}
+	}
+}
+
+// TestVerifyDetachedKeepsTheNoVerdictExits: the detached partial is where an
+// agent learns that a run that did not report is not a red suite, so the
+// expanded prompt must keep each of `verify results`' exit codes 10–14 with its
+// meaning, and the sentence that says none of them is a verdict.
+func TestVerifyDetachedKeepsTheNoVerdictExits(t *testing.T) {
+	prompt := strings.Join(strings.Fields(expandedPrompt(t, "verify.md")), " ")
+	for _, want := range []string{
+		"**A non-finished result is not a verdict about the code.**",
+		"`10` scheduled",
+		"`11` running",
+		"`12` the run produced nothing measurable",
+		"`13` the host was unreachable",
+		"`14` the run is gone",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("expanded verify.md lost the detached exit text %q", want)
+		}
+	}
+	base, err := assets.FS.ReadFile("prompts/verify.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(base), "`14` the run is gone") {
+		t.Error("the detached exits are back in base verify.md; they belong to the detached partial")
+	}
+}
+
+// TestVerifyScopeTriggerIsTheDegradedLine: the scope partial is fetched on
+// the line `dross verify` prints for a degraded scope, so the fetch prose must
+// quote that line's literal prefix — and printScopeSummary must still print it.
+func TestVerifyScopeTriggerIsTheDegradedLine(t *testing.T) {
+	const literal = "scope degraded:"
+	points, err := assets.FetchPoints(assets.FS, "verify.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := assets.FS.ReadFile("prompts/verify.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(raw), "\n")
+	found := false
+	for _, p := range points {
+		if p.Partial != "scope" || p.Refetch {
+			continue
+		}
+		found = true
+		if p.Key != "scope" || p.Value != "degraded" {
+			t.Errorf("verify.md:%d fetches scope on %s=%s, want scope=degraded", p.Line, p.Key, p.Value)
+		}
+		if !strings.Contains(lines[p.Line-1], "`"+literal+"`") {
+			t.Errorf("verify.md:%d does not name the literal `%s` line:\n%s", p.Line, literal, lines[p.Line-1])
+		}
+	}
+	if !found {
+		t.Fatal("verify.md has no When line fetching the scope partial")
+	}
+	tests, v := scopeSummaryFixture(1)
+	tests.Scope.Degraded = []string{"internal/f00.go: ast-unavailable"}
+	if out := captureStdout(t, func() { printScopeSummary(tests, v) }); !strings.Contains(out, "  "+literal+" ") {
+		t.Errorf("printScopeSummary no longer prints %q for a degraded scope:\n%s", literal, out)
 	}
 }
 

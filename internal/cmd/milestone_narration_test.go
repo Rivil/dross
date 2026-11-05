@@ -16,15 +16,27 @@ func docText(t *testing.T, parts ...string) string {
 	if err != nil {
 		t.Fatalf("read %s: %v", filepath.Join(parts...), err)
 	}
-	s := strings.ToLower(string(b))
-	s = strings.NewReplacer("`", "", "*", "", "_", "", "\n", " ").Replace(s)
+	return normaliseDoc(string(b))
+}
+
+// promptDocText is docText for a prompt: the expanded prompt, partials
+// inlined, normalised the same way.
+func promptDocText(t *testing.T, name string) string {
+	t.Helper()
+	return normaliseDoc(expandedPrompt(t, name))
+}
+
+// normaliseDoc lowercases s, strips backticks and emphasis, and collapses
+// whitespace, so a claim matches however it is formatted or wrapped.
+func normaliseDoc(s string) string {
+	s = strings.NewReplacer("`", "", "*", "", "_", "", "\n", " ").Replace(strings.ToLower(s))
 	return strings.Join(strings.Fields(s), " ")
 }
 
 // The cut point is conditional now, so the unconditional claim must be gone —
 // deleting it without stating the new rule is caught by the next test.
 func TestMilestonePromptDropsUnconditionalCutClaim(t *testing.T) {
-	if strings.Contains(docText(t, "assets", "prompts", "milestone.md"), "integration branch from main") {
+	if strings.Contains(promptDocText(t, "milestone.md"), "integration branch from main") {
 		t.Error("assets/prompts/milestone.md still claims the milestone branch is cut from main unconditionally")
 	}
 }
@@ -34,14 +46,13 @@ func TestMilestonePromptDropsUnconditionalCutClaim(t *testing.T) {
 // claim without stating the new rule fails here, and the failure names the file
 // so a partial pass is not green.
 func TestMilestoneCutNarrationStatesBothArms(t *testing.T) {
-	docs := [][]string{
-		{"assets", "prompts", "milestone.md"},
-		{"README.md"},
-		{"docs", "roadmap.md"},
+	docs := []struct{ name, text string }{
+		{filepath.Join("assets", "prompts", "milestone.md"), promptDocText(t, "milestone.md")},
+		{"README.md", docText(t, "README.md")},
+		{filepath.Join("docs", "roadmap.md"), docText(t, "docs", "roadmap.md")},
 	}
-	for _, parts := range docs {
-		name := filepath.Join(parts...)
-		text := docText(t, parts...)
+	for _, doc := range docs {
+		name, text := doc.name, doc.text
 		for _, needle := range []string{
 			"conditional",       // the rule is stated as conditional at all
 			"still unmerged",    // the stacked arm
@@ -68,7 +79,7 @@ func TestReadmeMilestoneRowDocumentsBaseFlag(t *testing.T) {
 // The PR-target claims t-5/t-6 falsified: a milestone PR no longer always
 // targets main, and main no longer always receives the merge.
 func TestPRTargetNarrationNamesRecordedParent(t *testing.T) {
-	ship := docText(t, "assets", "prompts", "ship.md")
+	ship := promptDocText(t, "ship.md")
 	if strings.Contains(ship, "opens one milestone/<version> → main pr") {
 		t.Error("assets/prompts/ship.md still claims milestone complete opens a milestone/<version> → main PR unconditionally")
 	}

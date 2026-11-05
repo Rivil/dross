@@ -190,7 +190,7 @@ func TestGateStatusListsEveryGate(t *testing.T) {
 // TestGateRegistryNames pins the registered set: a gate added or renamed must
 // change this list, and the README row and remedies along with it.
 func TestGateRegistryNames(t *testing.T) {
-	want := []string{"commit-green", "curated-shrink", "gate-off-guard", "pair-approval", "plan-edit", "secret-read", "secret-stream", "solo-review", "tamper-guard"}
+	want := []string{"commit-green", "curated-shrink", "gate-off-guard", "pair-approval", "plan-edit", "secret-read", "secret-stream", "solo-review", "solo-writer", "tamper-guard"}
 	var got []string
 	for _, g := range gate.All() {
 		got = append(got, g.Name)

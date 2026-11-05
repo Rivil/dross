@@ -1,0 +1,34 @@
+# captured: vitest@4.1.11 npx vitest run --config only.config.ts
+
+ RUN  v4.1.11 /Users/rivil/.claude/jobs/df272921/tmp/jsfx/vitest
+
+ ❯ only/broken.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  only/broken.test.ts [ only/broken.test.ts ]
+Error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mUnexpected token
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m only/broken.test.ts:4:13 [38;5;246m][0m
+   [38;5;246m│[0m
+ [38;5;246m4 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249mc[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249mx[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m;
+ [38;5;240m  │[0m             ┬  
+ [38;5;240m  │[0m             ╰── 
+[38;5;246m───╯[0m
+
+  Plugin: vite:oxc
+  File: /Users/rivil/.claude/jobs/df272921/tmp/jsfx/vitest/only/broken.test.ts
+ ❯ transformWithOxc node_modules/vite/dist/node/chunks/node.js:7551:19
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:7623:26
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8515:51
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:19998:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  14:42:21
+   Duration  76ms (transform 0ms, setup 0ms, import 0ms, tests 0ms, environment 0ms)
+

@@ -5,6 +5,7 @@
     "v1.5": "DRO-134",
     "v1.6": "DRO-188",
     "v1.7": "DRO-331",
+    "v1.8": "DRO-942",
     "v1.9": "DRO-694"
   },
   "phases": {
@@ -19,6 +20,7 @@
     "cmd-test-duration": "DRO-634",
     "completion-record-truth": "DRO-135",
     "config-value-truth": "DRO-25",
+    "context-boundaries": "DRO-944",
     "debug-sessions": "DRO-889",
     "deferred-add-command": "DRO-14",
     "dependency-update-automation": "DRO-620",
@@ -35,6 +37,7 @@
     "lane-selector-translation": "DRO-210",
     "legacy-phase-backfill": "DRO-142",
     "main-branch-protection": "DRO-767",
+    "memory-prune-advisor": "DRO-1029",
     "milestone-lifecycle-close": "DRO-13",
     "milestone-push-failure-tests": "DRO-263",
     "mirror-terminal-state": "DRO-149",
@@ -45,6 +48,8 @@
     "phase-create-adoption": "DRO-31",
     "plan-gray-area-walkthrough": "DRO-29",
     "project-toml-lossless-writes": "DRO-412",
+    "prompt-budgets-rest": "DRO-1067",
+    "prompt-partials": "DRO-992",
     "push-gates-on-origin": "DRO-392",
     "red-proof-reachability": "DRO-23",
     "red-proof-repoint": "DRO-125",
@@ -60,10 +65,13 @@
     "scanner-self-exclusion": "DRO-404",
     "secret-detection": "DRO-459",
     "solo-task-review": "DRO-814",
+    "solo-task-subagent": "DRO-1012",
     "supply-chain-currency": "DRO-423",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10",
     "test-lane-config": "DRO-191",
+    "test-output-summaries": "DRO-963",
+    "test-summary-parsers": "DRO-1051",
     "tool-gate-hooks": "DRO-787",
     "tool-output-not-persisted": "DRO-378",
     "tracked-path-containment": "DRO-355",
@@ -92,6 +100,8 @@
     "1.7.7.2": "DRO-444",
     "1.7.7.3": "DRO-445",
     "1.7.7.4": "DRO-446",
+    "1.8.3.1": "DRO-1009",
+    "1.8.4.1": "DRO-1030",
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
@@ -152,6 +162,7 @@
     "someday:id:211fd3040434016d": "DRO-645",
     "someday:id:215d2ae2e7799d69": "DRO-102",
     "someday:id:21841dbf893e97db": "DRO-834",
+    "someday:id:232957ce515ebfcd": "DRO-958",
     "someday:id:2385fc70268180d1": "DRO-83",
     "someday:id:23cd8142a6ba122b": "DRO-687",
     "someday:id:245f4ad61d9e038a": "DRO-372",
@@ -271,6 +282,7 @@
     "someday:id:82e3e60f30734120": "DRO-443",
     "someday:id:84db6f7af8f57cef": "DRO-49",
     "someday:id:8517ca7569b82540": "DRO-74",
+    "someday:id:85321d5a24e7736c": "DRO-943",
     "someday:id:8536d3cd598f4566": "DRO-568",
     "someday:id:85981310e87bb7cf": "DRO-68",
     "someday:id:860fbefe9a16aa80": "DRO-361",
@@ -877,6 +889,71 @@
       "issue": "DRO-138",
       "plan_status": "done",
       "board_state": "task-in-review"
+    },
+    "context-boundaries/t-1": {
+      "issue": "DRO-945",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "context-boundaries/t-10": {
+      "issue": "DRO-956",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "context-boundaries/t-11": {
+      "issue": "DRO-957",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "context-boundaries/t-12": {
+      "issue": "DRO-955",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "context-boundaries/t-13": {
+      "issue": "DRO-947",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "context-boundaries/t-2": {
+      "issue": "DRO-946",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "context-boundaries/t-3": {
+      "issue": "DRO-948",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "context-boundaries/t-4": {
+      "issue": "DRO-949",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "context-boundaries/t-5": {
+      "issue": "DRO-950",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "context-boundaries/t-6": {
+      "issue": "DRO-951",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "context-boundaries/t-7": {
+      "issue": "DRO-952",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "context-boundaries/t-8": {
+      "issue": "DRO-953",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "context-boundaries/t-9": {
+      "issue": "DRO-954",
+      "plan_status": "done",
+      "board_state": "task-complete"
     },
     "debug-sessions/t-1": {
       "issue": "DRO-891",
@@ -1548,6 +1625,101 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "memory-prune-advisor/t-1": {
+      "issue": "DRO-1031",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-10": {
+      "issue": "DRO-1040",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-11": {
+      "issue": "DRO-1041",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-12": {
+      "issue": "DRO-1042",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-13": {
+      "issue": "DRO-1043",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-14": {
+      "issue": "DRO-1044",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-15": {
+      "issue": "DRO-1045",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-16": {
+      "issue": "DRO-1046",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-17": {
+      "issue": "DRO-1048",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-18": {
+      "issue": "DRO-1049",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-19": {
+      "issue": "DRO-1050",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-2": {
+      "issue": "DRO-1032",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-3": {
+      "issue": "DRO-1033",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-4": {
+      "issue": "DRO-1034",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-5": {
+      "issue": "DRO-1035",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-6": {
+      "issue": "DRO-1036",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-7": {
+      "issue": "DRO-1037",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-8": {
+      "issue": "DRO-1038",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "memory-prune-advisor/t-9": {
+      "issue": "DRO-1039",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
     "milestone-push-failure-tests/t-1": {
       "issue": "DRO-264",
       "plan_status": "done",
@@ -1670,6 +1842,206 @@
     },
     "project-toml-lossless-writes/t-7": {
       "issue": "DRO-421",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-1": {
+      "issue": "DRO-1075",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-10": {
+      "issue": "DRO-1078",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-11": {
+      "issue": "DRO-1077",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-12": {
+      "issue": "DRO-1079",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-13": {
+      "issue": "DRO-1080",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-14": {
+      "issue": "DRO-1081",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-15": {
+      "issue": "DRO-1082",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-16": {
+      "issue": "DRO-1083",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-17": {
+      "issue": "DRO-1084",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-18": {
+      "issue": "DRO-1085",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-19": {
+      "issue": "DRO-1089",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-2": {
+      "issue": "DRO-1068",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-20": {
+      "issue": "DRO-1090",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-21": {
+      "issue": "DRO-1087",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-22": {
+      "issue": "DRO-1086",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-23": {
+      "issue": "DRO-1091",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-24": {
+      "issue": "DRO-1088",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-3": {
+      "issue": "DRO-1069",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-4": {
+      "issue": "DRO-1070",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-5": {
+      "issue": "DRO-1076",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-6": {
+      "issue": "DRO-1071",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-7": {
+      "issue": "DRO-1072",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-8": {
+      "issue": "DRO-1073",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-budgets-rest/t-9": {
+      "issue": "DRO-1074",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-1": {
+      "issue": "DRO-1001",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-10": {
+      "issue": "DRO-1000",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-11": {
+      "issue": "DRO-1002",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-12": {
+      "issue": "DRO-1004",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-13": {
+      "issue": "DRO-1005",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-14": {
+      "issue": "DRO-1006",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-15": {
+      "issue": "DRO-1007",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-16": {
+      "issue": "DRO-1008",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-2": {
+      "issue": "DRO-993",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-3": {
+      "issue": "DRO-994",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-4": {
+      "issue": "DRO-999",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-5": {
+      "issue": "DRO-995",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-6": {
+      "issue": "DRO-996",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-7": {
+      "issue": "DRO-997",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-8": {
+      "issue": "DRO-998",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "prompt-partials/t-9": {
+      "issue": "DRO-1003",
       "plan_status": "done",
       "board_state": "task-complete"
     },
@@ -2333,6 +2705,86 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "solo-task-subagent/t-1": {
+      "issue": "DRO-1013",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-10": {
+      "issue": "DRO-1022",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-11": {
+      "issue": "DRO-1025",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-12": {
+      "issue": "DRO-1023",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-13": {
+      "issue": "DRO-1024",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-14": {
+      "issue": "DRO-1026",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-15": {
+      "issue": "DRO-1027",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-16": {
+      "issue": "DRO-1028",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-2": {
+      "issue": "DRO-1014",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-3": {
+      "issue": "DRO-1015",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-4": {
+      "issue": "DRO-1016",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-5": {
+      "issue": "DRO-1017",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-6": {
+      "issue": "DRO-1018",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-7": {
+      "issue": "DRO-1019",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-8": {
+      "issue": "DRO-1020",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "solo-task-subagent/t-9": {
+      "issue": "DRO-1021",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
     "supply-chain-currency/t-1": {
       "issue": "DRO-424",
       "plan_status": "done",
@@ -2405,6 +2857,176 @@
     },
     "test-lane-config/t-9": {
       "issue": "DRO-200",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-1": {
+      "issue": "DRO-968",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-10": {
+      "issue": "DRO-974",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-11": {
+      "issue": "DRO-972",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-12": {
+      "issue": "DRO-979",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-13": {
+      "issue": "DRO-975",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-14": {
+      "issue": "DRO-978",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-15": {
+      "issue": "DRO-980",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-16": {
+      "issue": "DRO-981",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-17": {
+      "issue": "DRO-977",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-18": {
+      "issue": "DRO-969",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-19": {
+      "issue": "DRO-989",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-2": {
+      "issue": "DRO-964",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-3": {
+      "issue": "DRO-965",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-4": {
+      "issue": "DRO-966",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-5": {
+      "issue": "DRO-973",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-6": {
+      "issue": "DRO-976",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-7": {
+      "issue": "DRO-967",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-8": {
+      "issue": "DRO-970",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-output-summaries/t-9": {
+      "issue": "DRO-971",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-1": {
+      "issue": "DRO-1052",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-10": {
+      "issue": "DRO-1061",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-11": {
+      "issue": "DRO-1062",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-12": {
+      "issue": "DRO-1063",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-13": {
+      "issue": "DRO-1064",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-14": {
+      "issue": "DRO-1065",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-15": {
+      "issue": "DRO-1066",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-2": {
+      "issue": "DRO-1053",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-3": {
+      "issue": "DRO-1054",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-4": {
+      "issue": "DRO-1055",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-5": {
+      "issue": "DRO-1056",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-6": {
+      "issue": "DRO-1057",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-7": {
+      "issue": "DRO-1058",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-8": {
+      "issue": "DRO-1059",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "test-summary-parsers/t-9": {
+      "issue": "DRO-1060",
       "plan_status": "done",
       "board_state": "task-complete"
     },

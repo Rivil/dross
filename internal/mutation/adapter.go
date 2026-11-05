@@ -12,7 +12,11 @@
 // phase being verified) and produces a Report.
 package mutation
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/Rivil/dross/internal/runlog"
+)
 
 // Report is the normalised result format consumed by verify.
 type Report struct {
@@ -132,6 +136,14 @@ type Adapter interface {
 	Name() string
 	Supports(file string) bool
 	Run(files []string) (*Report, error)
+}
+
+// Streamer is an adapter whose tool stream can go to a run log instead of the
+// terminal. The parameter is the concrete *runlog.Log, never an io.Writer: the
+// exec-taint gate treats that one named type as terminal, and a field set from
+// a generic io.Writer parameter would not be. Nil restores the terminal.
+type Streamer interface {
+	SetStream(*runlog.Log)
 }
 
 // Range is an inclusive line range, both ends counted. It mirrors

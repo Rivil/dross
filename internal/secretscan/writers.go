@@ -20,7 +20,7 @@ import (
 //   - MachineLocal: the artifact lands under .dross/ but a seeded .gitignore
 //     line keeps it out of every commit, so it can never ride `git add .dross`
 //     into history. IgnoreSeed names the seed; the enum test proves the claim
-//     with `git check-ignore` in a repo that seed prepared. ONLY the two
+//     with `git check-ignore` in a repo that seed prepared. ONLY the
 //     paths ensureDrossGitignore seeds qualify: handoff.md, reap-log.json and
 //     the security/quality/techdebt run dirs are ignored by this repo's own
 //     hand-edited .gitignore, not by anything dross scaffolds, so in a fresh
@@ -32,7 +32,7 @@ import (
 //     them resolves under .dross/.
 //
 // Artifacts written by an agent rather than by Go code (panel notes, REVIEW.md,
-// pr-body.md, the criterion notes in verify.toml) are declared under the
+// pr-body.md, the criterion notes in verify.toml, kill-switch.toml) are declared under the
 // AgentAuthored sentinel: they are in the scanner's reach like any other
 // UnderDross artifact, and the stale-declaration arm skips resolving them to a
 // Go file.
@@ -174,6 +174,10 @@ const GateIgnoreSeed = "gatestate.ensureDir (.dross/gate/.gitignore)"
 // first session.
 const DebugIgnoreSeed = "debugsession.Create (.dross/debug/.gitignore)"
 
+// RunlogIgnoreSeed is the self-ignoring .dross/logs/.gitignore that a run log
+// writes before its own file on the first Write.
+const RunlogIgnoreSeed = "runlog.Log.Write (.dross/logs/.gitignore)"
+
 // userSettings is the Claude user-level settings file several writers merge
 // into.
 const userSettings = "~/.claude/settings.json"
@@ -211,6 +215,9 @@ var writers = []Writer{
 	{File: "internal/findings/state.go", UnderDross: &UnderDross{Artifacts: []string{"security/state.toml", "quality/state.toml", "techdebt/state.toml"}}},
 	{File: AgentAuthored, UnderDross: &UnderDross{Artifacts: []string{
 		"phases/<id>/panel/<name>.md", "phases/<id>/REVIEW.md", "phases/<id>/pr-body.md", "phases/<id>/notes.md",
+		// The writer trial's record: mined and written by the agent,
+		// only read by dross (internal/killswitch).
+		"phases/<id>/kill-switch.toml",
 	}}},
 
 	// ---- MachineLocal: under .dross, kept out of git by the dross seed -----
@@ -223,12 +230,30 @@ var writers = []Writer{
 		Why: "host allowlist additions and quick_base; a committed copy would let a repo authorize its own API host",
 	}},
 	{File: "internal/gatestate/store.go", MachineLocal: &MachineLocal{
-		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json", "gate/review.json", "gate/quick.json", "gate/review-context.md", "gate/reply.json"}, IgnoreSeed: GateIgnoreSeed,
-		Why: "tool-gate records (green tree, execute mode, task approval, solo review ledger, quick mode, reply approval) and the review context the reviewer reads; a committed copy would let a clone arrive pre-approved or pre-reviewed",
+		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json", "gate/review.json", "gate/quick.json", "gate/review-context.md", "gate/reply.json", "gate/writer.json", "gate/show/<name>"}, IgnoreSeed: GateIgnoreSeed,
+		Why: "tool-gate records (green tree, execute mode, task approval, solo review ledger, quick mode, reply approval, solo writer record, the show-once records of rule/interaction show) and the review context the reviewer reads; a committed copy would let a clone arrive pre-approved or pre-reviewed",
+	}},
+	{File: "internal/gatestate/nudge.go", MachineLocal: &MachineLocal{
+		Path: "gate/nudge/<name>", IgnoreSeed: GateIgnoreSeed,
+		Why: "empty per-session context-nudge claims (a hashed session key and a band, no content); machine-local because a session exists only on this machine",
 	}},
 	{File: "internal/debugsession/store.go", MachineLocal: &MachineLocal{
 		Path: "debug/<name>.md", Also: []string{"debug/.gitignore"}, IgnoreSeed: DebugIgnoreSeed,
 		Why: "/dross-debug sessions quote captured output, which must never reach a published artifact (locked session_tracking)",
+	}},
+	// The dir also writes its own `*` .gitignore, for repos onboarded before
+	// the dross seed covered it; the claim here rests on the seed alone.
+	{File: "internal/memadvise/turncache.go", MachineLocal: &MachineLocal{
+		Path: "memory/turns.json", Also: []string{"memory/.gitignore"}, IgnoreSeed: ignoreSeed,
+		Why: "the memory advisor's turn cache: per-transcript sizes and day counts read from this machine's ~/.claude (locked turn_counts)",
+	}},
+	{File: "internal/memadvise/snapshot.go", MachineLocal: &MachineLocal{
+		Path: "memory/snapshots/<name>/<name>", IgnoreSeed: ignoreSeed,
+		Why: "the copy of this machine's Claude memory dir `dross memory apply` takes before it changes anything; personal memories must never reach a commit (c-9)",
+	}},
+	{File: "internal/runlog/runlog.go", MachineLocal: &MachineLocal{
+		Path: "logs/<name>.log", Also: []string{"logs/.gitignore"}, IgnoreSeed: RunlogIgnoreSeed,
+		Why: "full output of `dross test` runs and mutation legs; an unignored log would count as a tree change and stale verify and the green record (locked log_location)",
 	}},
 
 	// ---- OutsideDross: not a .dross artifact ------------------------------
@@ -248,6 +273,7 @@ var writers = []Writer{
 	{File: "internal/gate/override.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/dross/gate-overrides.json"}, Why: "the gates a human lifted with `dross gate off`, user-level and outside every repo so no repo can ship a lifted gate"}},
 	{File: "internal/treefp/treefp.go", OutsideDross: &OutsideDross{Paths: []string{"<tmp>/dross-treefp-*/index"}, Why: "a scratch byte copy of the git index in the OS temp dir, staged into for a tree fingerprint and removed after the call"}},
 	{File: "internal/compilefence/compilefence.go", OutsideDross: &OutsideDross{Paths: []string{"<tmp>/module/*.go"}, Why: "a throwaway build module in t.TempDir for must-not-compile fixtures"}},
+	{File: "internal/memadvise/apply.go", OutsideDross: &OutsideDross{Paths: []string{"~/.claude/projects/<slug>/memory/MEMORY.md", "~/.claude/projects/<slug>/memory/<name>.md"}, Why: "`dross memory apply --yes` rewrites one MEMORY.md line and removes at most one memory file in the user's Claude memory dir — $CLAUDE_CONFIG_DIR when set"}},
 	{File: "internal/pincheck/bump.go", OutsideDross: &OutsideDross{Paths: []string{"go.mod", ".node-version", ".github/actions/<name>/action.yml"}, Why: "rewrites a stale pin's version in place in the repo's own pin files"}},
 	{File: "internal/cmd/root.go", OutsideDross: &OutsideDross{Why: "MustWriteFile is a generic parent-creating helper with no callers outside tests; it names no artifact of its own"}},
 	{File: "internal/pathfence/pathfence.go", OutsideDross: &OutsideDross{Why: "the contained-write primitive itself: it writes whatever contained path a caller hands it, and the caller's own entry names the artifact"}},

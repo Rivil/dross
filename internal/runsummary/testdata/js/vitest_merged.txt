@@ -1,0 +1,21 @@
+# captured: vitest@4.1.11 npx vitest run
+
+ RUN  v4.1.11 /Users/rivil/.claude/jobs/df272921/tmp/jsfx/vitest
+
+ ❯ src/same.test.ts (2 tests | 2 failed) 2ms
+   × case 1 1ms
+   × case 2 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/same.test.ts > case 1
+ FAIL  src/same.test.ts > case 2
+Error: same failure
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  2 failed | 5 passed (7)
+   Start at  14:42:21
+   Duration  78ms (transform 26ms, setup 0ms, import 41ms, tests 5ms, environment 0ms)
+

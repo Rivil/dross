@@ -643,7 +643,7 @@ func TestPhaseListDocsDescribeTheListing(t *testing.T) {
 // A prompt that is wrong about a command is worse than one that is silent —
 // it sends the agent somewhere confidently.
 func TestPhaseListPromptConsumersAreCurrent(t *testing.T) {
-	spec := readRepoFile(t, filepath.Join("assets", "prompts", "spec.md"))
+	spec := expandedPrompt(t, "spec.md")
 	// The create flow used to intersect raw `dross phase list` lines against
 	// the phases array. Every line now carries a marker prefix and the listing
 	// ends with a footer, so that parse yields slugs that do not exist.
@@ -654,7 +654,7 @@ func TestPhaseListPromptConsumersAreCurrent(t *testing.T) {
 		t.Error("spec.md's create flow should read the roadmap through `dross phase list --milestone`")
 	}
 
-	verify := readRepoFile(t, filepath.Join("assets", "prompts", "verify.md"))
+	verify := expandedPrompt(t, "verify.md")
 	// The claim was true of the bare listing and false of --milestone, which
 	// walks the whole roadmap including unscaffolded entries.
 	if strings.Contains(verify, "It is a directory listing — it prints only phases") {
@@ -664,7 +664,7 @@ func TestPhaseListPromptConsumersAreCurrent(t *testing.T) {
 		t.Error("verify.md should name the --milestone reading it is now safe to use")
 	}
 
-	ms := readRepoFile(t, filepath.Join("assets", "prompts", "milestone.md"))
+	ms := expandedPrompt(t, "milestone.md")
 	// phase list now reads doneness through the same reader as `milestone
 	// progress`, so forbidding it as a doneness source forbids agreement.
 	if strings.Contains(ms, "do NOT re-derive it from `dross phase list`") {

@@ -1,0 +1,189 @@
+package runsummary
+
+import (
+	"fmt"
+	"strings"
+	"time"
+)
+
+// MoreFailingPrefix follows "+N " on the line that closes a cut failure list:
+// "+4 more failing — see <log>". The execute and quick prompts quote it.
+const MoreFailingPrefix = "more failing — see"
+
+// MoreLinesPrefix follows "… N " on the line that closes a cut failure block:
+// "… 20 more lines — see <log>".
+const MoreLinesPrefix = "more lines — see"
+
+// Outcome is how the run ended.
+type Outcome struct {
+	Exit int
+	// Ran is false when the run did not happen — the host was unreachable or
+	// the tree never fully arrived — so no count can describe it.
+	Ran bool
+}
+
+// Render summarises segs. It prints green only when the run happened, exited
+// 0, every segment was claimed by at least one parser and none reported a
+// failure; a segment several runners claimed contributes each one's counts. Reported failures print red, at most b's remaining full blocks.
+// Anything else prints the fallback: the exit status, the last TailLines
+// lines and the log path. Every printed line is cut to LineCut bytes.
+func Render(o Outcome, segs []*Segment, b *Budget, logPath string, wall time.Duration) string {
+	var w lines
+	if !o.Ran {
+		fallback(&w, o, "the run did not happen", lastOf(segs), logPath)
+		return w.String()
+	}
+	results := make([]Result, 0, len(segs))
+	failing := 0
+	for _, s := range segs {
+		rs := s.results()
+		if len(rs) == 0 {
+			fallback(&w, o, "output not recognised", s, logPath)
+			return w.String()
+		}
+		for _, r := range rs {
+			results = append(results, r)
+			failing += r.Failures.Total
+		}
+	}
+	if len(results) == 0 {
+		fallback(&w, o, "no output", nil, logPath)
+		return w.String()
+	}
+	if failing == 0 {
+		if o.Exit != 0 {
+			fallback(&w, o, "no failing test reported", lastOf(segs), logPath)
+			return w.String()
+		}
+		w.add(header("PASS · ", results, " · "+clock(wall)))
+		w.add("log: " + logPath)
+		return w.String()
+	}
+
+	w.add(header(fmt.Sprintf("FAIL (exit %d) · ", o.Exit), results, fmt.Sprintf(" · %d failing · %s", failing, clock(wall))))
+	more := 0
+	for _, r := range results {
+		more += r.Failures.Total - len(r.Failures.Kept)
+		for _, f := range r.Failures.Kept {
+			if !b.take() {
+				more++
+				continue
+			}
+			block(&w, f, logPath)
+		}
+	}
+	if more > 0 {
+		w.add(fmt.Sprintf("+%d %s %s", more, MoreFailingPrefix, logPath))
+	}
+	w.add("log: " + logPath)
+	return w.String()
+}
+
+// block prints one failure: its "✗ name" line, its kept lines and, when any
+// are left out, the "… N more lines — see <log>" marker. All three count
+// toward BlockBytes as printed, so a long name or log path costs output lines:
+// trailing lines move into the marker's count until the block fits.
+func block(w *lines, f Failure, logPath string) {
+	name := Cut("✗ " + f.Name)
+	marker := func(more int) string {
+		if more == 0 {
+			return ""
+		}
+		return Cut(fmt.Sprintf("… %d %s %s", more, MoreLinesPrefix, logPath))
+	}
+	size := func(k int) int {
+		n := len(name) + 1
+		for _, l := range f.Lines[:k] {
+			n += len(Cut(l)) + 1
+		}
+		if m := marker(f.More + len(f.Lines) - k); m != "" {
+			n += len(m) + 1
+		}
+		return n
+	}
+	k := len(f.Lines)
+	for k > 0 && size(k) > BlockBytes {
+		k--
+	}
+	w.add(name)
+	for _, l := range f.Lines[:k] {
+		w.add(l)
+	}
+	if m := marker(f.More + len(f.Lines) - k); m != "" {
+		w.add(m)
+	}
+}
+
+// fallback prints the exit status, why there is no summary, and s's tail.
+func fallback(w *lines, o Outcome, why string, s *Segment, logPath string) {
+	var tail []string
+	if s != nil {
+		tail = s.Tail()
+	}
+	w.add(fmt.Sprintf("exit %d · %s — last %d lines:", o.Exit, why, len(tail)))
+	for _, l := range tail {
+		w.add(l)
+	}
+	w.add("log: " + logPath)
+}
+
+func lastOf(segs []*Segment) *Segment {
+	if len(segs) == 0 {
+		return nil
+	}
+	return segs[len(segs)-1]
+}
+
+// header is the summary line: lead, each runner's counts, tail. When every
+// count phrase would push it past LineCut, it keeps each runner's first
+// phrase, then the runner names alone — never a runner cut off the end.
+func header(lead string, rs []Result, tail string) string {
+	for _, keep := range []int{-1, 1, 0} {
+		h := lead + counts(rs, keep) + tail
+		if len(h) <= LineCut {
+			return h
+		}
+	}
+	return lead + counts(rs, 0) + tail
+}
+
+// counts joins each result's runner and its count phrases: all of them when
+// keep < 0, else the first keep.
+func counts(rs []Result, keep int) string {
+	parts := make([]string, 0, len(rs))
+	for _, r := range rs {
+		cs := r.Counts
+		if keep >= 0 && len(cs) > keep {
+			cs = cs[:keep]
+		}
+		c := strings.Join(cs, ", ")
+		switch {
+		case r.Runner == "":
+		case c == "":
+			c = r.Runner
+		default:
+			c = r.Runner + ": " + c
+		}
+		parts = append(parts, c)
+	}
+	return strings.Join(parts, " · ")
+}
+
+// clock formats a wall-clock time: whole seconds from a minute up ("1m12s"),
+// tenths below it ("3.2s").
+func clock(d time.Duration) string {
+	if d >= time.Minute {
+		return d.Round(time.Second).String()
+	}
+	return d.Round(100 * time.Millisecond).String()
+}
+
+// lines accumulates printed lines, each cut to LineCut.
+type lines struct{ b strings.Builder }
+
+func (l *lines) add(s string) {
+	l.b.WriteString(Cut(s))
+	l.b.WriteByte('\n')
+}
+
+func (l *lines) String() string { return l.b.String() }

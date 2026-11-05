@@ -1,0 +1,112 @@
+# captured: pytest@9.1.1 docker compose --profile test run --rm test /repo/scripts/selftest.sh (sunday-rider@5720fae) ruff → mypy → pytest -q break: tests/test_parsing_keywords.py:352 adds `assert "gravel" not in sentence, f.unrecognised` (parametrized: 2 cases fail); :379 expects ["to the moon!"]
+ Container sundayride-test-run-c2c69895db1b Creating 
+ Container sundayride-test-run-c2c69895db1b Created 
+== ruff ==
+All checks passed!
+91 files already formatted
+
+== mypy --strict ==
+Success: no issues found in 88 source files
+
+== pytest ==
+........................................................................ [  3%]
+........................................................................ [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 14%]
+........................................................................ [ 18%]
+........................................................................ [ 21%]
+........................................................................ [ 25%]
+........................................................................ [ 29%]
+........................................................................ [ 32%]
+........................................................................ [ 36%]
+........................................................................ [ 39%]
+........................................................................ [ 43%]
+........................................................................ [ 47%]
+........................................................................ [ 50%]
+........................................................................ [ 54%]
+........................................................................ [ 58%]
+........................................................................ [ 61%]
+.......................................F...F.............F.............. [ 65%]
+........................................................................ [ 69%]
+........................................................................ [ 72%]
+........................................................................ [ 76%]
+........................................................................ [ 79%]
+........................................................................ [ 83%]
+........................................................................ [ 87%]
+........................................................................ [ 90%]
+........................................................................ [ 94%]
+........................................................................ [ 98%]
+......................................                                   [100%]
+=================================== FAILURES ===================================
+_ test_unrecognised_names_the_ignored_clause[2h gravel ride ending at the pub-2h gravel ride, ending at the pub-ending at the pub] _
+
+sentence = '2h gravel ride ending at the pub'
+comma_form = '2h gravel ride, ending at the pub', ignored = 'ending at the pub'
+
+    @pytest.mark.parametrize(("sentence", "comma_form", "ignored"), _IGNORED_CLAUSES)
+    def test_unrecognised_names_the_ignored_clause(
+        sentence: str, comma_form: str, ignored: str
+    ) -> None:
+        """Every one of these returned [] before span subtraction landed.
+    
+        Containment, not equality: the surviving run may carry leading words that
+        are not filler end-to-end ("ride ending at the pub"). Demanding equality
+        would force trimming filler off a run's edges, which eats real clauses.
+        """
+        f = parse_keywords(sentence)
+        assert f.unrecognised, sentence
+        assert any(ignored in clause for clause in f.unrecognised), f.unrecognised
+>       assert "gravel" not in sentence, f.unrecognised
+E       AssertionError: ['ride ending at the pub']
+E       assert 'gravel' not in '2h gravel r...g at the pub'
+E         
+E         'gravel' is contained here:
+E           2h gravel ride ending at the pub
+E         ?    ++++++
+
+tests/test_parsing_keywords.py:353: AssertionError
+_ test_unrecognised_names_the_ignored_clause[gravel 90 min in the rain-gravel 90 min, in the rain-in the rain] _
+
+sentence = 'gravel 90 min in the rain'
+comma_form = 'gravel 90 min, in the rain', ignored = 'in the rain'
+
+    @pytest.mark.parametrize(("sentence", "comma_form", "ignored"), _IGNORED_CLAUSES)
+    def test_unrecognised_names_the_ignored_clause(
+        sentence: str, comma_form: str, ignored: str
+    ) -> None:
+        """Every one of these returned [] before span subtraction landed.
+    
+        Containment, not equality: the surviving run may carry leading words that
+        are not filler end-to-end ("ride ending at the pub"). Demanding equality
+        would force trimming filler off a run's edges, which eats real clauses.
+        """
+        f = parse_keywords(sentence)
+        assert f.unrecognised, sentence
+        assert any(ignored in clause for clause in f.unrecognised), f.unrecognised
+>       assert "gravel" not in sentence, f.unrecognised
+E       AssertionError: ['in the rain']
+E       assert 'gravel' not in 'gravel 90 min in the rain'
+E         
+E         'gravel' is contained here:
+E           gravel 90 min in the rain
+E         ? ++++++
+
+tests/test_parsing_keywords.py:353: AssertionError
+______________________ test_comma_form_is_pinned_exactly _______________________
+
+    def test_comma_form_is_pinned_exactly() -> None:
+>       assert parse_keywords("gravel, to the moon").unrecognised == ["to the moon!"]
+E       AssertionError: assert ['to the moon'] == ['to the moon!']
+E         
+E         At index 0 diff: 'to the moon' != 'to the moon!'
+E         Use -v to get more diff
+
+tests/test_parsing_keywords.py:380: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_parsing_keywords.py::test_unrecognised_names_the_ignored_clause[2h gravel ride ending at the pub-2h gravel ride, ending at the pub-ending at the pub]
+FAILED tests/test_parsing_keywords.py::test_unrecognised_names_the_ignored_clause[gravel 90 min in the rain-gravel 90 min, in the rain-in the rain]
+FAILED tests/test_parsing_keywords.py::test_comma_form_is_pinned_exactly - As...
+3 failed, 1979 passed in 54.51s
+selftest FAILED: pytest
+
+

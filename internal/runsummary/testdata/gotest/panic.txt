@@ -1,0 +1,21 @@
+# captured: go1.27.1 go test -count=1 ./...
+--- FAIL: TestBoom (0.00s)
+panic: boom [recovered, repanicked]
+
+goroutine 8 [running]:
+testing.tRunner.func1.2({0x104fd78d8, 0x104fac3c0})
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2123 +0x1a0
+testing.tRunner.func1()
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2126 +0x2c8
+panic({0x104fd78d8?, 0x104fac3c0?})
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/runtime/panic.go:859 +0x120
+example.com/panic/p.boom(...)
+	/Users/rivil/.claude/jobs/df272921/tmp/gofx/panic/p/p_test.go:12
+example.com/panic/p.TestBoom(0x3646fc618488?)
+	/Users/rivil/.claude/jobs/df272921/tmp/gofx/panic/p/p_test.go:8 +0x30
+testing.tRunner(0x3646fc618488, 0x104ff73e8)
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2193 +0xc4
+created by testing.(*T).Run in goroutine 1
+	/Users/rivil/go/src/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.darwin-arm64/src/testing/testing.go:2258 +0x3b8
+FAIL	example.com/panic/p	0.175s
+FAIL

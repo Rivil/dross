@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	"os"
-	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/assets"
 	"github.com/Rivil/dross/internal/gate"
 	"github.com/Rivil/dross/internal/review"
+	"github.com/Rivil/dross/internal/runsummary"
 )
 
 // executePromptContent loads assets/prompts/execute.md and normalises it
@@ -15,23 +16,49 @@ import (
 // of an instruction rather than its exact formatting.
 func executePromptContent(t *testing.T) string {
 	t.Helper()
-	root := repoRootFromTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "execute.md"))
-	if err != nil {
-		t.Fatalf("read execute.md: %v", err)
-	}
-	s := strings.ToLower(string(b))
-	return strings.NewReplacer("`", "", "*", "", "_", "").Replace(s)
+	return normalisePrompt(expandedPrompt(t, "execute.md"))
 }
 
 // TestExecutePromptWiresPhaseNumber proves pc-3's "the version patch digit uses
-// DisplayNumber" clause: the execute orchestration sets the patch digit from
-// `dross phase number` rather than counting by hand. Removing that wiring fails
-// this. (r-01: the prompt edit is only live after `make install`.)
+// DisplayNumber" clause: `dross execute begin`, which absorbed the prompt's
+// version step, sets the patch digit to what `dross phase number` prints for
+// the phase rather than counting by hand.
 func TestExecutePromptWiresPhaseNumber(t *testing.T) {
-	content := executePromptContent(t)
-	if !strings.Contains(content, "dross phase number") {
-		t.Error("execute.md must derive the version patch digit from `dross phase number`")
+	executeFixture(t)
+	writeBeginMilestone(t, repoDirHere(t), "v1.8", "a", "b", "p")
+	mustRunState(t, "current_milestone", "v1.8")
+	mustRunState(t, "version", "1.8.1.4")
+	var num string
+	if err := runCmdCapturing(t, &num, Phase(), "number", "p"); err != nil {
+		t.Fatal(err)
+	}
+	want := "1.8." + strings.TrimSpace(num) + ".0"
+	if want != "1.8.3.0" {
+		t.Fatalf("phase number p = %q, want 3 — the fixture's array is a, b, p", num)
+	}
+	out, err := beginOut(t, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "version: 1.8.1.4 -> "+want+"\n") {
+		t.Errorf("begin printed %q, want the patch from `dross phase number` (%s)", out, want)
+	}
+}
+
+// TestExecutePromptStaleBinaryStop: begin's version line is how the prompt
+// knows the binary absorbed the steps §0 no longer spells out, so §0 must say a
+// missing `version:` line is a stale binary to reinstall, not a skipped step.
+func TestExecutePromptStaleBinaryStop(t *testing.T) {
+	pre := strings.Join(strings.Fields(sectionOf(promptBody(t, "execute.md"), "## 0. Pre-flight", "## 1.")), " ")
+	for _, want := range []string{"No `version:` line means a stale binary", "stop", "`make install`"} {
+		if !strings.Contains(pre, want) {
+			t.Errorf("§0 lost the stale-binary stop: missing %q", want)
+		}
+	}
+	for _, gone := range []string{"dross state set version", "dross issue phase sync <id> --status in-progress"} {
+		if strings.Contains(pre, gone) {
+			t.Errorf("§0 still spells out %q, which `execute begin` now does", gone)
+		}
 	}
 }
 
@@ -96,7 +123,10 @@ func TestExecutePromptCheckpointConsistencyBeforeReentry(t *testing.T) {
 
 // TestExecutePromptCheckpointWaveLead proves the checkpoint_posture locked
 // decision: at wave boundaries the gate leads with checkpoint as the
-// recommended option.
+// recommended option. Below the context threshold that order is unchanged
+// (context-boundaries c-4): mid-wave still leads with continue, and the
+// checkpoint bullet calls exactly the two consistency commands — the context
+// rule adds no call to it (signal_path).
 func TestExecutePromptCheckpointWaveLead(t *testing.T) {
 	section := executeGateSection(t)
 	if !strings.Contains(section, "wave") {
@@ -104,6 +134,22 @@ func TestExecutePromptCheckpointWaveLead(t *testing.T) {
 	}
 	if !strings.Contains(section, "lead with checkpoint") {
 		t.Error("wave-boundary branch must mark checkpoint as the lead/recommended option")
+	}
+	if !strings.Contains(section, "mid-wave, lead with continue") {
+		t.Error("mid-wave must still lead with continue below the context threshold")
+	}
+
+	_, bullet, ok := strings.Cut(section, "\n- checkpoint —")
+	if !ok {
+		t.Fatal("post-commit gate has no `checkpoint` bullet")
+	}
+	bullet, _, _ = strings.Cut(bullet, "\n- stop")
+	calls := map[string]bool{}
+	for _, m := range regexp.MustCompile(`dross ([a-z]+)( next)?`).FindAllStringSubmatch(bullet, -1) {
+		calls[m[1]+m[2]] = true
+	}
+	if len(calls) != 2 || !calls["validate"] || !calls["task next"] {
+		t.Errorf("checkpoint bullet calls %v; want exactly dross validate and dross task next", calls)
 	}
 }
 
@@ -188,6 +234,20 @@ func TestExecutePromptPullsBoardTaskMoves(t *testing.T) {
 			t.Errorf("execute.md must wire the inbound board task pull: missing %q", needle)
 		}
 	}
+	// The apply path is fetched only when begin's pull: line reports a move.
+	common, err := assets.Fetched(promptFS, "execute", assets.CommonPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := assets.CommonPath()
+	facts["board_pull"] = "reported"
+	reported, err := assets.Fetched(promptFS, "execute", facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contains(common, "board-moves") || !contains(reported, "board-moves") {
+		t.Errorf("board-moves fetched %v on the common path and %v on board_pull=reported; want only the latter", common, reported)
+	}
 }
 
 // TestExecutePromptOffersApproveLabel: the pair-approval gate records an
@@ -257,16 +317,24 @@ func TestExecutePromptLaneCommitRunsFullSuite(t *testing.T) {
 // soloReview is execute.md §1f, and the solo review block inside it.
 func soloReview(t *testing.T) (string, string) {
 	t.Helper()
-	f := sectionOf(promptBody(t, "execute.md"), "### 1f.", "### ")
-	if f == "" {
-		t.Fatal("execute.md has no §1f section")
-	}
+	f := expandedPrompt(t, "_execute.solo.md")
 	i := strings.Index(f, "**Solo review (`--solo` only).**")
 	j := strings.Index(f, "The commit gate checks this too")
 	if i < 0 || j < i {
-		t.Fatal("§1f has no solo review block")
+		t.Fatal("the solo partial has no solo review block")
 	}
 	return f, f[i:j]
+}
+
+// rawExecuteBase is execute.md without its partials, read through assets.FS:
+// the text every run loads, solo or pair.
+func rawExecuteBase(t *testing.T) string {
+	t.Helper()
+	b, err := assets.FS.ReadFile("prompts/execute.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
 
 func mustIdx(t *testing.T, s, sub string) int {
@@ -281,14 +349,19 @@ func mustIdx(t *testing.T, s, sub string) int {
 // TestExecuteSoloReviewPlacement (c-1): in a solo run the reviewer runs after
 // the full green `dross test` and before the commit; pair mode spawns none.
 func TestExecuteSoloReviewPlacement(t *testing.T) {
-	f, block := soloReview(t)
+	f := sectionOf(rawExecuteBase(t), "### 1f.", "### ")
 	test := bareDrossTestRE.FindStringIndex(f)
 	if test == nil {
 		t.Fatal("§1f lost its bare `dross test`")
 	}
-	ctx, spawn, status, add := mustIdx(t, f, "dross review context"), mustIdx(t, f, `subagent_type: "`+review.ReviewerAgent+`"`), mustIdx(t, f, "dross review status"), mustIdx(t, f, "git add <task.files>")
-	if !(test[0] < ctx && ctx < spawn && spawn < status && status < add) {
-		t.Errorf("solo review order: dross test %d, review context %d, spawn %d, review status %d, git add %d — want that order", test[0], ctx, spawn, status, add)
+	refetch, add := mustIdx(t, f, "**Re-fetch** if context was compacted: `dross prompt partial execute solo`"), mustIdx(t, f, "git add <task.files>")
+	if !(test[0] < refetch && refetch < add) {
+		t.Errorf("§1f order: dross test %d, solo re-fetch %d, git add %d — want that order", test[0], refetch, add)
+	}
+	_, block := soloReview(t)
+	run, ctx, spawn, status := mustIdx(t, block, "`dross test`"), mustIdx(t, block, "dross review context"), mustIdx(t, block, `subagent_type: "`+review.ReviewerAgent+`"`), mustIdx(t, block, "dross review status")
+	if !(run < ctx && ctx < spawn && spawn < status) {
+		t.Errorf("solo review order: dross test %d, review context %d, spawn %d, review status %d — want that order", run, ctx, spawn, status)
 	}
 	if !strings.Contains(block, "In **pair mode skip this entirely**: the human is the gate.") {
 		t.Error("the solo review block no longer says pair mode skips it")
@@ -296,6 +369,42 @@ func TestExecuteSoloReviewPlacement(t *testing.T) {
 	c := sectionOf(promptBody(t, "execute.md"), "### 1c.", "### ")
 	if strings.Contains(c, "dross review") || strings.Contains(c, review.ReviewerAgent) {
 		t.Error("§1c (the pair approval step) spawns or prepares the reviewer")
+	}
+}
+
+// TestExecuteSoloFetchedOnceAfterBegin (locked solo_branch): the solo partial
+// is fetched once per run, in §0, and the first fetch after the solo begin
+// fence is that one — so a pair run never pays for it.
+func TestExecuteSoloFetchedOnceAfterBegin(t *testing.T) {
+	base := rawExecuteBase(t)
+	fence := strings.Index(base, "dross execute begin <id> --solo\n")
+	loop := strings.Index(base, "## 1. Per-task loop")
+	if fence < 0 || loop < fence {
+		t.Fatal("execute.md lost the solo begin fence before the loop")
+	}
+	fenceLine := strings.Count(base[:fence], "\n") + 1
+	points, err := assets.FetchPoints(assets.FS, "execute.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var first *assets.FetchPoint
+	solo := 0
+	for i, p := range points {
+		if p.Partial == "solo" && !p.Refetch {
+			solo++
+		}
+		if first == nil && !p.Refetch && p.Line > fenceLine {
+			first = &points[i]
+		}
+	}
+	if first == nil || first.Partial != "solo" || first.Key != "mode" || first.Value != "solo" {
+		t.Errorf("first fetch after the solo begin fence is %+v, want `mode=solo` → solo", first)
+	}
+	if first != nil && first.Line > strings.Count(base[:loop], "\n") {
+		t.Errorf("the solo fetch (line %d) sits past §0", first.Line)
+	}
+	if solo != 1 {
+		t.Errorf("execute.md has %d When lines fetching solo, want exactly 1", solo)
 	}
 }
 
@@ -359,16 +468,244 @@ func TestExecuteNoCodeSkipsReview(t *testing.T) {
 // TestExecuteSoloRedStashes: the red-test solo path must stash before
 // marking failed — `failed` refuses while a solo task's code is uncommitted.
 func TestExecuteSoloRedStashes(t *testing.T) {
-	e := sectionOf(promptBody(t, "execute.md"), "### 1e.", "### ")
-	red := e[mustIdx(t, e, "**Red, solo mode**"):]
+	solo := expandedPrompt(t, "_execute.solo.md")
+	red := solo[mustIdx(t, solo, "**Red, solo mode**"):]
 	if mustIdx(t, red, "git stash push -u -- . ':(exclude).dross'") > mustIdx(t, red, "dross task status <phase> <task-id> failed") {
-		t.Error("§1e's solo red path marks failed before stashing")
+		t.Error("the solo red path marks failed before stashing")
 	}
 }
 
 func TestExecutePromptSoloBeginNeedsReviewer(t *testing.T) {
-	pre := sectionOf(promptBody(t, "execute.md"), "## 0. Pre-flight", "## 1.")
+	pre := sectionOf(rawExecuteBase(t), "## 0. Pre-flight", "## 1.")
 	if !strings.Contains(pre, "A `--solo` begin refuses unless the solo task reviewer") || !strings.Contains(pre, "`dross install`") {
 		t.Error("§0 no longer routes a refused solo begin to `dross install`")
+	}
+}
+
+// rawPrompt reads assets/prompts/<name> unnormalised.
+func rawPrompt(t *testing.T, name string) string {
+	t.Helper()
+	return expandedPrompt(t, name)
+}
+
+// testStepSection is the text from the line starting with from up to the next line
+// starting with to, whitespace-normalised so a phrase wrapped across lines
+// still matches.
+func testStepSection(t *testing.T, s, from, to string) string {
+	t.Helper()
+	i := strings.Index(s, "\n"+from)
+	if i < 0 {
+		t.Fatalf("no %q heading", from)
+	}
+	rest := s[i+1:]
+	if j := strings.Index(rest, "\n"+to); j >= 0 {
+		rest = rest[:j]
+	}
+	return strings.Join(strings.Fields(rest), " ")
+}
+
+// assertTestStepDescribesSummary is the shared c-3 check: the test step tells
+// the agent `dross test` prints a summary and keeps the log, quotes the marker
+// a cut failure list ends with, and no longer promises streaming or a tail.
+func assertTestStepDescribesSummary(t *testing.T, name, step string) {
+	t.Helper()
+	whole := strings.Join(strings.Fields(rawPrompt(t, name)), " ")
+	for _, gone := range []string{"streaming output as it arrives", "last 30-40 lines"} {
+		if strings.Contains(whole, gone) {
+			t.Errorf("%s still says %q", name, gone)
+		}
+	}
+	for _, want := range []string{".dross/logs/", runsummary.MoreFailingPrefix} {
+		if !strings.Contains(step, want) {
+			t.Errorf("%s's test step does not name %q", name, want)
+		}
+	}
+}
+
+func TestExecuteTestStepDescribesSummary(t *testing.T) {
+	assertTestStepDescribesSummary(t, "execute.md", testStepSection(t, rawPrompt(t, "execute.md"), "### 1e.", "### 1f."))
+}
+
+// TestGreenPathNeverReadsLog: a green run's summary is the whole story — no
+// prompt sends the agent to read the run log on green.
+func TestGreenPathNeverReadsLog(t *testing.T) {
+	read := regexp.MustCompile(`(?i)\b(cat|read|open)\b`)
+	for _, name := range []string{"execute.md", "quick.md"} {
+		raw := rawPrompt(t, name)
+		i := strings.Index(raw, "\n**Green**")
+		if i < 0 {
+			t.Fatalf("%s has no Green branch", name)
+		}
+		green := raw[i+1:]
+		if j := strings.Index(green, "\n**Red"); j >= 0 {
+			green = green[:j]
+		}
+		if strings.Contains(green, ".dross/logs") && read.MatchString(green) {
+			t.Errorf("%s's Green branch sends the agent to read the run log:\n%s", name, green)
+		}
+	}
+}
+
+// TestTestStepPromptsNotGrown: the rewrite costs no context — both prompts are
+// no larger than at the phase's base commit 54ad9064.
+func TestTestStepPromptsNotGrown(t *testing.T) {
+	for name, limit := range map[string]int{"execute.md": 25854, "quick.md": 18102} {
+		if n := len(rawPrompt(t, name)); n > limit {
+			t.Errorf("%s is %d bytes, over its %d-byte base size", name, n, limit)
+		}
+	}
+}
+
+// TestExecuteAbsorbedProseDeleted: §0's version, sync and pull mechanics went
+// to `execute begin`, so they were deleted rather than moved — expanded
+// execute.md keeps that room for the fetch lines later splits add.
+func TestExecuteAbsorbedProseDeleted(t *testing.T) {
+	const limit = 25500
+	if n := len(rawPrompt(t, "execute.md")); n > limit {
+		t.Errorf("expanded execute.md is %d bytes, over %d — was absorbed §0 prose moved instead of deleted?", n, limit)
+	}
+}
+
+// soloWriterBranch is the solo partial's writer dispatch block: from its
+// lead-in up to the solo red path.
+func soloWriterBranch(t *testing.T) string {
+	t.Helper()
+	solo := expandedPrompt(t, "_execute.solo.md")
+	i := strings.Index(solo, "**Writer dispatch (`--solo` only).**")
+	j := strings.Index(solo, "**Red, solo mode**")
+	if i < 0 || j < i {
+		t.Fatal("the solo partial has no writer dispatch block before its red path")
+	}
+	return solo[i:j]
+}
+
+// TestSoloWriterDispatch (c-2): the main loop asks `dross task dispatch` before
+// it spawns anything, and spawns the writer with the printed prompt verbatim,
+// in the background.
+func TestSoloWriterDispatch(t *testing.T) {
+	w := soloWriterBranch(t)
+	dispatch, spawn := mustIdx(t, w, "dross task dispatch <phase> <task-id>"), mustIdx(t, w, "the printed `subagent_type`")
+	if dispatch > spawn {
+		t.Errorf("the writer is spawned (%d) before `dross task dispatch` runs (%d)", spawn, dispatch)
+	}
+	for _, want := range []string{"`dispatch: inline (…)` → §1b–§1e as written", "the printed `prompt:` line **verbatim** as the whole prompt", "`run_in_background: true`", "no `model`", "**Wait for its completion notice**"} {
+		if !strings.Contains(w, want) {
+			t.Errorf("the writer branch lost %q", want)
+		}
+	}
+}
+
+// TestSoloWriterGatesStayInMainLoop (c-3): a green writer is followed, in the
+// main loop and in order, by the bare suite, the cold review and the commit;
+// its own green is never the gate.
+func TestSoloWriterGatesStayInMainLoop(t *testing.T) {
+	w := soloWriterBranch(t)
+	green := w[mustIdx(t, w, "- `test: green`"):mustIdx(t, w, "**Writer failed**")]
+	test, ctx, commit := mustIdx(t, green, "bare `dross test`"), mustIdx(t, green, "`dross review context`"), mustIdx(t, green, "the commit")
+	if !(test < ctx && ctx < commit) {
+		t.Errorf("writer-green order: dross test %d, review context %d, commit %d — want that order", test, ctx, commit)
+	}
+	for _, want := range []string{"§1f in the main loop", "The writer's green certifies nothing."} {
+		if !strings.Contains(green, want) {
+			t.Errorf("the writer-green arm lost %q", want)
+		}
+	}
+}
+
+// TestSoloWriterReportOnly (c-2): the main loop reads the writer's report and
+// nothing else — no task file, no diff, none of the inline steps.
+func TestSoloWriterReportOnly(t *testing.T) {
+	w := soloWriterBranch(t)
+	for _, want := range []string{"skip §1b–§1e", "read only its `dross-writer-report` block", "never Read the task's files, never `git diff`"} {
+		if !strings.Contains(w, want) {
+			t.Errorf("the writer branch lost %q", want)
+		}
+	}
+	writer := w[mustIdx(t, w, "- `dispatch: writer`"):]
+	// What is left once the allowed, negated mentions are cut must never send
+	// the main loop into the code.
+	rest := strings.NewReplacer("skip §1b–§1e", "", "never Read the task's files, never `git diff`", "").Replace(writer)
+	for _, gone := range []string{"git diff", "Read the task", "task.files", "§1b", "§1d"} {
+		if strings.Contains(rest, gone) {
+			t.Errorf("the writer branch sends the main loop to %q", gone)
+		}
+	}
+}
+
+// TestSoloWriterFailurePath (c-5): every way a writer fails — spawn error, red,
+// no report, a red suite after it, a failed fix round — fails the task by
+// stashing and then marking it failed with a writer reason; none is fixed
+// inline.
+func TestSoloWriterFailurePath(t *testing.T) {
+	w := soloWriterBranch(t)
+	fail := w[mustIdx(t, w, "**Writer failed**"):mustIdx(t, w, "- A `blocked` review")]
+	for _, want := range []string{"the spawn errored", "the report says `test: red`", "there is no report", "the bare `dross test` after it is red", "never fix it inline"} {
+		if !strings.Contains(fail, want) {
+			t.Errorf("the writer failure arm lost %q", want)
+		}
+	}
+	stash, failed, next := mustIdx(t, fail, "git stash push -u -- . ':(exclude).dross'"), mustIdx(t, fail, `dross task status <phase> <task-id> failed --reason "writer: `), mustIdx(t, fail, "dross task next <phase>")
+	if !(stash < failed && failed < next) {
+		t.Errorf("writer failure order: stash %d, failed %d, task next %d — want that order", stash, failed, next)
+	}
+	round := w[mustIdx(t, w, "- A `blocked` review"):]
+	for _, want := range []string{"goes to the same writer, never inline", "load `SendMessage` via ToolSearch", "SendMessage unavailable, a red report or no reply → **Writer failed**"} {
+		if !strings.Contains(round, want) {
+			t.Errorf("the writer fix round lost %q", want)
+		}
+	}
+	for _, inline := range []string{"one bounded fix", "fix here", "Edit pass"} {
+		if strings.Contains(w, inline) {
+			t.Errorf("the writer branch offers an inline fix: %q", inline)
+		}
+	}
+}
+
+// TestPairPromptHasNoWriter (c-4): pair mode never meets the writer — not in
+// base execute.md, not in any partial a pair run can fetch.
+func TestPairPromptHasNoWriter(t *testing.T) {
+	texts := map[string]string{"execute.md": rawExecuteBase(t)}
+	points, err := assets.FetchPoints(promptFS, "execute.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair := 0
+	for _, p := range points {
+		if p.Refetch || (p.Key == "mode" && p.Value != "pair") {
+			continue
+		}
+		b, err := assets.Partial(promptFS, "execute", p.Partial)
+		if err != nil {
+			t.Fatal(err)
+		}
+		texts["_execute."+p.Partial+".md"] = string(b)
+		pair++
+	}
+	if pair == 0 {
+		t.Fatal("no execute partial is reachable in pair mode — the check went vacuous")
+	}
+	for name, s := range texts {
+		for _, gone := range []string{review.WriterAgent, "task dispatch"} {
+			if strings.Contains(s, gone) {
+				t.Errorf("%s, loaded in pair mode, mentions %q", name, gone)
+			}
+		}
+	}
+}
+
+// TestRecoveryWriterInFlight (c-5): a resumed run whose task still has a
+// launched writer fails it — stash, then failed — and never takes it over.
+func TestRecoveryWriterInFlight(t *testing.T) {
+	r := expandedPrompt(t, "_execute.recovery.md")
+	arm := r[mustIdx(t, r, "- **A writer still in flight**"):]
+	arm = arm[:mustIdx(t, arm, "- **Dirty tree**")]
+	for _, want := range []string{".dross/gate/writer.json", `"state": "launched"`, "Never resume the task inline"} {
+		if !strings.Contains(arm, want) {
+			t.Errorf("the writer-in-flight arm lost %q", want)
+		}
+	}
+	stash, failed := mustIdx(t, arm, "git stash push -u -- . ':(exclude).dross'"), mustIdx(t, arm, `dross task status <phase> <task-id> failed --reason "writer: `)
+	if stash > failed {
+		t.Error("the writer-in-flight arm marks failed before stashing")
 	}
 }

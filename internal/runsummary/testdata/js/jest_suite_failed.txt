@@ -1,0 +1,21 @@
+# captured: jest@30.5.2 npx jest
+FAIL ./broken.test.js
+  ● Test suite failed to run
+
+    Cannot find module './does-not-exist' from 'broken.test.js'
+
+    > 1 | const missing = require("./does-not-exist");
+        |                 ^
+      2 |
+      3 | test("never runs", () => {
+      4 |   expect(missing).toBeDefined();
+
+      at Resolver._throwModNotFoundError (node_modules/jest-resolve/build/index.js:1031:11)
+      at Object.require (broken.test.js:1:17)
+
+
+Test Suites: 1 failed, 2 passed, 3 total
+Tests:       4 passed, 4 total
+Snapshots:   0 total
+Time:        0.162 s, estimated 1 s
+Ran all test suites.

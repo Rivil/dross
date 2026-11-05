@@ -1,0 +1,897 @@
+{
+  "phase": "memory-prune-advisor",
+  "pr": 196,
+  "base": "milestone/v1.8",
+  "base_commit": "024756792334f783ccd4e948d6e940badac65048",
+  "status": "complete",
+  "tasks": {
+    "quick-1": {
+      "files": [
+        "assets/prompts/spec.md",
+        "assets/prompts/plan.md",
+        "assets/prompts/_interaction.md",
+        "docs/interaction-audit.md",
+        "internal/cmd/interaction_coreloop_test.go"
+      ],
+      "commit": "73ad1afd",
+      "completed_at": "2026-10-30T15:04:48.84886Z",
+      "notes": "quick: ask the spec/plan lock gate as an AskUserQuestion"
+    },
+    "t-1": {
+      "files": [
+        "internal/memadvise/locate.go",
+        "internal/memadvise/paths.go",
+        "internal/memadvise/locate_test.go"
+      ],
+      "commit": "1efce234",
+      "completed_at": "2026-10-30T15:18:52.138541Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Locate",
+          "loc": "internal/memadvise/locate.go:57",
+          "what": "resolves the repo's Claude memory dir (CLAUDE_CONFIG_DIR-aware, symlink-resolved slug), silent when absent or symlinked"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/memory.go",
+        "internal/cmd/memory_test.go",
+        "cmd/dross/main.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "c722d22d",
+      "completed_at": "2026-10-30T18:27:38.4829Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "memoryApply",
+          "loc": "internal/cmd/memory.go:63",
+          "what": "dross memory advise lists every suggestion read-only; dross memory apply \u003cid\u003e --yes re-gathers, refuses unknown/ambiguous/report-only ids, applies with a snapshot and prints the integrity recheck"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        ".dross/phases/memory-prune-advisor/flow-cost.toml",
+        "internal/cmd/flowcost_record_test.go",
+        "README.md"
+      ],
+      "commit": "22d95a3",
+      "completed_at": "2026-10-30T19:06:23.467725Z",
+      "landmarks": [
+        {
+          "feature": "memory-prune advisor",
+          "symbol": "checkMemoryPruneAdvisorFlow",
+          "loc": "internal/cmd/flowcost_record_test.go:269",
+          "what": "pins the /dross-status before/after flow-cost record (status_bytes, cold turn cache) and forbids copied memory content in it"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/memadvise/hook_test.go",
+        "internal/memadvise/turns_test.go"
+      ],
+      "commit": "34122732",
+      "completed_at": "2026-10-31T08:51:52.234479Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "TestTurnsPastTailCap",
+          "loc": "internal/memadvise/turns_test.go:246",
+          "what": "pins earliest-clause pick, unreadable counts and the tail-cap trim against verify survivors"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/memadvise/index.go",
+        "internal/memadvise/index_test.go",
+        "internal/memadvise/advise.go",
+        "internal/memadvise/advise_test.go"
+      ],
+      "commit": "61f04ea6",
+      "completed_at": "2026-10-31T15:40:51.420046Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Corpus.Resolve",
+          "loc": "internal/memadvise/index.go:237",
+          "what": "normalises index link targets (./, #frag, %-escapes, case fold) so live memories are never reported dead"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/memadvise/hook.go",
+        "internal/memadvise/hook_test.go"
+      ],
+      "commit": "7088d1f2",
+      "completed_at": "2026-10-31T15:54:18.344569Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "removeClause",
+          "loc": "internal/memadvise/hook.go:83",
+          "what": "rewords an expired clause out of a parenthetical without leaving a dangling separator; next: slugs match case-insensitively"
+        }
+      ]
+    },
+    "t-15": {
+      "files": [
+        "internal/memadvise/turns.go",
+        "internal/memadvise/turns_test.go",
+        "internal/memadvise/turncache.go",
+        "internal/memadvise/turncache_test.go",
+        "internal/memadvise/gather.go",
+        "internal/memadvise/render_test.go",
+        "internal/cmd/memory.go",
+        "internal/cmd/memory_test.go",
+        "internal/cmd/status_memory_test.go"
+      ],
+      "commit": "7c459ef",
+      "completed_at": "2026-11-01T08:46:48.977074Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "update",
+          "loc": "internal/memadvise/turns.go:160",
+          "what": "turn counts recount on in-place transcript rewrites; cache refuses symlinked state dirs, persists Unreadable, and a cache-write error no longer drops counts"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        "internal/memadvise/apply.go",
+        "internal/memadvise/apply_test.go",
+        "internal/memadvise/snapshot.go",
+        "internal/memadvise/index.go"
+      ],
+      "commit": "47a64156",
+      "completed_at": "2026-10-31T17:56:25.604176Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "rewriteIndex",
+          "loc": "internal/memadvise/apply.go:152",
+          "what": "rewrites one index line keeping every other line's ending; snapshot copies files of any size; index mode preserved"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "internal/memadvise/snapshot.go",
+        "internal/memadvise/apply_test.go"
+      ],
+      "commit": "ff9cd13f",
+      "completed_at": "2026-11-01T13:00:32.68524Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Snapshot",
+          "loc": "internal/memadvise/snapshot.go:23",
+          "what": "snapshot path built component-by-component via ensureStateDir + Mkdir/Lstat; any symlinked .dross/memory/snapshots component is refused"
+        }
+      ]
+    },
+    "t-18": {
+      "files": [
+        "internal/memadvise/apply.go",
+        "internal/memadvise/apply_test.go"
+      ],
+      "commit": "65350a68",
+      "completed_at": "2026-11-01T13:13:58.021203Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "rewriteIndex",
+          "loc": "internal/memadvise/apply.go:152",
+          "what": "deleting a last index line with no newline drops the preceding LF/CRLF so the index still ends without one"
+        }
+      ]
+    },
+    "t-19": {
+      "files": [
+        "internal/memadvise/advise.go",
+        "internal/memadvise/advise_test.go",
+        "internal/memadvise/apply_test.go",
+        "internal/cmd/status_memory_test.go",
+        "internal/cmd/memory_test.go"
+      ],
+      "commit": "ad23fe1b",
+      "completed_at": "2026-11-01T14:00:11.429478Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "DeadLinkID",
+          "loc": "internal/memadvise/advise.go:213",
+          "what": "dead-link ids are delete-\u003cstem\u003e-\u003c6hex sha256 of the line\u003e, so reordering never re-points an id and a dead link never holds a memory's plain id"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/memadvise/index.go",
+        "internal/memadvise/index_test.go",
+        "internal/memadvise/testdata/corpus/MEMORY.md"
+      ],
+      "commit": "6091f65d",
+      "completed_at": "2026-10-30T15:39:39.477999Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Corpus.Integrity",
+          "loc": "internal/memadvise/index.go:255",
+          "what": "loads MEMORY.md + direct-child memories (no symlinks/FIFOs) and reports dead index links, orphans, inbound/dangling [[links]] by name: slug and duplicate slugs"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/memadvise/guard.go",
+        "internal/memadvise/dup.go",
+        "internal/memadvise/guard_test.go",
+        "internal/memadvise/dup_test.go"
+      ],
+      "commit": "1308825c",
+      "completed_at": "2026-10-30T15:42:42.517774Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Docs.Duplicates",
+          "loc": "internal/memadvise/dup.go:56",
+          "what": "flags a memory whose normalised 8-word shingles are \u003e=50% inside one tracked doc; Guarded blocks deletes on NEVER/ASK/DECOY/REOPENED/don't re-raise|revert"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/memadvise/hook.go",
+        "internal/memadvise/hook_test.go"
+      ],
+      "commit": "83c598c6",
+      "completed_at": "2026-10-30T16:02:45.528214Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Expired",
+          "loc": "internal/memadvise/hook.go:49",
+          "what": "finds an expired deadline (until/by/due… YYYY-MM-DD \u003c today) or a next-phase clause naming a known phase and rewords it out of the hook, never to empty"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/memadvise/turns.go",
+        "internal/memadvise/turncache.go",
+        "internal/memadvise/turns_test.go",
+        "internal/memadvise/turncache_test.go",
+        "internal/cmd/gitignore.go",
+        "internal/cmd/gitignore_test.go",
+        ".gitignore",
+        "internal/secretscan/writers.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "5d4979d4",
+      "completed_at": "2026-10-30T17:00:26.777664Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Turns",
+          "loc": "internal/memadvise/turncache.go:43",
+          "what": "counts this repo's and all projects' main-agent assistant turns over 30d from Claude transcripts, cached incrementally in gitignored .dross/memory/turns.json (24h reuse)"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/memadvise/advise.go",
+        "internal/memadvise/cost.go",
+        "internal/memadvise/advise_test.go",
+        "internal/memadvise/cost_test.go"
+      ],
+      "commit": "8a69b2b3",
+      "completed_at": "2026-10-30T17:15:34.914946Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Advise",
+          "loc": "internal/memadvise/advise.go:65",
+          "what": "turns a memory dir into ranked prune suggestions (expired-hook reword beats duplicate delete, guarded never deleted, dead links and orphans) priced at index bytes x repo turns x $0.20/MTok cache read"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/memadvise/gather.go",
+        "internal/memadvise/render.go",
+        "internal/memadvise/render_test.go"
+      ],
+      "commit": "f12216ea",
+      "completed_at": "2026-10-30T17:37:10.834714Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Gather",
+          "loc": "internal/memadvise/gather.go:29",
+          "what": "resolves memory dir, tracked docs (git ls-files), known next-phases and turn counts into a Report; Render prints id/file/action/$X.XX/mo lines, +N more, integrity and share lines, never bodies"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/memadvise/apply.go",
+        "internal/memadvise/snapshot.go",
+        "internal/memadvise/apply_test.go",
+        "internal/secretscan/writers.go"
+      ],
+      "commit": "1f42b123",
+      "completed_at": "2026-10-30T17:44:21.390482Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "Apply",
+          "loc": "internal/memadvise/apply.go:30",
+          "what": "carries out one delete/reword: refuses report-only, snapshots the memory dir to .dross/memory/snapshots first, re-checks the guard live, aborts on a concurrent MEMORY.md edit, rewrites the index atomically, re-runs integrity"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/status_memory_test.go",
+        "internal/cmd/status_prompt_test.go"
+      ],
+      "commit": "1baa5496",
+      "completed_at": "2026-10-30T18:03:01.088357Z",
+      "landmarks": [
+        {
+          "feature": "memory prune advisor",
+          "symbol": "statusMemory",
+          "loc": "internal/cmd/status.go:503",
+          "what": "dross status prints a memory: section with the top 3 prune suggestions and +N more after the debug: line; silent on no dir, nothing to suggest or any error"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "TestSlugResolvesSymlinks only runs the /tmp -\u003e /private/tmp check when /tmp is a symlink (macOS), so it is skipped on Linux CI. The link-vs-target check still enforces symlink resolution on every platform, so the contract holds.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "ClaudeDir returns CLAUDE_CONFIG_DIR as given: it does not expand '~' or make the path absolute, so a relative value resolves against the process cwd.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The package doc mentions Apply as the one writer, but this diff does not add Apply. The doc assumes sibling tasks will.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "advise reports a partial turn count only on the run that recounts: Turns saves the cache even when Unreadable \u003e 0, and a cache hit within CacheTTL returns Unreadable=0, so for the next 24h advise prints the partial counts silently with exit 0. TestAdviseSurfacesCountError only covers the first, uncached run.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the apply prints the snapshot line before checking Apply's error, so a failure after the snapshot (guard refusal, index changed meanwhile) still tells the user where the copy is",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestApplyUnknownID uses typo-shaped ids only. A truly stale id (a suggestion that was valid and then went away) takes the same not-found path, so this covers it in effect",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-11": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The measured flow-cost.toml itself sits under .dross/ and is excluded from the diff, so this review could not inspect the recorded numbers; their soundness rests on TestFlowCostRecords and TestFlowCostCopiesNoContent passing against the real file.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The walker's mutation tests assert exactly one problem per break and include a clean baseline, so a walker that stopped looking would fail rather than pass the real record vacuously.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-12": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestTurnsPastTailCap uses tailIDs+1 rather than a literal 33, so it keeps exercising the trim if the cap constant changes",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-13": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "Dead-link ids with a -N suffix (delete-gone-2, delete-x-3) depend on the order of index lines, which contradicts the id() doc comment that reordering index lines never renames a suggestion; an id taken from an advise run can name a different line after the index is reordered",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A duplicate delete for a memory with several index lines removes only lines[0] and the memory file, so its other index lines become dead links after apply. Unchanged from the old behaviour, and Apply's post-apply integrity check reports them",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "The double-index contract case is a separate test, TestExpiredHookOnSecondIndexLineNeverDeletes, rather than a case inside TestExpiredHookNeverDeletes; it covers the same behaviour",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-14": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "removeClause on an unclosed parenthetical clause at the end of a hook (e.g. 'X (until 2026-01-01') still returns 'X (' with a dangling open paren; this predates the change and is outside t-14's contract",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "NextSlugs now lowercases its output, so gather.go builds the known set from lowercased slugs, which matches Expired's lowercased lookup",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-15": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "A cached Unreadable count persists for the full 24h TTL, so advise keeps returning an error after the user fixes the permissions, until the cache expires. This is acceptable under the description's 'persist Unreadable' option.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "mark hashes only the first and last 4 KiB before Offset, so a rewrite that leaves both ends byte-identical is still resumed at the old offset. The doc comment says so, and it is a reasonable trade for the cost.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "TestStatusMemoryOnCacheWriteError's 'could not be cached' absence check is close to vacuous, because status never builds that string. The section-present and footer assertions carry the test.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-16": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "rewriteIndex's comment says 'a missing trailing newline stays missing', but deleting the last line of an index with no trailing newline (\"a\\nb\" -\u003e \"a\\n\") now leaves the previous line's newline in place; the old code returned \"a\". This path has no test.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "copyRegular leaves a partial copy in the snapshot dir if io.Copy fails midway; Snapshot then returns an error and apply aborts, so the memory dir itself is unharmed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The Chmod added in replaceIndex is what lets the new dirHash comparison pass: CreateTemp's 0600 would otherwise change MEMORY.md's mode.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-17": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Snapshot now reuses turncache.go's ensureStateDir for .dross/memory, so the turn cache and snapshots refuse symlinks the same way and the old MkdirAll+final-Lstat path is gone",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the table test also covers a symlinked .dross/memory (beyond the two contract lines) and points the snapshots link at the memory dir itself, so the c-3 'memory dir unchanged' property is exercised directly",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-18": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "If the line before the deleted last line is blank (e.g. 'a\\n\\nb'), trimming its ending gives 'a\\n'. That is consistent: the now-empty last line has no newline. But the result still looks like it ends in a newline, and no test covers this case.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The table test now covers delete under LF, CRLF, a sole line and a final newline, which fills the gap TestApplyKeepsEachLineEnding left for indexes with no trailing newline.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-19": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "spec",
+          "severity": "BLOCKING",
+          "criterion": "c-9",
+          "text": "Description requires every dead-link suggestion to get an id suffixed with a short hash of its raw index line (delete-\u003cstem\u003e-\u003chex\u003e), with -N only among byte-identical lines; the code hashes only contested dead links and an uncontested one keeps the plain delete-\u003cstem\u003e (the new test asserts delete-lone). The named hazard is still there: a later live x.md (or a newly created gone.md) takes the dead link's earlier plain id, so a stale 'dross memory apply delete-x' now targets the live memory.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestDeadLinkIDsSurviveReorder is a real reorder check: it reverses the index and compares ids per raw line, including byte-identical duplicates, and would fail on any position-dependent numbering.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "id()'s doc comment matches the contested-only behaviour the code has, not the every-dead-link behaviour the task describes; it will need updating along with the fix.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "No test covers the case where two different lines' 6-hex hashes collide. If that happens, the line whose text sorts first keeps the plain id, so adding a later colliding line that sorts earlier would move an id to a different line. The chance is about 2^-24 per pair, so this is acceptable as documented in advise.go.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A dead link can only fall back to -2 against a memory if that memory's stem itself ends in the same six hex digits. The DeadLinkID comment says so, and the fallback keeps the two apart.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "Resolve looks targets up with an exact, case-sensitive match on the bare file name. './foo.md', 'foo.md#anchor', '%20'-encoded names and a case mismatch on a case-insensitive filesystem (darwin) are all reported as dead links even when the file exists. Also, indexLineRe's target class [^)\\s]* means a link whose target contains a space is not parsed as an index line at all, so its file is reported as an orphan rather than as indexed or dead.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Files over the 1 MiB cap, or ones that fail to read, are dropped from Memories without a trace. An index line pointing at one is then reported dead, as if the file were missing. The code comments say so, but a later display layer may want to tell the two cases apart.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestIndexLinkOutsideDirIsDead does not watch whether '../../.ssh/id.md' is opened. It infers it from Resolve returning nil and no 'secret' memory being loaded. That still catches any Resolve that reads the path, so it is adequate.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Only MEMORY.md is fixed under testdata/corpus/. corpusDir writes the memory files at test time, which matches the files the task declared.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-7",
+          "text": "shingles() runs one word stream across paragraph breaks, so TestDupSurvivesReorder passes partly on shingles shared inside a paragraph and partly on the a-\u003eb boundary the doc keeps. Lowercasing on its own doesn't decide the result (without it the overlap is still 33/53), so the test is real coverage of reordering but only weak coverage of case normalisation.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "Guarded only provides the guard check. This task doesn't wire it into suggestion generation, so 'never suggested for deletion' and 'status words alone produce no suggestion' depend on whichever sibling task builds suggestions.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-7",
+          "text": "Duplicates returns whatever path string the caller passed to NewDocs. The repo-relative guarantee depends on callers feeding it DocCandidates output from git ls-files.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "removeClause leaves a dangling separator when a clause opens a parenthetical but ends at a separator rather than ')': \"X (until 2026-01-01; note) Y\" rewords to \"X (; note) Y\". Only the prefix '(' + suffix ')' case is handled.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "nextClauseRe is case-insensitive, so the slug group captures mixed case ('Next: Foo' -\u003e 'Foo'); a lowercase known-phase set never matches it, so the clause silently stays live. Consider lowercasing the captured slug or making the slug group case-sensitive.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Expired takes known map[string]bool, not the phaseKnown(slug) predicate the description names; a code comment gives the reason (exec-consent audit) and NextSlugs lets the caller build the set. The tested behaviour is the same.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "update() only treats a file as rewritten when size \u003c e.Offset. A transcript rewritten in place to the same or a larger size (e.g. compacted then grown past the old offset) is resumed from the stale offset, so its new head is never counted and its old day buckets stay. Resetting when mtime moved but the bytes before Offset changed, or at least when size \u003c e.Size, would narrow this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "saveCache's symlink refusal Lstat's only the final .dross/memory component. A symlinked .dross (or any parent) still lets MkdirAll and writeAtomic land turns.json wherever it points, including inside the memory dir, which TestCacheNeverInMemoryDir's intent rules out.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The window is day-granular: windowStart is the UTC date of now-30d, so a turn up to ~30d23h old can count while the mtime cutoff is exact. This meets the 31-day test_contract; it just runs slightly past 30 days.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "Advise iterates index lines, not memories: if a memory is indexed twice and the first line (no expired clause) yields a duplicate delete, the second line's expired clause is skipped via seen[], so that memory gets a delete instead of a reword.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "id() uses filepath.Base of the target, so two dead links to the same target, or a dead 'old/x.md' next to a live duplicate x.md, yield identical IDs (e.g. delete-x); ambiguous if Apply selects by ID.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "Adds a third Action, 'index', for guarded orphans, beyond the record's delete|reword hook; a reasonable resolution of the orphan-delete versus guard rule.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Line-byte pricing uses len(Raw)+1; it overcounts by 1 for a final line without a newline and undercounts by 1 for CRLF files, since Raw drops the \\r.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "Gather treats any Turns error as fatal and returns an empty Report, although Turns documents that a failed cache write still returns valid fresh counts alongside the error; a read-only checkout or a symlinked .dross/memory therefore silently suppresses all suggestions instead of just skipping the cache",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Gather calls Load(dir) and then Advise loads the same dir again; one read could serve both",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "knownPhases (DirExists || Done lookup per next-slug) has no direct test; not required by the test_contract",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "rewriteIndex picks one line ending for the whole file: if any CRLF is present, every line is rejoined with CRLF. So an index with mixed LF/CRLF endings gets bytes changed on lines other than the target, which the 'every other byte kept' promise rules out. Keeping each line's own ending would fix it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "Snapshot copies every direct-child regular file through readRegular, which refuses files over 1 MiB. One large file of any type in the memory dir (not only *.md) makes every apply fail with 'unreadable', and nothing tests it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "TestApplyDeleteRemovesFileAndLine compares only keep.md, other.md and MEMORY.md. It would not catch a leftover .MEMORY.md.*.tmp or any other new file in the memory dir. Comparing a dirHash of the expected tree would cover the 'any other byte changed' clause fully.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "If Snapshot fails partway, the partially written snapshot dir is left under .dross/memory/snapshots/. It is git-ignored, and the memory dir is not touched.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The record describes Apply(memDir, snapDir, s), but the code implements Apply(root, memDir, s, now) and derives the snapshot dir from root. The behaviour is the same.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "The 'unreadable MEMORY.md' subtest passes because memadvise.Load treats an unreadable index as no index (HasIndex false, so Advise returns nothing), not through a Gather error; the error branch is exercised by the 'unreadable memory dir' and 'turn cache cannot be written' subtests instead",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Turns returns fresh counts alongside a cache-write error, but Gather turns that into a hard error, so an unwritable .dross/memory silences the memory section entirely; this matches the task description and is pinned by a test",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Every dross status run now runs git ls-files, breaks tracked docs into word sequences for the duplicate check, and lists the memory dir; transcript recounts are limited by the 24h cache",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
+}

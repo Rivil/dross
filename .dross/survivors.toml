@@ -4585,3 +4585,624 @@
   line = 171
   accepted_in = "review-comment-ingest"
   category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "774dd92e98503b96"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !present && h.command == NudgeHook:"
+  line = 1162
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test drives that arm — go-cover gives the condition's columns no block (dross_gremlins_switchcase_ceiling). hooksSection's missing-nudge arm is asserted by the \"no nudge\" row of TestDoctorMissingConvenienceHooksWarnOnly, which requires the exact ⚠ \"context-threshold nudges are off\" line and a zero exit."
+  accepted_in = "context-boundaries"
+
+[[accepted]]
+  key = "928c1940e2ae8d55"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case n == 0:"
+  line = 1209
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test drives that arm — go-cover gives the condition's columns no block (dross_gremlins_switchcase_ceiling). contextThresholdLine's off arm is asserted by TestDoctorContextThreshold's \"off\" row (threshold = 0 → \"✓ context nudge: off (threshold 0)\")."
+  accepted_in = "context-boundaries"
+
+[[accepted]]
+  key = "4e34f76031ada531"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d.Context.Threshold == nil:"
+  line = 1211
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test drives that arm — go-cover gives the condition's columns no block (dross_gremlins_switchcase_ceiling). contextThresholdLine's unset arm is asserted by TestDoctorContextThreshold's \"absent\" row (\"✓ context nudge: 150k (default)\"), and its default arm by the \"explicit\" row (\"90k\")."
+  accepted_in = "context-boundaries"
+
+[[accepted]]
+  key = "ee32013f36033e7f"
+  file = "internal/runsummary/gotest.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case line == \"FAIL\" || line == \"PASS\":"
+  line = 84
+  reason = "gremlins switch-case attribution ceiling: case condition sits in no go-cover block, so it reads NOT COVERED even though the case is exercised (see TestGoBuildFailed/TestVitestLoadError/TestGitignoreDirRefused)"
+  accepted_in = "test-output-summaries"
+
+[[accepted]]
+  key = "c1633fe75ec564fb"
+  file = "internal/runsummary/jsrunner.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case title == \"Unhandled Errors\":"
+  line = 106
+  reason = "gremlins switch-case attribution ceiling: case condition sits in no go-cover block, so it reads NOT COVERED even though the case is exercised (see TestGoBuildFailed/TestVitestLoadError/TestGitignoreDirRefused)"
+  accepted_in = "test-output-summaries"
+
+[[accepted]]
+  key = "4105246fa4fa1f78"
+  file = "internal/runsummary/jsrunner.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v.unhandled && title != \"\" && !strings.HasPrefix(title, \"[\"):"
+  line = 108
+  reason = "gremlins switch-case attribution ceiling: case condition sits in no go-cover block, so it reads NOT COVERED even though the case is exercised (see TestGoBuildFailed/TestVitestLoadError/TestGitignoreDirRefused)"
+  accepted_in = "test-output-summaries"
+
+[[accepted]]
+  key = "75c7e03c898c507c"
+  file = "internal/runlog/runlog.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 287
+  reason = "gremlins switch-case attribution ceiling: case condition sits in no go-cover block, so it reads NOT COVERED even though the case is exercised (see TestGoBuildFailed/TestVitestLoadError/TestGitignoreDirRefused)"
+  accepted_in = "test-output-summaries"
+
+[[accepted]]
+  key = "9c3b14361e3d02b4"
+  file = "assets/partials.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case value == values[0]:"
+  line = 315
+  reason = "gremlins switch-case attribution ceiling: a bare switch{} case condition gets no go-cover block; the common-path rejection it guards is asserted by assets/partials_test.go TestCommonPathFetchesNothing (\"is the common path\")"
+  accepted_in = "prompt-partials"
+
+[[accepted]]
+  key = "642c11f3ced7acab"
+  file = "assets/partials.go"
+  op = "ARITHMETIC_BASE"
+  text = "return nil, fmt.Errorf(\"%s.md:%d: %w\", name, i+1, err)"
+  line = 195
+  reason = "line number inside Expand's missing-partial error message; unreachable for the embedded assets because CheckPartials (TestPartialRegistryRealAssets) rejects a missing partial first, and the value is diagnostic only"
+  accepted_in = "prompt-partials"
+
+[[accepted]]
+  key = "3b71a93ed10f964a"
+  file = "internal/cmd/task_dispatch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case surface < writerSurfaceBytes:"
+  line = 89
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "cbd135fb4a0c4d60"
+  file = "internal/cmd/task_dispatch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case surface < writerSurfaceBytes:"
+  line = 89
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "32d8d36ff642319d"
+  file = "internal/cmd/task_dispatch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case v.ContextDrop < killSwitchContextDrop-eps:"
+  line = 160
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "d86257d361b4923c"
+  file = "internal/cmd/task_dispatch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v.ContextDrop < killSwitchContextDrop-eps:"
+  line = 160
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "21b7a9dd0081fa4d"
+  file = "internal/cmd/task_dispatch.go"
+  op = "INVERT_NEGATIVES"
+  text = "case v.ContextDrop < killSwitchContextDrop-eps:"
+  line = 160
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "141fe6d068facf76"
+  file = "internal/cmd/task_dispatch.go"
+  op = "ARITHMETIC_BASE"
+  text = "case v.ContextDrop < killSwitchContextDrop-eps:"
+  line = 160
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "283c38e37bd0f063"
+  file = "internal/cmd/task_dispatch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case v.WallClockRise > killSwitchWallClockRise+eps:"
+  line = 162
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "260fec370d6f8325"
+  file = "internal/cmd/task_dispatch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case v.WallClockRise > killSwitchWallClockRise+eps:"
+  line = 162
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "5c8dad200ab448f8"
+  file = "internal/cmd/task_dispatch.go"
+  op = "ARITHMETIC_BASE"
+  text = "case v.WallClockRise > killSwitchWallClockRise+eps:"
+  line = 162
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "a92ed87a9d9b787a"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case isWriterSpawn(c), c.AgentType == review.WriterAgent:"
+  line = 54
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "b68709b57bea8da4"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.AgentType != \"\":"
+  line = 56
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "928ca7aac854a491"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.AgentType == review.WriterAgent:"
+  line = 64
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "a99c98e1a29c8845"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.ToolName == \"Bash\":"
+  line = 122
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "008c0fea3880b3e3"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "}); why != \"\" {"
+  line = 210
+  reason = "Condition on the closing line of a multi-line if-with-init (writerCommandRefusal's call spans 207-210). go-cover attributes the statement to the block starting at the if line, so gremlins marks the condition columns NOT COVERED; the branch provably runs and refuses in TestWriterBashAllowlist (git commit, dross task status, gh pr create...). Same attribution limit as gremlins-attribution-ceiling."
+  accepted_in = "solo-task-subagent"
+
+[[accepted]]
+  key = "75d524a5ea03dd5f"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"\":"
+  line = 229
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "23cba9c80d01c0e9"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"gh\" || name == \"glab\":"
+  line = 241
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "80e59f94531e7ad9"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"git\":"
+  line = 243
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "8d2ab4c7fbec213c"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"dross\":"
+  line = 248
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "e644682d4395481d"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case (first == \"rule\" || first == \"task\") && nextWord(args, first) != \"show\":"
+  line = 252
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "bee82d47cb989a78"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case first == \"test\" && !slices.ContainsFunc(args, func(a string) bool { return a == \"--files\" || strings.HasPrefix(a, \"--files=\") }):"
+  line = 254
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "f8d8ec9e568e3837"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"go\":"
+  line = 257
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "b50cf870208410b3"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"gofmt\":"
+  line = 261
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "95b0806029650b49"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !seen && a == after:"
+  line = 275
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "7d6d1374877afe70"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"dross\":"
+  line = 320
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "c4a03af6ccce8b26"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(args) > 0 && args[0] == \"test\" && !slices.ContainsFunc(args, func(a string) bool { return a == \"--files\" || strings.HasPrefix(a, \"--files=\") }):"
+  line = 322
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "ea713ee79ba49ad3"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(args) > 0 && args[0] == \"test\" && !slices.ContainsFunc(args, func(a string) bool { return a == \"--files\" || strings.HasPrefix(a, \"--files=\") }):"
+  line = 322
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "481d1439f7aac486"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(args) > 1 && args[0] == \"review\" && args[1] == \"context\":"
+  line = 324
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "513e0d0a85f875bb"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(args) > 1 && args[0] == \"review\" && args[1] == \"context\":"
+  line = 324
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "1d7c013f53794371"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"git\":"
+  line = 327
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "8708e802bf5cffcb"
+  file = "internal/gate/writer.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ex == nil:"
+  line = 69
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "7635936d9ee0ab64"
+  file = "internal/gate/writer.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ex.Mode != \"solo\":"
+  line = 71
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "2dc1522710b21e60"
+  file = "internal/gate/writer.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ex.Phase != id:"
+  line = 73
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "2c4a9785fb824f98"
+  file = "internal/gate/writer.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(tasks) == 0:"
+  line = 75
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "7ce86477e6694759"
+  file = "internal/gate/writer.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.Event == EventSubagentStop:"
+  line = 121
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "0c1720f279e3396d"
+  file = "internal/gate/writer.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.ToolName == \"SendMessage\":"
+  line = 123
+  accepted_in = "solo-task-subagent"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "a02e881f45ad1166"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.ToolName == \"Agent\" || c.ToolName == \"Task\":"
+  line = 130
+  reason = "gremlins-attribution-ceiling: switch{} case-condition line (Agent/Task spawn arm); the arm is driven by writerfence_test.go:TestWriterSpawnsNoAgent"
+  accepted_in = "solo-task-subagent"
+
+[[accepted]]
+  key = "22e08a96f7fed133"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"find\" && slices.ContainsFunc(args, func(a string) bool {"
+  line = 249
+  reason = "gremlins-attribution-ceiling: switch{} case-condition line (find -exec/-execdir/-delete/-ok arm); driven by writerfence_test.go:TestWriterBashAllowlist"
+  accepted_in = "solo-task-subagent"
+
+[[accepted]]
+  key = "9fa7735c60da667f"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"git\":"
+  line = 388
+  reason = "gremlins-attribution-ceiling: switch{} case-condition line (takeoverWrite git checkout/restore arm); driven by writerfence_test.go:TestNoInlineTakeoverViaBash"
+  accepted_in = "solo-task-subagent"
+
+[[accepted]]
+  key = "cd47480c6ec79776"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a == \"--reason\":"
+  line = 444
+  reason = "gremlins-attribution-ceiling: switch{} case-condition line (escape-route --reason value skip); driven by writerfence_test.go:TestEscapeRouteSurvivesLoadError"
+  accepted_in = "solo-task-subagent"
+
+[[accepted]]
+  key = "86267aed7899481b"
+  file = "internal/gate/writerfence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"dd\":"
+  line = 398
+  reason = "Switch-case condition (case name == \"dd\": in takeoverWrite). go-cover's case-arm block starts at the colon, so gremlins marks the condition NOT COVERED although it runs; negating it would stop dd's of= target being collected, and TestNoInlineTakeoverViaBash (refuses 'dd if=b.go of=a.go', admits 'dd if=a.go of=b.go', launched and stopped) would fail. Same attribution limit as gremlins-attribution-ceiling."
+  accepted_in = "solo-task-subagent"
+
+[[accepted]]
+  key = "1ebea3e14fc2fe5c"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "comment: \"# dross memory-advisor state — the turn cache, and the memory-dir snapshot taken\\n\" +"
+  line = 83
+  reason = "gremlins attribution ceiling: package-level var initializer string concat, read by TestRepoGitignoreCoversState and TestEnsureDrossGitignoreIsIdempotent; string + to - does not compile"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "d36354f618251058"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# before each applied prune. Machine-local: it mirrors this machine's\\n\" +"
+  line = 84
+  reason = "gremlins attribution ceiling: package-level var initializer string concat, read by TestRepoGitignoreCoversState and TestEnsureDrossGitignoreIsIdempotent; string + to - does not compile"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "930ffb1a6741127b"
+  file = "internal/memadvise/dup.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case p == \"CLAUDE.md\", p == \"ARCHITECTURE.md\","
+  line = 21
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestDocCandidates asserts the exact slice"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "f051f930cf9d2658"
+  file = "internal/memadvise/dup.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "strings.HasPrefix(p, \"docs/\") && path.Ext(p) == \".md\":"
+  line = 23
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestDocCandidates asserts the exact slice"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "433876fcfe18c0b4"
+  file = "internal/memadvise/turncache.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 131
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestIncrementalRecountAndTruncation reaches it with .gitignore present"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "813ad615b6415870"
+  file = "internal/memadvise/turns.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !had || size < e.Offset:"
+  line = 148
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestIncrementalRecountAndTruncation evaluates new, appended and truncated files"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "90579aa1cef3554e"
+  file = "internal/memadvise/turns.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case size == e.Size && mtime == e.ModTime:"
+  line = 150
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestIncrementalRecountAndTruncation reaches it on the appended-turn recount"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "9b37ca7505c56e5d"
+  file = "internal/memadvise/locate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 68
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestLocateHonorsClaudeConfigDir reaches it with an existing memory dir"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "1d9b3f7d9cc238c1"
+  file = "internal/memadvise/hook.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "if h.start < first.start {"
+  line = 69
+  reason = "equivalent mutant: matches from one regex never overlap and date/next clauses cannot start at the same index, so < vs <= cannot change the earliest pick; the pick itself is pinned by TestExpiredRemovesEarliestClause"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "6e2b0539e88222c4"
+  file = "internal/memadvise/turns.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case !had || size < e.Offset:"
+  line = 148
+  reason = "equivalent mutant: size == Offset under <= rescans from 0 to the same count on an append-only transcript; only extra bytes are read — both arms pinned by TestIncrementalRecountAndTruncation"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "e524475e33e04935"
+  file = "internal/memadvise/turns.go"
+  op = "INCREMENT_DECREMENT"
+  text = "unreadable++"
+  line = 120
+  reason = "unkillable: f.Info() fails only if the file vanishes between ReadDir and Info, a race with no deterministic seam; the sibling unreadable++ arms are pinned by TestTurnsProjectsNotADir and TestTurnsUnreadableProjectDir"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "b2cdcebbb72fa67e"
+  file = "internal/memadvise/hook.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case prefix == \"\" || strings.HasSuffix(prefix, \"(\"):"
+  line = 97
+  reason = "gremlins attribution ceiling: switch-case condition is executed by tests but go-cover cannot attribute it (see dross_gremlins_switchcase_ceiling); TestRewordRemovesOnlyClause kills the negation via 'next phase foo; X — done' (prefix==\"\" arm) and 'X (until 2026-01-01; note) Y' (open-paren arm)"
+  accepted_in = "memory-prune-advisor"
+
+[[accepted]]
+  key = "34f06047d8b36064"
+  file = "internal/runsummary/dart.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d.cur != nil:"
+  line = 71
+  reason = "gremlins switch-case attribution ceiling: 'case d.cur != nil:' in dart.Feed sits in no go-cover block. A go test -coverprofile ./internal/runsummary run on 2026-11-02 reports count 1 for the arm body (dart.go:72.3,72.19), driven by TestDartRedOwnLines/TestDartBlockEnds, while gremlins marks the condition NOT COVERED and builds no mutant. No mutant exists to kill: the suite already runs the arm."
+  accepted_in = "test-summary-parsers"
+
+[[accepted]]
+  key = "61ea2f8e845f2683"
+  file = "internal/cmd/verify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case p == \"\":"
+  line = 1427
+  reason = "gremlins switch-case attribution ceiling: 'case p == \"\":' in the collect host-log switch sits in no go-cover block. A go test -coverprofile ./internal/cmd -run Collect run on 2026-11-02 reports count 1 for the arm body (verify.go:1428.3,1428.54), driven by TestCollectEmptyHostLogSaysSo which asserts exactly one 'log unavailable' line, while gremlins marks the condition NOT COVERED. No mutant exists to kill: the suite already runs the arm."
+  accepted_in = "test-summary-parsers"
+
+[[accepted]]
+  key = "4fbaaf26ae024014"
+  file = "internal/cmd/verify.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case l.Err() != nil:"
+  line = 1425
+  reason = "gremlins switch-case attribution ceiling: the case condition sits in no go-cover block, so it reads NOT COVERED though tested. go test -coverprofile on 2026-11-03 shows count 1 on the arm body (verify.go:1426, 'case l.Err() != nil:' in collect's host-log switch), run by internal/cmd/verify_log_test.go:TestCollectRunLogErrorSaysSo, which asserts exactly one 'log unavailable:' line carrying the run log's error."
+  accepted_in = "test-summary-parsers"
+
+[[accepted]]
+  key = "166c1d68ad6ac04e"
+  file = "internal/runsummary/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.Runner == \"\":"
+  line = 161
+  reason = "gremlins switch-case attribution ceiling: the case condition sits in no go-cover block, so it reads NOT COVERED though tested. go test -coverprofile on 2026-11-03 shows count 1 on the arm body (render.go:161.23, 'case r.Runner == \"\":' in counts()), run by internal/runsummary/summary_test.go:TestCountsEmptyRunnerAndCounts, which asserts the exact joined string for empty-Runner results."
+  accepted_in = "test-summary-parsers"
+
+[[accepted]]
+  key = "6a16ca214a2d1926"
+  file = "internal/runsummary/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c == \"\":"
+  line = 162
+  reason = "gremlins switch-case attribution ceiling: the case condition sits in no go-cover block, so it reads NOT COVERED though tested. go test -coverprofile on 2026-11-03 shows count 1 on the arm body (render.go:163, 'case c == \"\":' in counts()), run by internal/runsummary/summary_test.go:TestCountsEmptyRunnerAndCounts, which asserts an empty-Counts result prints its runner name alone."
+  accepted_in = "test-summary-parsers"
+
+[[accepted]]
+  key = "94b27562d0e8887b"
+  file = "internal/runsummary/dart.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d.exc != nil:"
+  line = 82
+  reason = "gremlins switch-case attribution ceiling: the case condition sits in no go-cover block, so it reads NOT COVERED though tested. go test -coverprofile on 2026-11-03 shows count 1 on the arm body (dart.go:83-84, 'case d.exc != nil:' in dart.Feed), run by internal/runsummary/dart_test.go:TestDartExceptionSurvivesClockTick and TestDartPendingNotMisattributed, which assert where a held EXCEPTION CAUGHT block's lines land."
+  accepted_in = "test-summary-parsers"
+
+[[accepted]]
+  key = "6e0ce0e54c9ec2ca"
+  file = "internal/cmd/quick.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.CurrentPhase != \"\" && s.CurrentPhaseStatus != \"shipped\":"
+  line = 164
+  reason = "gremlins switch-case attribution ceiling: a bare switch{} case condition gets no go-cover block; the in-phase arm is asserted by internal/cmd/quick_test.go TestQuickEndRecordsInPhase and the shipped arm by TestQuickEndShippedIsStandalone"
+  accepted_in = "prompt-budgets-rest"
+
+[[accepted]]
+  key = "6dd427a46248a09b"
+  file = "internal/cmd/quick.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.CurrentPhase != \"\":"
+  line = 181
+  reason = "gremlins switch-case attribution ceiling: a bare switch{} case condition gets no go-cover block; the shipped-phase arm is asserted by internal/cmd/quick_test.go TestQuickEndShippedIsStandalone (\"phase p is shipped\") and the no-phase arm by TestQuickEndMatchesPRBranch (\"changes: none (standalone)\")"
+  accepted_in = "prompt-budgets-rest"

@@ -192,7 +192,9 @@ Read the user profile (global + project overrides).
 .B dross defaults \fR{\fBshow\fR|\fBsave\fR}
 Cross-project defaults at
 .IR ~/.claude/dross/defaults.toml
-(e.g. saving the current project's [remote] for future projects).
+(e.g. saving the current project's [remote] for future projects). The same
+file holds the context-nudge knob, hand-edited:
+[context] threshold = N tokens (default 150000; 0 turns the nudge off).
 .SS Code insight
 .TP
 .B dross codex \fIfile\fR [\fIfile\fR...]
@@ -363,6 +365,19 @@ Manage env keys in
 .TP
 .B dross stats \fR{\fBshow\fR|\fBpath\fR|\fBopt-in\fR|\fBopt-out\fR}
 Aggregate views over the local telemetry log; toggle the recorder.
+.TP
+.B dross hooks \fR{\fBensure\fR|\fBnudge\fR}
+.B ensure
+idempotently wires dross's hooks into the user-level
+.IR ~/.claude/settings.json ,
+leaving foreign hooks in place.
+.B nudge
+is a hook-only verb (PostToolUse): once the session's main-agent context
+reaches [context] threshold in
+.I ~/.claude/dross/defaults.toml
+(default 150000; 0 turns it off) it injects one
+\(lqcontext checkpoint:\(rq line, then again at each further 50k. It never
+blocks a tool call.
 .SH SLASH COMMANDS
 Run inside a Claude Code session. Pair-mode is the default: propose \(->
 steer \(-> write. Boldface flags are typed as part of the command's

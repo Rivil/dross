@@ -23,7 +23,7 @@ func Hooks() *cobra.Command {
 	}
 	root.AddCommand(&cobra.Command{
 		Use:   "ensure",
-		Short: "Idempotently wire the dross hooks (PreCompact, SessionStart, and the PreToolUse/PostToolUse/SubagentStop tool-call gates) into user-level settings.json",
+		Short: "Idempotently wire the dross hooks (PreCompact, SessionStart, the PreToolUse/PostToolUse/SubagentStop tool-call gates and the PostToolUse context nudge) into user-level settings.json",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			path, err := userSettingsPath()
 			if err != nil {
@@ -44,11 +44,11 @@ func Hooks() *cobra.Command {
 				Printf("hooks already wired → %s\n", path)
 				return nil
 			}
-			Printf("hooks ensured: PreCompact (%s) + SessionStart (%s) + PreToolUse (%s) + PostToolUse (%s) + SubagentStop (%s) → %s\n",
-				preCompactHookCommand, sessionStartHookCommand, GateCheckHook, GateRecordHook, GateRecordHook, path)
+			Printf("hooks ensured: %s → %s\n", userHooksSummary(), path)
 			return nil
 		},
 	})
+	root.AddCommand(hooksNudge())
 	return root
 }
 
@@ -67,6 +67,10 @@ var userHooks = []struct{ event, command string }{
 	{hooks.EventSessionStart, sessionStartHookCommand},
 	{hooks.EventPreToolUse, GateCheckHook},
 	{hooks.EventPostToolUse, GateRecordHook},
+	// The context-checkpoint nudge — after the gate record, and on
+	// PostToolUse only: a stray exit on UserPromptSubmit would erase the
+	// user's prompt, and PostToolUse output never blocks the call.
+	{hooks.EventPostToolUse, NudgeHook},
 	// A background solo reviewer's verdict arrives on its SubagentStop, not
 	// on the Agent call's PostToolUse (review_pass_signal as amended).
 	{hooks.EventSubagentStop, GateRecordHook},
@@ -83,10 +87,10 @@ func userHooksSummary() string {
 }
 
 // ensureUserHooks idempotently wires the dross hooks into the user-level
-// Claude settings.json via hooks.MergeHook: PreCompact and SessionStart, and
-// the tool-call gates' PreToolUse check and PostToolUse record, and the
-// SubagentStop record a background solo reviewer reports through — matcher-less,
-// so they see every tool call and every finished subagent. Already wired → no write at all (byte-stable).
+// Claude settings.json via hooks.MergeHook: PreCompact and SessionStart, the
+// tool-call gates' PreToolUse check and PostToolUse record, the PostToolUse
+// context nudge, and the SubagentStop record a background solo reviewer reports
+// through — matcher-less, so they see every tool call and every finished subagent. Already wired → no write at all (byte-stable).
 // init and onboard both call this, so whichever runs first does the wiring and
 // the other confirms it.
 func ensureUserHooks() error {

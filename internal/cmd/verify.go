@@ -3,15 +3,18 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/boardsync"
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/localstore"
@@ -21,7 +24,9 @@ import (
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/runlog"
 	"github.com/Rivil/dross/internal/stack"
+	"github.com/Rivil/dross/internal/state"
 	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/telemetry"
 	"github.com/Rivil/dross/internal/testlane"
@@ -174,7 +179,9 @@ func Verify() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			legsDone := streamLegs(filepath.Dir(root), phaseID, adapters)
 			t, err := verify.RunScoped(phaseID, files, adapters, scope)
+			legsDone()
 			if err != nil {
 				if errors.Is(err, remote.ErrHostBusy) {
 					// The host is held and --no-wait said not to wait: a
@@ -755,6 +762,7 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 		return &ExitCodeError{Code: exitResultsUnreachable, Err: fmt.Errorf(
 			"could not fetch run %s's reports from %s: %w", rec.RunID, rec.Host, err)}
 	}
+	collectHostLog(repoDir, phaseID, g.Name(), target, rec.RunDir)
 
 	// rec.Host, not the grant: Collect names the machine that MEASURED these
 	// reports when it refuses one, and c-5 turns on that being the recorded
@@ -811,14 +819,19 @@ func collectDetachedFrom(phaseID, baseOverride string) error {
 	if rec.MeasuredTree == "" {
 		Print("verify: this run was dispatched before trees were recorded — no measured tree, so this verdict's freshness will read as unknown")
 	}
-	if err := finishVerify(root, phaseID, spec, t, verify.MeasuredOnHost(rec.Host), gone); err != nil {
-		return err
+	// A board failure comes back after the artefacts are written: the run is
+	// collected all the same, so its record is cleared before the failure is
+	// returned — otherwise a 500 on the tracker would strand the run.
+	finishErr := finishVerify(root, phaseID, spec, t, verify.MeasuredOnHost(rec.Host), gone)
+	var ec *ExitCodeError
+	if finishErr != nil && !(errors.As(finishErr, &ec) && ec.Code == exitVerifyBoardFailed) {
+		return finishErr
 	}
 	if _, err := localstore.ClearDetachedRun(root, repoDir, phaseID); err != nil {
 		return err
 	}
 	Printf("collected run %s from %s\n", rec.RunID, rec.Host)
-	return nil
+	return finishErr
 }
 
 // detachCancel tears a run down on its host. Swapped in tests.
@@ -1071,6 +1084,32 @@ func finishVerify(root, phaseID string, spec *phase.Spec, t *verify.Tests, measu
 		reportTreeDrift(repoRoot, t.MeasuredTree)
 	}
 	recordVerifyOutcome(t, v)
+	// absorbs: dross issue phase sync <phase> --status uat
+	return verifyBoardUAT(phaseID)
+}
+
+// exitVerifyBoardFailed is a verify whose artefacts were written but whose
+// board could not be moved to uat: the measurement stands, so it must not
+// read as a mutation-tool failure (1) or as any results or host state.
+const exitVerifyBoardFailed = 16
+
+// verifyBoardUAT moves the phase's board issue to uat once tests.json and
+// verify.toml are on disk, narrating on a `board:` line. A failure is
+// reported after the artefacts, never instead of them; board sync off says so.
+func verifyBoardUAT(phaseID string) error {
+	ctx, enabled, err := openBoard()
+	if err == nil && !enabled {
+		Printf("board: off\n")
+		return nil
+	}
+	if err == nil {
+		ctx.Out = &labelWriter{label: "board: "}
+		err = boardsync.SyncPhase(ctx, phaseID, "uat", false)
+	}
+	if err != nil {
+		Printf("board: FAILED: %v — the verify artefacts are written; retry with `dross issue phase sync %s --status uat`\n", err, phaseID)
+		return &ExitCodeError{Code: exitVerifyBoardFailed, Err: fmt.Errorf("board uat sync: %w", err)}
+	}
 	return nil
 }
 
@@ -1177,14 +1216,62 @@ func verifyFinalize() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if recorded {
-				Printf("verify finalize: %s — verdict=%s recorded\n", phaseID, verdict)
-			} else {
-				Printf("verify finalize: %s — verdict=%s already recorded\n", phaseID, verdict)
+			if !recorded {
+				// A markVerified that failed after the marker landed leaves the
+				// phase at complete; heal it here, never past complete.
+				s, err := state.Load(filepath.Join(root, state.File))
+				if err != nil {
+					return err
+				}
+				if s.CurrentPhase != phaseID || s.CurrentPhaseStatus != "complete" {
+					Printf("verify finalize: %s — verdict=%s already recorded\n", phaseID, verdict)
+					return nil
+				}
+				Printf("verify finalize: %s — verdict=%s already recorded; status not verified — healing\n", phaseID, verdict)
+				return markVerified(root, phaseID, verdict)
 			}
-			return nil
+			Printf("verify finalize: %s — verdict=%s recorded\n", phaseID, verdict)
+			// Here and not in finalizeVerify: ship and phase complete heal
+			// through that, and must not walk a shipped phase back.
+			// absorbs: dross state set current_phase_status verified
+			// absorbs: dross state touch "verified <phase-id>: <verdict> (<criteria-covered>/<total>, mutation <score>)"
+			return markVerified(root, phaseID, verdict)
 		},
 	}
+}
+
+// markVerified sets current_phase_status=verified and appends the verified
+// history entry: "verified <id>: <verdict> (<covered>/<total>, mutation <score>)".
+func markVerified(root, phaseID, verdict string) error {
+	_, verifyPath := verify.FilePaths(root, phaseID)
+	v, err := verify.LoadVerify(verifyPath)
+	if err != nil {
+		return fmt.Errorf("read verify.toml: %w", err)
+	}
+	if v == nil {
+		return fmt.Errorf("verify.toml not found at %s", verifyPath)
+	}
+	covered, total := v.Summary.CriteriaCovered, v.Summary.CriteriaTotal
+	if len(v.Criteria) > 0 {
+		covered, total = 0, len(v.Criteria)
+		for _, c := range v.Criteria {
+			if c.Status == "covered" {
+				covered++
+			}
+		}
+	}
+	score := v.Summary.MutationStatus
+	if score == "measured" {
+		score = strconv.FormatFloat(v.Summary.MutationScore, 'f', 2, 64)
+	}
+	path := filepath.Join(root, state.File)
+	s, err := state.Load(path)
+	if err != nil {
+		return err
+	}
+	s.CurrentPhaseStatus = "verified"
+	s.Touch(fmt.Sprintf("verified %s: %s (%d/%d, mutation %s)", phaseID, verdict, covered, total, score))
+	return s.Save(path)
 }
 
 // finalizeVerify records the resolved verdict from a phase's
@@ -1259,6 +1346,89 @@ func refuseOrphanedAcceptances(root string) error {
 		fmt.Fprintf(&b, "\n  %s (%s) — %s — dross survivor retire %s", o.File, o.Key, o.Reason, o.Key)
 	}
 	return errors.New(b.String())
+}
+
+// verifyStdoutIsTTY decides whether a leg's tool stream also reaches the
+// terminal live (a human) or only its run log (an agent). A test swaps it.
+var verifyStdoutIsTTY = runlog.StdoutIsTerminal
+
+// streamLegs gives every adapter that can stream (mutation.Streamer) its own
+// run log, verify-<phase>-<adapter>-<ts>.log, so the per-mutant stream lands
+// there rather than in the conversation; a human on a terminal still watches
+// it live. The returned func closes the logs and prints each kept one's path.
+// A leg that never ran never wrote, so it leaves no log (the file is lazy).
+func streamLegs(repoDir, phaseID string, adapters []mutation.Adapter) func() {
+	type leg struct {
+		name string
+		log  *runlog.Log
+	}
+	var legs []leg
+	for _, a := range adapters {
+		s, ok := a.(mutation.Streamer)
+		if !ok {
+			continue
+		}
+		l := runlog.Open(repoDir, runlog.Name{Kind: runlog.KindVerify, Phase: phaseID, Leg: a.Name()},
+			runlog.Options{Terminal: runlog.Stderr, Echo: verifyStdoutIsTTY()})
+		s.SetStream(l)
+		legs = append(legs, leg{a.Name(), l})
+	}
+	return func() {
+		for _, lg := range legs {
+			lg.log.Close()
+			if p := lg.log.Path(); p != "" {
+				Printf("verify log (%s): %s\n", lg.name, p)
+			}
+		}
+	}
+}
+
+// detachFetchLog pulls a detached run's host-side stream (<runDir>/log, which
+// the run's script writes) to local, through the same audited fetch the
+// reports take.
+var detachFetchLog = func(t remote.Target, runDir, local string) error {
+	argv, err := remote.FetchArgs(t, path.Join(runDir, "log"), local)
+	if err != nil {
+		return err
+	}
+	return classifyFetch(t.Host, runDetachArgv(argv))
+}
+
+// collectHostLog copies a detached run's host-side stream into a fresh verify
+// run log and prints its path. The log is a convenience, never evidence: a
+// fetch that fails is a note, and the collect carries on.
+func collectHostLog(repoDir, phaseID, leg string, t remote.Target, runDir string) {
+	dir, err := os.MkdirTemp("", "dross-host-log-")
+	if err != nil {
+		Printf("log unavailable: %v\n", err)
+		return
+	}
+	defer os.RemoveAll(dir)
+	local := filepath.Join(dir, "log")
+	if err := detachFetchLog(t, runDir, local); err != nil {
+		Printf("log unavailable: %v\n", err)
+		return
+	}
+	f, err := os.Open(local)
+	if err != nil {
+		Printf("log unavailable: %v\n", err)
+		return
+	}
+	defer f.Close()
+	l := runlog.Open(repoDir, runlog.Name{Kind: runlog.KindVerify, Phase: phaseID, Leg: leg}, runlog.Options{Terminal: runlog.Stderr})
+	io.Copy(l, f)
+	l.Close()
+	// The log file is created on its first Write, so a fetch that copied an
+	// empty host log leaves no path — and printing nothing would read as a
+	// collect that never tried. Exactly one of the two lines prints, always.
+	switch p := l.Path(); {
+	case l.Err() != nil:
+		Printf("log unavailable: %v\n", l.Err())
+	case p == "":
+		Printf("log unavailable: the host log was empty\n")
+	default:
+		Printf("verify log (%s, from %s): %s\n", leg, t.Host, p)
+	}
 }
 
 // configuredAdaptersFn is the seam a refusal test substitutes to prove verify
@@ -1536,6 +1706,9 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 		m := lr.Mutation
 		Printf("  %s (%s): %d files — killed=%d survived=%d (not_covered=%d) timeout=%d errors=%d score=%.2f\n",
 			lr.Name, lr.Tool, len(lr.Files), m.Killed, m.Survived, m.NotCovered, m.Timeout, m.Errors, m.Score)
+		for _, l := range verify.LegLines(lr) {
+			Print(l)
+		}
 		// No per-leg efficacy. It used to drop every NOT COVERED mutant from its
 		// denominator, count-0 test gaps included, and printed 1.00 beside
 		// printOverallScore's split. That split is the only efficacy figure.

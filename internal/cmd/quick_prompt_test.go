@@ -1,28 +1,28 @@
 package cmd
 
 import (
-	"os"
-	"path/filepath"
+	"io/fs"
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/assets"
 	"github.com/Rivil/dross/internal/review"
 )
 
-// quickPromptContent loads assets/prompts/quick.md and normalises it —
-// lowercased, with backticks and asterisk emphasis stripped — so assertions
-// test the presence of a rule, not its exact formatting. Unlike the ship.md
-// helper this does NOT strip underscores: the needles here are store keys
-// (quick_base) and stripping them would mangle the thing being asserted.
+// quickPromptContent loads quick.md expanded with its partials and normalises
+// it with normaliseKeepUnderscores, so assertions test the presence of a rule,
+// not its exact formatting.
 func quickPromptContent(t *testing.T) string {
 	t.Helper()
-	root := repoRootFromTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "quick.md"))
-	if err != nil {
-		t.Fatalf("read quick.md: %v", err)
-	}
-	s := strings.ToLower(string(b))
-	return strings.NewReplacer("`", "", "*", "").Replace(s)
+	return normaliseKeepUnderscores(expandedPrompt(t, "quick.md"))
+}
+
+// normaliseKeepUnderscores lowercases s and strips backticks and asterisk
+// emphasis. Unlike normalisePrompt it does NOT strip underscores: the quick
+// needles are store keys (quick_base, current_phase_status) and stripping them
+// would mangle the thing being asserted.
+func normaliseKeepUnderscores(s string) string {
+	return strings.NewReplacer("`", "", "*", "").Replace(strings.ToLower(s))
 }
 
 // TestQuickPromptRecordsStandaloneBase (c-7) gates the half of the quick base
@@ -73,34 +73,147 @@ func TestQuickPromptRecordsStandaloneBase(t *testing.T) {
 	}
 }
 
-// quickSoloReview is quick.md's solo review block.
+// rawQuickBase is quick.md without its partials, read through assets.FS: the
+// text every quick loads, pair or solo.
+func rawQuickBase(t *testing.T) string {
+	t.Helper()
+	b, err := assets.FS.ReadFile("prompts/quick.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// quickSoloReview returns quick.md as loaded and the solo partial's review
+// block: from its lead-in up to the §5 solo arm.
 func quickSoloReview(t *testing.T) (string, string) {
 	t.Helper()
-	body := promptBody(t, "quick.md")
-	i := strings.Index(body, "**Solo review (`--solo` only).**")
-	j := strings.Index(body, "## 5. Commit")
+	solo := expandedPrompt(t, "_quick.solo.md")
+	i := strings.Index(solo, "**Solo review (`--solo` only).**")
+	j := strings.Index(solo, "**§5, solo**")
 	if i < 0 || j < i {
-		t.Fatal("quick.md has no solo review block before §5")
+		t.Fatal("the quick solo partial has no solo review block before its §5 arm")
 	}
-	return body, body[i:j]
+	return promptBody(t, "quick.md"), solo[i:j]
 }
 
 // TestQuickSoloReview (c-8): a solo quick is reviewed after its green test and
-// before its commit; pair mode spawns no reviewer.
+// before its commit; pair mode spawns no reviewer. The review lives in the solo
+// partial; base §4 marks its place with a re-fetch between the green `dross
+// test` and §5.
 func TestQuickSoloReview(t *testing.T) {
 	body, block := quickSoloReview(t)
-	test := strings.Index(body, "\ndross test\n")
-	ctx := strings.Index(body, "dross review context")
-	spawn := strings.Index(body, `subagent_type: "`+review.ReviewerAgent+`"`)
-	add := strings.Index(body, "git add <touched-files>")
-	if test < 0 || !(test < ctx && ctx < spawn && spawn < add) {
-		t.Errorf("solo quick review order: dross test %d, review context %d, spawn %d, git add %d", test, ctx, spawn, add)
+	run, ctx := mustIdx(t, block, "after the green `dross test`, before the commit"), mustIdx(t, block, "dross review context")
+	spawn := mustIdx(t, block, `subagent_type: "`+review.ReviewerAgent+`"`)
+	status, commit := mustIdx(t, block, "dross review status"), mustIdx(t, block, "`pass` → commit (§5)")
+	if !(run < ctx && ctx < spawn && spawn < status && status < commit) {
+		t.Errorf("solo quick review order: dross test %d, review context %d, spawn %d, review status %d, commit %d — want that order", run, ctx, spawn, status, commit)
+	}
+	// Each fix-round arm re-runs the test before it rebuilds the review.
+	for _, arm := range []string{"- `blocked` →", "- `pass-stale` →"} {
+		line, _, _ := strings.Cut(block[mustIdx(t, block, arm):], "\n")
+		rerun, rebuild := strings.Index(line, "re-run `dross test`"), strings.Index(line, "`dross review context`")
+		if rerun < 0 || rebuild < rerun {
+			t.Errorf("the %s arm lost its `dross test` re-run ahead of the review context: %q", arm, line)
+		}
 	}
 	if !strings.Contains(block, "In **pair mode skip this entirely**") {
 		t.Error("the quick's solo review block no longer says pair mode skips it")
 	}
 	if strings.Count(body, review.ReviewerAgent) != strings.Count(block, review.ReviewerAgent) {
 		t.Error("quick.md spawns the reviewer outside its solo review block")
+	}
+
+	base := rawQuickBase(t)
+	four := sectionOf(base, "## 4. Diff + test gate", "## 5. Commit")
+	test := bareDrossTestRE.FindStringIndex(four)
+	if test == nil {
+		t.Fatal("base §4 lost its bare `dross test`")
+	}
+	green := mustIdx(t, four, "**Green**")
+	refetch := mustIdx(t, four, "**Re-fetch** if context was compacted: `dross prompt partial quick solo`")
+	if !(test[0] < green && green < refetch) {
+		t.Errorf("base §4 order: dross test %d, Green %d, solo re-fetch %d — want the re-fetch after the green test, before §5", test[0], green, refetch)
+	}
+}
+
+// TestQuickSoloFetchPlacement (locked branch_placement): the solo partial is
+// fetched once, by the first fetch line after the `dross quick begin --solo`
+// fence, still in §0 — so a pair quick never pays for it — and the text it
+// carries is gone from the base.
+func TestQuickSoloFetchPlacement(t *testing.T) {
+	base := rawQuickBase(t)
+	fence := strings.Index(base, "dross quick begin --solo \"<description>\"\n")
+	insight := strings.Index(base, "## 1. Insight")
+	if fence < 0 || insight < fence {
+		t.Fatal("quick.md lost the solo begin fence before §1")
+	}
+	fenceLine := strings.Count(base[:fence], "\n") + 1
+	points, err := assets.FetchPoints(assets.FS, "quick.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var first *assets.FetchPoint
+	solo := 0
+	for i, p := range points {
+		if p.Partial == "solo" && !p.Refetch {
+			solo++
+		}
+		// Re-fetch lines count too: any fetch between the fence and the
+		// solo When line is a stray one.
+		if first == nil && p.Line > fenceLine {
+			first = &points[i]
+		}
+	}
+	if first == nil || first.Refetch || first.Partial != "solo" || first.Key != "mode" || first.Value != "solo" {
+		t.Errorf("first fetch after the solo begin fence is %+v, want `mode=solo` → solo", first)
+	}
+	if first != nil && first.Line > strings.Count(base[:insight], "\n") {
+		t.Errorf("the solo fetch (line %d) sits past §0", first.Line)
+	}
+	if solo != 1 {
+		t.Errorf("quick.md has %d When lines fetching solo, want exactly 1", solo)
+	}
+	for _, moved := range []string{"**Solo mode** (`--solo`)", "**Red, solo mode**", "**Solo review", "`solo: yes`", "dross review context", "In solo mode, proceed without a gate"} {
+		if strings.Contains(base, moved) {
+			t.Errorf("base quick.md still carries %q; it lives in the solo partial", moved)
+		}
+	}
+}
+
+// TestQuickCommonPathFetchesNothing (c-2): a pair quick to its commit fetches
+// no partial; a solo quick fetches exactly the solo one.
+func TestQuickCommonPathFetchesNothing(t *testing.T) {
+	common, err := assets.Fetched(promptFS, "quick", assets.CommonPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(common) != 0 {
+		t.Errorf("a pair quick fetches %v on the common path; want nothing", common)
+	}
+	facts := assets.CommonPath()
+	facts["mode"] = "solo"
+	got, err := assets.Fetched(promptFS, "quick", facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, ",") != "solo" {
+		t.Errorf("a solo quick fetches %v; want [solo]", got)
+	}
+}
+
+// TestQuickSoloBeginNeedsReviewer: the refused-solo-begin stop stays in base
+// §0. The partial is fetched only once begin has recorded solo, so a stop that
+// moved into it would never be read by the run it is meant to stop.
+func TestQuickSoloBeginNeedsReviewer(t *testing.T) {
+	pre := sectionOf(rawQuickBase(t), "## 0. Pre-flight", "## 1.")
+	stop := strings.Index(pre, "A solo begin refuses unless the solo task reviewer is installed and current — **stop and ask the user to run `dross install`**")
+	fetch := strings.Index(pre, "**When** `mode=solo`")
+	if stop < 0 {
+		t.Fatal("base §0 no longer stops a refused solo begin and routes it to `dross install`")
+	}
+	if fetch < 0 || stop > fetch {
+		t.Errorf("base §0: refusal stop at %d, solo fetch at %d — the stop must precede the fetch", stop, fetch)
 	}
 }
 
@@ -117,7 +230,7 @@ func TestQuickMarkerClosed(t *testing.T) {
 	}
 	for name, sec := range map[string]string{
 		"§2 user abort":   sectionOf(body, "## 2. Propose", "## 3."),
-		"§4 red paths":    sectionOf(body, "## 4. Diff + test gate", "**Solo review"),
+		"§4 red paths":    sectionOf(body, "## 4. Diff + test gate", "## 5."),
 		"§5 after commit": sectionOf(body, "## 5. Commit", "## 6."),
 	} {
 		if !strings.Contains(sec, "dross quick end") {
@@ -174,6 +287,34 @@ func TestReviewerSpawnWaitsForVerdict(t *testing.T) {
 		status := strings.Index(body, "dross review status")
 		if wait < 0 || status < 0 || wait > status {
 			t.Errorf("%s does not wait for the reviewer to finish before `dross review status` (wait %d, status %d)", name, wait, status)
+		}
+	}
+}
+
+func TestQuickTestStepDescribesSummary(t *testing.T) {
+	assertTestStepDescribesSummary(t, "quick.md", testStepSection(t, rawPrompt(t, "quick.md"), "## 4.", "## 5."))
+}
+
+// TestQuickHasNoWriter (quick_solo): a quick stays inline, solo or not — no
+// quick prompt or quick partial names the writer or its dispatch.
+func TestQuickHasNoWriter(t *testing.T) {
+	texts := map[string]string{"quick.md": expandedPrompt(t, "quick.md")}
+	partials, err := fs.Glob(promptFS, "prompts/_quick*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range partials {
+		b, err := fs.ReadFile(promptFS, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		texts[p] = string(b)
+	}
+	for name, s := range texts {
+		for _, gone := range []string{review.WriterAgent, "task dispatch"} {
+			if strings.Contains(s, gone) {
+				t.Errorf("%s mentions %q", name, gone)
+			}
 		}
 	}
 }

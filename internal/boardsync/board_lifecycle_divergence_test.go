@@ -4,7 +4,9 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -12,7 +14,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 
+	"github.com/Rivil/dross/assets"
 	"github.com/Rivil/dross/internal/board"
 	"github.com/Rivil/dross/internal/configenum"
 )
@@ -30,8 +34,9 @@ import (
 // entry fails; a state map keyed on a status nothing emits fails.
 //
 // **"Emits" means call sites only** — the `--status <literal>` occurrences in
-// assets/prompts/*.md, the values DerivePhaseStatus can return, and the status
-// every close call FinalizePhase reaches carries. Declared Go
+// assets/prompts/*.md, the values DerivePhaseStatus can return, the status
+// every close call FinalizePhase reaches carries, and the literal statuses
+// internal/cmd passes to SyncPhase. Declared Go
 // constants are deliberately NOT counted: ctx.go's constants are defined *as*
 // members of configenum.LifecycleStatuses (cmd's issue_test.go asserts exactly that),
 // so folding them in would make the emit-set equal the Set by construction and
@@ -52,27 +57,8 @@ func emittedStatuses(t *testing.T) map[string]string {
 	out := map[string]string{} // status -> where it is emitted
 
 	// 1. Prompt call sites.
-	promptDir := filepath.Join(root, "assets", "prompts")
-	entries, err := os.ReadDir(promptDir)
-	if err != nil {
-		t.Fatalf("read %s: %v", promptDir, err)
-	}
-	scanned := 0
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-			continue
-		}
-		b, err := os.ReadFile(filepath.Join(promptDir, e.Name()))
-		if err != nil {
-			t.Fatalf("read %s: %v", e.Name(), err)
-		}
-		scanned++
-		for _, m := range statusLiteralRE.FindAllStringSubmatch(string(b), -1) {
-			out[m[1]] = "assets/prompts/" + e.Name()
-		}
-	}
-	if scanned == 0 {
-		t.Fatal("scanned no prompt files — the emit-set would be empty and every assertion below vacuous")
+	for s, where := range promptEmittedStatuses(t) {
+		out[s] = where
 	}
 
 	// 2. DerivePhaseStatus's return values, read as source. Executing the
@@ -88,6 +74,109 @@ func emittedStatuses(t *testing.T) map[string]string {
 	// complete` runs, so the binary is now their only call site.
 	for _, s := range finalizerCloses(t) {
 		out[s] = finalizerFile + ":FinalizePhase"
+	}
+
+	// 4. Literal statuses the CLI passes to SyncPhase itself. `dross execute
+	// begin` absorbed the prompt's in-progress sync, so that status's call site
+	// moved from execute.md into internal/cmd.
+	for s, where := range cliSyncPhaseLiterals(t, filepath.Join(root, "internal", "cmd")) {
+		out[s] = where
+	}
+	return out
+}
+
+// promptFS is the tree the prompt readers here expand: the embedded assets,
+// swapped for a MapFS by seedPromptFS.
+var promptFS fs.FS = assets.FS
+
+// seedPromptFS swaps promptFS for m for one test.
+func seedPromptFS(t *testing.T, m fstest.MapFS) {
+	t.Helper()
+	old := promptFS
+	promptFS = m
+	t.Cleanup(func() { promptFS = old })
+}
+
+// partialFileRE matches a partial's file name, _<prompt>.<name>.md.
+var partialFileRE = regexp.MustCompile(`^_[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*\.md$`)
+
+// promptEmittedStatuses maps each `--status <literal>` in promptFS's prompts to
+// the prompt emitting it. A base prompt is read expanded, so a status that
+// lives only in a partial is attributed to the prompt that fetches it; a
+// partial is not scanned on its own, so expansion is the only way it is seen.
+// _interaction.md, no partial, is scanned as written.
+func promptEmittedStatuses(t *testing.T) map[string]string {
+	t.Helper()
+	files, err := fs.Glob(promptFS, "prompts/*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]string{}
+	scanned := 0
+	for _, f := range files {
+		name := path.Base(f)
+		if partialFileRE.MatchString(name) {
+			continue
+		}
+		scanned++
+		for _, m := range statusLiteralRE.FindAllStringSubmatch(rawPrompt(t, name), -1) {
+			out[m[1]] = "assets/prompts/" + name
+		}
+	}
+	if scanned == 0 {
+		t.Fatal("scanned no prompt files — the emit-set would be empty and every assertion below vacuous")
+	}
+	return out
+}
+
+// TestPromptEmittedStatusesSeePartials: a status whose only `--status` lives in
+// a partial stays in the emit-set, attributed to the prompt fetching it.
+func TestPromptEmittedStatusesSeePartials(t *testing.T) {
+	seedPromptFS(t, fstest.MapFS{
+		"prompts/ship.md":        {Data: []byte("# ship\n**When** `auto=on` — auto mode is on: `dross prompt partial ship merge`\nend\n")},
+		"prompts/_ship.merge.md": {Data: []byte("dross issue phase sync <id> --status shipped\n")},
+		"prompts/quick.md":       {Data: []byte("# quick\ndross issue phase sync <id> --status uat\n")},
+	})
+	got := promptEmittedStatuses(t)
+	want := map[string]string{"shipped": "assets/prompts/ship.md", "uat": "assets/prompts/quick.md"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("promptEmittedStatuses = %v, want %v", got, want)
+	}
+}
+
+// cliSyncPhaseLiterals maps each string-literal status passed as SyncPhase's
+// status argument in dir's non-test files to the file:line passing it.
+func cliSyncPhaseLiterals(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", dir, err)
+	}
+	out := map[string]string{}
+	for _, pkg := range pkgs {
+		for _, f := range pkg.Files {
+			ast.Inspect(f, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok || len(call.Args) < 3 {
+					return true
+				}
+				sel, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || sel.Sel.Name != "SyncPhase" {
+					return true
+				}
+				if x, ok := sel.X.(*ast.Ident); !ok || x.Name != "boardsync" {
+					return true
+				}
+				if lit, ok := call.Args[2].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+					if v, err := strconv.Unquote(lit.Value); err == nil {
+						pos := fset.Position(lit.Pos())
+						out[v] = filepath.ToSlash(filepath.Join("internal", "cmd", filepath.Base(pos.Filename))) + ":" + strconv.Itoa(pos.Line)
+					}
+				}
+				return true
+			})
+		}
 	}
 	return out
 }
@@ -391,6 +480,15 @@ func TestEmittedStatusesAreTheLifecycleSet(t *testing.T) {
 	}
 }
 
+// TestCLISyncPhaseLiteralsSeeExecuteBegin keeps source 4 from going vacuous:
+// it must find the in-progress status `dross execute begin` passes.
+func TestCLISyncPhaseLiteralsSeeExecuteBegin(t *testing.T) {
+	got := cliSyncPhaseLiterals(t, filepath.Join(repoRootFromTest(t), "internal", "cmd"))
+	if where := got["in-progress"]; !strings.HasPrefix(where, "internal/cmd/execute.go:") {
+		t.Errorf("in-progress SyncPhase literal found at %q, want internal/cmd/execute.go (all: %v)", where, got)
+	}
+}
+
 // TestStateMapsKeyExactlyTheEmittedStatuses gates the map side, per provider.
 //
 // The two maps are checked independently on purpose: a key present in one and
@@ -466,9 +564,10 @@ var taskEdges = map[string]string{
 // pins the pairing to something that cannot be relabelled without changing what
 // the loop does.
 func TestTaskEdgesPairTheBoardStatusWithThePlanStatus(t *testing.T) {
-	root := repoRootFromTest(t)
-	path := filepath.Join(root, "assets", "prompts", "execute.md")
-	b, err := os.ReadFile(path)
+	// The bare base prompt, deliberately: these edges are the common path and
+	// must stay in execute.md itself, never move into a partial.
+	path := "prompts/execute.md"
+	b, err := assets.FS.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
@@ -637,15 +736,28 @@ var mirrorLanes = map[string]mirrorLane{
 	},
 }
 
-// rawPrompt reads one prompt verbatim. promptContent normalises for prose
-// assertions; a command line has to be matched as written.
+// rawPrompt reads one prompt verbatim, expanded with its partials over
+// promptFS. promptContent normalises for prose assertions; a command line has
+// to be matched as written.
 func rawPrompt(t *testing.T, name string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", name))
+	b, err := assets.Expand(promptFS, name)
 	if err != nil {
-		t.Fatalf("read %s: %v", name, err)
+		t.Fatalf("expand %s: %v", name, err)
 	}
 	return string(b)
+}
+
+// TestRawPromptSeesPartials: an emission line that lives only in a partial
+// reaches rawPrompt as written, shell variable and all.
+func TestRawPromptSeesPartials(t *testing.T) {
+	seedPromptFS(t, fstest.MapFS{
+		"prompts/quick.md":       {Data: []byte("# quick\n**When** `mode=solo` — solo: `dross prompt partial quick solo`\nend\n")},
+		"prompts/_quick.solo.md": {Data: []byte("dross issue quick $NEW_VERSION --close\n")},
+	})
+	if got := rawPrompt(t, "quick.md"); !strings.Contains(got, mirrorLanes["Quicks"].emission) {
+		t.Errorf("rawPrompt(quick.md) lacks %q, which lives only in the seeded partial:\n%s", mirrorLanes["Quicks"].emission, got)
+	}
 }
 
 // laneDistinctnessExemption records a terminal/non-terminal collision that

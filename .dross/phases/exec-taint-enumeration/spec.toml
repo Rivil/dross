@@ -63,8 +63,8 @@
 
 [[decisions]]
   key = "terminal_definition"
-  choice = "Terminal means the concrete os.Stdout / os.Stderr and cobra's OutOrStdout / ErrOrStderr. An error value is never terminal. A generic io.Writer parameter is not terminal — taint is followed to its callers."
-  why = "Error strings are exactly what reached verify.toml before tool-output-not-persisted (its locked cut_point). Treating any io.Writer as terminal would let a strings.Builder launder the head — the c-3 shape."
+  choice = "Terminal means the concrete os.Stdout / os.Stderr, cobra's OutOrStdout / ErrOrStderr, and a value of the one named type *runlog.Log (parameter, field or local). An error value is never terminal. A generic io.Writer parameter is not terminal — taint is followed to its callers."
+  why = "Error strings are exactly what reached verify.toml before tool-output-not-persisted (its locked cut_point). Treating any io.Writer as terminal would let a strings.Builder launder the head — the c-3 shape. Amended 2026-10-09 by test-output-summaries: *runlog.Log joins by type because its only outputs are its gitignored .dross/logs/ file and os.Stdout or os.Stderr chosen by an enum — it holds no io.Writer a caller can set, so nothing launders through it — and spawn streams now go there instead of the terminal. Pinned by TestRunlogSinkIsTerminal; no //dross:taint-cleared marker."
   locked = true
 
 [[decisions]]

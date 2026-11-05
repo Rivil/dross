@@ -1,0 +1,315 @@
+task_seq = 15
+[phase]
+  id = "test-summary-parsers"
+
+# Capture rules for every fixture-capturing task (t-1, t-2, t-3, t-5, t-6, t-10):
+# run the runner directly in the source repo, piped, stdout+stderr on one fd — never `dross test` from a git worktree;
+# red runs come from a local uncommitted break, reverted after (`git -C <repo> status --porcelain` empty before the task ends);
+# the flutter lane is local only (helicon has no flutter);
+# header "# captured: <runner>@<ver> <command> (<repo>@<sha>)", red files also name their break;
+# `git add -N` new fixtures and run the secret self-scan pre-gate (TestDrossTreeHasNoUnmarkedHits) before gating.
+# Panel audit trail: panel/{risk,mvp,verification,synthesis}.md.
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Parse gradle test output from equerry"
+  files = [
+    "internal/runsummary/gradle.go",
+    "internal/runsummary/gradle_test.go",
+    "internal/runsummary/testdata/gradle/green.txt",
+    "internal/runsummary/testdata/gradle/red.txt",
+    "internal/runsummary/testdata/gradle/compile_failed.txt",
+  ]
+  description = """
+Capture `./gradlew testDebugUnitTest` in equerry: green, red with 2 broken tests (one multi-line assertion; a Kotlin backtick
+name with spaces if equerry has one), and red from a compile break. Claims only on `BUILD SUCCESSFUL in` / `BUILD FAILED in`.
+Counts = outcome + `N actionable tasks` (+ `N tests completed, M failed` when printed). Each `Class > method FAILED` starts a failure."""
+  covers = ["c-1"]
+  test_contract = [
+    "if green counts drift from gradle_green_counts, TestGradleGreenCounts fails: green.txt → Counts == [\"BUILD SUCCESSFUL\", \"<N> actionable tasks: …\"] exactly, no phrase contains \"test\"",
+    "if a name loses class or method, TestGradleRedNames fails: red.txt → names == the two broken tests as Class.method, nothing else; `> Task :app:testDebugUnitTest FAILED` and the `* What went wrong:` epilogue open no failure",
+    "if a method name with spaces is cut at the first word, TestGradleRedNames fails on the whole name",
+    "if output bleeds between tests, TestGradleRedOwnLines fails: each block holds its own assertion line and none of the other test's",
+    "if gradle's red count is dropped, TestGradleRedCounts fails: Counts contain \"<N> tests completed, 2 failed\" verbatim",
+    "if a compile break reads green or as `FAIL · 0 failing`, TestGradleCompileFailedNeverGreen fails: compile_failed.txt at exit 1 prints the fallback tail containing `What went wrong`, no PASS line",
+    "if a cut-off run is summarised, TestGradleTruncatedNotClaimed fails: red.txt cut before BUILD FAILED is not claimed",
+    "if JUnit XML reads are added, TestGradleReadsNoFiles fails: gradle.go imports none of os, io/fs, path/filepath, encoding/xml",
+    "if a fixture is synthesized, TestGradleFixturesCaptured fails: every file starts \"# captured: gradle@<ver> ./gradlew testDebugUnitTest (equerry@<sha>)\", red files name their break",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Parse flutter/dart test, both reporters"
+  files = [
+    "internal/runsummary/dart.go",
+    "internal/runsummary/dart_test.go",
+    "internal/runsummary/testdata/dart/compact_green.txt",
+    "internal/runsummary/testdata/dart/compact_red.txt",
+    "internal/runsummary/testdata/dart/expanded_green.txt",
+    "internal/runsummary/testdata/dart/expanded_red.txt",
+    "internal/runsummary/testdata/dart/load_error.txt",
+  ]
+  description = """
+In feastahead/phone, LOCALLY, capture `flutter test --reporter compact|expanded`, green and red on the same 2 breaks, plus a load
+error (syntax error in a _test.dart). Claims only on `All tests passed!` / `Some tests failed.` / `No tests ran.`. Counts = the
+runner's own +N ~S -F. Each `[E]` header starts a block. Runner label is "dart test" (panel D3)."""
+  covers = ["c-2"]
+  test_contract = [
+    "if one reporter is mis-parsed, TestDartReportersAgree fails: compact_red and expanded_red give identical failure names and counts; the green pair likewise (catches a CR-redraw mis-split)",
+    "if counts are not the runner's own, TestDartGreenCounts fails: final \"+N\" (and \"~K\") verbatim",
+    "if a name keeps timer noise, TestDartRedNames fails: names == the two broken tests, no \"00:0x +n -m:\" prefix and no \"[E]\"",
+    "if error output bleeds or carries the next progress line, TestDartRedOwnLines / TestDartBlockEnds fail: each block holds its own Expected:/Actual: lines, and the next progress line closes it",
+    "if a load error is not one failure named after its file, TestDartLoadError fails on load_error.txt (`loading test/x_test.dart [E]`)",
+    "if a `══╡ EXCEPTION CAUGHT` block longer than BlockLines is dropped instead of cut with More > 0, TestDartLongExceptionCut fails",
+    "if a running counter forges a claim, TestDartTruncatedNotClaimed fails: either red fixture cut before its terminal line is not claimed",
+    "if a fixture is synthesized, TestDartFixturesCaptured fails: every file starts \"# captured: flutter@<ver> flutter test --reporter <r> (feastahead@<sha>)\"",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Parse pytest output, default and -q"
+  files = [
+    "internal/runsummary/pytest.go",
+    "internal/runsummary/pytest_test.go",
+    "internal/runsummary/testdata/pytest/default_green.txt",
+    "internal/runsummary/testdata/pytest/default_red.txt",
+    "internal/runsummary/testdata/pytest/quiet_green.txt",
+    "internal/runsummary/testdata/pytest/quiet_red.txt",
+    "internal/runsummary/testdata/pytest/selftest_mypy_red.txt",
+    "internal/runsummary/testdata/pytest/collect_error.txt",
+  ]
+  description = """
+In sunday-rider's test container capture the repo's test_command (selftest.sh: ruff → mypy → `pytest -q`) and bare `pytest`, each
+green and red on the same 2 breaks (one parametrized), a collection error, and selftest with pytest green + a local mypy break.
+Claims only on pytest's terminal count line (with or without `===` padding). Node ids from `FAILED <nodeid>`; output from the
+matching `____ name ____` section."""
+  covers = ["c-3"]
+  test_contract = [
+    "if -q or default is mis-parsed, TestPytestFormatsAgree fails: default_red and quiet_red give identical node ids and count phrases; green pair likewise",
+    "if the node id is lost, TestPytestRedNodeIDs fails: names == \"path/test_x.py::[Class::]test_y\"",
+    "if sections are mismatched, TestPytestRedOwnLines fails: each block holds its own \"E   \" line; a parametrized test_x[a-b] carries ITS section, not sibling test_x[a-c]'s",
+    "if counts are rewritten, TestPytestGreenCounts fails: Counts == [\"<N> passed in <t>s\"], `=` stripped",
+    "if wrapper noise forges a claim, TestPytestClaimsOnlyItsSummary fails: quiet_green minus its final pytest line is not claimed; mypy's `Found 3 errors in 2 files` and ruff's `Found 2 errors.` fed alone are not claimed",
+    "if a green pytest under a red wrapper prints PASS, TestPytestGreenUnderRedWrapper fails: selftest_mypy_red.txt (exit 1) renders the fallback",
+    "if a collection error is lost, TestPytestCollectError fails: `ERROR collecting tests/x.py` is one failure named by its path and the counts keep pytest's `error` phrase",
+    "if a fixture is synthesized, TestPytestFixturesCaptured fails: every file starts \"# captured: pytest@<ver> <command> (sunday-rider@<sha>)\"",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Count name and marker lines in the block bound"
+  files = [
+    "internal/runsummary/render.go",
+    "internal/runsummary/summary.go",
+    "internal/runsummary/summary_test.go",
+  ]
+  description = """
+At Render, a block's printed bytes = "✗ name" + kept lines + the "… N more lines — see <log>" marker; when that exceeds BlockBytes,
+trailing lines move into the marker's count. Applied per printed copy (covers vitest's re-stamped shared names, blockLines.addTo).
+Update the BlockBytes doc and TestBlockByteShare's arithmetic."""
+  covers = ["c-4"]
+  test_contract = ["if name/marker escape the bound, TestWorstCaseBlockBytes fails: 14 failures with names past LineCut, 40 LineCut-byte lines each, a 200-byte logPath → every printed block (✗ through marker) ≤ BlockBytes, len(out) ≤ 30,000, exactly 10 ✗ blocks (TestMassBreakSize extended the same way)", "if the name is not counted, TestBlockNameCounts fails: a 240-byte name prints strictly fewer lines than a 10-byte name", "if the marker is not counted, TestBlockMarkerCounts fails: a 200-byte logPath prints fewer lines than a 10-byte one", "if dropped lines vanish from the count, TestBlockBoundCountsDropped fails: marker N = original More + lines dropped", "if the bound trims what fits, TestBlockBoundKeepsSmallBlock fails: a name + 3 lines block prints unchanged", "if a shared-header copy re-stamped with a 240-byte name exceeds BlockBytes in printed output, TestSharedHeaderCopyBounded (new, in summary_test.go — jsrunner_test.go is t-6's) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 1
+  title = "Stop go blocks absorbing orphans and phantom headings"
+  files = ["internal/runsummary/gotest.go", "internal/runsummary/gotest_test.go", "internal/runsummary/testdata/gotest/build_then_testmain.txt", "internal/runsummary/testdata/gotest/hash_heading.txt", "internal/runsummary/testdata/gotest/hash_heading_green.txt", "internal/runsummary/testdata/gotest/build_failed_oneword.txt"]
+  description = "Capture from a scratch module with GOTOOLCHAIN=go1.27.1 (exact header pin kept, panel D7): (a) a build-failed pkg followed by a pkg\nwhose TestMain prints and exits 1; (b) a test printing \"# Results\", red (hash_heading.txt) and green (hash_heading_green.txt), both live;\n(c) a build error in a one-word module path. An open `# pkg` block closes on the next package's first non-compiler line; a one-word `# X`\nopens a block only where a build block can appear. Raise TestGoFixturesCaptured's minimum (an at-least floor, not an exact count) to cover the new files."
+  covers = ["c-5"]
+  test_contract = [
+    "if a block absorbs orphans, TestGoBlockDoesNotAbsorbNextPackage fails: the \"# <dep>\" failure holds only its compile lines; the TestMain package's failure holds its TestMain output",
+    "if a heading forges a build failure, TestGoHashHeadingNotABuildBlock fails: hash_heading.txt has no `Results` failure (green variant renders PASS)",
+    "if the fix drops real one-word build blocks, TestGoOneWordBuildStillReported fails: one failure with the \"undefined:\" line, package counted FAIL",
+    "if existing build/vet handling regresses, TestGoBuildFailed / TestGoSetupAndVet fail: exact names and counts kept; vet's second `# [pkg]` header stays inside its block",
+    "if the toolchain pin is loosened, TestGoFixturesCaptured fails on any header that isn't \"# captured: go1.27.1 go test -count=1 \"",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 1
+  title = "Confine vitest FAIL to banners; keep it.each names"
+  files = ["internal/runsummary/jsrunner.go", "internal/runsummary/jsrunner_test.go", "internal/runsummary/testdata/js/vitest_console_fail.txt", "internal/runsummary/testdata/js/vitest_console_fail_green.txt", "internal/runsummary/testdata/js/vitest_each_bracket.txt", "internal/runsummary/summary_test.go"]
+  description = "In feastahead/web capture runs from local uncommitted tests: one console.logs \"FAIL  phantom\" (red: vitest_console_fail.txt; exit-0:\nvitest_console_fail_green.txt, both live), one it.each title contains \" [ \". FAIL opens a failure only after a Failed Tests/Suites banner;\nstrip only a trailing \" [ <same path> ]\" suite suffix. vitestHeader becomes a recorded version set {4.1.11, 4.1.12} (panel D7)."
+  covers = ["c-6"]
+  test_contract = [
+    "if console output forges a failure, TestVitestConsoleFailNotAFailure fails: Failures.Total == the fixture's own \"Tests N failed\" N, no failure named \"phantom\"; the exit-0 variant renders PASS",
+    "if it.each names are clipped, TestVitestEachBracketNameWhole fails: \"FAIL src/a.test.ts > adds [ 1, 2 ]\" keeps \"[ 1, 2 ]\"",
+    "if the suite strip is lost, TestVitestLoadError fails: \"x.test.ts [ x.test.ts ]\" still named \"x.test.ts\"; every existing vitest_* fixture keeps its names and counts",
+    "if the pin is loosened to anything, TestJSFixturesCaptured fails on a vitest version outside the recorded set {4.1.11, 4.1.12}",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 1
+  title = "Close verify-collect and stryker-net test gaps"
+  files = [
+    "internal/cmd/verify.go",
+    "internal/cmd/verify_log_test.go",
+    "internal/mutation/stryker_stream_test.go",
+  ]
+  description = """
+Tests swap runDetachArgv and leave detachFetchLog at its production value. When the copy creates no log file (Path()=="" or runlog Err),
+collectHostLog prints "log unavailable: the host log was empty". Add the stryker-net SetStream test beside its JS mirror and red-prove it
+by hand: drop `head` from stryker_net.go's MultiWriter, watch it fail, restore."""
+  covers = ["c-7", "c-8"]
+  test_contract = [
+    "if the fetch source drifts, TestDetachFetchLogProduction fails: the argv handed to runDetachArgv is rsync with remote operand ending \"<workdir>/.dross-runs/r-1/log\"",
+    "if classifyFetch is bypassed, TestDetachFetchLogProduction fails: stub exit 23 comes back errors.Is remote.ErrPartial and reaches stdout as `log unavailable` naming a partial transfer",
+    "if an empty host log is silent, TestCollectEmptyHostLogSaysSo fails: a 0-byte stub leaves stdout with exactly one of {\"verify log (\", \"log unavailable\"}",
+    "if the success path regresses, TestCollectFetchesHostLog fails; collect still writes the tests/verify toml when the log is empty",
+    "if head leaves the MultiWriter with a stream set, TestStrykerNetHeadReachesStderrWithStream fails: stderr lacks CANARY-N-2e5c (observed red before green)",
+    "if the head bound or stream copy breaks, TestStrykerNetHeadReachesStderrWithStream fails: stderr carries > strykerHeadLines tool lines, or the stream log holds fewer than all filler lines",
+  ]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 1
+  title = "Show the failing step's tail on 3/4/7"
+  files = [
+    "internal/cmd/test_output.go",
+    "internal/cmd/test.go",
+    "internal/cmd/test_summary_wiring_test.go",
+  ]
+  description = """
+testRun records the segment whose spawn returned the error (tr.failed(err) at each spawnLocal/spawnRemote site); on 3/4/7 summarise
+shows that segment. When the failing step spawned nothing (host lock, argv validation), it shows no other spawn's tail and names the reason."""
+  covers = ["c-9"]
+  test_contract = ["if the tail still comes from the last spawn, TestFallbackTailFromFailingStep fails: two hosts, host-1 rsync prints RSYNC-MARK, testHold returns ErrTransport for host-2 → exit 3, stdout has no RSYNC-MARK", "if a failing spawn's own tail is lost, TestFallbackTailFromFailingSpawn fails: lane 1 ran, lane 2's prepare prints PREP-MARK and exits 1 → exit 7 fallback holds PREP-MARK, not lane 1's suite output", "if the 3/4/7 tail stops showing the failing spawn's line and the log path, TestTransportTailShown fails", "if exit codes or tty streaming change, TestExitCodesUnchanged / TestTTYStreamsNonTTYSummarises fail", "if an argv-validation refusal shows another spawn's tail, TestFallbackTailNoSpawnArgvInvalid fails: lane 1 ran and printed LANE1-MARK, lane 2 is refused at argv validation → the 3/4/7 fallback has no LANE1-MARK and names the validation reason"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 2
+  title = "Copy pending lines to the run log once"
+  files = [
+    "internal/runlog/runlog.go",
+    "internal/runlog/runlog_test.go",
+    "internal/cmd/test_output.go",
+    "internal/cmd/test_output_test.go",
+  ]
+  description = """
+Add Log.Record(p): file-only, lazy-open like Write, never echoes, never falls back to the terminal. testRun.spawn copies pending lines
+through Record on a terminal and off one (say already printed them). Wave 2 only to serialise the shared test_output.go with t-8."""
+  covers = ["c-10"]
+  test_contract = [
+    "if Record echoes, TestRecordNeverReachesTerminal fails: on an Echo log Record's bytes land only in the file; on a failed log (wrapFile seam) the terminal gets only the one warning",
+    "if a terminal run drops its preamble, TestPendingLinesReachLogOnTerminal fails: tty=true, say \"PRE-MARK\" then spawn → log holds PRE-MARK before its first \"$ \" header, stdout holds it exactly once",
+    "if an unavailable log double-prints, TestPendingLinesPrintOnceWithoutLog fails: tty=false, logs dir is a file → stdout+stderr contain PRE-MARK exactly once",
+    "if a refused run starts creating a log, TestRefusalWritesNoLog / TestLogPathBeforeSpawn fail",
+  ]
+  depends_on = ["t-8"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 2
+  title = "Merge several runners' claims on one segment"
+  files = [
+    "internal/runsummary/summary.go",
+    "internal/runsummary/render.go",
+    "internal/runsummary/summary_test.go",
+    "internal/runsummary/merge_test.go",
+    "internal/runsummary/testdata/mixed/feastahead_green.txt",
+    "internal/runsummary/testdata/mixed/feastahead_web_red.txt",
+  ]
+  description = """
+Capture feastahead's bare `bash scripts/dross-test.sh` locally: green, and flutter-green + vitest-red. Segment.result returns every claiming
+parser's Result in registry order; Render prints each runner's counts on one line and spends one Budget on the union of failures; the
+ambiguous fallback goes; TestAmbiguousClaimFallsBack is rewritten. Both-red case = t-2's and t-6's live captures fed into one segment (D4)."""
+  covers = ["c-12"]
+  test_contract = ["if the merge falls back, TestMixedGreen fails: feastahead_green.txt at exit 0 → one \"PASS ·\" line with both the vitest and the dart test counts (registry order, not hardcoded)", "if one runner's failures vanish, TestMixedRedBothRunners fails: one segment fed testdata/dart/compact_red.txt (t-2) then testdata/js/vitest_console_fail.txt (t-6) → ✗ names are the union, FAIL line carries both runners' counts", "if the budget is per-runner, TestMixedSharesMaxBlocks fails: two fake parsers × 8 failures → exactly 10 ✗ blocks and \"+6 more failing\"", "if the live mixed red mis-renders, TestMixedWebRed fails: feastahead_web_red.txt → dart test counts and the vitest ✗ names", "if strict claims break now that nothing falls back, TestNoCrossClaims fails: every fixture under testdata/{gotest,js,gradle,dart,pytest} is claimed by exactly its own parser; only testdata/mixed by two", "if merging double-closes a parser, TestNoCrossClaims fails: Result() called twice on every claiming parser for every fixture returns equal Results", "if the merged fallback rules regress, the rewritten TestAmbiguousClaimFallsBack fails: two claims + zero failures + exit 1 prints the fallback; two claims + exit 0 → PASS with both counts", "if the mixed header overflows, TestMixedHeaderFits fails: the header stays under LineCut with both runner names intact"]
+  depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5", "t-6"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 2
+  title = "Record before-numbers on base binary; save breaks"
+  files = [
+    ".dross/phases/test-summary-parsers/flow-cost-before.toml",
+    ".dross/phases/test-summary-parsers/flow/equerry-red.patch",
+    ".dross/phases/test-summary-parsers/flow/feastahead-red.patch",
+    ".dross/phases/test-summary-parsers/flow/sunday-rider-red.patch",
+  ]
+  description = """
+Build dross from base_commit ea72a2cb (git archive into scratch, not a worktree), record `dross version`. Re-create the breaks named in
+t-1/t-2/t-3's red headers and save each as a patch; record `dross test >f 2>&1; wc -c <f` as gradle/dart/pytest_red_bytes (dart via
+`--local phone/…`). The human drives one fresh red-flow session on sunday-rider; jq-count agent_turns, turn_tools, wall_clock_s,
+dross_calls, log_reads. Write [scenario] + [before]; revert every repo."""
+  covers = ["c-11"]
+  test_contract = [
+    "if the half record is globbed, TestFlowCostRecords goes red on every later commit: the phases/*/flow-cost.toml glob must not match flow-cost-before.toml",
+    "if a patch can't replay, t-13 cannot reproduce the break: each patch passes `git apply --check` at its repo's HEAD, and `git status --porcelain` is empty afterwards",
+    "if before ran on the phase binary, checkTestSummaryParsersFlow (t-13) fails: before.binary_version contains \"commit ea72a2cb\"",
+    "if a field is missing, TestFlowCostRecords (t-13) fails: agent_turns > 0, wall_clock_s > 0, session_id, len(turn_tools) == agent_turns, non-empty dross_calls, every *_red_bytes > 0",
+  ]
+  depends_on = ["t-1", "t-2", "t-3"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 3
+  title = "Name the new runners in the README"
+  files = [
+    "README.md",
+    "internal/cmd/readme_doc_test.go",
+  ]
+  description = """
+Rewrite the `dross test` row's "plain `go test`, vitest and jest are" to list gradle, dart test (flutter) and pytest, and say a segment
+with several runners prints each runner's counts under the shared ten-block budget."""
+  covers = ["c-1", "c-2", "c-3", "c-12"]
+  test_contract = [
+    "if the README lags the registry, TestReadmeNamesSummaryRunners fails: the row does not name each of go test, vitest, jest, gradle, dart test and pytest",
+    "if the merge goes undocumented, TestReadmeNamesSummaryRunners fails: no mention of several runners in one run",
+  ]
+  depends_on = ["t-10"]
+  status = "done"
+
+[[task]]
+  id = "t-13"
+  wave = 3
+  title = "Record after-numbers and gate them"
+  files = [
+    ".dross/phases/test-summary-parsers/flow-cost.toml",
+    ".dross/phases/test-summary-parsers/flow-cost-before.toml",
+    "internal/cmd/flowcost_record_test.go",
+  ]
+  description = "`make install` (r-01), confirm `dross version` names the phase build. First `git apply --check` each t-11 patch at its repo's current HEAD;\nif a repo moved and a patch no longer applies, re-create the same break, update the patch and note it. Replay the scenario, fold [before] next to\n[after] in flow-cost.toml, delete flow-cost-before.toml. Add gradle/dart/pytest_red_bytes and gradle/dart/pytest_red_summarised to flowLeg, a\ntestSummaryParsersBase const, checkTestSummaryParsersFlow, and \"test-summary-parsers\" to the required list. Turns/wall-clock stay ungated."
+  covers = ["c-11"]
+  test_contract = ["if a round-trip was added, checkLegPair fails: after.dross_calls ⊄ before.dross_calls", "if the red summary still needs the log, checkTestSummaryParsersFlow fails: after.log_reads != 0", "if a parser went unmeasured, checkTestSummaryParsersFlow fails: any gradle/dart/pytest_red_bytes ≤ 0 on either leg", "if an after-run was really a fallback, checkTestSummaryParsersFlow fails: any of gradle_red_summarised, dart_red_summarised, pytest_red_summarised is not true on [after]", "if before drifted off base, checkTestSummaryParsersFlow fails: before.binary_version lacks \"commit ea72a2cb\"; if after used the old binary, checkLegPair's binary_version inequality fails", "if the half file lingers, checkTestSummaryParsersFlow fails: flow-cost-before.toml still exists", "if the record is deleted, TestFlowCostRecords' found check fails for \"test-summary-parsers\"", "if the after leg replays a different break than before, the byte comparison is void: every t-11 patch passes `git apply --check` at its repo's HEAD before replay, or the re-created patch is committed with a note in flow-cost.toml's [scenario]"]
+  depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5", "t-6", "t-7", "t-8", "t-9", "t-10", "t-11"]
+  status = "done"
+
+[[task]]
+  id = "t-14"
+  wave = 4
+  title = "Close verify's live FLAGs and uncovered survivors"
+  files = ["internal/runsummary/dart.go", "internal/runsummary/dart_test.go", "internal/runsummary/pytest.go", "internal/runsummary/pytest_test.go", "internal/runsummary/gradle.go", "internal/runsummary/gradle_test.go", "internal/runsummary/jsrunner.go", "internal/runsummary/jsrunner_test.go", "internal/runsummary/gotest.go", "internal/runsummary/gotest_test.go", "internal/runsummary/merge_test.go", "internal/runsummary/summary_test.go", "internal/cmd/readme_doc_test.go", "internal/cmd/test_summary_wiring_test.go", "internal/cmd/verify_log_test.go"]
+  description = "Remediation from /dross-verify 2026-11-02 (user chose remediate in-phase). Parser gaps the solo reviewers left live: (1) dart: an EXCEPTION CAUGHT block not followed by an [E] line (a teardown exception after [E]) attaches to the next failing test — a non-[E] progress line must close/discard pending; (2) pytest: a test that both FAILs and ERRORs at teardown must match FAILED to its plain section and ERROR to 'ERROR at teardown of', not first-unmatched of any key; (3) pytest: a multi-frame traceback whose E lines fall past BlockLines must still print its E lines; (4) gradle: JUnit 5 nested 'Outer > Inner > method() FAILED' names Outer.Inner.method(); (5) vitest suiteName strips ' [ X ]' only when the name has no ' > ' ('rounds 1.5 [ 1.5 ]' keeps its bracket); (6) go: a one-word module's vet block ('# oneword' then '# [oneword]') is a build block. Weak tests: (7) TestFallbackTailFromFailingSpawn/TestFallbackTailNoSpawnArgvInvalid pass on base ea72a2cb — rework so each is observed red there; (8) TestNoCrossClaims requires testdata/mixed claimers == {dart, vitest}; (9) its Result()-twice check also runs on testdata/mixed; (10) TestReadmeNamesSummaryRunners derives the runner list from runsummary's registry; (11) dart '~K' skip counter gets a fixture (live feastahead capture if a skip exists, else an inline feed like TestPytestFrameSeparatorKeepsSection). Uncovered survivors (NOT COVERED, coverprofile count 0): render.go:147 header last resort, render.go:161/162 counts() empty-Runner and empty-Counts arms, verify.go:1425 collect run-log error arm. 161/162/1425 are switch-case conditions gremlins will still mark NOT COVERED once tested; after tests land, re-verify accepts them with a coverprofile count>=1 reason."
+  covers = ["c-1", "c-2", "c-3", "c-5", "c-6", "c-8", "c-9", "c-12"]
+  test_contract = ["if a teardown exception is misattributed, TestDartPendingNotMisattributed fails: an EXCEPTION CAUGHT block after test A's [E] and before test B's [E] is in neither B's block nor dropped silently from A's", "if FAILED and teardown ERROR of one test swap sections, TestPytestFailAndTeardownErrorOwnSections fails: the FAILED failure holds its assertion E line and the teardown ERROR its fixture E line", "if a deep traceback loses its E lines, TestPytestDeepTracebackKeepsELines fails: a section with > BlockLines frame lines still prints its final E line", "if nested classes mangle the name, TestGradleNestedClassName fails: 'Outer > Inner > method() FAILED' is named Outer.Inner.method()", "if suiteName clips a dotted it.each value, TestVitestEachBracketNameWhole fails on 'src/a.test.ts > rounds 1.5 [ 1.5 ]'", "if a one-word vet block is not a build block, TestGoOneWordVetBlock fails: '# oneword' + '# [oneword]' + a vet diagnostic is one build failure named oneword", "if the 3/4/7 fallback still picks the last segment, TestFallbackTailFromFailingSpawn and TestFallbackTailNoSpawnArgvInvalid each fail against base ea72a2cb's selection (observed red before green)", "if mixed claims a wrong pair, TestNoCrossClaims fails: testdata/mixed claimers != {*runsummary.dart, *runsummary.vitest}, and Result() read twice on a mixed claimer differs", "if a parser is registered without a README mention, TestReadmeNamesSummaryRunners fails: its runner list comes from runsummary's registry", "if the skip arm of dartProgress breaks, TestDartGreenCounts fails: a '+N ~K' run keeps '~K' verbatim", "if header's last resort drops lead or tail, TestHeaderLastResort fails: a tail long enough that keep=0 still exceeds LineCut returns lead + runner names + tail (kills render.go:147)", "if counts() mishandles an empty Runner or empty Counts, TestCountsEmptyRunnerAndCounts fails: an empty-Runner result adds an empty part, an empty-Counts result prints its runner name alone", "if collect's run-log error is silent, TestCollectRunLogErrorSaysSo fails: with .dross/logs a file, stdout has exactly one 'log unavailable:' line carrying the error and tests/verify toml are still written"]
+  status = "done"
+  depends_on = ["t-13"]
+
+[[task]]
+  id = "t-15"
+  wave = 5
+  title = "Keep a held dart exception across same-test clock ticks"
+  files = ["internal/runsummary/dart.go", "internal/runsummary/dart_test.go"]
+  description = "t-14 review FLAG: dart.go discards a held EXCEPTION CAUGHT block at any non-[E] progress line, including the same test's progress line reprinted as the compact reporter's clock ticks (testdata/dart/compact_red.txt:13 shows one test at 00:03 and 00:04). Drop the held block only when the progress line names a different test; a same-test tick keeps it pending for that test's [E]. The t-14 teardown case (exception after A's [E], before B's) must still not attach to B."
+  covers = ["c-2"]
+  test_contract = ["if a same-test clock tick drops the held block, TestDartExceptionSurvivesClockTick fails: an EXCEPTION CAUGHT block, then the same test's progress line at a later time, then its [E] line keeps the exception's lines in that test's failure", "if the fix lets a stale block reach the next test, TestDartPendingNotMisattributed still fails: the teardown block stays out of B's failure"]
+  status = "done"
+  depends_on = ["t-14"]

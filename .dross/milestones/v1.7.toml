@@ -3,7 +3,7 @@ phases = ["exec-consent-completeness", "tracked-path-containment", "tool-output-
 [milestone]
   version = "v1.7"
   title = "1.7 symmetric controls — every path to a dangerous operation goes through the gate"
-  status = "active"
+  status = "complete"
   started = "2026-09-03"
   base = "main"
 

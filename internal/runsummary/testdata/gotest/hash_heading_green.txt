@@ -1,0 +1,5 @@
+# captured: go1.27.1 go test -count=1 (directory mode in example.com/heading/h: passing output is shown only here; TestReport prints "# Results")
+# Results
+all rows matched
+PASS
+ok  	example.com/heading/h	0.050s

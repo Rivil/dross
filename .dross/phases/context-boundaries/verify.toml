@@ -1,0 +1,117 @@
+[verify]
+  phase = "context-boundaries"
+  generated_at = 2026-10-08T14:42:19.487379Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-10-08T14:43:04.060317Z
+  measured_commit = "bcae699bac803a0171a8ef61209b4301a42ba640"
+  measured_tree = "802a56ed864de7e822bbfb9f093136eea4440f3d"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9126760563380282
+  mutants_killed = 324
+  mutants_survived = 31
+  mutants_not_covered = 31
+  mutants_no_block = 30
+  mutants_test_gap = 1
+  mutants_in_scope = 355
+  unclassified_in_scope = 0
+  criteria_total = 9
+  criteria_covered = 9
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 324
+    survived = 31
+    timeout = 0
+    in_scope = 355
+    score = 0.9126760563380282
+    file_count = 24
+    measured_on = "helicon"
+    whole_file = ["internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/doctor_hooks_test.go — adapter-lacks-range-runner", "internal/cmd/execute_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/flowcost_record_test.go — adapter-lacks-range-runner", "internal/cmd/hooklatency_record_test.go — adapter-lacks-range-runner", "internal/cmd/hooks.go — adapter-lacks-range-runner", "internal/cmd/hooks_nudge.go — adapter-lacks-range-runner", "internal/cmd/hooks_nudge_test.go — adapter-lacks-range-runner", "internal/cmd/hooks_test.go — adapter-lacks-range-runner", "internal/cmd/interaction_snippet_test.go — adapter-lacks-range-runner", "internal/cmd/readme_doc_test.go — adapter-lacks-range-runner", "internal/cmd/survivor_backlog_repo_test.go — adapter-lacks-range-runner", "internal/cmd/telemetry.go — adapter-lacks-range-runner", "internal/ctxnudge/nudge.go — adapter-lacks-range-runner", "internal/ctxnudge/nudge_test.go — adapter-lacks-range-runner", "internal/ctxnudge/run.go — adapter-lacks-range-runner", "internal/ctxnudge/run_test.go — adapter-lacks-range-runner", "internal/ctxnudge/transcript.go — adapter-lacks-range-runner", "internal/ctxnudge/transcript_test.go — adapter-lacks-range-runner", "internal/defaults/defaults.go — adapter-lacks-range-runner", "internal/defaults/defaults_test.go — adapter-lacks-range-runner", "internal/gatestate/nudge.go — adapter-lacks-range-runner", "internal/gatestate/nudge_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/defaults/defaults_test.go:TestContextThresholdUnsetVsZero", "internal/defaults/defaults_test.go:TestContextThresholdSurvivesOtherWriters", "internal/defaults/defaults_test.go:TestContextThresholdValidation", "internal/defaults/defaults_test.go:TestContextDefaultsOneKnob", "internal/cmd/hooks_nudge_test.go:TestNudgeOffSwitch"]
+  notes = "unset → 150000, explicit 0 → 0 (pointer survives other writers' saves), negative errors; threshold 0 at 900k emits nothing end to end"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/ctxnudge/transcript_test.go:TestMainBeatsNewerSidechain", "internal/ctxnudge/transcript_test.go:TestUsageSumsThreeInputFields", "internal/ctxnudge/transcript_test.go:TestSubagentTranscriptYieldsNothing", "internal/ctxnudge/transcript_test.go:TestSyntheticEntrySkipped", "internal/ctxnudge/nudge_test.go:TestBand", "internal/ctxnudge/run_test.go:TestSubagentFireNeitherNudgesNorClaims"]
+  notes = "sum of input+cache_read+cache_creation (output excluded); sidechain and agent_id fires ignored; Band(150000,150000)=1 pins at-or-above; synthetic filter has a non-zero-usage case (round-2 fix)"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/ctxnudge/run_test.go:TestEnvelopeNeverBlocks", "internal/ctxnudge/nudge_test.go:TestLineCarriesLockedParts", "internal/ctxnudge/nudge_test.go:TestJumpNudgesOnce", "internal/gatestate/nudge_test.go:TestClaimNudgeExactlyOnce", "internal/cmd/hooks_nudge_test.go:TestNudgeCadenceEndToEnd", "internal/cmd/hooks_nudge_test.go:TestNudgeNamesSessionStartReentry"]
+  notes = "systemMessage == additionalContext == the line (user + model); same band twice → nil; 150k emits, 160k silent, 200k emits; re-entry segment equals `dross reentry`'s"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/interaction_snippet_test.go:TestInteractionSnippetHasContextNudgeRule", "internal/cmd/execute_prompt_test.go:TestExecutePromptCheckpointWaveLead", "internal/cmd/flowcost_record_test.go:TestFlowCostRecords"]
+  notes = "rule text pins 'even mid-wave' + '§1g' + 'overrides'; below threshold §1g still 'mid-wave, lead with continue' with exactly validate + task next; observed after.gate_lead=checkpoint vs control.gate_lead=continue pinned by the record test"
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/ctxnudge/run_test.go:TestSilentPaths", "internal/ctxnudge/transcript_test.go:TestSpecialFilesAreSilent", "internal/cmd/hooks_nudge_test.go:TestNudgeHookNeverFails"]
+  notes = "outside repo, half-built .dross, missing transcript, FIFO/dir/mode-000, threshold error → nil output and no claim; the verb exits 0 with empty stdout+stderr on garbage stdin and a panicking seam"
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/hooks_test.go:TestEnsureUpgradesFiveHookInstall", "internal/cmd/hooks_test.go:TestUserHooksResolve", "internal/cmd/hooks_test.go:TestNudgeNotWiredOnUserPromptSubmit", "internal/cmd/doctor_hooks_test.go:TestDoctorMissingConvenienceHooksWarnOnly", "internal/cmd/doctor_hooks_test.go:TestDoctorGateHooks"]
+  notes = "second ensure byte-identical with foreign hooks kept in order; doctor's 'no nudge' row asserts the ⚠ line and exit 0; doctor.go:1162 arm survivor accepted (switch-case ceiling) with this row named"
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/ctxnudge/transcript_test.go:TestTailReadIsBounded", "internal/ctxnudge/transcript_test.go:TestTailRead50MBUnder50ms", "internal/ctxnudge/run_test.go:TestRunUnder50ms", "internal/cmd/hooklatency_record_test.go:TestHookLatencyRecord"]
+  notes = "≤1 MiB read of a 50 MB transcript; in-process <50 ms; installed binary p95 7.5 / 7.5 / 14.8 ms (below / claimed / emit) over 50 fires, gated ≤50 ms"
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/flowcost_record_test.go:TestFlowCostRecords", "internal/cmd/interaction_snippet_test.go:TestContextRuleAddsNoCalls"]
+  notes = "before/after turns (12 → 17) and wall-clock (41.5 → 60.0 s) recorded in flow-cost.toml; gate is the dross-call set (identical, 11 calls) per rivil 2026-10-08 — turn delta is batching variance; no prompt gains a `dross context` / `hooks nudge` call"
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/interaction_snippet_test.go:TestInteractionSnippetHasContextNudgeRule", "internal/cmd/interaction_snippet_test.go:TestInteractionShowCarriesContextRule", "internal/cmd/interaction_snippet_test.go:TestFooterPromptsLoadPlaybook", "internal/cmd/interaction_snippet_test.go:TestNudgeRuleLivesOnlyInPlaybook"]
+  notes = "dropping the rule from _interaction.md fails the phrase test; the embed test fails on a stale binary; every footer-bearing prompt must still run `dross interaction show`"
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation: 0.91 over 355 in-scope mutants (324 killed, 31 survived, all NOT COVERED); 30 sit in no go-cover block; the 1 counted test gap is doctor.go:1516, an accepted seam body tests replace wholesale"
+
+[[finding]]
+  severity = "NOTE"
+  text = "doctor.go:1162/1209/1211 (in-hunk switch-case conditions, gremlins attribution ceiling) accepted 2026-10-08 with the asserting test rows named; run re-collected after restoring its consumed [[detached_run]] record — no CLI re-applies dispositions to a collected run"
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-8: the round-trip gate compares dross-call sets (jq `unique`), so a call repeated more often in the after leg is invisible; the +5 turns / +18.5 s after-leg delta is attributed to batching variance per the 2026-10-08 ruling (t-11 review)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gatestate.ClaimNudge's high-water check precedes the O_EXCL create, so concurrent claims of two different bands could both win (same-band races are exclusive); needs the transcript to grow between two concurrent fires (t-4 review)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "TestFlowCostRecords and TestHookLatencyRecord read .dross/phases/context-boundaries/flow-cost.toml; renaming or pruning that phase dir fails the suite (t-12 review)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "boardsync.Disposed ignores absorption for survivor-keyed routes while the repo audit's routeClosed counts it — already parked as deferred 232957ce515ebfcd (t-13 review)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "live dogfood: the installed nudge fired in this verify session at 151k / 150k, naming `dross verify finalize context-boundaries` as the re-entry"
