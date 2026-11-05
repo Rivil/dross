@@ -266,9 +266,8 @@ Preconditions: `make install` at the phase head, then `dross prompt partial plan
   description = "Verify FLAG (c-2): `/dross-spec <id>` for a roadmap phase with no phase dir — the exact Next line verify prints — reads as 'scaffolding needed' and fetches _spec.create.md, so spec's common path is not zero-fetch. In spec.md §0 step 2's <phase-id> bullet, inline the roadmap case: if .dross/phases/<id>/ is missing but <id> is an entry in the active milestone's phases array, run `dross phase create \"<id>\"` (which checks out phase/<id>) and continue; fail only if it is in neither. Narrow the target=new trigger (spec.md line 17 and _spec.create.md's opening line) to --new and the no-target 'new' answer — drop 'scaffolding needed'. spec.md must stay ≤15,000 B (13,250 B today). Add an after-leg for spec on an unscaffolded roadmap target (fixture milestone lists the id, no phase dir) to flow-cost.toml, alongside the existing pre-scaffolded leg, and extend TestPromptBudgetsRestFlowProblems to require it. Post-commit: make install before re-driving the leg."
   covers = ["c-2", "c-4"]
   test_contract = ["if the roadmap-id scaffolding step leaves base spec.md, a raw spec.md check (TestCommonPathInline needle) fails", "if target=new still triggers on an unscaffolded roadmap id, the spec_prompt_test Fetched table fails: a given roadmap id with no phase dir fetches nothing", "if the unscaffolded-target spec after-leg is missing from flow-cost.toml or fetched a partial, TestPromptBudgetsRestFlowProblems fails"]
-  status = "failed"
+  status = "done"
   depends_on = ["t-17"]
-  reason = "writer: red TestFlowCostRecords/prompt-budgets-rest, spec_roadmap_after leg unrecorded; it needs commit + make install + a live spec run first; code stashed (t-19 stash)"
 
 [[task]]
   id = "t-20"
