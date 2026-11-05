@@ -1,95 +1,79 @@
 [verify]
   phase = "prompt-budgets-rest"
-  generated_at = 2026-11-04T16:00:48.201272Z
-  verdict = "partial"
+  generated_at = 2026-11-05T09:55:57.928136Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-11-04T16:09:42.896153Z
-  measured_commit = "11548ce03b2f7ae8870590f90f7a6745beaacd18"
-  measured_tree = "34177478116c963a18388c4fa93738225e8050cb"
+  finalized_at = 2026-11-05T10:09:44.31285Z
+  measured_commit = "a2c9c1cb304f4e390f5278150b63160d5e9c8e31"
+  measured_tree = "c3c53fbc79fc29295b8f7359054b7968930481cd"
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9468085106382979
-  mutants_killed = 89
-  mutants_survived = 5
-  mutants_not_covered = 5
-  mutants_no_block = 4
+  mutation_score = 0.9715639810426541
+  mutants_killed = 205
+  mutants_survived = 6
+  mutants_not_covered = 6
+  mutants_no_block = 5
   mutants_test_gap = 1
-  mutants_in_scope = 94
+  mutants_in_scope = 211
   unclassified_in_scope = 0
   criteria_total = 4
-  criteria_covered = 3
-  criteria_uncovered = 1
+  criteria_covered = 4
+  criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 89
-    survived = 5
+    killed = 205
+    survived = 6
     timeout = 0
-    in_scope = 94
-    score = 0.9468085106382979
-    file_count = 29
+    in_scope = 211
+    score = 0.9715639810426541
+    file_count = 32
     measured_on = "helicon"
-    whole_file = ["assets/budget_test.go — adapter-lacks-range-runner", "assets/conservation_test.go — adapter-lacks-range-runner", "assets/partials.go — adapter-lacks-range-runner", "assets/partials_test.go — adapter-lacks-range-runner", "cmd/dross/main_test.go — adapter-lacks-range-runner", "internal/boardsync/board_lifecycle_divergence_test.go — adapter-lacks-range-runner", "internal/cmd/flowcost_record_test.go — adapter-lacks-range-runner", "internal/cmd/interaction_coreloop_test.go — adapter-lacks-range-runner", "internal/cmd/interaction_pilot_test.go — adapter-lacks-range-runner", "internal/cmd/interaction_setupcmds_test.go — adapter-lacks-range-runner", "internal/cmd/interaction_snippet_test.go — adapter-lacks-range-runner", "internal/cmd/lane_install_docs_test.go — adapter-lacks-range-runner", "internal/cmd/lane_toolchain_docs_test.go — adapter-lacks-range-runner", "internal/cmd/milestone_narration_test.go — adapter-lacks-range-runner", "internal/cmd/options_docs_test.go — adapter-lacks-range-runner", "internal/cmd/phase_test.go — adapter-lacks-range-runner", "internal/cmd/plan_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/plan_review_tiers_test.go — adapter-lacks-range-runner", "internal/cmd/prompt_expand_test.go — adapter-lacks-range-runner", "internal/cmd/protected_prompts_test.go — adapter-lacks-range-runner", "internal/cmd/quick.go — adapter-lacks-range-runner", "internal/cmd/quick_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/quick_test.go — adapter-lacks-range-runner", "internal/cmd/readme_doc_test.go — adapter-lacks-range-runner", "internal/cmd/ship_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/spec_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/squash_claim_guard_test.go — adapter-lacks-range-runner", "internal/cmd/status_test.go — adapter-lacks-range-runner", "internal/rules/rules_test.go — adapter-lacks-range-runner"]
+    whole_file = ["assets/budget_test.go — adapter-lacks-range-runner", "assets/conservation_test.go — adapter-lacks-range-runner", "assets/partials.go — adapter-lacks-range-runner", "assets/partials_test.go — adapter-lacks-range-runner", "cmd/dross/main_test.go — adapter-lacks-range-runner", "internal/boardsync/board_lifecycle_divergence_test.go — adapter-lacks-range-runner", "internal/cmd/flowcost_record_test.go — adapter-lacks-range-runner", "internal/cmd/interaction_coreloop_test.go — adapter-lacks-range-runner", "internal/cmd/interaction_pilot_test.go — adapter-lacks-range-runner", "internal/cmd/interaction_setupcmds_test.go — adapter-lacks-range-runner", "internal/cmd/interaction_snippet_test.go — adapter-lacks-range-runner", "internal/cmd/issue.go — adapter-lacks-range-runner", "internal/cmd/lane_install_docs_test.go — adapter-lacks-range-runner", "internal/cmd/lane_toolchain_docs_test.go — adapter-lacks-range-runner", "internal/cmd/milestone_narration_test.go — adapter-lacks-range-runner", "internal/cmd/options_docs_test.go — adapter-lacks-range-runner", "internal/cmd/phase_test.go — adapter-lacks-range-runner", "internal/cmd/plan_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/plan_review_tiers_test.go — adapter-lacks-range-runner", "internal/cmd/prompt_expand_test.go — adapter-lacks-range-runner", "internal/cmd/protected_prompts_test.go — adapter-lacks-range-runner", "internal/cmd/quick.go — adapter-lacks-range-runner", "internal/cmd/quick_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/quick_test.go — adapter-lacks-range-runner", "internal/cmd/readme_doc_test.go — adapter-lacks-range-runner", "internal/cmd/ship_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/spec_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/squash_claim_guard_test.go — adapter-lacks-range-runner", "internal/cmd/status_test.go — adapter-lacks-range-runner", "internal/cmd/trust.go — adapter-lacks-range-runner", "internal/cmd/trust_test.go — adapter-lacks-range-runner", "internal/rules/rules_test.go — adapter-lacks-range-runner"]
 
 [[criterion]]
   id = "c-1"
   status = "covered"
   tests = ["assets/budget_test.go:TestPromptByteBudget", "assets/budget_test.go:TestPromptByteBudgetBites", "assets/budget_test.go:TestPromptByteBudgetEnumerates"]
-  notes = "globs the embedded prompts/*.md (not a fixed list), fails 15,001 B and passes 15,000 B, a brand-new or cut prompt over the cap is reported, partials and _interaction.md are exempt"
+  notes = "globs the embedded prompts/*.md rather than a fixed list, fails 15,001 B and passes 15,000 B, reports a new prompt over the cap, exempts partials. Largest base prompt is quick.md at 14,820 B"
 
 [[criterion]]
   id = "c-2"
-  status = "weak"
-  tests = ["assets/partials_test.go:TestCommonPathFetchesNothing", "assets/partials_test.go:TestCommonPathInline", "internal/cmd/flowcost_record_test.go:TestPromptBudgetsRestFlowProblems"]
-  notes = "Fetched(CommonPath()) is empty for every prompt; the common-path text is pinned in the base files; the flow-cost gate fails on any after-leg partial fetch. WEAK: the spec leg measures only a pre-scaffolded target; `/dross-spec <id>` for an unscaffolded roadmap phase (verify's own Next line) fetches _spec.create.md, so the zero-fetch claim fails on that path. Routed to t-19"
+  status = "covered"
+  tests = ["assets/partials_test.go:TestCommonPathFetchesNothing", "assets/partials_test.go:TestCommonPathInline", "internal/cmd/spec_prompt_test.go:TestSpecPromptScaffoldsRoadmapTargetInline", "internal/cmd/flowcost_record_test.go:TestPromptBudgetsRestFlowProblems"]
+  notes = "Fetched(CommonPath()) is empty for every prompt and the flow-cost gate fails on any after-leg fetch. Last run's weak spot is closed: t-19 scaffolds a roadmap id inline in spec.md and [spec_roadmap_after] records 0 partial fetches on an unscaffolded target, gated by specRoadmapAfterProblems"
 
 [[criterion]]
   id = "c-3"
   status = "covered"
   tests = ["assets/conservation_test.go:TestPromptInstructionsConserved", "assets/conservation_test.go:TestConservationCatchesALostRow", "internal/cmd/prompt_expand_test.go:TestPromptReadsGoThroughExpansion", "internal/cmd/prompt_expand_test.go:TestNoAllowlistedReaderReadsASplitPrompt"]
-  notes = "284-row instruction manifest over 7 prompts checked against Expand(prompt + partials); the raw-read guard forces prompt-content tests through Expand. Suite green on helicon: gremlins baseline ran with errors=0"
+  notes = "instruction manifest checked against Expand(prompt + partials), command rows now matched on token boundaries (t-22) so a longer command cannot satisfy a short row; raw-read guard forces prompt tests through Expand. Full suite green: dross test on helicon, 66 packages ok, log test-20261105T100734"
 
 [[criterion]]
   id = "c-4"
   status = "covered"
   tests = ["internal/cmd/flowcost_record_test.go:TestFlowCostRecords", "internal/cmd/flowcost_record_test.go:TestPromptBudgetsRestFlowProblems"]
-  notes = "the real flow-cost.toml is decoded and checked: before/after bytes, turns and wall-clock for plan/quick/spec, bytes-only for ship/options, sha256-pinned scenario scripts"
+  notes = "the real flow-cost.toml is decoded and checked: before/after bytes, turns and wall-clock for plan/quick/spec plus the roadmap spec leg, bytes-only for ship/options. Recorded after-bytes match the shipped prompts: plan 14452, quick 14820, spec 13445, ship 14495, options 14494"
 
 [[finding]]
   severity = "NOTE"
-  text = "quick.go:111 (CONDITIONALS_NEGATION), last run's BLOCKING, is killed by t-18's TestQuickEndUnreadableRecord (3dc2fc17)"
+  text = "all 6 in-scope survivors are accepted with recorded reasons: quick.go:171 (x2), :188 and issue.go:151, partials.go:325 hit the gremlins switch-case attribution ceiling (quick arms asserted by TestQuickEndRecordsInPhase / TestQuickEndShippedIsStandalone / TestQuickEndMatchesPRBranch; partials.go:325 by TestCommonPathFetchesNothing); partials.go:205 is a line number in Expand's missing-partial error, unreachable for embedded assets. 5 of 6 are uncoverable by construction"
 
 [[finding]]
   severity = "NOTE"
-  text = "all 5 survivors are accepted with recorded reasons: quick.go:164 (x2) and :181 hit the gremlins switch-case attribution ceiling (arms asserted by TestQuickEndRecordsInPhase / TestQuickEndShippedIsStandalone / TestQuickEndMatchesPRBranch); partials.go:205 and :325 are inherited and were accepted earlier. Efficacy over the 90 reachable = 0.99"
+  text = "last run's six FLAGs are closed: c-2 roadmap spec path by t-19, ship --auto recovery route by t-20 (TestShipAutoFailureRoutesToRecovery), quick end exec consent by t-21 (TestQuickEndRefusesUntrusted), conservation substring match by t-22, raw reads and loose anchors by t-23, quick issue duplication by t-24 (TestQuickEndAndIssueQuickOpenTheSameIssue)"
 
 [[finding]]
   severity = "NOTE"
-  text = "the internal/cmd leg is whole-package gremlins on helicon (r-20261104-123618, ~3h20m including the lock wait) filtered to 94 in-scope mutants"
+  text = "residual reviewer FLAGs, read against the code and held at NOTE because none can hide a lost instruction: t-23 TestQuickSoloReview's run anchor is still the lead-in sentence, but the order is pinned by the fix-round arm loop and the base §4 test < Green < re-fetch check; t-23 no seeded-FS test pins TestCoreLoopPromptsReferenceContract on a partial-only phrase, though it reads through expandedPrompt; t-22 promptUnits and extractInstructions can pair backticks differently, which fails safe as a false 'lost' and no manifest prompt has the construct"
 
 [[finding]]
-  severity = "FLAG"
-  text = "c-2: `/dross-spec <id>` for a roadmap phase with no phase dir reads as 'scaffolding needed' and fetches _spec.create.md; the flow-cost spec leg measured only a pre-scaffolded target. Routed to t-19 (inline roadmap-id scaffolding in spec.md + unscaffolded after-leg)"
+  severity = "NOTE"
+  text = "reviewer FLAGs now moot: t-9's hook-nudge exemption (the text stayed in options.md); t-11's ≤14,500 B spec.md target (13,445 B, under the global cap); t-20's task record wording (forced by CheckPartials' no-nesting rule)"
 
 [[finding]]
-  severity = "FLAG"
-  text = "t-12 review: _ship.auto.md says report and stop, and the ship recovery fetch sits after §6, so a failed `dross ship --auto` has no route to the Recovery text. Routed to t-20"
-
-[[finding]]
-  severity = "FLAG"
-  text = "t-5 review: `dross quick end` absorbs exec-gated `state bump` + `changes record` without requireExecConsent, so the quick flow no longer refuses in an untrusted tree. Routed to t-21"
-
-[[finding]]
-  severity = "FLAG"
-  text = "t-2 review: conservationProblems matches manifest rows by substring, so a short row is satisfied by a longer command and a lost instruction can hide (weakens c-3's evidence). Routed to t-22"
-
-[[finding]]
-  severity = "FLAG"
-  text = "t-7/t-13 reviews: interaction_coreloop_test reads plan.md/ship.md raw via a path variable; TestQuickSoloReview anchors on prose and TestQuickSoloFetchPlacement skips Re-fetch lines. Routed to t-23"
-
-[[finding]]
-  severity = "FLAG"
-  text = "t-5 review: openQuickIssue duplicates the `dross issue quick` CreateIssue/SetQuick/Save body. Routed to t-24"
+  severity = "NOTE"
+  text = "gremlins is whole-file here (adapter-lacks-range-runner, 32 files), so the score is over the whole of each touched file: run r-20261105-065020 on helicon, filtered to 211 in-scope mutants, 187 out-of-scope survivors dropped"
