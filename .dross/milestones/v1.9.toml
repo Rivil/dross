@@ -1,10 +1,12 @@
-phases = ["scoped-commit-gate", "spec-edge-probe", "review-edge-lenses", "milestone-closeout-check", "spec-fact-drift", "task-preconditions", "one-way-door-decisions", "ci-timing-trend", "verify-eta", "handoff-staleness", "prompt-behaviour-evals", "azure-devops-provider"]
+phases = ["scoped-commit-gate", "spec-edge-probe", "review-edge-lenses", "milestone-closeout-check", "spec-fact-drift", "task-preconditions", "one-way-door-decisions", "ci-timing-trend", "verify-eta", "handoff-staleness", "prompt-behaviour-evals"]
 
 [milestone]
   version = "v1.9"
-  title = "1.9 workflow depth — ideas ported from superpowers, GSD and gsd-core"
-  status = "planning"
-  started = "2026-09-24"
-  base = "milestone/v1.7"
+  title = "1.9 workflow depth — scoped commit gate, plus ideas ported from superpowers, GSD and gsd-core"
+  status = "active"
+  started = "2026-11-05"
+  base = "main"
 
 [scope]
+  success_criteria = ["On barktime, a phase's task commits pass commit-green on a scoped green run covering the changed paths, with no full-suite run per commit and no manual `dross gate off commit-green`; the full suite still gates verify, ship and CI.", "Before any code is written, a phase's spec and plan have every proposed edge class resolved (covered, dismissed with a reason, or deferred), every one-way decision explicitly confirmed, and every symbol or path they cite resolved in the tree, and a task whose machine-checkable precondition fails will not start.", "/dross-review reports a diff that handles only some values of an enum, status or flag, and one that swallows an error; `dross milestone complete` refuses to open the integration PR until every unresolved item (routed deferred items, unclassified survivors, unverified or unshipped phases) is resolved or acknowledged.", "Before a mutation leg dispatches, `dross verify` prints per-package mutant-site counts and an ETA with its basis stated; a package nearing its CI test-time cap draws a warning from its persisted trend; and resume/status warn when the handoff is many commits behind HEAD.", "An on-demand eval suite fails when a slash-command prompt regresses (a commit before AskUserQuestion in pair mode, an Edit on plan.toml)."]
+  non_goals = ["Prompt evals in CI: they run on demand only, never per push or on a schedule.", "Auto-repair: the new checks (fact drift, close-out, handoff staleness) name problems, they do not fix them.", "Automatic test selection beyond barktime's vitest/Svelte stack: other stacks keep their current gate behaviour.", "Azure DevOps provider: it is being done in another fork."]
