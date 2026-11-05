@@ -68,11 +68,11 @@
 
 [[finding]]
   severity = "NOTE"
-  text = "residual reviewer FLAGs, read against the code and held at NOTE because none can hide a lost instruction: t-23 TestQuickSoloReview's run anchor is still the lead-in sentence, but the order is pinned by the fix-round arm loop and the base §4 test < Green < re-fetch check; t-23 no seeded-FS test pins TestCoreLoopPromptsReferenceContract on a partial-only phrase, though it reads through expandedPrompt; t-22 promptUnits and extractInstructions can pair backticks differently, which fails safe as a false 'lost' and no manifest prompt has the construct"
+  text = "residual reviewer FLAGs, read against the code and held at NOTE because none can hide a lost instruction: t-23 TestQuickSoloReview's run anchor is still the lead-in sentence, but the order is pinned by the fix-round arm loop and the base §4 test < Green < re-fetch check; t-23 no seeded-FS test pins TestCoreLoopPromptsReferenceContract on a partial-only phrase, though it reads through expandedPrompt; t-11 the 'already has a target' check searches all of spec.md, not §4, so a move between base sections would pass, though the rule stays on the common path, sits in §4 today, and a move to a partial is caught"
 
 [[finding]]
   severity = "NOTE"
-  text = "reviewer FLAGs now moot: t-9's hook-nudge exemption (the text stayed in options.md); t-11's ≤14,500 B spec.md target (13,445 B, under the global cap); t-20's task record wording (forced by CheckPartials' no-nesting rule)"
+  text = "reviewer FLAGs now moot: t-9's hook-nudge exemption (the text stayed in options.md); t-11's two ≤14,500 B spec.md target FLAGs (13,445 B, under the global cap); t-20's task record wording (forced by CheckPartials' no-nesting rule); t-22's backtick pairing (fixed in round 2: promptUnits runs both regexes, pinned by the whole-span test)"
 
 [[finding]]
   severity = "NOTE"
