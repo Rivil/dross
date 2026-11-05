@@ -445,19 +445,22 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Review-comment ingest — `/dross-respond <pr>` triages a phase PR's review comments across all four providers: `dross pr comments` lists them fenced as untrusted data, `dross pr resolve` records one evidenced verdict each (accept → task, reject → reason, route → deferred) in a tracked `pr-triage.toml` that never stores a comment body, `dross pr reply` posts the rejections once on a recorded human approval, `dross ship` refuses while an accepted comment's task is undone, and `/dross-watch` shows each ship PR's untriaged count
 - [x] Debug sessions — `/dross-debug` keeps a systematic investigation in a gitignored `.dross/debug/<slug>.md` (one hypothesis per probe, evidence before the next, hard stop after three failed fixes, two independent signals to close), `dross debug {new,list,close}` gates it, and `dross status` plus the SessionStart line name any open session
 
-### Milestone v1.8 — context economy: shrink what every turn re-reads (active)
+### Milestone v1.8 — context economy: shrink what every turn re-reads (complete)
 
-- [ ] Past a configurable context threshold (default 150k tokens) a hook nudges "checkpoint + /clear", and the next durable gate leads with it
+- [x] Past a configurable context threshold (default 150k tokens) a hook nudges "checkpoint + /clear", and the next durable gate leads with it
 - [x] `dross test`, verify and mutation print counts plus failures and write the full log to a gitignored file; a green run prints no per-test lines
 - [x] A repeat `dross rule show` in the same session prints a one-line "rules unchanged" marker instead of the full block
-- [ ] `execute.md` and `verify.md` each load at ≤15 KB, with rare branches fetched on demand and a test that fails over budget
-- [ ] `/dross-status` suggests memory prunes with a $/month estimate each, never deletes, and never suggests a memory that carries a guard phrase
-- [ ] Time is a constraint, not a trade: no change adds agent round-trips to a command's common path, and each phase records before/after turn counts and wall-clock
+- [x] `execute.md` and `verify.md` each load at ≤15 KB, with rare branches fetched on demand and a test that fails over budget
+- [x] `/dross-status` suggests memory prunes with a $/month estimate each, never deletes, and never suggests a memory that carries a guard phrase
+- [x] Time is a constraint, not a trade: no change adds agent round-trips to a command's common path, and each phase records before/after turn counts and wall-clock
 
-### Milestone v1.9 — workflow depth: ideas ported from superpowers, GSD and gsd-core (planning)
+### Milestone v1.9 — workflow depth: scoped commit gate, plus ideas ported from superpowers, GSD and gsd-core (active)
 
-- [ ] Success criteria not yet written — scope with `/dross-milestone v1.9`
-- [ ] Azure DevOps works as a ship/PR provider alongside GitHub, GitLab, Forgejo/Gitea and Bitbucket
+- [ ] On barktime, a phase's task commits pass commit-green on a scoped green run covering the changed paths, with no full-suite run per commit and no manual `dross gate off commit-green`; the full suite still gates verify, ship and CI
+- [ ] Before any code is written, a phase's spec and plan have every proposed edge class resolved, every one-way decision confirmed and every cited symbol or path resolved in the tree, and a task whose machine-checkable precondition fails will not start
+- [ ] `/dross-review` reports a diff that handles only some values of an enum, status or flag, and one that swallows an error; `dross milestone complete` refuses to open the integration PR until every unresolved item is resolved or acknowledged
+- [ ] Before a mutation leg dispatches, `dross verify` prints per-package mutant-site counts and an ETA with its basis stated; a package nearing its CI test-time cap draws a warning from its persisted trend; and resume/status warn when the handoff is many commits behind HEAD
+- [ ] An on-demand eval suite fails when a slash-command prompt regresses (a commit before AskUserQuestion in pair mode, an Edit on `plan.toml`)
 
 ## Telemetry
 
