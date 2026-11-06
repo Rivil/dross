@@ -3,7 +3,7 @@
 Run a one-shot task with dross's atomic-commit + test-gate guarantees, **without** the spec → plan ceremony. **Pair-mode by default** — the user is the checker. Pass `--solo` to run autonomously for a trivial, well-specified change (mechanical refactor, config tweak, dependency bump): it skips only the approval gate, never the test gate or the safety rules.
 
 Use when:
-- A small change needs to land but doesn't justify a whole phase (typo fix, small refactor, dependency bump, README touch-up).
+- A small change needs to land but doesn't justify a whole phase.
 - You're mid-phase and a tangentially-related fix surfaces that would otherwise pollute the current task's diff.
 
 `$ARGUMENTS` is the **freeform task description** — what you want done, in plain prose. The model interprets the intent and proposes the change.
@@ -50,7 +50,7 @@ Version: <state.version> (will bump to <preview>.+1 on success)
 
 ## 1. Insight
 
-Surface the 3-5 most useful observations before proposing. Don't dump everything.
+Surface the 3-5 most useful observations before proposing.
 
 - Identify the **likely files** the task touches. Use the task description as a guide:
   - Grep for distinctive nouns/identifiers if the task names them.
@@ -59,7 +59,7 @@ Surface the 3-5 most useful observations before proposing. Don't dump everything
 - `git log -n 5 --oneline -- <file>` for recent activity.
 - Look for sibling files in the same dir for pattern-mirroring (test layout, validation shape).
 
-If the task is ambiguous about which file(s) it concerns, ask **one** targeted clarifying question via `AskUserQuestion` before proposing — better than guessing and steering later.
+If the task is ambiguous about which file(s) it concerns, ask **one** targeted clarifying question via `AskUserQuestion` before proposing.
 
 ## 2. Propose
 
@@ -75,14 +75,14 @@ In one block, 3-6 lines covering:
 - `show me <X>` — user requests more context; treat as steer
 - `abort` — stop without writing anything, then `dross quick end`
 
-Never write code without an explicit `proceed` in pair mode — that's the contract. These gates mirror `/dross-execute`'s shape — the §1c approval (proceed/steer/show/abort) and the §4 red-test gate below the §1e fix/abort — adapted to a single task with no task-loop `skip`/`mark failed`.
+Never write code without an explicit `proceed` in pair mode — that's the contract.
 
 ## 3. Implement
 
 Use `Edit`/`Write`. Constraints:
 - Touch only the files agreed in the proposal. If implementation reveals you need to touch others, **pause and re-confirm** before doing so.
 - Honor every `locked = true` decision in any active `spec.toml` (when in a phase) and every project-level rule. Surface conflicts; do not silently work around them.
-- Respect `runtime.*` routing (e.g. "always run X via docker compose exec"). Match the user's environment, not the most convenient shell.
+- Respect `runtime.*` routing (e.g. "always run X via docker compose exec").
 
 If `runtime.test_command` is set and the change is behavioural, **write/update tests in the same diff**. A quick task isn't done until the new behaviour has at least one test exercising it.
 
@@ -90,32 +90,25 @@ If `runtime.test_command` is set and the change is behavioural, **write/update t
 
 Show `git diff` (filtered to the touched files). Run `dross validate` if any `.dross/` files changed.
 
-Before running it, check consent — dross will not run a repo's test command
-until this machine has explicitly trusted it. It gates every dross command
-that spawns a process, so assume one that runs something refuses without it:
+Check consent first — dross runs no repo command that spawns a process until this machine trusts it:
 ```
 dross trust --check
 ```
-Exit 0 means trusted; run the suite. Non-zero means it is untrusted or stale —
-**stop and show the user the exact `runtime.test_command` line**, then let them
-run `dross trust`. Never run `dross trust` on their behalf: the whole point of
-the gate is that a human reads the line the repo supplied.
+Non-zero means untrusted or stale: **stop and show the user the exact `runtime.test_command` line**, then let them run `dross trust`. Never run `dross trust` on their behalf: the gate exists so a human reads the line.
 
-If `runtime.test_command` is set, run the suite through dross rather than
-interpolating the raw command:
+If `runtime.test_command` is set, run the suite through dross, never raw. `dross test lane list` prints `vouch: true` on a vouching lane; with one, run the touched files, one `--files` per path — `scoped green: <n> covered` says the commit needs no full run:
+```
+dross test --files <touched-files[0]> --files <touched-files[1]> ...
+```
+Run the whole suite in a repo with no vouching lane — with lanes declared, its `--files` run records nothing and the commit would be refused — and in a vouching repo only after a refused `git commit` names a path only a full run clears (build config, a deletion, a path with no related test):
 ```
 dross test
 ```
-Same consent gate; it runs on the granted host when there is one (`--local`:
-this machine; a selector narrows it). Full output goes to a log under
-`.dross/logs/`; the summary is counts on green, each failing test with its own
-output on red, then `+N more failing — see <log>` past ten. Exit **1** is a red
-suite; **3**/**4** mean the run did not happen and are never a reason to
-commit.
+Either runs on the granted host if any (`--local`: this machine), logs to `.dross/logs/`, and prints counts on green; on red each failing test, then `+N more failing — see <log>` past ten. Exit **1** is a red suite; any other non-zero but **5** means the run did not happen, in whole or in part, and is never a reason to commit.
 
-Three outcomes:
+**Green** → continue to commit. `uncovered:` reports the asked list, not the commit, so it alone never triggers a bare run: commit and let the gate judge.
 
-**Green** → continue to commit.
+**Exit 5** → a test-less or docs-only quick: nothing was measured, which is no red. Paths that all match `runtime.test_exempt` commit with no run on a current grant; a commit refused for want of one waits on the user's own `dross trust --test-exempt`, never run on their behalf. Any other path takes a test and a re-run, or the bare run once its commit is refused.
 
 **Red, pair mode** → surface the summary's failures; open the log only where a block was cut. Ask via `AskUserQuestion`:
 - `fix here` — address inline, re-run
@@ -123,7 +116,7 @@ Three outcomes:
 
 **No test command configured** → warn once. In pair mode, ask via `AskUserQuestion` (`proceed without tests` / `abort`).
 
-A solo quick reviews here, after the green `dross test` and before the commit.
+A solo quick reviews here, after §4's run and before the commit.
 **Re-fetch** if context was compacted: `dross prompt partial quick solo`
 
 ## 5. Commit
@@ -152,7 +145,7 @@ Quick: <internal-version-after-bump>
 [Phase: <phase-id>]
 ```
 
-**Match the repository's existing trailer convention.** Check recent history (`git log -1 --format=%B`): if commits carry a `Co-Authored-By` trailer, include one; if they don't, omit it. Don't introduce the trailer into a repo that doesn't already use it, and don't strip it from one that does. Do not skip hooks (`--no-verify`). If a pre-commit hook fails, treat it as a red test (step 4) — fix inline, commit fresh, never amend.
+**Match the repository's existing trailer convention.** Check recent history (`git log -1 --format=%B`): if commits carry a `Co-Authored-By` trailer, include one; if they don't, omit it. Do not skip hooks (`--no-verify`). If a pre-commit hook fails, treat it as a red test (step 4) — fix inline, commit fresh, never amend.
 
 Once the commit lands, end the quick:
 ```
@@ -200,10 +193,10 @@ state is on disk — safe to /clear · fresh session: /dross-status
 
 ## Hard rules
 
-- **Pair mode by default; `--solo` is opt-in.** Pair keeps a human in the loop (the checker). `--solo` runs autonomously for trivial, well-specified changes; §0's solo fetch carries its rules.
-- **One commit per quick** for the actual work, plus a single follow-up `chore(dross):` commit for the version bump + state/changes bookkeeping `dross quick end` writes (§5) — the counter only bumps after the work commit succeeds, so the two can't merge. If the *work* itself naturally splits into two commits, it's not a quick — route to a phase or run /dross-quick twice.
+- **Pair mode by default; `--solo` is opt-in.** §0's solo fetch carries its rules.
+- **One commit per quick** for the actual work, plus a single follow-up `chore(dross):` commit for the version bump + state/changes bookkeeping `dross quick end` writes (§5). If the *work* itself naturally splits into two commits, it's not a quick — route to a phase or run /dross-quick twice.
 - **Touch only what you proposed.** Mid-implementation scope expansion requires re-confirmation.
 - **No `git add -A`.** Always specify files explicitly.
-- **No `--no-verify`** unless the user asks. Pre-commit hook failures get fixed and re-committed, not amended away.
+- **No `--no-verify`** unless the user asks.
 - **No retries on red tests.** One fix attempt, then: pair mode asks (fix again / abort); solo mode aborts and discards (no bump). Never loop on red.
-- **Internal counter bumps on success only.** If the user aborts mid-flow, the version stays where it was — quick tasks earn their version bump.
+- **Internal counter bumps on success only.** If the user aborts mid-flow, the version stays where it was.
