@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -99,6 +100,8 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 // a degraded diff, a file recorded in changes.json that git never saw change —
 // and mutating nothing because nothing was known is how a phase passes having
 // measured nothing.
+//
+// A .svelte's ranges narrow the report, not the argv: see svelteRanges.
 func (s *Stryker) RunRanges(files []string, ranges map[string][]Range) (*Report, error) {
 	if len(files) == 0 {
 		return &Report{Tool: s.Name()}, nil
@@ -219,7 +222,7 @@ func (s *Stryker) RunRanges(files []string, ranges map[string][]Range) (*Report,
 		}
 		return nil, fmt.Errorf("read stryker report: %w", err)
 	}
-	report, err := ParseStrykerJSON(b)
+	report, err := s.parseRanged(b, requested, ranges)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +266,7 @@ func (s *Stryker) reuseReport(files []string, ranges map[string][]Range) (*Repor
 	if err != nil {
 		return nil, fmt.Errorf("read stryker report: %w", err)
 	}
-	report, err := ParseStrykerJSON(b)
+	report, err := s.parseRanged(b, requested, ranges)
 	if err != nil {
 		return nil, err
 	}
@@ -313,6 +316,11 @@ const strykerInitialTestFailureText = "One or more tests failed in the initial t
 const strykerInitialTestTruncationNote = "stryker aborted on its initial test run and names ONLY the first failing test above — " +
 	"that list is truncated by design, so an unknown number of further failures remain. " +
 	"Fix the one it named, re-run, and expect it to name another.\n"
+
+// strykerQuietRangedFormat is the line naming narrowed files that yielded no
+// mutants: checkInstrumented's for a file absent from the report, parseRanged's
+// for a .svelte whose mutants all fell outside its ranges.
+const strykerQuietRangedFormat = "stryker: %d narrowed file(s) contributed no mutants in their changed lines: %s\n"
 
 // checkInstrumented hard-fails the run when stryker did not instrument a file
 // it was asked to mutate (locked decision drop_behaviour).
@@ -390,9 +398,7 @@ func (s *Stryker) checkInstrumented(data []byte, requested []string, narrowed ma
 			}
 		}
 		if len(quietRanged) > 0 {
-			fmt.Fprintf(os.Stderr,
-				"stryker: %d narrowed file(s) contributed no mutants in their changed lines: %s\n",
-				len(quietRanged), strings.Join(quietRanged, ", "))
+			fmt.Fprintf(os.Stderr, strykerQuietRangedFormat, len(quietRanged), strings.Join(quietRanged, ", "))
 		}
 		if len(quietWhole) > 0 {
 			fmt.Fprintf(os.Stderr,
@@ -508,6 +514,11 @@ func (s *Stryker) runArgs(files []string, ranges map[string][]Range) (argv []str
 			mutate = append(mutate, escaped)
 			continue
 		}
+		// Instrumented whole and narrowed from the report: see svelteRanges.
+		if isSvelte(f) {
+			mutate = append(mutate, escaped)
+			continue
+		}
 		for _, r := range rs {
 			mutate = append(mutate, fmt.Sprintf("%s:%d-%d", escaped, r.Start, r.End))
 		}
@@ -540,6 +551,112 @@ func narrowedSet(requested []string, workdir string, ranges map[string][]Range) 
 		}
 	}
 	return out
+}
+
+// isSvelte reports whether path is a Svelte component.
+func isSvelte(path string) bool {
+	return strings.EqualFold(filepath.Ext(path), ".svelte")
+}
+
+// svelteRanges returns the ranges runArgs held back from the argv, keyed by the
+// trimmed request path.
+//
+// STRYKER CANNOT RANGE A .svelte ITSELF. Its instrumenter parses each <script>
+// body and each template expression as a separate document, then compares a
+// --mutate range to the node's line INSIDE that document, adding the document's
+// offset only when it reports the mutant (@stryker-mutator/instrumenter 9.6.1,
+// transformBabel against Mutant.toApiLocation). So "Widget.svelte:9-12" selects
+// lines 9-12 of every block: the wrong function in the script, and nothing at
+// all in a one-line template expression. No shift of the range fixes that,
+// because one range applies to every block and each has its own offset.
+//
+// The report's locations ARE the file's own lines, the ones the construct spans
+// are in. So a .svelte is instrumented whole and parseRanged drops every mutant
+// outside its ranges. The tool does test the dropped mutants, which is the price
+// of a scope that is right.
+//
+// A malformed range is left out: runArgs fell back to the whole file for it, and
+// a file measured whole must be reported whole.
+func svelteRanges(requested []string, workdir string, ranges map[string][]Range) map[string][]Range {
+	out := map[string][]Range{}
+	for _, f := range requested {
+		rs := ranges[rangeKey(f, workdir)]
+		if !isSvelte(f) || len(rs) == 0 || slices.ContainsFunc(rs, func(r Range) bool { return !r.Valid() }) {
+			continue
+		}
+		out[filepath.ToSlash(f)] = rs
+	}
+	return out
+}
+
+// requestedFor names the request path a report key belongs to, or "" for none.
+// The suffix limb is checkInstrumented's: a report keyed on absolute paths names
+// the same file. It searches every requested path, not just the ranged ones, and
+// the longest wins: otherwise a file requested whole, packages/x/src/Widget.svelte,
+// would take the ranges of src/Widget.svelte, whose path is its suffix.
+func requestedFor(key string, requested []string) string {
+	key = filepath.ToSlash(key)
+	var best string
+	for _, want := range requested {
+		want = filepath.ToSlash(want)
+		if key == want {
+			return want
+		}
+		if strings.HasSuffix(key, "/"+want) && len(want) > len(best) {
+			best = want
+		}
+	}
+	return best
+}
+
+// inRanges applies Stryker's own rule for a --mutate range: a mutant counts only
+// when it sits wholly inside one, so a mutant spanning a construct's edge stays
+// out here as it does for a .ts.
+func inRanges(m strykerMutant, rs []Range) bool {
+	for _, r := range rs {
+		if m.Location.Start.Line >= r.Start && m.Location.End.Line <= r.End {
+			return true
+		}
+	}
+	return false
+}
+
+// parseRanged is ParseStrykerJSON with svelteRanges applied. The report on disk
+// stays the tool's own, so --reuse-report can read it under any ranges, and
+// checkInstrumented keeps reading it: an instrumented file whose mutants all
+// fell outside its ranges was not dropped.
+func (s *Stryker) parseRanged(data []byte, requested []string, ranges map[string][]Range) (*Report, error) {
+	held := svelteRanges(requested, s.Workdir, ranges)
+	if len(held) == 0 {
+		return ParseStrykerJSON(data)
+	}
+	var raw strykerReport
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("decode stryker report: %w", err)
+	}
+	var quiet []string
+	for path, f := range raw.Files {
+		rs := held[requestedFor(path, requested)]
+		if len(rs) == 0 {
+			continue
+		}
+		kept := make([]strykerMutant, 0, len(f.Mutants))
+		for _, m := range f.Mutants {
+			if inRanges(m, rs) {
+				kept = append(kept, m)
+			}
+		}
+		if len(kept) == 0 && len(f.Mutants) > 0 {
+			quiet = append(quiet, path)
+		}
+		f.Mutants = kept
+		raw.Files[path] = f
+	}
+	if len(quiet) > 0 {
+		slices.Sort(quiet)
+		fmt.Fprintf(os.Stderr, strykerQuietRangedFormat, len(quiet), strings.Join(quiet, ", "))
+	}
+	return raw.report(), nil
 }
 
 // escapeGlobMeta makes a literal path safe to hand Stryker as a --mutate glob.
@@ -733,6 +850,11 @@ func ParseStrykerJSON(data []byte) (*Report, error) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("decode stryker report: %w", err)
 	}
+	return raw.report(), nil
+}
+
+// report applies ParseStrykerJSON's status mapping to a decoded report.
+func (raw *strykerReport) report() *Report {
 	r := &Report{Tool: "stryker"}
 	for path, f := range raw.Files {
 		for _, m := range f.Mutants {
@@ -779,5 +901,5 @@ func ParseStrykerJSON(data []byte) (*Report, error) {
 		}
 	}
 	r.Score = PooledScore(r.Killed, r.Survived, r.Timeout)
-	return r, nil
+	return r
 }

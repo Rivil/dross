@@ -325,6 +325,142 @@ func TestRealParserSpansMatchTheExpansionForSvelte(t *testing.T) {
 	})
 }
 
+// constructAt is the lookup verify's expansion makes for one hunk line. verify
+// imports this package, so the planner itself is out of reach from here;
+// TestPlanRangesRangesASvelteFile pins it on these same spans.
+func constructAt(cs []Construct, line int) (Construct, bool) {
+	for _, c := range cs {
+		if line >= c.Start && line <= c.End {
+			return c, true
+		}
+	}
+	return Construct{}, false
+}
+
+// instrumentedMutants reads every mutant of file out of the last run's report on
+// disk: the tool's whole-file answer, before dross narrows it.
+func instrumentedMutants(t *testing.T, s *Stryker, file string) []strykerMutant {
+	t.Helper()
+	var raw strykerReport
+	readJSON(t, s.reportPath(), &raw)
+	var all []strykerMutant
+	for path, f := range raw.Files {
+		if strings.HasSuffix(filepath.ToSlash(path), file) {
+			all = append(all, f.Mutants...)
+		}
+	}
+	return all
+}
+
+func hasMutant(placed []strykerMutant, line int, mutator, status string) bool {
+	for _, m := range placed {
+		if m.Location.Start.Line == line && m.MutatorName == mutator && m.Status == status {
+			return true
+		}
+	}
+	return false
+}
+
+func instrumentedOn(all []strykerMutant, line int) bool {
+	for _, m := range all {
+		if m.Location.Start.Line == line {
+			return true
+		}
+	}
+	return false
+}
+
+// TestRealParserSpansMatchTheExpansionForSvelteMutants is c-8's acceptance: the
+// three things a .svelte hunk can land on, each run through the real Stryker on
+// the span the real compiler resolved, in a leg holding Widget.svelte alone.
+// Stryker aborts a run that collects no test, so Widget.svelte.test.ts is what
+// lets each leg reach its assertions. It renders the markup and clicks nothing,
+// so the template's mutants die and the script's stay NoCoverage, and a leg is
+// proved on both. The name rides ci.yml's selector, as above.
+func TestRealParserSpansMatchTheExpansionForSvelteMutants(t *testing.T) {
+	root := requireSvelte(t)
+	const file = "src/Widget.svelte"
+	widget := filepath.Join(root, file)
+	s := &Stryker{ProjectRoot: root}
+	cs, err := s.Constructs(file)
+	if err != nil {
+		t.Fatalf("Constructs: %v", err)
+	}
+
+	// run is one ranged leg. A refusal is fatal. The tool's own report holds the
+	// whole file, so what it placed inside r is the answer the leg's row must
+	// match status for status: a mutant kept from outside r, or lost from inside
+	// it, breaks that whichever way the tool scored it.
+	run := func(t *testing.T, r Range) (report *Report, placed, all []strykerMutant) {
+		t.Helper()
+		report, err := s.RunRanges([]string{file}, map[string][]Range{file: {r}})
+		if err != nil {
+			t.Fatalf("RunRanges(%v): %v", r, err)
+		}
+		all = instrumentedMutants(t, s, file)
+		for _, m := range all {
+			if m.Location.Start.Line >= r.Start && m.Location.End.Line <= r.End {
+				placed = append(placed, m)
+			}
+		}
+		want := (&strykerReport{Files: map[string]strykerFile{file: {Mutants: placed}}}).report().Files[file]
+		if got := report.Files[file]; got != want {
+			t.Errorf("range %d-%d: the leg's row is %+v, the tool placed %+v inside it", r.Start, r.End, got, want)
+		}
+		for _, m := range report.Surviving {
+			if m.Line < r.Start || m.Line > r.End {
+				t.Errorf("%s %q on line %d, outside the requested %d-%d", m.Op, m.Snippet, m.Line, r.Start, r.End)
+			}
+		}
+		t.Logf("range %d-%d: kept %d of %d mutants in %s, row %+v", r.Start, r.End, len(placed), len(all), file, want)
+		return report, placed, all
+	}
+
+	t.Run("a hunk in one script function mutates it and no sibling", func(t *testing.T) {
+		hunk := fixtureLine(t, widget, "count = count + by")
+		sibling := fixtureLine(t, widget, "if (count > 0)")
+		c, ok := constructAt(cs, hunk)
+		if !ok || c.Label() != "FunctionDeclaration increment" {
+			t.Fatalf("line %d resolved to %q (found %v), want FunctionDeclaration increment", hunk, c.Label(), ok)
+		}
+		_, placed, all := run(t, Range{Start: c.Start, End: c.End})
+		if !hasMutant(placed, hunk, "ArithmeticOperator", "NoCoverage") {
+			t.Errorf("no ArithmeticOperator mutant on line %d, the hunk itself: %+v", hunk, placed)
+		}
+		// Without this the row check is vacuous: a sibling nothing mutated could
+		// not have leaked.
+		if !instrumentedOn(all, sibling) {
+			t.Errorf("the tool placed no mutant on line %d, so nothing tested the sibling staying out", sibling)
+		}
+	})
+
+	t.Run("a hunk on a template expression mutates that expression", func(t *testing.T) {
+		hunk := fixtureLine(t, widget, "{count + 1}")
+		c, ok := constructAt(cs, hunk)
+		if !ok || c.Label() != "Element button" {
+			t.Fatalf("line %d resolved to %q (found %v), want Element button", hunk, c.Label(), ok)
+		}
+		// Killed, not just placed: the fixture test reached this very mutant.
+		if _, placed, _ := run(t, Range{Start: c.Start, End: c.End}); !hasMutant(placed, hunk, "ArithmeticOperator", "Killed") {
+			t.Errorf("no killed ArithmeticOperator mutant on line %d, the expression itself: %+v", hunk, placed)
+		}
+	})
+
+	t.Run("a style-only hunk stays raw and yields nothing", func(t *testing.T) {
+		hunk := fixtureLine(t, widget, "color: red")
+		if c, ok := constructAt(cs, hunk); ok {
+			t.Fatalf("style line %d resolved to %q, want no construct", hunk, c.Label())
+		}
+		report, placed, all := run(t, Range{Start: hunk, End: hunk})
+		if len(placed) != 0 || report.Killed != 0 || report.Survived != 0 {
+			t.Errorf("a style line kept mutants: killed %d, survived %d, placed %+v", report.Killed, report.Survived, placed)
+		}
+		if len(all) == 0 {
+			t.Error("the tool placed no mutant in the file at all, so nothing was narrowed away")
+		}
+	})
+}
+
 // TestUnresolvableParserIsUnavailableForSvelte: the real causes behind
 // ast-unavailable on a .svelte, each named by dross with no compiler text in
 // the detail. A position is the file's own, inside a script block too. The name
