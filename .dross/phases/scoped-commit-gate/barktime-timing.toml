@@ -1,0 +1,63 @@
+# t-19: one `vitest related --run <path>` in barktime, measured before per-path
+# units are built. No dross or barktime changes. Measured 2026-11-06.
+
+verdict = "over_budget"
+budget_s = 600
+t9_may_start = false
+
+[run_site]
+  site = "helicon, stack"
+  why = "vitest related collects integration-project tests, which need the stack's postgres. On the laptop host both measured runs went red on those files alone, so a host run cannot vouch for a path. in-container.sh passes its args to `vitest run`, so `related` needs its own route."
+
+[integration]
+  collected = true
+  detail = "Both measured paths collected integration-project tests: StatusBadge 2 failed of 112 files, Shopfront 1 failed of 5 (tests/integration/public-profile-route.integration.test.ts). All failures were integration files with no database on the host."
+
+# Measured on the laptop host, the only site reachable with no barktime change.
+# wall_clock_s is real time; vitest_duration_s is vitest's own Duration line.
+[[measured]]
+  path = "src/lib/components/directory/Shopfront.svelte"
+  shape = "leaf"
+  site = "laptop host"
+  wall_clock_s = 73
+  vitest_duration_s = 24
+  test_files = 5
+  exit = 1
+
+[[measured]]
+  path = "src/lib/components/ui/StatusBadge.svelte"
+  shape = "widely imported"
+  site = "laptop host"
+  wall_clock_s = 191
+  vitest_duration_s = 135
+  test_files = 112
+  exit = 1
+
+[[measured]]
+  path = "src/lib/components/directory/shopfront.svelte"
+  shape = "misspelled case: no such file"
+  site = "laptop host"
+  wall_clock_s = 46
+  test_files = 0
+  exit = 0
+  note = "vitest related exits 0 having collected nothing: the fail-open t-18's wrapper must catch. It also gives the fixed startup cost per spawn."
+
+[overhead]
+  # From barktime's last full `dross test` on helicon (log test-20261105T210130):
+  # 1130 s wall clock less 973 s of vitest Duration across its three projects.
+  stack_per_run_s = 157
+  includes = "tree sync, image build, service wait, migrate, teardown"
+  tree_sync_s = "not split out: rsync's share sits inside stack_per_run_s, and a live sync was not run because it can clobber a helicon workdir in use"
+  vitest_startup_per_unit_s = 46
+
+[projection]
+  # 5-file task, two runs (solo re-runs after the writer stops) = 10 units.
+  units = 10
+  one_stack_per_unit_leaf_s = 2300
+  one_stack_per_unit_wide_s = 3480
+  one_stack_per_run_leaf_s = 1044
+  one_stack_per_run_wide_s = 2224
+  # Best model with the leaf cost halved for helicon's cores: still over budget.
+  best_case_halved_s = 679
+  full_suite_helicon_s = 1130
+  caveat = "Per-path costs are laptop figures carried to helicon, not an in-stack measurement. Every model exceeds 600 s, including the best one with its cost halved."
