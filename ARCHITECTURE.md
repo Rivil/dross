@@ -66,7 +66,7 @@ _introduced 01-architecture-comprehension-layer · extended architecture-doc-enh
 Schema-check every .dross/ TOML/JSON artefact, including that plan `covers` reference real spec criteria. The two validators divide the work by blast radius (locked `status_check_home`): `dross validate` stays **structural only** because it runs in every slash command's wrap step and must never newly fail an existing repo, while `dross doctor` is the sole **enum-enforcing** validator. Doctor therefore owns the plan-task status check — a task whose `status` falls outside `pending|in_progress|done|failed` is reported as an exit-code issue naming both phase and task id, closing the hole where a hand-edited plan.toml silently dropped a task out of `NextRunnable`. A phase directory with no plan.toml is skipped in silence (spec'd-but-unplanned is legal); an unparseable one is its own issue rather than a clean verdict.
 
 - `Validate` — `internal/cmd/validate.go:33`
-- `loadIfExists` — `internal/cmd/validate.go:639`
+- `loadIfExists` — `internal/cmd/validate.go:641`
 - `taskStatusIssues` (doctor's plan-task status enum check) — `internal/cmd/doctor.go:833`
 - `triageProblems` (each phase's `pr-triage.toml` is checked against its plan tasks and spec deferred items — an accept must name a real task, a route a real deferred item) — `internal/cmd/validate.go:211`
 
@@ -377,7 +377,7 @@ Give every deferred idea a destination instead of leaving it write-only: `/dross
 - `validDeferredTarget` (one target rule shared by route, add and validate) — `internal/cmd/deferred_target.go:54`
 - `deferred.ResolveSource` (route/unroute/dismiss resolve `_project` through the store helper) — `internal/deferred/deferred.go:148`
 - `mirrorDeferredAdd` (same-command board mirror; warns and keeps the local write on failure) — `internal/cmd/deferred_add.go:158`
-- `danglingTargets` (validate walks the store; reserved `phases/_project` dir flagged; rename repoints store entries) — `internal/cmd/validate.go:576`
+- `danglingTargets` (validate walks the store; reserved `phases/_project` dir flagged; rename repoints store entries) — `internal/cmd/validate.go:578`
 - `TestParksHomelessFindingScopesToOpenLoops` (self-retiring guard against parking a finding instead of filing it) — `internal/cmd/deferred_homeless_repo_test.go:40`
 - `/dross-inbox` board-off fallback + dismiss funnel — `assets/prompts/inbox.md`
 - `resolveBacklogIssue` (routed items mirrored with a `dross/target:` label, resolved by identity label) — `internal/boardsync/backlog.go:323`
@@ -385,7 +385,7 @@ Give every deferred idea a destination instead of leaving it write-only: `/dross
 - `forge.IssueLinker` (optional link capability: YouTrack + Jira, absent on GitHub by design) — `internal/forge/forge.go:202`
 - `refuseCompleteTarget` (deferred route, survivor route and `deferred add --target` refuse a destination that is already complete, before any write; locked `route_to_complete`) — `internal/cmd/deferred_target.go:70`
 - `deferredAbsorb` (`dross deferred absorb` records a parked item's stable id on the criterion that takes it in — the record its board mirror closes on; `/dross-spec` runs it for every criterion seeded from a parked item) — `internal/cmd/deferred_absorb.go:27`
-- `absorbedProblems` (validate refuses an absorbed id that names no item, or one dismissed, unrouted or routed elsewhere, while the phase is open) — `internal/cmd/validate.go:611`
+- `absorbedProblems` (validate refuses an absorbed id that names no item, or one dismissed, unrouted or routed elsewhere, while the phase is open) — `internal/cmd/validate.go:613`
 
 _introduced deferred-item-routing · 6509930 · extended deferred-triage-gaps · 539d475 · extended deferred-unroute-command · fb24bc2 · extended survivor-lifecycle · a6b366d · extended deferred-add-command · 5e86a7b · extended board-sync-truth · a587471 · extended cmd-package-decomposition · adc37f7 · extended board-finalize-on-complete · 328f2f2_
 
@@ -764,8 +764,8 @@ A phase's mutation score covers only the files that phase touched: a survivor in
 - `FilterReport` (split against scope, recompute counts, tag survivors) — `internal/verify/verify.go:298`
 - `IsTestdataPath` (one segment-scoped testdata rule shared by the drain and verify) — `internal/verify/verify.go:382`
 - `RunScoped` (Stryker legs instrument only the construct-widened hunks via the optional `RangeRunner`; gremlins and hunk-less scopes fall open to whole files) — `internal/verify/verify.go:672`
-- `ConstructResolver` (the optional adapter capability beside `RangeRunner`: a file's top-level construct spans; `Construct.Label` is what provenance prints) — `internal/mutation/construct.go:62`
-- `Stryker.Constructs` (`@babel/parser` out of Stryker's own tree under `node -`, source on stdin, every failure a dross-authored `ErrASTUnavailable` cause; `.svelte` refused pre-spawn) — `internal/mutation/construct.go:109`
+- `ConstructResolver` (the optional adapter capability beside `RangeRunner`: a file's top-level construct spans; `Construct.Label` is what provenance prints) — `internal/mutation/construct.go:68`
+- `Stryker.Constructs` (`@babel/parser` out of Stryker's own tree under `node -`, source on stdin, every failure a dross-authored `ErrASTUnavailable` cause; `.svelte` resolves too: the project's `svelte/compiler` finds each script and markup node, `@babel/parser` reads the script bodies, and `mergeConstructs` fuses spans sharing a line) — `internal/mutation/construct.go:142`
 - `resolveConstructs` (asks the resolver for exactly the files the planner would range, before dispatch, never for a hunk-less scope, an absent file or a malformed hunk) — `internal/verify/verify.go:608`
 - `expandToConstructs` (pure hunk→construct widening: full span per construct, split across constructs, uncovered lines stay a bare `hunk` range, output never overlaps) — `internal/verify/range_expand.go:30`
 - `RangeRunner` (the optional adapter capability; `Range.Valid` is the one validator shared with stryker's argv) — `internal/mutation/adapter.go:186`
@@ -1626,7 +1626,7 @@ Stated limit, measured rather than assumed: this buys a **free laptop, not a fas
 - `testLaneEdit` (`dross test lane edit <name>`: every field in place — match, command, selector, empty_exit, template and join — keeping the lane's position; reads cobra's `Changed` so omitted and empty stay distinct, and *stales* the grant instead of revoking it) — `internal/cmd/test_lane.go:386`
 - `laneRefusal` (the one CLI gate for a proposed lane, validating a synthetic one-lane project so a neighbour's fault cannot block the edit that fixes it) — `internal/cmd/test_lane.go:132`
 - `testlane.Expand` (`{path}` repeats the template per path, `{paths}` substitutes them into one instance and joins when declared; the sole shell quoter, so template text and substituted path are quoted by one implementation) — `internal/testlane/template.go:52`
-- `laneWholeTreeWarning` (names the lane and the token when a scoped selector is declared on a command already ending in `./...` or `.`) — `internal/cmd/validate.go:686`
+- `laneWholeTreeWarning` (names the lane and the token when a scoped selector is declared on a command already ending in `./...` or `.`) — `internal/cmd/validate.go:688`
 - `TestLaneSelectorRefusalIsGone` (pins the deletion of the orphaned per-field-group gate laneRefusal subsumed, and that laneRefusal itself stays) — `internal/cmd/test_lane_edit_test.go:731`
 - `TestExecutePromptDocumentsPrepareExit` (execute.md lists exit 7 among the codes that mean the run did not happen, so an agent cannot send a reader hunting a bug in code that never ran) — `internal/cmd/execute_prompt_test.go:179`
 - `TestExecutePromptPassesTaskFilesToTest` (execute's pre-commit gate scopes itself to the task's own plan.toml files) — `internal/cmd/prompt_test_command_test.go:128`

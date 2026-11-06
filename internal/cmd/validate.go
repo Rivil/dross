@@ -525,8 +525,10 @@ func vouchFullRunProblems(p *project.Project) []string {
 // exemptNamesNothing matches a glob holding no literal name: only wildcards,
 // bracket classes, separators and dots. `.` counts as a wildcard here because
 // `**/*.*` and `./**` pick out no directory or file type either. A class may
-// hold an escaped `]`, so `[\]a-z]*` is one class and not a literal name.
-var exemptNamesNothing = regexp.MustCompile(`^(?:[*?./]|\[(?:\\.|[^\]\\])*\])*$`)
+// hold an escaped `]`, so `[\]a-z]*` is one class and not a literal name. An
+// escaped dot, separator or glob metacharacter adds no name either, so `**/*\.*`
+// is `**/*.*` again, while the `\d` of `\docs/**` is still the letter d.
+var exemptNamesNothing = regexp.MustCompile(`^(?:[*?./]|\\[*?./\[\]\\]|\[(?:\\.|[^\]\\])*\])*$`)
 
 // testExemptProblems reports every runtime.test_exempt glob that cannot be
 // used. An exempt path needs no tests at all, so a catch-all would turn the

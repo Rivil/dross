@@ -1026,11 +1026,13 @@ func setExempt(t *testing.T, dir string, globs ...string) {
 // TestValidateRefusesACatchAllExemptGlob: an exempt path needs no tests, so one
 // of these would turn the commit gate off for the whole repo. The first five
 // are the plain spellings. The rest reach the same place without spelling it:
-// each is a glob with no literal name in it.
+// each is a glob with no literal name in it, and an escaped dot or wildcard is
+// not one.
 func TestValidateRefusesACatchAllExemptGlob(t *testing.T) {
 	for _, glob := range []string{
 		"**", "*", "**/*", "*/**", "**/**",
 		"**/", "*/", "./**", "*/*", "?*", "**/?*", "*.*", "**/*.*", "**/[!.]*", `[\]a-z]*`,
+		`**/*\.*`, `*\.*`, `**/\.*`, `**/*\**`, `**/*\?*`, `**/*\[*`, `**/*\]*`, `**/*\\*`, `**/*\/*`,
 	} {
 		t.Run(glob, func(t *testing.T) {
 			dir := laneFixture(t)
@@ -1085,10 +1087,12 @@ func TestValidateRefusesABlankExemptGlob(t *testing.T) {
 
 // TestValidateAcceptsExemptGlobsThatNameSomething is the accept side: refusing
 // every glob would pass all three tests above. Each of these names a directory
-// or a file type, and dots and bracket classes beside a name change nothing.
+// or a file type, and dots, bracket classes and escapes beside a name change
+// nothing. `\m\d` is the letters md, so an escape alone never reads as a wildcard.
 func TestValidateAcceptsExemptGlobsThatNameSomething(t *testing.T) {
 	dir := laneFixture(t)
-	setExempt(t, dir, "docs/**", "docs/", "*.md", "**/*.md", "README.md", ".github/**", "[Dd]ocs/**")
+	setExempt(t, dir, "docs/**", "docs/", "*.md", "**/*.md", "README.md", ".github/**", "[Dd]ocs/**",
+		`**/*\.md`, `**/*\m\d`, `\docs/**`, `src/routes/\[slug\]/**`)
 
 	out, err := validateOutput(t)
 	if err != nil {

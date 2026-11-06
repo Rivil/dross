@@ -117,10 +117,18 @@ func TestBuildConfigListHasNoGap(t *testing.T) {
 		"vitest.mutation.config.ts",
 		"postcss.config.mjs",
 		"eslint.config.cjs",
+		"vitest.config.mts",
+		"vite.config.cts",
 		"Dockerfile",
 		"Dockerfile.test",
 		"docker-compose.yml",
 		"docker-compose.test.yml",
+		"docker-compose.yaml",
+		"docker-compose.test.yaml",
+		"compose.yml",
+		"compose.yaml",
+		"compose.override.yml",
+		"compose.override.yaml",
 	} {
 		for _, p := range []string{base, "apps/web/" + base} {
 			got := NeedsFullGreen([]string{p}, []string{p}, []string{"**/" + base})
@@ -142,6 +150,10 @@ func TestBuildConfigListStaysNarrow(t *testing.T) {
 		"src/Makefile.md",
 		"docs/tsconfig.md",
 		"src/docker-compose.md",
+		"src/compose.ts",
+		"src/compose.md",
+		"config/composer.yml",
+		"config/composer.yaml",
 	} {
 		if got := NeedsFullGreen([]string{p}, []string{p}, nil); got != nil {
 			t.Errorf("%s in covered: got %q, want it admitted", p, got)

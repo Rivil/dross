@@ -171,6 +171,24 @@ func TestArchitectureDescribesConstructRanges(t *testing.T) {
 			t.Errorf("ARCHITECTURE.md does not name %q", want)
 		}
 	}
+
+	// The resolver's entry has to say .svelte resolves, not that it is refused.
+	// Found by its symbol, so moving the function cannot pass or fail this.
+	var entry string
+	for _, line := range strings.Split(string(body), "\n") {
+		if strings.HasPrefix(line, "- `Stryker.Constructs`") {
+			entry = line
+		}
+	}
+	if entry == "" {
+		t.Fatal("ARCHITECTURE.md has no Stryker.Constructs entry")
+	}
+	if strings.Contains(entry, "refused") {
+		t.Errorf("the Stryker.Constructs entry still says something is refused: %s", entry)
+	}
+	if !strings.Contains(entry, "`.svelte`") || !strings.Contains(entry, "svelte/compiler") {
+		t.Errorf("the Stryker.Constructs entry must say .svelte resolves through svelte/compiler: %s", entry)
+	}
 }
 
 // TestPadResidueScanSeesPartials: a retired needle that lives only in a verify

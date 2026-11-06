@@ -19,8 +19,15 @@ var buildConfigNames = []string{
 	"*.config.ts",
 	"*.config.mjs",
 	"*.config.cjs",
+	"*.config.mts",
+	"*.config.cts",
 	"Dockerfile*",
 	"docker-compose*.yml",
+	"docker-compose*.yaml",
+	"compose.yml",
+	"compose.yaml",
+	"compose.*.yml",
+	"compose.*.yaml",
 }
 
 // NeedsFullGreen returns the changed paths a scoped green cannot admit: build
