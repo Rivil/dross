@@ -19,8 +19,8 @@ import (
 // Its recorder keeps .dross/gate/writer.json: the launch's PostToolUse binds
 // the writer's agent id to the task, a SendMessage to that agent (the review
 // fix round) marks it launched again, and its SubagentStop marks it stopped
-// and clears green.json — the writer's own `dross test` green is never the
-// green a commit is gated on (c-3). Events of any other agent change nothing.
+// and clears green.json and scoped.json — the writer's own green never gates a
+// commit (c-3). Events of any other agent change nothing.
 //
 // The same gate fences the hand-off itself (writerfence.go): the writer's own
 // calls, and the main loop's on a writer-owned task.
@@ -153,7 +153,10 @@ func recordWriter(c *Call) error {
 			if err := gatestate.SaveWriter(root, *w); err != nil {
 				return err
 			}
-			return gatestate.ClearGreen(root)
+			if err := gatestate.ClearGreen(root); err != nil {
+				return err
+			}
+			return gatestate.ClearScoped(root)
 		}
 		if c.Field("to") != w.AgentID {
 			return nil

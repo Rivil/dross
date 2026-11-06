@@ -255,6 +255,21 @@ func TestExemptGlobsNameEveryReader(t *testing.T) {
 	}
 }
 
+// TestScopedCoverNamesItsGateReader: commit-green admits a commit on these
+// strings, so the not-consumed claim has to name the function that reads them.
+func TestScopedCoverNamesItsGateReader(t *testing.T) {
+	f := find(t, "gatestate.Scoped.Covered")
+	if f.NotConsumed == nil {
+		t.Fatal("gatestate.Scoped.Covered must be not-consumed")
+	}
+	joined := strings.Join(f.NotConsumed.Readers, " ")
+	for _, reader := range []string{"internal/gatestate/store.go", "internal/gate/commit.go", "vouchedCover"} {
+		if !strings.Contains(joined, reader) {
+			t.Errorf("Readers must name %s, got %v", reader, f.NotConsumed.Readers)
+		}
+	}
+}
+
 // TestConsumedEntriesCarryACarrier asserts DECLARATION only. That the named
 // carrier is really typed pathfence.Contained is a claim about internal/cmd
 // symbols, asserted from a package cmd test — this package cannot import
