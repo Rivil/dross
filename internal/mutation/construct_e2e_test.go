@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -27,6 +28,37 @@ func requireE2E(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+// requireSvelte is requireE2E for a test that needs the real compiler. A
+// node_modules older than the svelte pin has none, and that is a stale install
+// to name, not a resolver failure to report.
+func requireSvelte(t *testing.T) string {
+	t.Helper()
+	root := requireE2E(t)
+	if _, err := os.Stat(filepath.Join(root, "node_modules", "svelte", "package.json")); err != nil {
+		reason := "the fixture's node_modules has no svelte — run `npm ci --ignore-scripts` in " + tsFixtureDir
+		if os.Getenv("DROSS_REQUIRE_E2E") != "" {
+			t.Fatalf("DROSS_REQUIRE_E2E is set but the end-to-end run cannot proceed: %s", reason)
+		}
+		t.Skip(reason)
+	}
+	return root
+}
+
+// svelteProbe resolves src as a .svelte inside the fixture tree, the one
+// place svelte/compiler resolves from.
+func svelteProbe(t *testing.T, root, src string) ([]Construct, error) {
+	t.Helper()
+	probe := filepath.Join(root, "src", "probe-svelte")
+	if err := os.MkdirAll(probe, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(probe) })
+	if err := os.WriteFile(filepath.Join(probe, "Probe.svelte"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return (&Stryker{ProjectRoot: root}).Constructs("src/probe-svelte/Probe.svelte")
 }
 
 // fixtureLine returns the 1-based line of the first line containing needle.
@@ -196,6 +228,138 @@ func TestRealParserSpansMatchTheExpansion(t *testing.T) {
 	if fixtureLine(t, longTS, "export function small<") != small.Start {
 		t.Errorf("small's span starts at %d, not at its export line", small.Start)
 	}
+}
+
+// TestRealParserSpansMatchTheExpansionForSvelte pins the .svelte spans against
+// the real compiler and the real Babel: the JavaScript that produces them has no
+// other test. The name rides the unanchored -run selector of ci.yml's e2e job,
+// the one job where DROSS_REQUIRE_E2E turns a skip into a failure.
+func TestRealParserSpansMatchTheExpansionForSvelte(t *testing.T) {
+	root := requireSvelte(t)
+
+	t.Run("a function on line 40 reports line 40", func(t *testing.T) {
+		src := "<script lang=\"ts\">\n" + strings.Repeat("  // pad\n", 38) +
+			"  function late(): number {\n    return 1;\n  }\n</script>\n"
+		got, err := svelteProbe(t, root, src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []Construct{{Start: 40, End: 42, Kind: "FunctionDeclaration", Name: "late"}}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("constructs = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("both script blocks resolve, sorted and disjoint", func(t *testing.T) {
+		widget := filepath.Join(root, "src", "Widget.svelte")
+		got, err := (&Stryker{ProjectRoot: root}).Constructs("src/Widget.svelte")
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The needle ties each literal span to the fixture's real text, so an
+		// edit to Widget.svelte fails here rather than passing on stale lines.
+		rows := []struct {
+			needle string
+			want   Construct
+		}{
+			{"export const step", Construct{3, 3, "VariableDeclaration", "step"}},
+			{"let count: number", Construct{7, 7, "VariableDeclaration", "count"}},
+			{"function increment", Construct{9, 12, "FunctionDeclaration", "increment"}},
+			{"function reset", Construct{14, 18, "FunctionDeclaration", "reset"}},
+			{"<button onclick={() =>", Construct{21, 23, "Element", "button"}},
+			{"{#if count", Construct{25, 29, "IfBlock", ""}},
+		}
+		var want []Construct
+		for _, r := range rows {
+			if line := fixtureLine(t, widget, r.needle); line != r.want.Start {
+				t.Errorf("%q is on line %d of the fixture, the table says %d", r.needle, line, r.want.Start)
+			}
+			want = append(want, r.want)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("constructs = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("a script inside a comment is no construct", func(t *testing.T) {
+		got, err := svelteProbe(t, root, "<!-- <script>x</script> -->\n<script>\n  let y = 1;\n</script>\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []Construct{{Start: 3, End: 3, Kind: "VariableDeclaration", Name: "y"}}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("constructs = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("script and markup on one line merge", func(t *testing.T) {
+		got, err := svelteProbe(t, root, "<script>let x = 1;</script><div>{x}</div>\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []Construct{{Start: 1, End: 1, Kind: mergedKind}}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("constructs = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("a multi-line block is one construct and style is none", func(t *testing.T) {
+		got, err := svelteProbe(t, root, "{#if a}\n  <p>{a}</p>\n{:else}\n  <p>b</p>\n{/if}\n\n<style>\n  p { color: red; }\n</style>\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []Construct{{Start: 1, End: 5, Kind: "IfBlock"}}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("constructs = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("a style the compiler cannot read is still none", func(t *testing.T) {
+		got, err := svelteProbe(t, root, "<style lang=\"scss\">\n  $c: red;\n  p { color: $c; // note\n  }\n</style>\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got == nil || len(got) != 0 {
+			t.Errorf("constructs = %#v, want an empty non-nil slice", got)
+		}
+	})
+}
+
+// TestUnresolvableParserIsUnavailableForSvelte: the real causes behind
+// ast-unavailable on a .svelte, each named by dross with no compiler text in
+// the detail. A position is the file's own, inside a script block too. The name
+// rides ci.yml's selector, as above.
+func TestUnresolvableParserIsUnavailableForSvelte(t *testing.T) {
+	root := requireSvelte(t)
+
+	t.Run("compiler unresolvable from the workdir", func(t *testing.T) {
+		bare := t.TempDir()
+		if err := os.WriteFile(filepath.Join(bare, "App.svelte"), []byte("<p>a</p>\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := (&Stryker{ProjectRoot: bare}).Constructs("App.svelte")
+		want := "cannot resolve svelte/compiler from " + bare
+		if !errors.Is(err, ErrASTUnavailable) || !strings.Contains(err.Error(), want) {
+			t.Fatalf("err = %v, want ErrASTUnavailable with %q", err, want)
+		}
+	})
+
+	t.Run("malformed markup", func(t *testing.T) {
+		_, err := svelteProbe(t, root, "<div>\n  {#if x}\n</div>\n")
+		if !errors.Is(err, ErrASTUnavailable) || !strings.Contains(err.Error(), "parse error at 3:0") {
+			t.Fatalf("err = %v, want ErrASTUnavailable with the position 3:0", err)
+		}
+		if strings.Contains(err.Error(), "attempted to close") {
+			t.Errorf("the compiler's own message leaked into the persisted detail: %v", err)
+		}
+	})
+
+	t.Run("malformed script body", func(t *testing.T) {
+		_, err := svelteProbe(t, root, "<p>a</p>\n\n<script lang=\"ts\">\n  let = ;\n</script>\n")
+		if !errors.Is(err, ErrASTUnavailable) || !strings.Contains(err.Error(), "parse error at 4:") {
+			t.Fatalf("err = %v, want ErrASTUnavailable with a position on the file's line 4", err)
+		}
+	})
 }
 
 // TestUnresolvableParserIsUnavailable: the real cause behind
