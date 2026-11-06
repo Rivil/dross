@@ -595,3 +595,129 @@ func TestSingleLaneCandidateIsUnchangedFromTheOneHostRun(t *testing.T) {
 		t.Error("an empty host produced a candidate — a machine that never answered must route nothing")
 	}
 }
+
+// vouchingNodeLane is a lane whose suite and relate need different binaries, so
+// a host can hold one and lack the other.
+func vouchingNodeLane() project.TestLane {
+	return project.TestLane{Name: "web", Command: "pnpm test", Vouch: true, Relate: "node scripts/relate.mjs"}
+}
+
+// TestLaneToolUnionAsksForRelatesBinary: the union is the one probe the run
+// pays for, so a relate binary missing from it is never asked about at all.
+func TestLaneToolUnionAsksForRelatesBinary(t *testing.T) {
+	lane := vouchingNodeLane()
+	lane.Prepare = "make deps"
+	got := laneToolUnion([]project.TestLane{lane})
+	want := []string{"pnpm", "make", "node"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("union = %v, want %v — command, prepare, then relate", got, want)
+	}
+}
+
+// TestRelateLaneFallsBackFromAHostWithoutItsBinary: helicon holds the suite's
+// tool and lacks relate's. Sending the lane there spawns relate into exit 127,
+// a red that measured nothing, so the lane comes home and says which binary
+// sent it.
+func TestRelateLaneFallsBackFromAHostWithoutItsBinary(t *testing.T) {
+	got := laneLocality(lanesFor(vouchingNodeLane()),
+		singleLaneCandidate("helicon", []string{"node"}), haveTools("pnpm", "node"))
+
+	if got[0].Site != siteLocal {
+		t.Fatalf("the lane went %v, want local — helicon has no node for relate", got[0].Site)
+	}
+	if !strings.Contains(got[0].Announce, "helicon has no node") {
+		t.Errorf("the fallback does not name relate's binary: %q", got[0].Announce)
+	}
+}
+
+// TestRelateLaneMovesToTheCandidateHoldingItsBinary: relate's tool counts in the
+// same walk as the other two, so a host later in the pool beats coming home.
+func TestRelateLaneMovesToTheCandidateHoldingItsBinary(t *testing.T) {
+	got := laneLocality(lanesFor(vouchingNodeLane()),
+		[]laneCandidate{{Host: "alpha", Missing: []string{"node"}}, {Host: "beta"}},
+		haveTools("pnpm", "node"))
+
+	if got[0].Site != siteRemote || got[0].Host != "beta" {
+		t.Fatalf("the lane went to %q (%v), want remote on beta — alpha has no node", got[0].Host, got[0].Site)
+	}
+	if !strings.Contains(got[0].Announce, "alpha has no node") {
+		t.Errorf("the move does not name relate's binary: %q", got[0].Announce)
+	}
+}
+
+// TestRelateBinaryOnNoMachineRefusesTheLane: relate's tool takes the same exit 8
+// as a command's. Spawning it here would report a missing binary as a red suite.
+func TestRelateBinaryOnNoMachineRefusesTheLane(t *testing.T) {
+	got := laneLocality(lanesFor(vouchingNodeLane()),
+		singleLaneCandidate("helicon", []string{"node"}), haveTools("pnpm"))
+
+	if got[0].Site != siteRefused {
+		t.Fatalf("the lane went %v, want refused — neither machine has node", got[0].Site)
+	}
+	if code := ExitCode(got[0].Err); code != exitToolchainMissing {
+		t.Errorf("the refusal carries exit %d, want %d", code, exitToolchainMissing)
+	}
+	if !strings.Contains(got[0].Err.Error(), "node") {
+		t.Errorf("the refusal does not name relate's binary: %v", got[0].Err)
+	}
+}
+
+// TestLaneOverrideDropsRelatesBinaryFromLocality: an override replaces relate's
+// token too, so a host without node keeps a lane the user says does not need it.
+func TestLaneOverrideDropsRelatesBinaryFromLocality(t *testing.T) {
+	lane := vouchingNodeLane()
+	lane.Toolchain = []string{"mise"}
+
+	got := laneLocality(lanesFor(lane), singleLaneCandidate("helicon", []string{"node"}), haveTools())
+	if got[0].Site != siteRemote {
+		t.Errorf("the lane went %v, want remote — its override does not name node", got[0].Site)
+	}
+}
+
+// TestLaneListShowsRelatesBinary: the listing is how a user reads the probe set,
+// so it must carry the binary the probe asks about.
+func TestLaneListShowsRelatesBinary(t *testing.T) {
+	if got, want := laneToolchainLine(vouchingNodeLane()), "pnpm node (derived)"; got != want {
+		t.Errorf("toolchain line = %q, want %q", got, want)
+	}
+}
+
+// relateInstallLane is the lane `dross test lane install` is asked about.
+const relateInstallLane = `[[runtime.test_lane]]
+name = "web"
+match = ["web/**"]
+command = "pnpm test"
+vouch = true
+relate = "node scripts/relate.mjs"`
+
+// TestLaneInstallSeesRelatesBinaryAsAGap: the fallback line offers this verb as
+// the remedy, so a verb blind to relate's binary would call the host provisioned
+// and leave the lane falling back on every run.
+func TestLaneInstallSeesRelatesBinaryAsAGap(t *testing.T) {
+	laneInstallVerbFixture(t, relateInstallLane, []string{"node"}, nil)
+
+	var out string
+	// The exit is not the assertion: node is a runtime, whose refusal is exit 1.
+	_ = runCmdCapturing(t, &out, Test(), "lane", "install", "web")
+
+	if strings.Contains(out, "nothing to install") {
+		t.Errorf("the verb did not see relate's binary as a gap:\n%s", out)
+	}
+	if !strings.Contains(out, "node") {
+		t.Errorf("the report does not name relate's binary:\n%s", out)
+	}
+}
+
+// TestLaneInstallNamesRelatesBinaryWhenProvisioned: the no-op line lists what the
+// machine has, which for this lane is both binaries.
+func TestLaneInstallNamesRelatesBinaryWhenProvisioned(t *testing.T) {
+	laneInstallVerbFixture(t, relateInstallLane, nil, nil)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "lane", "install", "web"); err != nil {
+		t.Fatalf("a fully provisioned lane exited non-zero: %v", err)
+	}
+	if !strings.Contains(out, "this machine has pnpm, node") {
+		t.Errorf("the no-op line does not list relate's binary:\n%s", out)
+	}
+}

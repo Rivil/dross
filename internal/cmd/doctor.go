@@ -1349,7 +1349,7 @@ func remoteProbeTools(p *project.Project) (tools []string, needBy, laneBy map[st
 	}
 	laneBy = map[string]string{}
 	for _, lane := range p.Runtime.TestLane {
-		for _, tool := range testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain) {
+		for _, tool := range testlane.Toolchain(lane.Command, lane.Prepare, lane.Relate, lane.Toolchain) {
 			if seen[tool] {
 				// Claimed by an adapter. Left unattributed to any lane rather
 				// than double-tagged: one tool, one reason it is being asked
@@ -1392,7 +1392,7 @@ func reportLaneToolchains(host string, p *project.Project, missing []string) {
 		gone[tool] = true
 	}
 	for _, lane := range p.Runtime.TestLane {
-		tools := testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain)
+		tools := testlane.Toolchain(lane.Command, lane.Prepare, lane.Relate, lane.Toolchain)
 		var gaps []string
 		for _, tool := range tools {
 			if gone[tool] {

@@ -154,7 +154,7 @@ func laneToolchainLine(lane project.TestLane) string {
 	if len(lane.Toolchain) > 0 {
 		origin = "overridden"
 	}
-	tools := testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain)
+	tools := testlane.Toolchain(lane.Command, lane.Prepare, lane.Relate, lane.Toolchain)
 	return fmt.Sprintf("%s (%s)", strings.Join(tools, " "), origin)
 }
 

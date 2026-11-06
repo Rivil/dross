@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -364,5 +365,70 @@ func TestProbeFailureNamesTheHostThatFailed(t *testing.T) {
 	// banner's host a matter of which machine answered last.
 	if len(asked) != 1 || asked[0] != "helicon" {
 		t.Errorf("probed %v, want [helicon] only — the walk ran past a real failure", asked)
+	}
+}
+
+// TestPreviewProbesTheRunsSetForARelateLane: preview must ask the host what the
+// run will ask it. Pinned to the literal list as well as to the union, since the
+// union alone would agree with itself if both lost relate's binary.
+func TestPreviewProbesTheRunsSetForARelateLane(t *testing.T) {
+	grantedLaneFixture(t, relateLane)
+	grantLaneLines(t)
+	installLaneLookPath(t)
+	var asked []string
+	fakeProbe(t, func(_ remote.Target, tools []string) (remote.Readiness, error) {
+		asked = append([]string(nil), tools...)
+		return remote.Readiness{Cores: 8}, nil
+	})
+	root, repoDir, lanes := previewLanes(t)
+
+	if _, err := previewHost(root, repoDir, lanes, true); err != nil {
+		t.Fatal(err)
+	}
+
+	if want := []string{"npx", "node"}; !reflect.DeepEqual(asked, want) {
+		t.Errorf("preview asked %v, want %v — relate's binary rides the same probe", asked, want)
+	}
+	if run := laneToolUnion(runnableLanes(lanes)); !reflect.DeepEqual(asked, run) {
+		t.Errorf("preview asked %v, the run asks %v", asked, run)
+	}
+}
+
+// TestPreviewFallsARelateLaneBackLikeTheRun: a host lacking relate's binary
+// reads as local here for the reason it runs there, with the binary named.
+func TestPreviewFallsARelateLaneBackLikeTheRun(t *testing.T) {
+	grantedLaneFixture(t, relateLane)
+	grantLaneLines(t)
+	installLaneLookPath(t)
+	fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
+		return remote.Readiness{Cores: 8, Missing: []string{"node"}}, nil
+	})
+	root, repoDir, lanes := previewLanes(t)
+
+	got, err := previewHost(root, repoDir, lanes, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Lanes[0].Text != "local" {
+		t.Errorf("text = %q, want local — helicon has no node for relate", got.Lanes[0].Text)
+	}
+	if !strings.Contains(got.Lanes[0].Note, "helicon has no node") {
+		t.Errorf("note = %q, does not name relate's binary", got.Lanes[0].Note)
+	}
+}
+
+// TestUnprobedPreviewNamesRelatesBinaryAbsentHere: with no probe, this machine's
+// gap is all preview can report, and relate's binary is part of it.
+func TestUnprobedPreviewNamesRelatesBinaryAbsentHere(t *testing.T) {
+	grantedLaneFixture(t, relateLane)
+	installLaneLookPath(t, "node")
+	root, repoDir, lanes := previewLanes(t)
+
+	got, err := previewHost(root, repoDir, lanes, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got.Lanes[0].Text, "node absent from this machine") {
+		t.Errorf("text = %q, does not name relate's binary", got.Lanes[0].Text)
 	}
 }

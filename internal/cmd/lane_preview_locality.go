@@ -242,7 +242,7 @@ func previewUnresolved(state previewHostState, host, why string, lanes []matched
 // about what this machine has.
 func localAbsentTools(lane project.TestLane) []string {
 	var out []string
-	for _, tool := range testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain) {
+	for _, tool := range testlane.Toolchain(lane.Command, lane.Prepare, lane.Relate, lane.Toolchain) {
 		if _, err := laneLookPath(tool); err != nil {
 			out = append(out, tool)
 		}

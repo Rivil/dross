@@ -174,8 +174,8 @@ type TestLane struct {
 
 	// Toolchain overrides the binaries this lane needs on the host that runs
 	// it. Omitted — the normal case — means the list is DERIVED from the first
-	// token of Command and Prepare (testlane.Toolchain), so locality detection
-	// works on every lane already declared without an edit.
+	// token of Command, Prepare and Relate (testlane.Toolchain), so locality
+	// detection works on every lane already declared without an edit.
 	//
 	// The field is the escape hatch for the lines derivation gets wrong: an env
 	// prefix like `FOO=1 go test`, a wrapper script, a `mise exec`. It replaces

@@ -10,7 +10,7 @@ import (
 // missing tools are reported in, and because deriving from the command alone —
 // the obvious under-implementation — still contains `go`.
 func TestToolchainDerivesCommandTokenBeforePrepareToken(t *testing.T) {
-	got := Toolchain("go test ./...", "make build", nil)
+	got := Toolchain("go test ./...", "make build", "", nil)
 	if !reflect.DeepEqual(got, []string{"go", "make"}) {
 		t.Errorf("Toolchain = %v, want exactly [go make] — command token first, prepare second", got)
 	}
@@ -21,7 +21,7 @@ func TestToolchainDerivesCommandTokenBeforePrepareToken(t *testing.T) {
 // [mise go], which keeps probing the very token the override exists to say is
 // not the binary — so the length is asserted, not just the presence of mise.
 func TestToolchainOverrideReplacesRatherThanAppends(t *testing.T) {
-	got := Toolchain("go test ./...", "make build", []string{"mise"})
+	got := Toolchain("go test ./...", "make build", "", []string{"mise"})
 	if !reflect.DeepEqual(got, []string{"mise"}) {
 		t.Errorf("Toolchain with override = %v, want exactly [mise] — an override replaces the derived list, it does not extend it", got)
 	}
@@ -31,7 +31,7 @@ func TestToolchainOverrideReplacesRatherThanAppends(t *testing.T) {
 // command is the common lane shape, and it must cost ONE `command -v` on a
 // host reached over ssh, not two.
 func TestToolchainDedupesARepeatedTool(t *testing.T) {
-	got := Toolchain("go test ./...", "go build ./...", nil)
+	got := Toolchain("go test ./...", "go build ./...", "", nil)
 	if !reflect.DeepEqual(got, []string{"go"}) {
 		t.Errorf("Toolchain = %v, want exactly [go] — a repeated tool is probed once", got)
 	}
@@ -41,11 +41,11 @@ func TestToolchainDedupesARepeatedTool(t *testing.T) {
 // `command -v ""`, which no host satisfies, so a lane with an empty prepare
 // would report its toolchain missing and fall back on every run forever.
 func TestToolchainDropsBlankTokens(t *testing.T) {
-	got := Toolchain("  ", "", nil)
+	got := Toolchain("  ", "", "", nil)
 	if len(got) != 0 {
 		t.Errorf("Toolchain(blank) = %v, want no tools — a blank token probes the empty string and never resolves", got)
 	}
-	if withPrepare := Toolchain("go test", "   ", nil); !reflect.DeepEqual(withPrepare, []string{"go"}) {
+	if withPrepare := Toolchain("go test", "   ", "", nil); !reflect.DeepEqual(withPrepare, []string{"go"}) {
 		t.Errorf("Toolchain with a blank prepare = %v, want exactly [go]", withPrepare)
 	}
 }
@@ -55,7 +55,7 @@ func TestToolchainDropsBlankTokens(t *testing.T) {
 // user's --toolchain override surfaced by doctor — not a shell parser growing
 // inside a locality check.
 func TestToolchainTakesTheFirstTokenVerbatim(t *testing.T) {
-	got := Toolchain("FOO=1 go test ./...", "", nil)
+	got := Toolchain("FOO=1 go test ./...", "", "", nil)
 	if !reflect.DeepEqual(got, []string{"FOO=1"}) {
 		t.Errorf("Toolchain = %v, want exactly [FOO=1] — the rule is first-token, and stripping the prefix here would hide the case doctor exists to name", got)
 	}
@@ -66,8 +66,46 @@ func TestToolchainTakesTheFirstTokenVerbatim(t *testing.T) {
 // at all, which reads to every caller as "this lane needs nothing" — a lane
 // that would then run anywhere, including a host with no toolchain.
 func TestToolchainOverrideOfBlanksFallsBackToDerivation(t *testing.T) {
-	got := Toolchain("go test ./...", "", []string{"", "  "})
+	got := Toolchain("go test ./...", "", "", []string{"", "  "})
 	if !reflect.DeepEqual(got, []string{"go"}) {
 		t.Errorf("Toolchain with a blank override = %v, want the derived [go]", got)
+	}
+}
+
+// TestToolchainDerivesRelateTokenAfterCommandAndPrepare pins the third token and
+// its place. A vouching lane spawns relate before its tests, so an unprobed
+// relate binary reaches a host that exits 127 having measured nothing.
+func TestToolchainDerivesRelateTokenAfterCommandAndPrepare(t *testing.T) {
+	got := Toolchain("pnpm test", "make build", "node scripts/relate.mjs", nil)
+	if !reflect.DeepEqual(got, []string{"pnpm", "make", "node"}) {
+		t.Errorf("Toolchain = %v, want exactly [pnpm make node] — command, prepare, then relate", got)
+	}
+}
+
+// TestToolchainOverrideReplacesAllThreeDerivedTokens: the override's meaning did
+// not change when the list grew. Leaving relate's token beside it would keep
+// probing a binary the user's override says the lane does not need.
+func TestToolchainOverrideReplacesAllThreeDerivedTokens(t *testing.T) {
+	got := Toolchain("pnpm test", "make build", "node scripts/relate.mjs", []string{"mise"})
+	if !reflect.DeepEqual(got, []string{"mise"}) {
+		t.Errorf("Toolchain with override = %v, want exactly [mise] — relate's token goes with the other two", got)
+	}
+}
+
+// TestToolchainDedupesRelateAgainstTheCommand: a relate that shares the suite's
+// binary is the common shape, and it costs one `command -v`, not two.
+func TestToolchainDedupesRelateAgainstTheCommand(t *testing.T) {
+	got := Toolchain("node --test", "", "node scripts/relate.mjs", nil)
+	if !reflect.DeepEqual(got, []string{"node"}) {
+		t.Errorf("Toolchain = %v, want exactly [node] — a repeated tool is probed once", got)
+	}
+}
+
+// TestToolchainDropsABlankRelate: every lane that does not vouch has no relate,
+// and probing its blank token would pin all of them to a fallback.
+func TestToolchainDropsABlankRelate(t *testing.T) {
+	got := Toolchain("go test ./...", "make build", "   ", nil)
+	if !reflect.DeepEqual(got, []string{"go", "make"}) {
+		t.Errorf("Toolchain with a blank relate = %v, want exactly [go make]", got)
 	}
 }
