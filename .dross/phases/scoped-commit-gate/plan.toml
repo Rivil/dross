@@ -1,4 +1,4 @@
-task_seq = 19
+task_seq = 22
 
 [phase]
   id = "scoped-commit-gate"
@@ -101,78 +101,36 @@ Before per-path units are built, decide where barktime's lane runs and time one 
   status = "done"
 
 [[task]]
-  id = "t-6"
+  id = "t-20"
   wave = 2
-  depends_on = ["t-3"]
-  title = "Bind vouch to a human-only lane grant"
-  files = ["internal/consent/lane.go", "internal/consent/lane_test.go", "internal/gate/selfguard.go", "internal/gate/selfguard_test.go", "internal/gate/override.go", "internal/gate/override_test.go"]
-  description = """
-Fold `vouch` into LaneLine under a new frame, so turning it on stales the grant until a human runs `dross trust`. Extend gate-off-guard so a tool-call `dross trust` that writes a grant is refused, while `--check` passes, and extend tamper-guard to .dross/local.toml, which holds the grants. These block direct routes; neither claims to stop a deliberate forgery. A vouch=false lane's line stays byte-identical.
-"""
-  covers = ["c-2", "c-4"]
-  test_contract = [
-    "if a vouch flip keeps its grant, lane_test fails: flipping vouch false to true on a granted lane makes LaneConsented report stale (CHANGED, not ABSENT) until `dross trust`",
-    "if an agent can clear its own grant, selfguard_test fails: a Bash tool call of `dross trust`, `dross trust --lane x` or `dross trust --test-exempt` is refused, and the reason says only a human may grant",
-    "if the guard over-reaches, selfguard_test fails: `dross trust --check` and `dross trust --lane x --check` through the tool call still pass, as execute.md, quick.md and options.md call them",
-    "if an unparseable line dodges the guard, selfguard_test fails: a partial-parse `dross trust` is refused through the rawTokens arm",
-    "if the grant file is writable, override_test fails: tamper-guard refuses Write, Edit and `sed -i` on .dross/local.toml, and `dross local set` through the CLI still works",
-    "if existing grants stale, lane_test fails: a vouch=false lane's LaneLine is byte-identical to today's for plain, prepared and templated lanes",
-  ]
+  title = "Time the batched run in barktime stack"
+  files = [".dross/phases/scoped-commit-gate/barktime-batch-timing.toml"]
+  description = "Before t-9, measure the planned model: a relate pass on helicon's host (throwaway script, vitest's own related selection) and `dross test <selected tests>` in barktime for a 5-file leaf set, which is the batched line in the real stack. No dross or barktime changes. It syncs barktime to helicon and holds the host lock, so it needs a quiet host. If a leaf task projects over 600s at two runs, the human stops the phase."
+  covers = ["c-5"]
+  test_contract = ["if the attribution model is wrong, the record fails: relate on helicon must give t-19's counts (Shopfront 5, StatusBadge 112, the misspelled path 0)", "if the run is not the planned line, the record fails: the batched leg is `dross test <tests>` through in-container.sh with its log id, and barktime's git status is unchanged by it", "if the cost is undercounted, the record fails: it must hold wall_clock_s for relate and for the batched leaf run, and project a 5-file leaf task at two runs with the stack included", "if the budget is blown silently, the human reading the record stops the phase: a leaf projection over 600s sets t9_may_start = false and t-9 does not start", "if wide and hot costs are hidden, the record fails: it must hold one wide figure (StatusBadge, measured) and one hot figure (db/index.ts, measured or projected), both marked informational"]
   status = "pending"
 
 [[task]]
-  id = "t-7"
+  id = "t-21"
   wave = 2
-  depends_on = ["t-3"]
-  title = "Expose vouch and test_exempt in CLI"
-  files = ["internal/cmd/test_lane.go", "internal/cmd/test_lane_edit_test.go", "internal/cmd/test_lane_list_fields_test.go", "assets/prompts/_options.lanes.md", "internal/cmd/options_docs_test.go", "internal/cmd/project.go", "internal/cmd/project_test.go"]
-  description = """
-Add `--vouch` to lane add and edit, show it in lane list, and add `dross project set runtime.test_exempt`. Document the exit contract and the `dross trust` requirement in _options.lanes.md, with `--vouch` in its own span so the recorded `lane edit` span stays byte-identical.
-"""
-  covers = ["c-2", "c-5"]
-  test_contract = [
-    "if the CLI skips validation, test_lane_edit_test fails: `lane edit --vouch` on a selector-less lane is refused and project.toml is byte-unchanged",
-    "if the path-only rule is skipped, the test fails: `lane edit --vouch` on a `dir` or `go-package` lane is refused and project.toml is byte-unchanged",
-    "if add skips the exit rule, the test fails: `lane add --vouch` with no --empty-exit is refused and project.toml is byte-unchanged",
-    "if clearing vouch rewrites the lane, the test fails: `lane edit x --vouch=false` removes the key and keeps the lane's document position",
-    "if list noise returns, test_lane_list_fields_test fails: `lane list` prints vouch only for a lane that sets it",
-    "if test_exempt has no verb, project_test fails: `dross project set runtime.test_exempt docs/**,*.md` round-trips through get, and a catch-all value is refused with project.toml byte-unchanged",
-    "if the docs edit drops a recorded row, TestPromptInstructionsConserved fails: the existing `dross test lane edit <name> --match ...` span in _options.lanes.md is unchanged",
-    "if the docs drift, options_docs_test fails: _options.lanes.md states the exit contract, that only `path` lanes can vouch, and that vouch and test_exempt need `dross trust`",
-  ]
-  status = "pending"
-
-[[task]]
-  id = "t-8"
-  wave = 2
-  depends_on = ["t-3"]
-  title = "Add human grant for test_exempt"
-  files = ["internal/consent/store.go", "internal/localstore/store_test.go", "internal/consent/exempt.go", "internal/consent/exempt_test.go", "internal/cmd/trust.go", "internal/cmd/trust_test.go", "internal/cmd/testdata/cli_surface/trust.txt", "internal/diag/trust.go", "internal/pathfence/fields.go", "internal/pathfence/fields_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
-  description = """
-Add `dross trust --test-exempt`, a grant over the sorted exempt globs stored as a new consent.Grants field, reported by the trust diagnostic. Refuse catch-alls at trust. `dross trust --lane` states when the lane vouches for commits. A repo with no test_exempt needs no grant.
-"""
-  covers = ["c-3"]
-  test_contract = ["if an agent can extend the exempt list silently, exempt_test fails: appending a glob makes the grant stale", "if ordering churns the grant, exempt_test fails: reordering globs does not stale it", "if the human grants blind, trust_test fails: the output prints every glob before the grant is written", "if a catch-all reaches a grant, trust_test fails: `dross trust --test-exempt` with `**/*` hand-edited into project.toml is refused and no grant is written", "if the human grants vouch blind, trust_test fails: `dross trust --lane` on a vouching lane states that the lane may admit commits, and a non-vouching lane's output is unchanged", "if the verb drifts, the cli_surface golden fails: trust.txt lists --test-exempt", "if a tag drifts, localstore's round-trip test fails: the exempt grant survives a reload of local.toml", "if empty reads as untrusted, the test fails: a repo with no test_exempt reports not-applicable and prints no doctor row, so doctor_run.txt is unchanged", "if the exempt grant field goes unfiled, TestEveryPathShapedFieldIsDeclared fails: the new consent.Grants field is filed exactly once, in pathfence.Fields() or not_paths.txt"]
-  status = "pending"
-
-[[task]]
-  id = "t-9"
-  wave = 2
-  depends_on = ["t-3", "t-19"]
-  title = "Split vouching lanes into per-path run units"
-  files = ["internal/cmd/lane_plan.go", "internal/cmd/lane_plan_test.go", "internal/cmd/lane_preview.go", "internal/cmd/lane_preview_json.go", "internal/cmd/lane_preview_test.go"]
-  description = """
-Plan a vouching lane as one unit per path, carrying the path it vouches for. laneFence refuses a vouching lane that breaks t-3's rule. Non-vouching lanes plan today's single line. Preview reads the same units.
-"""
+  title = "Add lane relate field and validation"
+  files = ["internal/project/project.go", "internal/cmd/validate.go", "internal/cmd/validate_lane_test.go", "internal/project/save_lossless_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "ARCHITECTURE.md"]
+  description = "Add `relate` to [[runtime.test_lane]]: the command a vouching lane runs once over all its paths, whose stdout maps each path to its tests. Validate requires it on a vouching lane and refuses it on a lane that does not vouch. t-3's selector, empty_exit and test_command rules stay. Omitted, the file saves byte-identical."
   covers = ["c-9"]
-  test_contract = [
-    "if paths batch, lane_plan_test fails: a vouching `path` lane over a.ts and b.svelte plans two units with different lines",
-    "if a hand-edited lane slips past validate, laneFence's test fails: a selector-less, `dir` or `go-package` lane with `vouch = true`, or one in a repo with no test_command, is refused at run time and spawns nothing",
-    "if non-vouching lanes change, existing lane_plan tests fail: they plan exactly today's single Line",
-    "if a deleted path can be covered, the test fails: it appears in Dropped and in no unit",
-    "if preview drifts from the run, lane_preview_test fails: preview's lines equal the plan's unit lines, read from the same value",
-  ]
+  test_contract = ["if a lane can vouch without attribution, validate's test fails: `vouch = true` with no relate is a problem naming the lane", "if relate is dead config, validate's test fails: `relate` on a lane with no vouch is a problem naming the lane", "if t-3's rules weaken, the existing validate cases fail: a vouching lane with relate but no path selector, no empty_exit or no test_command is still a problem", "if the new field churns other repos, the lossless test fails: a project.toml with no relate saves byte-identical", "if relate goes unfiled, TestEveryPathShapedFieldIsDeclared fails: project.TestLane.Relate is a row in not_paths.txt", "if the Save anchor drifts, TestArchitectureNamesLosslessWriter fails: ARCHITECTURE.md's project.Project.Save and saveLossless anchors name their current project.go lines"]
   status = "pending"
+  depends_on = ["t-3"]
+
+[[task]]
+  id = "t-22"
+  wave = 2
+  title = "Close wave-1 review gaps"
+  files = ["internal/cmd/validate.go", "internal/cmd/validate_lane_test.go", "internal/testlane/coverage.go", "internal/testlane/coverage_test.go", "internal/mutation/construct_test.go", "ARCHITECTURE.md"]
+  description = "Close three gaps left by t-3, t-4 and t-5: the exempt fence passes a glob whose only literal is an escaped wildcard, the config list misses compose and .mts names, and ARCHITECTURE.md still says .svelte is refused."
+  covers = ["c-3", "c-8"]
+  test_contract = ["if an escaped catch-all slips the fence, validate's test fails: `**/*\\.*` in test_exempt is a problem naming the glob, and `docs/**` and `**/*.md` still pass", "if the config list has a gap, the classifier test fails: docker-compose.test.yaml, compose.yml, compose.yaml and vitest.config.mts in covered each need a full green", "if the stale claim returns, construct_test fails: ARCHITECTURE.md's Stryker.Constructs entry no longer says .svelte is refused, and names construct.go's current line"]
+  status = "pending"
+  depends_on = ["t-3", "t-4", "t-5"]
 
 [[task]]
   id = "t-10"
@@ -214,6 +172,50 @@ Prove with the real tool, under DROSS_REQUIRE_E2E, that a .svelte hunk ranges to
   status = "pending"
 
 [[task]]
+  id = "t-6"
+  wave = 3
+  depends_on = ["t-3", "t-21"]
+  title = "Bind vouch to a human-only lane grant"
+  files = ["internal/consent/lane.go", "internal/consent/lane_test.go", "internal/gate/selfguard.go", "internal/gate/selfguard_test.go", "internal/gate/override.go", "internal/gate/override_test.go"]
+  description = "Fold `vouch` and `relate` into LaneLine under a new frame, so turning vouch on or changing relate stales the grant until a human runs `dross trust`. Extend gate-off-guard so a tool-call `dross trust` that writes a grant is refused, while `--check` passes, and extend tamper-guard to .dross/local.toml, which holds the grants. These block direct routes; neither claims to stop a deliberate forgery. A vouch=false lane's line stays byte-identical."
+  covers = ["c-2", "c-4"]
+  test_contract = ["if a vouch flip keeps its grant, lane_test fails: flipping vouch false to true on a granted lane makes LaneConsented report stale (CHANGED, not ABSENT) until `dross trust`", "if an agent can clear its own grant, selfguard_test fails: a Bash tool call of `dross trust`, `dross trust --lane x` or `dross trust --test-exempt` is refused, and the reason says only a human may grant", "if the guard over-reaches, selfguard_test fails: `dross trust --check` and `dross trust --lane x --check` through the tool call still pass, as execute.md, quick.md and options.md call them", "if an unparseable line dodges the guard, selfguard_test fails: a partial-parse `dross trust` is refused through the rawTokens arm", "if the grant file is writable, override_test fails: tamper-guard refuses Write, Edit and `sed -i` on .dross/local.toml, and `dross local set` through the CLI still works", "if existing grants stale, lane_test fails: a vouch=false lane's LaneLine is byte-identical to today's for plain, prepared and templated lanes", "if a relate edit keeps its grant, lane_test fails: changing relate on a granted lane makes LaneConsented report stale (CHANGED, not ABSENT) until `dross trust`", "if a NUL dodges the frame, lane_test fails: a relate holding a NUL makes LaneLine return empty, as command and prepare do"]
+  status = "pending"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  depends_on = ["t-3", "t-21"]
+  title = "Expose vouch, relate and test_exempt in CLI"
+  files = ["internal/cmd/test_lane.go", "internal/cmd/test_lane_edit_test.go", "internal/cmd/test_lane_list_fields_test.go", "assets/prompts/_options.lanes.md", "internal/cmd/options_docs_test.go", "internal/cmd/project.go", "internal/cmd/project_test.go"]
+  description = "Add `--vouch` and `--relate` to lane add and edit, show them in lane list, and add `dross project set runtime.test_exempt`. Document the exit contract, relate's stdout contract and the `dross trust` requirement in _options.lanes.md, with the new flags in their own span so the recorded `lane edit` span stays byte-identical."
+  covers = ["c-2", "c-5"]
+  test_contract = ["if the CLI skips validation, test_lane_edit_test fails: `lane edit --vouch` on a selector-less lane is refused and project.toml is byte-unchanged", "if the path-only rule is skipped, the test fails: `lane edit --vouch` on a `dir` or `go-package` lane is refused and project.toml is byte-unchanged", "if add skips the exit rule, the test fails: `lane add --vouch` with no --empty-exit is refused and project.toml is byte-unchanged", "if clearing vouch rewrites the lane, the test fails: `lane edit x --vouch=false` removes the key and keeps the lane's document position", "if list noise returns, test_lane_list_fields_test fails: `lane list` prints vouch only for a lane that sets it", "if test_exempt has no verb, project_test fails: `dross project set runtime.test_exempt docs/**,*.md` round-trips through get, and a catch-all value is refused with project.toml byte-unchanged", "if the docs edit drops a recorded row, TestPromptInstructionsConserved fails: the existing `dross test lane edit <name> --match ...` span in _options.lanes.md is unchanged", "if the docs drift, options_docs_test fails: _options.lanes.md states the exit contract, that only `path` lanes can vouch, and that vouch and test_exempt need `dross trust`", "if vouch skips attribution, test_lane_edit_test fails: `lane edit --vouch` on a lane with no relate is refused and project.toml is byte-unchanged", "if relate has no verb, the test fails: `lane edit x --relate <line>` round-trips through `lane list`, which prints it only for a lane that sets it", "if relate's contract goes undocumented, options_docs_test fails: _options.lanes.md states the `<path><TAB><test>` stdout format and that an omitted path stays uncovered"]
+  status = "pending"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  depends_on = ["t-3", "t-21"]
+  title = "Add human grant for test_exempt"
+  files = ["internal/consent/store.go", "internal/localstore/store_test.go", "internal/consent/exempt.go", "internal/consent/exempt_test.go", "internal/cmd/trust.go", "internal/cmd/trust_test.go", "internal/cmd/testdata/cli_surface/trust.txt", "internal/diag/trust.go", "internal/pathfence/fields.go", "internal/pathfence/fields_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
+  description = "Add `dross trust --test-exempt`, a grant over the sorted exempt globs stored as a new consent.Grants field, reported by the trust diagnostic. Refuse catch-alls at trust. `dross trust --lane` states when the lane vouches for commits and prints its relate line. A repo with no test_exempt needs no grant."
+  covers = ["c-3"]
+  test_contract = ["if an agent can extend the exempt list silently, exempt_test fails: appending a glob makes the grant stale", "if ordering churns the grant, exempt_test fails: reordering globs does not stale it", "if the human grants blind, trust_test fails: the output prints every glob before the grant is written", "if a catch-all reaches a grant, trust_test fails: `dross trust --test-exempt` with `**/*` hand-edited into project.toml is refused and no grant is written", "if the human grants vouch blind, trust_test fails: `dross trust --lane` on a vouching lane states that the lane may admit commits, and a non-vouching lane's output is unchanged", "if the verb drifts, the cli_surface golden fails: trust.txt lists --test-exempt", "if a tag drifts, localstore's round-trip test fails: the exempt grant survives a reload of local.toml", "if empty reads as untrusted, the test fails: a repo with no test_exempt reports not-applicable and prints no doctor row, so doctor_run.txt is unchanged", "if the exempt grant field goes unfiled, TestEveryPathShapedFieldIsDeclared fails: the new consent.Grants field is filed exactly once, in pathfence.Fields() or not_paths.txt", "if the human grants relate blind, trust_test fails: `dross trust --lane` on a vouching lane prints the relate line before the grant is written"]
+  status = "pending"
+
+[[task]]
+  id = "t-9"
+  wave = 3
+  depends_on = ["t-3", "t-20", "t-21"]
+  title = "Plan vouching lanes as relate plus batch"
+  files = ["internal/testlane/relate.go", "internal/testlane/relate_test.go", "internal/cmd/lane_plan.go", "internal/cmd/lane_plan_test.go", "internal/cmd/lane_preview.go", "internal/cmd/lane_preview_json.go", "internal/cmd/lane_preview_test.go", "internal/cmd/lane_preview_json_test.go"]
+  description = "Plan a vouching lane as a relate line over its live paths, plus a pure builder for the one batched line. A fail-closed parser reads relate's `<path><TAB><test>` stdout into covered paths and deduped tests. Nothing here spawns. laneFence refuses a vouching lane that breaks t-3's or t-21's rules. Non-vouching lanes plan today's single line. Preview shows the relate line and says the tests are chosen at run time."
+  covers = ["c-9"]
+  test_contract = ["if bad relate output admits, relate_test fails: a line with no tab, an empty field, or a path nobody asked about refuses the whole output, naming the line", "if a test path escapes, relate_test fails: an absolute or `../` test path refuses the whole output", "if path spelling splits, relate_test fails: `./src/a.ts` asked matches `src/a.ts` in the output", "if an omitted path counts, relate_test fails: a.ts listed and b.svelte omitted gives covered [a.ts] and missed [b.svelte]", "if tests duplicate, lane_plan_test fails: two paths sharing one test give one shell-quoted argument, in first-seen order", "if changed paths reach the batched line, lane_plan_test fails: the line carries the tests relate named and never the changed paths", "if a hand-edited lane slips past validate, laneFence's test fails: a selector-less, `dir`, `go-package` or relate-less lane with `vouch = true`, or one in a repo with no test_command, is refused at run time and spawns nothing", "if non-vouching lanes change, existing lane_plan tests fail: they plan exactly today's single Line", "if a deleted path can be covered, the test fails: it appears in Dropped and is never on the relate line", "if preview drifts from the run, lane_preview_test fails: preview's relate line equals the plan's, read from the same value, it says the tests are chosen at run time, and it spawns nothing"]
+  status = "pending"
+
+[[task]]
   id = "t-12"
   wave = 3
   depends_on = ["t-10"]
@@ -235,20 +237,18 @@ Call t-10's check for repos with a vouching lane ahead of auto-finalize, reading
 
 [[task]]
   id = "t-13"
-  wave = 3
+  wave = 4
   depends_on = ["t-2", "t-9"]
-  title = "Run units and record scoped green"
+  title = "Relate, run and record scoped green"
   files = ["internal/cmd/test.go", "internal/cmd/test_scoped.go", "internal/cmd/test_scoped_test.go", "internal/cmd/test_green_test.go", "internal/pathfence/fields.go", "internal/pathfence/fields_test.go"]
-  description = """
-Run a vouching lane's units under `dross test --files`, attribute each path by its unit's exit code, and record Covered in scoped.json. Each run replaces the record, with each lane's LaneLine fingerprint, and a red clears it through ClearScoped. A run with nothing collected records nothing and never escalates.
-"""
+  description = "Under `dross test --files`, run a vouching lane's relate once, then one batched line over the tests it named. Covered is the paths relate listed, if the batched line exits 0. Each run replaces the record, with each lane's LaneLine fingerprint, and a red clears it through ClearScoped. A run with nothing related records nothing and never escalates."
   covers = ["c-2", "c-9"]
-  test_contract = ["if the lane spawns batched, test_scoped_test fails: a.ts exits 0 and b.svelte exits the declared empty_exit, the run exits 0, Covered == [a.ts], and the transcript has `uncovered: b.svelte`", "if an empty run escalates or records, the test fails: every path a miss gives exit 5, no scoped.json, only the lane's own lines spawn, and no test_command spawn in the recorder (zero_test_scoped_run)", "if a red keeps a record, the test fails: one red unit records nothing and removes a prior scoped.json on that tree; exit 3, 4, 6, 7 or 8 leaves it", "if a red from another lane admits, the test fails: a path matched by a vouching and a non-vouching lane, with the non-vouching lane red, records nothing and clears the record", "if an empty run counts as green, the test fails: a run that spawned nothing records no green and no scoped record", "if transport failure reads as a miss, the test fails: a transport failure on a unit exits 3, records nothing, and is never a miss", "if a non-vouching lane vouches, the test fails: its path is never in Covered even when green, and its spawned line is byte-identical to today's", "if a mid-run write is missed, the test fails: a file written during the run records nothing and names it, reusing the green recorder's line", "if a deletion is covered, the test fails: a deleted path stays out of Covered", "if prepare runs per unit, the test fails: lane prepare spawns once for a three-unit lane (locked prepare_scope), and remote order through the spawn seams is sync, prepare, units", "if records cross-contaminate, test_green_test fails: a full red on tree T clears scoped.json on T; a scoped red leaves green.json alone; a green scoped run leaves green.json byte-unchanged (TestPartialRunsRecordNothing holds)", "if non-vouching repos gain a record, the test fails: `dross test --files` with no vouching lanes writes no scoped.json", "if runs union, the test fails: a second run on the same tree replaces the record", "if recorder and gate disagree on the tree, TestScopedGreenMatchesCandidate fails: the recorded tree equals treefp.Candidate after `git add -A`", "if a new reader of Scoped.Covered goes unnamed, the pathfence entry's reader list is stale: any function added here that reads Covered is named in fields.go", "if an unrunnable lane fingerprints as vouching, the test fails: a lane whose consent.LaneLine is empty contributes nothing to Scoped.Lanes"]
+  test_contract = ["if a path with no test is covered, test_scoped_test fails: relate lists a.ts and omits b.svelte, one batched line spawns, the run exits 0, Covered == [a.ts], and the transcript has `uncovered: b.svelte`", "if paths spawn one by one, the test fails: a three-path run spawns relate once and the lane command once", "if an empty run escalates or records, the test fails: relate listing nothing gives exit 5, no scoped.json, the lane command never spawns, and no test_command spawn is in the recorder (zero_test_scoped_run)", "if a failed relate reads as a miss, the test fails: relate exiting non-zero or printing a malformed line takes the prepare-failure exit, spawns no lane command, records nothing and is never a miss", "if test output is read, the test fails: `dross-covered`-shaped lines in the lane command's output change nothing, and only relate's stdout is parsed", "if the batched line collects nothing, the test fails: a batched exit in empty_exit records nothing", "if a red keeps a record, the test fails: a red batched line records nothing and removes a prior scoped.json on that tree; exit 3, 4, 6, 7 or 8 leaves it", "if a red from another lane admits, the test fails: a path matched by a vouching and a non-vouching lane, with the non-vouching lane red, records nothing and clears the record", "if an empty run counts as green, the test fails: a run that spawned nothing records no green and no scoped record", "if transport failure reads as a miss, the test fails: a transport failure on relate or the batched line exits 3, records nothing, and is never a miss", "if a non-vouching lane vouches, the test fails: its path is never in Covered even when green, and its spawned line is byte-identical to today's", "if a mid-run write is missed, the test fails: a file written during the run records nothing and names it, reusing the green recorder's line", "if a deletion is covered, the test fails: a deleted path stays out of Covered", "if the order drifts, the test fails: prepare spawns once, and remote order through the spawn seams is sync, prepare, relate, batched line, with relate on the lane's own site", "if records cross-contaminate, test_green_test fails: a full red on tree T clears scoped.json on T; a scoped red leaves green.json alone; a green scoped run leaves green.json byte-unchanged (TestPartialRunsRecordNothing holds)", "if non-vouching repos gain a record, the test fails: `dross test --files` with no vouching lanes writes no scoped.json", "if runs union, the test fails: a second run on the same tree replaces the record", "if recorder and gate disagree on the tree, TestScopedGreenMatchesCandidate fails: the recorded tree equals treefp.Candidate after `git add -A`", "if a new reader of Scoped.Covered goes unnamed, the pathfence entry's reader list is stale: any function added here that reads Covered is named in fields.go", "if an unrunnable lane fingerprints as vouching, the test fails: a lane whose consent.LaneLine is empty contributes nothing to Scoped.Lanes"]
   status = "pending"
 
 [[task]]
   id = "t-14"
-  wave = 3
+  wave = 4
   depends_on = ["t-2", "t-3", "t-4", "t-6", "t-8"]
   title = "Admit scoped commits in commit-green"
   files = ["internal/gate/commit.go", "internal/gate/commit_test.go", "internal/gate/writer.go", "internal/gate/writer_test.go", "internal/gate/soloreview.go", "internal/gate/soloreview_test.go", "internal/pathfence/fields.go", "internal/pathfence/fields_test.go"]
@@ -261,26 +261,18 @@ Teach commit-green to admit a commit on a scoped green for its exact tree when t
 
 [[task]]
   id = "t-15"
-  wave = 4
+  wave = 5
   depends_on = ["t-10", "t-13", "t-14"]
   title = "Prove run-to-commit-to-verify journey end to end"
   files = ["internal/cmd/scoped_commit_e2e_test.go"]
-  description = """
-One e2e test on a real git repo with real Test() and real gate.Judge on a real `git commit` payload, proving recorder and gate agree without seeded records.
-"""
+  description = "One e2e test on a real git repo with real Test() and real gate.Judge on a real `git commit` payload, proving recorder and gate agree without seeded records. The fixture lane carries a real relate script."
   covers = ["c-2", "c-3", "c-4", "c-6", "c-9"]
-  test_contract = [
-    "if recorder and gate spell paths differently, the e2e test fails: `--files ./src/A.svelte --files src/a.test.ts` then a judged `git add -A && git commit` is admitted, test_command never spawns, and green.json is absent",
-    "if c-6 breaks in the journey, the test fails: verify refuses on the committed HEAD of a vouching repo, and a bare green admits it",
-    "if a miss admits, the test fails: a two-path run where one path misses has its commit refused, naming that path",
-    "if c-4 breaks in the journey, the test fails: in a lanes-declared, non-vouching repo, a `--files` green leaves the commit refused, a bare green admits it, and verify is not refused",
-    "if removing vouch keeps admitting, the test fails: the same tree after removing the lane's vouch is refused with the full-green text",
-  ]
+  test_contract = ["if recorder and gate spell paths differently, the e2e test fails: `--files ./src/A.svelte --files src/a.test.ts` then a judged `git add -A && git commit` is admitted, test_command never spawns, and green.json is absent", "if c-6 breaks in the journey, the test fails: verify refuses on the committed HEAD of a vouching repo, and a bare green admits it", "if a miss admits, the test fails: a two-path run where one path misses has its commit refused, naming that path", "if c-4 breaks in the journey, the test fails: in a lanes-declared, non-vouching repo, a `--files` green leaves the commit refused, a bare green admits it, and verify is not refused", "if removing vouch keeps admitting, the test fails: the same tree after removing the lane's vouch is refused with the full-green text", "if relate and the run disagree, the e2e test fails: the spawned batched line carries the test relate named for src/A.svelte and not the changed path"]
   status = "pending"
 
 [[task]]
   id = "t-16"
-  wave = 4
+  wave = 5
   depends_on = ["t-13", "t-14"]
   title = "Scope execute, solo and writer prompts"
   files = ["assets/prompts/execute.md", "assets/prompts/_execute.solo.md", "assets/agents/dross-task-writer.md", "internal/cmd/execute_prompt_test.go", "internal/cmd/prompt_commit_gate_test.go"]
@@ -301,7 +293,7 @@ Rewrite execute §1f, the solo partial and the writer line so a commit needs a s
 
 [[task]]
   id = "t-17"
-  wave = 4
+  wave = 5
   depends_on = ["t-10", "t-13", "t-14"]
   title = "Scope quick prompts, add verify's full run"
   files = ["assets/prompts/quick.md", "assets/prompts/_quick.solo.md", "assets/prompts/verify.md", "internal/cmd/quick_prompt_test.go", "internal/cmd/verify_prompt_test.go"]
@@ -321,21 +313,11 @@ Rewrite quick §4 and the solo partial to use `dross test --files`, keeping the 
 
 [[task]]
   id = "t-18"
-  wave = 5
+  wave = 6
   depends_on = ["t-7", "t-15", "t-16", "t-17"]
   title = "Prove a real barktime task commit"
   files = [".dross/phases/scoped-commit-gate/barktime-proof.toml"]
-  description = """
-`make install` from this branch, then a /dross-quick in barktime lands a wrapper running `vitest related --run <path>` that exits a declared code when nothing was collected, a vouching lane and test_exempt. The wrapper runs at t-19's run_site. The human grants them in their own terminal. The evidence is a separate real task commit touching a .svelte, not the quick that lands the wrapper, which touches an uncovered path. barktime-proof.toml holds sha, run_log, run_site, paths, wall_clock_s, gate_status, green_tree and commit_tree; a human reads it as c-5 evidence at verify.
-"""
+  description = "`make install` from this branch, then a /dross-quick in barktime lands a relate script on vitest's own related selection, a vouching lane over in-container.sh and test_exempt. The lane runs at t-20's run site. The human grants them in their own terminal. The evidence is a separate real task commit touching a .svelte, not the quick that lands the script, which touches an uncovered path. barktime-proof.toml holds sha, run_log, run_site, paths, wall_clock_s, gate_status, green_tree and commit_tree; a human reads it as c-5 evidence at verify."
   covers = ["c-5"]
-  test_contract = [
-    "if the evidence is unreal, the acceptance record fails: its SHA must resolve with `git -C ~/Development/barktime cat-file -e`, and its run log must exist",
-    "if the run wasn't scoped, the record fails: the log must show `vitest related` on a .svelte path, tests collected, no `uncovered:` line and no bare in-container suite",
-    "if the gate was lifted, the record fails: `dross gate status` in barktime, run right after the commit, must show commit-green not lifted",
-    "if a full run admitted it, the record fails: barktime's green.json tree must differ from that commit's tree",
-    "if the cost model is wrong, the record fails: wall_clock_s for a multi-path task commit must fit t-19's 10-minute budget",
-    "if the wrapper fails open, the same-session check fails: a .svelte with no related test must give exit 5 and no scoped.json, which catches vitest's default pass-with-no-tests",
-    "if a miss admits on the real repo, the check fails: a commit touching one covered and one test-less .svelte must be refused, naming the second",
-  ]
+  test_contract = ["if the evidence is unreal, the acceptance record fails: its SHA must resolve with `git -C ~/Development/barktime cat-file -e`, and its run log must exist", "if the run was not scoped, the record fails: the log must show relate mapping a .svelte path to its tests, the batched line carrying only those tests, tests collected, no `uncovered:` line and no bare in-container suite", "if the gate was lifted, the record fails: `dross gate status` in barktime, run right after the commit, must show commit-green not lifted", "if a full run admitted it, the record fails: barktime's green.json tree must differ from that commit's tree", "if the cost model is wrong, the record fails: wall_clock_s for a multi-path leaf task commit must fit t-20's 600s budget, and a hot-file task is recorded rather than failed", "if relate fails open, the same-session check fails: a .svelte with no related test, and a misspelled path, must each give exit 5, no lane spawn and no scoped.json", "if a miss admits on the real repo, the check fails: a commit touching one covered and one test-less .svelte must be refused, naming the second"]
   status = "pending"
