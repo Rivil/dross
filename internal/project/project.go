@@ -111,8 +111,8 @@ type Runtime struct {
 // Those three fields are required and validate says so per-field — a lane with
 // no Command cannot be run, a lane with no Match can never be selected, and a
 // lane with no Name cannot be granted consent, since the machine-local grant
-// store is keyed by lane name. Prepare, Selector, EmptyExit and Vouch are
-// optional and opt-in; see their own comments.
+// store is keyed by lane name. Prepare, Selector, EmptyExit, Vouch and Relate
+// are optional and opt-in; see their own comments.
 type TestLane struct {
 	Name    string   `toml:"name" json:"name"`
 	Match   []string `toml:"match" json:"match"`
@@ -229,11 +229,23 @@ type TestLane struct {
 	//
 	// A green only vouches if it measured the path it names, so validate
 	// refuses a lane that could report green having measured nothing: one with
-	// no `path` selector, one with no EmptyExit code to say "collected
-	// nothing", and one whose EmptyExit lists 1, which would read a red as a
-	// miss. It also refuses a vouching lane in a repo with no
-	// Runtime.TestCommand, where the lanes would be the only full run.
+	// no `path` selector, one with no Relate to tie a path to its tests, and
+	// one whose EmptyExit lists 1, which would read a red as a miss. It also
+	// refuses a vouching lane in a repo with no Runtime.TestCommand, where the
+	// lanes would be the only full run.
 	Vouch bool `toml:"vouch,omitempty" json:"vouch,omitempty"`
+
+	// Relate is the command a vouching lane runs once over all its paths; its
+	// stdout maps each path to its tests. validate requires it on a vouching
+	// lane, which otherwise cannot say which tests measure a path, and refuses
+	// it on any other lane, where nothing would ever run it.
+	//
+	// The paths are always appended as shell-quoted arguments. SelectorTemplate
+	// shapes Command only, so a template never reaches this line.
+	//
+	// It is also what says a path has no test, so EmptyExit is optional on a
+	// vouching lane. Omitted, a file saves byte-identical.
+	Relate string `toml:"relate,omitempty" json:"relate,omitempty"`
 }
 
 type Service struct {

@@ -66,7 +66,7 @@ _introduced 01-architecture-comprehension-layer · extended architecture-doc-enh
 Schema-check every .dross/ TOML/JSON artefact, including that plan `covers` reference real spec criteria. The two validators divide the work by blast radius (locked `status_check_home`): `dross validate` stays **structural only** because it runs in every slash command's wrap step and must never newly fail an existing repo, while `dross doctor` is the sole **enum-enforcing** validator. Doctor therefore owns the plan-task status check — a task whose `status` falls outside `pending|in_progress|done|failed` is reported as an exit-code issue naming both phase and task id, closing the hole where a hand-edited plan.toml silently dropped a task out of `NextRunnable`. A phase directory with no plan.toml is skipped in silence (spec'd-but-unplanned is legal); an unparseable one is its own issue rather than a clean verdict.
 
 - `Validate` — `internal/cmd/validate.go:33`
-- `loadIfExists` — `internal/cmd/validate.go:641`
+- `loadIfExists` — `internal/cmd/validate.go:647`
 - `taskStatusIssues` (doctor's plan-task status enum check) — `internal/cmd/doctor.go:833`
 - `triageProblems` (each phase's `pr-triage.toml` is checked against its plan tasks and spec deferred items — an accept must name a real task, a route a real deferred item) — `internal/cmd/validate.go:211`
 
@@ -291,7 +291,7 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `configenum.Set` (normalising enum home + per-field empty-value policy) — `internal/configenum/configenum.go:32`
 - doctor enum validation via `configenum` Sets — `internal/cmd/doctor.go:117`
 - `diag.RemoteCombination` (runtime-fatal pairings as advisory warnings) — `internal/diag/combinations.go:15`
-- `Remote.AuthUser` (`[remote].auth_user` schema + dotted read/write) — `internal/project/project.go:265`
+- `Remote.AuthUser` (`[remote].auth_user` schema + dotted read/write) — `internal/project/project.go:277`
 - `forge.Client.do` (basic scheme + construction-time auth_user check) — `internal/forge/forge.go:878`
 - `providerSwitchIn` (go/ast validator↔dispatch divergence guard) — `internal/cmd/enum_divergence_test.go:56`
 - `TestPromptProviderListsMatchShipProviders` (init/onboard provider bullets pinned to ShipProviders) — `internal/cmd/prompt_provider_list_test.go:73`
@@ -304,13 +304,13 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `writeVersion` (one validated writer for both version homes, tracked copy first) — `internal/cmd/state.go:239`
 - doctor version-drift check (project.toml vs state.json, skipped on a fresh clone) — `internal/cmd/doctor.go:349`
 - `checkConfigTrust` (rejectable branch name, off-allowlist api_base, tracked local.toml and pre-2.24 git as exit-code-moving findings) — `internal/cmd/doctor.go:1094`
-- `project.BoardFields` (`[board.fields]` nested table, locked `field_config_shape` — same idiom as `board.state_map`) — `internal/project/project.go:297`
+- `project.BoardFields` (`[board.fields]` nested table, locked `field_config_shape` — same idiom as `board.state_map`) — `internal/project/project.go:309`
 - `boardFieldKey` (`board.fields.<name>` addressed per leaf; a bogus name is rejected by name, bare `board.fields` is not a leaf) — `internal/cmd/project.go:601`
 - `enumKeys` (the one table both enum gates read: five dotted keys → their `configenum` Sets) — `internal/cmd/project.go:325`
 - `checkEnumValue` (set-time refusal, run before the write so a rejected value leaves project.toml byte-unchanged) — `internal/cmd/project.go:339`
 - `enumProblems` (validate re-checks the same table, catching the hand-edited or cloned file the setter never saw) — `internal/cmd/validate.go:256`
-- `project.Project.Save` (the sole project.toml writer: load → diff → patch → canonical verify → atomic temp+fsync+rename; fresh encode only for an absent path) — `internal/project/project.go:524`
-- `saveLossless` / `SaveTOML` (the lossless write door Save and every other hand-annotated TOML store share: decode into the value's own type, diff, patch, verify, atomic write; `SaveTOML` exports it with its own `doorOps` seam) — `internal/project/project.go:539`
+- `project.Project.Save` (the sole project.toml writer: load → diff → patch → canonical verify → atomic temp+fsync+rename; fresh encode only for an absent path) — `internal/project/project.go:536`
+- `saveLossless` / `SaveTOML` (the lossless write door Save and every other hand-annotated TOML store share: decode into the value's own type, diff, patch, verify, atomic write; `SaveTOML` exports it with its own `doorOps` seam) — `internal/project/project.go:551`
 - `apply` / `indexDoc` (raw-byte patcher: line-indexed value spans, header blocks, per-op re-index, inline tables refused by line) — `internal/project/patch.go:619`
 - `diff` (two values of one TOML-tagged struct type → per-leaf set/delete and per-element array-of-tables ops, over the encoder's canonical trees) — `internal/project/patch_diff.go:111`
 - `encodeFresh` (the package's single BurntSushi encoder call site; the door, verify, the differ and value rendering all route through it) — `internal/project/patch_value.go:16`
@@ -377,7 +377,7 @@ Give every deferred idea a destination instead of leaving it write-only: `/dross
 - `validDeferredTarget` (one target rule shared by route, add and validate) — `internal/cmd/deferred_target.go:54`
 - `deferred.ResolveSource` (route/unroute/dismiss resolve `_project` through the store helper) — `internal/deferred/deferred.go:148`
 - `mirrorDeferredAdd` (same-command board mirror; warns and keeps the local write on failure) — `internal/cmd/deferred_add.go:158`
-- `danglingTargets` (validate walks the store; reserved `phases/_project` dir flagged; rename repoints store entries) — `internal/cmd/validate.go:578`
+- `danglingTargets` (validate walks the store; reserved `phases/_project` dir flagged; rename repoints store entries) — `internal/cmd/validate.go:584`
 - `TestParksHomelessFindingScopesToOpenLoops` (self-retiring guard against parking a finding instead of filing it) — `internal/cmd/deferred_homeless_repo_test.go:40`
 - `/dross-inbox` board-off fallback + dismiss funnel — `assets/prompts/inbox.md`
 - `resolveBacklogIssue` (routed items mirrored with a `dross/target:` label, resolved by identity label) — `internal/boardsync/backlog.go:323`
@@ -385,7 +385,7 @@ Give every deferred idea a destination instead of leaving it write-only: `/dross
 - `forge.IssueLinker` (optional link capability: YouTrack + Jira, absent on GitHub by design) — `internal/forge/forge.go:202`
 - `refuseCompleteTarget` (deferred route, survivor route and `deferred add --target` refuse a destination that is already complete, before any write; locked `route_to_complete`) — `internal/cmd/deferred_target.go:70`
 - `deferredAbsorb` (`dross deferred absorb` records a parked item's stable id on the criterion that takes it in — the record its board mirror closes on; `/dross-spec` runs it for every criterion seeded from a parked item) — `internal/cmd/deferred_absorb.go:27`
-- `absorbedProblems` (validate refuses an absorbed id that names no item, or one dismissed, unrouted or routed elsewhere, while the phase is open) — `internal/cmd/validate.go:613`
+- `absorbedProblems` (validate refuses an absorbed id that names no item, or one dismissed, unrouted or routed elsewhere, while the phase is open) — `internal/cmd/validate.go:619`
 
 _introduced deferred-item-routing · 6509930 · extended deferred-triage-gaps · 539d475 · extended deferred-unroute-command · fb24bc2 · extended survivor-lifecycle · a6b366d · extended deferred-add-command · 5e86a7b · extended board-sync-truth · a587471 · extended cmd-package-decomposition · adc37f7 · extended board-finalize-on-complete · 328f2f2_
 
@@ -1488,7 +1488,7 @@ Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (
 - `Techdebt` (CLI) — `internal/cmd/techdebt.go:23`
 - `trackedFiles` (skip-set-pruned scan set, both enumeration paths; `[techdebt] exclude` applied via `Filter` before `NewRun`) — `internal/cmd/techdebt.go:88`
 - `techdebt.Filter` (pure repo-relative exclude filter) — `internal/techdebt/filter.go:29`
-- `project.Techdebt` (`[techdebt] exclude`, nil when absent) — `internal/project/project.go:329`
+- `project.Techdebt` (`[techdebt] exclude`, nil when absent) — `internal/project/project.go:341`
 - `findings.StampLastRun` — `internal/findings/state.go:121`
 - `actionCatalog` (status actions all slash commands) — `internal/cmd/status.go:503`
 - `/dross-techdebt` thin skill — `assets/prompts/techdebt.md`
@@ -1626,7 +1626,7 @@ Stated limit, measured rather than assumed: this buys a **free laptop, not a fas
 - `testLaneEdit` (`dross test lane edit <name>`: every field in place — match, command, selector, empty_exit, template and join — keeping the lane's position; reads cobra's `Changed` so omitted and empty stay distinct, and *stales* the grant instead of revoking it) — `internal/cmd/test_lane.go:386`
 - `laneRefusal` (the one CLI gate for a proposed lane, validating a synthetic one-lane project so a neighbour's fault cannot block the edit that fixes it) — `internal/cmd/test_lane.go:132`
 - `testlane.Expand` (`{path}` repeats the template per path, `{paths}` substitutes them into one instance and joins when declared; the sole shell quoter, so template text and substituted path are quoted by one implementation) — `internal/testlane/template.go:52`
-- `laneWholeTreeWarning` (names the lane and the token when a scoped selector is declared on a command already ending in `./...` or `.`) — `internal/cmd/validate.go:688`
+- `laneWholeTreeWarning` (names the lane and the token when a scoped selector is declared on a command already ending in `./...` or `.`) — `internal/cmd/validate.go:694`
 - `TestLaneSelectorRefusalIsGone` (pins the deletion of the orphaned per-field-group gate laneRefusal subsumed, and that laneRefusal itself stays) — `internal/cmd/test_lane_edit_test.go:731`
 - `TestExecutePromptDocumentsPrepareExit` (execute.md lists exit 7 among the codes that mean the run did not happen, so an agent cannot send a reader hunting a bug in code that never ran) — `internal/cmd/execute_prompt_test.go:179`
 - `TestExecutePromptPassesTaskFilesToTest` (execute's pre-commit gate scopes itself to the task's own plan.toml files) — `internal/cmd/prompt_test_command_test.go:128`

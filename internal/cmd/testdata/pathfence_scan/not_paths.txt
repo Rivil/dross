@@ -312,6 +312,7 @@ project.TestLane.Command command
 project.TestLane.Install install
 project.TestLane.Name name
 project.TestLane.Prepare prepare
+project.TestLane.Relate relate
 project.TestLane.Selector selector
 project.TestLane.SelectorJoin selector_join
 project.TestLane.SelectorTemplate selector_template

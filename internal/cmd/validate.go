@@ -465,17 +465,23 @@ func laneToolchainProblems(label string, lane project.TestLane) []string {
 
 // laneVouchProblems reports why one lane cannot vouch for a commit. A green may
 // only admit a commit if it measured the paths it names, so each rule closes a
-// way to report green having measured nothing.
+// way to report green having measured nothing. empty_exit is not required:
+// relate is what says a path has no test.
 //
 // Only properties of the lane itself are judged here, so the rule holds on the
 // one-lane project `laneRefusal` builds. vouchFullRunProblem is the half that
 // needs the rest of the repo.
 //
-// Nothing is reported for a lane that does not vouch: the field is opt-in, and
-// empty_exit = [1] stays legal on a lane no commit depends on.
+// A lane that does not vouch answers for one thing only, carrying a relate
+// nothing would run. The field is opt-in, and empty_exit = [1] stays legal on a
+// lane no commit depends on. That check reads the raw value, so a blank relate
+// is dead config here and a missing one on a vouching lane.
 func laneVouchProblems(label string, lane project.TestLane) []string {
 	if !lane.Vouch {
-		return nil
+		if lane.Relate == "" {
+			return nil
+		}
+		return []string{fmt.Sprintf("project.toml: %s declares relate with no vouch — only a vouching lane runs relate, so this line would never fire; set vouch = true or drop the key", label)}
 	}
 	var problems []string
 	switch configenum.Normalize(lane.Selector) {
@@ -488,8 +494,8 @@ func laneVouchProblems(label string, lane project.TestLane) []string {
 		// the changed file comes back green.
 		problems = append(problems, fmt.Sprintf("project.toml: %s sets vouch with selector = %q — only a \"path\" lane can vouch, because a run over a whole directory or package can pass without reaching the changed file: `go test` exits 0 on `[no test files]`", label, lane.Selector))
 	}
-	if len(lane.EmptyExit) == 0 {
-		problems = append(problems, fmt.Sprintf("project.toml: %s sets vouch with no empty_exit — with no code meaning \"collected nothing\", a run that measured nothing reads as green; declare the code the runner exits with", label))
+	if strings.TrimSpace(lane.Relate) == "" {
+		problems = append(problems, fmt.Sprintf("project.toml: %s sets vouch with no relate — nothing says which tests measure which path, so a green could name a path no test reached; declare the command that maps each path to its tests", label))
 	}
 	if slices.Contains(lane.EmptyExit, 1) {
 		problems = append(problems, fmt.Sprintf("project.toml: %s sets vouch with empty_exit listing 1 — 1 is how runners report failing tests, so a red would read as collecting nothing; have the lane exit a code of its own", label))

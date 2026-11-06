@@ -368,6 +368,57 @@ func TestSaveSetsAndClearsVouchAndExempt(t *testing.T) {
 	}
 }
 
+// TestSaveChurnsNothingForRelate: no repo on disk declares relate, so it may not
+// reach a file that does not ask for it. As with vouch, a plain Load then Save
+// proves nothing, so the zero value goes through a real document and a fresh one.
+func TestSaveChurnsNothingForRelate(t *testing.T) {
+	src := fixture(t)
+	path := seed(t, src)
+	p := mustLoad(t, path)
+	p.Runtime.TestLane[0].Relate = ""
+	if err := p.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if got := mustRead(t, path); !bytes.Equal(got, src) {
+		added, removed := changedLines(src, got)
+		t.Errorf("an empty relate changed the file: added %q removed %q", added, removed)
+	}
+
+	fresh := filepath.Join(t.TempDir(), "project.toml")
+	if err := p.Save(fresh); err != nil {
+		t.Fatalf("save fresh: %v", err)
+	}
+	if out := mustRead(t, fresh); bytes.Contains(out, []byte("relate")) {
+		t.Errorf("a fresh document wrote relate, which nothing set:\n%s", out)
+	}
+}
+
+// TestSaveSetsAndClearsRelate: relate is one line in the lane it belongs to, and
+// clearing it restores the document byte for byte. A tag that lost omitempty
+// would leave `relate = ""` behind here, on a file that once declared it.
+func TestSaveSetsAndClearsRelate(t *testing.T) {
+	src := fixture(t)
+	path := seed(t, src)
+
+	p := mustLoad(t, path)
+	p.Runtime.TestLane[1].Relate = "scripts/relate.sh"
+	withRelate := saveAndCheck(t, p, path)
+	assertChanged(t, src, withRelate, []string{`    relate = "scripts/relate.sh"`}, nil)
+	if !bytes.Contains(withRelate, []byte("    command = \"go test ./internal/project/...\"\n    relate = \"scripts/relate.sh\"\n")) {
+		t.Errorf("relate landed outside its lane:\n%s", withRelate)
+	}
+
+	p = mustLoad(t, path)
+	if p.Runtime.TestLane[1].Relate != "scripts/relate.sh" || p.Runtime.TestLane[0].Relate != "" {
+		t.Errorf("relate did not load onto lane 1 alone: %+v", p.Runtime.TestLane)
+	}
+	p.Runtime.TestLane[1].Relate = ""
+	if out := saveAndCheck(t, p, path); !bytes.Equal(out, src) {
+		added, removed := changedLines(src, out)
+		t.Errorf("clearing relate did not restore the file: added %q removed %q", added, removed)
+	}
+}
+
 // TestArchitectureAnchorsTheSaveDoors: TestArchitectureNamesLosslessWriter only
 // asks that Save's anchor line mentions the word, and has no row for
 // saveLossless. These two bullets are how a reader finds the write door, so each

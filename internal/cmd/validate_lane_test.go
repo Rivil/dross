@@ -835,12 +835,16 @@ func vouchFixture(t *testing.T) string {
 	return dir
 }
 
-// vouchLaneBlock is a lane with everything but the fields a vouch test varies.
-const vouchLaneBlock = `[[runtime.test_lane]]
+// vouchLaneHead is a vouching lane with no way yet to attribute its paths.
+const vouchLaneHead = `[[runtime.test_lane]]
 name = "web"
 match = ["src/**"]
 command = "vitest related --run"
 vouch = true
+`
+
+// vouchLaneBlock is a lane with everything but the fields a vouch test varies.
+const vouchLaneBlock = vouchLaneHead + `relate = "scripts/relate.sh"
 `
 
 // lineWith reports whether one output line carries every needle, so a test can
@@ -877,6 +881,77 @@ empty_exit = [5]`)
 	}
 }
 
+// TestValidateLetsRelateStandInForEmptyExit: relate says when a path has no test,
+// so a vouching lane owes no exit code for it. This was t-3's refusal of a lane
+// with no empty_exit, turned around once relate took over the job.
+func TestValidateLetsRelateStandInForEmptyExit(t *testing.T) {
+	for _, tc := range []struct{ name, fields string }{
+		{"no empty_exit", `selector = "path"`},
+		{"empty empty_exit", "selector = \"path\"\nempty_exit = []"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := vouchFixture(t)
+			appendLanes(t, dir, vouchLaneBlock+tc.fields)
+
+			out, err := validateOutput(t)
+			if err != nil {
+				t.Fatalf("validate refused a vouching lane with relate and %s: %v\n%s", tc.name, err, out)
+			}
+		})
+	}
+}
+
+// TestValidateRefusesVouchWithNoRelate: without relate no test is tied to a path,
+// so a green could name one nothing measured. A blank line is no relate at all.
+func TestValidateRefusesVouchWithNoRelate(t *testing.T) {
+	for _, tc := range []struct{ name, fields string }{
+		{"absent", "selector = \"path\"\nempty_exit = [5]"},
+		{"empty", "selector = \"path\"\nempty_exit = [5]\nrelate = \"\""},
+		{"whitespace", "selector = \"path\"\nempty_exit = [5]\nrelate = \"   \""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := vouchFixture(t)
+			appendLanes(t, dir, vouchLaneHead+tc.fields)
+
+			out, err := validateOutput(t)
+			if err == nil {
+				t.Fatalf("validate accepted a vouching lane with no relate:\n%s", out)
+			}
+			if !lineWith(out, `runtime.test_lane "web"`, "vouch with no relate") {
+				t.Errorf("the problem must name the lane and the missing key, got:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestValidateRefusesRelateWithNoVouch: only a vouching lane runs relate, so on
+// any other lane it reads as configured and does nothing. A blank value is the
+// same dead key, and must not slip through as "no relate".
+func TestValidateRefusesRelateWithNoVouch(t *testing.T) {
+	for _, tc := range []struct{ name, fields string }{
+		{"vouch absent", `relate = "scripts/relate.sh"`},
+		{"vouch false", "vouch = false\nrelate = \"scripts/relate.sh\""},
+		{"blank relate", `relate = "   "`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := laneFixture(t)
+			appendLanes(t, dir, `[[runtime.test_lane]]
+name = "web"
+match = ["src/**"]
+command = "vitest run"
+`+tc.fields)
+
+			out, err := validateOutput(t)
+			if err == nil {
+				t.Fatalf("validate accepted relate on a lane that does not vouch:\n%s", out)
+			}
+			if !lineWith(out, `runtime.test_lane "web"`, "relate with no vouch") {
+				t.Errorf("the problem must name the lane and the dead key, got:\n%s", out)
+			}
+		})
+	}
+}
+
 // TestValidateRefusesALaneThatCannotVouch walks every way a lane could report
 // green having measured nothing. Each refusal is held to the lane it names.
 func TestValidateRefusesALaneThatCannotVouch(t *testing.T) {
@@ -889,8 +964,6 @@ func TestValidateRefusesALaneThatCannotVouch(t *testing.T) {
 		{"dir selector", "selector = \"dir\"\nempty_exit = [5]", "[no test files]"},
 		{"go-package selector", "selector = \"go-package\"\nempty_exit = [5]", "[no test files]"},
 		{"unknown selector", "selector = \"packages\"\nempty_exit = [5]", `selector = "packages"`},
-		{"no empty_exit", `selector = "path"`, "vouch with no empty_exit"},
-		{"empty empty_exit", "selector = \"path\"\nempty_exit = []", "vouch with no empty_exit"},
 		{"empty_exit of 1", "selector = \"path\"\nempty_exit = [1]", "empty_exit listing 1"},
 		{"1 among other codes", "selector = \"path\"\nempty_exit = [5, 1]", "empty_exit listing 1"},
 	} {
@@ -919,7 +992,8 @@ match = ["lib/**"]
 command = "vitest related --run"
 selector = "path"
 empty_exit = [5]
-vouch = true`)
+vouch = true
+relate = "scripts/relate.sh"`)
 
 	out, err := validateOutput(t)
 	if err == nil {
@@ -980,7 +1054,7 @@ command = "true"`)
 func TestLaneRefusalJudgesAVouchingLaneOnItsOwnShape(t *testing.T) {
 	good := project.TestLane{
 		Name: "web", Match: []string{"src/**"}, Command: "vitest related --run",
-		Selector: "path", EmptyExit: []int{5}, Vouch: true,
+		Selector: "path", EmptyExit: []int{5}, Vouch: true, Relate: "scripts/relate.sh",
 	}
 	if err := laneRefusal("web", good); err != nil {
 		t.Errorf("a well-formed vouching lane was refused: %v", err)
@@ -994,6 +1068,16 @@ func TestLaneRefusalJudgesAVouchingLaneOnItsOwnShape(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "[no test files]") {
 		t.Errorf("the refusal must say why a dir lane cannot vouch, got: %v", err)
+	}
+
+	dead := good
+	dead.Vouch = false
+	err = laneRefusal("web", dead)
+	if err == nil {
+		t.Fatal("laneRefusal accepted relate on a lane that does not vouch")
+	}
+	if !strings.Contains(err.Error(), "relate with no vouch") {
+		t.Errorf("the refusal must say why relate is dead here, got: %v", err)
 	}
 }
 
