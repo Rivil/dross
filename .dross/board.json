@@ -2550,16 +2550,36 @@
     },
     "scoped-commit-gate/t-11": {
       "issue": "DRO-1105",
-      "plan_status": "failed",
-      "board_state": "planned"
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "scoped-commit-gate/t-12": {
       "issue": "DRO-1109",
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "scoped-commit-gate/t-13": {
+      "issue": "DRO-1115",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "scoped-commit-gate/t-14": {
       "issue": "DRO-1114",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-15": {
+      "issue": "DRO-1117",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-16": {
+      "issue": "DRO-1118",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-17": {
+      "issue": "DRO-1119",
       "plan_status": "done",
       "board_state": "task-in-review"
     },
@@ -2595,6 +2615,11 @@
     },
     "scoped-commit-gate/t-24": {
       "issue": "DRO-1101",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-25": {
+      "issue": "DRO-1116",
       "plan_status": "done",
       "board_state": "task-in-review"
     },

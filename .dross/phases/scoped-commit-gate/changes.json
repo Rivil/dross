@@ -36,6 +36,27 @@
         }
       ]
     },
+    "t-11": {
+      "files": [
+        "internal/mutation/construct_e2e_test.go",
+        "internal/mutation/range_test.go",
+        "internal/mutation/stryker.go",
+        "internal/mutation/testdata/ts-project/src/Widget.svelte.test.ts",
+        "internal/mutation/testdata/ts-project/vitest.config.ts",
+        "internal/verify/range_expand_test.go",
+        "internal/verify/range_provenance_test.go"
+      ],
+      "commit": "41146bbb",
+      "completed_at": "2026-11-06T19:12:13.03955Z",
+      "landmarks": [
+        {
+          "feature": "mutation ranging",
+          "symbol": "svelteRanges",
+          "loc": "internal/mutation/stryker.go:580",
+          "what": "a ranged .svelte is instrumented whole and narrowed from the report, because Stryker reads --mutate ranges per script block"
+        }
+      ]
+    },
     "t-12": {
       "files": [
         "internal/cmd/ship.go",
@@ -49,6 +70,25 @@
           "symbol": "gateShipFullGreen",
           "loc": "internal/cmd/ship.go:620",
           "what": "ship refuses a vouching repo with no full green on HEAD before auto-finalize writes anything, and --force-unverified warns and proceeds"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/cmd/lane_plan.go",
+        "internal/cmd/lane_plan_test.go",
+        "internal/cmd/test.go",
+        "internal/cmd/test_scoped.go",
+        "internal/cmd/test_scoped_test.go"
+      ],
+      "commit": "60afdaa8",
+      "completed_at": "2026-11-06T18:16:44.809484Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "runLaneRelate",
+          "loc": "internal/cmd/test_scoped.go:71",
+          "what": "dross test --files runs a vouching lane's relate once, then one batched line over the tests it named, withholding build config from relate"
         }
       ]
     },
@@ -69,6 +109,61 @@
           "symbol": "judgeVouched",
           "loc": "internal/gate/commit.go:279",
           "what": "commit-green admits a commit on a scoped green for its exact tree when no path is uncovered and the lanes still vouch under current grants"
+        }
+      ]
+    },
+    "t-15": {
+      "files": [
+        "internal/cmd/scoped_commit_e2e_test.go"
+      ],
+      "commit": "c6f811fb",
+      "completed_at": "2026-11-06T19:46:54.247645Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "TestScopedJourneyAdmitsThenVerifyWantsAFullGreen",
+          "loc": "internal/cmd/scoped_commit_e2e_test.go:120",
+          "what": "real Test and real commit-green on a real commit payload prove recorder and gate agree with no seeded record"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        "assets/agents/dross-task-writer.md",
+        "assets/prompts/_execute.solo.md",
+        "assets/prompts/_execute.test-not-run.md",
+        "assets/prompts/execute.md",
+        "internal/cmd/execute_prompt_test.go",
+        "internal/cmd/prompt_commit_gate_test.go",
+        "internal/review/writer_test.go"
+      ],
+      "commit": "b9e91f36",
+      "completed_at": "2026-11-06T20:06:01.105398Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "execute section 1f",
+          "loc": "assets/prompts/execute.md:120",
+          "what": "execute, solo and writer prompts commit on a scoped green where one is enough, keying the bare run on a refused commit"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "assets/prompts/_quick.solo.md",
+        "assets/prompts/quick.md",
+        "assets/prompts/verify.md",
+        "internal/cmd/quick_prompt_test.go",
+        "internal/cmd/verify_prompt_test.go"
+      ],
+      "commit": "08271cd1",
+      "completed_at": "2026-11-06T20:30:51.209888Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "quick section 4",
+          "loc": "assets/prompts/quick.md:89",
+          "what": "quick commits on a scoped green in a vouching repo, and verify runs a bare suite first there"
         }
       ]
     },
@@ -202,6 +297,26 @@
           "symbol": "grantingTrust",
           "loc": "internal/gate/selfguard.go:113",
           "what": "gate-off-guard refuses a tool-call dross trust that writes a grant, and tamper-guard fences .dross/local.toml including sed -i"
+        }
+      ]
+    },
+    "t-25": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_green_test.go",
+        "internal/cmd/test_scoped.go",
+        "internal/cmd/test_scoped_test.go",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go"
+      ],
+      "commit": "5f4e0bcb",
+      "completed_at": "2026-11-06T19:33:29.808655Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "scopedRecorder",
+          "loc": "internal/cmd/test_scoped.go:102",
+          "what": "a relate run whose batch passed records a scoped green holding the paths it covered and each lane's fingerprint, and a red clears it"
         }
       ]
     },
@@ -417,6 +532,85 @@
         }
       ]
     },
+    "t-11": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "spec",
+          "severity": "BLOCKING",
+          "criterion": "c-8",
+          "text": "test_contract says 'a fixture test imports Widget.svelte, so Stryker's dry run collects tests', and the description says to add one because no fixture test relates to Widget.svelte. The diff adds no such test: the declared file internal/mutation/testdata/ts-project/src/Widget.svelte.test.ts does not exist and nothing in the fixture's src/*.ts references Widget. TestRealParserSpansMatchTheExpansionForSvelteMutants instead co-mutates a line of src/tally.ts so the dry run has tests to collect, leaving every Widget mutant NoCoverage. The comment that no fixture test can import Widget.svelte is asserted, not shown: adding a svelte plugin to the fixture's vitest config, or an import form that needs no plugin, is not ruled out. Either deliver the fixture test or have the task record changed; the substitution cannot stand in for the contract line.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "Because every e2e leg carries the tally.ts anchor, no real-tool run covers a .svelte alone in its leg. By the test's own comment, Stryker aborts when the dry run collects no test, so a sole .svelte with no related test (including a style-only hunk) writes no report and RunRanges returns an error, giving a failed leg rather than 'no mutants'. The style-only no-refusal claim is proven only with the anchor present, or with stubs and canned reports.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "rangesForKey's suffix limb can give an unranged file another file's ranges under absolute report keys: with src/Widget.svelte held and packages/x/src/Widget.svelte requested whole, the key /abs/packages/x/src/Widget.svelte matches the suffix src/Widget.svelte and gets narrowed. Longest-suffix only resolves between held entries. The cost is silently under-measuring a whole file, though only if Stryker emits absolute keys.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The e2e count check derives its expected value with inRanges, the production predicate, so it cannot catch a wrong range rule. The table test TestParseRangedKeepsOnlyMutantsWhollyInsideARange and the hasMutant positives carry that instead.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "parseRanged's quiet line names the report key, which may be absolute, while checkInstrumented's names the trimmed request path, so the same message can show two path forms.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "A style-only hunk on a .svelte that no test imports, alone in its leg, still fails. The vitest runner passes the mutated file as relatedFiles, the dry run collects no tests, and 3-dry-run-executor throws 'No tests were executed' unless allowEmpty is set. No report is written, so RunRanges returns 'stryker did not write a report' and the leg records an error. The test_contract only claims this path through the fixture test, but the description's 'zero mutants must read as no mutants, not as a failed leg' holds only for a .svelte that has a related test.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "vitest.config.ts now imports svelte/compiler at top level, so every Stryker e2e on this fixture needs svelte installed. requireE2E and e2eSkipReason only check that node_modules exists, so on the stale install requireSvelte describes, TestStrykerRunsEndToEnd and TestConstructRangeRecoversTheDeepMutant would hit a config-load failure instead of a named skip. CI's npm ci is unaffected.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The comment on TestParseRangedSaysNothingOfAFileThatHadNoMutants says checkInstrumented's own branch speaks for that file. With a report key holding an empty mutants array, as this test builds, the file counts as mentioned, so checkInstrumented prints nothing either. That branch only fires when the key is absent.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The real-tool outcome could not be confirmed from this review. The context holds no record of the DROSS_REQUIRE_E2E run the task asked the author to report, and the reports/mutation/mutation.json on disk has no Widget mutants among the entries read. The Killed and NoCoverage assertions are therefore checked by reading only.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A ranged .svelte now pays for whole-file instrumentation and testing of every mutant, even for a style-only hunk. svelteRanges documents this as the accepted cost of correct scope.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
     "t-12": {
       "outcome": "pass",
       "rounds": 1,
@@ -448,6 +642,35 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "In a vouching repo with no full green, an unfinalized partial or fail verdict now gets the full-green refusal, and its outcome event is not recorded until a later ship gets past the gate. The test_contract requires this, but it narrows the heal-before-gate behaviour described in the comment just below the new call.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-13": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "runPlannedLanes calls scoped.note(rel) before the batched line runs, so scopedRun.covered holds paths relate mapped, not paths whose batch passed. If the batched line exits a declared empty_exit beside a green neighbour, the run exits 0 and the path is neither measured nor printed as uncovered:. A second lane's omission of that path is also suppressed. c-9 requires that the batched run passed. Nothing is recorded in this task, but t-25 must not take covered from this struct as it stands, and TestBatchedLineFailsLikeAnyLaneLine only drives the lone-lane empty_exit case.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "A deleted non-config path on a vouching lane goes on Dropped and never reaches uncovered:. A run over src/a.ts plus a deleted src/gone.ts exits 0 with a silent transcript, and the gate will then refuse the path as neither covered nor exempt. TestDeletedBuildConfigStillPrintsAsUncovered names a deleted config path for exactly that reason, so the treatment is inconsistent, and the run never prints Dropped.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "This task widens ScopedToNothing to cover a lane holding only withheld config, but lane_preview.go was not updated. printPreviewLane says 'every path matching it is gone' for a package.json that exists, while the run says 'build config is all that is left'. Withheld also never reaches the preview report, text or JSON, so a relate line shortened by config is silent there, which is what that file's Dropped comment says preview must not do. The relate line itself matches the spawned one, as the contract asks, but lane_preview.go's ScopedToNothing doc comment is now stale.",
           "resolution": "non-blocking, left"
         }
       ]
@@ -490,6 +713,83 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "c-4 is pinned well: refusedAsToday compares Rule and Remedy with judgeGreen's output and also pins the expected rule text, so both sides cannot drift together.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-15": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "e2eRelateScript maps src/A.svelte and src/a.test.ts to the same test, and that test is also an asked path. The exact-line assertion on \"sh scripts/run.sh 'src/a.test.ts'\" therefore cannot tell a line built from relate's answer for A.svelte from one built from the test-shaped --files input or from the self-mapping row alone. It does fail if a changed path like A.svelte reaches the line, but a regression that ignores the A.svelte row's test survives. Having relate name a separate committed test for A.svelte (say src/b.test.ts) would pin this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The contract says a two-path run, but TestScopedJourneyRefusesTheMissedPath passes three paths: A.svelte, a.test.ts and untested.svelte. The fixture leaves a.test.ts untracked, so it has to be covered for the refusal to name only the miss. The property is still tested, including that covered paths are not named.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In TestNonVouchingJourneyStaysOnTheFullGreen, `git commit --allow-empty` does nothing useful: the tree does not move and green.json is deleted on the next line.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Deleting green.json before verify in the non-vouching journey is a good strengthening: without it, a verify that wrongly applied requireFullGreen would still pass on a matching green.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-9",
+          "text": "TestScopedJourneyRefusesTheMissedPath's comment says 'one path of two reaches a test', and the contract says a two-path run, but the test passes three --files (two covered, one missed). The behaviour is still proved, and the third path keeps src/a.test.ts out of the refusal; only the comment is inaccurate.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-16": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-7",
+          "text": "pass-stale on a writer task that reported `test: none` has no route of its own. In a vouching repo it sends the main loop to `dross test --files`, which exits 5, and _execute.test-not-run.md then offers 'write a test for it'. That contradicts the `none` arm's 'a missing test is never written inline'. The fix-round arm avoids this by pointing back to the report's arm; pass-stale does not. Rare path, and the bare-run option is still available.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSoloWriterNoneIsNoFailure checks the failure arm with strings.Contains(fail, \"none\"), a bare substring that any later word containing 'none' would trip. It fails loudly rather than passing vacuously, so it is only brittle.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-17": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "quick.md §4 folds exits 2, 3, 4, 6, 7 and 8 into 'the run did not happen', so it names no `dross trust --lane` remedy for exit 6, which execute.md does document. The instruction is still safe because it says never to commit on those exits, and the task record only asked for `uncovered:` and exit 5 routes.",
           "resolution": "non-blocking, left"
         }
       ]
@@ -664,6 +964,27 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "`cp -t .dross /tmp/x/local.toml` still escapes tamper-guard because copyTargets assumes the destination is the last operand. The gap already existed for .dross/gate/, and the task does not claim this form.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-25": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "In a lanes-only bare `dross test`, a red lane beside a failed prepare or relate, a missing toolchain, or a transport failure exits with the higher-ranked code, because exitRank puts those above exitSuiteFailed. greenRecorder.finish then sees isRed(runErr) == false and leaves scoped.json on that tree, so a commit can still be admitted on a tree a full run just saw go red. scopedRun.red exists to solve this for --files runs, and its comment says the exit cannot carry the red, but Test() passes a throwaway \u0026scopedRun{} and never reads it. green.json has the same gap, which predates this diff. Keeping the scopedRun and clearing on its red flag would close both; no test covers this path.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The red-clearing tests all run locally. A red batch on a remote host relies on remoteFailure tagging exitSuiteFailed; the code reads correctly, but only the transport legs are tested on a host.",
           "resolution": "non-blocking, left"
         }
       ]
