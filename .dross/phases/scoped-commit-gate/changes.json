@@ -2,5 +2,228 @@
   "phase": "scoped-commit-gate",
   "base": "milestone/v1.9",
   "base_commit": "eaaab8d14b2208fec26d76d48b4f5dc6e6af45cd",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "README.md",
+        "internal/cmd/readme_roadmap_test.go"
+      ],
+      "commit": "8c66089",
+      "completed_at": "2026-11-05T20:24:24.800263Z",
+      "landmarks": [
+        {
+          "feature": "readme roadmap sync",
+          "symbol": "readmeRoadmapProblems",
+          "loc": "internal/cmd/readme_roadmap_test.go:52",
+          "what": "guards the README roadmap against recorded milestones: status, ticks, active box count, no Azure DevOps"
+        }
+      ]
+    },
+    "t-19": {
+      "files": [
+        ".dross/phases/scoped-commit-gate/barktime-timing.toml"
+      ],
+      "commit": "7379049",
+      "completed_at": "2026-11-06T07:25:12.860692Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "barktime-timing.toml",
+          "loc": ".dross/phases/scoped-commit-gate/barktime-timing.toml:1",
+          "what": "records the measured per-path cost that puts per-path units over budget"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/gatestate/store.go",
+        "internal/gatestate/store_test.go",
+        "internal/secretscan/writers.go",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "2993dc4",
+      "completed_at": "2026-11-05T20:57:17.157022Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "SaveScoped",
+          "loc": "internal/gatestate/store.go:201",
+          "what": "stores the scoped green record beside green.json: tree, covered paths, lane fingerprints"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "ARCHITECTURE.md",
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_lane_test.go",
+        "internal/project/project.go",
+        "internal/project/save_lossless_test.go",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go"
+      ],
+      "commit": "b6f7006",
+      "completed_at": "2026-11-06T06:54:39.820943Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "laneVouchProblems",
+          "loc": "internal/cmd/validate.go:476",
+          "what": "validates vouching lanes and test_exempt globs: path selector, empty_exit, no catch-all exempt"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/testlane/coverage.go",
+        "internal/testlane/coverage_test.go",
+        "internal/testlane/match.go",
+        "internal/testlane/match_test.go"
+      ],
+      "commit": "31a3f70",
+      "completed_at": "2026-11-06T06:59:36.874092Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "NeedsFullGreen",
+          "loc": "internal/testlane/coverage.go:33",
+          "what": "classifies changed paths a scoped green cannot admit: build config, uncovered and non-exempt paths"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/mutation/astspan.go",
+        "internal/mutation/construct.go",
+        "internal/mutation/construct_test.go",
+        "internal/mutation/construct_e2e_test.go",
+        "internal/mutation/testdata/ts-project/package.json",
+        "internal/mutation/testdata/ts-project/package-lock.json",
+        "internal/mutation/testdata/ts-project/src/Widget.svelte"
+      ],
+      "commit": "b6b1378",
+      "completed_at": "2026-11-06T07:18:18.750072Z",
+      "landmarks": [
+        {
+          "feature": "svelte mutation ranging",
+          "symbol": "Stryker.Constructs",
+          "loc": "internal/mutation/construct.go:142",
+          "what": "resolves .svelte script and markup constructs through svelte/compiler with file-relative lines"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The comment on roadmapGuardFixture in internal/cmd/readme_roadmap_test.go says it agrees with roadmapGuardRecords, but no such identifier exists; the records are a local variable named records in TestReadmeRoadmapGuardCatchesEachDrift.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The active-section guard compares box counts only, as the test_contract asks, so a v1.9 line reworded away from its recorded criterion would still pass.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "ClearScoped has no caller yet, while ClearGreen is called at internal/gate/writer.go:156 and internal/cmd/test.go:1226. The task record does not claim that wiring, but whichever sibling task makes scoped.json admit commits must clear it on those same paths, or a writer's own scoped green could outlive the stop that discards a full green.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Scoped.check refuses blank lane strings, but consent.LaneLine returns an empty string for an unrunnable lane and consent.Fingerprint of that is a non-blank hash, so check cannot catch it. The caller that builds Lanes must skip empty LaneLines.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The pathfence entry for gatestate.Scoped.Covered lists only internal/gatestate/store.go under Readers, while its Why describes comparison against a commit's changed paths. The gate code that does that comparison should be added to Readers when it lands.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "exemptNamesNothing does not treat a backslash escape outside a class as a non-literal, so `**/*\\.*` passes testExemptProblems. filepath.Match reads it the same as `**/*.*`, which is refused, so any path with a dot in its name is exempted. Low-letter globs like `**/*e*` also pass the shape check. The five contract spellings are all refused, so this is a gap in the wider fence the comment claims, not an unmet contract line.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The contract names TestArchitectureNamesLosslessWriter for anchor drift, but that test only checks that Save's anchor line mentions the word and has no saveLossless row. lossless_docs_test.go is outside the task's files, so the exact-line check lives in the new TestArchitectureAnchorsTheSaveDoors, which does fail on drift of either anchor.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The config list matches the task record exactly, so close variants such as docker-compose*.yaml, compose.yml, *.config.mts and lowercase dockerfile are not forced to a full green. They can still be admitted by coverage or an exempt glob. This conforms to the spec; widening the list would be a plan change.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "ARCHITECTURE.md:768 still says Stryker.Constructs has `.svelte` refused pre-spawn, which this diff makes false. The file is outside the task's declared list, so the doc needs its own sync.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "svelte's parse() strips a leading BOM but preprocess() does not, so on a BOM-prefixed .svelte the compiler's offsets sit one behind `source`, against the astspan.go comment that blanking keeps every offset valid. A script slice then starts at the `\u003e` of its tag, Babel refuses it, and the file falls open to ast-unavailable, so this degrades safely in a rare case.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The fixture must clear `npm audit --audit-level=high`, which a read-only review cannot confirm. The lockfile's svelte dependency ranges are consistent, and the CI audit step remains the check.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
 }

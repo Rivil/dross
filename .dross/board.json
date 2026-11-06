@@ -2538,6 +2538,36 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "scoped-commit-gate/t-1": {
+      "issue": "DRO-1095",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-19": {
+      "issue": "DRO-1100",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-2": {
+      "issue": "DRO-1096",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-3": {
+      "issue": "DRO-1097",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-4": {
+      "issue": "DRO-1098",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-5": {
+      "issue": "DRO-1099",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "secret-detection/t-1": {
       "issue": "DRO-460",
       "plan_status": "done",
