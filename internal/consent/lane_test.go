@@ -417,3 +417,205 @@ func TestLaneRefusalsNameTheLane(t *testing.T) {
 		t.Errorf("absent install refusal = %v", iabsent)
 	}
 }
+
+// --- vouch and relate ---
+
+// vouchLane is the shape every vouch assertion starts from, with the vouch bit
+// on. Flipping it off gives the same lines under the form a grant from before
+// the lane could vouch was taken over.
+var vouchLane = project.TestLane{
+	Name:    "web",
+	Prepare: "npm ci",
+	Command: "npx vitest run",
+	Vouch:   true,
+	Relate:  "scripts/relate.sh",
+}
+
+// assertStaleUntilTrust pins one edit's whole ladder: the old grant reads Stale,
+// never Absent, because a rewritten grant and a never-trusted lane call for
+// different reactions, and a fresh grant over the new line is what clears it.
+func assertStaleUntilTrust(t *testing.T, granted, edited project.TestLane) {
+	t.Helper()
+	store, _, repoDir := consentFixture(t)
+	mustGrantLane(t, store, granted.Name, LaneLine(granted))
+
+	state, err := LaneConsented(store, repoDir, edited.Name, LaneLine(edited))
+	if state != Stale {
+		t.Fatalf("the edited lane reads %v, want Stale (err %v)", state, err)
+	}
+	if err != ErrStaleConsent {
+		t.Errorf("err = %v, want ErrStaleConsent", err)
+	}
+	mustGrantLane(t, store, edited.Name, LaneLine(edited))
+	if got := laneState(t, store, repoDir, edited.Name, LaneLine(edited)); got != Granted {
+		t.Errorf("after a fresh grant the lane reads %v, want Granted", got)
+	}
+}
+
+// TestVouchFlipStalesTheGrant: a grant taken while the lane could only run tests
+// must not carry over to a lane that can admit commits. It covers every form a
+// grant could have been taken under, because each is a separate branch of
+// LaneLine a flip has to leave.
+func TestVouchFlipStalesTheGrant(t *testing.T) {
+	for name, lane := range map[string]project.TestLane{
+		"plain":     {Name: "web", Command: "npx vitest run"},
+		"prepared":  {Name: "web", Prepare: "npm ci", Command: "npx vitest run"},
+		"templated": {Name: "web", Command: "npx vitest run", SelectorTemplate: "--dir {path}"},
+		"related":   {Name: "web", Command: "npx vitest run", Relate: "scripts/relate.sh"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			flipped := lane
+			flipped.Vouch = true
+			assertStaleUntilTrust(t, lane, flipped)
+		})
+	}
+}
+
+// TestRelateEditStalesTheGrant: relate decides which paths count as covered, so
+// a rewritten relate on a granted lane is a rewritten admission rule.
+func TestRelateEditStalesTheGrant(t *testing.T) {
+	edited := vouchLane
+	edited.Relate = "scripts/relate.sh --all"
+	assertStaleUntilTrust(t, vouchLane, edited)
+}
+
+// TestVouchFrameBindsEveryLine: the fourth form replaces the other three for a
+// vouching lane, so any line it failed to bind would be editable under a live
+// grant.
+func TestVouchFrameBindsEveryLine(t *testing.T) {
+	for name, edit := range map[string]func(*project.TestLane){
+		"prepare":  func(l *project.TestLane) { l.Prepare = "npm i" },
+		"command":  func(l *project.TestLane) { l.Command = "npx vitest" },
+		"template": func(l *project.TestLane) { l.SelectorTemplate = "--dir {path}" },
+		"join":     func(l *project.TestLane) { l.SelectorJoin = "," },
+	} {
+		t.Run(name, func(t *testing.T) {
+			edited := vouchLane
+			edit(&edited)
+			assertStaleUntilTrust(t, vouchLane, edited)
+		})
+	}
+}
+
+// TestVouchFrameIsLengthFramed: the frame is the only thing separating relate
+// from its neighbours, so characters moved across a field boundary must change
+// the line, and the framed bytes must not be spellable as a bare command.
+func TestVouchFrameIsLengthFramed(t *testing.T) {
+	framed := LaneLine(vouchLane)
+	if !strings.HasPrefix(framed, LaneVouchFrame) {
+		t.Fatalf("a vouching lane did not take the vouch frame: %q", framed)
+	}
+	const want = LaneVouchFrame + "6\x00npm ci\x0014\x00npx vitest run\x000\x00\x000\x00\x0017\x00scripts/relate.sh"
+	if framed != want {
+		t.Errorf("framed line = %q, want %q", framed, want)
+	}
+
+	left := project.TestLane{Name: "web", Command: "a", SelectorJoin: "b", Vouch: true, Relate: "c"}
+	right := project.TestLane{Name: "web", Command: "a", SelectorJoin: "bc", Vouch: true}
+	if LaneLine(left) == LaneLine(right) {
+		t.Errorf("a re-split across join and relate produced one consent line: %q", LaneLine(left))
+	}
+
+	if got := LaneLine(project.TestLane{Name: "web", Command: framed}); got != "" {
+		t.Errorf("a bare command spelled like the frame produced a consent line: %q", got)
+	}
+}
+
+// TestNonVouchingLaneLineIsUnchanged is the compatibility half: every grant on
+// every machine was taken over one of these forms. The wants are literals rather
+// than the frame constants composed by hand, so a rewrite of either form fails
+// here, and a relate on a lane that does not vouch runs nothing and moves nothing.
+func TestNonVouchingLaneLineIsUnchanged(t *testing.T) {
+	cases := []struct {
+		name string
+		lane project.TestLane
+		want string
+	}{
+		{"plain", project.TestLane{Command: "go test ./..."}, "go test ./..."},
+		{
+			"prepared",
+			project.TestLane{Prepare: "make build", Command: "go test"},
+			"dross:lane-prepare:v1\x0010\x00make build\x007\x00go test",
+		},
+		{
+			"templated",
+			project.TestLane{Prepare: "make", Command: "go test", SelectorTemplate: "-run {path}", SelectorJoin: "|"},
+			"dross:lane-template:v1\x004\x00make\x007\x00go test\x0011\x00-run {path}\x001\x00|",
+		},
+		{"plain with relate", project.TestLane{Command: "go test ./...", Relate: "scripts/relate.sh"}, "go test ./..."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := LaneLine(c.lane); got != c.want {
+				t.Errorf("LaneLine = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// TestRelateCarryingANulIsUnrunnable mirrors the command and prepare guards: an
+// argv element cannot hold a NUL, so the lane is unrunnable and takes the
+// NotApplicable arm rather than a grant bound to a line that can never spawn.
+func TestRelateCarryingANulIsUnrunnable(t *testing.T) {
+	store, _, repoDir := consentFixture(t)
+	lane := vouchLane
+	lane.Relate = "scripts/relate.sh\x00--all"
+
+	line := LaneLine(lane)
+	if line != "" {
+		t.Fatalf("a relate carrying a NUL produced a consent line: %q", line)
+	}
+	state, err := LaneConsented(store, repoDir, lane.Name, line)
+	if state != NotApplicable {
+		t.Errorf("state = %v, want NotApplicable (err %v)", state, err)
+	}
+}
+
+// TestVouchingLaneRefusalShowsRelate: both arms send the reader to `dross trust
+// --lane`, which grants relate too, so neither may ask for a line it hides.
+func TestVouchingLaneRefusalShowsRelate(t *testing.T) {
+	for name, arm := range map[string]struct {
+		state State
+		cerr  error
+		says  string
+	}{
+		"stale":     {Stale, ErrStaleConsent, "its lines or vouch setting has CHANGED"},
+		"untrusted": {Absent, ErrNoConsent, "its lines or vouch setting has not been trusted"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			msg := LaneRefusal(vouchLane, arm.state, arm.cerr).Error()
+			for _, want := range []string{
+				arm.says,
+				"    prepare: npm ci\n",
+				"    command: npx vitest run\n",
+				"    relate: scripts/relate.sh\n",
+				"may admit commits",
+				"dross trust --lane web",
+			} {
+				if !strings.Contains(msg, want) {
+					t.Errorf("refusal lacks %q:\n%s", want, msg)
+				}
+			}
+		})
+	}
+
+	// A vouching lane with no prepare has no line to invent.
+	bare := vouchLane
+	bare.Prepare = ""
+	if msg := LaneRefusal(bare, Stale, ErrStaleConsent).Error(); strings.Contains(msg, "prepare:") {
+		t.Errorf("a lane with no prepare printed one:\n%s", msg)
+	}
+}
+
+// TestNonVouchingRefusalIsUnchanged: the wording of a lane that cannot admit a
+// commit stays as it was, including one carrying a relate nothing runs.
+func TestNonVouchingRefusalIsUnchanged(t *testing.T) {
+	lane := project.TestLane{Name: "go", Command: "go test ./...", Relate: "scripts/relate.sh"}
+	msg := LaneRefusal(lane, Stale, ErrStaleConsent).Error()
+	if !strings.Contains(msg, "its command has CHANGED") || !strings.Contains(msg, "    go test ./...\n") {
+		t.Errorf("the plain refusal moved:\n%s", msg)
+	}
+	if strings.Contains(msg, "relate") || strings.Contains(msg, "admit") {
+		t.Errorf("a lane that does not vouch was described as one that does:\n%s", msg)
+	}
+}

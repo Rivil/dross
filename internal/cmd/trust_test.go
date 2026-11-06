@@ -655,3 +655,135 @@ func TestDoctorReportsTheExemptGrant(t *testing.T) {
 		}
 	})
 }
+
+// --- `dross trust --lane` on a vouching lane ---
+
+const trustVouchLane = `[[runtime.test_lane]]
+name = "web"
+match = ["src/**"]
+command = "npx vitest run"
+prepare = "npm ci"
+selector = "path"
+vouch = true
+relate = "scripts/relate.sh"`
+
+// TestTrustLaneSaysAVouchingLaneMayAdmitCommits: the grant lets this lane put a
+// commit past the gate, which no other lane grant does, so the human is told
+// that and shown relate. The grant must also land over the vouch frame, or the
+// lane would refuse straight after being trusted.
+func TestTrustLaneSaysAVouchingLaneMayAdmitCommits(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, trustVouchLane)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Trust(), "--lane", "web"); err != nil {
+		t.Fatalf("trust --lane: %v", err)
+	}
+	for _, want := range []string{
+		"    prepare: npm ci\n",
+		"    command: npx vitest run\n",
+		"    relate: scripts/relate.sh\n",
+		"may admit commits",
+		"its prepare, relate and vouch setting included",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+	if err := runCmd(t, Trust(), "--lane", "web", "--check"); err != nil {
+		t.Errorf("the lane refuses straight after its grant: %v", err)
+	}
+}
+
+// TestTrustLanePrintsRelateBeforeWriting pins the order, on
+// TestTrustExemptPrintsEveryGlobBeforeGranting's proof: with a store that cannot
+// be written, whatever is on screen was printed before the write.
+func TestTrustLanePrintsRelateBeforeWriting(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, trustVouchLane)
+	store := localPath(filepath.Join(dir, RootDirName))
+	if err := os.RemoveAll(store); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(store, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Trust(), "--lane", "web"); err == nil {
+		t.Fatal("the grant succeeded over a store that cannot be written")
+	}
+	for _, want := range []string{"    relate: scripts/relate.sh\n", "may admit commits"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q was not printed before the write:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "recorded in") {
+		t.Errorf("a failed write still reported a grant:\n%s", out)
+	}
+}
+
+// TestTrustLaneOutputUnchangedWithoutVouch holds the whole output to the byte,
+// so a lane that cannot admit a commit never gains the vouching wording. The
+// relate case is a lane validate refuses, which `dross trust` does not read.
+func TestTrustLaneOutputUnchangedWithoutVouch(t *testing.T) {
+	const tail = "recorded in .dross/local.toml (gitignored — it does not travel with the repo).\n" +
+		"Editing or renaming lane \"l\" — its prepare included — revokes this; every other lane's grant is untouched.\n"
+	plain := "trusting test lane \"l\" on this machine:\n\n    go test\n\n" + tail
+	prepared := "trusting test lane \"l\" on this machine — both lines:\n\n    prepare: make\n    command: go test\n\n" + tail
+	for name, c := range map[string]struct{ extra, want string }{
+		"plain":       {"", plain},
+		"prepared":    {"prepare = \"make\"", prepared},
+		"relate only": {"relate = \"scripts/relate.sh\"", plain},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := laneFixture(t)
+			appendLanes(t, dir, "[[runtime.test_lane]]\nname = \"l\"\nmatch = [\"src/**\"]\ncommand = \"go test\"\n"+c.extra)
+
+			var out string
+			if err := runCmdCapturing(t, &out, Trust(), "--lane", "l"); err != nil {
+				t.Fatalf("trust --lane: %v", err)
+			}
+			if out != c.want {
+				t.Errorf("output = %q, want %q", out, c.want)
+			}
+		})
+	}
+}
+
+// TestVouchFlipStalesThroughTrust drives the flip end to end: a lane trusted
+// before it could vouch refuses through `--check` with relate on screen, and a
+// fresh `dross trust --lane` is what clears it.
+func TestVouchFlipStalesThroughTrust(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, strings.ReplaceAll(trustVouchLane, "vouch = true\n", ""))
+	if err := runCmd(t, Trust(), "--lane", "web"); err != nil {
+		t.Fatalf("trust --lane: %v", err)
+	}
+
+	path := filepath.Join(dir, RootDirName, project.File)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	flipped := strings.Replace(string(body), `relate = "scripts/relate.sh"`, "vouch = true\n"+`relate = "scripts/relate.sh"`, 1)
+	if err := os.WriteFile(path, []byte(flipped), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err = runCmd(t, Trust(), "--lane", "web", "--check")
+	if err == nil {
+		t.Fatal("turning vouch on kept the grant")
+	}
+	for _, want := range []string{"CHANGED", "    relate: scripts/relate.sh\n"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal lacks %q:\n%v", want, err)
+		}
+	}
+	if err := runCmd(t, Trust(), "--lane", "web"); err != nil {
+		t.Fatalf("re-trust: %v", err)
+	}
+	if err := runCmd(t, Trust(), "--lane", "web", "--check"); err != nil {
+		t.Errorf("the lane still refuses after a fresh grant: %v", err)
+	}
+}

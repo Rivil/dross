@@ -361,17 +361,25 @@ func trustLane(root, name string, check bool) error {
 	// Printed BEFORE the write, and in full — BOTH lines when the lane
 	// declares a prepare. They arrive from TRACKED project.toml, so a grant
 	// that did not show them would be consenting to whatever a clone happened
-	// to carry, and one grant covers the pair.
-	if lane.Prepare != "" {
+	// to carry, and one grant covers the pair. A vouching lane's grant also lets
+	// it admit commits, so that is said here too, ahead of the same write.
+	switch {
+	case lane.Vouch:
+		Printf("trusting test lane %q on this machine — everything this grant covers:\n\n%s\n", lane.Name, consent.LaneVouchLines(lane))
+	case lane.Prepare != "":
 		Printf("trusting test lane %q on this machine — both lines:\n\n    prepare: %s\n    command: %s\n\n", lane.Name, lane.Prepare, lane.Command)
-	} else {
+	default:
 		Printf("trusting test lane %q on this machine:\n\n    %s\n\n", lane.Name, lane.Command)
 	}
 	if err := consent.GrantLaneConsent(localstore.GrantStore(root), lane.Name, consent.LaneLine(lane)); err != nil {
 		return err
 	}
 	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, localstore.File)
-	Printf("Editing or renaming lane %q — its prepare included — revokes this; every other lane's grant is untouched.\n", lane.Name)
+	included := "its prepare"
+	if lane.Vouch {
+		included = "its prepare, relate and vouch setting"
+	}
+	Printf("Editing or renaming lane %q — %s included — revokes this; every other lane's grant is untouched.\n", lane.Name, included)
 	return nil
 }
 

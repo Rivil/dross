@@ -1,8 +1,8 @@
 package consent
 
 // Per-lane consent: one grant per [[runtime.test_lane]] for its command (and
-// prepare, and selector scoping), and a second, independent grant for its
-// install line. Both ride the same Store the whole-suite grant does.
+// prepare, selector scoping, vouch and relate), and a second, independent grant
+// for its install line. Both ride the same Store the whole-suite grant does.
 
 import (
 	"fmt"
@@ -31,10 +31,19 @@ const LaneFrame = "dross:lane-prepare:v1\x00"
 // command lines.
 const LaneTemplateFrame = "dross:lane-template:v1\x00"
 
+// LaneVouchFrame is the FOURTH namespace, for a lane trusted to admit a commit
+// on a scoped green.
+//
+// Disjoint from the other three the way LaneTemplateFrame is, and for a sharper
+// reason: a lane that vouches can put a commit past the gate, which a lane that
+// only runs tests cannot. No grant issued for the same lines before the lane
+// could vouch may carry over to it.
+const LaneVouchFrame = "dross:lane-vouch:v1\x00"
+
 // LaneLine returns the exact byte string ONE lane's consent grant is
 // taken over — the value Fingerprint hashes and the store records.
 //
-// Three properties, each load-bearing:
+// Five properties, each load-bearing:
 //
 //   - A lane declaring NO prepare returns its command UNCHANGED. Framing
 //     applied unconditionally would re-fingerprint every lane grant already
@@ -54,6 +63,12 @@ const LaneTemplateFrame = "dross:lane-template:v1\x00"
 //     grant rather than letting an unread line run under one issued before it —
 //     the template is arbitrary user text on the spawned line, fenced by
 //     consent exactly as command and prepare are.
+//   - A vouching lane takes a FOURTH form under LaneVouchFrame, binding relate
+//     alongside every line the template form binds. Turning vouch on or changing
+//     relate therefore stales the grant: the first widens what the lane may do,
+//     and the second rewrites what decides which paths count as covered. A lane
+//     with vouch off keeps its form whatever its relate says, because nothing
+//     runs relate there, so no grant already written is disturbed.
 //
 // A lane with no command returns the empty string whatever its prepare says:
 // consent binds to something runnable, and LaneConsented's NotApplicable
@@ -73,8 +88,20 @@ func LaneLine(lane project.TestLane) string {
 	// can never run. Empty here means exactly that, and LaneConsented turns it
 	// into the same NotApplicable a commandless lane gets.
 	if strings.ContainsRune(lane.Command, 0) || strings.ContainsRune(lane.Prepare, 0) ||
-		strings.ContainsRune(lane.SelectorTemplate, 0) || strings.ContainsRune(lane.SelectorJoin, 0) {
+		strings.ContainsRune(lane.SelectorTemplate, 0) || strings.ContainsRune(lane.SelectorJoin, 0) ||
+		strings.ContainsRune(lane.Relate, 0) {
 		return ""
+	}
+	// Ahead of the template form, not beside it: a vouching lane may declare
+	// selector scoping too, and the frame says it vouches whichever lines it has.
+	if lane.Vouch {
+		return fmt.Sprintf("%s%d\x00%s\x00%d\x00%s\x00%d\x00%s\x00%d\x00%s\x00%d\x00%s",
+			LaneVouchFrame,
+			len(lane.Prepare), lane.Prepare,
+			len(lane.Command), lane.Command,
+			len(lane.SelectorTemplate), lane.SelectorTemplate,
+			len(lane.SelectorJoin), lane.SelectorJoin,
+			len(lane.Relate), lane.Relate)
 	}
 	// Gated on either scoping field being declared, not on the template alone:
 	// a join carries user text into the run just as a template does, so a lane
@@ -311,6 +338,12 @@ func LaneRefusal(lane project.TestLane, state State, cerr error) error {
 		lines = "    prepare: " + lane.Prepare + "\n    command: " + lane.Command + "\n"
 		what = "prepare or command"
 	}
+	// The vouch setting joins the list because turning it on stales the grant
+	// with no line edited: "its command has CHANGED" would send the reader
+	// looking for a difference that is not there.
+	if lane.Vouch {
+		lines, what = LaneVouchLines(lane), "lines or vouch setting"
+	}
 	switch state {
 	case Refused, NotApplicable:
 		return cerr
@@ -329,6 +362,24 @@ func LaneRefusal(lane project.TestLane, state State, cerr error) error {
 				"its author wrote. Read the lines above, then:\n\n"+
 				"    dross trust --lane %s\n\n%w", name, what, lines, name, cerr)
 	}
+}
+
+// LaneVouchLines renders what a vouching lane's grant says yes to, one indented
+// line each, for a human about to re-consent.
+//
+// One renderer for the refusal and for `dross trust --lane`, so what a user is
+// told to read and what they then grant cannot drift apart. The last line is the
+// consequence rather than a config line: without it a grant on a vouching lane
+// reads like any other, and the human never learns it opens the commit gate.
+func LaneVouchLines(lane project.TestLane) string {
+	var b strings.Builder
+	if lane.Prepare != "" {
+		b.WriteString("    prepare: " + lane.Prepare + "\n")
+	}
+	b.WriteString("    command: " + lane.Command + "\n")
+	b.WriteString("    relate: " + lane.Relate + "\n")
+	b.WriteString("    vouch: this lane may admit commits on a scoped green, with no full run\n")
+	return b.String()
 }
 
 // LaneInstallRefusal turns one lane's INSTALL consent state into the message
