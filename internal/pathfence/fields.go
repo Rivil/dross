@@ -367,7 +367,8 @@ var unguessedFields = []Field{
 		"repo paths that reached a collected test in a scoped run, held as strings to compare "+
 			"against a commit's changed paths — never opened.",
 		"internal/gatestate/store.go (Scoped.check refuses a blank entry)",
-		"internal/gate/commit.go (vouchedCover keeps the paths a lane still matches; commit-green compares them with the commit's)"),
+		"internal/gate/commit.go (vouchedCover keeps the paths a lane still matches; commit-green compares them with the commit's)",
+		"internal/cmd/test_scoped.go (scopedRecorder.finish prints how many a recorded run covered)"),
 
 	// ---- PR triage: the locator a resolution cites ------------------------
 	reportPath("prtriage.Evidence", "At", "at", "phases/<id>/pr-triage.toml",

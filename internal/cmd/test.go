@@ -301,7 +301,7 @@ func Test() *cobra.Command {
 			// (locked bare_test_run): it already is the whole suite.
 			if len(files) == 0 && len(args) == 0 && strings.TrimSpace(proj.Runtime.TestCommand) == "" && len(proj.Runtime.TestLane) > 0 {
 				green := startGreen(repoDir, true)
-				err := runPlannedLanes(tr, root, repoDir, proj, fullLanePlan(proj), local, wait, green.sites)
+				err := runPlannedLanes(tr, root, repoDir, proj, fullLanePlan(proj), local, wait, green.sites, &scopedRun{})
 				tr.finish(err)
 				green.finish(err)
 				return err
@@ -396,13 +396,17 @@ func runTestLanes(tr *testRun, root, repoDir string, proj *project.Project, file
 	if len(plan.Unmatched) > 0 {
 		tr.say("no lane matches: %s\n", strings.Join(plan.Unmatched, " "))
 	}
-	return runPlannedLanes(tr, root, repoDir, proj, plan.Lanes, local, wait, nil)
+	rec := startScoped(tr, repoDir, proj)
+	err := runPlannedLanes(tr, root, repoDir, proj, plan.Lanes, local, wait, rec.tree.sites, &rec.run)
+	rec.finish(err)
+	return err
 }
 
 // runPlannedLanes runs a set of planned lanes — the ones a --files set hit, or
 // every lane unscoped for a lanes-only repo's bare run — each through its own
 // grant, prepare, toolchain and locality path, and reports the worst outcome.
-func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, lanes []plannedLane, local bool, wait time.Duration, sites ranOn) error {
+// What the vouching lanes among them measured lands in scoped.
+func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, lanes []plannedLane, local bool, wait time.Duration, sites ranOn, scoped *scopedRun) error {
 	// The fence ran inside the planner, over every lane, before any line was
 	// derived. Its verdicts are read here in declaration order and the first
 	// one refuses the whole run — which is exactly the property an in-loop
@@ -418,7 +422,6 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 	// the transcript names every refusal up front rather than interleaving them
 	// with test output, where a refusal scrolls past under a passing suite.
 	var worst error
-	scoped := &scopedRun{}
 	runnable := make([]plannedLane, 0, len(lanes))
 	for _, pl := range lanes {
 		// Resolved against lane.Command, never against the derived line
@@ -628,10 +631,11 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 		// A vouching lane has no line until relate answers, and relate needs
 		// what the prepare built, so it runs here: after the prepare, on the
 		// site the lane's own command is about to use.
+		var rel testlane.Relation
 		if pl.Relate != "" {
 			tr.say("lane %s relate: %s\n", pl.lane.Name, pl.Relate)
-			rel, err := runLaneRelate(tr, laneTarget, repoDir, pl)
-			if err != nil {
+			var err error
+			if rel, err = runLaneRelate(tr, laneTarget, repoDir, pl); err != nil {
 				// A failed prepare's arm, for its reasons: the lane is out, the
 				// other lanes are untouched, and a relate that could not answer
 				// is not a miss. A miss says the paths have no test, and nothing
@@ -666,6 +670,7 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 		}
 		tr.laneDone(err)
 		worst = worseOutcome(worst, err)
+		scoped.settle(pl.lane, rel, err)
 	}
 
 	// Only when EVERY lane that got as far as a spawn decision was a miss. One
@@ -1216,8 +1221,9 @@ var greenStderr io.Writer = os.Stderr
 // during the run was not the tree that went green, so nothing is recorded and
 // one line names what moved — a suite that writes an untracked file would
 // otherwise send the agent back to `dross test` forever. A red full run on the
-// recorded tree clears the record; a run that never happened (exit 3–8, a
-// refusal) leaves it, since it measured nothing either way.
+// recorded tree clears the record, and any scoped record on that tree with it; a
+// run that never happened (exit 3–8, a refusal) leaves both, since it measured
+// nothing either way.
 //
 // It never changes the run's outcome: a recorder failure is one warning.
 type greenRecorder struct {
@@ -1227,12 +1233,13 @@ type greenRecorder struct {
 	active  bool
 }
 
-// startGreen fingerprints the tree when the run about to start is a full one.
+// startGreen fingerprints the tree when the run about to start can vouch for
+// it: a full run, or (through startScoped) a run in a repo with a vouching lane.
 // Outside a git work tree there is nothing a commit could be judged against,
 // so it records nothing and says nothing.
-func startGreen(repoDir string, full bool) *greenRecorder {
+func startGreen(repoDir string, vouches bool) *greenRecorder {
 	r := &greenRecorder{repoDir: repoDir}
-	if !full {
+	if !vouches {
 		return r
 	}
 	if out, err := gitrun.Trim(repoDir, "rev-parse", "--is-inside-work-tree"); err != nil || out != "true" {
@@ -1256,28 +1263,17 @@ func (r *greenRecorder) finish(runErr error) {
 	if !r.active {
 		return
 	}
-	var ec *ExitCodeError
 	switch {
 	case runErr == nil:
-		after, err := treefp.WorkingTree(r.repoDir)
-		if err != nil {
-			r.warn(err)
-			return
-		}
-		if after != r.before {
-			paths, err := treefp.Diff(r.repoDir, r.before, after)
-			if err != nil {
-				r.warn(err)
-				return
-			}
-			fmt.Fprintf(greenStderr, "dross test: green, but not recorded for the commit gate — these paths changed while the suite ran: %s\n",
-				strings.Join(paths, " "))
+		after, ok := r.settled()
+		if !ok {
 			return
 		}
 		if err := gatestate.SaveGreen(r.repoDir, gatestate.Green{Tree: after, At: time.Now().UTC(), Runner: r.sites.String()}); err != nil {
 			r.warn(err)
 		}
-	case errors.As(runErr, &ec) && ec.Code == exitSuiteFailed:
+	case isRed(runErr):
+		r.clearScoped()
 		g, err := gatestate.LoadGreen(r.repoDir)
 		if err != nil {
 			r.warn(err)
@@ -1289,4 +1285,48 @@ func (r *greenRecorder) finish(runErr error) {
 			}
 		}
 	}
+}
+
+// settled fingerprints the tree after a green and reports whether it is still
+// the tree the run started on. A tree that moved is named in one line.
+func (r *greenRecorder) settled() (string, bool) {
+	after, err := treefp.WorkingTree(r.repoDir)
+	if err != nil {
+		r.warn(err)
+		return "", false
+	}
+	if after == r.before {
+		return after, true
+	}
+	paths, err := treefp.Diff(r.repoDir, r.before, after)
+	if err != nil {
+		r.warn(err)
+		return "", false
+	}
+	fmt.Fprintf(greenStderr, "dross test: green, but not recorded for the commit gate — these paths changed while the suite ran: %s\n",
+		strings.Join(paths, " "))
+	return "", false
+}
+
+// clearScoped removes a scoped record standing on the tree this run went red on.
+// A record on another tree is about code this run did not measure.
+func (r *greenRecorder) clearScoped() {
+	s, err := gatestate.LoadScoped(r.repoDir)
+	if err != nil {
+		r.warn(err)
+		return
+	}
+	if s == nil || s.Tree != r.before {
+		return
+	}
+	if err := gatestate.ClearScoped(r.repoDir); err != nil {
+		r.warn(err)
+	}
+}
+
+// isRed reports whether err is a suite that ran and failed. An untagged error
+// exits 1 too, and it is never a verdict about the code.
+func isRed(err error) bool {
+	var ec *ExitCodeError
+	return errors.As(err, &ec) && ec.Code == exitSuiteFailed
 }

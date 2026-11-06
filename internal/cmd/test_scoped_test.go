@@ -6,14 +6,20 @@ package cmd
 // prevent.
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/gatestate"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/testlane"
+	"github.com/Rivil/dross/internal/treefp"
 )
 
 // The two lines relateLane spawns for a run over src/a.ts that relate maps to
@@ -48,12 +54,15 @@ const goNeighbourLine = "go test -count=1 './internal/cmd/...'"
 
 // relateSeam answers the spawn seams as a vouching lane's tools would: a relate
 // line prints stdout and stderr and returns err, and a batched line prints
-// laneOut and returns laneErr. Everything else exits clean.
+// laneOut, calls onBatch and returns laneErr. Anything else but a prepare returns
+// otherErr.
 type relateSeam struct {
 	stdout, stderr string
 	err            error
 	laneOut        string
 	laneErr        error
+	onBatch        func()
+	otherErr       error
 	// lines are the local spawns, and events the remote ones by leg, in order.
 	lines  []string
 	events []string
@@ -68,11 +77,14 @@ func (s *relateSeam) answer(line string, stdout, stderr io.Writer) (string, erro
 		return "relate", s.err
 	case strings.Contains(line, "npx vitest run"):
 		io.WriteString(stdout, s.laneOut)
+		if s.onBatch != nil {
+			s.onBatch()
+		}
 		return "batch", s.laneErr
 	case strings.Contains(line, "npm ci"):
 		return "prepare", nil
 	}
-	return "other", nil
+	return "other", s.otherErr
 }
 
 // install takes over the local spawn seam.
@@ -844,4 +856,702 @@ func TestBatchedLineFailsLikeAnyLaneLine(t *testing.T) {
 			t.Errorf("the miss does not name the tests it looked in:\n%s", out)
 		}
 	})
+}
+
+// lintLane is a plain lane over the same paths relateLane matches, so one path
+// can sit under a lane that vouches and a lane that does not.
+const lintLane = `
+
+[[runtime.test_lane]]
+name = "lint"
+match = ["src/**"]
+command = "npx eslint"`
+
+// appLane is a second vouching lane, over paths of its own.
+const appLane = `
+
+[[runtime.test_lane]]
+name = "app"
+match = ["app/**"]
+command = "npx vitest run --project app"
+selector = "path"
+vouch = true
+relate = "node scripts/relate.mjs --project app"`
+
+// scopedRepo is relateFixture in a git work tree, with the recorder's notes
+// captured. The tree a run fingerprints is the one this leaves.
+func scopedRepo(t *testing.T, lanes string, files ...string) (string, *strings.Builder) {
+	t.Helper()
+	relateFixture(t, lanes, files...)
+	dir := asGitRepo(t)
+	return dir, captureGreen(t)
+}
+
+// scopedRecordOf is the record on disk, or nil.
+func scopedRecordOf(t *testing.T, dir string) *gatestate.Scoped {
+	t.Helper()
+	s, err := gatestate.LoadScoped(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// scopedBytes is the record file itself, nil when there is none. A run that
+// leaves a record leaves it byte for byte, which a loaded record cannot show.
+func scopedBytes(t *testing.T, dir string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(gatestate.Path(dir, gatestate.ScopedFile))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+// seedScoped writes a record on tree, covering a path no fixture run names, so
+// finding it after a run can only mean the run left it alone.
+func seedScoped(t *testing.T, dir, tree string) []byte {
+	t.Helper()
+	if err := gatestate.SaveScoped(dir, gatestate.Scoped{
+		Tree:    tree,
+		Covered: []string{"src/seeded.ts"},
+		Lanes:   []string{consent.Fingerprint("seeded")},
+		At:      time.Now().UTC(),
+		Runner:  "local",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return scopedBytes(t, dir)
+}
+
+// seedScopedHere is seedScoped on the tree a run would measure now.
+func seedScopedHere(t *testing.T, dir string) []byte {
+	t.Helper()
+	tree, err := treefp.WorkingTree(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return seedScoped(t, dir, tree)
+}
+
+// scopedGreenLines are the transcript's `scoped green:` lines.
+func scopedGreenLines(out string) []string {
+	var found []string
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(l, "scoped green:") {
+			found = append(found, l)
+		}
+	}
+	return found
+}
+
+// assertNoRecord: no scoped.json, and a transcript that does not claim one.
+func assertNoRecord(t *testing.T, dir, out string) {
+	t.Helper()
+	if b := scopedBytes(t, dir); b != nil {
+		t.Errorf("recorded %s, want nothing", b)
+	}
+	if got := scopedGreenLines(out); len(got) != 0 {
+		t.Errorf("a run that recorded nothing says %q", got)
+	}
+}
+
+// laneFingerprint is what a record names the fixture's lane by.
+func laneFingerprint(t *testing.T, name string) string {
+	t.Helper()
+	root, err := FindRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lane := range p.Runtime.TestLane {
+		if lane.Name == name {
+			return consent.Fingerprint(laneConsentLine(lane))
+		}
+	}
+	t.Fatalf("the fixture declares no lane %q", name)
+	return ""
+}
+
+// TestScopedGreenCoversOnlyWhatRelateListed is c-9: a path with no test stays out
+// of the record however green the run beside it was. The record says what ran and
+// where, and the run says it recorded, once.
+func TestScopedGreenCoversOnlyWhatRelateListed(t *testing.T) {
+	dir, notes := scopedRepo(t, relateLane, "src/a.ts", "src/b.svelte", "src/a.test.ts")
+	(&relateSeam{stdout: aToATest}).install(t)
+
+	out, err := runTestCapturing(t, "--files", "src/a.ts", "--files", "src/b.svelte")
+	if err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	rec := scopedRecordOf(t, dir)
+	if rec == nil {
+		t.Fatalf("a green relate run recorded nothing (notes: %q)", notes.String())
+	}
+	if want := []string{"src/a.ts"}; !reflect.DeepEqual(rec.Covered, want) {
+		t.Errorf("covered = %q, want %q", rec.Covered, want)
+	}
+	if want := []string{laneFingerprint(t, "web")}; !reflect.DeepEqual(rec.Lanes, want) {
+		t.Errorf("lanes = %q, want %q", rec.Lanes, want)
+	}
+	if rec.Runner != "local" || rec.At.IsZero() {
+		t.Errorf("runner = %q, at = %v; want local and a time", rec.Runner, rec.At)
+	}
+	if got, want := scopedGreenLines(out), []string{"scoped green: 1 covered"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("scoped green lines = %q, want %q:\n%s", got, want, out)
+	}
+	if got := uncoveredLine(t, out); got != "uncovered: src/b.svelte" {
+		t.Errorf("uncovered line = %q:\n%s", got, out)
+	}
+}
+
+// TestScopedGreenCountsDistinctPaths: two lanes reaching one path cover one path,
+// and each lane that did is on the record.
+func TestScopedGreenCountsDistinctPaths(t *testing.T) {
+	dir, _ := scopedRepo(t, relateLane+`
+
+[[runtime.test_lane]]
+name = "shared"
+match = ["src/**"]
+command = "npx vitest run --project shared"
+selector = "path"
+vouch = true
+relate = "node scripts/relate.mjs --project shared"`, "src/a.ts", "src/a.test.ts")
+	(&relateSeam{stdout: aToATest}).install(t)
+
+	out, err := runTestCapturing(t, "--files", "src/a.ts")
+	if err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	rec := scopedRecordOf(t, dir)
+	if rec == nil {
+		t.Fatal("recorded nothing")
+	}
+	if want := []string{"src/a.ts"}; !reflect.DeepEqual(rec.Covered, want) {
+		t.Errorf("covered = %q, want %q", rec.Covered, want)
+	}
+	if want := []string{laneFingerprint(t, "web"), laneFingerprint(t, "shared")}; !reflect.DeepEqual(rec.Lanes, want) {
+		t.Errorf("lanes = %q, want %q", rec.Lanes, want)
+	}
+	if got, want := scopedGreenLines(out), []string{"scoped green: 1 covered"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("scoped green lines = %q, want %q", got, want)
+	}
+}
+
+// TestScopedGreenNamesTheHostItRanOn: a host is where the batch ran, so the record
+// says so, and the tree it vouches for is the one here.
+func TestScopedGreenNamesTheHostItRanOn(t *testing.T) {
+	relateHostFixture(t, relateLane, "src/a.ts", "src/a.test.ts")
+	dir := asGitRepo(t)
+	captureGreen(t)
+	(&relateSeam{stdout: aToATest}).installRemote(t)
+
+	if err := runCmd(t, Test(), "--files", "src/a.ts"); err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	rec := scopedRecordOf(t, dir)
+	if rec == nil || rec.Runner != "helicon" {
+		t.Fatalf("record = %+v, want one recorded on helicon", rec)
+	}
+}
+
+// TestScopedGreenMatchesCandidate: the recorder and the commit side fingerprint
+// the same tree the same way.
+func TestScopedGreenMatchesCandidate(t *testing.T) {
+	dir, _ := scopedRepo(t, relateLane, "src/a.ts", "src/a.test.ts")
+	(&relateSeam{stdout: aToATest}).install(t)
+
+	if err := runCmd(t, Test(), "--files", "src/a.ts"); err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	rec := scopedRecordOf(t, dir)
+	if rec == nil {
+		t.Fatal("recorded nothing")
+	}
+	if want := candidateAfterAddAll(t, dir); rec.Tree != want {
+		t.Errorf("scoped tree %s != candidate after git add -A %s", rec.Tree, want)
+	}
+}
+
+// TestRefusedRunsRecordNothing is zero_test_scoped_run: none of these measured a
+// path, so none of them may vouch for one.
+func TestRefusedRunsRecordNothing(t *testing.T) {
+	local := func(seam relateSeam) func(t *testing.T) string {
+		return func(t *testing.T) string {
+			dir, _ := scopedRepo(t, relateLane, "src/a.ts", "src/a.test.ts")
+			seam.install(t)
+			return dir
+		}
+	}
+	host := func(seam relateSeam) func(t *testing.T) string {
+		return func(t *testing.T) string {
+			relateHostFixture(t, relateLane, "src/a.ts", "src/a.test.ts")
+			dir := asGitRepo(t)
+			captureGreen(t)
+			seam.installRemote(t)
+			installSpawnRecorder(t, nil)
+			return dir
+		}
+	}
+	for _, tc := range []struct {
+		name    string
+		arrange func(t *testing.T) string
+		want    int
+	}{
+		{"relate lists nothing", local(relateSeam{}), exitNothingMeasured},
+		{"relate exits non-zero", local(relateSeam{stdout: aToATest, err: fakeExit{code: 2}}), exitPrepareFailed},
+		{"a malformed line", local(relateSeam{stdout: "RELATE-MALFORMED\n"}), exitPrepareFailed},
+		{"a named test absent from the tree", local(relateSeam{stdout: "src/a.ts\tsrc/gone.test.ts\n"}), exitPrepareFailed},
+		{"transport fails on relate", host(relateSeam{stdout: aToATest, err: fakeExit{code: 255}}), exitTransport},
+		{"transport fails on the batched line", host(relateSeam{stdout: aToATest, laneErr: fakeExit{code: 255}}), exitTransport},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := tc.arrange(t)
+			out, err := runTestCapturing(t, "--files", "src/a.ts")
+			if ExitCode(err) != tc.want {
+				t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, tc.want)
+			}
+			assertNoRecord(t, dir, out)
+		})
+	}
+}
+
+// TestRunsThatMeasuredNothingLeaveTheRecord: none of these is a verdict on the
+// tree, so a record standing on it stands, byte for byte.
+func TestRunsThatMeasuredNothingLeaveTheRecord(t *testing.T) {
+	onHost := func(t *testing.T) string {
+		t.Helper()
+		relateHostFixture(t, relateLane, "src/a.ts", "src/a.test.ts")
+		dir := asGitRepo(t)
+		captureGreen(t)
+		return dir
+	}
+	for _, tc := range []struct {
+		name    string
+		arrange func(t *testing.T) string
+		want    int
+	}{
+		{"exit 3, the sync never reached the host", func(t *testing.T) string {
+			dir := onHost(t)
+			installRemoteRecorder(t, fakeExit{code: 255})
+			return dir
+		}, exitTransport},
+		{"exit 3 on the batched line", func(t *testing.T) string {
+			dir := onHost(t)
+			(&relateSeam{stdout: aToATest, laneErr: fakeExit{code: 255}}).installRemote(t)
+			return dir
+		}, exitTransport},
+		{"exit 4, an incomplete transfer", func(t *testing.T) string {
+			dir := onHost(t)
+			installRemoteRecorder(t, fakeExit{code: 23})
+			return dir
+		}, exitPartial},
+		{"exit 5, nothing related", func(t *testing.T) string {
+			dir, _ := scopedRepo(t, relateLane, "src/a.ts")
+			(&relateSeam{}).install(t)
+			return dir
+		}, exitNothingMeasured},
+		{"exit 6, an ungranted lane", func(t *testing.T) string {
+			filesFixture(t, relateLane)
+			touchFile(t, "src/a.ts")
+			dir := asGitRepo(t)
+			captureGreen(t)
+			(&relateSeam{stdout: aToATest}).install(t)
+			return dir
+		}, exitLaneRefused},
+		{"exit 7, a failed relate", func(t *testing.T) string {
+			dir, _ := scopedRepo(t, relateLane, "src/a.ts")
+			(&relateSeam{err: fakeExit{code: 2}}).install(t)
+			return dir
+		}, exitPrepareFailed},
+		{"exit 8, no toolchain anywhere", func(t *testing.T) string {
+			dir, _ := scopedRepo(t, relateLane, "src/a.ts")
+			installLaneLookPath(t, "npx")
+			(&relateSeam{stdout: aToATest}).install(t)
+			return dir
+		}, exitToolchainMissing},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := tc.arrange(t)
+			before := seedScopedHere(t, dir)
+			out, err := runTestCapturing(t, "--files", "src/a.ts")
+			if ExitCode(err) != tc.want {
+				t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, tc.want)
+			}
+			if got := scopedBytes(t, dir); !bytes.Equal(got, before) {
+				t.Errorf("the record changed:\n%s\nwas:\n%s", got, before)
+			}
+			if got := scopedGreenLines(out); len(got) != 0 {
+				t.Errorf("a run that recorded nothing says %q", got)
+			}
+		})
+	}
+}
+
+// TestBatchThatCollectedNothingRecordsNothing: a declared empty_exit is a miss,
+// which is no verdict either way, so it records nothing and clears nothing.
+func TestBatchThatCollectedNothingRecordsNothing(t *testing.T) {
+	t.Run("no record to begin with", func(t *testing.T) {
+		dir, _ := scopedRepo(t, relateLane+"\nempty_exit = [4]", "src/a.ts", "src/a.test.ts")
+		(&relateSeam{stdout: aToATest, laneErr: fakeExit{code: 4}}).install(t)
+
+		out, err := runTestCapturing(t, "--files", "src/a.ts")
+		if ExitCode(err) != exitNothingMeasured {
+			t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitNothingMeasured)
+		}
+		assertNoRecord(t, dir, out)
+	})
+
+	t.Run("a record on the tree stands", func(t *testing.T) {
+		dir, _ := scopedRepo(t, relateLane+"\nempty_exit = [4]", "src/a.ts", "src/a.test.ts")
+		before := seedScopedHere(t, dir)
+		(&relateSeam{stdout: aToATest, laneErr: fakeExit{code: 4}}).install(t)
+
+		if err := runCmd(t, Test(), "--files", "src/a.ts"); ExitCode(err) != exitNothingMeasured {
+			t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitNothingMeasured)
+		}
+		if got := scopedBytes(t, dir); !bytes.Equal(got, before) {
+			t.Errorf("a miss changed the record:\n%s", got)
+		}
+	})
+}
+
+// TestEmptyBatchBesideAGreenLaneCoversNothing: relate mapped src/a.ts, and its
+// batch then collected nothing beside a neighbour that passed. The run is green
+// and records, and what relate promised for src/a.ts counts for nothing.
+func TestEmptyBatchBesideAGreenLaneCoversNothing(t *testing.T) {
+	dir, _ := scopedRepo(t, relateLane+"\nempty_exit = [4]"+appLane,
+		"src/a.ts", "src/a.test.ts", "app/x.ts", "app/x.test.ts")
+	orig := spawnLocal
+	t.Cleanup(func() { spawnLocal = orig })
+	spawnLocal = func(_, line string, stdout, _ io.Writer) error {
+		switch {
+		case strings.HasPrefix(line, "node scripts/relate.mjs --project app"):
+			io.WriteString(stdout, "app/x.ts\tapp/x.test.ts\n")
+		case strings.HasPrefix(line, "node scripts/relate.mjs"):
+			io.WriteString(stdout, aToATest)
+		case line == batchOfATest:
+			return fakeExit{code: 4}
+		}
+		return nil
+	}
+
+	out, err := runTestCapturing(t, "--files", "src/a.ts", "--files", "app/x.ts")
+	if err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	rec := scopedRecordOf(t, dir)
+	if rec == nil {
+		t.Fatal("the neighbour's green recorded nothing")
+	}
+	if want := []string{"app/x.ts"}; !reflect.DeepEqual(rec.Covered, want) {
+		t.Errorf("covered = %q, want %q", rec.Covered, want)
+	}
+	if want := []string{laneFingerprint(t, "app")}; !reflect.DeepEqual(rec.Lanes, want) {
+		t.Errorf("lanes = %q, want only the lane that measured something", rec.Lanes)
+	}
+	if got := uncoveredLine(t, out); got != "uncovered: src/a.ts" {
+		t.Errorf("uncovered line = %q:\n%s", got, out)
+	}
+}
+
+// TestRedBatchClearsTheRecordOnItsTree: a red says the tree is broken, whatever an
+// earlier run said about it. A code empty_exit does not declare is red like any
+// other, so a lane with none declared cannot pass an empty batch off as a miss.
+func TestRedBatchClearsTheRecordOnItsTree(t *testing.T) {
+	for _, tc := range []struct {
+		name, lane string
+		code       int
+	}{
+		{"no empty_exit declared, exit 1", relateLane, 1},
+		{"no empty_exit declared, a runner's own code", relateLane, 4},
+		{"a code empty_exit does not declare", relateLane + "\nempty_exit = [4]", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, _ := scopedRepo(t, tc.lane, "src/a.ts", "src/a.test.ts")
+			seedScopedHere(t, dir)
+			(&relateSeam{stdout: aToATest, laneErr: fakeExit{code: tc.code}}).install(t)
+
+			out, err := runTestCapturing(t, "--files", "src/a.ts")
+			if ExitCode(err) != exitSuiteFailed {
+				t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitSuiteFailed)
+			}
+			assertNoRecord(t, dir, out)
+		})
+	}
+}
+
+// TestRedLeavesARecordOnAnotherTree: that record is about code this run did not
+// measure.
+func TestRedLeavesARecordOnAnotherTree(t *testing.T) {
+	dir, _ := scopedRepo(t, relateLane, "src/a.ts", "src/a.test.ts")
+	before := seedScoped(t, dir, "another-tree")
+	(&relateSeam{stdout: aToATest, laneErr: fakeExit{code: 1}}).install(t)
+
+	if err := runCmd(t, Test(), "--files", "src/a.ts"); ExitCode(err) != exitSuiteFailed {
+		t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitSuiteFailed)
+	}
+	if got := scopedBytes(t, dir); !bytes.Equal(got, before) {
+		t.Errorf("a red on this tree touched another tree's record:\n%s", got)
+	}
+}
+
+// TestRedFromAnotherLaneClearsTheRecord: the vouching lane passed and the lane
+// beside it, over the same path, did not. That path is broken, so nothing vouches
+// for it.
+func TestRedFromAnotherLaneClearsTheRecord(t *testing.T) {
+	dir, _ := scopedRepo(t, relateLane+lintLane, "src/a.ts", "src/a.test.ts")
+	seedScopedHere(t, dir)
+	seam := (&relateSeam{stdout: aToATest, otherErr: fakeExit{code: 1}}).install(t)
+
+	out, err := runTestCapturing(t, "--files", "src/a.ts")
+	if ExitCode(err) != exitSuiteFailed {
+		t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitSuiteFailed)
+	}
+	if want := []string{relateOverA, batchOfATest, "npx eslint"}; !reflect.DeepEqual(seam.lines, want) {
+		t.Fatalf("spawned %q, want %q", seam.lines, want)
+	}
+	assertNoRecord(t, dir, out)
+}
+
+// TestRedOutrankedByAFailedRelateStillClears: the exit is the relate failure's,
+// and the red it outranks is still a red on this tree.
+func TestRedOutrankedByAFailedRelateStillClears(t *testing.T) {
+	dir, _ := scopedRepo(t, relateLane+goNeighbourLane, "src/a.ts", "internal/cmd/here.go")
+	seedScopedHere(t, dir)
+	(&relateSeam{err: fakeExit{code: 2}, otherErr: fakeExit{code: 1}}).install(t)
+
+	out, err := runTestCapturing(t, "--files", "src/a.ts", "--files", "internal/cmd/here.go")
+	if ExitCode(err) != exitPrepareFailed {
+		t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitPrepareFailed)
+	}
+	assertNoRecord(t, dir, out)
+}
+
+// TestRunThatSpawnedNothingRecordsNothing: nothing ran, so there is no green of
+// either kind, however the run came to spawn nothing.
+func TestRunThatSpawnedNothingRecordsNothing(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		arrange func(t *testing.T) string
+		want    int
+	}{
+		{"only build config was left", func(t *testing.T) string {
+			dir, _ := scopedRepo(t, relateWideLane, "package.json")
+			return dir
+		}, exitNothingMeasured},
+		{"every lane was refused", func(t *testing.T) string {
+			filesFixture(t, relateWideLane)
+			touchFile(t, "package.json")
+			dir := asGitRepo(t)
+			captureGreen(t)
+			return dir
+		}, exitLaneRefused},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := tc.arrange(t)
+			seam := (&relateSeam{}).install(t)
+
+			out, err := runTestCapturing(t, "--files", "package.json")
+			if ExitCode(err) != tc.want {
+				t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, tc.want)
+			}
+			if len(seam.lines) != 0 {
+				t.Fatalf("spawned %q, want nothing", seam.lines)
+			}
+			assertNoRecord(t, dir, out)
+			if g := green(t, dir); g != nil {
+				t.Errorf("recorded a full green %+v", g)
+			}
+		})
+	}
+}
+
+// TestNonVouchingLaneCoversNothing: its green is real and it measured its path,
+// and it still has no say in the record, which a gate would sink if it named the
+// lane.
+func TestNonVouchingLaneCoversNothing(t *testing.T) {
+	dir, _ := scopedRepo(t, relateLane+goNeighbourLane, "src/a.ts", "src/a.test.ts", "internal/cmd/here.go")
+	(&relateSeam{stdout: aToATest}).install(t)
+
+	if err := runCmd(t, Test(), "--files", "src/a.ts", "--files", "internal/cmd/here.go"); err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	rec := scopedRecordOf(t, dir)
+	if rec == nil {
+		t.Fatal("recorded nothing")
+	}
+	if want := []string{"src/a.ts"}; !reflect.DeepEqual(rec.Covered, want) {
+		t.Errorf("covered = %q, want %q", rec.Covered, want)
+	}
+	if want := []string{laneFingerprint(t, "web")}; !reflect.DeepEqual(rec.Lanes, want) {
+		t.Errorf("lanes = %q, want only the vouching lane", rec.Lanes)
+	}
+}
+
+// TestGreenNonVouchingLaneAloneRecordsNothing: a vouching lane is declared and
+// this run never reached it, so nothing vouched and the record stands.
+func TestGreenNonVouchingLaneAloneRecordsNothing(t *testing.T) {
+	dir, _ := scopedRepo(t, relateLane+goNeighbourLane, "internal/cmd/here.go")
+	before := seedScopedHere(t, dir)
+	(&relateSeam{}).install(t)
+
+	out, err := runTestCapturing(t, "--files", "internal/cmd/here.go")
+	if err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	if got := scopedBytes(t, dir); !bytes.Equal(got, before) {
+		t.Errorf("the record changed:\n%s", got)
+	}
+	if got := scopedGreenLines(out); len(got) != 0 {
+		t.Errorf("a run that recorded nothing says %q", got)
+	}
+}
+
+// TestNoVouchingLaneNoRecord: a repo that never opted in gets no record, and the
+// run's transcript and notes hold nothing of this.
+func TestNoVouchingLaneNoRecord(t *testing.T) {
+	dir, notes := scopedRepo(t, goAndDocsLanes, "internal/cmd/here.go")
+	(&relateSeam{}).install(t)
+
+	out, err := runTestCapturing(t, "--files", "internal/cmd/here.go")
+	if err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	assertNoRecord(t, dir, out)
+	if notes.Len() != 0 {
+		t.Errorf("notes = %q, want silence", notes.String())
+	}
+}
+
+// TestRedInANonVouchingRepoLeavesAStrayRecord: a repo that never opted in has no
+// recorder running, so a stray record is left to the gate, which ignores it.
+func TestRedInANonVouchingRepoLeavesAStrayRecord(t *testing.T) {
+	dir, _ := scopedRepo(t, goAndDocsLanes, "internal/cmd/here.go")
+	before := seedScopedHere(t, dir)
+	(&relateSeam{otherErr: fakeExit{code: 1}}).install(t)
+
+	if err := runCmd(t, Test(), "--files", "internal/cmd/here.go"); ExitCode(err) != exitSuiteFailed {
+		t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitSuiteFailed)
+	}
+	if got := scopedBytes(t, dir); !bytes.Equal(got, before) {
+		t.Errorf("the record changed:\n%s", got)
+	}
+}
+
+// TestMidRunWriteRecordsNothing: the tree that went green no longer exists, and
+// the note is the full recorder's own, naming what moved.
+func TestMidRunWriteRecordsNothing(t *testing.T) {
+	dir, notes := scopedRepo(t, relateLane, "src/a.ts", "src/a.test.ts")
+	(&relateSeam{stdout: aToATest, onBatch: func() {
+		mustWrite(t, filepath.Join(dir, "coverage.out"), "x")
+	}}).install(t)
+
+	out, err := runTestCapturing(t, "--files", "src/a.ts")
+	if err != nil {
+		t.Fatalf("the run's own verdict changed: %v", err)
+	}
+	assertNoRecord(t, dir, out)
+	want := "dross test: green, but not recorded for the commit gate — these paths changed while the suite ran: coverage.out\n"
+	if notes.String() != want {
+		t.Errorf("notes = %q, want %q", notes.String(), want)
+	}
+}
+
+// TestDeletionStaysOutOfCovered: a deleted path has no test to pass, and it is on
+// no relate line, so the run beside it covers only what is left.
+func TestDeletionStaysOutOfCovered(t *testing.T) {
+	t.Run("beside a live path", func(t *testing.T) {
+		dir, _ := scopedRepo(t, relateLane, "src/a.ts", "src/a.test.ts")
+		(&relateSeam{stdout: aToATest}).install(t)
+
+		if err := runCmd(t, Test(), "--files", "src/a.ts", "--files", "src/gone.ts"); err != nil {
+			t.Fatalf("dross test --files: %v", err)
+		}
+		rec := scopedRecordOf(t, dir)
+		if rec == nil {
+			t.Fatal("recorded nothing")
+		}
+		if want := []string{"src/a.ts"}; !reflect.DeepEqual(rec.Covered, want) {
+			t.Errorf("covered = %q, want %q", rec.Covered, want)
+		}
+	})
+
+	t.Run("relate cannot answer for it", func(t *testing.T) {
+		dir, _ := scopedRepo(t, relateLane, "src/a.ts", "src/a.test.ts")
+		(&relateSeam{stdout: aToATest + "src/gone.ts\tsrc/a.test.ts\n"}).install(t)
+
+		out, err := runTestCapturing(t, "--files", "src/a.ts", "--files", "src/gone.ts")
+		if ExitCode(err) != exitPrepareFailed {
+			t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitPrepareFailed)
+		}
+		assertNoRecord(t, dir, out)
+	})
+}
+
+// TestSecondRunReplacesTheRecord: runs never union. The first run's path has to
+// be asked again, on the same tree, to stay covered.
+func TestSecondRunReplacesTheRecord(t *testing.T) {
+	dir, _ := scopedRepo(t, relateLane, "src/a.ts", "src/b.ts", "src/a.test.ts", "src/b.test.ts")
+	(&relateSeam{stdout: aToATest}).install(t)
+	if err := runCmd(t, Test(), "--files", "src/a.ts"); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+	first := scopedRecordOf(t, dir)
+	if first == nil {
+		t.Fatal("the first run recorded nothing")
+	}
+
+	(&relateSeam{stdout: "src/b.ts\tsrc/b.test.ts\n"}).install(t)
+	if err := runCmd(t, Test(), "--files", "src/b.ts"); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	rec := scopedRecordOf(t, dir)
+	if rec == nil || rec.Tree != first.Tree {
+		t.Fatalf("record = %+v, want one on the first run's tree", rec)
+	}
+	if want := []string{"src/b.ts"}; !reflect.DeepEqual(rec.Covered, want) {
+		t.Errorf("covered = %q, want %q", rec.Covered, want)
+	}
+}
+
+// TestUnrunnableLaneContributesNothing: a lane with no LaneLine has no grant to
+// stand on, and consent.Fingerprint would still hash its empty line. The run
+// cannot get here past consent, so settle is asked directly.
+func TestUnrunnableLaneContributesNothing(t *testing.T) {
+	lane := project.TestLane{Name: "web", Command: "npx vitest\x00run", Vouch: true, Relate: "node scripts/relate.mjs"}
+	if line := laneConsentLine(lane); line != "" {
+		t.Fatalf("the fixture lane has a line: %q", line)
+	}
+	s := &scopedRun{}
+	rel := testlane.Relation{Covered: []string{"src/a.ts"}, Tests: []string{"src/a.test.ts"}}
+	s.note(rel)
+	s.settle(lane, rel, nil)
+	if len(s.lanes) != 0 || len(s.covered) != 0 {
+		t.Errorf("lanes = %q, covered = %q; want nothing from an unrunnable lane", s.lanes, s.covered)
+	}
+}
+
+// TestUntaggedFailureIsNoRed: an error with no exit tag exits 1 like a red, and
+// says nothing about the code, so it clears nothing.
+func TestUntaggedFailureIsNoRed(t *testing.T) {
+	s := &scopedRun{}
+	s.settle(project.TestLane{Name: "web", Command: "npx vitest run"}, testlane.Relation{}, os.ErrInvalid)
+	if s.red {
+		t.Error("an untagged error read as a red")
+	}
+	s.settle(project.TestLane{Name: "web", Command: "npx vitest run"}, testlane.Relation{}, &ExitCodeError{Code: exitSuiteFailed, Err: os.ErrInvalid})
+	if !s.red {
+		t.Error("a red did not read as one")
+	}
+	s.settle(project.TestLane{Name: "web", Command: "npx vitest run"}, testlane.Relation{}, nil)
+	if !s.red {
+		t.Error("a later green took the red back")
+	}
 }
