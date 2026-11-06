@@ -19,6 +19,59 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/cmd/full_green.go",
+        "internal/cmd/full_green_test.go",
+        "internal/cmd/verify.go"
+      ],
+      "commit": "07b2b680",
+      "completed_at": "2026-11-06T10:51:42.192604Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "requireFullGreen",
+          "loc": "internal/cmd/full_green.go:37",
+          "what": "verify refuses a vouching repo whose HEAD tree has no full green, ahead of every flag and adapter"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_full_green_test.go"
+      ],
+      "commit": "f9d0130e",
+      "completed_at": "2026-11-06T12:30:42.973633Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "gateShipFullGreen",
+          "loc": "internal/cmd/ship.go:620",
+          "what": "ship refuses a vouching repo with no full green on HEAD before auto-finalize writes anything, and --force-unverified warns and proceeds"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/gate/commit.go",
+        "internal/gate/commit_test.go",
+        "internal/gate/writer.go",
+        "internal/gate/writer_test.go",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go"
+      ],
+      "commit": "8843284c",
+      "completed_at": "2026-11-06T14:54:50.96205Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "judgeVouched",
+          "loc": "internal/gate/commit.go:279",
+          "what": "commit-green admits a commit on a scoped green for its exact tree when no path is uncovered and the lanes still vouch under current grants"
+        }
+      ]
+    },
     "t-19": {
       "files": [
         ".dross/phases/scoped-commit-gate/barktime-timing.toml"
@@ -51,6 +104,122 @@
           "symbol": "SaveScoped",
           "loc": "internal/gatestate/store.go:201",
           "what": "stores the scoped green record beside green.json: tree, covered paths, lane fingerprints"
+        }
+      ]
+    },
+    "t-20": {
+      "files": [
+        ".dross/phases/scoped-commit-gate/barktime-batch-timing.toml"
+      ],
+      "commit": "af5f85e0",
+      "completed_at": "2026-11-06T10:34:55.051687Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "barktime-batch-timing",
+          "loc": ".dross/phases/scoped-commit-gate/barktime-batch-timing.toml:1",
+          "what": "barktime relate plus batched line measured in the real stack at 526 s for a 5-file leaf at two runs, clearing the 600 s budget"
+        }
+      ]
+    },
+    "t-21": {
+      "files": [
+        "ARCHITECTURE.md",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_lane_test.go",
+        "internal/project/project.go",
+        "internal/project/save_lossless_test.go"
+      ],
+      "commit": "730ecf24",
+      "completed_at": "2026-11-06T12:14:12.608023Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "TestLane.Relate",
+          "loc": "internal/project/project.go:248",
+          "what": "vouching lanes must declare relate, the one command that maps changed paths to tests, and validate refuses it on any other lane"
+        }
+      ]
+    },
+    "t-22": {
+      "files": [
+        "ARCHITECTURE.md",
+        "internal/cmd/pad_residue_test.go",
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_lane_test.go",
+        "internal/testlane/coverage.go",
+        "internal/testlane/coverage_test.go"
+      ],
+      "commit": "1d752536",
+      "completed_at": "2026-11-06T10:18:46.471897Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "testExemptProblems",
+          "loc": "internal/cmd/validate.go:541",
+          "what": "exempt fence refuses globs whose only literal is an escaped wildcard, and the config list adds compose and .mts names"
+        }
+      ]
+    },
+    "t-23": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_lane_toolchain_test.go",
+        "internal/cmd/lane_locality.go",
+        "internal/cmd/lane_locality_test.go",
+        "internal/cmd/lane_preview_locality.go",
+        "internal/cmd/lane_preview_locality_test.go",
+        "internal/cmd/test_lane.go",
+        "internal/cmd/test_lane_install.go",
+        "internal/project/project.go",
+        "internal/testlane/toolchain.go",
+        "internal/testlane/toolchain_test.go"
+      ],
+      "commit": "fd4813f1",
+      "completed_at": "2026-11-06T14:33:06.205087Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "testlane.Toolchain",
+          "loc": "internal/testlane/toolchain.go:21",
+          "what": "a lane's derived toolchain includes relate's first token, so a host missing it falls back instead of exiting 127"
+        }
+      ]
+    },
+    "t-24": {
+      "files": [
+        "internal/gate/selfguard.go",
+        "internal/gate/selfguard_test.go",
+        "internal/gate/override.go",
+        "internal/gate/override_test.go"
+      ],
+      "commit": "c9e96dc3",
+      "completed_at": "2026-11-06T09:56:00.263672Z",
+      "landmarks": [
+        {
+          "feature": "tool gates",
+          "symbol": "grantingTrust",
+          "loc": "internal/gate/selfguard.go:113",
+          "what": "gate-off-guard refuses a tool-call dross trust that writes a grant, and tamper-guard fences .dross/local.toml including sed -i"
+        }
+      ]
+    },
+    "t-26": {
+      "files": [
+        "internal/cmd/review.go",
+        "internal/cmd/review_test.go",
+        "internal/gate/soloreview.go",
+        "internal/gate/soloreview_test.go"
+      ],
+      "commit": "1a3cae8d",
+      "completed_at": "2026-11-06T11:54:23.021254Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "ReviewRetest",
+          "loc": "internal/gate/soloreview.go:47",
+          "what": "solo-review refusals and dross review status share one retest wording, naming a scoped run only in a vouching repo"
         }
       ]
     },
@@ -113,6 +282,97 @@
           "what": "resolves .svelte script and markup constructs through svelte/compiler with file-relative lines"
         }
       ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/trust.go",
+        "internal/cmd/trust_test.go",
+        "internal/consent/lane.go",
+        "internal/consent/lane_test.go"
+      ],
+      "commit": "ef409a67",
+      "completed_at": "2026-11-06T12:53:28.603663Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "LaneVouchFrame",
+          "loc": "internal/consent/lane.go:41",
+          "what": "a vouching lane's grant binds vouch and relate under a new frame, so turning vouch on or editing relate stales it until a human re-grants"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "assets/prompts/_options.lanes.md",
+        "assets/prompts/options.md",
+        "cmd/dross/testdata/cli_tree.txt",
+        "internal/cmd/options_docs_test.go",
+        "internal/cmd/project.go",
+        "internal/cmd/project_test.go",
+        "internal/cmd/test_lane.go",
+        "internal/cmd/test_lane_edit_test.go",
+        "internal/cmd/test_lane_list_fields_test.go"
+      ],
+      "commit": "e2af5a14",
+      "completed_at": "2026-11-06T13:28:22.439197Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "vouch and relate flags",
+          "loc": "internal/cmd/test_lane.go:313",
+          "what": "lane add and edit take --vouch and --relate, project set takes runtime.test_exempt, and _options.lanes.md documents the exit and relate contracts"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "cmd/dross/testdata/cli_tree.txt",
+        "internal/cmd/testdata/cli_surface/trust.txt",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/cmd/trust.go",
+        "internal/cmd/trust_test.go",
+        "internal/consent/store.go",
+        "internal/diag/trust.go",
+        "internal/localstore/store_test.go",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go",
+        "internal/consent/exempt.go",
+        "internal/consent/exempt_test.go"
+      ],
+      "commit": "e2920818",
+      "completed_at": "2026-11-06T11:38:40.738708Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "ExemptConsented",
+          "loc": "internal/consent/exempt.go:71",
+          "what": "dross trust --test-exempt grants over the sorted exempt globs, so appending a glob stales the grant until a human re-grants"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/lane_plan.go",
+        "internal/cmd/lane_plan_test.go",
+        "internal/cmd/lane_preview.go",
+        "internal/cmd/lane_preview_json.go",
+        "internal/cmd/lane_preview_json_test.go",
+        "internal/cmd/lane_preview_test.go",
+        "internal/cmd/test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/testlane/relate.go",
+        "internal/testlane/relate_test.go"
+      ],
+      "commit": "cc57e8dd",
+      "completed_at": "2026-11-06T14:07:47.588698Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "ParseRelate",
+          "loc": "internal/testlane/relate.go:40",
+          "what": "a vouching lane plans a relate line plus a batched line, and a fail-closed parser reads relate's stdout into covered paths and deduped tests"
+        }
+      ]
     }
   },
   "reviews": {
@@ -132,6 +392,104 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The active-section guard compares box counts only, as the test_contract asks, so a v1.9 line reworded away from its recorded criterion would still pass.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-6",
+          "text": "requireFullGreen compares against treefp.Base, which exempts only .dross/ and counts ARCHITECTURE.md, whereas MeasuredTree exempts both because ship's landmark merge commits that file after a verdict. This is what the task specifies and is harmless for verify, but when the sibling ship task reuses this check, or a phase is re-verified after a landmark commit, an ARCHITECTURE.md-only commit will invalidate the green.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "requireFullGreen repeats the branch structure and rerun wording of judgeGreen in internal/gate/commit.go (no green, tree match, work-tree match with Diff, otherwise rerun). The two refusals can drift apart if either changes.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-12": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "--force-unverified now also bypasses the full-green gate, but its help text at ship.go:603 still lists only a non-pass verdict and a stale pass. The refusal comes from the shared fullGreenRerun text, so unlike ship's other refusals it never names the override. Users can't discover the bypass from the CLI.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The override warning embeds the first line of the refusal, so a ship that proceeds prints 'warning: shipping with no full green ... — refusing: no full green ...'. It is accurate but reads as contradictory.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The shipVouchingLane fixture has no selector or relate, and the fixture repo sets no runtime.test_command as far as the setup shows, so `dross validate` would reject it. This is harmless here: ship uses project.Load, which does not run those lane checks, and hasVouchingLane reads only the vouch flag.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In a vouching repo with no full green, an unfinalized partial or fail verdict now gets the full-green refusal, and its outcome event is not recorded until a later ship gets past the gate. The test_contract requires this, but it narrows the heal-before-gate behaviour described in the comment just below the new call.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-14": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "internal/pathfence/fields.go names the new reader for Scoped.Covered only. commit-green now also reads project.Runtime.TestExempt (judgeTree/judgeVouched) and project.TestLane.Match (vouchedCover), and neither field's Readers list names internal/gate/commit.go. TestExemptGlobsNameEveryReader's own comment says a list missing a reader stops describing what happens to the value.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "The gate has no deletion check of its own. Snapshot.Changed carries no status, so a deleted path listed in Covered would be admitted. TestDeletionsAreUncovered passes only because its record omits the deleted path. Today's safety comes from lane_plan's live-path filter on Asked, which the future scoped recorder must keep; no test here pins a record that lists a deleted path.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "vouchedCover keys `ran` on the LaneLine fingerprint, and match is not in that line. Two lanes with identical lines but different match globs both count as having run, so a twin that did not run can reach a path. An ungranted twin sinks the record, which fails closed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Snapshot.Changed paths are relative to the git top level, while lane and exempt globs and Covered are relative to the dross root. With a .dross below the repository top, nothing matches and scoped admission is always refused. That fails closed, and isDross shares the same top-level assumption as the old onlyDross.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "c-4 is pinned well: refusedAsToday compares Rule and Remedy with judgeGreen's output and also pins the expected rule text, so both sides cannot drift together.",
           "resolution": "non-blocking, left"
         }
       ]
@@ -159,6 +517,195 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The pathfence entry for gatestate.Scoped.Covered lists only internal/gatestate/store.go under Readers, while its Why describes comparison against a commit's changed paths. The gate code that does that comparison should be added to Readers when it lands.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-21": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-9",
+          "text": "Nothing runs relate yet. 'Paths always appended as shell-quoted arguments' and 'selector_template shapes the lane's command only' exist only as the doc comment on project.TestLane.Relate. The task's files and test_contract cover the field and validation only, so this is not a spec gap, but the task that runs relate must implement and test both.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "consent.LaneLine (internal/consent/lane.go) binds command, prepare, selector_template and selector_join but not Relate, and its NUL guard skips it too. This is harmless while nothing spawns relate. Once it runs, a hand-edited relate would ride an existing grant unless the line is bound the way selector_template was.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The vouchingLane fixture in internal/cmd/full_green_test.go has vouch = true and no relate, so it no longer passes validate. Nothing fails, because those tests never call validate, but the fixture no longer shows a valid lane.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-22": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "checkGlob compiles the whole glob, but matchGlob in internal/testlane/match.go splits on `/` before honouring escapes. `**/*\\/*` therefore matches nothing rather than exempting the repo, so the refusal's 'would exempt the whole repo' wording is inaccurate for that case. `docs\\/**` passes validate yet exempts nothing. This is pre-existing and fails closed, because such paths still need a full green.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-23": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "User-facing text still describes the old derivation. The --toolchain flag help at internal/cmd/test_lane.go:310 (a file this task lists), its golden at cmd/dross/testdata/cli_tree.txt:378, README.md:233 and ARCHITECTURE.md:1597 all say the list comes from command and prepare only, while assets/prompts/_options.lanes.md already names relate. A user reading --help or the README cannot tell why a host missing relate's binary sends the lane home.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "Relate lines are likely to be scripts, and the repo's own fixtures use scripts/relate.sh. That first token now reaches remote.Probe as `command -v scripts/relate.sh`, and the probe runs before the sync, so it can report missing even when the script is in the tree. That lane then stays local, or is refused with exit 8 if the path does not resolve here either. This follows the locked first-token rule, and doctor prints the --toolchain fix, but a vouching lane with a script relate now needs an override, and no test covers that shape.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The contract says existing toolchain tests fail unmodified. The existing toolchain_test.go call sites did change, but only to add the empty relate argument the new signature requires; their assertions are untouched, and no existing lane_locality_test or lane_preview_locality_test line was edited.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-24": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "grantingTrust stops at the first non-dash word, so `dross --lane x trust` is not claimed: `x` hits the break before `trust` is seen. From cobra's known behaviour (not run here), Find strips `--lane x` to locate the subcommand and passes those flags on to trust, so the line would write a grant. That contradicts 'refuses every granting form' in a rare ordering. The fix is to skip trustValueFlags values in the verb search, or scan every word for `trust`.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "gate-off-guard does not unwrap launchers: `timeout 5 dross trust` and `nice dross trust` have Name() timeout/nice, because shellscan strips only env, command, sudo, nohup and time. writerfence.go already keeps a writerWrappers list for this. guardedGateVerb has the same gap, so this is inherited, but a grant is a new thing to reach this way.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "sedInPlace matches only lowercase `i`, so BSD sed's `-I` in-place flag passes: `sed -I '' 's/a/b/' .dross/local.toml` is not refused, and macOS is the platform here. GNU long-option abbreviations such as `--in-pl` also pass.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "local.toml's fence is narrower than the 'same fence' the comment claims. `cp /tmp/x/local.toml .dross/` targets the directory, so isLocalStore does not match and the write passes, whereas `cp ... .dross/gate/` is caught by the path-contains check. `mv` into `.dross/` is refused, but through the removes branch, so it gets the gate-record wording that names `dross test`.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "trustValueFlags is a hand-kept list, which sits awkwardly with the claim that the guard needs no knowledge of later flags. If a later grant flag takes a value and is not added, `dross trust --newflag --check` passes the guard while pflag consumes `--check` as the value and grants. The comment 'a granting form it has never heard of still refuses' does not hold for that shape, and the test pins `--test-exempt --check` as passing on the assumption that the flag is boolean.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The tests cover the shapes a naive `--check` search would get wrong: a value flag swallowing `--check`, last-wins ordering, `--`, and the partial arm's `=` split.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "trustGrants returns false at the first --help or -h, but the help flag is last-wins like --check. pflag sets it true then false, and cobra only checks the final value before RunE, so `dross trust --help --help=false` should pass the guard and write a grant. This is a crafted line rather than a direct route, and the task disclaims deliberate forgery, so it does not block. The fix is to track help the way check is tracked, and to add a test.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The partial arm of grantingTrust only matches `dross` directly followed by `trust`, so `dross --lane x trust --check \"half` passes while `dross trust --check \"half` is refused. The comment says any `dross trust` counts on an unfinished line. Exposure is low because bash will not run a line with an unterminated quote.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "tamperTarget treats every non-dash sed word as a target, including the script and -e values, and sedInPlace matches any i or I in a short-flag word. So `sed -i 's|/.dross/gate/x|y|' README.md` and the read-only `sed -e's/a/bi/' .dross/local.toml` are falsely refused. Both errors are on the safe side and rare.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "`cp -t .dross /tmp/x/local.toml` still escapes tamper-guard because copyTargets assumes the destination is the last operand. The gap already existed for .dross/gate/, and the task does not claim this form.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-26": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-7",
+          "text": "At this tree the new vouching-repo note points at a run the commit gate does not accept. `dross test --files` records nothing: SaveScoped, LoadScoped and testlane.NeedsFullGreen have no non-test callers, and judgeGreen in internal/gate/commit.go admits only a full green. A vouching repo following ReviewRetest therefore still hits commit-green's 'run a bare `dross test`' refusal. t-26's record does not claim scoped admission, so this is not a spec finding, but the note is only correct once that work lands.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "ReviewRetest always names `--files` in a vouching repo, whatever the change touched. Under locked decision uncovered_paths, a task touching build config or a path no vouching lane covers still needs a full green, so the note can name the wrong run for that change.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "The wording `\u003cthe task's files\u003e` also reaches solo quicks, because judgeSoloReview and `dross review status` both serve KindQuick scopes. A quick has no task or files record, and neither new test covers a quick scope. `--files` is also repeatable, one path per flag, which the placeholder does not show.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "vouchingRepo repeats the predicate of hasVouchingLane in internal/cmd/full_green.go and the project read in testsDeclared in internal/gate/commit.go. It also decodes without validate, so it counts a vouching lane that validate would refuse; the new tests' selector-less `vouch = true` fixtures rely on this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The tests are strong: they compare the whole remedy or note line rather than a substring, and the gate test also covers an undecodable project.toml falling back to the bare text.",
           "resolution": "non-blocking, left"
         }
       ]
@@ -221,6 +768,145 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The fixture must clear `npm audit --audit-level=high`, which a read-only review cannot confirm. The lockfile's svelte dependency ranges are consistent, and the CI audit step remains the check.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "internal/cmd/trust.go prints 'everything this grant covers', but consent.LaneVouchLines leaves out selector_template and selector_join, which the vouch frame binds (TestVouchFrameBindsEveryLine pins this) and validate allows on a vouching lane. On such a lane the human grants lines they were never shown, and a template edit produces a refusal saying 'lines or vouch setting has CHANGED' with no changed line on screen. Render both fields when set, or drop the 'everything' claim.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The LaneLine doc comment says a vouch-off lane keeps its form 'whatever its relate says', but the NUL guard runs first, so a vouch=false lane with a NUL in relate returns empty and reads NotApplicable. The test_contract asks for this and only a TOML \\u0000 escape can reach it, so only the comment overclaims. On a vouching lane, trustLane's blank-command guard also lets this through: it records Fingerprint(\"\") and reports a grant for a lane that stays NotApplicable, as a NUL command or prepare already does.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Turning vouch off also stales the grant, but the lane then takes the plain refusal, 'its command has CHANGED', with no line edited. That is the misdirection the new LaneRefusal comment describes for turning vouch on. The non-vouching wording is pinned as unchanged, so this is recorded only.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Two surfaces outside this task's files lag the new frame. The stale arm of diag.LaneConsent in internal/diag/trust.go tells the reader to read the lines but shows no relate or vouch line. The grantAllLanes test helper grants raw lane.Command, which is now a stale grant for any vouching lane; today's fixtures pass only because bare `dross test` uses test_command, so a later test running `--files` through that helper would be refused.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "_options.lanes.md now says a lane's toolchain is derived from `command`, `prepare` and `relate`, but testlane.Toolchain(command, prepare, override) takes no relate and all its callers (lane list, the locality probe, doctor, lane install) pass only those two lines. `lane list` and the host probe therefore leave out relate's binary, and the unchanged `lane add --toolchain` usage text still says --command and --prepare. The test_contract requires the wording and only checks the prose. Confirm a sibling task changes the derivation, or the doc stays false.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "Outside the CLI, `.Relate` is read only by validate and consent; nothing in internal/ spawns relate or parses its output. The 'What `relate` must do' paragraph (runs once, whole-output refusal, omitted path refused by name) therefore describes behaviour not in this repo yet, and the new options_docs tests only pin the wording. If no sibling task lands this before the phase ships, a reader can opt a lane in on a contract nothing enforces.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "`--vouch=false --relate \u003cline\u003e` is refused rather than silently dropping the typed line, and a dead hand-edited relate can be repaired with `--relate \"\"`. Both paths have tests.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "No test_exempt or --test-exempt mention exists in README.md, ARCHITECTURE.md or assets/, and trust's Long help is unchanged, so the verb is only discoverable through the flag list and doctor's fix line. The task record does not claim docs.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In TestTrustExemptCheckWritesNothing the absent-state comment says no store appears, but the test only asserts that no grant was recorded, not that local.toml is missing. The contract's byte-unchanged checks on the current and stale states are asserted properly.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "BLOCKING",
+          "criterion": "c-9",
+          "text": "lanePlan now gives a fence-passing vouching lane Line == \"\" and ScopedToNothing == false, but runPlannedLanes (internal/cmd/test.go:614-616) has no Relate branch and calls runOneLane with the empty line. Locally that is spawnLocal -\u003e sh -c \"\", and remotely runRemoteLine does the same; both exit 0. So `dross test --files` on a consented vouching lane runs its prepare, prints a blank `lane web: ` header, spawns nothing real and exits 0, where before this diff it ran the command over the changed paths. That reports a green having measured nothing, which runTestLanes' own comments call worse than any red, and it contradicts the record's 'Nothing here spawns'. No green is written (--files never calls startGreen, SaveScoped has no production caller), so the commit gate stays shut, but the exit status is false. No test drives a valid vouching lane through Test(); the new run-level tests only cover fenced lanes. Fix: make the run site refuse a lane with Relate set, with a non-zero exit and no spawn, until the relate-and-batch run exists, and add a test that spawns nothing and fails the run. test.go is not in this task's file list, so that edit would be an undeclared file.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "testInTree's containment is lexical and pathfence.Stat follows symlinks, so an in-tree symlink to a regular file outside the repo counts as a test in the tree. Reaching this needs a symlink already in the repo.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "ParseRelate's refusal table is strong: line 1 is always good, so partial results are caught, and the MARKER check proves no stream text reaches an error.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "testInTree in internal/testlane/relate.go checks containment lexically, then calls pathfence.Stat, which is os.Stat and follows symlinks. An in-tree symlink to a regular file outside the repo therefore passes, although Relation.Tests documents each entry as a regular file in the tree. The test_contract only claims absolute and ../ escapes, so this is not a spec gap, but no test pins the symlink case either way.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "The spawn-count assertions in TestLaneFenceRefusesAHandEditedVouchingLane and TestLaneFenceRefusesVouchingWithNoTestCommand run with no lane grants, so the consent refusal would also keep the spawn count at zero if runPlannedLanes stopped honouring FenceErr. The plan-level FenceErr check and the refusal-text check in the no-test_command test are real; only the 'spawns nothing' half is masked. Granting with grantLaneLines first would make it bite.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The ssh/rsync loop in TestPreviewShowsThePlansRelateLine cannot fail as written, because planFixture grants no remote. The local spawn recorder carries that assertion.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "laneBatchLine has no production caller yet. The record scopes it as a pure builder and the runPlannedLanes refusal holds the gap closed until t-13 lands the relate run.",
           "resolution": "non-blocking, left"
         }
       ]
