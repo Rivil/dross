@@ -34,6 +34,30 @@ func TestDoubleStarCrossesDirectories(t *testing.T) {
 	}
 }
 
+// TestMatchAny keeps `*` inside one segment for exempt globs, where a crossing
+// star would exempt a whole tree the repo only meant to exempt at its root.
+func TestMatchAny(t *testing.T) {
+	cases := []struct {
+		globs []string
+		path  string
+		want  bool
+	}{
+		{[]string{"docs/**"}, "docs/a/b.md", true},
+		{[]string{"*.md"}, "docs/a.md", false},
+		{[]string{"*.md"}, "a.md", true},
+		{[]string{"src/**", "docs/**"}, "docs/a.md", true}, // not just the first glob
+		{[]string{"docs/**"}, "./docs/a.md", true},         // spelling is normalized
+		{[]string{"**"}, "../a.md", false},                 // out of tree matches nothing
+		{[]string{"**"}, "", false},                        // nor does a blank path
+		{nil, "a.md", false},
+	}
+	for _, c := range cases {
+		if got := MatchAny(c.globs, c.path); got != c.want {
+			t.Errorf("MatchAny(%q, %q) = %v, want %v", c.globs, c.path, got, c.want)
+		}
+	}
+}
+
 // TestSingleStarStopsAtSeparator is the other half of the pair: if `*` were
 // allowed to cross a separator, a docs lane would swallow every nested file and
 // two lanes that look disjoint on the page would both fire.
