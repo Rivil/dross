@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/Rivil/dross/internal/project"
@@ -63,9 +64,13 @@ type plannedLane struct {
 	// builds the lane's line at run time and no plan can hold it.
 	Relate string
 	// Asked are the live paths Relate carries, which is the list ParseRelate
-	// reads its output against. A dropped path is on neither, so nothing relate
-	// says can cover a deleted file.
+	// reads its output against. A dropped or withheld path is on neither, so
+	// nothing relate says can cover a deleted file or a build config.
 	Asked []string
+	// Withheld are this lane's build config paths, kept off Relate because the
+	// commit gate refuses them however they were tested. Held here rather than
+	// at the run so preview's relate line is the one that spawns.
+	Withheld []string
 	// Selector is the derived arguments Line carries. It travels beside the
 	// line because the miss report names them: "collected no tests" is only
 	// actionable if the reader can see what it was looking in.
@@ -75,8 +80,9 @@ type plannedLane struct {
 	// shortens its line silently; preview names each one and why (c-2), which
 	// is the case a user is most likely to preview.
 	Dropped []string
-	// ScopedToNothing marks a lane that declares a selector whose every path
-	// has been deleted. It does not spawn, and it is not a green.
+	// ScopedToNothing marks a lane that declares a selector and has no path left
+	// to scope to: every one was deleted, or on a vouching lane withheld. It does
+	// not spawn, and it is not a green.
 	ScopedToNothing bool
 	// FenceErr is the up-front fence's verdict on this lane's own project.toml
 	// entry — a malformed command, prepare, selector style or template.
@@ -116,8 +122,9 @@ func lanePlan(repoDir string, proj *project.Project, files []string) lanePlanRes
 			continue
 		}
 		if lane.Vouch {
-			relate, asked, dropped, ok := laneRelateLine(repoDir, lane, sel.Matched[i])
-			pl.Relate, pl.Asked, pl.Dropped, pl.ScopedToNothing = relate, asked, dropped, !ok
+			keep, withheld := withholdBuildConfig(sel.Matched[i])
+			relate, asked, dropped, ok := laneRelateLine(repoDir, lane, keep)
+			pl.Relate, pl.Asked, pl.Withheld, pl.Dropped, pl.ScopedToNothing = relate, asked, withheld, dropped, !ok
 			out.Lanes = append(out.Lanes, pl)
 			continue
 		}
@@ -279,6 +286,27 @@ func laneArgsLine(lane project.TestLane, args []string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(lane.Command) + " " + strings.Join(frags, " "), true
+}
+
+// withholdBuildConfig splits a vouching lane's paths into the ones relate may be
+// asked about and the build config it may not.
+//
+// A config change can move every test in the repo, so the commit gate refuses it
+// however it was tested. Asking relate about one would buy a run the gate must
+// refuse anyway, and `vitest related vite.config.ts` is close to the whole suite.
+//
+// The split comes before the existence filter because the list reads names, not
+// the disk: a deleted package.json is as refused as an edited one.
+//
+// Every path is passed as covered and none as exempt, which leaves NeedsFullGreen
+// only its fixed list to answer from: the list is the gate's, read through the
+// gate's own classifier rather than restated here.
+func withholdBuildConfig(paths []string) ([]string, []string) {
+	config := testlane.NeedsFullGreen(paths, paths, nil)
+	keep := slices.DeleteFunc(slices.Clone(paths), func(p string) bool {
+		return slices.Contains(config, p)
+	})
+	return keep, config
 }
 
 // laneRelateLine builds the line a vouching lane spawns first, over its live

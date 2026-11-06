@@ -69,7 +69,7 @@ const (
 	// suite: the lane's code was never measured, and a caller that read this
 	// as "your code is broken" would go looking for a bug that is not there.
 	exitLaneRefused = 6
-	// exitPrepareFailed: a matched lane's prepare command failed, so that
+	// exitPrepareFailed: a matched lane's prepare or relate failed, so that
 	// lane's test command never ran. Distinct from a red suite for the same
 	// reason exitLaneRefused is: a bootstrap that failed measured nothing
 	// about the code, and a caller that read this as "your tests are broken"
@@ -418,6 +418,7 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 	// the transcript names every refusal up front rather than interleaving them
 	// with test output, where a refusal scrolls past under a passing suite.
 	var worst error
+	scoped := &scopedRun{}
 	runnable := make([]plannedLane, 0, len(lanes))
 	for _, pl := range lanes {
 		// Resolved against lane.Command, never against the derived line
@@ -437,15 +438,12 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 			worst = worseOutcome(worst, &ExitCodeError{Code: exitLaneRefused, Err: refusal})
 			continue
 		}
-		// A vouching lane has no Line until relate has answered, and nothing
-		// here runs relate yet. Spawning the empty Line would exit 0 having
-		// measured nothing, so the lane leaves the run before its prepare, the
-		// probe or a sync. Printed and folded, as a consent refusal is. The
-		// relate-and-batch run replaces this branch.
-		if pl.Relate != "" {
-			refusal := fmt.Errorf("refusing to report a run that measured nothing: lane %q vouches, and this build cannot run a relate lane yet", pl.lane.Name)
-			tr.say("%v\n\n", refusal)
-			worst = worseOutcome(worst, &ExitCodeError{Code: exitNothingMeasured, Err: refusal})
+		// A lane the plan left holding only build config stops here, ahead of
+		// the probe and the sync, so it pays for no host. It is not in runnable,
+		// which is what keeps it out of the miss count below: beside a lane that
+		// measured something it is information, as a miss is.
+		if !scoped.withhold(pl) {
+			tr.say("selector miss: lane %q — build config is all that is left of its paths, and only a full run measures that\n", pl.lane.Name)
 			continue
 		}
 		runnable = append(runnable, pl)
@@ -453,7 +451,12 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 	if len(runnable) == 0 {
 		// Nothing spawns, and the status is the refusal. A run where every
 		// lane was refused measured exactly as much as one that matched
-		// nothing, and must not read as green.
+		// nothing, and must not read as green. With no refusal to report,
+		// every lane held only build config, and that is the same run.
+		scoped.report(tr, proj.Runtime.TestExempt)
+		if worst == nil {
+			return nothingCollected()
+		}
 		return worst
 	}
 
@@ -622,6 +625,35 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 				continue
 			}
 		}
+		// A vouching lane has no line until relate answers, and relate needs
+		// what the prepare built, so it runs here: after the prepare, on the
+		// site the lane's own command is about to use.
+		if pl.Relate != "" {
+			tr.say("lane %s relate: %s\n", pl.lane.Name, pl.Relate)
+			rel, err := runLaneRelate(tr, laneTarget, repoDir, pl)
+			if err != nil {
+				// A failed prepare's arm, for its reasons: the lane is out, the
+				// other lanes are untouched, and a relate that could not answer
+				// is not a miss. A miss says the paths have no test, and nothing
+				// here knows that.
+				worst = worseOutcome(worst, err)
+				tr.laneDone(err)
+				continue
+			}
+			scoped.note(rel)
+			var ok bool
+			pl.Line, pl.Selector, ok = laneBatchLine(pl.lane, rel.Tests)
+			if !ok {
+				// The lane's command with nothing appended is its whole suite,
+				// which is the run this lane exists to avoid (locked
+				// zero_test_scoped_run), so nothing spawns in its place.
+				tr.dropLane()
+				tr.say("selector miss: lane %q — relate named no test for %s\n",
+					pl.lane.Name, strings.Join(pl.Asked, " "))
+				misses++
+				continue
+			}
+		}
 		tr.say("lane %s: %s\n", pl.lane.Name, pl.Line)
 		sites.add(laneTarget)
 		err := runOneLane(tr, laneTarget, repoDir, pl.lane, pl.Line)
@@ -645,10 +677,17 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 	// consent refusal or a red lane that this run also produced — exitRank
 	// already puts nothing-measured last for precisely that reason.
 	if misses > 0 && misses == len(runnable) {
-		worst = worseOutcome(worst, &ExitCodeError{Code: exitNothingMeasured, Err: fmt.Errorf(
-			"refusing to report a run that measured nothing: every matched lane's selector collected no tests")})
+		worst = worseOutcome(worst, nothingCollected())
 	}
+	scoped.report(tr, proj.Runtime.TestExempt)
 	return worst
+}
+
+// nothingCollected is the status of a run whose every matched lane got as far as
+// a spawn decision and had nothing to measure.
+func nothingCollected() error {
+	return &ExitCodeError{Code: exitNothingMeasured, Err: fmt.Errorf(
+		"refusing to report a run that measured nothing: every matched lane's selector collected no tests")}
 }
 
 // selectorMissCode reports whether a lane's failure was its runner saying "I
@@ -1076,6 +1115,13 @@ func stateWord(r localstore.DetachedRun) string {
 
 // runRemoteLine runs one command line on the already-synced target.
 func runRemoteLine(tr *testRun, t remote.Target, line string, aux bool) error {
+	return runRemoteLineTee(tr, t, line, aux, nil)
+}
+
+// runRemoteLineTee is runRemoteLine with the line's stdout also written to tee,
+// when there is one. Stderr stays out of it: ssh keeps the two apart, and a
+// caller that reads what a line printed has asked for its stdout.
+func runRemoteLineTee(tr *testRun, t remote.Target, line string, aux bool, tee io.Writer) error {
 	ssh, err := remote.SSHArgs(t)
 	if err != nil {
 		return err
@@ -1087,7 +1133,11 @@ func runRemoteLine(tr *testRun, t remote.Target, line string, aux bool) error {
 		return err
 	}
 	tr.spawn(line+"  (on "+t.Host+")", aux)
-	if err := spawnRemote(ssh, script, tr.out, tr.out); err != nil {
+	stdout := tr.out
+	if tee != nil {
+		stdout = io.MultiWriter(tr.out, tee)
+	}
+	if err := spawnRemote(ssh, script, stdout, tr.out); err != nil {
 		tr.failed()
 		return remoteFailure("ssh", t.Host, err)
 	}

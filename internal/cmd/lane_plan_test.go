@@ -497,10 +497,11 @@ func grantLaneLines(t *testing.T) {
 	}
 }
 
-// TestConsentedVouchingLaneMeasuresNothingSoFailsTheRun: the plan gives this lane
-// no Line, and spawning that is `sh -c ""`, which exits 0. The exit is the
-// nothing-measured one rather than consent's, which is what shows the lane got
-// past its grant, and the prepare is declared so "spawns nothing" covers it too.
+// TestConsentedVouchingLaneMeasuresNothingSoFailsTheRun: past its grant the lane
+// has no Line until relate answers, and spawning that is `sh -c ""`, which exits
+// 0. A relate that names nothing leaves it no line at all, so the prepare and
+// relate are the whole run, and the exit is the nothing-measured one rather than
+// consent's.
 func TestConsentedVouchingLaneMeasuresNothingSoFailsTheRun(t *testing.T) {
 	filesFixture(t, relateLane+"\nprepare = \"npm ci\"")
 	grantLaneLines(t)
@@ -512,23 +513,19 @@ func TestConsentedVouchingLaneMeasuresNothingSoFailsTheRun(t *testing.T) {
 	if ExitCode(err) != exitNothingMeasured {
 		t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitNothingMeasured)
 	}
-	if !strings.Contains(err.Error(), `lane "web"`) {
-		t.Errorf("the refusal does not name the lane: %v", err)
+	if !strings.Contains(out, `selector miss: lane "web"`) {
+		t.Errorf("the transcript does not name the lane:\n%s", out)
 	}
-	if !strings.Contains(out, `lane "web" vouches`) {
-		t.Errorf("the transcript does not carry the refusal:\n%s", out)
-	}
-	if rec.count() != 0 {
-		t.Errorf("a lane with no line spawned %d command(s): %q", rec.count(), rec.lines)
+	if want := []string{"npm ci", relateOverA}; !reflect.DeepEqual(rec.lines, want) {
+		t.Errorf("spawned %q, want %q — the lane's command has nothing to run", rec.lines, want)
 	}
 }
 
-// TestRefusedVouchingLanePaysForNoHost: the same lane with a host granted. The
-// remote arm spawns an empty line just as the local one does, and a lane leaving
-// the run must leave before the probe and the sync, not only before its spawn.
+// TestRefusedVouchingLanePaysForNoHost: a lane refused for its grant leaves
+// before the probe and the sync, not only before its relate. grantedLaneFixture
+// grants lane.Command, which a vouching lane's frame reads as stale.
 func TestRefusedVouchingLanePaysForNoHost(t *testing.T) {
 	grantedLaneFixture(t, relateLane)
-	grantLaneLines(t)
 	touchFile(t, "src/a.ts")
 	log := &runLog{}
 	log.probeSeam(t, nil, nil)
@@ -536,8 +533,8 @@ func TestRefusedVouchingLanePaysForNoHost(t *testing.T) {
 	rec := installSpawnRecorder(t, nil)
 
 	err := runCmd(t, Test(), "--files", "src/a.ts")
-	if ExitCode(err) != exitNothingMeasured {
-		t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitNothingMeasured)
+	if ExitCode(err) != exitLaneRefused {
+		t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitLaneRefused)
 	}
 	if len(log.events) != 0 || log.probes != 0 {
 		t.Errorf("the refused lane reached the host: %d probe(s), events %v", log.probes, log.events)
@@ -547,25 +544,122 @@ func TestRefusedVouchingLanePaysForNoHost(t *testing.T) {
 	}
 }
 
-// TestVouchingRefusalFailsTheRunBesideAGreenLane: the neighbour still runs, and
-// its green must not stand for the run, because the paths in the refused lane
-// were never measured.
+// TestVouchingRefusalFailsTheRunBesideAGreenLane: the refusal here is the parser's
+// of relate's answer. The neighbour still runs, and its green must not stand for
+// the run, because the paths in the refused lane were never measured.
 func TestVouchingRefusalFailsTheRunBesideAGreenLane(t *testing.T) {
-	filesFixture(t, relateLane+"\n\n"+`[[runtime.test_lane]]
-name = "go"
-match = ["internal/**"]
-command = "go test -count=1"
-selector = "go-package"`)
+	filesFixture(t, relateLane+goNeighbourLane)
 	grantLaneLines(t)
 	touchFile(t, "src/a.ts")
 	touchFile(t, "internal/cmd/here.go")
-	rec := installSpawnRecorder(t, nil)
+	seam := (&relateSeam{stdout: "RELATE-MALFORMED\n"}).install(t)
 
 	err := runCmd(t, Test(), "--files", "src/a.ts", "--files", "internal/cmd/here.go")
-	if ExitCode(err) != exitNothingMeasured {
-		t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitNothingMeasured)
+	if ExitCode(err) != exitPrepareFailed {
+		t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitPrepareFailed)
 	}
-	if want := []string{"go test -count=1 './internal/cmd/...'"}; !reflect.DeepEqual(rec.lines, want) {
-		t.Errorf("spawned %q, want only the neighbour's %q", rec.lines, want)
+	if want := []string{relateOverA, goNeighbourLine}; !reflect.DeepEqual(seam.lines, want) {
+		t.Errorf("spawned %q, want relate and the neighbour's line, %q", seam.lines, want)
+	}
+}
+
+// TestPlanWithholdsBuildConfigFromRelate: the plan is where config leaves the
+// lane, so nothing downstream of it can show relate a path the run would not ask
+// about. Config matched at any depth goes, and in the order it was named.
+func TestPlanWithholdsBuildConfigFromRelate(t *testing.T) {
+	repoDir, proj := planFixture(t, relateWideLane)
+	touchFile(t, "src/a.ts")
+	touchFile(t, "src/vite.config.ts")
+	touchFile(t, "package.json")
+
+	got := lanePlan(repoDir, proj, []string{"src/a.ts", "src/vite.config.ts", "package.json"}).Lanes[0]
+	if got.Relate != relateOverA {
+		t.Errorf("relate = %q, want %q", got.Relate, relateOverA)
+	}
+	if !reflect.DeepEqual(got.Asked, []string{"src/a.ts"}) {
+		t.Errorf("asked = %v, want only the path relate is asked about", got.Asked)
+	}
+	if want := []string{"src/vite.config.ts", "package.json"}; !reflect.DeepEqual(got.Withheld, want) {
+		t.Errorf("withheld = %v, want %v", got.Withheld, want)
+	}
+	if got.ScopedToNothing {
+		t.Error("a lane with a path left to ask about is ScopedToNothing")
+	}
+}
+
+// TestPlanOfOnlyBuildConfigHasNoRelateLine: a bare relate line would ask about
+// nothing, so the lane has none, and Withheld is what tells it from a lane whose
+// paths were all deleted.
+func TestPlanOfOnlyBuildConfigHasNoRelateLine(t *testing.T) {
+	repoDir, proj := planFixture(t, relateWideLane)
+	touchFile(t, "package.json")
+
+	got := lanePlan(repoDir, proj, []string{"package.json"}).Lanes[0]
+	if got.Relate != "" || got.Asked != nil {
+		t.Errorf("relate = %q, asked = %v, want neither", got.Relate, got.Asked)
+	}
+	if !got.ScopedToNothing {
+		t.Error("a lane with nothing to ask about is not ScopedToNothing")
+	}
+	if !reflect.DeepEqual(got.Withheld, []string{"package.json"}) {
+		t.Errorf("withheld = %v, want [package.json]", got.Withheld)
+	}
+}
+
+// TestDeletedBuildConfigIsWithheldNotDropped: the fixed list reads names, and the
+// gate refuses a deleted package.json as it refuses an edited one, so the run
+// must name it. Filtered as dropped first, it would vanish from the transcript.
+func TestDeletedBuildConfigIsWithheldNotDropped(t *testing.T) {
+	repoDir, proj := planFixture(t, relateWideLane)
+	touchFile(t, "src/a.ts")
+
+	got := lanePlan(repoDir, proj, []string{"src/a.ts", "package.json"}).Lanes[0]
+	if !reflect.DeepEqual(got.Withheld, []string{"package.json"}) {
+		t.Errorf("withheld = %v, want [package.json]", got.Withheld)
+	}
+	if len(got.Dropped) != 0 {
+		t.Errorf("dropped = %v, want none", got.Dropped)
+	}
+}
+
+// TestPlanOfANonVouchingLaneWithholdsNothing: a plain lane's line is today's, so
+// its build config stays on it.
+func TestPlanOfANonVouchingLaneWithholdsNothing(t *testing.T) {
+	const plain = `[[runtime.test_lane]]
+name = "web"
+match = ["package.json"]
+command = "npx vitest run"
+selector = "path"`
+	repoDir, proj := planFixture(t, plain)
+	touchFile(t, "package.json")
+
+	got := lanePlan(repoDir, proj, []string{"package.json"}).Lanes[0]
+	if got.Withheld != nil {
+		t.Errorf("withheld = %v, want none", got.Withheld)
+	}
+	if want := "npx vitest run 'package.json'"; got.Line != want {
+		t.Errorf("line = %q, want %q", got.Line, want)
+	}
+}
+
+// TestPreviewRelateLineIsTheSpawnedOne is TestPlanLineIsTheSpawnedLine for a relate
+// line carrying withheld config: one string, compared across preview and the run,
+// so a filter on either side alone fails here.
+func TestPreviewRelateLineIsTheSpawnedOne(t *testing.T) {
+	relateFixture(t, relateWideLane, "src/a.ts", "package.json", "src/a.test.ts")
+	seam := (&relateSeam{stdout: aToATest}).install(t)
+
+	out := previewOut(t, "--files", "src/a.ts", "--files", "package.json")
+	if err := runCmd(t, Test(), "--files", "src/a.ts", "--files", "package.json"); err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	if len(seam.lines) == 0 {
+		t.Fatal("the run spawned nothing")
+	}
+	if !strings.Contains(out, "lane web relate: "+seam.lines[0]+"\n") {
+		t.Errorf("preview does not show the relate line the run spawned (%q):\n%s", seam.lines[0], out)
+	}
+	if strings.Contains(seam.lines[0], "package.json") {
+		t.Errorf("relate was asked about build config: %q", seam.lines[0])
 	}
 }
