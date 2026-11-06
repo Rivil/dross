@@ -132,12 +132,12 @@ func reviewStatus() *cobra.Command {
 				}
 				if tree != st.Tree {
 					status = "pass-stale"
-					note = "the tree changed after the review passed — re-run `dross test`, then `dross review context` and the reviewer"
+					note = "the tree changed after the review passed — " + gate.ReviewRetest(repoDir)
 				}
 			case review.StatusNone:
 				note = "no review recorded yet — run `dross review context`, then spawn " + review.ReviewerAgent + " with the printed prompt and wait for its verdict"
 			case review.StatusBlocked:
-				note = "blocked — one fix round: address every blocking finding, re-run `dross test`, then `dross review context` and the reviewer"
+				note = "blocked — one fix round: address every blocking finding, " + gate.ReviewRetest(repoDir)
 			case review.StatusExhausted, review.StatusUnavailable:
 				note = st.Cause + " — set the code aside and mark the task failed"
 			}
