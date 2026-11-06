@@ -39,7 +39,9 @@ func testLane() *cobra.Command {
 			"file set actually hits.\n\n" +
 			"Each lane's command carries its own consent grant — `dross trust --lane\n" +
 			"<name>` — so a lane that changes refuses only itself. A lane's optional\n" +
-			"install line is granted apart from it, with `dross trust --lane-install`.",
+			"install line is granted apart from it, with `dross trust --lane-install`.\n\n" +
+			"A lane with --vouch may admit a commit on a scoped green; --relate maps each\n" +
+			"changed path to the tests that measure it.",
 	}
 	c.AddCommand(testLaneAdd(), testLaneList(), testLanePreview(), testLaneEdit(), testLaneRemove(), testLaneInstall())
 	return c
@@ -166,6 +168,8 @@ func testLaneAdd() *cobra.Command {
 	var toolchain []string
 	var install string
 	var emptyExit []int
+	var vouch bool
+	var relate string
 	c := &cobra.Command{
 		Use:   "add <name>",
 		Short: "Declare a test lane",
@@ -175,7 +179,10 @@ func testLaneAdd() *cobra.Command {
 			"it. Follow with `dross trust --lane <name>`, which prints the line first.\n\n" +
 			"--install declares how this lane's toolchain is installed, replacing dross's\n" +
 			"built-in recipe. It carries its OWN grant — `dross trust --lane-install\n" +
-			"<name>` — because installing changes a machine and running a suite does not.",
+			"<name>` — because installing changes a machine and running a suite does not.\n\n" +
+			"--vouch lets the lane admit a commit on a scoped green. It needs --selector\n" +
+			"path, a --relate line and a runtime.test_command. --relate runs once over the\n" +
+			"changed paths, appended to it, and prints one <path><TAB><test> line per pair.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			name := strings.TrimSpace(args[0])
@@ -224,6 +231,10 @@ func testLaneAdd() *cobra.Command {
 				// disk from this verb.
 				Install:   strings.TrimSpace(install),
 				EmptyExit: emptyExit,
+				Vouch:     vouch,
+				// Trimmed to absent as Prepare and Install are: a blank relate
+				// on a vouching lane then reads as the missing one it is.
+				Relate: strings.TrimSpace(relate),
 			}
 			// The WHOLE lane, through the same problems validate reports, so
 			// this verb cannot write a lane the next `dross validate` rejects
@@ -237,6 +248,9 @@ func testLaneAdd() *cobra.Command {
 			}
 			root, p, err := loadProjectForLanes()
 			if err != nil {
+				return err
+			}
+			if err := laneFullRunRefusal(name, proposed, p); err != nil {
 				return err
 			}
 			for _, lane := range p.Runtime.TestLane {
@@ -273,6 +287,7 @@ func testLaneAdd() *cobra.Command {
 			if proposed.Install != "" {
 				Printf("  install: %s\n", proposed.Install)
 			}
+			printLaneVouch(proposed)
 			Printf("\n")
 			Printf("It will not run until this machine trusts it:\n\n    dross trust --lane %s\n", name)
 			// A SECOND grant, named separately. The command grant does not
@@ -295,6 +310,8 @@ func testLaneAdd() *cobra.Command {
 	c.Flags().StringArrayVar(&toolchain, "toolchain", nil, "binary this lane needs on the host that runs it (repeatable); omitted derives it from the first token of --command and --prepare")
 	c.Flags().StringVar(&install, "install", "", "optional line that installs this lane's toolchain; replaces dross's built-in recipe and carries its own consent grant, separate from the lane's")
 	c.Flags().IntSliceVar(&emptyExit, "empty-exit", nil, "exit code this lane's runner uses for \"collected no tests\" (repeatable); requires --selector")
+	c.Flags().BoolVar(&vouch, "vouch", false, "trust this lane to admit a commit on a scoped green; requires --selector path and --relate")
+	c.Flags().StringVar(&relate, "relate", "", "the line that maps each changed path to its tests, printing one <path><TAB><test> per pair; the paths are appended to it. Requires --vouch")
 	return c
 }
 
@@ -354,6 +371,7 @@ func testLaneList() *cobra.Command {
 				if len(lane.EmptyExit) > 0 {
 					Printf("  empty-exit: %s\n", joinInts(lane.EmptyExit))
 				}
+				printLaneVouch(lane)
 			}
 			return nil
 		},
@@ -371,10 +389,10 @@ func testLaneList() *cobra.Command {
 // into ABSENT, which is the distinction the consent ladder exists to preserve
 // and the one that tells a rewrite apart from a first run.
 //
-// So match, command, selector, empty_exit, selector_template and selector_join
-// join prepare, toolchain and install here. Nothing about a lane is
-// remove-then-re-add any more except its NAME, which keys the grant store and
-// therefore cannot move without the grant moving with it.
+// So match, command, selector, empty_exit, selector_template, selector_join,
+// vouch and relate join prepare, toolchain and install here. Nothing about a
+// lane is remove-then-re-add any more except its NAME, which keys the grant
+// store and therefore cannot move without the grant moving with it.
 //
 // Toolchain and install remain the two fields OUTSIDE the command grant —
 // toolchain names binaries rather than a command, and install carries its own
@@ -393,14 +411,17 @@ func testLaneEdit() *cobra.Command {
 	var toolchain []string
 	var install string
 	var emptyExit []string
+	var vouch bool
+	var relate string
 	c := &cobra.Command{
 		Use:   "edit <name>",
 		Short: "Change a declared lane's fields in place, keeping its grant",
 		Long: "Changes a lane's --match, --command, --prepare, --selector,\n" +
-			"--selector-template, --selector-join, --empty-exit, --toolchain or\n" +
-			"--install in place, leaving its name and its position in project.toml\n" +
-			"exactly as they were. Only the lane's NAME is still remove-then-re-add:\n" +
-			"it keys the consent store, so it cannot move without the grant moving.\n\n" +
+			"--selector-template, --selector-join, --empty-exit, --toolchain, --install,\n" +
+			"--vouch or --relate in place, leaving its name and its position in\n" +
+			"project.toml exactly as they were. Only the lane's NAME is still\n" +
+			"remove-then-re-add: it keys the consent store, so it cannot move without\n" +
+			"the grant moving.\n\n" +
 			"--match, --command, --prepare, --selector-template and --selector-join\n" +
 			"change the consent line, so the lane's grant is kept but goes STALE:\n" +
 			"`dross trust --lane <name>` will say the line CHANGED rather than that it\n" +
@@ -411,6 +432,10 @@ func testLaneEdit() *cobra.Command {
 			"--match, --toolchain and --empty-exit are repeatable and REPLACE the\n" +
 			"declared list wholesale; pass \"\" to any of them to clear it, and\n" +
 			"--prepare \"\", --selector \"\" or --install \"\" to drop those.\n\n" +
+			"--vouch lets the lane admit a commit on a scoped green. Neither it nor --relate\n" +
+			"is valid alone, so opting in is both flags in one edit, on a `path` lane.\n" +
+			"--vouch=false clears relate in the same edit and prints the line it cleared.\n" +
+			"Both are part of the consent line, so either change stales the grant.\n\n" +
 			"An edit that would leave the lane malformed is refused before anything is\n" +
 			"written, through the same rules `dross validate` reports.",
 		Args: cobra.ExactArgs(1),
@@ -429,12 +454,16 @@ func testLaneEdit() *cobra.Command {
 			setsEmptyExit := cmd.Flags().Changed("empty-exit")
 			setsToolchain := cmd.Flags().Changed("toolchain")
 			setsInstall := cmd.Flags().Changed("install")
+			setsVouch := cmd.Flags().Changed("vouch")
+			setsRelate := cmd.Flags().Changed("relate")
 			if !setsMatch && !setsCommand && !setsPrepare && !setsSelector &&
-				!setsTemplate && !setsJoin && !setsEmptyExit && !setsToolchain && !setsInstall {
+				!setsTemplate && !setsJoin && !setsEmptyExit && !setsToolchain && !setsInstall &&
+				!setsVouch && !setsRelate {
 				return fmt.Errorf("nothing to change: `dross test lane edit %s` needs one of --match, --command,\n"+
 					"--prepare, --selector, --selector-template, --selector-join, --empty-exit,\n"+
-					"--toolchain or --install.\n\n"+
-					"Pass \"\" to any of them to clear the field. Only the lane's NAME is changed\n"+
+					"--toolchain, --install, --vouch or --relate.\n\n"+
+					"Pass \"\" to any of them but --vouch to clear the field, and --vouch=false to\n"+
+					"stop a lane vouching. Only the lane's NAME is changed\n"+
 					"by removing the lane and re-adding it — it keys the consent grant", args[0])
 			}
 			name := args[0]
@@ -522,6 +551,24 @@ func testLaneEdit() *cobra.Command {
 				// disagreed would put a lane on disk validate then rejects.
 				proposed.Install = strings.TrimSpace(install)
 			}
+			// Vouch first, so that a --relate in the same edit lands on top of
+			// the clear: `--vouch=false --relate <line>` asks for a relate no
+			// lane may carry, and the refusal below says so where clearing last
+			// would silently discard the line the user typed.
+			var clearedRelate string
+			if setsVouch {
+				proposed.Vouch = vouch
+				if !vouch {
+					// Cleared with it, because validate refuses a relate on a
+					// lane that does not vouch: leaving it would make stopping
+					// a lane vouching take two edits.
+					clearedRelate = strings.TrimSpace(proposed.Relate)
+					proposed.Relate = ""
+				}
+			}
+			if setsRelate {
+				proposed.Relate = strings.TrimSpace(relate)
+			}
 			// Checked BEFORE the mutation lands, so a refused edit leaves
 			// project.toml byte-for-byte unchanged — and checked through the
 			// WHOLE lane's problems, not one field group's, because the newly
@@ -532,6 +579,9 @@ func testLaneEdit() *cobra.Command {
 				return err
 			}
 			if err := laneToolchainRefusal(name, proposed); err != nil {
+				return err
+			}
+			if err := laneFullRunRefusal(name, proposed, p); err != nil {
 				return err
 			}
 			p.Runtime.TestLane[idx] = proposed
@@ -592,6 +642,24 @@ func testLaneEdit() *cobra.Command {
 					Printf("\nIts install grant is separate and now needs reading:\n\n    dross trust --lane-install %s\n", name)
 				}
 			}
+			if setsVouch {
+				if lane.Vouch {
+					Printf("lane %q now vouches for a commit on a scoped green.\n", name)
+				} else {
+					Printf("lane %q no longer vouches.\n", name)
+				}
+			}
+			// The cleared line is printed in full: `--vouch=false` removes a
+			// command the user never mentioned, and this is the only copy of it
+			// left if they meant to keep it.
+			switch {
+			case clearedRelate != "":
+				Printf("lane %q relate cleared: %s\n", name, clearedRelate)
+			case setsRelate && lane.Relate == "":
+				Printf("lane %q now declares no relate.\n", name)
+			case setsRelate:
+				Printf("lane %q relate: %s\n", name, lane.Relate)
+			}
 			// Only when the consent line actually moved. A trust instruction
 			// printed on a no-op re-set teaches the user that the message
 			// carries no information, and the next real one gets skimmed.
@@ -611,6 +679,8 @@ func testLaneEdit() *cobra.Command {
 	c.Flags().StringArrayVar(&emptyExit, "empty-exit", nil, "exit code this lane's runner uses for \"collected no tests\" (repeatable); replaces the declared list, pass \"\" to clear it")
 	c.Flags().StringArrayVar(&toolchain, "toolchain", nil, "binary this lane needs on the host that runs it (repeatable); replaces the derived list, pass \"\" to go back to deriving it")
 	c.Flags().StringVar(&install, "install", "", "the line that installs this lane's toolchain; replaces dross's built-in recipe, pass \"\" to drop it")
+	c.Flags().BoolVar(&vouch, "vouch", false, "trust this lane to admit a commit on a scoped green; --vouch=false stops it and clears relate in the same edit")
+	c.Flags().StringVar(&relate, "relate", "", "the line that maps each changed path to its tests, printing one <path><TAB><test> per pair; only a vouching lane may carry one")
 	return c
 }
 
@@ -706,4 +776,34 @@ func printLaneTemplate(lane project.TestLane) {
 	if lane.SelectorJoin != "" {
 		Printf("  selector-join: %s\n", lane.SelectorJoin)
 	}
+}
+
+// printLaneVouch echoes a lane's vouch and relate, and prints nothing for a lane
+// that sets neither.
+//
+// Each line is judged on its own field, so a relate hand-edited onto a lane that
+// does not vouch is still visible in the listing that would explain it. Shared
+// by `lane add` and `lane list` for the reason printLaneTemplate is.
+func printLaneVouch(lane project.TestLane) {
+	if lane.Vouch {
+		Printf("  vouch: true\n")
+	}
+	if lane.Relate != "" {
+		Printf("  relate: %s\n", lane.Relate)
+	}
+}
+
+// laneFullRunRefusal returns the refusal for a vouching lane in a repo with no
+// runtime.test_command, or nil.
+//
+// It is the one lane rule laneRefusal cannot reach: that gate validates a
+// one-lane project with no test_command, so this reads the real one. Without it
+// the CLI could write a lane the next `dross validate` rejects, which is the
+// invariant laneRefusal exists to hold.
+func laneFullRunRefusal(name string, lane project.TestLane, p *project.Project) error {
+	problem := vouchFullRunProblem(laneLabel(0, name), lane, p.Runtime.TestCommand)
+	if problem == "" {
+		return nil
+	}
+	return fmt.Errorf("lane %q would not validate:\n  %s", name, problem)
 }

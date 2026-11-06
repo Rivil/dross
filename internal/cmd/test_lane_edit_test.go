@@ -744,3 +744,270 @@ func TestLaneSelectorRefusalIsGone(t *testing.T) {
 		t.Error("laneRefusal is missing — the gate that replaced it")
 	}
 }
+
+// testRelate is the relate line these tests opt a lane in with. Its text is
+// never run: only `dross test` spawns relate, and nothing here gets that far.
+const testRelate = "node scripts/relate.mjs"
+
+// vouchEditFixture declares a `path` lane to opt in, a lane for each selector
+// shape that may not vouch, and neighbours whose position must hold.
+func vouchEditFixture(t *testing.T) string {
+	dir := vouchFixture(t)
+	mustAddLane(t, "web", "--match", "src/**", "--command", "npx vitest run", "--selector", "path")
+	mustAddLane(t, "docs", "--match", "docs/", "--command", "markdownlint docs")
+	mustAddLane(t, "pkg", "--match", "lib/**", "--command", "pytest", "--selector", "dir")
+	mustAddLane(t, "gopkg", "--match", "internal/**", "--command", "go test", "--selector", "go-package")
+	return dir
+}
+
+// assertLaneRefused runs one lane verb and requires it to fail naming want,
+// leaving project.toml byte-for-byte as it was.
+func assertLaneRefused(t *testing.T, dir, want string, args ...string) {
+	t.Helper()
+	path := filepath.Join(dir, RootDirName, project.File)
+	before := mustRead(t, path)
+	err := runCmd(t, Test(), append([]string{"lane"}, args...)...)
+	if err == nil {
+		t.Fatalf("`lane %v` was accepted", args)
+	}
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("`lane %v` refusal does not say %q: %v", args, want, err)
+	}
+	if after := mustRead(t, path); after != before {
+		t.Errorf("a refused edit rewrote project.toml:\n--- before\n%s\n--- after\n%s", before, after)
+	}
+}
+
+// TestLaneEditRefusesALaneThatCannotVouch: each shape reports green having
+// measured nothing, so each is refused by the rule validate reports, and none
+// reaches disk. Every row but the last two passes a relate, so the refusal can
+// only be the selector's.
+func TestLaneEditRefusesALaneThatCannotVouch(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"no selector", []string{"docs", "--vouch", "--relate", testRelate}, "sets vouch with no selector"},
+		{"dir selector", []string{"pkg", "--vouch", "--relate", testRelate}, `sets vouch with selector = "dir"`},
+		{"go-package selector", []string{"gopkg", "--vouch", "--relate", testRelate}, `sets vouch with selector = "go-package"`},
+		{"no relate", []string{"web", "--vouch"}, "sets vouch with no relate"},
+		{"relate alone", []string{"web", "--relate", testRelate}, "declares relate with no vouch"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := vouchEditFixture(t)
+			assertLaneRefused(t, dir, tc.want, append([]string{"edit"}, tc.args...)...)
+		})
+	}
+}
+
+// TestLaneEditVouchIsOneEdit: neither flag is valid alone, so a verb that
+// applied them one at a time could never opt a lane in at all.
+func TestLaneEditVouchIsOneEdit(t *testing.T) {
+	dir := vouchEditFixture(t)
+	before := loadLanes(t, dir)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "lane", "edit", "web", "--vouch", "--relate", "  "+testRelate+" "); err != nil {
+		t.Fatalf("opting in with both flags was refused: %v", err)
+	}
+
+	after := loadLanes(t, dir)
+	want := before[0]
+	want.Vouch = true
+	want.Relate = testRelate // trimmed, as prepare and install are
+	if !reflect.DeepEqual(after[0], want) {
+		t.Errorf("the edit changed more than vouch and relate:\n want %+v\n got  %+v", want, after[0])
+	}
+	if !reflect.DeepEqual(after[1:], before[1:]) {
+		t.Errorf("the neighbours changed:\n before %+v\n after  %+v", before[1:], after[1:])
+	}
+	for _, line := range []string{`lane "web" now vouches`, `lane "web" relate: ` + testRelate} {
+		if !strings.Contains(out, line) {
+			t.Errorf("the edit did not echo %q:\n%s", line, out)
+		}
+	}
+}
+
+// TestLaneEditLeavesVouchAloneWhenNotNamed is the Changed guard for the two new
+// flags: read from their values, `--prepare` alone would stop a lane vouching.
+func TestLaneEditLeavesVouchAloneWhenNotNamed(t *testing.T) {
+	dir := vouchEditFixture(t)
+	mustEditLane(t, "web", "--vouch", "--relate", testRelate)
+
+	mustEditLane(t, "web", "--prepare", "make build")
+
+	got := loadLanes(t, dir)[0]
+	if !got.Vouch || got.Relate != testRelate {
+		t.Errorf("an edit naming neither flag changed them: vouch=%t relate=%q", got.Vouch, got.Relate)
+	}
+}
+
+// TestLaneEditVouchFalseClearsRelate: validate refuses a relate on a lane that
+// does not vouch, so stopping one must take both keys in one edit, and the
+// command it removed unasked has to be named or it is gone without a trace.
+func TestLaneEditVouchFalseClearsRelate(t *testing.T) {
+	dir := vouchEditFixture(t)
+	before := loadLanes(t, dir)
+	mustEditLane(t, "web", "--vouch", "--relate", testRelate)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "lane", "edit", "web", "--vouch=false"); err != nil {
+		t.Fatalf("--vouch=false was refused: %v", err)
+	}
+
+	if after := loadLanes(t, dir); !reflect.DeepEqual(after, before) {
+		t.Errorf("the lanes are not back as they were, in place:\n want %+v\n got  %+v", before, after)
+	}
+	body := mustRead(t, filepath.Join(dir, RootDirName, project.File))
+	for _, key := range []string{"vouch", "relate"} {
+		if strings.Contains(body, key) {
+			t.Errorf("clearing left the %s key behind:\n%s", key, body)
+		}
+	}
+	if !strings.Contains(out, `lane "web" no longer vouches`) {
+		t.Errorf("the edit did not say the lane stopped vouching:\n%s", out)
+	}
+	if !strings.Contains(out, `lane "web" relate cleared: `+testRelate) {
+		t.Errorf("the edit did not name the relate line it cleared:\n%s", out)
+	}
+}
+
+// TestLaneEditVouchFalseWithRelateIsRefused: clearing last would discard the
+// line the user typed in the same breath, so the contradiction is named instead.
+func TestLaneEditVouchFalseWithRelateIsRefused(t *testing.T) {
+	dir := vouchEditFixture(t)
+	mustEditLane(t, "web", "--vouch", "--relate", testRelate)
+
+	assertLaneRefused(t, dir, "declares relate with no vouch", "edit", "web", "--vouch=false", "--relate", "node other.mjs")
+}
+
+// TestLaneEditCannotBlankAVouchingLanesRelate: relate is the only thing tying a
+// path to its tests, so clearing it on a lane still vouching is refused, and a
+// blank is the same request as an empty one.
+func TestLaneEditCannotBlankAVouchingLanesRelate(t *testing.T) {
+	for _, blank := range []string{"", "   "} {
+		dir := vouchEditFixture(t)
+		mustEditLane(t, "web", "--vouch", "--relate", testRelate)
+
+		assertLaneRefused(t, dir, "sets vouch with no relate", "edit", "web", "--relate", blank)
+	}
+}
+
+// TestLaneEditClearsADeadRelate: the one lane a bare `--relate ""` can apply to
+// is a hand-edited one validate already rejects, and this verb is how it is
+// repaired.
+func TestLaneEditClearsADeadRelate(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+  name = "web"
+  match = ["src/**"]
+  command = "npx vitest run"
+  relate = "node scripts/relate.mjs"`)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "lane", "edit", "web", "--relate", ""); err != nil {
+		t.Fatalf("clearing a dead relate was refused: %v", err)
+	}
+	if got := loadLanes(t, dir)[0].Relate; got != "" {
+		t.Errorf("relate = %q, want it cleared", got)
+	}
+	if !strings.Contains(out, `lane "web" now declares no relate`) {
+		t.Errorf("the edit did not say the relate went:\n%s", out)
+	}
+}
+
+// TestLaneEditVouchStalesTheGrant: a lane that vouches can put a commit past the
+// gate, so a grant issued before it could must not carry over, and the edit has
+// to say so. Rewriting relate is the same, since relate decides what counts as
+// covered.
+func TestLaneEditVouchStalesTheGrant(t *testing.T) {
+	dir := vouchEditFixture(t)
+	root := filepath.Join(dir, RootDirName)
+	if err := GrantLaneConsent(root, "web", laneConsentLine(loadLanes(t, dir)[0])); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "lane", "edit", "web", "--vouch", "--relate", testRelate); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "dross trust --lane web") {
+		t.Errorf("opting in did not name the fix for the stale grant:\n%s", out)
+	}
+	err := runCmd(t, Trust(), "--lane", "web", "--check")
+	if err == nil || !strings.Contains(err.Error(), "has CHANGED since you trusted it") {
+		t.Errorf("--check after opting in = %v, want a stale grant", err)
+	}
+
+	if err := GrantLaneConsent(root, "web", laneConsentLine(loadLanes(t, dir)[0])); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmdCapturing(t, &out, Test(), "lane", "edit", "web", "--relate", "node other.mjs"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "dross trust --lane web") {
+		t.Errorf("rewriting relate did not name the fix for the stale grant:\n%s", out)
+	}
+}
+
+// TestLaneAddVouchExitRule: 1 is how runners report failing tests, so listing it
+// would read a red as collecting nothing. relate is what says a path has no
+// test, so the field itself stays optional.
+func TestLaneAddVouchExitRule(t *testing.T) {
+	vouching := []string{"add", "web", "--match", "src/**", "--command", "npx vitest run",
+		"--selector", "path", "--vouch", "--relate", testRelate}
+
+	t.Run("listing 1 is refused", func(t *testing.T) {
+		dir := vouchFixture(t)
+		assertLaneRefused(t, dir, "sets vouch with empty_exit listing 1", append(vouching, "--empty-exit", "1")...)
+	})
+	t.Run("omitted is accepted", func(t *testing.T) {
+		dir := vouchFixture(t)
+		mustAddLane(t, vouching[1:]...)
+		got := loadLanes(t, dir)[0]
+		if !got.Vouch || got.Relate != testRelate || len(got.EmptyExit) != 0 {
+			t.Errorf("the lane did not land as declared: %+v", got)
+		}
+	})
+	t.Run("another code is accepted", func(t *testing.T) {
+		dir := vouchFixture(t)
+		mustAddLane(t, append(vouching[1:], "--empty-exit", "5")...)
+		if got := loadLanes(t, dir)[0].EmptyExit; !reflect.DeepEqual(got, []int{5}) {
+			t.Errorf("empty_exit = %v, want [5]", got)
+		}
+	})
+}
+
+// TestLaneAddRefusesARelateWithNoVouch: add reads the same rule edit does, so a
+// relate nothing would ever run cannot enter by the other door.
+func TestLaneAddRefusesARelateWithNoVouch(t *testing.T) {
+	dir := laneFixture(t)
+	assertLaneRefused(t, dir, "declares relate with no vouch",
+		"add", "web", "--match", "src/**", "--command", "npx vitest run", "--selector", "path", "--relate", testRelate)
+}
+
+// TestLaneVouchNeedsATestCommand: laneRefusal validates a one-lane project with
+// no test_command, so this rule is checked apart from it, and both verbs have
+// to. Without it either could write a lane the next `dross validate` rejects.
+func TestLaneVouchNeedsATestCommand(t *testing.T) {
+	const want = "sets vouch in a repo with no runtime.test_command"
+
+	t.Run("add", func(t *testing.T) {
+		dir := laneFixture(t)
+		assertLaneRefused(t, dir, want, "add", "web", "--match", "src/**", "--command", "npx vitest run",
+			"--selector", "path", "--vouch", "--relate", testRelate)
+	})
+	t.Run("edit", func(t *testing.T) {
+		dir := laneFixture(t)
+		mustAddLane(t, "web", "--match", "src/**", "--command", "npx vitest run", "--selector", "path")
+		assertLaneRefused(t, dir, want, "edit", "web", "--vouch", "--relate", testRelate)
+	})
+}
+
+// TestLaneEditNothingToChangeNamesTheVouchFlags: the refusal is the list a user
+// reads to find the flag they wanted.
+func TestLaneEditNothingToChangeNamesTheVouchFlags(t *testing.T) {
+	dir := vouchEditFixture(t)
+	assertLaneRefused(t, dir, "--vouch or --relate", "edit", "web")
+}

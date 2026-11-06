@@ -213,6 +213,8 @@ func readDotted(p *project.Project, path string) (string, bool) {
 		return p.Runtime.ShellCommand, true
 	case "runtime.logs_command":
 		return p.Runtime.LogsCommand, true
+	case "runtime.test_exempt":
+		return strings.Join(p.Runtime.TestExempt, ","), true
 	// repo
 	case "repo.layout":
 		return p.Repo.Layout, true
@@ -477,6 +479,14 @@ func writeDotted(p *project.Project, path, value string) error {
 		p.Runtime.ShellCommand = value
 	case "runtime.logs_command":
 		p.Runtime.LogsCommand = value
+	case "runtime.test_exempt":
+		// Through the same rule validate reports, so a catch-all that would turn
+		// the commit gate off for the whole repo never reaches disk.
+		globs := splitCSV(value)
+		if problems := testExemptProblems(globs); len(problems) > 0 {
+			return fmt.Errorf("runtime.test_exempt would not validate:\n  %s", strings.Join(problems, "\n  "))
+		}
+		p.Runtime.TestExempt = globs
 	// repo
 	case "repo.layout":
 		p.Repo.Layout = value
