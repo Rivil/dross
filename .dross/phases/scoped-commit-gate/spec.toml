@@ -39,7 +39,7 @@
 
 [[criteria]]
   id = "c-9"
-  text = "A scoped green covers only the paths that reached at least one collected test. A changed path with no related test stays uncovered, so c-3 refuses the commit even when other paths in the same run have tests."
+  text = "A scoped green covers only the paths relate mapped to at least one test that exists in the tree, where the batched run of those tests passed. A changed path with no related test stays uncovered, so c-3 refuses the commit even when other paths in the same run have tests."
 
 [[decisions]]
   key = "scoped_gate_optin"
