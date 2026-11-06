@@ -239,6 +239,22 @@ func TestTaskFilesIsAWriteTimeGateOnly(t *testing.T) {
 	}
 }
 
+// TestExemptGlobsNameEveryReader: the human grant fingerprints the globs and
+// two commands print them, so the not-consumed claim has to name those readers
+// or it stops describing what happens to the value.
+func TestExemptGlobsNameEveryReader(t *testing.T) {
+	f := find(t, "project.Runtime.TestExempt")
+	if f.NotConsumed == nil {
+		t.Fatal("project.Runtime.TestExempt must be not-consumed")
+	}
+	joined := strings.Join(f.NotConsumed.Readers, " ")
+	for _, reader := range []string{"internal/consent/exempt.go", "internal/cmd/trust.go", "internal/diag/trust.go"} {
+		if !strings.Contains(joined, reader) {
+			t.Errorf("Readers must name %s, got %v", reader, f.NotConsumed.Readers)
+		}
+	}
+}
+
 // TestConsumedEntriesCarryACarrier asserts DECLARATION only. That the named
 // carrier is really typed pathfence.Contained is a claim about internal/cmd
 // symbols, asserted from a package cmd test — this package cannot import

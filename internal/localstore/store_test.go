@@ -352,6 +352,7 @@ mutation_workers = "6"
 trusted_test_command = "aaaa"
 trusted_replay_commands = "bbbb,cccc"
 trusted_run_commands = "dddd"
+trusted_test_exempt = "hhhh"
 
 [trusted_lane_commands]
   go = "eeee"
@@ -377,7 +378,8 @@ trusted_run_commands = "dddd"
 	}
 	// Every grant reads back through the embed.
 	if before.TrustedTestCommand != "aaaa" || before.TrustedReplayCommands != "bbbb,cccc" || before.TrustedRunCommands != "dddd" ||
-		before.TrustedLaneCommands["go"] != "eeee" || before.TrustedLaneCommands["web"] != "ffff" || before.TrustedLaneInstalls["web"] != "gggg" {
+		before.TrustedLaneCommands["go"] != "eeee" || before.TrustedLaneCommands["web"] != "ffff" || before.TrustedLaneInstalls["web"] != "gggg" ||
+		before.TrustedTestExempt != "hhhh" {
 		t.Fatalf("seeded grants did not decode through the embedded consent.Grants: %+v", before.Grants)
 	}
 
@@ -403,7 +405,8 @@ trusted_run_commands = "dddd"
 	}
 	// Every OTHER grant survives the writes, and the lane grants landed.
 	if after.TrustedReplayCommands != "bbbb,cccc" || after.TrustedRunCommands != "dddd" ||
-		after.TrustedLaneCommands["go"] != "eeee" || after.TrustedLaneCommands["web"] != "ffff" || after.TrustedLaneInstalls["web"] != "gggg" {
+		after.TrustedLaneCommands["go"] != "eeee" || after.TrustedLaneCommands["web"] != "ffff" || after.TrustedLaneInstalls["web"] != "gggg" ||
+		after.TrustedTestExempt != "hhhh" {
 		t.Errorf("a sibling grant was dropped by a grant: %+v", after.Grants)
 	}
 	if after.TrustedLaneCommands["docs"] != consent.Fingerprint("markdownlint docs") || after.TrustedLaneInstalls["go"] != consent.Fingerprint("go install x@latest") {
@@ -425,6 +428,33 @@ trusted_run_commands = "dddd"
 	g, err := GrantStore(root).Load()
 	if err != nil || g.TrustedTestCommand != consent.Fingerprint(cmd) {
 		t.Errorf("GrantStore.Load = %+v, %v", g, err)
+	}
+}
+
+// TestExemptGrantSurvivesAReload: the grant goes out through GrantStore and
+// comes back from the file under the key the other readers of local.toml know
+// it by. A tag drifting on either side reads as an ungranted list on the next
+// run, with nothing in the output to say why.
+func TestExemptGrantSurvivesAReload(t *testing.T) {
+	root := storeRoot(t)
+	globs := []string{"docs/**", "*.md"}
+	if err := consent.GrantExemptConsent(GrantStore(root), globs); err != nil {
+		t.Fatal(err)
+	}
+
+	if body := mustRead(t, Path(root)); !strings.Contains(body, "trusted_test_exempt = ") {
+		t.Errorf("local.toml does not carry the grant under its key:\n%s", body)
+	}
+	reloaded, err := Load(Path(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := consent.Fingerprint(consent.ExemptLine(globs)); reloaded.TrustedTestExempt != want {
+		t.Errorf("trusted_test_exempt = %q after a reload, want %q", reloaded.TrustedTestExempt, want)
+	}
+	state, err := consent.ExemptConsented(GrantStore(root), filepath.Dir(root), globs)
+	if err != nil || state != consent.Granted {
+		t.Errorf("ExemptConsented after a reload = %v, %v; want granted", state, err)
 	}
 }
 

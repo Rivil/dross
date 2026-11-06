@@ -6,3 +6,4 @@ command: trust
   flag: --run (string) default="" usage="grant consent for `dross run <name>`'s configured command instead of runtime.test_command"
   flag: --lane (string) default="" usage="grant consent for the named [[runtime.test_lane]]'s command instead of runtime.test_command"
   flag: --lane-install (string) default="" usage="grant consent for the named [[runtime.test_lane]]'s install line — a separate grant from --lane, because installing is a different act from running a suite"
+  flag: --test-exempt (bool) default="false" noopt="true" usage="grant consent for the runtime.test_exempt globs instead of runtime.test_command — paths matching them commit with no test run"

@@ -184,6 +184,9 @@ var fields = []Field{
 				"changed paths and never opened.",
 			Readers: []string{
 				"internal/cmd/validate.go (compiles each glob, refuses a catch-all)",
+				"internal/consent/exempt.go (fingerprints the sorted globs for the human grant)",
+				"internal/cmd/trust.go (prints each glob before granting)",
+				"internal/diag/trust.go (prints each glob on a stale or ungranted row)",
 			},
 		},
 	},

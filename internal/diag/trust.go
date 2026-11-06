@@ -44,8 +44,8 @@ type TrustInputs struct {
 // ConfigTrust reports hostile-or-broken config BEFORE a command refuses
 // mid-run: branch names git would reject, API hosts outside the derived
 // allowlist, an untracked-but-not-ignored local store, a git too old for
-// --end-of-options, and the exec-consent state of the test command and every
-// lane. It returns the sections in print order and the number of issues.
+// --end-of-options, and the exec-consent state of the test command, every lane
+// and test_exempt. It returns the sections in print order and the issue count.
 //
 // Every finding that costs counts as an issue, not a warning. A finding
 // printed without moving doctor's exit code is a finding nobody acts on — and
@@ -170,7 +170,7 @@ func gitVersion(in TrustInputs) Section {
 }
 
 // execConsent: 5. exec consent for runtime.test_command, the gated-surface
-// roster, and one row per lane.
+// roster, one row per lane, and the test_exempt grant.
 //
 // The half the locked exec_consent_gate decision admits the CLI cannot enforce
 // on its own: the gate refuses at the moment of use, but nothing tells the
@@ -219,6 +219,7 @@ func execConsent(root, repoDir string, p *project.Project, in TrustInputs) Secti
 	s.Lines = append(s.Lines, gatedSurface(in.GatedCommands)...)
 	lanes, _ := LaneConsent(root, repoDir, p, in.Grants)
 	s.Lines = append(s.Lines, lanes...)
+	s.Lines = append(s.Lines, exemptConsent(repoDir, p, in.Grants)...)
 	return s
 }
 
@@ -306,6 +307,42 @@ func lanePrepare(lane project.TestLane) []Line {
 		return nil
 	}
 	return []Line{note("      prepare: " + lane.Prepare)}
+}
+
+// exemptConsent renders the test_exempt grant, on the severity split the lane
+// rows use: a never-trusted list is the honest state of a fresh clone, and a
+// changed one is an issue.
+//
+// A repo with no list renders nothing. No grant is needed there, so a row of
+// any kind would tell the reader to look at something that is not a problem.
+func exemptConsent(repoDir string, p *project.Project, grants consent.Store) []Line {
+	globs := p.Runtime.TestExempt
+	state, cerr := consent.ExemptConsented(grants, repoDir, globs)
+	switch state {
+	case consent.NotApplicable:
+		return nil
+	case consent.Granted:
+		return []Line{ok("runtime.test_exempt: trusted")}
+	case consent.Refused:
+		return []Line{issue(fmt.Sprintf("runtime.test_exempt: %v", cerr))}
+	case consent.Stale:
+		lines := []Line{issue("runtime.test_exempt: consent is stale — the list has CHANGED since it was trusted here:")}
+		return append(lines, exemptGlobs(globs)...)
+	default:
+		lines := []Line{warn("runtime.test_exempt: not trusted on this machine, so these paths still need a green:")}
+		return append(lines, exemptGlobs(globs)...)
+	}
+}
+
+// exemptGlobs lists what the grant covers, then the fix. Every glob, because
+// re-consenting covers all of them, and a human runs the fix because an agent's
+// `dross trust` is refused.
+func exemptGlobs(globs []string) []Line {
+	var lines []Line
+	for _, glob := range consent.SortedExempt(globs) {
+		lines = append(lines, note("      "+glob))
+	}
+	return append(lines, note("    Fix (a human, only after reading that): `dross trust --test-exempt`"))
 }
 
 // hostOf extracts host[:port] from a URL for the allow_hosts fix line.

@@ -47,6 +47,12 @@ type Grants struct {
 	// line — consent to INSTALL that lane's toolchain, a different act from
 	// consent to run its suite (the locked install_consent decision).
 	TrustedLaneInstalls map[string]string `toml:"trusted_lane_installs,omitempty"`
+
+	// TrustedTestExempt is sha256 of ExemptLine: the sorted runtime.test_exempt
+	// globs this machine has agreed may commit with no test run. One value, not
+	// one per glob, so appending a glob stales the grant rather than leaving
+	// the rest of the list trusted beside it.
+	TrustedTestExempt string `toml:"trusted_test_exempt,omitempty"`
 }
 
 // Store is the persistence seam. Load returns the grants currently on disk —

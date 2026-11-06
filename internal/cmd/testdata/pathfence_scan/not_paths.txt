@@ -74,6 +74,7 @@ cmd.watchDigest.Suggested suggested_command
 consent.Grants.TrustedReplayCommands trusted_replay_commands
 consent.Grants.TrustedRunCommands trusted_run_commands
 consent.Grants.TrustedTestCommand trusted_test_command
+consent.Grants.TrustedTestExempt trusted_test_exempt
 
 # ---- ctxnudge — a transcript entry's kind ("assistant", "user", …) and the hook envelope's event name and nudge line, never paths
 ctxnudge.entry.Type type

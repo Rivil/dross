@@ -401,6 +401,7 @@ dross trust flag --lane (string) default="" usage="grant consent for the named [
 dross trust flag --lane-install (string) default="" usage="grant consent for the named [[runtime.test_lane]]'s install line — a separate grant from --lane, because installing is a different act from running a suite"
 dross trust flag --replay (string) default="" usage="grant consent for <phase-id>'s recorded red-proof replay command instead of runtime.test_command"
 dross trust flag --run (string) default="" usage="grant consent for `dross run <name>`'s configured command instead of runtime.test_command"
+dross trust flag --test-exempt (bool) default="false" noopt="true" usage="grant consent for the runtime.test_exempt globs instead of runtime.test_command — paths matching them commit with no test run"
 dross update | use="update" short="Update dross to the latest GitHub release"
 dross update flag --api-base (string) default="" hidden usage="override the GitHub API base URL (testing)"
 dross update flag --check (bool) default="false" noopt="true" usage="report the available version without updating"
