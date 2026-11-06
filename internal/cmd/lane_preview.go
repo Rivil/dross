@@ -59,8 +59,12 @@ type previewReport struct {
 // previewLaneReport is one lane's answer.
 type previewLaneReport struct {
 	Name string `json:"name"`
-	// Line is what the gate would spawn, empty when the lane would not spawn.
+	// Line is what the gate would spawn, empty when the lane would not spawn
+	// or when Relate is set, since no line exists until relate has answered.
 	Line string `json:"line"`
+	// Relate is the line a vouching lane spawns first. Its output chooses the
+	// tests, so a preview can show this line and never the one after it.
+	Relate string `json:"relate,omitempty"`
 	// Selector is the derived arguments Line carries.
 	Selector []string `json:"selector,omitempty"`
 	// Dropped are this lane's paths that are not on disk.
@@ -97,7 +101,8 @@ func testLanePreview() *cobra.Command {
 		Short: "Show the command line each lane would spawn for a file set, without running anything",
 		Long: "Resolves a file set against the declared lanes exactly as `dross test --files`\n" +
 			"does and prints the line each hit lane would spawn — and nothing else happens:\n" +
-			"no lane command, no prepare, no tree sync.\n\n" +
+			"no lane command, no prepare, no tree sync. A vouching lane shows its relate\n" +
+			"line instead, because its tests are chosen at run time.\n\n" +
 			"With no --files and no paths, the file set is the working tree's uncommitted\n" +
 			"changes. Exits 0 for every finding, including \"no lane matches\": preview\n" +
 			"describes, it does not judge.",
@@ -164,6 +169,7 @@ func runLanePreview(files, args []string, lane string, probe, asJSON bool) error
 		report.Lanes = append(report.Lanes, previewLaneReport{
 			Name:            pl.lane.Name,
 			Line:            pl.Line,
+			Relate:          pl.Relate,
 			Selector:        pl.Selector,
 			Dropped:         pl.Dropped,
 			ScopedToNothing: pl.ScopedToNothing,
@@ -268,6 +274,11 @@ func printPreviewLane(l previewLaneReport) {
 		Printf("lane %s — would not run: %s\n", l.Name, l.FenceErr)
 	case l.ScopedToNothing:
 		Printf("lane %s — every path matching it is gone, so its selector scoped to nothing\n", l.Name)
+	case l.Relate != "":
+		// Said rather than left to be inferred from the missing line: a reader
+		// looking for the tests would otherwise take this for the lane's run.
+		Printf("lane %s relate: %s\n", l.Name, l.Relate)
+		Printf("  tests are chosen at run time, from what this line prints\n")
 	default:
 		Printf("lane %s: %s\n", l.Name, l.Line)
 	}

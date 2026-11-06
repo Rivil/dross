@@ -22,6 +22,7 @@ package cmd
 // inherit refusals it exists precisely not to make.
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -55,8 +56,16 @@ type plannedLane struct {
 	// Line is what would be spawned: lane.Command byte-for-byte for a
 	// selectorless lane, the derived or templated line for a scoped one. Empty
 	// when the lane would not spawn at all — FenceErr or ScopedToNothing says
-	// which.
+	// which — and on a lane with a Relate, whose line needs relate's answer.
 	Line string
+	// Relate is what a vouching lane spawns first: lane.Relate with its live
+	// paths appended. What that prints decides the tests, so laneBatchLine
+	// builds the lane's line at run time and no plan can hold it.
+	Relate string
+	// Asked are the live paths Relate carries, which is the list ParseRelate
+	// reads its output against. A dropped path is on neither, so nothing relate
+	// says can cover a deleted file.
+	Asked []string
 	// Selector is the derived arguments Line carries. It travels beside the
 	// line because the miss report names them: "collected no tests" is only
 	// actionable if the reader can see what it was looking in.
@@ -101,8 +110,14 @@ func lanePlan(repoDir string, proj *project.Project, files []string) lanePlanRes
 		// derivation, so the plan can never carry a Line built from an entry
 		// the fence rejected — which is what keeps preview from rendering a
 		// command that could not legally spawn.
-		if err := laneFence(lane); err != nil {
+		if err := laneFence(lane, proj.Runtime.TestCommand); err != nil {
 			pl.FenceErr = err
+			out.Lanes = append(out.Lanes, pl)
+			continue
+		}
+		if lane.Vouch {
+			relate, asked, dropped, ok := laneRelateLine(repoDir, lane, sel.Matched[i])
+			pl.Relate, pl.Asked, pl.Dropped, pl.ScopedToNothing = relate, asked, dropped, !ok
 			out.Lanes = append(out.Lanes, pl)
 			continue
 		}
@@ -124,7 +139,10 @@ func lanePlan(repoDir string, proj *project.Project, files []string) lanePlanRes
 // shArgvFor rather than shArgv: the label is what the refusal tells the user to
 // go and edit, and blaming runtime.test_command for a lane's command would send
 // them to a line that is perfectly fine.
-func laneFence(lane project.TestLane) error {
+//
+// testCommand is here for one rule: a vouching lane needs a full run that is not
+// itself, which the lane alone cannot answer.
+func laneFence(lane project.TestLane, testCommand string) error {
 	if _, err := testlane.ShArgvFor(laneField(lane.Name), lane.Command); err != nil {
 		return err
 	}
@@ -146,7 +164,31 @@ func laneFence(lane project.TestLane) error {
 			return fmt.Errorf("%s: %w", laneField(lane.Name), err)
 		}
 	}
+	if lane.Vouch {
+		return vouchFence(lane, testCommand)
+	}
 	return nil
+}
+
+// vouchFence refuses a vouching lane validate would refuse. `dross validate` is
+// a verb nobody has to run, so a hand-edited lane reaches this point unjudged,
+// and a lane that cannot measure its paths must not get as far as admitting a
+// commit. The rules are validate's own helpers, so the two cannot disagree.
+//
+// relate is fenced here and only here: a lane that does not vouch never runs it.
+func vouchFence(lane project.TestLane, testCommand string) error {
+	label := laneField(lane.Name)
+	problems := laneVouchProblems(label, lane)
+	if problem := vouchFullRunProblem(label, lane, testCommand); problem != "" {
+		problems = append(problems, problem)
+	}
+	if len(problems) > 0 {
+		return errors.New(strings.Join(problems, "; "))
+	}
+	// Trimmed because laneRelateLine's line is: a leading space must not carry
+	// a dash past the fence and onto the line.
+	_, err := testlane.ShArgvFor(label, strings.TrimSpace(lane.Relate))
+	return err
 }
 
 // laneRunLine builds the one command line a lane will spawn, reports which of
@@ -177,19 +219,7 @@ func laneRunLine(repoDir string, lane project.TestLane, paths []string) (string,
 	if lane.Selector == "" {
 		return lane.Command, nil, nil, true
 	}
-	// Filtered before translation (locked missing_paths): a task that deleted
-	// a file would otherwise derive a package that no longer exists, and
-	// `go test ./gone/...` is a hard runner error — a failing gate for work
-	// the task did on purpose.
-	live := make([]string, 0, len(paths))
-	var dropped []string
-	for _, p := range paths {
-		if _, err := os.Stat(filepath.Join(repoDir, p)); err == nil {
-			live = append(live, p)
-			continue
-		}
-		dropped = append(dropped, p)
-	}
+	live, dropped := liveLanePaths(repoDir, paths)
 	if len(live) == 0 {
 		return "", nil, dropped, false
 	}
@@ -201,24 +231,91 @@ func laneRunLine(repoDir string, lane project.TestLane, paths []string) (string,
 	if err != nil || len(args) == 0 {
 		return "", nil, dropped, false
 	}
-	if lane.SelectorTemplate == "" {
-		return testCommandLine(lane.Command, args), args, dropped, true
-	}
-	// The template decides WHERE the derived arguments land; Derive above has
-	// already decided what shape they take. The fragments carry their own
-	// quoting — done mid-expansion, since template text and substituted path
-	// are one string by the time they get here — so they are joined onto the
-	// consented command verbatim rather than re-quoted.
-	//
-	// An error here means the up-front fence was skipped: the lane does not
-	// spawn, for the reason a bad style does not. Appending nothing and
-	// running anyway would be the silent whole-suite run this feature exists
-	// to replace.
-	frags, err := testlane.Expand(lane.SelectorTemplate, lane.SelectorJoin, args)
-	if err != nil || len(frags) == 0 {
+	line, ok := laneArgsLine(lane, args)
+	if !ok {
 		return "", nil, dropped, false
 	}
-	return strings.TrimSpace(lane.Command) + " " + strings.Join(frags, " "), args, dropped, true
+	return line, args, dropped, true
+}
+
+// liveLanePaths splits a lane's paths into those on disk and those gone.
+//
+// Filtered before translation (locked missing_paths): a task that deleted a
+// file would otherwise derive a package that no longer exists, and `go test
+// ./gone/...` is a hard runner error — a failing gate for work the task did on
+// purpose.
+func liveLanePaths(repoDir string, paths []string) ([]string, []string) {
+	live := make([]string, 0, len(paths))
+	var dropped []string
+	for _, p := range paths {
+		if _, err := os.Stat(filepath.Join(repoDir, p)); err == nil {
+			live = append(live, p)
+			continue
+		}
+		dropped = append(dropped, p)
+	}
+	return live, dropped
+}
+
+// laneArgsLine places derived arguments on a lane's command: appended, or
+// through its selector_template when it declares one.
+//
+// The template decides WHERE the arguments land; the caller has already decided
+// what they are. The fragments carry their own quoting — done mid-expansion,
+// since template text and substituted path are one string by the time they get
+// here — so they are joined onto the consented command verbatim rather than
+// re-quoted.
+//
+// ok is false when the template fails, which means the up-front fence was
+// skipped: the lane does not spawn, for the reason a bad style does not.
+// Appending nothing and running anyway would be the silent whole-suite run this
+// feature exists to replace.
+func laneArgsLine(lane project.TestLane, args []string) (string, bool) {
+	if lane.SelectorTemplate == "" {
+		return testCommandLine(lane.Command, args), true
+	}
+	frags, err := testlane.Expand(lane.SelectorTemplate, lane.SelectorJoin, args)
+	if err != nil || len(frags) == 0 {
+		return "", false
+	}
+	return strings.TrimSpace(lane.Command) + " " + strings.Join(frags, " "), true
+}
+
+// laneRelateLine builds the line a vouching lane spawns first, over its live
+// paths, and returns those paths and the ones dropped for being gone. ok is
+// false when none survive, which is laneRunLine's scoped-to-nothing lane.
+//
+// The paths are always appended. selector_template shapes the lane's command,
+// and relate is not that command: a template written for a runner's flags has
+// no meaning on the line that asks which tests exist.
+func laneRelateLine(repoDir string, lane project.TestLane, paths []string) (string, []string, []string, bool) {
+	live, dropped := liveLanePaths(repoDir, paths)
+	args, err := testlane.Derive(lane.Selector, live)
+	if err != nil || len(args) == 0 {
+		return "", nil, dropped, false
+	}
+	return testCommandLine(lane.Relate, args), live, dropped, true
+}
+
+// laneBatchLine builds the one line a vouching lane runs, over the tests relate
+// named, and returns the arguments it carries. Pure, so the run can call it once
+// relate has answered and a test can reach it with no spawn.
+//
+// The tests take the placement a path takes on any other lane, template
+// included. The changed paths are not an input, so they cannot reach this line.
+//
+// ok is false for no tests: a lane's command with nothing appended is its whole
+// suite, and that is the run a vouching lane exists to avoid.
+func laneBatchLine(lane project.TestLane, tests []string) (string, []string, bool) {
+	args := testlane.BatchArgs(tests)
+	if len(args) == 0 {
+		return "", nil, false
+	}
+	line, ok := laneArgsLine(lane, args)
+	if !ok {
+		return "", nil, false
+	}
+	return line, args, true
 }
 
 // fullLanePlan is every declared lane, unscoped: each runs its own command with
@@ -231,7 +328,7 @@ func fullLanePlan(proj *project.Project) []plannedLane {
 	out := make([]plannedLane, 0, len(proj.Runtime.TestLane))
 	for i, lane := range proj.Runtime.TestLane {
 		pl := plannedLane{matchedLane: matchedLane{index: i, lane: lane}}
-		if err := laneFence(lane); err != nil {
+		if err := laneFence(lane, proj.Runtime.TestCommand); err != nil {
 			pl.FenceErr = err
 		} else {
 			pl.Line = lane.Command

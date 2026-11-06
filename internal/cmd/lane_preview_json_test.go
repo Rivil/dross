@@ -182,3 +182,42 @@ func TestJSONCarriesConsentAndLocality(t *testing.T) {
 		t.Errorf("host_state = %q, want %q", got, hostUnresolved)
 	}
 }
+
+// TestPreviewJSONCarriesRelateBesideAnEmptyLine: `relate` is the plan's string
+// and the transcript's, and `line` keeps its one meaning rather than being reused
+// for it. A consumer reading `line` as what would run must not find relate there.
+func TestPreviewJSONCarriesRelateBesideAnEmptyLine(t *testing.T) {
+	repoDir, proj := planFixture(t, relateLane)
+	touchFile(t, "src/a.ts")
+	args := []string{"--files", "src/a.ts", "--no-probe"}
+
+	lanes := jsonLanes(t, previewJSON(t, args...))
+	if len(lanes) != 1 {
+		t.Fatalf("want 1 lane in the payload, got %d", len(lanes))
+	}
+	relate, _ := lanes[0]["relate"].(string)
+	if want := lanePlan(repoDir, proj, []string{"src/a.ts"}).Lanes[0].Relate; relate == "" || relate != want {
+		t.Errorf("relate = %q, want the plan's %q", relate, want)
+	}
+	if out := previewOut(t, args...); !strings.Contains(out, relate) {
+		t.Errorf("relate = %q, which the transcript does not carry:\n%s", relate, out)
+	}
+	if line, ok := lanes[0]["line"].(string); !ok || line != "" {
+		t.Errorf("line = %#v, want present and empty", lanes[0]["line"])
+	}
+}
+
+// TestPreviewJSONOmitsRelateOnAPlainLane: a lane with no relate carries no such
+// key, so the payload of every repo without one is unchanged.
+func TestPreviewJSONOmitsRelateOnAPlainLane(t *testing.T) {
+	filesFixture(t, selectorLanes)
+	touchFile(t, "internal/cmd/here.go")
+
+	lanes := jsonLanes(t, previewJSON(t, "--files", "internal/cmd/here.go", "--no-probe"))
+	if _, ok := lanes[0]["relate"]; ok {
+		t.Errorf("a plain lane carries relate: %#v", lanes[0])
+	}
+	if line, _ := lanes[0]["line"].(string); line == "" {
+		t.Error("a plain lane lost its line")
+	}
+}

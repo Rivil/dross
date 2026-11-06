@@ -12,6 +12,10 @@ package cmd
 // It serializes previewReport rather than re-walking the plan, for the reason
 // preview reads lanePlan rather than deriving its own line: a second traversal
 // is a second answer.
+//
+// A vouching lane comes through with `relate` set and `line` empty. `line` keeps
+// its one meaning, and a non-empty `relate` is the transcript's "tests are chosen
+// at run time": the line that runs them does not exist until relate has answered.
 
 import (
 	"github.com/spf13/cobra"

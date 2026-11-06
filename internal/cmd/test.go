@@ -437,6 +437,17 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 			worst = worseOutcome(worst, &ExitCodeError{Code: exitLaneRefused, Err: refusal})
 			continue
 		}
+		// A vouching lane has no Line until relate has answered, and nothing
+		// here runs relate yet. Spawning the empty Line would exit 0 having
+		// measured nothing, so the lane leaves the run before its prepare, the
+		// probe or a sync. Printed and folded, as a consent refusal is. The
+		// relate-and-batch run replaces this branch.
+		if pl.Relate != "" {
+			refusal := fmt.Errorf("refusing to report a run that measured nothing: lane %q vouches, and this build cannot run a relate lane yet", pl.lane.Name)
+			tr.say("%v\n\n", refusal)
+			worst = worseOutcome(worst, &ExitCodeError{Code: exitNothingMeasured, Err: refusal})
+			continue
+		}
 		runnable = append(runnable, pl)
 	}
 	if len(runnable) == 0 {

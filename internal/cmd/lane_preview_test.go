@@ -261,3 +261,79 @@ func TestPreviewTakesTrailingPathsAsFiles(t *testing.T) {
 		t.Errorf("the two-path set did not hit both lanes:\n%s", out)
 	}
 }
+
+// TestPreviewShowsThePlansRelateLine: preview prints the plan's relate string,
+// compared as an identity for the reason TestPreviewLineIsTheLineTheGateWouldSpawn
+// is, and it says the tests wait for the run. Every recorder stays silent, because
+// relate is the one line here a preview could be tempted to run for a better answer.
+func TestPreviewShowsThePlansRelateLine(t *testing.T) {
+	repoDir, proj := planFixture(t, relateLane)
+	touchFile(t, "src/a.ts")
+	log := &runLog{}
+	log.probeSeam(t, nil, nil)
+	log.spawnSeam(t)
+	rec := installSpawnRecorder(t, nil)
+
+	relate := lanePlan(repoDir, proj, []string{"src/a.ts"}).Lanes[0].Relate
+	if relate == "" {
+		t.Fatal("the plan has no relate line — the fixture proves nothing")
+	}
+	out := previewOut(t, "--files", "src/a.ts")
+
+	if !strings.Contains(out, "lane web relate: "+relate+"\n") {
+		t.Errorf("preview does not print the plan's relate line (%q):\n%s", relate, out)
+	}
+	if !strings.Contains(out, "chosen at run time") {
+		t.Errorf("preview does not say the tests are chosen at run time:\n%s", out)
+	}
+	if strings.Contains(out, "lane web:") {
+		t.Errorf("preview printed a line for a lane whose line does not exist yet:\n%s", out)
+	}
+	if rec.count() != 0 {
+		t.Errorf("preview spawned %d local command(s): %v", rec.count(), rec.lines)
+	}
+	for _, e := range log.events {
+		if e == "rsync" || strings.HasPrefix(e, "ssh") {
+			t.Errorf("preview reached out: %s", e)
+		}
+	}
+}
+
+// TestPreviewNamesAVouchingLanesDroppedPath: the deleted path is the case most
+// likely to be previewed, and a relate lane reports it as every other lane does.
+func TestPreviewNamesAVouchingLanesDroppedPath(t *testing.T) {
+	filesFixture(t, relateLane)
+	touchFile(t, "src/a.ts")
+
+	out := previewOut(t, "--files", "src/a.ts", "--files", "src/gone.ts")
+	if line := findLineWith(out, "dropped src/gone.ts"); !strings.Contains(line, "not on disk") {
+		t.Errorf("the deleted path is not named:\n%s", out)
+	}
+}
+
+// TestPreviewOfAGoneVouchingLaneSaysSo: with every path deleted there is no relate
+// line, so the finding is the scoped-to-nothing one and the promise of tests at
+// run time, which would be false, stays out.
+func TestPreviewOfAGoneVouchingLaneSaysSo(t *testing.T) {
+	filesFixture(t, relateLane)
+
+	out := previewOut(t, "--files", "src/gone.ts")
+	if !strings.Contains(out, "lane web — every path matching it is gone") {
+		t.Errorf("the empty lane is not named:\n%s", out)
+	}
+	if strings.Contains(out, "chosen at run time") {
+		t.Errorf("preview promised tests for a lane with nothing to run:\n%s", out)
+	}
+}
+
+// TestPreviewOfAPlainLaneNeverMentionsRelate: the new arm belongs to a vouching
+// lane, and every other lane's transcript stays as it was.
+func TestPreviewOfAPlainLaneNeverMentionsRelate(t *testing.T) {
+	filesFixture(t, selectorLanes)
+	touchFile(t, "internal/cmd/here.go")
+
+	out := previewOut(t, "--files", "internal/cmd/here.go")
+	if strings.Contains(out, "relate") || strings.Contains(out, "chosen at run time") {
+		t.Errorf("a plain lane's preview changed:\n%s", out)
+	}
+}

@@ -54,6 +54,7 @@ cmd.previewLaneReport.FenceErr fence_err
 cmd.previewLaneReport.Line line
 cmd.previewLaneReport.Locality locality
 cmd.previewLaneReport.Name name
+cmd.previewLaneReport.Relate relate
 cmd.previewReport.Host host
 cmd.previewReport.HostState host_state
 cmd.sessionStartHookOutput.AdditionalContext additionalcontext
