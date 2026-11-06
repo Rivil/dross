@@ -295,22 +295,78 @@ func TestExecutePromptBeginsBeforeLoop(t *testing.T) {
 	}
 }
 
-// TestExecutePromptLaneCommitRunsFullSuite: in a laned repo §1e's --files run
-// records no green, so a commit straight after it would be refused. §1f must
-// run a bare `dross test` — the full run the commit gate counts — before the
-// task's files are staged.
+// fenceLead is the prose line that introduces the fence holding the line at
+// offset at in s: the condition a reader runs that fence under.
+func fenceLead(s string, at int) string {
+	lines := strings.Split(s[:at], "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if l := strings.TrimSpace(lines[i]); l != "" && l != "```" {
+			return l
+		}
+	}
+	return ""
+}
+
+// laneCommitProblems lists what §1f f gets wrong about which green a commit
+// takes. A bare run must stay, ahead of the staging, as a branch: for a laned
+// repo with no vouching lane, whose --files run records nothing (c-4), and for a
+// vouching repo only once a `git commit` is refused. `uncovered:` is not that
+// trigger, because it reports the asked list and a commit may be smaller.
+func laneCommitProblems(f string) []string {
+	var out []string
+	for _, want := range []string{
+		"[[runtime.test_lane]]",
+		"`dross test lane list`",
+		"`--files` run is enough",
+		"`uncovered:` reports the asked list, not the commit",
+	} {
+		if !strings.Contains(f, want) {
+			out = append(out, "§1f lost "+want)
+		}
+	}
+	add := strings.Index(f, "git add <task.files>")
+	runs := bareDrossTestRE.FindAllStringIndex(f, -1)
+	if len(runs) == 0 {
+		out = append(out, "§1f has no fenced bare `dross test`")
+	}
+	for _, run := range runs {
+		if add < 0 || run[0] > add {
+			out = append(out, "§1f's bare `dross test` is not ahead of `git add <task.files>`")
+		}
+		lead := fenceLead(f, run[0])
+		for _, cond := range []string{"no vouching lane", "refused `git commit`"} {
+			if !strings.Contains(lead, cond) {
+				out = append(out, "§1f's bare run is not conditional on "+cond+": "+lead)
+			}
+		}
+	}
+	return out
+}
+
+// TestExecutePromptLaneCommitRunsFullSuite (c-7): a scoped green is enough where
+// a lane vouches, so §1f keeps its full run only as a branch. Each mutation
+// below is a §1f the check must refuse, the unconditional run first.
 func TestExecutePromptLaneCommitRunsFullSuite(t *testing.T) {
 	f := sectionOf(promptBody(t, "execute.md"), "### 1f.", "### ")
 	if f == "" {
 		t.Fatal("execute.md has no §1f section")
 	}
-	if !strings.Contains(f, "[[runtime.test_lane]]") {
-		t.Error("§1f must say when the extra full run is needed: when [[runtime.test_lane]] is declared")
+	for _, p := range laneCommitProblems(f) {
+		t.Error(p)
 	}
-	add := strings.Index(f, "git add <task.files>")
-	test := bareDrossTestRE.FindStringIndex(f)
-	if add < 0 || test == nil || test[0] > add {
-		t.Errorf("§1f must run a bare `dross test` before `git add <task.files>` (test at %v, add at %d)", test, add)
+	run := bareDrossTestRE.FindStringIndex(f)
+	if run == nil {
+		t.Fatal("§1f has no fenced bare `dross test` to mutate")
+	}
+	for name, mutant := range map[string]string{
+		"unconditional bare run":  strings.Replace(f, fenceLead(f, run[0]), "Run the full suite bare first:", 1),
+		"no bare run":             bareDrossTestRE.ReplaceAllString(f, ""),
+		"no lane check":           strings.ReplaceAll(f, "`dross test lane list`", "project.toml"),
+		"uncovered: as a trigger": strings.ReplaceAll(f, "`uncovered:` reports the asked list, not the commit", "`uncovered:` means run bare"),
+	} {
+		if len(laneCommitProblems(mutant)) == 0 {
+			t.Errorf("a §1f with %s passed the check", name)
+		}
 	}
 }
 
@@ -347,7 +403,7 @@ func mustIdx(t *testing.T, s, sub string) int {
 }
 
 // TestExecuteSoloReviewPlacement (c-1): in a solo run the reviewer runs after
-// the full green `dross test` and before the commit; pair mode spawns none.
+// §1f's green `dross test` and before the commit; pair mode spawns none.
 func TestExecuteSoloReviewPlacement(t *testing.T) {
 	f := sectionOf(rawExecuteBase(t), "### 1f.", "### ")
 	test := bareDrossTestRE.FindStringIndex(f)
@@ -427,6 +483,28 @@ func TestExecuteReviewerSpawnForeground(t *testing.T) {
 	}
 }
 
+// soloRetestProblems lists what a solo re-test arm gets wrong: a repo with a
+// vouching lane re-tests scoped and a repo with none bare, as `dross review
+// status` tells them to, and both come before the review is rebuilt.
+func soloRetestProblems(arm string) []string {
+	var out []string
+	review := strings.Index(arm, "dross review context")
+	if review < 0 {
+		out = append(out, "the arm no longer rebuilds the review")
+	}
+	for _, want := range []string{
+		"`dross test --files <the task's files>` in a repo with a vouching lane",
+		"bare `dross test` in a repo with no vouching lane",
+	} {
+		if i := strings.Index(arm, want); i < 0 {
+			out = append(out, "the arm lost "+want)
+		} else if i > review {
+			out = append(out, "the arm rebuilds the review before "+want)
+		}
+	}
+	return out
+}
+
 // TestExecuteReviewFailurePath (c-3): one fix round, re-tested before the
 // re-review; a still-failing review sets the code aside before marking the
 // task failed, and the loop moves on.
@@ -436,8 +514,12 @@ func TestExecuteReviewFailurePath(t *testing.T) {
 	if !strings.Contains(blocked, "**one fix round**, never more") {
 		t.Error("the blocked branch no longer caps the fix round at one")
 	}
-	if mustIdx(t, blocked, "re-run `dross test`") > mustIdx(t, blocked, "dross review context") {
-		t.Error("the fix round re-reviews before re-running `dross test`")
+	for _, p := range soloRetestProblems(blocked) {
+		t.Error("blocked: " + p)
+	}
+	reordered := strings.Replace(blocked, "re-test —", "`dross review context` first, then re-test —", 1)
+	if len(soloRetestProblems(reordered)) == 0 {
+		t.Error("a `blocked` route that rebuilds the review before re-testing passed the check")
 	}
 	fail := block[mustIdx(t, block, "- `exhausted` or `unavailable`"):]
 	stash, failed, next := mustIdx(t, fail, "git stash push -u -- . ':(exclude).dross'"), mustIdx(t, fail, "dross task status <phase> <task-id> failed"), mustIdx(t, fail, "dross task next <phase>")
@@ -454,6 +536,25 @@ func TestExecuteReviewSpawnError(t *testing.T) {
 	for _, want := range []string{"**or the spawn itself errored**", `--reason "<the error>"`} {
 		if !strings.Contains(fail, want) {
 			t.Errorf("the failure path lost %q", want)
+		}
+	}
+}
+
+// TestExecuteStaleReviewRetests (c-7): a stale pass re-tests by the repo's
+// lanes too, so a vouching repo never pays a full run for it and a repo with no
+// vouching lane keeps the only run its commit accepts.
+func TestExecuteStaleReviewRetests(t *testing.T) {
+	_, block := soloReview(t)
+	stale := block[mustIdx(t, block, "- `pass-stale`"):mustIdx(t, block, "- `exhausted` or `unavailable`")]
+	for _, p := range soloRetestProblems(stale) {
+		t.Error("pass-stale: " + p)
+	}
+	for name, mutant := range map[string]string{
+		"a bare run for every repo": strings.ReplaceAll(stale, "`dross test --files <the task's files>` in a repo with a vouching lane, ", ""),
+		"no bare run":               strings.ReplaceAll(stale, ", bare `dross test` in a repo with no vouching lane", ""),
+	} {
+		if len(soloRetestProblems(mutant)) == 0 {
+			t.Errorf("a `pass-stale` route with %s passed the check", name)
 		}
 	}
 }
@@ -595,20 +696,47 @@ func TestSoloWriterDispatch(t *testing.T) {
 	}
 }
 
-// TestSoloWriterGatesStayInMainLoop (c-3): a green writer is followed, in the
-// main loop and in order, by the bare suite, the cold review and the commit;
-// its own green is never the gate.
+// TestSoloWriterGatesStayInMainLoop (c-3, c-7): a green writer is followed, in
+// the main loop and in order, by the main loop's own run, the cold review and
+// the commit; its own green is never the gate. The run is a `--files` one because
+// the writer's stop cleared any scoped green, so a commit on the writer's run
+// alone is refused, and bare where no lane vouches, as c-4 needs.
 func TestSoloWriterGatesStayInMainLoop(t *testing.T) {
 	w := soloWriterBranch(t)
-	green := w[mustIdx(t, w, "- `test: green`"):mustIdx(t, w, "**Writer failed**")]
-	test, ctx, commit := mustIdx(t, green, "bare `dross test`"), mustIdx(t, green, "`dross review context`"), mustIdx(t, green, "the commit")
-	if !(test < ctx && ctx < commit) {
-		t.Errorf("writer-green order: dross test %d, review context %d, commit %d — want that order", test, ctx, commit)
+	green := w[mustIdx(t, w, "- `test: green`"):mustIdx(t, w, "- `test: none")]
+	scoped, bare, ctx, commit := mustIdx(t, green, "`dross test --files <the task's files>`"), mustIdx(t, green, "bare `dross test` in a repo with no vouching lane"), mustIdx(t, green, "`dross review context`"), mustIdx(t, green, "the commit")
+	if !(scoped < bare && bare < ctx && ctx < commit) {
+		t.Errorf("writer-green order: --files %d, bare %d, review context %d, commit %d — want that order", scoped, bare, ctx, commit)
 	}
-	for _, want := range []string{"§1f in the main loop", "The writer's green certifies nothing."} {
+	for _, want := range []string{"§1f in the main loop", "the writer's stop cleared any scoped green", "The writer's green certifies nothing."} {
 		if !strings.Contains(green, want) {
 			t.Errorf("the writer-green arm lost %q", want)
 		}
+	}
+}
+
+// TestSoloWriterNoneIsNoFailure (c-7): a writer whose run related no tests did
+// its task correctly, so `test: none` takes exit 5's routes to the same review
+// and commit, and never reaches the failure arm. They are spelled out here
+// because partials do not nest. A missing test stays out of the main loop's
+// hands: the route it gets is the bare run.
+func TestSoloWriterNoneIsNoFailure(t *testing.T) {
+	w := soloWriterBranch(t)
+	none := w[mustIdx(t, w, "- `test: none (<why>)`"):mustIdx(t, w, "**Writer failed**")]
+	exempt, bare, ctx, commit := mustIdx(t, none, "`runtime.test_exempt` in a repo with a vouching lane need no run"), mustIdx(t, none, "bare `dross test`"), mustIdx(t, none, "`dross review context`"), mustIdx(t, none, "the commit")
+	if !(exempt < bare && bare < ctx && ctx < commit) {
+		t.Errorf("writer-none order: exempt %d, bare %d, review context %d, commit %d — want that order", exempt, bare, ctx, commit)
+	}
+	if !strings.Contains(none, "no failure") {
+		t.Error("the writer-none arm no longer says it is no failure")
+	}
+	fail := w[mustIdx(t, w, "**Writer failed**"):mustIdx(t, w, "- A `blocked` review")]
+	if strings.Contains(fail, "none") {
+		t.Errorf("the writer failure arm takes `none`:\n%s", fail)
+	}
+	round := w[mustIdx(t, w, "- A `blocked` review"):]
+	if !strings.Contains(round, "green or `none` →") {
+		t.Error("a fix round's `none` report has no route but **Writer failed**")
 	}
 }
 
@@ -639,7 +767,7 @@ func TestSoloWriterReportOnly(t *testing.T) {
 func TestSoloWriterFailurePath(t *testing.T) {
 	w := soloWriterBranch(t)
 	fail := w[mustIdx(t, w, "**Writer failed**"):mustIdx(t, w, "- A `blocked` review")]
-	for _, want := range []string{"the spawn errored", "the report says `test: red`", "there is no report", "the bare `dross test` after it is red", "never fix it inline"} {
+	for _, want := range []string{"the spawn errored", "the report says `test: red`", "there is no report", "the main loop's `dross test` after it is red", "never fix it inline"} {
 		if !strings.Contains(fail, want) {
 			t.Errorf("the writer failure arm lost %q", want)
 		}
@@ -657,6 +785,50 @@ func TestSoloWriterFailurePath(t *testing.T) {
 	for _, inline := range []string{"one bounded fix", "fix here", "Edit pass"} {
 		if strings.Contains(w, inline) {
 			t.Errorf("the writer branch offers an inline fix: %q", inline)
+		}
+	}
+}
+
+// exitEntry is the test-not-run partial's text for one exit status, whitespace
+// normalised so a phrase wrapped across lines still matches.
+func exitEntry(t *testing.T, from, to string) string {
+	t.Helper()
+	s := expandedPrompt(t, "_execute.test-not-run.md")
+	return strings.Join(strings.Fields(s[mustIdx(t, s, from):mustIdx(t, s, to)]), " ")
+}
+
+// TestExecuteExitFiveRoutes (c-7): exit 5 is the absence of a verdict, and what
+// it asks for turns on the paths. A docs-only commit needs no run on a current
+// grant, a human clears a missing grant, and a path no test reaches needs a test
+// or the whole suite. The closing line must not undo the first route.
+func TestExecuteExitFiveRoutes(t *testing.T) {
+	five := exitEntry(t, "- **5** — ", "- **6** — ")
+	for _, want := range []string{
+		"Exempt-only: in a repo with a vouching lane",
+		"`runtime.test_exempt`",
+		"commit with no test run",
+		"`dross trust --test-exempt`, never run on their behalf",
+		"A changed path no test reaches: write a test for it and re-run, or run bare `dross test`",
+		"No vouching lane: widen a lane (`dross test lane list`) or run the whole suite bare",
+	} {
+		if !strings.Contains(five, want) {
+			t.Errorf("exit 5 lost %q:\n%s", want, five)
+		}
+	}
+	summary := exitEntry(t, "all mean the run did not happen", "red suite:")
+	if !strings.Contains(summary, "an exempt-only 5 commits on its grant, not on the run") {
+		t.Errorf("the closing line forbids the exempt-only commit exit 5 routes to:\n%s", summary)
+	}
+}
+
+// TestExecuteExitSevenNamesRelate (c-7): relate shares prepare's exit, so 7's
+// text must send the reader to whichever line failed. Worded for prepare alone,
+// a relate failure reads as a bootstrap fault and the agent reads the wrong line.
+func TestExecuteExitSevenNamesRelate(t *testing.T) {
+	seven := exitEntry(t, "- **7** — ", "- **8** — ")
+	for _, want := range []string{"`prepare` or `relate` command failed", "read the one the failure names", "no bootstrap fault"} {
+		if !strings.Contains(seven, want) {
+			t.Errorf("exit 7 lost %q:\n%s", want, seven)
 		}
 	}
 }

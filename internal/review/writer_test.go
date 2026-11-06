@@ -98,7 +98,7 @@ func TestWriterReportBounded(t *testing.T) {
 	for _, want := range []string{
 		"exactly one fenced block whose info string is `" + WriterReportFence + "`",
 		"- `files` —",
-		"- `test` — exactly `green`, or `red: <first failing test>`",
+		"- `test` — exactly `green`, `red: <first failing test>` or `none (<why>)`",
 		"- `notes` — at most 5 lines",
 		"No code, no diff and no file contents in the report",
 	} {
@@ -122,6 +122,42 @@ func TestWriterReportBounded(t *testing.T) {
 	}
 	if !slices.Equal(keys, []string{"files", "test", "notes"}) {
 		t.Errorf("the worked example's keys are %v, want files, test, notes", keys)
+	}
+}
+
+// TestWriterNamesNoFullSuite (c-7): a scoped green can be all a commit needs, so
+// the writer is never told the main loop runs the full suite after it.
+func TestWriterNamesNoFullSuite(t *testing.T) {
+	_, body := writerDef(t)
+	for _, line := range strings.Split(body, "\n") {
+		if strings.Contains(strings.ToLower(line), "full suite") {
+			t.Errorf("a writer line still names the full suite: %s", line)
+		}
+	}
+}
+
+// TestWriterReportsNoneOnExitFive (c-7): a run that related no tests measured
+// nothing and is not red, so it reports `none`. Reported as `red: not run`, it
+// would fail a correct task; `red: not run` stays for every other unrun test.
+func TestWriterReportsNoneOnExitFive(t *testing.T) {
+	_, body := writerDef(t)
+	var exit, field string
+	for _, line := range strings.Split(body, "\n") {
+		if strings.Contains(line, "exits 5") {
+			exit = line
+		}
+		if strings.HasPrefix(line, "- `test` — ") {
+			field = line
+		}
+	}
+	if !strings.Contains(exit, "related no tests") || !strings.Contains(exit, "report `test: none (<why>)`") {
+		t.Errorf("the body does not route an exit 5 to `test: none (<why>)`: %q", exit)
+	}
+	if strings.Contains(exit, "red: not run") {
+		t.Errorf("an exit 5 still reports `red: not run`: %q", exit)
+	}
+	if !strings.Contains(field, "for any other reason are `red: not run (<why>)`, never green") {
+		t.Errorf("the test field no longer keeps `red: not run` for the rest: %q", field)
 	}
 }
 

@@ -119,11 +119,16 @@ Read the exit status. Only **0** means the code was measured and passed:
 
 ### 1f. Commit + record
 
-The commit gate admits a code commit only after a **full** green `dross test` on exactly the tree being committed. With no lanes, §1e's run was that. With `[[runtime.test_lane]]` declared, §1e's `--files` run recorded nothing, so run the full suite bare first:
+The commit gate admits a code commit only on a green for exactly the tree being committed; re-run if anything outside `.dross/` changed since. Which green it takes depends on the repo — `dross test lane list` prints `vouch: true` on a vouching lane:
+
+- **Vouching lane** — §1e's `--files` run is enough: `scoped green: <n> covered` says it recorded one, and the commit needs no full run. `uncovered:` reports the asked list, not the commit, so it alone never triggers a bare run: commit and let the gate judge.
+- **No vouching lane** — with no lanes, §1e's run was the full green. With `[[runtime.test_lane]]` declared it recorded nothing.
+
+Run bare where a scoped green cannot do: before the commit in a laned repo with no vouching lane; in a vouching repo only after a refused `git commit` names a path only a full run clears (build config, a deletion, a path with no related test):
 ```
 dross test
 ```
-Only exit **0** lets you commit; re-run if anything outside `.dross/` changed since. A refused `git commit` is a hard stop, never something to route around.
+Only exit **0** lets you commit. A refused `git commit` is a hard stop, never something to route around: follow its remedy.
 
 A solo run reviews here, before the commit.
 **Re-fetch** if context was compacted: `dross prompt partial execute solo`
