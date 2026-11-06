@@ -175,28 +175,65 @@ func LiftedBy(home string, now time.Time) func(Gate, string) bool {
 // deleted writer record admits a second writer and lifts the main loop's
 // takeover refusal), so rm, unlink, mv with a record as its source, and the
 // ignored-file sweeps (`git clean -x/-X`, `git stash -a`) over .dross/gate/
-// are refused alongside the writes. Reads pass. Like gate-off-guard it cannot be lifted, and it fires everywhere: a
-// .dross/gate/ is the same record whichever repo it sits in.
+// are refused alongside the writes. .dross/local.toml gets the same fence,
+// because it holds the consent grants: a hand-written one is a forged `dross
+// trust`. Reads pass. Like gate-off-guard it cannot be lifted, and it fires
+// everywhere: a .dross/gate/ is the same record whichever repo it sits in.
 func init() {
 	Register(Gate{
 		Name: "tamper-guard", Scope: AlwaysOn, Liftable: false,
 		Claims: func(c *Call) bool { return tamperTarget(c) != "" },
 		Judge: func(c *Call) (*Refusal, error) {
+			target := tamperTarget(c)
+			if isLocalStore(target) {
+				return NewRefusal(
+					fmt.Sprintf("%s holds this machine's consent grants; writing or deleting it from a tool call would forge a grant no human gave", target),
+					"a human grants with `dross trust` in their own terminal; its plain settings change through `dross local set <key> <value>`")
+			}
 			return NewRefusal(
-				fmt.Sprintf("%s is a record the tool gates trust; writing or deleting it from a tool call would forge a green, an approval, a review or an override", tamperTarget(c)),
+				fmt.Sprintf("%s is a record the tool gates trust; writing or deleting it from a tool call would forge a green, an approval, a review or an override", target),
 				"let dross write it — `dross test` records a green, an AskUserQuestion approval records an approval, and only a human lifts a gate, from their own terminal")
 		},
 	})
 }
 
+// isLocalStore reports whether p is a repo's .dross/local.toml.
+func isLocalStore(p string) bool {
+	return strings.HasSuffix("/"+path.Clean(filepath.ToSlash(p)), "/.dross/local.toml")
+}
+
 // isGateRecord reports whether p (absolute, or relative to nothing) is under a
-// .dross/gate/ directory or is the override store.
+// .dross/gate/ directory, is the override store or is a repo's local.toml.
 func isGateRecord(p, home string) bool {
 	clean := path.Clean(filepath.ToSlash(p))
-	if strings.Contains("/"+clean+"/", "/.dross/gate/") {
+	if strings.Contains("/"+clean+"/", "/.dross/gate/") || isLocalStore(p) {
 		return true
 	}
 	return home != "" && filepath.Clean(p) == OverridesPath(home)
+}
+
+// sedInPlace reports whether sed's args rewrite its files: `-i`, BSD's `-I`, a
+// bundle holding either (`-ni`, `-i.bak`) or `--in-place`, which GNU takes
+// abbreviated down to `--i`. Without one sed only reads.
+func sedInPlace(args []string) bool {
+	for _, a := range args {
+		short := strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--")
+		if (short && strings.ContainsAny(a, "iI")) || strings.HasPrefix(a, "--i") {
+			return true
+		}
+	}
+	return false
+}
+
+// copyTargets names what cp or mv writes: the last operand, and each source's
+// name inside it, because that operand may be a directory.
+func copyTargets(operands []string) []string {
+	last := operands[len(operands)-1]
+	var out []string
+	for _, src := range operands[:len(operands)-1] {
+		out = append(out, filepath.Join(last, filepath.Base(src)))
+	}
+	return append(out, last)
 }
 
 // tamperTarget names the gate record the call would write, or "".
@@ -227,15 +264,22 @@ func tamperTarget(c *Call) string {
 			targets = append(targets, operands...)
 		case "cp":
 			if len(operands) > 1 {
-				targets = append(targets, operands[len(operands)-1])
+				targets = append(targets, copyTargets(operands)...)
 			}
 		case "mv":
 			// Every operand: the target is written, each source is deleted.
+			if len(operands) > 0 {
+				targets = append(targets, copyTargets(operands)...)
+			}
 			targets = append(targets, operands...)
 			removes = true
 		case "rm", "unlink":
 			targets = append(targets, operands...)
 			removes = true
+		case "sed":
+			if sedInPlace(args) {
+				targets = append(targets, operands...)
+			}
 		case "git":
 			if g, ok := cmd.Git(); ok {
 				if p := ignoredSweep(c, g); p != "" {

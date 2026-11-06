@@ -212,3 +212,79 @@ func TestReviewRecordDeleteRefused(t *testing.T) {
 		}
 	}
 }
+
+// TestTamperGuardLocalGrants: .dross/local.toml holds the consent grants, so a
+// hand edit is a forged `dross trust`. The CLI that owns it and every read pass.
+func TestTamperGuardLocalGrants(t *testing.T) {
+	home := t.TempDir()
+	repo := droot(t)
+	e := Env{Home: home, Gates: []Gate{mustGate(t, "tamper-guard")}, Lifted: func(Gate, string) bool { return true }}
+	p := filepath.Join(repo, ".dross", "local.toml")
+	refused := func(what string, res Result) {
+		t.Helper()
+		text := res.Text()
+		if res.Allowed() || !strings.Contains(text, "tamper-guard") {
+			t.Errorf("%s: %q, want a tamper-guard refusal even with every gate lifted", what, text)
+		}
+		for _, want := range []string{"`dross trust`", "`dross local set"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s: %q does not name %s", what, text, want)
+			}
+		}
+		if strings.Contains(text, "`dross test`") {
+			t.Errorf("%s: %q sends a grant refusal to `dross test`", what, text)
+		}
+	}
+	for _, tool := range []string{"Write", "Edit"} {
+		refused(tool, Check(payload(t, tool, map[string]any{"file_path": p, "content": "x", "old_string": "a", "new_string": "b"}, repo), e))
+	}
+	for _, line := range []string{
+		"sed -i 's/a/b/' .dross/local.toml",
+		"sed -i '' 's/a/b/' .dross/local.toml",
+		"sed -i.bak -e 's/a/b/' .dross/local.toml",
+		"sed -Ei 's/a/b/' .dross/local.toml",
+		"sed --in-place 's/a/b/' .dross/local.toml",
+		"sed --in-place=.bak 's/a/b/' .dross/local.toml",
+		"sed -I '' 's/a/b/' .dross/local.toml",
+		"sed --in-pl 's/a/b/' .dross/local.toml",
+		"cp /tmp/x/local.toml .dross/",
+		"mv /tmp/x/local.toml .dross",
+		"cd .dross && sed -i 's/a/b/' local.toml",
+		"echo x >> .dross/local.toml",
+		"cp /tmp/l .dross/local.toml",
+		"printf x | tee .dross/local.toml",
+		"mv /tmp/l .dross/local.toml",
+		"rm .dross/local.toml",
+	} {
+		refused(line, Check(bash(t, line, repo), e))
+	}
+	if res := Check(payload(t, "Read", map[string]any{"file_path": p}, repo), e); !res.Allowed() {
+		t.Errorf("Read %s was refused: %q", p, res.Text())
+	}
+	for _, line := range []string{
+		"dross local set quick_base main",
+		"dross local get quick_base",
+		"cat .dross/local.toml",
+		"sed -n '1,5p' .dross/local.toml",
+		"sed 's/a/b/' .dross/local.toml",
+		"cp .dross/local.toml /tmp/l",
+		"cp /tmp/x/notes.toml .dross/",
+		"sed -i 's/a/b/' README.md",
+		"echo x > local.toml",
+	} {
+		if res := Check(bash(t, line, repo), e); !res.Allowed() {
+			t.Errorf("%q was refused: %q", line, res.Text())
+		}
+	}
+}
+
+// TestTamperGuardSedGateRecords: sed -i reaches the gate records the same way,
+// and their refusal keeps its own wording.
+func TestTamperGuardSedGateRecords(t *testing.T) {
+	repo := droot(t)
+	e := Env{Home: t.TempDir(), Gates: []Gate{mustGate(t, "tamper-guard")}}
+	res := Check(bash(t, "sed -i 's/a/b/' .dross/gate/green.json", repo), e)
+	if res.Allowed() || !strings.Contains(res.Text(), "forge a green") {
+		t.Errorf("sed -i on green.json: %q, want the gate-record refusal", res.Text())
+	}
+}
