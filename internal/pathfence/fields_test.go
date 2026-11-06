@@ -109,6 +109,7 @@ func TestRegistryCoversEveryKnownFieldByName(t *testing.T) {
 		"phase.Task.Files",
 		"project.Env.Files",
 		"project.TestLane.Match",
+		"project.Runtime.TestExempt",
 		"project.Paths.Source",
 		"project.Paths.Tests",
 		"project.Paths.E2E",
@@ -280,6 +281,7 @@ func TestStoredFieldsStayStringTyped(t *testing.T) {
 		{"project.Env.Files", reflect.TypeOf(project.Env{}), "Files"},
 		{"project.Paths.Source", reflect.TypeOf(project.Paths{}), "Source"},
 		{"project.TestLane.Match", reflect.TypeOf(project.TestLane{}), "Match"},
+		{"project.Runtime.TestExempt", reflect.TypeOf(project.Runtime{}), "TestExempt"},
 	} {
 		sf, ok := tc.typ.FieldByName(tc.fld)
 		if !ok {

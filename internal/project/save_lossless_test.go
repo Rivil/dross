@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -297,6 +299,108 @@ func TestSaveArrayOfTablesAlignment(t *testing.T) {
 			`    command = "go test ./internal/cmd/..."`,
 		})
 	})
+}
+
+// TestSaveChurnsNothingForVouchAndExempt: no repo on disk declares either
+// field, so neither may reach a file that does not ask for it. A plain Load then
+// Save cannot show that, since both sides encode alike and no op is planned, so
+// the zero values go through the routes that do encode them: an explicit false
+// and empty list over a real document, and a fresh one.
+func TestSaveChurnsNothingForVouchAndExempt(t *testing.T) {
+	src := fixture(t)
+	path := seed(t, src)
+	p := mustLoad(t, path)
+	p.Runtime.TestExempt = []string{}
+	p.Runtime.TestLane[0].Vouch = false
+	if err := p.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if got := mustRead(t, path); !bytes.Equal(got, src) {
+		added, removed := changedLines(src, got)
+		t.Errorf("zero values changed the file: added %q removed %q", added, removed)
+	}
+
+	fresh := filepath.Join(t.TempDir(), "project.toml")
+	p.Runtime.TestExempt = []string{}
+	if err := p.Save(fresh); err != nil {
+		t.Fatalf("save fresh: %v", err)
+	}
+	out := mustRead(t, fresh)
+	for _, key := range []string{"vouch", "test_exempt"} {
+		if bytes.Contains(out, []byte(key)) {
+			t.Errorf("a fresh document wrote %s, which nothing set:\n%s", key, out)
+		}
+	}
+}
+
+// TestSaveSetsAndClearsVouchAndExempt: each field is one line in the block it
+// belongs to, and clearing it restores the document byte for byte. The literal
+// keys also pin the tags, which is what a hand-edited project.toml has to spell.
+func TestSaveSetsAndClearsVouchAndExempt(t *testing.T) {
+	src := fixture(t)
+	path := seed(t, src)
+
+	p := mustLoad(t, path)
+	p.Runtime.TestLane[1].Vouch = true
+	withVouch := saveAndCheck(t, p, path)
+	assertChanged(t, src, withVouch, []string{`    vouch = true`}, nil)
+	if !bytes.Contains(withVouch, []byte("    command = \"go test ./internal/project/...\"\n    vouch = true\n")) {
+		t.Errorf("vouch landed outside its lane:\n%s", withVouch)
+	}
+
+	p = mustLoad(t, path)
+	if !p.Runtime.TestLane[1].Vouch || p.Runtime.TestLane[0].Vouch {
+		t.Errorf("vouch did not load onto lane 1 alone: %+v", p.Runtime.TestLane)
+	}
+	p.Runtime.TestExempt = []string{"docs/**", "*.md"}
+	both := saveAndCheck(t, p, path)
+	assertChanged(t, withVouch, both, []string{`  test_exempt = ["docs/**", "*.md"]`}, nil)
+	if !bytes.Contains(both, []byte("  build_command = \"make build\"\n  test_exempt = [\"docs/**\", \"*.md\"]\n")) {
+		t.Errorf("test_exempt landed outside [runtime]'s keys:\n%s", both)
+	}
+
+	p = mustLoad(t, path)
+	p.Runtime.TestLane[1].Vouch = false
+	p.Runtime.TestExempt = nil
+	if out := saveAndCheck(t, p, path); !bytes.Equal(out, src) {
+		added, removed := changedLines(src, out)
+		t.Errorf("clearing both did not restore the file: added %q removed %q", added, removed)
+	}
+}
+
+// TestArchitectureAnchorsTheSaveDoors: TestArchitectureNamesLosslessWriter only
+// asks that Save's anchor line mentions the word, and has no row for
+// saveLossless. These two bullets are how a reader finds the write door, so each
+// must land on the declaration itself, and any edit above it moves the anchor.
+func TestArchitectureAnchorsTheSaveDoors(t *testing.T) {
+	doc, err := os.ReadFile(filepath.Join("..", "..", "ARCHITECTURE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.ReadFile("project.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(src), "\n")
+
+	for _, tc := range []struct{ bullet, decl string }{
+		{"- `project.Project.Save` ", "func (p *Project) Save("},
+		{"- `saveLossless` / `SaveTOML` ", "func saveLossless("},
+	} {
+		anchor := regexp.MustCompile("(?m)^" + regexp.QuoteMeta(tc.bullet) + ".*`internal/project/project\\.go:(\\d+)`$")
+		m := anchor.FindSubmatch(doc)
+		if m == nil {
+			t.Errorf("ARCHITECTURE.md has no project.go anchor on the bullet %q", tc.bullet)
+			continue
+		}
+		line, err := strconv.Atoi(string(m[1]))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if line < 1 || line > len(lines) || !strings.HasPrefix(lines[line-1], tc.decl) {
+			t.Errorf("the anchor on %q names project.go:%d, which is not %q", tc.bullet, line, tc.decl)
+		}
+	}
 }
 
 func TestSaveFailureLeavesOriginalBytes(t *testing.T) {

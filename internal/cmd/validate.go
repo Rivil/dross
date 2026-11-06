@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -63,6 +65,8 @@ func Validate() *cobra.Command {
 				}
 				problems = append(problems, enumProblems(p)...)
 				problems = append(problems, laneProblems(p)...)
+				problems = append(problems, vouchFullRunProblems(p)...)
+				problems = append(problems, testExemptProblems(p.Runtime.TestExempt)...)
 				warnings = append(warnings, laneWarnings(p)...)
 			}
 
@@ -332,6 +336,7 @@ func laneProblems(p *project.Project) []string {
 		}
 		problems = append(problems, laneSelectorProblems(label, lane)...)
 		problems = append(problems, laneToolchainProblems(label, lane)...)
+		problems = append(problems, laneVouchProblems(label, lane)...)
 		for _, pattern := range lane.Match {
 			if err := checkGlob(pattern); err != nil {
 				// Named by pattern as well as by lane: a broken glob
@@ -453,6 +458,94 @@ func laneToolchainProblems(label string, lane project.TestLane) []string {
 			// trees do not have to agree. Only a name looked up on PATH means
 			// the same question on both.
 			problems = append(problems, fmt.Sprintf("project.toml: %s toolchain lists %q — an entry is looked up on PATH on whichever host runs the lane, so it must be a bare binary name, not a path", label, tool))
+		}
+	}
+	return problems
+}
+
+// laneVouchProblems reports why one lane cannot vouch for a commit. A green may
+// only admit a commit if it measured the paths it names, so each rule closes a
+// way to report green having measured nothing.
+//
+// Only properties of the lane itself are judged here, so the rule holds on the
+// one-lane project `laneRefusal` builds. vouchFullRunProblem is the half that
+// needs the rest of the repo.
+//
+// Nothing is reported for a lane that does not vouch: the field is opt-in, and
+// empty_exit = [1] stays legal on a lane no commit depends on.
+func laneVouchProblems(label string, lane project.TestLane) []string {
+	if !lane.Vouch {
+		return nil
+	}
+	var problems []string
+	switch configenum.Normalize(lane.Selector) {
+	case "path":
+	case "":
+		problems = append(problems, fmt.Sprintf("project.toml: %s sets vouch with no selector — the lane runs the same line whatever changed, so its green says nothing about the paths in a commit; declare selector = \"path\"", label))
+	default:
+		// Aggregates are refused rather than trusted to report a miss: `go
+		// test` exits 0 on `[no test files]`, so a package holding no test for
+		// the changed file comes back green.
+		problems = append(problems, fmt.Sprintf("project.toml: %s sets vouch with selector = %q — only a \"path\" lane can vouch, because a run over a whole directory or package can pass without reaching the changed file: `go test` exits 0 on `[no test files]`", label, lane.Selector))
+	}
+	if len(lane.EmptyExit) == 0 {
+		problems = append(problems, fmt.Sprintf("project.toml: %s sets vouch with no empty_exit — with no code meaning \"collected nothing\", a run that measured nothing reads as green; declare the code the runner exits with", label))
+	}
+	if slices.Contains(lane.EmptyExit, 1) {
+		problems = append(problems, fmt.Sprintf("project.toml: %s sets vouch with empty_exit listing 1 — 1 is how runners report failing tests, so a red would read as collecting nothing; have the lane exit a code of its own", label))
+	}
+	return problems
+}
+
+// vouchFullRunProblem reports a vouching lane in a repo with no test_command,
+// or "" when there is nothing to say. Bare `dross test` falls back to the lanes
+// there, so the full run a scoped green defers to would be the same lanes.
+//
+// It is apart from laneVouchProblems because it reads the repo, not the lane:
+// the project laneRefusal builds has no test_command, so folding this in would
+// refuse every vouching lane that verb touched.
+func vouchFullRunProblem(label string, lane project.TestLane, testCommand string) string {
+	if !lane.Vouch || strings.TrimSpace(testCommand) != "" {
+		return ""
+	}
+	return fmt.Sprintf("project.toml: %s sets vouch in a repo with no runtime.test_command — a vouching lane defers to a full run, so the full run cannot be the lanes themselves; set runtime.test_command", label)
+}
+
+// vouchFullRunProblems is vouchFullRunProblem over every declared lane.
+func vouchFullRunProblems(p *project.Project) []string {
+	var problems []string
+	for i, lane := range p.Runtime.TestLane {
+		if problem := vouchFullRunProblem(laneLabel(i, lane.Name), lane, p.Runtime.TestCommand); problem != "" {
+			problems = append(problems, problem)
+		}
+	}
+	return problems
+}
+
+// exemptNamesNothing matches a glob holding no literal name: only wildcards,
+// bracket classes, separators and dots. `.` counts as a wildcard here because
+// `**/*.*` and `./**` pick out no directory or file type either. A class may
+// hold an escaped `]`, so `[\]a-z]*` is one class and not a literal name.
+var exemptNamesNothing = regexp.MustCompile(`^(?:[*?./]|\[(?:\\.|[^\]\\])*\])*$`)
+
+// testExemptProblems reports every runtime.test_exempt glob that cannot be
+// used. An exempt path needs no tests at all, so a catch-all would turn the
+// commit gate off for the whole repo, and a glob that does not compile would
+// exempt nothing while looking configured.
+//
+// A catch-all is judged by shape, not by what it matches: `*` only reaches the
+// repo root, yet it names nothing, and a glob that names nothing is not a
+// statement about which paths need no tests.
+func testExemptProblems(globs []string) []string {
+	var problems []string
+	for _, glob := range globs {
+		trimmed := filepath.ToSlash(strings.TrimSpace(glob))
+		if trimmed == "" {
+			problems = append(problems, "project.toml: runtime.test_exempt lists a blank entry — a blank glob matches no path; drop it")
+		} else if err := checkGlob(trimmed); err != nil {
+			problems = append(problems, fmt.Sprintf("project.toml: runtime.test_exempt glob %q does not compile: %v", glob, err))
+		} else if exemptNamesNothing.MatchString(trimmed) {
+			problems = append(problems, fmt.Sprintf("project.toml: runtime.test_exempt glob %q names no directory or file type — it would exempt the whole repo from testing; list what needs no tests, like docs/** or *.md", glob))
 		}
 	}
 	return problems

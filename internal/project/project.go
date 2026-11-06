@@ -92,6 +92,16 @@ type Runtime struct {
 	// the whole feature stays opt-in and `dross test` keeps meaning
 	// TestCommand for every repo that has not asked for anything else.
 	TestLane []TestLane `toml:"test_lane,omitempty" json:"test_lane,omitempty"`
+
+	// TestExempt lists the globs of paths that need no tests — `docs/**`,
+	// `*.md` — so a commit touching only those, plus paths a vouching lane
+	// covered, needs no full green. Omitted means no path is exempt, and a repo
+	// that declares nothing round-trips byte-identically.
+	//
+	// The globs use a lane's Match syntax. validate refuses one that does not
+	// compile, and one that names nothing, like `**/*`: that would exempt the
+	// whole repo and turn the commit gate off without saying so.
+	TestExempt []string `toml:"test_exempt,omitempty" json:"test_exempt,omitempty"`
 }
 
 // TestLane is one named subset of the repo paired with the command that tests
@@ -101,8 +111,8 @@ type Runtime struct {
 // Those three fields are required and validate says so per-field — a lane with
 // no Command cannot be run, a lane with no Match can never be selected, and a
 // lane with no Name cannot be granted consent, since the machine-local grant
-// store is keyed by lane name. Prepare, Selector and EmptyExit are optional and
-// opt-in; see their own comments.
+// store is keyed by lane name. Prepare, Selector, EmptyExit and Vouch are
+// optional and opt-in; see their own comments.
 type TestLane struct {
 	Name    string   `toml:"name" json:"name"`
 	Match   []string `toml:"match" json:"match"`
@@ -211,6 +221,19 @@ type TestLane struct {
 	// validate refuses the combination rather than letting a user believe they
 	// configured a code that can never fire.
 	EmptyExit []int `toml:"empty_exit,omitempty" json:"empty_exit,omitempty"`
+
+	// Vouch marks this lane as trusted to admit a commit on a scoped green.
+	// Omitted means it does not: declaring a lane is not enough, because a
+	// `path` selector can be a name filter that never measures a changed file,
+	// and every undeclared lane keeps the full-green rule.
+	//
+	// A green only vouches if it measured the path it names, so validate
+	// refuses a lane that could report green having measured nothing: one with
+	// no `path` selector, one with no EmptyExit code to say "collected
+	// nothing", and one whose EmptyExit lists 1, which would read a red as a
+	// miss. It also refuses a vouching lane in a repo with no
+	// Runtime.TestCommand, where the lanes would be the only full run.
+	Vouch bool `toml:"vouch,omitempty" json:"vouch,omitempty"`
 }
 
 type Service struct {

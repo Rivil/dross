@@ -177,6 +177,17 @@ var fields = []Field{
 		},
 	},
 
+	{
+		Struct: "project.Runtime", Field: "TestExempt", Tag: "test_exempt", Artifact: "project.toml",
+		NotConsumed: &NotConsumedBy{
+			Why: "glob PATTERNS naming paths that need no tests, matched against a commit's " +
+				"changed paths and never opened.",
+			Readers: []string{
+				"internal/cmd/validate.go (compiles each glob, refuses a catch-all)",
+			},
+		},
+	},
+
 	// project.Paths.*: the repo layout, displayed and edited, never opened by
 	// dross itself. Declared one per field rather than as a group so t-9's
 	// two-way check has a name to match against.
