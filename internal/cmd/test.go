@@ -580,6 +580,12 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 			// to (locked missing_paths). It does not spawn: `go test
 			// ./gone/...` is a hard runner error, which would read as a
 			// failing gate for code the task deliberately removed.
+			//
+			// The tree sync may already have spawned, and a run that ends on
+			// this miss would otherwise summarise that segment as an
+			// unrecognised tail under the miss line — the other miss arms'
+			// reason, so their call.
+			tr.dropLane()
 			tr.say("selector miss: lane %q — every path matching it is gone, so its %s selector scoped to nothing\n",
 				pl.lane.Name, pl.lane.Selector)
 			misses++
