@@ -447,10 +447,30 @@ func TestAmbiguousEscape(t *testing.T) {
 		"dross task status p t-1 pending",
 		"dross task status p t-3 failed",
 		`dross task status p 't-1' "pending"`,
-		"dross task status p t-1 pending && dross task status p t-3 pending",
+		// One id named twice still leaves t-3 armed.
+		"dross task status p t-1 pending && dross task status p t-1 failed",
 	} {
 		if res := check(amb, bash(t, line, cwd)); !res.Allowed() {
 			t.Errorf("%q with two tasks in_progress was refused: %q", line, res.Text())
+		}
+	}
+	// With three in_progress, parking two leaves one armed.
+	amb3 := ambiguous("p", []string{"t-1", "t-2", "t-3"})
+	if res := check(amb3, bash(t, "dross task status p t-1 pending && dross task status p t-2 pending", cwd)); !res.Allowed() {
+		t.Errorf("parking two of three was refused: %q", res.Text())
+	}
+	// Parking every in_progress id would leave no task armed, and the escape
+	// runs before solo-review's downgrade guard: refused, two or three alike.
+	for _, tc := range []struct {
+		err  error
+		line string
+	}{
+		{amb, "dross task status p t-1 pending && dross task status p t-3 pending"},
+		{amb, "dross task status p t-1 failed; dross task status p t-3 failed"},
+		{amb3, "dross task status p t-1 pending && dross task status p t-2 pending && dross task status p t-3 pending"},
+	} {
+		if res := check(tc.err, bash(t, tc.line, cwd)); res.Allowed() {
+			t.Errorf("%q parks every in_progress task and was allowed, want refused", tc.line)
 		}
 	}
 	// errors.As sees through a gate that wraps it.

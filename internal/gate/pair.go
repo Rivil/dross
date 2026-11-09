@@ -194,6 +194,12 @@ func (e *AmbiguousError) Remedy() string {
 // pending|failed` for this phase and one of its in_progress ids — no flags,
 // no assignments, no redirections, no substitutions. Anything else, the
 // remedy chained with another command included, is not.
+//
+// It parks all BUT one: a line naming every in_progress id would leave no task
+// armed, and the engine lets this call through before solo-review's downgrade
+// guard runs, so with uncommitted solo code it would disarm the scope that
+// guard exists to keep. The task left in_progress is the armed scope, and the
+// gates govern it from the next call on.
 func (e *AmbiguousError) Parks(c *Call) bool {
 	if c.ToolName != "Bash" {
 		return false
@@ -202,6 +208,7 @@ func (e *AmbiguousError) Parks(c *Call) bool {
 	if s.Partial || len(s.Commands) == 0 {
 		return false
 	}
+	parked := map[string]bool{}
 	for _, cmd := range s.Commands {
 		if cmd.Program != "dross" || cmd.Substituted || len(cmd.Assigns) > 0 || len(cmd.Redirects) > 0 {
 			return false
@@ -211,8 +218,9 @@ func (e *AmbiguousError) Parks(c *Call) bool {
 			!inList(a[3], e.Tasks) || (a[4] != phase.StatusPending && a[4] != phase.StatusFailed) {
 			return false
 		}
+		parked[a[3]] = true
 	}
-	return true
+	return len(parked) < len(e.Tasks)
 }
 
 func ambiguous(id string, tasks []string) error {
