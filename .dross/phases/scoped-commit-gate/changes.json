@@ -179,6 +179,21 @@
         }
       ]
     },
+    "t-18": {
+      "files": [
+        ".dross/phases/scoped-commit-gate/barktime-proof.toml"
+      ],
+      "commit": "edbc9e43",
+      "completed_at": "2026-11-09T15:45:17.288318Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "barktime-proof",
+          "loc": ".dross/phases/scoped-commit-gate/barktime-proof.toml:1",
+          "what": "barktime bf4f57c0 admitted on a vitest-related scoped green over a .svelte source, 261 s"
+        }
+      ]
+    },
     "t-19": {
       "files": [
         ".dross/phases/scoped-commit-gate/barktime-timing.toml"
@@ -363,6 +378,26 @@
           "symbol": "runTest",
           "loc": "internal/cmd/test.go:588",
           "what": "a scoped-to-nothing miss drops its sync segment so it prints only its miss line"
+        }
+      ]
+    },
+    "t-28": {
+      "files": [
+        "internal/gate/engine.go",
+        "internal/gate/scope.go",
+        "internal/gate/pair.go",
+        "internal/gate/engine_test.go",
+        "internal/cmd/task.go",
+        "internal/cmd/task_test.go"
+      ],
+      "commit": "285b5312",
+      "completed_at": "2026-11-09T15:44:26.982645Z",
+      "landmarks": [
+        {
+          "feature": "tool gates",
+          "symbol": "AmbiguousError.Parks",
+          "loc": "internal/gate/pair.go:197",
+          "what": "two tasks in_progress no longer deadlock the gates: a plain park call passes, and a second in_progress is refused"
         }
       ]
     },
@@ -1068,6 +1103,33 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The test also checks that only the rsync was spawned remotely, so it cannot pass vacuously on a local fallback where there would be no sync tail to drop.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-28": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "AmbiguousError.Parks accepts a line that parks every in_progress task (e.g. `dross task status p t-1 pending \u0026\u0026 dross task status p t-3 pending`), and the engine returns before solo-review's judgeDowngrade runs. With uncommitted code on a solo run, that disarms the solo scope, which the downgrade guard otherwise refuses. Consider allowing at most len(Tasks)-1 parks per line, or keep the escape but still refuse when it would leave nothing in_progress while code is dirty.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Parks does not look at the command separator, so a backgrounded (`\u0026`) or subshell-grouped park also passes. This is harmless, because only the park command runs.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The negative table in TestAmbiguousEscape is thorough: flags, --flag=value, global flags, assignments, redirections, pipes, substitutions, path-qualified binaries, an unterminated quote and the empty line, plus an untyped-error control.",
           "resolution": "non-blocking, left"
         }
       ]
