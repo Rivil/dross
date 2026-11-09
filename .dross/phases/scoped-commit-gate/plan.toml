@@ -1,4 +1,4 @@
-task_seq = 27
+task_seq = 28
 
 [phase]
   id = "scoped-commit-gate"
@@ -347,3 +347,12 @@ Call t-10's check for repos with a vouching lane ahead of auto-finalize, reading
   covers = ["c-9"]
   test_contract = ["if a scoped-to-nothing miss still renders the sync segment, a remote --files run over a missing path prints 'output not recognised' and TestScopedToNothingMissNoTail fails", "if the fix swallows the miss itself, the run no longer exits 5 or no longer prints 'selector miss:', and TestScopedToNothingMissNoTail fails"]
   status = "done"
+
+[[task]]
+  id = "t-28"
+  wave = 1
+  title = "Let task status clear an ambiguous in_progress"
+  files = ["internal/gate/engine.go", "internal/gate/scope.go", "internal/gate/pair.go", "internal/gate/engine_test.go", "internal/cmd/task.go", "internal/cmd/task_test.go"]
+  description = "Reported from feastahead (fix-phone-cooking-timers, dross a025c09b). When a phase has two tasks in_progress, ArmedScope (scope.go) and armedRun (pair.go) return ambiguous(), and engine.go turns any Judge error into a refusal. So every Bash call is refused, including the 'dross task status <phase> <id> pending' that ambiguous() itself names as the remedy. Only the human's ! prefix recovers. Fix, two parts: (1) ambiguous returns a typed error (errors.As-able, carrying the phase and its in_progress ids). In engine.go, when a Judge error is that type and the call is a Bash line whose every command is 'dross task status <that phase> <one of those ids> pending|failed', the call passes. Any other call is still refused, and the refusal text names both pending and failed. (2) cmd 'task status <phase> <id> in_progress' refuses, before writing, when a different task in that phase is already in_progress. It names that task and the 'dross task status <phase> <other> pending' that parks it. Re-setting the same task to in_progress stays allowed. Found 2026-11-09 by feastahead-6c."
+  test_contract = ["if the remedy stays refused, a Bash 'dross task status <phase> <id> pending' with two tasks in_progress is refused and the engine_test case for the ambiguous escape fails", "if the escape is too wide, any other Bash call (git status, or 'dross task status ... done', or a remedy chained with another command) with two tasks in_progress passes, and the engine_test negative cases fail", "if a second in_progress can still be created, 'dross task status <phase> B in_progress' while A is in_progress writes the plan, and the task_test case fails; re-setting A to in_progress must still succeed"]
+  status = "pending"
