@@ -346,4 +346,4 @@ Call t-10's check for repos with a vouching lane ahead of auto-finalize, reading
   description = "A remote --files run whose only lane is ScopedToNothing (every selected path gone, e.g. a misspelled path) spawns only the tree sync, then continues past the lane. summarise then falls back to that aux rsync segment and prints 'exit 5 · output not recognised — last 0 lines' after the correct selector-miss line (seen live on barktime, log test-20261109T073754). Fix: call tr.dropLane() in test.go's ScopedToNothing branch, mirroring the relate-miss and collected-no-tests branches, so a miss prints only its miss line. Found by t-18's same-session checks."
   covers = ["c-9"]
   test_contract = ["if a scoped-to-nothing miss still renders the sync segment, a remote --files run over a missing path prints 'output not recognised' and TestScopedToNothingMissNoTail fails", "if the fix swallows the miss itself, the run no longer exits 5 or no longer prints 'selector miss:', and TestScopedToNothingMissNoTail fails"]
-  status = "pending"
+  status = "done"

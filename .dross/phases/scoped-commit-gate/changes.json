@@ -350,6 +350,22 @@
         }
       ]
     },
+    "t-27": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_summary_wiring_test.go"
+      ],
+      "commit": "5f88cbbf",
+      "completed_at": "2026-11-09T08:08:50.133424Z",
+      "landmarks": [
+        {
+          "feature": "scoped commit gate",
+          "symbol": "runTest",
+          "loc": "internal/cmd/test.go:588",
+          "what": "a scoped-to-nothing miss drops its sync segment so it prints only its miss line"
+        }
+      ]
+    },
     "t-3": {
       "files": [
         "ARCHITECTURE.md",
@@ -1039,6 +1055,19 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The tests are strong: they compare the whole remedy or note line rather than a substring, and the gate test also covers an undecodable project.toml falling back to the bare text.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-27": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The test also checks that only the rsync was spawned remotely, so it cannot pass vacuously on a local fallback where there would be no sync tail to drop.",
           "resolution": "non-blocking, left"
         }
       ]
