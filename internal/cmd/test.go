@@ -225,7 +225,7 @@ func testCommandLine(base string, selector []string) string {
 
 // Test registers `dross test`.
 func Test() *cobra.Command {
-	var local bool
+	var local, redProof bool
 	var files []string
 	var waitFlag string
 	c := &cobra.Command{
@@ -239,6 +239,10 @@ func Test() *cobra.Command {
 			"A repo with no lanes ignores it and runs the whole suite, unchanged.\n\n" +
 			"In a repo with lanes but no runtime.test_command, a bare `dross test` runs\n" +
 			"every lane's own command, unscoped — that repo's whole suite.\n\n" +
+			"--red-proof with --files <test path> runs those tests against HEAD's code:\n" +
+			"a scratch copy of HEAD with only the named test files laid over it from the\n" +
+			"working tree. Red there is proof the tests need the fix (exit 0); green is\n" +
+			"not (exit 1). It never touches the working tree or the commit gate's records.\n\n" +
 			"Every run's full output goes to a log under .dross/logs/, whose path is\n" +
 			"printed before the first spawn and again at the end. On a terminal the\n" +
 			"output also arrives live; anywhere else a summary prints at the end. The\n" +
@@ -289,6 +293,12 @@ func Test() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Ahead of every other branch, because none of them may run: each
+			// one records against the working tree, and a red-proof measures a
+			// different tree that must never be recorded as this one.
+			if redProof {
+				return runRedProof(tr, root, repoDir, proj, files, local, wait)
+			}
 			if len(files) > 0 && len(proj.Runtime.TestLane) > 0 {
 				err := runTestLanes(tr, root, repoDir, proj, files, local, wait)
 				tr.finish(err)
@@ -301,7 +311,7 @@ func Test() *cobra.Command {
 			// (locked bare_test_run): it already is the whole suite.
 			if len(files) == 0 && len(args) == 0 && strings.TrimSpace(proj.Runtime.TestCommand) == "" && len(proj.Runtime.TestLane) > 0 {
 				green := startGreen(repoDir, true)
-				err := runPlannedLanes(tr, root, repoDir, proj, fullLanePlan(proj), local, wait, green.sites, &scopedRun{})
+				err := runPlannedLanes(tr, root, repoDir, workTree(repoDir), proj, fullLanePlan(proj), local, wait, green.sites, &scopedRun{})
 				tr.finish(err)
 				green.finish(err)
 				return err
@@ -316,7 +326,7 @@ func Test() *cobra.Command {
 			// is the whole suite too. Only those runs vouch for a tree.
 			green := startGreen(repoDir, len(args) == 0)
 			line := testCommandLine(proj.Runtime.TestCommand, args)
-			err = runTest(tr, root, repoDir, proj.Project.Name, line, local, wait, green.sites)
+			err = runTest(tr, root, repoDir, workTree(repoDir), proj.Project.Name, line, local, wait, green.sites)
 			tr.finish(err)
 			green.finish(err)
 			return err
@@ -324,6 +334,7 @@ func Test() *cobra.Command {
 	}
 	c.Flags().BoolVar(&local, "local", false, "run on this machine even when a remote is granted")
 	c.Flags().StringArrayVar(&files, "files", nil, "repo-relative path to resolve against the declared test lanes (repeatable)")
+	c.Flags().BoolVar(&redProof, "red-proof", false, "run the --files test paths against HEAD's code instead of the working tree's; only a red there exits 0")
 	c.Flags().StringVar(&waitFlag, "wait", defaultTestWait.String(), "how long to wait for a host held by a mutation leg before running alongside it (0 = at once)")
 	c.AddCommand(testLane())
 	return c
@@ -364,7 +375,20 @@ func refuseFilesWithSelector(files, args []string) error {
 // disagree about what would run.
 func runTestLanes(tr *testRun, root, repoDir string, proj *project.Project, files []string, local bool, wait time.Duration) error {
 	plan := lanePlan(repoDir, proj, files)
+	if err := refuseLanePlan(tr, proj, plan); err != nil {
+		return err
+	}
+	rec := startScoped(tr, repoDir, proj)
+	err := runPlannedLanes(tr, root, repoDir, workTree(repoDir), proj, plan.Lanes, local, wait, rec.tree.sites, &rec.run)
+	rec.finish(err)
+	return err
+}
 
+// refuseLanePlan is the refusal policy a --files plan meets before anything
+// spawns, shared by the working-tree run and the red-proof so the two refuse
+// the same file sets the same way. A partial miss is not a refusal: it is said,
+// and the matched lanes run.
+func refuseLanePlan(tr *testRun, proj *project.Project, plan lanePlanResult) error {
 	// Checked FIRST, and it poisons the whole set. Resolving the in-tree half
 	// of a half-broken argv would report on a subset the caller never asked
 	// for — and they would read the result as covering everything they listed.
@@ -396,17 +420,34 @@ func runTestLanes(tr *testRun, root, repoDir string, proj *project.Project, file
 	if len(plan.Unmatched) > 0 {
 		tr.say("no lane matches: %s\n", strings.Join(plan.Unmatched, " "))
 	}
-	rec := startScoped(tr, repoDir, proj)
-	err := runPlannedLanes(tr, root, repoDir, proj, plan.Lanes, local, wait, rec.tree.sites, &rec.run)
-	rec.finish(err)
-	return err
+	return nil
+}
+
+// runTree is the tree a run measures: the directory its lines spawn in on this
+// machine, and how that tree reaches a granted host.
+//
+// It is apart from repoDir because the two stop being one directory for a
+// red-proof. repoDir stays the repo's identity — the grants, the remote
+// workdir and the host lock are keyed on it — while the tree is a scratch copy
+// of HEAD that must reach the same host by the same push.
+type runTree struct {
+	dir  string
+	sync func(tr *testRun, t remote.Target) error
+}
+
+// workTree is every ordinary run's tree: the working tree itself, pushed whole.
+func workTree(repoDir string) runTree {
+	return runTree{dir: repoDir, sync: func(tr *testRun, t remote.Target) error {
+		return syncTreeTo(tr, t, repoDir)
+	}}
 }
 
 // runPlannedLanes runs a set of planned lanes — the ones a --files set hit, or
 // every lane unscoped for a lanes-only repo's bare run — each through its own
 // grant, prepare, toolchain and locality path, and reports the worst outcome.
-// What the vouching lanes among them measured lands in scoped.
-func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, lanes []plannedLane, local bool, wait time.Duration, sites ranOn, scoped *scopedRun) error {
+// What the vouching lanes among them measured lands in scoped. The lines spawn
+// in tree; everything keyed on the repo reads repoDir.
+func runPlannedLanes(tr *testRun, root, repoDir string, tree runTree, proj *project.Project, lanes []plannedLane, local bool, wait time.Duration, sites ranOn, scoped *scopedRun) error {
 	// The fence ran inside the planner, over every lane, before any line was
 	// derived. Its verdicts are read here in declaration order and the first
 	// one refuses the whole run — which is exactly the property an in-loop
@@ -536,7 +577,7 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 		if h != nil {
 			holds = append(holds, h)
 		}
-		if err := syncTreeTo(tr, target, repoDir); err != nil {
+		if err := tree.sync(tr, target); err != nil {
 			return err
 		}
 	}
@@ -619,7 +660,7 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 			// No selector is appended: the derived paths scope the suite, and
 			// a bootstrap handed this file set's paths would be a different
 			// command on every run.
-			if err := runLanePrepare(tr, laneTarget, repoDir, pl.lane); err != nil {
+			if err := runLanePrepare(tr, laneTarget, tree.dir, pl.lane); err != nil {
 				// The lane's own command does NOT run. A bootstrap that failed
 				// measured nothing about the code, and running the suite
 				// anyway would report the consequence as a verdict.
@@ -641,7 +682,7 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 		if pl.Relate != "" {
 			tr.say("lane %s relate: %s\n", pl.lane.Name, pl.Relate)
 			var err error
-			if rel, err = runLaneRelate(tr, laneTarget, repoDir, pl); err != nil {
+			if rel, err = runLaneRelate(tr, laneTarget, tree.dir, pl); err != nil {
 				// A failed prepare's arm, for its reasons: the lane is out, the
 				// other lanes are untouched, and a relate that could not answer
 				// is not a miss. A miss says the paths have no test, and nothing
@@ -666,7 +707,7 @@ func runPlannedLanes(tr *testRun, root, repoDir string, proj *project.Project, l
 		}
 		tr.say("lane %s: %s\n", pl.lane.Name, pl.Line)
 		sites.add(laneTarget)
-		err := runOneLane(tr, laneTarget, repoDir, pl.lane, pl.Line)
+		err := runOneLane(tr, laneTarget, tree.dir, pl.lane, pl.Line)
 		if code, miss := selectorMissCode(err, pl.lane.EmptyExit); miss {
 			tr.dropLane()
 			tr.say("selector miss: lane %q collected no tests for %s (exit %d)\n",
@@ -909,8 +950,8 @@ func resolveTestTarget(tr *testRun, root, repoDir string, local bool, tools []st
 	return chosen, pool, nil
 }
 
-// runTest executes one test run, here or on the granted host.
-func runTest(tr *testRun, root, repoDir, projectName, line string, local bool, wait time.Duration, sites ranOn) error {
+// runTest executes one test run over tree, here or on the granted host.
+func runTest(tr *testRun, root, repoDir string, tree runTree, projectName, line string, local bool, wait time.Duration, sites ranOn) error {
 	// nil tools: a whole-suite run has no lanes to derive a toolchain from, so
 	// the probe asks exactly what it asked before this feature existed and the
 	// lane-less transcript is unchanged.
@@ -921,13 +962,13 @@ func runTest(tr *testRun, root, repoDir, projectName, line string, local bool, w
 	sites.add(target)
 	if target == nil {
 		tr.spawn(line, false)
-		if err := spawnLocal(repoDir, line, tr.out, tr.out); err != nil {
+		if err := spawnLocal(tree.dir, line, tr.out, tr.out); err != nil {
 			tr.failed()
 			return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test suite failed: %w", err)}
 		}
 		return nil
 	}
-	return runTestRemotely(tr, root, repoDir, projectName, *target, line, wait)
+	return runTestRemotely(tr, root, repoDir, tree, projectName, *target, line, wait)
 }
 
 // runTestRemotely pushes the tree, then runs the suite over ssh.
@@ -943,7 +984,7 @@ func runTest(tr *testRun, root, repoDir, projectName, line string, local bool, w
 //
 // The host lock comes first — before the sync, because the sync is already
 // work on the host — and is released after the suite, whatever it returned.
-func runTestRemotely(tr *testRun, root, repoDir, projectName string, t remote.Target, line string, wait time.Duration) error {
+func runTestRemotely(tr *testRun, root, repoDir string, tree runTree, projectName string, t remote.Target, line string, wait time.Duration) error {
 	h, err := holdHostForSuite(root, repoDir, projectName, t, wait)
 	if err != nil {
 		return err
@@ -955,7 +996,7 @@ func runTestRemotely(tr *testRun, root, repoDir, projectName string, t remote.Ta
 			}
 		}()
 	}
-	if err := syncTreeTo(tr, t, repoDir); err != nil {
+	if err := tree.sync(tr, t); err != nil {
 		return err
 	}
 	return runRemoteLine(tr, t, line, false)
@@ -1063,10 +1104,15 @@ func alongsideLine(host string, wait time.Duration, other remote.Holder) string 
 		wait, host, who)
 }
 
-// syncTreeTo pushes the working tree to the target. The argv builder validates
-// the target and returns an error INSTEAD of an argv, so an unsafe host never
-// reaches a shell.
-func syncTreeTo(tr *testRun, t remote.Target, repoDir string) error {
+// syncTreeTo pushes the tree at repoDir to the target. The argv builder
+// validates the target and returns an error INSTEAD of an argv, so an unsafe
+// host never reaches a shell.
+//
+// filters are extra rsync filter rules for a tree that is not the working tree
+// (see redProofSyncFilters). They go in ahead of the source and destination,
+// which SyncArgs always places last, so they are read as rules and never as a
+// path. An ordinary sync passes none and its argv is SyncArgs' own.
+func syncTreeTo(tr *testRun, t remote.Target, repoDir string, filters ...string) error {
 	root, err := filepath.Abs(repoDir)
 	if err != nil {
 		return err
@@ -1077,6 +1123,10 @@ func syncTreeTo(tr *testRun, t remote.Target, repoDir string) error {
 	sync, cleanup, err := remote.SyncArgs(t, root)
 	if err != nil {
 		return err
+	}
+	if len(filters) > 0 {
+		ends := len(sync) - 2
+		sync = append(append(append([]string{}, sync[:ends]...), filters...), sync[ends:]...)
 	}
 	// The exclude list is a temp file rsync reads; it must outlive the spawn
 	// and not outlive this call.

@@ -99,6 +99,7 @@ func TestWriterReportBounded(t *testing.T) {
 		"exactly one fenced block whose info string is `" + WriterReportFence + "`",
 		"- `files` —",
 		"- `test` — exactly `green`, `red: <first failing test>` or `none (<why>)`",
+		"- `red-proof` —",
 		"- `notes` — at most 5 lines",
 		"No code, no diff and no file contents in the report",
 	} {
@@ -120,8 +121,61 @@ func TestWriterReportBounded(t *testing.T) {
 		k, _, _ := strings.Cut(line, ":")
 		keys = append(keys, k)
 	}
-	if !slices.Equal(keys, []string{"files", "test", "notes"}) {
-		t.Errorf("the worked example's keys are %v, want files, test, notes", keys)
+	if !slices.Equal(keys, []string{"files", "test", "red-proof", "notes"}) {
+		t.Errorf("the worked example's keys are %v, want files, test, red-proof, notes", keys)
+	}
+}
+
+// TestWriterRunsRedProof: the writer shows its tests need its fix with
+// `dross test --red-proof` on the test files it added or changed, and copies
+// the run's verdict into the report as printed. A verdict that is not proven
+// fails nothing, so the writer is never told to chase a red.
+func TestWriterRunsRedProof(t *testing.T) {
+	_, body := writerDef(t)
+	var run, field string
+	for _, line := range strings.Split(body, "\n") {
+		if strings.Contains(line, "dross test --red-proof --files <test path>") {
+			run = line
+		}
+		if strings.HasPrefix(line, "- `red-proof` — ") {
+			field = line
+		}
+	}
+	if run == "" {
+		t.Fatal("the body never tells the writer to run `dross test --red-proof --files <test path>`")
+	}
+	for _, want := range []string{"one `--files` per test file you added or changed", "never touches your tree", "never bend a test"} {
+		if !strings.Contains(run, want) {
+			t.Errorf("the red-proof instruction no longer says %q: %q", want, run)
+		}
+	}
+	// The values `dross test --red-proof` prints, verbatim, so the main loop
+	// can match the one that proves.
+	for _, want := range []string{"`proven (red at base)`", "`not proven (green at base)`", "`not run (exit <n>)`", "`none (<why>)`"} {
+		if !strings.Contains(field, want) {
+			t.Errorf("the red-proof field does not list %s: %q", want, field)
+		}
+	}
+}
+
+// TestSoloReadsRedProof: the solo partial reads the writer's red-proof line, a
+// result that is not proven never fails the task, and it goes into the commit
+// body so the history says no one showed the tests fail without the fix.
+func TestSoloReadsRedProof(t *testing.T) {
+	b, err := assets.FS.ReadFile("prompts/_execute.solo.md")
+	if err != nil {
+		t.Fatalf("the solo partial is not embedded: %v", err)
+	}
+	var line string
+	for _, l := range strings.Split(string(b), "\n") {
+		if strings.Contains(l, "`red-proof:`") {
+			line = l
+		}
+	}
+	for _, want := range []string{"never fails the task", "`proven (red at base)`", "or no such line", "commit body as `red-proof: <value>`"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("the solo partial's red-proof line no longer says %q: %q", want, line)
+		}
 	}
 }
 

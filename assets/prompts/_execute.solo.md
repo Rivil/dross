@@ -12,6 +12,7 @@ dross task dispatch <phase> <task-id>
 - `dispatch: writer` → skip §1b–§1e. Spawn with the Agent tool: the printed `subagent_type`, the printed `prompt:` line **verbatim** as the whole prompt, `run_in_background: true`, no `model`. **Wait for its completion notice**, then read only its `dross-writer-report` block: never Read the task's files, never `git diff` — the review reads the code.
   - `test: green` → §1f in the main loop, in order: `dross test --files <the task's files>` — the writer's stop cleared any scoped green, so the main loop records its own — or bare `dross test` in a repo with no vouching lane, then `dross review context` and the reviewer, then the commit. The writer's green certifies nothing.
   - `test: none (<why>)` → no failure: no test reaches the task's files, so its run measured nothing. In the main loop, paths that all match `runtime.test_exempt` in a repo with a vouching lane need no run, and any other path takes a bare `dross test`, because a missing test is never written inline. Then `dross review context` and the reviewer, then the commit.
+  - `red-proof:` never fails the task. Any value but `proven (red at base)`, or no such line, goes into the commit body as `red-proof: <value>`, so the history says no one showed the task's tests fail without its fix.
   - **Writer failed** — the spawn errored, the report says `test: red`, there is no report, or the main loop's `dross test` after it is red → the task fails; never fix it inline. Set its code aside first:
     ```
     git stash push -u -- . ':(exclude).dross'
