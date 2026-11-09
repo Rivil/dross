@@ -219,6 +219,14 @@ func taskStatus() *cobra.Command {
 			if plan.FindTask(args[1]) == nil {
 				return fmt.Errorf("task not found: %s", args[1])
 			}
+			// One task in_progress at a time: with two, no gate can tell which
+			// one it guards, and they all refuse. Re-setting the same task is
+			// fine.
+			if status == phase.StatusInProgress {
+				if err := refuseSecondInProgress(plan, args[0], args[1]); err != nil {
+					return err
+				}
+			}
 			// A failed solo task carries its review: the refusal comes before
 			// any write, and the review — read only from the recorder's
 			// ledger — explains the failure when no --reason does.
@@ -274,6 +282,22 @@ func taskStatus() *cobra.Command {
 	}
 	c.Flags().StringVar(&reason, "reason", "", "why the task failed (only with failed; any other status clears a recorded reason)")
 	return c
+}
+
+// refuseSecondInProgress refuses setting taskID in_progress while another task
+// of the phase already is, naming that task and the call that parks it.
+func refuseSecondInProgress(plan *phase.Plan, phaseID, taskID string) error {
+	var others []string
+	for _, t := range plan.Task {
+		if t.ID != taskID && t.Status == phase.StatusInProgress {
+			others = append(others, t.ID)
+		}
+	}
+	if len(others) == 0 {
+		return nil
+	}
+	return fmt.Errorf("%s already has %s in_progress, and a phase runs one task at a time — park it first with `dross task status %s %s pending`, then set %s in_progress",
+		phaseID, strings.Join(others, ", "), phaseID, others[0], taskID)
 }
 
 // savePlan is plan.Save, a seam for the status command's save-failure test.
