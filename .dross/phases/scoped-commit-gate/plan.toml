@@ -1,4 +1,4 @@
-task_seq = 26
+task_seq = 27
 
 [phase]
   id = "scoped-commit-gate"
@@ -336,4 +336,14 @@ Call t-10's check for repos with a vouching lane ahead of auto-finalize, reading
   description = "`make install` from this branch, then a /dross-quick in barktime lands a relate script on vitest's own related selection, a vouching lane over in-container.sh and test_exempt. The lane runs at t-20's run site. The human grants them in their own terminal. The evidence is a separate real task commit touching a .svelte, not the quick that lands the script, which touches an uncovered path. barktime-proof.toml holds sha, run_log, run_site, paths, wall_clock_s, runs, gate_status, green_tree and commit_tree; a human reads it as c-5 evidence at verify. The lane declares no empty_exit, and declares t-20's lockfile-guarded install as its `prepare`."
   covers = ["c-5"]
   test_contract = ["if the evidence is unreal, the acceptance record fails: its SHA must resolve with `git -C ~/Development/barktime cat-file -e`, and its run log must exist", "if the run was not scoped, the record fails: the log must show relate mapping a .svelte path to its tests, the batched line carrying only those tests, tests collected, no `uncovered:` line and no bare in-container suite", "if the gate was lifted, the record fails: `dross gate status` in barktime, run right after the commit, must show commit-green not lifted", "if a full run admitted it, the record fails: barktime's green.json tree must differ from that commit's tree", "if the cost model is wrong, the record fails: it must hold runs beside wall_clock_s for a multi-path leaf task commit, the figure for two runs must fit t-20's 600s budget, and a hot-file task is recorded rather than failed", "if relate fails open, the same-session check fails: a .svelte with no related test, and a misspelled path, must each give exit 5, no lane spawn, scoped.json unchanged and no record for that tree", "if a miss admits on the real repo, the check fails: a commit touching one covered and one test-less .svelte must be refused, naming the second", "if dependencies reach the site another way, the record fails: the lane's `prepare` is t-20's lockfile-guarded install, and the log shows it ran before relate"]
+  status = "pending"
+
+[[task]]
+  id = "t-27"
+  wave = 1
+  title = "Drop the sync tail from a scoped-to-nothing miss"
+  files = ["internal/cmd/test.go", "internal/cmd/test_summary_wiring_test.go"]
+  description = "A remote --files run whose only lane is ScopedToNothing (every selected path gone, e.g. a misspelled path) spawns only the tree sync, then continues past the lane. summarise then falls back to that aux rsync segment and prints 'exit 5 · output not recognised — last 0 lines' after the correct selector-miss line (seen live on barktime, log test-20261109T073754). Fix: call tr.dropLane() in test.go's ScopedToNothing branch, mirroring the relate-miss and collected-no-tests branches, so a miss prints only its miss line. Found by t-18's same-session checks."
+  covers = ["c-9"]
+  test_contract = ["if a scoped-to-nothing miss still renders the sync segment, a remote --files run over a missing path prints 'output not recognised' and TestScopedToNothingMissNoTail fails", "if the fix swallows the miss itself, the run no longer exits 5 or no longer prints 'selector miss:', and TestScopedToNothingMissNoTail fails"]
   status = "pending"
