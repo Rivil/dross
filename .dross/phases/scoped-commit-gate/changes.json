@@ -3,6 +3,18 @@
   "base": "milestone/v1.9",
   "base_commit": "eaaab8d14b2208fec26d76d48b4f5dc6e6af45cd",
   "tasks": {
+    "quick-1": {
+      "files": [
+        "internal/cmd/state.go",
+        "internal/cmd/version_pkgjson_test.go",
+        "internal/pkgjson/version.go",
+        "internal/pkgjson/version_test.go",
+        "internal/secretscan/writers.go"
+      ],
+      "commit": "31c3904",
+      "completed_at": "2026-11-09T07:28:38.700072Z",
+      "notes": "quick: writeVersion also syncs every tracked package.json version to the first three parts of the dross version (npm semver), so phase/quick bumps keep package.json in step with project.toml"
+    },
     "t-1": {
       "files": [
         "README.md",
