@@ -591,6 +591,30 @@ func TestIsTestPath(t *testing.T) {
 	}
 }
 
+// TestUnderAny: an ignored entry beneath an already-linked directory is skipped,
+// so MkdirAll never follows the link into the working tree. Beneath means a
+// path separator after the dir: a sibling sharing its prefix, or the dir
+// itself, is not under it.
+func TestUnderAny(t *testing.T) {
+	linked := []string{"node_modules", "web/.svelte-kit"}
+	for name, want := range map[string]bool{
+		"node_modules/vitest":      true,
+		"web/.svelte-kit/output/x": true,
+		"node_modules":             false,
+		"node_modules_extra/x":     false,
+		"web/.svelte-kitchen/x":    false,
+		"web/node_modules/vitest":  false,
+		"dist":                     false,
+	} {
+		if got := underAny(name, linked); got != want {
+			t.Errorf("underAny(%q, %q) = %v, want %v", name, linked, got, want)
+		}
+	}
+	if underAny("node_modules/x", nil) {
+		t.Error("underAny with no linked dirs reported a match")
+	}
+}
+
 // TestRedProofLanesSkipRelate: a vouching lane's tests are the named paths
 // themselves, so its line is built from them and relate never spawns.
 func TestRedProofLanesSkipRelate(t *testing.T) {

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 )
@@ -68,10 +67,10 @@ func topLevelVersionSpan(b []byte) (start, end int, ok bool, err error) {
 			return 0, 0, false, nil
 		}
 		to := int(dec.InputOffset())
+		// The span opens on the key's ':', so the decoder having read a string
+		// puts its opening quote at q >= 1. No guard on q: a span that missed
+		// the quote would fail the escape check below, never write.
 		q := bytes.IndexByte(b[from:to], '"')
-		if q < 0 {
-			return 0, 0, false, fmt.Errorf("version value at offset %d is not a quoted string", from)
-		}
 		start, end = int(from)+q+1, to-1
 		if string(b[start:end]) != s {
 			return 0, 0, false, errors.New("top-level version uses JSON escapes; fix it by hand")

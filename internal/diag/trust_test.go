@@ -265,6 +265,62 @@ func TestLaneConsentLevels(t *testing.T) {
 	}
 }
 
+// TestExemptConsentLevels: no list renders nothing, a granted list one OK row,
+// and a stale or never-trusted list a headline at its severity followed by
+// every glob, sorted, and the human-only fix.
+func TestExemptConsentLevels(t *testing.T) {
+	_, repoDir, in := trustFixture(t)
+	globs := []string{"docs/**", "ARCHITECTURE.md"}
+	p := &project.Project{}
+
+	if got := exemptConsent(repoDir, p, in.Grants); got != nil {
+		t.Errorf("a repo with no test_exempt rendered %+v", got)
+	}
+
+	p.Runtime.TestExempt = globs
+	wantGlobs := func(t *testing.T, lines []Line, level Level) {
+		t.Helper()
+		if len(lines) != 4 {
+			t.Fatalf("got %d lines, want headline + 2 globs + fix:\n%s", len(lines), joined(lines))
+		}
+		if lines[0].Level != level {
+			t.Errorf("headline level = %v, want %v: %q", lines[0].Level, level, lines[0].Text)
+		}
+		want := []Line{
+			{Note, "      ARCHITECTURE.md"},
+			{Note, "      docs/**"},
+			{Note, "    Fix (a human, only after reading that): `dross trust --test-exempt`"},
+		}
+		for i, w := range want {
+			if lines[i+1] != w {
+				t.Errorf("line %d = %+v, want %+v", i+1, lines[i+1], w)
+			}
+		}
+	}
+
+	absent := exemptConsent(repoDir, p, in.Grants)
+	wantGlobs(t, absent, Warn)
+	if !strings.Contains(absent[0].Text, "not trusted on this machine") {
+		t.Errorf("never-trusted headline = %q", absent[0].Text)
+	}
+
+	if err := consent.GrantExemptConsent(in.Grants, []string{"docs/**"}); err != nil {
+		t.Fatal(err)
+	}
+	stale := exemptConsent(repoDir, p, in.Grants)
+	wantGlobs(t, stale, Issue)
+	if !strings.Contains(stale[0].Text, "consent is stale") {
+		t.Errorf("stale headline = %q", stale[0].Text)
+	}
+
+	if err := consent.GrantExemptConsent(in.Grants, globs); err != nil {
+		t.Fatal(err)
+	}
+	if got := exemptConsent(repoDir, p, in.Grants); len(got) != 1 || got[0] != (Line{OK, "runtime.test_exempt: trusted"}) {
+		t.Errorf("granted list rendered %+v", got)
+	}
+}
+
 // TestHostOf pins the host[:port] extraction the fix line relies on.
 func TestHostOf(t *testing.T) {
 	for raw, want := range map[string]string{
