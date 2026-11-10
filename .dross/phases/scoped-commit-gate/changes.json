@@ -460,6 +460,26 @@
         }
       ]
     },
+    "t-31": {
+      "files": [
+        "internal/cmd/test_redproof.go",
+        "internal/cmd/test_redproof_test.go",
+        "internal/cmd/test_output.go",
+        "assets/agents/dross-task-writer.md",
+        "internal/runsummary/summary.go",
+        "internal/runsummary/summary_test.go"
+      ],
+      "commit": "7fa1b12",
+      "completed_at": "2026-11-10T08:05:20.914127Z",
+      "landmarks": [
+        {
+          "feature": "red-proof",
+          "symbol": "redProofVerdict",
+          "loc": "internal/cmd/test_redproof.go:116",
+          "what": "a red at base proves a task's tests only when a parsed failure belongs to a named test file; build blocks and unattributed reds do not"
+        }
+      ]
+    },
     "t-4": {
       "files": [
         "internal/testlane/coverage.go",
@@ -1243,6 +1263,33 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "redProofLanes drops relate for vouching lanes and builds the batch line straight from the named tests. That is reasonable because every path is already a test, and TestRedProofLanesSkipRelate pins it.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-31": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "No test drives a red-proof with tr.tty set, so the new 'r.tty \u0026\u0026 !r.keep' branch in spawn (segments built on a terminal) is unexercised; a regression there would silently turn every terminal red-proof into 'not proven'.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "initRedProofGit fetches all of HEAD's tree objects into a fresh .git on every red-proof, and on a granted host that .git replaces the host's, so the next ordinary sync re-sends the full .git. This only affects speed and transfer size on large repos, not correctness.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Attribution residuals are documented in owns/hasFile: suffix matching lets a bare or shorter printed path match a deeper named file, and Go names carry no package, so a same-named test elsewhere in a whole-suite run reads as the named one. Both can make the verdict claim proof it should not.",
           "resolution": "non-blocking, left"
         }
       ]
