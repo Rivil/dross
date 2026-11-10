@@ -15,6 +15,17 @@
       "completed_at": "2026-11-09T07:28:38.700072Z",
       "notes": "quick: writeVersion also syncs every tracked package.json version to the first three parts of the dross version (npm semver), so phase/quick bumps keep package.json in step with project.toml"
     },
+    "quick-2": {
+      "files": [
+        "internal/cmd/test_redproof_test.go",
+        "internal/diag/trust_test.go",
+        "internal/pkgjson/version.go",
+        "internal/pkgjson/version_test.go"
+      ],
+      "commit": "af56ad9",
+      "completed_at": "2026-11-10T16:52:36.696659Z",
+      "notes": "quick: add in-package tests for scoped-commit-gate's uncovered verify survivors (pkgjson SyncVersion, diag exemptGlobs, red-proof underAny)"
+    },
     "t-1": {
       "files": [
         "README.md",
