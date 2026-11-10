@@ -11,6 +11,9 @@
 package runsummary
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"regexp"
 	"strings"
 	"sync"
@@ -261,6 +264,40 @@ func (s *Segment) Retained() int {
 		n += len(l)
 	}
 	return n
+}
+
+// Results is what Render reads, for a caller that judges a run by which tests
+// failed rather than printing it — a red-proof asking whether the red came from
+// the tests it named. Read it after Close, or a last line with no newline is
+// not in it. A segment no parser claimed has none.
+func (s *Segment) Results() []Result { return s.results() }
+
+// goTestPrefixes are the names `go test` runs a top-level function under.
+var goTestPrefixes = []string{"Test", "Fuzz", "Example", "Benchmark"}
+
+// GoTestFuncs is every test function a Go _test.go source declares: the names
+// the go test parser's failures carry for that file, before any "/subtest". A
+// source that does not parse yields what parsed before the error — such a
+// file fails to build, and its package's failure is named after the package.
+func GoTestFuncs(src []byte) []string {
+	f, _ := parser.ParseFile(token.NewFileSet(), "", src, parser.SkipObjectResolution)
+	if f == nil {
+		return nil
+	}
+	var out []string
+	for _, d := range f.Decls {
+		fn, ok := d.(*ast.FuncDecl)
+		if !ok || fn.Recv != nil {
+			continue
+		}
+		for _, p := range goTestPrefixes {
+			if strings.HasPrefix(fn.Name.Name, p) {
+				out = append(out, fn.Name.Name)
+				break
+			}
+		}
+	}
+	return out
 }
 
 // results is every claiming parser's Result, in registry order: one spawn

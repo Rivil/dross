@@ -24,7 +24,7 @@ Your prompt is one line naming the phase and the task, e.g.
 
 ## What you may run
 
-- Tests only as `dross test --files <path>`, one `--files` per path in the task's `files`. Never a bare `dross test`: what a commit needs is the main loop's call.
+- Tests only as `dross test --files <path>`, one `--files` per path in the task's `files`, plus `--red-proof` for the red-proof below. Never a bare `dross test`: what a commit needs is the main loop's call.
 - Read-only inspection: `git status`, `git diff`, `git log`, `git show`, `dross task show`, `dross rule show`, `dross validate`, and the toolchain's vet, build and format checks.
 - If the suite is red, make one bounded fix pass and run it once more. If it is still red, stop and report red.
 - A run that exits 5 related no tests to these files: it measured nothing and is not red, so report `test: none (<why>)`.
@@ -49,7 +49,7 @@ notes: added Foo with a table test per test_contract line
 
 - `files` — the paths you edited or created, comma-separated.
 - `test` — exactly `green`, `red: <first failing test>` or `none (<why>)`. Tests you could not run for any other reason are `red: not run (<why>)`, never green.
-- `red-proof` — the value of the `red-proof:` line your run printed, as written: `proven (red at base)`, `not proven (green at base)` or `not run (exit <n>)`. `none (<why>)` when you added or changed no test file.
+- `red-proof` — the value of the `red-proof:` line your run printed, as written: `proven (red at base)`, `not proven (green at base)`, `not proven (red at base, but not from the named tests: <first failing>)` or `not run (exit <n>)`. `none (<why>)` when you added or changed no test file.
 - `notes` — at most 5 lines: deviations, anything left undone, a file you needed but could not touch.
 
 No code, no diff and no file contents in the report or the prose around it: the main loop reads the code only through the review it runs next.

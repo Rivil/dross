@@ -9,17 +9,21 @@ package cmd
 // run against a scratch copy of HEAD — the code as it stood before the task —
 // with only those test files laid over it from the working tree.
 //
-// Red there is the proof, and exits 0: the tests need the working tree's fix to
-// pass. Green is not, and exits 1 — this mode's ordinary failure — because a
-// test that passes without the fix says nothing about it. A run that never
-// happened keeps its own exit in the 2–8 band and is never read as either.
+// A red there from one of the named tests is the proof, and exits 0: the tests
+// need the working tree's fix to pass. Anything else exits 1 — this mode's
+// ordinary failure. Green is not proof, because a test that passes without the
+// fix says nothing about it. Nor is a red the named tests did not cause: a
+// build failure (the tests call what HEAD lacks), another test in the package
+// failing, or output no parser could name. A run that never happened keeps its
+// own exit in the 2–8 band and is never read as either.
 //
 // The scratch copy is built from HEAD's tree through a scratch index and
 // checkout-index, never as a git worktree: a worktree's .git is a FILE pointing
 // back into this repo, and pushing it to a granted host would replace the
-// host's .git directory with a dangling pointer. The working tree, the real
-// index, green.json and scoped.json are never written — a red-proof measures a
-// tree no commit will ever record, so nothing it learns may vouch for one.
+// host's .git directory with a dangling pointer. It gets a .git of its own at
+// HEAD instead (see initRedProofGit). The working tree, the real index,
+// green.json and scoped.json are never written — a red-proof measures a tree no
+// commit will ever record, so nothing it learns may vouch for one.
 
 import (
 	"errors"
@@ -34,27 +38,35 @@ import (
 	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/runsummary"
 	"github.com/Rivil/dross/internal/verify"
 )
 
 // runRedProof is `dross test --red-proof --files <tests>`: the run, then its
 // verdict, printed as one `red-proof:` line a writer's report can quote.
 func runRedProof(tr *testRun, root, repoDir string, proj *project.Project, files []string, local bool, wait time.Duration) error {
-	runErr := redProofRun(tr, root, repoDir, proj, files, local, wait)
+	tr.keep = true
+	named, runErr := redProofRun(tr, root, repoDir, proj, files, local, wait)
 	tr.finish(runErr)
-	line, err := redProofVerdict(runErr)
+	line, err := redProofVerdict(runErr, tr.parsed, named)
 	Print(line)
 	return err
 }
 
 // redProofRun runs the named tests at base the way a --files run would run them
 // on the working tree: the lanes they hit, on the same site, through the same
-// grants — with no recorder anywhere on the path.
-func redProofRun(tr *testRun, root, repoDir string, proj *project.Project, files []string, local bool, wait time.Duration) error {
+// grants — with no recorder anywhere on the path. It returns what a failure
+// must point at to be theirs.
+func redProofRun(tr *testRun, root, repoDir string, proj *project.Project, files []string, local bool, wait time.Duration) (redProofNamed, error) {
 	tests, err := redProofTests(repoDir, files)
 	if err != nil {
-		return err
+		return redProofNamed{}, err
 	}
+	return namedTests(repoDir, tests), redProofRunTests(tr, root, repoDir, proj, tests, local, wait)
+}
+
+// redProofRunTests is redProofRun past the check of its file set.
+func redProofRunTests(tr *testRun, root, repoDir string, proj *project.Project, tests []string, local bool, wait time.Duration) error {
 	// A lane-less repo's --files run is its whole suite, so its red-proof is
 	// too. The consent gate comes before the scratch copy is built, as it comes
 	// before any spawn on the ordinary path.
@@ -89,12 +101,19 @@ func redProofRun(tr *testRun, root, repoDir string, proj *project.Project, files
 // redProofVerdict turns the run's outcome into the proof's: the line to print,
 // and the error the command exits with.
 //
-// Only a red suite proves anything, and it exits 0, because a proven red is
-// this mode's success. A red whose runner was never found (126 or 127 from the
-// shell) is not a test failing: in a scratch tree that lacks something the
-// working tree had, it is the likeliest red of all, and reading it as proof
-// would be the tool manufacturing the evidence it was asked to check for.
-func redProofVerdict(runErr error) (string, error) {
+// Only a red suite can prove anything, and a proven one exits 0, because a
+// proven red is this mode's success. A red whose runner was never found (126 or
+// 127 from the shell) is not a test failing: in a scratch tree that lacks
+// something the working tree had, it is the likeliest red of all, and reading
+// it as proof would be the tool manufacturing the evidence it was asked to
+// check for.
+//
+// Any other red is proof only when one failure the parsers read is the named
+// tests' own (see redProofNamed.owns): a red at base the named tests did not
+// cause says nothing about the fix. Only the failures each parser kept in full
+// are looked at, so a named failure past the first MaxBlocks of its runner's
+// goes unseen, and the verdict errs toward not proven.
+func redProofVerdict(runErr error, parsed []runsummary.Result, named redProofNamed) (string, error) {
 	if isRed(runErr) {
 		var ec exitCoder
 		if errors.As(runErr, &ec) && (ec.ExitCode() == 126 || ec.ExitCode() == 127) {
@@ -102,7 +121,26 @@ func redProofVerdict(runErr error) (string, error) {
 				"the runner was not found at base (shell exit %d), so no test ran: %w", ec.ExitCode(), runErr)}
 			return fmt.Sprintf("red-proof: not run (exit %d)", exitToolchainMissing), err
 		}
-		return "red-proof: proven (red at base)", nil
+		first := ""
+		for _, r := range parsed {
+			for _, f := range r.Failures.Kept {
+				if named.owns(r.Runner, f.Name) {
+					return "red-proof: proven (red at base)", nil
+				}
+				if first == "" {
+					first = f.Name
+				}
+			}
+		}
+		if first == "" {
+			first = "no failing test could be read from the output"
+		}
+		first = runsummary.Cut(first)
+		return fmt.Sprintf("red-proof: not proven (red at base, but not from the named tests: %s)", first),
+			&ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf(
+				"not proven: the run at HEAD went red, but none of its failures is one of the named tests' own "+
+					"(first failing: %s) — a build failure, another test, or output no parser could name "+
+					"says nothing about the fix", first)}
 	}
 	if runErr == nil {
 		return "red-proof: not proven (green at base)", &ExitCodeError{Code: exitSuiteFailed, Err: errors.New(
@@ -116,6 +154,95 @@ func redProofVerdict(runErr error) (string, error) {
 		runErr = &ExitCodeError{Code: exitPrepareFailed, Err: fmt.Errorf("the red-proof did not run: %w", runErr)}
 	}
 	return fmt.Sprintf("red-proof: not run (exit %d)", ExitCode(runErr)), runErr
+}
+
+// redProofNamed is what a parsed failure must point at to be the named tests'
+// own.
+type redProofNamed struct {
+	// files are the named test paths, repo-relative.
+	files []string
+	// goFuncs are the Test, Fuzz, Example and Benchmark functions the named
+	// _test.go files declare.
+	goFuncs map[string]bool
+}
+
+// namedTests indexes the named tests. A Go file's test functions are read from
+// the working tree's copy, which is the one laid over HEAD. A file that cannot
+// be read declares nothing here, so no failure is attributed to it.
+func namedTests(repoDir string, tests []string) redProofNamed {
+	n := redProofNamed{files: tests, goFuncs: map[string]bool{}}
+	for _, t := range tests {
+		if !strings.HasSuffix(t, "_test.go") {
+			continue
+		}
+		src, err := os.ReadFile(filepath.Join(repoDir, filepath.FromSlash(t)))
+		if err != nil {
+			continue
+		}
+		for _, fn := range runsummary.GoTestFuncs(src) {
+			n.goFuncs[fn] = true
+		}
+	}
+	return n
+}
+
+// owns reports whether a failure, as runner named it, is one of the named
+// tests'. Each runner names failures its own way:
+//
+//   - go test: a leaf "TestX/sub", which is TestX's, and counts when a named
+//     _test.go file declares TestX. A `# pkg` build block, or a package's own
+//     failure (a timeout, a TestMain exit), is named after the package, which
+//     no test function shares. Go's names carry no package, so a same-named
+//     test in another package of a whole-suite run reads as the named one.
+//   - pytest: a node id "path::test". A module that failed to collect is
+//     "path" alone — pytest's build failure — and never counts.
+//   - jest: "<file> › <title>"; its "Test suite failed to run" is the file
+//     failing to load, and never counts.
+//   - vitest: "<file> > <describe> > <test>", the file after any workspace
+//     project label. A bare "<file>" is a suite that failed to load, and an
+//     unhandled error is named by its banner: neither counts.
+//
+// Any other runner — dart, gradle — has no mapping, so none of its failures
+// is attributed.
+func (n redProofNamed) owns(runner, name string) bool {
+	switch runner {
+	case "go test":
+		fn, _, _ := strings.Cut(name, "/")
+		return n.goFuncs[fn]
+	case "pytest":
+		file, _, ok := strings.Cut(name, "::")
+		return ok && n.hasFile(file)
+	case "jest":
+		file, title, ok := strings.Cut(name, " › ")
+		return ok && title != "Test suite failed to run" && n.hasFile(file)
+	case "vitest":
+		head, _, ok := strings.Cut(name, " > ")
+		fields := strings.Fields(head)
+		return ok && len(fields) > 0 && n.hasFile(fields[len(fields)-1])
+	}
+	return false
+}
+
+// hasFile reports whether a path a runner printed is one of the named tests.
+//
+// A runner prints paths from its own root, which can sit below the repo's: a
+// lane that runs `cd web && npx vitest` prints src/a.test.ts for
+// web/src/a.test.ts. So a named path that ends in the printed one, at a
+// directory boundary, matches; an absolute one matches when it ends in the
+// named path. The residual: in a whole-suite run, a failing un-named
+// src/a.test.ts at the repo's top reads as a named web/src/a.test.ts.
+func (n redProofNamed) hasFile(printed string) bool {
+	abs := path.IsAbs(printed)
+	p := path.Clean(printed)
+	if p == "." || p == "/" {
+		return false
+	}
+	for _, f := range n.files {
+		if f == p || strings.HasSuffix(f, "/"+p) || (abs && strings.HasSuffix(p, "/"+f)) {
+			return true
+		}
+	}
+	return false
 }
 
 // redProofLanes runs each vouching lane straight on the tests it was handed.
@@ -304,6 +431,9 @@ func buildRedProofTree(repoDir string, tests []string) (_ *redProofTree, err err
 	if _, err = gitrun.RawWith(opts, repoDir, "checkout-index", "--all", "--force", "--prefix="+top+"/"); err != nil {
 		return nil, redProofNotBuilt(fmt.Errorf("could not check HEAD's tree out: %w", err))
 	}
+	if err = initRedProofGit(repoDir, prefix, top, head); err != nil {
+		return nil, redProofNotBuilt(err)
+	}
 	s.dir = filepath.Join(top, prefix)
 	if err = os.MkdirAll(s.dir, 0o755); err != nil {
 		return nil, redProofNotBuilt(err)
@@ -312,6 +442,45 @@ func buildRedProofTree(repoDir string, tests []string) (_ *redProofTree, err err
 		return nil, redProofNotBuilt(err)
 	}
 	return s, nil
+}
+
+// initRedProofGit makes the copy's top a git work tree at HEAD: HEAD detached
+// at head and the index at its tree, so a test that calls git — rev-parse,
+// ls-files, a diff against HEAD — finds what it finds in the working tree, the
+// laid-over tests showing as changed or untracked just as they do there.
+// Without one, every git-calling test in a whole-package run goes red at base
+// whatever the fix.
+//
+// The objects are fetched one commit deep into a .git of the copy's own, never
+// shared with this repo's through alternates: a push sends the copy whole, .git
+// included, and an alternates path on this machine would dangle on the host.
+// Sent whole, it also replaces the host's .git, which would otherwise sit
+// beside HEAD's files describing whatever tree was pushed before. When the
+// dross root sits below the work tree's top, the .git is above what is pushed,
+// as the working tree's is above an ordinary push.
+func initRedProofGit(repoDir, prefix, top, head string) error {
+	src, err := filepath.Abs(repoDir)
+	if err != nil {
+		return err
+	}
+	// The repo's top is the dross root with its place in the work tree taken
+	// off; fetch needs a repository, not a directory inside one.
+	if prefix != "" {
+		for range strings.Split(filepath.ToSlash(prefix), "/") {
+			src = filepath.Dir(src)
+		}
+	}
+	for _, args := range [][]string{
+		{"init", "-q"},
+		gitRefArgs("fetch", []string{"-q", "--depth=1", "--no-tags", "--no-auto-gc"}, src, head),
+		gitRefArgs("update-ref", []string{"--no-deref"}, "HEAD", head),
+		gitRefArgs("read-tree", nil, head),
+	} {
+		if err := gitrun.Run(top, args...); err != nil {
+			return fmt.Errorf("could not give the copy a .git at HEAD (git %s): %w", args[0], err)
+		}
+	}
+	return nil
 }
 
 // redProofNotBuilt tags a failure to build the scratch tree.
@@ -391,15 +560,15 @@ func (s *redProofTree) runTree() runTree {
 
 // redProofSyncFilters are the rules a push of the copy adds to SyncArgs' own.
 //
-// The copy has no .git, and an ordinary sync sends the working tree's .git on
-// purpose (see remote.SyncArgs), so without a protect rule --delete would remove
-// the host's. The excludes stand in for the git-derived list SyncArgs cannot
-// build for a directory that is not a work tree. Each is anchored at the root,
-// so a bare name cannot match elsewhere, and carries no trailing slash: in the
-// copy a linked directory is a symlink, which a directory-only pattern would
-// let through to replace the host's directory.
+// The copy's .git is its own, at HEAD (see initRedProofGit), and goes over
+// whole like the working tree's does on an ordinary sync, so no rule protects
+// the host's. The excludes are the working tree's ignored paths, which the
+// copy's own git cannot list: in the copy they are symlinks, or absent. Each is
+// anchored at the root, so a bare name cannot match elsewhere, and carries no
+// trailing slash: in the copy a linked directory is a symlink, which a
+// directory-only pattern would let through to replace the host's directory.
 func redProofSyncFilters(ignored []string) []string {
-	out := []string{"--filter=P /.git"}
+	var out []string
 	for _, name := range ignored {
 		out = append(out, "--exclude=/"+name)
 	}
