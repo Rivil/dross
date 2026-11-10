@@ -401,6 +401,22 @@
         }
       ]
     },
+    "t-29": {
+      "files": [
+        "internal/gate/pair.go",
+        "internal/gate/engine_test.go"
+      ],
+      "commit": "6b5db690",
+      "completed_at": "2026-11-09T20:29:27.401008Z",
+      "landmarks": [
+        {
+          "feature": "tool gates",
+          "symbol": "AmbiguousError.Parks",
+          "loc": "internal/gate/pair.go:203",
+          "what": "the ambiguous escape parks all but one in_progress task, so the downgrade guard keeps an armed scope"
+        }
+      ]
+    },
     "t-3": {
       "files": [
         "ARCHITECTURE.md",
@@ -419,6 +435,28 @@
           "symbol": "laneVouchProblems",
           "loc": "internal/cmd/validate.go:476",
           "what": "validates vouching lanes and test_exempt globs: path selector, empty_exit, no catch-all exempt"
+        }
+      ]
+    },
+    "t-30": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_redproof.go",
+        "internal/cmd/test_redproof_test.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "assets/agents/dross-task-writer.md",
+        "assets/prompts/_execute.solo.md",
+        "internal/cmd/test_output_test.go",
+        "internal/review/writer_test.go"
+      ],
+      "commit": "105786af",
+      "completed_at": "2026-11-09T21:35:48.673133Z",
+      "landmarks": [
+        {
+          "feature": "solo red-proof",
+          "symbol": "runRedProof",
+          "loc": "internal/cmd/test_redproof.go:42",
+          "what": "dross test --red-proof runs a task's tests against HEAD in a scratch copy and requires a red"
         }
       ]
     },
@@ -1134,6 +1172,26 @@
         }
       ]
     },
+    "t-29": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Parks counts distinct ids (map), so naming one id twice still leaves the other armed; the 'one id named twice' allowed case pins this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The refusal for an all-parking line reuses the existing ambiguous refusal path in engine.go (refuse with amb.Remedy()), as the description requires; no new refusal text was introduced.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
     "t-3": {
       "outcome": "pass",
       "rounds": 1,
@@ -1151,6 +1209,40 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The contract names TestArchitectureNamesLosslessWriter for anchor drift, but that test only checks that Save's anchor line mentions the word and has no saveLossless row. lossless_docs_test.go is outside the task's files, so the exact-line check lives in the new TestArchitectureAnchorsTheSaveDoors, which does fail on drift of either anchor.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-30": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "The scratch copy has no .git, and lanes like Go run the whole package rather than the named test, so any test in that package that shells out to git against its own repo goes red at base whether or not the fix matters. redProofVerdict reports that as 'proven (red at base)', a false proof of the kind the 126/127 check exists to prevent. Consider noting it in the output or excluding such reds.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "On a granted host the push protects the host's existing .git (from the last full sync of the working tree) and puts HEAD's files beside it, so the host's git sees a dirty tree relative to its index. Git-dependent tests then behave differently on a remote red-proof than on a local one.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "dross-task-writer.md line 27 still reads 'Tests only as `dross test --files \u003cpath\u003e`', which conflicts slightly with the new red-proof bullet. The fence allows the command because --files is present.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "redProofLanes drops relate for vouching lanes and builds the batch line straight from the named tests. That is reasonable because every path is already a test, and TestRedProofLanesSkipRelate pins it.",
           "resolution": "non-blocking, left"
         }
       ]

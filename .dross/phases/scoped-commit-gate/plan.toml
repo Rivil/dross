@@ -1,4 +1,4 @@
-task_seq = 30
+task_seq = 31
 
 [phase]
   id = "scoped-commit-gate"
@@ -364,15 +364,25 @@ Call t-10's check for repos with a vouching lane ahead of auto-finalize, reading
   files = ["internal/gate/pair.go", "internal/gate/engine_test.go"]
   description = "t-28's review FLAG. AmbiguousError.Parks lets through a line that parks EVERY in_progress task (e.g. 'dross task status p t-1 pending && dross task status p t-3 pending'). The engine returns before solo-review's judgeDowngrade runs, so with uncommitted solo code that line disarms the solo scope, which the downgrade guard otherwise refuses. Fix: Parks accepts a line only when it parks at most len(Tasks)-1 distinct ids, leaving one task in_progress. That task is the armed scope, and judgeDowngrade governs it on the next call. A line parking all of them is refused with the existing ambiguous refusal text."
   test_contract = ["if a line parking every in_progress id still passes, the engine_test case with two in_progress and both parked in one line is not refused and fails", "if the fix over-tightens, a line parking one of two in_progress ids is refused and the existing allowed-line cases in TestAmbiguousEscape fail"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-28"]
 
 [[task]]
   id = "t-30"
   wave = 3
   title = "Prove a solo task's tests go red at base"
-  files = ["internal/cmd/test.go", "internal/cmd/test_redproof.go", "internal/cmd/test_redproof_test.go", "cmd/dross/testdata/cli_tree.txt", "assets/agents/dross-task-writer.md", "assets/prompts/_execute.solo.md"]
+  files = ["internal/cmd/test.go", "internal/cmd/test_redproof.go", "internal/cmd/test_redproof_test.go", "cmd/dross/testdata/cli_tree.txt", "assets/agents/dross-task-writer.md", "assets/prompts/_execute.solo.md", "internal/cmd/test_output_test.go", "internal/review/writer_test.go"]
   description = "From feastahead's report: in solo runs no one can show a task's new test fails without its fix. The solo-writer gate blocks main-loop edits, and the writer's own file copies too. User chose the 'tests at base' shape. New 'dross test --red-proof --files <test paths>': dross builds a scratch copy of HEAD's tree (git archive or checkout-index into a temp dir, never a git worktree: rsyncing a worktree to helicon clobbers its .git) and overlays only the named test files from the working tree. It runs the lanes those paths hit at the same run site as a normal --files run, and REQUIRES a red: exit 1 from the suite means proven. A green means the tests pass without the fix, so the result is not proven and the exit is non-zero. Not run (2-8) stays its own exit, never counted as proof. The working tree, scoped.json and green.json are never touched or written. Refuse non-test paths: overlaying source would prove nothing. Writer prompt: run it on the task's new or changed tests before reporting, and add a 'red-proof:' line to dross-writer-report. Solo partial: the main loop reads that line; a not-proven result is surfaced in the commit body, and the task does not fail."
   test_contract = ["if --red-proof runs against the working tree instead of HEAD, a fixture where the fix makes the test pass reports proven-green and TestRedProofRunsAtBase fails", "if a green at base counts as proof, TestRedProofGreenIsNotProven fails", "if the run touches the working tree or records a green, TestRedProofLeavesTreeAndRecords fails (tree fingerprint, scoped.json and green.json unchanged)", "if a non-test path is overlaid, TestRedProofRefusesSourcePaths fails", "if the CLI tree drifts, cli_tree.txt's golden test fails"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-29"]
+
+[[task]]
+  id = "t-31"
+  wave = 4
+  title = "Name only reds from the named tests as proof"
+  files = ["internal/cmd/test_redproof.go", "internal/cmd/test_redproof_test.go", "assets/agents/dross-task-writer.md"]
+  description = "t-30's review FLAGs plus a compile-failure case seen in t-30's own run. 'dross test --red-proof' currently reports 'proven (red at base)' for any red at base. Three of those reds have nothing to do with the fix: (1) a compile failure at base (the new tests call functions HEAD lacks); (2) the scratch copy has no .git, so a git-calling test anywhere in a whole-package run (Go) goes red regardless; (3) on a granted host the push keeps the host's stale .git beside HEAD's files. Fix: (a) give the scratch copy a .git at HEAD, made locally and pushed whole so the host does not keep its old one; (b) a red counts as proven only when the run's parsed failures (runsummary) name at least one of the named test files or packages AND the run compiled. A build failure, or reds only in un-named tests, prints 'red at base, but not from the named tests: <first failing>' and is NOT proven (exit 1). An unparsed red is not proven either. (c) dross-task-writer.md line 27: say tests run as 'dross test --files <path>', plus '--red-proof' for the red-proof, so the two bullets agree."
+  test_contract = ["if a compile failure at base still counts as proof, TestRedProofBuildFailureNotProven fails", "if a red only in an un-named test counts as proof, TestRedProofUnnamedRedNotProven fails", "if the scratch copy lacks .git at HEAD, a git-calling test at base fails and TestRedProofScratchHasGitAtHead fails", "if a red in a named test no longer counts, TestRedProofRunsAtBase fails"]
+  status = "pending"
+  depends_on = ["t-30"]

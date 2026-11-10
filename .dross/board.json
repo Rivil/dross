@@ -2644,8 +2644,18 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "scoped-commit-gate/t-29": {
+      "issue": "DRO-1124",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "scoped-commit-gate/t-3": {
       "issue": "DRO-1097",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-30": {
+      "issue": "DRO-1125",
       "plan_status": "done",
       "board_state": "task-in-review"
     },
