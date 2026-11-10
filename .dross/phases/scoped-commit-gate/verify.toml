@@ -1,0 +1,259 @@
+[verify]
+  phase = "scoped-commit-gate"
+  generated_at = 2026-11-10T14:38:16.893044Z
+  verdict = "pending"
+  measured_commit = "74bcf01c54e782176f9be617484fdaeacd85eba0"
+  measured_tree = "0e6e1e2c3829e7d4716798fbda63f8ebe0c84f7a"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9238991021804189
+  mutants_killed = 2161
+  mutants_survived = 178
+  mutants_not_covered = 178
+  mutants_no_block = 148
+  mutants_test_gap = 30
+  mutants_in_scope = 2339
+  unclassified_in_scope = 42
+  criteria_total = 9
+  criteria_covered = 0
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 2161
+    survived = 178
+    timeout = 0
+    in_scope = 2339
+    score = 0.9238991021804189
+    file_count = 99
+    measured_on = "helicon"
+    whole_file = ["internal/cmd/doctor.go — adapter-lacks-range-runner", "internal/cmd/doctor_lane_toolchain_test.go — adapter-lacks-range-runner", "internal/cmd/execute_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/full_green.go — adapter-lacks-range-runner", "internal/cmd/full_green_test.go — adapter-lacks-range-runner", "internal/cmd/lane_locality.go — adapter-lacks-range-runner", "internal/cmd/lane_locality_test.go — adapter-lacks-range-runner", "internal/cmd/lane_plan.go — adapter-lacks-range-runner", "internal/cmd/lane_plan_test.go — adapter-lacks-range-runner", "internal/cmd/lane_preview.go — adapter-lacks-range-runner", "internal/cmd/lane_preview_json.go — adapter-lacks-range-runner", "internal/cmd/lane_preview_json_test.go — adapter-lacks-range-runner", "internal/cmd/lane_preview_locality.go — adapter-lacks-range-runner", "internal/cmd/lane_preview_locality_test.go — adapter-lacks-range-runner", "internal/cmd/lane_preview_test.go — adapter-lacks-range-runner", "internal/cmd/options_docs_test.go — adapter-lacks-range-runner", "internal/cmd/pad_residue_test.go — adapter-lacks-range-runner", "internal/cmd/project.go — adapter-lacks-range-runner", "internal/cmd/project_test.go — adapter-lacks-range-runner", "internal/cmd/prompt_commit_gate_test.go — adapter-lacks-range-runner", "internal/cmd/quick_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/readme_roadmap_test.go — adapter-lacks-range-runner", "internal/cmd/review.go — adapter-lacks-range-runner", "internal/cmd/review_test.go — adapter-lacks-range-runner", "internal/cmd/scoped_commit_e2e_test.go — adapter-lacks-range-runner", "internal/cmd/ship.go — adapter-lacks-range-runner", "internal/cmd/ship_full_green_test.go — adapter-lacks-range-runner", "internal/cmd/state.go — adapter-lacks-range-runner", "internal/cmd/task.go — adapter-lacks-range-runner", "internal/cmd/task_test.go — adapter-lacks-range-runner", "internal/cmd/test.go — adapter-lacks-range-runner", "internal/cmd/test_green_test.go — adapter-lacks-range-runner", "internal/cmd/test_lane.go — adapter-lacks-range-runner", "internal/cmd/test_lane_edit_test.go — adapter-lacks-range-runner", "internal/cmd/test_lane_install.go — adapter-lacks-range-runner", "internal/cmd/test_lane_list_fields_test.go — adapter-lacks-range-runner", "internal/cmd/test_output.go — adapter-lacks-range-runner", "internal/cmd/test_output_test.go — adapter-lacks-range-runner", "internal/cmd/test_redproof.go — adapter-lacks-range-runner", "internal/cmd/test_redproof_test.go — adapter-lacks-range-runner", "internal/cmd/test_scoped.go — adapter-lacks-range-runner", "internal/cmd/test_scoped_test.go — adapter-lacks-range-runner", "internal/cmd/test_summary_wiring_test.go — adapter-lacks-range-runner", "internal/cmd/trust.go — adapter-lacks-range-runner", "internal/cmd/trust_test.go — adapter-lacks-range-runner", "internal/cmd/validate.go — adapter-lacks-range-runner", "internal/cmd/validate_lane_test.go — adapter-lacks-range-runner", "internal/cmd/verify.go — adapter-lacks-range-runner", "internal/cmd/verify_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/version_pkgjson_test.go — adapter-lacks-range-runner", "internal/consent/exempt.go — adapter-lacks-range-runner", "internal/consent/exempt_test.go — adapter-lacks-range-runner", "internal/consent/lane.go — adapter-lacks-range-runner", "internal/consent/lane_test.go — adapter-lacks-range-runner", "internal/consent/store.go — adapter-lacks-range-runner", "internal/diag/trust.go — adapter-lacks-range-runner", "internal/gate/commit.go — adapter-lacks-range-runner", "internal/gate/commit_test.go — adapter-lacks-range-runner", "internal/gate/engine.go — adapter-lacks-range-runner", "internal/gate/engine_test.go — adapter-lacks-range-runner", "internal/gate/override.go — adapter-lacks-range-runner", "internal/gate/override_test.go — adapter-lacks-range-runner", "internal/gate/pair.go — adapter-lacks-range-runner", "internal/gate/scope.go — adapter-lacks-range-runner", "internal/gate/selfguard.go — adapter-lacks-range-runner", "internal/gate/selfguard_test.go — adapter-lacks-range-runner", "internal/gate/soloreview.go — adapter-lacks-range-runner", "internal/gate/soloreview_test.go — adapter-lacks-range-runner", "internal/gate/writer.go — adapter-lacks-range-runner", "internal/gate/writer_test.go — adapter-lacks-range-runner", "internal/gatestate/store.go — adapter-lacks-range-runner", "internal/gatestate/store_test.go — adapter-lacks-range-runner", "internal/localstore/store_test.go — adapter-lacks-range-runner", "internal/mutation/astspan.go — adapter-lacks-range-runner", "internal/mutation/construct.go — adapter-lacks-range-runner", "internal/mutation/construct_e2e_test.go — adapter-lacks-range-runner", "internal/mutation/construct_test.go — adapter-lacks-range-runner", "internal/mutation/range_test.go — adapter-lacks-range-runner", "internal/mutation/stryker.go — adapter-lacks-range-runner", "internal/pathfence/fields.go — adapter-lacks-range-runner", "internal/pathfence/fields_test.go — adapter-lacks-range-runner", "internal/pkgjson/version.go — adapter-lacks-range-runner", "internal/pkgjson/version_test.go — adapter-lacks-range-runner", "internal/project/project.go — adapter-lacks-range-runner", "internal/project/save_lossless_test.go — adapter-lacks-range-runner", "internal/review/writer_test.go — adapter-lacks-range-runner", "internal/runsummary/summary.go — adapter-lacks-range-runner", "internal/runsummary/summary_test.go — adapter-lacks-range-runner", "internal/secretscan/writers.go — adapter-lacks-range-runner", "internal/testlane/coverage.go — adapter-lacks-range-runner", "internal/testlane/coverage_test.go — adapter-lacks-range-runner", "internal/testlane/match.go — adapter-lacks-range-runner", "internal/testlane/match_test.go — adapter-lacks-range-runner", "internal/testlane/relate.go — adapter-lacks-range-runner", "internal/testlane/relate_test.go — adapter-lacks-range-runner", "internal/testlane/toolchain.go — adapter-lacks-range-runner", "internal/testlane/toolchain_test.go — adapter-lacks-range-runner", "internal/verify/range_expand_test.go — adapter-lacks-range-runner", "internal/verify/range_provenance_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/readme_roadmap_test.go:TestReadmeRoadmapMatchesRecordedMilestones", "internal/cmd/readme_roadmap_test.go:TestReadmeRoadmapGuardCatchesEachDrift"]
+  notes = "complete-milestone check counts open boxes only; README has v1.8 6/6 ticked, v1.9 5 boxes, no Azure"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/gate/commit_test.go:TestScopedGreenAdmits", "internal/cmd/scoped_commit_e2e_test.go:TestScopedJourneyAdmitsThenVerifyWantsAFullGreen", "internal/cmd/test_scoped_test.go:TestScopedGreenMatchesCandidate"]
+  notes = ""
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/gate/commit_test.go:TestScopedRefusalNamesOnlyUncovered", "internal/gate/commit_test.go:TestStaleCoverRefuses", "internal/cmd/scoped_commit_e2e_test.go:TestScopedJourneyRefusesTheMissedPath"]
+  notes = "gate has no deletion check of its own; safe because lane_plan filters deleted paths from Asked (t-14 review FLAG)"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/gate/commit_test.go:TestCommitWithoutVouchingLaneIsToday", "internal/cmd/scoped_commit_e2e_test.go:TestNonVouchingJourneyStaysOnTheFullGreen"]
+  notes = ""
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = [".dross/phases/scoped-commit-gate/barktime-proof.toml (barktime bf4f57c0, tree 0ff307f8, re-checked at verify)", "internal/cmd/test_scoped_test.go:TestManyPathsSpawnOneRelateAndOneBatch"]
+  notes = "evidence is a recorded cross-repo proof per locked barktime_proof; the run log has since rotated out of barktime .dross/logs, its content is excerpted in the proof"
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/full_green_test.go:TestVerifyRefusesAScopedGreen", "internal/cmd/ship_full_green_test.go:TestShipRefusesAScopedGreen", "internal/cmd/full_green_test.go:TestVerifyLeavesReposWithNoVouchingLaneAlone"]
+  notes = "ship and verify share requireFullGreen, so the no-vouch arms are pinned once"
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/execute_prompt_test.go:TestExecutePromptLaneCommitRunsFullSuite", "internal/cmd/quick_prompt_test.go:TestQuickTestGateRoutes", "internal/cmd/execute_prompt_test.go:TestExecuteStaleReviewRetests", "internal/review/writer_test.go:TestWriterNamesNoFullSuite"]
+  notes = ""
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/mutation/construct_e2e_test.go:TestRealParserSpansMatchTheExpansionForSvelteMutants", "internal/verify/range_expand_test.go:TestPlanRangesRangesASvelteFile", "internal/mutation/range_test.go:TestParseRangedKeepsOnlyMutantsWhollyInsideARange"]
+  notes = "e2e runs forced by DROSS_REQUIRE_E2E in CI mutation-ts; a style-only .svelte hunk with no related test still fails its Stryker leg (FLAG)"
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/test_scoped_test.go:TestScopedGreenCoversOnlyWhatRelateListed", "internal/cmd/test_scoped_test.go:TestEmptyBatchBesideAGreenLaneCoversNothing", "internal/cmd/test_scoped_test.go:TestRedBatchClearsTheRecordOnItsTree", "internal/testlane/relate_test.go:TestParseRelateRefusesTheWholeOutput"]
+  notes = "a relate naming an absent test refuses the whole relation (stricter than per-path)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/trust.go:369 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_redproof.go:304 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_redproof.go:304 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_redproof.go:307 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_redproof.go:307 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_redproof.go:313 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_redproof.go:313 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_redproof.go:352 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_redproof.go:352 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_redproof.go:354 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_redproof.go:354 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_redproof.go:354 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_redproof.go:546 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/lane_preview.go:277 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_lane.go:656 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/test_lane.go:658 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/diag/trust.go:343 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/selfguard.go:78 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/selfguard.go:80 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/selfguard.go:80 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/selfguard.go:82 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/gate/selfguard.go:101 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pathfence/fields.go:183 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pathfence/fields.go:367 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:27 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:31 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:31 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:56 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:72 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:72 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:75 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:75 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:75 (INVERT_NEGATIVES)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:75 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:76 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:90 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:94 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:94 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:95 (INCREMENT_DECREMENT)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:97 (INCREMENT_DECREMENT)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/pkgjson/version.go:100 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "stale acceptance: internal/cmd/test.go (c10285dfc822967b) — mutant no longer produced — it suppresses nothing and no run can revive it; retire it: dross survivor retire c10285dfc822967b"

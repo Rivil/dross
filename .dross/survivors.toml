@@ -3129,15 +3129,6 @@
   accepted_in = "tool-gate-hooks"
 
 [[accepted]]
-  key = "c10285dfc822967b"
-  file = "internal/cmd/test.go"
-  op = "CONDITIONALS_NEGATION"
-  text = "case errors.As(runErr, &ec) && ec.Code == exitSuiteFailed:"
-  line = 1197
-  category = "gremlins-attribution-ceiling"
-  accepted_in = "tool-gate-hooks"
-
-[[accepted]]
   key = "3e916f43438fa396"
   file = "internal/gate/commit.go"
   op = "CONDITIONALS_NEGATION"
@@ -5206,3 +5197,156 @@
   line = 181
   reason = "gremlins switch-case attribution ceiling: a bare switch{} case condition gets no go-cover block; the shipped-phase arm is asserted by internal/cmd/quick_test.go TestQuickEndShippedIsStandalone (\"phase p is shipped\") and the no-phase arm by TestQuickEndMatchesPRBranch (\"changes: none (standalone)\")"
   accepted_in = "prompt-budgets-rest"
+
+[[accepted]]
+  key = "3a5711d7b8d699b6"
+  file = "internal/cmd/test_redproof.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(outside) > 0:"
+  line = 304
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "97828ea33c08e131"
+  file = "internal/cmd/test_redproof.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(outside) > 0:"
+  line = 304
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "a1627e94e6a9837c"
+  file = "internal/cmd/test_redproof.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(source) > 0:"
+  line = 307
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "aaa5358518b3e6db"
+  file = "internal/cmd/test_redproof.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(source) > 0:"
+  line = 307
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "2a21cffc5bee8382"
+  file = "internal/cmd/test_redproof.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(missing) > 0:"
+  line = 313
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "8bf6a2203c5dbdd2"
+  file = "internal/cmd/test_redproof.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(missing) > 0:"
+  line = 313
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "b7f8c90884003d33"
+  file = "internal/cmd/test_redproof.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ext == \".py\" && (strings.HasPrefix(base, \"test_\") || base == \"conftest.py\"):"
+  line = 352
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "a6807f2e71ad821e"
+  file = "internal/cmd/test_redproof.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case (ext == \".kt\" || ext == \".java\" || ext == \".scala\") && (strings.HasSuffix(stem, \"Test\") || strings.HasSuffix(stem, \"Tests\")):"
+  line = 354
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "04fd2dd0036c1ce3"
+  file = "internal/cmd/trust.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case lane.Prepare != \"\":"
+  line = 369
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "5a1ac5930caeb0b7"
+  file = "internal/cmd/test_lane.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case clearedRelate != \"\":"
+  line = 656
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "83673c6d8a500d98"
+  file = "internal/cmd/test_lane.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case setsRelate && lane.Relate == \"\":"
+  line = 658
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "6a566397e274a7b4"
+  file = "internal/gate/selfguard.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case args[i] == \"--\":"
+  line = 78
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "4177c08c5d04a8d8"
+  file = "internal/gate/selfguard.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case args[i] == \"--help\" || args[i] == \"-h\":"
+  line = 80
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "712d8e4847df04f4"
+  file = "internal/gate/selfguard.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case name == \"--check\":"
+  line = 82
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "b470262c1f1fb017"
+  file = "internal/gate/selfguard.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case args[i] == \"trust\":"
+  line = 101
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap (TestAttributionCeilingIsReal). Arm exercised at verify 2026-11-10 by the named tests in its package."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "003635f8e6a3116a"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "Why: \"glob PATTERNS naming paths that need no tests, matched against a commit's \" +"
+  line = 183
+  reason = "A package-level declaration initializer — a const, or a var whose composite literal is built at init — is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all: not a block with count 0, no block. Gremlins only builds and runs mutants on lines the profile shows as covered, so such a line's mutant is never compiled, never run, and can never be killed by any test a caller could write. Proven by TestConstInitializerHasNoCoverageBlock in internal/mutation/ceiling_test.go (the fixture's const line sits in no block while its statement lines do) and by TestNoCoverageBlockIsNotACoverageGap in internal/survivor/evidence_test.go, which pins the distinction from an ordinary coverage gap — a gap is a block that never ran, and a test can close it. Distinct from the attribution ceiling: there the line runs and the tool disagrees; here the line is structurally uninstrumentable."
+  accepted_in = "scoped-commit-gate"
+
+[[accepted]]
+  key = "bce699b195237f10"
+  file = "internal/pathfence/fields.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"repo paths that reached a collected test in a scoped run, held as strings to compare \"+"
+  line = 367
+  reason = "A package-level declaration initializer — a const, or a var whose composite literal is built at init — is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all: not a block with count 0, no block. Gremlins only builds and runs mutants on lines the profile shows as covered, so such a line's mutant is never compiled, never run, and can never be killed by any test a caller could write. Proven by TestConstInitializerHasNoCoverageBlock in internal/mutation/ceiling_test.go (the fixture's const line sits in no block while its statement lines do) and by TestNoCoverageBlockIsNotACoverageGap in internal/survivor/evidence_test.go, which pins the distinction from an ordinary coverage gap — a gap is a block that never ran, and a test can close it. Distinct from the attribution ceiling: there the line runs and the tool disagrees; here the line is structurally uninstrumentable."
+  accepted_in = "scoped-commit-gate"
