@@ -2666,8 +2666,8 @@
     },
     "scoped-commit-gate/t-32": {
       "issue": "DRO-1127",
-      "plan_status": "in_progress",
-      "board_state": "task-in-progress"
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "scoped-commit-gate/t-4": {
       "issue": "DRO-1098",

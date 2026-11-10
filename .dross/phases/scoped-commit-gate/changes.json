@@ -480,6 +480,24 @@
         }
       ]
     },
+    "t-32": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_output.go",
+        "internal/cmd/test_redproof_test.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "28dbc53",
+      "completed_at": "2026-11-10T09:06:46.449938Z",
+      "landmarks": [
+        {
+          "feature": "red-proof",
+          "symbol": "TestRedProofOnTerminalProven",
+          "loc": "internal/cmd/test_redproof_test.go:306",
+          "what": "--red-proof help states only reds from the named tests prove; a terminal red-proof is tested to still parse and prove"
+        }
+      ]
+    },
     "t-4": {
       "files": [
         "internal/testlane/coverage.go",
@@ -1290,6 +1308,19 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "Attribution residuals are documented in owns/hasFile: suffix matching lets a bare or shorter printed path match a deeper named file, and Go names carry no package, so a same-named test elsewhere in a whole-suite run reads as the named one. Both can make the verdict claim proof it should not.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-32": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestRedProofHelpNamesNamedTests's negative check matches one exact old sentence, so it would miss other any-red wording. The positive phrase checks and the usage check are what actually enforce the contract.",
           "resolution": "non-blocking, left"
         }
       ]
