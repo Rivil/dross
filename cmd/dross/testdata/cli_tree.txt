@@ -363,7 +363,7 @@ dross techdebt | use="techdebt" short="Scan tracked files for tech-debt markers 
 dross test | use="test [selector...]" short="Run this repo's test suite"
 dross test flag --files (stringArray) default="[]" usage="repo-relative path to resolve against the declared test lanes (repeatable)"
 dross test flag --local (bool) default="false" noopt="true" usage="run on this machine even when a remote is granted"
-dross test flag --red-proof (bool) default="false" noopt="true" usage="run the --files test paths against HEAD's code instead of the working tree's; only a red there exits 0"
+dross test flag --red-proof (bool) default="false" noopt="true" usage="run the --files test paths against HEAD's code instead of the working tree's; only a red from the named tests exits 0"
 dross test flag --wait (string) default="10m0s" usage="how long to wait for a host held by a mutation leg before running alongside it (0 = at once)"
 dross test lane | use="lane" short="Declare, list, edit and remove [[runtime.test_lane]] entries"
 dross test lane add | use="add <name>" short="Declare a test lane"

@@ -241,8 +241,12 @@ func Test() *cobra.Command {
 			"every lane's own command, unscoped — that repo's whole suite.\n\n" +
 			"--red-proof with --files <test path> runs those tests against HEAD's code:\n" +
 			"a scratch copy of HEAD with only the named test files laid over it from the\n" +
-			"working tree. Red there is proof the tests need the fix (exit 0); green is\n" +
-			"not (exit 1). It never touches the working tree or the commit gate's records.\n\n" +
+			"working tree. A red there is proof the tests need the fix (exit 0) only when\n" +
+			"a failure read from the output belongs to one of the named test files. Green\n" +
+			"is not proof (exit 1), and neither is a build failure, a red only in tests\n" +
+			"you did not name, or a red no failing test could be read from: those print\n" +
+			"\"red at base, but not from the named tests: <first failing>\" and exit 1.\n" +
+			"It never touches the working tree or the commit gate's records.\n\n" +
 			"Every run's full output goes to a log under .dross/logs/, whose path is\n" +
 			"printed before the first spawn and again at the end. On a terminal the\n" +
 			"output also arrives live; anywhere else a summary prints at the end. The\n" +
@@ -334,7 +338,7 @@ func Test() *cobra.Command {
 	}
 	c.Flags().BoolVar(&local, "local", false, "run on this machine even when a remote is granted")
 	c.Flags().StringArrayVar(&files, "files", nil, "repo-relative path to resolve against the declared test lanes (repeatable)")
-	c.Flags().BoolVar(&redProof, "red-proof", false, "run the --files test paths against HEAD's code instead of the working tree's; only a red there exits 0")
+	c.Flags().BoolVar(&redProof, "red-proof", false, "run the --files test paths against HEAD's code instead of the working tree's; only a red from the named tests exits 0")
 	c.Flags().StringVar(&waitFlag, "wait", defaultTestWait.String(), "how long to wait for a host held by a mutation leg before running alongside it (0 = at once)")
 	c.AddCommand(testLane())
 	return c

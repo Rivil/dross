@@ -299,6 +299,57 @@ func TestRedProofUnnamedRedNotProven(t *testing.T) {
 	}
 }
 
+// TestRedProofOnTerminalProven: on a terminal a plain run builds no summary
+// segments, since every byte streams live. A red-proof judges by the parsed
+// failures, so it must build them there too: without them a red from the named
+// test reads as one no failing test could be read from, and is not proven.
+func TestRedProofOnTerminalProven(t *testing.T) {
+	dir := redProofLaneFixture(t, "bug")
+	writeGoFixTest(t, dir)
+	origTTY := testStdoutIsTTY
+	t.Cleanup(func() { testStdoutIsTTY = origTTY })
+	testStdoutIsTTY = func() bool { return true }
+	fakeRunner(t, "--- FAIL: TestFix (0.00s)\n    fix_test.go:7: not fixed\nFAIL\nFAIL\tex.com/m/checks\t0.01s\nFAIL\n", 1)
+
+	out, err := redProof(t, goFixTest)
+	if err != nil {
+		t.Fatalf("a red from the named test on a terminal did not prove: exit %d: %v\n%s", ExitCode(err), err, out)
+	}
+	if !strings.Contains(out, "red-proof: proven (red at base)") {
+		t.Errorf("no proven line on a terminal:\n%s", out)
+	}
+	// The run streamed, as any terminal run does: the runner's own lines
+	// reached stdout rather than a summary standing in for them.
+	if !strings.Contains(out, "--- FAIL: TestFix") {
+		t.Errorf("the run did not stream on a terminal:\n%s", out)
+	}
+}
+
+// TestRedProofHelpNamesNamedTests: the help states the rule the verdict
+// applies. A red at base proves only when it is the named tests'; any red is
+// not, and the help must not say it is.
+func TestRedProofHelpNamesNamedTests(t *testing.T) {
+	c := Test()
+	long := strings.Join(strings.Fields(c.Long), " ")
+	for _, want := range []string{
+		"belongs to one of the named test files",
+		"a build failure",
+		"a red only in tests you did not name",
+		"red at base, but not from the named tests: <first failing>",
+	} {
+		if !strings.Contains(long, want) {
+			t.Errorf("long help lacks %q:\n%s", want, c.Long)
+		}
+	}
+	if strings.Contains(long, "Red there is proof the tests need the fix (exit 0); green") {
+		t.Errorf("long help still says any red is proof:\n%s", c.Long)
+	}
+	usage := c.Flags().Lookup("red-proof").Usage
+	if !strings.Contains(usage, "only a red from the named tests exits 0") {
+		t.Errorf("--red-proof usage = %q, want it to name the named tests", usage)
+	}
+}
+
 // TestRedProofOwns: each runner's real report, parsed as a run's would be, and
 // which of its failures are the named tests'. Paths a runner prints from below
 // the repo's top still match; a file that failed to load never does.
