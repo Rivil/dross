@@ -1,8 +1,10 @@
 [verify]
   phase = "scoped-commit-gate"
-  generated_at = 2026-11-11T07:33:44.582571Z
-  verdict = "pending"
-  measured_commit = "6d2bf2bbcd366d46caea6e7a62357042d1467b35"
+  generated_at = 2026-11-11T11:52:00.531852Z
+  verdict = "partial"
+  finalized = true
+  finalized_at = 2026-11-11T12:17:57.491546Z
+  measured_commit = "69cbecbf89e286d8dcab78ced981e43f997e97a3"
   measured_tree = "14478168694b5e64216b08e3632f0920ae40bc14"
 
 [summary]
@@ -15,9 +17,9 @@
   mutants_no_block = 148
   mutants_test_gap = 10
   mutants_in_scope = 2337
-  unclassified_in_scope = 1
+  unclassified_in_scope = 0
   criteria_total = 9
-  criteria_covered = 0
+  criteria_covered = 9
   criteria_uncovered = 0
 
   [[summary.leg]]
@@ -34,40 +36,59 @@
 
 [[criterion]]
   id = "c-1"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/readme_roadmap_test.go:TestReadmeRoadmapMatchesRecordedMilestones", "internal/cmd/readme_roadmap_test.go:TestReadmeRoadmapGuardCatchesEachDrift"]
+  notes = "complete-milestone check counts open boxes only; README has v1.8 6/6 ticked, v1.9 5 boxes, no Azure"
 
 [[criterion]]
   id = "c-2"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/gate/commit_test.go:TestScopedGreenAdmits", "internal/cmd/scoped_commit_e2e_test.go:TestScopedJourneyAdmitsThenVerifyWantsAFullGreen", "internal/cmd/test_scoped_test.go:TestScopedGreenMatchesCandidate"]
 
 [[criterion]]
   id = "c-3"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/gate/commit_test.go:TestScopedRefusalNamesOnlyUncovered", "internal/gate/commit_test.go:TestStaleCoverRefuses", "internal/cmd/scoped_commit_e2e_test.go:TestScopedJourneyRefusesTheMissedPath"]
+  notes = "gate has no deletion check of its own; safe because lane_plan filters deleted paths from Asked (t-14 review FLAG)"
 
 [[criterion]]
   id = "c-4"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/gate/commit_test.go:TestCommitWithoutVouchingLaneIsToday", "internal/cmd/scoped_commit_e2e_test.go:TestNonVouchingJourneyStaysOnTheFullGreen"]
 
 [[criterion]]
   id = "c-5"
-  status = "unknown"
+  status = "covered"
+  tests = [".dross/phases/scoped-commit-gate/barktime-proof.toml (barktime bf4f57c0, tree 0ff307f8, re-checked at verify)", "internal/cmd/test_scoped_test.go:TestManyPathsSpawnOneRelateAndOneBatch"]
+  notes = "evidence is a recorded cross-repo proof per locked barktime_proof; the run log has since rotated out of barktime .dross/logs, its content is excerpted in the proof"
 
 [[criterion]]
   id = "c-6"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/full_green_test.go:TestVerifyRefusesAScopedGreen", "internal/cmd/ship_full_green_test.go:TestShipRefusesAScopedGreen", "internal/cmd/full_green_test.go:TestVerifyLeavesReposWithNoVouchingLaneAlone"]
+  notes = "ship and verify share requireFullGreen, so the no-vouch arms are pinned once"
 
 [[criterion]]
   id = "c-7"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/execute_prompt_test.go:TestExecutePromptLaneCommitRunsFullSuite", "internal/cmd/quick_prompt_test.go:TestQuickTestGateRoutes", "internal/cmd/execute_prompt_test.go:TestExecuteStaleReviewRetests", "internal/review/writer_test.go:TestWriterNamesNoFullSuite"]
 
 [[criterion]]
   id = "c-8"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/mutation/construct_e2e_test.go:TestRealParserSpansMatchTheExpansionForSvelteMutants", "internal/verify/range_expand_test.go:TestPlanRangesRangesASvelteFile", "internal/mutation/range_test.go:TestParseRangedKeepsOnlyMutantsWhollyInsideARange"]
+  notes = "e2e runs forced by DROSS_REQUIRE_E2E in CI mutation-ts; a style-only .svelte hunk with no related test still fails its Stryker leg (FLAG)"
 
 [[criterion]]
   id = "c-9"
-  status = "unknown"
+  status = "covered"
+  tests = ["internal/cmd/test_scoped_test.go:TestScopedGreenCoversOnlyWhatRelateListed", "internal/cmd/test_scoped_test.go:TestEmptyBatchBesideAGreenLaneCoversNothing", "internal/cmd/test_scoped_test.go:TestRedBatchClearsTheRecordOnItsTree", "internal/testlane/relate_test.go:TestParseRelateRefusesTheWholeOutput"]
+  notes = "a relate naming an absent test refuses the whole relation (stricter than per-path)"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/lane_preview.go:277 (CONDITIONALS_NEGATION)"
+  severity = "FLAG"
+  text = "c-8 surface: a .svelte with no related test, alone in its Stryker leg (e.g. a style-only hunk), fails the leg instead of contributing no mutants — the vitest dry run collects no tests, Stryker throws 'No tests were executed' (allowEmpty unset), writes no report, and RunRanges errors. Every real-tool e2e leg carries the tally.ts anchor, so this path is unproven (t-5 review rounds 1-2). Fix in this phase: new task."
+
+[[finding]]
+  severity = "NOTE"
+  text = "148 of 158 survivors are uncoverable by construction (no go-cover block); efficacy over the 2189 reachable is 1.00. All 158 carry an accepted disposition (attribution ceiling / package-level initializer / lane_preview.go:277)."
