@@ -509,6 +509,23 @@
         }
       ]
     },
+    "t-33": {
+      "files": [
+        "internal/mutation/stryker.go",
+        "internal/mutation/stryker_test.go",
+        "internal/mutation/construct_e2e_test.go"
+      ],
+      "commit": "15182445",
+      "completed_at": "2026-11-11T12:40:54.569164Z",
+      "landmarks": [
+        {
+          "feature": "mutation testing",
+          "symbol": "Stryker.emptyDryRun",
+          "loc": "internal/mutation/stryker.go:352",
+          "what": "a reportless --allowEmpty Stryker run of ranged .svelte files whose ranges touch no construct yields zero mutants instead of a failed leg"
+        }
+      ]
+    },
     "t-4": {
       "files": [
         "internal/testlane/coverage.go",
@@ -1332,6 +1349,41 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "TestRedProofHelpNamesNamedTests's negative check matches one exact old sentence, so it would miss other any-red wording. The positive phrase checks and the usage check are what actually enforce the contract.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-33": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "The zero-mutant proof in emptyDryRun depends on Constructs covering every mutable node of a .svelte (every top-level script statement and markup node, with only \u003cstyle\u003e excluded, per astspan.go). If astspan ever stops emitting a top-level node kind, this path would silently turn real mutants into a passing zero.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The e2e's no-test premise rests on Stryker's vitest runner collecting only tests related to the mutated file in the ts-project fixture. If that default changes, the style-only subtest fails loudly rather than passing vacuously, which is the right direction.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The reworded doc comment above TestRealParserSpansMatchTheExpansionForSvelteMutants (construct_e2e_test.go:61) has one line much longer than the lines around it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The table test covers the boundaries well: a range adjacent to a construct but not touching it, ranges touching a construct's first and last lines, a whole-file .svelte, a malformed range, a .ts, an unreadable file, a non-zero exit, a run that found tests, a drop warning, and the workdir path mapping.",
           "resolution": "non-blocking, left"
         }
       ]

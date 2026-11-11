@@ -405,5 +405,5 @@ Call t-10's check for repos with a vouching lane ahead of auto-finalize, reading
   description = "Pass allowEmpty to Stryker so a dry run that collects no tests (a .svelte no test imports, alone in its leg — e.g. a style-only hunk) still writes a report, and RunRanges returns zero mutants instead of 'stryker did not write a report'. Today every real-tool e2e leg carries the tally.ts anchor, so this path is unproven (t-5 review rounds 1-2; verify FLAG 861f4893). Stryker pin 9.6.1 supports allowEmpty."
   covers = ["c-8"]
   test_contract = ["if a sole .svelte with no related test fails its leg, the real-tool e2e under DROSS_REQUIRE_E2E fails: a style-only hunk alone in its leg, no tally.ts anchor, must yield zero mutants and no error", "if allowEmpty is dropped from the stryker argv, an argv unit test in stryker_test.go fails"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-5"]

@@ -2670,6 +2670,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "scoped-commit-gate/t-33": {
+      "issue": "DRO-1129",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "scoped-commit-gate/t-4": {
       "issue": "DRO-1098",
       "plan_status": "done",
