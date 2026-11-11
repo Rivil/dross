@@ -206,6 +206,9 @@ func (s *Stryker) RunRanges(files []string, ranges map[string][]Range) (*Report,
 			// looking — and the error carries only facts ABOUT that output
 			// (spec decision cut_point). Nothing downstream has to scrub,
 			// because the string was never built.
+			if report, ok := s.emptyDryRun(exitStatus, head, files, requested, ranges); ok {
+				return report, nil
+			}
 			head.printHead(os.Stderr, "stryker", strykerHeadLines)
 			fmt.Fprintln(os.Stderr)
 			err := fmt.Errorf("stryker did not write a report at %s: %w",
@@ -321,6 +324,63 @@ const strykerInitialTestTruncationNote = "stryker aborted on its initial test ru
 // mutants: checkInstrumented's for a file absent from the report, parseRanged's
 // for a .svelte whose mutants all fell outside its ranges.
 const strykerQuietRangedFormat = "stryker: %d narrowed file(s) contributed no mutants in their changed lines: %s\n"
+
+// strykerNoTestsText is Stryker's own line for a dry run that collected no
+// test, verbatim off @stryker-mutator/core 9.6.1 (3-dry-run-executor). Named
+// for the same reason as strykerDropWarningText.
+const strykerNoTestsText = "No tests were found"
+
+// emptyDryRun answers the one reportless run that is not a failure: a leg whose
+// dry run collected no test — a .svelte no test imports, alone in its leg —
+// and whose ranges hold no mutable code, like a style-only hunk.
+//
+// --allowEmpty lets that run finish, but Stryker then returns before any
+// reporter runs (4-mutation-test-executor, 9.6.1), so there is no report and
+// no instrumented mutant to narrow. The zero is therefore PROVED here rather
+// than read: every requested file must be a ranged .svelte, and no construct
+// of it — the spans every one of its mutants lies in — may touch its ranges.
+//
+// Anything short of that falls through to the reportless error. A .ts with no
+// test, a .svelte measured whole, or a hunk inside a script function holds
+// mutants no test reached, and a zero there would be a phase passing having
+// measured nothing.
+//
+// files is the caller's repo-relative list and requested its workdir-trimmed
+// form, index for index (runArgs). The resolver is handed files[i], never a
+// path rebuilt from Workdir: that is the caller's own path, the one verify
+// hands Constructs when it plans the ranges.
+func (s *Stryker) emptyDryRun(exitStatus int, head *headBuffer, files, requested []string, ranges map[string][]Range) (*Report, bool) {
+	if exitStatus != 0 || !head.contains(strykerNoTestsText) || head.contains(strykerDropWarningText) {
+		return nil, false
+	}
+	held := svelteRanges(requested, s.Workdir, ranges)
+	for i, f := range requested {
+		rs := held[filepath.ToSlash(f)]
+		if len(rs) == 0 {
+			return nil, false
+		}
+		cs, err := s.Constructs(files[i])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "stryker: no test relates to %s, and its ranges could not be shown to hold no construct: %v\n", f, err)
+			return nil, false
+		}
+		if slices.ContainsFunc(cs, func(c Construct) bool { return touchesAny(c, rs) }) {
+			return nil, false
+		}
+	}
+	fmt.Fprintf(os.Stderr, strykerQuietRangedFormat, len(requested), strings.Join(requested, ", "))
+	return (&strykerReport{}).report(), true
+}
+
+// touchesAny reports whether c shares a line with any of rs.
+func touchesAny(c Construct, rs []Range) bool {
+	for _, r := range rs {
+		if c.Start <= r.End && r.Start <= c.End {
+			return true
+		}
+	}
+	return false
+}
 
 // checkInstrumented hard-fails the run when stryker did not instrument a file
 // it was asked to mutate (locked decision drop_behaviour).
@@ -523,9 +583,13 @@ func (s *Stryker) runArgs(files []string, ranges map[string][]Range) (argv []str
 			mutate = append(mutate, fmt.Sprintf("%s:%d-%d", escaped, r.Start, r.End))
 		}
 	}
+	// --allowEmpty: a dry run that collects no test finishes instead of
+	// aborting. It still writes no report, so RunRanges decides what such a
+	// run measured: see emptyDryRun.
 	return []string{"npx", "--yes", strykerPin, "run",
 		"--mutate", strings.Join(mutate, ","),
-		"--reporters", "json"}, requested, nil
+		"--reporters", "json",
+		"--allowEmpty"}, requested, nil
 }
 
 // rangeKey maps a workdir-TRIMMED path back to the key the caller's range map

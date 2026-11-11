@@ -373,8 +373,9 @@ func instrumentedOn(all []strykerMutant, line int) bool {
 // TestRealParserSpansMatchTheExpansionForSvelteMutants is c-8's acceptance: the
 // three things a .svelte hunk can land on, each run through the real Stryker on
 // the span the real compiler resolved, in a leg holding Widget.svelte alone.
-// Stryker aborts a run that collects no test, so Widget.svelte.test.ts is what
-// lets each leg reach its assertions. It renders the markup and clicks nothing,
+// A run that collects no test writes no report to narrow, so
+// Widget.svelte.test.ts is what lets each leg reach its assertions; the lone
+// leg is TestRealParserSpansMatchTheExpansionForLoneSvelte's. It renders the markup and clicks nothing,
 // so the template's mutants die and the script's stay NoCoverage, and a leg is
 // proved on both. The name rides ci.yml's selector, as above.
 func TestRealParserSpansMatchTheExpansionForSvelteMutants(t *testing.T) {
@@ -512,4 +513,79 @@ func TestUnresolvableParserIsUnavailable(t *testing.T) {
 	if !errors.Is(err, ErrASTUnavailable) || !strings.Contains(err.Error(), "@babel/parser") {
 		t.Fatalf("err = %v, want ErrASTUnavailable naming @babel/parser", err)
 	}
+}
+
+// loneSvelte is a component no fixture test imports: script, markup and style,
+// so a hunk can land on code or on nothing mutable.
+const loneSvelte = `<script lang="ts">
+  let n: number = 0;
+
+  function bump(): number {
+    n = n + 1;
+    return n;
+  }
+</script>
+
+<p>{n * 2}</p>
+
+<style>
+  p {
+    color: blue;
+  }
+</style>
+`
+
+// TestRealParserSpansMatchTheExpansionForLoneSvelte is the leg the test above
+// cannot reach: a .svelte no test imports, alone in its leg, so the real
+// Stryker's dry run collects no test at all and, under --allowEmpty, finishes
+// without writing a report. A style-only hunk there has nothing to mutate and
+// must cost the leg nothing; a hunk in the script has mutants no test reached,
+// and a zero there would be a leg that measured nothing passing, so it must
+// still refuse. The name rides ci.yml's selector, as above.
+func TestRealParserSpansMatchTheExpansionForLoneSvelte(t *testing.T) {
+	root := requireSvelte(t)
+	probe := filepath.Join(root, "src", "probe-lone")
+	if err := os.MkdirAll(probe, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(probe) })
+	if err := os.WriteFile(filepath.Join(probe, "Lone.svelte"), []byte(loneSvelte), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	const file = "src/probe-lone/Lone.svelte"
+	lone := filepath.Join(root, file)
+	s := &Stryker{ProjectRoot: root}
+	cs, err := s.Constructs(file)
+	if err != nil {
+		t.Fatalf("Constructs: %v", err)
+	}
+
+	t.Run("a style-only hunk yields zero mutants and no error", func(t *testing.T) {
+		hunk := fixtureLine(t, lone, "color: blue")
+		if c, ok := constructAt(cs, hunk); ok {
+			t.Fatalf("style line %d resolved to %q, want no construct", hunk, c.Label())
+		}
+		report, err := s.RunRanges([]string{file}, map[string][]Range{file: {{Start: hunk, End: hunk}}})
+		if err != nil {
+			t.Fatalf("a style-only hunk in a lone .svelte failed its leg: %v", err)
+		}
+		if n := mutantsIn(report, file); n != 0 || report.Killed+report.Survived+report.Timeout+report.Errors != 0 {
+			t.Errorf("a style-only hunk counted mutants: %d in %s, report %+v", n, file, report)
+		}
+	})
+
+	t.Run("a script hunk with no test still refuses", func(t *testing.T) {
+		hunk := fixtureLine(t, lone, "n = n + 1")
+		c, ok := constructAt(cs, hunk)
+		if !ok || c.Label() != "FunctionDeclaration bump" {
+			t.Fatalf("line %d resolved to %q (found %v), want FunctionDeclaration bump", hunk, c.Label(), ok)
+		}
+		report, err := s.RunRanges([]string{file}, map[string][]Range{file: {{Start: c.Start, End: c.End}}})
+		if err == nil {
+			t.Fatalf("a script hunk no test reaches passed as measured: %+v", report)
+		}
+		if !strings.Contains(err.Error(), "did not write a report") {
+			t.Errorf("err = %v, want the reportless refusal", err)
+		}
+	})
 }
