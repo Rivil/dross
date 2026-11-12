@@ -193,6 +193,7 @@ func Trust() *cobra.Command {
 	var runSlotName string
 	var laneName string
 	var laneInstallName string
+	var testExempt bool
 	c := &cobra.Command{
 		Use:   "trust",
 		Short: "Consent to dross running this repo's runtime.test_command on this machine",
@@ -218,6 +219,9 @@ func Trust() *cobra.Command {
 			}
 			if laneInstallName != "" {
 				return trustLaneInstall(root, laneInstallName, check)
+			}
+			if testExempt {
+				return trustTestExempt(root, check)
 			}
 			proj, err := project.Load(filepath.Join(root, project.File))
 			if err != nil {
@@ -264,7 +268,61 @@ func Trust() *cobra.Command {
 	c.Flags().StringVar(&runSlotName, "run", "", "grant consent for `dross run <name>`'s configured command instead of runtime.test_command")
 	c.Flags().StringVar(&laneName, "lane", "", "grant consent for the named [[runtime.test_lane]]'s command instead of runtime.test_command")
 	c.Flags().StringVar(&laneInstallName, "lane-install", "", "grant consent for the named [[runtime.test_lane]]'s install line — a separate grant from --lane, because installing is a different act from running a suite")
+	c.Flags().BoolVar(&testExempt, "test-exempt", false, "grant consent for the runtime.test_exempt globs instead of runtime.test_command — paths matching them commit with no test run")
 	return c
+}
+
+// trustTestExempt is `dross trust --test-exempt`: the grant over the whole
+// exempt list.
+//
+// A repo with no list needs no grant, so --check passes there. The grant form
+// refuses rather than succeeding silently, because a success would leave the
+// user believing something had been recorded.
+//
+// The catch-all fence runs again here, not only in `dross validate`, because
+// project.toml can be hand-edited past every verb that writes it. This grant is
+// the last point a human is in the loop before the commit gate honours the list.
+func trustTestExempt(root string, check bool) error {
+	proj, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		return err
+	}
+	globs := proj.Runtime.TestExempt
+	repoDir := filepath.Dir(root)
+	if check {
+		state, cerr := consent.ExemptConsented(localstore.GrantStore(root), repoDir, globs)
+		if cerr == nil || state == consent.NotApplicable {
+			return nil
+		}
+		return consent.ExemptRefusal(globs, state, cerr)
+	}
+	if err := consent.RefuseTrackedLocal(repoDir); err != nil {
+		return err
+	}
+	if len(globs) == 0 {
+		return fmt.Errorf(
+			"nothing to trust: runtime.test_exempt is empty, so no path is exempt and no\n" +
+				"grant is needed. List what needs no tests under [runtime] in project.toml first")
+	}
+	if problems := testExemptProblems(globs); len(problems) > 0 {
+		return fmt.Errorf("refusing to trust runtime.test_exempt:\n\n    %s\n\n"+
+			"Fix the list in project.toml, then run this again", strings.Join(problems, "\n    "))
+	}
+	// Printed BEFORE the write, and in full. The globs arrive from TRACKED
+	// project.toml, so a grant that did not show them would be consenting to
+	// whatever a clone happened to carry, and one grant covers the whole list.
+	Print("trusting runtime.test_exempt on this machine — paths matching these globs commit with no test run:")
+	Print()
+	for _, glob := range consent.SortedExempt(globs) {
+		Printf("    %s\n", glob)
+	}
+	Print()
+	if err := consent.GrantExemptConsent(localstore.GrantStore(root), globs); err != nil {
+		return err
+	}
+	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, localstore.File)
+	Print("Editing runtime.test_exempt revokes this; reordering it does not.")
+	return nil
 }
 
 // trustLane is `dross trust --lane <name>`: the grant for ONE test lane.
@@ -303,17 +361,25 @@ func trustLane(root, name string, check bool) error {
 	// Printed BEFORE the write, and in full — BOTH lines when the lane
 	// declares a prepare. They arrive from TRACKED project.toml, so a grant
 	// that did not show them would be consenting to whatever a clone happened
-	// to carry, and one grant covers the pair.
-	if lane.Prepare != "" {
+	// to carry, and one grant covers the pair. A vouching lane's grant also lets
+	// it admit commits, so that is said here too, ahead of the same write.
+	switch {
+	case lane.Vouch:
+		Printf("trusting test lane %q on this machine — everything this grant covers:\n\n%s\n", lane.Name, consent.LaneVouchLines(lane))
+	case lane.Prepare != "":
 		Printf("trusting test lane %q on this machine — both lines:\n\n    prepare: %s\n    command: %s\n\n", lane.Name, lane.Prepare, lane.Command)
-	} else {
+	default:
 		Printf("trusting test lane %q on this machine:\n\n    %s\n\n", lane.Name, lane.Command)
 	}
 	if err := consent.GrantLaneConsent(localstore.GrantStore(root), lane.Name, consent.LaneLine(lane)); err != nil {
 		return err
 	}
 	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, localstore.File)
-	Printf("Editing or renaming lane %q — its prepare included — revokes this; every other lane's grant is untouched.\n", lane.Name)
+	included := "its prepare"
+	if lane.Vouch {
+		included = "its prepare, relate and vouch setting"
+	}
+	Printf("Editing or renaming lane %q — %s included — revokes this; every other lane's grant is untouched.\n", lane.Name, included)
 	return nil
 }
 

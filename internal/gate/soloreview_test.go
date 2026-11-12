@@ -226,3 +226,40 @@ func TestSoloReviewClosedPosture(t *testing.T) {
 		t.Error("an unreadable commit line while armed was admitted")
 	}
 }
+
+// TestSoloReviewNotesFollowTheRepo: a vouching repo's fix round re-runs scoped,
+// and every other repo keeps today's text to the letter, an unreadable project
+// included.
+func TestSoloReviewNotesFollowTheRepo(t *testing.T) {
+	const (
+		bareStale   = "re-run `dross test`, then `dross review context` and the reviewer, and commit once `dross review status` reads pass"
+		bareBlocked = "one fix round: address every blocking finding `dross review status` lists, re-run `dross test`, then `dross review context` and the reviewer"
+		lane        = "[[runtime.test_lane]]\n  name = \"web\"\n  command = \"x\"\n"
+	)
+	for _, c := range []struct {
+		name, project  string
+		stale, blocked string
+	}{
+		{"no lanes", "[runtime]\n  test_command = \"x\"\n", bareStale, bareBlocked},
+		{"non-vouching lane", lane, bareStale, bareBlocked},
+		{"unreadable project", "not toml [", bareStale, bareBlocked},
+		{"vouching lane", lane + "  vouch = true\n",
+			"re-run `dross test --files <the task's files>`, then `dross review context` and the reviewer, and commit once `dross review status` reads pass",
+			"one fix round: address every blocking finding `dross review status` lists, re-run `dross test --files <the task's files>`, then `dross review context` and the reviewer"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir, tree := stagedSolo(t)
+			put(t, dir, ".dross/project.toml", c.project)
+			saveScopeLedger(t, dir, review.Round{Outcome: review.OutcomePass, Tree: tree})
+			put(t, dir, "a.go", "package a // edited after the pass\n")
+			gitIn(t, dir, "add", "a.go")
+			if res := soloCheck(t, "git commit -m x", dir); res.Allowed() || !strings.HasSuffix(strings.Split(res.Text(), "\n")[1], "Use: "+c.stale) {
+				t.Errorf("stale pass: %q, want the remedy %q", res.Text(), c.stale)
+			}
+			saveScopeLedger(t, dir, review.Round{Outcome: review.OutcomeBlock})
+			if res := soloCheck(t, "git commit -m x", dir); res.Allowed() || !strings.HasSuffix(strings.Split(res.Text(), "\n")[1], "Use: "+c.blocked) {
+				t.Errorf("blocked: %q, want the remedy %q", res.Text(), c.blocked)
+			}
+		})
+	}
+}

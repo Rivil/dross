@@ -51,7 +51,9 @@ Fields: `stack.languages` (csv), `stack.frameworks` (csv), `stack.package_manage
 
 ## 3. Runtime
 
-Fields: `runtime.mode`, `runtime.dev_command`, `runtime.stop_command`, `runtime.test_command`, `runtime.test_watch`, `runtime.e2e_command`, `runtime.typecheck_command`, `runtime.lint_command`, `runtime.format_command`, `runtime.build_command`, `runtime.migrate_command`, `runtime.seed_command`, `runtime.shell_command`, `runtime.logs_command`.
+Fields: `runtime.mode`, `runtime.dev_command`, `runtime.stop_command`, `runtime.test_command`, `runtime.test_watch`, `runtime.e2e_command`, `runtime.typecheck_command`, `runtime.lint_command`, `runtime.format_command`, `runtime.build_command`, `runtime.migrate_command`, `runtime.seed_command`, `runtime.shell_command`, `runtime.logs_command`, `runtime.test_exempt` (csv).
+
+`runtime.test_exempt` lists the globs of paths that need no tests. A catch-all is refused, and the list exempts nothing on this machine until the user runs `dross trust --test-exempt` themselves.
 
 For each command, show what's currently set. Empty = "not configured". Encourage **exact** strings, including docker prefixes.
 

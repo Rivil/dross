@@ -1,9 +1,9 @@
 // Package gatestate is the machine-local record the tool gates judge against:
-// the tree the last full green `dross test` ran on, the mode /dross-execute
-// is running in, the approval a human gave the current task, the solo review
-// ledger, the mode a /dross-quick run is in, the review context file, the
-// approval a human gave to post one drafted PR reply, and the solo writer a
-// task was handed to.
+// the tree the last full green `dross test` ran on, the paths the last scoped
+// green covered, the mode /dross-execute is running in, the approval a human
+// gave the current task, the solo review ledger, the mode a /dross-quick run is
+// in, the review context file, the approval a human gave to post one drafted PR
+// reply, and the solo writer a task was handed to.
 //
 // Records live in .dross/gate/, which carries its own `*` .gitignore: a green
 // or an approval is a fact about THIS machine, and a copy committed to the repo
@@ -37,6 +37,7 @@ const Dir = ".dross/gate"
 // Record file names.
 const (
 	GreenFile    = "green.json"
+	ScopedFile   = "scoped.json"
 	ExecuteFile  = "execute.json"
 	ApprovalFile = "approval.json"
 	ReviewFile   = "review.json"
@@ -55,6 +56,22 @@ type Green struct {
 	Tree   string    `json:"tree"`
 	At     time.Time `json:"at"`
 	Runner string    `json:"runner"`
+}
+
+// Scoped is the last green `dross test --files` run on vouching lanes: the
+// tree fingerprint it ran on, the paths that reached a collected test, and when
+// and where. It is a separate file from Green because it vouches for its
+// Covered paths and no others: nothing that reads a full green may read this.
+//
+// Lanes holds each lane's consent.Fingerprint of its consent.LaneLine, not its
+// name: a name survives a lane edit, so a record keyed on names would go on
+// vouching for a command that never ran.
+type Scoped struct {
+	Tree    string    `json:"tree"`
+	Covered []string  `json:"covered"`
+	Lanes   []string  `json:"lanes"`
+	At      time.Time `json:"at"`
+	Runner  string    `json:"runner"`
 }
 
 // Execute is the mode /dross-execute recorded for a phase: "pair" or "solo".
@@ -165,6 +182,57 @@ func SaveGreen(root string, g Green) error {
 
 // ClearGreen removes the green record; none is not an error.
 func ClearGreen(root string) error { return remove(root, GreenFile) }
+
+// LoadScoped returns the scoped record, or nil when there is none.
+func LoadScoped(root string) (*Scoped, error) {
+	var s Scoped
+	ok, err := load(root, ScopedFile, &s)
+	if err != nil || !ok {
+		return nil, err
+	}
+	if err := s.check(); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// SaveScoped records a scoped green, replacing any earlier one: runs never
+// union.
+func SaveScoped(root string, s Scoped) error {
+	if err := s.check(); err != nil {
+		return fmt.Errorf("refusing to record it: %w", err)
+	}
+	return save(root, ScopedFile, s)
+}
+
+// ClearScoped removes the scoped record; none is not an error.
+func ClearScoped(root string) error { return remove(root, ScopedFile) }
+
+// check refuses a hollow record: an empty fingerprint could only ever match
+// another empty one, a record covering nothing vouches for nothing, and one
+// naming no lane leaves a gate nothing to hold against the lanes it finds now.
+func (s Scoped) check() error {
+	if strings.TrimSpace(s.Tree) == "" {
+		return fmt.Errorf("%s: scoped record has no tree", rel(ScopedFile))
+	}
+	if len(s.Covered) == 0 {
+		return fmt.Errorf("%s: scoped record covers no path", rel(ScopedFile))
+	}
+	if len(s.Lanes) == 0 {
+		return fmt.Errorf("%s: scoped record names no lane", rel(ScopedFile))
+	}
+	for i, p := range s.Covered {
+		if strings.TrimSpace(p) == "" {
+			return fmt.Errorf("%s: covered path %d is blank", rel(ScopedFile), i+1)
+		}
+	}
+	for i, l := range s.Lanes {
+		if strings.TrimSpace(l) == "" {
+			return fmt.Errorf("%s: lane fingerprint %d is blank", rel(ScopedFile), i+1)
+		}
+	}
+	return nil
+}
 
 // LoadExecute returns the execute-mode record, or nil when there is none.
 func LoadExecute(root string) (*Execute, error) {

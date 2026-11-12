@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"os"
@@ -163,6 +164,11 @@ func TestPartialRunsRecordNothing(t *testing.T) {
 			installSpawnRecorder(t, nil)
 			return dir, runCmd(t, Test(), "--files", "internal/a/a.go")
 		}},
+		{"--files on a vouching lane", func(t *testing.T) (string, error) {
+			dir, _ := scopedRepo(t, relateLane, "src/a.ts", "src/a.test.ts")
+			(&relateSeam{stdout: aToATest}).install(t)
+			return dir, runCmd(t, Test(), "--files", "src/a.ts")
+		}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -253,6 +259,116 @@ func TestGreenLifecycle(t *testing.T) {
 			}
 			if g := green(t, dir); g == nil || g.Tree != before.Tree {
 				t.Errorf("a run that never happened changed the record: %+v -> %+v", before, g)
+			}
+		})
+	}
+}
+
+// TestFullRedClearsScopedOnItsTree: a full run is the stronger measurement, so a
+// red from one sinks a scoped record on that tree as it sinks a full green.
+func TestFullRedClearsScopedOnItsTree(t *testing.T) {
+	t.Run("on the tree it ran on", func(t *testing.T) {
+		dir, _ := scopedRepo(t, relateLane, "src/a.ts")
+		seedScopedHere(t, dir)
+		installSpawnRecorder(t, errors.New("exit status 1"))
+		if err := runCmd(t, Test()); ExitCode(err) != exitSuiteFailed {
+			t.Fatalf("exit = %d, want red", ExitCode(err))
+		}
+		if b := scopedBytes(t, dir); b != nil {
+			t.Errorf("a full red on the recorded tree left %s", b)
+		}
+	})
+	t.Run("on another tree", func(t *testing.T) {
+		dir, _ := scopedRepo(t, relateLane, "src/a.ts")
+		before := seedScoped(t, dir, "another-tree")
+		installSpawnRecorder(t, errors.New("exit status 1"))
+		if err := runCmd(t, Test()); ExitCode(err) != exitSuiteFailed {
+			t.Fatalf("exit = %d, want red", ExitCode(err))
+		}
+		if got := scopedBytes(t, dir); !bytes.Equal(got, before) {
+			t.Errorf("a full red changed another tree's record:\n%s", got)
+		}
+	})
+	t.Run("beside a green record", func(t *testing.T) {
+		dir, _ := scopedRepo(t, relateLane, "src/a.ts")
+		seedScopedHere(t, dir)
+		tree, err := treefp.WorkingTree(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := gatestate.SaveGreen(dir, gatestate.Green{Tree: tree, Runner: "local"}); err != nil {
+			t.Fatal(err)
+		}
+		installSpawnRecorder(t, errors.New("exit status 1"))
+		if err := runCmd(t, Test()); ExitCode(err) != exitSuiteFailed {
+			t.Fatalf("exit = %d, want red", ExitCode(err))
+		}
+		if b := scopedBytes(t, dir); b != nil {
+			t.Errorf("the scoped record survived: %s", b)
+		}
+		if g := green(t, dir); g != nil {
+			t.Errorf("the full green survived: %+v", g)
+		}
+	})
+}
+
+// TestFullRunThatNeverHappenedLeavesScoped: an unreachable host measured nothing
+// about the tree, so the scoped record stands as the full green does.
+func TestFullRunThatNeverHappenedLeavesScoped(t *testing.T) {
+	relateHostFixture(t, relateLane, "src/a.ts")
+	dir := asGitRepo(t)
+	captureGreen(t)
+	before := seedScopedHere(t, dir)
+	installRemoteRecorder(t, errors.New("connection refused"))
+	if err := runCmd(t, Test()); ExitCode(err) != exitTransport {
+		t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, exitTransport)
+	}
+	if got := scopedBytes(t, dir); !bytes.Equal(got, before) {
+		t.Errorf("a run that never happened changed the record:\n%s", got)
+	}
+}
+
+// TestScopedRunsLeaveGreenAlone: a scoped run measured part of the tree, so it has
+// nothing to say to the full record in either direction.
+func TestScopedRunsLeaveGreenAlone(t *testing.T) {
+	seedGreen := func(t *testing.T, dir string) []byte {
+		t.Helper()
+		tree, err := treefp.WorkingTree(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := gatestate.SaveGreen(dir, gatestate.Green{Tree: tree, Runner: "local"}); err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(gatestate.Path(dir, gatestate.GreenFile))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	for _, tc := range []struct {
+		name string
+		seam relateSeam
+		want int
+	}{
+		{"a scoped green", relateSeam{stdout: aToATest}, 0},
+		{"a scoped red", relateSeam{stdout: aToATest, laneErr: fakeExit{code: 1}}, exitSuiteFailed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, _ := scopedRepo(t, relateLane, "src/a.ts", "src/a.test.ts")
+			before := seedGreen(t, dir)
+			seam := tc.seam
+			seam.install(t)
+
+			if err := runCmd(t, Test(), "--files", "src/a.ts"); ExitCode(err) != tc.want {
+				t.Fatalf("exit = %d (%v), want %d", ExitCode(err), err, tc.want)
+			}
+			got, err := os.ReadFile(gatestate.Path(dir, gatestate.GreenFile))
+			if err != nil {
+				t.Fatalf("green.json is gone: %v", err)
+			}
+			if !bytes.Equal(got, before) {
+				t.Errorf("green.json changed:\n%s\nwas:\n%s", got, before)
 			}
 		})
 	}

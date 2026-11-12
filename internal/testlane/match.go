@@ -120,6 +120,21 @@ func Select(globs [][]string, paths []string) Selection {
 	return sel
 }
 
+// MatchAny reports whether any glob matches p, under the same syntax as a lane's
+// match list. A blank or out-of-tree path matches nothing.
+func MatchAny(globs []string, p string) bool {
+	norm, inTree := normalize(p)
+	if !inTree || norm == "" {
+		return false
+	}
+	for _, g := range globs {
+		if matchGlob(g, norm) {
+			return true
+		}
+	}
+	return false
+}
+
 // normalize reduces one caller-supplied path to the repo-relative slash form
 // the globs are written in, and reports whether it stayed inside the tree.
 //

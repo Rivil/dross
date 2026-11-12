@@ -312,3 +312,58 @@ func TestReviewStatusNoneHint(t *testing.T) {
 		t.Errorf("review status lost its next steps:\n%s", out)
 	}
 }
+
+// TestReviewStatusNotesFollowTheRepo: `dross review status` shares solo-review's
+// wording. A vouching repo's notes name the scoped run; a repo with no vouching
+// lane keeps today's text to the letter.
+func TestReviewStatusNotesFollowTheRepo(t *testing.T) {
+	const (
+		bareStale   = "the tree changed after the review passed — re-run `dross test`, then `dross review context` and the reviewer"
+		bareBlocked = "blocked — one fix round: address every blocking finding, re-run `dross test`, then `dross review context` and the reviewer"
+		lane        = "\n[[runtime.test_lane]]\n  name = \"web\"\n  command = \"x\"\n"
+	)
+	for _, c := range []struct {
+		name, extra    string
+		stale, blocked string
+	}{
+		{"no lanes", "", bareStale, bareBlocked},
+		{"non-vouching lane", lane, bareStale, bareBlocked},
+		{"vouching lane", lane + "  vouch = true\n",
+			"the tree changed after the review passed — re-run `dross test --files <the task's files>`, then `dross review context` and the reviewer",
+			"blocked — one fix round: address every blocking finding, re-run `dross test --files <the task's files>`, then `dross review context` and the reviewer"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir, _ := reviewFixture(t, "solo")
+			projectFile := filepath.Join(dir, ".dross", "project.toml")
+			base, err := os.ReadFile(projectFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mustWrite(t, projectFile, string(base)+c.extra)
+			mustWrite(t, filepath.Join(dir, "a.go"), "package a // edited\n")
+			scope, err := gate.ArmedScope(dir)
+			if err != nil || scope == nil {
+				t.Fatalf("scope = %+v, %v", scope, err)
+			}
+			tree, err := treefp.WorkingTree(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ledger := func(rounds ...review.Round) {
+				t.Helper()
+				if err := gatestate.SaveReview(dir, gatestate.Review{Kind: scope.Kind, Phase: scope.Phase, Task: scope.Task, Attempt: scope.Attempt, Rounds: rounds}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			ledger(review.Round{Outcome: review.OutcomePass, Tree: tree})
+			mustWrite(t, filepath.Join(dir, "a.go"), "package a // edited again\n")
+			if out, _ := runReview(t, "status"); !strings.Contains(out, "\n"+c.stale+"\n") {
+				t.Errorf("pass-stale note:\n%s\nwant the line %q", out, c.stale)
+			}
+			ledger(review.Round{Outcome: review.OutcomeBlock})
+			if out, _ := runReview(t, "status"); !strings.Contains(out, "\n"+c.blocked+"\n") {
+				t.Errorf("blocked note:\n%s\nwant the line %q", out, c.blocked)
+			}
+		})
+	}
+}

@@ -43,7 +43,8 @@ func assertClosedReasons(t *testing.T, plan RangePlan) {
 // contract is pinned through the predicate both layers share —
 // mutation.Range.Valid — which TestRunArgsFallsBackOnAMalformedRange pins as
 // runArgs' only refusal; every range PlanRanges dispatches must satisfy it,
-// so runArgs emits `file:start-end` for every key and never falls back.
+// so runArgs honours every key and never falls back: as `file:start-end`, or
+// for a .svelte by narrowing the report.
 func TestVerifyNeverDispatchesARangeStrykerWouldRefuse(t *testing.T) {
 	a := &rangingAdapter{name: "stryker"}
 	for _, raw := range []Range{{0, 5}, {5, 2}, {-3, 4}} {
@@ -247,6 +248,47 @@ func TestASTUnavailableDegradesAndFallsWholeOnlyItsOwnFile(t *testing.T) {
 		t.Errorf("the sibling must still range: Ranges[b.ts] = %v, want %v", got, want)
 	}
 	assertClosedReasons(t, plan)
+}
+
+// A <style> holds no construct, so a hunk there stays the raw hunk. Resolving
+// to nothing is an answer, not a failure: the leg runs ranged, and neither it
+// nor the scope reads as ast-unavailable, even when the file has nothing but
+// style and the resolver's answer is empty.
+func TestStyleOnlySvelteHunkStaysARawHunk(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		constructs []mutation.Construct
+	}{
+		{"beside script and markup constructs", widgetConstructs},
+		{"in a file with no constructs", []mutation.Construct{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &rangingAdapter{name: "stryker", constructs: map[string][]mutation.Construct{widgetFile: tc.constructs}}
+			scope := scopeWithHunks([]string{widgetFile}, map[string][]Range{widgetFile: {{Start: 33, End: 33}}})
+			// The helper's scope is already degraded by its missing git input.
+			before := len(scope.Degraded)
+			tests, err := RunScoped("p", []string{widgetFile}, []mutation.Adapter{a}, scope)
+			if err != nil {
+				t.Fatalf("RunScoped: %v", err)
+			}
+			leg := tests.Languages[0]
+			if leg.Error != "" {
+				t.Errorf("leg refused: %s", leg.Error)
+			}
+			if reason, whole := leg.WholeFile[widgetFile]; whole {
+				t.Errorf("WholeFile[%s] = %q, want no entry", widgetFile, reason)
+			}
+			if want := []EffectiveRange{{Start: 33, End: 33, Construct: ConstructHunk}}; !reflect.DeepEqual(leg.Ranges[widgetFile], want) {
+				t.Errorf("Ranges[%s] = %v, want %v", widgetFile, leg.Ranges[widgetFile], want)
+			}
+			if want := []mutation.Range{{Start: 33, End: 33}}; !a.rangedCall || !reflect.DeepEqual(a.ranRanges[widgetFile], want) {
+				t.Errorf("dispatched ranged=%v %v, want %v", a.rangedCall, a.ranRanges[widgetFile], want)
+			}
+			if added := scope.Degraded[before:]; len(added) != 0 {
+				t.Errorf("a style-only hunk must not degrade the scope, added %v", added)
+			}
+		})
+	}
 }
 
 // A range-capable adapter with a NIL index is every hunked file unresolved,

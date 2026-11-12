@@ -63,6 +63,7 @@
     "review-comment-ingest": "DRO-903",
     "run-block-pin-currency": "DRO-746",
     "scanner-self-exclusion": "DRO-404",
+    "scoped-commit-gate": "DRO-1094",
     "secret-detection": "DRO-459",
     "solo-task-review": "DRO-814",
     "solo-task-subagent": "DRO-1012",
@@ -102,6 +103,8 @@
     "1.7.7.4": "DRO-446",
     "1.8.3.1": "DRO-1009",
     "1.8.4.1": "DRO-1030",
+    "1.9.1.1": "DRO-1120",
+    "1.9.1.2": "DRO-1128",
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
@@ -2536,6 +2539,171 @@
       "issue": "DRO-411",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "scoped-commit-gate/t-1": {
+      "issue": "DRO-1095",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-10": {
+      "issue": "DRO-1104",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-11": {
+      "issue": "DRO-1105",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-12": {
+      "issue": "DRO-1109",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-13": {
+      "issue": "DRO-1115",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-14": {
+      "issue": "DRO-1114",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-15": {
+      "issue": "DRO-1117",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-16": {
+      "issue": "DRO-1118",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-17": {
+      "issue": "DRO-1119",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-18": {
+      "issue": "DRO-1123",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-19": {
+      "issue": "DRO-1100",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-2": {
+      "issue": "DRO-1096",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-20": {
+      "issue": "DRO-1102",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-21": {
+      "issue": "DRO-1108",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-22": {
+      "issue": "DRO-1103",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-23": {
+      "issue": "DRO-1113",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-24": {
+      "issue": "DRO-1101",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-25": {
+      "issue": "DRO-1116",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-26": {
+      "issue": "DRO-1107",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-27": {
+      "issue": "DRO-1121",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-28": {
+      "issue": "DRO-1122",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-29": {
+      "issue": "DRO-1124",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-3": {
+      "issue": "DRO-1097",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-30": {
+      "issue": "DRO-1125",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-31": {
+      "issue": "DRO-1126",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-32": {
+      "issue": "DRO-1127",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-33": {
+      "issue": "DRO-1129",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-4": {
+      "issue": "DRO-1098",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-5": {
+      "issue": "DRO-1099",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-6": {
+      "issue": "DRO-1110",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-7": {
+      "issue": "DRO-1111",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-8": {
+      "issue": "DRO-1106",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "scoped-commit-gate/t-9": {
+      "issue": "DRO-1112",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "secret-detection/t-1": {
       "issue": "DRO-460",

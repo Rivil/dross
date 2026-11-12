@@ -12,8 +12,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/gitrun"
+	"github.com/Rivil/dross/internal/pkgjson"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/render"
+	"github.com/Rivil/dross/internal/stack"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -249,8 +252,49 @@ func writeVersion(root string, s *state.State, v string) error {
 	if err := p.Save(projPath); err != nil {
 		return fmt.Errorf("write %s: %w", projPath, err)
 	}
+	// package.json is the version's third home in a JS repo. Before this
+	// sync it was left to the model to remember the global rule's second
+	// write, and a phase that forgot left it a milestone behind.
+	if err := syncPackageVersions(filepath.Dir(root), v); err != nil {
+		return err
+	}
 	s.Version = v
 	return nil
+}
+
+// syncPackageVersions writes major.minor.patch of the 4-part v (npm wants
+// semver) into every git-tracked package.json that already carries a
+// top-level version, skipping the shared stack skip set (fixtures, testdata,
+// vendored and built trees: someone else's package.json, never the
+// project's). Outside a git work tree nothing is tracked, so nothing syncs.
+func syncPackageVersions(repoDir, v string) error {
+	if _, err := gitrun.Read(repoDir, "rev-parse", "--is-inside-work-tree"); err != nil {
+		return nil
+	}
+	out, err := gitrun.Raw(repoDir, "ls-files", "-z", "--", ":(glob)**/package.json")
+	if err != nil {
+		return fmt.Errorf("git ls-files package.json: %w", err)
+	}
+	want := v[:strings.LastIndex(v, ".")]
+	//dross:taint-cleared ls-files -z prints NUL-separated tracked package.json paths; each is only read and version-rewritten
+	for _, rel := range strings.Split(out, "\x00") {
+		if rel == "" || pkgJSONSkipped(rel) {
+			continue
+		}
+		if err := pkgjson.SyncVersion(filepath.Join(repoDir, filepath.FromSlash(rel)), want); err != nil {
+			return fmt.Errorf("sync version into %s: %w", rel, err)
+		}
+	}
+	return nil
+}
+
+func pkgJSONSkipped(rel string) bool {
+	for _, seg := range strings.Split(rel, "/") {
+		if stack.SkipDir(seg) {
+			return true
+		}
+	}
+	return false
 }
 
 // ensureState materializes .dross/state.json when it is absent, so a fresh

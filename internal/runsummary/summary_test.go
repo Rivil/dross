@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -328,6 +329,54 @@ func TestStripsANSIAndCR(t *testing.T) {
 	segment("50%\r100% done\r\n")
 	if len(fed) != 1 || fed[0] != "100% done" {
 		t.Fatalf("fed %q, want exactly %q", fed, "100% done")
+	}
+}
+
+// TestResultsNamesTheFailures: Results hands a caller the failing tests by
+// name, from every claiming parser, the last unterminated line included once
+// the segment is closed — and nothing from a segment no parser claimed.
+func TestResultsNamesTheFailures(t *testing.T) {
+	withParsers(t, newFake, newFake)
+	rs := segment("ok a\nFAIL TestA\n\tboom\nFAIL TestB").Results()
+	if len(rs) != 2 {
+		t.Fatalf("want one result per claiming parser, got %d: %+v", len(rs), rs)
+	}
+	for _, r := range rs {
+		var names []string
+		for _, f := range r.Failures.Kept {
+			names = append(names, f.Name)
+		}
+		if r.Failures.Total != 2 || !reflect.DeepEqual(names, []string{"TestA", "TestB"}) {
+			t.Errorf("failures %v (total %d), want TestA and TestB", names, r.Failures.Total)
+		}
+	}
+	if rs := segment("nothing a runner prints\n").Results(); len(rs) != 0 {
+		t.Errorf("an unclaimed segment returned %+v", rs)
+	}
+}
+
+// TestGoTestFuncs: the top-level functions go test runs, and not a method, a
+// helper, or a name inside a string or a comment.
+func TestGoTestFuncs(t *testing.T) {
+	src := "package x\n\nimport \"testing\"\n\n" +
+		"// func TestInComment(t *testing.T) {}\n" +
+		"var fixture = `\nfunc TestInString(t *testing.T) {}\n`\n\n" +
+		"func TestA(t *testing.T) { t.Run(\"sub\", func(t *testing.T) {}) }\n" +
+		"func FuzzB(f *testing.F) {}\n" +
+		"func ExampleC() {}\n" +
+		"func BenchmarkD(b *testing.B) {}\n" +
+		"func helper(t *testing.T) {}\n" +
+		"type s struct{}\n" +
+		"func (s) TestMethod(t *testing.T) {}\n"
+	if got, want := GoTestFuncs([]byte(src)), []string{"TestA", "FuzzB", "ExampleC", "BenchmarkD"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("GoTestFuncs = %v, want %v", got, want)
+	}
+	// What parsed before a syntax error still counts; nothing parses to nothing.
+	if got := GoTestFuncs([]byte("package x\nfunc TestA(t *testing.T) {}\nfunc TestB( {\n")); !slices.Contains(got, "TestA") {
+		t.Errorf("a broken source gave %v, want the TestA before the error", got)
+	}
+	if got := GoTestFuncs([]byte("not go")); len(got) != 0 {
+		t.Errorf("a non-Go source gave %v", got)
 	}
 }
 

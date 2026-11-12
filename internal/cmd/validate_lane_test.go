@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -820,5 +821,381 @@ command = ""`)
 	}
 	if !strings.Contains(out, "✗") {
 		t.Errorf("the problem was not reported:\n%s", out)
+	}
+}
+
+// --- the vouch rule (c-2, c-3, c-4, c-9) ---
+
+// vouchFixture is laneFixture in a repo with a full run of its own, so a
+// vouching lane's problems are attributable to the lane and not to the repo.
+func vouchFixture(t *testing.T) string {
+	t.Helper()
+	dir := laneFixture(t)
+	mustRunSet(t, "runtime.test_command", "go test ./...")
+	return dir
+}
+
+// vouchLaneHead is a vouching lane with no way yet to attribute its paths.
+const vouchLaneHead = `[[runtime.test_lane]]
+name = "web"
+match = ["src/**"]
+command = "vitest related --run"
+vouch = true
+`
+
+// vouchLaneBlock is a lane with everything but the fields a vouch test varies.
+const vouchLaneBlock = vouchLaneHead + `relate = "scripts/relate.sh"
+`
+
+// lineWith reports whether one output line carries every needle, so a test can
+// tie a reason to the lane it was reported against.
+func lineWith(out string, needles ...string) bool {
+	for _, line := range strings.Split(out, "\n") {
+		all := true
+		for _, needle := range needles {
+			all = all && strings.Contains(line, needle)
+		}
+		if all {
+			return true
+		}
+	}
+	return false
+}
+
+// TestValidateAcceptsAWellFormedVouchingLane is the other side of every refusal
+// below: a validator that refused all vouching lanes would satisfy them alone.
+// The selector goes through configenum.Normalize like every other enum, so a
+// hand-written PATH is the same style.
+func TestValidateAcceptsAWellFormedVouchingLane(t *testing.T) {
+	for _, selector := range []string{"path", "PATH"} {
+		t.Run(selector, func(t *testing.T) {
+			dir := vouchFixture(t)
+			appendLanes(t, dir, vouchLaneBlock+`selector = "`+selector+`"
+empty_exit = [5]`)
+
+			out, err := validateOutput(t)
+			if err != nil {
+				t.Fatalf("validate rejected a well-formed vouching lane: %v\n%s", err, out)
+			}
+		})
+	}
+}
+
+// TestValidateLetsRelateStandInForEmptyExit: relate says when a path has no test,
+// so a vouching lane owes no exit code for it. This was t-3's refusal of a lane
+// with no empty_exit, turned around once relate took over the job.
+func TestValidateLetsRelateStandInForEmptyExit(t *testing.T) {
+	for _, tc := range []struct{ name, fields string }{
+		{"no empty_exit", `selector = "path"`},
+		{"empty empty_exit", "selector = \"path\"\nempty_exit = []"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := vouchFixture(t)
+			appendLanes(t, dir, vouchLaneBlock+tc.fields)
+
+			out, err := validateOutput(t)
+			if err != nil {
+				t.Fatalf("validate refused a vouching lane with relate and %s: %v\n%s", tc.name, err, out)
+			}
+		})
+	}
+}
+
+// TestValidateRefusesVouchWithNoRelate: without relate no test is tied to a path,
+// so a green could name one nothing measured. A blank line is no relate at all.
+func TestValidateRefusesVouchWithNoRelate(t *testing.T) {
+	for _, tc := range []struct{ name, fields string }{
+		{"absent", "selector = \"path\"\nempty_exit = [5]"},
+		{"empty", "selector = \"path\"\nempty_exit = [5]\nrelate = \"\""},
+		{"whitespace", "selector = \"path\"\nempty_exit = [5]\nrelate = \"   \""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := vouchFixture(t)
+			appendLanes(t, dir, vouchLaneHead+tc.fields)
+
+			out, err := validateOutput(t)
+			if err == nil {
+				t.Fatalf("validate accepted a vouching lane with no relate:\n%s", out)
+			}
+			if !lineWith(out, `runtime.test_lane "web"`, "vouch with no relate") {
+				t.Errorf("the problem must name the lane and the missing key, got:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestValidateRefusesRelateWithNoVouch: only a vouching lane runs relate, so on
+// any other lane it reads as configured and does nothing. A blank value is the
+// same dead key, and must not slip through as "no relate".
+func TestValidateRefusesRelateWithNoVouch(t *testing.T) {
+	for _, tc := range []struct{ name, fields string }{
+		{"vouch absent", `relate = "scripts/relate.sh"`},
+		{"vouch false", "vouch = false\nrelate = \"scripts/relate.sh\""},
+		{"blank relate", `relate = "   "`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := laneFixture(t)
+			appendLanes(t, dir, `[[runtime.test_lane]]
+name = "web"
+match = ["src/**"]
+command = "vitest run"
+`+tc.fields)
+
+			out, err := validateOutput(t)
+			if err == nil {
+				t.Fatalf("validate accepted relate on a lane that does not vouch:\n%s", out)
+			}
+			if !lineWith(out, `runtime.test_lane "web"`, "relate with no vouch") {
+				t.Errorf("the problem must name the lane and the dead key, got:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestValidateRefusesALaneThatCannotVouch walks every way a lane could report
+// green having measured nothing. Each refusal is held to the lane it names.
+func TestValidateRefusesALaneThatCannotVouch(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		fields string
+		why    string
+	}{
+		{"no selector", `empty_exit = [5]`, "vouch with no selector"},
+		{"dir selector", "selector = \"dir\"\nempty_exit = [5]", "[no test files]"},
+		{"go-package selector", "selector = \"go-package\"\nempty_exit = [5]", "[no test files]"},
+		{"unknown selector", "selector = \"packages\"\nempty_exit = [5]", `selector = "packages"`},
+		{"empty_exit of 1", "selector = \"path\"\nempty_exit = [1]", "empty_exit listing 1"},
+		{"1 among other codes", "selector = \"path\"\nempty_exit = [5, 1]", "empty_exit listing 1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := vouchFixture(t)
+			appendLanes(t, dir, vouchLaneBlock+tc.fields)
+
+			out, err := validateOutput(t)
+			if err == nil {
+				t.Fatalf("validate accepted a vouching lane with %s:\n%s", tc.name, out)
+			}
+			if !lineWith(out, `runtime.test_lane "web"`, tc.why) {
+				t.Errorf("the problem must name the lane and say %q, got:\n%s", tc.why, out)
+			}
+		})
+	}
+}
+
+// TestValidateRefusesVouchWithNoFullRun: with no test_command a bare run is the
+// lanes themselves, so a scoped green would defer to a full run that is not one.
+// The nameless lane proves the problem still points at a specific block.
+func TestValidateRefusesVouchWithNoFullRun(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, vouchLaneBlock+"selector = \"path\"\nempty_exit = [5]\n\n"+`[[runtime.test_lane]]
+match = ["lib/**"]
+command = "vitest related --run"
+selector = "path"
+empty_exit = [5]
+vouch = true
+relate = "scripts/relate.sh"`)
+
+	out, err := validateOutput(t)
+	if err == nil {
+		t.Fatalf("validate accepted a vouching lane in a repo with no test_command:\n%s", out)
+	}
+	for _, label := range []string{`runtime.test_lane "web"`, "runtime.test_lane[1]"} {
+		if !lineWith(out, label, "runtime.test_command") {
+			t.Errorf("the problem must name %s and the missing key, got:\n%s", label, out)
+		}
+	}
+}
+
+// TestVouchFullRunProblemReadsABlankCommandAsNone: `dross test` trims
+// test_command before it falls back to the lanes, so this rule must agree on
+// what counts as having none. A non-vouching lane has nothing to answer for.
+func TestVouchFullRunProblemReadsABlankCommandAsNone(t *testing.T) {
+	vouching := project.TestLane{Name: "web", Vouch: true}
+	if vouchFullRunProblem("web", vouching, "   ") == "" {
+		t.Error("a whitespace-only test_command was read as a full run")
+	}
+	if got := vouchFullRunProblem("web", vouching, "go test ./..."); got != "" {
+		t.Errorf("a repo with a test_command was refused: %s", got)
+	}
+	if got := vouchFullRunProblem("web", project.TestLane{Name: "web"}, ""); got != "" {
+		t.Errorf("a lane that does not vouch was refused: %s", got)
+	}
+}
+
+// TestValidateLeavesANonVouchingLaneAlone keeps the rule opt-in: every shape it
+// refuses stays legal on a lane no commit depends on, even in a repo with no
+// test_command. Without this the rule would reach every lane already declared.
+func TestValidateLeavesANonVouchingLaneAlone(t *testing.T) {
+	for _, flag := range []string{"", "vouch = false\n"} {
+		dir := laneFixture(t)
+		appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"
+selector = "go-package"
+empty_exit = [1]
+`+flag+`
+[[runtime.test_lane]]
+name = "plain"
+match = ["docs/**"]
+command = "true"`)
+
+		out, err := validateOutput(t)
+		if err != nil {
+			t.Errorf("validate reported a lane that does not vouch (%q): %v\n%s", flag, err, out)
+		}
+	}
+}
+
+// TestLaneRefusalJudgesAVouchingLaneOnItsOwnShape: laneRefusal validates a
+// one-lane project with no test_command, so the repo half of the rule must stay
+// out of laneProblems or every edit to a vouching lane would be refused. The
+// lane half must stay in, so the CLI cannot write what validate then rejects.
+func TestLaneRefusalJudgesAVouchingLaneOnItsOwnShape(t *testing.T) {
+	good := project.TestLane{
+		Name: "web", Match: []string{"src/**"}, Command: "vitest related --run",
+		Selector: "path", EmptyExit: []int{5}, Vouch: true, Relate: "scripts/relate.sh",
+	}
+	if err := laneRefusal("web", good); err != nil {
+		t.Errorf("a well-formed vouching lane was refused: %v", err)
+	}
+
+	bad := good
+	bad.Selector = "dir"
+	err := laneRefusal("web", bad)
+	if err == nil {
+		t.Fatal("laneRefusal accepted a dir lane that vouches")
+	}
+	if !strings.Contains(err.Error(), "[no test files]") {
+		t.Errorf("the refusal must say why a dir lane cannot vouch, got: %v", err)
+	}
+
+	dead := good
+	dead.Vouch = false
+	err = laneRefusal("web", dead)
+	if err == nil {
+		t.Fatal("laneRefusal accepted relate on a lane that does not vouch")
+	}
+	if !strings.Contains(err.Error(), "relate with no vouch") {
+		t.Errorf("the refusal must say why relate is dead here, got: %v", err)
+	}
+}
+
+// --- the exempt fence (c-3) ---
+
+// setExempt writes a runtime.test_exempt list into the fixture as a hand edit
+// would, so validate reads it through project.Load. The key has to sit under
+// [runtime], so it cannot be appended the way an array-of-tables block can.
+func setExempt(t *testing.T, dir string, globs ...string) {
+	t.Helper()
+	path := filepath.Join(dir, ".dross", "project.toml")
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quoted := make([]string, len(globs))
+	for i, glob := range globs {
+		quoted[i] = strconv.Quote(glob)
+	}
+	const header = "[runtime]\n"
+	if !bytes.Contains(src, []byte(header)) {
+		t.Fatalf("no [runtime] table to edit:\n%s", src)
+	}
+	edited := strings.Replace(string(src), header, header+"  test_exempt = ["+strings.Join(quoted, ", ")+"]\n", 1)
+	if err := os.WriteFile(path, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestValidateRefusesACatchAllExemptGlob: an exempt path needs no tests, so one
+// of these would turn the commit gate off for the whole repo. The first five
+// are the plain spellings. The rest reach the same place without spelling it:
+// each is a glob with no literal name in it, and an escaped dot or wildcard is
+// not one.
+func TestValidateRefusesACatchAllExemptGlob(t *testing.T) {
+	for _, glob := range []string{
+		"**", "*", "**/*", "*/**", "**/**",
+		"**/", "*/", "./**", "*/*", "?*", "**/?*", "*.*", "**/*.*", "**/[!.]*", `[\]a-z]*`,
+		`**/*\.*`, `*\.*`, `**/\.*`, `**/*\**`, `**/*\?*`, `**/*\[*`, `**/*\]*`, `**/*\\*`, `**/*\/*`,
+	} {
+		t.Run(glob, func(t *testing.T) {
+			dir := laneFixture(t)
+			setExempt(t, dir, glob)
+
+			out, err := validateOutput(t)
+			if err == nil {
+				t.Fatalf("validate accepted the catch-all test_exempt glob %q:\n%s", glob, out)
+			}
+			if !lineWith(out, "runtime.test_exempt", strconv.Quote(glob), "names no directory or file type") {
+				t.Errorf("the problem must quote the glob and say why, got:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestValidateRefusesAnUncompilableExemptGlob: a broken glob exempts nothing
+// while looking configured, and its fix starts from knowing which one it was.
+func TestValidateRefusesAnUncompilableExemptGlob(t *testing.T) {
+	dir := laneFixture(t)
+	setExempt(t, dir, "docs/[")
+
+	out, err := validateOutput(t)
+	if err == nil {
+		t.Fatalf("validate accepted an uncompilable test_exempt glob:\n%s", out)
+	}
+	if !lineWith(out, "runtime.test_exempt", `"docs/["`, "does not compile") {
+		t.Errorf("the problem must quote the glob and say it does not compile, got:\n%s", out)
+	}
+}
+
+// TestValidateRefusesABlankExemptGlob: a blank entry matches no path, so it is
+// a line the user believes does something. It is not a catch-all, and must not
+// be reported as one.
+func TestValidateRefusesABlankExemptGlob(t *testing.T) {
+	for _, glob := range []string{"", "   "} {
+		dir := laneFixture(t)
+		setExempt(t, dir, glob)
+
+		out, err := validateOutput(t)
+		if err == nil {
+			t.Fatalf("validate accepted the blank test_exempt glob %q:\n%s", glob, out)
+		}
+		if !lineWith(out, "runtime.test_exempt", "blank entry") {
+			t.Errorf("the problem must call the entry blank, got:\n%s", out)
+		}
+		if strings.Contains(out, "names no directory") {
+			t.Errorf("a blank entry was reported as a catch-all:\n%s", out)
+		}
+	}
+}
+
+// TestValidateAcceptsExemptGlobsThatNameSomething is the accept side: refusing
+// every glob would pass all three tests above. Each of these names a directory
+// or a file type, and dots, bracket classes and escapes beside a name change
+// nothing. `\m\d` is the letters md, so an escape alone never reads as a wildcard.
+func TestValidateAcceptsExemptGlobsThatNameSomething(t *testing.T) {
+	dir := laneFixture(t)
+	setExempt(t, dir, "docs/**", "docs/", "*.md", "**/*.md", "README.md", ".github/**", "[Dd]ocs/**",
+		`**/*\.md`, `**/*\m\d`, `\docs/**`, `src/routes/\[slug\]/**`)
+
+	out, err := validateOutput(t)
+	if err != nil {
+		t.Fatalf("validate rejected usable test_exempt globs: %v\n%s", err, out)
+	}
+}
+
+// TestTestExemptProblemsReportsEachBadGlob: the helper is what the CLI and the
+// trust verb refuse through, so it has to name every bad entry in one pass and
+// none of the good ones beside them.
+func TestTestExemptProblemsReportsEachBadGlob(t *testing.T) {
+	problems := testExemptProblems([]string{"docs/**", "**", "*.md", "a/["})
+	if len(problems) != 2 {
+		t.Fatalf("want one problem per bad glob, got %d: %q", len(problems), problems)
+	}
+	if !strings.Contains(problems[0], `"**"`) || !strings.Contains(problems[1], `"a/["`) {
+		t.Errorf("problems must name the bad globs in list order, got: %q", problems)
+	}
+	if got := testExemptProblems(nil); got != nil {
+		t.Errorf("a repo with no test_exempt must have no problems, got: %q", got)
 	}
 }

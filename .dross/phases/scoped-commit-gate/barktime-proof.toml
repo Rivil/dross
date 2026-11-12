@@ -1,0 +1,111 @@
+# t-18: c-5 evidence. A real barktime task commit, touching a .svelte source,
+# admitted by commit-green on a `dross test --files` run that executed only the
+# tests vitest relates to its paths. No `dross gate off commit-green`, and no full
+# run admitted it. Gathered 2026-11-09 by barktime-0e (barktime's own phase work)
+# and checked independently from the dross repo; a human reads this at verify.
+
+criterion = "c-5"
+verdict = "met"
+dross_build = "ec4ac80a, then a025c09b (t-27) from 2026-11-09T08:09Z"
+
+# The task commit. barktime t-21 of uploads-and-platform-hardening.
+sha = "bf4f57c0b68dc45eb57a0da775e1c910726d6546"
+commit_tree = "0ff307f8942888b72f60c0847729a885afee7a43"
+run_log = "~/Development/barktime/.dross/logs/test-20261109T143947.990128000Z.log"
+run_site = "helicon, stack"
+paths = [
+  "src/lib/server/domain/support/attachments.ts",
+  "src/routes/(app)/(owner)/support/[id=uuid]/+page.server.ts",
+  "src/routes/(app)/(owner)/support/[id=uuid]/+page.svelte",
+  "src/routes/(app)/(owner)/support/[id=uuid]/support-thread.svelte.test.ts",
+  "tests/integration/support-attachment-routes.integration.test.ts",
+  "tests/integration/support-attachments.integration.test.ts",
+  "tests/integration/support-open-attachments.integration.test.ts",
+]
+svelte_source = "src/routes/(app)/(owner)/support/[id=uuid]/+page.svelte"
+wall_clock_s = 261
+runs = 1
+lock_wait_s = 0
+gate_status = "commit-green, plan-edit, curated-shrink, pair-approval, solo-review, solo-writer on (workflow); tamper-guard, gate-off-guard, secret-stream, secret-read on (always-on). Taken right after the commit."
+# green.json did not exist at commit time. The one there now was written by a
+# later full run (2026-11-09T15:37:35Z, 50 min after the 14:45 commit) and holds
+# a different tree, so no full green can have admitted bf4f57c0.
+green_tree = "8df1de9792dec5592539eefd825ffd748d629bd8"
+green_at = "2026-11-09T15:37:35.944951Z"
+green_absent_at_commit = true
+
+[checked]
+  sha_resolves = "git -C ~/Development/barktime cat-file -e bf4f57c0: ok"
+  commit_tree = "git show --format=%T bf4f57c0 = 0ff307f8"
+  log_exists = true
+  log_order = "line 2 `lane web prepare: bash scripts/test/prepare-host.sh` (up to date, acb12554dc5e); line 5 `lane web relate: node scripts/test/relate.mjs <9 paths>`; line 30 one batched `lane web: bash scripts/test/in-container.sh` carrying 10 related tests; 10 files passed; line 236 `scoped green: 9 covered`"
+  no_uncovered_line = true
+  no_bare_suite = true
+  run_asked = "9 paths: the 7 committed plus 2 unchanged tests from the task's file list; scoped.json covered all 9"
+  scoped_tree = "52154d119da4c8a6312fd5493849fc7a88f853dc, the run-time working tree with unstaged .dross/ edits; treefp excludes .dross/, so it admits commit tree 0ff307f8"
+  lane_fingerprint = "e6e232cb00fb33f2f4d6d20777059f2485b6138d6379bc4d513e68be29717a9f, consent.Fingerprint(LaneLine); `match` is not in the consent line, so widening it to tests/ left it unchanged"
+
+[lane]
+  # Landed by barktime quicks 0.3.11.1 (378b5325) and 0.3.11.2 (match widened);
+  # granted by the user in their own terminal.
+  name = "web"
+  match = ["src/", "tests/"]
+  command = "bash scripts/test/in-container.sh"
+  selector = "path"
+  vouch = true
+  relate = "node scripts/test/relate.mjs"
+  prepare = "bash scripts/test/prepare-host.sh"
+  prepare_is = "t-20's lockfile-guarded install: npm ci only when the sha of package-lock.json, messages/*.json and project.inlang/settings.json changes"
+  empty_exit = "none declared"
+  test_exempt = ["ARCHITECTURE.md"]
+  relate_stdout = "TSV only: relate.mjs sends process.stdout.write and console.log/info/debug to stderr, so the paraglide line never reaches the parser"
+  grants = "dross trust --lane web; dross trust --test-exempt, both by the user. Before them, two --files runs refused with exit 6 (no exec consent)."
+
+[cost]
+  # t-20's budget: a leaf task's two runs within 600 s. Lock waits on the shared
+  # helicon host are listed apart from the run itself.
+  budget_s = 600
+  leaf_commit_runs_s = [261]
+  leaf_two_runs_s = 522
+  within_budget = true
+  other_leaf_runs = "barktime t-12 2 paths 342 s (~3 min lock); t-13 3 paths 249 s; t-14 4 paths 250 s (no lock); one .svelte probe 245 s (no lock)"
+  lock_wait_note = "Cross-repo helicon lock waits ran up to ~10 min per run (barktime t-13 re-run 784 s, t-15 856 s, dross t-28's run queued 10 min behind barktime). That is host contention, not the scoped model."
+
+[hot]
+  # Recorded, not failed (test_contract): a path near the root of the import graph
+  # relates to most of the suite.
+  sha = "5d18e75a"
+  path = "src/lib/server/storage/upload-guard.ts"
+  related_test_files = 210
+  wall_clock_s = 832
+  admitted_by = "a full green (1126 s): its docs/features/photos-storage.md matches no lane"
+
+[negative]
+  # Same session, on the real repo, against the installed build.
+  [negative.testless_svelte]
+    path = "src/routes/(app)/(owner)/reports/+page.svelte"
+    exit = 5
+    output = "selector miss: lane \"web\" — relate named no test for …; uncovered: …"
+    lane_spawned = false
+    scoped_json_sha1_before = "4ab672c0436631fb5a33997bd69818ad59569000"
+    scoped_json_sha1_after = "4ab672c0436631fb5a33997bd69818ad59569000"
+    log = "test-20261109T122854.772126000Z"
+  [negative.misspelled]
+    path = "src/lib/components/ErrorContnet.svelte"
+    exit = 5
+    output = "selector miss: lane \"web\" — every path matching it is gone, so its path selector scoped to nothing"
+    lane_spawned = false
+    scoped_json_sha1_before = "4ab672c0436631fb5a33997bd69818ad59569000"
+    scoped_json_sha1_after = "4ab672c0436631fb5a33997bd69818ad59569000"
+    log = "test-20261109T123046.370719000Z"
+    finding = "it also printed `exit 5 · output not recognised — last 0 lines`; fixed by t-27 (5f88cbbf)"
+  [negative.mixed_commit]
+    covered = "src/routes/(app)/(owner)/settings/public-profile/+page.svelte (scoped green: 1 covered)"
+    testless = "src/routes/(app)/(owner)/reports/+page.svelte"
+    refused = "dross gate commit-green refused this call: no green vouches for these paths in this commit: src/routes/(app)/(owner)/reports/+page.svelte"
+    reverted = true
+
+[earlier]
+  # Superseded data points, kept for the record.
+  scoped_admitted_test_only = "6102cff4 (t-11): admitted on a scoped green, but its one path is a .svelte.test.ts, not a .svelte source"
+  svelte_probe = "public-profile/+page.svelte alone: relate named one test, PASS 16 tests, scoped green: 1 covered, 245 s (log test-20261109T122435.067660000Z); not a commit"

@@ -37,11 +37,12 @@ import (
 // Verify registers `dross verify <phase>`.
 //
 // What this command does (mechanical only — LLM does criterion mapping):
-//  1. Read project.toml + phases/<id>/spec.toml + phases/<id>/changes.json
-//  2. Group touched files by language
-//  3. For each language with an adapter: run mutation testing
-//  4. Aggregate into tests.json
-//  5. Write a verify.toml skeleton (verdict = pending) for /dross-verify
+//  1. Read project.toml; with a vouching lane, refuse a HEAD tree no full green ran on
+//  2. Read phases/<id>/spec.toml + phases/<id>/changes.json
+//  3. Group touched files by language
+//  4. For each language with an adapter: run mutation testing
+//  5. Aggregate into tests.json
+//  6. Write a verify.toml skeleton (verdict = pending) for /dross-verify
 //     to fill in criterion-to-test mappings + final verdict.
 func Verify() *cobra.Command {
 	var skipMutation bool
@@ -81,6 +82,12 @@ func Verify() *cobra.Command {
 			}
 			proj, err := project.Load(filepath.Join(root, project.File))
 			if err != nil {
+				return err
+			}
+			// On the path every flag shares, so --detach and --skip-mutation
+			// take this check too, and before the phase is read, so no adapter
+			// is built and no tree pushed for a run it would refuse.
+			if err := requireFullGreen(proj, filepath.Dir(root)); err != nil {
 				return err
 			}
 			specPath := filepath.Join(phase.Dir(root, phaseID), "spec.toml")

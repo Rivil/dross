@@ -55,7 +55,7 @@ func strykerWithSource(t *testing.T, file, src string) *Stryker {
 }
 
 func TestEmbeddedScriptIsNonEmpty(t *testing.T) {
-	for _, want := range []string{"@babel/parser", "constructs", "@stryker-mutator/instrumenter", "process.exit(2)"} {
+	for _, want := range []string{"@babel/parser", "svelte/compiler", "constructs", "@stryker-mutator/instrumenter", "process.exit(2)"} {
 		if !strings.Contains(astspanScript, want) {
 			t.Errorf("astspanScript lacks %q", want)
 		}
@@ -190,17 +190,115 @@ func TestConstructsClassifiesTimeout(t *testing.T) {
 	}
 }
 
-// Svelte is refused before any process exists: Babel cannot parse the
-// markup, and a doomed spawn per run is a cost with no signal.
+// The blanket .svelte refusal is gone; the name stays because tests_before.txt
+// holds it. What is left of "unavailable" is a named cause: a compiler that does
+// not resolve, a file the compiler refuses, and a file that cannot be read,
+// which is still the one case with no spawn. The real compiler's half of this
+// is TestUnresolvableParserIsUnavailableForSvelte.
 func TestSvelteIsUnavailableWithoutASpawn(t *testing.T) {
-	rec := fakeNode(t, `echo '{"constructs":[]}'`)
-	s := strykerWithSource(t, "web/src/App.svelte", "<script>let x = 1;</script>\n")
-	_, err := s.Constructs("web/src/App.svelte")
-	if !errors.Is(err, ErrASTUnavailable) || !strings.Contains(err.Error(), "no parser for .svelte") {
-		t.Fatalf("err = %v, want the svelte refusal", err)
+	const file = "web/src/App.svelte"
+
+	t.Run("compiler unresolvable", func(t *testing.T) {
+		fakeNode(t, `echo '{"error":{"message":"cannot resolve svelte/compiler from /x"}}'; exit 2`)
+		s := strykerWithSource(t, file, "<p>a</p>\n")
+		_, err := s.Constructs(file)
+		want := "cannot resolve svelte/compiler from " + s.workDir()
+		if !errors.Is(err, ErrASTUnavailable) || !strings.Contains(err.Error(), want) {
+			t.Fatalf("err = %v, want ErrASTUnavailable with %q", err, want)
+		}
+	})
+
+	t.Run("malformed file", func(t *testing.T) {
+		fakeNode(t, `echo '{"error":{"message":"attempted to close an element","line":4,"column":2}}'; exit 2`)
+		s := strykerWithSource(t, file, "<div>\n")
+		_, err := s.Constructs(file)
+		if !errors.Is(err, ErrASTUnavailable) || !strings.Contains(err.Error(), "parse error at 4:2") {
+			t.Fatalf("err = %v, want ErrASTUnavailable with the position", err)
+		}
+		if strings.Contains(err.Error(), "attempted to close") {
+			t.Errorf("the compiler's own message leaked into the persisted detail: %v", err)
+		}
+	})
+
+	t.Run("unreadable file", func(t *testing.T) {
+		rec := fakeNode(t, `echo '{"constructs":[]}'`)
+		s := strykerWithSource(t, "web/src/Other.svelte", "<p>a</p>\n")
+		_, err := s.Constructs(file)
+		if !errors.Is(err, ErrASTUnavailable) || !strings.Contains(err.Error(), "cannot read "+file) {
+			t.Fatalf("err = %v, want ErrASTUnavailable naming the file", err)
+		}
+		if calls := readRecord(t, rec, "calls"); calls != "" {
+			t.Errorf("node was spawned %q times for a file that cannot be read", strings.TrimSpace(calls))
+		}
+	})
+}
+
+// A .svelte goes to node like any other file, and what comes back is merged;
+// every other extension keeps the spans the parser gave it.
+func TestSvelteSpansAreMergedOthersPassThrough(t *testing.T) {
+	const answer = `echo '{"constructs":[` +
+		`{"start":5,"end":5,"kind":"Element","name":"div"},` +
+		`{"start":5,"end":5,"kind":"VariableDeclaration","name":"x"}]}'`
+	merged := []Construct{{Start: 5, End: 5, Kind: mergedKind}}
+	untouched := []Construct{
+		{Start: 5, End: 5, Kind: "Element", Name: "div"},
+		{Start: 5, End: 5, Kind: "VariableDeclaration", Name: "x"},
 	}
-	if calls := readRecord(t, rec, "calls"); calls != "" {
-		t.Errorf("node was spawned %q times for a .svelte file", strings.TrimSpace(calls))
+	for _, tc := range []struct {
+		file string
+		want []Construct
+	}{
+		{"web/src/App.svelte", merged},
+		{"web/src/App.SVELTE", merged},
+		{"web/src/a.ts", untouched},
+	} {
+		t.Run(tc.file, func(t *testing.T) {
+			rec := fakeNode(t, answer)
+			s := strykerWithSource(t, tc.file, "<script>let x = 1;</script>\n")
+			got, err := s.Constructs(tc.file)
+			if err != nil {
+				t.Fatalf("Constructs: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("Constructs = %v, want %v", got, tc.want)
+			}
+			if stdin := readRecord(t, rec, "stdin"); !strings.Contains(stdin, `"file":"`+tc.file+`"`) {
+				t.Errorf("stdin does not name %s", tc.file)
+			}
+		})
+	}
+}
+
+// The merge is what keeps ConstructResolver's sorted-and-disjoint promise, and
+// enclosing()'s binary search relies on it.
+func TestMergeConstructs(t *testing.T) {
+	fn := func(start, end int, name string) Construct {
+		return Construct{Start: start, End: end, Kind: "FunctionDeclaration", Name: name}
+	}
+	fused := func(start, end int) Construct {
+		return Construct{Start: start, End: end, Kind: mergedKind}
+	}
+	for _, tc := range []struct {
+		name string
+		in   []Construct
+		want []Construct
+	}{
+		{"nothing stays empty and non-nil", []Construct{}, []Construct{}},
+		{"disjoint spans keep their labels", []Construct{fn(1, 2, "a"), fn(4, 5, "b")}, []Construct{fn(1, 2, "a"), fn(4, 5, "b")}},
+		{"adjacent lines do not touch", []Construct{fn(1, 2, "a"), fn(3, 4, "b")}, []Construct{fn(1, 2, "a"), fn(3, 4, "b")}},
+		{"markup ahead of script is sorted", []Construct{fn(7, 8, "markup"), fn(2, 3, "script")}, []Construct{fn(2, 3, "script"), fn(7, 8, "markup")}},
+		{"one shared line fuses", []Construct{fn(1, 1, "a"), fn(1, 1, "b")}, []Construct{fused(1, 1)}},
+		{"a shared last line widens the span", []Construct{fn(1, 3, "a"), fn(3, 5, "b")}, []Construct{fused(1, 5)}},
+		{"a span inside another cannot shrink it", []Construct{fn(1, 9, "a"), fn(3, 4, "b")}, []Construct{fused(1, 9)}},
+		{"a chain fuses end to end", []Construct{fn(3, 4, "c"), fn(1, 2, "a"), fn(2, 3, "b")}, []Construct{fused(1, 4)}},
+		{"only the colliding pair fuses", []Construct{fn(1, 1, "a"), fn(1, 2, "b"), fn(4, 5, "c")}, []Construct{fused(1, 2), fn(4, 5, "c")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := mergeConstructs(tc.in)
+			if got == nil || !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("mergeConstructs = %#v, want %#v", got, tc.want)
+			}
+		})
 	}
 }
 

@@ -49,7 +49,9 @@ func (s *ReviewScope) Name() string {
 // else is going on); otherwise the one in_progress task of a solo execute
 // run, while HEAD is on its phase branch. Pair mode arms nothing — the human
 // is the gate. A damaged record is an error naming the file, never a silent
-// nil: the solo-review gate fails closed on it.
+// nil: the solo-review gate fails closed on it. Two tasks in_progress is an
+// *AmbiguousError, which the engine turns into a refusal of every call but
+// the one that parks the extras.
 func ArmedScope(root string) (*ReviewScope, error) {
 	q, err := gatestate.LoadQuick(root)
 	if err != nil {

@@ -3,6 +3,7 @@ package gate
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -424,6 +425,130 @@ func TestValidate(t *testing.T) {
 	}
 	if errs := Validate(All()); len(errs) != 0 {
 		t.Errorf("the registry is malformed: %v", errs)
+	}
+}
+
+// TestAmbiguousEscape: a gate that cannot judge because two tasks are
+// in_progress refuses every call except a Bash line that only parks them —
+// the remedy its own refusal names.
+func TestAmbiguousEscape(t *testing.T) {
+	cwd := t.TempDir()
+	amb := ambiguous("p", []string{"t-1", "t-3"})
+	var got *AmbiguousError
+	if !errors.As(amb, &got) || got.Phase != "p" || len(got.Tasks) != 2 {
+		t.Fatalf("ambiguous() = %#v, want an *AmbiguousError carrying p and both ids", amb)
+	}
+	check := func(err error, in []byte) Result {
+		f := &fake{err: err}
+		return Check(in, env(t, f.gate("amb", AlwaysOn, true)))
+	}
+
+	for _, line := range []string{
+		"dross task status p t-1 pending",
+		"dross task status p t-3 failed",
+		`dross task status p 't-1' "pending"`,
+		// One id named twice still leaves t-3 armed.
+		"dross task status p t-1 pending && dross task status p t-1 failed",
+	} {
+		if res := check(amb, bash(t, line, cwd)); !res.Allowed() {
+			t.Errorf("%q with two tasks in_progress was refused: %q", line, res.Text())
+		}
+	}
+	// With three in_progress, parking two leaves one armed.
+	amb3 := ambiguous("p", []string{"t-1", "t-2", "t-3"})
+	if res := check(amb3, bash(t, "dross task status p t-1 pending && dross task status p t-2 pending", cwd)); !res.Allowed() {
+		t.Errorf("parking two of three was refused: %q", res.Text())
+	}
+	// Parking every in_progress id would leave no task armed, and the escape
+	// runs before solo-review's downgrade guard: refused, two or three alike.
+	for _, tc := range []struct {
+		err  error
+		line string
+	}{
+		{amb, "dross task status p t-1 pending && dross task status p t-3 pending"},
+		{amb, "dross task status p t-1 failed; dross task status p t-3 failed"},
+		{amb3, "dross task status p t-1 pending && dross task status p t-2 pending && dross task status p t-3 pending"},
+	} {
+		if res := check(tc.err, bash(t, tc.line, cwd)); res.Allowed() {
+			t.Errorf("%q parks every in_progress task and was allowed, want refused", tc.line)
+		}
+	}
+	// errors.As sees through a gate that wraps it.
+	if res := check(fmt.Errorf("solo scope: %w", amb), bash(t, "dross task status p t-1 pending", cwd)); !res.Allowed() {
+		t.Errorf("a wrapped ambiguity refused its own remedy: %q", res.Text())
+	}
+
+	for _, line := range []string{
+		"git status",
+		"ls",
+		"dross task status p t-1 done",
+		"dross task status p t-1 in_progress",
+		"dross task status p t-2 pending",
+		"dross task status q t-1 pending",
+		"dross task status p t-1",
+		"dross task status p t-1 pending --reason x",
+		"dross task status p t-1 failed --reason=x",
+		"dross --json task status p t-1 pending",
+		"dross task status p t-1 pending && git status",
+		"git status; dross task status p t-1 pending",
+		"dross task status p t-1 pending | tee out.txt",
+		"cd . && dross task status p t-1 pending",
+		"dross task status p t-1 pending > a.go",
+		"dross task status p t-1 pending 2>&1",
+		"FOO=1 dross task status p t-1 pending",
+		"./dross task status p t-1 pending",
+		"/tmp/x/dross task status p t-1 pending",
+		"echo $(dross task status p t-1 pending)",
+		"dross task status p t-1 $(echo pending)",
+		"dross task status p t-1 pending 'unterminated",
+		"",
+	} {
+		res := check(amb, bash(t, line, cwd))
+		if res.Allowed() {
+			t.Errorf("%q with two tasks in_progress was allowed, want refused", line)
+			continue
+		}
+		for _, want := range []string{"t-1, t-3", "dross task status p <id> pending", "`failed`"} {
+			if !strings.Contains(res.Text(), want) {
+				t.Errorf("%q: refusal %q lacks %q", line, res.Text(), want)
+			}
+		}
+	}
+	if res := check(amb, payload(t, "Edit", map[string]any{"file_path": filepath.Join(cwd, "a.go")}, cwd)); res.Allowed() {
+		t.Error("an Edit with two tasks in_progress was allowed")
+	}
+	// Only the typed ambiguity escapes: any other judge error refuses the
+	// same line.
+	if res := check(errors.New("phase p has 2 tasks in_progress"), bash(t, "dross task status p t-1 pending", cwd)); res.Allowed() {
+		t.Error("an untyped judge error let the park line through")
+	}
+}
+
+// TestAmbiguousEscapeRegistry runs the escape through the real gates: the
+// solo-review downgrade guard claims `dross task status`, and with two tasks
+// in_progress on a solo run it used to refuse the call that parks one.
+func TestAmbiguousEscapeRegistry(t *testing.T) {
+	dir := soloRepo(t, "in_progress", "", "in_progress")
+	g, ok := Lookup("solo-review")
+	if !ok {
+		t.Fatal("solo-review is not registered")
+	}
+	run := func(line string) Result { return Check(bash(t, line, dir), Env{Home: t.TempDir(), Gates: []Gate{g}}) }
+	for _, line := range []string{"dross task status p t-1 pending", "dross task status p t-3 failed"} {
+		if res := run(line); !res.Allowed() {
+			t.Errorf("%q was refused: %q", line, res.Text())
+		}
+	}
+	for _, line := range []string{"dross task status p t-1 done", "dross task status p t-1 pending && dross quick end"} {
+		if res := run(line); res.Allowed() || !strings.Contains(res.Text(), "ambiguous") {
+			t.Errorf("%q: %q, want refused as ambiguous", line, res.Text())
+		}
+	}
+
+	pair := pairRepo(t, "in_progress", "in_progress")
+	res := pairCheck(t, payload(t, "Edit", map[string]any{"file_path": filepath.Join(pair, "a.go")}, pair))
+	if res.Allowed() || !strings.Contains(res.Text(), "`failed`") {
+		t.Errorf("a pair-mode Edit with two tasks in_progress: %q, want refused naming pending and failed", res.Text())
 	}
 }
 

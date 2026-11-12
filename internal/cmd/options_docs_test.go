@@ -371,7 +371,7 @@ func TestOptionsDocumentsTheSelectorSurfaceCorrectly(t *testing.T) {
 	for _, field := range []string{
 		"--match", "--command", "--prepare", "--selector",
 		"--selector-template", "--selector-join", "--empty-exit",
-		"--toolchain", "--install",
+		"--toolchain", "--install", "--vouch", "--relate",
 	} {
 		if !strings.Contains(prompt, field) {
 			t.Errorf("options.md does not name the in-place-editable field %q", field)
@@ -464,6 +464,139 @@ func TestOptionsDocumentsTheSelectorSurfaceCorrectly(t *testing.T) {
 			t.Errorf("no `%s` flag example was found in either doc — the guard is vacuous for that verb", verb.name)
 		}
 	}
+}
+
+// lanesPartial reads the lanes partial alone, so a claim made only in base
+// options.md cannot satisfy a test about what a lane editor is told.
+func lanesPartial(t *testing.T) string {
+	t.Helper()
+	b, err := assets.FS.ReadFile("prompts/_options.lanes.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// lanesParagraph returns the partial's one paragraph opening with lead. Each
+// claim is held to its own paragraph, so a stray mention elsewhere cannot stand
+// in for the statement a reader goes looking for.
+func lanesParagraph(t *testing.T, lead string) string {
+	t.Helper()
+	for _, para := range strings.Split(lanesPartial(t), "\n\n") {
+		if strings.HasPrefix(para, lead) {
+			return para
+		}
+	}
+	t.Fatalf("_options.lanes.md has no paragraph opening %q", lead)
+	return ""
+}
+
+// TestLanesPartialDocumentsVouching: each of these is a rule the CLI refuses on,
+// so a reader who cannot find it meets it first as a refusal.
+func TestLanesPartialDocumentsVouching(t *testing.T) {
+	para := lanesParagraph(t, "**Letting a lane vouch for a commit.**")
+	for _, want := range []string{
+		"Only `path` lanes can vouch",
+		"`go test` exits 0 on `[no test files]`",
+		"both flags in one edit",
+		"`--vouch=false` removes `vouch` and `relate` together",
+		"`runtime.test_command`",
+	} {
+		if !strings.Contains(para, want) {
+			t.Errorf("the vouching paragraph does not say %q:\n%s", want, para)
+		}
+	}
+}
+
+// TestLanesPartialDocumentsRelateContract: relate is a script the repo writes, so
+// this paragraph is its specification. Each row is a way to write one that admits
+// a commit nothing measured.
+func TestLanesPartialDocumentsRelateContract(t *testing.T) {
+	para := lanesParagraph(t, "**What `relate` must do.**")
+	for _, want := range []string{
+		"appended to it as shell-quoted arguments",
+		"`--selector-template` shapes `command` only",
+		"`<path><TAB><test>`",
+		"A path it omits stays uncovered",
+		"refuses the whole output",
+		"`relate` vouches every test it names is collectable",
+	} {
+		if !strings.Contains(para, want) {
+			t.Errorf("the relate paragraph does not say %q:\n%s", want, para)
+		}
+	}
+}
+
+// TestLanesPartialDocumentsExitContract: the runner's exit status is all dross
+// reads, so a runner that passes on an empty set is a green that measured nothing.
+func TestLanesPartialDocumentsExitContract(t *testing.T) {
+	para := lanesParagraph(t, "**The exit contract.**")
+	for _, want := range []string{
+		"a runner must not exit 0 on collecting nothing",
+		"`--empty-exit` is optional on a vouching lane",
+		"it may not list `1`",
+	} {
+		if !strings.Contains(para, want) {
+			t.Errorf("the exit contract does not say %q:\n%s", want, para)
+		}
+	}
+}
+
+// TestLanesPartialDocumentsTheGrants: declaring is not consenting, so a reader told
+// only about the flags would set both and find neither does anything.
+func TestLanesPartialDocumentsTheGrants(t *testing.T) {
+	para := lanesParagraph(t, "**Vouch and `test_exempt` need `dross trust`.**")
+	for _, want := range []string{
+		"`dross trust --lane <name>`",
+		"`dross trust --test-exempt`",
+		"`dross project set runtime.test_exempt docs/**,*.md`",
+		"never run either on the user's behalf",
+	} {
+		if !strings.Contains(para, want) {
+			t.Errorf("the grants paragraph does not say %q:\n%s", want, para)
+		}
+	}
+}
+
+// TestLanesPartialKeepsTheVouchFlagsInTheirOwnSpan: the recorded `lane edit` span
+// is a conservation row, so folding the new flags into it would lose the row.
+func TestLanesPartialKeepsTheVouchFlagsInTheirOwnSpan(t *testing.T) {
+	partial := lanesPartial(t)
+	if !strings.Contains(partial, "`dross test lane edit <name> --vouch --relate \"<cmd>\"`") {
+		t.Error("_options.lanes.md has no span of its own for the opt-in")
+	}
+	for _, line := range strings.Split(partial, "\n") {
+		if strings.HasPrefix(line, "- **Edit any field**") && strings.Contains(line, "--vouch") {
+			t.Errorf("the recorded `lane edit` span gained a flag: %s", line)
+		}
+	}
+}
+
+// TestLanesPartialToolchainNamesRelate: relate spawns on the lane's host, so a
+// toolchain rule naming only the other two lines would leave its binary unprobed.
+func TestLanesPartialToolchainNamesRelate(t *testing.T) {
+	para := lanesParagraph(t, "**Choosing which machine a lane runs on.**")
+	if !strings.Contains(para, "`command`, `prepare` and `relate`") {
+		t.Errorf("the toolchain paragraph does not name relate beside command and prepare:\n%s", para)
+	}
+}
+
+// TestOptionsRuntimeFieldsNameTestExempt: read from base options.md's field list,
+// because a walk offers the fields it lists there and fetches no partial to do it.
+func TestOptionsRuntimeFieldsNameTestExempt(t *testing.T) {
+	section := sectionOf(rawOptionsBase(t), "## 3. ", "## 4. ")
+	if section == "" {
+		t.Fatal("base options.md has no §3 ending at §4")
+	}
+	for _, line := range strings.Split(section, "\n") {
+		if strings.HasPrefix(line, "Fields:") {
+			if !strings.Contains(line, "`runtime.test_exempt`") {
+				t.Errorf("the runtime field list does not name runtime.test_exempt: %s", line)
+			}
+			return
+		}
+	}
+	t.Fatal("§3 has no Fields: line")
 }
 
 // TestReadmeDocumentsDetachedRuns: a shipped verb with no README line is a verb

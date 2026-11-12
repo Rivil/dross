@@ -15,6 +15,9 @@
 // Error posture (gate_error_posture). A call a gate claims but cannot judge —
 // state unreadable, git failing, the gate itself panicking — is refused naming
 // the error: a gate that fails open stops protecting without anyone noticing.
+// The one exception is an *AmbiguousError (two tasks in_progress), which lets
+// through only the Bash line that parks the extras — the call its own refusal
+// names as the remedy.
 // A payload that cannot be read at all passes with a warning: failing closed
 // there would block every tool call the day the hook schema changes. A human
 // lifts a misbehaving liftable gate with `dross gate off`, which the agent
@@ -418,6 +421,16 @@ func (env Env) judge(g Gate, c *Call) (ref *Refusal) {
 	}
 	r, err := g.Judge(c)
 	if err != nil {
+		// Two tasks in_progress leave the gate unable to judge anything, and
+		// refusing everything would refuse the very call that resolves it. The
+		// one escape is a line that only parks the extra tasks.
+		var amb *AmbiguousError
+		if errors.As(err, &amb) {
+			if amb.Parks(c) {
+				return nil
+			}
+			return refuse(fmt.Sprintf("the %s gate could not judge this call: %v", g.Name, err), amb.Remedy())
+		}
 		return refuse(fmt.Sprintf("the %s gate could not judge this call: %v", g.Name, err),
 			"fix the error above, then retry the call")
 	}

@@ -222,6 +222,39 @@ covers = ["c-1"]
 	}
 }
 
+// TestTaskStatusRefusesSecondInProgress: with t-1 in_progress, setting t-2
+// in_progress is refused before any write, naming t-1 and the call that parks
+// it; re-setting t-1 in_progress still succeeds.
+func TestTaskStatusRefusesSecondInProgress(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", strings.Replace(twoTaskPlan, `title = "first"`, `title = "first"`+"\nstatus = \"in_progress\"", 1))
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+	before := mustRead(t, planPath)
+
+	err := runCmd(t, Task(), "status", "01-test", "t-2", "in_progress")
+	if err == nil {
+		t.Fatal("setting t-2 in_progress while t-1 is in_progress succeeded, want refused")
+	}
+	if want := "dross task status 01-test t-1 pending"; !strings.Contains(err.Error(), want) {
+		t.Errorf("refusal %q does not name the call that parks t-1 (%q)", err, want)
+	}
+	assertPlanUnchanged(t, planPath, before)
+
+	if err := runCmd(t, Task(), "status", "01-test", "t-1", "in_progress"); err != nil {
+		t.Errorf("re-setting t-1 in_progress: %v", err)
+	}
+	if got := planTask(t, planPath, "t-1").Status; got != phase.StatusInProgress {
+		t.Errorf("t-1 status = %q after re-set, want in_progress", got)
+	}
+	// Once t-1 is parked, t-2 may start.
+	if err := runCmd(t, Task(), "status", "01-test", "t-1", "pending"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Task(), "status", "01-test", "t-2", "in_progress"); err != nil {
+		t.Errorf("t-2 in_progress with t-1 parked: %v", err)
+	}
+}
+
 func TestTaskAddTailAppend(t *testing.T) {
 	chdir(t, t.TempDir())
 	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)

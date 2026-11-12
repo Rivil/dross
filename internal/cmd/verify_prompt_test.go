@@ -501,6 +501,75 @@ func TestVerifyShowsReviews(t *testing.T) {
 	}
 }
 
+// verifyFullRunProblems lists what §1 sec gets wrong about the full run verify
+// needs. requireFullGreen refuses a vouching repo's HEAD tree with no full green,
+// so a bare run has to come ahead of `dross verify`, over committed work: a run
+// over uncommitted work records the work tree, and that is refused too. It is
+// stated for a vouching repo only, because every other repo already paid for its
+// full greens commit by commit.
+func verifyFullRunProblems(sec string) []string {
+	var out []string
+	verify := strings.Index(sec, "dross verify <phase> [--skip-mutation]\n")
+	if verify < 0 {
+		out = append(out, "§1 lost `dross verify <phase>`")
+	}
+	runs := bareDrossTestRE.FindAllStringIndex(sec, -1)
+	if len(runs) == 0 {
+		out = append(out, "§1 has no fenced bare `dross test`")
+	}
+	for _, run := range runs {
+		if run[0] > verify {
+			out = append(out, "§1's bare `dross test` is not ahead of `dross verify <phase>`")
+		}
+		lead := fenceLead(sec, run[0])
+		for _, cond := range []string{"There only", "with the work committed"} {
+			if !strings.Contains(lead, cond) {
+				out = append(out, "§1's bare run lost "+cond+": "+lead)
+			}
+		}
+		for _, cond := range []string{"vouching lane", "`dross test lane list`"} {
+			if !strings.Contains(lead, cond) {
+				out = append(out, "§1's bare run is not conditional on "+cond+": "+lead)
+			}
+		}
+	}
+	return out
+}
+
+// TestVerifyPromptRunsFullSuiteFirst (c-6): verify would otherwise hit its own
+// refusal in a vouching repo, and in any other repo the run is a cost with no
+// gate behind it. Each mutation below is a §1 the check must refuse.
+func TestVerifyPromptRunsFullSuiteFirst(t *testing.T) {
+	sec := sectionOf(verifyPromptBody(t), "## 1. Mechanical pass", "## 2.")
+	if sec == "" {
+		t.Fatal("verify.md has no §1 section")
+	}
+	for _, p := range verifyFullRunProblems(sec) {
+		t.Error(p)
+	}
+	run := bareDrossTestRE.FindStringIndex(sec)
+	if run == nil {
+		t.Fatal("§1 has no fenced bare `dross test` to mutate")
+	}
+	const fence = "```\ndross test\n```\n\n"
+	lead := fenceLead(sec, run[0])
+	for name, mutant := range map[string]string{
+		"no bare run":              bareDrossTestRE.ReplaceAllString(sec, ""),
+		"an unconditional run":     strings.Replace(sec, lead, "Run the whole suite first:", 1),
+		"the run after verify":     strings.Replace(sec, fence, "", 1) + "\n" + fence,
+		"no lane check":            strings.ReplaceAll(sec, "`dross test lane list`", "project.toml"),
+		"a run over uncommitted":   strings.ReplaceAll(sec, "with the work committed", "as the tree stands"),
+		"a scoped run in its seat": bareDrossTestRE.ReplaceAllString(sec, "dross test --files <paths>"),
+	} {
+		if mutant == sec {
+			t.Fatalf("the %q mutation changed nothing", name)
+		}
+		if len(verifyFullRunProblems(mutant)) == 0 {
+			t.Errorf("a §1 with %s passed the check", name)
+		}
+	}
+}
+
 // TestVerifyPromptKeepsTheMeasuredTree (c-1): /dross-verify hand-edits
 // verify.toml, and an edit that drops the recorded tree turns ship's stale
 // refusal into a freshness-unknown warning. §3 tells the agent to leave both

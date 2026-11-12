@@ -1,14 +1,18 @@
 package gatestate
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/review"
 )
 
@@ -497,5 +501,204 @@ func TestWriterRecordDecode(t *testing.T) {
 	}
 	if w, err := LoadWriter(dir); w != nil || err != nil {
 		t.Errorf("cleared writer = %+v, %v; want nil, nil", w, err)
+	}
+}
+
+// laneFingerprints are the real fingerprints of two lanes: a prepared lane,
+// whose LaneLine carries NULs, and a bare one.
+func laneFingerprints() []string {
+	return []string{
+		consent.Fingerprint(consent.LaneLine(project.TestLane{Name: "web", Prepare: "npm ci", Command: "npx vitest related --run"})),
+		consent.Fingerprint(consent.LaneLine(project.TestLane{Name: "go", Command: "go test"})),
+	}
+}
+
+func sampleScoped() Scoped {
+	return Scoped{
+		Tree:    "4b825dc",
+		Covered: []string{"src/a.ts", "src/b.svelte"},
+		Lanes:   laneFingerprints(),
+		At:      at,
+		Runner:  "helicon",
+	}
+}
+
+// TestScopedRoundTrip: every field survives the file, and a later save replaces
+// the record rather than unioning with it.
+func TestScopedRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	want := sampleScoped()
+	if err := SaveScoped(dir, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadScoped(dir)
+	if err != nil || got == nil {
+		t.Fatalf("LoadScoped = %+v, %v", got, err)
+	}
+	if got.Tree != want.Tree || !got.At.Equal(want.At) || got.Runner != want.Runner {
+		t.Errorf("scalar fields = %+v; want %+v", got, want)
+	}
+	if !slices.Equal(got.Covered, want.Covered) {
+		t.Errorf("Covered = %q; want %q", got.Covered, want.Covered)
+	}
+	if !slices.Equal(got.Lanes, laneFingerprints()) {
+		t.Errorf("Lanes = %q; want the LaneLine fingerprints %q", got.Lanes, laneFingerprints())
+	}
+
+	next := sampleScoped()
+	next.Covered = []string{"src/c.ts"}
+	if err := SaveScoped(dir, next); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := LoadScoped(dir); err != nil || !slices.Equal(got.Covered, next.Covered) {
+		t.Errorf("after a second save = %+v, %v; want Covered %q alone", got, err, next.Covered)
+	}
+}
+
+// TestSaveScopedRefusesHollowRecord: a record with nothing to vouch for is
+// refused before anything is written.
+func TestSaveScopedRefusesHollowRecord(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		spoil func(*Scoped)
+		want  string
+	}{
+		{"empty tree", func(s *Scoped) { s.Tree = "" }, "no tree"},
+		{"blank tree", func(s *Scoped) { s.Tree = " \t" }, "no tree"},
+		{"nil covered", func(s *Scoped) { s.Covered = nil }, "covers no path"},
+		{"empty covered", func(s *Scoped) { s.Covered = []string{} }, "covers no path"},
+		{"blank covered path", func(s *Scoped) { s.Covered = []string{"src/a.ts", " "} }, "covered path 2 is blank"},
+		{"nil lanes", func(s *Scoped) { s.Lanes = nil }, "names no lane"},
+		{"blank lane", func(s *Scoped) { s.Lanes = []string{"abc", ""} }, "lane fingerprint 2 is blank"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			s := sampleScoped()
+			tc.spoil(&s)
+			err := SaveScoped(dir, s)
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), ".dross/gate/scoped.json") {
+				t.Fatalf("SaveScoped(%+v) = %v; want a refusal naming .dross/gate/scoped.json and containing %q", s, err, tc.want)
+			}
+			if _, statErr := os.Stat(Path(dir, ScopedFile)); !os.IsNotExist(statErr) {
+				t.Errorf("a refused record was written: stat = %v", statErr)
+			}
+		})
+	}
+}
+
+// TestLoadScopedRefusesBadFile: no file is no record; a file that does not
+// decode, or decodes hollow, is an error naming the path, never a zero value a
+// gate could read as a scoped green.
+func TestLoadScopedRefusesBadFile(t *testing.T) {
+	dir := t.TempDir()
+	if s, err := LoadScoped(dir); s != nil || err != nil {
+		t.Errorf("missing scoped = %+v, %v; want nil, nil", s, err)
+	}
+	if err := SaveScoped(dir, sampleScoped()); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		"truncated":   `{"tree":"abc","cov`,
+		"empty file":  ``,
+		"wrong type":  `{"tree":"abc","covered":"src/a.ts","lanes":["f"]}`,
+		"zero record": `{}`,
+		"no tree":     `{"tree":"","covered":["src/a.ts"],"lanes":["f"]}`,
+		"no covered":  `{"tree":"abc","covered":[],"lanes":["f"]}`,
+		"no lanes":    `{"tree":"abc","covered":["src/a.ts"]}`,
+	} {
+		if err := os.WriteFile(Path(dir, ScopedFile), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if s, err := LoadScoped(dir); err == nil || s != nil || !strings.Contains(err.Error(), ".dross/gate/scoped.json") {
+			t.Errorf("%s scoped.json = %+v, %v; want an error naming .dross/gate/scoped.json", name, s, err)
+		}
+	}
+}
+
+// TestTrackedScopedRefusedUnread: the file holds bytes that would not decode,
+// so only a guard running before the read returns the tracked refusal.
+func TestTrackedScopedRefusedUnread(t *testing.T) {
+	dir := repo(t)
+	if err := SaveScoped(dir, sampleScoped()); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", "-f", ".dross/gate/scoped.json")
+	if s, err := LoadScoped(dir); err == nil || s != nil || !strings.Contains(err.Error(), "tracked") {
+		t.Errorf("tracked scoped = %+v, %v; want a refusal", s, err)
+	}
+	if err := os.WriteFile(Path(dir, ScopedFile), []byte(`{"tree":`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if s, err := LoadScoped(dir); err == nil || s != nil || !strings.Contains(err.Error(), "tracked") {
+		t.Errorf("tracked, undecodable scoped = %+v, %v; want the tracked refusal, not a decode error", s, err)
+	}
+}
+
+// TestScopedAndGreenStaySeparate: neither record stands in for the other, and
+// writing one never touches the other's file.
+func TestScopedAndGreenStaySeparate(t *testing.T) {
+	dir := t.TempDir()
+	if err := SaveScoped(dir, sampleScoped()); err != nil {
+		t.Fatal(err)
+	}
+	if g, err := LoadGreen(dir); g != nil || err != nil {
+		t.Errorf("green with only scoped.json present = %+v, %v; want nil, nil", g, err)
+	}
+
+	dir = t.TempDir()
+	if err := SaveGreen(dir, Green{Tree: "4b825dc", At: at, Runner: "local"}); err != nil {
+		t.Fatal(err)
+	}
+	if s, err := LoadScoped(dir); s != nil || err != nil {
+		t.Errorf("scoped with only green.json present = %+v, %v; want nil, nil", s, err)
+	}
+	before, err := os.ReadFile(Path(dir, GreenFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveScoped(dir, sampleScoped()); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(Path(dir, GreenFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Errorf("SaveScoped changed green.json:\nbefore %s\nafter  %s", before, after)
+	}
+}
+
+// TestClearScoped: clearing removes the scoped record alone, and clearing
+// nothing is not an error.
+func TestClearScoped(t *testing.T) {
+	dir := t.TempDir()
+	if err := ClearScoped(dir); err != nil {
+		t.Errorf("clearing with no gate dir: %v", err)
+	}
+	if err := SaveGreen(dir, Green{Tree: "4b825dc", At: at, Runner: "local"}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(Path(dir, GreenFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ClearScoped(dir); err != nil {
+		t.Errorf("clearing an absent scoped record beside a green: %v", err)
+	}
+	if err := SaveScoped(dir, sampleScoped()); err != nil {
+		t.Fatal(err)
+	}
+	if err := ClearScoped(dir); err != nil {
+		t.Fatal(err)
+	}
+	if s, err := LoadScoped(dir); s != nil || err != nil {
+		t.Errorf("after ClearScoped = %+v, %v; want nil, nil", s, err)
+	}
+	after, err := os.ReadFile(Path(dir, GreenFile))
+	if err != nil {
+		t.Fatalf("ClearScoped took green.json with it: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Errorf("ClearScoped changed green.json:\nbefore %s\nafter  %s", before, after)
 	}
 }

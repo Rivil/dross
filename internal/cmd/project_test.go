@@ -966,3 +966,73 @@ func TestBoardConfigCarriesFields(t *testing.T) {
 		t.Errorf("Fields = %+v for an unconfigured board, want the zero value", zero.Fields)
 	}
 }
+
+// TestProjectSetTestExemptRoundTrips: test_exempt had no verb, so the only way to
+// declare it was the hand-edit the prompts forbid.
+func TestProjectSetTestExemptRoundTrips(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldProject(t)
+	mustRunSet(t, "runtime.test_exempt", "docs/**,*.md")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Project(), "get", "runtime.test_exempt"); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(out); got != "docs/**,*.md" {
+		t.Errorf("get = %q, want the value set", got)
+	}
+	p, _, err := loadProjectAt(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"docs/**", "*.md"}; !reflect.DeepEqual(p.Runtime.TestExempt, want) {
+		t.Errorf("on disk = %v, want %v", p.Runtime.TestExempt, want)
+	}
+}
+
+// TestProjectSetTestExemptRefusesAnUnusableGlob: a catch-all would turn the commit
+// gate off for the whole repo, so one beside a good entry refuses the whole value
+// and the list already declared survives it.
+func TestProjectSetTestExemptRefusesAnUnusableGlob(t *testing.T) {
+	for _, tc := range []struct{ name, value, want string }{
+		{"double star", "**", "names no directory or file type"},
+		{"single star", "*", "names no directory or file type"},
+		{"nested", "**/*", "names no directory or file type"},
+		{"beside a good entry", "docs/**,**", "names no directory or file type"},
+		{"does not compile", "docs/[", "does not compile"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			chdir(t, t.TempDir())
+			scaffoldProject(t)
+			mustRunSet(t, "runtime.test_exempt", "*.md")
+			path := filepath.Join(".dross", "project.toml")
+			before := mustRead(t, path)
+
+			err := runCmd(t, Project(), "set", "runtime.test_exempt", tc.value)
+			if err == nil {
+				t.Fatalf("%q was accepted", tc.value)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("refusal does not say %q: %v", tc.want, err)
+			}
+			if after := mustRead(t, path); after != before {
+				t.Errorf("a refused value rewrote project.toml:\n--- before\n%s\n--- after\n%s", before, after)
+			}
+		})
+	}
+}
+
+// TestProjectUnsetTestExempt: an empty list is what a repo with no exempt paths
+// has, so --unset goes through the same arm without tripping its refusal.
+func TestProjectUnsetTestExempt(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldProject(t)
+	mustRunSet(t, "runtime.test_exempt", "docs/**")
+
+	if err := runCmd(t, Project(), "set", "--unset", "runtime.test_exempt"); err != nil {
+		t.Fatal(err)
+	}
+	if body := mustRead(t, filepath.Join(".dross", "project.toml")); strings.Contains(body, "test_exempt") {
+		t.Errorf("--unset left the key behind:\n%s", body)
+	}
+}

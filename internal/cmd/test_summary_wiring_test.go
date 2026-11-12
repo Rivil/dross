@@ -287,6 +287,25 @@ func TestSelectorMissNoTail(t *testing.T) {
 	}
 }
 
+// TestScopedToNothingMissNoTail: a remote run whose only lane scoped to nothing
+// still spawned the tree sync, and a summary that fell back to that segment
+// would follow the miss line with an "output not recognised" tail about an
+// rsync that is no lane's verdict.
+func TestScopedToNothingMissNoTail(t *testing.T) {
+	remoteLaneFixture(t, missLanes)
+	rem := installRemoteRecorder(t, nil)
+	out, err := runTestCapturing(t, "--files", "internal/gone/away.go")
+	if ExitCode(err) != exitNothingMeasured {
+		t.Fatalf("exit %d, want %d", ExitCode(err), exitNothingMeasured)
+	}
+	if bins := rem.bins(); len(bins) != 1 || !strings.Contains(bins[0], "rsync") {
+		t.Fatalf("spawned %v remotely, want only the tree sync — without it there is no tail to drop", bins)
+	}
+	if !strings.Contains(out, "selector miss:") || strings.Contains(out, "output not recognised") {
+		t.Fatalf("a miss must print only its miss line:\n%s", out)
+	}
+}
+
 func TestSummaryNotInError(t *testing.T) {
 	trustedTestFixture(t)
 	spawnWriting(t, runnerOutput(t, "gotest/red_subtests.txt"), fakeExit{code: 1})

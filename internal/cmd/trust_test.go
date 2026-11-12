@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/consent"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
@@ -359,5 +361,429 @@ func TestTrustWithoutATestCommandRefuses(t *testing.T) {
 	// And nothing was written: a refused trust must not leave a consent record.
 	if state, cerr := CheckConsent(filepath.Join(dir, ".dross"), dir, ""); cerr == nil {
 		t.Errorf("a refused trust granted consent anyway (state=%v)", state)
+	}
+}
+
+// --- `dross trust --test-exempt` ---
+
+// exemptFixture is gatedFixture with a test_exempt list, returning the repo dir.
+func exemptFixture(t *testing.T, globs ...string) string {
+	t.Helper()
+	dir := gatedFixture(t)
+	setExempt(t, dir, globs...)
+	return dir
+}
+
+// exemptGrant reads the recorded grant back from the file itself, so "no grant
+// was written" does not depend on the code under test.
+func exemptGrant(t *testing.T, dir string) string {
+	t.Helper()
+	s, err := localstore.Load(localPath(filepath.Join(dir, ".dross")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s.TrustedTestExempt
+}
+
+// TestTrustExemptPrintsEveryGlobBeforeGranting: the list comes from tracked
+// project.toml, and a grant that did not show it is a rubber stamp. The store
+// is made unwritable, so the globs on screen can only have been printed before
+// the write: printing after it would leave this output empty.
+func TestTrustExemptPrintsEveryGlobBeforeGranting(t *testing.T) {
+	dir := exemptFixture(t, "docs/**", "*.md")
+	if err := os.Mkdir(localPath(filepath.Join(dir, ".dross")), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Trust(), "--test-exempt"); err == nil {
+		t.Fatal("the grant succeeded over a store that cannot be written")
+	}
+	for _, glob := range []string{"docs/**", "*.md"} {
+		if !strings.Contains(out, "    "+glob+"\n") {
+			t.Errorf("glob %q was not printed before the write:\n%s", glob, out)
+		}
+	}
+	if strings.Contains(out, "recorded in") {
+		t.Errorf("a failed write still reported a grant:\n%s", out)
+	}
+}
+
+// TestTrustExemptGrants: the happy path records the list's fingerprint and
+// nothing else moves.
+func TestTrustExemptGrants(t *testing.T) {
+	dir := exemptFixture(t, "docs/**", "*.md")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Trust(), "--test-exempt"); err != nil {
+		t.Fatalf("dross trust --test-exempt: %v", err)
+	}
+	want := consent.Fingerprint(consent.ExemptLine([]string{"docs/**", "*.md"}))
+	if got := exemptGrant(t, dir); got != want {
+		t.Errorf("recorded grant = %q, want %q", got, want)
+	}
+	if !strings.Contains(out, "recorded in") {
+		t.Errorf("the output does not say where the grant went:\n%s", out)
+	}
+	if err := runCmd(t, Trust(), "--check"); err == nil {
+		t.Error("the exempt grant also granted the test command")
+	}
+}
+
+// TestTrustExemptRefusesACatchAll: project.toml can be hand-edited past every
+// verb that writes it, and this grant is the last human step before the commit
+// gate honours the list. Refused before the list is printed, so it cannot read
+// as something the user is being asked to accept.
+func TestTrustExemptRefusesACatchAll(t *testing.T) {
+	dir := exemptFixture(t, "docs/**", "**/*")
+
+	var out string
+	err := runCmdCapturing(t, &out, Trust(), "--test-exempt")
+	if err == nil {
+		t.Fatal("a catch-all reached a grant")
+	}
+	if !strings.Contains(err.Error(), `"**/*"`) || !strings.Contains(err.Error(), "names no directory or file type") {
+		t.Errorf("the refusal does not name the glob and why: %v", err)
+	}
+	if strings.Contains(out, "trusting") {
+		t.Errorf("the refused list was offered for trust:\n%s", out)
+	}
+	if got := exemptGrant(t, dir); got != "" {
+		t.Errorf("a refused list still wrote a grant: %q", got)
+	}
+}
+
+// TestTrustExemptCheckWritesNothing: --check is what a pre-flight runs, so it
+// answers from the store and never changes it, in any state. A stale answer
+// that quietly re-granted would turn the check into the consent it reports on.
+func TestTrustExemptCheckWritesNothing(t *testing.T) {
+	dir := exemptFixture(t, "docs/**")
+	projPath := filepath.Join(dir, ".dross", "project.toml")
+	local := localPath(filepath.Join(dir, ".dross"))
+
+	// Absent: non-zero, and no store appears.
+	err := runCmd(t, Trust(), "--test-exempt", "--check")
+	if err == nil {
+		t.Fatal("--check passed with no grant")
+	}
+	if strings.Contains(err.Error(), "CHANGED") {
+		t.Errorf("a first run was reported as stale: %v", err)
+	}
+	if !strings.Contains(err.Error(), "dross trust --test-exempt") {
+		t.Errorf("the refusal does not name the remedy: %v", err)
+	}
+	if got := exemptGrant(t, dir); got != "" {
+		t.Errorf("--check wrote a grant: %q", got)
+	}
+
+	// Current: exit 0, silent, byte-unchanged.
+	if err := runCmd(t, Trust(), "--test-exempt"); err != nil {
+		t.Fatalf("dross trust --test-exempt: %v", err)
+	}
+	before := mustRead(t, local)
+	var out string
+	if err := runCmdCapturing(t, &out, Trust(), "--test-exempt", "--check"); err != nil {
+		t.Fatalf("--check refused a current grant: %v", err)
+	}
+	if strings.TrimSpace(out) != "" {
+		t.Errorf("--check printed on success:\n%s", out)
+	}
+	if after := mustRead(t, local); after != before {
+		t.Errorf("--check changed local.toml on a current grant:\n--- before\n%s\n--- after\n%s", before, after)
+	}
+
+	// Stale: a glob appended by hand. Non-zero, names every glob, byte-unchanged.
+	mustWrite(t, projPath, strings.Replace(mustRead(t, projPath), `"docs/**"`, `"docs/**", "src/**"`, 1))
+	err = runCmd(t, Trust(), "--test-exempt", "--check")
+	if err == nil {
+		t.Fatal("--check passed on a stale grant")
+	}
+	for _, want := range []string{"CHANGED", "docs/**", "src/**", "dross trust --test-exempt"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("stale refusal does not contain %q: %v", want, err)
+		}
+	}
+	if after := mustRead(t, local); after != before {
+		t.Errorf("--check changed local.toml on a stale grant:\n--- before\n%s\n--- after\n%s", before, after)
+	}
+}
+
+// TestTrustExemptRefusesATrackedStore: a committed local.toml is a repo
+// authorizing its own exempt list, on both the grant and the check.
+func TestTrustExemptRefusesATrackedStore(t *testing.T) {
+	dir := exemptFixture(t, "docs/**")
+	mustWrite(t, localPath(filepath.Join(dir, ".dross")), "\n")
+	mustGit(t, dir, "add", "-f", RootDirName+"/"+LocalFile)
+
+	for _, args := range [][]string{{"--test-exempt"}, {"--test-exempt", "--check"}} {
+		err := runCmd(t, Trust(), args...)
+		if err == nil {
+			t.Fatalf("`dross trust %v` passed over a tracked store", args)
+		}
+		if !strings.Contains(err.Error(), "tracked") {
+			t.Errorf("`dross trust %v` does not say the store is tracked: %v", args, err)
+		}
+	}
+	if got := exemptGrant(t, dir); got != "" {
+		t.Errorf("a tracked store took a grant: %q", got)
+	}
+}
+
+// TestNoExemptListNeedsNoGrant: empty is not untrusted. --check passes silently,
+// because a pre-flight in a repo with no list has nothing to refuse. The grant
+// form refuses, so the user is never told something was recorded when nothing
+// was.
+func TestNoExemptListNeedsNoGrant(t *testing.T) {
+	dir := gatedFixture(t)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Trust(), "--test-exempt", "--check"); err != nil {
+		t.Fatalf("--check refused a repo with nothing to grant: %v", err)
+	}
+	if strings.TrimSpace(out) != "" {
+		t.Errorf("--check printed in a repo with no list:\n%s", out)
+	}
+
+	err := runCmd(t, Trust(), "--test-exempt")
+	if err == nil {
+		t.Fatal("`dross trust --test-exempt` recorded consent for an empty list")
+	}
+	for _, want := range []string{"nothing to trust", "runtime.test_exempt", "no\ngrant is needed"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal does not contain %q: %v", want, err)
+		}
+	}
+	if got := exemptGrant(t, dir); got != "" {
+		t.Errorf("an empty list took a grant: %q", got)
+	}
+}
+
+// TestExemptGrantKeyIsNotSettable: the whole ceremony is that the verb prints
+// the globs before writing, and a generic key-writer would skip it.
+func TestExemptGrantKeyIsNotSettable(t *testing.T) {
+	dir := exemptFixture(t, "docs/**")
+
+	err := runCmd(t, Local(), "set", "trusted_test_exempt", consent.Fingerprint("x"))
+	if err == nil || !strings.Contains(err.Error(), "unknown local key") {
+		t.Fatalf("`local set trusted_test_exempt` = %v, want an unknown-key rejection", err)
+	}
+	if got := exemptGrant(t, dir); got != "" {
+		t.Errorf("the rejected set still wrote the key: %q", got)
+	}
+}
+
+// TestDoctorPrintsNoExemptRowWithoutAList: a repo that never wanted the list
+// must not grow a permanent row about it. doctor_run.txt pins the same thing
+// byte for byte on the greenfield fixture; this names the failure directly.
+func TestDoctorPrintsNoExemptRowWithoutAList(t *testing.T) {
+	gatedFixture(t)
+
+	var out string
+	_ = runCmdCapturing(t, &out, Doctor())
+	if strings.Contains(out, "test_exempt") {
+		t.Errorf("doctor printed an exempt row for a repo with no list:\n%s", out)
+	}
+	if !strings.Contains(out, "Exec consent:") {
+		t.Fatalf("doctor never reached the section the row would sit in:\n%s", out)
+	}
+}
+
+// TestDoctorReportsTheExemptGrant walks the rows a list can produce. Absent is
+// advisory, as it is for a lane, because it is the honest state of a fresh
+// clone. Stale moves the exit code, because something WAS trusted here.
+func TestDoctorReportsTheExemptGrant(t *testing.T) {
+	const fixLine = "`dross trust --test-exempt`"
+
+	t.Run("absent is an advisory listing the globs", func(t *testing.T) {
+		exemptFixture(t, "docs/**", "*.md")
+		var out string
+		_ = runCmdCapturing(t, &out, Doctor())
+		for _, want := range []string{"⚠ runtime.test_exempt: not trusted", "      *.md\n", "      docs/**\n", fixLine} {
+			if !strings.Contains(out, want) {
+				t.Errorf("doctor output does not contain %q:\n%s", want, out)
+			}
+		}
+	})
+
+	t.Run("granted is one trusted row", func(t *testing.T) {
+		exemptFixture(t, "docs/**")
+		if err := runCmd(t, Trust(), "--test-exempt"); err != nil {
+			t.Fatal(err)
+		}
+		var out string
+		_ = runCmdCapturing(t, &out, Doctor())
+		if !strings.Contains(out, "✓ runtime.test_exempt: trusted") {
+			t.Errorf("the granted list is not reported as trusted:\n%s", out)
+		}
+		if strings.Contains(out, fixLine) {
+			t.Errorf("a granted list was given a fix line:\n%s", out)
+		}
+	})
+
+	t.Run("stale is an issue that moves the exit code", func(t *testing.T) {
+		dir := exemptFixture(t, "docs/**")
+		if err := runCmd(t, Trust(), "--test-exempt"); err != nil {
+			t.Fatal(err)
+		}
+		var clean string
+		cleanErr := runCmdCapturing(t, &clean, Doctor())
+
+		path := filepath.Join(dir, ".dross", "project.toml")
+		mustWrite(t, path, strings.Replace(mustRead(t, path), `"docs/**"`, `"docs/**", "src/**"`, 1))
+		var out string
+		err := runCmdCapturing(t, &out, Doctor())
+		for _, want := range []string{"runtime.test_exempt: consent is stale", "      src/**\n", fixLine} {
+			if !strings.Contains(out, want) {
+				t.Errorf("doctor output does not contain %q:\n%s", want, out)
+			}
+		}
+		if err == nil {
+			t.Error("a stale exempt grant left doctor exiting 0")
+		} else if cleanErr != nil && err.Error() == cleanErr.Error() {
+			t.Errorf("the stale grant did not move doctor's issue count: %v", err)
+		}
+	})
+
+	t.Run("a tracked store is an issue", func(t *testing.T) {
+		dir := exemptFixture(t, "docs/**")
+		mustWrite(t, localPath(filepath.Join(dir, ".dross")), "\n")
+		mustGit(t, dir, "add", "-f", RootDirName+"/"+LocalFile)
+		var out string
+		_ = runCmdCapturing(t, &out, Doctor())
+		if !strings.Contains(out, "runtime.test_exempt: refusing to read") {
+			t.Errorf("doctor does not report the refused store on the exempt row:\n%s", out)
+		}
+	})
+}
+
+// --- `dross trust --lane` on a vouching lane ---
+
+const trustVouchLane = `[[runtime.test_lane]]
+name = "web"
+match = ["src/**"]
+command = "npx vitest run"
+prepare = "npm ci"
+selector = "path"
+vouch = true
+relate = "scripts/relate.sh"`
+
+// TestTrustLaneSaysAVouchingLaneMayAdmitCommits: the grant lets this lane put a
+// commit past the gate, which no other lane grant does, so the human is told
+// that and shown relate. The grant must also land over the vouch frame, or the
+// lane would refuse straight after being trusted.
+func TestTrustLaneSaysAVouchingLaneMayAdmitCommits(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, trustVouchLane)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Trust(), "--lane", "web"); err != nil {
+		t.Fatalf("trust --lane: %v", err)
+	}
+	for _, want := range []string{
+		"    prepare: npm ci\n",
+		"    command: npx vitest run\n",
+		"    relate: scripts/relate.sh\n",
+		"may admit commits",
+		"its prepare, relate and vouch setting included",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+	if err := runCmd(t, Trust(), "--lane", "web", "--check"); err != nil {
+		t.Errorf("the lane refuses straight after its grant: %v", err)
+	}
+}
+
+// TestTrustLanePrintsRelateBeforeWriting pins the order, on
+// TestTrustExemptPrintsEveryGlobBeforeGranting's proof: with a store that cannot
+// be written, whatever is on screen was printed before the write.
+func TestTrustLanePrintsRelateBeforeWriting(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, trustVouchLane)
+	store := localPath(filepath.Join(dir, RootDirName))
+	if err := os.RemoveAll(store); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(store, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Trust(), "--lane", "web"); err == nil {
+		t.Fatal("the grant succeeded over a store that cannot be written")
+	}
+	for _, want := range []string{"    relate: scripts/relate.sh\n", "may admit commits"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q was not printed before the write:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "recorded in") {
+		t.Errorf("a failed write still reported a grant:\n%s", out)
+	}
+}
+
+// TestTrustLaneOutputUnchangedWithoutVouch holds the whole output to the byte,
+// so a lane that cannot admit a commit never gains the vouching wording. The
+// relate case is a lane validate refuses, which `dross trust` does not read.
+func TestTrustLaneOutputUnchangedWithoutVouch(t *testing.T) {
+	const tail = "recorded in .dross/local.toml (gitignored — it does not travel with the repo).\n" +
+		"Editing or renaming lane \"l\" — its prepare included — revokes this; every other lane's grant is untouched.\n"
+	plain := "trusting test lane \"l\" on this machine:\n\n    go test\n\n" + tail
+	prepared := "trusting test lane \"l\" on this machine — both lines:\n\n    prepare: make\n    command: go test\n\n" + tail
+	for name, c := range map[string]struct{ extra, want string }{
+		"plain":       {"", plain},
+		"prepared":    {"prepare = \"make\"", prepared},
+		"relate only": {"relate = \"scripts/relate.sh\"", plain},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := laneFixture(t)
+			appendLanes(t, dir, "[[runtime.test_lane]]\nname = \"l\"\nmatch = [\"src/**\"]\ncommand = \"go test\"\n"+c.extra)
+
+			var out string
+			if err := runCmdCapturing(t, &out, Trust(), "--lane", "l"); err != nil {
+				t.Fatalf("trust --lane: %v", err)
+			}
+			if out != c.want {
+				t.Errorf("output = %q, want %q", out, c.want)
+			}
+		})
+	}
+}
+
+// TestVouchFlipStalesThroughTrust drives the flip end to end: a lane trusted
+// before it could vouch refuses through `--check` with relate on screen, and a
+// fresh `dross trust --lane` is what clears it.
+func TestVouchFlipStalesThroughTrust(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, strings.ReplaceAll(trustVouchLane, "vouch = true\n", ""))
+	if err := runCmd(t, Trust(), "--lane", "web"); err != nil {
+		t.Fatalf("trust --lane: %v", err)
+	}
+
+	path := filepath.Join(dir, RootDirName, project.File)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	flipped := strings.Replace(string(body), `relate = "scripts/relate.sh"`, "vouch = true\n"+`relate = "scripts/relate.sh"`, 1)
+	if err := os.WriteFile(path, []byte(flipped), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err = runCmd(t, Trust(), "--lane", "web", "--check")
+	if err == nil {
+		t.Fatal("turning vouch on kept the grant")
+	}
+	for _, want := range []string{"CHANGED", "    relate: scripts/relate.sh\n"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal lacks %q:\n%v", want, err)
+		}
+	}
+	if err := runCmd(t, Trust(), "--lane", "web"); err != nil {
+		t.Fatalf("re-trust: %v", err)
+	}
+	if err := runCmd(t, Trust(), "--lane", "web", "--check"); err != nil {
+		t.Errorf("the lane still refuses after a fresh grant: %v", err)
 	}
 }

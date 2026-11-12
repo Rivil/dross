@@ -55,3 +55,91 @@ func TestGateOffGuardPartial(t *testing.T) {
 		}
 	}
 }
+
+// TestTrustGrantRefused: every form of `dross trust` that writes a grant is
+// refused through the tool call, including the ones a naive `--check` search
+// reads as a check: a value flag swallowing it, and a later false.
+func TestTrustGrantRefused(t *testing.T) {
+	e := gatesEnv(t, "gate-off-guard")
+	e.Lifted = func(Gate, string) bool { return true }
+	for _, line := range []string{
+		"dross trust",
+		"dross trust --lane x",
+		"dross trust --lane=x",
+		"dross trust --lane-install x",
+		"dross trust --run x",
+		"dross trust --replay x",
+		"dross trust --test-exempt",
+		"dross trust --check=false",
+		"dross trust --check=0",
+		"dross trust --check --check=false",
+		"dross trust --lane --check",
+		"dross trust --lane-install --check",
+		"dross trust --run --check",
+		"dross trust --replay --check",
+		"dross trust --lane --help",
+		"dross trust -- --check",
+		"dross --lane x trust",
+		"dross --lane --check trust",
+		"dross --run x trust --lane y",
+		"FOO=1 dross trust",
+		"make && /usr/local/bin/dross trust --lane x",
+	} {
+		res := Check(bash(t, line, t.TempDir()), e)
+		if res.Allowed() || !strings.Contains(res.Text(), "gate-off-guard") || !strings.Contains(res.Text(), "only a human may grant") {
+			t.Errorf("%q: %q, want a gate-off-guard refusal saying only a human may grant", line, res.Text())
+		}
+	}
+}
+
+// TestTrustCheckPasses: the read-only forms the prompts call stay open, and
+// nothing that merely mentions the words is caught.
+func TestTrustCheckPasses(t *testing.T) {
+	e := gatesEnv(t, "gate-off-guard")
+	for _, line := range []string{
+		"dross trust --check",
+		"dross trust --check=true",
+		"dross trust --check=1",
+		"dross trust --check=false --check",
+		"dross trust --lane x --check",
+		"dross trust --check --lane x",
+		"dross trust --lane=x --check",
+		"dross trust --lane-install x --check",
+		"dross trust --run x --check",
+		"dross trust --replay x --check",
+		"dross trust --test-exempt --check",
+		"dross trust --help",
+		"dross trust -h",
+		"dross help trust",
+		"dross rule add trust",
+		"echo dross trust",
+		"grep 'dross trust' README.md",
+	} {
+		if res := Check(bash(t, line, t.TempDir()), e); !res.Allowed() {
+			t.Errorf("%q refused: %q", line, res.Text())
+		}
+	}
+}
+
+// TestTrustGrantPartial drives the raw-token arm. Past an unterminated quote
+// the line cannot be read, so `--check` buys nothing there: rawTokens splits on
+// `=`, and `--check=false` looks the same as `--check`.
+func TestTrustGrantPartial(t *testing.T) {
+	e := gatesEnv(t, "gate-off-guard")
+	for _, line := range []string{
+		`echo "oops; dross trust`,
+		`echo "oops; /usr/local/bin/dross trust --lane x`,
+		`echo "oops; dross trust --check=false`,
+		`dross trust --check "half`,
+	} {
+		res := Check(bash(t, line, t.TempDir()), e)
+		if res.Allowed() || !strings.Contains(res.Text(), "only a human may grant") || strings.Contains(res.Text(), "internal error") {
+			t.Errorf("%q: %q, want a gate-off-guard refusal saying only a human may grant", line, res.Text())
+		}
+	}
+	for _, line := range []string{`echo "oops; dross`, `echo "oops; dross status`, `echo "oops; trust dross`} {
+		if res := Check(bash(t, line, t.TempDir()), e); !res.Allowed() {
+			t.Errorf("%q (no trust verb) refused: %q", line, res.Text())
+		}
+	}
+}

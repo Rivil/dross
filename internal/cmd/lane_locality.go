@@ -112,7 +112,7 @@ func laneToolUnion(lanes []project.TestLane) []string {
 	seen := map[string]bool{}
 	out := []string{}
 	for _, lane := range lanes {
-		for _, tool := range testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain) {
+		for _, tool := range testlane.Toolchain(lane.Command, lane.Prepare, lane.Relate, lane.Toolchain) {
 			if seen[tool] {
 				continue
 			}
@@ -166,12 +166,12 @@ func laneLocality(lanes []matchedLane, candidates []laneCandidate, lookPath func
 
 // oneLaneLocality is laneLocality for a single lane.
 func oneLaneLocality(lane project.TestLane, candidates []laneCandidate, gone []map[string]bool, lookPath func(string) (string, error)) laneVerdict {
-	tools := testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain)
+	tools := testlane.Toolchain(lane.Command, lane.Prepare, lane.Relate, lane.Toolchain)
 
-	// The prepare's tool and the command's tool are ONE requirement set
+	// The tools of the command, prepare and relate are ONE requirement set
 	// (locked prepare_toolchain): prepare_locality already pins the bootstrap
-	// to its command's host, so a split would bootstrap one machine for a
-	// suite that ran on another.
+	// to its command's host, so a split would bootstrap or relate on one
+	// machine for a suite that ran on another.
 	//
 	// Declared order is the preference, so the first candidate holding the
 	// whole set wins. Moving is announced, never silent: two runs measured on

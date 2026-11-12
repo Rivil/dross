@@ -109,6 +109,7 @@ func TestRegistryCoversEveryKnownFieldByName(t *testing.T) {
 		"phase.Task.Files",
 		"project.Env.Files",
 		"project.TestLane.Match",
+		"project.Runtime.TestExempt",
 		"project.Paths.Source",
 		"project.Paths.Tests",
 		"project.Paths.E2E",
@@ -149,6 +150,7 @@ func TestRegistryCoversEveryKnownFieldByName(t *testing.T) {
 		"findings.Record.File",
 		"security.Finding.File",
 		"quality.Finding.File",
+		"gatestate.Scoped.Covered",
 		"prtriage.Evidence.At",
 		"ship.bbInline.Path",
 		"ship.forgejoComment.Path",
@@ -237,6 +239,41 @@ func TestTaskFilesIsAWriteTimeGateOnly(t *testing.T) {
 	}
 }
 
+// TestExemptGlobsNameEveryReader: the human grant fingerprints the globs and
+// two commands print them, so the not-consumed claim has to name those readers
+// or it stops describing what happens to the value.
+func TestExemptGlobsNameEveryReader(t *testing.T) {
+	f := find(t, "project.Runtime.TestExempt")
+	if f.NotConsumed == nil {
+		t.Fatal("project.Runtime.TestExempt must be not-consumed")
+	}
+	joined := strings.Join(f.NotConsumed.Readers, " ")
+	for _, reader := range []string{"internal/consent/exempt.go", "internal/cmd/trust.go", "internal/diag/trust.go"} {
+		if !strings.Contains(joined, reader) {
+			t.Errorf("Readers must name %s, got %v", reader, f.NotConsumed.Readers)
+		}
+	}
+}
+
+// TestScopedCoverNamesItsGateReader: commit-green admits a commit on these
+// strings and the recorder counts them, so the not-consumed claim has to name
+// each function that reads them.
+func TestScopedCoverNamesItsGateReader(t *testing.T) {
+	f := find(t, "gatestate.Scoped.Covered")
+	if f.NotConsumed == nil {
+		t.Fatal("gatestate.Scoped.Covered must be not-consumed")
+	}
+	joined := strings.Join(f.NotConsumed.Readers, " ")
+	for _, reader := range []string{
+		"internal/gatestate/store.go", "internal/gate/commit.go", "vouchedCover",
+		"internal/cmd/test_scoped.go", "scopedRecorder.finish",
+	} {
+		if !strings.Contains(joined, reader) {
+			t.Errorf("Readers must name %s, got %v", reader, f.NotConsumed.Readers)
+		}
+	}
+}
+
 // TestConsumedEntriesCarryACarrier asserts DECLARATION only. That the named
 // carrier is really typed pathfence.Contained is a claim about internal/cmd
 // symbols, asserted from a package cmd test — this package cannot import
@@ -279,6 +316,7 @@ func TestStoredFieldsStayStringTyped(t *testing.T) {
 		{"project.Env.Files", reflect.TypeOf(project.Env{}), "Files"},
 		{"project.Paths.Source", reflect.TypeOf(project.Paths{}), "Source"},
 		{"project.TestLane.Match", reflect.TypeOf(project.TestLane{}), "Match"},
+		{"project.Runtime.TestExempt", reflect.TypeOf(project.Runtime{}), "TestExempt"},
 	} {
 		sf, ok := tc.typ.FieldByName(tc.fld)
 		if !ok {

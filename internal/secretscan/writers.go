@@ -230,8 +230,8 @@ var writers = []Writer{
 		Why: "host allowlist additions and quick_base; a committed copy would let a repo authorize its own API host",
 	}},
 	{File: "internal/gatestate/store.go", MachineLocal: &MachineLocal{
-		Path: "gate/green.json", Also: []string{"gate/execute.json", "gate/approval.json", "gate/review.json", "gate/quick.json", "gate/review-context.md", "gate/reply.json", "gate/writer.json", "gate/show/<name>"}, IgnoreSeed: GateIgnoreSeed,
-		Why: "tool-gate records (green tree, execute mode, task approval, solo review ledger, quick mode, reply approval, solo writer record, the show-once records of rule/interaction show) and the review context the reviewer reads; a committed copy would let a clone arrive pre-approved or pre-reviewed",
+		Path: "gate/green.json", Also: []string{"gate/scoped.json", "gate/execute.json", "gate/approval.json", "gate/review.json", "gate/quick.json", "gate/review-context.md", "gate/reply.json", "gate/writer.json", "gate/show/<name>"}, IgnoreSeed: GateIgnoreSeed,
+		Why: "tool-gate records (green tree, scoped green, execute mode, task approval, solo review ledger, quick mode, reply approval, solo writer record, the show-once records of rule/interaction show) and the review context the reviewer reads; a committed copy would let a clone arrive pre-approved or pre-reviewed",
 	}},
 	{File: "internal/gatestate/nudge.go", MachineLocal: &MachineLocal{
 		Path: "gate/nudge/<name>", IgnoreSeed: GateIgnoreSeed,
@@ -261,6 +261,7 @@ var writers = []Writer{
 	{File: "internal/cmd/init.go", OutsideDross: &OutsideDross{Paths: []string{"ARCHITECTURE.md"}, Why: "seeds the repo-root ARCHITECTURE.md skeleton"}},
 	{File: "internal/cmd/gitattributes.go", OutsideDross: &OutsideDross{Paths: []string{".gitattributes"}, Why: "repo-root git config line"}},
 	{File: "internal/cmd/gitignore.go", OutsideDross: &OutsideDross{Paths: []string{".gitignore"}, Why: "repo-root ignore seed"}},
+	{File: "internal/pkgjson/version.go", OutsideDross: &OutsideDross{Paths: []string{"package.json"}, Why: "tracked package.json version kept in step with project.toml"}},
 	{File: "internal/hooks/settings.go", OutsideDross: &OutsideDross{Paths: []string{userSettings}, Why: "env var block in the user-level Claude settings"}},
 	{File: "internal/cmd/hooks.go", OutsideDross: &OutsideDross{Paths: []string{userSettings}, Why: "hook wiring in the user-level Claude settings"}},
 	{File: "internal/cmd/statusline.go", OutsideDross: &OutsideDross{Paths: []string{userSettings}, Why: "statusline block in the user-level Claude settings"}},

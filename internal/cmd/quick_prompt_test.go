@@ -97,13 +97,35 @@ func quickSoloReview(t *testing.T) (string, string) {
 	return promptBody(t, "quick.md"), solo[i:j]
 }
 
-// TestQuickSoloReview (c-8): a solo quick is reviewed after its green test and
+// quickRetestProblems lists what a solo fix-round arm gets wrong: a repo with a
+// vouching lane re-tests scoped and a repo with none bare, as `dross review
+// status` tells them to, and both come before the review is rebuilt.
+func quickRetestProblems(arm string) []string {
+	var out []string
+	review := strings.Index(arm, "`dross review context`")
+	if review < 0 {
+		out = append(out, "the arm no longer rebuilds the review")
+	}
+	for _, want := range []string{
+		"`dross test --files <touched-files>` in a repo with a vouching lane",
+		"bare `dross test` in a repo with no vouching lane",
+	} {
+		if i := strings.Index(arm, want); i < 0 {
+			out = append(out, "the arm lost "+want)
+		} else if i > review {
+			out = append(out, "the arm rebuilds the review before "+want)
+		}
+	}
+	return out
+}
+
+// TestQuickSoloReview (c-8): a solo quick is reviewed after its test run and
 // before its commit; pair mode spawns no reviewer. The review lives in the solo
 // partial; base §4 marks its place with a re-fetch between the green `dross
 // test` and §5.
 func TestQuickSoloReview(t *testing.T) {
 	body, block := quickSoloReview(t)
-	run, ctx := mustIdx(t, block, "after the green `dross test`, before the commit"), mustIdx(t, block, "dross review context")
+	run, ctx := mustIdx(t, block, "after the green `dross test` run it needs, before the commit"), mustIdx(t, block, "dross review context")
 	spawn := mustIdx(t, block, `subagent_type: "`+review.ReviewerAgent+`"`)
 	status, commit := mustIdx(t, block, "dross review status"), mustIdx(t, block, "`pass` → commit (§5)")
 	if !(run < ctx && ctx < spawn && spawn < status && status < commit) {
@@ -112,9 +134,8 @@ func TestQuickSoloReview(t *testing.T) {
 	// Each fix-round arm re-runs the test before it rebuilds the review.
 	for _, arm := range []string{"- `blocked` →", "- `pass-stale` →"} {
 		line, _, _ := strings.Cut(block[mustIdx(t, block, arm):], "\n")
-		rerun, rebuild := strings.Index(line, "re-run `dross test`"), strings.Index(line, "`dross review context`")
-		if rerun < 0 || rebuild < rerun {
-			t.Errorf("the %s arm lost its `dross test` re-run ahead of the review context: %q", arm, line)
+		for _, p := range quickRetestProblems(line) {
+			t.Errorf("%s %s: %q", arm, p, line)
 		}
 	}
 	if !strings.Contains(block, "In **pair mode skip this entirely**") {
@@ -134,6 +155,110 @@ func TestQuickSoloReview(t *testing.T) {
 	refetch := mustIdx(t, four, "**Re-fetch** if context was compacted: `dross prompt partial quick solo`")
 	if !(test[0] < green && green < refetch) {
 		t.Errorf("base §4 order: dross test %d, Green %d, solo re-fetch %d — want the re-fetch after the green test, before §5", test[0], green, refetch)
+	}
+}
+
+// TestQuickFixRoundRetests (c-7): a fix round re-tests by the repo's lanes, so a
+// vouching repo never pays a full run for it and a repo with no vouching lane
+// keeps the only run its commit accepts. Each mutation is an arm the check must
+// refuse.
+func TestQuickFixRoundRetests(t *testing.T) {
+	_, block := quickSoloReview(t)
+	for _, arm := range []string{"- `blocked` →", "- `pass-stale` →"} {
+		line, _, _ := strings.Cut(block[mustIdx(t, block, arm):], "\n")
+		for name, mutant := range map[string]string{
+			"a bare run for every repo": strings.ReplaceAll(line, "`dross test --files <touched-files>` in a repo with a vouching lane, ", ""),
+			"no bare run":               strings.ReplaceAll(line, ", bare `dross test` in a repo with no vouching lane", ""),
+			"the review rebuilt first":  strings.Replace(line, "re-test —", "`dross review context` first, then re-test —", 1),
+		} {
+			if mutant == line {
+				t.Fatalf("the %q mutation changed nothing in the %s arm", name, arm)
+			}
+			if len(quickRetestProblems(mutant)) == 0 {
+				t.Errorf("a %s arm with %s passed the check", arm, name)
+			}
+		}
+	}
+}
+
+// quickGateProblems lists what §4 four gets wrong about which run a quick takes.
+// A vouching repo runs scoped. A repo with no vouching lane keeps its bare run,
+// because its `--files` run records nothing and its commit would be refused
+// (c-4). A vouching repo reaches that bare run only through a refused `git
+// commit`: `uncovered:` reports the asked list, and a commit may be smaller.
+// Exit 5 is what a test-less or docs-only quick hits, so it needs a route too.
+func quickGateProblems(four string) []string {
+	var out []string
+	for _, want := range []string{
+		"`dross test lane list`",
+		"`uncovered:` reports the asked list, not the commit",
+		"commit and let the gate judge",
+		"**Exit 5**",
+		"`runtime.test_exempt`",
+		"`dross trust --test-exempt`, never run on their behalf",
+		"the bare run once its commit is refused",
+	} {
+		if !strings.Contains(four, want) {
+			out = append(out, "§4 lost "+want)
+		}
+	}
+	scoped := fencedFilesRunRE.FindStringIndex(four)
+	if scoped == nil {
+		out = append(out, "§4 has no fenced `dross test --files`")
+	} else if lead := fenceLead(four, scoped[0]); !strings.Contains(lead, "with one, run the touched files") {
+		out = append(out, "§4's scoped run is not conditional on a vouching lane: "+lead)
+	}
+	runs := bareDrossTestRE.FindAllStringIndex(four, -1)
+	if len(runs) == 0 {
+		out = append(out, "§4 has no fenced bare `dross test`")
+	}
+	for _, run := range runs {
+		lead := fenceLead(four, run[0])
+		for _, cond := range []string{"no vouching lane", "`--files` run records nothing", "commit would be refused", "only after a refused `git commit`"} {
+			if !strings.Contains(lead, cond) {
+				out = append(out, "§4's bare run is not conditional on "+cond+": "+lead)
+			}
+		}
+		if strings.Contains(lead, "`uncovered:`") {
+			out = append(out, "§4's bare run is keyed on `uncovered:`: "+lead)
+		}
+	}
+	return out
+}
+
+// TestQuickTestGateRoutes (c-6, c-7): a scoped green is enough where a lane
+// vouches, so §4 keeps its full run only as a branch. Each mutation below is a
+// §4 the check must refuse.
+func TestQuickTestGateRoutes(t *testing.T) {
+	four := sectionOf(rawQuickBase(t), "## 4. Diff + test gate", "## 5. Commit")
+	if four == "" {
+		t.Fatal("quick.md has no §4 section")
+	}
+	for _, p := range quickGateProblems(four) {
+		t.Error(p)
+	}
+	run := bareDrossTestRE.FindStringIndex(four)
+	if run == nil {
+		t.Fatal("§4 has no fenced bare `dross test` to mutate")
+	}
+	lead := fenceLead(four, run[0])
+	for name, mutant := range map[string]string{
+		"a bare-only run":             fencedFilesRunRE.ReplaceAllString(four, ""),
+		"no bare run":                 bareDrossTestRE.ReplaceAllString(four, ""),
+		"an unconditional bare run":   strings.Replace(four, lead, "Run the whole suite:", 1),
+		"no route for a plain repo":   strings.Replace(four, lead, "Only after a refused `git commit`, run the whole suite:", 1),
+		"no lane check":               strings.ReplaceAll(four, "`dross test lane list`", "project.toml"),
+		"`uncovered:` as the trigger": strings.Replace(four, "only after a refused `git commit`", "only after `uncovered:`", 1),
+		"no `uncovered:` route":       strings.ReplaceAll(four, "`uncovered:` reports the asked list, not the commit", "it"),
+		"no exit 5 route":             strings.ReplaceAll(four, "**Exit 5**", "**Other**"),
+		"exit 5 running bare at once": strings.ReplaceAll(four, "the bare run once its commit is refused", "the bare run"),
+	} {
+		if mutant == four {
+			t.Fatalf("the %q mutation changed nothing", name)
+		}
+		if len(quickGateProblems(mutant)) == 0 {
+			t.Errorf("a §4 with %s passed the check", name)
+		}
 	}
 }
 

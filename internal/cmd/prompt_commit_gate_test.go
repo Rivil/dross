@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -13,7 +15,9 @@ import (
 type codeAdd struct {
 	prompt, heading, line string
 	// tested is whether a bare `dross test` runs between the previous fenced
-	// `git add`/`git commit` (or the top of the prompt) and this one.
+	// `git add`/`git commit` (or the top of the prompt) and this one. A `--files`
+	// run never counts, whatever its window: it is no route for a repo with no
+	// vouching lane, and it leaves HEAD with no full green for ship.
 	tested bool
 }
 
@@ -73,10 +77,20 @@ func stagesCode(line string) bool {
 	return false
 }
 
-// TestPromptCommitsSatisfyGreenGate: the commit-green gate refuses a code
-// commit whose tree no full `dross test` passed, so every prompt step that
-// stages code must run a bare `dross test` first. .dross-only commits — verify,
-// review, execute §2, quick §6 — are bookkeeping the gate passes ungated.
+// fencedFilesRunRE is a line that IS a scoped run.
+var fencedFilesRunRE = regexp.MustCompile(`(?m)^\s*dross test --files .*$`)
+
+// anyUntested reports whether any of adds stages code with no bare run ahead.
+func anyUntested(adds []codeAdd) bool {
+	return slices.ContainsFunc(adds, func(a codeAdd) bool { return !a.tested })
+}
+
+// TestPromptCommitsSatisfyGreenGate: in a repo with no vouching lane the
+// commit-green gate refuses a code commit whose tree no full `dross test` passed,
+// so every prompt step that stages code must carry a fenced bare `dross test`
+// ahead of it, as a branch where a scoped green can do instead. .dross-only
+// commits — verify, review, execute §2, quick §6 — are bookkeeping the gate
+// passes ungated.
 func TestPromptCommitsSatisfyGreenGate(t *testing.T) {
 	root := repoRootForHybridTest(t)
 	entries, err := os.ReadDir(filepath.Join(root, "assets", "prompts"))
@@ -107,16 +121,34 @@ func TestPromptCommitsSatisfyGreenGate(t *testing.T) {
 		}
 	}
 
-	// It bites: ship.md without its pre-commit `dross test` fails, and a
-	// .dross-only add is never matched.
-	ship := bareDrossTestRE.ReplaceAllString(promptBody(t, "ship.md"), "")
-	bites := false
-	for _, a := range codeAdds("ship.md", ship) {
-		bites = bites || !a.tested
+	// It bites: ship.md without its pre-commit `dross test` fails, and so does
+	// one scoped to `--files`, because that commit would leave HEAD with no full
+	// green and c-6 refuses the ship. A .dross-only add is never matched.
+	body := promptBody(t, "ship.md")
+	for name, ship := range map[string]string{
+		"removing ship.md's `dross test` step": bareDrossTestRE.ReplaceAllString(body, ""),
+		"scoping ship.md's `dross test` step":  bareDrossTestRE.ReplaceAllString(body, "dross test --files ARCHITECTURE.md"),
+	} {
+		if !anyUntested(codeAdds("ship.md", ship)) {
+			t.Errorf("%s left every code commit passing", name)
+		}
 	}
-	if !bites {
-		t.Error("removing ship.md's `dross test` step left every code commit passing")
+
+	// §1f losing both runs bites too, with §1e's `--files` fence still in the
+	// commit's window: that run is no route for a repo with no vouching lane.
+	exec := promptBody(t, "execute.md")
+	f := sectionOf(exec, "### 1f.", "### ")
+	lost := strings.Replace(exec, f, fencedFilesRunRE.ReplaceAllString(bareDrossTestRE.ReplaceAllString(f, ""), ""), 1)
+	if lost == exec {
+		t.Fatal("execute.md's §1f holds no run to remove")
 	}
+	if !fencedFilesRunRE.MatchString(lost) {
+		t.Fatal("execute.md lost §1e's `--files` fence, so this arm no longer proves it does not count")
+	}
+	if !anyUntested(codeAdds("execute.md", lost)) {
+		t.Error("removing §1f's runs left every code commit passing")
+	}
+
 	if got := codeAdds("x.md", "```\ngit add .dross/\ngit commit -m x\n```\n"); len(got) != 0 {
 		t.Errorf("a .dross-only add was matched: %v", got)
 	}

@@ -142,7 +142,8 @@ func judgePair(c *Call) (*Refusal, error) {
 
 // armedRun reads whether the gate is armed in root, and on what; nil is
 // silent. Two tasks in_progress at once is an ambiguity the gate cannot judge
-// — which one would an approval be for? — so it is an error, not a guess.
+// — which one would an approval be for? — so it is an *AmbiguousError, not a
+// guess.
 func armedRun(root string) (*pairRun, error) {
 	id, tasks, err := inProgress(root)
 	if err != nil || len(tasks) == 0 {
@@ -169,9 +170,61 @@ func armedRun(root string) (*pairRun, error) {
 	return &pairRun{Phase: id, Task: tasks[0], Head: head}, nil
 }
 
+// AmbiguousError is the error the gates judge with when current_phase has more
+// than one task in_progress: no gate can tell which task it is guarding. It
+// carries the phase and its in_progress ids so the engine can let through the
+// one call that resolves it — parking all but one (see Parks).
+type AmbiguousError struct {
+	Phase string
+	Tasks []string
+}
+
+func (e *AmbiguousError) Error() string {
+	return fmt.Sprintf("phase %s has %d tasks in_progress (%s), so which one the gates are guarding is ambiguous — %s",
+		e.Phase, len(e.Tasks), strings.Join(e.Tasks, ", "), e.Remedy())
+}
+
+// Remedy is the sanctioned way out, naming both parking statuses.
+func (e *AmbiguousError) Remedy() string {
+	return fmt.Sprintf("set all but one back with `dross task status %s <id> pending` (or `failed`), run on its own as a Bash call", e.Phase)
+}
+
+// Parks reports whether c is nothing but that remedy: a Bash line, read in
+// full, whose every command is a plain `dross task status <phase> <id>
+// pending|failed` for this phase and one of its in_progress ids — no flags,
+// no assignments, no redirections, no substitutions. Anything else, the
+// remedy chained with another command included, is not.
+//
+// It parks all BUT one: a line naming every in_progress id would leave no task
+// armed, and the engine lets this call through before solo-review's downgrade
+// guard runs, so with uncommitted solo code it would disarm the scope that
+// guard exists to keep. The task left in_progress is the armed scope, and the
+// gates govern it from the next call on.
+func (e *AmbiguousError) Parks(c *Call) bool {
+	if c.ToolName != "Bash" {
+		return false
+	}
+	s := c.Script()
+	if s.Partial || len(s.Commands) == 0 {
+		return false
+	}
+	parked := map[string]bool{}
+	for _, cmd := range s.Commands {
+		if cmd.Program != "dross" || cmd.Substituted || len(cmd.Assigns) > 0 || len(cmd.Redirects) > 0 {
+			return false
+		}
+		a := cmd.Args()
+		if len(a) != 5 || a[0] != "task" || a[1] != "status" || a[2] != e.Phase ||
+			!inList(a[3], e.Tasks) || (a[4] != phase.StatusPending && a[4] != phase.StatusFailed) {
+			return false
+		}
+		parked[a[3]] = true
+	}
+	return len(parked) < len(e.Tasks)
+}
+
 func ambiguous(id string, tasks []string) error {
-	return fmt.Errorf("phase %s has %d tasks in_progress (%s), so which one is being approved is ambiguous — set all but one back with `dross task status %s <id> pending`",
-		id, len(tasks), strings.Join(tasks, ", "), id)
+	return &AmbiguousError{Phase: id, Tasks: tasks}
 }
 
 // inProgress reads current_phase and the ids of the tasks its plan has

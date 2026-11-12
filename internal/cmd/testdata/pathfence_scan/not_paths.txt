@@ -54,6 +54,7 @@ cmd.previewLaneReport.FenceErr fence_err
 cmd.previewLaneReport.Line line
 cmd.previewLaneReport.Locality locality
 cmd.previewLaneReport.Name name
+cmd.previewLaneReport.Relate relate
 cmd.previewReport.Host host
 cmd.previewReport.HostState host_state
 cmd.sessionStartHookOutput.AdditionalContext additionalcontext
@@ -74,6 +75,7 @@ cmd.watchDigest.Suggested suggested_command
 consent.Grants.TrustedReplayCommands trusted_replay_commands
 consent.Grants.TrustedRunCommands trusted_run_commands
 consent.Grants.TrustedTestCommand trusted_test_command
+consent.Grants.TrustedTestExempt trusted_test_exempt
 
 # ---- ctxnudge — a transcript entry's kind ("assistant", "user", …) and the hook envelope's event name and nudge line, never paths
 ctxnudge.entry.Type type
@@ -130,7 +132,7 @@ gate.listFile.SecretTools secret_tools
 gate.Override.Name name
 gate.Override.Repo repo
 
-# ---- gatestate — machine-local gate records: tree object ids, phase/task ids, HEAD SHAs, modes, runner labels, review kinds and attempt keys, quick descriptions, reply digests, writer agent ids and states
+# ---- gatestate — machine-local gate records: tree object ids, phase/task ids, HEAD SHAs, modes, runner labels, lane fingerprints, review kinds and attempt keys, quick descriptions, reply digests, writer agent ids and states
 gatestate.Approval.Head head
 gatestate.Approval.Phase phase
 gatestate.Approval.Task task
@@ -149,6 +151,9 @@ gatestate.Review.Attempt attempt
 gatestate.Review.Kind kind
 gatestate.Review.Phase phase
 gatestate.Review.Task task
+gatestate.Scoped.Lanes lanes
+gatestate.Scoped.Runner runner
+gatestate.Scoped.Tree tree
 gatestate.Writer.AgentID agent_id
 gatestate.Writer.Phase phase
 gatestate.Writer.State state
@@ -308,6 +313,7 @@ project.TestLane.Command command
 project.TestLane.Install install
 project.TestLane.Name name
 project.TestLane.Prepare prepare
+project.TestLane.Relate relate
 project.TestLane.Selector selector
 project.TestLane.SelectorJoin selector_join
 project.TestLane.SelectorTemplate selector_template

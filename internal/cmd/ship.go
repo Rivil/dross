@@ -172,6 +172,12 @@ func Ship() *cobra.Command {
 			if p.Remote.URL == "" || p.Remote.Provider == "" {
 				return errors.New("project has no [remote].url or .provider — run /dross-options or /dross-onboard")
 			}
+			// A phase whose commits landed on scoped greens ships only on a
+			// full one. Ahead of auto-finalize, because a refusal here must
+			// leave verify.toml and the rest of .dross untouched.
+			if err := gateShipFullGreen(p, repoDir, phaseBranch, forceUnverified); err != nil {
+				return err
+			}
 			// Heal-before-gate: a resolved verdict that was never
 			// finalized gets its outcome event recorded here, BEFORE the
 			// pass-only refusal — a partial/fail verdict is recorded,
@@ -605,6 +611,25 @@ func Ship() *cobra.Command {
 	c.AddCommand(shipComment())
 	c.AddCommand(shipRecover())
 	return c
+}
+
+// gateShipFullGreen applies requireFullGreen to a ship from phaseBranch. Off
+// that branch it skips: HEAD is another branch's tree, and ship's own branch
+// refusal is the one to fire. --force-unverified warns on stderr and proceeds,
+// as gateFreshness does, so `ship --json` keeps stdout to one object.
+func gateShipFullGreen(p *project.Project, repoDir, phaseBranch string, force bool) error {
+	if !hasVouchingLane(p) {
+		return nil
+	}
+	if cur, err := gitrun.Trim(repoDir, "symbolic-ref", "--short", "HEAD"); err != nil || cur != phaseBranch {
+		return nil
+	}
+	err := requireFullGreen(p, repoDir)
+	if err != nil && force {
+		fmt.Fprintf(os.Stderr, "warning: shipping with no full green on HEAD's tree under --force-unverified — %s\n", strings.SplitN(err.Error(), "\n", 2)[0])
+		return nil
+	}
+	return err
 }
 
 // gateAcceptedTriage refuses while any accepted review comment names a task

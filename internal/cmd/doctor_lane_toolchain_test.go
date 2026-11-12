@@ -219,7 +219,7 @@ func TestDoctorReusesTheRunsDerivation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, lane := range p.Runtime.TestLane {
-		for _, tool := range testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain) {
+		for _, tool := range testlane.Toolchain(lane.Command, lane.Prepare, lane.Relate, lane.Toolchain) {
 			if !contains(asked, tool) {
 				t.Errorf("lane %s needs %q and doctor never asked for it: %v", lane.Name, tool, asked)
 			}
@@ -481,5 +481,69 @@ func TestDoctorRemoteSectionSurvivesTheWidening(t *testing.T) {
 	// leaked into what doctor prints.
 	if strings.Contains(out, "laneBy") {
 		t.Errorf("the new attribution leaked into doctor's output:\n%s", out)
+	}
+}
+
+// doctorRelateLane needs one binary for its suite and another for relate.
+const doctorRelateLane = `[[runtime.test_lane]]
+name = "web"
+match = ["web/**"]
+command = "pnpm test"
+selector = "path"
+vouch = true
+relate = "node scripts/relate.mjs"`
+
+// TestDoctorAndTheRunBothListRelatesBinary: doctor passing a host the run then
+// falls back from is the failure c-8 is worded against, and relate's binary is
+// the one a suite-only derivation would miss. The probe, the union and the
+// printed row are all asserted, since the first two share a code path and the
+// row does not.
+func TestDoctorAndTheRunBothListRelatesBinary(t *testing.T) {
+	doctorLaneFixture(t, "helicon", []string{"gremlins"}, doctorRelateLane)
+	var asked []string
+	fakeProbe(t, func(_ remote.Target, tools []string) (remote.Readiness, error) {
+		asked = append([]string(nil), tools...)
+		return remote.Readiness{Cores: 8}, nil
+	})
+
+	var out string
+	doctorIssues(t, &out)
+
+	if want := "✓ lane web toolchain on helicon: pnpm node"; !strings.Contains(out, want) {
+		t.Errorf("the Remote section lost relate's binary, want %q:\n%s", want, out)
+	}
+	if !contains(asked, "node") {
+		t.Errorf("doctor never asked the host for relate's binary: %v", asked)
+	}
+	if union := laneToolUnion(loadDoctorFixtureProject(t).Runtime.TestLane); !contains(union, "node") {
+		t.Errorf("the run's union has no relate binary: %v", union)
+	}
+}
+
+// TestDoctorReportsAHostMissingRelatesBinary: the gap row is what warns a user
+// before the run falls back, so it names the binary and the lane's whole set.
+func TestDoctorReportsAHostMissingRelatesBinary(t *testing.T) {
+	doctorLaneFixture(t, "helicon", []string{"gremlins"}, doctorRelateLane)
+	fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
+		return remote.Readiness{Cores: 8, Missing: []string{"node"}}, nil
+	})
+
+	var out string
+	doctorIssues(t, &out)
+
+	if want := "⚠ lane web will run on this machine — helicon has no node (lane needs pnpm node)"; !strings.Contains(out, want) {
+		t.Errorf("the Remote section does not report the gap, want %q:\n%s", want, out)
+	}
+}
+
+// TestRemoteProbeToolsAttributesRelatesBinaryToItsLane: bootstrap tags a step
+// from this map, and an untagged tool has no lane to say why the host needs it.
+func TestRemoteProbeToolsAttributesRelatesBinaryToItsLane(t *testing.T) {
+	doctorLaneFixture(t, "helicon", []string{"gremlins"}, doctorRelateLane)
+
+	_, _, laneBy := remoteProbeTools(loadDoctorFixtureProject(t))
+
+	if got := laneBy["node"]; got != "web" {
+		t.Errorf("node attributed to %q, want web", got)
 	}
 }

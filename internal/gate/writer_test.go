@@ -2,6 +2,7 @@ package gate
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -241,6 +242,70 @@ func TestWriterStopIgnoresUnbound(t *testing.T) {
 	}
 	if !greenPresent(t, dir) {
 		t.Error("an unbound writer's stop cleared green.json")
+	}
+}
+
+func saveScoped(t *testing.T, dir string) {
+	t.Helper()
+	rec := gatestate.Scoped{Tree: "tree-before-stop", Covered: []string{"a.go"}, Lanes: []string{"lane"}, At: time.Now().UTC()}
+	if err := gatestate.SaveScoped(dir, rec); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func scopedPresent(t *testing.T, dir string) bool {
+	t.Helper()
+	s, err := gatestate.LoadScoped(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s != nil
+}
+
+// TestWriterStopClearsScoped: a writer's `dross test --files` vouches for its own
+// run only, so its stop takes the scoped record with it, as it does the green.
+func TestWriterStopClearsScoped(t *testing.T) {
+	dir := soloRepo(t, "in_progress")
+	writerRecord(t, writerLaunch(t, dir, review.WriterPromptLine("p", "t-1")))
+	saveGreen(t, dir)
+	saveScoped(t, dir)
+	writerRecord(t, bgPost(t, "writer_subagent_stop.json", dir, nil))
+	if scopedPresent(t, dir) {
+		t.Error("the writer's stop left scoped.json in place")
+	}
+	if greenPresent(t, dir) {
+		t.Error("the writer's stop left green.json in place")
+	}
+}
+
+// TestWriterStopLeavesScopedWhenUnbound: a stop from any other agent id is not
+// the writer's, so the record it did not make stays.
+func TestWriterStopLeavesScopedWhenUnbound(t *testing.T) {
+	dir := soloRepo(t, "in_progress")
+	bound := gatestate.Writer{Phase: "p", Task: "t-1", AgentID: "another-agent", State: gatestate.WriterLaunched}
+	if err := gatestate.SaveWriter(dir, bound); err != nil {
+		t.Fatal(err)
+	}
+	saveScoped(t, dir)
+	writerRecord(t, bgPost(t, "writer_subagent_stop.json", dir, nil))
+	if !scopedPresent(t, dir) {
+		t.Error("an unbound agent's stop cleared scoped.json")
+	}
+}
+
+// TestTamperGuardFencesScoped: a forged scoped.json admits a commit, and a
+// deleted one drops a lane's vouching, so neither is the agent's to do.
+func TestTamperGuardFencesScoped(t *testing.T) {
+	repo := droot(t)
+	rec := filepath.Join(repo, ".dross", "gate", gatestate.ScopedFile)
+	e := Env{Home: t.TempDir(), Gates: []Gate{mustGate(t, "tamper-guard")}}
+	for name, in := range map[string][]byte{
+		"Write": payload(t, "Write", map[string]any{"file_path": rec, "content": "{}"}, repo),
+		"rm":    bash(t, "rm "+rec, repo),
+	} {
+		if res := Check(in, e); res.Allowed() || !strings.Contains(res.Text(), "tamper-guard") {
+			t.Errorf("%s on scoped.json: %q, want a tamper-guard refusal", name, res.Text())
+		}
 	}
 }
 

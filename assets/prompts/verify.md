@@ -21,6 +21,11 @@ Decide whether a phase delivered what its `spec.toml` promised — not by counti
 
 ## 1. Mechanical pass — `dross verify`
 
+A repo with a vouching lane (`dross test lane list` prints `vouch: true`) commits on scoped greens, so `dross verify` refuses a HEAD tree with no full green. There only, with the work committed, run the whole suite first; on anything but exit **0**, stop:
+```
+dross test
+```
+
 ```
 dross verify <phase> [--skip-mutation]
 ```

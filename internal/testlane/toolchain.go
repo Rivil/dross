@@ -5,20 +5,20 @@ import "strings"
 // Toolchain reports the binaries one lane needs on the host that runs it.
 //
 // It is the whole of the locked toolchain_source decision: a lane's toolchain
-// is DERIVED from the first whitespace token of its command and prepare lines,
-// with an optional override replacing that derived list wholesale. Derivation
-// is what makes the feature work on every lane already declared — a
+// is DERIVED from the first whitespace token of its command, prepare and relate
+// lines, with an optional override replacing that derived list wholesale.
+// Derivation is what makes the feature work on every lane already declared — a
 // declared-only field would leave locality detection dead until every existing
 // lane was rewritten by hand.
 //
-// The command's token comes first and the prepare's second. The order is not
-// cosmetic: it is the order the probe reports missing tools in, and a lane is
-// far more often understood by what it runs than by what it bootstraps.
+// The command's token comes first, then the prepare's, then relate's. The order
+// is not cosmetic: it is the order the probe reports missing tools in, and a lane
+// is far more often understood by what it runs than by what it bootstraps.
 //
 // Pure, like the rest of this package: nothing here asks the filesystem whether
 // a token exists. Probing is the caller's, on whichever host it is deciding
 // about — the same derived list is asked of the remote and of this machine.
-func Toolchain(command, prepare string, override []string) []string {
+func Toolchain(command, prepare, relate string, override []string) []string {
 	// A non-empty override REPLACES the derived list rather than extending it.
 	// The field exists for the lines derivation gets wrong — an env prefix, a
 	// wrapper script, a `mise exec` — and appending would keep probing the
@@ -26,7 +26,11 @@ func Toolchain(command, prepare string, override []string) []string {
 	if tools := clean(override); len(tools) > 0 {
 		return tools
 	}
-	return clean([]string{firstToken(command), firstToken(prepare)})
+	// Relate is spawned on the lane's host like the other two lines, so a host
+	// without its binary would exit 127 before any test ran. Derived here, that
+	// host is a fallback instead. An empty relate cleans away, so a lane without
+	// one probes exactly what it did before the field existed.
+	return clean([]string{firstToken(command), firstToken(prepare), firstToken(relate)})
 }
 
 // firstToken returns the leading whitespace-delimited word of a command line,

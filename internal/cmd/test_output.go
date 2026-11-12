@@ -39,6 +39,12 @@ type testRun struct {
 	pending []string // dross's own lines printed before the log existed
 	budget  runsummary.Budget
 	segs    []spawnSeg // spawned since the last summary
+	// keep holds on to what the parsers read from every suite spawn, in
+	// parsed, for a caller that judges the run by which tests failed: a
+	// red-proof. It builds segments on a terminal too, where nothing is
+	// summarised, because the verdict needs them wherever the run printed.
+	keep   bool
+	parsed []runsummary.Result
 }
 
 // spawnSeg is one spawn's share of the output.
@@ -77,7 +83,7 @@ func (r *testRun) spawn(line string, aux bool) {
 			Print("log: " + p)
 		}
 	}
-	if r.tty {
+	if r.tty && !r.keep {
 		return
 	}
 	s := runsummary.NewSegment()
@@ -130,14 +136,27 @@ func (r *testRun) dropLane() { r.segs = nil }
 // failedStep); otherwise the suite's own spawns are parsed. On a terminal, or
 // when the log fell back to streaming, there is nothing to summarise: every
 // byte was shown.
+//
+// A run that keeps its results takes them here, before the segments go: each
+// lane's are dropped as the lane is summarised, long before finish.
 func (r *testRun) summarise(err error) {
 	segs := r.segs
 	r.segs = nil
-	if r.tty || len(segs) == 0 || r.log.Err() != nil {
+	if len(segs) == 0 {
 		return
 	}
 	for _, s := range segs {
 		s.seg.Close()
+	}
+	if r.keep {
+		for _, s := range segs {
+			if !s.aux {
+				r.parsed = append(r.parsed, s.seg.Results()...)
+			}
+		}
+	}
+	if r.tty || r.log.Err() != nil {
+		return
 	}
 	code := ExitCode(err)
 	path := r.log.Path()

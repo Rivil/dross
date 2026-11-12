@@ -177,6 +177,20 @@ var fields = []Field{
 		},
 	},
 
+	{
+		Struct: "project.Runtime", Field: "TestExempt", Tag: "test_exempt", Artifact: "project.toml",
+		NotConsumed: &NotConsumedBy{
+			Why: "glob PATTERNS naming paths that need no tests, matched against a commit's " +
+				"changed paths and never opened.",
+			Readers: []string{
+				"internal/cmd/validate.go (compiles each glob, refuses a catch-all)",
+				"internal/consent/exempt.go (fingerprints the sorted globs for the human grant)",
+				"internal/cmd/trust.go (prints each glob before granting)",
+				"internal/diag/trust.go (prints each glob on a stale or ungranted row)",
+			},
+		},
+	},
+
 	// project.Paths.*: the repo layout, displayed and edited, never opened by
 	// dross itself. Declared one per field rather than as a group so t-9's
 	// two-way check has a name to match against.
@@ -347,6 +361,14 @@ var unguessedFields = []Field{
 	reportPath("quality.Finding", "File", "file", "quality run findings.toml",
 		"the file a quality finding points at — compared across runs and printed.",
 		"internal/quality/lifecycle.go"),
+
+	// ---- gate records: the paths a scoped green vouches for ----------------
+	reportPath("gatestate.Scoped", "Covered", "covered", ".dross/gate/scoped.json",
+		"repo paths that reached a collected test in a scoped run, held as strings to compare "+
+			"against a commit's changed paths — never opened.",
+		"internal/gatestate/store.go (Scoped.check refuses a blank entry)",
+		"internal/gate/commit.go (vouchedCover keeps the paths a lane still matches; commit-green compares them with the commit's)",
+		"internal/cmd/test_scoped.go (scopedRecorder.finish prints how many a recorded run covered)"),
 
 	// ---- PR triage: the locator a resolution cites ------------------------
 	reportPath("prtriage.Evidence", "At", "at", "phases/<id>/pr-triage.toml",

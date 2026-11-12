@@ -143,7 +143,7 @@ func testLaneInstall() *cobra.Command {
 				// that failed on "there was nothing to do" would be one nobody
 				// could put in a script.
 				Printf("lane %s: nothing to install — %s has %s\n",
-					lane.Name, site.Machine, joinTools(testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain)))
+					lane.Name, site.Machine, joinTools(testlane.Toolchain(lane.Command, lane.Prepare, lane.Relate, lane.Toolchain)))
 				return nil
 			}
 			return reportLaneInstall(root, repoDir, lane, site, apply)
@@ -171,7 +171,7 @@ func testLaneInstall() *cobra.Command {
 // nothing installs on either side: a local install firing on the strength of an
 // unanswered probe would provision the wrong machine on no evidence at all.
 func laneInstallTarget(root, repoDir string, lane project.TestLane, local bool) (laneInstallSite, error) {
-	tools := testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain)
+	tools := testlane.Toolchain(lane.Command, lane.Prepare, lane.Relate, lane.Toolchain)
 	probe := append(append([]string{}, tools...), laneInstallRuntimes(tools)...)
 
 	if !local {

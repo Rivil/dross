@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -421,6 +422,129 @@ func TestStrykerRunArgsPinned(t *testing.T) {
 	}
 	if spec := args[yes+1]; !strykerPinPattern.MatchString(spec) {
 		t.Errorf("package spec %q is not an exact pin (argv: %q)", spec, args)
+	}
+}
+
+// TestStrykerRunArgsAllowEmpty: without --allowEmpty a dry run that collects no
+// test aborts, and a .svelte no test imports, alone in its leg, fails the leg
+// even when its only hunk is style.
+func TestStrykerRunArgsAllowEmpty(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	args, _, err := s.runArgs([]string{"src/Lone.svelte"}, map[string][]Range{"src/Lone.svelte": {{Start: 10, End: 10}}})
+	if err != nil {
+		t.Fatalf("runArgs: %v", err)
+	}
+	if !slices.Contains(args, "--allowEmpty") {
+		t.Errorf("no --allowEmpty in argv: %q", args)
+	}
+}
+
+// emptyRunStryker is noisyStryker for a run that writes no report, with the
+// construct resolver faked too: `node -` answers constructs, and any other
+// spawn prints out and exits code.
+func emptyRunStryker(t *testing.T, s *Stryker, out string, code int, constructs []Construct) func() {
+	t.Helper()
+	orig := strykerBuildCmd
+	resp, err := json.Marshal(astResponse{Constructs: constructs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	strykerBuildCmd = func(_ *Stryker, args []string) *exec.Cmd {
+		if len(args) > 0 && args[0] == "node" {
+			return exec.Command("sh", "-c", fmt.Sprintf("cat <<'DROSSEOF'\n%s\nDROSSEOF", resp))
+		}
+		if err := os.MkdirAll(filepath.Dir(s.reportPath()), 0o755); err != nil {
+			t.Fatalf("prepare fake report dir: %v", err)
+		}
+		return exec.Command("sh", "-c", fmt.Sprintf("cat <<'DROSSEOF'\n%s\nDROSSEOF\nexit %d", out, code))
+	}
+	return func() { strykerBuildCmd = orig }
+}
+
+// TestStrykerEmptyDryRunIsZeroOnlyWhenProved: under --allowEmpty a dry run
+// that collected no test exits 0 with no report. That is zero mutants only when
+// every file is a ranged .svelte whose ranges touch none of its constructs;
+// anything else held mutants no test reached and stays the reportless refusal.
+//
+// Stryker's line is a HARDCODED literal, as in the truncation tests: a
+// reworded strykerNoTestsText stops matching the real tool and goes red here.
+func TestStrykerEmptyDryRunIsZeroOnlyWhenProved(t *testing.T) {
+	const noTests = "INFO DryRunExecutor No tests were found"
+	// A script function on lines 3-5; line 10 is style.
+	fn := []Construct{{Start: 3, End: 5, Kind: "FunctionDeclaration", Name: "bump"}}
+	lone := "src/Lone.svelte"
+	other := "src/Other.svelte"
+	cases := []struct {
+		name    string
+		workdir string
+		out     string
+		code    int
+		files   []string
+		ranges  map[string][]Range
+		zero    bool
+	}{
+		{name: "a style-only range is zero", out: noTests, files: []string{lone},
+			ranges: map[string][]Range{lone: {{Start: 10, End: 10}}}, zero: true},
+		{name: "a range ending the line before a construct is zero", out: noTests, files: []string{lone},
+			ranges: map[string][]Range{lone: {{Start: 1, End: 2}}}, zero: true},
+		{name: "a range starting the line after a construct is zero", out: noTests, files: []string{lone},
+			ranges: map[string][]Range{lone: {{Start: 6, End: 6}}}, zero: true},
+		{name: "two clear .svelte files are zero", out: noTests, files: []string{lone, other},
+			ranges: map[string][]Range{lone: {{Start: 10, End: 10}}, other: {{Start: 1, End: 1}}}, zero: true},
+		{name: "a workdir path is resolved repo-relative", workdir: "web", out: noTests, files: []string{"web/" + lone},
+			ranges: map[string][]Range{"web/" + lone: {{Start: 10, End: 10}}}, zero: true},
+		{name: "a range ending on a construct's first line refuses", out: noTests, files: []string{lone},
+			ranges: map[string][]Range{lone: {{Start: 1, End: 3}}}},
+		{name: "a range starting on a construct's last line refuses", out: noTests, files: []string{lone},
+			ranges: map[string][]Range{lone: {{Start: 5, End: 8}}}},
+		{name: "one file touching a construct refuses the pair", out: noTests, files: []string{lone, other},
+			ranges: map[string][]Range{lone: {{Start: 10, End: 10}}, other: {{Start: 4, End: 4}}}},
+		{name: "a .svelte measured whole refuses", out: noTests, files: []string{lone}},
+		{name: "a malformed range refuses", out: noTests, files: []string{lone},
+			ranges: map[string][]Range{lone: {{Start: 0, End: 10}}}},
+		{name: "a ranged .ts refuses", out: noTests, files: []string{"src/a.ts"},
+			ranges: map[string][]Range{"src/a.ts": {{Start: 10, End: 10}}}},
+		{name: "a file the resolver cannot read refuses", out: noTests, files: []string{"src/Missing.svelte"},
+			ranges: map[string][]Range{"src/Missing.svelte": {{Start: 10, End: 10}}}},
+		{name: "a non-zero exit refuses", out: noTests, code: 1, files: []string{lone},
+			ranges: map[string][]Range{lone: {{Start: 10, End: 10}}}},
+		{name: "a run that found tests refuses", out: "INFO Stryker Done", files: []string{lone},
+			ranges: map[string][]Range{lone: {{Start: 10, End: 10}}}},
+		{name: "a drop warning refuses", out: noTests + "\nWARN ProjectReader Glob pattern \"src/Lone.svelte\" " + strykerDropWarningText + ".",
+			files: []string{lone}, ranges: map[string][]Range{lone: {{Start: 10, End: 10}}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			for _, f := range []string{lone, other} {
+				path := filepath.Join(root, tc.workdir, filepath.FromSlash(f))
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte("<p>x</p>\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s := &Stryker{ProjectRoot: root, Workdir: tc.workdir}
+			defer emptyRunStryker(t, s, tc.out, tc.code, fn)()
+
+			_, rep, err := captureStderr(t, func() (*Report, error) { return s.RunRanges(tc.files, tc.ranges) })
+			if !tc.zero {
+				if err == nil || !strings.Contains(err.Error(), "did not write a report") {
+					t.Errorf("err = %v, want the reportless refusal", err)
+				}
+				if rep != nil {
+					t.Errorf("a refusal still produced a Report: %+v", rep)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("a proved-empty leg failed: %v", err)
+			}
+			if rep == nil || rep.Tool != "stryker" || rep.Killed+rep.Survived+rep.Timeout+rep.Errors != 0 || len(rep.Files) != 0 {
+				t.Errorf("report = %+v, want an empty stryker report", rep)
+			}
+		})
 	}
 }
 

@@ -1,0 +1,115 @@
+# t-20: the planned model timed in barktime's real stack on helicon: a
+# lockfile-guarded bootstrap, one relate pass, one batched `dross test <tests>`.
+# No dross or barktime changes. Measured 2026-11-06.
+#
+# This record REPLACES barktime-timing.toml's verdict and t9_may_start. t-19
+# timed per-path units; this times the relate + batched model t-9 will build.
+
+verdict = "within_budget"
+budget_s = 600
+t9_may_start = true
+replaces = "barktime-timing.toml verdict and t9_may_start"
+barktime_sha = "85b1ba07"
+run_site = "helicon, stack"
+
+[host]
+  quiet = true
+  note = "A barktime full run held the host at 09:55-10:14, so t-20 waited for it. Every leg below ran with no other in-container run on helicon. Relate and bootstrap held /tmp/dross-host.lock through flock; the batched legs took it through dross test."
+  tree_check = "rsync -anc over git ls-files reported no tracked file differing between the laptop at 85b1ba07 and helicon's workdir before the relate leg."
+
+[dependencies]
+  helicon_vitest_before_bootstrap = "4.1.7"
+  helicon_vitest_before_relate = "4.1.11"
+  package_lock_vitest = "4.1.11"
+  package_lock_sha256_prefix = "b2357d7e551b8d40"
+  note = ".dockerignore excludes node_modules, so the host install does not reach the stack image."
+
+[bootstrap]
+  guard = "npm ci only when sha256(package-lock.json) differs from node_modules/.lock-sha"
+  cold_wall_clock_s = 30
+  cold_is = "informational"
+  warm_wall_clock_s = 0
+  warm_counts_in_projection = true
+
+# Laptop figures are `vitest related --run <path>` at barktime_sha. Helicon
+# figures are the throwaway relate script, one process over vitest's own related
+# selection. The laptop's exit 1s are integration files with no database.
+[[attribution]]
+  path = "src/lib/components/directory/Shopfront.svelte"
+  laptop_test_files = 5
+  helicon_test_files = 5
+
+[[attribution]]
+  path = "src/lib/components/ui/StatusBadge.svelte"
+  laptop_test_files = 112
+  helicon_test_files = 112
+
+[[attribution]]
+  path = "src/lib/components/directory/shopfront.svelte"
+  shape = "misspelled case: no such file"
+  laptop_test_files = 0
+  helicon_test_files = 0
+
+[leaf_set]
+  selection = "Shopfront plus four component paths at 3-5 related test files; the median over 148 related .svelte paths is 3. Picked by count band, not as the cheapest paths."
+  paths = [
+    "src/lib/components/directory/Shopfront.svelte",
+    "src/lib/components/DateRangePicker.svelte",
+    "src/lib/components/invoices/PayPanel.svelte",
+    "src/lib/components/visits/VisitNotes.svelte",
+    "src/lib/components/visits/VisitRouteSection.svelte",
+  ]
+  related_test_files = 15
+  includes_integration = true
+
+[relate]
+  # Two runs over the five leaf paths, under the host lock, on a quiet host.
+  wall_clock_s = 111
+  runs_s = [112, 111]
+  vitest_init_s = 92
+  first_walk_s = 18
+  all_paths_wall_clock_s = 165
+  all_paths_count = 160
+  note = "Init dominates, so relate costs about the same for one path or five."
+
+[batched_leaf]
+  line = "dross test <15 tests> through bash scripts/test/in-container.sh"
+  log = "test-20261106T102738.292475000Z"
+  wall_clock_s = 152
+  exit = 0
+  test_files = 15
+  tests = 168
+  barktime_git_status_unchanged = true
+
+[projection]
+  # One run = warm bootstrap + relate + batched line, the stack and tree sync
+  # inside the batched line's wall clock. Solo re-runs after the writer stops.
+  runs = 2
+  per_run_leaf_s = 263
+  leaf_two_runs_s = 526
+  margin_s = 74
+  caveat = "Inside budget by 12%, on a quiet host. A run queued behind the cross-repo host lock pays that wait on top: t-22's writer waited 10 minutes on barktime's run."
+
+[wide]
+  informational = true
+  path = "src/lib/components/ui/StatusBadge.svelte"
+  measured = true
+  log = "test-20261106T103033.888371000Z"
+  batched_wall_clock_s = 214
+  test_files = 112
+  tests = 1534
+  exit = 0
+  two_runs_s = 650
+
+[hot]
+  informational = true
+  path = "src/lib/server/db/index.ts"
+  measured = false
+  related_test_files_measured = 344
+  projected_batched_s = 362
+  two_runs_s = 946
+  method = "Line through the measured leaf (15 files, 152 s) and wide (112 files, 214 s) legs, carried to 344 files, plus relate. The test-file count is measured; the time is not."
+
+[findings]
+  relate_stdout_noise = "The paraglide vite plugin prints `[paraglide-js] Compilation complete (locale-modules)` to stdout during relate. That line has no tab, so t-9's fail-closed parser would refuse the whole output on every run. t-18's relate script must keep stdout to `<path><TAB><test>` lines alone."
+  relate_init_cost = "Helicon's vitest init is 92 s, stable across three runs (91.5-92.1 s). That is 35% of a leaf run, and relate as a whole is 42%, so init is the first place to look if the budget tightens."

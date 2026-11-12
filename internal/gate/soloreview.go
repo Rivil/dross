@@ -2,9 +2,14 @@ package gate
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
+	"github.com/BurntSushi/toml"
+
 	"github.com/Rivil/dross/internal/gatestate"
+	"github.com/Rivil/dross/internal/pathfence"
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/review"
 	"github.com/Rivil/dross/internal/treefp"
 )
@@ -33,6 +38,36 @@ func init() {
 			return judgeDowngrade(c)
 		},
 	})
+}
+
+// ReviewRetest is the test-then-review step of a solo fix round, worded for the
+// repo at root: a scoped run where a lane vouches, a bare one everywhere else.
+// solo-review's refusals and `dross review status` both read it, so their notes
+// cannot drift.
+func ReviewRetest(root string) string {
+	run := "`dross test`"
+	if vouchingRepo(root) {
+		run = "`dross test --files <the task's files>`"
+	}
+	return "re-run " + run + ", then `dross review context` and the reviewer"
+}
+
+// vouchingRepo reports whether a lane at root may admit a commit on a scoped
+// green. A project that cannot be read counts as no: a bare run suits any repo.
+func vouchingRepo(root string) bool {
+	f, err := pathfence.Contain(root, "dross project", ".dross/project.toml")
+	if err != nil {
+		return false
+	}
+	b, err := pathfence.ReadFile(f)
+	if err != nil {
+		return false
+	}
+	var p project.Project
+	if _, err := toml.Decode(string(b), &p); err != nil {
+		return false
+	}
+	return slices.ContainsFunc(p.Runtime.TestLane, func(l project.TestLane) bool { return l.Vouch })
 }
 
 func judgeSoloReview(c *Call) (*Refusal, error) {
@@ -74,11 +109,11 @@ func judgeSoloReview(c *Call) (*Refusal, error) {
 		}
 		return NewRefusal(
 			fmt.Sprintf("the solo review of %s passed, but the tree changed since the review — these paths differ: %s", scope.Name(), strings.Join(paths, " ")),
-			"re-run `dross test`, then `dross review context` and the reviewer, and commit once `dross review status` reads pass")
+			ReviewRetest(root)+", and commit once `dross review status` reads pass")
 	case review.StatusBlocked:
 		return NewRefusal(
 			fmt.Sprintf("the solo review of %s blocked this change", scope.Name()),
-			"one fix round: address every blocking finding `dross review status` lists, re-run `dross test`, then `dross review context` and the reviewer")
+			"one fix round: address every blocking finding `dross review status` lists, "+ReviewRetest(root))
 	case review.StatusExhausted, review.StatusUnavailable:
 		return NewRefusal(
 			fmt.Sprintf("the solo review of %s failed it: %s — this change is not committed", scope.Name(), st.Cause),

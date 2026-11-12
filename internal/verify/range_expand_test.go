@@ -107,6 +107,53 @@ func TestExpandOutputNeverOverlaps(t *testing.T) {
 	}
 }
 
+// widgetFile and widgetConstructs are the ts-project fixture's Widget.svelte as
+// the real compiler and Babel resolve it, every span pinned against that file
+// by internal/mutation's TestRealParserSpansMatchTheExpansionForSvelte.
+const widgetFile = "src/Widget.svelte"
+
+var widgetConstructs = []mutation.Construct{
+	{Start: 3, End: 3, Kind: "VariableDeclaration", Name: "step"},
+	{Start: 7, End: 7, Kind: "VariableDeclaration", Name: "count"},
+	fn(9, 12, "increment"),
+	fn(14, 18, "reset"),
+	{Start: 21, End: 23, Kind: "Element", Name: "button"},
+	{Start: 25, End: 29, Kind: "IfBlock"},
+}
+
+// c-8 at the planner: a resolved .svelte ranges like any other file, through
+// the real adapter, whichever of its roots the hunk landed in.
+func TestPlanRangesRangesASvelteFile(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		hunk Range
+		want EffectiveRange
+	}{
+		{"a line in a script function", Range{10, 10}, eff(9, 12, "FunctionDeclaration increment")},
+		{"a template expression", Range{22, 22}, eff(21, 23, "Element button")},
+		{"a line in a markup block", Range{28, 28}, eff(25, 29, "IfBlock")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			scope := scopeWithHunks([]string{widgetFile}, map[string][]Range{widgetFile: {tc.hunk}})
+			asts := ASTIndex{widgetFile: {Constructs: widgetConstructs}}
+			plan := PlanRanges(&mutation.Stryker{}, []string{widgetFile}, scope, asts)
+			if reason, whole := plan.WholeFile[widgetFile]; whole {
+				t.Errorf("WholeFile[%s] = %q, want no entry", widgetFile, reason)
+			}
+			wantDispatch := []mutation.Range{{Start: tc.want.Start, End: tc.want.End}}
+			if got := plan.Dispatch[widgetFile]; !reflect.DeepEqual(got, wantDispatch) {
+				t.Errorf("Dispatch[%s] = %v, want %v", widgetFile, got, wantDispatch)
+			}
+			if got := plan.Ranges[widgetFile]; !reflect.DeepEqual(got, []EffectiveRange{tc.want}) {
+				t.Errorf("Ranges[%s] = %v, want [%v]", widgetFile, got, tc.want)
+			}
+			if len(plan.Degraded) != 0 {
+				t.Errorf("a resolved .svelte must not degrade, got %v", plan.Degraded)
+			}
+		})
+	}
+}
+
 func TestExpandWithNoConstructsIsTheRawHunks(t *testing.T) {
 	got := expandToConstructs([]Range{{5, 7}, {30, 31}}, nil)
 	want := []EffectiveRange{eff(5, 7, ConstructHunk), eff(30, 31, ConstructHunk)}

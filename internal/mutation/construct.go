@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -25,6 +26,11 @@ import (
 // that line goes ungenerated is the full span of the OUTERMOST construct below
 // the root. Anything narrower is the line-pad heuristic again under another
 // name.
+//
+// A .svelte file has two kinds of root: each <script> body, whose top-level
+// statements are constructs like any other file's, and the template, whose
+// top-level nodes are constructs in their own right ("Element div", "IfBlock"),
+// because Stryker places mutants in template expressions too.
 type Construct struct {
 	Start int    // first line, 1-based, inclusive
 	End   int    // last line, 1-based, inclusive
@@ -64,6 +70,31 @@ type ConstructResolver interface {
 	Constructs(file string) ([]Construct, error)
 }
 
+// mergedKind labels a span that fused constructs sharing a line. Neither
+// source node's label would be true of the whole span.
+const mergedKind = "MergedConstructs"
+
+// mergeConstructs turns a .svelte file's spans into the sorted, pairwise
+// disjoint list ConstructResolver promises. Script and markup spans arrive in
+// two groups and can share a line (`<script>let x = 1;</script><div>{x}</div>`),
+// and two spans on one line would let enclosing()'s binary search land on the
+// wrong one and miss. Constructs are line spans, so a shared line cannot be
+// split: they fuse into one. The input is reordered in place.
+func mergeConstructs(cs []Construct) []Construct {
+	sort.Slice(cs, func(i, j int) bool { return cs[i].Start < cs[j].Start })
+	out := make([]Construct, 0, len(cs))
+	for _, c := range cs {
+		if len(out) > 0 && c.Start <= out[len(out)-1].End {
+			last := &out[len(out)-1]
+			last.End = max(last.End, c.End)
+			last.Kind, last.Name = mergedKind, ""
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
 // constructTimeout bounds one resolver spawn. A parse is milliseconds; the
 // bound exists for a node that hangs on startup (a broken install, a
 // loader that waits on the network), which would otherwise hold the run
@@ -93,7 +124,9 @@ type astError struct {
 
 // Constructs resolves file's top-level constructs through @babel/parser out
 // of Stryker's own dependency tree, run by node in the adapter's Workdir —
-// the same place stryker itself runs, so the same node_modules resolve.
+// the same place stryker itself runs, so the same node_modules resolve. A
+// .svelte file also needs the project's svelte/compiler, and its spans are
+// merged here, where that rule is tested without node.
 //
 // LOCAL, always. This goes through strykerBuildCmd — so a docker Prefix is
 // honoured, since that is where the project's node_modules live — and never
@@ -107,12 +140,6 @@ type astError struct {
 // the parser's own message streams to stderr where the live diagnostic
 // belongs.
 func (s *Stryker) Constructs(file string) ([]Construct, error) {
-	if strings.EqualFold(filepath.Ext(file), ".svelte") {
-		// Stryker mutates Svelte through its own svelte-parser; Babel alone
-		// would fail on the markup with a position inside a <script> block
-		// that names nothing. Refused before any process is spawned.
-		return nil, fmt.Errorf("%w: no parser for .svelte", ErrASTUnavailable)
-	}
 	src, err := os.ReadFile(filepath.Join(s.ProjectRoot, filepath.FromSlash(file)))
 	if err != nil {
 		return nil, fmt.Errorf("%w: cannot read %s", ErrASTUnavailable, file)
@@ -156,8 +183,10 @@ func (s *Stryker) Constructs(file string) ([]Construct, error) {
 	if resp.Error != nil {
 		// The script's own words for its own failures (resolution), the
 		// position only for the parser's.
-		if strings.HasPrefix(resp.Error.Message, "cannot resolve @babel/parser") {
-			return nil, fmt.Errorf("%w: cannot resolve @babel/parser from %s", ErrASTUnavailable, s.workDir())
+		for _, pkg := range []string{"@babel/parser", "svelte/compiler"} {
+			if strings.HasPrefix(resp.Error.Message, "cannot resolve "+pkg) {
+				return nil, fmt.Errorf("%w: cannot resolve %s from %s", ErrASTUnavailable, pkg, s.workDir())
+			}
 		}
 		if resp.Error.Line > 0 {
 			fmt.Fprintf(os.Stderr, "astspan: %s: %s\n", file, resp.Error.Message)
@@ -171,6 +200,9 @@ func (s *Stryker) Constructs(file string) ([]Construct, error) {
 	}
 	if resp.Constructs == nil {
 		resp.Constructs = []Construct{}
+	}
+	if strings.EqualFold(filepath.Ext(file), ".svelte") {
+		return mergeConstructs(resp.Constructs), nil
 	}
 	return resp.Constructs, nil
 }

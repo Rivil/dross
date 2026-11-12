@@ -326,7 +326,7 @@ func TestNoStreamingFlag(t *testing.T) {
 	var got []string
 	Test().Flags().VisitAll(func(f *pflag.Flag) { got = append(got, f.Name) })
 	sort.Strings(got)
-	if strings.Join(got, ",") != "files,local,wait" {
-		t.Fatalf("dross test defines flags %v, want exactly files, local and wait", got)
+	if strings.Join(got, ",") != "files,local,red-proof,wait" {
+		t.Fatalf("dross test defines flags %v, want exactly files, local, red-proof and wait", got)
 	}
 }

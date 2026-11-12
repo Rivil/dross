@@ -98,7 +98,8 @@ func TestWriterReportBounded(t *testing.T) {
 	for _, want := range []string{
 		"exactly one fenced block whose info string is `" + WriterReportFence + "`",
 		"- `files` —",
-		"- `test` — exactly `green`, or `red: <first failing test>`",
+		"- `test` — exactly `green`, `red: <first failing test>` or `none (<why>)`",
+		"- `red-proof` —",
 		"- `notes` — at most 5 lines",
 		"No code, no diff and no file contents in the report",
 	} {
@@ -120,8 +121,97 @@ func TestWriterReportBounded(t *testing.T) {
 		k, _, _ := strings.Cut(line, ":")
 		keys = append(keys, k)
 	}
-	if !slices.Equal(keys, []string{"files", "test", "notes"}) {
-		t.Errorf("the worked example's keys are %v, want files, test, notes", keys)
+	if !slices.Equal(keys, []string{"files", "test", "red-proof", "notes"}) {
+		t.Errorf("the worked example's keys are %v, want files, test, red-proof, notes", keys)
+	}
+}
+
+// TestWriterRunsRedProof: the writer shows its tests need its fix with
+// `dross test --red-proof` on the test files it added or changed, and copies
+// the run's verdict into the report as printed. A verdict that is not proven
+// fails nothing, so the writer is never told to chase a red.
+func TestWriterRunsRedProof(t *testing.T) {
+	_, body := writerDef(t)
+	var run, field string
+	for _, line := range strings.Split(body, "\n") {
+		if strings.Contains(line, "dross test --red-proof --files <test path>") {
+			run = line
+		}
+		if strings.HasPrefix(line, "- `red-proof` — ") {
+			field = line
+		}
+	}
+	if run == "" {
+		t.Fatal("the body never tells the writer to run `dross test --red-proof --files <test path>`")
+	}
+	for _, want := range []string{"one `--files` per test file you added or changed", "never touches your tree", "never bend a test"} {
+		if !strings.Contains(run, want) {
+			t.Errorf("the red-proof instruction no longer says %q: %q", want, run)
+		}
+	}
+	// The values `dross test --red-proof` prints, verbatim, so the main loop
+	// can match the one that proves.
+	for _, want := range []string{"`proven (red at base)`", "`not proven (green at base)`", "`not run (exit <n>)`", "`none (<why>)`"} {
+		if !strings.Contains(field, want) {
+			t.Errorf("the red-proof field does not list %s: %q", want, field)
+		}
+	}
+}
+
+// TestSoloReadsRedProof: the solo partial reads the writer's red-proof line, a
+// result that is not proven never fails the task, and it goes into the commit
+// body so the history says no one showed the tests fail without the fix.
+func TestSoloReadsRedProof(t *testing.T) {
+	b, err := assets.FS.ReadFile("prompts/_execute.solo.md")
+	if err != nil {
+		t.Fatalf("the solo partial is not embedded: %v", err)
+	}
+	var line string
+	for _, l := range strings.Split(string(b), "\n") {
+		if strings.Contains(l, "`red-proof:`") {
+			line = l
+		}
+	}
+	for _, want := range []string{"never fails the task", "`proven (red at base)`", "or no such line", "commit body as `red-proof: <value>`"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("the solo partial's red-proof line no longer says %q: %q", want, line)
+		}
+	}
+}
+
+// TestWriterNamesNoFullSuite (c-7): a scoped green can be all a commit needs, so
+// the writer is never told the main loop runs the full suite after it.
+func TestWriterNamesNoFullSuite(t *testing.T) {
+	_, body := writerDef(t)
+	for _, line := range strings.Split(body, "\n") {
+		if strings.Contains(strings.ToLower(line), "full suite") {
+			t.Errorf("a writer line still names the full suite: %s", line)
+		}
+	}
+}
+
+// TestWriterReportsNoneOnExitFive (c-7): a run that related no tests measured
+// nothing and is not red, so it reports `none`. Reported as `red: not run`, it
+// would fail a correct task; `red: not run` stays for every other unrun test.
+func TestWriterReportsNoneOnExitFive(t *testing.T) {
+	_, body := writerDef(t)
+	var exit, field string
+	for _, line := range strings.Split(body, "\n") {
+		if strings.Contains(line, "exits 5") {
+			exit = line
+		}
+		if strings.HasPrefix(line, "- `test` — ") {
+			field = line
+		}
+	}
+	if !strings.Contains(exit, "related no tests") || !strings.Contains(exit, "report `test: none (<why>)`") {
+		t.Errorf("the body does not route an exit 5 to `test: none (<why>)`: %q", exit)
+	}
+	if strings.Contains(exit, "red: not run") {
+		t.Errorf("an exit 5 still reports `red: not run`: %q", exit)
+	}
+	if !strings.Contains(field, "for any other reason are `red: not run (<why>)`, never green") {
+		t.Errorf("the test field no longer keeps `red: not run` for the rest: %q", field)
 	}
 }
 
