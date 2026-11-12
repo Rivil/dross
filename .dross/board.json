@@ -67,6 +67,7 @@
     "secret-detection": "DRO-459",
     "solo-task-review": "DRO-814",
     "solo-task-subagent": "DRO-1012",
+    "spec-edge-probe": "DRO-1130",
     "supply-chain-currency": "DRO-423",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10",
