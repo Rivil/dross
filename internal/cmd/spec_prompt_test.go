@@ -4,7 +4,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BurntSushi/toml"
+	"github.com/spf13/cobra"
+
 	"github.com/Rivil/dross/assets"
+	"github.com/Rivil/dross/internal/phase"
 )
 
 // specPromptContent loads spec.md expanded with its partials and normalises it
@@ -366,5 +370,150 @@ func TestSpecPromptSkipRuleStaysInBaseSection4(t *testing.T) {
 	}
 	if !strings.Contains(s[start:end], "already has a target") {
 		t.Error("base spec.md §4 lost the skip rule \"already has a target\"")
+	}
+}
+
+// specSection returns the expanded spec.md text from heading to the next
+// "\n## " heading, unnormalised.
+func specSection(t *testing.T, heading string) string {
+	t.Helper()
+	s := expandedPrompt(t, "spec.md")
+	start := strings.Index(s, "\n"+heading)
+	if start < 0 {
+		t.Fatalf("spec.md has no %q heading", heading)
+	}
+	body := s[start+1:]
+	if end := strings.Index(body[len(heading):], "\n## "); end >= 0 {
+		body = body[:len(heading)+end]
+	}
+	return body
+}
+
+// edgeProbe is §2b, normalised.
+func edgeProbe(t *testing.T) string {
+	t.Helper()
+	return normalisePrompt(specSection(t, "## 2b. Edge probe"))
+}
+
+// TestSpecEdgeProbeCapped (c-1): §2b proposes 2–3 classes one per turn and
+// never walks all eight.
+func TestSpecEdgeProbeCapped(t *testing.T) {
+	sec := edgeProbe(t)
+	for _, want := range []string{"2–3", "one per turn", "never walk all eight"} {
+		if !strings.Contains(sec, want) {
+			t.Errorf("§2b lost %q", want)
+		}
+	}
+}
+
+// TestSpecEdgeProbeNamesEveryClass: a class Go knows is a class the prompt
+// can propose.
+func TestSpecEdgeProbeNamesEveryClass(t *testing.T) {
+	sec := edgeProbe(t)
+	for _, c := range phase.EdgeClasses {
+		if !strings.Contains(sec, c.Name) {
+			t.Errorf("§2b does not name edge class %q", c.Name)
+		}
+	}
+}
+
+// TestSpecEdgeProbeMustNot (c-4): a must-NOT joins [[criteria]] through the
+// accept / reword / drop gate, and a dropped one never records covered.
+func TestSpecEdgeProbeMustNot(t *testing.T) {
+	sec := edgeProbe(t)
+	for _, want := range []string{"never x when y", "accept / reword / drop", "dropped", "dismissed or deferred, never covered"} {
+		if !strings.Contains(sec, want) {
+			t.Errorf("§2b lost the must-NOT path: no %q", want)
+		}
+	}
+}
+
+// TestSpecEdgeProbeOutcomes (c-2): every outcome, the minting step and the
+// same-id link are named.
+func TestSpecEdgeProbeOutcomes(t *testing.T) {
+	sec := edgeProbe(t)
+	for _, want := range []string{"covered", "dismissed", "deferred", "dross deferred new-id", "same id on the new [[deferred]]"} {
+		if !strings.Contains(sec, want) {
+			t.Errorf("§2b lost %q", want)
+		}
+	}
+}
+
+// TestSpecEdgeProbeNoMinimum (zero_edges): no minimum, and a non-applicable
+// proposal is recorded dismissed with a reason.
+func TestSpecEdgeProbeNoMinimum(t *testing.T) {
+	sec := edgeProbe(t)
+	for _, want := range []string{"no minimum", "recorded dismissed with a reason"} {
+		if !strings.Contains(sec, want) {
+			t.Errorf("§2b lost %q", want)
+		}
+	}
+}
+
+// TestSpecEdgeProbeResume (c-6): base §2b reads `dross phase edges` and
+// proposes only from open; replace clears [[edges]] and proposes from classes.
+func TestSpecEdgeProbeResume(t *testing.T) {
+	sec := edgeProbe(t)
+	for _, want := range []string{"dross phase edges <id> --json", "resolved classes are never in open", "repair each unresolved class's record first"} {
+		if !strings.Contains(sec, want) {
+			t.Errorf("§2b lost %q", want)
+		}
+	}
+	all := specPromptContent(t)
+	for _, want := range []string{"replacing clears [[edges]]", "proposes from the --json classes list, not open"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("expanded spec prompt's replace branch lost %q", want)
+		}
+	}
+}
+
+// TestSpecSchemaExampleDecodes: §5's toml block is a spec the struct reads
+// whole, with at least one edge record and no edge problem.
+func TestSpecSchemaExampleDecodes(t *testing.T) {
+	sec := specSection(t, "## 5. Write spec.toml")
+	start := strings.Index(sec, "```toml\n")
+	if start < 0 {
+		t.Fatal("§5 has no ```toml block")
+	}
+	block := sec[start+len("```toml\n"):]
+	end := strings.Index(block, "```")
+	if end < 0 {
+		t.Fatal("§5 toml block is not closed")
+	}
+	var spec phase.Spec
+	md, err := toml.Decode(block[:end], &spec)
+	if err != nil {
+		t.Fatalf("§5 schema does not decode: %v", err)
+	}
+	if u := md.Undecoded(); len(u) > 0 {
+		t.Errorf("§5 schema has keys phase.Spec does not read: %v", u)
+	}
+	if len(spec.Edges) == 0 {
+		t.Error("§5 schema shows no [[edges]] record")
+	}
+	if p := phase.EdgeProblems(&spec, nil); len(p) > 0 {
+		t.Errorf("§5 schema's edge example is unresolved: %v", p)
+	}
+}
+
+// TestSpecPromptEdgeCommandsResolve: every `dross deferred new-id` and
+// `dross phase edges` the expanded prompt runs is a real verb.
+func TestSpecPromptEdgeCommandsResolve(t *testing.T) {
+	root := &cobra.Command{Use: "dross"}
+	root.AddCommand(Deferred(), Phase())
+	s := expandedPrompt(t, "spec.md")
+	for _, verb := range [][]string{{"deferred", "new-id"}, {"phase", "edges"}} {
+		if !strings.Contains(s, "dross "+strings.Join(verb, " ")) {
+			t.Errorf("spec prompt never runs `dross %s`", strings.Join(verb, " "))
+			continue
+		}
+		c, _, err := root.Find(verb)
+		if err != nil || c.Name() != verb[1] {
+			t.Errorf("`dross %s` does not resolve: %v", strings.Join(verb, " "), err)
+		}
+	}
+	c, _, _ := root.Find([]string{"phase", "edges"})
+	if c != nil && c.Flags().Lookup("json") == nil {
+		t.Error("spec prompt runs `dross phase edges --json`, which is not a flag")
 	}
 }

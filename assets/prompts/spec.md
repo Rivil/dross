@@ -58,6 +58,17 @@ Tighten each candidate into a one-liner and assign id `c-1`, `c-2`, … — a so
 - Vague ("works well") instead of measurable ("loads in under 200ms on 4G")
 - Two outcomes squashed into one (split it)
 
+## 2b. Edge probe
+
+Run `dross phase edges <id> --json`. From its `open` list of classes — boundary, empty, encoding, ordering, precision, idempotency, concurrency, adjacency, each with its hint — propose the **2–3** likeliest to bite this phase, **one per turn** via `AskUserQuestion` — never walk all eight. Resolved classes are never in `open`, so a resumed spec re-proposes none; repair each `unresolved` class's record first, or plan-lock refuses it. There is no minimum: a proposal that doesn't apply is recorded dismissed with a reason.
+
+Each answer is one `[[edges]]` record (§5):
+- **covered** — `criteria` names the criterion ids that test it.
+- **dismissed** — `reason` says why it can't bite.
+- **deferred** — mint an id with `dross deferred new-id` and put the same id on the new `[[deferred]]` entry (§4) and in the edge's `deferred`; or name an already-parked item's id.
+
+A class may surface a must-NOT ("never X when Y"): it joins `[[criteria]]` through §2's accept / reword / drop gate. Accepted → the edge is covered, naming it; dropped → record the edge dismissed or deferred, never covered.
+
 ## 3. Locked decisions — gray-area walkthrough
 
 Don't ask "any locked decisions?" and wait for free recall. Surface this phase's **gray areas** and walk **every** one, one at a time; each resolved area becomes a locked decision.
@@ -150,8 +161,14 @@ why    = "..."
 locked = true
 
 [[deferred]]
+id   = "..."                       # dross deferred new-id, when an edge links it
 text = "..."
 why  = "..."                       # optional
+
+[[edges]]
+class    = "boundary"
+outcome  = "covered"               # covered | dismissed | deferred
+criteria = ["c-1"]                 # or reason = "..." / deferred = "<id>"
 ```
 
 `Write` it to `.dross/phases/<id>/spec.toml`. **Don't paste the TOML back** — every line was agreed in §2–§4. Confirm with a one-line summary asked as one `AskUserQuestion`, never a trailing prose line:
