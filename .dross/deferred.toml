@@ -83,3 +83,9 @@
   text = "Scoped commit gate: commit-green accepts a scoped green covering the changed paths instead of a full dross test per commit (overturns tool-gate-hooks' green_run_definition / full_run_source); full suite stays at verify/ship + CI. barktime needs auto-selection (vitest related) and a Svelte construct resolver for stryker ranges."
   why = "Evidence: barktime 15-26 min full run x ~20 tasks/phase = 5-8h/phase, forcing a manual dross gate off commit-green. Asked for 2026-10-26, never inserted into v1.8; routed to head of v1.9 at v1.8 close, 2026-11-05."
   target = "scoped-commit-gate"
+
+[[deferred]]
+  id = "18096d91353ced67"
+  text = "README roadmap drift: mark v1.8 (complete) with its criteria ticked, rewrite the v1.9 section as active with its 5 criteria, and drop the Azure DevOps line."
+  why = "TestReadmeRoadmapMatchesRecordedMilestones is red since the v1.8 close and v1.9 activation changed the recorded statuses. README is a non-.dross path, so the protected milestone branch only takes it through a phase PR; same shape as context-boundaries' first task."
+  target = "scoped-commit-gate"
