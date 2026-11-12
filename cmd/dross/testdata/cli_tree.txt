@@ -155,6 +155,8 @@ dross phase complete flag --recover (bool) default="false" noopt="true" usage="o
 dross phase create | use="create <title>" short="Create the next phase directory and switch to phase/<id>"
 dross phase create flag --adopt (bool) default="false" noopt="true" usage="take over a slug that has already been started (refused without this)"
 dross phase create flag --no-branch (bool) default="false" noopt="true" usage="skip creating/checking out the phase/<id> git branch (advanced)"
+dross phase edges | use="edges <phase-id>" short="Report which edge classes a phase's spec has resolved, left unresolved or not yet probed"
+dross phase edges flag --json (bool) default="false" noopt="true" usage="emit the report as JSON {classes, resolved, unresolved, open} (for /dross-spec)"
 dross phase insert | use="insert <title>" short="Scaffold a phase and place it at a position in the milestone array"
 dross phase insert flag --after (string) default="" usage="place the new phase immediately after this phase slug"
 dross phase insert flag --before (string) default="" usage="place the new phase immediately before this phase slug"

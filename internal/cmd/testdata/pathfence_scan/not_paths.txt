@@ -44,6 +44,10 @@ changes.TaskReview.Outcome outcome
 changes.TaskRecord.Notes notes
 
 # ---- cmd — command-local records: ids, hosts, states, prose, report labels, hook payloads
+cmd.edgeClassRow.Class class
+cmd.edgeClassRow.Hint hint
+cmd.edgesReport.Resolved resolved
+cmd.edgesReport.Unresolved unresolved
 cmd.milestoneProgressReport.Remaining remaining
 cmd.milestoneProgressReport.Status status
 cmd.milestoneProgressReport.Unscaffolded unscaffolded
