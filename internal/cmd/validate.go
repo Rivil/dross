@@ -101,6 +101,16 @@ func Validate() *cobra.Command {
 			// same broken file twice — or call every absorbed id unknown.
 			absorbable, _ := deferredByID(root)
 
+			// The same project-wide id set resolves deferred edges: an edge may
+			// park its work in another phase or the _project store. It stands
+			// down with absorbable — on a Collect failure the broken file is
+			// reported in its own right, and judging edges against a partial
+			// set would call every deferred edge dangling.
+			knownDeferred := make(map[string]bool, len(absorbable))
+			for id := range absorbable {
+				knownDeferred[id] = true
+			}
+
 			for _, id := range phaseIDs {
 				dir := phase.Dir(root, id)
 				specPath := filepath.Join(dir, "spec.toml")
@@ -137,6 +147,7 @@ func Validate() *cobra.Command {
 					problems = append(problems, danglingTargets(specPath, spec, validTargets)...)
 					if absorbable != nil {
 						problems = append(problems, absorbedProblems(root, id, specPath, spec, absorbable)...)
+						problems = append(problems, edgeLines(specPath, spec, knownDeferred)...)
 					}
 				}
 				// A spec or plan that did not decode is reported above; its ids
@@ -606,6 +617,19 @@ func deferredByID(root string) (map[string]deferred.Entry, error) {
 		}
 	}
 	return out, nil
+}
+
+// edgeLines reports every unresolved [[edges]] record of spec, prefixed with
+// its path. The rules are phase.EdgeProblems — the one rule set the plan-lock
+// gate and `dross phase edges` share — so validate cannot disagree with them.
+// Unlike absorbedProblems it checks complete phases too: an edge record is
+// written once, at spec time, so a bad one is wrong whenever it is found.
+func edgeLines(path string, spec *phase.Spec, knownDeferred map[string]bool) []string {
+	var out []string
+	for _, p := range phase.EdgeProblems(spec, knownDeferred) {
+		out = append(out, fmt.Sprintf("%s: %s", path, p))
+	}
+	return out
 }
 
 // absorbedProblems checks every id a criterion of phaseID's spec absorbs: it
