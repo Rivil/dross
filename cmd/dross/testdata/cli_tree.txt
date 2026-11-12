@@ -40,6 +40,7 @@ dross deferred list flag --milestone (string) default="" usage="only items from 
 dross deferred list flag --routed (bool) default="false" noopt="true" usage="only routed (target set) items"
 dross deferred list flag --someday (bool) default="false" noopt="true" usage="only unrouted (no target, not dismissed) items"
 dross deferred list flag --target (string) default="" usage="only items routed to this phase slug"
+dross deferred new-id | use="new-id" short="Print a fresh deferred-item id, unique across the project (writes nothing)"
 dross deferred route | use="route <phase> <idx>" short="Stamp a target on a phase's Nth deferred item"
 dross deferred route flag --target (string) default="" usage="destination phase slug to stamp (required)"
 dross deferred unroute | use="unroute <phase> <idx>" short="Clear a routed deferred item's target, returning it to someday"
