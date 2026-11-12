@@ -2,5 +2,283 @@
   "phase": "spec-edge-probe",
   "base": "milestone/v1.9",
   "base_commit": "8343cba8564d4826803ad1fb1b026885a7832a2e",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/edge.go",
+        "internal/phase/edge_test.go",
+        "internal/deferred/deferred_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "ec143241",
+      "completed_at": "2026-11-12T17:13:13.799017Z",
+      "landmarks": [
+        {
+          "feature": "spec edge probe",
+          "symbol": "EdgeProblems",
+          "loc": "internal/phase/edge.go:70",
+          "what": "[[edges]] spec table plus the one shared rule set that flags unresolved edge records against the project-wide deferred ids"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/deferred.go",
+        "internal/cmd/deferred_newid.go",
+        "internal/cmd/deferred_newid_test.go",
+        "README.md",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "94f627c8",
+      "completed_at": "2026-11-12T18:25:26.973223Z",
+      "landmarks": [
+        {
+          "feature": "spec edge probe",
+          "symbol": "deferredNewID",
+          "loc": "internal/cmd/deferred_newid.go:15",
+          "what": "read-only dross deferred new-id prints one project-unique [[deferred]] id for a spec-time deferred edge link"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_edges_test.go"
+      ],
+      "commit": "6a12a85f",
+      "completed_at": "2026-11-12T17:36:40.142587Z",
+      "landmarks": [
+        {
+          "feature": "spec edge probe",
+          "symbol": "edgeLines",
+          "loc": "internal/cmd/validate.go:627",
+          "what": "dross validate prints one path-prefixed ✗ line per unresolved [[edges]] record, deferred ids resolved project-wide"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/state.go",
+        "internal/cmd/state_edges_gate_test.go"
+      ],
+      "commit": "9ac1a04f",
+      "completed_at": "2026-11-12T18:04:50.468894Z",
+      "landmarks": [
+        {
+          "feature": "spec edge probe",
+          "symbol": "planLockEdgeGate",
+          "loc": "internal/cmd/state.go:349",
+          "what": "state set current_phase_status planned refuses, before mutating, while the current phase's spec holds an unresolved edge record"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_edges.go",
+        "internal/cmd/phase_edges_test.go",
+        "README.md",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "627f6838",
+      "completed_at": "2026-11-12T18:48:47.157925Z",
+      "landmarks": [
+        {
+          "feature": "spec edge probe",
+          "symbol": "phaseEdges",
+          "loc": "internal/cmd/phase_edges.go:42",
+          "what": "dross phase edges reports all eight edge classes as open, resolved or unresolved (plain and --json) for the spec prompt to propose from"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "assets/prompts/spec.md",
+        "assets/prompts/_spec.resume.md",
+        "internal/cmd/spec_prompt_test.go"
+      ],
+      "commit": "f3c247d6",
+      "completed_at": "2026-11-12T19:00:03.926819Z",
+      "landmarks": [
+        {
+          "feature": "spec edge probe",
+          "symbol": "§2b Edge probe",
+          "loc": "assets/prompts/spec.md:61",
+          "what": "/dross-spec proposes the 2–3 likeliest open edge classes one per turn and records each as covered, dismissed or deferred"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "TestEdgeCorpusIsClean builds its known-deferred set only from .dross/phases/*/spec.toml and leaves out the _project store. The record says callers resolve deferred ids project-wide. So once a checked-in spec has a deferred edge pointing at a project-store item, the corpus test fails even though the record is valid. Build the set the way deferred.Collect does, or add the store file.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "The empty-id rule is enforced by a separate e.Deferred == \"\" check that runs before the known-set lookup, so it holds whatever set the caller passes. The table covers this with a known set that contains \"\".",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "EdgeStatus calls a record with an unknown class neither resolved, unresolved nor open, and leaves it for EdgeProblems to report. The doc comment says so and TestEdgeStatusPartitions covers it with the 'latency' record.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "edgeLines runs only inside `if absorbable != nil`, so when deferred.Collect fails (any other undecodable spec or store) every spec's edge checks are skipped, including the ones that need no deferred set (dismissed with no reason, covered naming a missing criterion, unknown class). The description says EdgeProblems runs for every spec that decoded. Validate still exits non-zero on the broken file, but those edge errors only appear once it is fixed. Running the checks with knownDeferred as nil or partial and suppressing only the deferred-id defect would report them.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In TestValidateUndecodableSpecHasNoEdgeNoise, two things keep edge lines away: specErr leaves spec nil, and the absorbable gate trips because Collect also fails on that spec. The test cannot tell which one did the work, but the contract is met either way.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-7",
+          "text": "planLockEdgeGate refuses whenever deferred.Collect fails, even if the current spec has no deferred edges. So a malformed spec.toml in an unrelated phase, or a broken deferred.toml, blocks plan-lock of a clean or legacy phase. Validate does the opposite on the same failure: it skips the edge check. Consider calling Collect only when the spec has at least one outcome=deferred edge.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPlanLockGateIsScopedToPlanned only checks that the calls succeed. It never checks that the status actually became in-progress; that is enough for this contract line, just lightly asserted.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPlanLockSharesValidateRules compares the gate's lines with validate's exact lines for a two-edge fixture, which pins both commands to the shared phase.EdgeProblems rule set.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-7",
+          "text": "When the current spec has a deferred edge and deferred.Collect fails, the gate refuses. That goes beyond the description: it was not asked for, but it is defensible. It also differs from validate, which skips edge checks entirely when Collect fails (it reports the broken file instead). So with a broken spec elsewhere in the project, validate shows no edge lines while plan-lock refuses.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In TestPlanLockUnrelatedBrokenSpec, the deferred-edge subtest only checks that the call errors. It never checks that the error comes from the Collect failure rather than some other refusal. The fixture's edges are all resolved, so the check is effectively sound anyway.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Plain output says '(resolved)' using the first record's outcome. That is sound because a duplicate record makes its class unresolved, so a resolved class always has exactly one record.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "edgeDeferredIDs only calls deferred.Collect when the spec has a deferred edge, like the plan-lock gate does. A broken spec in an unrelated phase therefore cannot break this report, and TestPhaseEdgesJudgesDeferredAgainstTheProject checks both a resolving and a dangling deferred id.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPhaseEdgesAbsenceIsAllOpen is labelled c-5 in its comment, but it carries the absence line of this task's test_contract (the task covers c-6 and c-1). The test is correct; only the label is off.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "§2b proposes only from `open`, but `dross phase edges --json` also reports `unresolved` classes (e.g. dismissed with no reason, or a deferred id that doesn't exist). When resuming with extend, nothing tells the agent to repair those records, so a spec can leave /dross-spec still unable to pass plan-lock or `dross validate`.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In TestSpecEdgeProbeResume the needle \"open\" is close to vacuous: it matches anywhere in §2b. The real guard is the \"resolved classes are never in open\" needle.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The reviewer did not measure spec.md against the 15,000-byte cap independently; TestPromptByteBudget enforces it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "TestSpecEdgeProbeResume checks the replace-branch phrases ('replacing clears [[edges]]', 'proposes from the --json classes list, not open') against the whole expanded spec prompt, not the _spec.resume.md replace bullet the contract names; the phrase could move out of the replace branch and the test would still pass",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "specSection and edgeProbe scope assertions to the §2b heading through the next '\\n## ', so the c-4 must-NOT checks cannot be satisfied by §1/§4's copies of accept / reword / drop",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
 }
