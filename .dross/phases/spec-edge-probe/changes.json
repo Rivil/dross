@@ -1,0 +1,6 @@
+{
+  "phase": "spec-edge-probe",
+  "base": "milestone/v1.9",
+  "base_commit": "8343cba8564d4826803ad1fb1b026885a7832a2e",
+  "tasks": {}
+}
