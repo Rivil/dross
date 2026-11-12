@@ -210,13 +210,18 @@ mutation.strykerMutant.Status status
 mutation.strykerMutant.StatusReason statusreason
 mutation.strykerReport.SchemaVersion schemaversion
 
-# ---- phase — spec and plan prose and ids: criteria, decisions, deferred items, task ids, titles, statuses
+# ---- phase — spec and plan prose and ids: criteria, decisions, edge records, deferred items, task ids, titles, statuses
 phase.Criterion.Deferred deferred
 phase.Criterion.ID id
 phase.Criterion.Text text
 phase.Decision.Choice choice
 phase.Decision.Key key
 phase.Decision.Why why
+phase.Edge.Class class
+phase.Edge.Criteria criteria
+phase.Edge.Deferred deferred
+phase.Edge.Outcome outcome
+phase.Edge.Reason reason
 phase.Deferred.Survivor survivor
 phase.Deferred.Text text
 phase.Deferred.Why why
