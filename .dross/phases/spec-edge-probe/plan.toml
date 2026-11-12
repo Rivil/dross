@@ -8,28 +8,9 @@ task_seq = 6
   wave = 1
   title = "Add [[edges]] schema and shared edge checks"
   files = ["internal/phase/phase.go", "internal/phase/edge.go", "internal/phase/edge_test.go", "internal/deferred/deferred_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
-  description = """
-Add Edge{Class, Outcome, Criteria, Reason, Deferred} (matching toml/json tags, omitempty) and Spec.Edges `toml:"edges,omitempty"`. In edge.go: EdgeClasses (the eight, in spec order, each with a one-line hint), the outcome set, EdgeProblems(spec) []string (one line per unresolved record, in record order, naming `edges[i] (<class>)` and the defect) and EdgeStatus(spec) partitioning classes into resolved / unresolved / open. Deferred ids resolve against this spec's own [[deferred]] only. This is the ONLY rule set; validate, the state gate and `phase edges` all call it. File the new Edge fields in not_paths.txt.
-"""
+  description = "Add Edge{Class, Outcome, Criteria, Reason, Deferred} (matching toml/json tags, omitempty) and Spec.Edges `toml:\"edges,omitempty\"`. In edge.go: EdgeClasses (the eight, in spec order, each with a one-line hint), the outcome set, EdgeProblems(spec, knownDeferred map[string]bool) []string (one line per unresolved record, in record order, naming `edges[i] (<class>)` and the defect) and EdgeStatus(spec, knownDeferred) partitioning classes into resolved / unresolved / open. Deferred ids resolve against the caller-supplied PROJECT-WIDE id set (callers build it from deferred.Collect: every phase spec plus the _project store); the empty id never matches. This is the ONLY rule set; validate, the state gate and `phase edges` all call it. File the new Edge fields in not_paths.txt."
   covers = ["c-2", "c-3", "c-5"]
-  test_contract = [
-    "if the unknown-class rule loosens, the EdgeProblems table fails: class \"nullness\", \"Boundary\", \" boundary\" and \"\" each yield a problem naming edges[i] and listing the eight classes",
-    "if an outcome typo is accepted, the table fails: outcome \"maybe\", \"dismiss\" and \"\" each yield a problem",
-    "if covered stops checking criteria, the table fails: covered with criteria=[] is a problem, and covered [\"c-1\",\"c-9\"] where only c-1..c-3 exist names c-9 and not c-1",
-    "if dismissed accepts a blank reason, the table fails: reason \"\" and \"   \" are both problems",
-    "if deferred stops checking its link, the table fails: deferred \"abc\" with no [[deferred]] id \"abc\" names \"abc\"; adding [[deferred]] id=\"abc\" clears it",
-    "if empty ids match each other, the table fails: deferred \"\" while an id-less [[deferred]] exists is still a problem",
-    "if duplicate classes pass, the table fails: two records with class \"empty\" yield one duplicate problem naming both indices",
-    "if a rule over-reaches, the table fails: one well-formed record per outcome returns nil, and a dismissed record that also carries criteria is not a problem",
-    "if output order depends on map iteration, the test fails: a spec with 3 bad records returns them in record order on 20 repeated calls",
-    "if the class set drifts, TestEdgeClassesExact fails: EdgeClasses must equal [boundary empty encoding ordering precision idempotency concurrency adjacency] in that order, each with a non-empty hint",
-    "if an Edge field is dropped, the round-trip test fails: Save then LoadSpec on a spec with three records preserves every field",
-    "if omitempty is dropped, the legacy round-trip fails: a spec with no [[edges]] goes LoadSpec then Save byte-identical",
-    "if a deferred-verb re-save strips edges, the deferred_test fails: EnsureIDs on a spec holding [[edges]] plus an id-less [[deferred]] backfills the id and leaves Edges intact",
-    "if a legacy spec trips the rules, the corpus test fails: every checked-in ../../.dross/phases/*/spec.toml returns nil EdgeProblems, and the glob must match more than 0 specs",
-    "if EdgeStatus mis-partitions, its test fails: boundary covered + empty dismissed(reason) + encoding dismissed(\"\") gives resolved=[boundary empty], unresolved=[encoding], open=the other five in EdgeClasses order; a legacy spec gives open=all eight",
-    "if Edge's json tags drift from its toml tags, TestTomlFieldsCarryMatchingJSONTags fails; if an Edge field goes unfiled, TestEveryPathShapedFieldIsDeclared fails",
-  ]
+  test_contract = ["if the unknown-class rule loosens, the EdgeProblems table fails: class \"nullness\", \"Boundary\", \" boundary\" and \"\" each yield a problem naming edges[i] and listing the eight classes", "if an outcome typo is accepted, the table fails: outcome \"maybe\", \"dismiss\" and \"\" each yield a problem", "if covered stops checking criteria, the table fails: covered with criteria=[] is a problem, and covered [\"c-1\",\"c-9\"] where only c-1..c-3 exist names c-9 and not c-1", "if dismissed accepts a blank reason, the table fails: reason \"\" and \"   \" are both problems", "if deferred stops checking its link, the table fails: deferred \"abc\" with a known-id set lacking \"abc\" names \"abc\"; the same record with \"abc\" in the known set is clean", "if empty ids match each other, the table fails: deferred \"\" is a problem even when the known-id set contains \"\"", "if duplicate classes pass, the table fails: two records with class \"empty\" yield one duplicate problem naming both indices", "if a rule over-reaches, the table fails: one well-formed record per outcome returns nil, and a dismissed record that also carries criteria is not a problem", "if output order depends on map iteration, the test fails: a spec with 3 bad records returns them in record order on 20 repeated calls", "if the class set drifts, TestEdgeClassesExact fails: EdgeClasses must equal [boundary empty encoding ordering precision idempotency concurrency adjacency] in that order, each with a non-empty hint", "if an Edge field is dropped, the round-trip test fails: Save then LoadSpec on a spec with three records preserves every field", "if omitempty is dropped from Spec.Edges, the save test fails: a spec with Edges = []Edge{} (non-nil, empty) saves with no `edges` key; and a legacy spec Saved once, then LoadSpec then Save again, is byte-identical to the first save with no `edges` key", "if a deferred-verb re-save strips edges, the deferred_test fails: EnsureIDs on a spec holding [[edges]] plus an id-less [[deferred]] backfills the id and leaves Edges intact", "if a legacy spec trips the rules, the corpus test fails: every checked-in ../../.dross/phases/*/spec.toml returns nil EdgeProblems, and the glob must match more than 0 specs", "if EdgeStatus mis-partitions, its test fails: boundary covered + empty dismissed(reason) + encoding dismissed(\"\") gives resolved=[boundary empty], unresolved=[encoding], open=the other five in EdgeClasses order; a legacy spec gives open=all eight", "if Edge's json tags drift from its toml tags, TestTomlFieldsCarryMatchingJSONTags fails; if an Edge field goes unfiled, TestEveryPathShapedFieldIsDeclared fails"]
   status = "pending"
 
 [[task]]
@@ -41,13 +22,7 @@ Add Edge{Class, Outcome, Criteria, Reason, Deferred} (matching toml/json tags, o
 A read-only verb that prints one id from mintDeferredID(root), unique across every phase spec and the _project store, and writes nothing. Registered in Deferred()'s AddCommand; the README `dross deferred {…}` row gains `new-id`.
 """
   covers = ["c-2"]
-  test_contract = [
-    "if the output gains a label or prefix, the test fails: stdout is exactly one line matching ^[0-9a-f]{16}$",
-    "if the verb writes, the test fails: on a fixture .dross tree with no deferred.toml, the file is still absent afterwards and every spec.toml is byte-identical",
-    "if minting ignores used ids, the test fails: with \"aaaaaaaaaaaaaaaa\" seeded as the only used id (in a phase spec and the _project store), the printed id differs, and two consecutive calls print different ids",
-    "if a broken spec is silently skipped, the test fails: a malformed spec.toml in another phase gives a non-zero exit naming that spec's path",
-    "if the verb is unregistered, the test fails: root.Find([]string{\"deferred\",\"new-id\"}) resolves; if the README deferred row lacks `new-id`, the readme needle test fails",
-  ]
+  test_contract = ["if the output gains a label or prefix, the test fails: stdout is exactly one line matching ^[0-9a-f]{16}$", "if the verb writes, the test fails: on a fixture .dross tree with no deferred.toml, the file is still absent afterwards and every spec.toml is byte-identical", "if the verb bypasses the project-wide used-id set (calls deferred.NewID directly instead of mintDeferredID), the test fails: a malformed spec.toml in another phase makes deferred.Collect error, so the verb exits non-zero naming that spec path; used-id avoidance itself stays pinned by TestNewIDAvoidsCollisions", "if the verb is unregistered, the test fails: root.Find([]string{\"deferred\",\"new-id\"}) resolves; if the README deferred row lacks `new-id`, the readme needle test fails"]
   status = "pending"
 
 [[task]]
@@ -56,17 +31,9 @@ A read-only verb that prints one id from mintDeferredID(root), unique across eve
   depends_on = ["t-1"]
   title = "Report unresolved edges in `dross validate`"
   files = ["internal/cmd/validate.go", "internal/cmd/validate_edges_test.go"]
-  description = """
-In validate's per-phase walk (beside danglingTargets / absorbedProblems), append EdgeProblems(spec) prefixed with the spec path for every spec that decoded, complete phases included. A spec that failed to decode is already reported and gets no edge lines.
-"""
+  description = "In validate's per-phase walk (beside danglingTargets / absorbedProblems), build the known deferred-id set once from deferred.Collect(root) and append EdgeProblems(spec, known) prefixed with the spec path for every spec that decoded, complete phases included. A spec that failed to decode is already reported and gets no edge lines."
   covers = ["c-3", "c-5"]
-  test_contract = [
-    "if any c-3 shape slips through, its subtest fails: dismissed with no reason, covered naming a missing criterion, deferred with no matching [[deferred]] id, and an unknown class each make validate exit non-zero with \"✗ <specpath>: edges[N] (<class>) …\" naming that record",
-    "if validate returns after the first edge problem, the test fails: a spec with two bad records prints two ✗ lines",
-    "if a decode failure also emits edge noise, the test fails: an undecodable spec reports exactly one problem line for that file",
-    "if legacy specs regress (c-5), the test fails: a fixture copied from a real pre-phase spec (criteria + decisions + deferred, no [[edges]]) plus a plan prints \"✓ all dross artefacts valid\" and exits 0",
-    "if deferred matching goes project-wide, the test fails: an id matching a [[deferred]] in the same spec passes; the same id present only in another phase's spec fails",
-  ]
+  test_contract = ["if any c-3 shape slips through, its subtest fails: dismissed with no reason, covered naming a missing criterion, deferred with an id found nowhere in the project, and an unknown class each make validate exit non-zero with \"✗ <specpath>: edges[N] (<class>) …\" naming that record", "if validate returns after the first edge problem, the test fails: a spec with two bad records prints two ✗ lines", "if a decode failure also emits edge noise, the test fails: an undecodable spec reports exactly one problem line for that file", "if legacy specs regress (c-5), the test fails: a fixture copied from a real pre-phase spec (criteria + decisions + deferred, no [[edges]]) plus a plan prints \"✓ all dross artefacts valid\" and exits 0", "if deferred matching narrows to the same spec, the test fails: a deferred edge whose id exists only in another phase's [[deferred]] passes, as does one whose id exists only in the _project store"]
   status = "pending"
 
 [[task]]
@@ -75,18 +42,9 @@ In validate's per-phase walk (beside danglingTargets / absorbedProblems), append
   depends_on = ["t-1"]
   title = "Refuse plan-lock on unresolved edges"
   files = ["internal/cmd/state.go", "internal/cmd/state_edges_gate_test.go"]
-  description = """
-In stateSet, before anything mutates: when field=current_phase_status and value=planned, load the current phase's spec.toml and refuse with every EdgeProblems line. Empty current_phase or no spec.toml allows; a spec that fails to decode refuses, naming its path.
-"""
+  description = "In stateSet, before anything mutates: when field=current_phase_status and value=planned, load current_phase's spec.toml, build the known deferred-id set from deferred.Collect(root), and refuse with every EdgeProblems line. Empty current_phase or no spec.toml allows; a spec that fails to decode refuses, naming its path. The gate reads current_phase (the phase the status field describes), never another phase."
   covers = ["c-7", "c-5"]
-  test_contract = [
-    "if the gate is missing or runs after mutation, the test fails: a current-phase spec with covered → \"c-9\" (missing) makes `state set current_phase_status planned` error naming edges[0] and its class, and state.json is byte-identical afterwards (no status change, no history row)",
-    "if a second rule set appears, the test fails: the refusal text equals validate's line for the same fixture minus the ✗/path prefix",
-    "if the gate over-blocks, the test fails: an all-resolved spec and a legacy spec with no [[edges]] both reach status \"planned\"",
-    "if the gate is not scoped to plan-lock, the test fails: with the same bad spec, `set current_phase_status in-progress` and `set current_phase other` both succeed",
-    "if absence is treated as failure, the test fails: empty current_phase and a phase with no spec.toml both allow `planned`",
-    "if a broken spec is waved through, the test fails: a malformed spec.toml refuses `planned` with the spec path in the error",
-  ]
+  test_contract = ["if the gate is missing or runs after mutation, the test fails: a current-phase spec with covered → \"c-9\" (missing) makes `state set current_phase_status planned` error naming edges[0] and its class, and state.json is byte-identical afterwards (no status change, no history row)", "if a second rule set appears, the test fails: the refusal text equals validate's line for the same fixture minus the ✗/path prefix", "if the gate over-blocks, the test fails: an all-resolved spec and a legacy spec with no [[edges]] both reach status \"planned\"", "if the gate is not scoped to plan-lock, the test fails: with the same bad spec, `set current_phase_status in-progress` and `set current_phase other` both succeed", "if absence is treated as failure, the test fails: empty current_phase and a phase with no spec.toml both allow `planned`", "if a broken spec is waved through, the test fails: a malformed spec.toml refuses `planned` with the spec path in the error", "if the gate reads the wrong phase, the test fails: with current_phase=A (all edges resolved) and phase B holding an unresolved edge, set current_phase_status planned succeeds", "if the gate's deferred lookup is same-spec only, the test fails: a deferred edge whose id lives only in another phase's [[deferred]] lets planned succeed"]
   status = "pending"
 
 [[task]]
@@ -95,19 +53,9 @@ In stateSet, before anything mutates: when field=current_phase_status and value=
   depends_on = ["t-1"]
   title = "Add `dross phase edges <id>` report"
   files = ["internal/cmd/phase.go", "internal/cmd/phase_edges.go", "internal/cmd/phase_edges_test.go", "README.md", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
-  description = """
-Report EdgeStatus for a phase's spec. Plain output: all eight classes in EdgeClasses order, each with its hint and `open` / `<outcome> (resolved)` / `unresolved: <problem>`, unknown-class records listed after. `--json`: {resolved: [class], unresolved: [class], open: [{class, hint}]} — the prompt reads this, so spec.md carries no class hints. Registered in Phase()'s AddCommand; README phase row gains `edges`.
-"""
+  description = "Report EdgeStatus for a phase's spec (known deferred ids from deferred.Collect). Plain output: all eight classes in EdgeClasses order, each with its hint and `open` / `<outcome> (resolved)` / `unresolved: <problem>`, unknown-class records listed after. `--json`: {classes: [{class, hint}] (all eight), resolved: [class], unresolved: [class], open: [{class, hint}]} — the prompt reads this, so spec.md carries no class hints. Registered in Phase()'s AddCommand; README phase row gains `edges`."
   covers = ["c-6", "c-1"]
-  test_contract = [
-    "if a resolved class leaks into open (the c-6 guarantee), the test fails: boundary covered + empty dismissed(reason) + encoding dismissed(\"\") gives --json resolved=[\"boundary\",\"empty\"], unresolved=[\"encoding\"], and open = exactly the other five, each with a non-empty hint",
-    "if a reasonless dismissal reads as resolved, the test fails: in plain output that class prints `unresolved:` and never `resolved`",
-    "if an unknown-class record vanishes, the test fails: a record with class \"latency\" appears as unknown in the plain listing",
-    "if absence breaks the report, the test fails: a legacy spec or no spec.toml gives open = all eight, and resolved/unresolved are empty JSON arrays, not null",
-    "if a bad id is accepted, the test fails: an unknown phase id gives a non-zero exit naming the id",
-    "if plain-output order drifts from EdgeClasses, the golden order check fails",
-    "if the verb is unregistered, root.Find([]string{\"phase\",\"edges\"}) fails; if the README phase row lacks `edges`, the readme needle test fails",
-  ]
+  test_contract = ["if a resolved class leaks into open (the c-6 guarantee), the test fails: boundary covered + empty dismissed(reason) + encoding dismissed(\"\") gives --json resolved=[\"boundary\",\"empty\"], unresolved=[\"encoding\"], and open = exactly the other five, each with a non-empty hint", "if a reasonless dismissal reads as resolved, the test fails: in plain output that class prints `unresolved:` and never `resolved`", "if an unknown-class record vanishes, the test fails: a record with class \"latency\" appears as unknown in the plain listing", "if absence breaks the report, the test fails: a legacy spec or no spec.toml gives open = all eight, and resolved/unresolved are empty JSON arrays, not null", "if a bad id is accepted, the test fails: an unknown phase id gives a non-zero exit naming the id", "if plain-output order drifts from EdgeClasses, the golden order check fails", "if the verb is unregistered, root.Find([]string{\"phase\",\"edges\"}) fails; if the README phase row lacks `edges`, the readme needle test fails", "if the replace path loses its source, the test fails: --json classes always lists all eight in EdgeClasses order with non-empty hints, including when every class is resolved"]
   status = "pending"
 
 [[task]]
@@ -116,19 +64,7 @@ Report EdgeStatus for a phase's spec. Plain output: all eight classes in EdgeCla
   depends_on = ["t-1", "t-2", "t-5"]
   title = "Add §2b edge-probe step to /dross-spec"
   files = ["assets/prompts/spec.md", "assets/prompts/_spec.resume.md", "internal/cmd/spec_prompt_test.go"]
-  description = """
-New "## 2b. Edge probe" in base spec.md after §2: run `dross phase edges <id> --json`, propose the 2–3 likeliest OPEN classes one AskUserQuestion each (never all eight, no minimum; resolved classes are skipped by construction, on every path). Record each as covered (criteria ids), dismissed (reason) or deferred (id minted via `dross deferred new-id`, same id on the [[deferred]] entry). A must-NOT ("never X when Y") goes through §2's accept / reword / drop gate: accepted → covered naming it; dropped → dismissed or deferred. §5 schema gains an [[edges]] example and `id` on [[deferred]]. _spec.resume.md: replacing a spec clears [[edges]]. spec.md stays ≤ 15,000 B.
-"""
+  description = "New \"## 2b. Edge probe\" in base spec.md after §2: run `dross phase edges <id> --json`, propose the 2–3 likeliest OPEN classes one AskUserQuestion each (never all eight, no minimum; resolved classes are skipped by construction, on every path). Record each as covered (criteria ids), dismissed (reason) or deferred (id minted via `dross deferred new-id`, same id on the [[deferred]] entry, or an existing parked item's id). A must-NOT (\"never X when Y\") goes through §2's accept / reword / drop gate: accepted → covered naming it; dropped → dismissed or deferred. §5 schema gains an [[edges]] example and `id` on [[deferred]]. _spec.resume.md replace branch: the new spec starts with no edges, so §2b proposes from --json `classes`, not `open`. spec.md stays ≤ 15,000 B."
   covers = ["c-1", "c-2", "c-4", "c-6"]
-  test_contract = [
-    "if the cap is removed, the section-scoped check fails: text between the §2b heading and the next \"\\n## \" contains \"2–3\", \"one per turn\" and \"never walk all eight\"",
-    "if Go adds a class the prompt doesn't know, the test fails: every name in phase.EdgeClasses appears in the §2b section",
-    "if the must-NOT path is lost (c-4), the test fails: the §2b section itself (not §1/§4's copies) contains \"never X when Y\" and \"accept / reword / drop\", and says a dropped must-NOT is recorded dismissed or deferred, never covered",
-    "if the §5 schema example drifts from the struct, the test fails: its fenced toml block decodes into phase.Spec with MetaData.Undecoded() empty, at least one Edge, and zero EdgeProblems — renaming `criteria` to `criterion` fails it",
-    "if an outcome or the minting step is dropped, the test fails: §2b names covered, dismissed, deferred, \"dross deferred new-id\" and the same-id-on-[[deferred]] instruction",
-    "if zero_edges is broken, the test fails: §2b says there is no minimum and that a non-applicable proposal is recorded dismissed with a reason",
-    "if resume could re-propose a resolved class (c-6), the test fails: §2b in BASE spec.md runs `dross phase edges` and proposes only its open classes; the expanded _spec.resume.md says replacing a spec clears [[edges]]",
-    "if a referenced verb is renamed, the test fails: every `dross deferred new-id` / `dross phase edges` span in the expanded prompt resolves via root.Find (TestProtectedPromptCommandsResolve pattern)",
-    "if spec.md outgrows its budget, TestPromptByteBudget fails (≤ 15,000 B); TestSpecPromptBranchesFetchTheirPartial's common path still fetches nothing; TestPromptInstructionsConserved rows for spec.md and TestSpecPromptSkipRuleStaysInBaseSection4 stay green",
-  ]
+  test_contract = ["if the cap is removed, the section-scoped check fails: text between the §2b heading and the next \"\\n## \" contains \"2–3\", \"one per turn\" and \"never walk all eight\"", "if Go adds a class the prompt doesn't know, the test fails: every name in phase.EdgeClasses appears in the §2b section", "if the must-NOT path is lost (c-4), the test fails: the §2b section itself (not §1/§4's copies) contains \"never X when Y\" and \"accept / reword / drop\", and says a dropped must-NOT is recorded dismissed or deferred, never covered", "if the §5 schema example drifts from the struct, the test fails: its fenced toml block decodes into phase.Spec with MetaData.Undecoded() empty, at least one Edge, and zero EdgeProblems — renaming `criteria` to `criterion` fails it", "if an outcome or the minting step is dropped, the test fails: §2b names covered, dismissed, deferred, \"dross deferred new-id\" and the same-id-on-[[deferred]] instruction", "if zero_edges is broken, the test fails: §2b says there is no minimum and that a non-applicable proposal is recorded dismissed with a reason", "if resume could re-propose a resolved class (c-6), the test fails: §2b in BASE spec.md runs `dross phase edges` and proposes only its open classes; the expanded _spec.resume.md says replacing a spec clears [[edges]]", "if a referenced verb is renamed, the test fails: every `dross deferred new-id` / `dross phase edges` span in the expanded prompt resolves via root.Find (TestProtectedPromptCommandsResolve pattern)", "if spec.md outgrows its budget, TestPromptByteBudget fails (≤ 15,000 B); TestSpecPromptBranchesFetchTheirPartial's common path still fetches nothing; TestPromptInstructionsConserved rows for spec.md and TestSpecPromptSkipRuleStaysInBaseSection4 stay green", "if replace inherits the old spec's resolution, the test fails: the expanded _spec.resume.md replace branch tells §2b to propose from the --json `classes` list, not `open`"]
   status = "pending"
