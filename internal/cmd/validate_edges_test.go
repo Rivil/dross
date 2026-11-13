@@ -252,3 +252,96 @@ deferred = "`+id+`"
 		})
 	}
 }
+
+// brokenSibling makes the project-wide deferred lookup fail: another phase's
+// spec does not decode, so deferred.Collect errors. Returns its path.
+func brokenSibling(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, ".dross", "phases", "broken", "spec.toml")
+	mustWrite(t, path, "[phase\nid = \"broken\"\n")
+	return path
+}
+
+// lineFor returns the ✗ line starting with prefix, or "".
+func lineFor(out, prefix string) string {
+	for _, l := range failLines(out) {
+		if strings.HasPrefix(l, prefix) {
+			return l
+		}
+	}
+	return ""
+}
+
+// TestValidateNamesEdgesDespiteBrokenSibling (c-3): a broken spec elsewhere
+// does not silence this spec's edge records — every deferred-independent
+// defect is still named, next to the broken file's own line.
+func TestValidateNamesEdgesDespiteBrokenSibling(t *testing.T) {
+	dir := edgeRepo(t)
+	broken := brokenSibling(t, dir)
+	specPath := writeEdgeSpec(t, dir, `
+[[edges]]
+class = "boundary"
+outcome = "dismissed"
+
+[[edges]]
+class = "empty"
+outcome = "covered"
+criteria = ["c-9"]
+
+[[edges]]
+class = "latency"
+outcome = "dismissed"
+reason = "n/a"
+`)
+	out, err := validateOut(t)
+	if err == nil {
+		t.Fatalf("validate passed with a broken sibling spec:\n%s", out)
+	}
+	if lineFor(out, "✗ "+broken) == "" {
+		t.Errorf("no ✗ line for the broken sibling %s:\n%s", broken, out)
+	}
+	for _, rec := range []struct{ prefix, want string }{
+		{"edges[0] (boundary)", "dismissed with no reason"},
+		{"edges[1] (empty)", `"c-9"`},
+		{"edges[2] (latency)", "unknown class"},
+	} {
+		line := lineFor(out, "✗ "+specPath+": "+rec.prefix)
+		if line == "" {
+			t.Errorf("broken sibling silenced %s:\n%s", rec.prefix, out)
+			continue
+		}
+		if !strings.Contains(line, rec.want) {
+			t.Errorf("line %q does not name %q", line, rec.want)
+		}
+	}
+}
+
+// TestValidateBrokenSiblingStandsDownOnlyTheIDLookup: with the project-wide
+// set unavailable, a link that cannot be checked is not called dangling, but a
+// deferred edge naming no id at all still is.
+func TestValidateBrokenSiblingStandsDownOnlyTheIDLookup(t *testing.T) {
+	dir := edgeRepo(t)
+	brokenSibling(t, dir)
+	specPath := writeEdgeSpec(t, dir, `
+[[edges]]
+class = "ordering"
+outcome = "deferred"
+deferred = "zzz"
+
+[[edges]]
+class = "encoding"
+outcome = "deferred"
+deferred = ""
+`)
+	out, _ := validateOut(t)
+	if l := lineFor(out, "✗ "+specPath+": edges[0]"); l != "" {
+		t.Errorf("an unverifiable deferred link was called dangling: %q", l)
+	}
+	line := lineFor(out, "✗ "+specPath+": edges[1] (encoding)")
+	if line == "" {
+		t.Fatalf("a deferred edge naming no id went unreported:\n%s", out)
+	}
+	if !strings.Contains(line, "names no [[deferred]] id") {
+		t.Errorf("line %q does not say the id is missing", line)
+	}
+}
