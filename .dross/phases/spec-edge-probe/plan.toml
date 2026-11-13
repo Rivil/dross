@@ -1,4 +1,4 @@
-task_seq = 6
+task_seq = 7
 
 [phase]
   id = "spec-edge-probe"
@@ -68,3 +68,14 @@ A read-only verb that prints one id from mintDeferredID(root), unique across eve
   covers = ["c-1", "c-2", "c-4", "c-6"]
   test_contract = ["if the cap is removed, the section-scoped check fails: text between the §2b heading and the next \"\\n## \" contains \"2–3\", \"one per turn\" and \"never walk all eight\"", "if Go adds a class the prompt doesn't know, the test fails: every name in phase.EdgeClasses appears in the §2b section", "if the must-NOT path is lost (c-4), the test fails: the §2b section itself (not §1/§4's copies) contains \"never X when Y\" and \"accept / reword / drop\", and says a dropped must-NOT is recorded dismissed or deferred, never covered", "if the §5 schema example drifts from the struct, the test fails: its fenced toml block decodes into phase.Spec with MetaData.Undecoded() empty, at least one Edge, and zero EdgeProblems — renaming `criteria` to `criterion` fails it", "if an outcome or the minting step is dropped, the test fails: §2b names covered, dismissed, deferred, \"dross deferred new-id\" and the same-id-on-[[deferred]] instruction", "if zero_edges is broken, the test fails: §2b says there is no minimum and that a non-applicable proposal is recorded dismissed with a reason", "if resume could re-propose a resolved class (c-6), the test fails: §2b in BASE spec.md runs `dross phase edges` and proposes only its open classes; the expanded _spec.resume.md says replacing a spec clears [[edges]]", "if a referenced verb is renamed, the test fails: every `dross deferred new-id` / `dross phase edges` span in the expanded prompt resolves via root.Find (TestProtectedPromptCommandsResolve pattern)", "if spec.md outgrows its budget, TestPromptByteBudget fails (≤ 15,000 B); TestSpecPromptBranchesFetchTheirPartial's common path still fetches nothing; TestPromptInstructionsConserved rows for spec.md and TestSpecPromptSkipRuleStaysInBaseSection4 stay green", "if replace inherits the old spec's resolution, the test fails: the expanded _spec.resume.md replace branch tells §2b to propose from the --json `classes` list, not `open`"]
   status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Name edge records in validate when the deferred lookup fails"
+  files = ["internal/cmd/validate.go", "internal/cmd/validate_edges_test.go"]
+  description = "Verify FLAG (solo review t-3): validate ran edgeLines only when deferredByID succeeded, so an undecodable spec elsewhere (or a broken deferred store) silenced every edge record — including the deferred-independent defects. On a Collect failure, still run phase.EdgeProblems for every decoded spec, standing down only the deferred-id lookup: seed knownDeferred with that spec's own non-empty deferred edge ids so an unverifiable link is not called dangling. EdgeProblems stays the one rule set; edge.go is untouched."
+  covers = ["c-3"]
+  test_contract = ["if edge checks stand down with the deferred lookup again, the test fails: with a sibling phase's spec undecodable, an edgy spec holding a reasonless dismissal, a covered → c-9 record and an unknown class prints a ✗ line naming each of edges[0..2] alongside the sibling's own ✗ line", "if the stand-down calls unverifiable links dangling, the test fails: in the same broken-sibling fixture, a deferred edge naming an id found nowhere prints no edges[N] line for that record, while a deferred edge with an empty id still does"]
+  status = "done"
+  depends_on = ["t-3"]

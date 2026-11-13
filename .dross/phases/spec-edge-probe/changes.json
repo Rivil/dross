@@ -109,6 +109,22 @@
           "what": "/dross-spec proposes the 2–3 likeliest open edge classes one per turn and records each as covered, dismissed or deferred"
         }
       ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_edges_test.go"
+      ],
+      "commit": "18caf784",
+      "completed_at": "2026-11-13T06:43:50.018779Z",
+      "landmarks": [
+        {
+          "feature": "spec edge probe",
+          "symbol": "unverifiedDeferredIDs",
+          "loc": "internal/cmd/validate.go:644",
+          "what": "validate keeps naming edge records when the project-wide deferred lookup fails, standing down only the id-exists check"
+        }
+      ]
     }
   },
   "reviews": {
