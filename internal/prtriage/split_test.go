@@ -2,6 +2,7 @@ package prtriage_test
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -34,8 +35,21 @@ func reviewTemplate(t *testing.T) string {
 
 func TestSplitReviewMatchesReviewTemplate(t *testing.T) {
 	got, ok := prtriage.SplitReview(reviewTemplate(t))
-	if !ok || len(got) != 2 {
-		t.Fatalf("the review.md template split into %d findings (ok=%v), want 2: %+v", len(got), ok, got)
+	if !ok || len(got) != 4 {
+		t.Fatalf("the review.md template split into %d findings (ok=%v), want 4: %+v", len(got), ok, got)
+	}
+	for _, f := range got[2:] {
+		if f.Severity != "FLAG" || f.Loc == "" {
+			t.Errorf("new-lens finding %d = %+v, want FLAG with a Loc", f.N, f)
+		}
+	}
+	// The edge-case finding names the switch first and the set definition
+	// after it; Loc must be the switch, the site the author fixes.
+	if got[2].Loc != "path/to/label.go:57" {
+		t.Errorf("edge-case finding Loc = %q, want the switch site path/to/label.go:57", got[2].Loc)
+	}
+	if !strings.Contains(got[2].Text, "`path/to/status.go:12`") {
+		t.Errorf("edge-case finding lost the set-definition site after its Loc: %q", got[2].Text)
 	}
 	if got[0].N != 1 || got[0].Severity != "BLOCKING" || got[0].Loc != "path/to/file.go:42" {
 		t.Errorf("finding 1 = %+v, want BLOCKING at path/to/file.go:42", got[0])
@@ -170,5 +184,77 @@ func TestSplitFindingIsolation(t *testing.T) {
 		if crlf[i] != base[i] {
 			t.Errorf("finding %d differs under CRLF: %+v vs %+v", i+1, crlf[i], base[i])
 		}
+	}
+}
+
+// lensBullets are one finding per /dross-review lens, in panel order; the
+// last two are the edge-case and silent-failure lenses.
+var lensBullets = []string{
+	"- **BLOCKING** — `auth.go:3` — token logged",
+	"- **FLAG** — `util.go:9` — dead helper",
+	"- **NOTE** — `util_test.go:4` — assertion never fails",
+	"- **FLAG** — `cmd.go:20` — outside every criterion",
+	"- **FLAG** — `label.go:57` — switch leaves `Refunded` unhandled — set defined at `status.go:12`",
+	"- **FLAG** — `store.go:88` — `Close` error discarded",
+}
+
+var lensHeadings = []string{"Security", "Code quality", "Test efficacy", "Spec fidelity", "Edge cases", "Silent failures"}
+
+// sixSectionReview renders a comment with one section per lens, or every
+// bullet under ### Security when flat is set.
+func sixSectionReview(flat bool) string {
+	var b strings.Builder
+	b.WriteString("## /dross-review — phase x\n\n1 blocking, 4 flags, 1 note across 6 lenses\n")
+	for i, bullet := range lensBullets {
+		if i == 0 || !flat {
+			b.WriteString("\n### " + lensHeadings[i] + " (1 finding)\n")
+		}
+		b.WriteString(bullet + "\n")
+	}
+	b.WriteString("\n---\n*Posted by `/dross-review`.*\n")
+	return b.String()
+}
+
+func TestSplitReviewSixSections(t *testing.T) {
+	got, ok := prtriage.SplitReview(sixSectionReview(false))
+	if !ok || len(got) != 6 {
+		t.Fatalf("six sections split into %d findings (ok=%v), want 6: %+v", len(got), ok, got)
+	}
+	for i, f := range got {
+		if f.N != i+1 {
+			t.Errorf("finding %d numbered %d", i+1, f.N)
+		}
+		if f.Text != lensBullets[i] {
+			t.Errorf("finding %d text = %q, want %q", i+1, f.Text, lensBullets[i])
+		}
+		if strings.Contains(f.Text, "###") {
+			t.Errorf("finding %d swallowed a heading: %q", i+1, f.Text)
+		}
+	}
+	if got[4].Loc != "label.go:57" || got[5].Loc != "store.go:88" {
+		t.Errorf("new-lens Locs = %q, %q; want label.go:57, store.go:88", got[4].Loc, got[5].Loc)
+	}
+	flat, _ := prtriage.SplitReview(sixSectionReview(true))
+	if !slices.Equal(got, flat) {
+		t.Errorf("the new headings split differently from ### Security:\n sections %+v\n flat     %+v", got, flat)
+	}
+}
+
+func TestSplitReviewKeepsValueList(t *testing.T) {
+	body := "## /dross-review — phase x\n\n### Edge cases (2 findings)\n" +
+		"- **FLAG** — `label.go:57` — switch leaves two values unhandled:\n" +
+		"  - Refunded\n" +
+		"  - Cancelled\n" +
+		"- **FLAG** — `route.go:8` — flag switch ignores `off`\n" +
+		"\n### Silent failures (1 finding)\n- **NOTE** — `store.go:88` — discard\n"
+	got, ok := prtriage.SplitReview(body)
+	if !ok || len(got) != 3 {
+		t.Fatalf("got %d findings (ok=%v), want 3: %+v", len(got), ok, got)
+	}
+	if want := "- **FLAG** — `label.go:57` — switch leaves two values unhandled:\n  - Refunded\n  - Cancelled"; got[0].Text != want {
+		t.Errorf("finding 1 = %q, want the value list kept inside it: %q", got[0].Text, want)
+	}
+	if got[1].Loc != "route.go:8" || strings.Contains(got[1].Text, "Refunded") {
+		t.Errorf("finding 2 = %+v, want route.go:8 without the value list", got[1])
 	}
 }

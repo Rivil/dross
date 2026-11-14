@@ -96,6 +96,10 @@ TEST EFFICACY (N findings)
   ...
 SPEC FIDELITY (N findings)
   ...
+EDGE CASES (N findings)
+  ...
+SILENT FAILURES (N findings)
+  ...
 ```
 
 Skip lenses with zero findings rather than printing an empty block.
@@ -124,6 +128,12 @@ Comment template:
 
 ### Spec fidelity (W findings)
 ...
+
+### Edge cases (E findings)
+- **FLAG** — `path/to/label.go:57` — status switch leaves `Refunded` unhandled; it falls into a silent `default` — set defined at `path/to/status.go:12`
+
+### Silent failures (S findings)
+- **FLAG** — `path/to/store.go:88` — `Close` error discarded with no reason comment
 
 ---
 *Posted by `/dross-review`. Lenses are independent; agreement across lenses is intentional. Disagreement between lenses is a useful signal.*
