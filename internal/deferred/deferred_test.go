@@ -3,6 +3,7 @@ package deferred
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -304,6 +305,42 @@ func TestEnsureIDsIsIdempotent(t *testing.T) {
 		if ids[e.ID] != e.Source {
 			t.Errorf("after a fresh Collect, %s[%d] carries id %q which was minted for %q", e.Source, e.Index, e.ID, ids[e.ID])
 		}
+	}
+}
+
+// TestEnsureIDsKeepsEdges: the id backfill re-saves the whole spec, so a
+// spec holding [[edges]] must come back with its edge records intact — a
+// phase.Spec that dropped them would strip every probe outcome on the first
+// board sync.
+func TestEnsureIDsKeepsEdges(t *testing.T) {
+	root := fixtureRoot(t)
+	path := filepath.Join(root, "phases", "beta", "spec.toml")
+	spec, err := phase.LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edges := []phase.Edge{
+		{Class: "boundary", Outcome: "covered", Criteria: []string{"c-1"}},
+		{Class: "empty", Outcome: "dismissed", Reason: "never empty"},
+		{Class: "ordering", Outcome: "deferred", Deferred: "0123456789abcdef"},
+	}
+	spec.Edges = edges
+	if err := spec.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := EnsureIDs(root); err != nil {
+		t.Fatalf("EnsureIDs: %v", err)
+	}
+	got, err := phase.LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Deferred) != 1 || !hexID.MatchString(got.Deferred[0].ID) {
+		t.Errorf("beta's id-less item was not backfilled: %+v", got.Deferred)
+	}
+	if !reflect.DeepEqual(got.Edges, edges) {
+		t.Errorf("EnsureIDs changed the edge records:\n got %+v\nwant %+v", got.Edges, edges)
 	}
 }
 

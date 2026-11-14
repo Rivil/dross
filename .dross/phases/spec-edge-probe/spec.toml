@@ -1,0 +1,51 @@
+[phase]
+  id = "spec-edge-probe"
+  title = "spec-edge-probe"
+  milestone = "v1.9"
+
+[[criteria]]
+  id = "c-1"
+  text = "/dross-spec proposes the 2–3 edge classes that apply to the phase (from boundary, empty, encoding, ordering, precision, idempotency, concurrency, adjacency), one per turn; it never walks all eight."
+  deferred = ["ddf9c9e63e17d0fc"]
+
+[[criteria]]
+  id = "c-2"
+  text = "Each proposed edge class is recorded in spec.toml with an outcome: covered (names the criterion id that covers it), dismissed (with a reason), or deferred (names a [[deferred]] entry)."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross validate` fails a spec whose edge record is unresolved — covered naming a missing criterion, dismissed with no reason, deferred with no matching [[deferred]] entry, or an unknown class — and names the offending record."
+
+[[criteria]]
+  id = "c-4"
+  text = "The edge step can propose must-NOT criteria (\"never X when Y\") that join [[criteria]] through the same accept / reword / drop gate."
+
+[[criteria]]
+  id = "c-5"
+  text = "A spec with no edge records (every spec written before this phase) still passes `dross validate`."
+
+[[criteria]]
+  id = "c-6"
+  text = "Resuming /dross-spec on a spec that already has edge records proposes no class that is already resolved."
+
+[[criteria]]
+  id = "c-7"
+  text = "`dross state set current_phase_status planned` (the plan-lock step) refuses while the phase's spec has an unresolved edge record, and names it."
+
+[[decisions]]
+  key = "edge_storage"
+  choice = "Dedicated [[edges]] table: class, outcome (covered|dismissed|deferred), plus criteria / reason / deferred per outcome."
+  why = "Validates on its own without parsing decision strings; legacy specs simply lack the table."
+  locked = true
+
+[[decisions]]
+  key = "deferred_link"
+  choice = "A deferred edge names its [[deferred]] entry by id; the id is minted at spec-write time (e.g. a small `dross deferred new-id`), and validate checks it exists."
+  why = "Deferred ids are only backfilled at board sync, so a fresh spec has none; text-matching breaks on reword."
+  locked = true
+
+[[decisions]]
+  key = "zero_edges"
+  choice = "No minimum edge count. The step always proposes its 2–3 likeliest classes; if none apply, each is recorded as dismissed with a reason."
+  why = "Records what was ruled out without a new 'none' marker, and keeps legacy specs valid (c-5)."
+  locked = true

@@ -318,7 +318,11 @@ type Spec struct {
 	Phase     SpecPhase   `toml:"phase" json:"phase"`
 	Criteria  []Criterion `toml:"criteria" json:"criteria"`
 	Decisions []Decision  `toml:"decisions,omitempty" json:"decisions,omitempty"`
-	Deferred  []Deferred  `toml:"deferred,omitempty" json:"deferred,omitempty"`
+	// Edges records the outcome of each edge class the spec step probed
+	// (edge.go). omitempty so every spec written before edges existed — and
+	// every spec that probed none — saves with no `edges` key.
+	Edges    []Edge     `toml:"edges,omitempty" json:"edges,omitempty"`
+	Deferred []Deferred `toml:"deferred,omitempty" json:"deferred,omitempty"`
 }
 
 type SpecPhase struct {
@@ -342,6 +346,21 @@ type Decision struct {
 	Choice string `toml:"choice" json:"choice"`
 	Why    string `toml:"why" json:"why"`
 	Locked bool   `toml:"locked,omitempty" json:"locked,omitempty"`
+}
+
+// Edge is one [[edges]] record: an edge class the spec step proposed and what
+// became of it. Which of the per-outcome fields must be set depends on Outcome
+// — covered names Criteria, dismissed gives a Reason, deferred names the
+// [[deferred]] entry's ID — and EdgeProblems is the one place that says so.
+type Edge struct {
+	Class   string `toml:"class" json:"class"`
+	Outcome string `toml:"outcome" json:"outcome"`
+	// Criteria lists the ids of the criteria that cover the class.
+	Criteria []string `toml:"criteria,omitempty" json:"criteria,omitempty"`
+	Reason   string   `toml:"reason,omitempty" json:"reason,omitempty"`
+	// Deferred is the id (Deferred.ID) of the parked item the class waits on,
+	// in this spec, another phase's or the project store.
+	Deferred string `toml:"deferred,omitempty" json:"deferred,omitempty"`
 }
 
 type Deferred struct {

@@ -12,7 +12,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/gitrun"
+	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/pkgjson"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/render"
@@ -113,6 +115,14 @@ func stateSet() *cobra.Command {
 			case "current_phase":
 				s.CurrentPhase = args[1]
 			case "current_phase_status":
+				// Plan-lock is the spec's last exit (c-7): before anything
+				// mutates, the phase the status describes must have no
+				// unresolved edge record.
+				if args[1] == "planned" {
+					if err := planLockEdgeGate(filepath.Dir(path), s.CurrentPhase); err != nil {
+						return err
+					}
+				}
 				s.CurrentPhaseStatus = args[1]
 			default:
 				return fmt.Errorf("unknown field: %s", args[0])
@@ -324,6 +334,55 @@ func ensureState(root string) error {
 		s.Version = p.Project.Version
 	}
 	return s.Save(path)
+}
+
+// planLockEdgeGate refuses plan-lock while phaseID's spec holds an unresolved
+// [[edges]] record, listing every phase.EdgeProblems line — the rule set
+// validate and `dross phase edges` share, so the three cannot disagree.
+//
+// Absence allows: no current phase, or a phase with no spec.toml, has nothing
+// to judge (a legacy spec with no [[edges]] passes the rules themselves, c-5).
+// A spec that fails to decode refuses, naming its path. A spec with a deferred
+// edge also refuses when the project's deferred ids cannot be gathered: that
+// edge cannot be judged against a set that failed to load, so the gate fails
+// closed — but only then.
+func planLockEdgeGate(root, phaseID string) error {
+	if phaseID == "" {
+		return nil
+	}
+	specPath := filepath.Join(phase.Dir(root, phaseID), "spec.toml")
+	if _, err := os.Stat(specPath); errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	spec, err := phase.LoadSpec(specPath)
+	if err != nil {
+		return fmt.Errorf("plan-lock refused: %s does not decode: %w", specPath, err)
+	}
+	// Only a deferred edge needs the project-wide id set, so only such a spec
+	// pays for gathering it — a broken file in an unrelated phase must not
+	// block locking a phase with nothing parked.
+	known := map[string]bool{}
+	for _, e := range spec.Edges {
+		if e.Outcome != phase.EdgeDeferred {
+			continue
+		}
+		entries, err := deferred.Collect(root)
+		if err != nil {
+			return fmt.Errorf("plan-lock refused: cannot gather [[deferred]] ids to judge %s's deferred edges: %w", specPath, err)
+		}
+		for _, d := range entries {
+			if d.ID != "" {
+				known[d.ID] = true
+			}
+		}
+		break
+	}
+	problems := phase.EdgeProblems(spec, known)
+	if len(problems) == 0 {
+		return nil
+	}
+	return fmt.Errorf("plan-lock refused: %s has %d unresolved edge record(s):\n  %s\nresolve each as covered (criterion ids), dismissed (with a reason) or deferred (a [[deferred]] id), then lock again",
+		specPath, len(problems), strings.Join(problems, "\n  "))
 }
 
 func loadState() (*state.State, string, error) {
