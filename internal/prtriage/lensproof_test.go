@@ -9,8 +9,11 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/prtriage"
 )
 
 // The c-4 proof fixture: a nested Go module whose order package holds the
@@ -341,5 +344,108 @@ func TestLensFixtureHelpersLocateDefects(t *testing.T) {
 	}
 	if line >= start && line <= end {
 		t.Errorf("seeded discard line %d falls inside the switch span %d..%d", line, start, end)
+	}
+}
+
+// recordedSections reads a recorded proof comment, requires SplitReview to
+// accept it whole, and returns its findings by `### ` section title (the
+// heading minus its "(N findings)" count). A section split alone numbers its
+// findings from 1; only Loc, Severity and Text are read.
+func recordedSections(t *testing.T, name string) map[string][]prtriage.Finding {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(lensFixtureDir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	if _, ok := prtriage.SplitReview(body); !ok {
+		t.Fatalf("%s no longer splits as a /dross-review comment", name)
+	}
+	bodies := map[string][]string{}
+	var cur string
+	for _, l := range strings.Split(body, "\n") {
+		if h, ok := strings.CutPrefix(l, "### "); ok {
+			cur, _, _ = strings.Cut(h, " (")
+			continue
+		}
+		if l == "---" {
+			cur = ""
+		}
+		if cur != "" {
+			bodies[cur] = append(bodies[cur], l)
+		}
+	}
+	lenses := []string{"Security", "Code quality", "Test efficacy", "Spec fidelity", "Edge cases", "Silent failures"}
+	out := map[string][]prtriage.Finding{}
+	for title, lines := range bodies {
+		if !slices.Contains(lenses, title) {
+			t.Fatalf("%s has section %q, not one of the six lens headings %q", name, title, lenses)
+		}
+		// ok is false only for a section with no findings; fs is then nil,
+		// which the callers read as "no findings".
+		fs, _ := prtriage.SplitReview(prtriage.ReviewHeader + "\n" + strings.Join(lines, "\n"))
+		out[title] = fs
+	}
+	return out
+}
+
+// locLine returns a finding's line in <dir>/handler.go, or 0 when its Loc
+// names another file or no line. A lens may cite the file by any suffix of
+// its path, down to a bare handler.go (the reviewed diff holds only one).
+func locLine(f prtriage.Finding, dir string) int {
+	path, lines, ok := strings.Cut(f.Loc, ":")
+	base := dir + "/handler.go"
+	if !ok || (path != "handler.go" && path != base && !strings.HasSuffix(path, "/"+base)) {
+		return 0
+	}
+	first, _, _ := strings.Cut(lines, "-")
+	n, err := strconv.Atoi(first)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+func TestLensProofSeeded(t *testing.T) {
+	start, end := seededSwitchSpan(t)
+	discard := seededDiscardLine(t)
+	secs := recordedSections(t, "seeded-comment.md")
+
+	edgeHit := false
+	for _, f := range secs["Edge cases"] {
+		if l := locLine(f, "seeded"); l >= start && l <= end && strings.Contains(f.Text, "Refunded") && strings.Contains(f.Text, "status.go") {
+			edgeHit = true
+		}
+	}
+	if !edgeHit {
+		t.Errorf("Edge cases holds no finding inside the seeded switch (lines %d-%d) naming Refunded and status.go: %+v", start, end, secs["Edge cases"])
+	}
+
+	silentHit := false
+	for _, f := range secs["Silent failures"] {
+		if locLine(f, "seeded") == discard {
+			silentHit = true
+		}
+	}
+	if !silentHit {
+		t.Errorf("Silent failures holds no finding at the seeded discard (line %d): %+v", discard, secs["Silent failures"])
+	}
+
+	// c-6: one defect, one lens.
+	for _, sec := range []string{"Code quality", "Edge cases"} {
+		for _, f := range secs[sec] {
+			if locLine(f, "seeded") == discard {
+				t.Errorf("%s also reports the swallowed error at line %d: %q", sec, discard, f.Text)
+			}
+		}
+	}
+}
+
+func TestLensProofClean(t *testing.T) {
+	secs := recordedSections(t, "clean-comment.md")
+	for _, sec := range []string{"Edge cases", "Silent failures"} {
+		for _, f := range secs[sec] {
+			t.Errorf("%s reported a finding on the clean fixture: %q", sec, f.Text)
+		}
 	}
 }
