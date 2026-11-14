@@ -1,11 +1,11 @@
 [verify]
   phase = "spec-edge-probe"
-  generated_at = 2026-11-12T22:30:44.171272Z
-  verdict = "partial"
+  generated_at = 2026-11-14T09:07:28.373981Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-11-12T22:32:57.025246Z
-  measured_commit = "5e7aa69378c46bd3e04eea3325acd27a7e6c97b7"
-  measured_tree = "c62dce749f1b170781f268cf4a3869263aca9146"
+  finalized_at = 2026-11-14T09:08:29.727733Z
+  measured_commit = "e435b7bd5b0c92c279abbe4f6234252a47bd4118"
+  measured_tree = "489d998acca9e8dddb6b3d8436fead172a3a0909"
 
 [summary]
   mutation_status = "measured"
@@ -38,25 +38,25 @@
   id = "c-1"
   status = "covered"
   tests = ["internal/cmd/spec_prompt_test.go:TestSpecEdgeProbeCapped", "internal/cmd/spec_prompt_test.go:TestSpecEdgeProbeNamesEveryClass", "internal/cmd/phase_edges_test.go:TestPhaseEdgesClassesAlwaysListsAllEight"]
-  notes = "Prompt-behaviour criterion: pinned at the prompt-text level — §2b (section-scoped) must say 2–3, one per turn, never walk all eight, and name every phase.EdgeClasses class. Fails if the cap is removed; the agent's runtime behaviour itself is not testable."
+  notes = "Prompt-behaviour criterion, pinned at prompt-text level: §2b (section-scoped) must say 2–3, one per turn, never walk all eight, and name every phase.EdgeClasses class. The agent's runtime behaviour itself is not testable."
 
 [[criterion]]
   id = "c-2"
   status = "covered"
   tests = ["internal/phase/edge_test.go:TestEdgeProblemsTable", "internal/phase/edge_test.go:TestEdgeRoundTrip", "internal/cmd/spec_prompt_test.go:TestSpecEdgeProbeOutcomes", "internal/cmd/spec_prompt_test.go:TestSpecSchemaExampleDecodes", "internal/cmd/deferred_newid_test.go:TestDeferredNewIDPrintsOneBareID"]
-  notes = "Edge{class,outcome,criteria,reason,deferred} round-trips through Save/LoadSpec; the three outcomes and their required payloads are table-tested; §5 schema example decodes into phase.Spec with no undecoded keys; deferred ids are mintable via `dross deferred new-id`."
+  notes = "Edge{class,outcome,criteria,reason,deferred} round-trips; the three outcomes and their required payloads are table-tested; §5 schema example decodes with no undecoded keys; deferred ids are mintable via `dross deferred new-id`."
 
 [[criterion]]
   id = "c-3"
   status = "covered"
-  tests = ["internal/cmd/validate_edges_test.go:TestValidateRefusesUnresolvedEdges", "internal/cmd/validate_edges_test.go:TestValidateReportsEveryBadEdge", "internal/cmd/validate_edges_test.go:TestValidateDeferredEdgeResolvesProjectWide", "internal/phase/edge_test.go:TestEdgeProblemsTable"]
-  notes = "All four named shapes (missing criterion, reasonless dismissal, dangling deferred id, unknown class) make validate exit non-zero with a `✗ <spec>: edges[N] (<class>)` line naming the record. In-hunk survivor edge.go:151 sits on this path; killed by hand (5 TestEdgeProblemsTable subtests red), so no downgrade. See FLAG on the co-failure naming gap."
+  tests = ["internal/cmd/validate_edges_test.go:TestValidateRefusesUnresolvedEdges", "internal/cmd/validate_edges_test.go:TestValidateReportsEveryBadEdge", "internal/cmd/validate_edges_test.go:TestValidateDeferredEdgeResolvesProjectWide", "internal/cmd/validate_edges_test.go:TestValidateNamesEdgesDespiteBrokenSibling", "internal/cmd/validate_edges_test.go:TestValidateBrokenSiblingStandsDownOnlyTheIDLookup", "internal/phase/edge_test.go:TestEdgeProblemsTable"]
+  notes = "All four shapes make validate exit non-zero naming `edges[N] (<class>)`. t-7 closed last run's co-failure FLAG: with a sibling spec undecodable, the deferred-independent defects are still named, and only the id-exists check stands down. No survivor on t-7's new lines; in-hunk edge.go:151 remains accepted (killed by hand)."
 
 [[criterion]]
   id = "c-4"
   status = "covered"
   tests = ["internal/cmd/spec_prompt_test.go:TestSpecEdgeProbeMustNot"]
-  notes = "Prompt-behaviour criterion: §2b itself (scoped, not §1/§4's copies) must carry \"never X when Y\", the accept / reword / drop gate, and \"dismissed or deferred, never covered\" for a dropped must-NOT."
+  notes = "Prompt-behaviour criterion: §2b itself (scoped, not §1/§4's copies) carries \"never X when Y\", the accept / reword / drop gate, and dismissed-or-deferred-never-covered for a dropped must-NOT."
 
 [[criterion]]
   id = "c-5"
@@ -68,26 +68,22 @@
   id = "c-6"
   status = "covered"
   tests = ["internal/cmd/phase_edges_test.go:TestPhaseEdgesJSONPartitionsClasses", "internal/phase/edge_test.go:TestEdgeStatusPartitions", "internal/cmd/spec_prompt_test.go:TestSpecEdgeProbeResume"]
-  notes = "Mechanical guarantee: `phase edges --json` never puts a resolved class in open (boundary covered + empty dismissed → open = the other five, encoding unresolved). §2b proposes only from open, so resume cannot re-propose a resolved class."
+  notes = "`phase edges --json` never puts a resolved class in open; §2b proposes only from open (and repairs unresolved records first), so resume cannot re-propose a resolved class."
 
 [[criterion]]
   id = "c-7"
   status = "covered"
   tests = ["internal/cmd/state_edges_gate_test.go:TestPlanLockRefusesUnresolvedEdge", "internal/cmd/state_edges_gate_test.go:TestPlanLockSharesValidateRules", "internal/cmd/state_edges_gate_test.go:TestPlanLockReadsCurrentPhaseOnly"]
-  notes = "`state set current_phase_status planned` errors naming edges[0] (empty) and state.json is byte-identical afterwards; refusal lines equal validate's for the same fixture (one rule set)."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-3 co-failure gap (solo review t-3, still live): validate.go:148 runs edgeLines only when deferredByID succeeds, so when any other spec or the deferred store is undecodable, validate still exits non-zero (on the broken file) but stops naming unresolved edge records — including the deferred-independent ones (reasonless dismissal, missing criterion, unknown class). Plan-lock and `phase edges` already call Collect only when a deferred edge exists. Fix: run EdgeProblems with a nil/partial known set and suppress only the deferred-id defect."
+  notes = "`state set current_phase_status planned` errors naming edges[0] and its class with state.json byte-identical afterwards; refusal lines equal validate's for the same fixture (one rule set)."
 
 [[finding]]
   severity = "NOTE"
-  text = "In-hunk survivor internal/phase/edge.go:151 (CONDITIONALS_NEGATION, `case e.Deferred == \"\"`) was undispositioned at collection. It is a switch-case condition gremlins attributes no coverage block to; applying == -> != by hand turned TestEdgeProblemsTable red in 5 subtests. Accepted this run (key b55e2338f2b717bd) and unclassified_in_scope set 1 -> 0 without re-running the ~3h15m helicon leg — the classification is a pure function of tests.json + survivors.toml (re-derive gap already filed, deferred a1f0a6f51a442945)."
+  text = "Score 0.93 over 384 in-scope mutants (killed 357, survived 27); 25 have no go-cover block (efficacy 0.99 over the 359 reachable). Every survivor is accepted: the one in-hunk survivor, edge.go:151 (switch-case attribution ceiling, killed by hand last run), plus inherited switch-case / closure-body attributions, among them the 2 test-gap ones at validate.go:121/127 (shifted +1 by t-7). 186 out-of-scope survivors filtered. No survivor on t-7's new lines."
 
 [[finding]]
   severity = "NOTE"
-  text = "Score 0.93 over 384 in-scope mutants (killed 357, survived 27); 25 have no go-cover block (efficacy 0.99 over the 359 reachable). The 2 counted as test-gap are validate.go:120 and :126 — single-line `if _, err := loadIfExists(…closure…); err != nil`, inherited and already accepted as closure-body attribution; negating them would make every cleanly-loading spec/plan report an error, which TestValidateLegacySpecStillValid asserts against (reasoned, not re-run by hand). All other in-scope survivors are inherited switch-case conditions already accepted. 186 out-of-scope survivors filtered."
+  text = "Last run's c-3 FLAG (validate silenced edge records when deferred.Collect failed) is closed by t-7 (18caf784), pinned by TestValidateNamesEdgesDespiteBrokenSibling and TestValidateBrokenSiblingStandsDownOnlyTheIDLookup."
 
 [[finding]]
   severity = "NOTE"
-  text = "Solo review test-precision notes (non-blocking, coverage unaffected): TestEdgeCorpusIsClean builds its known-deferred set from phase specs only, not the _project store, so a future checked-in deferred edge pointing at a project-store item would false-fail it; TestSpecEdgeProbeResume checks the replace-branch phrase against the whole expanded prompt rather than the _spec.resume.md replace bullet (the phrase does sit in that bullet today)."
+  text = "Solo review test-precision notes (non-blocking, coverage unaffected): TestEdgeCorpusIsClean builds its known-deferred set from phase specs only, not the _project store; TestSpecEdgeProbeResume checks the replace-branch phrase against the whole expanded prompt rather than the _spec.resume.md replace bullet (the phrase sits in that bullet today). The t-6 round-1 FLAG (repair unresolved records on resume) is addressed in §2b; the t-4 round-1 FLAG was fixed in round 2."
