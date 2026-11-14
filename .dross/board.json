@@ -2957,37 +2957,37 @@
     "spec-edge-probe/t-1": {
       "issue": "DRO-1131",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-edge-probe/t-2": {
       "issue": "DRO-1132",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-edge-probe/t-3": {
       "issue": "DRO-1133",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-edge-probe/t-4": {
       "issue": "DRO-1134",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-edge-probe/t-5": {
       "issue": "DRO-1135",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-edge-probe/t-6": {
       "issue": "DRO-1136",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-edge-probe/t-7": {
       "issue": "DRO-1137",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "supply-chain-currency/t-1": {
       "issue": "DRO-424",
