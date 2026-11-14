@@ -29,7 +29,7 @@ Reviews a patch file instead of a PR: proof runs and pre-PR checks. It never pos
 - **No PR number, no fetch:** skip §1. Instead `mkdir -p <dir>`, copy the patch to `<dir>/review-diff.patch`, and confirm it exists and is non-empty.
 - **`<diff-path>` is `<dir>/review-diff.patch`.** The lenses still read the phase's spec.toml and verify.toml.
 - **§4 saves to `<dir>/review-comment.md`** and prints the comment in full.
-- **Skip §5 and §6's commit:** print §6's wrap with `Comment: saved to <dir>/review-comment.md`.
+- **Skip §5 and §6's commit:** print §6's wrap headed `Reviewed diff <patch> — <phase-id>` (there is no PR to name), with `Comment: saved to <dir>/review-comment.md`.
 
 ## 1. Fetch the PR diff
 
@@ -168,7 +168,7 @@ If `skip`: just print the comment to stdout so the user can copy it manually.
 
 ## 6. Wrap
 
-**`--diff` mode:** no commit — print the wrap below only.
+**`--diff` mode:** no commit — print the wrap below only, its first line `Reviewed diff <patch> — <phase-id>` in place of `Reviewed PR #<n> — <phase-id>`.
 
 Per the builtin commit-hygiene rule, commit the artefacts you wrote:
 ```

@@ -333,6 +333,37 @@ func TestReviewDiffModeWritesOutDir(t *testing.T) {
 	}
 }
 
+func TestReviewDiffModeSkipsDoctor(t *testing.T) {
+	pre := section(t, readAsset(t, "prompts/review.md"), "## 0.")
+	step := regexp.MustCompile("(?m)^\\d+\\. `dross doctor`.*$").FindString(pre)
+	if step == "" {
+		t.Fatal("§0 no longer has a `dross doctor` step")
+	}
+	if !strings.Contains(step, "Skipped in `--diff` mode") {
+		t.Errorf("§0's doctor step no longer exempts --diff, which posts nothing and needs no [remote]: %q", step)
+	}
+}
+
+func TestReviewDiffModeChecksPatch(t *testing.T) {
+	local := localMode(t, readAsset(t, "prompts/review.md"))
+	copyStep := regexp.MustCompile("(?m)^- .*copy the patch to `<dir>/review-diff.patch`.*$").FindString(local)
+	if copyStep == "" {
+		t.Fatal("Local mode no longer copies the patch to <dir>/review-diff.patch")
+	}
+	if !strings.Contains(copyStep, "confirm it exists and is non-empty") {
+		t.Errorf("Local mode's copy step no longer confirms the patch is non-empty; an empty diff would review as clean: %q", copyStep)
+	}
+}
+
+func TestReviewDiffModeWrapNamesDiff(t *testing.T) {
+	doc := readAsset(t, "prompts/review.md")
+	const diffWrap = "`Reviewed diff <patch> — <phase-id>`"
+	if !strings.Contains(localMode(t, doc), diffWrap) {
+		t.Errorf("Local mode's wrap no longer heads with %s; it would name a PR that does not exist", diffWrap)
+	}
+	guardBefore(t, "§6 wrap", section(t, doc, "## 6."), "in place of `Reviewed PR #<n> — <phase-id>`", "Reviewed PR #<n> — <phase-id>\n")
+}
+
 func TestReviewDiffModeRequiresOut(t *testing.T) {
 	local := localMode(t, readAsset(t, "prompts/review.md"))
 	if !strings.Contains(local, "**Refuse without `--out <dir>`:** print `--diff needs --out <dir>` and stop.") {
