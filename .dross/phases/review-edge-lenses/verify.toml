@@ -1,0 +1,149 @@
+[verify]
+  phase = "review-edge-lenses"
+  generated_at = 2026-11-14T13:42:47.632271Z
+  verdict = "partial"
+  finalized = true
+  finalized_at = 2026-11-14T17:08:44.587291Z
+  measured_commit = "a9c649890ca299b330c0c41eab889dd6ad189873"
+  measured_tree = "5eb7fb6251e13b3734c075b39d9f58666dfb8939"
+
+[summary]
+  mutation_status = "out-of-scope"
+  measured_on = "helicon"
+  mutation_score = 0.0
+  mutants_killed = 0
+  mutants_survived = 0
+  mutants_not_covered = 0
+  mutants_no_block = 0
+  mutants_test_gap = 0
+  mutants_in_scope = 0
+  unclassified_in_scope = 0
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 0
+    survived = 0
+    timeout = 0
+    in_scope = 0
+    score = 0.0
+    file_count = 9
+    measured_on = "helicon"
+    whole_file = ["assets/review_lenses_test.go — adapter-lacks-range-runner", "fixtures/review-edge-lenses-c4/clean/handler.go — adapter-lacks-range-runner", "fixtures/review-edge-lenses-c4/order/status.go — adapter-lacks-range-runner", "fixtures/review-edge-lenses-c4/seeded/handler.go — adapter-lacks-range-runner", "internal/cmd/readme_doc_test.go — adapter-lacks-range-runner", "internal/prtriage/items_test.go — adapter-lacks-range-runner", "internal/prtriage/lensproof_test.go — adapter-lacks-range-runner", "internal/prtriage/split_test.go — adapter-lacks-range-runner", "internal/review/agentdef_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["assets/review_lenses_test.go:TestEdgeCaseLensRules", "internal/prtriage/lensproof_test.go:TestLensProofSeeded"]
+  notes = "Prompt contract pins the value_set_source/default_arm rule lines and 'names every unhandled value ... file:line'; the recorded live run must hold an Edge cases finding inside the go/parser-computed switch span naming Refunded and status.go."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["assets/review_lenses_test.go:TestSilentFailureLensRules", "internal/prtriage/lensproof_test.go:TestLensProofSeeded"]
+  notes = "Subtests pin each shape (discarded returns, empty catch, empty recover, quiet fallback) and the reason-comment exemption; the recorded run must hold a Silent failures finding at the computed discard line."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/prtriage/split_test.go:TestSplitReviewMatchesReviewTemplate", "internal/prtriage/split_test.go:TestSplitReviewSixSections", "internal/prtriage/split_test.go:TestSplitReviewKeepsValueList", "internal/prtriage/items_test.go:TestItemsSplitIDsSixLenses"]
+  notes = "Template must split into 4 findings with new-lens Locs; six-section comment splits identically to all-under-Security; items path yields c<id>#1..#6."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/prtriage/lensproof_test.go:TestLensProofSeeded", "internal/prtriage/lensproof_test.go:TestLensProofClean", "internal/prtriage/lensproof_test.go:TestLensFixtureSeededShape", "internal/prtriage/lensproof_test.go:TestLensFixtureCleanShape", "assets/review_lenses_test.go:TestReviewDiffModeNeverPosts"]
+  notes = "Recorded seeded/clean runs checked against go/parser-computed defect lines; fixture shape tests stop the fixtures drifting. Clean check can pass vacuously on a mis-levelled heading (FLAG)."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/readme_doc_test.go:TestNoFourLensSurface", "internal/cmd/readme_doc_test.go:TestReviewSurfacesNameSixLenses", "assets/review_lenses_test.go:TestReviewCommandNamesSixLenses", "assets/review_lenses_test.go:TestReviewSummaryNamesSixLenses"]
+  notes = "Guard regex over README/ARCHITECTURE/docs/assets .md/.1 plus per-surface six-token checks. docs/dross.pdf is gitignored, not a shipped surface (NOTE)."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["assets/review_lenses_test.go:TestCodeQualityCedesSilentFailures", "internal/prtriage/lensproof_test.go:TestLensProofSeeded"]
+  notes = "Code-quality template may not name error handling/surprising defaults and §3 must keep the drop rule; recorded run fails if Code quality or Edge cases reports at the discard line."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/review/agentdef_test.go:TestReviewerSharesLensRules", "internal/review/agentdef_test.go:TestReviewerEdgeHitsBlock", "internal/review/agentdef_test.go:TestReviewerBodyDefinesGrades"]
+  notes = "Every review.md lens Rule line must appear verbatim in the reviewer section; BLOCKING grade names both hits; lens Severity (FLAG-by-default) must not be copied. Prompt-contract level; no live reviewer run."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/agents/dross-task-reviewer.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/commands/dross-review.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/review.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/dross.1: no mutation adapter for .1"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/subagent-offload-audit.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped fixtures/review-edge-lenses-c4/RUN.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped fixtures/review-edge-lenses-c4/clean-comment.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped fixtures/review-edge-lenses-c4/go.mod: no mutation adapter for .mod"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped fixtures/review-edge-lenses-c4/seeded-comment.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-4: internal/prtriage/lensproof_test.go recordedSections files lines under a mis-levelled heading (## or ####) into the previous ### section, so TestLensProofClean can pass vacuously on a re-recorded comment (t-6 reviewer round-2 FLAG, still open)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "assets/prompts/review.md:22 '--diff skips the §0 dross doctor requirement' has no test; removing the sentence fails nothing (t-7 reviewer FLAG)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "assets/prompts/review.md:29 Local mode's 'confirm the copied patch exists and is non-empty' check has no test (t-7 reviewer FLAG)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "assets/prompts/review.md:182 §6 wrap print still begins 'Reviewed PR #<n>' in --diff mode, naming a PR that does not exist"
+
+[[finding]]
+  severity = "NOTE"
+  text = "docs/dross.pdf (gitignored local build of dross.1) still says 'Four-lens'; regenerate with mandoc -T pdf docs/dross.1 — not a shipped surface, so c-5 holds"
+
+[[finding]]
+  severity = "NOTE"
+  text = "commit 8048e260 uses a test(...) prefix outside the conventional type list; squash-merge at ship replaces it"
+
+[[finding]]
+  severity = "NOTE"
+  text = "verify tried to mutate the nested fixtures/review-edge-lenses-c4 module: helicon rsync exited 23 for clean/order/seeded, then gremlins found no covered mutants; harmless here, but verify should skip nested go.mod modules"
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation out-of-scope: the phase changed only prompts, docs, test files and a nested fixture module, so no in-scope mutant exists; verdict rests on criterion coverage. 251 out-of-diff survivors, all already accepted"
