@@ -1,6 +1,7 @@
 package prtriage_test
 
 import (
+	"fmt"
 	"go/ast"
 	"go/importer"
 	"go/parser"
@@ -8,6 +9,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -361,12 +363,42 @@ func recordedSections(t *testing.T, name string) map[string][]prtriage.Finding {
 	if _, ok := prtriage.SplitReview(body); !ok {
 		t.Fatalf("%s no longer splits as a /dross-review comment", name)
 	}
+	bodies, err := lensSectionLines(body)
+	if err != nil {
+		t.Fatalf("%s: %v", name, err)
+	}
+	out := map[string][]prtriage.Finding{}
+	for title, lines := range bodies {
+		// ok is false only for a section with no findings; fs is then nil,
+		// which the callers read as "no findings".
+		fs, _ := prtriage.SplitReview(prtriage.ReviewHeader + "\n" + strings.Join(lines, "\n"))
+		out[title] = fs
+	}
+	return out
+}
+
+// proofLenses are the six `### ` section titles a recorded comment may hold.
+var proofLenses = []string{"Security", "Code quality", "Test efficacy", "Spec fidelity", "Edge cases", "Silent failures"}
+
+// lensSectionLines walks a recorded comment and returns each `### ` lens
+// section's lines, up to the `---` footer. Every heading after the comment's
+// first line must be a `### ` lens heading: one recorded at another level
+// (`## Edge cases`, `#### Silent failures`) would otherwise leave its findings
+// filed under the previous section, and a clean-run check would pass on a
+// comment whose new-lens sections it never read.
+func lensSectionLines(body string) (map[string][]string, error) {
 	bodies := map[string][]string{}
 	var cur string
-	for _, l := range strings.Split(body, "\n") {
+	for i, l := range strings.Split(body, "\n") {
 		if h, ok := strings.CutPrefix(l, "### "); ok {
 			cur, _, _ = strings.Cut(h, " (")
+			if !slices.Contains(proofLenses, cur) {
+				return nil, fmt.Errorf("line %d: section %q is not one of the six lens headings %q", i+1, cur, proofLenses)
+			}
 			continue
+		}
+		if i > 0 && markdownHeading.MatchString(l) {
+			return nil, fmt.Errorf("line %d: heading %q is not a `### ` lens heading; its findings would be read as part of section %q", i+1, l, cur)
 		}
 		if l == "---" {
 			cur = ""
@@ -375,18 +407,40 @@ func recordedSections(t *testing.T, name string) map[string][]prtriage.Finding {
 			bodies[cur] = append(bodies[cur], l)
 		}
 	}
-	lenses := []string{"Security", "Code quality", "Test efficacy", "Spec fidelity", "Edge cases", "Silent failures"}
-	out := map[string][]prtriage.Finding{}
-	for title, lines := range bodies {
-		if !slices.Contains(lenses, title) {
-			t.Fatalf("%s has section %q, not one of the six lens headings %q", name, title, lenses)
-		}
-		// ok is false only for a section with no findings; fs is then nil,
-		// which the callers read as "no findings".
-		fs, _ := prtriage.SplitReview(prtriage.ReviewHeader + "\n" + strings.Join(lines, "\n"))
-		out[title] = fs
+	return bodies, nil
+}
+
+// markdownHeading matches an ATX heading line at any level.
+var markdownHeading = regexp.MustCompile(`^#{1,6}(\s|$)`)
+
+func TestRecordedSectionsRefusesMisleveledHeading(t *testing.T) {
+	head := prtriage.ReviewHeader + " — phase review-edge-lenses\n\n"
+	finding := "- **FLAG** — `seeded/handler.go:29` — error discarded\n"
+	for _, tc := range []struct{ name, heading string }{
+		{"h4 lens", "#### Silent failures (1 finding)"},
+		{"h2 lens", "## Edge cases (1 finding)"},
+		{"bare h4", "####"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := head + "### Test efficacy (1 finding)\n" + finding + "\n" + tc.heading + "\n" + finding + "\n---\n"
+			if _, err := lensSectionLines(body); err == nil {
+				t.Errorf("a comment holding %q was accepted; its finding would be filed under Test efficacy", tc.heading)
+			}
+		})
 	}
-	return out
+
+	ok := head + "### Test efficacy (1 finding)\n" + finding + "\n### Silent failures (1 finding)\n" + finding + "\n---\n*Posted by `/dross-review`.*\n"
+	secs, err := lensSectionLines(ok)
+	if err != nil {
+		t.Fatalf("a well-levelled comment was refused: %v", err)
+	}
+	if len(secs["Silent failures"]) == 0 || len(secs["Test efficacy"]) == 0 {
+		t.Errorf("well-levelled sections not both read: %q", secs)
+	}
+
+	if _, err := lensSectionLines(head + "### Style (1 finding)\n" + finding); err == nil {
+		t.Error("a non-lens ### section was accepted")
+	}
 }
 
 // locLine returns a finding's line in <dir>/handler.go, or 0 when its Loc
