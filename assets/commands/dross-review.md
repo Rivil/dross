@@ -1,6 +1,6 @@
 ---
 name: dross-review
-description: "Spawn a four-lens subagent panel (security / quality / tests / spec-fidelity) over an open PR and post the aggregated findings as a single comment"
+description: "Spawn a six-lens subagent panel (security / quality / tests / spec-fidelity / edge-case / silent-failure) over an open PR and post the aggregated findings as a single comment"
 argument-hint: "<pr-number> [--phase <id>]"
 allowed-tools:
   - Read
