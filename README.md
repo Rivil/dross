@@ -281,7 +281,7 @@ export PATH="$HOME/.local/bin:$PATH"
 | `/dross-watch` | ✅ (read-only heartbeat — board inbound + phase-drift digest, ends with one suggested next command; a ship PR with review comments waiting shows `· <n> untriaged — /dross-respond <pr>` on its line) |
 | `/dross-options` | ✅ |
 | `/dross-ship` | ✅ (CI watch + merge gate + branch cleanup; on a protected base — `dross protect --check` reads `protected` — `.dross` chores go through an auto-merging chore PR, and `dross phase complete` waits for it rather than offering `--recover`) |
-| `/dross-review` | ✅ (4-lens subagent panel: security / quality / tests / spec-fidelity) |
+| `/dross-review` | ✅ (six-lens subagent panel: security / quality / tests / spec-fidelity / edge-case / silent-failure) |
 | `/dross-respond` | ✅ (pair-only triage of a phase PR's review comments: each claim checked against the code, then accepted as a task, rejected with a reason or routed as deferred; the rejections go back in one reply posted only on the user's recorded approval) |
 | `/dross-secure` | ✅ (context-free multi-pass security audit: real scanners + adversarial refute-panel; scaffolds a remediation phase) |
 | `/dross-quality` | ✅ (multi-pass code-quality audit: real analyzers + refute-panel over substantive maintainability dimensions; scaffolds a remediation phase) |
@@ -308,7 +308,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Builtin `.dross/` commit-hygiene rule baked into every prompt's pre-flight
 - [x] Ship filter rewrite — runs in an ephemeral worktree so the user's gitignored `.dross/` is never destroyed
 - [x] Ship `--preserve-history` — alternative filter that keeps per-task commits, `.dross/` stripped from each
-- [x] `/dross-review` four-lens subagent panel — spawns security / code-quality / test-efficacy / spec-fidelity reviewers in parallel and posts an aggregated comment to the PR
+- [x] `/dross-review` six-lens subagent panel — spawns security / code-quality / tests / spec-fidelity / edge-case / silent-failure reviewers in parallel and posts an aggregated comment to the PR
 - [x] Mutation adapter: Stryker.NET (C#) — modeled from public Stryker.NET docs, JSON shape shared with Stryker.JS, fixture-tested; real-world verify pending a C# project to dogfood against
 - [x] Codex polyglot indexer — Go via stdlib `go/ast`, TS/TSX/Svelte/C#/GDScript via `ast-grep` shell-out. Graceful degradation when ast-grep isn't installed (other commands keep working). HTML/CSS get sibling + git-log enrichment only (no symbols)
 - [x] `/dross-quick` — one-shot task with atomic commit + `runtime.test_command` gate, pair-mode only. Bumps `state.version`'s internal counter (`dross state bump internal`). Works inside a phase (recorded as `quick-N` in `changes.json`) or standalone
