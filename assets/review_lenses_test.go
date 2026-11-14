@@ -251,3 +251,91 @@ func TestReviewCommandNamesSixLenses(t *testing.T) {
 		}
 	}
 }
+
+// localMode is review.md's `--diff` Local mode block, up to the next `## `.
+func localMode(t *testing.T, doc string) string {
+	t.Helper()
+	return section(t, doc, "### Local mode — `--diff <patch> --out <dir>`")
+}
+
+// guardBefore fails unless sec holds guard, and holds it before the first
+// occurrence of action.
+func guardBefore(t *testing.T, name, sec, guard, action string) {
+	t.Helper()
+	g, a := strings.Index(sec, guard), strings.Index(sec, action)
+	switch {
+	case g < 0:
+		t.Errorf("%s lost its --diff guard %q", name, guard)
+	case a >= 0 && a < g:
+		t.Errorf("%s reaches %q before its --diff guard", name, action)
+	}
+}
+
+func TestReviewDiffModeNeverPosts(t *testing.T) {
+	doc := readAsset(t, "prompts/review.md")
+	cmd := readAsset(t, "commands/dross-review.md")
+	for _, hint := range []string{"--diff <patch>", "--out <dir>"} {
+		if !regexp.MustCompile(`(?m)^argument-hint: .*` + regexp.QuoteMeta(hint)).MatchString(cmd) {
+			t.Errorf("dross-review argument-hint lacks %q", hint)
+		}
+	}
+	local := localMode(t, doc)
+	if !strings.Contains(local, "Skip §5 and §6's commit") {
+		t.Error("Local mode no longer skips §5 and §6's commit")
+	}
+	for _, banned := range []string{"dross ship comment", "git commit", "git add"} {
+		if strings.Contains(local, banned) {
+			t.Errorf("Local mode names %q; --diff never posts or commits", banned)
+		}
+	}
+	guardBefore(t, "§5", section(t, doc, "## 5."), "**`--diff` mode:** skip this section", "dross ship comment")
+	guardBefore(t, "§6", section(t, doc, "## 6."), "**`--diff` mode:** no commit", "git commit")
+}
+
+func TestReviewDiffModeSkipsFetch(t *testing.T) {
+	doc := readAsset(t, "prompts/review.md")
+	if !strings.Contains(section(t, doc, "## 0."), "Required unless `--diff` is passed") {
+		t.Error("§0 still requires a PR number in --diff mode")
+	}
+	local := localMode(t, doc)
+	if !strings.Contains(local, "No PR number, no fetch:** skip §1") {
+		t.Error("Local mode no longer replaces §1's fetch")
+	}
+	for _, banned := range []string{"<pr-number>", "gh pr diff", "curl"} {
+		if strings.Contains(local, banned) {
+			t.Errorf("Local mode names %q; --diff fetches no PR", banned)
+		}
+	}
+	guardBefore(t, "§1", section(t, doc, "## 1."), "**`--diff` mode:** skip this section", "gh pr diff")
+}
+
+func TestReviewDiffModeWritesOutDir(t *testing.T) {
+	doc := readAsset(t, "prompts/review.md")
+	local := localMode(t, doc)
+	for _, want := range []string{"`<diff-path>` is `<dir>/review-diff.patch`", "copy the patch to `<dir>/review-diff.patch`", "§4 saves to `<dir>/review-comment.md`"} {
+		if !strings.Contains(local, want) {
+			t.Errorf("Local mode no longer says %q", want)
+		}
+	}
+	if strings.Contains(local, ".dross/phases") {
+		t.Error("Local mode names a .dross/phases path; --diff writes only under --out")
+	}
+	// §4's fenced template holds its own `## /dross-review` heading, so match
+	// the save sentence whole rather than slicing §4 at the next `## `.
+	if !strings.Contains(doc, "Save the composed comment to `.dross/phases/<phase-id>/review-comment.md` for posterity — in `--diff` mode to `<dir>/review-comment.md` instead.") {
+		t.Error("§4 no longer redirects the saved comment to the --out dir in --diff mode")
+	}
+	for _, lens := range []string{"security", "code quality", "test efficacy", "spec fidelity", "edge cases", "silent failures"} {
+		tmpl := lensTemplate(t, doc, lens)
+		if !strings.Contains(tmpl, "`<diff-path>`") || strings.Contains(tmpl, "review-diff.patch") {
+			t.Errorf("%s template does not read the diff from `<diff-path>`", lens)
+		}
+	}
+}
+
+func TestReviewDiffModeRequiresOut(t *testing.T) {
+	local := localMode(t, readAsset(t, "prompts/review.md"))
+	if !strings.Contains(local, "**Refuse without `--out <dir>`:** print `--diff needs --out <dir>` and stop.") {
+		t.Error("Local mode no longer refuses --diff without --out")
+	}
+}
