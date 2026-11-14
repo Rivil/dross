@@ -1,4 +1,4 @@
-task_seq = 7
+task_seq = 9
 
 [phase]
   id = "review-edge-lenses"
@@ -101,4 +101,24 @@ The README command-table row and roadmap bullet, the dross.1 /dross-review entry
     "if a recorded comment is hand-edited out of the six-section shape, SplitReview returns ok=false and both record tests fail",
     "if the fixture is edited so its lines shift without a re-run, the computed lines stop matching the recorded Locs and TestLensProofSeeded fails",
   ]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 1
+  title = "Refuse mis-levelled headings in recorded proof comments"
+  files = ["internal/prtriage/lensproof_test.go"]
+  description = "Verify FLAG (t-6 reviewer round 2): recordedSections files any line under the current ### section, so a lens heading re-recorded at ## or #### (e.g. '#### Edge cases (1 finding)') has its findings absorbed into the previous section and TestLensProofClean can pass vacuously. Make recordedSections t.Fatalf on any markdown heading line (^#{1,6} ) after the comment's first line that is not a '### ' lens heading, naming the file, line and heading. The leading '## /dross-review' header stays legal. Add a test that feeds recordedSections' parsing a body with a '#### Edge cases' (and a '## Silent failures') heading and proves it is refused — factor the line-walk into a helper that returns an error so the test can assert on it without failing itself."
+  covers = ["c-4"]
+  test_contract = ["if recordedSections stops refusing a mis-levelled lens heading, TestRecordedSectionsRefusesMisleveledHeading fails"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 1
+  title = "Pin --diff doctor skip, non-empty patch check and diff-mode wrap"
+  files = ["assets/prompts/review.md", "assets/review_lenses_test.go"]
+  description = "Verify FLAGs (t-7 reviewer): review.md §0 step 5 'Skipped in --diff mode, which posts nothing' (the dross doctor skip) and Local mode's 'confirm it exists and is non-empty' patch check are untested — deleting either sentence fails nothing. Add assertions to assets/review_lenses_test.go pinning both (§0 doctor step names the --diff skip; Local mode's copy bullet requires the patch be non-empty). Also fix the verify NOTE: §6's wrap prints 'Reviewed PR #<n>' even in --diff mode, naming a PR that does not exist — make Local mode's wrap bullet say to print 'Reviewed diff <patch> — <phase-id>' as the first wrap line instead, and pin that with a test (Local mode names the diff-mode wrap line)."
+  covers = ["c-4"]
+  test_contract = ["if review.md drops the --diff doctor skip, TestReviewDiffModeSkipsDoctor fails", "if Local mode drops the non-empty patch check, TestReviewDiffModeChecksPatch fails", "if Local mode's wrap stops replacing 'Reviewed PR #<n>', TestReviewDiffModeWrapNamesDiff fails"]
   status = "done"

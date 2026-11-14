@@ -2473,6 +2473,16 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "review-edge-lenses/t-8": {
+      "issue": "DRO-1146",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-9": {
+      "issue": "DRO-1147",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "run-block-pin-currency/t-1": {
       "issue": "DRO-747",
       "plan_status": "done",

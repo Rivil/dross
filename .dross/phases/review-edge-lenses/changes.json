@@ -124,6 +124,37 @@
           "what": "/dross-review --diff \u003cpatch\u003e --out \u003cdir\u003e reviews a patch file locally: no fetch, no post, no commit, output under --out"
         }
       ]
+    },
+    "t-8": {
+      "files": [
+        "internal/prtriage/lensproof_test.go"
+      ],
+      "commit": "84cc9532",
+      "completed_at": "2026-11-14T19:01:40.044992Z",
+      "landmarks": [
+        {
+          "feature": "review lens proof",
+          "symbol": "lensSectionLines",
+          "loc": "internal/prtriage/lensproof_test.go:389",
+          "what": "recorded proof comments refuse any non-### heading so a mis-levelled lens section cannot pass the clean check vacuously"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "assets/prompts/review.md",
+        "assets/review_lenses_test.go"
+      ],
+      "commit": "ad5db25b",
+      "completed_at": "2026-11-14T19:05:42.565415Z",
+      "landmarks": [
+        {
+          "feature": "local diff review",
+          "symbol": "TestReviewDiffModeWrapNamesDiff",
+          "loc": "assets/review_lenses_test.go:358",
+          "what": "--diff wrap heads 'Reviewed diff \u003cpatch\u003e' instead of a nonexistent PR; doctor skip and non-empty patch check now pinned"
+        }
+      ]
     }
   },
   "reviews": {
@@ -306,6 +337,48 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "In --diff mode, §6's printed wrap still begins 'Reviewed PR #\u003cn\u003e'; Local mode only overrides the Comment: line, so the header names a PR that does not exist",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "markdownHeading (internal/prtriage/lensproof_test.go:414) only matches headings that start at column 0; markdown also treats a line indented by 1-3 spaces as a heading (e.g. '   ## Edge cases'), and that would still be filed under the previous section. Unlikely in recorded /dross-review output.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "the test also covers a well-levelled comment (both sections read) and a non-lens '### Style' section, so the earlier check against the six lens names is still tested now that it runs during the line walk",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The --diff doctor skip (review.md:22) and the non-empty patch check (review.md:29) were already in the prompt; this diff only adds tests that pin them. The only new prose is the diff-mode wrap line at review.md:32 and review.md:171.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestReviewDiffModeWrapNamesDiff's guardBefore action string ends in a newline, so it matches only the bare 'Reviewed PR #\u003cn\u003e — \u003cphase-id\u003e' wrap line (review.md:182) and not the backticked mention in the --diff guard at line 171. The ordering check is real.",
           "resolution": "non-blocking, left"
         }
       ]
