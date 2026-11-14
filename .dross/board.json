@@ -61,6 +61,7 @@
     "remote-toolchain-bootstrap": "DRO-129",
     "remote-toolchain-install": "DRO-246",
     "review-comment-ingest": "DRO-903",
+    "review-edge-lenses": "DRO-1138",
     "run-block-pin-currency": "DRO-746",
     "scanner-self-exclusion": "DRO-404",
     "scoped-commit-gate": "DRO-1094",
