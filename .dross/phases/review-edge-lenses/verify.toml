@@ -1,11 +1,11 @@
 [verify]
   phase = "review-edge-lenses"
-  generated_at = 2026-11-14T13:42:47.632271Z
-  verdict = "partial"
+  generated_at = 2026-11-14T19:07:38.823509Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-11-14T17:08:44.587291Z
-  measured_commit = "a9c649890ca299b330c0c41eab889dd6ad189873"
-  measured_tree = "5eb7fb6251e13b3734c075b39d9f58666dfb8939"
+  finalized_at = 2026-11-14T22:39:46.734159Z
+  measured_commit = "d407aa75c5dd5a194265a89c72234f0323dd95c2"
+  measured_tree = "0d067cf58e2cf33e9a7d565969a48ea50e87f5f7"
 
 [summary]
   mutation_status = "out-of-scope"
@@ -55,8 +55,8 @@
 [[criterion]]
   id = "c-4"
   status = "covered"
-  tests = ["internal/prtriage/lensproof_test.go:TestLensProofSeeded", "internal/prtriage/lensproof_test.go:TestLensProofClean", "internal/prtriage/lensproof_test.go:TestLensFixtureSeededShape", "internal/prtriage/lensproof_test.go:TestLensFixtureCleanShape", "assets/review_lenses_test.go:TestReviewDiffModeNeverPosts"]
-  notes = "Recorded seeded/clean runs checked against go/parser-computed defect lines; fixture shape tests stop the fixtures drifting. Clean check can pass vacuously on a mis-levelled heading (FLAG)."
+  tests = ["internal/prtriage/lensproof_test.go:TestLensProofSeeded", "internal/prtriage/lensproof_test.go:TestLensProofClean", "internal/prtriage/lensproof_test.go:TestRecordedSectionsRefusesMisleveledHeading", "internal/prtriage/lensproof_test.go:TestLensFixtureSeededShape", "internal/prtriage/lensproof_test.go:TestLensFixtureCleanShape", "assets/review_lenses_test.go:TestReviewDiffModeNeverPosts", "assets/review_lenses_test.go:TestReviewDiffModeSkipsDoctor", "assets/review_lenses_test.go:TestReviewDiffModeChecksPatch", "assets/review_lenses_test.go:TestReviewDiffModeWrapNamesDiff"]
+  notes = "Recorded seeded/clean runs checked against go/parser-computed defect lines. t-8 closes the vacuous-clean FLAG: lensSectionLines refuses any non-### heading, so a mis-levelled lens section can no longer hide findings. t-9 pins the --diff doctor skip, the non-empty patch check and the diff-mode wrap line."
 
 [[criterion]]
   id = "c-5"
@@ -117,20 +117,20 @@
   text = "skipped fixtures/review-edge-lenses-c4/seeded-comment.md: no mutation adapter for .md"
 
 [[finding]]
-  severity = "FLAG"
-  text = "c-4: internal/prtriage/lensproof_test.go recordedSections files lines under a mis-levelled heading (## or ####) into the previous ### section, so TestLensProofClean can pass vacuously on a re-recorded comment (t-6 reviewer round-2 FLAG, still open)"
-
-[[finding]]
-  severity = "FLAG"
-  text = "assets/prompts/review.md:22 '--diff skips the §0 dross doctor requirement' has no test; removing the sentence fails nothing (t-7 reviewer FLAG)"
-
-[[finding]]
-  severity = "FLAG"
-  text = "assets/prompts/review.md:29 Local mode's 'confirm the copied patch exists and is non-empty' check has no test (t-7 reviewer FLAG)"
+  severity = "NOTE"
+  text = "t-8 closed the c-4 FLAG: recorded proof comments now refuse any heading that is not a ### lens heading (TestRecordedSectionsRefusesMisleveledHeading)"
 
 [[finding]]
   severity = "NOTE"
-  text = "assets/prompts/review.md:182 §6 wrap print still begins 'Reviewed PR #<n>' in --diff mode, naming a PR that does not exist"
+  text = "t-9 closed both t-7 FLAGs (--diff doctor skip, non-empty patch check) and the §6 wrap NOTE: --diff mode now heads its wrap 'Reviewed diff <patch> — <phase-id>'"
+
+[[finding]]
+  severity = "NOTE"
+  text = "full suite green on helicon at d407aa75 (67 packages ok, 0 FAIL; log .dross/logs/test-20261114T223604.081494000Z.log)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "markdownHeading in lensproof_test.go matches column-0 headings only; a 1-3-space-indented heading would still be absorbed into the previous section (t-8 reviewer NOTE, unlikely in recorded output)"
 
 [[finding]]
   severity = "NOTE"
@@ -138,11 +138,11 @@
 
 [[finding]]
   severity = "NOTE"
-  text = "commit 8048e260 uses a test(...) prefix outside the conventional type list; squash-merge at ship replaces it"
+  text = "commit 8048e260 uses a test(...) prefix outside the conventional type list, and 84cc9532 is chore(...) for a test change; squash-merge at ship replaces both"
 
 [[finding]]
   severity = "NOTE"
-  text = "verify tried to mutate the nested fixtures/review-edge-lenses-c4 module: helicon rsync exited 23 for clean/order/seeded, then gremlins found no covered mutants; harmless here, but verify should skip nested go.mod modules"
+  text = "verify still mutates the nested fixtures/review-edge-lenses-c4 module: helicon rsync exited 23 for clean/order/seeded, then gremlins found no covered mutants; harmless, but verify should skip nested go.mod modules"
 
 [[finding]]
   severity = "NOTE"
