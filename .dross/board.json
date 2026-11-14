@@ -2438,6 +2438,41 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "review-edge-lenses/t-1": {
+      "issue": "DRO-1139",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-2": {
+      "issue": "DRO-1140",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-3": {
+      "issue": "DRO-1141",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-4": {
+      "issue": "DRO-1142",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-5": {
+      "issue": "DRO-1143",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-6": {
+      "issue": "DRO-1145",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-7": {
+      "issue": "DRO-1144",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "run-block-pin-currency/t-1": {
       "issue": "DRO-747",
       "plan_status": "done",

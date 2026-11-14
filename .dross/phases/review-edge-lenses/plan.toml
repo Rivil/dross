@@ -13,7 +13,7 @@ review.md gains lens 5 (edge cases) and lens 6 (silent failures): list entries, 
 """
   covers = ["c-1", "c-2", "c-5", "c-6"]
   test_contract = ["if either new template is dropped, TestReviewSpawnsSixLenses fails: review.md must hold 6 numbered lenses, 6 `subagent_type: general-purpose` templates, \"all six subagents in a single tool block\", and no lens-count \"four\" in intro, spawn, aggregate, hard rule or wrap print", "if the edge-case template stops telling the lens to Grep/Read the working tree for the full value set, to say where the set is defined, or to name every unhandled value with file:line, TestEdgeCaseLensRules fails", "if the default_arm `> Rule:` line is lost (loud catch-all that errors/panics/logs counts as handling; silent catch-all is flagged naming the values that fall into it), TestEdgeCaseLensRules fails", "if the silent-failure template drops any one of discarded error returns, empty catch, empty recover, or a default returned on failure with nothing logged or surfaced — or drops the adjacent-reason-comment exemption — TestSilentFailureLensRules fails in that shape's subtest", "if either new template loses its `> Severity:` line (FLAG by default; BLOCKING only on a spec-criterion path or a verify.toml survivor) or stops pointing at verify.toml, TestNewLensSeverity fails for that lens", "c-6: if the code-quality template still names \"error handling\" or \"surprising defaults\", or §3 loses the topical drop rule for swallowed errors/quiet fallbacks, TestCodeQualityCedesSilentFailures fails", "language_scope: if the silent-failure template omits `catch` or `recover`, or either new template (edge-case or silent-failure) contains `err != nil` or a `.go` example, TestNewLensesLanguageAgnostic fails", "if the summary line lacks \"across 6 lenses\" or any of the six lens names, TestReviewSummaryNamesSixLenses fails", "if the dross-review command description omits any of the six lens names, TestReviewCommandNamesSixLenses fails", "if review.md grows past 15,000 B, TestPromptByteBudget/review.md fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-2"
@@ -31,7 +31,7 @@ A nested Go module (own go.mod, so ./..., gremlins and vet never see it). order/
     "if the clean fixture regresses into a defect (missing case, silent default, uncommented discard) or loses a near-miss (the loud default, or the discard's reason comment), TestLensFixtureCleanShape fails",
     "if fixtures/review-edge-lenses-c4/go.mod is removed, TestLensFixtureIsOwnModule fails",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-3"
@@ -42,7 +42,7 @@ A nested Go module (own go.mod, so ./..., gremlins and vet never see it). order/
   description = "The §3 aggregate block and §4 comment template gain `### Edge cases (N findings)` and `### Silent failures (N findings)`, each with one example bullet in the existing `- **FLAG** — `file:line` — …` shape; the edge example puts the switch site first and the set-definition site after. split.go is not changed."
   covers = ["c-3"]
   test_contract = ["if a new section is missing or malformed (e.g. `- FLAG:` instead of `- **FLAG** — `), TestSplitReviewMatchesReviewTemplate fails: the template must split into 4 findings (was 2), with findings 3 and 4 graded FLAG and Loc set", "if an edge finding's Loc becomes the set-definition site, TestSplitReviewMatchesReviewTemplate fails: finding 3's Loc must be the switch path:line although a second path:line follows in its text", "if SplitReview treats the new headings differently from the original four, TestSplitReviewSixSections fails: a six-section comment yields 6 findings numbered 1..6 in order, no `###` in any Text, and moving the two new bullets under `### Security` yields an identical []Finding", "if an indented unhandled-values sub-list (`  - Refunded`) escapes its finding or starts a new one, TestSplitReviewKeepsValueList fails", "if a six-section own review does not yield c<id>#1..#k with new-lens findings at their positions on the /dross-respond items path, TestItemsSplitIDsSixLenses fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-7"
@@ -52,7 +52,7 @@ A nested Go module (own go.mod, so ./..., gremlins and vet never see it). order/
   description = "`/dross-review --diff <patch> --out <dir>` (argument-hint updated; refuses without --out): in place of §1's fetch it copies the patch into <dir> and checks it exists and is non-empty; skips the §0 doctor requirement, the §5 post and the §6 commit; prints the comment and saves <dir>/review-comment.md. Nothing is written under .dross/phases/."
   covers = ["c-4"]
   test_contract = ["if --diff mode can reach `dross ship comment` or the §6 commit, or the argument-hint lacks `--diff <patch>` and `--out <dir>`, TestReviewDiffModeNeverPosts fails", "if --diff still requires or fetches a PR number, TestReviewDiffModeSkipsFetch fails", "if --diff mode names any `.dross/phases` path for its patch or comment, or stops directing output to the --out dir, TestReviewDiffModeWritesOutDir fails", "if --diff runs without --out instead of refusing, TestReviewDiffModeRequiresOut fails"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-3"]
 
 [[task]]
@@ -66,7 +66,7 @@ Add a "Partial value sets and swallowed errors" section copying the `> Rule:` se
 """
   covers = ["c-7"]
   test_contract = ["if the reviewer's rules drift from the lenses', TestReviewerSharesLensRules fails: every `> Rule:` sentence in review.md's edge-case and silent-failure templates must appear verbatim in the reviewer body", "if the BLOCKING grade line stops naming partial enum/status/flag handling and swallowed errors, TestReviewerBodyDefinesGrades (needle updated) fails", "if the reviewer body contains review.md's `> Severity:` text (letting a hit grade FLAG and pass), TestReviewerEdgeHitsBlock fails", "if the new section tells the reviewer to read verify.toml or any `.dross/` path, TestReviewerSectionNoDrossReads fails (TestReviewerBodyLimitsReads is a separate, unchanged guard)", "if the reviewer's tool list grows, TestReviewerDefinitionIsolation fails; if the worked example breaks, TestReviewerBodyMatchesParser fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-5"
@@ -83,7 +83,7 @@ The README command-table row and roadmap bullet, the dross.1 /dross-review entry
     "if the guard's globs visit fewer files than the known surfaces (README, dross.1, audit doc, review.md, dross-review command), TestNoFourLensSurface fails on the visited count",
     "if any surface drops one of the six lens tokens, TestReviewSurfacesNameSixLenses fails naming the surface and missing token: README /dross-review row, README roadmap bullet, dross.1 entry, audit doc review entry, command description, review.md summary line",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-6"
@@ -101,4 +101,4 @@ The README command-table row and roadmap bullet, the dross.1 /dross-review entry
     "if a recorded comment is hand-edited out of the six-section shape, SplitReview returns ok=false and both record tests fail",
     "if the fixture is edited so its lines shift without a re-run, the computed lines stop matching the recorded Locs and TestLensProofSeeded fails",
   ]
-  status = "pending"
+  status = "done"
