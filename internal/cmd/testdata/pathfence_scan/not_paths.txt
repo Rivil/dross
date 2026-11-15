@@ -523,6 +523,8 @@ verify.ProvenanceLeg.Tool tool
 verify.Scope.Base base
 verify.Scope.Degraded degraded
 verify.SkippedFile.Reason reason
+verify.SurvivorRecord.Key key
+verify.SurvivorRecord.Op op
 verify.Tests.MeasuredCommit measured_commit
 verify.Tests.MeasuredOn measured_on
 verify.Tests.MeasuredTree measured_tree

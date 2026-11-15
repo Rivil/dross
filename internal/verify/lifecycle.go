@@ -58,6 +58,12 @@ type Classified struct {
 	// or the resolution error that left it unclassified. Empty for a plain
 	// in-diff survivor, which needs no explanation.
 	Note string
+	// Ambiguous marks a survivor whose acceptance was withheld because its key
+	// is not unique in the file. It rides onto the persisted record so a later
+	// reader re-classifying it against the acceptance store does not treat the
+	// acceptance as settling it — the same noise-over-silence rule, carried
+	// past the run that first applied it.
+	Ambiguous bool
 }
 
 // Lifecycle is the classification of a run's survivors into the four states.
@@ -134,6 +140,7 @@ func classifyOne(s Survivor, accepted, routed map[string]string, id Identifier) 
 			// The acceptance is real but the key it matches is not unique in
 			// the file, so it cannot be attributed to THIS survivor. Re-emit.
 			c.Note = "accepted key is ambiguous in this file (identical source text on more than one line) — acceptance withheld"
+			c.Ambiguous = true
 		} else {
 			c.State = LifecycleAccepted
 			c.Note = reason
@@ -177,8 +184,9 @@ func (l *Lifecycle) add(c Classified) {
 
 // ApplyLifecycle classifies every survivor in a run — in-scope and out-of-scope
 // alike — and stamps the resolved key, state and note back onto the records
-// that reach tests.json. It returns the classification so the caller can print
-// the per-state counts.
+// that reach tests.json. An out-of-scope record also takes the ambiguity flag:
+// it is the one Skeleton persists into verify.toml for close-out to re-read. It
+// returns the classification so the caller can print the per-state counts.
 //
 // The in-scope aggregates are untouched: an acceptance suppresses a *finding*,
 // never a *count*. Folding acceptances out of the denominator would let a phase
@@ -221,7 +229,7 @@ func ApplyLifecycle(t *Tests, accepted, routed map[string]string, id Identifier)
 	for i := range t.OutOfScope {
 		o := &t.OutOfScope[i]
 		if c, ok := byPos[posKey(o.File, o.Line, o.Op)]; ok {
-			o.Key, o.Lifecycle, o.Note = c.Key, c.State, c.Note
+			o.Key, o.Lifecycle, o.Note, o.Ambiguous = c.Key, c.State, c.Note, c.Ambiguous
 		}
 	}
 	return l

@@ -275,6 +275,9 @@ type OutOfScopeMutant struct {
 	// Note explains a state that needs explaining — destination, ambiguity,
 	// or the reason identity could not be resolved.
 	Note string `json:"note,omitempty"`
+	// Ambiguous is set when an acceptance matched this survivor's key but was
+	// withheld because the key is not unique in its file.
+	Ambiguous bool `json:"ambiguous,omitempty"`
 }
 
 // FilterReport splits a mutation report against the phase's scope: the mutants
@@ -394,6 +397,28 @@ type Verify struct {
 	Summary  VerifySummary     `toml:"summary"`
 	Criteria []CriterionResult `toml:"criterion,omitempty"`
 	Findings []Finding         `toml:"finding,omitempty"`
+	// Survivors are the out-of-scope survivors this run left undisposed —
+	// neither accepted nor routed. They are structured rather than read back
+	// out of the FLAG text so milestone close-out can re-classify them against
+	// the acceptance and routing stores as they stand at close-out, without
+	// re-running mutation. A verify.toml from before this field has none, and
+	// that reads as nothing to answer for (locked survivor_source).
+	Survivors []SurvivorRecord `toml:"survivor,omitempty"`
+}
+
+// SurvivorRecord is one undisposed out-of-scope survivor as verify.toml keeps
+// it. Key is empty when identity could not be resolved: the survivor is still
+// recorded, because an unreadable survivor dropping out of the record is the
+// silent inheritance the drain rule forbids.
+type SurvivorRecord struct {
+	Key  string `toml:"key,omitempty"`
+	File string `toml:"file"`
+	Line int    `toml:"line"`
+	Op   string `toml:"op,omitempty"`
+	// Ambiguous carries the run's verdict that an acceptance for Key could not
+	// be attributed to this survivor, so a later reader must not let one
+	// settle it either.
+	Ambiguous bool `toml:"ambiguous,omitempty"`
 }
 
 type VerifyMeta struct {
@@ -1033,6 +1058,8 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 			remainder++
 		}
 	}
+	// The FLAGs above are for the reader; these records are for close-out.
+	v.Survivors = undisposedSurvivors(t.OutOfScope)
 	// ONE line for the whole remaining filtered set. The count is the
 	// post-lifecycle remainder — accepted survivors are gone from it, which is
 	// what makes the number shrink as the backlog is drained instead of
@@ -1056,6 +1083,28 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 		})
 	}
 	return v
+}
+
+// undisposedSurvivors lists the out-of-scope survivors with no disposition,
+// one record per file/line/op, in the run's order. "No disposition" is every
+// state but accepted and routed — unclassified, and also a row no
+// classification ever stamped: a run that could not classify has not disposed
+// of anything.
+func undisposedSurvivors(rows []OutOfScopeMutant) []SurvivorRecord {
+	var out []SurvivorRecord
+	seen := map[string]bool{}
+	for _, o := range rows {
+		if o.Lifecycle == LifecycleAccepted || o.Lifecycle == LifecycleRouted {
+			continue
+		}
+		pos := posKey(o.File, o.Line, o.Op)
+		if seen[pos] {
+			continue
+		}
+		seen[pos] = true
+		out = append(out, SurvivorRecord{Key: o.Key, File: o.File, Line: o.Line, Op: o.Op, Ambiguous: o.Ambiguous})
+	}
+	return out
 }
 
 // NotCoveredKind is where a go-cover profile puts a NOT COVERED survivor's line.

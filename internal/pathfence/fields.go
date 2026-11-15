@@ -350,6 +350,9 @@ var unguessedFields = []Field{
 	reportPath("verify.LegSummary", "Ranges", "ranges", "tests.json",
 		"file:range labels a leg measured, summarised for the report.",
 		"internal/verify/verify.go"),
+	reportPath("verify.SurvivorRecord", "File", "file", "verify.toml",
+		"where an undisposed out-of-scope survivor sits, recorded for milestone close-out to name as file:line — never opened.",
+		"internal/verify/verify.go"),
 
 	// ---- scan findings: where a finding points ---------------------------
 	reportPath("findings.Record", "File", "file", "findings.toml",

@@ -575,6 +575,18 @@ func TestVerifyPromptRunsFullSuiteFirst(t *testing.T) {
 // refusal into a freshness-unknown warning. §3 tells the agent to leave both
 // fields exactly as written.
 func TestVerifyPromptKeepsTheMeasuredTree(t *testing.T) {
+	sec := verifyUpdateSection(t)
+	for _, needle := range []string{"`[verify].measured_commit`", "`[verify].measured_tree`", "exactly as `dross verify` wrote them"} {
+		if !strings.Contains(sec, needle) {
+			t.Errorf("verify.md §3 must tell the agent to keep the measured tree — missing %q", needle)
+		}
+	}
+}
+
+// verifyUpdateSection returns verify.md's §3, the section where the agent
+// hand-edits verify.toml, up to the next top-level heading.
+func verifyUpdateSection(t *testing.T) string {
+	t.Helper()
 	body := verifyPromptBody(t)
 	const heading = "## 3. Update `verify.toml`"
 	at := strings.Index(body, heading)
@@ -585,9 +597,16 @@ func TestVerifyPromptKeepsTheMeasuredTree(t *testing.T) {
 	if next := strings.Index(sec, "\n## "); next >= 0 {
 		sec = sec[:next]
 	}
-	for _, needle := range []string{"`[verify].measured_commit`", "`[verify].measured_tree`", "exactly as `dross verify` wrote them"} {
-		if !strings.Contains(sec, needle) {
-			t.Errorf("verify.md §3 must tell the agent to keep the measured tree — missing %q", needle)
-		}
+	return sec
+}
+
+// TestVerifyPromptKeepsSurvivorRecords (c-3): milestone close-out reads the
+// `[[survivor]]` records `dross verify` writes, and /dross-verify hand-edits
+// the same file. An agent that tidies them away hides undisposed survivors
+// from close-out, so §3 tells it to leave them exactly as written.
+func TestVerifyPromptKeepsSurvivorRecords(t *testing.T) {
+	const line = "Leave every `[[survivor]]` record exactly as written"
+	if !strings.Contains(verifyUpdateSection(t), line) {
+		t.Errorf("verify.md §3 must tell the agent to leave the survivor records alone — missing %q", line)
 	}
 }

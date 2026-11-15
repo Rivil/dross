@@ -1789,3 +1789,181 @@ func TestFilePathsContainThePhaseID(t *testing.T) {
 		}
 	}
 }
+
+// --- undisposed survivor records (milestone close-out) ----------------------
+
+// TestSkeletonRecordsUndisposedSurvivors (c-3): verify.toml records exactly the
+// out-of-scope survivors nobody has disposed of, with the position close-out
+// names. An accepted or routed survivor leaking in would block a milestone on
+// a decision already made; an in-scope one is the phase's own BLOCKING, not
+// backlog; and a keyless survivor dropped for being unreadable is the silent
+// inheritance the drain rule forbids.
+func TestSkeletonRecordsUndisposedSurvivors(t *testing.T) {
+	tests := &Tests{
+		Phase: "p",
+		Languages: []LanguageRun{{
+			Name: "go", Tool: "gremlins",
+			Mutation: &mutation.Report{
+				Killed: 1, Survived: 1,
+				Surviving: []mutation.Mutant{{File: "in.go", Line: 3, Op: "OP", Key: "k0", Lifecycle: LifecycleUnclassified}},
+			},
+		}},
+		OutOfScope: []OutOfScopeMutant{
+			{File: "f.go", Line: 12, Op: "OP", Key: "k1", Lifecycle: LifecycleUnclassified},
+			{File: "a.go", Line: 20, Op: "OP", Key: "k2", Lifecycle: LifecycleAccepted, Note: "ceiling"},
+			{File: "r.go", Line: 30, Op: "OP", Key: "k3", Lifecycle: LifecycleRouted, Note: "routed to elsewhere"},
+			{File: "gone.go", Line: 40, Op: "NEG", Lifecycle: LifecycleUnclassified, Note: "identity unresolved: gone"},
+		},
+	}
+
+	got := Skeleton(tests, []string{"c-1"}).Survivors
+
+	want := []SurvivorRecord{
+		{Key: "k1", File: "f.go", Line: 12, Op: "OP"},
+		{File: "gone.go", Line: 40, Op: "NEG"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("survivor records =\n %+v\nwant\n %+v", got, want)
+	}
+}
+
+// TestSkeletonRecordsUnstampedSurvivors: a row no classification ever stamped
+// (a run without identity resolution) has not been disposed of either, so it
+// is recorded rather than read as settled.
+func TestSkeletonRecordsUnstampedSurvivors(t *testing.T) {
+	tests := &Tests{
+		Phase:      "p",
+		OutOfScope: []OutOfScopeMutant{{File: "old.go", Line: 5, Op: "OP"}},
+	}
+	got := Skeleton(tests, nil).Survivors
+	want := []SurvivorRecord{{File: "old.go", Line: 5, Op: "OP"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("survivor records = %+v, want %+v", got, want)
+	}
+}
+
+// TestSkeletonDrainedRunRecordsNoSurvivors: with every out-of-scope survivor
+// disposed of there is nothing to record, and the field stays nil so the saved
+// verify.toml carries no empty table.
+func TestSkeletonDrainedRunRecordsNoSurvivors(t *testing.T) {
+	ti := fixtureIdentifier()
+	tests := lifecycleTests(t,
+		map[string]string{keyOf(t, ti, "accept.go", 30, "OP"): "a", keyOf(t, ti, "bare.go", 40, "OP"): "b"},
+		map[string]string{keyOf(t, ti, "routed.go", 20, "OP"): "elsewhere"},
+	)
+	if got := Skeleton(tests, nil).Survivors; got != nil {
+		t.Errorf("drained run recorded %+v, want nil", got)
+	}
+}
+
+// TestSkeletonSurvivorRecordsAreIdempotent: two rows at one file/line/op (a
+// tool that reports a mutant twice, or two legs reporting the same line) are
+// one survivor, and re-running the skeleton over the same run records the same
+// thing — close-out must never count one survivor twice.
+func TestSkeletonSurvivorRecordsAreIdempotent(t *testing.T) {
+	tests := &Tests{
+		Phase: "p",
+		OutOfScope: []OutOfScopeMutant{
+			{File: "f.go", Line: 12, Op: "OP", Language: "go", Key: "k1", Lifecycle: LifecycleUnclassified},
+			{File: "f.go", Line: 12, Op: "OP", Language: "go", Key: "k1", Lifecycle: LifecycleUnclassified},
+			{File: "f.go", Line: 12, Op: "OTHER", Language: "go", Key: "k9", Lifecycle: LifecycleUnclassified},
+		},
+	}
+
+	first := Skeleton(tests, nil).Survivors
+	var atOP int
+	for _, r := range first {
+		if r.File == "f.go" && r.Line == 12 && r.Op == "OP" {
+			atOP++
+		}
+	}
+	if atOP != 1 {
+		t.Errorf("f.go:12 (OP) recorded %d times, want exactly 1: %+v", atOP, first)
+	}
+	if len(first) != 2 {
+		t.Errorf("a different op on the same line is a different survivor: want 2 records, got %+v", first)
+	}
+
+	if again := Skeleton(tests, nil).Survivors; !reflect.DeepEqual(again, first) {
+		t.Errorf("re-run recorded %+v, first run %+v", again, first)
+	}
+}
+
+// TestSurvivorRecordsSurviveTheRoundTrip: finalize loads verify.toml and writes
+// the whole struct back, so every field of every record must make that trip —
+// a record that loses its key or its ambiguity on the way is re-classified
+// wrongly at close-out.
+func TestSurvivorRecordsSurviveTheRoundTrip(t *testing.T) {
+	original := &Verify{
+		Verify: VerifyMeta{Phase: "p", Verdict: "pass"},
+		Survivors: []SurvivorRecord{
+			{Key: "k1", File: "internal/x.go", Line: 12, Op: "CONDITIONALS_NEGATION", Ambiguous: true},
+			{File: "internal/y.go", Line: 7, Op: "ARITHMETIC_BASE"},
+		},
+	}
+	path := filepath.Join(t.TempDir(), "verify.toml")
+	if err := original.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got, err := LoadVerify(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !reflect.DeepEqual(got.Survivors, original.Survivors) {
+		t.Errorf("survivors after round-trip =\n %+v\nwant\n %+v", got.Survivors, original.Survivors)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(raw), "[[survivor]]"); n != 2 {
+		t.Errorf("verify.toml carries %d [[survivor]] tables, want 2:\n%s", n, raw)
+	}
+}
+
+// TestLegacyVerifyHasNoSurvivorRecords: a verify.toml written before the field
+// existed loads with none (it counts as nothing to answer for) and re-saves
+// without growing an empty survivor table.
+func TestLegacyVerifyHasNoSurvivorRecords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "verify.toml")
+	legacy := `[verify]
+  phase = "p"
+  generated_at = 2026-01-02T03:04:05Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 1.0
+  mutants_killed = 4
+  mutants_survived = 0
+  mutants_in_scope = 4
+  unclassified_in_scope = 0
+  criteria_total = 1
+  criteria_covered = 1
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+`
+	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v, err := LoadVerify(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if v.Survivors != nil {
+		t.Errorf("legacy verify.toml loaded survivors %+v, want nil", v.Survivors)
+	}
+	if err := v.Save(path); err != nil {
+		t.Fatalf("re-save: %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "survivor") {
+		t.Errorf("re-saved legacy verify.toml grew a survivor table:\n%s", raw)
+	}
+}
