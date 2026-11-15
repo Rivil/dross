@@ -12,7 +12,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 
@@ -23,6 +25,114 @@ type Milestone struct {
 	Milestone Meta     `toml:"milestone" json:"milestone"`
 	Scope     Scope    `toml:"scope" json:"scope"`
 	Phases    []string `toml:"phases" json:"phases"` // phase ids in delivery order
+
+	// Closeout holds one acknowledgement per close-out item the user chose to
+	// carry past `milestone complete` with a reason (locked ack_storage). Nil
+	// on every milestone without acks, so an untouched toml re-saves unchanged.
+	Closeout []CloseoutAck `toml:"closeout_ack,omitempty" json:"closeout_ack,omitempty"`
+}
+
+// CloseoutAck acknowledges one unresolved close-out item. Item is an id in the
+// ParseAckItem grammar; Reason is the non-empty prose carried into the
+// integration PR body.
+type CloseoutAck struct {
+	Item   string    `toml:"item" json:"item"`
+	Reason string    `toml:"reason" json:"reason"`
+	At     time.Time `toml:"at" json:"at"`
+}
+
+// Ack records an acknowledgement for item, replacing any earlier one for the
+// same item so a re-ack leaves exactly one record carrying the latest reason.
+// A blank or whitespace-only reason is refused and leaves m unchanged.
+func (m *Milestone) Ack(item, reason string, at time.Time) error {
+	if strings.TrimSpace(reason) == "" {
+		return fmt.Errorf("acknowledge %s: a non-empty --reason is required", item)
+	}
+	for i := range m.Closeout {
+		if m.Closeout[i].Item == item {
+			m.Closeout[i].Reason = reason
+			m.Closeout[i].At = at
+			return nil
+		}
+	}
+	m.Closeout = append(m.Closeout, CloseoutAck{Item: item, Reason: reason, At: at})
+	return nil
+}
+
+// Ack item kinds — the prefix before the first colon of an ack item id.
+const (
+	AckPhase    = "phase"
+	AckDeferred = "deferred"
+	AckSurvivor = "survivor"
+)
+
+// AckItem is a parsed close-out item id. Source and Index are set only for
+// the deferred kind; Payload holds the phase slug or the survivor key.
+type AckItem struct {
+	Kind    string
+	Payload string
+	Source  string
+	Index   int
+}
+
+// ackForms names the accepted item shapes in every parse refusal.
+const ackForms = "phase:<slug>, deferred:<source>#<index>, survivor:<key>"
+
+// ParseAckItem parses a close-out item id. Only three shapes are accepted:
+// phase:<slug>, deferred:<source>#<non-negative int> and survivor:<key>. The
+// kind splits on the first colon only, so a keyless survivor key such as
+// f.go:12:op keeps its inner colons.
+func ParseAckItem(id string) (AckItem, error) {
+	kind, payload, ok := strings.Cut(id, ":")
+	if !ok || payload == "" {
+		return AckItem{}, fmt.Errorf("unknown close-out item %q: want one of %s", id, ackForms)
+	}
+	switch kind {
+	case AckPhase, AckSurvivor:
+		return AckItem{Kind: kind, Payload: payload}, nil
+	case AckDeferred:
+		hash := strings.LastIndex(payload, "#")
+		if hash <= 0 {
+			return AckItem{}, fmt.Errorf("unknown close-out item %q: want one of %s", id, ackForms)
+		}
+		source, digits := payload[:hash], payload[hash+1:]
+		idx, err := parseIndex(digits)
+		if err != nil {
+			return AckItem{}, fmt.Errorf("unknown close-out item %q: index %w; want one of %s", id, err, ackForms)
+		}
+		return AckItem{Kind: kind, Payload: payload, Source: source, Index: idx}, nil
+	}
+	return AckItem{}, fmt.Errorf("unknown close-out item %q: want one of %s", id, ackForms)
+}
+
+// parseIndex accepts only plain decimal digits, so "+1" or "01"-style
+// spellings cannot alias one item under two ids.
+func parseIndex(s string) (int, error) {
+	if s == "" {
+		return 0, errors.New("is empty")
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return 0, fmt.Errorf("%q is not a non-negative integer", s)
+		}
+	}
+	if len(s) > 1 && s[0] == '0' {
+		return 0, fmt.Errorf("%q has a leading zero", s)
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("%q: %w", s, err)
+	}
+	return n, nil
+}
+
+// FormatAckItem renders a parsed item back to its id; ParseAckItem(FormatAckItem(x))
+// returns x for every item ParseAckItem accepts.
+func FormatAckItem(it AckItem) string {
+	if it.Kind == AckDeferred {
+		return AckDeferred + ":" + it.Source + "#" + strconv.Itoa(it.Index)
+	}
+	return it.Kind + ":" + it.Payload
 }
 
 type Meta struct {

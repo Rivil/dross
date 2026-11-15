@@ -188,7 +188,9 @@ memadvise.fileEntry.Tail tail
 memadvise.transcriptLine.Timestamp timestamp
 memadvise.transcriptLine.Type type
 
-# ---- milestone — milestone metadata: titles, versions, statuses, dates, phase ids, prose
+# ---- milestone — milestone metadata: titles, versions, statuses, dates, phase ids, prose; close-out ack item ids (matched against collected items, printed, never opened) and reasons
+milestone.CloseoutAck.Item item
+milestone.CloseoutAck.Reason reason
 milestone.Meta.Base base
 milestone.Meta.Shipped shipped
 milestone.Meta.Started started
