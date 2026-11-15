@@ -1,0 +1,73 @@
+[phase]
+  id = "review-edge-lenses"
+  title = "review-edge-lenses"
+  milestone = "v1.9"
+
+[[criteria]]
+  id = "c-1"
+  text = "/dross-review runs an edge-case lens that flags a diff branching on an enum, status or flag value set and handling only some of its values; each finding names the unhandled values and file:line."
+  deferred = ["c7d43efe3667c110"]
+
+[[criteria]]
+  id = "c-2"
+  text = "/dross-review runs a silent-failure lens that flags swallowed errors (discarded error returns, empty catch/recover) and quiet fallbacks (a default returned on failure with nothing logged or surfaced); each finding names file:line."
+
+[[criteria]]
+  id = "c-3"
+  text = "The posted comment gives each new lens its own section in the existing finding shape (BLOCKING/FLAG/NOTE — file:line), and prtriage.SplitReview splits those sections' findings for /dross-respond exactly as it does the original four."
+
+[[criteria]]
+  id = "c-4"
+  text = "Proof run: /dross-review over a seeded fixture diff (one partial enum/status switch, one swallowed error) reports both defects from the matching lens; over a clean fixture diff neither new lens reports a finding."
+
+[[criteria]]
+  id = "c-5"
+  text = "The dross-review command description, README entry and the comment's summary line name all six lenses; no surface still says \"four lenses\"."
+
+[[criteria]]
+  id = "c-6"
+  text = "A swallowed error or quiet fallback is reported by the silent-failure lens only — never also by the code-quality lens."
+
+[[criteria]]
+  id = "c-7"
+  text = "The --solo per-task reviewer (dross-task-reviewer) checks its task's diff for partial enum/status/flag handling and swallowed errors under the same rules as the two /dross-review lenses, and a hit fails its verdict."
+
+[[decisions]]
+  key = "value_set_source"
+  choice = "The edge-case lens may Grep/Read the working tree to find an enum/status/flag's full value set; a finding says where the set is defined."
+  why = "Value sets usually live outside the diff; diff-only would miss the common case of a switch changing while the consts don't."
+  locked = true
+
+[[decisions]]
+  key = "default_arm"
+  choice = "A catch-all arm that errors, panics or logs counts as handling; a silent catch-all (no-op or fallback value) is flagged, naming the values that fall into it."
+  why = "Silent defaults are exactly the gap the gremlins switch-case ceiling hides; loud defaults are legitimate exhaustiveness."
+  locked = true
+
+[[decisions]]
+  key = "severity"
+  choice = "Both new lenses emit FLAG by default; BLOCKING only when the gap sits on a path a spec criterion covers or verify.toml shows a survivor there. Lenses read verify.toml when present."
+  why = "A lens can't always tell an intentional gap from an oversight; spec or survivor evidence is what makes it blocking."
+  locked = true
+
+[[decisions]]
+  key = "intentional_discards"
+  choice = "The silent-failure lens skips a discarded error with an adjacent comment stating the reason; every uncommented discard is flagged."
+  why = "Keeps noise down on deliberate discards (e.g. Close on read) while pushing authors to record intent."
+  locked = true
+
+[[decisions]]
+  key = "language_scope"
+  choice = "Lens prompts are language-agnostic; the c-4 proof fixture is Go."
+  why = "Lenses must work on barktime's TS/Svelte too; Go is the repo's own stack for the fixture."
+  locked = true
+
+[[edges]]
+  class = "adjacency"
+  outcome = "covered"
+  criteria = ["c-6"]
+
+[[edges]]
+  class = "empty"
+  outcome = "covered"
+  criteria = ["c-4"]

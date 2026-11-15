@@ -1,0 +1,389 @@
+{
+  "phase": "review-edge-lenses",
+  "pr": 222,
+  "base": "milestone/v1.9",
+  "base_commit": "36670c9870d8d7714262e2c45370b5d06211c309",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "assets/prompts/review.md",
+        "assets/commands/dross-review.md",
+        "assets/review_lenses_test.go"
+      ],
+      "commit": "5d9ef717",
+      "completed_at": "2026-11-14T12:09:55.770205Z",
+      "landmarks": [
+        {
+          "feature": "PR review panel",
+          "symbol": "edge cases lens",
+          "loc": "assets/prompts/review.md:63",
+          "what": "/dross-review gains edge-case (partial value sets) and silent-failure (swallowed errors, quiet fallbacks) lenses; code quality cedes swallowed errors"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "fixtures/review-edge-lenses-c4/go.mod",
+        "fixtures/review-edge-lenses-c4/order/status.go",
+        "fixtures/review-edge-lenses-c4/seeded/handler.go",
+        "fixtures/review-edge-lenses-c4/clean/handler.go",
+        "internal/prtriage/lensproof_test.go"
+      ],
+      "commit": "8048e260",
+      "completed_at": "2026-11-14T12:15:09.531967Z",
+      "landmarks": [
+        {
+          "feature": "PR review panel",
+          "symbol": "loadLensFixture",
+          "loc": "internal/prtriage/lensproof_test.go:58",
+          "what": "nested Go fixture module (seeded partial Status switch + uncommented discard, clean near-miss twin) with type-checked shape tests"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/review.md",
+        "internal/prtriage/split_test.go",
+        "internal/prtriage/items_test.go"
+      ],
+      "commit": "e7f2b069",
+      "completed_at": "2026-11-14T12:19:47.290196Z",
+      "landmarks": [
+        {
+          "feature": "PR review panel",
+          "symbol": "review comment template",
+          "loc": "assets/prompts/review.md:132",
+          "what": "posted comment gains Edge cases and Silent failures sections that SplitReview splits for /dross-respond like the original four"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "assets/agents/dross-task-reviewer.md",
+        "internal/review/agentdef_test.go"
+      ],
+      "commit": "57557113",
+      "completed_at": "2026-11-14T12:32:55.549426Z",
+      "landmarks": [
+        {
+          "feature": "solo task review",
+          "symbol": "Partial value sets and swallowed errors",
+          "loc": "assets/agents/dross-task-reviewer.md:40",
+          "what": "solo reviewer applies the edge-case and silent-failure lens rules verbatim and blocks on a hit"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "README.md",
+        "docs/dross.1",
+        "docs/subagent-offload-audit.md",
+        "internal/cmd/readme_doc_test.go"
+      ],
+      "commit": "8a689080",
+      "completed_at": "2026-11-14T12:54:59.586357Z",
+      "landmarks": [
+        {
+          "feature": "PR review panel",
+          "symbol": "TestNoFourLensSurface",
+          "loc": "internal/cmd/readme_doc_test.go:284",
+          "what": "README, dross.1 and audit doc name the six lenses; a guard fails on any four-lens surface"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "fixtures/review-edge-lenses-c4/RUN.md",
+        "fixtures/review-edge-lenses-c4/seeded-comment.md",
+        "fixtures/review-edge-lenses-c4/clean-comment.md",
+        "internal/prtriage/lensproof_test.go"
+      ],
+      "commit": "b1a3d5c0",
+      "completed_at": "2026-11-14T13:28:29.773955Z",
+      "landmarks": [
+        {
+          "feature": "PR review panel",
+          "symbol": "TestLensProofSeeded",
+          "loc": "internal/prtriage/lensproof_test.go:409",
+          "what": "recorded live /dross-review --diff run: seeded fixture hits both new lenses at the computed lines, clean fixture yields none"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "assets/prompts/review.md",
+        "assets/commands/dross-review.md",
+        "assets/review_lenses_test.go"
+      ],
+      "commit": "06450861",
+      "completed_at": "2026-11-14T13:09:06.824575Z",
+      "landmarks": [
+        {
+          "feature": "PR review panel",
+          "symbol": "Local mode --diff",
+          "loc": "assets/prompts/review.md:24",
+          "what": "/dross-review --diff \u003cpatch\u003e --out \u003cdir\u003e reviews a patch file locally: no fetch, no post, no commit, output under --out"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/prtriage/lensproof_test.go"
+      ],
+      "commit": "84cc9532",
+      "completed_at": "2026-11-14T19:01:40.044992Z",
+      "landmarks": [
+        {
+          "feature": "review lens proof",
+          "symbol": "lensSectionLines",
+          "loc": "internal/prtriage/lensproof_test.go:389",
+          "what": "recorded proof comments refuse any non-### heading so a mis-levelled lens section cannot pass the clean check vacuously"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "assets/prompts/review.md",
+        "assets/review_lenses_test.go"
+      ],
+      "commit": "ad5db25b",
+      "completed_at": "2026-11-14T19:05:42.565415Z",
+      "landmarks": [
+        {
+          "feature": "local diff review",
+          "symbol": "TestReviewDiffModeWrapNamesDiff",
+          "loc": "assets/review_lenses_test.go:358",
+          "what": "--diff wrap heads 'Reviewed diff \u003cpatch\u003e' instead of a nonexistent PR; doctor skip and non-empty patch check now pinned"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "review.md §3's aggregate skeleton and §4's comment template still show only four lens sections (SECURITY / CODE QUALITY / TEST EFFICACY / SPEC FIDELITY). There is no Edge cases or Silent failures section, so an agent following the templates literally may leave the new lenses' findings out of the posted comment, even though the summary line counts them.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The hard rule's reason 'Sequential spawns triple the wall-clock cost' was written for a four-lens panel; with six it is closer to 6x. Cosmetic.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The rule and severity tests compare whole lines exactly, so any rewording fails them. This is deliberate under the one-sentence-per-line contract, but brittle against harmless edits.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "armIsLoud treats only panic, fmt.Errorf, errors.New and log/slog calls as loud; returning a sentinel error variable would count as silent. That is fine for this fixture, but t-6 should not reuse it as a general classifier.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "loadLensFixture type-checks the standard library through importer.Default(), which on recent Go versions runs `go list -export`. It works, but it is slower and depends on the toolchain being on PATH when the tests run.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSplitReviewMatchesReviewTemplate checks only that the silent-failure finding's Loc is non-empty, not that it equals path/to/store.go:88; enough for the contract, which asks only that Loc is set",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-7",
+          "text": "TestReviewerSharesLensRules only requires at least 3 Rule lines in total across both lenses, so if one lens lost its Rule lines while the other gained some, the count check would still pass; the word-for-word check still covers every Rule line that remains",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "reviewerLensSection ignores the found flag from strings.Cut on the next heading, which is fine: with no later heading the section simply runs to the end of the body",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "TestNoFourLensSurface checks that each known surface was visited by name, not just how many files were visited. That is stricter than the test_contract's 'visited count' wording and still meets it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "The described rule that the README v1.9 roadmap checkbox stays unticked has no test. It holds today (README.md:461) and the test_contract does not claim it.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "internal/prtriage/lensproof_test.go locLine returns 0 unless the Loc ends in exactly 'review-edge-lenses-c4/seeded/handler.go'. The c-6 check (no Code quality or Edge cases finding at the discard line) therefore misses a finding cited with a shorter path such as `seeded/handler.go:29` or `handler.go:29`. The positive checks fail loudly on a path mismatch, but this negative check passes without noticing; matching on the 'handler.go' suffix plus the dir would close the gap.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "recordedSections accepts any `### ` title. If a re-recorded comment spells a lens heading differently (e.g. 'Edge case' or 'Silent-failures'), TestLensProofClean looks up secs[\"Edge cases\"] / secs[\"Silent failures\"], finds nothing and passes without checking. SplitReview only checks the header and that at least one finding exists, so it does not enforce the six-section shape the test_contract attributes to it. Rejecting any section title outside the six lens names would make both record tests fail on that drift.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "recordedSections discards the ok result of the per-section SplitReview with no comment. This is harmless: with ReviewHeader prepended, ok=false only means the section has no findings, and fs is then nil.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "recordedSections (internal/prtriage/lensproof_test.go) only treats a line starting exactly with '### ' as a new section. If a heading is mis-levelled (e.g. '## Edge cases' or '#### Silent failures'), the findings under it are filed under the preceding section, so TestLensProofClean would pass without checking them instead of failing. Rejecting any heading line that is not one of the six '### ' lens titles would close this.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The c-6 check matches only on a finding's Loc (its first backticked path:line). A Code quality finding that discusses the discard but cites another location first would not be caught. This is acceptable for the recorded fixture.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "locLine returns 0 when strconv.Atoi fails. This is documented, and the SplitReview findingLoc regex guarantees digits, so the branch cannot be reached in practice.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "The described '--diff skips the §0 doctor requirement' (review.md:22 'Skipped in `--diff` mode, which posts nothing.') has no test pinning it; removing that sentence fails nothing",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "Local mode's 'confirm it exists and is non-empty' check on the copied patch (review.md:29) is not asserted by any test; TestReviewDiffModeWritesOutDir only checks the copy destination",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In --diff mode, §6's printed wrap still begins 'Reviewed PR #\u003cn\u003e'; Local mode only overrides the Comment: line, so the header names a PR that does not exist",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "markdownHeading (internal/prtriage/lensproof_test.go:414) only matches headings that start at column 0; markdown also treats a line indented by 1-3 spaces as a heading (e.g. '   ## Edge cases'), and that would still be filed under the previous section. Unlikely in recorded /dross-review output.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "the test also covers a well-levelled comment (both sections read) and a non-lens '### Style' section, so the earlier check against the six lens names is still tested now that it runs during the line walk",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The --diff doctor skip (review.md:22) and the non-empty patch check (review.md:29) were already in the prompt; this diff only adds tests that pin them. The only new prose is the diff-mode wrap line at review.md:32 and review.md:171.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestReviewDiffModeWrapNamesDiff's guardBefore action string ends in a newline, so it matches only the bare 'Reviewed PR #\u003cn\u003e — \u003cphase-id\u003e' wrap line (review.md:182) and not the backticked mention in the --diff guard at line 171. The ordering check is real.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
+}

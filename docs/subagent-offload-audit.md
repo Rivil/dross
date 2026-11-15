@@ -122,7 +122,8 @@ would defeat it. Keep the diff re-orient summary-level rather than full-dump.
 
 ### review
 
-Four-lens subagent panel over an open PR. Disposition: **offloads-already**.
+Six-lens subagent panel (security / quality / tests / spec-fidelity /
+edge-case / silent-failure) over an open PR. Disposition: **offloads-already**.
 
 ### rule
 

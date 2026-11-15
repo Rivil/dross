@@ -61,6 +61,7 @@
     "remote-toolchain-bootstrap": "DRO-129",
     "remote-toolchain-install": "DRO-246",
     "review-comment-ingest": "DRO-903",
+    "review-edge-lenses": "DRO-1138",
     "run-block-pin-currency": "DRO-746",
     "scanner-self-exclusion": "DRO-404",
     "scoped-commit-gate": "DRO-1094",
@@ -2436,6 +2437,51 @@
       "issue": "DRO-921",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "review-edge-lenses/t-1": {
+      "issue": "DRO-1139",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-2": {
+      "issue": "DRO-1140",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-3": {
+      "issue": "DRO-1141",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-4": {
+      "issue": "DRO-1142",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-5": {
+      "issue": "DRO-1143",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-6": {
+      "issue": "DRO-1145",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-7": {
+      "issue": "DRO-1144",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-8": {
+      "issue": "DRO-1146",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "review-edge-lenses/t-9": {
+      "issue": "DRO-1147",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "run-block-pin-currency/t-1": {
       "issue": "DRO-747",

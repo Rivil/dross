@@ -120,7 +120,7 @@ func TestReviewerBodyLimitsReads(t *testing.T) {
 func TestReviewerBodyDefinesGrades(t *testing.T) {
 	_, body := agentDef(t)
 	for _, want := range []string{
-		"**BLOCKING** — a correctness bug, an unmet test_contract, or a locked-decision or rule violation. Only these block.",
+		"**BLOCKING** — a correctness bug, an unmet test_contract, a locked-decision or rule violation, partial enum/status/flag handling, or an uncommented swallowed error or quiet fallback. Only these block.",
 		"FLAG and NOTE are recorded only; they never block.",
 		`For a quick, the stated description is the only spec source: cite criterion "description".`,
 	} {
@@ -153,6 +153,93 @@ func TestParseVerdictRefusesNearMissFences(t *testing.T) {
 	for _, label := range []string{"dross-verify", "dross-review", "json"} {
 		if _, err := ParseVerdict("ok\n\n```"+label+"\n"+verdict+"\n```\n", KindTask); err == nil {
 			t.Errorf("a %s fence was read as a verdict", label)
+		}
+	}
+}
+
+// lensLines returns the lines starting with prefix (e.g. "> Rule: ") in
+// review.md's edge-case and silent-failure lens templates, prefix stripped.
+func lensLines(t *testing.T, prefix string) []string {
+	t.Helper()
+	b, err := assets.FS.ReadFile("prompts/review.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, lens := range []string{"edge cases", "silent failures"} {
+		_, after, ok := strings.Cut(string(b), "**"+lens+"** — `subagent_type: general-purpose`\n")
+		if !ok {
+			t.Fatalf("review.md has no %q lens template", lens)
+		}
+		for _, l := range strings.Split(after, "\n") {
+			if !strings.HasPrefix(l, ">") {
+				break
+			}
+			if s, ok := strings.CutPrefix(l, prefix); ok {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
+}
+
+// reviewerLensSection is the body's partial-value-set / swallowed-error
+// section, up to the next heading.
+func reviewerLensSection(t *testing.T) string {
+	t.Helper()
+	_, body := agentDef(t)
+	_, after, ok := strings.Cut(body, "## Partial value sets and swallowed errors\n")
+	if !ok {
+		t.Fatal("the reviewer body has no \"Partial value sets and swallowed errors\" section")
+	}
+	sec, _, _ := strings.Cut(after, "\n## ")
+	return sec
+}
+
+// TestReviewerSharesLensRules pins c-7: the reviewer judges partial value
+// sets and swallowed errors under the same rules as the two /dross-review
+// lenses, sentence for sentence.
+func TestReviewerSharesLensRules(t *testing.T) {
+	rules := lensLines(t, "> Rule: ")
+	if len(rules) < 3 {
+		t.Fatalf("review.md's new lenses hold %d `> Rule:` lines, want at least 3: %q", len(rules), rules)
+	}
+	sec := reviewerLensSection(t)
+	for _, r := range rules {
+		if !strings.Contains(sec, r) {
+			t.Errorf("the reviewer's lens section lacks the review.md rule %q", r)
+		}
+	}
+}
+
+// TestReviewerEdgeHitsBlock: a hit must fail the verdict. The lenses' severity
+// rule (FLAG by default) would let a reviewer pass one, so it is never copied.
+func TestReviewerEdgeHitsBlock(t *testing.T) {
+	_, body := agentDef(t)
+	sev := lensLines(t, "> Severity: ")
+	if len(sev) == 0 {
+		t.Fatal("review.md's new lenses hold no `> Severity:` line")
+	}
+	for _, s := range sev {
+		if strings.Contains(body, s) {
+			t.Errorf("the reviewer body copies the lens severity rule %q; a hit would grade FLAG and pass", s)
+		}
+	}
+	if strings.Contains(body, "FLAG by default") {
+		t.Error("the reviewer body grades a lens hit FLAG by default")
+	}
+	if !strings.Contains(reviewerLensSection(t), "a hit makes the verdict `\"block\"`") {
+		t.Error("the reviewer's lens section no longer says a hit blocks the verdict")
+	}
+}
+
+// TestReviewerSectionNoDrossReads: the lens section may send the reviewer to
+// the working tree for a value set, never into .dross/ (verify.toml included).
+func TestReviewerSectionNoDrossReads(t *testing.T) {
+	sec := reviewerLensSection(t)
+	for _, banned := range []string{"verify.toml", ".dross/", "spec.toml"} {
+		if strings.Contains(sec, banned) {
+			t.Errorf("the reviewer's lens section names %q; the read fence forbids .dross/", banned)
 		}
 	}
 }

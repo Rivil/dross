@@ -958,6 +958,24 @@ Ship refuses while an accepted comment's task is still open (see [Shipping / pul
 
 _introduced review-comment-ingest · 414cfcc_
 
+### PR review panel (dross-review)
+
+`/dross-review` runs six parallel lens subagents (security, code quality, test efficacy, spec fidelity, edge cases, silent failures) over a phase PR's diff and posts one comment with a section per lens, in the `BLOCKING/FLAG/NOTE — file:line` finding shape that `prtriage.SplitReview` splits for /dross-respond (see [PR review comment triage](#pr-review-comment-triage-dross-respond)). `--diff <patch> --out <dir>` reviews a local patch file without fetching, posting or committing.
+
+- edge cases lens (a branch on an enum, status or flag value set that handles only some values; the full set is found with Grep/Read and named; a silent catch-all is flagged) — `assets/prompts/review.md:75`
+- silent failures lens (discarded error returns, empty catch/recover, quiet fallbacks; the code-quality lens leaves these to it) — `assets/prompts/review.md:86`
+- review comment template (Edge cases and Silent failures sections after the original four, split like them by `SplitReview`) — `assets/prompts/review.md:144`
+- Local mode `--diff` (refuses without `--out`, skips doctor, checks the patch is non-empty, writes the comment under `--out`, and its wrap reads `Reviewed diff <patch>`) — `assets/prompts/review.md:24`
+- `loadLensFixture` (nested Go fixture module: a seeded partial Status switch and an uncommented discard, plus a clean near-miss twin, with type-checked shape tests) — `internal/prtriage/lensproof_test.go:63`
+- `TestLensProofSeeded` / `TestLensProofClean` (a recorded live `/dross-review --diff` run: the seeded fixture hits both new lenses at the computed lines, the clean one yields none) — `internal/prtriage/lensproof_test.go:463`, `internal/prtriage/lensproof_test.go:498`
+- `lensSectionLines` (a recorded proof comment with a heading that is not a `###` lens heading is refused, so a mis-levelled section cannot pass the clean check vacuously) — `internal/prtriage/lensproof_test.go:389`
+- `TestNoFourLensSurface` (README, dross.1 and the audit doc name all six lenses; a surface still giving the old lens count fails) — `internal/cmd/readme_doc_test.go:284`
+- `TestReviewDiffModeWrapNamesDiff` (pins the `--diff` wrap line, the doctor skip and the non-empty patch check) — `assets/review_lenses_test.go:358`
+
+The per-task solo reviewer applies the same two lens rules (see [Solo task review](#solo-task-review)).
+
+_introduced 3aa10d34 · extended review-edge-lenses · 5d9ef717_
+
 ### Prompt partials & byte budgets
 
 Keep every base prompt under one fixed 15,000-byte budget with no per-prompt overrides: off-path branches (solo review, recovery, detached legs, mutation errors, survivor drain, non-pass wrap-up, plan's `--panel`, spec's create, resume and deferral flows, ship's `--auto` and CI-failure paths, options' lanes and remote grant) live in `_<prompt>.<name>.md` partials fetched with one `dross prompt partial <prompt> <name>` command, each fetch line naming a closed-vocabulary trigger (**When** `key=value`) that is never the common path, and mechanical steps a dross command already runs at that point (version bump, board sync, inbound task pull, uat sync, verified status) moved into the CLI so the prompt only reacts to what it reports. A registry check fails the build on a missing, orphan, foreign or nested partial; prompt-content tests read the expanded prompt (base + partials inlined in place) so no instruction is lost in the move, guarded by a recorded instruction manifest.
@@ -1352,8 +1370,9 @@ In `--solo` runs of /dross-execute and /dross-quick no human approves a task, so
 - Solo review block (/dross-verify reports each task's review outcome, findings, resolutions and failed-task reasons) — `assets/prompts/verify.md:226`
 - `TestCapturedAgentReviewerFixture` / `TestRecorderBackgroundRoundTrip` (captured real Agent payloads pin the foreground and background verdict paths) — `internal/gate/fixture_test.go:146`
 - `TestReviewerBodyWarnsOffNearMissFences` (the reviewer is told its fence label is exactly `dross-verdict`, not `dross-verify` — a near-miss is read as no verdict) — `internal/review/agentdef_test.go:137`
+- Partial value sets and swallowed errors (the reviewer applies the `/dross-review` edge-case and silent-failure lens rules word for word, and a hit fails its verdict) — `assets/agents/dross-task-reviewer.md:40`
 
-_introduced solo-task-review · 6719096 · extended verify-staleness · d70ea24_
+_introduced solo-task-review · 6719096 · extended verify-staleness · d70ea24 · extended review-edge-lenses · 57557113_
 
 ### Solo task writer
 

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -232,6 +233,146 @@ func TestReadmeDocumentsContextNudge(t *testing.T) {
 	for _, want := range []string{"dross hooks", "[context] threshold"} {
 		if !strings.Contains(string(man), want) {
 			t.Errorf("docs/dross.1 does not mention %q", want)
+		}
+	}
+}
+
+// fourLensCount matches a /dross-review lens count from before the panel grew
+// to six. It deliberately leaves `all four` alone: the README's "all four
+// providers" is not a lens count.
+var fourLensCount = regexp.MustCompile(`(?i)\b(four|4)[- ]lens|across 4 lenses`)
+
+// knownLensSurfaces are the files that describe /dross-review's panel; the
+// stale-count guard must visit every one of them.
+var knownLensSurfaces = []string{
+	"README.md",
+	"docs/dross.1",
+	"docs/subagent-offload-audit.md",
+	"assets/prompts/review.md",
+	"assets/commands/dross-review.md",
+}
+
+// lensSurfaceFiles lists, root-relative with slash separators, README.md,
+// ARCHITECTURE.md and every .md or .1 file under docs/ and assets/.
+func lensSurfaceFiles(t *testing.T, root string) []string {
+	t.Helper()
+	files := []string{"README.md", "ARCHITECTURE.md"}
+	for _, dir := range []string{"docs", "assets"} {
+		err := filepath.WalkDir(filepath.Join(root, dir), func(p string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			if ext := filepath.Ext(p); ext != ".md" && ext != ".1" {
+				return nil
+			}
+			rel, err := filepath.Rel(root, p)
+			if err != nil {
+				return err
+			}
+			files = append(files, filepath.ToSlash(rel))
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return files
+}
+
+// TestNoFourLensSurface (c-5): no doc or prompt still counts the review panel
+// as four lenses, and the walk reaches every surface known to describe it.
+func TestNoFourLensSurface(t *testing.T) {
+	root := repoRootFromTest(t)
+	files := lensSurfaceFiles(t, root)
+
+	visited := map[string]bool{}
+	for _, f := range files {
+		visited[f] = true
+	}
+	var missing []string
+	for _, k := range knownLensSurfaces {
+		if !visited[k] {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("guard visited %d of the %d known lens surfaces; missing %v",
+			len(knownLensSurfaces)-len(missing), len(knownLensSurfaces), missing)
+	}
+
+	for _, f := range files {
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			if m := fourLensCount.FindString(line); m != "" {
+				t.Errorf("%s:%d still counts the review panel as four lenses (%q)", f, i+1, m)
+			}
+		}
+	}
+}
+
+// reviewLensTokens are the six /dross-review lenses as every surface names them.
+var reviewLensTokens = []string{"security", "quality", "tests", "spec-fidelity", "edge-case", "silent-failure"}
+
+// TestReviewSurfacesNameSixLenses (c-5): each place a user meets the review
+// panel names all six lenses, so a dropped lens cannot hide behind a correct
+// count word.
+func TestReviewSurfacesNameSixLenses(t *testing.T) {
+	root := repoRootFromTest(t)
+	read := func(parts ...string) string {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join(append([]string{root}, parts...)...))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	lineWhere := func(doc string, match func(string) bool) string {
+		for _, line := range strings.Split(doc, "\n") {
+			if match(line) {
+				return line
+			}
+		}
+		return ""
+	}
+	// between returns doc's text after start up to end, or "" without start.
+	between := func(doc, start, end string) string {
+		_, body, ok := strings.Cut(doc, start)
+		if !ok {
+			return ""
+		}
+		body, _, _ = strings.Cut(body, end)
+		return body
+	}
+
+	readme := read("README.md")
+	surfaces := []struct{ name, text string }{
+		{"README /dross-review row", lineWhere(readme, func(l string) bool {
+			return strings.HasPrefix(l, "| `/dross-review` |")
+		})},
+		{"README roadmap /dross-review bullet", lineWhere(readme, func(l string) bool {
+			return strings.HasPrefix(l, "- [x] `/dross-review`")
+		})},
+		{"docs/dross.1 /dross-review entry", between(read("docs", "dross.1"), "\n.B /dross-review ", "\n.TP")},
+		{"docs/subagent-offload-audit.md review entry", between(read("docs", "subagent-offload-audit.md"), "\n### review\n", "\n### ")},
+		{"dross-review command description", lineWhere(read("assets", "commands", "dross-review.md"), func(l string) bool {
+			return strings.HasPrefix(l, "description:")
+		})},
+		{"review.md summary line", lineWhere(expandedPrompt(t, "review.md"), func(l string) bool {
+			return strings.Contains(l, "<one-line summary:")
+		})},
+	}
+	for _, s := range surfaces {
+		if s.text == "" {
+			t.Errorf("%s not found", s.name)
+			continue
+		}
+		for _, tok := range reviewLensTokens {
+			if !strings.Contains(s.text, tok) {
+				t.Errorf("%s does not name the %s lens: %q", s.name, tok, s.text)
+			}
 		}
 	}
 }

@@ -31,11 +31,20 @@ Spec findings always block. There is no non-blocking spec finding.
 
 Grade every quality finding:
 
-- **BLOCKING** — a correctness bug, an unmet test_contract, or a locked-decision or rule violation. Only these block.
+- **BLOCKING** — a correctness bug, an unmet test_contract, a locked-decision or rule violation, partial enum/status/flag handling, or an uncommented swallowed error or quiet fallback. Only these block.
 - **FLAG** — the author should consider it: a likely bug in a rare path, a weak or vacuous test, a risky construct, an undeclared file the task did not list.
 - **NOTE** — an observation worth recording; no action needed.
 
 FLAG and NOTE are recorded only; they never block. Do not inflate a FLAG into a BLOCKING to be safe, and do not manufacture findings: an empty quality list is a fine answer.
+
+## Partial value sets and swallowed errors
+
+Check every branch the diff adds or changes that switches on, matches or compares an enum, status or flag value, and every error site the diff adds or changes.
+
+- **Partial value sets** — a branch that handles only some of the values in its set. Grep/Read the working tree to find the enum/status/flag's full value set; a finding says where the set is defined. A catch-all arm that errors, panics or logs counts as handling; a silent catch-all (no-op or fallback value) is flagged, naming the values that fall into it.
+- **Swallowed errors** — discarded error returns, empty catch blocks, empty recover handlers, and quiet fallbacks: a default returned on failure with nothing logged or surfaced. A discarded error with an adjacent comment stating the reason is skipped; every uncommented discard is flagged.
+
+Here "flagged" means a quality **BLOCKING**, so a hit makes the verdict `"block"`. Name the unhandled values or the swallowed error, with its file:line.
 
 ## Your reply
 

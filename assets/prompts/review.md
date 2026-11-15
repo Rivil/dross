@@ -1,27 +1,41 @@
 # /dross-review
 
-Spawn four parallel subagents to review an open PR through different lenses, aggregate their findings, and post one consolidated comment to the PR.
+Spawn six parallel subagents to review an open PR through different lenses, aggregate their findings, and post one consolidated comment to the PR.
 
-The four lenses (intentionally narrow scopes — each subagent stays in its lane):
+The six lenses (intentionally narrow scopes — each subagent stays in its lane):
 
 1. **security** — credential leaks, injection sinks, auth bypasses, OWASP top 10
-2. **code quality** — readability, dead code, premature abstraction, error handling, naming
+2. **code quality** — readability, dead code, premature abstraction, naming
 3. **test efficacy** — do tests actually exercise the change? (mutation-style reasoning, not coverage). Cross-reference `verify.toml` if present.
 4. **spec fidelity** — does the diff deliver the criteria in `spec.toml`? Anything outside the spec? Anything missing?
+5. **edge cases** — a branch on an enum, status or flag value set that handles only some of its values
+6. **silent failures** — swallowed errors and quiet fallbacks: a failure nobody hears about
 
 **Surface the post decision as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): the §5 post-or-skip gate is a single propose-and-react turn that leads with a default. The composed comment is outward-facing content about to be published, so it's shown in full before posting — that's the deliberate exception, not a contract violation.
 
 ## 0. Pre-flight
 
 1. `dross rule show` and `dross interaction show` — treat the rules as MUST-FOLLOW (the builtin commit-hygiene rule applies if you write any `.dross/` files during this run) and follow the printed interaction playbook for the post gate.
-2. Resolve the PR number from `$ARGUMENTS`. Required.
+2. Resolve the PR number from `$ARGUMENTS`. Required unless `--diff` is passed — then follow **Local mode** below instead.
 3. Resolve the phase id from `--phase <id>` or, if absent, from `state.json`'s `current_phase`. The phase context is essential — without it the spec-fidelity lens has no spec to compare against.
 4. Read `.dross/phases/<phase-id>/spec.toml`, `plan.toml`, and `verify.toml` if present. Surface the criteria + any verify findings — these become inputs the lenses cite.
-5. `dross doctor` — must exit 0 (the comment poster needs `[remote]` configured).
+5. `dross doctor` — must exit 0 (the comment poster needs `[remote]` configured). Skipped in `--diff` mode, which posts nothing.
+
+### Local mode — `--diff <patch> --out <dir>`
+
+Reviews a patch file instead of a PR: proof runs and pre-PR checks. It never posts, never commits, and writes nothing under the phase directory.
+
+- **Refuse without `--out <dir>`:** print `--diff needs --out <dir>` and stop.
+- **No PR number, no fetch:** skip §1. Instead `mkdir -p <dir>`, copy the patch to `<dir>/review-diff.patch`, and confirm it exists and is non-empty.
+- **`<diff-path>` is `<dir>/review-diff.patch`.** The lenses still read the phase's spec.toml and verify.toml.
+- **§4 saves to `<dir>/review-comment.md`** and prints the comment in full.
+- **Skip §5 and §6's commit:** print §6's wrap headed `Reviewed diff <patch> — <phase-id>` (there is no PR to name), with `Comment: saved to <dir>/review-comment.md`.
 
 ## 1. Fetch the PR diff
 
-The subagents review a *diff*, not the live working tree. Get one cohesive diff to hand them:
+**`--diff` mode:** skip this section — Local mode above already placed the patch.
+
+The subagents review a *diff*, not the live working tree. Get one cohesive diff to hand them; `<diff-path>` below is `.dross/phases/<phase-id>/review-diff.patch`:
 
 - GitHub: `gh pr diff <pr-number>` — emits unified diff to stdout. Pipe to `.dross/phases/<phase-id>/review-diff.patch`.
 - Forgejo / Gitea: `curl -s -H "Authorization: token $<auth_env>" "<api_base>/repos/<owner>/<repo>/pulls/<pr-number>.diff" > .dross/phases/<phase-id>/review-diff.patch`.
@@ -30,7 +44,7 @@ Confirm the file exists and is non-empty before continuing.
 
 ## 2. Spawn the panel — parallel
 
-Use the `Task` tool to launch all four subagents **in a single tool block** so they run concurrently. Each gets:
+Use the `Task` tool to launch all six subagents in a single tool block so they run concurrently. Each gets:
 
 - The diff path
 - The phase artefacts (spec.toml, verify.toml)
@@ -39,28 +53,48 @@ Use the `Task` tool to launch all four subagents **in a single tool block** so t
 ### Subagent prompts (templates — fill the placeholders)
 
 **security** — `subagent_type: general-purpose`
-> Review the unified diff at `.dross/phases/<phase-id>/review-diff.patch` for security issues only. Look for: credentials in code or configs, SQL/command/HTML injection sinks, auth bypasses, missing authorization checks, secrets in logs, unsafe deserialization, SSRF, OWASP top 10 patterns. Stay in your lane: ignore code quality, test coverage, and spec fidelity — other reviewers handle those.
+> Review the unified diff at `<diff-path>` for security issues only. Look for: credentials in code or configs, SQL/command/HTML injection sinks, auth bypasses, missing authorization checks, secrets in logs, unsafe deserialization, SSRF, OWASP top 10 patterns. Stay in your lane: ignore code quality, test coverage, and spec fidelity — other reviewers handle those.
 >
 > Return a JSON-formatted finding list. Each finding: `{severity: "BLOCKING|FLAG|NOTE", file: "<path>", line: <int|null>, summary: "<one line>", evidence: "<verbatim snippet>"}`. If no findings, return `{"findings": []}`.
 
 **code quality** — `subagent_type: general-purpose`
-> Review the unified diff at `.dross/phases/<phase-id>/review-diff.patch` for code-quality issues only. Look for: dead code, premature abstraction, deeply nested logic, inconsistent error handling, misleading names, comments that disagree with the code, surprising defaults. Stay in your lane: don't comment on security, tests, or spec fidelity.
+> Review the unified diff at `<diff-path>` for code-quality issues only. Look for: dead code, premature abstraction, deeply nested logic, misleading names, comments that disagree with the code. Swallowed errors and quiet fallbacks belong to the silent-failure lens — never report them here. Stay in your lane: don't comment on security, tests, spec fidelity, edge cases or silent failures.
 >
 > Return findings in the same JSON shape as above.
 
 **test efficacy** — `subagent_type: general-purpose`
-> Review the unified diff at `.dross/phases/<phase-id>/review-diff.patch` for test efficacy. The phase's mutation-testing report is at `.dross/phases/<phase-id>/verify.toml` (if present); read it. For each non-test file in the diff, check whether the same diff includes test changes that would catch a regression to that code. If verify.toml shows surviving mutants on touched code, surface the file/line — that's a test the diff weakened. Stay in your lane: don't comment on security, code quality (other than test code itself), or spec fidelity.
+> Review the unified diff at `<diff-path>` for test efficacy. The phase's mutation-testing report is at `.dross/phases/<phase-id>/verify.toml` (if present); read it. For each non-test file in the diff, check whether the same diff includes test changes that would catch a regression to that code. If verify.toml shows surviving mutants on touched code, surface the file/line — that's a test the diff weakened. Stay in your lane: don't comment on security, code quality (other than test code itself), or spec fidelity.
 >
 > Return findings in the same JSON shape.
 
 **spec fidelity** — `subagent_type: general-purpose`
-> Read `.dross/phases/<phase-id>/spec.toml` and the diff at `.dross/phases/<phase-id>/review-diff.patch`. For each `[[criteria]]` entry in spec.toml: does the diff implement it? Is there code in the diff that doesn't map to any criterion? Is anything in `[[deferred]]` accidentally implemented? Locked decisions in `[[decisions]]`: is the diff consistent with them?
+> Read `.dross/phases/<phase-id>/spec.toml` and the diff at `<diff-path>`. For each `[[criteria]]` entry in spec.toml: does the diff implement it? Is there code in the diff that doesn't map to any criterion? Is anything in `[[deferred]]` accidentally implemented? Locked decisions in `[[decisions]]`: is the diff consistent with them?
 >
 > Return findings in the same JSON shape, with severity reflecting: **BLOCKING** for missing criteria or violated locked decisions, **FLAG** for scope creep, **NOTE** for minor drift.
 
+**edge cases** — `subagent_type: general-purpose`
+> Review the unified diff at `<diff-path>` for edge cases only: every branch the diff adds or changes that switches on, matches or compares an enum, status or flag value (switch/match arms, if/else chains, lookup tables) and handles only some of the values in its set. Read `.dross/phases/<phase-id>/spec.toml` and `.dross/phases/<phase-id>/verify.toml` (if present). Stay in your lane: swallowed errors belong to the silent-failure lens; don't comment on security, code quality, tests or spec fidelity.
+>
+> Rule: Grep/Read the working tree to find the enum/status/flag's full value set; a finding says where the set is defined.
+>
+> Rule: A catch-all arm that errors, panics or logs counts as handling; a silent catch-all (no-op or fallback value) is flagged, naming the values that fall into it.
+>
+> Severity: FLAG by default; BLOCKING only when the gap sits on a path a spec.toml criterion covers or verify.toml shows a surviving mutant there.
+>
+> Each finding names every unhandled value, the branch's file:line first and the set's definition file:line after it. Return findings in the same JSON shape.
+
+**silent failures** — `subagent_type: general-purpose`
+> Review the unified diff at `<diff-path>` for silent failures only, at every error site the diff adds or changes: discarded error returns (an error result assigned to a blank or never read), empty catch blocks, empty recover handlers, and quiet fallbacks — a default returned on failure with nothing logged or surfaced. Read `.dross/phases/<phase-id>/spec.toml` and `.dross/phases/<phase-id>/verify.toml` (if present). Stay in your lane: partial value-set handling belongs to the edge-case lens; don't comment on security, code quality, tests or spec fidelity.
+>
+> Rule: A discarded error with an adjacent comment stating the reason is skipped; every uncommented discard is flagged.
+>
+> Severity: FLAG by default; BLOCKING only when the gap sits on a path a spec.toml criterion covers or verify.toml shows a surviving mutant there.
+>
+> Each finding names the file:line of the swallowed error or fallback. Return findings in the same JSON shape.
+
 ## 3. Aggregate
 
-When all four subagents return, collect their findings into one structured set:
+When all six subagents return, collect their findings into one structured set. Drop any code-quality finding about a swallowed error or quiet fallback, regardless of file or line — the silent-failure lens owns those, so one defect is reported once.
 
 ```
 SECURITY (N findings)
@@ -73,6 +107,10 @@ CODE QUALITY (N findings)
 TEST EFFICACY (N findings)
   ...
 SPEC FIDELITY (N findings)
+  ...
+EDGE CASES (N findings)
+  ...
+SILENT FAILURES (N findings)
   ...
 ```
 
@@ -87,7 +125,7 @@ Comment template:
 ```markdown
 ## /dross-review — phase <phase-id>
 
-<one-line summary: "N blocking, M flags, K notes across 4 lenses">
+<one-line summary: "N blocking, M flags, K notes across 6 lenses (security / quality / tests / spec-fidelity / edge-case / silent-failure)">
 
 ### Security (X findings)
 - **BLOCKING** — `path/to/file.go:42` — Token logged in plaintext
@@ -103,13 +141,21 @@ Comment template:
 ### Spec fidelity (W findings)
 ...
 
+### Edge cases (E findings)
+- **FLAG** — `path/to/label.go:57` — status switch leaves `Refunded` unhandled; it falls into a silent `default` — set defined at `path/to/status.go:12`
+
+### Silent failures (S findings)
+- **FLAG** — `path/to/store.go:88` — `Close` error discarded with no reason comment
+
 ---
 *Posted by `/dross-review`. Lenses are independent; agreement across lenses is intentional. Disagreement between lenses is a useful signal.*
 ```
 
-Save the composed comment to `.dross/phases/<phase-id>/review-comment.md` for posterity.
+Save the composed comment to `.dross/phases/<phase-id>/review-comment.md` for posterity — in `--diff` mode to `<dir>/review-comment.md` instead.
 
 ## 5. Post
+
+**`--diff` mode:** skip this section — never post; there is no PR.
 
 Drive a single propose-and-react turn (`AskUserQuestion`), leading with the default: **"Post the panel's findings as a comment on PR #<n>?"** — `post` (the recommended default once the comment is shown) / `skip`. One decision; don't bundle anything else into this turn.
 
@@ -122,6 +168,8 @@ If `skip`: just print the comment to stdout so the user can copy it manually.
 
 ## 6. Wrap
 
+**`--diff` mode:** no commit — print the wrap below only, its first line `Reviewed diff <patch> — <phase-id>` in place of `Reviewed PR #<n> — <phase-id>`.
+
 Per the builtin commit-hygiene rule, commit the artefacts you wrote:
 ```
 git add .dross/phases/<phase-id>/review-diff.patch .dross/phases/<phase-id>/review-comment.md
@@ -132,7 +180,7 @@ Print:
 
 ```
 Reviewed PR #<n> — <phase-id>
-  Subagents: security, code quality, test efficacy, spec fidelity
+  Subagents: security, code quality, test efficacy, spec fidelity, edge cases, silent failures
   Findings:  <total> (B blocking, F flags, N notes)
   Comment:   posted | saved to .dross/phases/<phase-id>/review-comment.md
 
@@ -142,7 +190,7 @@ Next: /dross-status — or address blocking findings, then /dross-ship once the 
 ## Hard rules
 
 - **Follow the interaction playbook (`_interaction.md`).** The §5 post-or-skip gate is a single propose-and-react turn leading with a default; the composed comment is shown in full before posting as the deliberate outward-facing exception.
-- **Spawn all four subagents in one tool block.** Sequential spawns triple the wall-clock cost without changing the analysis.
+- **Spawn all six subagents in a single tool block.** Sequential spawns triple the wall-clock cost without changing the analysis.
 - **Each lens stays in its lane.** Cross-lens findings are noise; the review value comes from independent perspectives. If a lens proposes a finding outside its scope, drop it.
 - **Don't auto-fix.** Findings are advisory. The phase author decides what to act on.
 - **Don't post if `dross doctor` failed pre-flight.** Without `[remote]` configured, the comment can't be posted; surface the doctor failure instead.
