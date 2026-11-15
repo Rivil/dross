@@ -1,0 +1,38 @@
+# Plan Review — milestone-closeout-check
+
+Reviewed: 2026-11-15
+Plan: 6 tasks across 4 waves
+
+## BLOCKING
+- [coverage] c-2 is contradicted, not just under-covered. c-2 requires a refusal while "any deferred item routed to a phase in this milestone has no `dross deferred absorb` record". t-4 excludes routed-survivor entries from the deferred kind ("routed-survivor entries excluded"; contract: "dismissed, someday, out-of-milestone and routed-survivor entries are never listed"), and the survivor kind treats any targeted route as clearing the survivor ("a targeted deferred entry with survivor=K clears it"). Net effect: a survivor that phase p1 routes to phase p2 *in the same milestone*, which p2 never kills, absorbs or accepts, passes close-out in both kinds. That is the dangling-loop case this phase exists to catch, and t-4's test pins the gap in place, so verify would map c-2 to a test asserting the opposite of its text. There may be a reason: `internal/boardsync/disposition.go` disposes a routed survivor by acceptance or by being measured away, not by absorption, so listing it as "clear with `dross deferred absorb`" would point at the wrong fix. Neither the spec nor the plan says so.
+  Suggestion: pick one and write it down. (a) Keep routed survivors that target milestone phases blocking until a disposition holds (the same absorbed / accepted / measured-away test boardsync uses), under whichever kind fits, with a clearing command that matches. Or (b) amend c-2's text in spec.toml to carve them out, and say why. Then change t-4's "never listed" assertion to match.
+
+## FLAG
+- [antipattern: missing file] t-3 adds `"closeout": {"clean","unresolved"}` to `TriggerVocabulary` in assets/partials.go. `TestCommonPathVocabularyPinned` in assets/partials_test.go:214 pins the exact key count and values of `CommonPath()`, so it fails when the key is added. assets/partials_test.go is not in t-3's files, so a scope-fenced solo writer can't fix it.
+  Suggestion: add assets/partials_test.go to t-3's files and add a contract line that the pinned map gains `"closeout": "clean"`.
+
+- [locked-decision / coverage] c-5 says "Any unresolved item can be acknowledged", and c-4 counts unverified phases as unresolved items. The plan makes the unverified kind non-ackable (t-4: "no ack id"; t-5 refuses `phase:<slug>` for a done-but-unverified phase) and makes collector-error lines non-ackable. This matches the locked `force_unverified` decision ("every other kind needs an ack"), so it is a defensible reading. It is still a literal gap against c-5 that a verifier could mark partial. It also reaches t-3: the closeout partial's contract requires only "resolve / acknowledge via `dross milestone ack`" for every item. Nothing pins what the walk offers for an unverified item, where ack is refused and the outs are /dross-verify or `--force-unverified` on both `--check` and `complete`.
+  Suggestion: record the interpretation (unverified is cleared by verify or `--force-unverified`, never by an ack) where verify will see it. Add a t-3 contract line that the partial routes unverified items to /dross-verify or `--force-unverified`, not to `dross milestone ack`.
+
+- [test-contract] Keyless survivors get the ack id `survivor:<file>:<line>:<op>` (t-4), but t-2's `ParseAckItem` table has no case with colons inside the survivor payload. If `ParseAckItem` splits on `:` more than once, or `FormatAckItem` doesn't round-trip that shape, t-5 refuses acks for keyless survivors, and no test in t-2 catches it. (t-5's refusal test only exercises `phase:` ids.)
+  Suggestion: add `survivor:f.go:12:op` to t-2's accept-and-round-trip table, and add a t-5 case that acks a keyless survivor.
+
+- [granularity] t-6 touches 5 files and carries 10 contract lines covering four behaviours: the open-mode refusal and `--force-unverified` scoping, the PR-body ack section, the side-effect-free `--check` mode (the strictest contract in the plan: sha256 of `.dross`, refs, FETCH_HEAD, no remote), and the `--finalize` bypass, plus re-seeding two existing tests. It is the most likely task to blow a writer's context or end with half its contracts green.
+  Suggestion: consider splitting `--check` (c-6, c-9, the conflicting-flags test, the stale-heading half of c-11) from the open-mode refusal, PR body and finalize bypass. They share only the collector call site in milestone.go.
+
+- [granularity] t-1 touches 6 files across the verify package and the verify prompt. The pieces are cohesive (record type, lifecycle stamp, prompt instruction to preserve records), so this is a mechanical flag, not a recommendation.
+  Suggestion: keep it as one task unless the writer struggles. The prompt line is the only piece that could split off cleanly.
+
+- [antipattern: missing file] README.md row 219 (`dross milestone {...}`) describes `complete` in detail: the recorded base, `--finalize` semantics, the verify gate. t-6 changes `complete` substantially (four-kind refusal, `--check`, ack section in the PR body) and doesn't touch README.md. t-5 only adds `ack` to the subcommand list. The roadmap line 461 entry for this phase also stays unticked. Given the repo's README-sync convention, the README will describe the old `complete`.
+  Suggestion: give t-6 (or t-5) README.md, with prose for `--check`, the close-out refusal and acks, plus the line-461 checkbox.
+
+## NOTE
+- [prompt budget] assets/prompts/milestone.md is 14,687 B against the 15,000 B cap, leaving 313 B for the `--check` step plus a `**When** closeout=unresolved` fetch line (about 130 B on its own). t-3's contract already gates on `TestPromptByteBudget`, but the writer may have to trim elsewhere in §8, and the description doesn't anticipate that. verify.md (14,612 B, 388 B left) is comfortable for t-1's one line.
+- [forbidden actions] No rule violations. r-01 (`make install` before relying on prompt or Go edits) matters only when the new completion arm is exercised live. t-3's tests read the embedded assets from source.
+- [wave order] t-3 lands in wave 1 and documents `dross milestone ack` and `complete --check` before t-5 and t-6 build them. That's fine on a phase branch, but the prompt is wrong against the installed binary until wave 4 lands. Don't `make install` mid-phase and run /dross-milestone expecting it to work.
+- [strength] The waves follow real dependencies. t-4 needs t-1's `SurvivorRecord` and t-2's `ParseAckItem`/`Closeout`, t-5 needs t-4's collector to check membership, and t-6 needs t-5's command for its c-5 test and shares milestone.go with it. t-3 is the only independent task, and it runs in parallel in wave 1.
+- [strength] The test contracts name exact surfaces and fixtures throughout, for example: the `[done, shipped, built, ghost, built-twice]` phases array; "source spec stays byte-identical (no EnsureIDs mint)"; c-6's no-FETCH_HEAD / unchanged-ref / no-`[remote]` checks; the struct-writer regression in t-5 (`milestone add` after an ack must keep `[[closeout_ack]]`); and determinism checked by comparing two renders byte for byte.
+- [strength] The regression surface was scoped correctly. Of the existing tests that open the integration PR, only `TestMilestoneCompleteOpensWhenEveryPhasePasses` and `TestMilestoneCompleteForceUnverifiedOverrides` seed milestone phases, so they are the only ones the new not-done kind breaks. t-6 names both and re-seeds them.
+
+## Summary
+The structure and contracts are strong, but t-4 explicitly excludes same-milestone routed survivors, which contradicts c-2 and leaves exactly the dangling-loop case uncaught. Resolve that, and add assets/partials_test.go to t-3, before execution.
