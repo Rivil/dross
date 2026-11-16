@@ -121,6 +121,40 @@ func TestCloseoutNotDoneKind(t *testing.T) {
 	}
 }
 
+// A phases entry that escapes .dross/phases is not done, and nothing outside
+// phases/ answers for it — not even a finished-looking record at .dross/x.
+func TestCloseoutNotDoneRefusesAnEscapingID(t *testing.T) {
+	root := ckRoot(t, "../x")
+	outside := filepath.Join(root, "x")
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(outside, "changes.json"), `{"phase":"x","status":"complete","tasks":{}}`)
+
+	got := ckKind(ckCollect(t, root).Items, closeoutNotDone)
+	if len(got) != 1 || got[0].Subject != "../x" {
+		t.Fatalf("not-done = %+v, want ../x listed", got)
+	}
+	if !strings.Contains(got[0].Detail, "refused") {
+		t.Errorf("detail %q does not say the id was refused", got[0].Detail)
+	}
+}
+
+// Only a missing directory is "unscaffolded"; any other stat failure is named
+// as itself. phases/ as a plain file makes stat fail with ENOTDIR.
+func TestCloseoutNotDoneNamesOtherStatErrors(t *testing.T) {
+	root := ckRoot(t, "p")
+	mustWrite(t, filepath.Join(root, "phases"), "not a directory")
+
+	got := ckKind(ckCollect(t, root).Items, closeoutNotDone)
+	if len(got) != 1 {
+		t.Fatalf("not-done = %+v, want p listed", got)
+	}
+	if d := got[0].Detail; strings.Contains(d, "unscaffolded") || !strings.Contains(d, "unreadable") {
+		t.Errorf("detail %q: want the stat error named, not 'unscaffolded'", d)
+	}
+}
+
 // c-2: routed items need an absorb record by their own target; dismissed,
 // someday and out-of-milestone items never block.
 func TestCloseoutDeferredKind(t *testing.T) {
@@ -332,6 +366,14 @@ func TestCloseoutClearingCommands(t *testing.T) {
 	ckPhase(t, root, "unv", "complete")
 	r := ckCollect(t, root)
 
+	gotIDs := []string{}
+	for _, it := range ckKind(r.Items, closeoutSurvivor) {
+		gotIDs = append(gotIDs, it.ID)
+	}
+	slices.Sort(gotIDs)
+	if want := []string{"survivor:A", "survivor:K", "survivor:g.go:7:neg"}; !slices.Equal(gotIDs, want) {
+		t.Fatalf("survivor items = %v, want %v", gotIDs, want)
+	}
 	for _, it := range ckKind(r.Items, closeoutSurvivor) {
 		switch it.ID {
 		case "survivor:K":

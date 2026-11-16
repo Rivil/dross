@@ -14,6 +14,7 @@ import (
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/deferred"
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/pathfence"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/verify"
@@ -160,25 +161,17 @@ func closeoutUnverifiedItems(root, version string) ([]closeoutItem, error) {
 // complete record. An unscaffolded roadmap entry is not done, and so is a
 // phase whose changes.json will not parse: an unreadable record is not
 // evidence of completion.
+//
+// Doneness is phase.Done — the single doneness reader `dross status` and
+// `milestone progress` use — so close-out cannot drift into its own definition.
+// The detail line only explains a not-done answer Done already gave.
 func closeoutNotDoneItems(root string, phases []string) []closeoutItem {
 	var out []closeoutItem
 	for _, id := range phases {
-		var detail string
-		if info, err := os.Stat(phase.Dir(root, id)); err != nil || !info.IsDir() {
-			detail = "no phase directory — unscaffolded roadmap entry"
-		} else {
-			c, err := changes.Load(changes.FilePath(root, id), id)
-			switch {
-			case err != nil:
-				detail = fmt.Sprintf("changes.json will not parse (%v)", err)
-			case c.Status == changes.StatusComplete || c.Status == changes.StatusShipped:
-				continue
-			case c.Status == "":
-				detail = "no shipped or complete record"
-			default:
-				detail = fmt.Sprintf("status %q", c.Status)
-			}
+		if phase.Done(root, id) {
+			continue
 		}
+		detail := notDoneDetail(root, id)
 		ackID := milestone.FormatAckItem(milestone.AckItem{Kind: milestone.AckPhase, Payload: id})
 		out = append(out, closeoutItem{
 			Kind:    closeoutNotDone,
@@ -189,6 +182,34 @@ func closeoutNotDoneItems(root string, phases []string) []closeoutItem {
 		})
 	}
 	return out
+}
+
+// notDoneDetail says why a phase is not done. The id is contained before
+// anything is stat'd, so a phases entry like ../x never reaches a path outside
+// .dross/phases; only a missing directory reads as unscaffolded, and any other
+// stat failure is named as itself.
+func notDoneDetail(root, id string) string {
+	c, err := phase.ContainID(root, id)
+	if err != nil {
+		return fmt.Sprintf("phase id refused (%v)", err)
+	}
+	fi, err := pathfence.Stat(c)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return "no phase directory — unscaffolded roadmap entry"
+	case err != nil:
+		return fmt.Sprintf("phase directory unreadable (%v)", err)
+	case !fi.IsDir():
+		return "phases entry is not a directory"
+	}
+	ch, err := changes.Load(changes.FilePath(root, id), id)
+	switch {
+	case err != nil:
+		return fmt.Sprintf("changes.json will not parse (%v)", err)
+	case ch.Status == "":
+		return "no shipped or complete record"
+	}
+	return fmt.Sprintf("status %q", ch.Status)
 }
 
 // closeoutDeferredItems lists every deferred item routed to a milestone phase
