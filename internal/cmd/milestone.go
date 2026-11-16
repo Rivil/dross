@@ -198,14 +198,21 @@ func isAffirmative(resp string) bool {
 // boundary): main advances only here, once per milestone. With --finalize —
 // run after that PR is merged — it fast-forwards local main from origin and
 // deletes milestone/<version> local+remote, mirroring `dross phase complete`.
+// With --check it only reports the close-out the open would gate on.
 func milestoneComplete() *cobra.Command {
 	var finalize bool
 	var forceUnverified bool
+	var check bool
 	c := &cobra.Command{
 		Use:   "complete [version]",
 		Short: "Open the milestone->main PR, or (--finalize) ff main and delete the milestone branch after merge",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			// --check previews the open; --finalize runs after the merge,
+			// when there is no open left to preview.
+			if check && finalize {
+				return errors.New("--check and --finalize conflict: --check previews opening the milestone PR, --finalize runs after it merges")
+			}
 			root, err := FindRoot()
 			if err != nil {
 				return err
@@ -238,6 +245,11 @@ func milestoneComplete() *cobra.Command {
 
 			if finalize {
 				return milestoneFinalize(root, repoDir, mainBranch, msBranch, version)
+			}
+			// Before the [remote] check, the fetch and the head push: a
+			// check needs no remote and moves no ref.
+			if check {
+				return milestoneCloseoutCheck(root, version, forceUnverified)
 			}
 
 			// Nothing unresolved may ride the integration PR into the base
@@ -315,8 +327,31 @@ func milestoneComplete() *cobra.Command {
 	c.Flags().BoolVar(&finalize, "finalize", false,
 		"after the milestone PR merges: ff main from origin and delete milestone/<version> local+remote")
 	c.Flags().BoolVar(&forceUnverified, "force-unverified", false,
-		"skip the 'every phase in the milestone must verify pass' gate")
+		"skip only the close-out's unverified-phases kind; phases not done, deferred items and survivors still need clearing or `dross milestone ack`")
+	c.Flags().BoolVar(&check, "check", false,
+		"print the close-out report (unresolved, acknowledged, stale acks) and exit non-zero if anything is unresolved; writes, fetches, pushes and opens nothing")
 	return c
+}
+
+// milestoneCloseoutCheck is `milestone complete --check`: the close-out the
+// open would gate on, printed rather than refused (c-6). It renders the same
+// report the refusal carries — unresolved items, acknowledged items with their
+// reasons, stale acks — and fails when anything blocks, so a caller can loop
+// on it until it is clean. It only reads: no file, ref, fetch, push or PR.
+// --force-unverified drops the unverified kind exactly as the gate does.
+func milestoneCloseoutCheck(root, version string, forceUnverified bool) error {
+	j, err := loadCloseout(root, version)
+	if err != nil {
+		return err
+	}
+	if forceUnverified {
+		j = withoutCloseoutKind(j, closeoutUnverified)
+	}
+	Printf("%s", renderCloseout(j))
+	if n := j.Blocking(); n > 0 {
+		return fmt.Errorf("milestone %s: %d close-out item(s) unresolved — `dross milestone complete %s` would refuse", version, n, version)
+	}
+	return nil
 }
 
 // milestonePRBase resolves which branch the milestone's integration PR targets.
