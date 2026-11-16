@@ -139,6 +139,7 @@ func TestCommonPathFetchesNothing(t *testing.T) {
 		"mode=pair", "test_exit=0", "verdict=pass", "leg=attached", "unclassified=zero",
 		"panel=off", "auto=off", "ci=passed", "ship_result=clean", "target=given",
 		"spec_file=absent", "deferral=none", "lanes=unchanged", "remote=unchanged",
+		"closeout=clean",
 	} {
 		line := "**When** `" + trig + "` — always: `dross prompt partial execute solo`"
 		_, err := FetchPoints(partialFS("# execute\n"+line+"\n", nil), "execute.md")
@@ -218,7 +219,7 @@ func TestCommonPathVocabularyPinned(t *testing.T) {
 		"reviews": "none", "verdict": "pass",
 		"panel": "off", "auto": "off", "ci": "passed", "ship_result": "clean",
 		"target": "given", "spec_file": "absent", "deferral": "none",
-		"lanes": "unchanged", "remote": "unchanged",
+		"lanes": "unchanged", "remote": "unchanged", "closeout": "clean",
 	}
 	got := CommonPath()
 	if len(got) != len(want) {
@@ -253,6 +254,10 @@ func TestCommonPathInline(t *testing.T) {
 			"dross mutation remote status", "dross trust --check", "Never run it on their behalf", "dross test lane list",
 		}, optionsHeadings...),
 		"prompts/execute.md": {"git add <task.files>", "dross changes record", "dross test --files", "approve <task-id>", "### 1g"},
+		"prompts/milestone.md": {
+			"dross milestone complete <version> --check", "**close it out**", "chore PR merges first",
+			"MERGE COMMIT", "dross milestone complete <version> --finalize", "dross issue milestone sync <version> --close",
+		},
 		"prompts/verify.md": {
 			"dross verify <phase>", "dross verify finalize", "`covered`", "`weak`", "`uncovered`", "If verdict is `pass`:",
 			"milestone's `phases` array", "no active milestone",
