@@ -194,12 +194,7 @@ func (r narratedRef) String() string {
 // Every entry is asserted below to be (a) actually used by some narration and
 // (b) a form the guard would otherwise reject, so a stale entry cannot sit here
 // masking a real command that has since been removed.
-var narratedIgnore = map[string]bool{
-	// Temporary (milestone-closeout-check t-4 → t-5): the close-out collectors
-	// narrate the ack command one task before t-5 registers it. t-5 drops this
-	// entry; the hygiene check below fails if it outlives the registration.
-	"dross milestone ack": true,
-}
+var narratedIgnore = map[string]bool{}
 
 // narratedCmdRefs extracts every `dross <verb> [<sub>]` reference from the
 // string literals of one Go file. Literals only: a stale command name in a

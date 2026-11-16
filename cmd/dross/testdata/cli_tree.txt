@@ -115,6 +115,8 @@ dross memory advise | use="advise" short="List every memory-prune suggestion wit
 dross memory apply | use="apply <id>" short="Carry out one memory-prune suggestion by its id (needs --yes); snapshots the memory dir first"
 dross memory apply flag --yes (bool) default="false" noopt="true" usage="confirm the change to the memory dir"
 dross milestone | use="milestone" short="Manage milestones under .dross/milestones/"
+dross milestone ack | use="ack <item> [version]" short="Acknowledge an unresolved close-out item with a reason (version defaults to state.current_milestone)"
+dross milestone ack flag --reason (string) default="" usage="why this item may ride the integration PR unresolved (required, non-empty)"
 dross milestone add | use="add [version] <list.path> <value>" short="Append a value to a list field (version defaults to state.current_milestone)"
 dross milestone complete | use="complete [version]" short="Open the milestone->main PR, or (--finalize) ff main and delete the milestone branch after merge"
 dross milestone complete flag --finalize (bool) default="false" noopt="true" usage="after the milestone PR merges: ff main from origin and delete milestone/<version> local+remote"

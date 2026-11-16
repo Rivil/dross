@@ -37,6 +37,7 @@ func Milestone() *cobra.Command {
 		milestoneReplace(),
 		milestoneProgressCmd(),
 		milestoneComplete(),
+		milestoneAck(),
 		milestonePrune(),
 	)
 	return c
