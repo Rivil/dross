@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/Rivil/dross/internal/milestone"
@@ -79,23 +81,85 @@ func milestoneUnverifiedPhases(root, version string) ([]unverifiedPhase, error) 
 	return bad, nil
 }
 
-// milestoneVerifyGate refuses to open the integration PR while any phase in
-// the milestone is unverified. It returns nil when the milestone has no
-// phases: an empty milestone has nothing to measure, and refusing it would
-// block the very first close on a technicality.
-func milestoneVerifyGate(root, version, target string) error {
-	bad, err := milestoneUnverifiedPhases(root, version)
+// milestoneCloseoutGate refuses to open the integration PR while the
+// close-out check has anything blocking, and otherwise returns the joined
+// report so the caller can carry its acknowledgements into the PR body.
+//
+// The refusal is the whole report, every kind at once (c-4): clearing a
+// milestone one error per run is the friction that teaches people to reach for
+// an override. --force-unverified drops only the unverified kind, items and
+// collector errors alike (locked force_unverified); it is the one kind an ack
+// cannot clear, and the override records nothing anywhere. Every other kind
+// still needs clearing or an ack.
+//
+// No milestone record, or one with no phases, has nothing to close out and
+// passes (c-8).
+func milestoneCloseoutGate(root, version string, forceUnverified bool) (closeoutJoined, error) {
+	j, err := loadCloseout(root, version)
 	if err != nil {
-		return err
+		return closeoutJoined{}, err
 	}
-	if len(bad) == 0 {
-		return nil
+	if forceUnverified {
+		j = withoutCloseoutKind(j, closeoutUnverified)
 	}
-	lines := make([]string, 0, len(bad))
-	for _, b := range bad {
-		lines = append(lines, fmt.Sprintf("  %s — %s", b.id, b.reason))
+	if j.Blocking() == 0 {
+		return j, nil
 	}
-	return fmt.Errorf("milestone %s has %d unverified phase(s):\n%s\n\n"+
-		"An integration PR carries these into %s unmeasured. Clear each one, or pass --force-unverified to override.",
-		version, len(bad), strings.Join(lines, "\n"), target)
+	msg := fmt.Sprintf("milestone %s is not ready to close — refusing to open the integration PR.\n\n%s\n"+
+		"Clear each item with the command under it, or acknowledge it with `dross milestone ack <item> --reason \"...\"`.",
+		version, strings.TrimRight(renderCloseout(j), "\n"))
+	if slices.ContainsFunc(j.Open, func(it closeoutItem) bool { return it.Kind == closeoutUnverified }) {
+		msg += " An unverified phase is never acknowledged: verify it, or pass --force-unverified to override."
+	}
+	return j, errors.New(msg)
+}
+
+// withoutCloseoutKind drops one kind's open items and collector errors. Acks
+// are untouched: no ack ever applies to the unverified kind, so its removal
+// cannot move one between Applied and Stale.
+func withoutCloseoutKind(j closeoutJoined, kind string) closeoutJoined {
+	open := make([]closeoutItem, 0, len(j.Open))
+	for _, it := range j.Open {
+		if it.Kind != kind {
+			open = append(open, it)
+		}
+	}
+	errs := make([]closeoutError, 0, len(j.Errors))
+	for _, e := range j.Errors {
+		if e.Kind != kind {
+			errs = append(errs, e)
+		}
+	}
+	j.Open, j.Errors = open, errs
+	return j
+}
+
+// milestonePRBody is the integration PR's description. With no applied
+// acknowledgement it is exactly the body every milestone PR has carried (c-8).
+// Each applied ack adds one line — item, reason, and the item's current detail
+// — so a reviewer sees what is riding in unresolved and why (c-5). Stale acks
+// never appear: their item is resolved, and listing it would claim otherwise
+// (c-11).
+func milestonePRBody(version, target string, applied []closeoutApplied) string {
+	body := fmt.Sprintf("Integration PR for milestone %s.\n\n"+
+		"Merge as a **merge commit** (not squash) to preserve per-phase history on %s.",
+		version, target)
+	if len(applied) == 0 {
+		return body
+	}
+	var b strings.Builder
+	b.WriteString(body)
+	b.WriteString("\n\n## Close-out acknowledgements\n\n" +
+		"Unresolved when this PR opened, and acknowledged with `dross milestone ack`:\n\n")
+	for _, a := range applied {
+		// One bullet per ack: a reason typed with newlines must not spill
+		// into lines that read as separate items.
+		fmt.Fprintf(&b, "- `%s` — %s (%s)\n", a.Ack.Item, oneLine(a.Ack.Reason), oneLine(a.Item.Detail))
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// oneLine collapses every run of whitespace, newlines included, to one space.
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }

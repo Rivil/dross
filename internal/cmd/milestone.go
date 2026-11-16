@@ -240,6 +240,18 @@ func milestoneComplete() *cobra.Command {
 				return milestoneFinalize(root, repoDir, mainBranch, msBranch, version)
 			}
 
+			// Nothing unresolved may ride the integration PR into the base
+			// branch: unverified or unfinished phases, unabsorbed deferred
+			// items, undisposed survivors. Gated on open rather than on
+			// --finalize: finalize runs after the merge, where a refusal
+			// strands a landed milestone instead of preventing anything. It
+			// runs before the fetch and the head push, so a refusal leaves
+			// every ref where it was.
+			closeout, err := milestoneCloseoutGate(root, version, forceUnverified)
+			if err != nil {
+				return err
+			}
+
 			// Open mode: one PR of the milestone branch into main.
 			if p.Remote.URL == "" || p.Remote.Provider == "" {
 				return errors.New("project has no [remote].url or .provider — run /dross-options or /dross-onboard")
@@ -247,16 +259,6 @@ func milestoneComplete() *cobra.Command {
 			target, err := milestonePRBase(root, repoDir, mainBranch, version, msBranch)
 			if err != nil {
 				return err
-			}
-
-			// Every phase must have verified before the integration PR
-			// carries it into the base branch. Gated on open rather than on
-			// --finalize: finalize runs after the merge, where a refusal
-			// strands a landed milestone instead of preventing anything.
-			if !forceUnverified {
-				if err := milestoneVerifyGate(root, version, target); err != nil {
-					return err
-				}
 			}
 
 			// The PR's head is resolved by the provider, so unpushed local
@@ -289,9 +291,7 @@ func milestoneComplete() *cobra.Command {
 			opts.HeadBranch = msBranch
 			opts.BaseBranch = target
 			opts.Title = fmt.Sprintf("milestone %s", version)
-			opts.Body = fmt.Sprintf("Integration PR for milestone %s.\n\n"+
-				"Merge as a **merge commit** (not squash) to preserve per-phase history on %s.",
-				version, target)
+			opts.Body = milestonePRBody(version, target, closeout.Applied)
 
 			res, err := ship.OpenPRFunc(opts)
 			if err != nil {

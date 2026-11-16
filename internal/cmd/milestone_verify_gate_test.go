@@ -25,6 +25,19 @@ func seedPhaseVerdict(t *testing.T, dir, id, verdict string) {
 	mustWrite(t, filepath.Join(pdir, "verify.toml"), body)
 }
 
+// seedPhaseComplete gives a phase a changes.json recording it complete, so the
+// close-out check's not-done kind passes it. A gate test about verdicts that
+// left this out would also be refused — or listed — as a phase not done, and
+// pass or fail for the wrong reason.
+func seedPhaseComplete(t *testing.T, dir, id string) {
+	t.Helper()
+	pdir := filepath.Join(dir, ".dross", "phases", id)
+	if err := os.MkdirAll(pdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(pdir, "changes.json"), `{"phase":"`+id+`","status":"complete","tasks":{}}`)
+}
+
 // setMilestonePhases records the phase list for the version the open-fixture
 // opens a PR for. The fixture writes no milestone toml — `milestone complete`
 // does not require one — so this creates the record rather than editing it.
@@ -96,6 +109,11 @@ func TestMilestoneCompleteNamesEveryUnverifiedPhase(t *testing.T) {
 	seedPhaseVerdict(t, dir, "p-missing", "")
 	seedPhaseVerdict(t, dir, "p-pending", "pending")
 	seedPhaseVerdict(t, dir, "p-partial", "partial")
+	// Every phase is done, so the only thing the refusal can name a phase
+	// for is its verdict.
+	for _, id := range []string{"p-ok", "p-missing", "p-pending", "p-partial"} {
+		seedPhaseComplete(t, dir, id)
+	}
 
 	err := runCmd(t, Milestone(), "complete", "v0.9")
 	if err == nil {
@@ -121,6 +139,8 @@ func TestMilestoneCompleteOpensWhenEveryPhasePasses(t *testing.T) {
 	setMilestonePhases(t, dir, "v0.9", []string{"p-one", "p-two"})
 	seedPhaseVerdict(t, dir, "p-one", "pass")
 	seedPhaseVerdict(t, dir, "p-two", "pass")
+	seedPhaseComplete(t, dir, "p-one")
+	seedPhaseComplete(t, dir, "p-two")
 
 	if err := runCmd(t, Milestone(), "complete", "v0.9"); err != nil {
 		t.Fatalf("all-passing milestone was refused: %v", err)
@@ -137,6 +157,7 @@ func TestMilestoneCompleteForceUnverifiedOverrides(t *testing.T) {
 	dir, cap := milestoneOpenFixture(t)
 	setMilestonePhases(t, dir, "v0.9", []string{"p-missing"})
 	seedPhaseVerdict(t, dir, "p-missing", "")
+	seedPhaseComplete(t, dir, "p-missing")
 
 	if err := runCmd(t, Milestone(), "complete", "v0.9", "--force-unverified"); err != nil {
 		t.Fatalf("--force-unverified did not override the gate: %v", err)
