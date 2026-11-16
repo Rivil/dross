@@ -2,5 +2,462 @@
   "phase": "milestone-closeout-check",
   "base": "milestone/v1.9",
   "base_commit": "47d4085d734bd1373c138b2505ab3c3c636fbddf",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/verify/verify.go",
+        "internal/verify/verify_test.go",
+        "internal/verify/lifecycle.go",
+        "internal/verify/lifecycle_test.go",
+        "assets/prompts/verify.md",
+        "internal/cmd/verify_prompt_test.go",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "aae937bf",
+      "completed_at": "2026-11-15T12:08:42.614835Z",
+      "landmarks": [
+        {
+          "feature": "milestone close-out check",
+          "symbol": "SurvivorRecord",
+          "loc": "internal/verify/verify.go:413",
+          "what": "verify.toml persists each undisposed out-of-scope survivor (key, file:line, op, ambiguous) for close-out to re-classify"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/milestone/milestone.go",
+        "internal/milestone/milestone_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "bdc95739",
+      "completed_at": "2026-11-15T11:35:46.252282Z",
+      "landmarks": [
+        {
+          "feature": "milestone close-out check",
+          "symbol": "Milestone.Ack",
+          "loc": "internal/milestone/milestone.go:47",
+          "what": "closeout_ack records upserted by item with a required reason, plus the phase/deferred/survivor item-id grammar"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/milestone.md",
+        "assets/prompts/_milestone.closeout.md",
+        "assets/partials.go",
+        "assets/partials_test.go",
+        "internal/cmd/milestone_dispatch_prompt_test.go",
+        "internal/cmd/prompt_expand_test.go"
+      ],
+      "commit": "fe3a7a73",
+      "completed_at": "2026-11-16T13:47:54.931988Z",
+      "landmarks": [
+        {
+          "feature": "milestone close-out check",
+          "symbol": "closeout partial",
+          "loc": "assets/prompts/milestone.md:146",
+          "what": "/dross-milestone completion arm runs --check first and walks each unresolved item one per turn (resolve / ack with reason) before opening the PR"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/milestone_closeout.go",
+        "internal/cmd/milestone_closeout_test.go",
+        "cmd/dross/main_test.go"
+      ],
+      "commit": "9a24db8c",
+      "completed_at": "2026-11-16T11:03:14.470494Z",
+      "landmarks": [
+        {
+          "feature": "milestone close-out check",
+          "symbol": "milestoneCloseout",
+          "loc": "internal/cmd/milestone_closeout.go:89",
+          "what": "collects unverified, not-done, unabsorbed-deferred and undisposed-survivor items with ack ids and clearing commands; collector errors become blocking lines"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/milestone_ack.go",
+        "internal/cmd/milestone_ack_test.go",
+        "internal/cmd/milestone.go",
+        "README.md",
+        "cmd/dross/main_test.go",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "2445d11d",
+      "completed_at": "2026-11-16T12:31:03.552964Z",
+      "landmarks": [
+        {
+          "feature": "milestone close-out check",
+          "symbol": "milestoneAck",
+          "loc": "internal/cmd/milestone_ack.go:30",
+          "what": "dross milestone ack \u003citem\u003e --reason records a closeout_ack for a currently-unresolved or already-acked item; unverified phases refused"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_verify_gate.go",
+        "internal/cmd/milestone_verify_gate_test.go",
+        "internal/cmd/milestone_closeout_cmd_test.go",
+        "internal/cmd/milestone_test.go"
+      ],
+      "commit": "c097480c",
+      "completed_at": "2026-11-16T12:57:48.802825Z",
+      "landmarks": [
+        {
+          "feature": "milestone close-out check",
+          "symbol": "milestoneCloseoutGate",
+          "loc": "internal/cmd/milestone_verify_gate.go:97",
+          "what": "milestone complete refuses with the full close-out report before any fetch/push; --force-unverified drops only the unverified kind; applied acks reach the PR body"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_check_test.go",
+        "README.md",
+        "cmd/dross/testdata/cli_tree.txt"
+      ],
+      "commit": "02e3bf8d",
+      "completed_at": "2026-11-16T13:11:00.99524Z",
+      "landmarks": [
+        {
+          "feature": "milestone close-out check",
+          "symbol": "milestoneCloseoutCheck",
+          "loc": "internal/cmd/milestone.go:342",
+          "what": "milestone complete --check prints the close-out report with acks and stale acks, exits non-zero while blocking, never fetches, pushes or writes"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/milestone_closeout_render.go",
+        "internal/cmd/milestone_closeout_render_test.go"
+      ],
+      "commit": "37c51fbb",
+      "completed_at": "2026-11-16T11:55:31.788338Z",
+      "landmarks": [
+        {
+          "feature": "milestone close-out check",
+          "symbol": "joinCloseoutAcks",
+          "loc": "internal/cmd/milestone_closeout_render.go:43",
+          "what": "partitions acks into applied and stale against produced items; Blocking counts unacked items plus collector errors; deterministic report render"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/milestone_closeout.go",
+        "internal/cmd/milestone_closeout_test.go"
+      ],
+      "commit": "93634bb9",
+      "completed_at": "2026-11-16T12:36:28.614049Z",
+      "landmarks": [
+        {
+          "feature": "milestone close-out check",
+          "symbol": "notDoneDetail",
+          "loc": "internal/cmd/milestone_closeout.go:191",
+          "what": "not-done kind reuses phase.Done and contains the id before any stat; only ErrNotExist reads as unscaffolded"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "undisposedSurvivors (internal/verify/verify.go:1093) treats every lifecycle value other than accepted/routed as undisposed, including in-diff and the empty unstamped state; in-diff cannot occur on out-of-scope rows per classifyOne, and the catch-all records rather than drops, so it fails towards noise",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestClassifyMarksOnlyWithheldAcceptancesAmbiguous pins that the flag means a withheld acceptance, not merely a repeated key, so a regression to stamping raw Identify ambiguity would be caught",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-9",
+          "text": "test_contract names TestRoundTrip for the no-acks case (a toml with no acks loads a nil Closeout and re-saves without a closeout_ack key), but that check is in the separate TestNoAcksStaysAbsent in internal/milestone/milestone_test.go; the guarantee is still tested",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "FormatAckItem (internal/milestone/milestone.go) renders any non-deferred Kind as Kind:Payload without checking it, so a hand-built AckItem with an unknown kind formats silently; the result is unreachable from ParseAckItem output, and a later ParseAckItem call would reject it",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "parseIndex rejects leading zeros and '+' signs, so one deferred item cannot be written under two different ids; the extra rejection cases in the table test cover this",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The description said to move existing §8 close-out prose into the partial to stay under 15000 B; instead the diff shortens the chore-PR and board-card sentences in place, and the partial contains only new walk text. By hand count milestone.md lands only a few dozen bytes under the budget; TestPromptByteBudget is what actually enforces it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestMilestonePromptCompletionArmChecksFirst reads the base prompt (milestoneBasePrompt), so the partial's own AskUserQuestion cannot skew the order check; the separate inlining check in the walk test covers the expanded prompt.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "TestCloseoutCollectorErrorsAreBlockingLines makes spec.toml and survivors.toml malformed in the same root. routedSurvivors also calls deferred.Collect, so the bad spec alone already makes the survivor kind error. If closeoutSurvivorItems stopped reporting a survivors.toml load error, this test could still pass. Test survivors.toml in its own root with valid specs.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "milestone_closeout.go:303: the routed-survivor clear hint reads \"`dross survivor accept` survivor K\". That cannot be run as written: accept takes \u003cfile\u003e:\u003cline\u003e plus --op and --reason, not a key. The keyed-survivor hint in the survivor kind gives full arguments; this one should too, using the file:line and op parsed from the entry text.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "boardsync.Disposed (existing code, internal/boardsync/disposition.go:47) ignores survivors.toml load errors. The deferred kind then lists the routed survivor, which is the safe direction, and the survivor kind reports the load error itself.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The narratedIgnore entry for `dross milestone ack` in cmd/dross/main_test.go is temporary. It is commented, and the hygiene check is expected to force its removal once t-5 registers the command.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "TestCloseoutClearingCommands never checks how many survivor items come back. If the survivor kind returned nothing, the switch loop over ckKind(r.Items, closeoutSurvivor) would assert nothing and still pass. Assert that survivor:K, survivor:A and survivor:g.go:7:neg are all present.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "closeoutNotDoneItems (internal/cmd/milestone_closeout.go:242) re-implements phase.IsDone instead of calling phase.Done/DirExists. It also stats phase.Dir(root, id) directly, skipping the ContainID escape guard that DirExists applies, so a phases entry like '../x' is stat'd outside phases/. Two definitions of done can drift apart.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "closeoutNotDoneItems treats any os.Stat error, not just ErrNotExist, as 'no phase directory — unscaffolded roadmap entry'. A permission error still lists the phase, but the detail line is wrong.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "If absorbedIDs fails for one target, closeoutDeferredItems stops there (milestone_closeout.go:322). Items for later targets are not listed, but the kind still carries a blocking error line.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "closeoutKinds is declared but not used yet, presumably for t-5's rendering. narratedIgnore's temporary 'dross milestone ack' entry is guarded by the existing hygiene check, so it cannot outlive t-5's registration.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The unverified collector loads the milestone record a second time through milestoneUnverifiedPhases. This is harmless.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "internal/cmd/milestone_ack.go checkAckable: the phase:\u003cslug\u003e refusal path never mentions r.Errors, unlike the non-phase path. If a collector failed, a phase that is in the milestone but has no unresolved item gets the message 'phase X is done — nothing to acknowledge', which may not be true. The refusal itself is still correct. It is low-risk in practice because the unverified collector only fails on a milestone load, and that load already succeeded earlier in the command.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A phase:\u003cslug\u003e that is already acknowledged is accepted before the unverified check runs. A phase acked while it was not done can therefore be re-acked after it becomes unverified. This is harmless: unverified items carry no ack id, so the ack never clears them, which still matches the locked force_unverified decision.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestMilestoneAckRefusesEmptyReason also covers a missing --reason flag. The blank-reason check runs before FindRoot and before any read of the milestone file, so the toml cannot be touched.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The refusal message embeds renderCloseout output, which tells the user to re-run `dross milestone complete --check` when a collector fails. The milestone complete command has no --check flag yet (presumably a sibling task's job), so until it lands that hint names a command that does not exist.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "milestoneCloseoutGate now runs before the [remote].url/.provider check in milestone.go. A project with no remote and unresolved items now gets the close-out refusal instead of the missing-remote error. The ordering is harmless and keeps refusals from moving any ref.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The c-10 finalize test calls loadCloseout first to confirm the fixture has unresolved items, so its 'finalize ignores close-out' check is not vacuous.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "milestoneCloseoutCheck (internal/cmd/milestone.go) duplicates the load + force-unverified filtering in milestoneCloseoutGate (internal/cmd/milestone_verify_gate.go:97-104); a shared helper would keep the preview and the gate from drifting apart",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "the README roadmap checkbox ticked here also covers the /dross-review partial-value-set and swallowed-error reporting, which this task does not deliver; the task description asks for the tick, so this is recorded only",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "renderCloseout only iterates closeoutKinds, and closeoutKindRank falls back to len(closeoutKinds), so an Open item or Error with a kind outside the four constants would count in Blocking() but never be printed. No value reaches that path today: all four collectors use the constants in milestone_closeout.go:25-32.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In TestLoadCloseoutEmpty, the 'empty phases' case relies on ckRoot(t) saving a nil Phases slice rather than an explicit `phases = []`. Both load as empty, so the c-8 contract is still exercised.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "loadCloseout stats and loads the milestone toml a second time after milestoneCloseout already loaded it. This is harmless but redundant I/O.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "phase.Done/DirExists use the literal ContainID path with no legacy NN-slug fallback, while the old code went through phase.Dir (which falls back to the stripped slug). A legacy id like 01-auth whose directory is phases/auth now reads not-done and its detail says unscaffolded. This matches the shared doneness reader the task asked to reuse, but it is a behaviour change for close-out.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "TestCloseoutNotDoneRefusesAnEscapingID cannot see a stat that happens outside the tree directly. It relies on the planted complete record at .dross/x, which would mark the phase done if anything outside were read. That is enough for the contract.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "TestCloseoutNotDoneNamesOtherStatErrors depends on POSIX ENOTDIR behaviour when phases/ is a plain file. That is fine on the platforms the repo targets.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "milestone_closeout.go:248 discards the boardsync.Disposed error (`ok, _ :=`) with no comment. That line predates this diff, so it is not a finding against this task, but it is worth a follow-up.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
 }
