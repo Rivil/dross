@@ -26,6 +26,25 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/cmd/milestone_closeout_cmd_test.go",
+        "internal/cmd/milestone_check_test.go",
+        "internal/cmd/milestone_closeout_render_test.go",
+        "internal/cmd/milestone_closeout_test.go",
+        "internal/cmd/milestone_closeout_render.go"
+      ],
+      "commit": "4381642b",
+      "completed_at": "2026-11-17T07:46:39.392276Z",
+      "landmarks": [
+        {
+          "feature": "milestone close-out check",
+          "symbol": "naturalCompare",
+          "loc": "internal/cmd/milestone_closeout_render.go:126",
+          "what": "orders close-out items and stale acks naturally so src#2 sorts before src#10"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/milestone/milestone.go",
@@ -188,6 +207,26 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "TestClassifyMarksOnlyWithheldAcceptancesAmbiguous pins that the flag means a withheld acceptance, not merely a repeated key, so a regression to stamping raw Identify ambiguity would be caught",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In production, closeoutDeferredItems sets Subject to \"\u003csource\u003e#\u003cidx\u003e\", so two deferred items from one source already differ by subject. The natural-order subject compare is what puts src#2 before src#10. The ID tie-break at milestone_closeout_render.go:119 is only reached when items share a subject, as in the unit test. TestRenderCloseoutOrdersIndexesNumerically covers the realistic subject path.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Stale acks are now sorted with naturalCompare instead of byte order (milestone_closeout_render.go:68). This goes slightly beyond the three survivors, but it is consistent with closeoutLess and covered by the stale-ack pair in TestRenderCloseoutOrdersIndexesNumerically.",
           "resolution": "non-blocking, left"
         }
       ]

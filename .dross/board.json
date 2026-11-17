@@ -1727,6 +1727,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "milestone-closeout-check/t-10": {
+      "issue": "DRO-1158",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "milestone-closeout-check/t-2": {
       "issue": "DRO-1150",
       "plan_status": "done",
