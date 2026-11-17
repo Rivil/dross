@@ -733,6 +733,23 @@ A milestone branch whose work already landed on main is detected and removable. 
 
 _introduced milestone-branch-model · extended state-json-branch-safety · extended milestone-stacking · extended milestone-lifecycle-close · ea4df10 · extended guard-remedy-ordering · d59a892 · extended milestone-push-failure-tests · cd30b16_
 
+### Milestone close-out check
+
+`dross milestone complete` refuses to open the integration PR while anything in the milestone is unresolved — unverified or not-done phases, deferred items with no absorb record, survivors with no disposition — listing every item grouped by kind with the command that clears it; `dross milestone ack <item> --reason` acknowledges one into the milestone toml and the PR body, `--check` previews the same report without side effects, `--force-unverified` drops only the unverified kind, and `--finalize` never runs the check.
+
+- `milestoneCloseout` (the four collectors: unverified, not-done, unabsorbed-deferred and undisposed-survivor items with ack ids and clearing commands; collector errors become blocking lines) — `internal/cmd/milestone_closeout.go:90`
+- `notDoneDetail` (not-done kind reuses phase.Done and contains the id before any stat; only ErrNotExist reads as unscaffolded) — `internal/cmd/milestone_closeout.go:191`
+- `SurvivorRecord` (verify.toml persists each undisposed out-of-scope survivor — key, file:line, op — for close-out to re-classify against the accept/route stores) — `internal/verify/verify.go:413`
+- `Milestone.Ack` (`[[closeout_ack]]` records upserted by item with a required reason; `ParseAckItem` holds the phase:/deferred:/survivor: id grammar) — `internal/milestone/milestone.go:47`
+- `milestoneAck` (`dross milestone ack <item> --reason` records an ack for a currently-unresolved or already-acked item; unverified phases refused) — `internal/cmd/milestone_ack.go:30`
+- `joinCloseoutAcks` (partitions acks into applied and stale; Blocking counts unacked items plus collector errors; deterministic render) — `internal/cmd/milestone_closeout_render.go:44`
+- `naturalCompare` (orders close-out items and stale acks naturally, so src#2 sorts before src#10) — `internal/cmd/milestone_closeout_render.go:126`
+- `milestoneCloseoutGate` (complete refuses with the full report before any fetch/push; applied acks reach the PR body) — `internal/cmd/milestone_verify_gate.go:97`
+- `milestoneCloseoutCheck` (`complete --check` prints the report with acks and stale acks, exits non-zero while blocking, never fetches, pushes or writes) — `internal/cmd/milestone.go:342`
+- milestone.md completion arm (runs `--check` first; the closeout partial walks each unresolved item one per turn — resolve, or ack with a reason) — `assets/prompts/milestone.md:146`
+
+_introduced milestone-closeout-check · c097480c_
+
 ### Milestone progress reporting
 
 `dross milestone progress` answers, in one deterministic call, the question `/dross-milestone` must resolve before it can act: is there an active milestone, is it finished, and if not what is left. Every arm exits 0 — including "planning" and "nothing done yet" — because a non-zero exit would make a prompt read a normal state as a broken command. Status is reported verbatim from the toml, never normalised or inferred, since the dispatch branches on it first. Doneness is not decided here: it comes from the shared reader in [Phase doneness](#phase-doneness), which measures off each phase's own durable status marker rather than the state history (capped at 50 entries, so it silently forgets older phases) and counts a roadmap slug with no phase directory as not-done, so a milestone cannot close with unbuilt criteria still on it (locked `phases_done_test`). `--json` emits the report as a document for prompts to consume; the plain-text arm narrates the same data for humans and is pinned on both of its list guards in each direction.
