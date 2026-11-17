@@ -79,6 +79,18 @@ func TestMilestoneCompleteRefusesWithEveryCloseoutKind(t *testing.T) {
 	}
 }
 
+// seedForcedPastCollectorError gives milestone v0.9 one unverified phase and
+// a source spec.toml that will not parse. --force-unverified clears the
+// unverified item, leaving only the deferred and survivor collector errors —
+// which the flag must not drop.
+func seedForcedPastCollectorError(t *testing.T, dir string) {
+	t.Helper()
+	root := filepath.Join(dir, ".dross")
+	setMilestonePhases(t, dir, "v0.9", []string{"unv"})
+	ckPhase(t, root, "unv", "complete")
+	ckSpec(t, root, "src", "[[deferred]\n  broken = ***\n")
+}
+
 // --force-unverified skips the unverified kind and nothing else, and leaves
 // no record of having done so.
 func TestMilestoneCompleteForceUnverifiedDropsOnlyThatKind(t *testing.T) {
@@ -119,6 +131,25 @@ func TestMilestoneCompleteForceUnverifiedDropsOnlyThatKind(t *testing.T) {
 		}
 		if sha256OfFile(t, path) != before {
 			t.Error("--force-unverified recorded something in the milestone toml")
+		}
+	})
+	t.Run("a collector error still refuses", func(t *testing.T) {
+		dir, cap := milestoneOpenFixture(t)
+		seedForcedPastCollectorError(t, dir)
+		err := runCmd(t, Milestone(), "complete", "v0.9", "--force-unverified")
+		if err == nil {
+			t.Fatal("--force-unverified opened the PR past a source spec.toml that will not parse")
+		}
+		if strings.Contains(err.Error(), headUnverified) {
+			t.Errorf("refusal under --force-unverified still lists the unverified kind:\n%v", err)
+		}
+		for _, want := range []string{headDeferred, "ERROR — "} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("refusal under --force-unverified is missing %q:\n%v", want, err)
+			}
+		}
+		if cap.created != 0 {
+			t.Errorf("PR opened despite the refusal (created=%d)", cap.created)
 		}
 	})
 	t.Run("a not-done phase still refuses", func(t *testing.T) {

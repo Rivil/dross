@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -64,7 +65,7 @@ func joinCloseoutAcks(r closeoutReport, acks []milestone.CloseoutAck) closeoutJo
 	}
 	sortCloseoutItems(j.Open)
 	sort.SliceStable(j.Applied, func(a, b int) bool { return closeoutLess(j.Applied[a].Item, j.Applied[b].Item) })
-	sort.SliceStable(j.Stale, func(a, b int) bool { return j.Stale[a].Item < j.Stale[b].Item })
+	sort.SliceStable(j.Stale, func(a, b int) bool { return naturalCompare(j.Stale[a].Item, j.Stale[b].Item) < 0 })
 	return j
 }
 
@@ -105,14 +106,60 @@ func closeoutKindRank(kind string) int {
 	return len(closeoutKinds)
 }
 
+// closeoutLess orders items by kind rank, then subject, then ack id, the last
+// two in natural order: deferred:src#2 lists before deferred:src#10, and
+// f.go:9 before f.go:10.
 func closeoutLess(a, b closeoutItem) bool {
 	if ra, rb := closeoutKindRank(a.Kind), closeoutKindRank(b.Kind); ra != rb {
 		return ra < rb
 	}
-	if a.Subject != b.Subject {
-		return a.Subject < b.Subject
+	if c := naturalCompare(a.Subject, b.Subject); c != 0 {
+		return c < 0
 	}
-	return a.ID < b.ID
+	return naturalCompare(a.ID, b.ID) < 0
+}
+
+// naturalCompare orders two strings with every run of ASCII digits compared
+// as a number, so src#2 sorts before src#10 — byte order puts it after.
+// Strings equal under that order but not byte-equal (#02 and #2) fall back to
+// byte order, so the result is total and a sort over it is deterministic.
+func naturalCompare(a, b string) int {
+	i, j := 0, 0
+	for i < len(a) && j < len(b) {
+		if !isASCIIDigit(a[i]) || !isASCIIDigit(b[j]) {
+			if a[i] != b[j] {
+				return cmp.Compare(a[i], b[j])
+			}
+			i, j = i+1, j+1
+			continue
+		}
+		si, sj := i, j
+		for i < len(a) && isASCIIDigit(a[i]) {
+			i++
+		}
+		for j < len(b) && isASCIIDigit(b[j]) {
+			j++
+		}
+		// Leading zeros carry no value: without them, a longer run is the
+		// larger number, and equal lengths compare digit by digit.
+		na, nb := strings.TrimLeft(a[si:i], "0"), strings.TrimLeft(b[sj:j], "0")
+		if c := cmp.Compare(len(na), len(nb)); c != 0 {
+			return c
+		}
+		if c := strings.Compare(na, nb); c != 0 {
+			return c
+		}
+	}
+	// One string ran out: the one with nothing left is a prefix and sorts
+	// first.
+	if c := cmp.Compare(len(a)-i, len(b)-j); c != 0 {
+		return c
+	}
+	return strings.Compare(a, b)
+}
+
+func isASCIIDigit(c byte) bool {
+	return '0' <= c && c <= '9'
 }
 
 func sortCloseoutItems(items []closeoutItem) {

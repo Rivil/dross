@@ -184,6 +184,26 @@ func TestMilestoneCompleteCheckHonoursForceUnverified(t *testing.T) {
 	}
 }
 
+// --force-unverified drops unverified items only: a deferred collector error
+// still fails --check under the flag.
+func TestMilestoneCompleteCheckForceUnverifiedKeepsCollectorErrors(t *testing.T) {
+	dir, _ := setupMilestoneRepo(t)
+	seedForcedPastCollectorError(t, dir)
+
+	out, err := runCheck(t, "--force-unverified")
+	if err == nil {
+		t.Fatalf("--check --force-unverified exited 0 past a source spec.toml that will not parse:\n%s", out)
+	}
+	if strings.Contains(out, headUnverified) {
+		t.Errorf("--check --force-unverified still lists the unverified kind:\n%s", out)
+	}
+	for _, want := range []string{headDeferred, "ERROR — "} {
+		if !strings.Contains(out, want) {
+			t.Errorf("--check --force-unverified output is missing %q:\n%s", want, out)
+		}
+	}
+}
+
 // c-8: no milestone record, or one with no phases, has nothing to close out.
 func TestMilestoneCompleteCheckEmpty(t *testing.T) {
 	for name, seed := range map[string]func(t *testing.T, dir string){

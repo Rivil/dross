@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -161,5 +162,97 @@ func TestRenderCloseoutIsDeterministic(t *testing.T) {
 	}
 	if len(first.Applied) != 1 {
 		t.Errorf("loadCloseout did not join the saved ack: %+v", first)
+	}
+}
+
+// Within a kind, items sharing a subject order by ack id, numerically: from
+// one source, deferred:src#2 lists before deferred:src#10 whichever arrives
+// first, and an item is never less than itself.
+func TestCloseoutLessTieBreaksOnIDNumerically(t *testing.T) {
+	two := closeoutItem{Kind: closeoutDeferred, ID: "deferred:src#2", Subject: "src"}
+	ten := closeoutItem{Kind: closeoutDeferred, ID: "deferred:src#10", Subject: "src"}
+	if !closeoutLess(two, ten) || closeoutLess(ten, two) {
+		t.Errorf("closeoutLess(#2, #10) = %v, (#10, #2) = %v; want #2 first",
+			closeoutLess(two, ten), closeoutLess(ten, two))
+	}
+	if closeoutLess(two, two) {
+		t.Error("closeoutLess(x, x) = true: an item is less than itself")
+	}
+	for name, in := range map[string][]closeoutItem{
+		"#10 first": {ten, two},
+		"#2 first":  {two, ten},
+	} {
+		items := slices.Clone(in)
+		sortCloseoutItems(items)
+		if items[0].ID != two.ID || items[1].ID != ten.ID {
+			t.Errorf("%s: sorted = %s, %s; want deferred:src#2 then deferred:src#10", name, items[0].ID, items[1].ID)
+		}
+	}
+
+	// Identical keys keep their arrival order: a tie-break that called equal
+	// items less would swap them.
+	a := closeoutItem{Kind: closeoutDeferred, ID: "deferred:src#2", Subject: "src", Detail: "first"}
+	b := a
+	b.Detail = "second"
+	items := []closeoutItem{a, b}
+	sortCloseoutItems(items)
+	if items[0].Detail != "first" {
+		t.Errorf("equal items reordered: %q before %q", items[0].Detail, items[1].Detail)
+	}
+}
+
+// The rendered report lists one source's deferred items in index order, and
+// stale acks the same way.
+func TestRenderCloseoutOrdersIndexesNumerically(t *testing.T) {
+	r := closeoutReport{Items: []closeoutItem{
+		{Kind: closeoutDeferred, ID: "deferred:src#10", Subject: "src#10", Detail: "ten", Clear: "c10"},
+		{Kind: closeoutDeferred, ID: "deferred:src#2", Subject: "src#2", Detail: "two", Clear: "c2"},
+	}}
+	acks := []milestone.CloseoutAck{
+		{Item: "deferred:old#10", Reason: "r10"},
+		{Item: "deferred:old#2", Reason: "r2"},
+	}
+	out := renderCloseout(joinCloseoutAcks(r, acks))
+	for _, pair := range [][2]string{
+		{"deferred:src#2 — two", "deferred:src#10 — ten"},
+		{"deferred:old#2 — r2", "deferred:old#10 — r10"},
+	} {
+		i, k := strings.Index(out, pair[0]), strings.Index(out, pair[1])
+		if i < 0 || k < 0 || i > k {
+			t.Errorf("want %q before %q:\n%s", pair[0], pair[1], out)
+		}
+	}
+}
+
+func TestNaturalCompare(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		want int
+	}{
+		{"src#2", "src#10", -1},
+		{"f.go:9", "f.go:10", -1},
+		{"a19", "a21", -1},
+		{"a10b", "a10c", -1},
+		{"a10", "a10", 0},
+		{"a", "b", -1},
+		{"a", "ab", -1},
+		{"a1", "a1b", -1},
+		{"a9", "ab", -1},
+		{"a#", "a1", -1},
+		// Equal as numbers, so byte order decides.
+		{"#02", "#2", -1},
+		{"001", "1", -1},
+		{"0", "00", -1},
+		// A zero is a digit: a0b and a00c are 0 then b, 0 then c.
+		{"a0b", "a00c", -1},
+		{"", "", 0},
+		{"", "0", -1},
+	} {
+		if got := naturalCompare(tc.a, tc.b); got != tc.want {
+			t.Errorf("naturalCompare(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
+		}
+		if got := naturalCompare(tc.b, tc.a); got != -tc.want {
+			t.Errorf("naturalCompare(%q, %q) = %d, want %d", tc.b, tc.a, got, -tc.want)
+		}
 	}
 }

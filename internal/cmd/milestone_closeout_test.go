@@ -113,6 +113,9 @@ func TestCloseoutNotDoneKind(t *testing.T) {
 	if got[0].ID != "phase:built" || got[1].ID != "phase:ghost" {
 		t.Errorf("ack ids = %q, %q; want phase:built, phase:ghost", got[0].ID, got[1].ID)
 	}
+	if got[0].Detail != "no shipped or complete record" {
+		t.Errorf("built detail = %q, want %q", got[0].Detail, "no shipped or complete record")
+	}
 	if !strings.Contains(got[1].Detail, "unscaffolded") {
 		t.Errorf("ghost detail %q does not say it is unscaffolded", got[1].Detail)
 	}
