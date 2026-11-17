@@ -5395,3 +5395,12 @@
   line = 374
   reason = "gremlins switch-case attribution ceiling: bare switch{} case condition has no go-cover block; the keyless arm is asserted by TestCloseoutClearingCommands (survivor:g.go:7:neg must never name dross survivor accept)"
   accepted_in = "milestone-closeout-check"
+
+[[accepted]]
+  key = "435c97f2d7a50578"
+  file = "internal/cmd/milestone_closeout.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ch.Status == \"\":"
+  line = 209
+  reason = "gremlins switch-case attribution ceiling: bare switch{} case condition has no go-cover block; the empty-status arm is asserted by TestCloseoutNotDoneKind (built detail == 'no shipped or complete record')"
+  accepted_in = "milestone-closeout-check"
