@@ -156,6 +156,18 @@ var fields = []Field{
 		},
 	},
 	{
+		Struct: "phase.Spec", Field: "New", Tag: "new", Artifact: "spec.toml",
+		NotConsumed: &NotConsumedBy{
+			Why: "citations (paths or symbols) a phase introduces, so the fact check does " +
+				"not report them missing. Compared against a citation, or appended when one " +
+				"is confirmed new — never opened.",
+			Readers: []string{
+				"internal/facts/facts.go (string-compares each citation against the list)",
+				"internal/cmd/phase_mark_new.go (appends a confirmed citation)",
+			},
+		},
+	},
+	{
 		Struct: "project.Env", Field: "Files", Tag: "files", Artifact: "project.toml",
 		NotConsumed: &NotConsumedBy{
 			Why: "an env-file load order dross records but never opens itself; the shell " +

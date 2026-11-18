@@ -107,6 +107,7 @@ func TestRegistryCoversEveryKnownFieldByName(t *testing.T) {
 		"changes.RedProof.Doc",
 		"verify.Scope.Files",
 		"phase.Task.Files",
+		"phase.Spec.New",
 		"project.Env.Files",
 		"project.TestLane.Match",
 		"project.Runtime.TestExempt",
@@ -240,6 +241,26 @@ func TestTaskFilesIsAWriteTimeGateOnly(t *testing.T) {
 	}
 }
 
+// TestSpecNewIsComparedNeverOpened pins phase.Spec.New's disposition: the fact
+// check string-compares citations against it and the mark-new command appends
+// to it, so both must be named as readers or the not-consumed claim stops
+// describing what happens to the value.
+func TestSpecNewIsComparedNeverOpened(t *testing.T) {
+	f := find(t, "phase.Spec.New")
+	if f.NotConsumed == nil {
+		t.Fatal("phase.Spec.New must be not-consumed")
+	}
+	if f.Tag != "new" || f.Artifact != "spec.toml" {
+		t.Errorf("phase.Spec.New: Tag %q Artifact %q, want new / spec.toml", f.Tag, f.Artifact)
+	}
+	joined := strings.Join(f.NotConsumed.Readers, " ")
+	for _, reader := range []string{"internal/facts/facts.go", "internal/cmd/phase_mark_new.go"} {
+		if !strings.Contains(joined, reader) {
+			t.Errorf("Readers must name %s, got %v", reader, f.NotConsumed.Readers)
+		}
+	}
+}
+
 // TestExemptGlobsNameEveryReader: the human grant fingerprints the globs and
 // two commands print them, so the not-consumed claim has to name those readers
 // or it stops describing what happens to the value.
@@ -314,6 +335,7 @@ func TestStoredFieldsStayStringTyped(t *testing.T) {
 		{"changes.RedProof.Doc", reflect.TypeOf(changes.RedProof{}), "Doc"},
 		{"verify.Scope.Files", reflect.TypeOf(verify.Scope{}), "Files"},
 		{"phase.Task.Files", reflect.TypeOf(phase.Task{}), "Files"},
+		{"phase.Spec.New", reflect.TypeOf(phase.Spec{}), "New"},
 		{"project.Env.Files", reflect.TypeOf(project.Env{}), "Files"},
 		{"project.Paths.Source", reflect.TypeOf(project.Paths{}), "Source"},
 		{"project.TestLane.Match", reflect.TypeOf(project.TestLane{}), "Match"},
