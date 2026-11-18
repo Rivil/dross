@@ -1,0 +1,211 @@
+task_seq = 11
+
+[phase]
+  id = "spec-fact-drift"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Pin architecture link-check output before refactor"
+  files = ["internal/cmd/architecture_link_parity_test.go"]
+  description = """
+Characterisation test, written and observed green on TODAY's code before t-5 touches links.go. Temp repo: one Go file plus ARCHITECTURE.md bullets for ok / moved (cited :3, lives :5) / unresolved / ambiguous (two `Fetch` methods) / skipped (.py, no line), and a `pkg.Bar` bullet that resolves ONLY via the lastComponent fallback. Pins doctor's architectureLinkWarnings lines and `dross architecture check` stdout.
+"""
+  covers = ["c-8"]
+  test_contract = [
+    "if the moved/gone wording or set changes, the warnings pin fails: exactly \"Foo — x.go:3 moved to line 5\" and \"Gone — x.go:9 no longer resolves\", nothing for the ambiguous, skipped and fallback bullets",
+    "if the lastComponent fallback is removed from the architecture path, the `pkg.Bar` bullet becomes an unresolved line and the `dross architecture check` stdout pin (including the \"N moved, N unresolved, N ambiguous\" summary) fails",
+    "if an ambiguous bullet is reclassified as unresolved, an extra warning appears and the warnings pin fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Add codex Symbols, CanIndex and Symbol.Package"
+  files = ["internal/codex/codex.go", "internal/codex/go_indexer.go", "internal/codex/ast_grep.go", "internal/codex/codex_test.go"]
+  description = """
+Export Symbols(file): indexer dispatch only — no findCallers, siblings or git log. Export CanIndex(file) = SupportsFile && (Go || ast-grep available). SupportsFile stays byte-identical. GoIndexer sets Symbol.Package from the package clause; Name unchanged ("T.M").
+"""
+  covers = ["c-3", "c-8"]
+  test_contract = [
+    "if CanIndex ignores ast-grep absence, the test with astGrepAvailableFn stubbed false fails: CanIndex(\"a.ts\") must be false while SupportsFile(\"a.ts\") stays true, and CanIndex(\"a.go\") stays true",
+    "if Symbols diverges from Index or shells out to git, the test fails: Symbols(f) must equal Index([f]).Symbols for a Go file in a non-git dir with no error",
+    "if Package comes from the dir name or is missing on methods, the test fails: a `package foo` file sets Package \"foo\" on every symbol including `T.M`, and cmd/dross's main file yields \"main\"",
+    "if adding Package changes `dross codex` output, the byte-identical stdout test on the same fixture fails",
+    "if Symbols panics on a syntactically broken .go file, the broken-file test fails: it must return an error",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Extract and classify citations from prose"
+  files = ["internal/facts/extract.go", "internal/facts/extract_test.go"]
+  description = """
+Extract(text) → []Citation{Kind: path|line|symbol, Raw, Path, Line, Symbol}. Path = closed extension allowlist (codex-indexed exts + toml/md/json/yml/yaml/txt/sh/mod/sum); slashed = repo-relative, else bare basename. A file:line pairs with an adjacent backticked symbol (`Sym` — f:N / `Sym` (f:N) / `Sym` at f:N). Symbol = locked symbol_shape; a dotted token whose final component is lowercase and not call-shaped is a TOML key and skipped. Excluded shapes: absolute paths, `~/…`, `origin/main`, `milestone/v1.9`, tokens holding `<` `*` `{`, URLs, versions; directory citations ending `/` are not extracted. `../` escapes ARE extracted (reported missing later).
+"""
+  covers = ["c-7", "c-1", "c-2", "c-3"]
+  test_contract = [
+    "if wrapping punctuation leaks into a citation, the c-7 table fails: `see foo.go:12.`, `(foo.go:12)`, `` `foo.go:12`, ``, `foo.go:12;` and `foo.go:12:` each yield Path \"foo.go\" Line 12, and a leading `.` survives (`.dross/x.toml`)",
+    "if non-path shapes are extracted, the exclusion table fails: `e.g.`, `i.e.`, `v1.9`, `go1.27.3`, `1.9.4.0`, URLs, `milestone/v1.9`, `origin/main`, `~/…`, absolute paths, `internal/codex/` and `.dross/phases/<id>/spec.toml` yield no path",
+    "if commands, flags or keys become symbols, the test fails: `` `dross phase facts` ``, `` `--json` ``, `` `paths.source` ``, `` `current_phase_status` `` and `` `facts` `` yield no symbol",
+    "if real symbol citations are missed, the test fails: `` `quoted.String()` ``, `` `phase.Spec` `` and `` `cmd.planLockEdgeGate()` `` yield symbols with `()` stripped, and `` `spec.toml` `` is a path never a symbol",
+    "if file:line pairing breaks, the test fails: `` `architecture.Resolve` — internal/architecture/links.go:192 `` yields one line citation with Symbol \"architecture.Resolve\", and a bare `x.go:5` carries no symbol",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Add spec-level new list to the schema"
+  files = ["internal/phase/phase.go", "internal/phase/phase_test.go", "internal/pathfence/fields.go", "internal/pathfence/fields_test.go"]
+  description = """
+Spec.New []string `toml:"new,omitempty"`, declared NotConsumed in pathfence.Fields() (compared, never opened; reader internal/cmd/phase_facts.go). Add the name to TestRegistryCoversEveryKnownFieldByName.
+"""
+  covers = ["c-4", "c-5"]
+  test_contract = [
+    "if Save misplaces or drops `new`, the round-trip test fails: Spec{New: [\"internal/facts/extract.go\", \"facts.Check\"]}.Save writes `new = [...]` in order before the `[phase]` header and LoadSpec returns it",
+    "if an empty New writes a key, the legacy test fails: an existing spec without `new` must save byte-identically",
+    "if the loader starts accepting a misplaced key, the pin fails: a hand-written `new = [...]` under `[phase]` decodes to an empty Spec.New (the silent drop t-9 prevents)",
+    "if the registry entry is deleted, TestEveryPathShapedFieldIsDeclared / TestRegistryCoversEveryKnownFieldByName fail",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Strict symbol resolver sharing link-check classification"
+  files = ["internal/architecture/links.go", "internal/architecture/links_test.go", "internal/facts/resolve.go", "internal/facts/resolve_test.go"]
+  description = """
+Export architecture.Classify(link, syms, match): the resolveAgainst switch with a pluggable matcher; ResolveAllIn/Resolve pass the existing matchSymbols. facts.StrictMatch requires every qualifier (Symbol.Package, then Type.Method), no last-component fallback. Lazy tree index (WalkDir skipping .git/node_modules; parse errors non-fatal; codex.Symbols) built only when a symbol or paired file:line citation exists. Index is Degraded when the tree holds SupportsFile && !CanIndex files OUTSIDE testdata/ and fixtures/ dirs; Degraded skips unmatched symbols instead of reporting them. External-package qualifiers (`os.Stat`) are not exempt.
+"""
+  depends_on = ["t-1", "t-2", "t-3"]
+  covers = ["c-2", "c-3", "c-8"]
+  test_contract = [
+    "if the classifier owns the fallback, the test fails: Classify(`pkg.Bar`, [{Name:\"Bar\", Package:\"other\"}], StrictMatch) is Unresolved while the same link with matchSymbols is OK",
+    "if strict matching leaks into the architecture path, the test fails: a bullet `wrongpkg.Index` — codex/codex.go:N resolves OK through ResolveAllIn while facts reports `wrongpkg.Index` unresolved",
+    "if a last-component fallback is re-added, the test fails: `quoted.String()` with a String method on an unrelated type is Gone; `phase.Spec` resolves; `cmd.Spec` is Gone when Spec lives only in package phase",
+    "if ambiguity or moves are misclassified, the test fails: `Changes.Record` defined in two files is ambiguous and never unresolved; `Resolve` — links.go:N with the func at N+3 is Moved with NewLine N+3, and Gone after deletion; a line citation into a .py file is Skipped",
+    "if the ast-grep census is wrong, the test fails: with astGrepAvailableFn stubbed false, a .ts file under src/ marks the index Degraded and an unmatched symbol is Skipped, while the same .ts file only under testdata/ or fixtures/ leaves it non-Degraded and the symbol is Gone",
+    "if the index is built eagerly, the test fails: input with no symbol or paired-line citation records builder call count 0; an unparsable testdata .go file does not stop other files indexing",
+    "if strict matching regresses on the real tree, the regression test fails: against this repo StrictMatch resolves `codex.Index` and `architecture.Classify` and does not resolve `quoted.String()`; t-1's pins stay green",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Route cited paths through pathfence; settle taint ledger"
+  files = ["internal/facts/paths.go", "internal/facts/paths_test.go", "internal/pathfence/fields.go", "internal/pathfence/fields_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt", "internal/cmd/pathfence_carrier_test.go"]
+  description = """
+facts.ContainCitation(root, raw) (pathfence.Contained, error); existence via pathfence.Stat. A path escaping root is reported missing with no fs call. A bare basename resolves when any tree file has that name. Move Criterion.Text, Decision.Choice, Task.Description, Task.TestContract from not_paths.txt to Consumed (carrier facts.ContainCitation) and add the carrierType case. Task.Files stays NotConsumed (string-compared only).
+"""
+  depends_on = ["t-3", "t-4"]
+  covers = ["c-1"]
+  test_contract = [
+    "if an escaping path touches the fs, the test fails: `../../etc/passwd` is reported missing and the stat seam records zero calls for it",
+    "if resolution is wrong, the test fails: `internal/cmd/state.go` resolves, bare `nosuch.go` is missing, bare `spec.toml` resolves via .dross/phases/x/spec.toml, and `./internal/x.go` equals `internal/x.go` after path.Clean",
+    "if the taint route regresses, TestNoDeclaredPathFieldReachesOS reports a finding in internal/facts; re-filing Criterion.Text in the ledger must turn the ContainCitation Stat into a finding",
+    "if the carrier returns a string, TestDeclaredCarriersAreContained fails: facts.ContainCitation must bind to pathfence.Contained",
+    "if a moved field is left in both places or neither, TestEveryPathShapedFieldIsDeclared fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Assemble facts check over scanned fields"
+  files = ["internal/facts/facts.go", "internal/facts/facts_test.go"]
+  description = """
+Check(repoDir, spec, plan *phase.Plan) → Report{Unresolved []Finding{Field, Kind, Citation, Status, NewLine}, Degraded}. Scans only the locked scanned_fields. Planned set = every task's files (path.Clean); new set = spec.New, normalised. Deterministic order: spec order then plan order. Finding.String() renders "<field>: <kind> <citation>[ now at line N]".
+"""
+  depends_on = ["t-4", "t-5", "t-6"]
+  covers = ["c-1", "c-2", "c-3"]
+  test_contract = [
+    "if a skipped field is scanned, the test fails: the same missing path cited only in a decision `why`, a [[deferred]] text/why or an [[edges]] reason is NOT reported",
+    "if field labels drift, the test fails: labels are exactly \"criteria c-2\", \"decisions symbol_shape choice\", \"task t-3 description\", \"task t-3 test_contract[1]\"",
+    "if planned files don't suppress, the test fails: a path in task t-2's files suppresses the same path cited in a criterion and in another task's description, and a nonexistent `files` entry itself yields no finding",
+    "if new-list matching is loose or strict in the wrong place, the test fails: spec.New [\"foo.go\"] suppresses `foo.go:12.` and `foo.go` but not `fooo.go`; spec.New [\"pkg.Name\"] suppresses `` `pkg.Name()` ``",
+    "if a missing plan errors or output is nondeterministic, the test fails: a nil plan checks the spec alone with no error, and two runs return byte-identical reports",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-8"
+  wave = 4
+  title = "Add dross phase facts read-only command"
+  files = ["internal/cmd/phase_facts.go", "internal/cmd/phase_facts_test.go", "internal/cmd/phase.go", "cmd/dross/testdata/cli_tree.txt"]
+  description = """
+`dross phase facts <id> [--json]`. Spec required, plan optional. Prints one Finding.String() line per finding, or "nothing unresolved" naming what was checked (spec only / spec + plan); exits non-zero on any finding. Never writes. Does not narrate `mark-new` (lands in t-9).
+"""
+  depends_on = ["t-7"]
+  covers = ["c-6", "c-9", "c-1", "c-2", "c-3"]
+  test_contract = [
+    "if the clean path misreports, the test fails: a clean spec with no plan.toml exits 0 and prints \"nothing unresolved\" plus \"spec only\"",
+    "if findings don't fail the exit, the test fails: one missing path exits non-zero and the line names \"criteria c-1\" and the path",
+    "if --json drifts, the test fails: it emits {phase, checked, unresolved:[{field,kind,citation,line,new_line}]}, stdout parses alone with errors on stderr, `unresolved` is [] (never null) when clean, and it still exits non-zero when non-empty",
+    "if a kind renders wrong, the synthetic renderer test fails: moved / gone / unresolved-symbol Findings render with their kind and new line",
+    "if the command writes, the test fails: a hash of every file under the fixture root is identical before and after, clean or not, and no *.tmp remains",
+    "if absence reads as clean, the c-9 test fails: no spec.toml exits non-zero naming .../spec.toml, unknown id exits non-zero naming the phases/<id> dir, `../x` is refused, a spec or plan.toml that fails to decode exits non-zero naming it, and none prints \"nothing unresolved\"",
+    "if cli_tree.txt lacks the `phase facts` row and its --json flag row, the CLI tree golden fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-9"
+  wave = 5
+  title = "Add dross phase mark-new spec writer"
+  files = ["internal/cmd/phase_mark_new.go", "internal/cmd/phase_mark_new_test.go", "internal/cmd/phase.go", "cmd/dross/testdata/cli_tree.txt", "internal/cmd/phase_facts.go"]
+  description = """
+`dross phase mark-new <id> <citation>...` normalises each citation via facts.Extract, refuses any not currently unresolved, appends deduped entries to spec.New via spec.Save. phase_facts.go text output gains the "confirm new with `dross phase mark-new`" hint.
+"""
+  depends_on = ["t-8"]
+  covers = ["c-4"]
+  test_contract = [
+    "if normalisation or persistence breaks, the test fails: mark-new `foo.go:12.` stores \"foo.go:12\" and the next `dross phase facts` exits 0",
+    "if a resolved citation is accepted, the test fails: mark-new `fooo.go` (not unresolved) exits non-zero naming it with the spec unchanged on disk",
+    "if dedupe breaks, marking the same citation twice leaves more than one entry and the test fails",
+    "if Save loses content, the test fails: the written spec keeps `new` above `[phase]` and LoadSpec before == after except New (every criterion, decision, edge and deferred entry preserved)",
+    "if a malformed spec is written, the test fails: a spec that fails to decode is refused without writing",
+    "if cli_tree.txt lacks the `phase mark-new` row, the CLI tree golden fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-10"
+  wave = 5
+  title = "Gate plan-lock on unresolved citations"
+  files = ["internal/cmd/state.go", "internal/cmd/state_facts_gate_test.go"]
+  description = """
+planLockFactsGate runs after planLockEdgeGate on `current_phase_status planned`: facts.Check via the same spec/plan loader as `phase facts`; refusal lists every Finding.String() line plus `dross phase facts <id>` and spec `new` (no `mark-new` mention — t-9 runs in parallel). Absence allows (no current phase / no spec), mirroring the edge gate; a malformed spec or plan refuses naming its path. Before writing, check existing internal/cmd fixtures that plan-lock a spec for citations that now refuse; fold fixture edits into this task via `dross task edit`.
+"""
+  depends_on = ["t-7", "t-8"]
+  covers = ["c-5"]
+  test_contract = [
+    "if the gate under-lists or mutates state, the test fails: 3 unresolved citations across spec and plan refuse, the error lists all 3 and names `dross phase facts <id>`, and state.json's current_phase_status is unchanged on disk",
+    "if new/planned don't clear the gate, the test fails: the same fixture with each citation in spec `new` (or the path in a task's files) locks",
+    "if gate and command disagree, the parity table fails: clean / missing path / moved line / why-only citation / new-marked / planned file each run through the gate and `dross phase facts --json`; the gate refuses iff unresolved is non-empty and its lines equal the command's",
+    "if a malformed plan passes, the test fails: a malformed plan.toml refuses naming the plan path",
+    "if the gate over-reaches, the test fails: `in_progress` / `executing` never run it; no current phase or no spec.toml allows (TestPlanLockAbsenceAllows and execute_test's spec-less fixture stay green); on a spec with both problems the edge gate fires first",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-11"
+  wave = 6
+  title = "Walk unresolved citations in /dross-plan"
+  files = ["assets/prompts/plan.md", "assets/prompts/_plan.facts.md", "assets/partials.go", "assets/partials_test.go", "assets/testdata/prompt_instructions.txt", "internal/cmd/plan_prompt_test.go"]
+  description = """
+plan.md §1 runs `dross phase facts <id> --json` before §2 and carries the fetch line **When** `facts=unresolved` — `dross phase facts` exited non-zero: `dross prompt partial plan facts`. The partial walks one citation per AskUserQuestion turn (fix the spec text / confirm new via `dross phase mark-new`) and re-runs facts until it exits 0, then composes. TriggerVocabulary gains "facts": {"clean", "unresolved"}.
+"""
+  depends_on = ["t-8", "t-9"]
+  covers = ["c-4"]
+  test_contract = [
+    "if plan.md grows past 15000 B, TestPromptByteBudget (assets/budget_test.go) fails; the walk lives in the partial",
+    "if the facts run moves after \"## 2. Goal-backward decomposition\" in expanded plan.md, a plan_prompt_test assertion fails; the last line before `## 2G` stays the panel fetch line",
+    "if the expanded partial loses AskUserQuestion, one-citation-per-turn, either outcome, `dross phase mark-new`, or the re-run before §2, the plan_prompt_test partial assertion fails",
+    "if partials_test.go is not updated, TestCommonPathVocabularyPinned / TestCommonPathFetchesNothing fail: CommonPath() must gain facts=clean",
+    "if new plan.md instruction rows are missing from the append-only manifest, TestPromptInstructionsConserved fails",
+  ]
+  status = "pending"
