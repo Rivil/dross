@@ -190,13 +190,22 @@ func Resolve(link SymbolLink) Resolution {
 	if link.Line == 0 || link.File == "" || !codex.SupportsFile(link.File) {
 		return Resolution{Link: link, Status: StatusSkipped}
 	}
-	return resolveAgainst(link, fileSymbols(link.File))
+	return Classify(link, fileSymbols(link.File), MatchSymbols)
 }
 
-// resolveAgainst classifies a link given the symbols extracted from its file.
-// Split out so ResolveAll can index each file once and reuse the result.
-func resolveAgainst(link SymbolLink, syms []codex.Symbol) Resolution {
-	matches := matchSymbols(syms, link.Symbol)
+// Matcher finds the symbols a cited name refers to among one file's (or one
+// tree's) symbols. The architecture link check uses MatchSymbols, which falls
+// back to the last dotted component; a stricter consumer plugs in its own.
+type Matcher func(syms []codex.Symbol, cited string) []codex.Symbol
+
+// Classify is the one moved / unresolved / ambiguous classification: given the
+// symbols extracted from a link's file and a matcher, it decides the link's
+// Status. Zero matches is Unresolved, one is OK or Moved (by line), more than
+// one is Ambiguous — never a guess. The matcher owns every naming rule; this
+// switch owns none, so two consumers with different matchers cannot classify
+// the same match set differently.
+func Classify(link SymbolLink, syms []codex.Symbol, match Matcher) Resolution {
+	matches := match(syms, link.Symbol)
 	switch len(matches) {
 	case 0:
 		return Resolution{Link: link, Status: StatusUnresolved}
@@ -241,7 +250,7 @@ func ResolveAllIn(content, baseDir string) []Resolution {
 				syms = fileSymbols(resolved)
 				cache[resolved] = syms
 			}
-			out = append(out, resolveAgainst(link, syms))
+			out = append(out, Classify(link, syms, MatchSymbols))
 		}
 	}
 	return out
@@ -256,12 +265,13 @@ func fileSymbols(file string) []codex.Symbol {
 	return res.Symbols
 }
 
-// matchSymbols finds the symbols matching a doc symbol name. It first tries an
+// MatchSymbols is the architecture link check's Matcher: it finds the symbols
+// matching a doc symbol name. It first tries an
 // exact name match (e.g. the method `Changes.Record`); failing that it matches
 // on the last dotted component (so the package-qualified `architecture.EntryTemplate`
 // matches codex's bare `EntryTemplate`). Two matches of the same base name are
 // returned both — the caller treats that as Ambiguous rather than guessing.
-func matchSymbols(syms []codex.Symbol, docSymbol string) []codex.Symbol {
+func MatchSymbols(syms []codex.Symbol, docSymbol string) []codex.Symbol {
 	var exact []codex.Symbol
 	for _, s := range syms {
 		if s.Name == docSymbol {
