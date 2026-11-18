@@ -160,6 +160,8 @@ dross phase create flag --adopt (bool) default="false" noopt="true" usage="take 
 dross phase create flag --no-branch (bool) default="false" noopt="true" usage="skip creating/checking out the phase/<id> git branch (advanced)"
 dross phase edges | use="edges <phase-id>" short="Report which edge classes a phase's spec has resolved, left unresolved or not yet probed"
 dross phase edges flag --json (bool) default="false" noopt="true" usage="emit the report as JSON {classes, resolved, unresolved, open} (for /dross-spec)"
+dross phase facts | use="facts <phase-id>" short="Report file paths, file:line citations and symbols a phase's spec or plan cites that the tree does not back"
+dross phase facts flag --json (bool) default="false" noopt="true" usage="emit the report as JSON {phase, checked, unresolved, degraded} (for /dross-plan)"
 dross phase insert | use="insert <title>" short="Scaffold a phase and place it at a position in the milestone array"
 dross phase insert flag --after (string) default="" usage="place the new phase immediately after this phase slug"
 dross phase insert flag --before (string) default="" usage="place the new phase immediately before this phase slug"

@@ -48,6 +48,13 @@ cmd.edgeClassRow.Class class
 cmd.edgeClassRow.Hint hint
 cmd.edgesReport.Resolved resolved
 cmd.edgesReport.Unresolved unresolved
+cmd.factsReport.Checked checked
+cmd.factsReport.DegradedWhy degraded_why
+cmd.factsReport.Phase phase
+cmd.factsRow.Citation citation
+cmd.factsRow.Field field
+cmd.factsRow.Kind kind
+cmd.factsRow.Line line
 cmd.milestoneProgressReport.Remaining remaining
 cmd.milestoneProgressReport.Status status
 cmd.milestoneProgressReport.Unscaffolded unscaffolded
