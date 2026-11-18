@@ -175,7 +175,7 @@ The commit is a durable boundary. In **pair mode**, one `AskUserQuestion`:
   ```
 - `stop` — halt here; state is preserved.
 
-**Option order follows the wave boundary (checkpoint_posture).** When the task closes its wave — `dross task next` names a *higher* wave, or nothing — lead with `checkpoint`. Mid-wave, lead with `continue`.
+**Lead with `continue`** at every task boundary, wave boundaries included; `checkpoint` and `stop` follow it.
 
 ## 2. Phase completion
 

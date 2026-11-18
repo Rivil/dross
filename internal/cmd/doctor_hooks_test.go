@@ -33,7 +33,6 @@ var (
 	gateCheckPair    = [2]string{"PreToolUse", GateCheckHook}
 	gateRecordPair   = [2]string{"PostToolUse", GateRecordHook}
 	subagentStopPair = [2]string{"SubagentStop", GateRecordHook}
-	nudgePostPair    = [2]string{"PostToolUse", NudgeHook}
 )
 
 // withConfig points CLAUDE_CONFIG_DIR at a fresh dir holding settings (none
@@ -80,7 +79,7 @@ func TestDoctorGateHooks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("doctor failed after `dross hooks ensure`: %v\n%s", err, sec)
 	}
-	for _, want := range []string{"✓ PreCompact", "✓ SessionStart", "✓ PreToolUse → dross gate check", "✓ PostToolUse → dross gate record", "✓ PostToolUse → dross hooks nudge", "✓ SubagentStop → dross gate record"} {
+	for _, want := range []string{"✓ PreCompact", "✓ SessionStart", "✓ PreToolUse → dross gate check", "✓ PostToolUse → dross gate record", "✓ SubagentStop → dross gate record"} {
 		if !strings.Contains(sec, want) {
 			t.Errorf("Hooks section lacks %q after ensure:\n%s", want, sec)
 		}
@@ -98,9 +97,8 @@ func TestDoctorMissingConvenienceHooksWarnOnly(t *testing.T) {
 		pairs [][2]string
 		warn  string
 	}{
-		{"no PreCompact", [][2]string{sessionStartPair, gateCheckPair, gateRecordPair, nudgePostPair, subagentStopPair}, "⚠ PreCompact"},
-		{"no SessionStart", [][2]string{preCompactPair, gateCheckPair, gateRecordPair, nudgePostPair, subagentStopPair}, "⚠ SessionStart"},
-		{"no nudge", [][2]string{preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, subagentStopPair}, "⚠ PostToolUse → `dross hooks nudge` is not wired, so context-threshold nudges are off. Fix: `dross hooks ensure`"},
+		{"no PreCompact", [][2]string{sessionStartPair, gateCheckPair, gateRecordPair, subagentStopPair}, "⚠ PreCompact"},
+		{"no SessionStart", [][2]string{preCompactPair, gateCheckPair, gateRecordPair, subagentStopPair}, "⚠ SessionStart"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			withConfig(t, settingsWith(t, "", c.pairs...))
@@ -118,7 +116,7 @@ func TestDoctorMissingConvenienceHooksWarnOnly(t *testing.T) {
 func TestDoctorHiddenGateHooks(t *testing.T) {
 	doctorRepo(t)
 	t.Run("gate commands only under a matcher", func(t *testing.T) {
-		withConfig(t, settingsWith(t, "Bash", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, nudgePostPair, subagentStopPair))
+		withConfig(t, settingsWith(t, "Bash", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, subagentStopPair))
 		sec, err := runDoctorHooks(t)
 		if err == nil || !strings.Contains(sec, "✗ PreToolUse → `dross gate check` is wired only under a matcher") {
 			t.Fatalf("a matcher-restricted gate hook passed: %v\n%s", err, sec)
@@ -130,7 +128,7 @@ func TestDoctorHiddenGateHooks(t *testing.T) {
 		}
 	})
 	t.Run("disableAllHooks", func(t *testing.T) {
-		all := settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, nudgePostPair, subagentStopPair)
+		all := settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, subagentStopPair)
 		withConfig(t, strings.Replace(all, "{", `{"disableAllHooks":true,`, 1))
 		sec, err := runDoctorHooks(t)
 		if err == nil || !strings.Contains(sec, "disableAllHooks") {
@@ -156,7 +154,7 @@ func TestDoctorReadsEffectiveSettings(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	mustWrite(t, filepath.Join(home, ".claude", "settings.json"),
-		settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, nudgePostPair, subagentStopPair))
+		settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, subagentStopPair))
 	cfg := withConfig(t, "")
 	sec, err := runDoctorHooks(t)
 	if err == nil || !strings.Contains(sec, "✗ PreToolUse") {
@@ -172,7 +170,7 @@ func TestDoctorReadsEffectiveSettings(t *testing.T) {
 // that repo however well the user-level file wires them.
 func TestDoctorProjectHooksDisabled(t *testing.T) {
 	repo := doctorRepo(t)
-	withConfig(t, settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, nudgePostPair, subagentStopPair))
+	withConfig(t, settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, subagentStopPair))
 	baseline, err := runDoctorHooks(t)
 	if err != nil {
 		t.Fatalf("doctor with every hook wired and no .claude/: %v\n%s", err, baseline)
@@ -198,7 +196,7 @@ func TestDoctorProjectHooksDisabled(t *testing.T) {
 
 func TestDoctorProjectSettingsUnparseable(t *testing.T) {
 	repo := doctorRepo(t)
-	withConfig(t, settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, nudgePostPair, subagentStopPair))
+	withConfig(t, settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, subagentStopPair))
 	mustWrite(t, filepath.Join(repo, ".claude", "settings.local.json"), `{"hooks": `)
 	sec, err := runDoctorHooks(t)
 	if err == nil || !strings.Contains(sec, "✗ .claude/settings.local.json cannot be read") || !strings.Contains(sec, "unexpected end of JSON input") {
@@ -218,41 +216,24 @@ func TestDoctorSubagentStopHook(t *testing.T) {
 	}
 }
 
-// TestDoctorContextThreshold: the Hooks section names the threshold the nudge
-// will use, and says so loudly when a value it cannot use has turned the
-// nudge off — the hook itself never speaks.
-func TestDoctorContextThreshold(t *testing.T) {
+// TestDoctorWarnsRetiredNudge: a settings.json still wiring the retired
+// context nudge warns, naming `dross hooks ensure`, and never fails doctor;
+// once ensure prunes it the warning goes.
+func TestDoctorWarnsRetiredNudge(t *testing.T) {
 	doctorRepo(t)
-	withConfig(t, settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, nudgePostPair, subagentStopPair))
-	for _, c := range []struct {
-		name  string
-		body  string // defaults.toml; "" for no file
-		wants []string
-	}{
-		{"absent", "", []string{"✓ context nudge: 150k (default)"}},
-		{"explicit", "[context]\nthreshold = 90000\n", []string{"✓ context nudge: 90k"}},
-		{"off", "[context]\nthreshold = 0\n", []string{"✓ context nudge: off (threshold 0)"}},
-		{"undecodable", "[context]\nthreshold = \"150k\"\n", []string{"⚠ the context nudge is silently off", "defaults.toml"}},
-		{"negative", "[context]\nthreshold = -5\n", []string{"⚠ the context nudge is silently off", "defaults.toml"}},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
-			if c.body != "" {
-				dir, err := GlobalDir()
-				if err != nil {
-					t.Fatal(err)
-				}
-				mustWrite(t, filepath.Join(dir, "defaults.toml"), c.body)
-			}
-			sec, err := runDoctorHooks(t)
-			if err != nil {
-				t.Errorf("a threshold setting failed doctor: %v\n%s", err, sec)
-			}
-			for _, want := range c.wants {
-				if !strings.Contains(sec, want) {
-					t.Errorf("Hooks section lacks %q:\n%s", want, sec)
-				}
-			}
-		})
+	withConfig(t, settingsWith(t, "", preCompactPair, sessionStartPair, gateCheckPair, gateRecordPair, [2]string{"PostToolUse", NudgeHook}, subagentStopPair))
+	sec, err := runDoctorHooks(t)
+	if err != nil {
+		t.Errorf("a still-wired retired hook failed doctor: %v\n%s", err, sec)
+	}
+	if want := "⚠ PostToolUse → `dross hooks nudge` is retired but still wired"; !strings.Contains(sec, want) || !strings.Contains(sec, "dross hooks ensure") {
+		t.Errorf("Hooks section lacks %q with its fix:\n%s", want, sec)
+	}
+	if err := runCmd(t, Hooks(), "ensure"); err != nil {
+		t.Fatal(err)
+	}
+	sec, err = runDoctorHooks(t)
+	if err != nil || strings.Contains(sec, "⚠") || strings.Contains(sec, NudgeHook) {
+		t.Errorf("after ensure the retired hook still shows: %v\n%s", err, sec)
 	}
 }

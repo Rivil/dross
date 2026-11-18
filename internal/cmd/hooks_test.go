@@ -218,11 +218,11 @@ func TestEnsureUserHooksWiresGates(t *testing.T) {
 	if err := ensureUserHooks(); err != nil {
 		t.Fatal(err)
 	}
-	// PostToolUse carries the gate record and, after it, the context nudge
-	// (context-boundaries t-9) — a deliberate move from exactly [gate record].
+	// PostToolUse carries exactly the gate record: the context nudge that sat
+	// after it is retired.
 	for event, want := range map[string][]string{
 		"PreCompact": {preCompactHookCommand}, "SessionStart": {sessionStartHookCommand},
-		"PreToolUse": {GateCheckHook}, "PostToolUse": {GateRecordHook, NudgeHook},
+		"PreToolUse": {GateCheckHook}, "PostToolUse": {GateRecordHook},
 	} {
 		if got := readHookCommands(t, settings, event); !slices.Equal(got, want) {
 			t.Errorf("hooks.%s = %q, want exactly %q", event, got, want)
@@ -287,8 +287,7 @@ func TestEnsureUserHooksUpgradesTwoHookInstall(t *testing.T) {
 	if err := ensureUserHooks(); err != nil {
 		t.Fatal(err)
 	}
-	// PostToolUse gains the gate record and the context nudge: 2, deliberately.
-	for event, n := range map[string]int{"PreCompact": 1, "SessionStart": 1, "PreToolUse": 1, "PostToolUse": 2} {
+	for event, n := range map[string]int{"PreCompact": 1, "SessionStart": 1, "PreToolUse": 1, "PostToolUse": 1} {
 		if got := readHookCommands(t, settings, event); len(got) != n {
 			t.Errorf("hooks.%s = %q after the upgrade, want %d entry", event, got, n)
 		}
@@ -358,11 +357,10 @@ func TestHookWordingNamesAllFour(t *testing.T) {
 		{"SessionStart", "dross reentry"},
 		{"PreToolUse", "dross gate check"},
 		{"PostToolUse", "dross gate record"},
-		{"PostToolUse", "dross hooks nudge"},
 		{"SubagentStop", "dross gate record"},
 	}
 	if len(userHooks) != len(want) {
-		t.Fatalf("userHooks = %v, want the six dross hooks", userHooks)
+		t.Fatalf("userHooks = %v, want the five dross hooks", userHooks)
 	}
 	for i, h := range userHooks {
 		if h.event != want[i].event || h.command != want[i].command {
@@ -434,25 +432,29 @@ func TestEnsureWiresSubagentStop(t *testing.T) {
 	}
 }
 
-// TestEnsureUpgradesFiveHookInstall: an install from before the nudge, with a
-// foreign PostToolUse group ahead of dross's, gains the nudge after the gate
-// record, keeps the foreign group first, and a second ensure writes nothing.
-func TestEnsureUpgradesFiveHookInstall(t *testing.T) {
+// TestEnsurePrunesRetiredNudge: an install from while the context nudge was
+// wired — a foreign PostToolUse group ahead of dross's, and the nudge in its
+// own group and beside a foreign hook under a matcher — loses every nudge
+// entry and keeps everything else in order; a second ensure writes nothing.
+func TestEnsurePrunesRetiredNudge(t *testing.T) {
 	cfg := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
 	settings := filepath.Join(cfg, "settings.json")
-	mustWrite(t, settings, `{"hooks":{`+
+	mustWrite(t, settings, `{"model":"opus","hooks":{`+
 		`"PreCompact":[{"hooks":[{"type":"command","command":"dross pause --auto"}]}],`+
 		`"SessionStart":[{"hooks":[{"type":"command","command":"dross reentry"}]}],`+
 		`"PreToolUse":[{"hooks":[{"type":"command","command":"dross gate check"}]}],`+
-		`"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"/usr/local/bin/fmt.sh"}]},{"hooks":[{"type":"command","command":"dross gate record"}]}],`+
+		`"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"/usr/local/bin/fmt.sh"}]},{"hooks":[{"type":"command","command":"dross gate record"}]},{"hooks":[{"type":"command","command":"dross hooks nudge"}]},{"matcher":"Bash","hooks":[{"type":"command","command":"dross hooks nudge"},{"type":"command","command":"/bin/lint.sh"}]}],`+
 		`"SubagentStop":[{"hooks":[{"type":"command","command":"dross gate record"}]}]}}`)
 	if err := ensureUserHooks(); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"/usr/local/bin/fmt.sh", GateRecordHook, NudgeHook}
+	want := []string{"/usr/local/bin/fmt.sh", GateRecordHook, "/bin/lint.sh"}
 	if got := readHookCommands(t, settings, "PostToolUse"); !slices.Equal(got, want) {
 		t.Errorf("hooks.PostToolUse = %q, want %q", got, want)
+	}
+	if !strings.Contains(mustRead(t, settings), `"model": "opus"`) {
+		t.Errorf("an unrelated key was lost:\n%s", mustRead(t, settings))
 	}
 	first := mustRead(t, settings)
 	if err := ensureUserHooks(); err != nil {
@@ -460,6 +462,32 @@ func TestEnsureUpgradesFiveHookInstall(t *testing.T) {
 	}
 	if again := mustRead(t, settings); again != first {
 		t.Errorf("a second ensure changed settings.json:\n--- first ---\n%s\n--- second ---\n%s", first, again)
+	}
+}
+
+// TestRetiredNudgeVerbIsSilent: a settings.json not yet pruned still runs
+// `dross hooks nudge` on every tool call, so the retired verb must exit 0 and
+// print nothing whatever the hook feeds it — and stay out of help.
+func TestRetiredNudgeVerbIsSilent(t *testing.T) {
+	c := hooksNudge()
+	if !c.Hidden {
+		t.Error("the retired nudge verb is listed in help")
+	}
+	var out bytes.Buffer
+	c.SetOut(&out)
+	c.SetErr(&out)
+	c.SetIn(strings.NewReader(`{"hook_event_name":"PostToolUse","session_id":"s","transcript_path":"/nope"}`))
+	c.SetArgs([]string{"stray"})
+	if err := c.Execute(); err != nil {
+		t.Errorf("the retired nudge verb failed: %v", err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("the retired nudge verb printed %q", out.String())
+	}
+	for _, h := range userHooks {
+		if h.command == NudgeHook {
+			t.Errorf("%s → %s is still wired", h.event, h.command)
+		}
 	}
 }
 
@@ -487,22 +515,5 @@ func TestUserHooksResolve(t *testing.T) {
 				t.Errorf("%s → %q: %s has no --%s flag", h.event, h.command, c.CommandPath(), f)
 			}
 		}
-	}
-}
-
-// TestNudgeNotWiredOnUserPromptSubmit: the nudge runs on PostToolUse only. A
-// hook that misbehaves on UserPromptSubmit can erase the user's prompt.
-func TestNudgeNotWiredOnUserPromptSubmit(t *testing.T) {
-	cfg := t.TempDir()
-	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
-	if err := ensureUserHooks(); err != nil {
-		t.Fatal(err)
-	}
-	settings := filepath.Join(cfg, "settings.json")
-	if n := countIn(readHookCommands(t, settings, "UserPromptSubmit"), NudgeHook); n != 0 {
-		t.Errorf("UserPromptSubmit runs %q %d times", NudgeHook, n)
-	}
-	if n := countIn(readHookCommands(t, settings, "PostToolUse"), NudgeHook); n != 1 {
-		t.Errorf("PostToolUse runs %q %d times, want 1", NudgeHook, n)
 	}
 }

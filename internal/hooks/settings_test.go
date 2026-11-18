@@ -122,6 +122,107 @@ func TestMergeHookRejectsGarbage(t *testing.T) {
 }
 
 // countCommand counts entries under hooks.<event> whose command equals command.
+const retired = "dross hooks nudge"
+
+// TestRemoveHookPrunes: the retired command goes wherever it sits under the
+// event — alone in its group (the group goes too) or beside a foreign hook
+// (only the entry goes, the group's matcher and the neighbour stay). Other
+// events and top-level keys survive in order.
+func TestRemoveHookPrunes(t *testing.T) {
+	initial := `{
+  "model": "opus",
+  "hooks": {
+    "PostToolUse": [
+      {"hooks": [{"type": "command", "command": "dross gate record"}]},
+      {"hooks": [{"type": "command", "command": "dross hooks nudge"}]},
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "dross hooks nudge"}, {"type": "command", "command": "/bin/fmt.sh", "timeout": 5}]}
+    ],
+    "PreToolUse": [{"hooks": [{"type": "command", "command": "dross gate check"}]}]
+  },
+  "permissions": {"allow": []}
+}`
+	out, err := RemoveHook([]byte(initial), EventPostToolUse, retired)
+	if err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if n := countCommand(t, out, EventPostToolUse, retired); n != 0 {
+		t.Errorf("%d %q entries survived:\n%s", n, retired, out)
+	}
+	for _, keep := range []string{"dross gate record", "/bin/fmt.sh"} {
+		if n := countCommand(t, out, EventPostToolUse, keep); n != 1 {
+			t.Errorf("PostToolUse runs %q %d times, want 1:\n%s", keep, n, out)
+		}
+	}
+	if n := countCommand(t, out, EventPreToolUse, "dross gate check"); n != 1 {
+		t.Errorf("another event lost its hook:\n%s", out)
+	}
+	var parsed struct {
+		Hooks map[string][]map[string]json.RawMessage `json:"hooks"`
+	}
+	if err := json.Unmarshal(out, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	groups := parsed.Hooks[EventPostToolUse]
+	if len(groups) != 2 {
+		t.Fatalf("PostToolUse has %d groups, want 2 (the emptied one dropped):\n%s", len(groups), out)
+	}
+	var entries []map[string]any
+	if err := json.Unmarshal(groups[1]["hooks"], &entries); err != nil {
+		t.Fatal(err)
+	}
+	if string(groups[1]["matcher"]) != `"Bash"` || len(entries) != 1 || entries[0]["timeout"] != float64(5) {
+		t.Errorf("the shared group lost its matcher or its neighbour's keys: %s", out)
+	}
+	if got, want := decodeOrderedKeys(t, out), []string{"model", "hooks", "permissions"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("top-level keys = %v, want %v", got, want)
+	}
+}
+
+// TestRemoveHookDropsEmptiedEvent: an event left with no groups goes, so a
+// settings.json is never left carrying `"PostToolUse": []`.
+func TestRemoveHookDropsEmptiedEvent(t *testing.T) {
+	out, err := RemoveHook([]byte(`{"hooks": {"PostToolUse": [{"hooks": [{"type": "command", "command": "dross hooks nudge"}]}], "PreCompact": [{"hooks": [{"type": "command", "command": "x"}]}]}}`), EventPostToolUse, retired)
+	if err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if strings.Contains(string(out), EventPostToolUse) {
+		t.Errorf("the emptied event survived:\n%s", out)
+	}
+	if n := countCommand(t, out, EventPreCompact, "x"); n != 1 {
+		t.Errorf("the other event lost its hook:\n%s", out)
+	}
+}
+
+// TestRemoveHookAbsentIsByteStable: nothing to remove returns the input bytes,
+// so a settings.json without the hook — or with no hooks at all — is never
+// rewritten, and its formatting is never normalized.
+func TestRemoveHookAbsentIsByteStable(t *testing.T) {
+	for _, in := range []string{
+		"",
+		`{"model":"opus"}`,
+		`{"hooks": {"PreCompact": [{"hooks": [{"type": "command", "command": "x"}]}]}}`,
+		`{"hooks": {"PostToolUse": [{"hooks": [{"type": "command", "command": "dross gate record"}]}, "not a group"]}}`,
+	} {
+		out, err := RemoveHook([]byte(in), EventPostToolUse, retired)
+		if err != nil {
+			t.Fatalf("remove from %q: %v", in, err)
+		}
+		if !bytes.Equal(out, []byte(in)) {
+			t.Errorf("no-op remove rewrote %q to %q", in, out)
+		}
+	}
+}
+
+// TestRemoveHookRejectsGarbage: malformed settings is an error, never a
+// partial rewrite.
+func TestRemoveHookRejectsGarbage(t *testing.T) {
+	for _, in := range []string{`[]`, `{"hooks": []}`, `{"hooks": {"PostToolUse": {}}}`} {
+		if out, err := RemoveHook([]byte(in), EventPostToolUse, retired); err == nil {
+			t.Errorf("RemoveHook(%q) = %q, nil; want an error", in, out)
+		}
+	}
+}
+
 func countCommand(t *testing.T, settings []byte, event, command string) int {
 	t.Helper()
 	var parsed struct {

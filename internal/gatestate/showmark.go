@@ -2,6 +2,7 @@ package gatestate
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -27,9 +28,16 @@ import (
 //   - <key>-<kind>: "<epoch> <sha>", the epoch and content digest of the last
 //     full print.
 //
-// <key> is the session id hashed the way nudgeKey hashes it, so an arbitrary
-// id never names a path outside ShowDir.
+// <key> is sessionKey of the session id, so an arbitrary id never names a path
+// outside ShowDir.
 const ShowDir = "show"
+
+// sessionKey is a session's file-name prefix. Hashing keeps an arbitrary
+// session id — "../x", "a/b" — from naming a path outside its directory.
+func sessionKey(sessionID string) string {
+	sum := sha256.Sum256([]byte(sessionID))
+	return hex.EncodeToString(sum[:])[:16]
+}
 
 // Show kinds.
 const (
@@ -70,7 +78,7 @@ func BumpContext(root, sessionID string) error {
 	if err := showWrite(root, showEpochFile, []byte(hex.EncodeToString(nonce)+"\n")); err != nil {
 		return err
 	}
-	return showWrite(root, nudgeKey(sessionID)+showSeenExt, nil)
+	return showWrite(root, sessionKey(sessionID)+showSeenExt, nil)
 }
 
 // BumpForHook reads a SessionStart hook payload and bumps the context for the
@@ -100,7 +108,7 @@ func ShownCurrent(root, sessionID, kind, sha string) bool {
 		return false
 	}
 	dir := showPath(root)
-	key := nudgeKey(sessionID)
+	key := sessionKey(sessionID)
 	if _, err := os.Stat(filepath.Join(dir, key+showSeenExt)); err != nil {
 		return false
 	}
@@ -130,7 +138,7 @@ func RecordShown(root, sessionID, kind, sha string) error {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("read %s: %w", rel(showName(showEpochFile)), err)
 	}
-	return showWrite(root, nudgeKey(sessionID)+"-"+kind, []byte(showLine(strings.TrimSpace(string(epoch)), sha)+"\n"))
+	return showWrite(root, sessionKey(sessionID)+"-"+kind, []byte(showLine(strings.TrimSpace(string(epoch)), sha)+"\n"))
 }
 
 // showWrite writes one file under ShowDir and prunes the directory.

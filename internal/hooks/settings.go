@@ -131,6 +131,87 @@ func MergeHook(settings []byte, event, command string) ([]byte, error) {
 	return root.marshalIndented()
 }
 
+// RemoveHook returns settings.json with every entry running command dropped
+// from hooks.<event>: the entry goes, a group it leaves with no hooks goes, and
+// an event it leaves with no groups goes. It is MergeHook's inverse for a
+// retired dross hook. Nothing to remove → the input bytes come back unchanged,
+// so a settings.json that never had the hook is never rewritten. A group that
+// does not parse is foreign config and survives verbatim; malformed JSON at the
+// root, hooks or the event array is an error with no output.
+func RemoveHook(settings []byte, event, command string) ([]byte, error) {
+	root, err := parseOrdered(settings)
+	if err != nil {
+		return nil, fmt.Errorf("parse settings.json: %w", err)
+	}
+	hooksObj, err := parseOrdered(rawValue(root, "hooks"))
+	if err != nil {
+		return nil, fmt.Errorf("parse settings.json hooks: %w", err)
+	}
+	raw, ok := hooksObj.get(event)
+	if !ok {
+		return settings, nil
+	}
+	var groups []json.RawMessage
+	if err := json.Unmarshal(raw, &groups); err != nil {
+		return nil, fmt.Errorf("parse settings.json hooks.%s: %w", event, err)
+	}
+
+	kept := make([]json.RawMessage, 0, len(groups))
+	removed := false
+	for _, g := range groups {
+		if !groupRunsCommand(g, command) {
+			kept = append(kept, g)
+			continue
+		}
+		removed = true
+		pruned, empty, err := withoutCommand(g, command)
+		if err != nil {
+			return nil, err
+		}
+		if !empty {
+			kept = append(kept, pruned)
+		}
+	}
+	if !removed {
+		return settings, nil
+	}
+
+	if len(kept) == 0 {
+		hooksObj.del(event)
+	} else {
+		hooksObj.set(event, compactArray(kept))
+	}
+	root.set("hooks", hooksObj.compact())
+	return root.marshalIndented()
+}
+
+// withoutCommand returns group with its entries running command dropped, and
+// whether no hook entry is left. Every other key of the group (a matcher) and
+// of the surviving entries (a timeout) is kept verbatim.
+func withoutCommand(group json.RawMessage, command string) (json.RawMessage, bool, error) {
+	g, err := parseOrdered(group)
+	if err != nil {
+		return nil, false, fmt.Errorf("parse hook group: %w", err)
+	}
+	var entries []json.RawMessage
+	if err := json.Unmarshal(rawValue(g, "hooks"), &entries); err != nil {
+		return nil, false, fmt.Errorf("parse hook group entries: %w", err)
+	}
+	kept := entries[:0]
+	for _, e := range entries {
+		var h hookCommand
+		if json.Unmarshal(e, &h) == nil && h.Command == command {
+			continue
+		}
+		kept = append(kept, e)
+	}
+	if len(kept) == 0 {
+		return nil, true, nil
+	}
+	g.set("hooks", compactArray(kept))
+	return g.compact(), false, nil
+}
+
 // groupRunsCommand reports whether a matcher group contains a command entry
 // running command. Unparseable groups are foreign config — never a match.
 func groupRunsCommand(group json.RawMessage, command string) bool {
@@ -227,6 +308,20 @@ func (o *orderedObject) set(key string, raw json.RawMessage) {
 		o.keys = append(o.keys, key)
 	}
 	o.m[key] = raw
+}
+
+// del removes key, keeping the order of the rest. Absent → no-op.
+func (o *orderedObject) del(key string) {
+	if _, ok := o.m[key]; !ok {
+		return
+	}
+	delete(o.m, key)
+	for i, k := range o.keys {
+		if k == key {
+			o.keys = append(o.keys[:i], o.keys[i+1:]...)
+			return
+		}
+	}
 }
 
 // compact renders the object as a single-line `{"k":v,...}` with values verbatim.
