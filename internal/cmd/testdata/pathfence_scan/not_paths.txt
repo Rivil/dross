@@ -216,11 +216,9 @@ mutation.strykerMutant.Status status
 mutation.strykerMutant.StatusReason statusreason
 mutation.strykerReport.SchemaVersion schemaversion
 
-# ---- phase — spec and plan prose and ids: criteria, decisions, edge records, deferred items, task ids, titles, statuses
+# ---- phase — spec and plan ids, the prose the fact check does not scan (decision whys, edge records, deferred items, task reasons), titles, statuses; the scanned prose is in pathfence.Fields()
 phase.Criterion.Deferred deferred
 phase.Criterion.ID id
-phase.Criterion.Text text
-phase.Decision.Choice choice
 phase.Decision.Key key
 phase.Decision.Why why
 phase.Edge.Class class
@@ -236,10 +234,8 @@ phase.SpecPhase.ID id
 phase.SpecPhase.Title title
 phase.Task.Covers covers
 phase.Task.DependsOn depends_on
-phase.Task.Description description
 phase.Task.Reason reason
 phase.Task.Status status
-phase.Task.TestContract test_contract
 phase.Task.Title title
 
 # ---- pincheck — upstream release documents: version strings and publish dates

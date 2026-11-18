@@ -1,10 +1,14 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/facts"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/pathfence"
@@ -67,6 +71,11 @@ func carrierType(name string) (got, want reflect.Type, ok bool) {
 	case "milestone.ContainVersion":
 		// milestone.FilePath's containment of a version under milestones/.
 		return reflect.TypeOf(milestone.ContainVersion).Out(0), contained, true
+	case "facts.ContainCitation":
+		// The fact check's only route from a path cited in spec or plan prose
+		// to the stat that proves it exists: a revert to a joined string is
+		// what would let a cited `../x` be stat'd outside the tree.
+		return reflect.TypeOf(facts.ContainCitation).Out(0), contained, true
 	}
 	return nil, nil, false
 }
@@ -132,5 +141,105 @@ func boundCarriers() []string {
 func TestRegistryIsWellFormed(t *testing.T) {
 	for _, err := range pathfence.Validate(pathfence.Fields()) {
 		t.Errorf("registry: %v", err)
+	}
+}
+
+// citedProseProbe reads each prose field the fact check scans and hands it to
+// facts.ContainCitation — the route internal/facts/facts.go takes.
+const citedProseProbe = `package probe
+
+import (
+	"example.com/fixture/facts"
+	"github.com/Rivil/dross/internal/phase"
+)
+
+func Check(root string, s phase.Spec, p phase.Plan) {
+	for _, c := range s.Criteria {
+		_, _ = facts.ContainCitation(root, c.Text)
+	}
+	for _, d := range s.Decisions {
+		_, _ = facts.ContainCitation(root, d.Choice)
+	}
+	for _, t := range p.Task {
+		_, _ = facts.ContainCitation(root, t.Description)
+		for _, line := range t.TestContract {
+			_, _ = facts.ContainCitation(root, line)
+		}
+	}
+}
+`
+
+// citedProseFixture is the probe over a copy of internal/facts' own sources,
+// so the Stat inside ContainCitation is a body the scan follows rather than a
+// bodiless dependency it cannot see into.
+func citedProseFixture(t *testing.T) *ssaFixture {
+	t.Helper()
+	srcs := []fixtureSource{{Name: "probe.go", Src: []byte(citedProseProbe)}}
+	names, err := filepath.Glob(filepath.Join("..", "facts", "*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range names {
+		if strings.HasSuffix(n, "_test.go") {
+			continue
+		}
+		body, err := os.ReadFile(n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		srcs = append(srcs, fixtureSource{Name: "internal/facts/" + filepath.Base(n), Src: body})
+	}
+	fx, err := typecheckFixture(liveImportable(t), srcs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fx
+}
+
+// TestContainCitationClearsOnlyDeclaredProse: with the scanned prose fields
+// declared Consumed, the cited path reaching pathfence.Stat inside
+// ContainCitation is cleared by its Contain. Re-filing any one of them in the
+// ledger turns that same Stat into a finding in internal/facts — which is what
+// proves the clean run traced the route rather than missing it.
+func TestContainCitationClearsOnlyDeclaredProse(t *testing.T) {
+	fx := citedProseFixture(t)
+	live := livePathSources(t)
+
+	res := pathTaintScan(fx.srcView, live)
+	if res.Reads == 0 {
+		t.Fatal("the probe's prose-field reads were not traced — the clean run below is vacuous")
+	}
+	for _, f := range res.Findings {
+		t.Errorf("a declared prose field reaches the filesystem uncleared: %s", f)
+	}
+
+	for _, field := range []string{
+		"phase.Criterion.Text", "phase.Decision.Choice",
+		"phase.Task.Description", "phase.Task.TestContract",
+	} {
+		t.Run(field, func(t *testing.T) {
+			refiled := make([]pathSource, 0, len(live))
+			moved := false
+			for _, s := range live {
+				if s.Name == field {
+					s.Class, s.LedgerLine, moved = pathLedger, 1, true
+				}
+				refiled = append(refiled, s)
+			}
+			if !moved {
+				t.Fatalf("%s is not among the live declarations", field)
+			}
+			hit := false
+			for _, f := range pathTaintScan(fx.srcView, refiled).Findings {
+				if f.Escape.Filename == "internal/facts/paths.go" &&
+					strings.Contains(f.What, "pathfence.Stat") && strings.Contains(f.String(), field) {
+					hit = true
+				}
+			}
+			if !hit {
+				t.Errorf("re-filing %s in the ledger left ContainCitation's Stat silent — "+
+					"the scan no longer traces cited prose into internal/facts", field)
+			}
+		})
 	}
 }

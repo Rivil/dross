@@ -142,16 +142,26 @@ var fields = []Field{
 		Consumed: &ConsumedBy{Carrier: "survivor.AcceptanceFile"},
 	},
 
+	// Spec and plan PROSE the fact check scans (the locked scanned_fields
+	// decision). The value is text, not a path, but the file paths cited in it
+	// are stat'd to prove they exist, so each cited path goes through Contain
+	// inside facts.ContainCitation before anything touches the filesystem.
+	citedProse("phase.Criterion", "Text", "text", "spec.toml"),
+	citedProse("phase.Decision", "Choice", "choice", "spec.toml"),
+	citedProse("phase.Task", "Description", "description", "plan.toml"),
+	citedProse("phase.Task", "TestContract", "test_contract", "plan.toml"),
+
 	// ---- NotConsumed: nothing opens these -------------------------------
 	{
 		Struct: "phase.Task", Field: "Files", Tag: "files", Artifact: "plan.toml",
 		NotConsumed: &NotConsumedBy{
 			Why: "ValidatePlan gates these at WRITE time and opens nothing; a validator " +
 				"constructs no Contained, so it proves nothing about a reader. Every " +
-				"reader is print-only.",
+				"reader prints the list or string-compares it.",
 			Readers: []string{
 				"internal/cmd/task.go (prints the file list)",
 				"internal/cmd/issue_task.go (renders the board checklist)",
+				"internal/facts/facts.go (string-compares the planned set: a cited path a task plans is not missing)",
 			},
 		},
 	},
@@ -465,6 +475,15 @@ var idSegmentFields = []Field{
 	idSegment("state.State", "CurrentPhase", "current_phase", "state.json", "phase.ContainID"),
 	idSegment("phase.SpecPhase", "Milestone", "milestone", "spec.toml", "milestone.ContainVersion"),
 	idSegment("state.State", "CurrentMilestone", "current_milestone", "state.json", "milestone.ContainVersion"),
+}
+
+// citedProse declares a prose field whose cited file paths the fact check
+// contains and stats. They differ only in struct, name, tag and artifact.
+func citedProse(strct, field, tag, artifact string) Field {
+	return Field{
+		Struct: strct, Field: field, Tag: tag, Artifact: artifact,
+		Consumed: &ConsumedBy{Carrier: "facts.ContainCitation"},
+	}
 }
 
 // pathsField builds one project.Paths entry. They differ only in name and tag.
