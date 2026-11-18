@@ -2,5 +2,400 @@
   "phase": "spec-fact-drift",
   "base": "milestone/v1.9",
   "base_commit": "45e371a3661f06fb32ef55e88894c15465eeec7e",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/architecture_link_parity_test.go"
+      ],
+      "commit": "cb3dee1e",
+      "completed_at": "2026-11-18T10:55:41.221152Z",
+      "landmarks": [
+        {
+          "feature": "architecture link check",
+          "symbol": "TestArchitectureCheckOutputParity",
+          "loc": "internal/cmd/architecture_link_parity_test.go:86",
+          "what": "pins doctor warnings and architecture check stdout across ok/moved/unresolved/ambiguous/skipped/fallback bullets"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/codex/codex.go",
+        "internal/codex/go_indexer.go",
+        "internal/codex/ast_grep.go",
+        "internal/codex/codex_test.go"
+      ],
+      "commit": "1b16db5a",
+      "completed_at": "2026-11-18T11:04:31.247214Z",
+      "landmarks": [
+        {
+          "feature": "symbol indexing",
+          "symbol": "codex.Symbols",
+          "loc": "internal/codex/codex.go:136",
+          "what": "per-file symbol extraction without enrichment, plus CanIndex tool-availability check and Package on Go symbols"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/facts/extract.go",
+        "internal/facts/extract_test.go",
+        "internal/facts/tree.go",
+        "internal/facts/tree_test.go"
+      ],
+      "commit": "bb1783d1",
+      "completed_at": "2026-11-18T11:19:24.593Z",
+      "landmarks": [
+        {
+          "feature": "spec fact checking",
+          "symbol": "facts.Extract",
+          "loc": "internal/facts/extract.go:86",
+          "what": "extracts path, file:line and symbol citations from spec/plan prose; facts.Tree is the shared gitignore-aware tree walker"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/phase_test.go",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go"
+      ],
+      "commit": "9b7c292c",
+      "completed_at": "2026-11-18T11:30:59.493684Z",
+      "landmarks": [
+        {
+          "feature": "spec fact checking",
+          "symbol": "phase.Spec.New",
+          "loc": "internal/phase/phase.go:324",
+          "what": "spec-level list of citations confirmed new in this phase, declared NotConsumed in pathfence"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/architecture/links.go",
+        "internal/architecture/links_test.go",
+        "internal/facts/resolve.go",
+        "internal/facts/resolve_test.go"
+      ],
+      "commit": "75d28660",
+      "completed_at": "2026-11-18T11:42:20.484097Z",
+      "landmarks": [
+        {
+          "feature": "spec fact checking",
+          "symbol": "facts.StrictMatch",
+          "loc": "internal/facts/resolve.go:34",
+          "what": "strict qualifier-exact symbol matching over a lazy tree index, sharing architecture.Classify with the link check"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/facts/paths.go",
+        "internal/facts/paths_test.go",
+        "internal/pathfence/fields.go",
+        "internal/pathfence/fields_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "internal/cmd/pathfence_carrier_test.go"
+      ],
+      "commit": "9830151a",
+      "completed_at": "2026-11-18T11:54:52.100671Z",
+      "landmarks": [
+        {
+          "feature": "spec fact checking",
+          "symbol": "facts.ContainCitation",
+          "loc": "internal/facts/paths.go:49",
+          "what": "resolves a cited path inside the repo through pathfence, bare basenames via the tree walk or gitignored files"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-8",
+          "text": "The description lists a plain 'ok' bullet separate from the pkg.Bar fallback bullet, but the fixture has none. The only ok-status bullet is pkg.Bar, which resolves through the fallback. An exact-match ok bullet (e.g. `Bar` — `x.go:7`) would pin that a directly resolved link stays silent without relying on the fallback.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The Fetch ambiguity also comes from the lastComponent fallback: codex names the methods A.Fetch and B.Fetch, so a bare `Fetch` has no exact match. Removing the fallback would change Fetch as well as pkg.Bar, and both pins still catch it. Ambiguity between two symbols with the same exact name is not exercised.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "The parityDoc comment says the tool.py bullet is skipped as an 'unindexed lang', but it has no line number, so Resolve/ResolveAllIn skip it on Line == 0 whether or not codex supports .py. The pin still holds; only the stated reason is off.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "The ambiguous `Fetch` bullet also depends on the lastComponent fallback, because codex indexes methods as A.Fetch / B.Fetch. If the fallback is removed it becomes unresolved, so both pins fail on that regression, which supports the test_contract.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The locked decision symbol_shape (no last-component fallback) covers the new spec-fact citation path. This test pins the architecture path keeping its fallback, which is what c-8's parity requirement asks for, so it does not conflict.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "BLOCKING",
+          "criterion": "c-3",
+          "text": "internal/codex/codex.go:136 (Symbols): if filepath.Abs fails, the error is dropped and the function carries on with the relative path. Nothing is logged or returned, and Symbol.File comes back relative even though the doc comment promises an absolute path. Add a comment giving the reason (e.g. mirrors Index; Abs fails only when Getwd fails) or return the error.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "Symbols sorts by Line with sort.SliceStable, but Index sorts by (File, Line) with the unstable sort.Slice. When two symbols share a line (e.g. `var a, b int`), Index's order is only guaranteed for small slices, where Go happens to use a stable insertion sort. So Symbols(f) == Index([f]).Symbols holds by implementation detail on larger files. The test fixture has no symbols sharing a line.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "CanIndex treats every non-Go indexer as ast-grep-backed (type switch on *GoIndexer, otherwise astGrepAvailable). That is true for everything allIndexers registers in languages.go today. A future indexer that doesn't use ast-grep would need this switch updated.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "TestIndexKeepsSymbolDataAddingPackage copies the TestGoIndexerExtractsAllKinds source instead of sharing it, so the two fixtures can drift apart. The pinned line numbers match the fixture.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-3",
+          "text": "The no-git test only proves Symbols does not surface a git error. Index also swallows recentLog failures, so a git shell-out inside Symbols that ignored its own error would not be caught. That matches the contract's wording; dropping the git call is shown by reading the code, not by a test.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "Index now sorts with sort.SliceStable instead of sort.Slice (internal/codex/codex.go:79). This only fixes the order of symbols that share a line, so existing consumers see the same symbol set, now in a fixed order.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Symbols returns nil on an indexer error, while Index still appends any partial symbols. The two are only claimed equal on success, and GoIndexer returns nil on a parse error anyway.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "internal/facts/extract.go isPath lowercases the extension (strings.ToLower(path.Ext(base))), so backticked Go symbols whose final component case-folds to a listed extension (`template.HTML`, `template.JS`, `template.CSS`, `math.Mod`) are extracted as path citations instead of symbols and would be reported as missing files under c-1; a case-sensitive extension match would avoid it",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "internal/facts/tree.go Tree falls back to walkTree on any lsFiles error, not just 'not a git repository' / no git binary; inside a real repo where git refuses to run (e.g. safe.directory dubious ownership) the walk silently includes gitignored files and nested worktrees with nothing surfaced",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "pathCitation drops a file:line whose line overflows strconv.Atoi or is 0 without comment; rejection as a non-citation is reasonable and x.go:0 is covered by the exclusion test",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "connector handling for `Sym` (`f:N`) relies on tokenize emitting a standalone '(' prose token between backtick spans; covered by the `Bar` (`foo.go:99`) case",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "internal/facts/tree.go:559-562: Tree falls back to walkTree on any lsFiles error, not only 'not a git repository' or 'no git binary' as the doc comment says. Inside a repo, a git failure (e.g. a safe.directory dubious-ownership error) silently switches to a walk that includes gitignored files and nested .claude/worktrees copies, with nothing logged.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "internal/facts/tree.go fromLsFiles: --cached lists a tracked submodule as a gitlink path with no trailing '/', so a submodule directory ends up in the file list as if it were a file. The '/'-suffix filter only drops untracked embedded repos.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "extract_test.go covers every test_contract case: the punctuation table, the exclusion table, commands/flags/keys, symbols with () stripped, spec.toml as a path, paired and bare file:line, the extension set, and pairing a bare capitalised ident. tree_test.go covers gitignore, the nested repo, untracked new.go, and the stubbed and real non-git fallbacks.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "isPath compares extensions case-sensitively on purpose, so template.HTML and math.Mod stay symbols. A path like README.MD with an uppercase extension is therefore not extracted.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "The Readers list for the phase.Spec.New registry entry (internal/pathfence/fields.go) names internal/facts/facts.go and internal/cmd/phase_mark_new.go, but neither file exists yet; sibling tasks are expected to add them. TestSpecNewIsComparedNeverOpened only checks that the names appear, not that the files exist.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSpecNewOmitEmpty checks for the substring \"new\" anywhere in the saved file. That works for this fixture but would give a false failure if the fixture text ever contained \"new\"; matching the line prefix `new =` would be tighter.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "BLOCKING",
+          "criterion": "c-3",
+          "text": "Silent catch-all on the Kind value set (KindPath, KindLine, KindSymbol, defined at internal/facts/extract.go:13-21). In internal/facts/resolve.go:113, Resolver.Line returns StatusSkipped for KindPath and KindSymbol; in internal/facts/resolve.go:145, Resolver.Symbol returns StatusSkipped for KindPath and KindLine. Skipped is never reported, so a citation sent to the wrong method disappears with no warning. Both methods already return an error; return one for an unexpected Kind. Line's documented unpaired case (KindLine with Symbol \"\") is fine as is.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "In buildTreeIndex (internal/facts/resolve.go, the `continue // unparsable ...` arm), a parse failure is skipped without marking the index Degraded, even when the file is ordinary project source outside testdata/fixtures. Any symbol defined in that file is then reported Unresolved (gone) instead of Skipped. The task does ask for parse errors to be non-fatal, but consider degrading the index when the broken file is not a fixture.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "test_contract says 'astGrepAvailableFn stubbed false'. That variable is unexported in codex, so TestDegradedCensus stubs the facts-level canIndex seam for .ts instead. It exercises the same census branch (SupportsFile \u0026\u0026 !CanIndex).",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestStrictMatchNoLastComponentFallback's T.String case would catch a re-added fallback, because MatchSymbols compares lastComponent(s.Name).",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "Resolver.Line (internal/facts/resolve.go, the canIndex/index/Classify sequence) looks up idx.byFile[file] for the cited file. When that project file failed to parse, buildTreeIndex skipped it and marked the index degraded, but byFile has no entry for it, so Classify sees zero symbols and reports the paired line citation as Unresolved (gone). A file:line citation into an unparsable non-fixture file should be Skipped, as Symbol does when the index is degraded.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-3",
+          "text": "test_contract says the ast-grep census is tested 'with astGrepAvailableFn stubbed false', but TestDegradedCensus stubs the facts-local canIndex seam instead. That variable is unexported in codex, so the substitution is reasonable, but the test never shows that codex.CanIndex really returns false for .ts when ast-grep is missing. It relies on codex's own tests for that.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "A broken project source file also degrades the index (TestBrokenProjectFileDegrades). The task record does not ask for this, but it fits c-3's rule that an unmatched symbol must not be called gone.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "locate matches a slashed cited path only exactly against the tree list, so a partial path such as architecture/links.go with no internal/ prefix is Unresolved. That is acceptable if checking path existence belongs to a sibling task.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "internal/facts/paths.go:317 throws away any lsIgnored error and treats it as no ignored match. The comment's reason (outside git, Tree's fallback walk already listed every file) only holds when Tree itself fell back. If Tree's git listing succeeds but the ignored listing fails, a present gitignored file is silently reported missing. The fallback walk also skips node_modules, so the claim that it lists every file, ignored or not, isn't quite true either.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "The taint-regression contract line is proved by TestContainCitationClearsOnlyDeclaredProse, a fixture over copied internal/facts sources, not by the live TestNoDeclaredPathFieldReachesOS. The live gate will only trace this route once a sibling task wires ContainCitation into internal/facts/facts.go.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "The Task.Files NotConsumed Readers now names internal/facts/facts.go, which doesn't exist in the tree yet. The task record asks for this, and no test checks that Readers files exist.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
 }

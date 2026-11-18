@@ -17,7 +17,7 @@ Characterisation test, written and observed green on TODAY's code before t-5 tou
     "if the lastComponent fallback is removed from the architecture path, the `pkg.Bar` bullet becomes an unresolved line and the `dross architecture check` stdout pin (including the \"N moved, N unresolved, N ambiguous\" summary) fails",
     "if an ambiguous bullet is reclassified as unresolved, an extra warning appears and the warnings pin fails",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-2"
@@ -29,7 +29,7 @@ Export Symbols(file): indexer dispatch only — no findCallers, siblings or git 
 """
   covers = ["c-3", "c-8"]
   test_contract = ["if CanIndex ignores ast-grep absence, the test with astGrepAvailableFn stubbed false fails: CanIndex(\"a.ts\") must be false while SupportsFile(\"a.ts\") stays true, and CanIndex(\"a.go\") stays true", "if Symbols diverges from Index or shells out to git, the test fails: Symbols(f) must equal Index([f]).Symbols for a Go file in a non-git dir with no error", "if Package comes from the dir name or is missing on methods, the test fails: a `package foo` file sets Package \"foo\" on every symbol including `T.M`, and cmd/dross main file yields \"main\"", "if adding Package disturbs existing symbol data, the test fails: Index results for an existing codex fixture keep Name, Kind and Line identical while gaining Package", "if Symbols panics on a syntactically broken .go file, the broken-file test fails: it must return an error"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-3"
@@ -39,7 +39,7 @@ Export Symbols(file): indexer dispatch only — no findCallers, siblings or git 
   description = "Extract(text) → []Citation{Kind: path|line|symbol, Raw, Path, Line, Symbol}. Path = extension set covering common source and config types (codex-indexed exts + js/jsx/mjs/cjs/py/rs/kt/dart/java/sql/tf/ps1/css/html/golden/jsonl + toml/md/json/yml/yaml/txt/sh/mod/sum) plus extensionless Makefile/Dockerfile; slashed = repo-relative, else bare basename. A file:line pairs with an adjacent backticked symbol (`Sym` — f:N / `Sym` (f:N) / `Sym` at f:N); pairing also accepts a bare capitalised ident (c-2 surface; locked symbol_shape governs standalone symbols). Standalone symbol = locked symbol_shape; a dotted token whose final component is lowercase and not call-shaped is a TOML key and skipped. Excluded shapes: absolute paths, `~/…`, `origin/main`, `milestone/v1.9`, tokens holding `<` `*` `{`, URLs, versions; directory citations ending `/` are not extracted. `../` escapes ARE extracted (reported missing later). tree.go: the one tree walker t-5 and t-6 share — `git ls-files --cached --others --exclude-standard` (respects .gitignore, never descends into nested worktrees), falling back to WalkDir skipping .git/node_modules outside a git repo."
   covers = ["c-7", "c-1", "c-2", "c-3"]
   test_contract = ["if wrapping punctuation leaks into a citation, the c-7 table fails: `see foo.go:12.`, `(foo.go:12)`, `` `foo.go:12`, ``, `foo.go:12;` and `foo.go:12:` each yield Path \"foo.go\" Line 12, and a leading `.` survives (`.dross/x.toml`)", "if non-path shapes are extracted, the exclusion table fails: `e.g.`, `i.e.`, `v1.9`, `go1.27.3`, `1.9.4.0`, URLs, `milestone/v1.9`, `origin/main`, `~/…`, absolute paths, `internal/codex/` and `.dross/phases/<id>/spec.toml` yield no path", "if commands, flags or keys become symbols, the test fails: `` `dross phase facts` ``, `` `--json` ``, `` `paths.source` ``, `` `current_phase_status` `` and `` `facts` `` yield no symbol", "if real symbol citations are missed, the test fails: `` `quoted.String()` ``, `` `phase.Spec` `` and `` `cmd.planLockEdgeGate()` `` yield symbols with `()` stripped, and `` `spec.toml` `` is a path never a symbol", "if file:line pairing breaks, the test fails: `` `architecture.Resolve` — internal/architecture/links.go:192 `` yields one line citation with Symbol \"architecture.Resolve\", and a bare `x.go:5` carries no symbol", "if the extension set is too narrow, the test fails: `install.ps1`, `fixtures/terraform-c3/main.tf`, `web/app.js`, `scripts/gen.py` and `Makefile` each yield a path citation", "if bare-ident pairing breaks, the test fails: `` `Init` — x.go:12 `` yields one line citation with Symbol \"Init\", and `` `Init` `` alone yields no standalone symbol", "if the walker includes ignored or nested-worktree files, the tree test fails: in a temp git repo, a gitignored dist/a.go and a nested repo copy under .claude/worktrees/w/ are absent from the walk while an untracked-but-not-ignored new.go is present; outside git the WalkDir fallback skips .git and node_modules"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-4"
@@ -49,7 +49,7 @@ Export Symbols(file): indexer dispatch only — no findCallers, siblings or git 
   description = "Spec.New []string `toml:\"new,omitempty\" json:\"new,omitempty\"`, declared NotConsumed in pathfence.Fields() (compared or appended, never opened; readers internal/facts/facts.go and internal/cmd/phase_mark_new.go). Add the name to TestRegistryCoversEveryKnownFieldByName."
   covers = ["c-4", "c-5"]
   test_contract = ["if Save misplaces or drops `new`, the round-trip test fails: Spec{New: [\"internal/facts/extract.go\", \"facts.Check\"]}.Save writes `new = [...]` in order before the `[phase]` header and LoadSpec returns it", "if an empty New writes a key, the legacy test fails: an existing spec without `new` must save byte-identically", "if the loader starts accepting a misplaced key, the pin fails: a hand-written `new = [...]` under `[phase]` decodes to an empty Spec.New (the silent drop t-9 prevents)", "if the registry entry is deleted, TestEveryPathShapedFieldIsDeclared / TestRegistryCoversEveryKnownFieldByName fail", "if the json tag is missing, the test fails: json.Marshal of a Spec with New emits key \"new\" (not \"New\"), and omits it when New is empty"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-5"
@@ -60,7 +60,7 @@ Export Symbols(file): indexer dispatch only — no findCallers, siblings or git 
   depends_on = ["t-1", "t-2", "t-3"]
   covers = ["c-2", "c-3", "c-8"]
   test_contract = ["if the classifier owns the fallback, the test fails: Classify(`pkg.Bar`, [{Name:\"Bar\", Package:\"other\"}], StrictMatch) is Unresolved while the same link with matchSymbols is OK", "if strict matching leaks into the architecture path, the test fails: a bullet `wrongpkg.Index` — codex/codex.go:N resolves OK through ResolveAllIn while facts reports `wrongpkg.Index` unresolved", "if a last-component fallback is re-added, the test fails: `quoted.String()` with a String method on an unrelated type is Gone; `phase.Spec` resolves; `cmd.Spec` is Gone when Spec lives only in package phase", "if ambiguity or moves are misclassified, the test fails: `Changes.Record` defined in two files is ambiguous and never unresolved; `Resolve` — links.go:N with the func at N+3 is Moved with NewLine N+3, and Gone after deletion; a line citation into a .py file is Skipped", "if the ast-grep census is wrong, the test fails: with astGrepAvailableFn stubbed false, a .ts file under src/ marks the index Degraded and an unmatched symbol is Skipped, while the same .ts file only under testdata/ or fixtures/ leaves it non-Degraded and the symbol is Gone", "if the index is built eagerly, the test fails: input with no symbol or paired-line citation records builder call count 0; an unparsable testdata .go file does not stop other files indexing", "if strict matching regresses on the real tree, the regression test fails: against this repo StrictMatch resolves `codex.Index` and `architecture.Classify` and does not resolve `quoted.String()`; t-1's pins stay green", "if the census misses languages codex has no indexer for, the test fails: a .py file under src/ marks the index Degraded and an unmatched dotted symbol is Skipped, while the same .py only under fixtures/ leaves it non-Degraded", "if the index walks nested worktrees, the test fails: adding a nested repo copy of the fixture under .claude/worktrees/w/ leaves every classification unchanged (no symbol turns Ambiguous)"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-6"
@@ -71,7 +71,7 @@ Export Symbols(file): indexer dispatch only — no findCallers, siblings or git 
   depends_on = ["t-3", "t-4"]
   covers = ["c-1"]
   test_contract = ["if an escaping path touches the fs, the test fails: `../../etc/passwd` is reported missing and the stat seam records zero calls for it", "if resolution is wrong, the test fails: `internal/cmd/state.go` resolves, bare `nosuch.go` is missing, bare `spec.toml` resolves via .dross/phases/x/spec.toml, and `./internal/x.go` equals `internal/x.go` after path.Clean", "if the taint route regresses, TestNoDeclaredPathFieldReachesOS reports a finding in internal/facts; re-filing Criterion.Text in the ledger must turn the ContainCitation Stat into a finding", "if the carrier returns a string, TestDeclaredCarriersAreContained fails: facts.ContainCitation must bind to pathfence.Contained", "if a moved field is left in both places or neither, TestEveryPathShapedFieldIsDeclared fails", "if the Task.Files declaration goes stale, the registry test fails: its Readers include internal/facts/facts.go", "if bare-basename lookup ignores gitignored files, the test fails: in a temp git repo with .dross/state.json gitignored but present on disk, bare `state.json` resolves, while bare `nosuch.json` is still missing and the ignored file is absent from the symbol-index walk"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-7"
@@ -82,7 +82,8 @@ Export Symbols(file): indexer dispatch only — no findCallers, siblings or git 
   depends_on = ["t-4", "t-5", "t-6"]
   covers = ["c-1", "c-2", "c-3"]
   test_contract = ["if a skipped field is scanned, the test fails: the same missing path cited only in a decision `why`, a [[deferred]] text/why or an [[edges]] reason is NOT reported", "if field labels drift, the test fails: labels are exactly \"criteria c-2\", \"decisions symbol_shape choice\", \"task t-3 description\", \"task t-3 test_contract[1]\"", "if planned files don't suppress, the test fails: a path in task t-2's files suppresses the same path cited in a criterion and in another task's description, and a nonexistent `files` entry itself yields no finding", "if new-list matching is loose or strict in the wrong place, the test fails: spec.New [\"foo.go\"] suppresses `foo.go:12.` and `foo.go` but not `fooo.go`; spec.New [\"pkg.Name\"] suppresses `` `pkg.Name()` ``", "if a missing plan errors or output is nondeterministic, the test fails: a nil plan checks the spec alone with no error, and two runs return byte-identical reports", "if the Status → kind mapping drifts, the mapping table fails: missing path → \"missing\", Moved line → \"moved\", Unresolved line → \"gone\", unmatched symbol → \"unresolved\"", "if extraction and resolution disagree end to end, the test fails: a criterion citing `` `Init` — x.go:3 `` with Init now at line 7 reports exactly \"criteria c-1: moved `Init` — x.go:3 now at line 7\""]
-  status = "pending"
+  status = "failed"
+  reason = "TestNoDeclaredPathFieldReachesOS: Consumed prose fields (t-6) make every not-path origin written into them (quality/security Finding fields, AuthEnv, PR HTMLURL, Spec.New) reach pathfence.Stat via facts.Check; needs a gate/ledger decision. Code in git stash."
 
 [[task]]
   id = "t-8"
