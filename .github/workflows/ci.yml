@@ -154,13 +154,41 @@ jobs:
         working-directory: internal/mutation/testdata/ts-project
         run: npm ci --ignore-scripts
 
-      # No allowlist and no `|| true`: a high-or-critical advisory fails the
-      # build and the dependency gets upgraded. --omit=dev is deliberately NOT
-      # passed — every dependency here is a devDependency, so omitting them
-      # would audit nothing and pass by construction.
+      # A high-or-critical advisory fails the build and the dependency gets
+      # upgraded. The one exception is an advisory with NO patched release,
+      # which no upgrade can clear: list its GHSA id in `allow`, and drop it as
+      # soon as a fix ships. Every allowlisted hit prints a warning annotation
+      # on each run, so the exception stays visible. A missing or unreadable
+      # report fails rather than passing as empty. --omit=dev is deliberately
+      # NOT passed — every dependency here is a devDependency, so omitting
+      # them would audit nothing and pass by construction.
+      #   GHSA-fc5q-39xc-vjpf — picomatch <= 4.0.7 ReDoS (published
+      #   2026-10-19, no patched version); reached via vitest/vite, matching
+      #   only this repo's own globs in a fixture that never ships.
       - name: npm audit (fixture)
         working-directory: internal/mutation/testdata/ts-project
-        run: npm audit --audit-level=high
+        shell: bash
+        run: |
+          set -euo pipefail
+          allow='GHSA-fc5q-39xc-vjpf'
+          report="$RUNNER_TEMP/npm-audit.json"
+          npm audit --json > "$report" || true
+          if ! jq -e 'has("vulnerabilities")' "$report" > /dev/null; then
+            echo "::error::npm audit produced no report"; cat "$report"; exit 1
+          fi
+          ids=$(jq -r '[.vulnerabilities[].via[] | objects
+            | select(.severity == "high" or .severity == "critical")
+            | .url | sub(".*/"; "")] | unique | .[]' "$report")
+          blocking=0
+          for id in $ids; do
+            if grep -qxF -- "$id" <<< "$allow"; then
+              echo "::warning::$id is allowlisted (no patched release) — drop it once a fix ships"
+            else
+              echo "::error::$id is a high/critical advisory"
+              blocking=1
+            fi
+          done
+          exit "$blocking"
 
       # Both node-gated legs: the adapter's whole-file run, and the
       # construct-range proof (three Stryker runs against the real
