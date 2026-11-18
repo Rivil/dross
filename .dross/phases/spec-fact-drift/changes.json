@@ -18,6 +18,60 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/cmd/state.go",
+        "internal/cmd/state_facts_gate_test.go"
+      ],
+      "commit": "c6487651",
+      "completed_at": "2026-11-18T18:27:04.726541Z",
+      "landmarks": [
+        {
+          "feature": "spec fact drift check",
+          "symbol": "planLockFactsGate",
+          "loc": "internal/cmd/state.go:401",
+          "what": "plan-lock (current_phase_status planned) refuses while phase facts reports unresolved citations, after the edge gate"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "assets/prompts/plan.md",
+        "assets/prompts/_plan.facts.md",
+        "assets/partials.go",
+        "assets/partials_test.go",
+        "assets/testdata/prompt_instructions.txt",
+        "internal/cmd/plan_prompt_test.go",
+        "README.md"
+      ],
+      "commit": "a3f083f2",
+      "completed_at": "2026-11-18T18:44:50.179919Z",
+      "landmarks": [
+        {
+          "feature": "spec fact drift check",
+          "symbol": "_plan.facts.md",
+          "loc": "assets/prompts/_plan.facts.md:1",
+          "what": "/dross-plan runs phase facts before decomposing and before lock, walking each unresolved citation one AskUserQuestion at a time (fix or mark-new)"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/taint_engine_test.go",
+        "internal/cmd/pathtaint_audit_test.go",
+        "internal/cmd/testdata/pathtaint/contained_ok.go.txt"
+      ],
+      "commit": "09b1c6a7",
+      "completed_at": "2026-11-18T17:34:15.298306Z",
+      "landmarks": [
+        {
+          "feature": "path-taint gate",
+          "symbol": "taintPolicy.StoreBarrier",
+          "loc": "internal/cmd/taint_engine_test.go:217",
+          "what": "a store into a declared Consumed field stops the stored value's taint; the field's own declaration governs its reads"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/codex/codex.go",
@@ -109,6 +163,62 @@
           "what": "resolves a cited path inside the repo through pathfence, bare basenames via the tree walk or gitignored files"
         }
       ]
+    },
+    "t-7": {
+      "files": [
+        "internal/facts/facts.go",
+        "internal/facts/facts_test.go"
+      ],
+      "commit": "31806df2",
+      "completed_at": "2026-11-18T17:34:15.335637Z",
+      "landmarks": [
+        {
+          "feature": "spec fact drift check",
+          "symbol": "facts.Check",
+          "loc": "internal/facts/facts.go:156",
+          "what": "scans locked prose fields for cited paths/lines/symbols, suppresses planned files and spec.new, reports missing/moved/gone/unresolved"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/phase_facts.go",
+        "internal/cmd/phase_facts_test.go",
+        "internal/cmd/phase.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt",
+        "README.md"
+      ],
+      "commit": "c55798c3",
+      "completed_at": "2026-11-18T17:56:21.18393Z",
+      "landmarks": [
+        {
+          "feature": "spec fact drift check",
+          "symbol": "phaseFacts",
+          "loc": "internal/cmd/phase_facts.go:55",
+          "what": "dross phase facts \u003cid\u003e [--json]: read-only report of unresolved spec/plan citations, non-zero exit on any"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/phase_mark_new.go",
+        "internal/cmd/phase_mark_new_test.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_facts.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "README.md"
+      ],
+      "commit": "96457340",
+      "completed_at": "2026-11-18T18:17:28.340101Z",
+      "landmarks": [
+        {
+          "feature": "spec fact drift check",
+          "symbol": "phaseMarkNew",
+          "loc": "internal/cmd/phase_mark_new.go:27",
+          "what": "dross phase mark-new \u003cid\u003e \u003ccitation\u003e...: records currently-unresolved citations in spec.new, normalised and deduped, all-or-nothing"
+        }
+      ]
     }
   },
   "reviews": {
@@ -152,6 +262,55 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The locked decision symbol_shape (no last-component fallback) covers the new spec-fact citation path. This test pins the architecture path keeping its fallback, which is what c-8's parity requirement asks for, so it does not conflict.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "planLockFactsGate ignores r.Degraded (internal/cmd/state.go planLockFactsGate): when the symbol index cannot cover the tree, symbols it cannot match are skipped and the gate allows the lock without saying so. The refusal text also leaves the degraded note out. `phase facts` prints that note, so the gate is quieter than the command even though the unresolved lines match.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The parity table compares the gate's lines with `phase facts --json` for all six named cases, and the edge-first subtest checks that no 'unresolved citation' text leaks into the edge refusal.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-11": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "test_contract line 'if new plan.md instruction rows are missing from the append-only manifest, TestPromptInstructionsConserved fails' does not describe what the test does: conservationProblems (assets/conservation_test.go:208) only checks that rows already in the manifest still appear in the expanded prompt. It never fails on a prompt instruction missing from the manifest. The rows are appended, so they are now conserved, but the contract as written is vacuous. The inline spans `dross phase facts` and `dross prompt partial plan facts` were also not recorded.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "By line-length counting, base plan.md is roughly 14.85-14.95 KB, only ~50-150 B under the 15000-byte promptByteCap. The next addition to plan.md will likely need to go into a partial.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "_plan.facts.md's field/kind vocabulary (missing/moved/gone/unresolved; 'criteria c-N', 'decisions \u003ckey\u003e choice', 'task t-N description') matches internal/facts/facts.go and the factsRow JSON tags in internal/cmd/phase_facts.go.",
           "resolution": "non-blocking, left"
         }
       ]
@@ -393,6 +552,105 @@
           "severity": "NOTE",
           "criterion": "c-1",
           "text": "The Task.Files NotConsumed Readers now names internal/facts/facts.go, which doesn't exist in the tree yet. The task record asks for this, and no test checks that Readers files exist.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "internal/facts/facts.go check(): a paired file:line citing a gitignored file passes containCitation (pathfence.Stat for slashed paths, lsIgnored for basenames), but Resolver.Line's locate() searches only Tree(), which excludes ignored files, so it returns StatusUnresolved with fileMissing=false and the citation is reported as \"gone\" although the file exists",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "Check overrides kindFor for a line citation whose file is missing and reports \"missing\" (pinned by TestCheckEndToEnd c-3), while the task record's vocabulary says line → \"moved\" or \"gone\"; defensible under c-1, but it departs from the stated mapping and the t-8 payload should account for it",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "kindFor maps (KindPath, StatusMoved) to \"missing\" and silently returns \"\" for (KindSymbol, StatusMoved); neither pair can occur from the current resolver, so this is unreachable rather than a gap",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In TestCheckPlannedFilesSuppress the nonexistent files entry (internal/also/missing.go) is also in the known set, so the no-finding assertion would hold even if task files were scanned; the outcome the contract asks for is still asserted",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-6",
+          "text": "internal/cmd/phase_facts_test.go TestPhaseFactsNeverWrites discards runFacts' error (`_, _, _ = runFacts(t, args...)`) with no adjacent comment. If the command failed early (e.g. FindRoot or the spec load), the hash comparison would pass without facts.Check ever running. Assert err == nil for the clean case and that the unresolved case's error is the 'unresolved citation(s)' one.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "factsReport.DegradedWhy holds a file path inside a display string. Filing it in not_paths.txt as a non-path is consistent with how the citation is filed.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-9": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "BLOCKING",
+          "criterion": "c-4",
+          "text": "Swallowed error: internal/cmd/phase_mark_new.go:141-142, markNewCoversAny drops the error from markNewCitation(f.Citation) with a bare `continue` and no comment. A finding whose citation fails to re-parse is silently treated as not coverable, and the user is told their argument 'is not an unresolved citation', which would be misleading. Add a comment explaining why the discard is safe (Finding.Citation is Extract's canonical Raw and always re-reads as one citation), or return the error.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "internal/cmd/phase_mark_new.go markNewEntry: the switch on facts.Kind (defined in internal/facts/extract.go: path, line, symbol) handles symbol only through the default arm returning c.Raw. Today it is correct, but a future Kind would be silently stored as Raw. An explicit `case facts.KindSymbol` plus an erroring default would be safer.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Dedupe compares raw spec.New strings against normalised entries, so a hand-edited entry like './foo.go' would not be seen as already listed. Because facts.Check (via newKey) already treats that entry as covering foo.go, re-marking foo.go is refused as 'not unresolved' instead of reported as 'already new'. It still fails closed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "Passing the same citation twice in one call (e.g. `foo.go` and `(foo.go),`) prints `already new: foo.go` for the second even though the first was only added in this call, and the `already new` line prints before `marked new`. Only the wording is off; behaviour is correct.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The reflowed printFacts doc comment in internal/cmd/phase_facts.go now has one line far longer than the lines around it; cosmetic only.",
           "resolution": "non-blocking, left"
         }
       ]
