@@ -1725,52 +1725,52 @@
     "milestone-closeout-check/t-1": {
       "issue": "DRO-1149",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "milestone-closeout-check/t-10": {
       "issue": "DRO-1158",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "milestone-closeout-check/t-2": {
       "issue": "DRO-1150",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "milestone-closeout-check/t-3": {
       "issue": "DRO-1157",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "milestone-closeout-check/t-4": {
       "issue": "DRO-1151",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "milestone-closeout-check/t-5": {
       "issue": "DRO-1153",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "milestone-closeout-check/t-6": {
       "issue": "DRO-1155",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "milestone-closeout-check/t-7": {
       "issue": "DRO-1156",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "milestone-closeout-check/t-8": {
       "issue": "DRO-1152",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "milestone-closeout-check/t-9": {
       "issue": "DRO-1154",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "milestone-push-failure-tests/t-1": {
       "issue": "DRO-264",
