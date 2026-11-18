@@ -1,4 +1,4 @@
-task_seq = 11
+task_seq = 12
 
 [phase]
   id = "spec-fact-drift"
@@ -74,12 +74,23 @@ Export Symbols(file): indexer dispatch only — no findCallers, siblings or git 
   status = "done"
 
 [[task]]
-  id = "t-7"
+  id = "t-12"
   wave = 3
+  title = "Store barrier: a declared Consumed field governs what is stored into it"
+  files = ["internal/cmd/taint_engine_test.go", "internal/cmd/pathtaint_audit_test.go", "internal/cmd/testdata/pathtaint/contained_ok.go.txt"]
+  description = "taintPolicy gains StoreBarrier func(*types.Var) bool; addField skips a field the barrier names (direct stores and callee-summary field writes alike), so the stored value's own taint stops at the store and the destination's declaration governs every later read. The path scan sets it for pathfence.Fields() entries declared Consumed only: a NotConsumed field, a ledger row and an undeclared field still carry the stored taint. Unblocks t-7: not-path origins (Finding.Title, HTMLURL, AuthEnv, Spec.New via Citation.Path) copied into Consumed prose fields no longer reach pathfence.Stat through facts.ContainCitation."
+  covers = ["c-1"]
+  test_contract = ["if the barrier is missing, TestPathTaintContainedOK fails: phase.Task.Files (NotConsumed) stored into changes.TaskRecord.Files (Consumed), then Contain + ReadFile, is clean", "if the barrier is too wide, TestPathTaintContainedOK fails: the same NotConsumed value stored into an undeclared struct field, then Contain + ReadFile, still trips at the opener's line"]
+  status = "in_progress"
+  depends_on = ["t-6"]
+
+[[task]]
+  id = "t-7"
+  wave = 4
   title = "Assemble facts check over scanned fields"
   files = ["internal/facts/facts.go", "internal/facts/facts_test.go"]
   description = "Check(repoDir, spec, plan *phase.Plan) → Report{Unresolved []Finding{Field, Kind, Citation, Status, NewLine}, Degraded}. Finding carries no json tags (t-8 owns the payload shape). Scans only the locked scanned_fields. Planned set = every task files entry (path.Clean); new set = spec.New, normalised. Deterministic order: spec order then plan order. Kind vocabulary is fixed: path → \"missing\"; line → \"moved\" or \"gone\"; symbol → \"unresolved\". Finding.String() renders \"<field>: <kind> <citation>[ now at line N]\"."
-  depends_on = ["t-4", "t-5", "t-6"]
+  depends_on = ["t-4", "t-5", "t-6", "t-12"]
   covers = ["c-1", "c-2", "c-3"]
   test_contract = ["if a skipped field is scanned, the test fails: the same missing path cited only in a decision `why`, a [[deferred]] text/why or an [[edges]] reason is NOT reported", "if field labels drift, the test fails: labels are exactly \"criteria c-2\", \"decisions symbol_shape choice\", \"task t-3 description\", \"task t-3 test_contract[1]\"", "if planned files don't suppress, the test fails: a path in task t-2's files suppresses the same path cited in a criterion and in another task's description, and a nonexistent `files` entry itself yields no finding", "if new-list matching is loose or strict in the wrong place, the test fails: spec.New [\"foo.go\"] suppresses `foo.go:12.` and `foo.go` but not `fooo.go`; spec.New [\"pkg.Name\"] suppresses `` `pkg.Name()` ``", "if a missing plan errors or output is nondeterministic, the test fails: a nil plan checks the spec alone with no error, and two runs return byte-identical reports", "if the Status → kind mapping drifts, the mapping table fails: missing path → \"missing\", Moved line → \"moved\", Unresolved line → \"gone\", unmatched symbol → \"unresolved\"", "if extraction and resolution disagree end to end, the test fails: a criterion citing `` `Init` — x.go:3 `` with Init now at line 7 reports exactly \"criteria c-1: moved `Init` — x.go:3 now at line 7\""]
   status = "failed"
