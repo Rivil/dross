@@ -121,22 +121,19 @@ func TestExecutePromptCheckpointConsistencyBeforeReentry(t *testing.T) {
 	}
 }
 
-// TestExecutePromptCheckpointWaveLead proves the checkpoint_posture locked
-// decision: at wave boundaries the gate leads with checkpoint as the
-// recommended option. Below the context threshold that order is unchanged
-// (context-boundaries c-4): mid-wave still leads with continue, and the
-// checkpoint bullet calls exactly the two consistency commands — the context
-// rule adds no call to it (signal_path).
-func TestExecutePromptCheckpointWaveLead(t *testing.T) {
+// TestExecutePromptGateLeadsWithContinue: the post-commit gate leads with
+// continue at every task boundary, wave boundaries included — the wave-boundary
+// checkpoint lead (checkpoint_posture) is retired with the context nudge. The
+// checkpoint option stays, and calls exactly the two consistency commands.
+func TestExecutePromptGateLeadsWithContinue(t *testing.T) {
 	section := executeGateSection(t)
-	if !strings.Contains(section, "wave") {
-		t.Fatal("post-commit gate must special-case wave boundaries")
+	if !strings.Contains(section, "lead with continue") {
+		t.Error("the post-commit gate must lead with continue")
 	}
-	if !strings.Contains(section, "lead with checkpoint") {
-		t.Error("wave-boundary branch must mark checkpoint as the lead/recommended option")
-	}
-	if !strings.Contains(section, "mid-wave, lead with continue") {
-		t.Error("mid-wave must still lead with continue below the context threshold")
+	for _, gone := range []string{"lead with checkpoint", "checkpoint_posture"} {
+		if strings.Contains(section, gone) {
+			t.Errorf("the post-commit gate still carries the retired %q", gone)
+		}
 	}
 
 	_, bullet, ok := strings.Cut(section, "\n- checkpoint —")

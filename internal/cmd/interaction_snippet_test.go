@@ -3,11 +3,8 @@ package cmd
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/Rivil/dross/internal/ctxnudge"
 )
 
 // interactionSnippetContent loads assets/prompts/_interaction.md lowercased but
@@ -85,55 +82,6 @@ func TestInteractionSnippetHasIncludeFirstPattern(t *testing.T) {
 	}
 }
 
-// contextRuleSection returns _interaction.md's "## Context checkpoint" section,
-// raw (not lowercased), up to the next "## " heading.
-func contextRuleSection(t *testing.T) string {
-	t.Helper()
-	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", "_interaction.md"))
-	if err != nil {
-		t.Fatalf("read _interaction.md: %v", err)
-	}
-	_, sec, ok := strings.Cut(string(b), "\n## Context checkpoint\n")
-	if !ok {
-		t.Fatal("_interaction.md has no \"## Context checkpoint\" section")
-	}
-	sec, _, _ = strings.Cut(sec, "\n## ")
-	return sec
-}
-
-// TestInteractionSnippetHasContextNudgeRule: the playbook carries the one rule
-// that turns a nudge into a checkpoint lead (locked gate_scope), keyed on the
-// exact marker the hook prints, with every scope limit the spec locked.
-func TestInteractionSnippetHasContextNudgeRule(t *testing.T) {
-	sec := strings.ToLower(contextRuleSection(t))
-	if !strings.Contains(sec, strings.ToLower(ctxnudge.Marker)) {
-		t.Errorf("the context rule does not quote the hook's marker %q verbatim", ctxnudge.Marker)
-	}
-	for _, phrase := range []string{
-		"checkpoint + /clear", "next durable boundary", "even mid-wave", "§1g", "overrides",
-		"safe to /clear", "--solo", "informational", "before its artifact is written", "/dross-pause",
-	} {
-		if !strings.Contains(sec, phrase) {
-			t.Errorf("the context rule lacks %q", phrase)
-		}
-	}
-}
-
-// TestInteractionShowCarriesContextRule: the rule reaches a session only
-// through the embedded playbook `dross interaction show` prints.
-func TestInteractionShowCarriesContextRule(t *testing.T) {
-	out := captureStdout(t, func() {
-		c := Interaction()
-		c.SetArgs([]string{"show"})
-		if err := c.Execute(); err != nil {
-			t.Fatalf("interaction show: %v", err)
-		}
-	})
-	if !strings.Contains(out, ctxnudge.Marker) {
-		t.Errorf("`dross interaction show` does not carry %q — the embedded playbook is stale", ctxnudge.Marker)
-	}
-}
-
 // commandPrompts returns every assets/prompts/*.md and assets/commands/*.md
 // path, relative to the repo root.
 func commandPrompts(t *testing.T, root string) []string {
@@ -155,63 +103,27 @@ func commandPrompts(t *testing.T, root string) []string {
 	return out
 }
 
-// TestNudgeRuleLivesOnlyInPlaybook: one rule, in one place (gate_scope). A
-// command prompt that quoted the marker would be a second copy to drift.
-func TestNudgeRuleLivesOnlyInPlaybook(t *testing.T) {
+// TestContextNudgeRetired: the context-checkpoint nudge is retired, so no
+// prompt carries its rule, quotes its marker, or calls its verb — a leftover
+// line would steer the agent toward a checkpoint nothing signals any more.
+func TestContextNudgeRetired(t *testing.T) {
 	root := repoRootFromTest(t)
-	for _, rel := range commandPrompts(t, root) {
-		if rel == "assets/prompts/_interaction.md" {
-			continue
-		}
-		b, err := os.ReadFile(filepath.Join(root, rel))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if strings.Contains(string(b), ctxnudge.Marker) {
-			t.Errorf("%s quotes %q; the nudge rule lives only in _interaction.md", rel, ctxnudge.Marker)
-		}
-	}
-}
-
-// drossVerb matches a `dross <verb>` CLI call (not a /dross-<name> slash command).
-var drossVerb = regexp.MustCompile(`\bdross [a-z]`)
-
-// TestContextRuleAddsNoCalls: the signal reaches the agent only through the
-// hook's injected line (locked signal_path) — no prompt calls the hook verb,
-// none checks context through a dross call, and the rule itself names none.
-func TestContextRuleAddsNoCalls(t *testing.T) {
-	root := repoRootFromTest(t)
-	// Raw by design: commandPrompts lists every partial file beside its base
-	// prompt, so text moved into _options.<name>.md is still read here.
 	for _, rel := range commandPrompts(t, root) {
 		b, err := os.ReadFile(filepath.Join(root, rel))
 		if err != nil {
 			t.Fatal(err)
 		}
 		s := string(b)
-		// options.md §15 documents the wired hooks by command; it calls none.
-		if rel != "assets/prompts/options.md" && strings.Contains(s, "dross hooks nudge") {
-			t.Errorf("%s calls `dross hooks nudge`; it is a hook verb, never a prompt step", rel)
+		for _, gone := range []string{"## Context checkpoint", "context checkpoint:", "dross hooks nudge", "[context] threshold"} {
+			if strings.Contains(s, gone) {
+				t.Errorf("%s still carries %q from the retired context nudge", rel, gone)
+			}
 		}
-		if strings.Contains(s, "dross context") {
-			t.Errorf("%s runs a `dross context` check; the nudge line is the only signal", rel)
-		}
-	}
-	if m := drossVerb.FindString(contextRuleSection(t)); m != "" {
-		t.Errorf("the context rule names a dross call (%q…); it must add no round-trip", m)
 	}
 }
 
-// TestContextRuleSizeBudget: the rule is cache-read on every later turn of
-// every interactive command, so it stays short.
-func TestContextRuleSizeBudget(t *testing.T) {
-	if n := len(contextRuleSection(t)); n > 700 {
-		t.Errorf("the context rule is %d bytes; budget is 700", n)
-	}
-}
-
-// TestFooterPromptsLoadPlaybook: the rule reaches every "safe to /clear"
-// wrap-up only if each footer-bearing prompt loads the playbook.
+// TestFooterPromptsLoadPlaybook: the playbook reaches every "safe to /clear"
+// wrap-up only if each footer-bearing prompt loads it.
 func TestFooterPromptsLoadPlaybook(t *testing.T) {
 	root := repoRootFromTest(t)
 	res, err := footerCoverage(root)
@@ -233,7 +145,7 @@ func TestFooterPromptsLoadPlaybook(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !strings.Contains(string(b), "dross interaction show") {
-			t.Errorf("%s.md carries the clear-point footer but never runs `dross interaction show`, so the context rule cannot reach its wrap-up", name)
+			t.Errorf("%s.md carries the clear-point footer but never runs `dross interaction show`, so the playbook cannot reach its wrap-up", name)
 		}
 	}
 	if checked == 0 {

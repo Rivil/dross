@@ -150,18 +150,14 @@ func TestShowPrune(t *testing.T) {
 	root := t.TempDir()
 	bump(t, root, "old")
 	record(t, root, "old", ShowRules, "h")
-	if !claim(t, root, "s", 1) {
-		t.Fatal("seed claim lost")
-	}
 	if err := SaveGreen(root, Green{Tree: "abc", At: at, Runner: "local"}); err != nil {
 		t.Fatal(err)
 	}
 	show := showPath(root)
-	oldRecord := filepath.Join(show, nudgeKey("old")+"-"+ShowRules)
-	oldSeen := filepath.Join(show, nudgeKey("old")+showSeenExt)
-	claimFile := filepath.Join(root, ".dross", "gate", NudgeDir, nudgeKey("s")+"-1")
+	oldRecord := filepath.Join(show, sessionKey("old")+"-"+ShowRules)
+	oldSeen := filepath.Join(show, sessionKey("old")+showSeenExt)
 	green := Path(root, GreenFile)
-	for _, p := range []string{oldRecord, oldSeen, claimFile, green} {
+	for _, p := range []string{oldRecord, oldSeen, green} {
 		past := time.Now().Add(-8 * 24 * time.Hour)
 		if err := os.Chtimes(p, past, past); err != nil {
 			t.Fatal(err)
@@ -174,7 +170,7 @@ func TestShowPrune(t *testing.T) {
 			t.Errorf("an 8-day-old %s survived the prune (stat err = %v)", filepath.Base(p), err)
 		}
 	}
-	for _, p := range []string{claimFile, green, filepath.Join(show, showEpochFile)} {
+	for _, p := range []string{green, filepath.Join(show, showEpochFile)} {
 		if _, err := os.Stat(p); err != nil {
 			t.Errorf("the prune removed %s: %v", p, err)
 		}

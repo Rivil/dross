@@ -23,7 +23,7 @@ func Hooks() *cobra.Command {
 	}
 	root.AddCommand(&cobra.Command{
 		Use:   "ensure",
-		Short: "Idempotently wire the dross hooks (PreCompact, SessionStart, the PreToolUse/PostToolUse/SubagentStop tool-call gates and the PostToolUse context nudge) into user-level settings.json",
+		Short: "Idempotently wire the dross hooks (PreCompact, SessionStart, the PreToolUse/PostToolUse/SubagentStop tool-call gates) into user-level settings.json and prune retired ones",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			path, err := userSettingsPath()
 			if err != nil {
@@ -67,13 +67,15 @@ var userHooks = []struct{ event, command string }{
 	{hooks.EventSessionStart, sessionStartHookCommand},
 	{hooks.EventPreToolUse, GateCheckHook},
 	{hooks.EventPostToolUse, GateRecordHook},
-	// The context-checkpoint nudge — after the gate record, and on
-	// PostToolUse only: a stray exit on UserPromptSubmit would erase the
-	// user's prompt, and PostToolUse output never blocks the call.
-	{hooks.EventPostToolUse, NudgeHook},
 	// A background solo reviewer's verdict arrives on its SubagentStop, not
 	// on the Agent call's PostToolUse (review_pass_signal as amended).
 	{hooks.EventSubagentStop, GateRecordHook},
+}
+
+// retiredHooks are hooks dross once wired and no longer does: ensureUserHooks
+// prunes each from settings.json, and doctor warns while one is still there.
+var retiredHooks = []struct{ event, command string }{
+	{hooks.EventPostToolUse, NudgeHook},
 }
 
 // userHooksSummary names each wired hook as "event → command", for the line
@@ -88,9 +90,11 @@ func userHooksSummary() string {
 
 // ensureUserHooks idempotently wires the dross hooks into the user-level
 // Claude settings.json via hooks.MergeHook: PreCompact and SessionStart, the
-// tool-call gates' PreToolUse check and PostToolUse record, the PostToolUse
-// context nudge, and the SubagentStop record a background solo reviewer reports
-// through — matcher-less, so they see every tool call and every finished subagent. Already wired → no write at all (byte-stable).
+// tool-call gates' PreToolUse check and PostToolUse record, and the
+// SubagentStop record a background solo reviewer reports through —
+// matcher-less, so they see every tool call and every finished subagent. Each
+// retiredHooks entry is pruned first (hooks.RemoveHook). Already wired and
+// nothing retired left → no write at all (byte-stable).
 // init and onboard both call this, so whichever runs first does the wiring and
 // the other confirms it.
 func ensureUserHooks() error {
@@ -104,6 +108,11 @@ func ensureUserHooks() error {
 	}
 
 	merged := existing
+	for _, h := range retiredHooks {
+		if merged, err = hooks.RemoveHook(merged, h.event, h.command); err != nil {
+			return err
+		}
+	}
 	for _, h := range userHooks {
 		if merged, err = hooks.MergeHook(merged, h.event, h.command); err != nil {
 			return err

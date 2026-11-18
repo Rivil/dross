@@ -95,8 +95,6 @@ Show output of `dross defaults show`. Ask whether to:
 - **Save current project's [remote] as defaults** → `dross defaults save`
 - **Skip** — leave defaults untouched
 
-The context-checkpoint threshold lives in the same file and has no verb — the user hand-edits `~/.claude/dross/defaults.toml`: `[context] threshold = N` (tokens; unset = 150000, `0` turns the nudge off). `dross defaults save` and `dross stats opt-out` keep it. `dross doctor` shows the value in effect.
-
 ## 9. Rules
 
 Show `dross rule list --scope project` and `dross rule list --scope global`. Ask:
@@ -159,7 +157,7 @@ Fields: `mutation.adapters` (csv), `mutation.gremlins.timeout_coefficient`, `mut
 
 ## 15. Claude Code hooks
 
-`dross hooks ensure` idempotently wires every dross-owned hook into user-level `settings.json`: `PreCompact` → `dross pause --auto`, `SessionStart` → `dross reentry`, `PreToolUse` → `dross gate check`, `PostToolUse` → `dross gate record` and `dross hooks nudge`, and `SubagentStop` → `dross gate record`. The `SessionStart` hook is what prints the "you are here / next command" re-entry line at the top of a fresh session; without the gate hooks the tool-call gates are off and `dross doctor` fails. Without `dross hooks nudge` there is no context-checkpoint nudge — `dross doctor` warns.
+`dross hooks ensure` idempotently wires every dross-owned hook into user-level `settings.json`: `PreCompact` → `dross pause --auto`, `SessionStart` → `dross reentry`, `PreToolUse` → `dross gate check`, `PostToolUse` → `dross gate record`, and `SubagentStop` → `dross gate record`. It also prunes retired dross hooks (the old `PostToolUse` context nudge). The `SessionStart` hook is what prints the "you are here / next command" re-entry line at the top of a fresh session; without the gate hooks the tool-call gates are off and `dross doctor` fails. `dross doctor` warns while a retired hook is still wired.
 
 Offer to run it. It is idempotent, so when the user is unsure, run it rather than inspecting `settings.json` by hand. If the re-entry line has stopped appearing at session start, this is the fix.
 

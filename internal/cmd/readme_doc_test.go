@@ -210,29 +210,20 @@ func TestReadmeDocumentsRespond(t *testing.T) {
 	}
 }
 
-// TestReadmeDocumentsContextNudge: the README and the man page carry the
-// nudge hook's verbs and the threshold key — the knob and its off switch would
-// otherwise exist only in source.
-func TestReadmeDocumentsContextNudge(t *testing.T) {
+// TestDocsDropRetiredContextNudge: the context nudge and its [context]
+// threshold knob are retired, so neither the README nor the man page may still
+// document them as a setting to reach for.
+func TestDocsDropRetiredContextNudge(t *testing.T) {
 	root := repoRootFromTest(t)
-	readme, err := os.ReadFile(filepath.Join(root, "README.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// "[context] threshold" as one string: either word alone already appears
-	// elsewhere in the README, so separately they would guard nothing.
-	for _, want := range []string{"dross hooks {ensure,nudge}", "[context] threshold"} {
-		if !strings.Contains(string(readme), want) {
-			t.Errorf("README does not mention %q", want)
+	for _, rel := range []string{"README.md", "docs/dross.1"} {
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	man, err := os.ReadFile(filepath.Join(root, "docs", "dross.1"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{"dross hooks", "[context] threshold"} {
-		if !strings.Contains(string(man), want) {
-			t.Errorf("docs/dross.1 does not mention %q", want)
+		for _, gone := range []string{"[context] threshold", "{ensure,nudge}", "\\fBnudge\\fR", "context checkpoint:"} {
+			if strings.Contains(string(b), gone) {
+				t.Errorf("%s still documents the retired context nudge (%q)", rel, gone)
+			}
 		}
 	}
 }
@@ -392,27 +383,15 @@ func optionsSection(t *testing.T, n int) string {
 	return body
 }
 
-// TestOptionsNamesContextThreshold: /dross-options §8 (global defaults) tells
-// the user where the threshold lives and how to write it — there is no verb
-// for it, so the hand-edit path is the only one.
-func TestOptionsNamesContextThreshold(t *testing.T) {
-	sec := optionsSection(t, 8)
-	for _, want := range []string{"~/.claude/dross/defaults.toml", "[context] threshold"} {
-		if !strings.Contains(sec, want) {
-			t.Errorf("options.md §8 does not name %q", want)
-		}
-	}
-}
-
-// hookCountWord matches a spelled-out hook count — the word that went stale
-// when the nudge became the sixth hook.
+// hookCountWord matches a spelled-out hook count — a word that goes stale
+// whenever a hook is added or retired.
 var hookCountWord = regexp.MustCompile(`(?i)\b(two|three|four|five|six|seven|eight)\b`)
 
 // TestOptionsHooksSectionNamesAllHooks: §15 lists every hook `dross hooks
 // ensure` wires, by command, and carries no count word to go stale again.
 func TestOptionsHooksSectionNamesAllHooks(t *testing.T) {
 	sec := optionsSection(t, 15)
-	want := []string{"dross hooks nudge"}
+	var want []string
 	for _, h := range userHooks {
 		want = append(want, h.command)
 	}

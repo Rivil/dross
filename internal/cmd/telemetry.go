@@ -25,8 +25,9 @@ func RecordCLIEvent(c *cobra.Command, dur time.Duration, runErr error) {
 	if c != nil {
 		cmdPath = c.CommandPath()
 	}
-	// The gate hook verbs and the nudge hook run on every tool call, and a
-	// refusal's text can name a secret path — neither belongs in a usage log.
+	// The gate hook verbs, and the retired nudge verb a not-yet-pruned
+	// settings.json still runs, fire on every tool call, and a refusal's text
+	// can name a secret path — neither belongs in a usage log.
 	// Checked before the enabled lookup, which reads a file: these run around
 	// every tool call.
 	if cmdPath == GateCheckHook || cmdPath == GateRecordHook || cmdPath == NudgeHook {

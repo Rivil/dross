@@ -55,7 +55,7 @@ The single feature-organized ARCHITECTURE.md — fixed entry template + greenfie
 - `architecture.Skeleton` — `internal/architecture/architecture.go:41`
 - `architecture.ParseDoc` / `Resolve` (codex-backed link resolver) — `internal/architecture/links.go:91`
 - `codex.SupportsFile` (language-dispatch gate) — `internal/codex/codex.go:106`
-- `architectureLinkWarnings` (doctor advisory section) — `internal/cmd/doctor.go:805`
+- `architectureLinkWarnings` (doctor advisory section) — `internal/cmd/doctor.go:804`
 - `Architecture` (`dross architecture check [--fix]`) — `internal/cmd/architecture.go:16`
 - `Init` (seeds skeleton) — `internal/cmd/init.go:29`
 
@@ -67,7 +67,7 @@ Schema-check every .dross/ TOML/JSON artefact, including that plan `covers` refe
 
 - `Validate` — `internal/cmd/validate.go:33`
 - `loadIfExists` — `internal/cmd/validate.go:647`
-- `taskStatusIssues` (doctor's plan-task status enum check) — `internal/cmd/doctor.go:850`
+- `taskStatusIssues` (doctor's plan-task status enum check) — `internal/cmd/doctor.go:849`
 - `triageProblems` (each phase's `pr-triage.toml` is checked against its plan tasks and spec deferred items — an accept must name a real task, a route a real deferred item) — `internal/cmd/validate.go:211`
 
 _c8b346e · extended cli-surface-sweep · d105fd0 · extended review-comment-ingest · 0994809_
@@ -287,7 +287,7 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `Env` — `internal/cmd/env.go:24`
 - `Profile` — `internal/cmd/profile.go:14`
 - `project.DetectRemote` / `KnownHostProviders` (host→provider autodetect + api_base) — `internal/project/remote.go:24`
-- `Doctor` (remote + auth_scheme validation) — `internal/cmd/doctor.go:43`
+- `Doctor` (remote + auth_scheme validation) — `internal/cmd/doctor.go:42`
 - `configenum.Set` (normalising enum home + per-field empty-value policy) — `internal/configenum/configenum.go:32`
 - doctor enum validation via `configenum` Sets — `internal/cmd/doctor.go:117`
 - `diag.RemoteCombination` (runtime-fatal pairings as advisory warnings) — `internal/diag/combinations.go:15`
@@ -303,7 +303,7 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `TestTomlFieldsCarryMatchingJSONTags` (toml↔json tag parity, transitive walk over the eight document roots) — `internal/cmd/json_tag_parity_test.go:48`
 - `writeVersion` (one validated writer for both version homes, tracked copy first) — `internal/cmd/state.go:242`
 - doctor version-drift check (project.toml vs state.json, skipped on a fresh clone) — `internal/cmd/doctor.go:349`
-- `checkConfigTrust` (rejectable branch name, off-allowlist api_base, tracked local.toml and pre-2.24 git as exit-code-moving findings) — `internal/cmd/doctor.go:1111`
+- `checkConfigTrust` (rejectable branch name, off-allowlist api_base, tracked local.toml and pre-2.24 git as exit-code-moving findings) — `internal/cmd/doctor.go:1110`
 - `project.BoardFields` (`[board.fields]` nested table, locked `field_config_shape` — same idiom as `board.state_map`) — `internal/project/project.go:309`
 - `boardFieldKey` (`board.fields.<name>` addressed per leaf; a bogus name is rejected by name, bare `board.fields` is not a leaf) — `internal/cmd/project.go:611`
 - `enumKeys` (the one table both enum gates read: five dotted keys → their `configenum` Sets) — `internal/cmd/project.go:327`
@@ -426,8 +426,8 @@ _introduced remote-run-detach · 6ad6efa · extended cmd-exec-baseline-drain · 
 - `diag.RemoteCombination` / `diag.BoardCombination` — `internal/diag/combinations.go:15`
 - `diag.MutationToolchain` — `internal/diag/toolchain.go:24`
 - `diag.Issues` (the transcript's issue count is what the exit code carries) — `internal/diag/diag.go:54`
-- `hooksSection` (every hook ensureUserHooks wires, in the user-level settings.json: a missing gate hook, a gate command only under a matcher, `disableAllHooks` or an unreadable file is an issue; so is `disableAllHooks` or a parse failure in the repo's `.claude/settings.json` / `settings.local.json`; a missing PreCompact/SessionStart only warns) — `internal/cmd/doctor.go:1144`
-- `Doctor` (gathers inputs, composes and prints; owns no check logic) — `internal/cmd/doctor.go:43`
+- `hooksSection` (every hook ensureUserHooks wires, in the user-level settings.json: a missing gate hook, a gate command only under a matcher, `disableAllHooks` or an unreadable file is an issue; so is `disableAllHooks` or a parse failure in the repo's `.claude/settings.json` / `settings.local.json`; a missing PreCompact/SessionStart only warns) — `internal/cmd/doctor.go:1143`
+- `Doctor` (gathers inputs, composes and prints; owns no check logic) — `internal/cmd/doctor.go:42`
 
 _introduced cmd-package-decomposition · 328349b · extended run-block-pin-currency · extended tool-gate-hooks · 1d0ff11_
 
@@ -562,7 +562,7 @@ The propose-and-react contract for interactive commands — a terse builtin rule
 - per-decision-point checklist + `## Exempt` list + coverage convention — `docs/interaction-audit.md`
 - README first-class write-up — `README.md` `## Interaction`
 - `interactionCoverage` (fail-closed classifier + Exempt parser) — `internal/cmd/interaction_coverage.go:37`
-- `interactionCoverageWarnings` (dross doctor on-demand lint) — `internal/cmd/doctor.go:828`
+- `interactionCoverageWarnings` (dross doctor on-demand lint) — `internal/cmd/doctor.go:827`
 - `TestInteractionCoverageFailClosed` (coverage gate + convention guard) — `internal/cmd/interaction_coverage_test.go:15`
 - `TestSpecPromptWalksEveryGrayArea` (spec §3 walk-all gray-area guard) — `internal/cmd/spec_prompt_test.go:103`
 - `TestInteractionSnippetHasIncludeFirstPattern` (include-first candidate pattern in the playbook) — `internal/cmd/interaction_snippet_test.go`
@@ -627,7 +627,7 @@ Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue 
 - `issuePhase` (the mirror verbs as nested parent+child subcommands, no aliases) — `internal/cmd/issue.go:54`
 - `issueReap` (`dross issue reap`: the dry-run plan, `--namespace` validated by reflection) — `internal/cmd/issue_reap_cmd.go:23`
 - `reaplog.Card` (gitignored `.dross/reap-log.json`: prior column recorded *before* the write, failed closes excluded from the undo target) — `internal/reaplog/reaplog.go:50`
-- `reportStrandedMirrors` (doctor's read-only stranded-per-lane advisory; never affects exit status) — `internal/cmd/doctor.go:1645`
+- `reportStrandedMirrors` (doctor's read-only stranded-per-lane advisory; never affects exit status) — `internal/cmd/doctor.go:1610`
 - `TestSetStateRawVerifiesReadBack` (the read-back guard on all three StateWriter backends, Jira included — its 204 is not evidence a workflow completed the transition) — `internal/forge/state_map_test.go:213`
 - `TestEveryDocumentedIssueVerbResolves` (every README/ARCHITECTURE invocation walked against the real cobra tree, brace lists expanded) — `internal/cmd/issue_verb_shape_test.go:251`
 - `faultBoard` (per-key fault-injecting board doubles + strict scripted tracker for package-local boardsync tests) — `internal/boardsync/doubles_test.go:47`
@@ -653,7 +653,7 @@ Reconstruct the completion marker for phases that finished before the marker exi
 - `phaseBackfill` (CLI: preview by default, `--apply` writes status + evidence SHA) — `internal/cmd/phase_backfill.go:221`
 - `backfillShipCommitsAtRef` / `backfillSlugKey` (ship-subject index off origin, whole-slug anchoring with optional `NN-` prefix) — `internal/cmd/phase_backfill.go:101`
 - `backfillCandidates` (candidates are phase directories with a status-less record, never roadmap arrays) — `internal/cmd/phase_backfill.go:168`
-- `backfillResidue` (doctor's offline advisory naming what backfill cannot close, and why) — `internal/cmd/doctor.go:1587`
+- `backfillResidue` (doctor's offline advisory naming what backfill cannot close, and why) — `internal/cmd/doctor.go:1552`
 
 _introduced legacy-phase-backfill · 45fad76 · extended cmd-package-decomposition · 58e26f3_
 
@@ -829,7 +829,7 @@ Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Sve
 - `mutationcfg.Configured` (one roster + `Source` seam builds every adapter for verify / doctor / drain; toolchain gaps and the docker prefix derive from the same roster) — `internal/mutationcfg/mutationcfg.go:217`
 - `TestStrykerRunsEndToEnd` (the real tool against a committed TS fixture: argv + config + report path + format, together) — `internal/mutation/stryker_e2e_test.go:48`
 - `TestEveryClaimedExtensionDispatches` (every claimed extension reaches an adapter; a dropped switch entry is named) — `internal/verify/dispatch_surface_test.go:42`
-- `checkMutationToolchain` (doctor's advisory for a missing local toolchain, scoped to configured adapters) — `internal/cmd/doctor.go:1287`
+- `checkMutationToolchain` (doctor's advisory for a missing local toolchain, scoped to configured adapters) — `internal/cmd/doctor.go:1252`
 
 A run compiles into a **scratch build cache it then throws away**, rather than into the developer's. The measurement that forced this: the Go build cache held 64 GB, of which 61 GB was 2,093 single-use archives averaging 30 MB and only 348 MB was genuinely-shared stdlib and deps — and an earlier symptom was a 399 GB cache that filled the disk and failed a verify outright. The cause is structural, not incidental: gremlins copies the module into a fresh `gremlins-PID/wd-RANDOM` every run and Go keys the build cache on source file paths, so every run re-stores every package under new keys and **nothing is ever reused across runs**. That zero reuse is exactly why scratch-and-wipe costs no rebuild time, and why a size ceiling on the shared cache was the wrong mechanism — it would evict the developer's genuinely warm entries while doing nothing about the churn. Which variables to redirect is declared by the **stack profile** (`mutation_cache.vars`), not by a table inside the runner, so adding a language stays a toml drop-in; the names are validated at load because they reach an `export NAME=value` line on a remote shell. Resolution prefers the recorded `stack.profile` and falls back to detection, without which the feature would have been inert on every repo predating that field — dross's own `project.toml` has none. Both transports redirect at the single construction point they share: a local run overrides the ambient variable in `cmd.Env` (last occurrence wins, which is what makes it an override rather than an accompaniment), and a remote run exports the same values plus `TMPDIR` — needed because gremlins copies the module through `os.MkdirTemp`, which honours `TMPDIR` and not `GOTMPDIR`, so redirecting the toolchain alone covers the compiler and leaves the harness on whatever volume the host defaults to (on the granted host, RAM). The scratch sits **beside** the tree, never inside it: a live run proved that placement wrong by making every `t.TempDir()` a child of the repo, so `FindRoot` walked up into the repo under test and nine root-discovery tests went red on the host while staying green locally. It is created before the tool runs — an exported path nothing creates is not a redirection but a broken run — and wiped on every exit path, with a failed wipe reported and never fatal, because losing a completed measurement to a cleanup error is worse than the disk it reclaims. Measured on the run that verified it: 26 GB into the scratch, shared cache unchanged at 1223 MB throughout, all of it reclaimed afterwards.
 
@@ -937,8 +937,8 @@ Find every version pin Dependabot cannot reach, judge each against its upstream'
 - `pincheck.Bump` (in-place rewrite; skips npm pins, refuses `.github/workflows/`) — `internal/pincheck/bump.go:56`
 - `run` (`go run ./cmd/pincheck [bump]`; writes `stale=` to `$GITHUB_OUTPUT`) — `cmd/pincheck/main.go:71`
 - `TestEveryPinSiteIsChecked` (an independent sweep: every pin-shaped token must be a checked site) — `cmd/pincheck/coverage_test.go:208`
-- `PinCurrencySection` (doctor's always-on, never-blocking section) — `internal/cmd/doctor.go:657`
-- `pinResolver` (doctor's resolver seam; the test binary's default counts and never dials) — `internal/cmd/doctor.go:640`
+- `PinCurrencySection` (doctor's always-on, never-blocking section) — `internal/cmd/doctor.go:656`
+- `pinResolver` (doctor's resolver seam; the test binary's default counts and never dials) — `internal/cmd/doctor.go:639`
 
 _introduced run-block-pin-currency · a46cf1b_
 
@@ -967,7 +967,7 @@ Pull a phase PR's review comments — conversation, inline (with file:line) and 
 - `resolveItem` (`dross pr resolve`: one evidenced verdict per comment; the plan or spec write rolls back if the record cannot be saved) — `internal/cmd/pr_resolve.go:201`
 - `postReply` (`dross pr reply --post`: posts once on a recorded approval of the exact draft, validating the record first) — `internal/cmd/pr_reply.go:56`
 - `/dross-respond` prompt (pair-only: verify each claim, one verdict per item, one human-approved reply) — `assets/prompts/respond.md:1`
-- `TestReadmeDocumentsRespond` (pins the `dross pr` row, `/dross-respond`, tracked `pr-triage.toml`, the watch pointer and man sections) — `internal/cmd/readme_doc_test.go:140`
+- `TestReadmeDocumentsRespond` (pins the `dross pr` row, `/dross-respond`, tracked `pr-triage.toml`, the watch pointer and man sections) — `internal/cmd/readme_doc_test.go:141`
 - `TestReplyApprovalCheck` / `TestRedactStringsWalksSlices` / `TestReplyOrdersRejectsByID` (approval PR/digest check on save and load; every string and struct slice redacted; several rejects listed in id order) — `internal/gatestate/store_test.go:394`, `internal/prtriage/record_test.go:187`, `internal/prtriage/reply_test.go:73`
 - `TestPRReplyWithRoutedResolution` / `TestPRResolveRouteWithReason` (reply validates spec deferred ids and refuses an unreadable spec; a route's reason prefixes the deferred item's why) — `internal/cmd/pr_reply_test.go:298`, `internal/cmd/pr_resolve_test.go:165`
 
@@ -986,7 +986,7 @@ _introduced review-comment-ingest · 414cfcc_
 - `loadLensFixture` (nested Go fixture module: a seeded partial Status switch and an uncommented discard, plus a clean near-miss twin, with type-checked shape tests) — `internal/prtriage/lensproof_test.go:63`
 - `TestLensProofSeeded` / `TestLensProofClean` (a recorded live `/dross-review --diff` run: the seeded fixture hits both new lenses at the computed lines, the clean one yields none) — `internal/prtriage/lensproof_test.go:463`, `internal/prtriage/lensproof_test.go:498`
 - `lensSectionLines` (a recorded proof comment with a heading that is not a `###` lens heading is refused, so a mis-levelled section cannot pass the clean check vacuously) — `internal/prtriage/lensproof_test.go:389`
-- `TestNoFourLensSurface` (README, dross.1 and the audit doc name all six lenses; a surface still giving the old lens count fails) — `internal/cmd/readme_doc_test.go:284`
+- `TestNoFourLensSurface` (README, dross.1 and the audit doc name all six lenses; a surface still giving the old lens count fails) — `internal/cmd/readme_doc_test.go:275`
 - `TestReviewDiffModeWrapNamesDiff` (pins the `--diff` wrap line, the doctor skip and the non-empty patch check) — `assets/review_lenses_test.go:358`
 
 The per-task solo reviewer applies the same two lens rules (see [Solo task review](#solo-task-review)).
@@ -1035,7 +1035,7 @@ Keeps the README's command table from lying about the CLI: `newRoot` is extracte
 - `newRoot` (testable command-tree assembly) — `cmd/dross/main.go:16`
 - `TestReadmeAdvertisesOnlyRealCommands` (over-claim guard) — `cmd/dross/main_test.go:37`
 - `TestReadmeStatusNotStale` (stale-version guard) — `cmd/dross/main_test.go:327`
-- `TestReadmeDocumentsBaseTruthSurfaces` (needle guard: `dross local`, `quick_base`, `--base`/`--recover`) — `internal/cmd/readme_doc_test.go:45`
+- `TestReadmeDocumentsBaseTruthSurfaces` (needle guard: `dross local`, `quick_base`, `--base`/`--recover`) — `internal/cmd/readme_doc_test.go:46`
 - `TestNarratedCommandsResolveAgainstTheTree` (fourth sibling: `dross <cmd>` narrated from a Go string literal) — `cmd/dross/main_test.go:257`
 - `TestNarratedCommandsGuardCatchesBogusSubcommands` (the guard's own failure path — top-level resolution alone must not satisfy it) — `cmd/dross/main_test.go:308`
 - `TestReadmeDocumentsTestLanes` (needle guard: the lane verbs, `dross test --files` and the per-lane grant documented in README and options.md) — `internal/cmd/options_docs_test.go:263`
@@ -1060,7 +1060,7 @@ A red proof is a recorded commit at which a fixture provably fails, plus the doc
 - `runRedProofReplay` (detached worktree at the proposed commit, consent-gated, timeout is a refusal not a red) — `internal/cmd/redproof_replay.go:66`
 - `RedProof` (the record: pinned SHA, doc, and the `Replay` line a repoint re-runs) — `internal/changes/changes.go:122`
 - `repointDoomedRedProofs` (ship-time repair before the squash-merge orphans the pin) — `internal/cmd/redproof_lifecycle.go:70`
-- `redProofRepointHint` (doctor names the verb, and no command at all when there is no fork point) — `internal/cmd/doctor.go:788`
+- `redProofRepointHint` (doctor names the verb, and no command at all when there is no fork point) — `internal/cmd/doctor.go:787`
 
 _introduced red-proof-repoint · 97bb8a8_
 
@@ -1079,8 +1079,8 @@ One authorization — "run this repo's code on that machine" — serving every c
 - `remote.ScriptAll` (the piped script: exports, `cd`, `&&`-chained commands, `exec` on the last) — `internal/remote/remote.go:254`
 - `localstore.ResolveRemoteEnv` (`mutation_remote_env` forwards variable NAMES; values are read at run time and stored nowhere) — `internal/localstore/store.go:498`
 - `TestBothVerbsWriteTheSameKeys` (the alias cannot become a second implementation) — `internal/cmd/remote_grant_test.go:83`
-- `checkRemoteMutation` (doctor's Remote section — one section for the one grant) — `internal/cmd/doctor.go:1432`
-- `reportLaneToolchains` (the same Remote section reports each declared lane's effective toolchain against the granted host, naming the lane, its tools and which are missing — from the SAME single probe the adapters use, so doctor and the run can never disagree about what the host has, and a locality fallback is visible before a run hits it) — `internal/cmd/doctor.go:1389`
+- `checkRemoteMutation` (doctor's Remote section — one section for the one grant) — `internal/cmd/doctor.go:1397`
+- `reportLaneToolchains` (the same Remote section reports each declared lane's effective toolchain against the granted host, naming the lane, its tools and which are missing — from the SAME single probe the adapters use, so doctor and the run can never disagree about what the host has, and a locality fallback is visible before a run hits it) — `internal/cmd/doctor.go:1354`
 
 A granted host is **preflighted, provisioned and attributed**, so the three ways an off-box run used to lie are closed. Every run that needs the host probes it — through `remoteProbeFn`, the same seam doctor reads, so a green doctor and a green preflight cannot disagree — **before** the tree is pushed; probing after the sync discovers an unreachable host having already paid for the transfer, and a transport failure at that point is indistinguishable from the suite dying. A host that could not be **reached** falls back to a local run and says so on stdout, because it gave no answer and this machine still can; a host that **ran** something and failed does not fall back, because that IS an answer and re-running it locally launders a real failure into a pass. The fallback is per-run and writes nothing, so one flaky network minute cannot retire a grant. What that fallback used to cost is the reason it exists: helicon was unreachable for hours during `board-task-mirror` and the only workaround was `dross remote revoke`, which left no trace that the numbers came from a different machine — so `verify.toml` now records `measured_on`, read off the adapters the run actually used rather than the grant on disk (a `--local` run holds a grant and ignores it; a fallback holds one it could not reach), naming both machines when a run fell back. `dross remote bootstrap` closes the last gap: it installs the adapter **packages** the configured `[mutation].adapters` need into a runtime that already exists — gremlins via a *pinned* `go install`, for the same supply-chain reason `strykerPin` exists — and refuses a missing language **runtime** by name, because version policy and PATH ownership on someone else's machine are not a mutation run's call. Dry-run by default, since the command's whole job is changing a machine that is not this one; one tool's failure never aborts the rest, and any refusal or failure exits non-zero.
 
@@ -1090,7 +1090,7 @@ Bootstrap answers for **lanes as well as adapters**, off the same single probe a
 - `planRemoteBootstrap` (adapter packages installable, runtimes refused by name, an unreachable host is never a plan) — `internal/cmd/remote_bootstrap.go:165`
 - `remoteBootstrap` (the verb: dry-run default, `--apply`, no-op over a provisioned host) — `internal/cmd/remote_bootstrap_cmd.go:29`
 - `planLaneStep` (every declared lane's toolchain planned alongside the adapters, from the shared probe and resolver; a declared install line is consent-gated at plan time) — `internal/cmd/remote_bootstrap.go:225`
-- `remoteProbeTools` (one probe returning two disjoint attributions — the adapter that wants a tool, and the lane that does) — `internal/cmd/doctor.go:1335`
+- `remoteProbeTools` (one probe returning two disjoint attributions — the adapter that wants a tool, and the lane that does) — `internal/cmd/doctor.go:1300`
 - `measuredOnOf` (provenance from the adapters used and the tuning that produced them) — `internal/cmd/verify.go:1504`
 - `verify.MeasuredAfterFallback` (a fallback names both machines; a plain "local" would lose the unmet expectation) — `internal/verify/verify.go:116`
 
@@ -1120,7 +1120,7 @@ Two shapes hold it. A **detached** run composes the prelude inside the `setsid` 
 - `mutationcfg.ResolveTuning` (mints the holder — project, phase, run id — once for verify and the drain) — `internal/mutationcfg/mutationcfg.go:163`
 - `holdHostForSuite` (`dross test`'s bounded wait and the alongside path) — `internal/cmd/test.go:1063`
 - `scheduledReason` (what a scheduled detached run is waiting on, for status and results) — `internal/cmd/verify.go:955`
-- `reportHostLock` (doctor names the holder) — `internal/cmd/doctor.go:1546`
+- `reportHostLock` (doctor names the holder) — `internal/cmd/doctor.go:1511`
 - `TestRealFlockSerializesAndReleasesOnKill` / `TestAKilledHolderReleasesWithNoCleanup` (the kernel's word, on a temp lock path; skipped where flock is absent) — `internal/remote/lock_test.go`, `internal/remote/hold_test.go`
 - `TestReadmeDocumentsTheHostLock` / `TestArchitectureDocumentsTheHostLock` (README, this entry and verify.md pinned to the lock's path, wait and `--no-wait`, `--wait` cap, doctor's flock probe and crash-safe release) — `internal/cmd/options_docs_test.go:745`
 
@@ -1156,7 +1156,7 @@ Decide what counts as a dross repo, and say so the same way everywhere. `state.j
 - `IncompleteRootError` — `internal/cmd/root.go:36`
 - `MissingRootFiles` — `internal/cmd/root.go:56`
 - `LocateRoot` (misses without erroring — doctor + ship-recover seam) — `internal/cmd/root.go:76`
-- `finalizeIncompleteRoot` (doctor's distinct verdict) / `incompleteRootHeading` — `internal/cmd/doctor.go:926`
+- `finalizeIncompleteRoot` (doctor's distinct verdict) / `incompleteRootHeading` — `internal/cmd/doctor.go:925`
 - `Onboard` (adopts an incomplete root in place) — `internal/cmd/onboard.go:26`
 - `TestRootHelperCallersAreAllowlisted` (AST allowlist over the swallow set) — `internal/cmd/incompleteroot_test.go:166`
 - `ensureState` (materializes a missing state.json from project.toml's version) — `internal/cmd/state.go:311`
@@ -1270,24 +1270,17 @@ _extended main-branch-protection (ReleaseTag projection for the chore-PR release
 
 ### Session continuity & context hygiene
 
-Survive `/clear` and compaction without losing the workflow thread: every durable-boundary prompt closes with a "state is on disk — safe to /clear" footer naming the exact re-entry command (enforced fail-closed by a footer-coverage gate over `docs/footer-audit.md`), `dross pause --auto` merges a mechanical snapshot (branch, dirty files, status, timestamp) into `.dross/handoff.md` without prompting, and `dross hooks ensure` (also run by init/onboard) idempotently wires user-level Claude Code hooks — PreCompact → `dross pause --auto`, SessionStart → `dross reentry` — that no-op outside dross repos and never disturb foreign settings.json entries. `/dross-execute` pair mode adds a post-commit continue/stop/checkpoint gate whose checkpoint path validates state then ends the session with the `/clear → /dross-execute --from <next-task>` re-entry. Past a token threshold (`[context] threshold` in `~/.claude/dross/defaults.toml`, default 150k, 0 off) a PostToolUse nudge injects one "checkpoint + /clear" line naming the re-entry command — once on crossing, again every +50k, main-agent turns only, read from the transcript's tail in ≤50 ms — and the shared playbook makes the next durable boundary lead with checkpoint (informational under `--solo`); the signal costs no extra agent round-trip, which a per-phase flow-cost record guards. A repeat `dross rule show` or `dross interaction show` in the same session context prints a one-line unchanged marker instead of the full block, and the SessionStart hook bumps the show epoch so `/clear` and compaction reprint both in full.
+Survive `/clear` and compaction without losing the workflow thread: every durable-boundary prompt closes with a "state is on disk — safe to /clear" footer naming the exact re-entry command (enforced fail-closed by a footer-coverage gate over `docs/footer-audit.md`), `dross pause --auto` merges a mechanical snapshot (branch, dirty files, status, timestamp) into `.dross/handoff.md` without prompting, and `dross hooks ensure` (also run by init/onboard) idempotently wires user-level Claude Code hooks — PreCompact → `dross pause --auto`, SessionStart → `dross reentry` — that no-op outside dross repos and never disturb foreign settings.json entries. `/dross-execute` pair mode adds a post-commit continue/stop/checkpoint gate whose checkpoint path validates state then ends the session with the `/clear → /dross-execute --from <next-task>` re-entry. The gate leads with continue at every task boundary. A token-threshold context-checkpoint nudge once wired as a PostToolUse hook is retired: `dross hooks ensure` prunes it from settings.json, the `dross hooks nudge` verb stays as a hidden silent no-op until then, and doctor warns while it is still wired. A repeat `dross rule show` or `dross interaction show` in the same session context prints a one-line unchanged marker instead of the full block, and the SessionStart hook bumps the show epoch so `/clear` and compaction reprint both in full.
 
 - `hooks.MergeHook` (order-preserving idempotent settings.json merge; foreign entries survive verbatim) — `internal/hooks/settings.go:98`
 - `hooks.MutateSettings` (settings.json env-block read/modify/write beside the hook merger, so cmd holds no json codec for it) — `internal/hooks/settings.go:44`
-- `Hooks` (`dross hooks ensure`) / `ensureUserHooks` (init/onboard wiring of PreCompact, SessionStart, the [tool-call gate](#tool-call-gates) pair and the PostToolUse context nudge) — `internal/cmd/hooks.go:19`
-- `userHooks` (the one list of wired hooks: drives ensureUserHooks, the init/onboard ensured-hooks line and doctor's Hooks section; the nudge sits after the gate record, PostToolUse only) — `internal/cmd/hooks.go:65`
-- `ContextDefaults.EffectiveThreshold` (`[context] threshold`: unset 150k, 0 off, negative an error only the nudge's readers see) — `internal/defaults/defaults.go:46`
-- `LatestMainContext` (bounded backwards tail read of the transcript: the newest main-agent turn's input + cache-read + cache-creation tokens; sidechain and synthetic entries skipped, unknown never read as zero) — `internal/ctxnudge/transcript.go:34`
-- `Band` / `Line` (threshold, then every +50k; the one nudge line with usage, the re-entry command and "mid-thought? /dross-pause first") — `internal/ctxnudge/nudge.go:20`
-- `Run` (PostToolUse payload → nudge envelope: silent unless a main-agent fire crosses an unclaimed band; never blocks the call) — `internal/ctxnudge/run.go:34`
-- `ClaimNudge` (once-per-band per-session claim under `.dross/gate/nudge`: O_EXCL, high-water, 7-day prune) — `internal/gatestate/nudge.go:69`
-- `hooksNudge` (`dross hooks nudge`: the never-failing PostToolUse verb that writes the envelope) — `internal/cmd/hooks_nudge.go:27`
-- `contextThresholdLine` (doctor shows the threshold in effect and warns when the nudge hook is missing or silently off) — `internal/cmd/doctor.go:1208`
-- `_interaction.md` Context checkpoint rule (a nudge line in context makes the next durable boundary — execute §1g even mid-wave, every "safe to /clear" wrap-up — lead with checkpoint + /clear) — `assets/prompts/_interaction.md:74`
+- `hooks.RemoveHook` (MergeHook's inverse for a retired dross hook: drops its entries, an emptied group and an emptied event; byte-stable when absent) — `internal/hooks/settings.go:141`
+- `Hooks` (`dross hooks ensure`) / `ensureUserHooks` (init/onboard wiring of PreCompact, SessionStart, the [tool-call gate](#tool-call-gates) pair and SubagentStop record; prunes retiredHooks first) — `internal/cmd/hooks.go:19`
+- `userHooks` (the one list of wired hooks: drives ensureUserHooks, the init/onboard ensured-hooks line and doctor's Hooks section) — `internal/cmd/hooks.go:65`
+- `hooksNudge` (`dross hooks nudge`: the retired context nudge, kept hidden and silent so a not-yet-pruned settings.json never errors) / `retiredHooks` (pruned by ensureUserHooks, warned on by doctor) — `internal/cmd/hooks_nudge.go:16`
 - `TestFlowCostRecords` (each phase's `flow-cost.toml` has complete before/after legs and the after leg adds no dross call) — `internal/cmd/flowcost_record_test.go:100`
-- `TestHookLatencyRecord` (installed nudge hook p95 ≤ 50 ms per path on a 50 MB transcript, recorded in context-boundaries' `flow-cost.toml`) — `internal/cmd/hooklatency_record_test.go:17`
 - `showOnce` (a repeat rule/interaction show prints a one-line MUST-FOLLOW marker naming `--full` when the merged text is byte-identical to the last full print) — `internal/cmd/showmark.go:38`
-- `gatestate.ShownCurrent` (per-session epoch + digest records under `.dross/gate/show/` that say whether a full print is still in context) — `internal/gatestate/showmark.go:98`
+- `gatestate.ShownCurrent` (per-session epoch + digest records under `.dross/gate/show/` that say whether a full print is still in context) — `internal/gatestate/showmark.go:106`
 - `bumpFromHook` (SessionStart bumps the show epoch for every source, so `/clear` and compaction reprint rules and playbook in full) — `internal/cmd/reentry.go:122`
 - `checkTestOutputSummariesFlow` (test-output-summaries' after-leg gate: smaller green and verify output, no log reads, a sub-300-byte repeat rule show, the marker live across /clear, /compact and a subagent) — `internal/cmd/flowcost_record_test.go:207`
 - `checkPromptPartialsFlow` (prompt-partials' execute and verify pairs: base prompts under 15,000 B and smaller than before, zero partial fetches on the common path, an attached verify pass, same fixture trees) — `internal/cmd/flowcost_record_test.go:248`
@@ -1380,7 +1373,7 @@ In `--solo` runs of /dross-execute and /dross-quick no human approves a task, so
 - `writeReviews` (PR body lists each solo task's review outcome and findings, escaped and budget-capped) — `internal/ship/body.go:135`
 - `quickBegin` (`dross quick begin/end` record a quick's mode and description — the reviewer's only spec source for a quick; a solo begin refuses without the installed reviewer) — `internal/cmd/quick.go:51`
 - `reviewerStatusIn` (`dross install` links the reviewer where Claude Code reads agents; readiness is ok / missing / stale / shadowed with a remedy) — `internal/cmd/reviewer_agent.go:126`
-- `reviewerSection` (`dross doctor` fails when the reviewer is missing, stale or shadowed, naming the path and fix) — `internal/cmd/doctor.go:1249`
+- `reviewerSection` (`dross doctor` fails when the reviewer is missing, stale or shadowed, naming the path and fix) — `internal/cmd/doctor.go:1214`
 - `userHooks` (SubagentStop runs `dross gate record`, so a background reviewer's verdict is recorded) — `internal/cmd/hooks.go:65`
 - Solo review loop (/dross-execute --solo: review after the green run, one fix round, failed reviews stash and move on) — `assets/prompts/execute.md:262`
 - Quick solo review (/dross-quick --solo is reviewed against its description before the commit) — `assets/prompts/quick.md:128`
@@ -1710,7 +1703,7 @@ Stated limit, measured rather than assumed: this buys a **free laptop, not a fas
 - `testlane.Expand` (`{path}` repeats the template per path, `{paths}` substitutes them into one instance and joins when declared; the sole shell quoter, so template text and substituted path are quoted by one implementation) — `internal/testlane/template.go:52`
 - `laneWholeTreeWarning` (names the lane and the token when a scoped selector is declared on a command already ending in `./...` or `.`) — `internal/cmd/validate.go:694`
 - `TestLaneSelectorRefusalIsGone` (pins the deletion of the orphaned per-field-group gate laneRefusal subsumed, and that laneRefusal itself stays) — `internal/cmd/test_lane_edit_test.go:731`
-- `TestExecutePromptDocumentsPrepareExit` (execute.md lists exit 7 among the codes that mean the run did not happen, so an agent cannot send a reader hunting a bug in code that never ran) — `internal/cmd/execute_prompt_test.go:204`
+- `TestExecutePromptDocumentsPrepareExit` (execute.md lists exit 7 among the codes that mean the run did not happen, so an agent cannot send a reader hunting a bug in code that never ran) — `internal/cmd/execute_prompt_test.go:201`
 - `TestExecutePromptPassesTaskFilesToTest` (execute's pre-commit gate scopes itself to the task's own plan.toml files) — `internal/cmd/prompt_test_command_test.go:123`
 - `fullLanePlan` (a bare `dross test` in a lanes-only repo runs every declared lane unscoped through runPlannedLanes — the full run the [commit gate](#tool-call-gates) records a green from) — `internal/cmd/lane_plan.go:355`
 - `openTestRun` (every run's full combined output goes to `.dross/logs/test-<ts>.log`, named before the first spawn and again at the end) — `internal/cmd/test_output.go:61`

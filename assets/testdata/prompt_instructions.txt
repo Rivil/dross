@@ -91,7 +91,6 @@ options.md	dross stack detect
 options.md	dross defaults save
 options.md	- **Save current project's [remote] as defaults**
 options.md	- **Skip**
-options.md	dross stats opt-out
 options.md	dross doctor
 options.md	dross rule list --scope project
 options.md	dross rule list --scope global
@@ -148,7 +147,6 @@ options.md	dross pause --auto
 options.md	dross reentry
 options.md	dross gate check
 options.md	dross gate record
-options.md	dross hooks nudge
 options.md	dross state touch "options reviewed"
 ship.md	dross interaction show
 ship.md	dross rule show
