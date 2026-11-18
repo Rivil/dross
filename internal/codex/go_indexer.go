@@ -103,6 +103,11 @@ func (g *GoIndexer) Symbols(file string) ([]Symbol, error) {
 			}
 		}
 	}
+	// Every symbol carries the package clause's name (not the directory's),
+	// methods included, so a `pkg.Name` citation can be matched strictly.
+	for i := range out {
+		out[i].Package = f.Name.Name
+	}
 	return out, nil
 }
 

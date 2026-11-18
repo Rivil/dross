@@ -1,9 +1,11 @@
 package codex
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -338,5 +340,195 @@ func AlphaTwo() {}
 	if filepath.Base(res.Symbols[0].File) != "alpha.go" {
 		t.Errorf("first symbol is in %q, want alpha.go — input order was bravo, alpha",
 			filepath.Base(res.Symbols[0].File))
+	}
+}
+
+// TestCanIndexReflectsToolAvailability pins CanIndex against SupportsFile:
+// with ast-grep absent, an ast-grep language is still *supported* but cannot
+// be *indexed*, while Go (stdlib parser) always can.
+func TestCanIndexReflectsToolAvailability(t *testing.T) {
+	prev := astGrepAvailableFn
+	t.Cleanup(func() { astGrepAvailableFn = prev })
+
+	astGrepAvailableFn = func() bool { return false }
+	if CanIndex("a.ts") {
+		t.Error("CanIndex(a.ts) = true with ast-grep absent, want false")
+	}
+	if !SupportsFile("a.ts") {
+		t.Error("SupportsFile(a.ts) must stay true with ast-grep absent")
+	}
+	if !CanIndex("a.go") {
+		t.Error("CanIndex(a.go) = false, want true (stdlib parser needs no tool)")
+	}
+
+	astGrepAvailableFn = func() bool { return true }
+	if !CanIndex("a.ts") {
+		t.Error("CanIndex(a.ts) = false with ast-grep present, want true")
+	}
+	for _, f := range []string{"x.py", "README.md", "noext"} {
+		if CanIndex(f) {
+			t.Errorf("CanIndex(%q) = true, want false (no indexer for the language)", f)
+		}
+	}
+}
+
+// TestSymbolsMatchesIndexWithoutGit pins Symbols to Index's symbol output for
+// one Go file in a directory that is not a git repo: same symbols, same order,
+// no error — the per-file entry point drops the enrichment, not the data.
+func TestSymbolsMatchesIndexWithoutGit(t *testing.T) {
+	dir := t.TempDir() // deliberately no .git
+	path := writeFile(t, dir, "two.go", `package two
+
+func B() {}
+
+type T struct{}
+
+func (T) M() {}
+
+func A() {}
+`)
+	got, err := Symbols(path)
+	if err != nil {
+		t.Fatalf("Symbols: %v", err)
+	}
+	res, err := Index([]string{path})
+	if err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+	if len(got) != 4 {
+		t.Fatalf("Symbols returned %d symbols, want 4: %+v", len(got), got)
+	}
+	if !reflect.DeepEqual(got, res.Symbols) {
+		t.Errorf("Symbols(f) != Index([f]).Symbols\nSymbols: %+v\n  Index: %+v", got, res.Symbols)
+	}
+}
+
+// TestSymbolsUnsupportedAndBroken pins Symbols' two error paths: a language
+// with no indexer, and a .go file the parser rejects. Neither may panic.
+func TestSymbolsUnsupportedAndBroken(t *testing.T) {
+	dir := t.TempDir()
+	broken := writeFile(t, dir, "broken.go", "package broken\n\nfunc (\n")
+	if _, err := Symbols(broken); err == nil {
+		t.Error("Symbols on a syntactically broken .go file returned no error")
+	}
+	py := writeFile(t, dir, "x.py", "def f():\n    pass\n")
+	if _, err := Symbols(py); !errors.Is(err, ErrUnsupportedLanguage) {
+		t.Errorf("Symbols(x.py) err = %v, want ErrUnsupportedLanguage", err)
+	}
+}
+
+// TestGoIndexerSetsPackageFromClause pins Symbol.Package to the package
+// clause, not the directory name, on every symbol kind including methods.
+func TestGoIndexerSetsPackageFromClause(t *testing.T) {
+	dir := t.TempDir()
+	// Directory "bar", package clause "foo": Package must follow the clause.
+	path := writeFile(t, dir, "bar/f.go", `package foo
+
+const C = 1
+
+var V int
+
+type T struct{}
+
+func (T) M() {}
+
+func F() {}
+`)
+	syms, err := Symbols(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(syms) != 5 {
+		t.Fatalf("got %d symbols, want 5: %+v", len(syms), syms)
+	}
+	sawMethod := false
+	for _, s := range syms {
+		if s.Package != "foo" {
+			t.Errorf("symbol %q: Package = %q, want %q", s.Name, s.Package, "foo")
+		}
+		if s.Name == "T.M" {
+			sawMethod = true
+		}
+	}
+	if !sawMethod {
+		t.Errorf("method must keep Name \"T.M\": %+v", syms)
+	}
+
+	// The real binary's entry file lives in cmd/dross but declares package main.
+	mainSyms, err := Symbols(filepath.Join("..", "..", "cmd", "dross", "main.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mainSyms) == 0 {
+		t.Fatal("cmd/dross/main.go yielded no symbols")
+	}
+	for _, s := range mainSyms {
+		if s.Package != "main" {
+			t.Errorf("cmd/dross/main.go symbol %q: Package = %q, want main", s.Name, s.Package)
+		}
+	}
+}
+
+// TestIndexKeepsSymbolDataAddingPackage re-indexes the
+// TestGoIndexerExtractsAllKinds fixture and pins every symbol's Name, Kind and
+// Line exactly: adding Package must not disturb existing data, only add to it.
+func TestIndexKeepsSymbolDataAddingPackage(t *testing.T) {
+	dir := makeFixture(t)
+	path := writeFile(t, dir, "thing.go", `package thing
+
+const Pi = 3.14
+const (
+	MaxRetries = 3
+	MinDelay   = 10
+)
+
+var Counter int
+
+type User struct {
+	Name string
+}
+
+type Stringer interface {
+	String() string
+}
+
+func New(name string) *User {
+	return &User{Name: name}
+}
+
+func (u *User) Greet() string {
+	return "hi " + u.Name
+}
+
+func (u User) Quiet() {}
+`)
+	res, err := Index([]string{path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	type row struct {
+		Name, Kind string
+		Line       int
+	}
+	want := []row{
+		{"Pi", "const", 3},
+		{"MaxRetries", "const", 5},
+		{"MinDelay", "const", 6},
+		{"Counter", "var", 9},
+		{"User", "type", 11},
+		{"Stringer", "type", 15},
+		{"New", "function", 19},
+		{"User.Greet", "method", 23},
+		{"User.Quiet", "method", 27},
+	}
+	var got []row
+	for _, s := range res.Symbols {
+		got = append(got, row{s.Name, s.Kind, s.Line})
+		if s.Package != "thing" {
+			t.Errorf("symbol %q: Package = %q, want thing", s.Name, s.Package)
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Index symbol data changed.\n got: %+v\nwant: %+v", got, want)
 	}
 }

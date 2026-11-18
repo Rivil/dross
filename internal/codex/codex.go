@@ -74,8 +74,9 @@ func Index(targetFiles []string) (*Result, error) {
 	// is documented in the package doc.
 	res.Callers = findCallers(targetFiles, res.Symbols)
 
-	// Stable output ordering for testability.
-	sort.Slice(res.Symbols, func(i, j int) bool {
+	// Stable output ordering for testability. SliceStable keeps symbols that
+	// share a line (`var a, b int`) in declaration order, matching Symbols.
+	sort.SliceStable(res.Symbols, func(i, j int) bool {
 		if res.Symbols[i].File != res.Symbols[j].File {
 			return res.Symbols[i].File < res.Symbols[j].File
 		}
@@ -105,6 +106,51 @@ func dispatch(indexers []Indexer, file string) Indexer {
 // absent (in which case Symbols() is empty). Go (stdlib parser) always works.
 func SupportsFile(file string) bool {
 	return dispatch(allIndexers(), file) != nil
+}
+
+// CanIndex reports whether codex can actually extract symbols from this file
+// right now: its language has an indexer (SupportsFile) AND that indexer can
+// run. Go always can (stdlib parser); an ast-grep-backed language can only
+// when the ast-grep binary is on PATH. Unlike SupportsFile it reflects tool
+// availability, so a consumer can tell "no symbols because none exist" apart
+// from "no symbols because the tool to find them is missing".
+func CanIndex(file string) bool {
+	idx := dispatch(allIndexers(), file)
+	if idx == nil {
+		return false
+	}
+	if _, isGo := idx.(*GoIndexer); isGo {
+		return true
+	}
+	return astGrepAvailable()
+}
+
+// Symbols extracts the top-level symbols of one file through the same
+// indexer dispatch Index uses, and nothing else: no sibling listing, no
+// cross-file caller grep, no git log. It is the cheap per-file entry point for
+// a consumer that indexes a whole tree. The file path is made absolute and the
+// result ordered by line, so Symbols(f) equals Index([]string{f}).Symbols.
+//
+// A file in a language with no indexer returns ErrUnsupportedLanguage; a file
+// its indexer cannot parse returns that indexer's error.
+func Symbols(file string) ([]Symbol, error) {
+	// Mirrors Index exactly so Symbols(f) == Index([f]).Symbols holds on every
+	// path: filepath.Abs fails only when the working directory is unreadable,
+	// and then Index keeps the path as given too. The indexer still opens the
+	// file through that path, so an unreadable target surfaces as its error.
+	if a, err := filepath.Abs(file); err == nil {
+		file = a
+	}
+	idx := dispatch(allIndexers(), file)
+	if idx == nil {
+		return nil, ErrUnsupportedLanguage
+	}
+	syms, err := idx.Symbols(file)
+	if err != nil {
+		return nil, err
+	}
+	sort.SliceStable(syms, func(i, j int) bool { return syms[i].Line < syms[j].Line })
+	return syms, nil
 }
 
 // siblings returns the names of files in dir, excluding the target
@@ -147,6 +193,11 @@ type Symbol struct {
 	Kind string // function | type | method | var | const
 	File string
 	Line int
+	// Package is the declaring package's name from the file's package clause
+	// (Go only; "" for languages with no package concept). Name is unchanged
+	// by it — a method stays "T.M" — so a qualified citation `pkg.T.M` matches
+	// on Package + Name.
+	Package string
 }
 
 // ErrUnsupportedLanguage is returned when no Indexer matches a file's
