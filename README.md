@@ -268,7 +268,7 @@ export PATH="$HOME/.local/bin:$PATH"
 | `/dross-rule` | ✅ |
 | `/dross-milestone` | ✅ (on a protected `milestone/*` — `dross protect --check` reads `protected` — `.dross` chores reach the branch through a chore PR, which merges before the integration PR opens; `--finalize` still deletes the branch) |
 | `/dross-spec` | ✅ |
-| `/dross-plan` | ✅ (`--panel` for 3-lens planner panel + cold judge; auto-runs plan review unless `--no-review`) |
+| `/dross-plan` | ✅ (`--panel` for 3-lens planner panel + cold judge; auto-runs plan review unless `--no-review`; runs `dross phase facts` before composing and again before the lock question, walking each unresolved citation one per turn — fix it, or confirm it is new with `dross phase mark-new` — until it exits 0) |
 | `/dross-plan-review` | ✅ (own context — cold subagent; also auto-run by `/dross-plan`) |
 | `/dross-execute` | ✅ |
 | `/dross-verify` | ✅ |

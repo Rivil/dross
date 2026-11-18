@@ -282,3 +282,9 @@ quick.md	- **No `git add -A`.**
 quick.md	- **No `--no-verify`**
 quick.md	- **No retries on red tests.**
 quick.md	- **Internal counter bumps on success only.**
+plan.md	dross phase facts <id> --json
+plan.md	dross phase facts <id>
+plan.md	dross phase mark-new <id> <citation>
+plan.md	dross task edit <id> t-N --description "<text>"
+plan.md	- **fix the citation**
+plan.md	- **confirm it is new**

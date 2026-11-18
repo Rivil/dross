@@ -139,7 +139,7 @@ func TestCommonPathFetchesNothing(t *testing.T) {
 		"mode=pair", "test_exit=0", "verdict=pass", "leg=attached", "unclassified=zero",
 		"panel=off", "auto=off", "ci=passed", "ship_result=clean", "target=given",
 		"spec_file=absent", "deferral=none", "lanes=unchanged", "remote=unchanged",
-		"closeout=clean",
+		"closeout=clean", "facts=clean",
 	} {
 		line := "**When** `" + trig + "` — always: `dross prompt partial execute solo`"
 		_, err := FetchPoints(partialFS("# execute\n"+line+"\n", nil), "execute.md")
@@ -220,6 +220,7 @@ func TestCommonPathVocabularyPinned(t *testing.T) {
 		"panel": "off", "auto": "off", "ci": "passed", "ship_result": "clean",
 		"target": "given", "spec_file": "absent", "deferral": "none",
 		"lanes": "unchanged", "remote": "unchanged", "closeout": "clean",
+		"facts": "clean",
 	}
 	got := CommonPath()
 	if len(got) != len(want) {
