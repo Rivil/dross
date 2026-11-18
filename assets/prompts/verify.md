@@ -102,6 +102,8 @@ criteria_uncovered = <count where status=uncovered or weak>
 
 Leave `[verify].measured_commit` and `[verify].measured_tree` exactly as `dross verify` wrote them — `dross ship` refuses a pass whose tree has moved since; without them that refusal degrades to a warning. Leave every `[[summary.leg]]` as written too, and **never** recompute `mutation_score` from them (averaging legs gives a small leg a large one's vote). A leg carrying an `error` measured nothing.
 
+Leave every `[[survivor]]` record exactly as written: `dross milestone complete` re-checks them against the accept/route stores, so a later accept or route clears one — never delete it by hand.
+
 Compute `[verify].verdict`. **Read `mutation_status` first** — when it is not `measured`, the score is a 0/0 artifact and the mutation leg has nothing to say. **The mutation leg gates on a count, not a ratio:** `[summary].unclassified_in_scope` (survivors in this phase's diff with no disposition) must be zero. `mutation_score` is reported as evidence, never a verdict lever — a cutoff lets killed mutants bury a live one.
 
 If `mutation_status == "measured"`:

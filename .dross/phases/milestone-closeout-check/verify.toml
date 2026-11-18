@@ -1,0 +1,109 @@
+[verify]
+  phase = "milestone-closeout-check"
+  generated_at = 2026-11-17T16:45:17.708198Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-11-17T16:46:31.192611Z
+  measured_commit = "903136e0da43d1b4a45fd7199e2a5abe0ae835bb"
+  measured_tree = "1f9eae7bb88e2c19efa5528c21cc0bee75300bdb"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.921161825726141
+  mutants_killed = 444
+  mutants_survived = 38
+  mutants_not_covered = 38
+  mutants_no_block = 37
+  mutants_test_gap = 1
+  mutants_in_scope = 482
+  unclassified_in_scope = 0
+  criteria_total = 11
+  criteria_covered = 11
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 444
+    survived = 38
+    timeout = 0
+    in_scope = 482
+    score = 0.921161825726141
+    file_count = 26
+    measured_on = "helicon"
+    whole_file = ["assets/partials.go — adapter-lacks-range-runner", "assets/partials_test.go — adapter-lacks-range-runner", "cmd/dross/main_test.go — adapter-lacks-range-runner", "internal/cmd/milestone.go — adapter-lacks-range-runner", "internal/cmd/milestone_ack.go — adapter-lacks-range-runner", "internal/cmd/milestone_ack_test.go — adapter-lacks-range-runner", "internal/cmd/milestone_check_test.go — adapter-lacks-range-runner", "internal/cmd/milestone_closeout.go — adapter-lacks-range-runner", "internal/cmd/milestone_closeout_cmd_test.go — adapter-lacks-range-runner", "internal/cmd/milestone_closeout_render.go — adapter-lacks-range-runner", "internal/cmd/milestone_closeout_render_test.go — adapter-lacks-range-runner", "internal/cmd/milestone_closeout_test.go — adapter-lacks-range-runner", "internal/cmd/milestone_dispatch_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/milestone_test.go — adapter-lacks-range-runner", "internal/cmd/milestone_verify_gate.go — adapter-lacks-range-runner", "internal/cmd/milestone_verify_gate_test.go — adapter-lacks-range-runner", "internal/cmd/prompt_expand_test.go — adapter-lacks-range-runner", "internal/cmd/verify_prompt_test.go — adapter-lacks-range-runner", "internal/milestone/milestone.go — adapter-lacks-range-runner", "internal/milestone/milestone_test.go — adapter-lacks-range-runner", "internal/pathfence/fields.go — adapter-lacks-range-runner", "internal/pathfence/fields_test.go — adapter-lacks-range-runner", "internal/verify/lifecycle.go — adapter-lacks-range-runner", "internal/verify/lifecycle_test.go — adapter-lacks-range-runner", "internal/verify/verify.go — adapter-lacks-range-runner", "internal/verify/verify_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/milestone_closeout_test.go:TestCloseoutNotDoneKind", "internal/cmd/milestone_closeout_cmd_test.go:TestMilestoneCompleteRefusesWithEveryCloseoutKind"]
+  notes = "not-done list asserted in roadmap order incl. unscaffolded + unparseable; built detail 'no shipped or complete record' pinned (t-10); refusal names phase:built. :200/:207/:209 are accepted switch-case ceilings whose arms these tests assert"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/milestone_closeout_test.go:TestCloseoutDeferredKind", "internal/cmd/milestone_closeout_test.go:TestCloseoutDeferredRoutedSurvivor"]
+  notes = "ids, source/index/target detail, absorb-by-own-target clears, other-phase absorb does not; routed-survivor variant"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/milestone_closeout_test.go:TestCloseoutSurvivorKind", "internal/verify/verify_test.go:TestSkeletonRecordsUndisposedSurvivors"]
+  notes = "records persisted by verify; re-classified against accept/route; detail names file:line and phase. :374 is an accepted switch-case ceiling asserted by TestCloseoutClearingCommands"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/milestone_closeout_cmd_test.go:TestMilestoneCompleteRefusesWithEveryCloseoutKind", "internal/cmd/milestone_closeout_cmd_test.go:TestMilestoneCompleteForceUnverifiedDropsOnlyThatKind/a collector error still refuses", "internal/cmd/milestone_check_test.go:TestMilestoneCompleteCheckForceUnverifiedKeepsCollectorErrors", "internal/cmd/milestone_closeout_render_test.go:TestRenderCloseoutListsEveryKindInOrder", "internal/cmd/milestone_closeout_render_test.go:TestRenderCloseoutOrdersIndexesNumerically"]
+  notes = "every kind grouped with clearing commands; t-10 pins collector errors surviving --force-unverified (gate.go:129 now killed) and within-kind ordering (render.go:115 now killed)"
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/milestone_closeout_cmd_test.go:TestMilestoneCompleteCarriesAcksIntoPRBody", "internal/cmd/milestone_ack_test.go:TestMilestoneAckRefusesEmptyReason", "internal/milestone/milestone_test.go:TestAckRefusesBlankReason"]
+  notes = "ack unblocks + item/reason reach PR body; empty/blank/missing reason refused with toml sha unchanged"
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/milestone_check_test.go:TestMilestoneCompleteCheckIsSideEffectFree"]
+  notes = "item lines equal the refusal's, acked item listed, non-zero exit, .dross hashes/refs/origin/FETCH_HEAD unchanged, no provider calls"
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/milestone_dispatch_prompt_test.go:TestMilestonePromptCompletionArmChecksFirst", "internal/cmd/milestone_dispatch_prompt_test.go:TestMilestonePromptCloseoutPartialWalksOnePerTurn"]
+  notes = "order --check < fetch < confirm < open; walk one-per-turn, resolve/ack options, re-check loop until exit 0"
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/milestone_closeout_cmd_test.go:TestMilestoneCompleteEmptyCloseoutKeepsTodaysBody", "internal/cmd/milestone_check_test.go:TestMilestoneCompleteCheckEmpty"]
+  notes = "no record and empty phases: PR opens with byte-equal body; --check exits 0 with 'nothing unresolved'"
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/milestone_ack_test.go:TestMilestoneReAckReplaces", "internal/cmd/milestone_check_test.go:TestMilestoneCompleteCheckIsRepeatable"]
+  notes = "one record with latest reason; two --check runs byte-identical"
+
+[[criterion]]
+  id = "c-10"
+  status = "covered"
+  tests = ["internal/cmd/milestone_closeout_cmd_test.go:TestMilestoneFinalizeSkipsTheCloseoutCheck"]
+  notes = "finalize succeeds with a not-done phase + unabsorbed item seeded; no close-out output"
+
+[[criterion]]
+  id = "c-11"
+  status = "covered"
+  tests = ["internal/cmd/milestone_closeout_cmd_test.go:TestMilestoneCompleteLeavesStaleAcksOutOfPRBody", "internal/cmd/milestone_check_test.go:TestMilestoneCompleteCheckListsStaleAcksAsNonBlocking"]
+  notes = "stale ack absent from PR body; --check exit 0 with it under the stale heading, not applied"
+
+[[finding]]
+  severity = "NOTE"
+  text = "score 0.92 over 482 in-scope mutants; 37 uncoverable by construction (no go-cover block), efficacy 1.00 over the 445 reachable; all 4 in-hunk survivors (milestone_closeout.go:200/207/209/374) accepted as switch-case attribution ceilings; 216 inherited survivors accepted; all 26 files whole-file (gremlins lacks a range runner)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "solo review t-5 FLAG still open: checkAckable (milestone_ack.go:136) says 'phase is done' for a listed phase without mentioning collector errors; the ack is still refused, so only the message is misleading"

@@ -514,6 +514,7 @@ type msPRCapture struct {
 	created int
 	base    string
 	head    string
+	body    string
 }
 
 // milestoneOpenFixture stands up a dross repo (git + bare origin) with a forgejo
@@ -547,6 +548,7 @@ func milestoneOpenFixture(t *testing.T) (string, *msPRCapture) {
 				_ = json.Unmarshal(body, &doc)
 				cap.base, _ = doc["base"].(string)
 				cap.head, _ = doc["head"].(string)
+				cap.body, _ = doc["body"].(string)
 				cap.created++
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(`{"number":42,"html_url":"https://forge.example/me/p/pulls/42"}`))

@@ -147,6 +147,7 @@ func TestRegistryCoversEveryKnownFieldByName(t *testing.T) {
 		"verify.LegSummary.WholeFile",
 		"verify.LegSummary.Ranges",
 		"verify.OutOfScopeMutant.File",
+		"verify.SurvivorRecord.File",
 		"findings.Record.File",
 		"security.Finding.File",
 		"quality.Finding.File",

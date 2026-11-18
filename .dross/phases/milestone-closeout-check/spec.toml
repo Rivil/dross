@@ -1,0 +1,82 @@
+[phase]
+  id = "milestone-closeout-check"
+  title = "milestone-closeout-check"
+  milestone = "v1.9"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross milestone complete` refuses to open the integration PR while any phase in the milestone's phases array is not done (no complete/shipped record; an unscaffolded roadmap entry counts as not done), naming each one."
+
+[[criteria]]
+  id = "c-2"
+  text = "`dross milestone complete` refuses while any deferred item routed to a phase in this milestone has no `dross deferred absorb` record, naming the item's source, index and target phase."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross milestone complete` refuses while any survivor recorded by a milestone phase's verify run has no disposition (neither accepted nor routed), naming its file:line and phase."
+
+[[criteria]]
+  id = "c-4"
+  text = "A single refusal lists every unresolved item across all kinds (unverified, not-done phases, unabsorbed deferred items, undisposed survivors), grouped by kind, each line naming the command that clears it; it never stops at the first failing kind."
+  deferred = ["c7348fe83200c482"]
+
+[[criteria]]
+  id = "c-5"
+  text = "Any unresolved item can be acknowledged with a non-empty reason; an acknowledged item no longer blocks `milestone complete`, and every acknowledgement (item + reason) appears in the integration PR body. An ack with an empty reason is refused."
+
+[[criteria]]
+  id = "c-6"
+  text = "`dross milestone complete --check` prints the same enumeration as the refusal plus acknowledged items, exits non-zero when anything is unresolved, and never pushes, opens a PR or writes any file."
+
+[[criteria]]
+  id = "c-7"
+  text = "The /dross-milestone completion arm runs `dross milestone complete --check` before its close-out confirm and walks each unresolved item one per turn (resolve it now / acknowledge with a reason), opening the PR only once --check is clean."
+
+[[criteria]]
+  id = "c-8"
+  text = "With nothing unresolved (including no milestone record or an empty phases array), `milestone complete` opens the PR exactly as today and `--check` exits 0 reporting nothing unresolved."
+
+[[criteria]]
+  id = "c-9"
+  text = "Acknowledging an already-acknowledged item leaves exactly one record for it, carrying the latest reason, and re-running `--check` after an ack reports the same result."
+
+[[criteria]]
+  id = "c-10"
+  text = "`dross milestone complete --finalize` never runs the close-out check: a merged milestone finalizes even with unresolved items."
+
+[[criteria]]
+  id = "c-11"
+  text = "An acknowledgement whose item is no longer unresolved is left out of the integration PR body, and `--check` lists it under a separate stale-acks heading without counting it as blocking."
+
+[[decisions]]
+  key = "survivor_source"
+  choice = "`dross verify` persists each undisposed out-of-scope survivor as a structured record (key, file:line, op) in verify.toml; close-out re-classifies those records against the current accept/route stores. Phases verified before this ships have no records and count as none."
+  why = "Survivors exist today only as free-text FLAG findings; parsing text is brittle and re-running the drain costs a 1-2h mutation run per check."
+  locked = true
+
+[[decisions]]
+  key = "ack_storage"
+  choice = "`dross milestone ack <item> --reason \"...\"` writes a `[[closeout_ack]]` record (item, reason, at) into .dross/milestones/<v>.toml; item ids are `phase:<slug>`, `deferred:<source>#<idx>`, `survivor:<key>`."
+  why = "Committed and travels with the milestone; one record per item makes re-runs idempotent without repeating flags."
+  locked = true
+
+[[decisions]]
+  key = "force_unverified"
+  choice = "Keep `--force-unverified`, scoped to the unverified kind only and unrecorded; every other kind needs an ack."
+  why = "No break for existing use; the new kinds get the reason-carrying ack path."
+  locked = true
+
+[[edges]]
+  class = "empty"
+  outcome = "covered"
+  criteria = ["c-8"]
+
+[[edges]]
+  class = "idempotency"
+  outcome = "covered"
+  criteria = ["c-9"]
+
+[[edges]]
+  class = "adjacency"
+  outcome = "covered"
+  criteria = ["c-10"]

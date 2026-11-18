@@ -6,7 +6,132 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
+
+// A milestone toml with no acks must load a nil Closeout and re-save without
+// any closeout_ack key — every milestone already on disk stays byte-stable.
+func TestNoAcksStaysAbsent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v1.1.toml")
+	body := "[milestone]\n  version = \"v1.1\"\n\nphases = [\"one\"]\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Closeout != nil {
+		t.Errorf("Closeout = %#v, want nil for a toml with no acks", m.Closeout)
+	}
+	if err := m.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	out, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "closeout_ack") {
+		t.Errorf("re-saved toml grew a closeout_ack key:\n%s", out)
+	}
+}
+
+func TestAckRefusesBlankReason(t *testing.T) {
+	m := &Milestone{}
+	t1 := time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)
+	if err := m.Ack("phase:p", "kept", t1); err != nil {
+		t.Fatal(err)
+	}
+	for _, reason := range []string{"", "   ", "\t\n"} {
+		if err := m.Ack("phase:p", reason, t1); err == nil {
+			t.Errorf("Ack accepted reason %q", reason)
+		}
+		if err := m.Ack("phase:q", reason, t1); err == nil {
+			t.Errorf("Ack accepted reason %q for a new item", reason)
+		}
+	}
+	if len(m.Closeout) != 1 || m.Closeout[0].Reason != "kept" {
+		t.Errorf("a refused ack changed the records: %+v", m.Closeout)
+	}
+}
+
+func TestAckUpsertsByItem(t *testing.T) {
+	m := &Milestone{}
+	t1 := time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)
+	t2 := t1.Add(time.Hour)
+	item := "deferred:p1#2"
+	if err := m.Ack(item, "r1", t1); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Ack("phase:other", "unrelated", t1); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Ack(item, "r2", t2); err != nil {
+		t.Fatal(err)
+	}
+	var hits []CloseoutAck
+	for _, a := range m.Closeout {
+		if a.Item == item {
+			hits = append(hits, a)
+		}
+	}
+	if len(hits) != 1 {
+		t.Fatalf("re-ack left %d records for %s, want 1: %+v", len(hits), item, m.Closeout)
+	}
+	if hits[0].Reason != "r2" || !hits[0].At.Equal(t2) {
+		t.Errorf("re-ack record = %+v, want reason r2 at %v", hits[0], t2)
+	}
+	if len(m.Closeout) != 2 {
+		t.Errorf("records = %d, want 2 (re-ack must not append): %+v", len(m.Closeout), m.Closeout)
+	}
+}
+
+func TestParseAckItem(t *testing.T) {
+	accepted := []struct {
+		id   string
+		want AckItem
+	}{
+		{"phase:built", AckItem{Kind: AckPhase, Payload: "built"}},
+		{"deferred:_project#0", AckItem{Kind: AckDeferred, Payload: "_project#0", Source: "_project", Index: 0}},
+		{"deferred:src#12", AckItem{Kind: AckDeferred, Payload: "src#12", Source: "src", Index: 12}},
+		{"survivor:abc123", AckItem{Kind: AckSurvivor, Payload: "abc123"}},
+		// A keyless survivor id keeps its inner colons: the kind splits on
+		// the first colon only.
+		{"survivor:f.go:12:op", AckItem{Kind: AckSurvivor, Payload: "f.go:12:op"}},
+	}
+	for _, c := range accepted {
+		got, err := ParseAckItem(c.id)
+		if err != nil {
+			t.Errorf("ParseAckItem(%q) refused: %v", c.id, err)
+			continue
+		}
+		if got != c.want {
+			t.Errorf("ParseAckItem(%q) = %+v, want %+v", c.id, got, c.want)
+		}
+		if f := FormatAckItem(got); f != c.id {
+			t.Errorf("FormatAckItem(ParseAckItem(%q)) = %q, want the id back", c.id, f)
+		}
+		again, err := ParseAckItem(FormatAckItem(got))
+		if err != nil || again != got {
+			t.Errorf("Parse(Format(%+v)) = %+v, %v; want a round-trip", got, again, err)
+		}
+	}
+
+	for _, id := range []string{
+		"", "bogus", "phase:", "deferred:src", "deferred:src#x", "deferred:x#-1",
+		"deferred:#1", "deferred:src#", "deferred:src#+1", "deferred:src#01",
+		"survivor:", "board:DRO-1", ":phase",
+	} {
+		_, err := ParseAckItem(id)
+		if err == nil {
+			t.Errorf("ParseAckItem(%q) accepted a malformed id", id)
+			continue
+		}
+		if !strings.Contains(err.Error(), "phase:<slug>") || !strings.Contains(err.Error(), "deferred:<source>#<index>") || !strings.Contains(err.Error(), "survivor:<key>") {
+			t.Errorf("ParseAckItem(%q) error %q does not list the three forms", id, err)
+		}
+	}
+}
 
 func TestRoundTrip(t *testing.T) {
 	dir := t.TempDir()
@@ -24,6 +149,10 @@ func TestRoundTrip(t *testing.T) {
 			NonGoals:        []string{"realtime collab"},
 		},
 		Phases: []string{"01-auth", "02-meals", "03-tagging"},
+		Closeout: []CloseoutAck{
+			{Item: "phase:03-tagging", Reason: "moved to v2.0", At: time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)},
+			{Item: "survivor:f.go:12:op", Reason: "equivalent mutant", At: time.Date(2026, 11, 15, 11, 30, 0, 0, time.UTC)},
+		},
 	}
 	original.Milestone.Base = "milestone/v1.1"
 	if err := original.Save(path); err != nil {
@@ -33,8 +162,21 @@ func TestRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(original, loaded) {
-		t.Errorf("round-trip drift:\norig: %+v\nload: %+v", original, loaded)
+	// Times are compared with Equal below; the decoder's zone pointer need
+	// not be the same *time.Location, so the rest is DeepEqual'd without them.
+	if len(loaded.Closeout) != len(original.Closeout) {
+		t.Fatalf("closeout acks: loaded %d, want %d: %+v", len(loaded.Closeout), len(original.Closeout), loaded.Closeout)
+	}
+	for i, want := range original.Closeout {
+		got := loaded.Closeout[i]
+		if got.Item != want.Item || got.Reason != want.Reason || !got.At.Equal(want.At) {
+			t.Errorf("closeout_ack[%d] = %+v, want %+v", i, got, want)
+		}
+	}
+	origRest, loadRest := *original, *loaded
+	origRest.Closeout, loadRest.Closeout = nil, nil
+	if !reflect.DeepEqual(origRest, loadRest) {
+		t.Errorf("round-trip drift:\norig: %+v\nload: %+v", origRest, loadRest)
 	}
 	// Called out separately from the DeepEqual so a dropped `base` toml tag
 	// names itself instead of printing two whole structs.

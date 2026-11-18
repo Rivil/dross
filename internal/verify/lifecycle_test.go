@@ -359,7 +359,7 @@ func TestAmbiguousAndRoutedSurvivorCarriesBothNotes(t *testing.T) {
 func TestOutOfScopeMutantWireForm(t *testing.T) {
 	in := OutOfScopeMutant{
 		File: "internal/x.go", Line: 42, Op: "OP", Language: "go",
-		Key: "deadbeef", Lifecycle: LifecycleRouted, Note: "routed to board-sync-truth",
+		Key: "deadbeef", Lifecycle: LifecycleRouted, Note: "routed to board-sync-truth", Ambiguous: true,
 	}
 	raw, err := json.Marshal(in)
 	if err != nil {
@@ -369,7 +369,7 @@ func TestOutOfScopeMutantWireForm(t *testing.T) {
 	if err := json.Unmarshal(raw, &fields); err != nil {
 		t.Fatalf("unmarshal into map: %v", err)
 	}
-	for _, want := range []string{"key", "lifecycle", "note"} {
+	for _, want := range []string{"key", "lifecycle", "note", "ambiguous"} {
 		if _, ok := fields[want]; !ok {
 			t.Errorf("OutOfScopeMutant did not serialise %q; raw = %s", want, raw)
 		}
@@ -381,5 +381,63 @@ func TestOutOfScopeMutantWireForm(t *testing.T) {
 	}
 	if out != in {
 		t.Errorf("round-trip = %+v, want %+v", out, in)
+	}
+}
+
+// TestAmbiguousOutOfScopeSurvivorIsRecordedAmbiguous (c-3): an out-of-scope
+// survivor whose acceptance was withheld for ambiguity carries that verdict all
+// the way into verify.toml's record. Close-out re-classifies the record against
+// the acceptance store; without the flag it would find the acceptance and read
+// the survivor as settled — the false suppression the ambiguity rule exists to
+// prevent. An unambiguous neighbour stays unflagged, so the flag is the
+// ambiguity's and not a constant.
+func TestAmbiguousOutOfScopeSurvivorIsRecordedAmbiguous(t *testing.T) {
+	ti := fixtureIdentifier()
+	dupKey := keyOf(t, ti, "dup.go", 50, "OP")
+	tests := &Tests{
+		Phase: "p",
+		OutOfScope: []OutOfScopeMutant{
+			{File: "dup.go", Line: 50, Op: "OP", Language: "go"},
+			{File: "bare.go", Line: 40, Op: "OP", Language: "go"},
+		},
+	}
+
+	ApplyLifecycle(tests, map[string]string{dupKey: "ceiling"}, nil, ti)
+
+	if o := tests.OutOfScope[0]; !o.Ambiguous || o.Lifecycle != LifecycleUnclassified {
+		t.Errorf("accepted-but-ambiguous out-of-scope survivor stamped %+v, want ambiguous and unclassified", o)
+	}
+	if tests.OutOfScope[1].Ambiguous {
+		t.Errorf("unambiguous survivor stamped ambiguous: %+v", tests.OutOfScope[1])
+	}
+
+	got := Skeleton(tests, nil).Survivors
+	want := []SurvivorRecord{
+		{Key: dupKey, File: "dup.go", Line: 50, Op: "OP", Ambiguous: true},
+		{Key: keyOf(t, ti, "bare.go", 40, "OP"), File: "bare.go", Line: 40, Op: "OP"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("survivor records = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("record %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+// TestClassifyMarksOnlyWithheldAcceptancesAmbiguous: the flag means "an
+// acceptance matched and was withheld", not "the key repeats in its file". An
+// ambiguous key nobody accepted has no acceptance to distrust.
+func TestClassifyMarksOnlyWithheldAcceptancesAmbiguous(t *testing.T) {
+	ti := fixtureIdentifier()
+	survivors := []Survivor{{File: "dup.go", Line: 50, Op: "OP", OutOfScope: true}}
+
+	if l := Classify(survivors, nil, nil, ti); l.Unclassified[0].Ambiguous {
+		t.Errorf("unaccepted ambiguous key flagged: %+v", l.Unclassified[0])
+	}
+	accepted := map[string]string{keyOf(t, ti, "dup.go", 50, "OP"): "ceiling"}
+	if l := Classify(survivors, accepted, nil, ti); !l.Unclassified[0].Ambiguous {
+		t.Errorf("withheld acceptance not flagged: %+v", l.Unclassified[0])
 	}
 }

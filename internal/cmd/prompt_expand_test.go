@@ -51,7 +51,6 @@ var rawPromptReadAllowlist = map[string]bool{
 	"internal/cmd/interaction_snippet_test.go#contextRuleSection":                 true,
 	"internal/cmd/interaction_snippet_test.go#interactionSnippetContent":          true,
 	"internal/cmd/interaction_test.go#TestInteractionPlaybookSingleSource":        true,
-	"internal/cmd/milestone_dispatch_prompt_test.go#milestonePromptText":          true,
 	"internal/cmd/pause_prompt_test.go#pausePromptContent":                        true,
 	"internal/cmd/pull_envelope_test.go#TestPromptsDescribeTheEnvelopeContract":   true,
 	"internal/cmd/quality_prompt_test.go#qualityPromptContent":                    true,
@@ -65,7 +64,7 @@ var rawPromptReadAllowlist = map[string]bool{
 	"internal/rules/rules_test.go#TestInteractionRuleUsesEmitter":                 true,
 }
 
-const rawPromptReadAllowlistSize = 20
+const rawPromptReadAllowlistSize = 19
 
 // promptGuardRoots are the trees the raw-read guards walk, relative to the
 // repo root: internal/ holds the prompt-content tests, cmd/ the binaries'.
