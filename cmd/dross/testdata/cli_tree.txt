@@ -167,6 +167,7 @@ dross phase insert flag --after (string) default="" usage="place the new phase i
 dross phase insert flag --before (string) default="" usage="place the new phase immediately before this phase slug"
 dross phase list | use="list" short="List phases, marking the done ones"
 dross phase list flag --milestone (string) default="" usage="list this milestone's roadmap in array order, including slugs with no phase directory"
+dross phase mark-new | use="mark-new <phase-id> <citation>..." short="Record citations a phase introduces in its spec's new list, so `dross phase facts` stops reporting them"
 dross phase migrate | use="migrate" short="Convert legacy NN-slug phases to bare-slug identity"
 dross phase move | use="move <slug>" short="Reorder a phase within its milestone's phases array"
 dross phase move flag --after (string) default="" usage="place <slug> immediately after this phase slug"

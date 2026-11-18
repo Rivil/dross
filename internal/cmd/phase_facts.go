@@ -156,8 +156,8 @@ func buildFactsReport(id, checked string, rep facts.Report) factsReport {
 	return r
 }
 
-// printFacts renders one line per finding, or the clean line naming what was
-// checked. A degraded index is said either way: a clean degraded run has not
+// printFacts renders one line per finding then the mark-new hint, or the
+// clean line naming what was checked. A degraded index is said either way: a clean degraded run has not
 // checked every symbol, and a reader must not take it for a full pass.
 func printFacts(r factsReport) {
 	if len(r.Unresolved) == 0 {
@@ -165,6 +165,9 @@ func printFacts(r factsReport) {
 	}
 	for _, row := range r.Unresolved {
 		Print(row.Line)
+	}
+	if len(r.Unresolved) > 0 {
+		Printf("fix the spec, or confirm new with `dross phase mark-new %s <citation>...`\n", r.Phase)
 	}
 	if r.Degraded {
 		Printf("symbol checks were skipped for unmatched symbols — %s\n", r.DegradedWhy)
