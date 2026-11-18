@@ -113,7 +113,6 @@
   "backlog": {
     "slug:ci-timing-trend": "DRO-701",
     "slug:handoff-staleness": "DRO-703",
-    "slug:milestone-closeout-check": "DRO-697",
     "slug:one-way-door-decisions": "DRO-700",
     "slug:prompt-behaviour-evals": "DRO-704",
     "slug:spec-fact-drift": "DRO-698",
@@ -385,7 +384,6 @@
     "someday:id:c54759da0ff89c69": "DRO-682",
     "someday:id:c5c048e9871e7f7f": "DRO-60",
     "someday:id:c648f395c95323ea": "DRO-554",
-    "someday:id:c7348fe83200c482": "DRO-681",
     "someday:id:c893c64201724fe8": "DRO-564",
     "someday:id:cca644b48f004e7c": "DRO-599",
     "someday:id:ccf2e24ffabb298f": "DRO-44",
