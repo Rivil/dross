@@ -72,6 +72,22 @@
         }
       ]
     },
+    "t-13": {
+      "files": [
+        "internal/facts/facts.go",
+        "internal/facts/facts_test.go"
+      ],
+      "commit": "6a8fc659",
+      "completed_at": "2026-11-19T07:40:41.016545Z",
+      "landmarks": [
+        {
+          "feature": "spec fact-drift check",
+          "symbol": "Resolver.check",
+          "loc": "internal/facts/facts.go:214",
+          "what": "a file:line citation into an existing file outside the indexed tree (gitignored) is Skipped, never reported gone"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/codex/codex.go",
@@ -311,6 +327,34 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "_plan.facts.md's field/kind vocabulary (missing/moved/gone/unresolved; 'criteria c-N', 'decisions \u003ckey\u003e choice', 'task t-N description') matches internal/facts/facts.go and the factsRow JSON tags in internal/cmd/phase_facts.go.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-13": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-2",
+          "text": "The new skip branch in check() (facts.go:214) covers anything containCitation accepts that is missing from Tree(), not only gitignored files. A slashed file:line citation into a directory, or into a file inside a nested repo, is now silently Skipped where it used to be reported 'gone'. This is rare and matches the 'unindexed is never reported' rule, but the comment only mentions gitignored files.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "check() now runs its own locate() before calling r.Line, so check() can no longer reach Line's len(cands)==0 -\u003e Unresolved arm. That arm stays only for direct callers of Line, as the task intended.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The new test covers a bare-name ignored file, a slashed path into an ignored directory (with both a right and a wrong line), and a genuinely missing file in one table.",
           "resolution": "non-blocking, left"
         }
       ]

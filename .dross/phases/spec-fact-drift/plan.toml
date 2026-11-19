@@ -149,5 +149,5 @@ Export Symbols(file): indexer dispatch only — no findCallers, siblings or git 
   description = "Verify finding (t-7 review FLAG, confirmed in code): a file:line citation into a gitignored file passes containCitation (statContained / lsIgnored), but Resolver.Line locates the file in Tree(), which deliberately omits ignored files (paths.go: ignored files never feed the symbol index), so it returns Unresolved and Check reports the valid citation as 'gone' — facts exits non-zero and plan-lock refuses. Fix in facts.go check(): when a KindLine citation's file exists (containCitation succeeded) but locate() over r.Files() finds no candidate, classify it Skipped — the file is outside the indexed tree, and an unindexed file is never reported (same rule as a .py line citation). Resolver.Line's own 'line into a missing file = unresolved' contract stays unchanged."
   covers = ["c-2", "c-6"]
   test_contract = ["if a file:line citation into an existing gitignored file is reported (gone or otherwise), a facts test over a real git repo with a .gitignore'd x_gen.go citing `Init` — x_gen.go:7 fails", "if a file:line citation into a genuinely missing file stops reporting 'missing', TestCheckEndToEnd fails"]
-  status = "pending"
+  status = "done"
   depends_on = ["t-7"]
