@@ -151,3 +151,31 @@ func TestGlobEscape(t *testing.T) {
 		t.Errorf("globEscape = %q, want %q", got, want)
 	}
 }
+
+// stubIgnored swaps the ignored-file lookup for one that fails with err.
+func stubIgnored(t *testing.T, err error) {
+	t.Helper()
+	prev := lsIgnored
+	t.Cleanup(func() { lsIgnored = prev })
+	lsIgnored = func(string, string) (string, error) { return "", err }
+}
+
+// TestContainCitationIgnoredLookupFailure: inside a repository a failed
+// ignored-file lookup is a failure to look, never ErrMissing — the file may be
+// there; outside git (git says no repository) a bare name it cannot find is
+// still missing.
+func TestContainCitationIgnoredLookupFailure(t *testing.T) {
+	tree := func() ([]string, error) { return []string{"main.go"}, nil }
+
+	boom := errors.New("exit status 128")
+	stubIgnored(t, boom)
+	_, err := containCitation(t.TempDir(), "state.json", tree)
+	if err == nil || errors.Is(err, ErrMissing) || !errors.Is(err, boom) {
+		t.Errorf("lookup failure inside git: err = %v; want the git error and not ErrMissing", err)
+	}
+
+	stubIgnored(t, errors.New("fatal: not a git repository"))
+	if _, err := containCitation(t.TempDir(), "state.json", tree); !errors.Is(err, ErrMissing) {
+		t.Errorf("lookup outside git: err = %v; want ErrMissing", err)
+	}
+}

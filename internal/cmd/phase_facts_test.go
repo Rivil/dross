@@ -262,9 +262,12 @@ func hashTree(t *testing.T, dir string) map[string]string {
 // the fixture is byte-identical afterwards, none is added, and no *.tmp is
 // left behind.
 func TestPhaseFactsNeverWrites(t *testing.T) {
-	for _, tc := range []struct{ name, text string }{
-		{"clean", "plain prose"},
-		{"unresolved", "see " + missingCite + " and `nopkg.Missing()`"},
+	// wantErr is what each run must return: nil when clean, the unresolved
+	// count when not — so a run that failed early, writing nothing because it
+	// did nothing, cannot pass the hash check vacuously.
+	for _, tc := range []struct{ name, text, wantErr string }{
+		{"clean", "plain prose", ""},
+		{"unresolved", "see " + missingCite + " and `nopkg.Missing()`", "unresolved citation(s)"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := factsRepo(t)
@@ -273,7 +276,13 @@ func TestPhaseFactsNeverWrites(t *testing.T) {
 			mustWrite(t, filepath.Join(dir, "a.go"), "package a\n\nfunc A() {}\n")
 			before := hashTree(t, dir)
 			for _, args := range [][]string{{"fx"}, {"fx", "--json"}} {
-				_, _, _ = runFacts(t, args...)
+				_, _, err := runFacts(t, args...)
+				switch {
+				case tc.wantErr == "" && err != nil:
+					t.Errorf("phase facts %v on a clean phase: %v, want nil", args, err)
+				case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+					t.Errorf("phase facts %v = %v, want an error naming %q", args, err, tc.wantErr)
+				}
 			}
 			after := hashTree(t, dir)
 			if !reflect.DeepEqual(before, after) {

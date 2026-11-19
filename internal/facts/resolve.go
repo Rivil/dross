@@ -108,7 +108,8 @@ func (r *Resolver) index() (*treeIndex, error) {
 // Line resolves a file:line citation that carries a paired symbol. An
 // unpaired file:line has nothing to classify here (its path existence is
 // checked separately) and is Skipped. A bare basename shared by several files
-// is Ambiguous, never guessed; one naming no file is Unresolved.
+// is Ambiguous, never guessed; one naming no file is Unresolved. A file codex
+// cannot index, or one that failed to parse, is Skipped: never reported.
 func (r *Resolver) Line(c Citation) (Resolved, error) {
 	if c.Kind != KindLine {
 		return Resolved{}, fmt.Errorf("facts: Line given a %s citation %q", c.Kind, c.Raw)
@@ -135,8 +136,14 @@ func (r *Resolver) Line(c Citation) (Resolved, error) {
 	if err != nil {
 		return Resolved{}, err
 	}
+	syms, parsed := idx.byFile[file]
+	if !parsed {
+		// Indexable but unparsed: the file failed to parse, so its symbols
+		// are unknown and the citation is outside the index, never gone.
+		return Resolved{Status: architecture.StatusSkipped}, nil
+	}
 	link := architecture.SymbolLink{Symbol: c.Symbol, File: file, Line: c.Line}
-	res := architecture.Classify(link, idx.byFile[file], StrictMatch)
+	res := architecture.Classify(link, syms, StrictMatch)
 	return Resolved{Status: res.Status, NewLine: res.NewLine}, nil
 }
 

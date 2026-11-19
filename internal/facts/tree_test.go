@@ -111,3 +111,58 @@ func TestTreeRealNonGitDir(t *testing.T) {
 		t.Errorf("non-git walk = %v, want a.go", files)
 	}
 }
+
+// TestTreeGitFailureInsideRepoIsAnError: when git fails for any reason but
+// "not a git repository" — a safe.directory refusal, a broken index — Tree
+// returns the error rather than walking, which would list ignored files.
+func TestTreeGitFailureInsideRepoIsAnError(t *testing.T) {
+	prev := lsFiles
+	t.Cleanup(func() { lsFiles = prev })
+	refused := errors.New("fatal: detected dubious ownership in repository")
+	lsFiles = func(string) (string, error) { return "", refused }
+
+	root := t.TempDir()
+	write(t, root, ".gitignore", "dist/\n")
+	write(t, root, "a.go", "package a\n")
+	write(t, root, "dist/ignored.go", "package dist\n")
+
+	files, err := Tree(root)
+	if !errors.Is(err, refused) {
+		t.Errorf("Tree err = %v, want the git failure", err)
+	}
+	if files != nil {
+		t.Errorf("Tree listed %v on a git failure, want nothing (the walk would list dist/ignored.go)", files)
+	}
+}
+
+// TestTreeGitErrorClassification pins which git failures mean "no repository
+// here" (walk) and which are a repository git would not list (error).
+func TestTreeGitErrorClassification(t *testing.T) {
+	prev := lsFiles
+	t.Cleanup(func() { lsFiles = prev })
+	root := t.TempDir()
+	write(t, root, "a.go", "package a\n")
+
+	cases := []struct {
+		name string
+		err  error
+		walk bool
+	}{
+		{"git not installed", &exec.Error{Name: "git", Err: exec.ErrNotFound}, true},
+		{"stderr says not a repo", &exec.ExitError{Stderr: []byte("fatal: not a git repository (or any of the parent directories): .git\n")}, true},
+		{"message says not a repo", errors.New("not a git repository"), true},
+		{"dubious ownership", &exec.ExitError{Stderr: []byte("fatal: detected dubious ownership in repository at '/r'\n")}, false},
+		{"broken index", &exec.ExitError{Stderr: []byte("error: bad signature 0x00000000\nfatal: index file corrupt\n")}, false},
+		{"bare exit status", errors.New("exit status 128"), false},
+	}
+	for _, tc := range cases {
+		lsFiles = func(string) (string, error) { return "", tc.err }
+		files, err := Tree(root)
+		switch {
+		case tc.walk && (err != nil || !contains(files, "a.go")):
+			t.Errorf("%s: Tree = %v, %v; want the fallback walk listing a.go", tc.name, files, err)
+		case !tc.walk && (!errors.Is(err, tc.err) || files != nil):
+			t.Errorf("%s: Tree = %v, %v; want the git error and no files", tc.name, files, err)
+		}
+	}
+}

@@ -321,3 +321,23 @@ func TestBrokenProjectFileDegrades(t *testing.T) {
 		t.Errorf("Degraded = %v (%q), want true naming the broken file", deg, why)
 	}
 }
+
+// TestBrokenProjectFileLineIsSkipped: a paired line citation into a project
+// file that failed to parse is outside the index — skipped, never gone — while
+// the index reports itself degraded by that file.
+func TestBrokenProjectFileLineIsSkipped(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "a/bad.go", "package a\n\nfunc Init( {\n")
+	write(t, root, "a/good.go", "package a\n\nfunc Good() {}\n")
+	r := NewResolver(root)
+	if got := mustLine(t, r, line("bad.go", 3, "Init")); got.Status != architecture.StatusSkipped {
+		t.Errorf("`Init` — bad.go:3 into an unparsable file = %+v, want skipped", got)
+	}
+	deg, why := r.Degraded()
+	if !deg || !strings.Contains(why, "a/bad.go") {
+		t.Errorf("Degraded = %v (%q), want true naming a/bad.go", deg, why)
+	}
+	if got := mustLine(t, r, line("good.go", 3, "Gone")); got.Status != architecture.StatusUnresolved {
+		t.Errorf("a gone symbol in a parsed file beside it = %+v, want unresolved", got)
+	}
+}

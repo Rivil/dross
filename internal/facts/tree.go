@@ -5,7 +5,11 @@
 package facts
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
 	"io/fs"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -31,12 +35,41 @@ var skipDirs = map[string]bool{".git": true, "node_modules": true}
 // --exclude-standard`), so gitignored files are absent and a nested repository
 // or worktree — which git lists as a single `dir/` entry and never descends
 // into — contributes nothing. Outside a git repo (or with no git binary) it
-// falls back to a directory walk that skips .git and node_modules.
+// falls back to a directory walk that skips .git and node_modules. Any other
+// git failure is returned: inside a repo git refused to list (a safe.directory
+// refusal, a broken index), the walk would count its ignored files and nested
+// worktrees, and a wrong tree is worse than none.
 func Tree(root string) ([]string, error) {
-	if out, err := lsFiles(root); err == nil {
+	out, err := lsFiles(root)
+	if err == nil {
 		return fromLsFiles(out), nil
 	}
+	if !notGitTree(err) {
+		return nil, fmt.Errorf("facts: git ls-files failed in %s (%w); run `git status` there to see why", root, err)
+	}
 	return walkTree(root)
+}
+
+// notARepo is the phrase git's fatal error carries when no repository
+// encloses the directory it was run in.
+const notARepo = "not a git repository"
+
+// notGitTree reports whether a git listing's error means there is no
+// repository to ask — git is not installed, or git says the directory is not
+// in a repository — so the plain directory walk is the right answer. Git's
+// reason is on the stderr its exit error captured; the error's own text is
+// checked too, for a failure that carries the reason there. Only the match
+// leaves this function, never git's text. A git whose messages are localised
+// never matches, so it fails closed: an error, not a walk.
+func notGitTree(err error) bool {
+	if errors.Is(err, exec.ErrNotFound) {
+		return true
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && bytes.Contains(exit.Stderr, []byte(notARepo)) {
+		return true
+	}
+	return strings.Contains(err.Error(), notARepo)
 }
 
 // fromLsFiles parses `ls-files -z` output. An entry ending in "/" is an

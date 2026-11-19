@@ -82,9 +82,11 @@ func statContained(c pathfence.Contained, raw string) (pathfence.Contained, erro
 }
 
 // containBasename resolves a bare file name against the tree listing, then
-// against git's ignored files. A git failure there (no repository, no git) is
-// treated as no ignored match: outside git, Tree's fallback walk has already
-// listed every file, ignored or not.
+// against git's ignored files. Outside git (no repository, no git binary) the
+// ignored lookup has nothing to add — Tree's fallback walk has already listed
+// every file, ignored or not — so its failure there is no match. Inside a
+// repository a failed lookup is a failure to look, returned as an error: a
+// present ignored file must never be reported missing because git refused.
 func containBasename(root, name, raw string, tree func() ([]string, error)) (pathfence.Contained, error) {
 	files, err := tree()
 	if err != nil {
@@ -93,10 +95,14 @@ func containBasename(root, name, raw string, tree func() ([]string, error)) (pat
 	if f, ok := firstNamed(files, name); ok {
 		return pathfence.Contain(root, citationArtifact, f)
 	}
-	if out, err := lsIgnored(root, name); err == nil {
+	out, err := lsIgnored(root, name)
+	switch {
+	case err == nil:
 		if f, ok := firstNamed(fromLsFiles(out), name); ok {
 			return pathfence.Contain(root, citationArtifact, f)
 		}
+	case !notGitTree(err):
+		return pathfence.Contained{}, fmt.Errorf("facts: listing ignored files named %s failed in %s (%w)", raw, root, err)
 	}
 	return pathfence.Contained{}, fmt.Errorf("%w: no file named %s", ErrMissing, raw)
 }
