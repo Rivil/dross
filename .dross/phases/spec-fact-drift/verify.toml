@@ -1,0 +1,125 @@
+[verify]
+  phase = "spec-fact-drift"
+  generated_at = 2026-11-19T12:25:21.46949Z
+  verdict = "partial"
+  finalized = true
+  finalized_at = 2026-11-19T14:16:56.444703Z
+  measured_commit = "238ad40cc14927f0073aad5d20ee0ec73650a142"
+  measured_tree = "d8aa7eae2b9ba4bf5e97b55f567133101086f201"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.8949152542372881
+  mutants_killed = 528
+  mutants_survived = 62
+  mutants_not_covered = 62
+  mutants_no_block = 59
+  mutants_test_gap = 3
+  mutants_in_scope = 590
+  unclassified_in_scope = 0
+  criteria_total = 9
+  criteria_covered = 9
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 528
+    survived = 62
+    timeout = 0
+    in_scope = 590
+    score = 0.8949152542372881
+    file_count = 34
+    measured_on = "helicon"
+    whole_file = ["assets/partials.go — adapter-lacks-range-runner", "assets/partials_test.go — adapter-lacks-range-runner", "internal/architecture/links.go — adapter-lacks-range-runner", "internal/architecture/links_test.go — adapter-lacks-range-runner", "internal/cmd/architecture_link_parity_test.go — adapter-lacks-range-runner", "internal/cmd/pathfence_carrier_test.go — adapter-lacks-range-runner", "internal/cmd/pathtaint_audit_test.go — adapter-lacks-range-runner", "internal/cmd/phase.go — adapter-lacks-range-runner", "internal/cmd/phase_facts.go — adapter-lacks-range-runner", "internal/cmd/phase_facts_test.go — adapter-lacks-range-runner", "internal/cmd/phase_mark_new.go — adapter-lacks-range-runner", "internal/cmd/phase_mark_new_test.go — adapter-lacks-range-runner", "internal/cmd/plan_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/state.go — adapter-lacks-range-runner", "internal/cmd/state_facts_gate_test.go — adapter-lacks-range-runner", "internal/cmd/taint_engine_test.go — adapter-lacks-range-runner", "internal/codex/ast_grep.go — adapter-lacks-range-runner", "internal/codex/codex.go — adapter-lacks-range-runner", "internal/codex/codex_test.go — adapter-lacks-range-runner", "internal/codex/go_indexer.go — adapter-lacks-range-runner", "internal/facts/extract.go — adapter-lacks-range-runner", "internal/facts/extract_test.go — adapter-lacks-range-runner", "internal/facts/facts.go — adapter-lacks-range-runner", "internal/facts/facts_test.go — adapter-lacks-range-runner", "internal/facts/paths.go — adapter-lacks-range-runner", "internal/facts/paths_test.go — adapter-lacks-range-runner", "internal/facts/resolve.go — adapter-lacks-range-runner", "internal/facts/resolve_test.go — adapter-lacks-range-runner", "internal/facts/tree.go — adapter-lacks-range-runner", "internal/facts/tree_test.go — adapter-lacks-range-runner", "internal/pathfence/fields.go — adapter-lacks-range-runner", "internal/pathfence/fields_test.go — adapter-lacks-range-runner", "internal/phase/phase.go — adapter-lacks-range-runner", "internal/phase/phase_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/phase_facts_test.go:TestPhaseFactsMissingPathFails", "internal/facts/facts_test.go:TestCheckFieldLabels", "internal/facts/facts_test.go:TestCheckPlannedFilesSuppress"]
+  notes = "missing path exits non-zero naming 'criteria c-1' + path; every field label pinned exactly (criteria, decisions choice, task description, test_contract[i]); planned task files suppress"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/facts/facts_test.go:TestCheckEndToEnd", "internal/facts/resolve_test.go:TestResolverAmbiguityMovesAndSkips", "internal/facts/facts_test.go:TestKindMapping", "internal/facts/facts_test.go:TestCheckIgnoredFileLineCitationSkipped"]
+  notes = "moved names the new line (7), deleted symbol turns gone; Classify shared with the architecture link check; kindFor :141-147 and resolve.go :125-158 in-hunk survivors are accepted switch-case ceilings whose arms TestKindMapping/TestResolverAmbiguityMovesAndSkips assert"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/facts/resolve_test.go:TestStrictMatchNoLastComponentFallback", "internal/facts/resolve_test.go:TestResolverAmbiguityMovesAndSkips", "internal/facts/resolve_test.go:TestDegradedCensus", "internal/cmd/phase_facts_test.go:TestPhaseFactsDegradedIsSaid"]
+  notes = "quoted.String / cmd.Spec / os.Stat unresolved with no last-component fallback; duplicate Changes.Record ambiguous and unreported; unindexable .py degrades the index and its unmatched symbols are skipped"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/plan_prompt_test.go:TestPlanFactsFetchPoint", "internal/cmd/plan_prompt_test.go:TestPlanFactsWalk", "internal/cmd/plan_prompt_test.go:TestPlanFactsRerunBeforeLock"]
+  notes = "prompt-level criterion pinned by content and order: facts run inside §1 before §2, one citation per AskUserQuestion turn, fix / confirm-new (mark-new) arms, re-run before the lock question"
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/state_facts_gate_test.go:TestPlanLockRefusesUnresolvedCitations", "internal/cmd/state_facts_gate_test.go:TestPlanLockFactsParity", "internal/cmd/state_facts_gate_test.go:TestPlanLockNewAndPlannedClear"]
+  notes = "3 unresolved across spec+plan refuse listing all 3, state.json byte-identical; parity table: gate refuses iff `phase facts --json` reports, with equal lines; new/planned clear"
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/phase_facts_test.go:TestPhaseFactsCleanSpecOnly", "internal/cmd/phase_facts_test.go:TestPhaseFactsJSON", "internal/cmd/phase_facts_test.go:TestPhaseFactsMissingPathFails", "internal/cmd/phase_facts_test.go:TestPhaseFactsNeverWrites"]
+  notes = "clean spec-only and spec+plan exit 0 saying 'nothing unresolved'; findings exit non-zero; --json payload pinned; tree hash unchanged. NeverWrites discards the run error (FLAG) — the exit legs are proven separately on identical fixtures"
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/facts/extract_test.go:TestExtractStripsWrappingPunctuation"]
+  notes = "`see foo.go:12.`, `(foo.go:12)`, backticked, `;` and `:` forms each yield Path foo.go Line 12; leading `.` in .dross/x.toml survives"
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/architecture_link_parity_test.go:TestArchitectureLinkWarningsParity", "internal/cmd/architecture_link_parity_test.go:TestArchitectureCheckOutputParity", "internal/facts/resolve_test.go:TestStrictMatchStaysOutOfArchitecture"]
+  notes = "doctor warnings and `architecture check` stdout pinned byte-for-byte (written green pre-refactor); strict matcher proven not to leak into ResolveAllIn"
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/phase_facts_test.go:TestPhaseFactsAbsenceIsNotClean"]
+  notes = "no spec, unknown id, escaping id, undecodable spec/plan each exit non-zero naming the path, plain and --json, with no 'nothing unresolved' and no report"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-2: Resolver.Line (internal/facts/resolve.go) classifies a paired file:line into a project file that failed to parse against an empty idx.byFile[file], so the citation is reported 'gone' although the index is degraded and the symbol may be there (t-5 review FLAG, still open)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-1: internal/facts/tree.go Tree falls back to walkTree on any git ls-files error (not only 'not a repo'), silently including gitignored files and nested worktrees; internal/facts/paths.go:96 drops any lsIgnored error, so a present gitignored file is reported missing (t-3/t-6 review FLAGs, still open)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-6: TestPhaseFactsNeverWrites (internal/cmd/phase_facts_test.go) discards runFacts' error; an early failure (FindRoot, spec load) would pass the hash check without facts.Check running (t-8 review FLAG, still open)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "score 0.89 over 590 in-scope mutants; 59 uncoverable by construction (no go-cover block), efficacy 0.99 over the 531 reachable; 3 NOT COVERED in a block no test ran; all 62 survivors accepted (16 in-hunk: extract.go/facts.go/resolve.go switch-case ceilings + fields.go:171-172 const-initializer-arithmetic; 46 inherited); 205 out-of-scope survivors filtered; all 34 files whole-file (gremlins lacks a range runner)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "solo review t-10 FLAG open: planLockFactsGate (internal/cmd/state.go) ignores Degraded — its lines still equal `phase facts`, so c-5 parity holds, but the refusal/allow omits the degraded note the command prints"
+
+[[finding]]
+  severity = "NOTE"
+  text = "solo review t-1 FLAG open: the c-8 parity fixture has no exact-match ok bullet; the only ok bullet (pkg.Bar) resolves through the lastComponent fallback"
+
+[[finding]]
+  severity = "NOTE"
+  text = "solo review t-13 FLAG open: check()'s skip branch (facts.go) also skips a slashed citation into a directory or nested-repo file, but its comment names gitignored files only"
+
+[[finding]]
+  severity = "NOTE"
+  text = "solo review FLAGs open, low impact: fromLsFiles lists a tracked submodule gitlink as a file (t-3); Symbols uses SliceStable while Index uses unstable sort.Slice (t-2); markNewEntry handles symbol via the default arm (t-9); t-11's conservation test_contract line is vacuous (the manifest only checks existing rows); a line citation into a missing file reports 'missing', not 'gone' (t-7, pinned by TestCheckEndToEnd)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "solo review FLAGs resolved since review: t-3 isPath case-folding (`template.HTML` stays a symbol, extract.go:221), t-5 unparsable file now degrades the index (resolve.go buildTreeIndex), t-7 gitignored file:line now skipped (t-13)"
