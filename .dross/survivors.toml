@@ -5519,8 +5519,8 @@
   op = "ARITHMETIC_BASE"
   text = "Why: \"citations (paths or symbols) a phase introduces, so the fact check does \" +"
   line = 171
-  reason = "const-initializer ceiling: string + concatenation inside the package-level Fields table's Why prose for phase.Spec.New; no go-cover block, and the text is documentation, not behaviour"
   accepted_in = "spec-fact-drift"
+  category = "const-initializer-arithmetic"
 
 [[accepted]]
   key = "d8daa332659e6358"
@@ -5528,5 +5528,5 @@
   op = "ARITHMETIC_BASE"
   text = "\"not report them missing. Compared against a citation, or appended when one \" +"
   line = 172
-  reason = "const-initializer ceiling: string + concatenation inside the package-level Fields table's Why prose for phase.Spec.New; no go-cover block, and the text is documentation, not behaviour"
   accepted_in = "spec-fact-drift"
+  category = "const-initializer-arithmetic"
