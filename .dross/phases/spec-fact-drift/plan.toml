@@ -1,4 +1,4 @@
-task_seq = 12
+task_seq = 13
 
 [phase]
   id = "spec-fact-drift"
@@ -140,3 +140,14 @@ Export Symbols(file): indexer dispatch only — no findCallers, siblings or git 
   covers = ["c-4"]
   test_contract = ["if plan.md grows past 15000 B, TestPromptByteBudget (assets/budget_test.go) fails; the walk lives in the partial", "if the facts run moves after \"## 2. Goal-backward decomposition\" in expanded plan.md, a plan_prompt_test assertion fails; the last line before `## 2G` stays the panel fetch line", "if the expanded partial loses AskUserQuestion, one-citation-per-turn, either outcome, `dross phase mark-new`, or the re-run before §2, the plan_prompt_test partial assertion fails", "if partials_test.go is not updated, TestCommonPathVocabularyPinned / TestCommonPathFetchesNothing fail: CommonPath() must gain facts=clean", "if new plan.md instruction rows are missing from the append-only manifest, TestPromptInstructionsConserved fails", "if §5 stops re-running facts before the lock question, the plan_prompt_test assertion fails: in expanded plan.md a `dross phase facts` run appears after \"## 5. Write plan.toml\" and before the lock AskUserQuestion text", "if the partial loses the plan-side fix path, the test fails: it names `dross task edit` for plan-side findings", "if README.md /dross-plan row loses the citation-walk mention, the readme-needle test fails"]
   status = "done"
+
+[[task]]
+  id = "t-13"
+  wave = 5
+  title = "Skip line citations into files outside the indexed tree"
+  files = ["internal/facts/facts.go", "internal/facts/facts_test.go"]
+  description = "Verify finding (t-7 review FLAG, confirmed in code): a file:line citation into a gitignored file passes containCitation (statContained / lsIgnored), but Resolver.Line locates the file in Tree(), which deliberately omits ignored files (paths.go: ignored files never feed the symbol index), so it returns Unresolved and Check reports the valid citation as 'gone' — facts exits non-zero and plan-lock refuses. Fix in facts.go check(): when a KindLine citation's file exists (containCitation succeeded) but locate() over r.Files() finds no candidate, classify it Skipped — the file is outside the indexed tree, and an unindexed file is never reported (same rule as a .py line citation). Resolver.Line's own 'line into a missing file = unresolved' contract stays unchanged."
+  covers = ["c-2", "c-6"]
+  test_contract = ["if a file:line citation into an existing gitignored file is reported (gone or otherwise), a facts test over a real git repo with a .gitignore'd x_gen.go citing `Init` — x_gen.go:7 fails", "if a file:line citation into a genuinely missing file stops reporting 'missing', TestCheckEndToEnd fails"]
+  status = "pending"
+  depends_on = ["t-7"]
