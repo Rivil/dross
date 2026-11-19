@@ -88,6 +88,27 @@
         }
       ]
     },
+    "t-14": {
+      "files": [
+        "internal/facts/resolve.go",
+        "internal/facts/resolve_test.go",
+        "internal/facts/tree.go",
+        "internal/facts/tree_test.go",
+        "internal/facts/paths.go",
+        "internal/facts/paths_test.go",
+        "internal/cmd/phase_facts_test.go"
+      ],
+      "commit": "614e7172",
+      "completed_at": "2026-11-19T15:04:52.197383Z",
+      "landmarks": [
+        {
+          "feature": "spec fact-drift check",
+          "symbol": "notGitTree",
+          "loc": "internal/facts/tree.go:64",
+          "what": "only a non-git root or missing git falls back to the walk; other git failures are errors, and unparsable cited files are skipped not gone"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/codex/codex.go",
@@ -355,6 +376,35 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "The new test covers a bare-name ignored file, a slashed path into an ignored directory (with both a right and a wrong line), and a genuinely missing file in one table.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-14": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "notGitTree matches git's English 'not a git repository' text; a localised git therefore errors instead of walking. This is documented as failing closed in /Users/rivil/Development/dross/internal/facts/tree.go.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "The new !parsed branch in Resolver.Line also turns a line citation into an unparsable file under testdata/ or fixtures/ into Skipped (it was gone before), even though that file does not mark the index degraded. This matches the task's 'an unindexed file is never reported'.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "TestTreeGitErrorClassification covers the not-installed, stderr-not-a-repo, dubious-ownership, broken-index and bare-exit-status cases, so the walk-or-error boundary is pinned on both sides.",
           "resolution": "non-blocking, left"
         }
       ]

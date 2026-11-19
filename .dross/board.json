@@ -3106,6 +3106,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "spec-fact-drift/t-14": {
+      "issue": "DRO-1174",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "spec-fact-drift/t-2": {
       "issue": "DRO-1161",
       "plan_status": "done",
