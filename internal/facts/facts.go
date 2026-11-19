@@ -205,6 +205,15 @@ func (r *Resolver) check(c Citation) (checked, error) {
 		if c.Kind == KindPath {
 			return checked{Resolved: Resolved{Status: architecture.StatusOK}}, nil
 		}
+		// The file exists, but a gitignored one is never in the indexed tree:
+		// it is outside the index, and an unindexed file is never reported.
+		files, err := r.Files()
+		if err != nil {
+			return checked{}, err
+		}
+		if len(locate(files, c.Path)) == 0 {
+			return checked{Resolved: Resolved{Status: architecture.StatusSkipped}}, nil
+		}
 		res, err := r.Line(c)
 		return checked{Resolved: res}, err
 	}

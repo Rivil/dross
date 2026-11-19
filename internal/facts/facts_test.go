@@ -200,6 +200,32 @@ func TestCheckEndToEnd(t *testing.T) {
 	}
 }
 
+// TestCheckIgnoredFileLineCitationSkipped: a file:line citation into a file
+// that exists but is gitignored — so outside the indexed tree — is skipped,
+// never reported gone, whether cited by bare name or by slashed path, and
+// whether or not the cited line is right.
+func TestCheckIgnoredFileLineCitationSkipped(t *testing.T) {
+	root := t.TempDir()
+	git(t, root, "init", "-q")
+	write(t, root, ".gitignore", "x_gen.go\ngen/\n")
+	write(t, root, "a.go", "package x\n")
+	git(t, root, "add", ".")
+	git(t, root, "commit", "-q", "-m", "base")
+	body := "package x\n\n// one\n// two\n// three\n\nfunc Init() {}\n"
+	write(t, root, "x_gen.go", body)
+	write(t, root, "gen/y_gen.go", body)
+
+	spec := &phase.Spec{Criteria: []phase.Criterion{
+		{ID: "c-1", Text: "`Init` — x_gen.go:7"},
+		{ID: "c-2", Text: "`Init` — gen/y_gen.go:7 and `Init` — gen/y_gen.go:3"},
+		{ID: "c-3", Text: "`Init` — nowhere_gen.go:7"},
+	}}
+	want := []string{"criteria c-3: missing `Init` — nowhere_gen.go:7"}
+	if got := lines(check(t, root, spec, nil)); !reflect.DeepEqual(got, want) {
+		t.Errorf("ignored-file line citations:\n got %q\nwant %q", got, want)
+	}
+}
+
 // TestCheckReportsDegraded: a degraded index surfaces on the report, and its
 // unmatched symbols are not findings.
 func TestCheckReportsDegraded(t *testing.T) {
