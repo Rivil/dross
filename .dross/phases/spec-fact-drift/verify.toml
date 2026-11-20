@@ -1,10 +1,10 @@
 [verify]
   phase = "spec-fact-drift"
-  generated_at = 2026-11-20T11:00:36.96574Z
-  verdict = "fail"
+  generated_at = 2026-11-20T15:07:15.729956Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-11-20T11:04:57.052987Z
-  measured_commit = "ec9db5f20fd811a88ee6eb49ccc8fbe3263b6d19"
+  finalized_at = 2026-11-20T15:12:53.574585Z
+  measured_commit = "914ba74259b5ad18850e9c8a1757a0d75900afdb"
   measured_tree = "e7f1df8b4f962096896663a21aedd3a84542e412"
 
 [summary]
@@ -17,7 +17,7 @@
   mutants_no_block = 60
   mutants_test_gap = 3
   mutants_in_scope = 590
-  unclassified_in_scope = 1
+  unclassified_in_scope = 0
   criteria_total = 9
   criteria_covered = 9
   criteria_uncovered = 0
@@ -89,16 +89,8 @@
   notes = "no spec, unknown id, escaping id, undecodable spec/plan each exit non-zero naming the path, plain and --json, never 'nothing unresolved'"
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/facts/paths.go:100 (CONDITIONALS_NEGATION)"
-
-[[finding]]
   severity = "NOTE"
-  text = "paths.go:100 is a switch-case NOT COVERED ceiling: hand-applying the negation fails TestContainCitationResolution. Accepted per-mutant after collect (survivors.toml); this run's gate count stays 1 because there is no reclassify path, so a fresh run must clear it"
-
-[[finding]]
-  severity = "NOTE"
-  text = "score 0.89 over 590 in-scope mutants; 60 uncoverable by construction, efficacy 0.99 over the 530 reachable; 3 NOT COVERED in a block no test ran; 63 survivors: 62 previously accepted + paths.go:100; 205 out-of-scope survivors filtered; all 34 files whole-file (gremlins lacks a range runner)"
+  text = "score 0.89 over 590 in-scope mutants; 60 uncoverable by construction, efficacy 0.99 over the 530 reachable; 3 NOT COVERED in a block no test ran; 63 survivors, all accepted (paths.go:100 switch-case ceiling accepted per-mutant after run r-20261120-065301, proven by hand-mutation against TestContainCitationResolution); 205 out-of-scope survivors filtered; all 34 files whole-file (gremlins lacks a range runner)"
 
 [[finding]]
   severity = "NOTE"
