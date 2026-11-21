@@ -107,6 +107,7 @@ func TestRegistryCoversEveryKnownFieldByName(t *testing.T) {
 		"changes.RedProof.Doc",
 		"verify.Scope.Files",
 		"phase.Task.Files",
+		"phase.Spec.New",
 		"project.Env.Files",
 		"project.TestLane.Match",
 		"project.Runtime.TestExempt",
@@ -125,6 +126,11 @@ func TestRegistryCoversEveryKnownFieldByName(t *testing.T) {
 		"verify.ProvenanceLeg.Files",
 		// routed through Contain since the enumeration found it opened raw
 		"survivor.Acceptance.File",
+		// prose the fact check scans: each cited path is contained and stat'd
+		"phase.Criterion.Text",
+		"phase.Decision.Choice",
+		"phase.Task.Description",
+		"phase.Task.TestContract",
 		// found once the enumeration stopped guessing by directory and tag word
 		"localstore.DetachedRun.RunDir",
 		"localstore.DetachedRun.Workdir",
@@ -233,9 +239,29 @@ func TestTaskFilesIsAWriteTimeGateOnly(t *testing.T) {
 		t.Errorf("Why must name ValidatePlan as the write-time gate, got %q", f.NotConsumed.Why)
 	}
 	joined := strings.Join(f.NotConsumed.Readers, " ")
-	for _, reader := range []string{"task.go", "issue_task.go"} {
+	for _, reader := range []string{"task.go", "issue_task.go", "internal/facts/facts.go"} {
 		if !strings.Contains(joined, reader) {
 			t.Errorf("Readers must name the print-only reader %s, got %v", reader, f.NotConsumed.Readers)
+		}
+	}
+}
+
+// TestSpecNewIsComparedNeverOpened pins phase.Spec.New's disposition: the fact
+// check string-compares citations against it and the mark-new command appends
+// to it, so both must be named as readers or the not-consumed claim stops
+// describing what happens to the value.
+func TestSpecNewIsComparedNeverOpened(t *testing.T) {
+	f := find(t, "phase.Spec.New")
+	if f.NotConsumed == nil {
+		t.Fatal("phase.Spec.New must be not-consumed")
+	}
+	if f.Tag != "new" || f.Artifact != "spec.toml" {
+		t.Errorf("phase.Spec.New: Tag %q Artifact %q, want new / spec.toml", f.Tag, f.Artifact)
+	}
+	joined := strings.Join(f.NotConsumed.Readers, " ")
+	for _, reader := range []string{"internal/facts/facts.go", "internal/cmd/phase_mark_new.go"} {
+		if !strings.Contains(joined, reader) {
+			t.Errorf("Readers must name %s, got %v", reader, f.NotConsumed.Readers)
 		}
 	}
 }
@@ -284,6 +310,10 @@ func TestConsumedEntriesCarryACarrier(t *testing.T) {
 		"changes.TaskRecord.Files": "containScope",
 		"verify.Scope.Files":       "containScope",
 		"changes.RedProof.Doc":     "redProofPin.Doc",
+		"phase.Criterion.Text":     "facts.ContainCitation",
+		"phase.Decision.Choice":    "facts.ContainCitation",
+		"phase.Task.Description":   "facts.ContainCitation",
+		"phase.Task.TestContract":  "facts.ContainCitation",
 	}
 	for name, carrier := range want {
 		f := find(t, name)
@@ -314,6 +344,11 @@ func TestStoredFieldsStayStringTyped(t *testing.T) {
 		{"changes.RedProof.Doc", reflect.TypeOf(changes.RedProof{}), "Doc"},
 		{"verify.Scope.Files", reflect.TypeOf(verify.Scope{}), "Files"},
 		{"phase.Task.Files", reflect.TypeOf(phase.Task{}), "Files"},
+		{"phase.Spec.New", reflect.TypeOf(phase.Spec{}), "New"},
+		{"phase.Criterion.Text", reflect.TypeOf(phase.Criterion{}), "Text"},
+		{"phase.Decision.Choice", reflect.TypeOf(phase.Decision{}), "Choice"},
+		{"phase.Task.Description", reflect.TypeOf(phase.Task{}), "Description"},
+		{"phase.Task.TestContract", reflect.TypeOf(phase.Task{}), "TestContract"},
 		{"project.Env.Files", reflect.TypeOf(project.Env{}), "Files"},
 		{"project.Paths.Source", reflect.TypeOf(project.Paths{}), "Source"},
 		{"project.TestLane.Match", reflect.TypeOf(project.TestLane{}), "Match"},

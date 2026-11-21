@@ -113,3 +113,109 @@ func TestPlanPanelBriefSurvivesExpansion(t *testing.T) {
 		}
 	}
 }
+
+// TestPlanFactsFetchPoint proves c-4's placement: the spec's citations are
+// checked in §1, so in expanded plan.md the facts run and the walk it fetches
+// both land before "## 2. Goal-backward decomposition" — nothing is decomposed
+// on an unchecked citation. The walk loads only when the run exits non-zero.
+func TestPlanFactsFetchPoint(t *testing.T) {
+	facts := assets.CommonPath()
+	facts["facts"] = "unresolved"
+	got, err := assets.Fetched(promptFS, "plan", facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, ",") != "facts" {
+		t.Errorf("plan fetches %v under facts=unresolved; want [facts]", got)
+	}
+
+	exp := expandedPrompt(t, "plan.md")
+	h1, h2 := strings.Index(exp, "\n## 1. "), strings.Index(exp, "\n## 2. Goal-backward decomposition")
+	if h1 < 0 || h2 < 0 {
+		t.Fatalf("expanded plan.md lacks ## 1 (%d) or ## 2 (%d)", h1, h2)
+	}
+	run := strings.Index(exp, "`dross phase facts <id> --json`")
+	fetch := strings.Index(exp, "**When** `facts=unresolved` — `dross phase facts` exited non-zero: `dross prompt partial plan facts`")
+	body, err := assets.Partial(promptFS, "plan", "facts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	walk := strings.Index(exp, string(body))
+	for name, at := range map[string]int{"facts run": run, "fetch line": fetch, "inlined walk": walk} {
+		if at < h1 || at > h2 {
+			t.Errorf("%s at %d; want it inside §1, between ## 1 at %d and ## 2 at %d", name, at, h1, h2)
+		}
+	}
+	if !(run < fetch && fetch < walk) {
+		t.Errorf("want facts run < fetch line < walk, got %d %d %d", run, fetch, walk)
+	}
+}
+
+// TestPlanFactsWalk pins the partial's content: one citation per
+// AskUserQuestion turn, both outcomes, mark-new for the new arm, `dross task
+// edit` for plan-side fixes, and a re-run until exit 0 before §2. Drop any one
+// and the walk stops being c-4's.
+func TestPlanFactsWalk(t *testing.T) {
+	body, err := assets.Partial(promptFS, "plan", "facts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := string(body)
+	for _, needle := range []string{
+		"AskUserQuestion",
+		"one citation per turn",
+		"**fix the citation**",
+		"**confirm it is new**",
+		"dross phase mark-new <id> <citation>",
+		"dross task edit <id> t-N",
+		"plan-side finding",
+		"re-run `dross phase facts <id> --json`",
+		"until it exits 0",
+		"Before §2",
+	} {
+		if !strings.Contains(raw, needle) {
+			t.Errorf("_plan.facts.md lost %q", needle)
+		}
+	}
+	// The plan-side arm must route through the CLI, never a hand edit.
+	if i, j := strings.Index(raw, "plan-side finding"), strings.Index(raw, "dross task edit"); i < 0 || j < i {
+		t.Errorf("plan-side findings must be fixed with `dross task edit` (plan-side at %d, task edit at %d)", i, j)
+	}
+}
+
+// TestPlanFactsRerunBeforeLock proves c-4's plan-side half: §5 re-runs `dross
+// phase facts` after plan.toml is written and before the lock question, so
+// §6's plan-lock never meets an unhandled refusal.
+func TestPlanFactsRerunBeforeLock(t *testing.T) {
+	section := promptSection(t, expandedPrompt(t, "plan.md"), "## 5. Write plan.toml")
+	write := strings.Index(section, "Use the `Write` tool")
+	rerun := strings.Index(section, "`dross phase facts <id>`")
+	lock := strings.Index(section, "Plan written: N tasks across W waves — lock it?")
+	if write < 0 || rerun < 0 || lock < 0 || !(write < rerun && rerun < lock) {
+		t.Errorf("plan.md §5: want Write < facts re-run < lock question, got %d %d %d", write, rerun, lock)
+	}
+	if !strings.Contains(section[:max(lock, 0)], "**When** `facts=unresolved`") {
+		t.Error("plan.md §5 must fetch the facts walk when the re-run exits non-zero, before the lock question")
+	}
+}
+
+// TestReadmePlanRowNamesCitationWalk: the README's /dross-plan row is where a
+// reader learns what the command does; it must say plan walks unresolved
+// citations, and name mark-new as the confirm-new arm.
+func TestReadmePlanRowNamesCitationWalk(t *testing.T) {
+	var row string
+	for _, line := range strings.Split(readmeBody(t), "\n") {
+		if strings.HasPrefix(line, "| `/dross-plan` |") {
+			row = line
+			break
+		}
+	}
+	if row == "" {
+		t.Fatal("no README row for `/dross-plan`")
+	}
+	for _, needle := range []string{"`dross phase facts`", "unresolved citation", "one per turn", "`dross phase mark-new`"} {
+		if !strings.Contains(row, needle) {
+			t.Errorf("README /dross-plan row lacks %q:\n%s", needle, row)
+		}
+	}
+}

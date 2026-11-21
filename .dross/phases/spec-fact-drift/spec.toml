@@ -1,0 +1,74 @@
+[phase]
+  id = "spec-fact-drift"
+  title = "spec-fact-drift"
+  milestone = "v1.9"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross phase facts <id>` reports every file path cited in the phase's spec.toml or plan.toml that does not exist in the tree, naming the citing field (e.g. `criteria c-2`, `task t-3 description`) and the path."
+
+[[criteria]]
+  id = "c-2"
+  text = "`dross phase facts` reports every `file:line` citation whose named symbol is not at that line: moved (naming the line it now lives at) or gone, using the same classification as the ARCHITECTURE.md link check."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross phase facts` reports every backticked symbol citation that matches no symbol the codex index finds in the tree. An ambiguous match, or a file in a language codex can't index, is never reported."
+  deferred = ["c54759da0ff89c69"]
+
+[[criteria]]
+  id = "c-4"
+  text = "/dross-plan runs `dross phase facts` on the spec before composing the plan, and walks each unresolved citation one per turn (fix the spec / confirm it is new in this phase) before building on it."
+
+[[criteria]]
+  id = "c-5"
+  text = "Plan-lock refuses while the phase's spec or plan holds an unresolved citation not marked as new in this phase, listing every one. It uses the same rule set as `dross phase facts`, so the two cannot disagree."
+
+[[criteria]]
+  id = "c-6"
+  text = "`dross phase facts` exits 0 and says nothing is unresolved when every citation resolves (including a phase with no plan yet, which checks the spec alone), exits non-zero when anything is unresolved, never writes a file, and offers `--json` for the prompts."
+
+[[criteria]]
+  id = "c-7"
+  text = "Punctuation or wrapping characters around a citation (trailing `.` `,` `;` `:`, surrounding `()` or backticks) never become part of the cited path or symbol, so prose like `see foo.go:12.` resolves as foo.go:12."
+
+[[criteria]]
+  id = "c-8"
+  text = "Reusing the symbol resolver never changes what `dross doctor`'s architecture-link section or `dross architecture check` report for the same ARCHITECTURE.md."
+
+[[criteria]]
+  id = "c-9"
+  text = "`dross phase facts` on a phase with no spec.toml, or an unknown phase id, exits non-zero naming the missing path; it never reports nothing unresolved."
+
+[[decisions]]
+  key = "new_names"
+  choice = "A path listed in any plan task's `files` counts as planned, not missing. Anything else the phase introduces goes in a spec-level `new = [...]` list, written when the c-4 walk confirms a citation is new."
+  why = "Explicit and reviewable with no prose markup; task files are already the plan's record of what gets created."
+  locked = true
+
+[[decisions]]
+  key = "symbol_shape"
+  choice = "A symbol citation is a single backticked token `Ident(.Ident)*` with optional `()` that is dotted or call-shaped. Every qualifier must match (`pkg.Name` needs package pkg to define Name); no last-component fallback. CLI commands, flags, TOML keys and bare lowercase words are skipped."
+  why = "Backticks mostly hold commands and keys; a last-name fallback would let `quoted.String()` resolve against any String method and miss the motivating case."
+  locked = true
+
+[[decisions]]
+  key = "scanned_fields"
+  choice = "Scan present-tense claims only: spec criteria text and decisions `choice`; plan task `files`, `description` and `test_contract`. Skip every `why`, [[deferred]] entries and edge reasons."
+  why = "Those fields describe history or future work; the parked item's own why cites `quoted.String()` precisely because it never existed."
+  locked = true
+
+[[edges]]
+  class = "encoding"
+  outcome = "covered"
+  criteria = ["c-7"]
+
+[[edges]]
+  class = "adjacency"
+  outcome = "covered"
+  criteria = ["c-8"]
+
+[[edges]]
+  class = "empty"
+  outcome = "covered"
+  criteria = ["c-6", "c-9"]

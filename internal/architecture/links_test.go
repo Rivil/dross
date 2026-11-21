@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Rivil/dross/internal/codex"
 )
 
 func writeGo(t *testing.T, dir, name, body string) string {
@@ -163,5 +165,46 @@ func TestResolveAll(t *testing.T) {
 	}
 	if res[2].Status != StatusSkipped {
 		t.Errorf("md link: expected Skipped, got %v", res[2].Status)
+	}
+}
+
+// TestClassifyMatcherIsPluggable: Classify owns only the count→status switch;
+// the matcher decides what a name matches. The same `pkg.Bar` link against a
+// bare `Bar` symbol is OK through MatchSymbols (last-component fallback) and
+// Unresolved through a matcher that demands an exact name — and Resolve still
+// uses the fallback.
+func TestClassifyMatcherIsPluggable(t *testing.T) {
+	syms := []codex.Symbol{{Name: "Bar", Package: "other", Line: 3}}
+	link := SymbolLink{Symbol: "pkg.Bar", File: "x.go", Line: 3}
+
+	if got := Classify(link, syms, MatchSymbols).Status; got != StatusOK {
+		t.Errorf("Classify with MatchSymbols = %v, want ok (fallback)", got)
+	}
+	exact := func(ss []codex.Symbol, cited string) []codex.Symbol {
+		var out []codex.Symbol
+		for _, s := range ss {
+			if s.Name == cited {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	if got := Classify(link, syms, exact).Status; got != StatusUnresolved {
+		t.Errorf("Classify with an exact matcher = %v, want unresolved", got)
+	}
+
+	moved := Classify(SymbolLink{Symbol: "Bar", File: "x.go", Line: 1}, syms, exact)
+	if moved.Status != StatusMoved || moved.NewLine != 3 {
+		t.Errorf("Classify moved = %+v, want moved to 3", moved)
+	}
+	two := append(syms, codex.Symbol{Name: "Bar", Line: 9})
+	if got := Classify(SymbolLink{Symbol: "Bar", File: "x.go", Line: 3}, two, exact).Status; got != StatusAmbiguous {
+		t.Errorf("Classify with two matches = %v, want ambiguous", got)
+	}
+
+	dir := t.TempDir()
+	f := writeGo(t, dir, "x.go", "package other\n\nfunc Bar() {}\n")
+	if got := Resolve(SymbolLink{Symbol: "pkg.Bar", File: f, Line: 3}).Status; got != StatusOK {
+		t.Errorf("Resolve(pkg.Bar) = %v, want ok — the architecture path keeps its fallback", got)
 	}
 }

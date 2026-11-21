@@ -176,10 +176,26 @@ func (s *pathScan) policy() *taintPolicy {
 		Opaque: func(obj *types.Func) bool {
 			return obj.Pkg() != nil && obj.Pkg().Path() == pathfencePkg
 		},
-		Call:     s.call,
-		External: s.external,
-		Clears:   s.clears,
+		Call:         s.call,
+		External:     s.external,
+		Clears:       s.clears,
+		StoreBarrier: s.consumedField,
 	}
+}
+
+// consumedField: a field declared Consumed is its own source — every read of
+// it is seeded and must pass Contain before it is opened — so what was stored
+// into it stops at the store. A not-a-path value copied into Consumed prose is
+// then held to the prose's promise, not reported as the prose being opened.
+// A NotConsumed field, a ledger row or an undeclared field still carries the
+// stored taint.
+func (s *pathScan) consumedField(f *types.Var) bool {
+	for _, src := range s.vars[f] {
+		if src.Class == pathConsumed {
+			return true
+		}
+	}
+	return false
 }
 
 // seed makes every read of a traced field a source. A FieldAddr used only as
