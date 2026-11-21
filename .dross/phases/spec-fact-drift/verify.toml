@@ -1,22 +1,22 @@
 [verify]
   phase = "spec-fact-drift"
-  generated_at = 2026-11-20T15:07:15.729956Z
+  generated_at = 2026-11-21T13:13:29.451401Z
   verdict = "pass"
   finalized = true
-  finalized_at = 2026-11-20T15:12:53.574585Z
-  measured_commit = "914ba74259b5ad18850e9c8a1757a0d75900afdb"
-  measured_tree = "e7f1df8b4f962096896663a21aedd3a84542e412"
+  finalized_at = 2026-11-21T13:14:21.522314Z
+  measured_commit = "329b4da6324b2668b2157b9899e04ea6f690659c"
+  measured_tree = "f61d643bcfca6cb7726dc13d7d16da097341486f"
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.8932203389830509
-  mutants_killed = 527
+  mutation_score = 0.8992
+  mutants_killed = 562
   mutants_survived = 63
   mutants_not_covered = 63
   mutants_no_block = 60
   mutants_test_gap = 3
-  mutants_in_scope = 590
+  mutants_in_scope = 625
   unclassified_in_scope = 0
   criteria_total = 9
   criteria_covered = 9
@@ -25,14 +25,14 @@
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 527
+    killed = 562
     survived = 63
     timeout = 0
-    in_scope = 590
-    score = 0.8932203389830509
-    file_count = 34
+    in_scope = 625
+    score = 0.8992
+    file_count = 36
     measured_on = "helicon"
-    whole_file = ["assets/partials.go — adapter-lacks-range-runner", "assets/partials_test.go — adapter-lacks-range-runner", "internal/architecture/links.go — adapter-lacks-range-runner", "internal/architecture/links_test.go — adapter-lacks-range-runner", "internal/cmd/architecture_link_parity_test.go — adapter-lacks-range-runner", "internal/cmd/pathfence_carrier_test.go — adapter-lacks-range-runner", "internal/cmd/pathtaint_audit_test.go — adapter-lacks-range-runner", "internal/cmd/phase.go — adapter-lacks-range-runner", "internal/cmd/phase_facts.go — adapter-lacks-range-runner", "internal/cmd/phase_facts_test.go — adapter-lacks-range-runner", "internal/cmd/phase_mark_new.go — adapter-lacks-range-runner", "internal/cmd/phase_mark_new_test.go — adapter-lacks-range-runner", "internal/cmd/plan_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/state.go — adapter-lacks-range-runner", "internal/cmd/state_facts_gate_test.go — adapter-lacks-range-runner", "internal/cmd/taint_engine_test.go — adapter-lacks-range-runner", "internal/codex/ast_grep.go — adapter-lacks-range-runner", "internal/codex/codex.go — adapter-lacks-range-runner", "internal/codex/codex_test.go — adapter-lacks-range-runner", "internal/codex/go_indexer.go — adapter-lacks-range-runner", "internal/facts/extract.go — adapter-lacks-range-runner", "internal/facts/extract_test.go — adapter-lacks-range-runner", "internal/facts/facts.go — adapter-lacks-range-runner", "internal/facts/facts_test.go — adapter-lacks-range-runner", "internal/facts/paths.go — adapter-lacks-range-runner", "internal/facts/paths_test.go — adapter-lacks-range-runner", "internal/facts/resolve.go — adapter-lacks-range-runner", "internal/facts/resolve_test.go — adapter-lacks-range-runner", "internal/facts/tree.go — adapter-lacks-range-runner", "internal/facts/tree_test.go — adapter-lacks-range-runner", "internal/pathfence/fields.go — adapter-lacks-range-runner", "internal/pathfence/fields_test.go — adapter-lacks-range-runner", "internal/phase/phase.go — adapter-lacks-range-runner", "internal/phase/phase_test.go — adapter-lacks-range-runner"]
+    whole_file = ["assets/partials.go — adapter-lacks-range-runner", "assets/partials_test.go — adapter-lacks-range-runner", "internal/architecture/links.go — adapter-lacks-range-runner", "internal/architecture/links_test.go — adapter-lacks-range-runner", "internal/cmd/architecture_link_parity_test.go — adapter-lacks-range-runner", "internal/cmd/pathfence_carrier_test.go — adapter-lacks-range-runner", "internal/cmd/pathtaint_audit_test.go — adapter-lacks-range-runner", "internal/cmd/phase.go — adapter-lacks-range-runner", "internal/cmd/phase_facts.go — adapter-lacks-range-runner", "internal/cmd/phase_facts_test.go — adapter-lacks-range-runner", "internal/cmd/phase_mark_new.go — adapter-lacks-range-runner", "internal/cmd/phase_mark_new_test.go — adapter-lacks-range-runner", "internal/cmd/plan_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/state.go — adapter-lacks-range-runner", "internal/cmd/state_facts_gate_test.go — adapter-lacks-range-runner", "internal/cmd/taint_engine_test.go — adapter-lacks-range-runner", "internal/codex/ast_grep.go — adapter-lacks-range-runner", "internal/codex/codex.go — adapter-lacks-range-runner", "internal/codex/codex_test.go — adapter-lacks-range-runner", "internal/codex/go_indexer.go — adapter-lacks-range-runner", "internal/facts/extract.go — adapter-lacks-range-runner", "internal/facts/extract_test.go — adapter-lacks-range-runner", "internal/facts/facts.go — adapter-lacks-range-runner", "internal/facts/facts_test.go — adapter-lacks-range-runner", "internal/facts/paths.go — adapter-lacks-range-runner", "internal/facts/paths_test.go — adapter-lacks-range-runner", "internal/facts/resolve.go — adapter-lacks-range-runner", "internal/facts/resolve_test.go — adapter-lacks-range-runner", "internal/facts/tree.go — adapter-lacks-range-runner", "internal/facts/tree_test.go — adapter-lacks-range-runner", "internal/pathfence/fields.go — adapter-lacks-range-runner", "internal/pathfence/fields_test.go — adapter-lacks-range-runner", "internal/phase/phase.go — adapter-lacks-range-runner", "internal/phase/phase_test.go — adapter-lacks-range-runner", "internal/ship/open.go — adapter-lacks-range-runner", "internal/ship/open_test.go — adapter-lacks-range-runner"]
 
 [[criterion]]
   id = "c-1"
@@ -90,7 +90,7 @@
 
 [[finding]]
   severity = "NOTE"
-  text = "score 0.89 over 590 in-scope mutants; 60 uncoverable by construction, efficacy 0.99 over the 530 reachable; 3 NOT COVERED in a block no test ran; 63 survivors, all accepted (paths.go:100 switch-case ceiling accepted per-mutant after run r-20261120-065301, proven by hand-mutation against TestContainCitationResolution); 205 out-of-scope survivors filtered; all 34 files whole-file (gremlins lacks a range runner)"
+  text = "run 5 (r-20261121-092618, HEAD 329b4da6): score 0.90 over 625 in-scope mutants; 60 uncoverable by construction, efficacy 0.99 over the 565 reachable; 3 NOT COVERED in a block no test ran; 63 survivors, all accepted (paths.go:100 switch-case ceiling accepted per-mutant after run r-20261120-065301, proven by hand-mutation against TestContainCitationResolution); 221 out-of-scope survivors filtered; all 36 files whole-file (gremlins lacks a range runner)"
 
 [[finding]]
   severity = "NOTE"
@@ -103,3 +103,7 @@
 [[finding]]
   severity = "NOTE"
   text = "solo review FLAGs still open, low impact: planLockFactsGate ignores Degraded (t-10; c-5 parity holds); c-8 parity fixture has no exact-match ok bullet (t-1); check()'s skip branch comment names gitignored files only (t-13); fromLsFiles lists a submodule gitlink as a file (t-3); SliceStable vs sort.Slice (t-2); markNewEntry symbol via default arm (t-9); t-11 conservation line vacuous; a line citation into a missing file reports 'missing' (t-7)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "re-measured after quick 1.9.5.2 (8d8e6c6f, gh PR-URL parse in internal/ship/open.go): no survivor in internal/ship/open.go; the criterion-mapped tests and their code are unchanged since run 4 (only ARCHITECTURE.md and internal/ship changed), so the run-4 mapping carries over"
