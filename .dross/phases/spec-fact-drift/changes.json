@@ -3,6 +3,15 @@
   "base": "milestone/v1.9",
   "base_commit": "45e371a3661f06fb32ef55e88894c15465eeec7e",
   "tasks": {
+    "quick-2": {
+      "files": [
+        "internal/ship/open.go",
+        "internal/ship/open_test.go"
+      ],
+      "commit": "8d8e6c6",
+      "completed_at": "2026-11-21T09:23:51.222577Z",
+      "notes": "quick: Fix gh PR-URL parsing in openGitHubPR: gh 2.105.0 prints an 'Event subscriptions are in preview' notice after the PR URL, so taking the last line yields PR #0. Pick the line that parses as a PR URL (number \u003e 0); return ghUnparseable when none does, never a #0 result. Test with the gh notice after the URL as fixture."
+    },
     "t-1": {
       "files": [
         "internal/cmd/architecture_link_parity_test.go"
