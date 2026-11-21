@@ -54,12 +54,13 @@ The single feature-organized ARCHITECTURE.md — fixed entry template + greenfie
 - `architecture.EntryTemplate` — `internal/architecture/architecture.go:27`
 - `architecture.Skeleton` — `internal/architecture/architecture.go:41`
 - `architecture.ParseDoc` / `Resolve` (codex-backed link resolver) — `internal/architecture/links.go:91`
-- `codex.SupportsFile` (language-dispatch gate) — `internal/codex/codex.go:106`
+- `codex.SupportsFile` (language-dispatch gate) — `internal/codex/codex.go:107`
 - `architectureLinkWarnings` (doctor advisory section) — `internal/cmd/doctor.go:805`
 - `Architecture` (`dross architecture check [--fix]`) — `internal/cmd/architecture.go:16`
 - `Init` (seeds skeleton) — `internal/cmd/init.go:29`
+- `TestArchitectureCheckOutputParity` (pins doctor warnings and `architecture check` output across ok/moved/unresolved/ambiguous/skipped/fallback bullets while the resolver is shared) — `internal/cmd/architecture_link_parity_test.go:86`
 
-_introduced 01-architecture-comprehension-layer · extended architecture-doc-enhancements · 89813a3_
+_introduced 01-architecture-comprehension-layer · extended architecture-doc-enhancements · 89813a3 · extended spec-fact-drift · cb3dee1e_
 
 ### Artefact validation
 
@@ -223,9 +224,10 @@ Polyglot symbol / cross-file reference / sibling / recent-git insight for given 
 
 - `codex.Index` — `internal/codex/codex.go:30`
 - `findCallers` — `internal/codex/refs.go:25`
+- `codex.Symbols` / `CanIndex` (per-file symbol extraction without enrichment, Go symbols carrying their package, plus a tool-availability check) — `internal/codex/codex.go:136`
 - `Codex` (CLI) — `internal/cmd/codex.go:15`
 
-_4b6e027_
+_4b6e027 · extended spec-fact-drift · 1b16db5a_
 
 ### Code-quality audit (dross-quality)
 
@@ -1428,6 +1430,24 @@ _introduced solo-task-subagent · bfdf8d9_
 
 _introduced spec-edge-probe · ec143241_
 
+### Spec fact-drift check
+
+`dross phase facts <id>` checks the file paths, `file:line` citations and backticked symbols that a phase's spec and plan cite against the live tree, and reports each one that is missing, moved, gone or unresolved. Planned task files and the spec's `new` list count as expected. `/dross-plan` walks each unresolved citation one per turn (fix it, or mark it new), and plan-lock refuses while any remain, using the same rule set as the command.
+
+- `facts.Extract` (pulls path, `file:line` and symbol citations out of spec/plan prose, stripping wrapping punctuation) — `internal/facts/extract.go:86`
+- `facts.Tree` / `notGitTree` (gitignore-aware tree listing; only a non-git root or missing git falls back to a walk, other git failures are errors) — `internal/facts/tree.go:42`
+- `facts.ContainCitation` (resolves a cited path inside the repo through pathfence, bare basenames via the tree or gitignored files) — `internal/facts/paths.go:49`
+- `facts.StrictMatch` (qualifier-exact symbol match, no last-component fallback, over a lazy tree index sharing `architecture.Classify` with the link check) — `internal/facts/resolve.go:34`
+- `Resolver.check` (a `file:line` into an existing file outside the indexed tree, or an unparsable one, is Skipped, never reported gone) — `internal/facts/facts.go:197`
+- `facts.Check` (scans present-tense spec/plan fields, suppresses planned files and `spec.new`, reports missing/moved/gone/unresolved) — `internal/facts/facts.go:156`
+- `phase.Spec.New` (spec-level list of citations confirmed new in this phase, declared NotConsumed in pathfence) — `internal/phase/phase.go:324`
+- `phaseFacts` (`dross phase facts <id> [--json]`: read-only report, non-zero exit on any unresolved citation) — `internal/cmd/phase_facts.go:55`
+- `phaseMarkNew` (`dross phase mark-new <id> <citation>...`: records currently unresolved citations in `spec.new`, normalised and deduped, all-or-nothing) — `internal/cmd/phase_mark_new.go:27`
+- `planLockFactsGate` (plan-lock refuses while `phase facts` reports unresolved citations, after the edge gate) — `internal/cmd/state.go:401`
+- `_plan.facts.md` (/dross-plan runs `phase facts` before decomposing and before lock, one `AskUserQuestion` per citation) — `assets/prompts/_plan.facts.md:1`
+
+_introduced spec-fact-drift · 31806df2_
+
 ### Stack profiles
 
 Declarative per-stack profiles — embedded built-ins plus `~/.claude/dross/profiles/` drop-ins (user wins on id) — that tune dross to a detected stack: runtime commands, the security/quality tool loadout, and the agent loadout. `dross stack detect/show/list/apply/loadout`; primary detection is signal-scored (exact marker files + source extensions), returning a matched profile id or an `unsupported` sentinel rather than a guess. `apply` re-syncs `[runtime]`; `loadout` emits a markdown block the execute prompt injects inline. Adding a stack is a single TOML drop-in — zero code change. Built-ins ship full profiles (dedicated quality analyzer + runtime + loadout) for Go, Kotlin, Dart, Svelte, SQL, TypeScript, Python, JavaScript, and C#, plus detection-only stubs (id + title + `[signals].exts` only) for Ruby/Rust/Java/C/C++/PHP/Swift. The Svelte, TypeScript, and Dart profiles carry a deepened loadout: dedicated **security scanners** (osv-scanner, plus eslint-plugin-security/retire.js on JS/TS) and **quality analyzers spanning ≥3 substantive dimensions** — dead-code (knip / `dcm unused-code`), coupling (dependency-cruiser), error-handling (typescript-eslint / `dart analyze`) — on top of the existing complexity analyzer, each tool distinctly named so the by-Name manifest dedup keeps every dimension. These surface findings the agnostic scc/jscpd/gitleaks/semgrep/trivy fallback misses (proven end-to-end by the committed `fixtures/multilang-c3` run: knip flags a dead export the fallback is blind to). ext→language is single-sourced from the loaded profiles: `DetectLanguages` derives it by **union** over every profile's `[signals].exts` — a shared extension (e.g. `.ts` in both svelte@6 and typescript@4) yields *both* languages, and the old hardcoded `extLang` map is deleted — so adding a profile extends language detection with no code change. The drop-in keystone is proven end-to-end: a brand-new `.zzz` profile dropped under `~/.claude/dross/profiles/` becomes both detectable and recon-visible with zero Go edit, and a malformed drop-in never crashes detection. Marker-file stacks (e.g. Docker, detected from `Dockerfile`/compose files via case-insensitive `[signals].file_patterns` globs, no source extension) are surfaced *additively* by `MarkerProfiles` on top of the source languages in the secure/quality manifests — leaving primary `Detect` winner-take-all unchanged — so their tools run on repos that have no matching source extension: the docker profile ships hadolint (scanner+analyzer) + trivy config, and the terraform profile ships trivy config (IaC-misconfiguration scanner, named distinctly from the agnostic trivy) + tflint (quality analyzer at the error-handling dimension), detected from `*.tf`/`*.tf.json`/`*.tfvars`/`*.tfvars.json`/`*.hcl` markers (`*.hcl` accepts a known false-positive risk on non-Terraform HCL). This is proven by the committed `fixtures/terraform-c3` run: `trivy config` flags an open-ingress misconfiguration (AVD-AWS-0107) the agnostic scc/jscpd/gitleaks fallback is structurally blind to. The container/IaC loadout is then *deepened* with **content-sniff marker detection**: `ContentMatch` adds an optional second gate so a profile globbing the ambiguous `*.yaml`/`*.yml`/`*.json` space confirms a candidate by case-sensitive token match (`All`=AND, `Any`=OR, body read capped at 64 KiB) before surfacing — turning a would-be every-YAML-repo false positive into a near-exact match, while a profile that declares no content keeps the pure-glob fast path. This enables two new marker profiles — `kubernetes` (content `apiVersion`+`kind`) and `cloudformation` (content `AWSTemplateFormatVersion`|`Resources`) — each shipping `trivy config` + `checkov` security scanners and a dedicated quality analyzer (`kube-linter` / `cfn-lint` at the error-handling dimension); `checkov` (cross-family IaC misconfiguration) is added to terraform/k8s/cfn and `dockle` (container image-layer) to docker, each kept distinctly named beside `trivy config` by the by-Name manifest dedup. Proven end-to-end by the committed `fixtures/iac-multi-c5` multi-family run record (a k8s manifest, a CFN template, and a Dockerfile each planting a defect the agnostic fallback misses). Every walk — extension scan, `Detect`, `MarkerProfiles` — prunes one shared **skip set** (`.git`, `.dross`, `node_modules`, `vendor`, `dist`, `build`, `.idea`, `.vscode`, `testdata`, `fixtures`), exported as `SkipDir`/`SkipDirs` so the tech-debt enumerator and the security manifest consume the same definition; a `go/ast` test forbids a second `testdata`/`fixtures` literal anywhere else under `internal/`, so `DetectLanguages` on the dross root is exactly `[go]` rather than every language its fixtures happen to contain.
@@ -1801,9 +1821,10 @@ A path read out of a tracked `.dross/` artifact is untrusted input to the filesy
 - `survivor.ContainReported` (tool-reported files and the Stryker workdir contained under the repo root before any read, clear or fetch) — `internal/survivor/identity.go:113`
 - `carrierType` (declared carriers asserted really typed `Contained`, plus the two fixture-driven AST scans banning `.String()`-into-`os.*` and any second dot-dot test) — `internal/cmd/pathfence_carrier_test.go:31`
 - `AssertDoesNotCompile` / `AssertCompiles` (real `go build` over a throwaway module; the fixture must fail for the stated reason) — `internal/compilefence/compilefence.go:58`
+- `taintPolicy.StoreBarrier` (a store into a declared Consumed field stops the stored value's taint; the field's own declaration governs its reads) — `internal/cmd/taint_engine_test.go:217`
 - `recorder` (recording `testing.TB` that drives both assertions inside compilefence's own package, killing the survivors routed from tracked-path-containment) — `internal/compilefence/compilefence_test.go:182`
 
-_introduced tracked-path-containment · fcc36fe · extended mutation-range-provenance · f38ad0b · extended exec-taint-enumeration · 6096453_
+_introduced tracked-path-containment · fcc36fe · extended mutation-range-provenance · f38ad0b · extended exec-taint-enumeration · 6096453 · extended spec-fact-drift · 09b1c6a7_
 
 ### Verification
 
