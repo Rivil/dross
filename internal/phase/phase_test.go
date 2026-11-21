@@ -1,6 +1,7 @@
 package phase
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -169,6 +170,151 @@ func TestSpecRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(original, loaded) {
 		t.Errorf("spec round-trip drift:\norig: %+v\nload: %+v", original, loaded)
+	}
+}
+
+// TestSpecNewRoundTrip pins the spec-level `new` list: Save writes it as a
+// top-level key above the [phase] header, in order, and LoadSpec reads it back.
+func TestSpecNewRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "spec.toml")
+	original := &Spec{
+		New:      []string{"internal/facts/extract.go", "facts.Check"},
+		Phase:    SpecPhase{ID: "host-phase", Title: "Host"},
+		Criteria: []Criterion{{ID: "c-1", Text: "does a thing"}},
+	}
+	if err := original.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `new = ["internal/facts/extract.go", "facts.Check"]`
+	at, header := strings.Index(string(raw), want), strings.Index(string(raw), "[phase]")
+	switch {
+	case at < 0:
+		t.Errorf("saved spec has no %s line:\n%s", want, raw)
+	case header < 0 || at > header:
+		t.Errorf("`new` must precede the [phase] header (new at %d, [phase] at %d):\n%s", at, header, raw)
+	}
+
+	loaded, err := LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(original, loaded) {
+		t.Errorf("spec round-trip drift:\norig: %+v\nload: %+v", original, loaded)
+	}
+}
+
+// TestSpecNewOmitEmpty: a spec that introduces nothing writes no `new` key —
+// neither for a nil list nor a non-nil empty one — and a spec written before
+// the key existed re-saves byte-identically.
+func TestSpecNewOmitEmpty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "spec.toml")
+	for _, n := range [][]string{nil, {}} {
+		spec := &Spec{New: n, Phase: SpecPhase{ID: "host-phase", Title: "Host"}}
+		if err := spec.Save(path); err != nil {
+			t.Fatal(err)
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(raw), "new") {
+			t.Errorf("New=%#v wrote a new key:\n%s", n, raw)
+		}
+	}
+
+	const legacy = `[phase]
+  id = "legacy-phase"
+  title = "Legacy"
+  milestone = "v1.0"
+
+[[criteria]]
+  id = "c-1"
+  text = "does a thing"
+
+[[decisions]]
+  key = "k"
+  choice = "c"
+  why = "w"
+  locked = true
+`
+	legacyPath := filepath.Join(dir, "legacy.toml")
+	if err := os.WriteFile(legacyPath, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadSpec(legacyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := loaded.Save(legacyPath); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(legacyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != legacy {
+		t.Errorf("legacy spec changed on re-save:\n--- before\n%s\n--- after\n%s", legacy, got)
+	}
+}
+
+// TestSpecNewUnderPhaseIsDropped pins the loader as it stands: `new = [...]`
+// hand-written under [phase] is a SpecPhase key, not the spec-level list, so it
+// decodes to an empty Spec.New with no error — the silent drop the fact check's
+// misplaced-key guard exists to catch.
+func TestSpecNewUnderPhaseIsDropped(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "spec.toml")
+	const misplaced = `[phase]
+  id = "host-phase"
+  title = "Host"
+  new = ["internal/facts/extract.go"]
+`
+	if err := os.WriteFile(path, []byte(misplaced), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.New) != 0 {
+		t.Errorf("a `new` key under [phase] decoded into Spec.New: %#v", loaded.New)
+	}
+	if loaded.Phase.ID != "host-phase" {
+		t.Errorf("the [phase] table did not decode: %+v", loaded.Phase)
+	}
+}
+
+// TestSpecNewJSONKey: the --json projection carries the list under "new" (not
+// the Go name) and omits it when the phase introduces nothing.
+func TestSpecNewJSONKey(t *testing.T) {
+	keys := func(s Spec) map[string]json.RawMessage {
+		t.Helper()
+		b, err := json.Marshal(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(b, &m); err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+
+	m := keys(Spec{New: []string{"facts.Check"}})
+	if _, ok := m["New"]; ok {
+		t.Errorf("json emitted the Go field name New: %v", m)
+	}
+	if got := string(m["new"]); got != `["facts.Check"]` {
+		t.Errorf(`json "new" = %s, want ["facts.Check"]`, got)
+	}
+
+	if _, ok := keys(Spec{})["new"]; ok {
+		t.Error(`an empty New emitted a "new" key`)
 	}
 }
 

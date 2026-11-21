@@ -210,6 +210,11 @@ type taintPolicy struct {
 	// write at the program's edge, a package variable, a panic, an
 	// unresolved call. Only what the policy reports through e.report counts.
 	OnlySinks bool
+	// StoreBarrier, when set, names fields whose own declaration governs
+	// every read: a value stored into one does not carry its taint across
+	// the store, whether written here or through a callee's summary. The
+	// policy must seed the field's reads itself, or the barrier hides a flow.
+	StoreBarrier func(f *types.Var) bool
 }
 
 // condEscape is an escape site inside a function that fires only when the
@@ -1092,6 +1097,9 @@ func (e *taintEngine) addObject(v ssa.Value, from tset) {
 // the same field at once.
 func (e *taintEngine) addField(f *types.Var, from tset) {
 	if f == nil {
+		return
+	}
+	if e.pol.StoreBarrier != nil && e.pol.StoreBarrier(f.Origin()) {
 		return
 	}
 	if addOrigins(e.fieldTaint, f, from.concrete()) {

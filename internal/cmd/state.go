@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/deferred"
+	"github.com/Rivil/dross/internal/facts"
 	"github.com/Rivil/dross/internal/gitrun"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/pkgjson"
@@ -120,6 +121,9 @@ func stateSet() *cobra.Command {
 				// unresolved edge record.
 				if args[1] == "planned" {
 					if err := planLockEdgeGate(filepath.Dir(path), s.CurrentPhase); err != nil {
+						return err
+					}
+					if err := planLockFactsGate(filepath.Dir(path), s.CurrentPhase); err != nil {
 						return err
 					}
 				}
@@ -383,6 +387,45 @@ func planLockEdgeGate(root, phaseID string) error {
 	}
 	return fmt.Errorf("plan-lock refused: %s has %d unresolved edge record(s):\n  %s\nresolve each as covered (criterion ids), dismissed (with a reason) or deferred (a [[deferred]] id), then lock again",
 		specPath, len(problems), strings.Join(problems, "\n  "))
+}
+
+// planLockFactsGate refuses plan-lock while phaseID's spec or plan cites a
+// path, file:line or symbol the tree does not back (c-5). It loads, checks and
+// renders exactly as `dross phase facts` does — the same loader, facts.Check
+// and report rows — so the gate refuses iff the command reports, with the same
+// lines.
+//
+// Absence allows, as the edge gate's does: no current phase, or a phase with
+// no spec.toml, has nothing to judge. A spec or plan that does not decode
+// refuses, naming its path.
+func planLockFactsGate(root, phaseID string) error {
+	if phaseID == "" {
+		return nil
+	}
+	specPath := filepath.Join(phase.Dir(root, phaseID), "spec.toml")
+	if _, err := os.Stat(specPath); errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	spec, plan, err := loadFactsPhase(root, phaseID)
+	if err != nil {
+		return fmt.Errorf("plan-lock refused: %w", err)
+	}
+	rep, err := facts.Check(filepath.Dir(root), spec, plan)
+	if err != nil {
+		return fmt.Errorf("plan-lock refused: cannot check phase %s's citations: %w", phaseID, err)
+	}
+	r := buildFactsReport(phaseID, factsChecked(plan), rep)
+	if len(r.Unresolved) == 0 {
+		return nil
+	}
+	lines := make([]string, 0, len(r.Unresolved))
+	for _, row := range r.Unresolved {
+		lines = append(lines, row.Line)
+	}
+	return fmt.Errorf("plan-lock refused: phase %s has %d unresolved citation(s) (checked %s):\n  %s\n"+
+		"see `dross phase facts %s`; fix the spec or plan, or confirm what the phase creates with "+
+		"`dross phase mark-new %s <citation>...`, then lock again",
+		phaseID, len(lines), r.Checked, strings.Join(lines, "\n  "), phaseID, phaseID)
 }
 
 func loadState() (*state.State, string, error) {

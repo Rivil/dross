@@ -315,6 +315,13 @@ func List(root string) ([]string, error) {
 
 // Spec is the acceptance contract for a phase.
 type Spec struct {
+	// New lists the paths and symbols this phase introduces: citations the
+	// fact check must not report as missing because the phase creates them
+	// (the locked new_names decision; a path in a task's files needs no
+	// entry). A top-level key, so TOML writes it above the [phase] header — a
+	// `new = [...]` hand-written under [phase] belongs to SpecPhase and is
+	// dropped. omitempty so every spec that introduces nothing writes no key.
+	New       []string    `toml:"new,omitempty" json:"new,omitempty"`
 	Phase     SpecPhase   `toml:"phase" json:"phase"`
 	Criteria  []Criterion `toml:"criteria" json:"criteria"`
 	Decisions []Decision  `toml:"decisions,omitempty" json:"decisions,omitempty"`

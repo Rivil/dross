@@ -1,11 +1,13 @@
 package ship
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/Rivil/dross/internal/hostallow"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -48,6 +50,59 @@ func TestParsePRNumber(t *testing.T) {
 		if got := parsePRNumber(url); got != want {
 			t.Errorf("parsePRNumber(%q) = %d want %d", url, got, want)
 		}
+	}
+}
+
+// TestOpenGitHubPRFindsURLAmongNotices: gh 2.105.0 prints a preview notice
+// after the PR URL, and taking the last line read it as PR #0 — chore PR
+// #230 opened with no number to arm auto-merge on. The URL line is found
+// wherever it sits; output holding none is an error, never a #0 result.
+func TestOpenGitHubPRFindsURLAmongNotices(t *testing.T) {
+	const notice = "- Event subscriptions are in preview and may not be enabled for your account."
+	const url = "https://github.com/Rivil/dross/pull/230"
+	for _, tc := range []struct {
+		name    string
+		out     string
+		wantN   int
+		wantErr bool
+	}{
+		{"notice after URL (gh 2.105.0)", url + "\n" + notice + "\n", 230, false},
+		{"notice before URL", notice + "\n" + url + "\n", 230, false},
+		{"URL only", url + "\n", 230, false},
+		{"no URL", notice + "\n", 0, true},
+		{"number-tailed non-PR line", "https://github.com/Rivil/dross/issues/9\n", 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stubGHOnPath(t)
+			prev, prevErr := ghCommand, ghStderr
+			t.Cleanup(func() { ghCommand, ghStderr = prev, prevErr })
+			var stderr bytes.Buffer
+			ghStderr = &stderr
+			ghCommand = func(...string) *exec.Cmd { return exec.Command("printf", "%s", tc.out) }
+
+			res, err := openGitHubPR(OpenOpts{Provider: "github", HeadBranch: "phase/x", BaseBranch: "main", Title: "t", Body: "b"})
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("res = %+v, want an error for output with no PR URL", res)
+				}
+				if res != nil {
+					t.Errorf("res = %+v, want nil alongside the error", res)
+				}
+				if strings.Contains(err.Error(), strings.TrimSpace(tc.out)) {
+					t.Errorf("err = %q, want fixed prose without gh's output", err)
+				}
+				if !strings.Contains(stderr.String(), strings.TrimSpace(tc.out)) {
+					t.Errorf("stderr = %q, want gh's output there", stderr.String())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("openGitHubPR: %v", err)
+			}
+			if res.Number != tc.wantN || res.URL != url {
+				t.Errorf("res = %+v, want #%d at %s", res, tc.wantN, url)
+			}
+		})
 	}
 }
 

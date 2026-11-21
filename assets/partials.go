@@ -62,6 +62,7 @@ var TriggerVocabulary = map[string][]string{
 	"lanes":       {"unchanged", "editing"},
 	"remote":      {"unchanged", "changing"},
 	"closeout":    {"clean", "unresolved"}, // unresolved: `milestone complete --check` exited non-zero
+	"facts":       {"clean", "unresolved"}, // unresolved: `dross phase facts` exited non-zero
 }
 
 // alwaysWholeFile names gremlins' always-whole-file path. A trigger naming it

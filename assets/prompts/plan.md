@@ -19,6 +19,10 @@ Decompose a phase's `spec.toml` into a task graph with waves, dependencies, and 
 - `.dross/project.toml` — `paths.*` (where source/tests/migrations live), `runtime.mode`, `runtime.test_command`, `stack.locked`
 - Existing relevant files in `paths.source` for patterns (use `Read`/`Bash` directly; codex isn't built yet)
 
+Then check the spec's citations: `dross phase facts <id> --json`. Exit 0 is `facts=clean`.
+
+**When** `facts=unresolved` — `dross phase facts` exited non-zero: `dross prompt partial plan facts`
+
 ## 2. Goal-backward decomposition
 
 Walk through criteria one by one. For each: **what's the smallest task that delivers this criterion?** Working backward from acceptance, not forward from tech.
@@ -148,7 +152,13 @@ depends_on = ["t-1"]
 ...
 ```
 
-Use the `Write` tool to save to `.dross/phases/<id>/plan.toml`. **Don't paste the toml back** — it's a build artifact, agreed task by task in §3, not a review medium. Confirm with a one-line summary instead, asked as a single `AskUserQuestion` — never as a trailing prose line the user has to type an answer to: **"Plan written: N tasks across W waves — lock it?"** — lead option **lock**, other option **edit \<what>**. Surface a specific task only if the user asks to see or change it.
+Use the `Write` tool to save to `.dross/phases/<id>/plan.toml`. **Don't paste the toml back** — it's a build artifact, agreed task by task in §3, not a review medium.
+
+Before the lock question, re-run `dross phase facts <id>`: plan-side findings get the same walk, until it exits 0.
+
+**When** `facts=unresolved` — the re-run exited non-zero: `dross prompt partial plan facts`
+
+Then confirm with a one-line summary, asked as a single `AskUserQuestion` — never as a trailing prose line the user has to type an answer to: **"Plan written: N tasks across W waves — lock it?"** — lead option **lock**, other option **edit \<what>**. Surface a specific task only if the user asks to see or change it.
 
 ## 6. Validate + wrap
 
