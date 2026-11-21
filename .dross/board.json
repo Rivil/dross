@@ -3085,72 +3085,72 @@
     "spec-fact-drift/t-1": {
       "issue": "DRO-1160",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-fact-drift/t-10": {
       "issue": "DRO-1171",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-fact-drift/t-11": {
       "issue": "DRO-1172",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-fact-drift/t-12": {
       "issue": "DRO-1168",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-fact-drift/t-13": {
       "issue": "DRO-1173",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-fact-drift/t-14": {
       "issue": "DRO-1174",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-fact-drift/t-2": {
       "issue": "DRO-1161",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-fact-drift/t-3": {
       "issue": "DRO-1162",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-fact-drift/t-4": {
       "issue": "DRO-1163",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-fact-drift/t-5": {
       "issue": "DRO-1164",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-fact-drift/t-6": {
       "issue": "DRO-1165",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-fact-drift/t-7": {
       "issue": "DRO-1166",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-fact-drift/t-8": {
       "issue": "DRO-1169",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "spec-fact-drift/t-9": {
       "issue": "DRO-1170",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "supply-chain-currency/t-1": {
       "issue": "DRO-424",
