@@ -142,13 +142,23 @@ func openGitHubPR(opts OpenOpts) (*OpenResult, error) {
 	if err != nil {
 		return nil, ghFailed("gh pr create", err, out)
 	}
-	// gh prints the URL on the last line; pick that to be safe.
+	// gh mixes the PR URL with notices on the same streams — gh 2.105.0
+	// prints "Event subscriptions are in preview…" after it — so take the
+	// last line that is a PR URL, not the last line.
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	prURL := strings.TrimSpace(lines[len(lines)-1])
-	return &OpenResult{
-		Number: parsePRNumber(prURL),
-		URL:    prURL,
-	}, nil
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if !strings.Contains(line, "/pull/") {
+			continue
+		}
+		if n := parsePRNumber(line); n > 0 {
+			return &OpenResult{Number: n, URL: line}, nil
+		}
+	}
+	// gh exited 0, so the PR is most likely open: say so rather than return
+	// a #0 result its callers would treat as "no PR".
+	fmt.Fprintf(ghStderr, "gh pr create: gh printed:\n%s\n", bytes.TrimRight(out, "\n"))
+	return nil, errors.New("gh pr create: gh printed no PR URL (output above) — the PR may be open; check with `gh pr list --head` before re-running")
 }
 
 // --- helpers ---
