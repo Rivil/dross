@@ -410,6 +410,12 @@ type Plan struct {
 	TaskSeq int       `toml:"task_seq,omitempty" json:"task_seq,omitempty"`
 	Phase   PlanPhase `toml:"phase" json:"phase"`
 	Task    []Task    `toml:"task" json:"task"` // ordered
+
+	// UnknownPreconditionKeys records, at LoadPlan, every key inside a task's
+	// preconditions the schema does not know. Recorded rather than fatal, so
+	// a typo never stops the plan loading for an unrelated verb; never
+	// serialised, so it cannot leak into the file it describes.
+	UnknownPreconditionKeys []UnknownPreconditionKey `toml:"-" json:"-"`
 }
 
 type PlanPhase struct {
@@ -430,6 +436,9 @@ type Task struct {
 	// an unavailable review's cause, or a red suite. Only a failed task keeps
 	// one: any other status clears it.
 	Reason string `toml:"reason,omitempty" json:"reason,omitempty"`
+	// Preconditions must all pass before the task may start (precondition.go).
+	// omitempty so a task without any writes no key.
+	Preconditions []Precondition `toml:"preconditions,omitempty" json:"preconditions,omitempty"`
 }
 
 // Task statuses.
@@ -527,9 +536,18 @@ func LoadSpec(path string) (*Spec, error) {
 
 func (s *Spec) Save(path string) error { return saveTOML(path, s) }
 
+// LoadPlan decodes a plan.toml, recording any unknown key inside a task's
+// preconditions on Plan.UnknownPreconditionKeys rather than failing.
 func LoadPlan(path string) (*Plan, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("decode plan %s: %w", path, err)
+	}
 	var p Plan
-	if _, err := toml.DecodeFile(path, &p); err != nil {
+	if _, err := toml.Decode(string(src), &p); err != nil {
+		return nil, fmt.Errorf("decode plan %s: %w", path, err)
+	}
+	if err := recordUnknownPreconditionKeys(&p, string(src)); err != nil {
 		return nil, fmt.Errorf("decode plan %s: %w", path, err)
 	}
 	return &p, nil

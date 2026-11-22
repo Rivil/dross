@@ -87,6 +87,10 @@ func deriveWave(explicitWave int, dependsOn []string, tasks []Task) int {
 // consumed — so this gate is what keeps the declaration honest: the path never
 // gets to be wrong in the first place.
 //
+// Malformed preconditions (PreconditionProblems) are refused here too. Unknown
+// precondition keys are not: they are recorded on the plan at load, and a
+// mutator that clears them must not be refused for what it removes.
+//
 // Every defect is reported together in one error, each naming the offending id,
 // so a single call surfaces all problems at once. A containment defect joins
 // that report rather than short-circuiting it: a hand-edited plan usually has
@@ -141,6 +145,9 @@ func ValidatePlan(plan *Plan, spec *Spec, repoRoot string) error {
 			}
 		}
 	}
+
+	// Precondition shapes — the one check, shared with `dross validate`.
+	problems = append(problems, PreconditionProblems(plan)...)
 
 	if len(problems) == 0 {
 		return nil
