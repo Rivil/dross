@@ -361,6 +361,10 @@ trusted_test_exempt = "hhhh"
 [trusted_lane_installs]
   web = "gggg"
 
+[trusted_preconditions]
+  alpha = "iiii"
+  beta = "jjjj"
+
 [[detached_run]]
   phase = "p"
   run_id = "r1"
@@ -379,7 +383,7 @@ trusted_test_exempt = "hhhh"
 	// Every grant reads back through the embed.
 	if before.TrustedTestCommand != "aaaa" || before.TrustedReplayCommands != "bbbb,cccc" || before.TrustedRunCommands != "dddd" ||
 		before.TrustedLaneCommands["go"] != "eeee" || before.TrustedLaneCommands["web"] != "ffff" || before.TrustedLaneInstalls["web"] != "gggg" ||
-		before.TrustedTestExempt != "hhhh" {
+		before.TrustedTestExempt != "hhhh" || before.TrustedPreconditions["alpha"] != "iiii" || before.TrustedPreconditions["beta"] != "jjjj" {
 		t.Fatalf("seeded grants did not decode through the embedded consent.Grants: %+v", before.Grants)
 	}
 
@@ -395,6 +399,11 @@ trusted_test_exempt = "hhhh"
 	if err := consent.GrantLaneInstallConsent(GrantStore(root), "go", "go install x@latest"); err != nil {
 		t.Fatalf("GrantLaneInstallConsent through GrantStore: %v", err)
 	}
+	// So does a precondition grant: one phase lands, the others stay.
+	const pcLine = `[{"preconditions":[{"run":"echo 3"}],"task":"t-1"}]`
+	if err := consent.GrantPreconditionsConsent(GrantStore(root), "gamma", pcLine); err != nil {
+		t.Fatalf("GrantPreconditionsConsent through GrantStore: %v", err)
+	}
 
 	after, err := Load(Path(root))
 	if err != nil {
@@ -406,8 +415,11 @@ trusted_test_exempt = "hhhh"
 	// Every OTHER grant survives the writes, and the lane grants landed.
 	if after.TrustedReplayCommands != "bbbb,cccc" || after.TrustedRunCommands != "dddd" ||
 		after.TrustedLaneCommands["go"] != "eeee" || after.TrustedLaneCommands["web"] != "ffff" || after.TrustedLaneInstalls["web"] != "gggg" ||
-		after.TrustedTestExempt != "hhhh" {
+		after.TrustedTestExempt != "hhhh" || after.TrustedPreconditions["alpha"] != "iiii" || after.TrustedPreconditions["beta"] != "jjjj" {
 		t.Errorf("a sibling grant was dropped by a grant: %+v", after.Grants)
+	}
+	if state, err := consent.PreconditionsConsented(GrantStore(root), filepath.Dir(root), "gamma", pcLine); state != consent.Granted || err != nil {
+		t.Errorf("the precondition grant did not land through the single writer: %v, %v (%+v)", state, err, after.Grants)
 	}
 	if after.TrustedLaneCommands["docs"] != consent.Fingerprint("markdownlint docs") || after.TrustedLaneInstalls["go"] != consent.Fingerprint("go install x@latest") {
 		t.Errorf("the lane grants did not land through the single writer: %+v", after.Grants)
@@ -418,7 +430,7 @@ trusted_test_exempt = "hhhh"
 		t.Errorf("a non-consent key changed under a grant:\n before: %+v\n after:  %+v", before, after)
 	}
 	body := mustRead(t, Path(root))
-	for _, want := range []string{`quick_base = "main"`, `mutation_remote_host = "helicon"`, `mutation_workers = "6"`, `run_id = "r1"`, `[trusted_lane_installs]`, `web = "gggg"`} {
+	for _, want := range []string{`quick_base = "main"`, `mutation_remote_host = "helicon"`, `mutation_workers = "6"`, `run_id = "r1"`, `[trusted_lane_installs]`, `web = "gggg"`, `[trusted_preconditions]`, `alpha = "iiii"`, `gamma = "`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("local.toml lost %q after a grant:\n%s", want, body)
 		}
