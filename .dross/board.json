@@ -74,6 +74,7 @@
     "supply-chain-currency": "DRO-423",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10",
+    "task-preconditions": "DRO-1176",
     "test-lane-config": "DRO-191",
     "test-output-summaries": "DRO-963",
     "test-summary-parsers": "DRO-1051",
