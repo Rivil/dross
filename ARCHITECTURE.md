@@ -313,14 +313,14 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `enumProblems` (validate re-checks the same table, catching the hand-edited or cloned file the setter never saw) — `internal/cmd/validate.go:256`
 - `project.Project.Save` (the sole project.toml writer: load → diff → patch → canonical verify → atomic temp+fsync+rename; fresh encode only for an absent path) — `internal/project/project.go:536`
 - `saveLossless` / `SaveTOML` (the lossless write door Save and every other hand-annotated TOML store share: decode into the value's own type, diff, patch, verify, atomic write; `SaveTOML` exports it with its own `doorOps` seam) — `internal/project/project.go:551`
-- `apply` / `indexDoc` (raw-byte patcher: line-indexed value spans, header blocks, per-op re-index, inline tables refused by line) — `internal/project/patch.go:619`
-- `diff` (two values of one TOML-tagged struct type → per-leaf set/delete and per-element array-of-tables ops, over the encoder's canonical trees) — `internal/project/patch_diff.go:111`
+- `apply` / `indexDoc` (raw-byte patcher: line-indexed value spans, header blocks, per-op re-index, inline tables refused by line) — `internal/project/patch.go:631`
+- `diff` (two values of one TOML-tagged struct type → per-leaf set/delete and per-element array-of-tables ops, over the encoder's canonical trees) — `internal/project/patch_diff.go:116`
 - `encodeFresh` (the package's single BurntSushi encoder call site; the door, verify, the differ and value rendering all route through it) — `internal/project/patch_value.go:16`
 - `projectWriterViolations` (go/ast guard: no writer or file-bound encoder for project.toml outside `internal/project`; one encoder and one file writer inside it) — `internal/cmd/project_writer_pin_test.go:61`
 - `TestLosslessUnmodeledKeysSurviveEveryWriter` (the in-process writer matrix: exact changed-line sets, comments and unmodeled keys after every command) — `internal/cmd/project_lossless_test.go:218`
 - `TestIndexLiteralStrings` (hand-edited shapes the encoder never writes — literal/multi-line strings, escaped quoted keys, dotted-key sub-tables, root keys — and every patcher refusal, pinned) — `internal/project/patch_test.go:587`
-- `keyedArray` (`SaveTOML`'s keyed arrays-of-tables match elements by identity: a reorder moves a block verbatim with its comments, an insert lands at its index, a delete takes only its own block) — `internal/project/patch_diff.go:335`
-- `TestKeyedInsertAtEndAppends` (the keyed patcher's edge paths — append at the end, nested arrays, trailing comments, the move refusal — pinned in their own package) — `internal/project/patch_keyed_test.go:375`
+- `keyedArray` (`SaveTOML`'s keyed arrays-of-tables match elements by identity: a reorder moves a block verbatim with its comments, an insert lands at its index, a delete takes only its own block; an array-of-tables directly inside a keyed element — `[[task.preconditions]]` — is diffed per sub-element and patched inside that element's span, anything deeper or under an unkeyed element refused by path) — `internal/project/patch_diff.go:373`
+- `TestKeyedInsertAtEndAppends` (the keyed patcher's edge paths — append at the end, nested arrays, trailing comments, the move refusal — pinned in their own package) — `internal/project/patch_keyed_test.go:376`
 - `configenum.RuntimeModes` (`docker | native`; `hybrid` removed) — `internal/configenum/configenum.go:148`
 - `TestNoSettableKeyIsInert` (parses `writeDotted`'s own case list; fails any settable key nothing reads) — `internal/cmd/inert_config_test.go:86`
 
