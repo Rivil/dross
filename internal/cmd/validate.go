@@ -131,6 +131,9 @@ func Validate() *cobra.Command {
 				if plan != nil && !strings.HasPrefix(id, plan.Phase.ID) && id != plan.Phase.ID {
 					problems = append(problems, fmt.Sprintf("%s: plan.phase.id (%s) does not match directory (%s)", planPath, plan.Phase.ID, id))
 				}
+				if plan != nil {
+					problems = append(problems, preconditionPlanProblems(planPath, plan)...)
+				}
 				if spec != nil && plan != nil {
 					ids := map[string]bool{}
 					for _, c := range spec.Criteria {
@@ -217,6 +220,20 @@ func Validate() *cobra.Command {
 			return fmt.Errorf("%d problem(s) found", len(problems))
 		},
 	}
+}
+
+// preconditionPlanProblems is every malformed precondition in a plan — shape
+// defects and keys the schema does not know — each prefixed by the plan's
+// path. It only reads the plan: validate never runs a precondition.
+func preconditionPlanProblems(planPath string, plan *phase.Plan) []string {
+	var out []string
+	for _, p := range phase.PreconditionProblems(plan) {
+		out = append(out, planPath+" "+p)
+	}
+	for _, u := range plan.UnknownPreconditionKeys {
+		out = append(out, planPath+" "+u.String())
+	}
+	return out
 }
 
 // triageProblems checks a phase's pr-triage.toml against the task ids of its
