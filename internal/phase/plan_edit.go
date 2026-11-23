@@ -166,6 +166,9 @@ type NewTask struct {
 	Description  string
 	TestContract []string
 	Wave         int
+	// Preconditions are already parsed and shape-checked (ParsePrecondition);
+	// ValidatePlan judges them again before the save.
+	Preconditions []Precondition
 }
 
 // AddTask builds a new task from nt, assigning it the next high-water id and a
@@ -189,15 +192,16 @@ func (p *Plan) AddTask(nt NewTask, anchor string, before bool) (*Task, error) {
 	}
 	id := p.NextTaskID()
 	t := Task{
-		ID:           id,
-		Wave:         deriveWave(nt.Wave, nt.DependsOn, p.Task),
-		Title:        nt.Title,
-		Files:        nt.Files,
-		Description:  nt.Description,
-		Covers:       nt.Covers,
-		DependsOn:    nt.DependsOn,
-		TestContract: nt.TestContract,
-		Status:       StatusPending,
+		ID:            id,
+		Wave:          deriveWave(nt.Wave, nt.DependsOn, p.Task),
+		Title:         nt.Title,
+		Files:         nt.Files,
+		Description:   nt.Description,
+		Covers:        nt.Covers,
+		DependsOn:     nt.DependsOn,
+		TestContract:  nt.TestContract,
+		Status:        StatusPending,
+		Preconditions: nt.Preconditions,
 	}
 	p.Task = slices.Insert(p.Task, pos, t)
 	p.TaskSeq = taskIDNum(id) // advance high-water past the consumed id
@@ -366,14 +370,20 @@ func (p *Plan) MoveTask(id, anchor string, before bool) error {
 // make hand-editing unnecessary — and a task's file list is exactly the kind of
 // thing execution corrects. It replaces the whole list, like Covers and
 // DependsOn.
+//
+// Preconditions replaces the task's whole precondition list too; an empty list
+// clears it, so the task writes no preconditions key at all. There is no field
+// that marks one skipped (the locked no_bypass decision): a wrong precondition
+// is fixed by editing it, where the change is visible in the plan.
 type TaskEdit struct {
-	Title        *string
-	Description  *string
-	Files        *[]string
-	Covers       *[]string
-	DependsOn    *[]string
-	TestContract *[]string
-	Wave         *int
+	Title         *string
+	Description   *string
+	Files         *[]string
+	Covers        *[]string
+	DependsOn     *[]string
+	TestContract  *[]string
+	Wave          *int
+	Preconditions *[]Precondition
 }
 
 // EditTask applies a partial update to the task with the given id: only the
@@ -405,6 +415,12 @@ func (p *Plan) EditTask(id string, e TaskEdit) error {
 	}
 	if e.Wave != nil {
 		t.Wave = *e.Wave
+	}
+	if e.Preconditions != nil {
+		t.Preconditions = slices.Clone(*e.Preconditions)
+		if len(t.Preconditions) == 0 {
+			t.Preconditions = nil
+		}
 	}
 	return nil
 }

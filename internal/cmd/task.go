@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/consent"
 	"github.com/Rivil/dross/internal/gatestate"
+	"github.com/Rivil/dross/internal/localstore"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/render"
 	"github.com/Rivil/dross/internal/state"
@@ -180,11 +183,44 @@ func taskShow() *cobra.Command {
 					Printf("  %s\n", line)
 				}
 			}
+			printTaskPreconditions(plan, t)
 			return nil
 		},
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
 	return c
+}
+
+// printTaskPreconditions renders a task's preconditions for `task show`: every
+// field the gate acts on — the command, each bound, the timeout it will be
+// killed at, and why — followed by any defect that would make `task status …
+// in_progress` refuse, so a typo like `mx = 3` is visible here rather than
+// only at the gate. A task with none prints nothing.
+func printTaskPreconditions(plan *phase.Plan, t *phase.Task) {
+	if len(t.Preconditions) == 0 {
+		return
+	}
+	Print("preconditions:")
+	for i, p := range t.Preconditions {
+		Printf("  %d. run:     %s\n", i+1, p.Run)
+		if p.Max != nil {
+			Printf("     max:     %s\n", strconv.FormatFloat(*p.Max, 'g', -1, 64))
+		}
+		if p.Min != nil {
+			Printf("     min:     %s\n", strconv.FormatFloat(*p.Min, 'g', -1, 64))
+		}
+		if p.Timeout == "" {
+			Printf("     timeout: %s (default)\n", phase.DefaultPreconditionTimeout)
+		} else {
+			Printf("     timeout: %s\n", p.Timeout)
+		}
+		if p.Why != "" {
+			Printf("     why:     %s\n", p.Why)
+		}
+	}
+	for _, problem := range taskPreconditionProblems(plan, t) {
+		Printf("  ✗ %s\n", problem)
+	}
 }
 
 func taskStatus() *cobra.Command {
@@ -342,7 +378,7 @@ func taskWriterRepo(phaseID, taskID string) (string, error) {
 func taskAdd() *cobra.Command {
 	var title, description, after, before string
 	var wave int
-	var covers, dependsOn, files, testContract []string
+	var covers, dependsOn, files, testContract, preconditions []string
 	c := &cobra.Command{
 		Use:   "add <phase-id>",
 		Short: "Append or insert a new task into a phase plan",
@@ -351,10 +387,15 @@ func taskAdd() *cobra.Command {
 			if strings.TrimSpace(title) == "" {
 				return errors.New("--title is required")
 			}
+			pres, err := parsePreconditionFlags("--precondition", preconditions)
+			if err != nil {
+				return err
+			}
 			plan, spec, planPath, err := loadPhasePlanAndSpec(args[0])
 			if err != nil {
 				return err
 			}
+			setBefore := phase.PreconditionSetLine(plan)
 			var anchor string
 			var isBefore bool
 			if after != "" || before != "" {
@@ -363,13 +404,14 @@ func taskAdd() *cobra.Command {
 				}
 			}
 			t, err := plan.AddTask(phase.NewTask{
-				Title:        title,
-				Files:        files,
-				Covers:       covers,
-				DependsOn:    dependsOn,
-				Description:  description,
-				TestContract: testContract,
-				Wave:         wave,
+				Title:         title,
+				Files:         files,
+				Covers:        covers,
+				DependsOn:     dependsOn,
+				Description:   description,
+				TestContract:  testContract,
+				Wave:          wave,
+				Preconditions: pres,
 			}, anchor, isBefore)
 			if err != nil {
 				return err
@@ -378,6 +420,7 @@ func taskAdd() *cobra.Command {
 				return err
 			}
 			Printf("added %s (%s) to %s at wave %d\n", t.ID, t.Title, args[0], t.Wave)
+			notePreconditionGrant(args[0], setBefore, plan)
 			return nil
 		},
 	}
@@ -394,9 +437,77 @@ func taskAdd() *cobra.Command {
 	// --landmark is a StringArray (changes.go).
 	c.Flags().StringArrayVar(&testContract, "test-contract", nil,
 		`one "if X breaks, TestY fails" statement (repeatable; not split on commas)`)
+	// StringArray for the same reason: a command routinely holds commas.
+	c.Flags().StringArrayVar(&preconditions, "precondition", nil,
+		`one precondition as a TOML inline table, e.g. '{run = "go test ./x", max = 5}' (repeatable)`)
 	c.Flags().StringVar(&after, "after", "", "insert immediately after this task id")
 	c.Flags().StringVar(&before, "before", "", "insert immediately before this task id")
 	return c
+}
+
+// parsePreconditionFlags parses each value of a precondition flag with
+// phase.ParsePrecondition — the strict parser built on the same shape rules
+// `dross validate` reports — so nothing malformed reaches plan.toml. Callers
+// run it before loading the plan, so a refused value writes nothing.
+func parsePreconditionFlags(flag string, vals []string) ([]phase.Precondition, error) {
+	var out []phase.Precondition
+	for _, v := range vals {
+		p, err := phase.ParsePrecondition(v)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", flag, err)
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+// notePreconditionGrant tells the human what a plan mutation did to the
+// phase's precondition grant, given the set line from before it. The grant is
+// a fingerprint of the whole set (the locked consent_granularity decision), so
+// a mutation that changes the line has already revoked it — nothing is written
+// here; this only says so and names the command that re-consents. A mutation
+// that leaves the line alone — a title edit, an identical rewrite, an unset
+// timeout written as "60s" — prints nothing.
+//
+// The plan is already saved when this runs, so a grant that cannot be read is
+// reported in the output rather than failing a mutation that happened. Every
+// arm of a changed, non-empty set names `dross trust --preconditions`.
+func notePreconditionGrant(phaseID, before string, plan *phase.Plan) {
+	after := phase.PreconditionSetLine(plan)
+	if after == before {
+		return
+	}
+	if after == "" {
+		Printf("%s declares no preconditions now: there is no precondition set left to trust\n", phaseID)
+		return
+	}
+	trust := fmt.Sprintf("`dross trust --preconditions %s`", phaseID)
+	root, err := FindRoot()
+	if err != nil {
+		Printf("%s's preconditions changed, and its precondition grant could not be read (%v) — a human reviews them and consents with %s\n", phaseID, err, trust)
+		return
+	}
+	state, cerr := consent.PreconditionsConsented(localstore.GrantStore(root), filepath.Dir(root), phaseID, after)
+	switch state {
+	case consent.Granted:
+		// Reachable only by editing the set back to exactly the one this
+		// machine trusted: that set is what the human consented to.
+		Printf("%s's preconditions are back to the set this machine trusted: its precondition grant stands\n", phaseID)
+	case consent.Stale:
+		Printf("%s's preconditions changed: its precondition grant is revoked — a human reviews them and re-consents with %s\n", phaseID, trust)
+	case consent.Refused:
+		// A tracked local.toml: the store is refused unread, and `dross
+		// trust` refuses it too until it is untracked — the error says how.
+		Printf("%s's preconditions changed, and this machine's precondition grant cannot be read — once the store below is fixed, a human re-consents with %s:\n%v\n", phaseID, trust, cerr)
+	default:
+		// Absent. A bare ErrNoConsent is "never trusted"; anything wrapped
+		// around it (an unparseable store) is the reason, and is shown.
+		if cerr != nil && cerr != consent.ErrNoConsent {
+			Printf("%s's preconditions changed, and this machine has no readable precondition grant (%v) — a human reviews them and consents with %s\n", phaseID, cerr, trust)
+			return
+		}
+		Printf("%s's preconditions changed and this machine has not trusted them — a human reviews them and consents with %s\n", phaseID, trust)
+	}
 }
 
 // taskRemove wires `dross task remove`: delete a task, dependency-safe. Without
@@ -413,6 +524,7 @@ func taskRemove() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			setBefore := phase.PreconditionSetLine(plan)
 			if err := plan.RemoveTask(args[1], force); err != nil {
 				return err
 			}
@@ -420,6 +532,7 @@ func taskRemove() *cobra.Command {
 				return err
 			}
 			Printf("removed %s from %s\n", args[1], args[0])
+			notePreconditionGrant(args[0], setBefore, plan)
 			return nil
 		},
 	}
@@ -429,11 +542,14 @@ func taskRemove() *cobra.Command {
 
 // taskEdit wires `dross task edit`: a partial update where only the flags
 // actually passed change the task, all other fields preserved. It deliberately
-// exposes no --status flag — `dross task status` stays the sole status owner.
+// exposes no --status flag — `dross task status` stays the sole status owner —
+// and no flag that skips a precondition (the locked no_bypass decision): a
+// wrong one is replaced or cleared here, where the change shows in the plan.
 func taskEdit() *cobra.Command {
 	var title, description string
 	var wave int
-	var files, covers, dependsOn, testContract, addTestContract []string
+	var clearPreconditions bool
+	var files, covers, dependsOn, testContract, addTestContract, preconditions, addPreconditions []string
 	c := &cobra.Command{
 		Use:   "edit <phase-id> <task-id>",
 		Short: "Update an existing task's fields (partial; status not editable)",
@@ -445,10 +561,26 @@ func taskEdit() *cobra.Command {
 			if cmd.Flags().Changed("test-contract") && cmd.Flags().Changed("add-test-contract") {
 				return errors.New("--test-contract replaces the whole contract and --add-test-contract appends to it; pass one, not both")
 			}
+			setPre, addPre := cmd.Flags().Changed("precondition"), cmd.Flags().Changed("add-precondition")
+			if clearPreconditions && (setPre || addPre) {
+				return errors.New("--clear-preconditions removes every precondition; it takes neither --precondition nor --add-precondition")
+			}
+			if setPre && addPre {
+				return errors.New("--precondition replaces the whole precondition list and --add-precondition appends to it; pass one, not both")
+			}
+			pres, err := parsePreconditionFlags("--precondition", preconditions)
+			if err != nil {
+				return err
+			}
+			addPres, err := parsePreconditionFlags("--add-precondition", addPreconditions)
+			if err != nil {
+				return err
+			}
 			plan, spec, planPath, err := loadPhasePlanAndSpec(args[0])
 			if err != nil {
 				return err
 			}
+			setBefore := phase.PreconditionSetLine(plan)
 			// Only flags the user actually set become non-nil, so unset flags
 			// leave their fields untouched (partial update).
 			var e phase.TaskEdit
@@ -484,6 +616,22 @@ func taskEdit() *cobra.Command {
 			if cmd.Flags().Changed("wave") {
 				e.Wave = &wave
 			}
+			switch {
+			case clearPreconditions:
+				var none []phase.Precondition
+				e.Preconditions = &none
+			case setPre:
+				e.Preconditions = &pres
+			case addPre:
+				// Existing preconditions first, as --add-test-contract does: an
+				// append never reorders a set someone already reviewed.
+				cur := plan.FindTask(args[1])
+				if cur == nil {
+					return fmt.Errorf("task not found: %s", args[1])
+				}
+				merged := append(slices.Clone(cur.Preconditions), addPres...)
+				e.Preconditions = &merged
+			}
 			if err := plan.EditTask(args[1], e); err != nil {
 				return err
 			}
@@ -491,6 +639,7 @@ func taskEdit() *cobra.Command {
 				return err
 			}
 			Printf("edited %s in %s\n", args[1], args[0])
+			notePreconditionGrant(args[0], setBefore, plan)
 			return nil
 		},
 	}
@@ -506,6 +655,11 @@ func taskEdit() *cobra.Command {
 		"replace the whole test contract (repeatable; not split on commas)")
 	c.Flags().StringArrayVar(&addTestContract, "add-test-contract", nil,
 		"append one statement to the existing test contract (repeatable; not split on commas)")
+	c.Flags().StringArrayVar(&preconditions, "precondition", nil,
+		`replace the whole precondition list; each a TOML inline table, e.g. '{run = "go test ./x", max = 5}' (repeatable)`)
+	c.Flags().StringArrayVar(&addPreconditions, "add-precondition", nil,
+		"append one precondition, a TOML inline table, to the existing list (repeatable)")
+	c.Flags().BoolVar(&clearPreconditions, "clear-preconditions", false, "remove every precondition from the task")
 	return c
 }
 
