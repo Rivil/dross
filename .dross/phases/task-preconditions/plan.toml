@@ -23,7 +23,7 @@ Inside a keyed [[task]] element, diff a nested [[task.preconditions]] array per 
     "if the refusal is widened too far, a depth-2 table or a table nested in an unkeyed array element saves instead of being refused by dotted path, and the existing \"table nested in array element\" row goes red",
     "if the anchors drift, TestArchitectureNamesLosslessWriter fails on the apply (patch.go) or diff (patch_diff.go) anchor",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-2"
@@ -45,7 +45,7 @@ phase.Precondition{Run, Max *float64, Min *float64, Timeout, Why} as Task.Precon
     "if the encoding can collide, one precondition with run `a\",\"b` hashes the same as two preconditions `a` and `b`",
     "if the not_paths rows are missing, TestEveryPathShapedFieldIsDeclared fails on phase.Precondition.{Run,Timeout,Why}",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-3"
@@ -64,18 +64,18 @@ Grants.TrustedPreconditions map[phase]sha256 (`trusted_preconditions`). Precondi
     "if the field does not round-trip, TestLocalStoreRoundTripsGrants loses trusted_preconditions on reload or when a sibling grant saves",
     "if the not_paths row is missing, TestEveryPathShapedFieldIsDeclared fails on consent.Grants.TrustedPreconditions",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-4"
   wave = 2
-  depends_on = ["t-2"]
-  title = "Evaluate preconditions with one shared renderer"
-  files = ["internal/testlane/spawn.go", "internal/precond/precond.go", "internal/precond/precond_test.go"]
-  description = "Extract testlane.RunLine(ctx, dir, field, line, stdout, stderr) from RunLocal; RunLocal delegates, so the spawn site stays the same one. Precondition spawns start in their own process group and a timeout kills the whole group; dross test's RunLocal signal behaviour is unchanged. precond.Evaluate(ctx, repoDir, []Precondition) runs in order under context.WithTimeout, stops at the first failure, returns a Verdict whose Render() is the one text c-2 and c-8 both print. Stdout captured capped and apart from stderr; tail bounded by lines and bytes."
-  covers = ["c-2", "c-3", "c-9", "c-10"]
-  test_contract = ["if failure detail is lost, `echo boom; exit 3` renders without \"precondition 1\", the run line, its why, \"exit 3\" or \"boom\"", "if the tail is unbounded, 50 output lines do not tail to exactly lines 31–50, or a 10 MiB writer pushes stdout past the cap instead of failing a bounded precondition as unparseable", "if the bound is off by one, max 5 rejects `echo 5` or accepts `echo 5.0001` (refusal must say \"measured 5.0001, bound max 5\"), min 80 rejects `echo 80` or accepts `echo 79.9`, or 0.3 fails `max = 0.3`", "if parsing coerces, any of `''`, `12 ms`, `1\\n2`, `NaN`, `Inf`, `+Inf`, `infinity`, `0x1p-2`, `1_000`, `1,234`, `3%`, `warming up\\n3` does not fail as \"unparseable\" quoting the text against both max 5 and min -1", "if exit status and measurement mix, a measurement printing 3 and exiting 1 is parsed instead of failing on \"exit 1\", or an unbounded `echo abc` with exit 0 fails", "if stderr is parsed, `echo 3; echo junk >&2` with max 5 fails, or either line is missing from the tail", "if the timeout does not kill, `sleep 30` with a 200ms timeout passes, renders \"exit\" instead of \"timed out after 200ms\", or Evaluate outlasts the timeout plus WaitDelay", "if a spawn error is misclassified, a spawn failure with no exit code is treated as exit 0", "if cwd is wrong, `test -f marker` fails at repoDir while the process cwd is a subdirectory without the marker", "if evaluation continues past a failure, a second `touch ran` precondition creates `ran`", "if the extraction regresses dross test, the existing RunLocal tests go red or the runtime.test_command fence label changes", "if the timeout kills only sh, a precondition `sleep 30 & echo $! > pid; wait` with a 200ms timeout leaves the recorded grandchild pid alive after Evaluate returns"]
-  status = "pending"
+  depends_on = ["t-1", "t-2", "t-3"]
+  title = "Evaluate preconditions and gate task status in_progress (t-4 + t-9)"
+  files = ["internal/testlane/spawn.go", "internal/precond/precond.go", "internal/precond/precond_test.go", "internal/testlane/pgroup_unix.go", "internal/testlane/pgroup_windows.go", "internal/cmd/task.go", "internal/cmd/task_precondition.go", "internal/cmd/task_precondition_test.go", "internal/phase/plan_lossless_test.go"]
+  description = "Extract testlane.RunLine(ctx, dir, field, line, stdout, stderr) from RunLocal; RunLocal delegates, so the spawn site stays the same one. Precondition spawns start in their own process group and a timeout kills the whole group; dross test's RunLocal signal behaviour is unchanged. precond.Evaluate(ctx, repoDir, []Precondition) runs in order under context.WithTimeout, stops at the first failure, returns a Verdict whose Render() is the one text c-2 and c-8 both print. Stdout captured capped and apart from stderr; tail bounded by lines and bytes. Folded with t-9 (user-approved 2026-11-23): the taint audit treats spawn output written by a function nothing in the program calls as escaping, so Render needs t-9's caller in the same commit. Process-group kill lives in build-tagged pgroup_unix.go / pgroup_windows.go (user-approved) because Setpgid does not exist on Windows. Render writes to an io.Writer rather than returning a string, so spawned output never lands in a string a caller could fold into an error. t-9: Order: requireExecConsent → load → task exists → refuseSecondInProgress → already in_progress? skip. With preconditions: shape + unknown-key problems → PreconditionsConsented → precond.Evaluate. On pass, re-load, re-check status and fingerprint, then save. Exit 3 = precondition refusal; exit 4 = missing/stale grant. Shared helper runTaskPreconditions is reused by t-11. No bypass flag.\n"
+  covers = ["c-2", "c-3", "c-4", "c-9", "c-10", "c-11"]
+  test_contract = ["if failure detail is lost, `echo boom; exit 3` renders without \"precondition 1\", the run line, its why, \"exit 3\" or \"boom\"", "if the tail is unbounded, 50 output lines do not tail to exactly lines 31–50, or a 10 MiB writer pushes stdout past the cap instead of failing a bounded precondition as unparseable", "if the bound is off by one, max 5 rejects `echo 5` or accepts `echo 5.0001` (refusal must say \"measured 5.0001, bound max 5\"), min 80 rejects `echo 80` or accepts `echo 79.9`, or 0.3 fails `max = 0.3`", "if parsing coerces, any of `''`, `12 ms`, `1\\n2`, `NaN`, `Inf`, `+Inf`, `infinity`, `0x1p-2`, `1_000`, `1,234`, `3%`, `warming up\\n3` does not fail as \"unparseable\" quoting the text against both max 5 and min -1", "if exit status and measurement mix, a measurement printing 3 and exiting 1 is parsed instead of failing on \"exit 1\", or an unbounded `echo abc` with exit 0 fails", "if stderr is parsed, `echo 3; echo junk >&2` with max 5 fails, or either line is missing from the tail", "if the timeout does not kill, `sleep 30` with a 200ms timeout passes, renders \"exit\" instead of \"timed out after 200ms\", or Evaluate outlasts the timeout plus WaitDelay", "if a spawn error is misclassified, a spawn failure with no exit code is treated as exit 0", "if cwd is wrong, `test -f marker` fails at repoDir while the process cwd is a subdirectory without the marker", "if evaluation continues past a failure, a second `touch ran` precondition creates `ran`", "if the extraction regresses dross test, the existing RunLocal tests go red or the runtime.test_command fence label changes", "if the timeout kills only sh, a precondition `sleep 30 & echo $! > pid; wait` with a 200ms timeout leaves the recorded grandchild pid alive after Evaluate returns", "if a failing precondition starts the task or its exit code is passed through, `echo boom; exit 7` does not make dross exit 3, changes plan.toml bytes, or omits \"precondition 1\", \"exit 7\" or \"boom\"; a failed task's status or reason changes", "if the bound path is unwired, `echo 7` with max 5 is not refused with \"measured 7, bound max 5\", `echo 5` with max 5 does not reach in_progress, `echo '12 ms'` is not refused as unparseable, or `sleep 30` with 200ms is not refused naming \"timed out after 200ms\"", "if unconsented commands run, no grant or a stale grant after a hand-edited run line does not exit 4 naming `dross trust --preconditions <phase>`, or creates the `ran` marker", "if malformed preconditions reach consent or spawn, a malformed or unknown-key precondition is not refused before the consent check and before any spawn", "if ungated tasks are blocked, a task with no preconditions in a phase with no grant does not reach in_progress", "if c-11 is violated, re-setting an already in_progress task with a failing precondition and no grant does not exit 0 or creates the marker, or a retry from pending or failed does not re-run them", "if ordering slips, a second task's refuseSecondInProgress fires after a precondition spawns", "if the save is stale, a seam that sets another task in_progress between run and save does not make the command refuse, or plan.toml loses that concurrent write", "if cwd is wrong, `test -f go.mod` fails when run from a subdirectory", "if a bypass appears, `task status` flags are not exactly {--reason}", "if status saves disturb blocks, SetTaskStatus + Save on a task carrying preconditions changes more than the status line", "if the spawn audit regresses, TestEverySpawnSiteGatedOrExempt goes red or a new //dross:exec-exempt is needed"]
+  status = "done"
 
 [[task]]
   id = "t-5"
@@ -93,14 +93,14 @@ For each phase plan, append PreconditionProblems and the recorded unknown task.p
     "if validate executes commands, a plan whose precondition is `touch marker` creates the marker",
     "if validate over-rejects, a well-formed plan with `max = 3` and no timeout does not validate clean",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-6"
   wave = 2
   depends_on = ["t-2", "t-3"]
   title = "Add dross trust --preconditions <phase>"
-  files = ["internal/cmd/trust.go", "internal/cmd/trust_preconditions_test.go", "cmd/dross/testdata/cli_tree.txt", "README.md"]
+  files = ["internal/cmd/trust.go", "internal/cmd/trust_preconditions_test.go", "cmd/dross/testdata/cli_tree.txt", "README.md", "internal/cmd/testdata/cli_surface/trust.txt"]
   description = """
 Mirror trustReplay: print every task id, run, bounds and timeout before writing, then grant the PreconditionSetLine fingerprint. --check is silent on success. A phase with no preconditions errors "nothing to trust". README trust row names the flag.
 """
@@ -113,7 +113,7 @@ Mirror trustReplay: print every task id, run, bounds and timeout before writing,
     "if the key becomes hand-settable, `dross local set trusted_preconditions x` does not fail with \"unknown local key\"",
     "if the surface is undocumented, cli_tree.txt lacks the `--preconditions` flag row or the README `dross trust` row lacks `--preconditions <phase-id>`",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-7"
@@ -124,7 +124,7 @@ Mirror trustReplay: print every task id, run, bounds and timeout before writing,
   description = "NewTask and TaskEdit gain Preconditions. `--precondition '<TOML inline table>'` (StringArray, repeatable) on add and edit — on edit it replaces the list. `--add-precondition` appends; `--clear-preconditions` empties; conflicting combinations refused. An edit that changes PreconditionSetLine prints that the phase grant is revoked; one that leaves it unchanged prints nothing. `show` prints preconditions in text and --json. README `dross task` row names the flags."
   covers = ["c-5", "c-1"]
   test_contract = ["if add drops or spills, `task add --precondition '{run = \"go test ./x\", max = 5}'` does not reload with that run and max, or another task's bytes change", "if the inline table is split naively, `{ run = \"a, b && c\", max = 3 }` does not decode run to exactly \"a, b && c\"", "if malformed input is written, `{run = \"\"}`, `{run = \"x\", bogus = 1}`, `{run = \"x\", timeout = \"soon\"}` or malformed TOML is accepted or changes plan.toml bytes, or validate and task edit disagree on the same fixtures", "if edit semantics slip, `--precondition` does not replace, `--add-precondition` does not append, `--clear-preconditions` leaves any block (including a stray unknown key), or `--clear-preconditions` combined with either other flag is accepted", "if revocation is misreported, an edit that changes PreconditionSetLine leaves the grant Granted or omits `dross trust --preconditions <phase>`, or an edit that leaves it unchanged (timeout \"\" → \"60s\", re-writing identical values, `--title` only) prints a revocation line", "if show hides them, `task show` omits run, bounds, timeout or why, or `--json` lacks a `preconditions` array", "if a bypass appears, task edit gains any flag that marks a precondition as skipped", "if the CLI surface drifts, cli_tree.txt lacks the new add/edit flags"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-8"
@@ -141,7 +141,7 @@ In ReportTaskMoves --apply, a board move from pending or failed into in_progress
     "if the guard over-reaches, the same drag for a task without preconditions is not applied",
     "if clean moves are blocked, in_progress → done for a task with preconditions, or other clean moves in the same --apply run, are not applied",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-9"
@@ -154,7 +154,7 @@ Order: requireExecConsent → load → task exists → refuseSecondInProgress �
 """
   covers = ["c-2", "c-3", "c-4", "c-9", "c-10", "c-11"]
   test_contract = ["if a failing precondition starts the task or its exit code is passed through, `echo boom; exit 7` does not make dross exit 3, changes plan.toml bytes, or omits \"precondition 1\", \"exit 7\" or \"boom\"; a failed task's status or reason changes", "if the bound path is unwired, `echo 7` with max 5 is not refused with \"measured 7, bound max 5\", `echo 5` with max 5 does not reach in_progress, `echo '12 ms'` is not refused as unparseable, or `sleep 30` with 200ms is not refused naming \"timed out after 200ms\"", "if unconsented commands run, no grant or a stale grant after a hand-edited run line does not exit 4 naming `dross trust --preconditions <phase>`, or creates the `ran` marker", "if malformed preconditions reach consent or spawn, a malformed or unknown-key precondition is not refused before the consent check and before any spawn", "if ungated tasks are blocked, a task with no preconditions in a phase with no grant does not reach in_progress", "if c-11 is violated, re-setting an already in_progress task with a failing precondition and no grant does not exit 0 or creates the marker, or a retry from pending or failed does not re-run them", "if ordering slips, a second task's refuseSecondInProgress fires after a precondition spawns", "if the save is stale, a seam that sets another task in_progress between run and save does not make the command refuse, or plan.toml loses that concurrent write", "if cwd is wrong, `test -f go.mod` fails when run from a subdirectory", "if a bypass appears, `task status` flags are not exactly {--reason}", "if status saves disturb blocks, SetTaskStatus + Save on a task carrying preconditions changes more than the status line", "if the spawn audit regresses, TestEverySpawnSiteGatedOrExempt goes red or a new //dross:exec-exempt is needed"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-10"
@@ -172,7 +172,7 @@ plan.md §2 field table gains a `preconditions` row: any "before X, check Y" gat
     "if plan.md grows past budget, TestPromptByteBudget fails at 15000 with the cap unchanged, or a conservation_test row for plan.md goes missing",
     "if the new test reads prompts raw, rawPromptReadAllowlistSize moves off 19",
   ]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-11"
@@ -185,7 +185,7 @@ Read-only verb: resolve the task, PreconditionsConsented, runTaskPreconditions, 
 """
   covers = ["c-8", "c-4"]
   test_contract = ["if check and status diverge, on t-9's failing fixture (`echo boom; exit 7`) `task check` output or exit code differs from `task status … in_progress` (string equality), or the exit is 7 instead of 3", "if check mutates the plan, plan.toml bytes change after a pass, a fail, or a check on an in_progress or done task", "if check runs unconsented, no grant does not exit 4 naming `dross trust --preconditions`, or the `ran` marker appears", "if the empty case errors, a task with no preconditions does not exit 0 saying it has none", "if the audit misclassifies it, the exec audit does not list `task check` as gated on the testlane site with no ungatedVia, or TestExecGatedSetIsExplicit goes red", "if the surface is undocumented, cli_tree.txt lacks the `dross task check` row or the README task brace list lacks `check`"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-12"
@@ -198,4 +198,4 @@ Read-only verb: resolve the task, PreconditionsConsented, runTaskPreconditions, 
 """
   covers = ["c-7"]
   test_contract = ["if the card moves on a refusal, §1a runs issue sync on a non-zero status exit, or TestTaskEdgesPairTheBoardStatusWithThePlanStatus goes red", "if the pair arm drifts, it does not offer exactly fix / replan / fail or omits `dross task check`", "if solo continues past a refusal, the expanded solo partial's refusal arm does not say halt, or contains `dross task next`, `task edit` or `--clear-preconditions`", "if the agent grants consent itself, the exit-4 arm does not ask the user to run `dross trust --preconditions`, or TestPromptsNeverGrantConsentForTheUser goes red", "if another start route exists, an expanded assets/prompts or assets/agents file other than execute.md §1a and _execute.board-moves.md's refused-move route contains `task status … in_progress`, or any prompt starts a task by hand-editing plan.toml", "if the refusal arms invite a bypass, the precondition-refusal text in execute.md, _execute.solo.md or _execute.board-moves.md names skip, force or bypass for a precondition", "if the prompts grow past budget, TestPromptByteBudget, TestTestStepPromptsNotGrown (25854) or TestExecuteAbsorbedProseDeleted (25500) fails with no pin raised"]
-  status = "pending"
+  status = "done"

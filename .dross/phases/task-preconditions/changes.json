@@ -2,5 +2,627 @@
   "phase": "task-preconditions",
   "base": "milestone/v1.9",
   "base_commit": "e17f4ad7cbb68b528cd9c238ac1f3e80a950b11f",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/project/patch_diff.go",
+        "internal/project/patch.go",
+        "internal/project/patch_keyed_test.go",
+        "ARCHITECTURE.md"
+      ],
+      "commit": "01f77ee0",
+      "completed_at": "2026-11-22T09:55:35.483878Z",
+      "landmarks": [
+        {
+          "feature": "lossless plan writes",
+          "symbol": "keyedArray",
+          "loc": "internal/project/patch_diff.go:373",
+          "what": "diffs nested [[task.preconditions]] blocks per element inside an id-matched [[task]] and patches them within the parent's span"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "assets/prompts/plan.md",
+        "assets/prompts/plan-review.md",
+        "internal/cmd/plan_prompt_test.go"
+      ],
+      "commit": "1dc92b4d",
+      "completed_at": "2026-11-23T16:37:39.087324Z",
+      "landmarks": [
+        {
+          "feature": "phase planning",
+          "symbol": "plan.md preconditions row",
+          "loc": "assets/prompts/plan.md:42",
+          "what": "planner encodes before-X-check-Y gates as task preconditions and plan review blocks a gate left in prose"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/task.go",
+        "internal/cmd/task_check_test.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "README.md"
+      ],
+      "commit": "c27200c0",
+      "completed_at": "2026-11-23T16:50:40.040739Z",
+      "landmarks": [
+        {
+          "feature": "task preconditions",
+          "symbol": "taskCheck",
+          "loc": "internal/cmd/task.go:351",
+          "what": "dross task check evaluates a task's preconditions through the same consent-gated runner as task status, read-only, same output and exit codes"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "assets/prompts/execute.md",
+        "assets/prompts/_execute.solo.md",
+        "assets/prompts/_execute.board-moves.md",
+        "internal/cmd/execute_prompt_test.go"
+      ],
+      "commit": "187808d3",
+      "completed_at": "2026-11-23T17:15:35.245734Z",
+      "landmarks": [
+        {
+          "feature": "task preconditions",
+          "symbol": "execute.md §1a",
+          "loc": "assets/prompts/execute.md:53",
+          "what": "execute starts a task only through task status in_progress, syncs the board only on exit 0, and stops on a precondition refusal (pair: fix/replan/fail, solo: halt)"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/precondition.go",
+        "internal/phase/precondition_test.go",
+        "internal/phase/plan_edit.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "71ea7cdc",
+      "completed_at": "2026-11-22T10:44:51.767089Z",
+      "landmarks": [
+        {
+          "feature": "task preconditions",
+          "symbol": "PreconditionProblems",
+          "loc": "internal/phase/precondition.go:99",
+          "what": "Task.Preconditions schema with one shape check folded into ValidatePlan plus PreconditionSetLine as the canonical per-phase consent fingerprint"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/consent/store.go",
+        "internal/consent/preconditions.go",
+        "internal/consent/preconditions_test.go",
+        "internal/localstore/store_test.go"
+      ],
+      "commit": "1db7ef4f",
+      "completed_at": "2026-11-22T10:57:24.257976Z",
+      "landmarks": [
+        {
+          "feature": "task preconditions",
+          "symbol": "PreconditionsConsented",
+          "loc": "internal/consent/preconditions.go:46",
+          "what": "per-phase exec consent bound to the sha256 of the phase's precondition set line; stale or absent grants refuse with the dross trust --preconditions instruction"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/testlane/spawn.go",
+        "internal/precond/precond.go",
+        "internal/precond/precond_test.go",
+        "internal/testlane/pgroup_unix.go",
+        "internal/testlane/pgroup_windows.go",
+        "internal/cmd/task.go",
+        "internal/cmd/task_precondition.go",
+        "internal/cmd/task_precondition_test.go",
+        "internal/phase/plan_lossless_test.go"
+      ],
+      "commit": "d50c94d1",
+      "completed_at": "2026-11-23T13:54:08.675038Z",
+      "landmarks": [
+        {
+          "feature": "task preconditions",
+          "symbol": "Evaluate",
+          "loc": "internal/precond/precond.go:127",
+          "what": "runs a task's preconditions in order under per-precondition timeouts in their own process group, strict numeric bounds, one rendered verdict"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_precondition_test.go"
+      ],
+      "commit": "ec8fbb8e",
+      "completed_at": "2026-11-23T14:07:47.781181Z",
+      "landmarks": [
+        {
+          "feature": "task preconditions",
+          "symbol": "preconditionPlanProblems",
+          "loc": "internal/cmd/validate.go:228",
+          "what": "dross validate lists each plan's malformed preconditions and unknown precondition keys without running any"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/trust.go",
+        "internal/cmd/trust_preconditions_test.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "README.md",
+        "internal/cmd/testdata/cli_surface/trust.txt"
+      ],
+      "commit": "1240035d",
+      "completed_at": "2026-11-23T16:01:40.418934Z",
+      "landmarks": [
+        {
+          "feature": "task preconditions",
+          "symbol": "trustPreconditions",
+          "loc": "internal/cmd/trust.go:294",
+          "what": "dross trust --preconditions lists every precondition of a phase then grants its set fingerprint; --check reports absent or stale"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/phase/plan_edit.go",
+        "internal/cmd/task.go",
+        "internal/cmd/task_precondition_edit_test.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "README.md"
+      ],
+      "commit": "517608f6",
+      "completed_at": "2026-11-23T16:27:40.209707Z",
+      "landmarks": [
+        {
+          "feature": "task preconditions",
+          "symbol": "taskEdit",
+          "loc": "internal/cmd/task.go:548",
+          "what": "task add/edit set, append and clear preconditions from TOML inline tables and report when the change revokes the phase grant; task show lists them"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/boardsync/task_pull.go",
+        "internal/boardsync/task_pull_test.go"
+      ],
+      "commit": "016fd1b5",
+      "completed_at": "2026-11-23T16:32:24.824435Z",
+      "landmarks": [
+        {
+          "feature": "board sync",
+          "symbol": "startsGatedTask",
+          "loc": "internal/boardsync/task_pull.go:231",
+          "what": "board pull reports but never applies a card move into in_progress for a task with preconditions, routing it to dross task status"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/task.go",
+        "internal/cmd/task_precondition.go",
+        "internal/cmd/task_precondition_test.go",
+        "internal/phase/plan_lossless_test.go"
+      ],
+      "commit": "d50c94d1",
+      "completed_at": "2026-11-23T13:54:10.399759Z",
+      "landmarks": [
+        {
+          "feature": "task preconditions",
+          "symbol": "runTaskPreconditions",
+          "loc": "internal/cmd/task_precondition.go:37",
+          "what": "gates task status in_progress on shape then phase consent then evaluation; exit 3 refusal, exit 4 consent; re-checks the plan before saving"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "test_contract line 1 names SetTaskStatus(t-1, done) + Save on a plan, but TestNestedStatusChangeTouchesOneLine edits a mirror struct (precondDoc) through SaveTOML with byID. That makes sense while phase.Plan has no Preconditions field, but no test yet runs the real plan writer path over nested blocks.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "applyOne in internal/project/patch.go:659-665 now runs qualify before refuseInline and passes the target along. When qualify fails, target is nil and refuseInline matches inline lists in any element. A qualify error on one task can then be reported as an inline-table refusal that names another task's line. This only happens on a path that is already an error, and the differ should not produce one.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestNestedBlocksTravelWithTheirTask checks the delete-t-2 and add-after-t-1 cases by reloading and deep-comparing rather than comparing exact bytes. That still catches a block attached to the wrong task, which is the failure the test_contract names.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-10": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-6",
+          "text": "TestPlanReviewBlocksProseGates checks for the substring \"precondition\", which the suggested `--precondition` command alone would satisfy. It does not separately check that the check names a `preconditions` entry, which is acceptable for a prompt-content guard.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The new plan.md row uses `dross task add/edit --precondition ...`, which is shorthand and not a literal command. The conservation manifest records only rows that existed before, so it does not affect that test.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-11": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-8",
+          "text": "On a failing precondition, `task check` reports \"\u003cphase\u003e/\u003ctask\u003e did not start: a precondition failed (above)\" (task_precondition.go:59-60). That wording reads oddly for a read-only check, but it is what keeps check's output byte-identical to the status gate, as the test_contract requires.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "taskCheck's early return for an empty precondition list repeats the one inside runTaskPreconditions. It exists only so the verb can print the 'has no preconditions' line; the behaviour is correct.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-12": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "assets/prompts/execute.md §1a handles exit 0, 3 and 4 from `dross task status … in_progress` but says nothing about any other non-zero exit (e.g. 1 for a bad task id or I/O error). The sync is correctly skipped, but the agent gets no instruction to surface the error and stop.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "In the pair `fix` arm, 're-run this step' re-runs `dross task next`, so it relies on next returning the same refused task; it does today, since the task stays pending.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestTaskStartsOnlyThroughPick's plan.toml check works line by line, so a hand-edit instruction wrapped across two lines would slip past it; acceptable for a prose guard.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "BLOCKING",
+          "criterion": "c-1",
+          "text": "internal/phase/precondition.go PreconditionSetLine (~line 248 of the new file, `if d, err := p.EffectiveTimeout(); err == nil { timeout = d.String() }`): when EffectiveTimeout fails, the error is dropped and the raw Timeout text is used instead, with nothing logged or reported and no comment saying why. Add a comment stating that a malformed timeout is kept verbatim on purpose (PreconditionProblems reports it, and the fingerprint still changes with it), or handle the error.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "LoadPlan now decodes plan.toml twice (typed, then raw for unknown precondition keys) and ParsePrecondition does the same; this is fine at plan sizes.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Test coverage is thorough: the malformed-shape table runs through PreconditionProblems, ValidatePlan and ParsePrecondition; the fingerprint has both under-cover and over-cover tables, an exact-shape golden, a collision test that also covers task ids, and a save/reload round trip.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "LoadPlan now decodes plan.toml twice (struct, then raw tables for unknown precondition keys); harmless at plan sizes, and recordUnknownPreconditionKeys' decode error is surfaced, not swallowed",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "ValidatePlan deliberately does not refuse unknown precondition keys (only records them at load); reporting them to the user is left to a sibling owner, as the doc comment on plan_edit.go:90-92 states",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPreconditionSetLineShape pins the exact canonical JSON encoding, and the collision test also covers a task id that smuggles a second task entry",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "The last test_contract line expects TestEveryPathShapedFieldIsDeclared to fail on consent.Grants.TrustedPreconditions without a not_paths row, but that can't happen: stringValued (internal/cmd/pathfence_fields_test.go:61) skips map fields, so the walker never lists this map[string]string. Leaving the row out is correct, since adding one would be reported as stale. That contract line has no test that can fail on it, and not_paths.txt is listed in the task's files even though it doesn't need to change.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "PreconditionsConsented and PreconditionsRefusal copy the ExemptConsented/ExemptRefusal pattern: the empty check comes before the tracked-store check, a failed load fails closed by wrapping ErrNoConsent, and the default arm returns an error for Absent and Granted.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The tests use loadCountingStore to show that a tracked or empty-set case never reads the store, and they plant a valid grant so that only the tracked-file check can cause the refusal. Those cases are covered well.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "BLOCKING",
+          "text": "internal/cmd/task_precondition_test.go TestPreconditionsRunAtTheRepoRoot: `defer func() { _ = os.Chdir(\"..\") }()` discards the chdir error with no comment stating why; use t.Chdir(\"sub\") (as precond_test.go does) or comment the discard",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-4",
+          "text": "runTaskPreconditions maps every consent error, including consent.Refused (RefuseTrackedLocal: the grant store is tracked), to exit 4, which the task record defines as missing/stale grant only; the Refused case fits neither exit code cleanly",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "reloadAfterPreconditions narrows but does not close the stale-save window: a write between its re-load and savePlan in task.go is still overwritten; no claimed contract covers it",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Verdict.Render ignores fmt.Fprintf write errors; conventional for terminal output",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "RunLocal keeps dross's process group (asserted via ps pgid) while RunLine gets Setpgid plus a group SIGKILL on cancel; the spawn site remains the single runLine",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-10",
+          "text": "internal/precond/precond.go evaluateOne: Result.Reason is an exported string that embeds quoted spawned stdout on an unparseable measurement (quote(out.buf)), so the description's goal that spawned output never lands in a string a caller could fold into an error holds only for Render, not for Verdict/Result. Today's caller (runTaskPreconditions) does not fold it, but a future one could.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-9",
+          "text": "internal/precond/precond.go evaluateOne checks errors.Is(tctx.Err(), DeadlineExceeded) after the run returns, so a command that exits 0 just before its deadline can be reported as 'timed out'. This fails closed, so it never produces a false pass.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-10",
+          "text": "TestStderrIsTailedNotParsed checks the tail with strings.Contains(tail, \"3\"), which is a weak probe for the stdout line. Comparing against the exact line \"3\" would be stricter.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "A consent state of Refused (a tracked local grant store) also maps to exit 4 in runTaskPreconditions, although the record describes exit 4 as covering only a missing or stale grant. Nothing runs in either case.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Precondition problems are added only when plan != nil; a plan that fails to decode is already reported through the existing planPath: err line, so nothing is lost.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestValidateNeverRunsAPrecondition discards validate's error on purpose: the test only checks whether the marker file exists, and a touch-marker plan is well-formed, so the exit code does not matter there.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "--preconditions is dispatched before --replay/--lane etc. in Trust's RunE, so passing it alongside another selector flag silently ignores the other; this matches the existing replay precedence rather than introducing a new pattern",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-4",
+          "text": "--check does not run PreconditionProblems/UnknownPreconditionKeys, so a malformed but fingerprint-matching set reports current; the grant form refuses such sets, so it cannot be granted in that shape in the first place",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "listingText quotes control characters in run/why, and a test proves a carriage return cannot overwrite the consented line on screen",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 2,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "BLOCKING",
+          "criterion": "c-5",
+          "text": "Swallowed error at internal/cmd/task.go:480-482: notePreconditionGrant returns silently when FindRoot() fails, with no comment. A set-changing edit or add then prints no revocation line and does not name `dross trust --preconditions \u003cphase\u003e`, and the command still succeeds.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "BLOCKING",
+          "criterion": "c-5",
+          "text": "Swallowed error at internal/cmd/task.go:484: `state, _ := consent.PreconditionsConsented(...)` discards the error with no comment. Refused (tracked local.toml, internal/consent/preconditions.go:50-52) and Absent from an unparseable store (preconditions.go:53-56) both land in the default arm, which prints 'this machine has not trusted them' and drops the real reason. Surface the error, or handle Refused on its own the way consent.PreconditionsRefusal does.",
+          "resolution": "fixed in the fix round"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "TestTaskEditPreconditionSemantics, subtest 'inline form with a stray key': the test passes whether --clear-preconditions clears the inline list or refuses it (project/patch.go refuseInline always refuses). So for the inline form the test cannot fail on 'clear leaves a block' and only checks that a refusal writes nothing. Either assert the refusal outright or make the clear work.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "The grantState test helper (task_precondition_edit_test.go:262) also discards the PreconditionsConsented error. A Refused state would read as 'not Granted' and could make the revocation assertion pass for the wrong reason.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Editing a set back to one this machine trusted reports 'grant stands' because consent is fingerprint-based. That fits the existing consent design, but it reads more loosely than the locked consent_granularity wording 'any add or edit revokes it'.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestNoPreconditionBypassFlag pins the full flag sets of edit and status, which gives the no_bypass decision a solid guard. task remove now also reports grant changes, which the record did not claim but which is consistent with it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-5",
+          "text": "A task whose preconditions use the inline form (`preconditions = [{...}]`) cannot have them changed by `task edit`: the patcher refuses and tells the user to rewrite the list as header tables by hand (the test of `--clear-preconditions` on the inline form pins this). For such plans c-5's 'never needs a hand edit' does not hold; the tool writes header form, so this only bites plans written by hand.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "notePreconditionGrant switches on consent.State (values defined in internal/consent/consent.go:51-64). NotApplicable falls into the default (Absent) arm, but it is unreachable because the empty-set case returns first, and that arm prints a message anyway, so nothing is silently dropped.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 2,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "`task remove` also reports grant revocation. The record's description does not mention this, but it is in a declared file (internal/cmd/task.go) and has a test.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-8": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-7",
+          "text": "TestBoardPullNeverStartsAGatedTask only asserts err != nil under --apply; it does not check that the error is the gated-start error, so any other failure would also satisfy the non-zero-exit check",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-11",
+          "text": "startsGatedTask blocks every move into in_progress from a status other than in_progress, including done -\u003e in_progress. That is stricter than the pending/failed wording and keeps the no-bypass rule, but it is broader than the task description says",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "Without --apply, a blocked start is printed but the command still exits zero and the trailing summary does not mention it. The task record only requires a non-zero exit under --apply",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
 }
