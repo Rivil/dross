@@ -193,7 +193,7 @@ func taskStatus() *cobra.Command {
 		Use:   "status <phase-id> <task-id> <pending|in_progress|done|failed>",
 		Short: "Set a task's status in plan.toml",
 		Args:  cobra.ExactArgs(3),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(c *cobra.Command, args []string) error {
 			status := args[2]
 			switch status {
 			case phase.StatusPending, phase.StatusInProgress, phase.StatusDone, phase.StatusFailed:
@@ -225,6 +225,23 @@ func taskStatus() *cobra.Command {
 			if status == phase.StatusInProgress {
 				if err := refuseSecondInProgress(plan, args[0], args[1]); err != nil {
 					return err
+				}
+				// Preconditions gate the transition INTO in_progress only:
+				// re-setting a task already there runs nothing. A retry from
+				// pending or failed runs them again.
+				task := plan.FindTask(args[1])
+				if task.Status != phase.StatusInProgress && len(task.Preconditions) > 0 {
+					preRoot, err := FindRoot()
+					if err != nil {
+						return err
+					}
+					line, err := runTaskPreconditions(c, preRoot, args[0], plan, task)
+					if err != nil {
+						return err
+					}
+					if plan, err = reloadAfterPreconditions(planPath, args[0], args[1], task.Status, line); err != nil {
+						return err
+					}
 				}
 			}
 			// A failed solo task carries its review: the refusal comes before

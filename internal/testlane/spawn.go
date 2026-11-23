@@ -60,8 +60,27 @@ func LookPath(bin string) (string, error) {
 // WaitDelay is what makes a kill actually terminate the call. Killing `sh`
 // leaves its children holding the pipe ends, so Wait would block on a copy that
 // never ends — the delay closes the descriptors and returns instead.
+//
+// The child stays in dross's own process group, so a Ctrl-C at the terminal
+// reaches the suite exactly as it always has.
 func RunLocal(ctx context.Context, dir, line string, stdout, stderr io.Writer) error {
-	argv, err := ShArgv(line)
+	return runLine(ctx, dir, "runtime.test_command", line, stdout, stderr, false)
+}
+
+// RunLine runs one consented shell line in dir like RunLocal, fenced under the
+// given field label, but in a process group of its own: when ctx ends, the
+// whole group is killed, not just `sh`. A precondition such as
+// `go test ./x | tail -1` would otherwise leave `go test` running after its
+// timeout was reported. Where process groups do not exist (Windows) the kill
+// falls back to the process itself.
+func RunLine(ctx context.Context, dir, field, line string, stdout, stderr io.Writer) error {
+	return runLine(ctx, dir, field, line, stdout, stderr, true)
+}
+
+// runLine is the one spawn site behind RunLocal and RunLine, so the
+// exec-consent audit sees a single site whatever the caller.
+func runLine(ctx context.Context, dir, field, line string, stdout, stderr io.Writer, ownGroup bool) error {
+	argv, err := ShArgvFor(field, line)
 	if err != nil {
 		return err
 	}
@@ -70,6 +89,9 @@ func RunLocal(ctx context.Context, dir, line string, stdout, stderr io.Writer) e
 	c.Stdout = stdout
 	c.Stderr = stderr
 	c.Stdin = nil
+	if ownGroup {
+		killGroupOnCancel(c)
+	}
 	c.WaitDelay = 5 * time.Second
 	return c.Run()
 }
