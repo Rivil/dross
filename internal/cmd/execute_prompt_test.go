@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"io/fs"
+	"path"
 	"regexp"
 	"strings"
 	"testing"
@@ -879,5 +881,177 @@ func TestRecoveryWriterInFlight(t *testing.T) {
 	stash, failed := mustIdx(t, arm, "git stash push -u -- . ':(exclude).dross'"), mustIdx(t, arm, `dross task status <phase> <task-id> failed --reason "writer: `)
 	if stash > failed {
 		t.Error("the writer-in-flight arm marks failed before stashing")
+	}
+}
+
+// --- precondition refusals (task-preconditions c-7) ---
+
+// pickSection is base execute.md's §1a: the task start and its refusal arms.
+func pickSection(t *testing.T) string {
+	t.Helper()
+	s := sectionOf(rawExecuteBase(t), "### 1a.", "### ")
+	if s == "" {
+		t.Fatal("execute.md has no §1a")
+	}
+	return s
+}
+
+// between is s from the first from up to the next to after it.
+func between(t *testing.T, s, from, to string) string {
+	t.Helper()
+	rest := s[mustIdx(t, s, from):]
+	return rest[:mustIdx(t, rest, to)]
+}
+
+// refusalArms is §1a's refusal text, its exit-3 pair arm and its exit-4 arm.
+func refusalArms(t *testing.T) (refusal, pair, exit4 string) {
+	t.Helper()
+	pick := pickSection(t)
+	refusal = between(t, pick, "That start runs the task's preconditions", "Show the user its full record")
+	pair = between(t, refusal, "**Pair** → `AskUserQuestion`:", "**Solo** →")
+	exit4 = between(t, refusal, "- **Exit 4", "\n\n")
+	return refusal, pair, exit4
+}
+
+// TestExecutePickSyncsOnlyOnAStart: the card moves to in-progress only when
+// `task status … in_progress` exits 0. Called unconditionally, a precondition
+// refusal would leave the task pending and its card in progress.
+func TestExecutePickSyncsOnlyOnAStart(t *testing.T) {
+	pick := pickSection(t)
+	if strings.Contains(pick, "unconditionally") {
+		t.Error("§1a still moves the card unconditionally")
+	}
+	const start = "```\ndross task status <phase> $TASK_ID in_progress\n```\n"
+	const sync = "```\ndross issue task sync <phase> $TASK_ID --status task-in-progress\n```\n"
+	gate := between(t, pick, start, sync)[len(start):]
+	if !strings.Contains(gate, "Only on exit 0") {
+		t.Errorf("the board sync after §1a's start is not gated on its exit 0: %q", gate)
+	}
+	refusal, _, _ := refusalArms(t)
+	if mustIdx(t, pick, sync) > strings.Index(pick, refusal) || strings.Contains(refusal, "issue task sync") {
+		t.Error("a refusal arm reaches the board sync — the card would move for a task that never started")
+	}
+}
+
+// TestExecutePairRefusalOffersFixReplanFail: an exit-3 refusal in pair mode is
+// one AskUserQuestion of exactly fix / replan / fail, and the fix re-checks
+// with `dross task check` rather than starting the task to find out.
+func TestExecutePairRefusalOffersFixReplanFail(t *testing.T) {
+	refusal, pair, _ := refusalArms(t)
+	var got []string
+	for _, m := range regexp.MustCompile("(?m)^\\s*- `([a-z]+)` — ").FindAllStringSubmatch(pair, -1) {
+		got = append(got, m[1])
+	}
+	if strings.Join(got, ",") != "fix,replan,fail" {
+		t.Errorf("the pair refusal offers %v, want exactly [fix replan fail]", got)
+	}
+	for _, want := range []string{"dross task check <phase> $TASK_ID", "dross task edit <phase> $TASK_ID --precondition", `dross task status <phase> $TASK_ID failed --reason "precondition: `} {
+		if !strings.Contains(pair, want) {
+			t.Errorf("the pair refusal lost %q", want)
+		}
+	}
+	if !strings.Contains(refusal, "- **Exit 3") || !strings.Contains(refusal, "**Solo** → halt the run") {
+		t.Error("§1a does not route an exit-3 refusal to fix/replan/fail in pair and halt in solo")
+	}
+}
+
+// soloRefusalArm is the solo partial's precondition refusal block.
+func soloRefusalArm(t *testing.T) string {
+	t.Helper()
+	return between(t, expandedPrompt(t, "_execute.solo.md"), "**Precondition refusal, solo**", "\n\n")
+}
+
+// TestSoloRefusalHalts: a solo run stops at a refusal. It never fixes the
+// precondition itself, never clears it, and never moves on to the next task.
+func TestSoloRefusalHalts(t *testing.T) {
+	arm := soloRefusalArm(t)
+	if !strings.Contains(arm, "halt") {
+		t.Errorf("the solo refusal arm does not halt:\n%s", arm)
+	}
+	for _, gone := range []string{"dross task next", "task edit", "--clear-preconditions"} {
+		if strings.Contains(arm, gone) {
+			t.Errorf("the solo refusal arm carries on past the refusal with %q:\n%s", gone, arm)
+		}
+	}
+}
+
+// TestExecuteExitFourLeavesConsentToTheUser: a missing precondition grant
+// stops the task and the user runs `dross trust --preconditions`; the agent
+// never grants it.
+func TestExecuteExitFourLeavesConsentToTheUser(t *testing.T) {
+	_, _, exit4 := refusalArms(t)
+	for _, want := range []string{"Stop", "let them run `dross trust --preconditions <phase>`", "Never run `dross trust` on their behalf"} {
+		if !strings.Contains(exit4, want) {
+			t.Errorf("the exit-4 arm lost %q:\n%s", want, exit4)
+		}
+	}
+}
+
+// startTaskRE is a runnable start: `dross task status <phase> <task> in_progress`.
+var startTaskRE = regexp.MustCompile(`dross task status\s+\S+\s+\S+\s+in_progress\b`)
+
+// TestTaskStartsOnlyThroughPick: the only start route in any prompt or agent is
+// §1a's call, which runs the preconditions, plus the board-moves partial naming
+// it for a refused card. No prompt starts a task by writing plan.toml.
+func TestTaskStartsOnlyThroughPick(t *testing.T) {
+	texts := map[string]string{}
+	prompts, err := fs.Glob(promptFS, "prompts/*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range prompts {
+		if name := path.Base(p); !strings.HasPrefix(name, "_") {
+			texts[p] = expandedPrompt(t, name)
+		}
+	}
+	agents, err := fs.Glob(assets.FS, "agents/*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range agents {
+		b, err := assets.FS.ReadFile(a)
+		if err != nil {
+			t.Fatal(err)
+		}
+		texts[a] = string(b)
+	}
+	if len(agents) == 0 || texts["prompts/execute.md"] == "" {
+		t.Fatal("no agents or no execute.md scanned — the check went vacuous")
+	}
+
+	exec := texts["prompts/execute.md"]
+	pick := sectionOf(exec, "### 1a.", "### ")
+	board := between(t, exec, "- **A board start refused**", "- **A task changed on both sides**")
+	if !startTaskRE.MatchString(pick) || !startTaskRE.MatchString(board) {
+		t.Fatal("§1a or the board-moves refused route no longer names the start call")
+	}
+	texts["prompts/execute.md"] = strings.Replace(strings.Replace(exec, pick, "", 1), board, "", 1)
+
+	tomlStart := regexp.MustCompile(`status\s*=\s*"in_progress"`)
+	for name, s := range texts {
+		if m := startTaskRE.FindString(s); m != "" {
+			t.Errorf("%s starts a task outside §1a: %q", name, m)
+		}
+		for _, l := range strings.Split(s, "\n") {
+			if tomlStart.MatchString(l) && !strings.Contains(l, "Detect resume state") {
+				t.Errorf("%s writes in_progress into plan.toml: %s", name, strings.TrimSpace(l))
+			}
+			if strings.Contains(l, "plan.toml") && strings.Contains(l, "in_progress") && !strings.Contains(strings.ToLower(l), "never") {
+				t.Errorf("%s pairs plan.toml with in_progress without forbidding the edit: %s", name, strings.TrimSpace(l))
+			}
+		}
+	}
+}
+
+// TestRefusalArmsNameNoBypass: the locked no_bypass decision. No refusal arm
+// offers to skip, force or bypass a precondition; a wrong one is edited.
+func TestRefusalArmsNameNoBypass(t *testing.T) {
+	refusal, _, _ := refusalArms(t)
+	board := between(t, expandedPrompt(t, "_execute.board-moves.md"), "- **A board start refused**", "- **A task changed on both sides**")
+	bypass := regexp.MustCompile(`(?i)\b(skip|forc|bypass)`)
+	for name, s := range map[string]string{"execute.md §1a": refusal, "_execute.solo.md": soloRefusalArm(t), "_execute.board-moves.md": board} {
+		if m := bypass.FindString(s); m != "" {
+			t.Errorf("%s's precondition refusal names %q:\n%s", name, m, s)
+		}
 	}
 }

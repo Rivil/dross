@@ -7,6 +7,11 @@ next` returns, so it is the user's call.
   ```
   dross issue task pull <phase> --apply
   ```
+- **A board start refused** → `pull:` says a card moved to in_progress has
+  preconditions. Nothing writes it — `--apply` exits non-zero on it after
+  applying the rest. Tell the user; the task starts only when §1a picks it,
+  through `dross task status <phase> <task-id> in_progress`, the call that runs
+  its preconditions. Never set its status by hand in `plan.toml`.
 - **A task changed on both sides** → `pull:` marks it CONFLICT and prints both
   values; `--apply` refuses it by name. dross does not pick a winner and neither do
   you: surface the conflict and let the user say which side is right.
