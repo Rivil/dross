@@ -219,3 +219,43 @@ func TestReadmePlanRowNamesCitationWalk(t *testing.T) {
 		}
 	}
 }
+
+// TestPlanFieldTableNamesPreconditions (c-6): the §2 field table tells the
+// planner that a "before X, check Y" gate is a precondition set through
+// `--precondition`, never prose.
+func TestPlanFieldTableNamesPreconditions(t *testing.T) {
+	section := promptSection(t, expandedPrompt(t, "plan.md"), "## 2. Goal-backward decomposition")
+	var row string
+	for _, l := range strings.Split(section, "\n") {
+		if strings.HasPrefix(l, "| `preconditions` |") {
+			row = l
+		}
+	}
+	if row == "" {
+		t.Fatalf("the §2 field table has no `preconditions` row:\n%s", section)
+	}
+	for _, want := range []string{`"before X, check Y"`, "--precondition"} {
+		if !strings.Contains(row, want) {
+			t.Errorf("the preconditions row lacks %q: %s", want, row)
+		}
+	}
+}
+
+// TestPlanReviewBlocksProseGates (c-6): the cold reviewer flags a task that
+// states a gate in prose with no precondition, at BLOCKING.
+func TestPlanReviewBlocksProseGates(t *testing.T) {
+	exp := expandedPrompt(t, "plan-review.md")
+	i := strings.Index(exp, "Prose gates.")
+	if i < 0 {
+		t.Fatal("plan-review.md has no \"Prose gates\" check")
+	}
+	check := exp[i:]
+	if j := strings.Index(check, "\n\n"); j >= 0 {
+		check = check[:j]
+	}
+	for _, want := range []string{"is BLOCKING", "precondition"} {
+		if !strings.Contains(check, want) {
+			t.Errorf("the Prose gates check lacks %q:\n%s", want, check)
+		}
+	}
+}

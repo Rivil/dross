@@ -49,7 +49,9 @@ Checks:
 
   7. Forbidden actions. Cross-reference rules.toml (project + global). If any task implies a violation (e.g. running pnpm directly when runtime.mode is docker), BLOCKING.
 
-  8. Strengths. Note 1-3 things the plan got right. Useful for the author and for calibrating future plans. Tag NOTE.
+  8. Prose gates. A task whose description or test_contract states a gate in prose — a condition that must hold before the task starts ("before X, check Y", "only once Z is under N") — with no `preconditions` entry on that task is BLOCKING: a gate in prose is one the executor can skip. Suggestion: encode it as a precondition with `dross task edit <phase> <task> --precondition '{run = "...", max = N}'`. A test_contract's "if X breaks, test Y fails" is not a gate.
+
+  9. Strengths. Note 1-3 things the plan got right. Useful for the author and for calibrating future plans. Tag NOTE.
 
 Write findings to <abs-path>/REVIEW.md in this format:
 
