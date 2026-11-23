@@ -19,13 +19,13 @@ import (
 	"github.com/Rivil/dross/internal/state"
 )
 
-// Task registers `dross task {next,list,show,status,add,remove,edit,move,dispatch}`.
+// Task registers `dross task {next,list,show,status,check,add,remove,edit,move,dispatch}`.
 func Task() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "task",
 		Short: "Inspect and update tasks within a phase plan",
 	}
-	c.AddCommand(taskNext(), taskList(), taskShow(), taskStatus(), taskAdd(), taskRemove(), taskEdit(), taskMove(), taskDispatch())
+	c.AddCommand(taskNext(), taskList(), taskShow(), taskStatus(), taskCheck(), taskAdd(), taskRemove(), taskEdit(), taskMove(), taskDispatch())
 	return c
 }
 
@@ -335,6 +335,45 @@ func taskStatus() *cobra.Command {
 	}
 	c.Flags().StringVar(&reason, "reason", "", "why the task failed (only with failed; any other status clears a recorded reason)")
 	return c
+}
+
+// taskCheck wires `dross task check`: a task's preconditions judged exactly as
+// `task status … in_progress` judges them — the same shape check, the same
+// consent refusal (exit 4), the same verdict on stderr and the same exit 3 on a
+// failure — without the transition. It never saves, so it can run on a task in
+// any status, and it is how a refusal is re-checked after a fix without
+// starting the task.
+//
+// It is gated by the precondition grant alone, through runTaskPreconditions,
+// and stays out of execGatedCommands: what it runs is the phase's precondition
+// set, never runtime.test_command, so test_command's grant is not the consent
+// that authorizes it.
+func taskCheck() *cobra.Command {
+	return &cobra.Command{
+		Use:   "check <phase-id> <task-id>",
+		Short: "Evaluate a task's preconditions without starting it (never changes the plan)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(c *cobra.Command, args []string) error {
+			plan, _, err := loadPhasePlan(args[0])
+			if err != nil {
+				return err
+			}
+			task := plan.FindTask(args[1])
+			if task == nil {
+				return fmt.Errorf("task not found: %s", args[1])
+			}
+			if len(task.Preconditions) == 0 {
+				Printf("%s/%s has no preconditions — nothing to check\n", args[0], args[1])
+				return nil
+			}
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			_, err = runTaskPreconditions(c, root, args[0], plan, task)
+			return err
+		},
+	}
 }
 
 // refuseSecondInProgress refuses setting taskID in_progress while another task
