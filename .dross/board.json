@@ -3191,6 +3191,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "task-preconditions/t-13": {
+      "issue": "DRO-1189",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "task-preconditions/t-2": {
       "issue": "DRO-1178",
       "plan_status": "done",

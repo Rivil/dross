@@ -74,6 +74,24 @@
         }
       ]
     },
+    "t-13": {
+      "files": [
+        "internal/precond/precond_test.go",
+        "internal/project/patch_keyed_test.go",
+        "internal/phase/plan_edit_test.go",
+        "internal/testlane/spawn_test.go"
+      ],
+      "commit": "c9ba6f9b",
+      "completed_at": "2026-11-24T13:33:05.345024Z",
+      "landmarks": [
+        {
+          "feature": "task preconditions",
+          "symbol": "TestRunLineCancelKillsTheWholeGroup",
+          "loc": "internal/testlane/spawn_test.go",
+          "what": "tests pinning precondition cancel/signal/min-render, nested elemCount, precondition clear, and process-group kill"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/phase/phase.go",
@@ -317,6 +335,36 @@
           "kind": "quality",
           "severity": "NOTE",
           "text": "TestTaskStartsOnlyThroughPick's plan.toml check works line by line, so a hand-edit instruction wrapped across two lines would slip past it; acceptable for a prose guard.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-13": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-9",
+          "text": "internal/testlane/spawn_test.go TestRunLineCancelKillsTheWholeGroup: sh has only the 200ms context timeout to write the pid file; on a heavily loaded runner the cancel can come first and os.ReadFile fails with t.Fatal. That is a flake, not a false pass, but a longer timeout or a wait until the pid file exists would make the test reliable.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-2",
+          "text": "TestParentCancelSaysCancelled covers both cancel timings: a context already cancelled before the run (exec refuses to start) and one cancelled mid-run. Both must give the exact reason 'cancelled: context canceled'.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-5",
+          "text": "TestEditTaskPreconditionsReplaceAndClear also pins copy-on-edit: changing the caller's slice after EditTask does not leak into the task.",
           "resolution": "non-blocking, left"
         }
       ]
