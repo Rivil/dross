@@ -1,0 +1,165 @@
+[verify]
+  phase = "task-preconditions"
+  generated_at = 2026-11-24T11:06:07.265787Z
+  verdict = "pending"
+  measured_commit = "d4f2981642c0481af16692d4f433495744e6d45c"
+  measured_tree = "cdb77429504a19f0ddc96c36c16ed918ffd88c0d"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9257425742574258
+  mutants_killed = 1122
+  mutants_survived = 90
+  mutants_not_covered = 90
+  mutants_no_block = 74
+  mutants_test_gap = 16
+  mutants_in_scope = 1212
+  unclassified_in_scope = 22
+  criteria_total = 11
+  criteria_covered = 0
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 1122
+    survived = 90
+    timeout = 0
+    in_scope = 1212
+    score = 0.9257425742574258
+    file_count = 30
+    measured_on = "helicon"
+    whole_file = ["internal/boardsync/task_pull.go — adapter-lacks-range-runner", "internal/boardsync/task_pull_test.go — adapter-lacks-range-runner", "internal/cmd/execute_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/plan_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/task.go — adapter-lacks-range-runner", "internal/cmd/task_check_test.go — adapter-lacks-range-runner", "internal/cmd/task_precondition.go — adapter-lacks-range-runner", "internal/cmd/task_precondition_edit_test.go — adapter-lacks-range-runner", "internal/cmd/task_precondition_test.go — adapter-lacks-range-runner", "internal/cmd/trust.go — adapter-lacks-range-runner", "internal/cmd/trust_preconditions_test.go — adapter-lacks-range-runner", "internal/cmd/validate.go — adapter-lacks-range-runner", "internal/cmd/validate_precondition_test.go — adapter-lacks-range-runner", "internal/consent/preconditions.go — adapter-lacks-range-runner", "internal/consent/preconditions_test.go — adapter-lacks-range-runner", "internal/consent/store.go — adapter-lacks-range-runner", "internal/localstore/store_test.go — adapter-lacks-range-runner", "internal/phase/phase.go — adapter-lacks-range-runner", "internal/phase/plan_edit.go — adapter-lacks-range-runner", "internal/phase/plan_lossless_test.go — adapter-lacks-range-runner", "internal/phase/precondition.go — adapter-lacks-range-runner", "internal/phase/precondition_test.go — adapter-lacks-range-runner", "internal/precond/precond.go — adapter-lacks-range-runner", "internal/precond/precond_test.go — adapter-lacks-range-runner", "internal/project/patch.go — adapter-lacks-range-runner", "internal/project/patch_diff.go — adapter-lacks-range-runner", "internal/project/patch_keyed_test.go — adapter-lacks-range-runner", "internal/testlane/pgroup_unix.go — adapter-lacks-range-runner", "internal/testlane/pgroup_windows.go — adapter-lacks-range-runner", "internal/testlane/spawn.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-2"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-3"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-4"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-5"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-6"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-7"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-8"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-9"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-10"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-11"
+  status = "unknown"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/trust.go:308 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/trust.go:308 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/trust.go:310 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/trust.go:310 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/phase/plan_edit.go:421 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/phase/precondition.go:67 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/precond/precond.go:158 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/precond/precond.go:159 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/precond/precond.go:164 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/precond/precond.go:171 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/precond/precond.go:234 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/project/patch.go:695 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/project/patch.go:695 (INVERT_NEGATIVES)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/project/patch.go:695 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/project/patch.go:695 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/project/patch.go:698 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/project/patch.go:698 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/project/patch.go:1011 (INCREMENT_DECREMENT)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/project/patch_diff.go:471 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/project/patch_diff.go:473 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/testlane/pgroup_unix.go:21 (INVERT_NEGATIVES)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/testlane/pgroup_unix.go:21 (ARITHMETIC_BASE)"

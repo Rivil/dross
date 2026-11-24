@@ -1,4 +1,4 @@
-task_seq = 12
+task_seq = 13
 
 [phase]
   id = "task-preconditions"
@@ -199,3 +199,14 @@ Read-only verb: resolve the task, PreconditionsConsented, runTaskPreconditions, 
   covers = ["c-7"]
   test_contract = ["if the card moves on a refusal, §1a runs issue sync on a non-zero status exit, or TestTaskEdgesPairTheBoardStatusWithThePlanStatus goes red", "if the pair arm drifts, it does not offer exactly fix / replan / fail or omits `dross task check`", "if solo continues past a refusal, the expanded solo partial's refusal arm does not say halt, or contains `dross task next`, `task edit` or `--clear-preconditions`", "if the agent grants consent itself, the exit-4 arm does not ask the user to run `dross trust --preconditions`, or TestPromptsNeverGrantConsentForTheUser goes red", "if another start route exists, an expanded assets/prompts or assets/agents file other than execute.md §1a and _execute.board-moves.md's refused-move route contains `task status … in_progress`, or any prompt starts a task by hand-editing plan.toml", "if the refusal arms invite a bypass, the precondition-refusal text in execute.md, _execute.solo.md or _execute.board-moves.md names skip, force or bypass for a precondition", "if the prompts grow past budget, TestPromptByteBudget, TestTestStepPromptsNotGrown (25854) or TestExecuteAbsorbedProseDeleted (25500) fails with no pin raised"]
   status = "done"
+
+[[task]]
+  id = "t-13"
+  wave = 3
+  title = "Kill the verify test-gap survivors"
+  files = ["internal/precond/precond_test.go", "internal/project/patch_keyed_test.go", "internal/phase/plan_edit_test.go", "internal/testlane/spawn_test.go"]
+  description = "Tests only, no production change. Kill the 6 gremlins survivors verify found NOT COVERED by their own package's tests: precond.go:159 (a parent ctx cancelled before or while a precondition runs → reason 'cancelled: …'), precond.go:171 (a precondition killed by a signal with no timeout → reason 'terminated: …'), precond.go:234 (a passing min-bounded measurement renders 'min N' in its detail), patch.go:1011 (elemCount resolves an array nested in an outer element by its outer index), plan_edit.go:421 (EditTask with an empty preconditions slice leaves Preconditions nil), pgroup_unix.go:21 (RunLine on cancel kills the whole process group, tested inside internal/testlane)."
+  covers = ["c-2", "c-3", "c-5", "c-9"]
+  test_contract = ["if Evaluate stops naming a parent-context cancel, the precond cancel test fails", "if a signal-killed precondition stops reporting 'terminated', the precond signal test fails", "if the pass render drops a min bound, the precond render test fails", "if elemCount ignores the outer index, the patch_keyed nested-count test fails", "if EditTask keeps an empty non-nil preconditions slice, the plan_edit clear test fails", "if RunLine's cancel stops killing the process group, the testlane group-kill test fails"]
+  status = "pending"
+  depends_on = ["t-1", "t-4", "t-7"]
