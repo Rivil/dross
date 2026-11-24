@@ -526,6 +526,31 @@ func TestEditTaskFilesNilLeavesUntouched(t *testing.T) {
 	}
 }
 
+// TestEditTaskPreconditionsReplaceAndClear: a non-empty Preconditions replaces
+// the task's with a copy the caller cannot reach into afterwards, and a pointer
+// to an empty slice clears them to nil — the shape a task with none decodes to,
+// so a cleared task and a never-set one compare and save alike.
+func TestEditTaskPreconditionsReplaceAndClear(t *testing.T) {
+	p := &Plan{TaskSeq: 1, Task: []Task{{
+		ID: "t-1", Wave: 1, Title: "one", Preconditions: []Precondition{{Run: "old"}},
+	}}}
+	want := []Precondition{{Run: "make build"}, {Run: "echo 3", Max: ptr(5.0)}}
+	edit := slices.Clone(want)
+	if err := p.EditTask("t-1", TaskEdit{Preconditions: &edit}); err != nil {
+		t.Fatal(err)
+	}
+	edit[0].Run = "mutated after the edit"
+	if got := p.FindTask("t-1").Preconditions; !reflect.DeepEqual(got, want) {
+		t.Errorf("preconditions = %+v, want %+v — replaced wholesale, by copy", got, want)
+	}
+	if err := p.EditTask("t-1", TaskEdit{Preconditions: ptr([]Precondition{})}); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.FindTask("t-1").Preconditions; got != nil {
+		t.Errorf("preconditions = %#v, want nil — an empty slice clears", got)
+	}
+}
+
 func TestEditTaskSetsDescription(t *testing.T) {
 	p := &Plan{TaskSeq: 1, Task: []Task{{ID: "t-1", Wave: 1, Title: "one"}}}
 	if err := p.EditTask("t-1", TaskEdit{Description: ptr("what it does")}); err != nil {

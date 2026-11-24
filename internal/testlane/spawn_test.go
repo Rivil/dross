@@ -5,9 +5,13 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // `sh` stands in for the repo's own lines here: same shape, no network, no
@@ -114,5 +118,44 @@ func TestRunInstallCapturesCombinedOutput(t *testing.T) {
 	out, err = RunInstall([]string{"sh", "-c", "echo the tail; exit 2"})
 	if err == nil || !strings.Contains(string(out), "the tail") {
 		t.Errorf("a failing install gave %q, %v; want its output and an error", out, err)
+	}
+}
+
+// TestRunLineCancelKillsTheWholeGroup: a cancelled RunLine kills sh's whole
+// process group, so a background grandchild dies with it rather than running
+// on past the deadline the caller reported. Killing only sh's own pid would
+// leave the grandchild alive.
+func TestRunLineCancelKillsTheWholeGroup(t *testing.T) {
+	skipOnWindows(t)
+	dir := t.TempDir()
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	err := RunLine(ctx, dir, "task.preconditions.run", "sleep 30 & echo $! > pid; wait", nil, nil)
+	if err == nil {
+		t.Fatal("a cancelled RunLine reported success")
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "pid"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	grandchild, err := os.FindProcess(pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The killed grandchild is reparented and reaped; give that a moment.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if err := grandchild.Signal(syscall.Signal(0)); errors.Is(err, os.ErrProcessDone) {
+			return
+		}
+		if time.Now().After(deadline) {
+			_ = grandchild.Kill() // don't leak it past the test
+			t.Fatalf("grandchild %d still alive after the cancel", pid)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

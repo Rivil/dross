@@ -278,6 +278,65 @@ func TestPassRendersEachPrecondition(t *testing.T) {
 	}
 }
 
+// TestPassRendersMinBounds: a passing bounded measurement names every bound it
+// was held to, min first — a min-only one as much as a max-only one.
+func TestPassRendersMinBounds(t *testing.T) {
+	v := Evaluate(context.Background(), t.TempDir(), []phase.Precondition{
+		{Run: "echo 80", Min: f(80)},
+		{Run: "echo 4.5", Min: f(4), Max: f(5)},
+	})
+	if !v.OK() {
+		t.Fatalf("passing preconditions failed: %s", render(v))
+	}
+	out := render(v)
+	for _, want := range []string{"1: echo 80 — measured 80 (min 80)\n", "2: echo 4.5 — measured 4.5 (min 4, max 5)\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("Render() lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestParentCancelSaysCancelled: a parent context cancelled before a
+// precondition starts, or while it runs, fails it as cancelled — never as a
+// timeout, an exit status or a spawn failure, and never as a pass.
+func TestParentCancelSaysCancelled(t *testing.T) {
+	dir := t.TempDir()
+	before, cancel := context.WithCancel(context.Background())
+	cancel()
+	v := Evaluate(before, dir, []phase.Precondition{{Run: "true"}})
+	if r, failed := v.Failure(); !failed || r.Reason != "cancelled: context canceled" {
+		t.Errorf("cancelled before the run: failed=%v reason %q, want \"cancelled: context canceled\"", failed, r.Reason)
+	}
+
+	during, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		cancel()
+	}()
+	start := time.Now()
+	v = Evaluate(during, dir, []phase.Precondition{{Run: "sleep 30"}})
+	if elapsed := time.Since(start); elapsed > 200*time.Millisecond+5*time.Second {
+		t.Errorf("Evaluate took %s after a cancel, past the WaitDelay", elapsed)
+	}
+	if r, failed := v.Failure(); !failed || r.Reason != "cancelled: context canceled" {
+		t.Errorf("cancelled while running: failed=%v reason %q, want \"cancelled: context canceled\"", failed, r.Reason)
+	}
+	if !strings.Contains(render(v), "failed: cancelled: context canceled") {
+		t.Errorf("Render() does not name the cancel:\n%s", render(v))
+	}
+}
+
+// TestSignalKillSaysTerminated: a precondition killed by a signal, with no
+// timeout or cancel behind it, has no exit status — it fails as terminated,
+// naming the signal, never as an exit code or a spawn failure.
+func TestSignalKillSaysTerminated(t *testing.T) {
+	r := evalOne(t, t.TempDir(), phase.Precondition{Run: "kill -9 $$"})
+	if r.Passed || !strings.HasPrefix(r.Reason, "terminated: ") || !strings.Contains(r.Reason, "killed") {
+		t.Errorf("a SIGKILLed precondition gave passed=%v reason %q, want \"terminated: …killed\"", r.Passed, r.Reason)
+	}
+}
+
 // TestRunLocalKeepsItsFenceLabel: extracting RunLine must not relabel the
 // suite's own fence, nor put the suite in a group of its own.
 func TestRunLocalKeepsItsFenceLabel(t *testing.T) {

@@ -947,3 +947,49 @@ func TestQualifyNestedElement(t *testing.T) {
 		t.Errorf("String = %q", got)
 	}
 }
+
+// TestElemCountNestedTwoDeep: elemCount resolves every array level it passes
+// through by its own outer index, so an array nested two deep counts the
+// elements of the one inner element named — not its first sibling's, and not
+// by reusing the outermost index.
+func TestElemCountNestedTwoDeep(t *testing.T) {
+	src := `[[a]]
+  [[a.b]]
+    [[a.b.c]]
+      n = 1
+    [[a.b.c]]
+      n = 2
+  [[a.b]]
+    [[a.b.c]]
+      n = 3
+[[a]]
+  [[a.b]]
+    [[a.b.c]]
+      n = 4
+    [[a.b.c]]
+      n = 5
+    [[a.b.c]]
+      n = 6
+`
+	d, err := indexDoc([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		table []string
+		outer []int
+		want  int
+	}{
+		{[]string{"a"}, nil, 2},
+		{[]string{"a", "b"}, []int{0}, 2},
+		{[]string{"a", "b"}, []int{1}, 1},
+		{[]string{"a", "b", "c"}, []int{0, 0}, 2},
+		{[]string{"a", "b", "c"}, []int{0, 1}, 1},
+		{[]string{"a", "b", "c"}, []int{1, 0}, 3},
+		{[]string{"a", "b", "c"}, []int{1, 1}, 0},
+	} {
+		if got := d.elemCount(c.table, c.outer); got != c.want {
+			t.Errorf("elemCount(%v, %v) = %d, want %d", c.table, c.outer, got, c.want)
+		}
+	}
+}
