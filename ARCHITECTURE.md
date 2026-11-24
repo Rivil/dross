@@ -491,8 +491,9 @@ A lane's `install` line carries **its own** grant, disjoint from the one coverin
 - `trustLaneInstall` (`dross trust --lane-install <name>`; the shared helper refuses an ungranted declared line ahead of both the local and the remote seam) — `internal/cmd/trust.go:57`
 - `TestTrustLaneInstallWithNoLineRefuses` (a lane with no install line is nothing-to-trust, not an empty grant) — `internal/cmd/trust_lane_install_cmd_test.go:277`
 - `quickEnd` (`dross quick end` refuses in an untrusted tree before reading its record, and is on the gated roster because it absorbs `state bump` and `changes record`) — `internal/cmd/quick.go:99`
+- `consent.PreconditionsConsented` (a further grant kind: a phase's [task preconditions](#task-preconditions) as one fingerprinted set, granted by `dross trust --preconditions <phase>` and revoked by any add or edit) — `internal/consent/preconditions.go:46`
 
-_introduced exec-trust-followups · ca15bb2 · extended test-lane-config · 9ce037a · extended remote-toolchain-install · 1fed76d · extended exec-consent-completeness · a11a9e7 · extended cmd-package-decomposition · 989fea7 · extended prompt-budgets-rest · 87deb487_
+_introduced exec-trust-followups · ca15bb2 · extended test-lane-config · 9ce037a · extended remote-toolchain-install · 1fed76d · extended exec-consent-completeness · a11a9e7 · extended cmd-package-decomposition · 989fea7 · extended prompt-budgets-rest · 87deb487 · extended task-preconditions · 1db7ef4f_
 
 ### Exec output containment
 
@@ -643,9 +644,10 @@ Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue 
 - `finalizerCloses` (the Phases and Tasks terminal emissions, parsed from every close call `FinalizePhase` reaches) — `internal/boardsync/board_lifecycle_divergence_test.go:236`
 - `TestBoardCallingPromptsSurfaceFailure` (every board-calling prompt names `[board].enabled` and treats a non-zero exit as a failure, never the disabled no-op) — `internal/cmd/board_switch_prompt_test.go:61`
 - `openQuickIssue` (one helper opens and links a quick's board issue for both `dross quick end` and `dross issue quick`) — `internal/cmd/issue.go:390`
+- `startsGatedTask` (`issue task pull` reports but never applies a card move into in_progress for a task with [preconditions](#task-preconditions); it names `dross task status` as the route and exits non-zero under `--apply`) — `internal/boardsync/task_pull.go:231`
 
 _a073ab7 · extended gitlab-ship-provider · 27e1a4f · extended youtrack-board-integration · extended prove-or-demote-board-sync · 50290f0_
-_extended additional-board-backends (GitHub Projects + Jira) · 9d60ea2 · extended board-state-map-truth · 3272339 · extended survivor-drain · 975870f · extended deferred-add-command · bcc8d5a · extended board-sync-truth · a587471 · extended board-task-mirror · c4b8b84 · extended mirror-terminal-state · dd76964 · extended board-mirror-reaper · 597cae4 · extended extracted-package-test-parity · 974edf0 · extended board-finalize-on-complete · 49291a6 · extended prompt-budgets-rest · 6e88787b_
+_extended additional-board-backends (GitHub Projects + Jira) · 9d60ea2 · extended board-state-map-truth · 3272339 · extended survivor-drain · 975870f · extended deferred-add-command · bcc8d5a · extended board-sync-truth · a587471 · extended board-task-mirror · c4b8b84 · extended mirror-terminal-state · dd76964 · extended board-mirror-reaper · 597cae4 · extended extracted-package-test-parity · 974edf0 · extended board-finalize-on-complete · 49291a6 · extended prompt-budgets-rest · 6e88787b · extended task-preconditions · 016fd1b5_
 
 ### Legacy phase backfill
 
@@ -1576,8 +1578,30 @@ List, add, remove, edit, and reposition tasks inside a phase's plan.toml through
 - `ValidatePlan` (pre-write integrity guard) — `internal/phase/plan_edit.go:95`
 - `taskStatus` (`dross task status <id> failed --reason` records why a task failed; any other status clears the reason) — `internal/cmd/task.go:190`
 - `Plan.Save` (plan.toml patched in place through the keyed lossless door, tasks matched by id: every `dross task` write keeps comments and hand formatting outside the tasks it changed) — `internal/phase/phase.go:512`
+- `differ.keyedArray` (nested `[[task.preconditions]]` blocks are diffed per element inside their id-matched task and patched within that task's span, so a status flip or precondition edit touches only its own lines) — `internal/project/patch_diff.go:373`
+- `taskEdit` (`--precondition` / `--add-precondition` / `--clear-preconditions` set, append and clear a task's [preconditions](#task-preconditions) without a hand edit) — `internal/cmd/task.go:587`
 
-_introduced task-lifecycle-commands · extended task-reordering · extended cli-surface-sweep · 949b375 · extended completion-record-truth · 7c3f7ff · extended solo-task-review · 6719096 · extended board-finalize-on-complete · dc37595_
+_introduced task-lifecycle-commands · extended task-reordering · extended cli-surface-sweep · 949b375 · extended completion-record-truth · 7c3f7ff · extended solo-task-review · 6719096 · extended board-finalize-on-complete · dc37595 · extended task-preconditions · 517608f6_
+
+### Task preconditions
+
+A plan task can carry machine-checked gates that must pass before it starts, so a "before X, check Y" condition is run by the CLI instead of left in prose for the executor to skip. Each precondition is a `[[task.preconditions]]` table — a required `run` command, an optional inclusive `max` and/or `min` numeric bound on what it prints, an optional `timeout` (Go duration, default 60s) and a `why` (locked `precondition_schema`). `dross task status <phase> <task> in_progress` evaluates them in order at the repo root via `sh -c`, each in its own process group so a timeout kills the whole tree (locked `exec_location`): a non-zero exit, a measurement past its bound, stdout that does not parse as exactly one finite number (quoted, never coerced to 0), or a timeout refuses the start with exit 3, naming the precondition, the measured value and bound or exit code, and the output tail, while plan.toml stays byte-identical. Only the transition into in_progress is gated: re-setting an in_progress task skips them, and a retry from pending or failed re-runs them. Running them needs exec consent like any repo-supplied command: `dross trust --preconditions <phase>` lists the phase's whole set and grants its fingerprint, so any add or edit revokes it and a stale or absent grant refuses with exit 4 before anything spawns (locked `consent_granularity`). A malformed set (empty run, unknown key, bad timeout, non-finite bound) is refused for its shape ahead of consent, and `dross validate` reports it without running anything. `dross task check` runs the same consent-gated evaluator read-only, with output and exit byte-identical to the status gate. There is no bypass flag anywhere (locked `no_bypass`): a wrong precondition is fixed with `dross task edit --precondition / --add-precondition / --clear-preconditions`, which leaves a reviewable record. The prompts close the loop: /dross-plan encodes every stated gate as a precondition, plan review blocks one left in prose, and /dross-execute starts a task only through `task status … in_progress`, stopping on a refusal (pair: fix / replan / fail; solo: halt).
+
+- `Task.Preconditions` (the per-task schema field) — `internal/phase/phase.go:441`
+- `PreconditionProblems` (one shape check, folded into ValidatePlan and the start gate) — `internal/phase/precondition.go:99`
+- `PreconditionSetLine` (canonical per-phase set encoding the consent grant fingerprints) — `internal/phase/precondition.go:236`
+- `consent.PreconditionsConsented` (per-phase grant bound to the set line; stale/absent refuse naming `dross trust --preconditions`) — `internal/consent/preconditions.go:46`
+- `precond.Evaluate` (ordered evaluation: per-precondition timeout, process-group kill, strict numeric parse, inclusive bounds, one rendered verdict) — `internal/precond/precond.go:127`
+- `testlane.RunLine` (the spawn seam: own process group, group SIGKILL on cancel) — `internal/testlane/spawn.go:76`
+- `runTaskPreconditions` (status gate: shape, then consent, then evaluation; exit 3 refusal, exit 4 consent; re-loads the plan before saving) — `internal/cmd/task_precondition.go:37`
+- `taskCheck` (`dross task check`, read-only, same verdict and exit codes) — `internal/cmd/task.go:351`
+- `trustPreconditions` (`dross trust --preconditions <phase>`: list the set, then grant; `--check` reports absent/stale) — `internal/cmd/trust.go:294`
+- `preconditionPlanProblems` (`dross validate` reports malformed preconditions and unknown keys without running any) — `internal/cmd/validate.go:228`
+- `notePreconditionGrant` (a set-changing add/edit/remove says when it revoked the phase grant) — `internal/cmd/task.go:514`
+- plan.md `preconditions` row / plan-review "Prose gates" check (planner encodes gates; reviewer blocks one left in prose) — `assets/prompts/plan.md:42`
+- execute.md §1a refusal arms (exit 3 → pair fix/replan/fail, solo halt; exit 4 → the user runs `dross trust`) — `assets/prompts/execute.md:68`
+
+_introduced task-preconditions · 187808d3_
 
 ### Tech-debt scan (dross techdebt)
 
