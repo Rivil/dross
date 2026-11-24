@@ -1,0 +1,80 @@
+[phase]
+  id = "one-way-door-decisions"
+  title = "one-way-door-decisions"
+  milestone = "v1.9"
+
+[[criteria]]
+  id = "c-1"
+  text = "Each [[decisions]] entry carries a reversibility tag (`reversible` | `one-way`); `dross validate` reports a missing or unknown value on a locked decision."
+  deferred = ["1e0a0171b87ba8b1"]
+
+[[criteria]]
+  id = "c-2"
+  text = "/dross-spec §3 proposes a reversibility tag for every decision, defaulting to one-way for file/schema formats, public CLI surface and new dependencies; the user can override it."
+
+[[criteria]]
+  id = "c-3"
+  text = "A one-way decision gets its own explicit confirm turn in /dross-spec, and the spec records that confirmation."
+
+[[criteria]]
+  id = "c-4"
+  text = "Plan-lock refuses while the spec holds an unconfirmed one-way decision, naming each key."
+
+[[criteria]]
+  id = "c-5"
+  text = "The ship PR body marks one-way decisions distinctly from reversible ones."
+
+[[criteria]]
+  id = "c-6"
+  text = "The task-reviewer context marks one-way decisions distinctly from reversible ones."
+
+[[criteria]]
+  id = "c-7"
+  text = "`dross validate` reports no reversibility problem on an already-complete phase's spec whose decisions predate the tag."
+
+[[criteria]]
+  id = "c-8"
+  text = "Changing a confirmed one-way decision's choice voids its confirmation, so plan-lock refuses it again until re-confirmed."
+
+[[criteria]]
+  id = "c-9"
+  text = "Plan-lock passes the one-way gate when the spec has no decisions, or only reversible or unlocked ones."
+
+[[decisions]]
+  key = "confirmation_record"
+  choice = "`dross phase confirm <phase> <key>` writes `confirmed = <hash of key+choice>` into spec.toml, run only after the user's AskUserQuestion yes."
+  why = "Committed and visible in the PR; an edited choice mismatches the hash, so c-8 falls out with no extra mechanism. A local trust grant would be per-machine."
+  locked = true
+
+[[decisions]]
+  key = "legacy_boundary"
+  choice = "A missing tag is reported only on phases not yet complete; plan-lock checks the phase being locked. An unknown tag value is reported everywhere."
+  why = "151 existing specs hold untagged decisions; backfilling them would stamp reversibility claims nobody made."
+  locked = true
+
+[[decisions]]
+  key = "confirm_turn_placement"
+  choice = "Inline in /dross-spec §3c: right after a gray area resolves to a one-way decision, ask confirm / make reversible / reopen. The verb runs for each yes after §5's write."
+  why = "The discussion that produced the decision is still fresh; a late batch confirm drifts toward rubber-stamping."
+  locked = true
+
+[[decisions]]
+  key = "tag_scope"
+  choice = "Only `locked = true` decisions require a reversibility tag and are subject to the one-way gate."
+  why = "Unlocked decisions are already open for plan time to revisit; gating them adds ceremony for no door."
+  locked = true
+
+[[edges]]
+  class = "adjacency"
+  outcome = "covered"
+  criteria = ["c-7"]
+
+[[edges]]
+  class = "idempotency"
+  outcome = "covered"
+  criteria = ["c-8", "c-4"]
+
+[[edges]]
+  class = "empty"
+  outcome = "covered"
+  criteria = ["c-9"]
